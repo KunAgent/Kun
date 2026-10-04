@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import type { ResponsesToolNamespaces } from './responses-tool-namespaces.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import type { ModelStreamChunk } from '../../ports/model-client.js'
 
@@ -34,7 +35,7 @@ export class OpenAiGatewayOutput {
   private readonly tools = new Map<string, ToolState>()
   private readonly output: WireRecord[] = []
 
-  constructor(readonly model: string, readonly shape: 'chat' | 'responses') {
+  constructor(readonly model: string, readonly shape: 'chat' | 'responses', private readonly namespaces?: ResponsesToolNamespaces) {
     this.id = `${shape === 'chat' ? 'chatcmpl' : 'resp'}_${randomUUID()}`
   }
 
@@ -143,7 +144,7 @@ export class OpenAiGatewayOutput {
   }
 
   private toolItem(tool: ToolState, status: string): WireRecord {
-    return { id: tool.itemId, type: 'function_call', call_id: tool.id, name: tool.name, arguments: tool.arguments, status }
+    return { id: tool.itemId, type: 'function_call', call_id: tool.id, ...(this.namespaces?.wireIdentity(tool.name) ?? { name: tool.name }), arguments: tool.arguments, status }
   }
 
   private closeTool(tool: ToolState): WireRecord[] {
@@ -158,7 +159,7 @@ export class OpenAiGatewayOutput {
     const item = this.toolItem(tool, this.stopReason === 'length' ? 'incomplete' : 'completed')
     this.output[tool.index] = item
     return [
-      this.event('response.function_call_arguments.done', { item_id: tool.itemId, output_index: tool.index, arguments: tool.arguments, name: tool.name }),
+      this.event('response.function_call_arguments.done', { item_id: tool.itemId, output_index: tool.index, arguments: tool.arguments, ...(this.namespaces?.wireIdentity(tool.name) ?? { name: tool.name }) }),
       this.event('response.output_item.done', { output_index: tool.index, item })
     ]
   }

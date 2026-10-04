@@ -308,7 +308,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         this.logHttpFailure({
           url: input.url,
           status: response.status,
-          body: errorBody.text,
+          body: input.request.gatewayRouting ? '[gateway error body omitted]' : errorBody.text,
           endpointFormat: input.endpointFormat,
           configuredEndpointFormat: input.configuredEndpointFormat,
           model: input.model

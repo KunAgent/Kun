@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,20 +11,23 @@ import { build } from 'esbuild'
 // Never loads a user's profile, account credential, provider, or repository.
 // Usage: node scripts/smoke-model-gateway-clients.mjs [--client codex|claude|all]
 // Optional: --codex /absolute/binary --claude /absolute/binary --timeout 45000
+// Local exploration only: --allow-version-mismatch true (always reported).
 // No installation or real model calls are performed. Missing clients fail.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const marker = 'KUN_GATEWAY_OFFLINE_OK'
 const fixtureToken = 'kun_local_offline_fixture_only'
+export const EXPECTED_CLIENT_VERSIONS = Object.freeze({ codex: '0.160.0', claude: '2.1.220' })
 
 export function parseOptions(argv) {
   const options = { client: 'all', timeout: 45_000 }
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]?.replace(/^--/, '')
     const value = argv[index + 1]
-    if (!['client', 'codex', 'claude', 'timeout'].includes(key) || !value) {
-      throw new Error('Expected --client, --codex, --claude, or --timeout with a value')
+    if (!['client', 'codex', 'claude', 'timeout', 'allow-version-mismatch'].includes(key) || !value) {
+      throw new Error('Expected --client, --codex, --claude, --timeout or --allow-version-mismatch with a value')
     }
-    options[key] = key === 'timeout' ? Number(value) : value
+    if (key === 'allow-version-mismatch') assert(['true', 'false'].includes(value), 'Version mismatch override must be true or false')
+    options[key] = key === 'timeout' ? Number(value) : key === 'allow-version-mismatch' ? value === 'true' : value
   }
   assert(['all', 'codex', 'claude'].includes(options.client), 'Unknown client')
   assert(Number.isFinite(options.timeout) && options.timeout >= 1000, 'Invalid timeout')
@@ -174,11 +177,34 @@ function fakeRuntime(calls) {
   }
 }
 
+export function clientVersionEvidence(client, version, allowMismatch = false) {
+  const expectedVersion = EXPECTED_CLIENT_VERSIONS[client]
+  const match = client === 'codex' ? /^codex-cli (\d+\.\d+\.\d+)$/.exec(version) : /^(\d+\.\d+\.\d+) \(Claude Code\)$/.exec(version)
+  const versionMatched = match?.[1] === expectedVersion
+  return { expectedVersion, versionMatched, allowedVersionMismatch: allowMismatch && !versionMatched }
+}
+
+function sourceEvidence() {
+  try {
+    const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    return { sourceRevision, sourceDirty: dirty.length > 0 }
+  } catch { return { sourceRevision: null, sourceDirty: null } }
+}
+
+export function toolShape(tool, depth = 0) {
+  return { type: tool.type ?? 'function', name: tool.name, keys: Object.keys(tool).sort(),
+    strict: tool.strict, defer_loading: tool.defer_loading, async: tool.async, allowed_callers: tool.allowed_callers,
+    ...(tool.format ? { format: { type: tool.format.type, syntax: tool.format.syntax } } : {}),
+    ...(depth < 2 && Array.isArray(tool.tools) ? { tools: tool.tools.map((member) => toolShape(member, depth + 1)) } : {}) }
+}
+
 function requestSummary(body) {
   return { keys: Object.keys(body).sort(), model: body.model, stream: body.stream,
     parallel_tool_calls: body.parallel_tool_calls, store: body.store,
     include: body.include, reasoning: body.reasoning,
     toolTypes: [...new Set((body.tools ?? []).map((tool) => tool.type ?? 'function'))],
+    toolStructure: (body.tools ?? []).map((tool) => toolShape(tool)),
     inputTypes: [...new Set((Array.isArray(body.input) ? body.input : []).map((item) => item.type ?? item.role))] }
 }
 
@@ -222,13 +248,19 @@ async function runClient(client, options, temp, gateway, denyProxy, blocked) {
   const beforeBlocked = blocked.length
   try {
     const version = await capture(binary, ['--version'], env, workspace, 10_000)
+    const versionEvidence = clientVersionEvidence(client, version.stdout.trim(), options['allow-version-mismatch'] === true)
+    if (version.code !== 0 || version.timedOut || (!versionEvidence.versionMatched && !versionEvidence.allowedVersionMismatch)) {
+      return { client, version: version.stdout.trim(), ...versionEvidence, passed: false,
+        error: `Expected official ${client} ${versionEvidence.expectedVersion}; refusing an unpinned compatibility result`,
+        exitCode: version.code, timedOut: version.timedOut, requests, upstreamCalls: calls, blockedExternalAttempts: blocked.slice(beforeBlocked) }
+    }
     const result = await capture(binary, clientArgs(client, workspace), env, workspace, options.timeout)
     const parsed = result.stdout.trim().split('\n').flatMap((line) => { try { return [JSON.parse(line)] } catch { return [] } })
     const success = client === 'codex'
       ? parsed.some((item) => item.type === 'item.completed' && item.item?.type === 'agent_message' && item.item.text === marker) && parsed.some((item) => item.type === 'turn.completed')
       : parsed.some((item) => item.type === 'result' && !item.is_error && item.result === marker)
     return {
-      client, version: version.stdout.trim(), passed: result.code === 0 && !result.timedOut && success && calls.length > 0,
+      client, version: version.stdout.trim(), ...versionEvidence, passed: result.code === 0 && !result.timedOut && success && calls.length > 0,
       exitCode: result.code, timedOut: result.timedOut, requests, upstreamCalls: calls,
       blockedExternalAttempts: blocked.slice(beforeBlocked),
       ...(!success || result.code !== 0 ? { stdout: result.stdout.slice(-8000), stderr: result.stderr.slice(-8000) } : {})
@@ -257,7 +289,7 @@ export async function main(argv = process.argv.slice(2)) {
     for (const client of options.client === 'all' ? ['codex', 'claude'] : [options.client]) {
       results.push(await runClient(client, options, temp, gateway, denyProxy, blocked))
     }
-    console.log(JSON.stringify({ passed: results.every((item) => item.passed), results }, null, 2))
+    console.log(JSON.stringify({ ...sourceEvidence(), expectedClientVersions: EXPECTED_CLIENT_VERSIONS, passed: results.every((item) => item.passed), results }, null, 2))
     return results.every((item) => item.passed) ? 0 : 1
   } finally {
     await closeServer(proxy)
