@@ -9,6 +9,7 @@ import { loadHarnesses, useHarnessStore } from '../store/harness-store'
 import { useChatStore } from '../store/chat-store'
 import { settingsButtonClass } from './settings-button'
 import { GatewayClientCredentials } from './gateway-client-credentials'
+import { GatewayClientSelect } from './gateway-client-select'
 import type { RoutePoolTestRecord, RouteStatus } from './settings-section-model-routes'
 
 export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, active, tests, translation, exportableModelIds, gatewayExportPools, onEditRoute }: {
@@ -61,11 +62,8 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
       <p className="mt-1 text-[12px] leading-5 text-ds-muted">{t('gatewayConnection.description')}</p>
     </div>
     <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2" data-gateway-connection-controls>
-      <label className="grid min-w-0 gap-1 text-[11px] text-ds-muted">{t('gatewayConnection.client')}
-        <select aria-label={t('gatewayConnection.client')} value={clientId} onChange={(event) => { setClientId(event.target.value as GatewayClientId); setCopied(false) }} className="w-full min-w-0 max-w-full rounded-lg border border-ds-border bg-ds-main px-3 py-2 text-[12px] text-ds-ink">
-          {GATEWAY_CLIENTS.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
-        </select>
-      </label>
+      <GatewayClientSelect label={t('gatewayConnection.client')} value={clientId}
+        onChange={(value) => { setClientId(value); setCopied(false) }} />
       <label className="grid min-w-0 gap-1 text-[11px] text-ds-muted">{t('gatewayConnection.alias')}
         <select aria-label={t('gatewayConnection.alias')} value={pool?.id ?? ''} disabled={!enabledPools.length} onChange={(event) => { setPoolId(event.target.value); setCopied(false) }} className="w-full min-w-0 max-w-full rounded-lg border border-ds-border bg-ds-main px-3 py-2 font-mono text-[12px] text-ds-ink">
           {!enabledPools.length ? <option value="">{t('gatewayConnection.noAlias')}</option> : enabledPools.map((entry) => <option key={entry.id} value={entry.id}>{entry.modelId}</option>)}

@@ -9,8 +9,8 @@ import { execFileSync } from 'node:child_process'
 import { _electron } from 'playwright-core'
 import { createServer, optimizeDeps } from 'vite'
 import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
-import { annotateSettingsTabs, scrollSettingsDetail } from './settings-ui-smoke-dom.mjs'
-import { captureReadySettingsDetail } from './settings-ui-smoke-detail.mjs'
+import { annotateSettingsTabs, readGatewayClientPicker, scrollSettingsDetail, verifyGatewayClientMaskAssets } from './settings-ui-smoke-dom.mjs'
+import { captureReadySettingsDetail, readGatewayClientAccessibility } from './settings-ui-smoke-detail.mjs'
 
 // Native offline renderer smoke; no app build, runtime, provider network or secrets.
 // node scripts/smoke-settings-ui.mjs [--baseline] [--quick] [--serve]
@@ -266,7 +266,10 @@ async function capture(category, panel, config) {
       assert.equal(detail.controls.length, 2, 'Capture the real client and stable-alias controls')
       assert.ok(detail.controls.every(control => control.name), 'Gateway controls must remain named')
       if (phase === 'after') assert.ok(detail.controls.every(control => control.fullyVisible),
-        `Gateway selects must fit after ordinary scrolling: ${JSON.stringify(detail.controls)}`)
+        `Gateway controls must fit after ordinary scrolling: ${JSON.stringify(detail.controls)}`)
+      if (phase === 'after' || await page.locator('[data-gateway-client-select]:visible').count()) {
+        await captureGatewayClientMenu({ key, category, panel, config, native })
+      }
     }
   }
   // Preserve the actual obscured state for the measured Subagent Profiles
@@ -285,6 +288,87 @@ async function capture(category, panel, config) {
   // Keep partial evidence when a later native crash or timeout prevents finish.
   await writeFile(join(evidence, 'progress.json'), JSON.stringify({ layouts: report.layouts.length,
     last: key, problems: report.problems.length, pageErrors: report.pageErrors }, null, 2))
+}
+async function captureGatewayClientMenu({ key, category, panel, config, native }) {
+  const clients = [['codex', 'Codex'], ['claude-code', 'Claude Code'], ['opencode', 'OpenCode'], ['pi', 'Pi']]
+  const trigger = page.locator('[data-gateway-client-select]:visible')
+  const popup = page.locator('[data-gateway-client-listbox]:visible')
+  const selectedMaskAssets = await page.evaluate(verifyGatewayClientMaskAssets)
+  const before = await page.evaluate(readGatewayClientPicker)
+  assert.ok(before.trigger?.name, 'The client picker must have an accessible name')
+  assert.equal(before.trigger.role, 'combobox')
+  assert.ok(before.trigger.fullyVisible, 'The selected client control must fit the viewport')
+  assert.equal(before.trigger.popup, 'listbox')
+  assert.equal(before.trigger.expanded, false)
+  const original = before.trigger.icon?.id
+  assert.ok(clients.some(([id]) => id === original), 'The selected client must have its own logo')
+  const verifyIcon = (icon, id) => {
+    assert.equal(icon?.id, id, `Expected the ${id} client logo`)
+    assert.ok(icon.visible && icon.fullyVisible && icon.hasGraphic,
+      `Client logo must have visible graphic geometry: ${JSON.stringify(icon)}`)
+  }
+  verifyIcon(before.trigger.icon, original)
+  const checks = { key, selectedBefore: original, selectedMaskAssets, selections: [], escapePreservedSelection: false, restored: false }
+  report.gatewayClientPickerChecks ??= []
+  report.gatewayClientPickerChecks.push(checks)
+  try {
+    const file = `${phase}-${key}-detail-gateway-client-menu.png`
+    const result = await captureReadySettingsDetail({
+      position: async () => { await trigger.click(); await popup.waitFor(); return page.evaluate(readGatewayClientPicker) },
+      paintFrames: () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))),
+      wait: delay => page.waitForTimeout(delay), now: () => performance.now(),
+      read: async () => {
+        const maskAssets = await page.evaluate(verifyGatewayClientMaskAssets)
+        return { ...await page.evaluate(readGatewayClientPicker), maskAssets }
+      }, capture: () => captureNativeImage(file)
+    })
+    report.screenshots.push({ file, category, panel, ...config, native, ...result,
+      diagnostic: 'Opened real client listbox; four client logos and labels, no authentication or inference' })
+    const { detail } = result
+    assert.equal(detail.trigger.expanded, true)
+    assert.equal(detail.menu?.role, 'listbox')
+    assert.ok(detail.menu.fullyVisible, `Client popup must fit the viewport: ${JSON.stringify(detail.menu)}`)
+    assert.deepEqual(detail.menu.options.map(option => [option.id, option.text]), clients)
+    for (const option of detail.menu.options) {
+      assert.equal(option.role, 'option')
+      assert.ok(option.visible && option.fullyVisible, `Client option must fit: ${JSON.stringify(option)}`)
+      verifyIcon(option.icon, option.id)
+    }
+    assert.deepEqual(detail.menu.options.filter(option => option.selected).map(option => option.id), [original])
+    await page.keyboard.press('Escape')
+    await popup.waitFor({ state: 'hidden' })
+    const dismissed = await page.evaluate(readGatewayClientPicker)
+    assert.equal(dismissed.trigger.expanded, false)
+    assert.equal(dismissed.trigger.icon?.id, original)
+    checks.escapePreservedSelection = true
+    for (const [id, label] of clients) {
+      await trigger.click()
+      await popup.waitFor()
+      await page.locator(`[data-gateway-client-option="${id}"]:visible`).click()
+      await popup.waitFor({ state: 'hidden' })
+      const selected = await page.evaluate(readGatewayClientPicker)
+      assert.equal(selected.trigger.expanded, false)
+      assert.equal(selected.trigger.text, label)
+      assert.ok(selected.trigger.fullyVisible, 'The selected client control must remain in the viewport')
+      verifyIcon(selected.trigger.icon, id)
+      const accessibility = await readGatewayClientAccessibility(cdp, await trigger.getAttribute('id'))
+      checks.selections.push({ id, label, trigger: selected.trigger, accessibility })
+      assert.equal(accessibility?.role, 'combobox')
+      assert.equal(accessibility.name, before.trigger.name, 'Native AX tree retains the client field name')
+      assert.equal(accessibility.value, label, 'Native AX tree exposes the current selected client value')
+    }
+  } finally {
+    if (await popup.count()) { await page.keyboard.press('Escape'); await popup.waitFor({ state: 'hidden' }) }
+    if ((await page.evaluate(readGatewayClientPicker)).trigger?.icon?.id !== original) {
+      await trigger.click()
+      await page.locator(`[data-gateway-client-option="${original}"]:visible`).click()
+      await popup.waitFor({ state: 'hidden' })
+    }
+    const restored = await page.evaluate(readGatewayClientPicker)
+    assert.equal(restored.trigger.expanded, false)
+    assert.equal(restored.trigger.icon?.id, original)
+    checks.restored = true
+  }
 }
 async function captureNativeImage(file) {
   const capture = await electron.evaluate(async ({ BrowserWindow, screen }) => {

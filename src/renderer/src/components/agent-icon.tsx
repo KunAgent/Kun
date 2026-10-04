@@ -10,6 +10,7 @@ import openCodeLightUrl from '../assets/agent-icons/opencode-logo-light-square.s
 import openCodeDarkUrl from '../assets/agent-icons/opencode-logo-dark-square.svg?url'
 import deepseekUrl from '../assets/provider-icons/deepseek.svg?url'
 import devinUrl from '../assets/agent-icons/devin.svg?url'
+import piUrl from '../assets/agent-icons/pi.svg?url'
 
 /** Agent identity is keyed by the trusted harness ID, never by model/provider. */
 const AGENT_ASSETS: Readonly<Record<string, string>> = {
@@ -20,6 +21,7 @@ const AGENT_ASSETS: Readonly<Record<string, string>> = {
   'gemini-cli': geminiUrl,
   codex: codexUrl,
   devin: devinUrl,
+  pi: piUrl,
   'deepseek-harness': deepseekUrl
 }
 
@@ -46,10 +48,6 @@ export function AgentIcon({
   const accessibility = label
     ? { role: 'img' as const, 'aria-label': label }
     : { 'aria-hidden': true as const }
-
-  if (harnessId === 'pi') {
-    return <span {...accessibility} style={style} className={`inline-flex items-center justify-center font-serif font-bold ${className}`} data-agent-icon="pi">π</span>
-  }
 
   if (harnessId === 'opencode') {
     // OpenCode and OpenCode Go are different brands. These square marks come
