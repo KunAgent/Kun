@@ -16,7 +16,7 @@
   "speakPreviewPlay": "재생",
   "speakPreviewStop": "정지",
   "speakDownloadSource": "다운로드 소스",
-  "speakDownloadSourceDesc": "선택한 소스에서 런타임 WASM과 음성 파일을 받습니다. 실패하면 다른 미러를 자동으로 시도합니다.",
+  "speakDownloadSourceDesc": "음성 가중치의 기본 다운로드 소스를 선택합니다. 실패하면 Kun이 다른 음성 소스를 자동으로 시도합니다.",
   "speakDownloadSourceChecking": "다운로드 소스를 확인하는 중...",
   "speakDownloadSourceAvailable": "{{source}} 응답 {{ms}} ms",
   "speakDownloadSourceUnavailable": "{{source}} 사용 불가: {{reason}}",
@@ -51,5 +51,6 @@
   "speakRuntimeCard": "sanoTTS 런타임",
   "speakRuntimeCardDesc": "공유 G2P WASM과 선택한 음성. 사용 전에 SHA-256으로 검증합니다.",
   "speakRuntimeHint": "약 3.5 MB. 라이선스 {{license}}.",
-  "speakVoiceHint": "선택한 언어의 음성 가중치."
+  "speakVoiceHint": "선택한 언어의 음성 가중치.",
+  "speakDownloadSourceRuntimeHint": "공유 런타임과 러시아어 발음 사전은 공식 GitHub의 고정 버전에서 다운로드합니다. 이 설정은 음성 가중치 다운로드에 적용되며 Hugging Face 미러에는 음성 모델만 있습니다."
 }

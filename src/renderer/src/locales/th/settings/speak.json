@@ -16,7 +16,7 @@
   "speakPreviewPlay": "เล่น",
   "speakPreviewStop": "หยุด",
   "speakDownloadSource": "แหล่งดาวน์โหลด",
-  "speakDownloadSourceDesc": "ใช้แหล่งที่เลือกก่อนสำหรับ WASM และไฟล์เสียง หากล้มเหลวจะลองแหล่งอื่นโดยอัตโนมัติ",
+  "speakDownloadSourceDesc": "เลือกแหล่งดาวน์โหลดน้ำหนักโมเดลเสียงที่ต้องการ หากไม่สำเร็จ Kun จะลองแหล่งเสียงอื่นโดยอัตโนมัติ",
   "speakDownloadSourceChecking": "กำลังตรวจสอบแหล่งดาวน์โหลด...",
   "speakDownloadSourceAvailable": "{{source}} ใช้งานได้ใน {{ms}} ms",
   "speakDownloadSourceUnavailable": "{{source}} ใช้งานไม่ได้: {{reason}}",
@@ -51,5 +51,6 @@
   "speakRuntimeCard": "รันไทม์ sanoTTS",
   "speakRuntimeCardDesc": "G2P WASM ที่ใช้ร่วมกันกับเสียงที่เลือก ตรวจสอบด้วย SHA-256 ก่อนใช้งาน",
   "speakRuntimeHint": "ประมาณ 3.5 MB สัญญาอนุญาต {{license}}",
-  "speakVoiceHint": "น้ำหนักเสียงของภาษาที่เลือก"
+  "speakVoiceHint": "น้ำหนักเสียงของภาษาที่เลือก",
+  "speakDownloadSourceRuntimeHint": "รันไทม์ส่วนกลางและพจนานุกรมการออกเสียงภาษารัสเซียจะดาวน์โหลดจากเวอร์ชันที่กำหนดของ GitHub ทางการเสมอ ตัวเลือกนี้ใช้กับน้ำหนักโมเดลเสียง โดยมิเรอร์ Hugging Face มีเฉพาะไฟล์เสียงเท่านั้น"
 }

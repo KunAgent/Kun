@@ -75,7 +75,7 @@ export const LOCAL_SANOTTS_VOICES = [
     label: 'Russian',
     language: 'ru',
     scripts: ['cyrillic'] as const satisfies readonly LocalSanottsSpeechScript[],
-    sizeBytes: 3_136_002,
+    sizeBytes: 26_472_875,
     files: [
       {
         fileName: 'meta.json',
@@ -94,6 +94,30 @@ export const LOCAL_SANOTTS_VOICES = [
         sizeBytes: 1_461_858,
         sha256: 'e794c358df9ffa29ae5b4d24e4065463e872499df9f3b8fd4497e454f715cc40',
         maxBytes: 4 * 1024 * 1024
+      },
+      {
+        fileName: 'ru_list',
+        sizeBytes: 8238,
+        sha256: '714956c28278e3d776f08263a446b4e10735051aebbbf0227974309aa69eb02f',
+        maxBytes: 16384
+      },
+      {
+        fileName: 'ru_rules',
+        sizeBytes: 14526,
+        sha256: '62f3a8f3f7b94d99077de0decf7e8a8a3dc9ca653863eff5b717b6ae465e59af',
+        maxBytes: 32768
+      },
+      {
+        fileName: 'ru_emoji',
+        sizeBytes: 92773,
+        sha256: '1e82a6dd526d3762274a3b5935decfa3c3db528bc1dea5b8d6ea017f13b4af35',
+        maxBytes: 131072
+      },
+      {
+        fileName: 'ru_listx',
+        sizeBytes: 23221336,
+        sha256: 'fa511621c879954bcf69b0cb1a6af4c53cf9ccc5269fbd4928896b56ffecc6e2',
+        maxBytes: 25165824
       }
     ]
   },

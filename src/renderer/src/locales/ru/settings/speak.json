@@ -16,7 +16,7 @@
   "speakPreviewPlay": "Воспроизвести",
   "speakPreviewStop": "Остановить",
   "speakDownloadSource": "Источник загрузки",
-  "speakDownloadSourceDesc": "Сначала используется выбранный источник для WASM и файлов голоса. При ошибке автоматически пробуются остальные зеркала.",
+  "speakDownloadSourceDesc": "Выберите предпочтительный источник весов голоса. При сбое Kun автоматически попробует остальные источники.",
   "speakDownloadSourceChecking": "Проверка источников загрузки...",
   "speakDownloadSourceAvailable": "{{source}} доступен за {{ms}} мс",
   "speakDownloadSourceUnavailable": "{{source}} недоступен: {{reason}}",
@@ -51,5 +51,6 @@
   "speakRuntimeCard": "Среда sanoTTS",
   "speakRuntimeCardDesc": "Общий G2P WASM и выбранный голос. Файлы проверяются SHA-256 перед использованием.",
   "speakRuntimeHint": "Около 3.5 МБ. Лицензия {{license}}.",
-  "speakVoiceHint": "Веса голоса для выбранного языка."
+  "speakVoiceHint": "Веса голоса для выбранного языка.",
+  "speakDownloadSourceRuntimeHint": "Общая среда выполнения и русский словарь произношения загружаются из закреплённых версий официального GitHub. Этот выбор относится к весам голосов: зеркала Hugging Face содержат только голоса."
 }

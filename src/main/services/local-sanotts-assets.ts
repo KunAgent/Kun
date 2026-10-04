@@ -1,11 +1,14 @@
 import { app } from 'electron'
-import { createReadStream, createWriteStream } from 'node:fs'
+import * as electron from 'electron'
+import { createWriteStream } from 'node:fs'
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { createHash } from 'node:crypto'
 import type { LocalSanottsVoiceId } from '../../shared/local-sanotts-voices'
+import { fileSha256, readVerifiedAssetSize } from './local-sanotts-asset-integrity'
+
+export { fileSha256, readVerifiedAssetSize } from './local-sanotts-asset-integrity'
 
 export const SANOTTS_CONNECT_TIMEOUT_MS = 20_000
 export const SANOTTS_STALL_TIMEOUT_MS = 30_000
@@ -54,10 +57,15 @@ export function localSanottsUserAgent(): string {
   return `Kun/${version} local-sanotts`
 }
 
-export async function fileSha256(path: string): Promise<string> {
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(path)) hash.update(chunk)
-  return hash.digest('hex')
+/** Electron's network stack honors the desktop's proxy configuration. */
+export function sanottsFetch(input: string, init?: RequestInit): Promise<Response> {
+  if ('net' in electron && typeof electron.net?.fetch === 'function') {
+    return electron.net.fetch(input, init)
+  }
+  // Unit tests run in Node with a partial Electron mock. Never silently switch
+  // production downloads to Node's different proxy/network behavior.
+  if (process.env.NODE_ENV === 'test') return fetch(input, init)
+  throw new Error('Electron network transport is unavailable for sanoTTS downloads')
 }
 
 export function readContentLength(headers: Headers): number | undefined {
@@ -93,32 +101,56 @@ export type SanottsAssetDownload = {
  */
 export async function downloadVerifiedAsset(request: SanottsAssetDownload): Promise<void> {
   const tempPath = `${request.targetPath}.download`
-  let timeoutMessage = `sanoTTS download stalled for ${Math.round(SANOTTS_STALL_TIMEOUT_MS / 1000)} seconds`
+  // Timeouts belong to this attempt; they must not cancel the caller's remaining
+  // mirrors/retries. Keep explicit user cancellation linked through verification.
+  const controller = new AbortController()
+  const onAbort = (): void => controller.abort(request.controller.signal.reason)
+  request.controller.signal.addEventListener('abort', onAbort, { once: true })
+  if (request.controller.signal.aborted) onAbort()
+  let timeoutError: Error | undefined
   let connectTimer: NodeJS.Timeout | undefined
   let stallTimer: NodeJS.Timeout | undefined
+  let response: Response | undefined
+  let bodyStream: Readable | undefined
   const clearTimers = (): void => {
     if (connectTimer) clearTimeout(connectTimer)
     if (stallTimer) clearTimeout(stallTimer)
   }
+  const timeout = (kind: 'connect' | 'stall'): void => {
+    timeoutError = new Error(sanottsTimeoutMessage(kind))
+    timeoutError.name = 'TimeoutError'
+    controller.abort(timeoutError)
+  }
   const resetStallTimer = (): void => {
     if (stallTimer) clearTimeout(stallTimer)
-    stallTimer = setTimeout(() => {
-      timeoutMessage = `sanoTTS download stalled for ${Math.round(SANOTTS_STALL_TIMEOUT_MS / 1000)} seconds`
-      request.controller.abort()
-    }, SANOTTS_STALL_TIMEOUT_MS)
+    stallTimer = setTimeout(() => timeout('stall'), SANOTTS_STALL_TIMEOUT_MS)
+  }
+  const writeMetadata = async (): Promise<void> => {
+    controller.signal.throwIfAborted()
+    if (request.metadata) {
+      await writeFile(request.metadata.path, JSON.stringify(request.metadata.content, null, 2), 'utf8')
+    }
+    controller.signal.throwIfAborted()
   }
   try {
+    controller.signal.throwIfAborted()
     await mkdir(dirname(request.targetPath), { recursive: true })
-    connectTimer = setTimeout(() => {
-      timeoutMessage = `sanoTTS download did not connect within ${Math.round(SANOTTS_CONNECT_TIMEOUT_MS / 1000)} seconds`
-      request.controller.abort()
-    }, SANOTTS_CONNECT_TIMEOUT_MS)
-    const response = await fetch(request.url, {
+    await rm(tempPath, { force: true })
+    if (await readVerifiedAssetSize(request.targetPath, request, controller.signal) !== null) {
+      request.onProgress?.(request.sizeBytes, request.sizeBytes, 0)
+      await writeMetadata()
+      return
+    }
+    controller.signal.throwIfAborted()
+    // The connection deadline covers DNS, TLS, redirects and response headers.
+    connectTimer = setTimeout(() => timeout('connect'), SANOTTS_CONNECT_TIMEOUT_MS)
+    response = await sanottsFetch(request.url, {
       headers: { 'User-Agent': localSanottsUserAgent() },
-      signal: request.controller.signal
+      signal: controller.signal,
+      redirect: 'follow'
     })
     if (connectTimer) clearTimeout(connectTimer)
-    resetStallTimer()
+    controller.signal.throwIfAborted()
     if (!response.ok || !response.body) {
       throw new Error(`failed to download sanoTTS asset: HTTP ${response.status}`)
     }
@@ -128,19 +160,22 @@ export async function downloadVerifiedAsset(request: SanottsAssetDownload): Prom
     }
     let downloadedBytes = 0
     const startedAt = Date.now()
-    const bodyStream = Readable.fromWeb(response.body as never)
+    bodyStream = Readable.fromWeb(response.body as never)
     bodyStream.on('data', (chunk: Buffer) => {
       downloadedBytes += chunk.length
       resetStallTimer()
       const elapsedSeconds = Math.max(1, (Date.now() - startedAt) / 1000)
       request.onProgress?.(downloadedBytes, totalBytes, downloadedBytes / elapsedSeconds)
       if (downloadedBytes > request.maxBytes) {
-        bodyStream.destroy(new Error('sanoTTS asset exceeded the local size limit'))
+        bodyStream?.destroy(new Error('sanoTTS asset exceeded the local size limit'))
       }
     })
+    resetStallTimer()
     request.onProgress?.(0, totalBytes, 0)
-    await pipeline(bodyStream, createWriteStream(tempPath))
+    await pipeline(bodyStream, createWriteStream(tempPath, { flags: 'wx' }), { signal: controller.signal })
+    // Disk verification is abortable, but is not a stalled network connection.
     clearTimers()
+    controller.signal.throwIfAborted()
     const info = await stat(tempPath)
     if (info.size <= 0 || info.size > request.maxBytes) {
       throw new Error('downloaded sanoTTS asset size is invalid')
@@ -150,21 +185,31 @@ export async function downloadVerifiedAsset(request: SanottsAssetDownload): Prom
         `downloaded sanoTTS asset size mismatch: expected ${request.sizeBytes} bytes, got ${info.size} bytes`
       )
     }
-    const actualSha256 = await fileSha256(tempPath)
+    const actualSha256 = await fileSha256(tempPath, controller.signal)
     if (actualSha256 !== request.sha256) {
       throw new Error(
         `downloaded sanoTTS asset checksum mismatch: expected ${request.sha256}, got ${actualSha256}`
       )
     }
-    request.controller.signal.throwIfAborted()
+    controller.signal.throwIfAborted()
     await rename(tempPath, request.targetPath)
-    if (request.metadata) {
-      await writeFile(request.metadata.path, JSON.stringify(request.metadata.content, null, 2), 'utf8')
-    }
+    await writeMetadata()
   } catch (error) {
     clearTimers()
+    // Also terminate an unconsumed HTTP error/oversized body. A fetch failure
+    // need not have destroyed the response stream itself.
+    controller.abort()
+    bodyStream?.destroy()
     await rm(tempPath, { force: true }).catch(() => undefined)
+    if (request.controller.signal.aborted) request.controller.signal.throwIfAborted()
+    if (timeoutError) throw timeoutError
     throw error instanceof Error ? error : new Error(String(error))
+  } finally {
+    clearTimers()
+    request.controller.signal.removeEventListener('abort', onAbort)
+    if (response?.body && !response.body.locked) {
+      await response.body.cancel().catch(() => undefined)
+    }
   }
 }
 
@@ -178,7 +223,7 @@ export function sanottsTimeoutMessage(kind: 'connect' | 'stall' | 'source'): str
   return `sanoTTS download stalled for ${Math.round(SANOTTS_STALL_TIMEOUT_MS / 1000)} seconds`
 }
 
-/** Verified on-disk size for an asset, or null when it is absent. */
+/** Raw on-disk size only; use readVerifiedAssetSize for readiness decisions. */
 export async function readAssetSize(path: string): Promise<number | null> {
   try {
     const info = await stat(path)

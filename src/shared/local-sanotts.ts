@@ -9,6 +9,11 @@ import type { LocalSanottsVoiceId } from './local-sanotts-voices'
 export const LOCAL_SANOTTS_PROVIDER_ID = 'local-sanotts'
 export const LOCAL_SANOTTS_PROTOCOL = 'local-sanotts'
 export const LOCAL_SANOTTS_MODEL_REPO = 'ampixa/sanoTTS'
+// The checksums below describe this release, not the mutable demo/main branches.
+export const LOCAL_SANOTTS_RUNTIME_REVISION = 'ce541238903817f3f186fe47460078f06f34997e'
+export const LOCAL_SANOTTS_VOICE_REVISION = 'c532a5d21c078a16cb633718e9182bfd71a5b760'
+export const LOCAL_SANOTTS_ESPEAK_REVISION = '4870adfa25b1a32b4361592f1be8a40337c58d6c'
+const GITHUB_ASSET_BASE_URL = `https://raw.githubusercontent.com/Ampixa/sanoTTS/${LOCAL_SANOTTS_RUNTIME_REVISION}/web/`
 export const LOCAL_SANOTTS_RUNTIME_ID = 'sanotts-runtime'
 export const LOCAL_SANOTTS_RUNTIME_LABEL = 'sanoTTS runtime'
 /** Piperlite voices in this build all render 22.05 kHz mono PCM. */
@@ -22,17 +27,18 @@ export const LOCAL_SANOTTS_DOWNLOAD_SOURCES = [
   {
     id: 'huggingface',
     label: 'Hugging Face',
-    baseUrl: `https://huggingface.co/${LOCAL_SANOTTS_MODEL_REPO}/resolve/main/web/`
+    baseUrl: `https://huggingface.co/${LOCAL_SANOTTS_MODEL_REPO}/resolve/${LOCAL_SANOTTS_VOICE_REVISION}/web/`
   },
   {
     id: 'hf-mirror',
     label: 'HF-Mirror',
-    baseUrl: `https://hf-mirror.com/${LOCAL_SANOTTS_MODEL_REPO}/resolve/main/web/`
+    baseUrl: `https://hf-mirror.com/${LOCAL_SANOTTS_MODEL_REPO}/resolve/${LOCAL_SANOTTS_VOICE_REVISION}/web/`
   },
   {
     id: 'github-pages',
-    label: 'GitHub Pages',
-    baseUrl: 'https://ampixa.github.io/sanoTTS/'
+    // Preserve the persisted id used by existing profiles. The demo URL is mutable.
+    label: 'GitHub (pinned)',
+    baseUrl: GITHUB_ASSET_BASE_URL
   }
 ] as const
 export const LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID = 'github-pages'
@@ -100,6 +106,8 @@ export type LocalSanottsVoiceStatus = {
   state: LocalSanottsAssetState
   path?: string
   downloadedBytes?: number
+  totalBytes?: number
+  speedBytesPerSecond?: number
   message?: string
 }
 
@@ -153,7 +161,11 @@ export function localSanottsDownloadSourceById(sourceId: unknown): LocalSanottsD
 }
 
 /** Preferred source first, then the rest of the catalog in listed order. */
-export function localSanottsDownloadSourcesForRetry(preferredId: unknown): LocalSanottsDownloadSource[] {
+export function localSanottsDownloadSourcesForRetry(
+  preferredId: unknown, asset: 'runtime' | 'voice' = 'voice'
+): LocalSanottsDownloadSource[] {
+  // The official Hugging Face repository contains voices only, never the WASM runtime.
+  if (asset === 'runtime') return [localSanottsDownloadSourceById('github-pages')]
   const preferred = localSanottsDownloadSourceById(preferredId)
   return [preferred, ...LOCAL_SANOTTS_DOWNLOAD_SOURCES.filter((source) => source.id !== preferred.id)]
 }
@@ -162,8 +174,8 @@ export function localSanottsAssetUrl(sourceId: unknown, remotePath: string): str
   return `${localSanottsDownloadSourceById(sourceId).baseUrl}${remotePath}`
 }
 
-export function localSanottsRuntimeFileUrl(fileName: string, sourceId: unknown): string {
-  return localSanottsAssetUrl(sourceId, fileName)
+export function localSanottsRuntimeFileUrl(fileName: string, _sourceId: unknown): string {
+  return `${GITHUB_ASSET_BASE_URL}${fileName}`
 }
 
 export function localSanottsVoiceRemotePath(voiceId: LocalSanottsVoiceId, fileName: string): string {
@@ -175,6 +187,13 @@ export function localSanottsVoiceFileUrl(
   fileName: string,
   sourceId: unknown
 ): string {
+  // sanoTTS's Russian voice requires the matching eSpeak 1.52 full dictionary.
+  // The demo fetches 2,048 shards lazily; local speech downloads the four official
+  // dictionary sources once and compiles offline, without transmitting spoken text.
+  if (voiceId === 'russian' && ['ru_list', 'ru_rules', 'ru_emoji', 'ru_listx'].includes(fileName)) {
+    const path = fileName === 'ru_listx' ? 'extra/ru_listx' : fileName
+    return `https://raw.githubusercontent.com/espeak-ng/espeak-ng/${LOCAL_SANOTTS_ESPEAK_REVISION}/dictsource/${path}`
+  }
   return localSanottsAssetUrl(sourceId, localSanottsVoiceRemotePath(voiceId, fileName))
 }
 
