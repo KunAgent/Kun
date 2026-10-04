@@ -144,6 +144,46 @@ test('detail capture positions once, waits, takes a fresh read, then preserves n
   assert.equal(result.timing.captureCompletedOffsetMs, 457)
 })
 
+test('gateway detail captures named visible selects and detects oversized native geometry', t => {
+  const window = new JSDOM(`<div class="ds-settings-scroller">
+    <div hidden><div data-gateway-connection-controls><select aria-label="Hidden"></select></div></div>
+    <div id="gateway-controls" data-gateway-connection-controls>
+      <select aria-label="Coding client"><option>Codex</option></select>
+      <select aria-label="Stable public route alias" disabled><option>No eligible alias</option></select>
+    </div></div>`).window
+  const { document } = window
+  const globals = { document, innerWidth: 450, innerHeight: 322 }
+  for (const [key, value] of Object.entries(globals)) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key)
+    Object.defineProperty(globalThis, key, { configurable: true, value })
+    t.after(() => descriptor ? Object.defineProperty(globalThis, key, descriptor) : delete globalThis[key])
+  }
+  t.after(() => window.close())
+  let scrolled, width = 350, scrollCount = 0
+  window.HTMLElement.prototype.scrollIntoView = function () { scrolled = this; scrollCount++ }
+  window.HTMLElement.prototype.getClientRects = () => [{}]
+  window.HTMLElement.prototype.getBoundingClientRect = function () {
+    if (this.classList.contains('ds-settings-scroller')) {
+      return { x: 13, y: 84, right: 429, bottom: 322, width: 416, height: 238 }
+    }
+    const y = this.disabled ? 210 : 150
+    const height = this.tagName === 'SELECT' ? 30 : 90
+    return { x: 40, y, width, height, right: 40 + width, bottom: y + height }
+  }
+  const detail = scrollSettingsDetail({ kind: 'gateway-connection-controls' })
+  assert.equal(scrolled.id, 'gateway-controls', 'Retained hidden panels are not capture targets')
+  assert.equal(detail.fullyVisible, true)
+  assert.deepEqual(detail.controls.map(control => [control.name, control.disabled, control.fullyVisible]),
+    [['Coding client', false, true], ['Stable public route alias', true, true]])
+  width = 458
+  const clipped = scrollSettingsDetail({ kind: 'gateway-connection-controls', readOnly: true })
+  assert.equal(scrollCount, 1, 'Fresh evidence must not scroll a second time')
+  assert.equal(clipped.fullyVisible, false)
+  assert.ok(clipped.controls.every(control => !control.fullyVisible))
+  document.querySelector('#gateway-controls').setAttribute('hidden', '')
+  assert.equal(scrollSettingsDetail({ kind: 'gateway-connection-controls' }), null)
+})
+
 test('a missing or clipped fresh detail does not discard the diagnostic native PNG', async () => {
   for (const detail of [null, { fullyVisible: false }]) {
     let captures = 0
@@ -226,6 +266,9 @@ test('workflow keeps both native OSes, source baseline and failure evidence', ()
   assert.match(smoke, /assert\.ok\(positionedDetail/)
   assert.match(smoke, /assert\.ok\(detail,/)
   assert.match(smoke, /assert\.ok\(detail\.fullyVisible/)
+  assert.match(smoke, /\[data-gateway-connection-controls\]:visible/)
+  assert.match(smoke, /assert\.equal\(detail\.controls\.length, 2/)
+  assert.match(smoke, /detail\.controls\.every\(control => control\.fullyVisible\)/)
 })
 
 test('review artifact stays bounded, retains pairs and preserves complete gzip reports', async t => {
@@ -241,6 +284,7 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
     await writeFile(join(source, phase, `${phase}-light-small-200-providers-7-model-routes-settings-tab-monitoring.png`), bytes)
     await writeFile(join(source, phase, `${phase}-light-wide-125-general-landing-detail-general-switch.png`), bytes)
     await writeFile(join(source, phase, `${phase}-light-small-200-providers-7-model-routes-settings-tab-monitoring-detail-model-route-tabs.png`), bytes)
+    await writeFile(join(source, phase, `${phase}-light-small-200-providers-6-provider-workspace-tab-routes-detail-gateway-connection-controls.png`), bytes)
     await writeFile(join(source, phase, 'report.json'), JSON.stringify({ phase, original: true }))
   }
   const result = spawnSync(process.execPath,
@@ -255,6 +299,7 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
   assert.ok(manifest.included.some(group => group.key.includes('model-routes-settings-tab-monitoring')))
   assert.ok(manifest.included.some(group => group.key.endsWith('-detail-general-switch.png')))
   assert.ok(manifest.included.some(group => group.key.endsWith('-detail-model-route-tabs.png')))
+  assert.ok(manifest.included.some(group => group.key.endsWith('-detail-gateway-connection-controls.png')))
   const report = JSON.parse(gunzipSync(await readFile(join(root,
     'dist/settings-ui-reports/after/report.json.gz'))).toString())
   assert.deepEqual(report, { phase: 'after', original: true })

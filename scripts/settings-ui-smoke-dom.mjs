@@ -38,11 +38,14 @@ export function annotateSettingsTabs(elements) {
 }
 
 export function scrollSettingsDetail({ kind, controlId, readOnly = false }) {
+  const shown = element => !element.closest('[hidden],[inert],[aria-hidden="true"]')
+    && element.getClientRects().length > 0
   const target = kind === 'general-switch'
     ? document.querySelector(`[data-settings-smoke-control="${controlId}"]`)
-    : [...document.querySelectorAll('[role="tab"][id^="model-routes-settings-tab-"]')]
-      .find(element => !element.closest('[hidden]') && element.getClientRects().length > 0)
-      ?.closest('[role="tablist"]')
+    : kind === 'gateway-connection-controls'
+      ? [...document.querySelectorAll('[data-gateway-connection-controls]')].find(shown)
+      : [...document.querySelectorAll('[role="tab"][id^="model-routes-settings-tab-"]')]
+        .find(shown)?.closest('[role="tablist"]')
   if (!target) return null
   // A readiness sample must read the settled position, never restart scrolling.
   if (!readOnly) target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })
@@ -56,10 +59,16 @@ export function scrollSettingsDetail({ kind, controlId, readOnly = false }) {
   const scrollport = scroller ? rect(scroller) : viewport
   const clip = { x: Math.max(0, scrollport.x), y: Math.max(0, scrollport.y),
     right: Math.min(innerWidth, scrollport.right), bottom: Math.min(innerHeight, scrollport.bottom) }
+  const fullyVisible = bounds => bounds.x >= clip.x - 1 && bounds.y >= clip.y - 1
+    && bounds.right <= clip.right + 1 && bounds.bottom <= clip.bottom + 1
   return { kind, targetId: target.id, targetRole: target.getAttribute('role'), bounds,
     name: target.getAttribute('aria-label'), viewport, clip,
-    fullyVisible: bounds.x >= clip.x - 1 && bounds.y >= clip.y - 1
-      && bounds.right <= clip.right + 1 && bounds.bottom <= clip.bottom + 1,
+    fullyVisible: fullyVisible(bounds),
+    controls: [...target.querySelectorAll('select')].filter(shown).map(control => {
+      const bounds = rect(control)
+      return { name: control.getAttribute('aria-label'), role: 'combobox',
+        disabled: control.disabled, bounds, fullyVisible: fullyVisible(bounds) }
+    }),
     tabs: [...target.querySelectorAll('[role="tab"]')].map(tab => ({ id: tab.id,
       name: tab.textContent?.trim(), selected: tab.getAttribute('aria-selected') === 'true', bounds: rect(tab) })),
     scroll: scroller ? { top: scroller.scrollTop, left: scroller.scrollLeft } : null }

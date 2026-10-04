@@ -32,6 +32,27 @@ describe('explicit isolated profile controls', () => {
     expect(text(renderer.root)).toContain('Previous profile restored')
     await act(async () => { renderer.unmount() })
   })
+  it('bounds reviewed long configuration columns and the launch command without truncating their contents', async () => {
+    const setup = buildGatewayClientSetup('pi', 'http://localhost:18899', `coding-${'long-alias-'.repeat(40)}`)
+    const preview = { planId: 'review', path: '/chosen/profile', before: setup.content!, after: setup.content!, launch: setup.launch, canRestore: true }
+    const bridge = vi.fn(async () => ({ ok: true, preview }))
+    vi.stubGlobal('window', { kunGui: { gatewayLaunchProfile: bridge } })
+    let renderer!: ReactTestRenderer
+    await act(async () => { renderer = create(createElement(GatewayLaunchProfile, { setup })) })
+    await act(async () => { await button(renderer, 'Choose folder and preview').props.onClick() })
+    const profile = renderer.root.findByProps({ 'data-gateway-launch-profile': true })
+    for (const token of ['min-w-0', 'grid-cols-1']) expect(profile.props.className.split(' ')).toContain(token)
+    const columns = renderer.root.findAllByType('div').find((node) => node.props.className?.includes('lg:grid-cols-2'))!
+    for (const token of ['min-w-0', 'grid-cols-1']) expect(columns.props.className.split(' ')).toContain(token)
+    const snippets = renderer.root.findAllByType('pre')
+    expect(snippets.map(text)).toEqual([preview.before, preview.after, preview.launch])
+    for (const snippet of snippets) {
+      for (const token of ['min-w-0', 'max-w-full', 'overflow-x-auto']) expect(snippet.props.className.split(' ')).toContain(token)
+      expect(snippet.parent!.props.className.split(' ')).toContain('min-w-0')
+    }
+    expect(bridge).toHaveBeenCalledTimes(1)
+    await act(async () => { renderer.unmount() })
+  })
   it('invalidates the reviewed file when the client alias changes', async () => {
     const setup = buildGatewayClientSetup('pi', 'http://localhost:18899', 'coding')
     const bridge = vi.fn(async () => ({ ok: true, preview: { planId: 'old', path: '/chosen/profile', before: '', after: setup.content!, launch: setup.launch, canRestore: false } }))

@@ -56,10 +56,10 @@ export function GatewayClientCredentials({ clientName, active }: { clientName: s
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
     finally { setPending(false) }
   }
-  return <section className="grid gap-2 rounded-xl border border-ds-border p-3" data-gateway-client-credentials>
+  return <section className="grid min-w-0 grid-cols-1 gap-2 rounded-xl border border-ds-border p-3" data-gateway-client-credentials>
     <h4 className="text-[12px] font-semibold text-ds-ink">{t('gatewayConnection.clientKeys')}</h4>
     <p className="text-[11px] leading-5 text-ds-muted">{t('gatewayConnection.clientKeysHint')}</p>
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
       <input aria-label={t('gatewayConnection.clientName')} value={name} maxLength={80} onChange={(event) => setName(event.target.value)}
         className="min-w-0 flex-1 rounded-lg border border-ds-border bg-ds-main px-2.5 py-1.5 text-[12px] text-ds-ink" />
       <button type="button" className={settingsButtonClass()} disabled={!available || pending || !name.trim()} onClick={() => void create()}>
@@ -69,8 +69,8 @@ export function GatewayClientCredentials({ clientName, active }: { clientName: s
     {!available ? <p className="text-[11px] text-ds-muted">{t('gatewayConnection.desktopKeys')}</p> : null}
     {copied ? <p role="status" className="text-[11px] text-emerald-700">{t('gatewayConnection.keyCopied')}</p> : null}
     {error ? <p role="alert" className="text-[11px] text-red-600">{error}</p> : null}
-    {clients.map((client) => <div key={client.clientId} className="flex flex-wrap items-center justify-between gap-2 border-t border-ds-border-muted pt-2 text-[11px] text-ds-muted">
-      <span>{client.name}{client.revokedAt ? ` (${t('gatewayConnection.revoked')})` : ''} <span className="font-mono text-ds-faint">{client.clientId}</span></span>
+    {clients.map((client) => <div key={client.clientId} className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-ds-border-muted pt-2 text-[11px] text-ds-muted">
+      <span className="min-w-0 max-w-full break-all">{client.name}{client.revokedAt ? ` (${t('gatewayConnection.revoked')})` : ''} <span className="font-mono text-ds-faint">{client.clientId}</span></span>
       <button type="button" className={settingsButtonClass()} disabled={pending} onClick={() => void readUsage(client.clientId)}>{t('gatewayConnection.readUsage')}</button>
       <button type="button" className={settingsButtonClass({ variant: 'danger' })} disabled={pending || Boolean(client.revokedAt)} onClick={() => void revoke(client)}>{t('gatewayConnection.revoke')}</button>
     </div>)}

@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
@@ -48,6 +49,30 @@ describe('gateway connection center', () => {
     expect(html).toContain('Waiting for authoritative target availability')
     expect(html).not.toContain('deepseek-chat')
   })
+  it.each(['empty', 'long'])('bounds the %s alias selects and parent grid instead of widening every control at high zoom', (variant) => {
+    const modelId = `coding-${'long-alias-'.repeat(70)}`
+    const input = variant === 'empty' ? { ...props(), exportableModelIds: [] }
+      : { ...props(), pools: [{ ...pool, modelId }], exportableModelIds: [modelId] }
+    const document = new JSDOM(renderToStaticMarkup(createElement(GatewayConnectionCenter, input))).window.document
+    const center = document.querySelector('[data-gateway-connection-center]')!
+    // Native CI found the long empty-state option expanded the implicit track,
+    // clipping both selects and the unrelated full-width standalone button.
+    expect(center.classList.contains('min-w-0')).toBe(true)
+    expect(center.classList.contains('grid-cols-1')).toBe(true)
+    const controls = center.querySelector('[data-gateway-connection-controls]')!
+    const selects = [...controls.querySelectorAll('select')]
+    expect(selects).toHaveLength(2)
+    for (const select of selects) {
+      for (const className of ['w-full', 'min-w-0', 'max-w-full']) expect(select.classList.contains(className)).toBe(true)
+      const label = select.closest('label')!
+      expect(label.classList.contains('min-w-0')).toBe(true)
+      expect(label.parentElement!.classList.contains('grid-cols-1')).toBe(true)
+    }
+    const alias = selects[1] as HTMLSelectElement
+    expect(alias.disabled).toBe(variant === 'empty')
+    expect(alias.options[0].textContent).toBe(variant === 'empty' ? i18n.t('gatewayConnection.noAlias', { ns: 'settings' }) : modelId)
+    expect(center.textContent).toContain('Set up a standalone client')
+  })
   it('honors a fixed parent translator even while global language changes', async () => {
     await i18n.changeLanguage('zh')
     const html = renderToStaticMarkup(createElement(GatewayConnectionCenter, { ...props(), translation: i18n.getFixedT('en', 'settings') }))
@@ -62,6 +87,29 @@ describe('gateway connection center', () => {
     expect(text(renderer.root)).not.toContain('Apply reviewed profile')
     expect(text(renderer.root)).toContain('Choose folder and preview')
     expect(text(renderer.root)).not.toContain('kun_local_')
+    await act(async () => { renderer.unmount() })
+  })
+  it('keeps expanded long-alias config and launch snippets in shrinkable scrolling containers', async () => {
+    const modelId = `coding-${'long-alias-'.repeat(40)}`
+    const input = { ...props(), pools: [{ ...pool, modelId }], exportableModelIds: [modelId] }
+    let renderer!: ReactTestRenderer
+    await act(async () => { renderer = create(createElement(GatewayConnectionCenter, input)) })
+    const open = renderer.root.findAllByType('button').find((node) => text(node) === 'Set up a standalone client')!
+    await act(async () => { open.props.onClick() })
+    const standalone = renderer.root.findByProps({ 'data-gateway-standalone': true })
+    for (const token of ['min-w-0', 'grid-cols-1']) expect(standalone.props.className.split(' ')).toContain(token)
+    const snippets = standalone.findAllByType('pre')
+    expect(snippets).toHaveLength(3)
+    expect(text(standalone)).toContain(modelId)
+    const aliasLabel = renderer.root.findByProps({ 'data-gateway-route-alias': true })
+    for (const token of ['min-w-0', 'max-w-full', 'break-all']) expect(aliasLabel.props.className.split(' ')).toContain(token)
+    expect(text(aliasLabel)).toBe(modelId)
+    for (const snippet of snippets) {
+      for (const token of ['min-w-0', 'max-w-full', 'overflow-x-auto']) expect(snippet.props.className.split(' ')).toContain(token)
+      expect(snippet.parent!.props.className.split(' ')).toContain('min-w-0')
+    }
+    const profile = standalone.findByProps({ 'data-gateway-launch-profile': true })
+    for (const token of ['min-w-0', 'grid-cols-1']) expect(profile.props.className.split(' ')).toContain(token)
     await act(async () => { renderer.unmount() })
   })
   it('includes authenticated models and Anthropic samples with valid JSON and shell escaping', async () => {

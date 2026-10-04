@@ -55,25 +55,25 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
     useHarnessStore.setState({ settingsHarnessId: clientId })
     useChatStore.getState().openSettings('agentsHarnesses')
   }
-  return <section className="mt-4 grid gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-connection-center>
+  return <section className="mt-4 grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-connection-center>
     <div>
       <h3 className="text-[14px] font-semibold text-ds-ink">{t('gatewayConnection.title')}</h3>
       <p className="mt-1 text-[12px] leading-5 text-ds-muted">{t('gatewayConnection.description')}</p>
     </div>
-    <div className="grid gap-3 sm:grid-cols-2">
-      <label className="grid gap-1 text-[11px] text-ds-muted">{t('gatewayConnection.client')}
-        <select aria-label={t('gatewayConnection.client')} value={clientId} onChange={(event) => { setClientId(event.target.value as GatewayClientId); setCopied(false) }} className="rounded-lg border border-ds-border bg-ds-main px-3 py-2 text-[12px] text-ds-ink">
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2" data-gateway-connection-controls>
+      <label className="grid min-w-0 gap-1 text-[11px] text-ds-muted">{t('gatewayConnection.client')}
+        <select aria-label={t('gatewayConnection.client')} value={clientId} onChange={(event) => { setClientId(event.target.value as GatewayClientId); setCopied(false) }} className="w-full min-w-0 max-w-full rounded-lg border border-ds-border bg-ds-main px-3 py-2 text-[12px] text-ds-ink">
           {GATEWAY_CLIENTS.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
         </select>
       </label>
-      <label className="grid gap-1 text-[11px] text-ds-muted">{t('gatewayConnection.alias')}
-        <select aria-label={t('gatewayConnection.alias')} value={pool?.id ?? ''} disabled={!enabledPools.length} onChange={(event) => { setPoolId(event.target.value); setCopied(false) }} className="rounded-lg border border-ds-border bg-ds-main px-3 py-2 font-mono text-[12px] text-ds-ink">
+      <label className="grid min-w-0 gap-1 text-[11px] text-ds-muted">{t('gatewayConnection.alias')}
+        <select aria-label={t('gatewayConnection.alias')} value={pool?.id ?? ''} disabled={!enabledPools.length} onChange={(event) => { setPoolId(event.target.value); setCopied(false) }} className="w-full min-w-0 max-w-full rounded-lg border border-ds-border bg-ds-main px-3 py-2 font-mono text-[12px] text-ds-ink">
           {!enabledPools.length ? <option value="">{t('gatewayConnection.noAlias')}</option> : enabledPools.map((entry) => <option key={entry.id} value={entry.id}>{entry.modelId}</option>)}
         </select>
       </label>
     </div>
-    {pool ? <div className="rounded-lg bg-ds-main p-3 text-[11px] leading-5 text-ds-muted">
-      <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono font-semibold text-ds-ink">{pool.modelId}</span>
+    {pool ? <div className="min-w-0 rounded-lg bg-ds-main p-3 text-[11px] leading-5 text-ds-muted">
+      <div className="flex flex-wrap items-center justify-between gap-2"><span className="min-w-0 max-w-full break-all font-mono font-semibold text-ds-ink" data-gateway-route-alias>{pool.modelId}</span>
         <button type="button" className={settingsButtonClass()} onClick={() => onEditRoute(pool.id)}>{t('gatewayConnection.editRoute')}</button></div>
       <p>{t('gatewayConnection.aliasHint')}</p>
       <p className="mt-1 break-all" data-gateway-export-targets>{exportPool
@@ -99,7 +99,7 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
       {rowsError ? <p role="alert" className="text-[11px] text-red-600">{rowsError}</p> : null}
     </div>
     <button type="button" className={settingsButtonClass()} aria-expanded={showPreview} onClick={() => setShowPreview((value) => !value)}>{t('gatewayConnection.standalone')}</button>
-    {showPreview ? <div className="grid gap-3" data-gateway-standalone>
+    {showPreview ? <div className="grid min-w-0 grid-cols-1 gap-3" data-gateway-standalone>
       <p className="text-[11px] leading-5 text-ds-muted">{t('gatewayConnection.manualHint')}</p>
       <GatewayClientCredentials clientName={client.label} active={active} />
       {preview ? <>
@@ -111,11 +111,11 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
           <li>{t('gatewayConnection.stepVerify')}</li>
         </ol>
         <p className="text-[11px] text-ds-muted">{client.protocol} · {preview.baseUrl}</p>
-        <details className="rounded-lg border border-ds-border p-3"><summary className="cursor-pointer text-[12px] font-medium text-ds-ink">{t('gatewayConnection.diffTitle')}</summary>
-          <pre className="mt-2 overflow-x-auto whitespace-pre font-mono text-[11px] leading-5 text-ds-muted">{gatewaySetupDiff(preview)}</pre>
+        <details className="min-w-0 max-w-full rounded-lg border border-ds-border p-3"><summary className="cursor-pointer text-[12px] font-medium text-ds-ink">{t('gatewayConnection.diffTitle')}</summary>
+          <pre className="mt-2 min-w-0 max-w-full overflow-x-auto whitespace-pre font-mono text-[11px] leading-5 text-ds-muted">{gatewaySetupDiff(preview)}</pre>
         </details>
-        {preview.content ? <div><p className="mb-1 font-mono text-[11px] text-ds-muted">{preview.fileName}</p><pre className="overflow-x-auto rounded-lg bg-ds-main p-3 text-[11px] leading-5 text-ds-ink">{preview.content}</pre></div> : null}
-        <div><p className="mb-1 text-[11px] text-ds-muted">{t('gatewayConnection.launchTitle')}</p><pre className="overflow-x-auto rounded-lg bg-ds-main p-3 text-[11px] leading-5 text-ds-ink">{preview.launch}</pre></div>
+        {preview.content ? <div className="min-w-0"><p className="mb-1 font-mono text-[11px] text-ds-muted">{preview.fileName}</p><pre className="min-w-0 max-w-full overflow-x-auto rounded-lg bg-ds-main p-3 text-[11px] leading-5 text-ds-ink">{preview.content}</pre></div> : null}
+        <div className="min-w-0"><p className="mb-1 text-[11px] text-ds-muted">{t('gatewayConnection.launchTitle')}</p><pre className="min-w-0 max-w-full overflow-x-auto rounded-lg bg-ds-main p-3 text-[11px] leading-5 text-ds-ink">{preview.launch}</pre></div>
         <div className="flex flex-wrap gap-2">
           {preview.content ? <button type="button" className={settingsButtonClass()} onClick={() => void copy(preview.content!)}>{t('gatewayConnection.copyConfig')}</button> : null}
           <button type="button" className={settingsButtonClass()} onClick={() => void copy(preview.launch)}>{t('gatewayConnection.copyLaunch')}</button>
