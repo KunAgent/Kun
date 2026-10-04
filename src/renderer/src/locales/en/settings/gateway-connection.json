@@ -56,7 +56,7 @@
     "messagesLimits": "Only supported message and tool content is accepted; unsupported upstream features are rejected. A model request may consume provider quota.",
     "authRequired": "Authentication is required, including GET /models. A model list verifies local gateway access, not upstream provider authentication.",
     "profileTitle": "Apply an isolated launch profile",
-    "profileHint": "Choose a folder, review the exact file, then apply. Kun only replaces profiles it generated and refuses outside edits or links. The previous generated configuration is backed up; Restore returns to it, or removes the first generated profile. Your native client home stays untouched.",
+    "profileHint": "Choose a folder, review the exact file, then apply. Kun only replaces profiles it generated and refuses outside edits or links. The previous generated configuration is backed up; Restore returns to it, or removes the first generated profile. Your native client home stays untouched. Keep .kun-gateway out of version control: clients may save session history or account state there.",
     "chooseFolder": "Choose folder and preview",
     "reviewFile": "Review exact file changes",
     "before": "Current file",

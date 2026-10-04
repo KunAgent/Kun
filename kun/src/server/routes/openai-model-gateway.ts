@@ -6,6 +6,7 @@ import { gatewayJsonResponse as jsonResponse } from './gateway-json-response.js'
 import type { GatewayLease } from './gateway-request-guard.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { beginGatewayUsage, wrapGatewayUsage, GatewayUsageError, type GatewayUsageRecorder, type GatewayUsageStream } from './gateway-usage.js'
+import { ResponsesToolNamespaces } from './responses-tool-namespaces.js'
 import { OpenAiGatewayOutput } from './openai-gateway-output.js'
 import {
   acquireHarnessGrantLease,
@@ -147,8 +148,10 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
   }
   let modelRequest: ModelRequest
   let recorder: GatewayUsageRecorder | undefined
+  let namespaces: ResponsesToolNamespaces | undefined
   try {
-    const normalized = shape === 'chat' ? input : responsesToChatInput(input)
+    namespaces = shape === 'responses' ? new ResponsesToolNamespaces(input) : undefined
+    const normalized = shape === 'chat' ? input : responsesToChatInput(input, namespaces)
     modelRequest = makeModelRequest({ ...normalized, model: resolved.model }, lease.signal, resolved.providerId,
       grant ? { threadId: grant.threadId, turnId: turnId ?? `gateway_${grant.grantId}` } : undefined)
     recorder = await beginGatewayUsage(runtime, verdict.auth, request, model, resolved)
@@ -167,8 +170,8 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
     return stream
-      ? streamingResponse(chunks, model, shape, lease, attribute, asRecord(input.stream_options).include_usage === true)
-      : nonStreamingResponse(chunks, model, shape, lease, attribute)
+      ? streamingResponse(chunks, model, shape, lease, attribute, asRecord(input.stream_options).include_usage === true, namespaces)
+      : nonStreamingResponse(chunks, model, shape, lease, attribute, namespaces)
   } catch (error) {
     await recorder?.finish('failed').catch(() => undefined)
     lease.release()
@@ -176,8 +179,8 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
   }
 }
 
-async function nonStreamingResponse(chunks: GatewayUsageStream, model: string, shape: 'chat' | 'responses', lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>): Promise<JsonResponse> {
-  const output = new OpenAiGatewayOutput(model, shape)
+async function nonStreamingResponse(chunks: GatewayUsageStream, model: string, shape: 'chat' | 'responses', lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>, namespaces?: ResponsesToolNamespaces): Promise<JsonResponse> {
+  const output = new OpenAiGatewayOutput(model, shape, namespaces)
   const iterator = chunks[Symbol.asyncIterator]()
   let exhausted = false
   try {
@@ -205,9 +208,9 @@ async function nonStreamingResponse(chunks: GatewayUsageStream, model: string, s
   }
 }
 
-function streamingResponse(chunks: GatewayUsageStream, model: string, shape: 'chat' | 'responses', lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>, includeUsage = false): Response {
+function streamingResponse(chunks: GatewayUsageStream, model: string, shape: 'chat' | 'responses', lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>, includeUsage = false, namespaces?: ResponsesToolNamespaces): Response {
   const encoder = new TextEncoder()
-  const output = new OpenAiGatewayOutput(model, shape)
+  const output = new OpenAiGatewayOutput(model, shape, namespaces)
   const iterator = chunks[Symbol.asyncIterator]()
   let cancelled = false
   let finished = false

@@ -42,14 +42,14 @@ jobs:
         shell: bash
         run: |
           node --test scripts/smoke-model-gateway-clients.test.mjs
-          mkdir -p gateway-client-evidence
+          mkdir -p dist/gateway-client-evidence
           CODEX_BINARY="$(find "$RUNNER_TEMP/gateway-clients/node_modules/@openai" -type f -path '*/bin/codex' | head -1)"
           test -n "$CODEX_BINARY"
-          node scripts/smoke-model-gateway-clients.mjs --codex "$CODEX_BINARY" > gateway-client-evidence/report.json
+          node scripts/smoke-model-gateway-clients.mjs --codex "$CODEX_BINARY" > dist/gateway-client-evidence/report.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: model-gateway-official-clients
-          path: gateway-client-evidence
+          path: dist/gateway-client-evidence
           if-no-files-found: warn
           retention-days: 7

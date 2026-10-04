@@ -33,6 +33,7 @@ import {
   warnModelTraceFailure
 } from './compat-model-support.js'
 import { resolveModelEndpointFormat, usesChatCompletionsShape, type ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
+import { gatewaySafeModelChunk, gatewaySafeThrownError } from './gateway-model-privacy.js'
 
 export { redactUrlForLog } from './compat-http-diagnostics.js'
 export { DEFAULT_MODEL_STREAM_LIMITS, type ModelStreamLimits } from './model-stream-resource-budget.js'
@@ -42,6 +43,18 @@ export type { CompatModelClientConfig } from './compat-model-types.js'
 /** Multi-provider HTTP model client with compatible endpoint formats. */
 export class CompatModelClient extends CompatModelStreamingClient implements ModelClient {
   async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    // External gateway content never enters native prompt/trajectory diagnostics,
+    // even when a global or per-thread debug policy requests full capture.
+    if (request.gatewayRouting) {
+      try {
+        for await (const chunk of this.streamInner(request, null)) {
+          yield gatewaySafeModelChunk(this.attributeUsage(chunk, request))
+        }
+      } catch (error) {
+        if (!request.abortSignal.aborted) yield gatewaySafeThrownError(error)
+      }
+      return
+    }
     const sink = this.config.debugSink
     if (!sink) {
       for await (const chunk of this.streamInner(request, null)) {
@@ -421,7 +434,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         this.logHttpFailure({
           url,
           status: response.status,
-          body: retryText,
+          body: request.gatewayRouting ? '[gateway error body omitted]' : retryText,
           endpointFormat,
           configuredEndpointFormat,
           model: requestModel
@@ -438,7 +451,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       this.logHttpFailure({
         url,
         status: response.status,
-        body: text,
+        body: request.gatewayRouting ? '[gateway error body omitted]' : text,
         endpointFormat,
         configuredEndpointFormat,
         model: requestModel

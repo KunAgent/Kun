@@ -70,7 +70,9 @@ The file guards detect ordinary conflicts and existing links, but are not a
 sandbox against a malicious same-user process racing directory replacement.
 Choose a trusted local folder. OpenCode may merge other global/project settings;
 inspect its resolved configuration before use. Native client home files are
-never imported or overwritten by Apply.
+never imported or overwritten by Apply. Keep `.kun-gateway` out of version
+control: after launch, a client may write its own session history or account
+state there even though the generated configuration contains no secret.
 
 ## Export policy and routing
 
@@ -96,6 +98,10 @@ This boundary is not an exactly-once guarantee for a client's own tool runtime.
 ## Protocol fidelity
 
 OpenAI Responses input preserves instructions and function-call/result history.
+Function namespace groups use collision-checked internal aliases while the
+caller retains separate namespace/name identities in results and replayed
+history. Custom/grammar tools, nested groups and deferred discovery are rejected
+until they can be represented faithfully.
 Responses streams expose item/content lifecycles and protocol-shaped usage;
 Chat streams use stable tool indexes and completion reasons. Unsupported
 semantic controls and content are rejected with an actionable request error
@@ -124,7 +130,10 @@ independent client keys; the UI presents those actions separately.
 Client/session correlation is an attribution aid, not authorization to an
 existing Kun conversation. External callers cannot use a session header to
 claim another thread's identity. Request metadata must not include raw keys,
-conversation bodies or arbitrary local paths.
+conversation bodies or arbitrary local paths. Gateway calls bypass the native
+model-debug content sink even if full capture is enabled elsewhere. Untrusted
+upstream diagnostic text and codes are replaced by safe status-based errors so
+a provider error cannot echo its credential to an external client.
 
 Measured token usage and actual selected provider/model belong to the existing
 usage ledger. Catalog/reference costs are estimates; they are not an upstream
@@ -143,3 +152,16 @@ This implementation references Magpie's control-plane ideas but does not copy
 its subscription bridges or promise their service compatibility. Any future
 code reuse must retain the source license notices and independently review
 provider access terms.
+
+## Offline client validation
+
+The conformance workflow pins Codex CLI 0.160.0 and Claude Code 2.1.220 from the
+locked Claude Agent SDK 0.3.220. Reports include the checked-out commit, dirty
+state, exact client versions and bounded request-shape summaries. Unexpected
+versions fail by default; a local developer may explicitly allow and report a
+version mismatch. CI does not use that override.
+
+These tests call the real gateway with a deterministic fake upstream and
+isolated client homes. They do not sign into accounts or consume model quota.
+The client smoke covers a text completion; namespace/tool history, parallel
+calls and streaming events also have dedicated protocol regression fixtures.

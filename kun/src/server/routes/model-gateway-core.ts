@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { ResponsesToolNamespaces } from './responses-tool-namespaces.js'
 import type { TurnItem } from '../../contracts/items.js'
 import type { ModelConnectionSnapshot } from '../../contracts/model-connections.js'
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-pool.js'
@@ -382,7 +383,8 @@ function strictToolArguments(value: unknown): Record<string, unknown> {
   return parsed as Record<string, unknown>
 }
 
-export function responsesToChatInput(input: Record<string, unknown>): Record<string, unknown> {
+export function responsesToChatInput(input: Record<string, unknown>, namespaces = new ResponsesToolNamespaces(input)): Record<string, unknown> {
+  input = namespaces.input
   for (const field of ['previous_response_id', 'conversation', 'truncation']) {
     if (input[field] != null) throw new Error(`Responses ${field} is not supported by the local gateway`)
   }
