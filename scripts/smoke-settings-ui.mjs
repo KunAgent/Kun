@@ -238,7 +238,13 @@ async function capture(category, panel, config) {
   const detailKind = category === 'general' && panel === 'landing' ? 'general-switch'
     : category === 'providers' && /provider-workspace-tab-routes|model-routes-settings-tab-/.test(panel)
       ? 'model-route-tabs' : null
-  if (detailKind) {
+  const detailKinds = detailKind ? [detailKind] : []
+  // The baseline predates Connection Center. Capture its real, visible controls
+  // when present, without fabricating credentials, aliases or provider readiness.
+  if (category === 'providers' && await page.locator('[data-gateway-connection-controls]:visible').count()) {
+    detailKinds.push('gateway-connection-controls')
+  }
+  for (const detailKind of detailKinds) {
     const controlId = detailKind === 'general-switch'
       ? actual.controls.find(control => control.role === 'switch')?.id : null
     const file = `${phase}-${key}-detail-${detailKind}.png`
@@ -256,6 +262,12 @@ async function capture(category, panel, config) {
     assert.ok(detail, `Settled detail target must exist: ${key} ${detailKind}`)
     if (phase === 'after') assert.ok(detail.fullyVisible,
       `Scrolled detail target must fit the final viewport: ${JSON.stringify(detail)}`)
+    if (detailKind === 'gateway-connection-controls') {
+      assert.equal(detail.controls.length, 2, 'Capture the real client and stable-alias controls')
+      assert.ok(detail.controls.every(control => control.name), 'Gateway controls must remain named')
+      if (phase === 'after') assert.ok(detail.controls.every(control => control.fullyVisible),
+        `Gateway selects must fit after ordinary scrolling: ${JSON.stringify(detail.controls)}`)
+    }
   }
   // Preserve the actual obscured state for the measured Subagent Profiles
   // blocker. The normal image above deliberately shows the panel's top.
