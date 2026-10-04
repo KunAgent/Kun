@@ -1,0 +1,7 @@
+<!-- Pi official favicon: https://pi.dev/favicon.svg (retrieved 2026-10-04).
+     Original vector geometry; monochrome fill follows the surrounding theme. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="560" fill="currentColor" viewBox="0 0 560 560">
+  <path d="M420 280H280V140H0V0H420V280Z"/>
+  <path d="M560 560H420V280H560V560Z"/>
+  <path d="M140 560H0V140H140V280H280V420H140V560Z"/>
+</svg>

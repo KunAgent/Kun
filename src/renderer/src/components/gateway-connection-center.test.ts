@@ -18,9 +18,9 @@ function props() { return { settings: defaultModelProviderSettings(), pools: [po
 const text = (node: ReactTestInstance): string => node.children.map((child) => typeof child === 'string' ? child : text(child)).join('')
 beforeEach(async () => { await i18n.changeLanguage('en'); useHarnessStore.setState({ rows: [], rowsLoading: false, rowsError: undefined }) })
 describe('gateway connection center', () => {
-  it('offers the stable alias, implemented clients, and honest status distinctions', () => {
+  it('offers the stable alias, selected client, and honest status distinctions', () => {
     const html = renderToStaticMarkup(createElement(GatewayConnectionCenter, props()))
-    for (const label of ['Codex', 'Claude Code', 'OpenCode', 'Pi', 'coding', 'Native login', 'not tested', 'needs explicit enablement']) expect(html).toContain(label)
+    for (const label of ['Codex', 'coding', 'Native login', 'not tested', 'needs explicit enablement']) expect(html).toContain(label)
     expect(html).not.toContain('value="cursor"'); expect(html).not.toContain('value="gemini-cli"'); expect(html).not.toContain('value="workbuddy"')
     expect(html).toContain('A readiness check does not prove API-key authentication or quota')
   })
@@ -60,15 +60,18 @@ describe('gateway connection center', () => {
     expect(center.classList.contains('min-w-0')).toBe(true)
     expect(center.classList.contains('grid-cols-1')).toBe(true)
     const controls = center.querySelector('[data-gateway-connection-controls]')!
-    const selects = [...controls.querySelectorAll('select')]
-    expect(selects).toHaveLength(2)
-    for (const select of selects) {
-      for (const className of ['w-full', 'min-w-0', 'max-w-full']) expect(select.classList.contains(className)).toBe(true)
-      const label = select.closest('label')!
-      expect(label.classList.contains('min-w-0')).toBe(true)
-      expect(label.parentElement!.classList.contains('grid-cols-1')).toBe(true)
+    const inputs = [...controls.querySelectorAll('select, [data-gateway-client-select]')]
+    expect(inputs).toHaveLength(2)
+    for (const input of inputs) {
+      for (const className of ['w-full', 'min-w-0', 'max-w-full']) expect(input.classList.contains(className)).toBe(true)
+      const field = input.closest('label, [data-gateway-client-control]')!
+      expect(field.classList.contains('min-w-0')).toBe(true)
+      expect(field.parentElement!.classList.contains('grid-cols-1')).toBe(true)
     }
-    const alias = selects[1] as HTMLSelectElement
+    const client = controls.querySelector('[data-gateway-client-select]')!
+    expect(client.getAttribute('role')).toBe('combobox')
+    expect(client.querySelector('[data-agent-icon="codex"]')).not.toBeNull()
+    const alias = controls.querySelector('select')!
     expect(alias.disabled).toBe(variant === 'empty')
     expect(alias.options[0].textContent).toBe(variant === 'empty' ? i18n.t('gatewayConnection.noAlias', { ns: 'settings' }) : modelId)
     expect(center.textContent).toContain('Set up a standalone client')

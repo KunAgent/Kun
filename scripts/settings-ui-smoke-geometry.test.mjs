@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
-import { annotateSettingsControls, annotateSettingsTabs, scrollSettingsDetail } from './settings-ui-smoke-dom.mjs'
-import { captureReadySettingsDetail, SETTINGS_DETAIL_SETTLE_MS } from './settings-ui-smoke-detail.mjs'
+import { annotateSettingsControls, annotateSettingsTabs, readGatewayClientPicker, scrollSettingsDetail, verifyGatewayClientMaskAssets } from './settings-ui-smoke-dom.mjs'
+import { captureReadySettingsDetail, readGatewayClientAccessibility, SETTINGS_DETAIL_SETTLE_MS } from './settings-ui-smoke-detail.mjs'
 import { JSDOM } from 'jsdom'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -144,11 +144,12 @@ test('detail capture positions once, waits, takes a fresh read, then preserves n
   assert.equal(result.timing.captureCompletedOffsetMs, 457)
 })
 
-test('gateway detail captures named visible selects and detects oversized native geometry', t => {
+test('gateway detail captures named client button and alias select and detects oversized native geometry', t => {
   const window = new JSDOM(`<div class="ds-settings-scroller">
     <div hidden><div data-gateway-connection-controls><select aria-label="Hidden"></select></div></div>
     <div id="gateway-controls" data-gateway-connection-controls>
-      <select aria-label="Coding client"><option>Codex</option></select>
+      <span id="client-label">Coding client</span>
+      <button data-gateway-client-select role="combobox" aria-labelledby="client-label" aria-haspopup="listbox">Codex</button>
       <select aria-label="Stable public route alias" disabled><option>No eligible alias</option></select>
     </div></div>`).window
   const { document } = window
@@ -167,7 +168,7 @@ test('gateway detail captures named visible selects and detects oversized native
       return { x: 13, y: 84, right: 429, bottom: 322, width: 416, height: 238 }
     }
     const y = this.disabled ? 210 : 150
-    const height = this.tagName === 'SELECT' ? 30 : 90
+    const height = this.tagName === 'SELECT' || this.tagName === 'BUTTON' ? 30 : 90
     return { x: 40, y, width, height, right: 40 + width, bottom: y + height }
   }
   const detail = scrollSettingsDetail({ kind: 'gateway-connection-controls' })
@@ -175,6 +176,7 @@ test('gateway detail captures named visible selects and detects oversized native
   assert.equal(detail.fullyVisible, true)
   assert.deepEqual(detail.controls.map(control => [control.name, control.disabled, control.fullyVisible]),
     [['Coding client', false, true], ['Stable public route alias', true, true]])
+  assert.deepEqual(detail.controls.map(control => control.role), ['combobox', 'combobox'])
   width = 458
   const clipped = scrollSettingsDetail({ kind: 'gateway-connection-controls', readOnly: true })
   assert.equal(scrollCount, 1, 'Fresh evidence must not scroll a second time')
@@ -182,6 +184,61 @@ test('gateway detail captures named visible selects and detects oversized native
   assert.ok(clipped.controls.every(control => !control.fullyVisible))
   document.querySelector('#gateway-controls').setAttribute('hidden', '')
   assert.equal(scrollSettingsDetail({ kind: 'gateway-connection-controls' }), null)
+})
+
+test('client picker evidence reads four real option logos, selection and clipped or missing graphics', t => {
+  const clients = [['codex', 'Codex'], ['claude-code', 'Claude Code'], ['opencode', 'OpenCode'], ['pi', 'Pi']]
+  const mark = id => `<span data-agent-icon="${id}" style="mask-image:url(/${id}.svg)"></span>`
+  const window = new JSDOM(`<div hidden><button data-gateway-client-select>Hidden</button>
+    <div data-gateway-client-listbox></div></div>
+    <span id="client-label">Coding client</span>
+    <button data-gateway-client-select role="combobox" aria-labelledby="client-label" aria-haspopup="listbox" aria-expanded="true">${mark('codex')}Codex</button>
+    <div data-gateway-client-listbox role="listbox">${clients.map(([id, label]) =>
+      `<button data-gateway-client-option="${id}" role="option" aria-selected="${id === 'codex'}">${mark(id)}${label}</button>`).join('')}</div>`).window
+  const { document } = window
+  for (const [key, value] of Object.entries({ document, getComputedStyle: window.getComputedStyle.bind(window),
+    innerWidth: 450, innerHeight: 322 })) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key)
+    Object.defineProperty(globalThis, key, { configurable: true, value })
+    t.after(() => descriptor ? Object.defineProperty(globalThis, key, descriptor) : delete globalThis[key])
+  }
+  t.after(() => window.close())
+  let lastOptionY = 194
+  const bounds = (x, y, width, height) => ({ x, y, width, height, right: x + width, bottom: y + height })
+  window.HTMLElement.prototype.getClientRects = () => [{}]
+  window.HTMLElement.prototype.getBoundingClientRect = function () {
+    if (this.hasAttribute('data-gateway-client-select')) return bounds(20, 20, 300, 32)
+    if (this.hasAttribute('data-gateway-client-listbox')) return bounds(20, 70, 300, 200)
+    const option = this.closest('[data-gateway-client-option]')
+    const index = clients.findIndex(([id]) => id === option?.getAttribute('data-gateway-client-option'))
+    const y = index === 3 ? lastOptionY : index >= 0 ? 74 + index * 40 : 20
+    return this.hasAttribute('data-agent-icon') ? bounds(32, y + 6, 20, 20) : bounds(24, y, 292, 36)
+  }
+  const detail = readGatewayClientPicker()
+  assert.equal(detail.trigger.name, 'Coding client')
+  assert.equal(detail.trigger.icon.id, 'codex')
+  assert.equal(detail.trigger.icon.hasGraphic, true)
+  assert.deepEqual(detail.menu.options.map(option => [option.id, option.text]), clients)
+  assert.deepEqual(detail.menu.options.filter(option => option.selected).map(option => option.id), ['codex'])
+  assert.ok(detail.menu.options.every(option => option.fullyVisible && option.icon.fullyVisible
+    && option.icon.visible && option.icon.hasGraphic && option.icon.id === option.id))
+  lastOptionY = 300
+  const clipped = readGatewayClientPicker().menu.options.at(-1)
+  assert.equal(clipped.fullyVisible, false)
+  assert.equal(clipped.icon.fullyVisible, false)
+  document.querySelector('[data-gateway-client-option="pi"] [data-agent-icon]').remove()
+  assert.equal(readGatewayClientPicker().menu.options.at(-1).icon, null)
+  const codex = document.querySelector('[data-gateway-client-option="codex"] [data-agent-icon]')
+  codex.style.maskImage = 'none'
+  assert.equal(readGatewayClientPicker().menu.options[0].icon.hasGraphic, false)
+  codex.style.display = 'none'
+  assert.equal(readGatewayClientPicker().menu.options[0].icon.visible, false)
+  document.querySelector('[data-gateway-client-listbox]:not([hidden])').setAttribute('hidden', '')
+  document.querySelector('body > [data-gateway-client-listbox]').setAttribute('hidden', '')
+  document.querySelector('body > [data-gateway-client-select]').setAttribute('aria-expanded', 'false')
+  const closed = readGatewayClientPicker()
+  assert.equal(closed.menu, null)
+  assert.equal(closed.trigger.expanded, false)
 })
 
 test('a missing or clipped fresh detail does not discard the diagnostic native PNG', async () => {
@@ -195,6 +252,55 @@ test('a missing or clipped fresh detail does not discard the diagnostic native P
     assert.equal(result.detail, detail)
     assert.equal(result.pixels, 'native bytes retained')
   }
+})
+
+test('masked client logos must decode locally; broken and external SVGs cannot pass from CSS alone', async t => {
+  const window = new JSDOM('<button data-gateway-client-select><span data-agent-icon="codex" style="mask-image:url(/codex.svg)"></span></button>',
+    { url: 'http://127.0.0.1:43000/__settings' }).window
+  const { document } = window
+  const decoded = []
+  let broken = false, width = 16
+  class TestImage {
+    get naturalWidth() { return width }
+    get naturalHeight() { return 16 }
+    async decode() { decoded.push(this.src); if (broken) throw new Error('SVG decode failed') }
+  }
+  for (const [key, value] of Object.entries({ document, getComputedStyle: window.getComputedStyle.bind(window),
+    location: window.location, Image: TestImage })) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key)
+    Object.defineProperty(globalThis, key, { configurable: true, value })
+    t.after(() => descriptor ? Object.defineProperty(globalThis, key, descriptor) : delete globalThis[key])
+  }
+  t.after(() => window.close())
+  window.HTMLElement.prototype.getClientRects = () => [{}]
+  assert.deepEqual(await verifyGatewayClientMaskAssets(), [{ id: 'codex',
+    url: 'http://127.0.0.1:43000/codex.svg', width: 16, height: 16, decoded: true }])
+  broken = true
+  await assert.rejects(verifyGatewayClientMaskAssets(), /SVG decode failed/)
+  broken = false
+  width = 0
+  await assert.rejects(verifyGatewayClientMaskAssets(), /no decoded pixels/)
+  const count = decoded.length
+  document.querySelector('[data-agent-icon]').style.maskImage = 'url(https://external.invalid/client.svg)'
+  await assert.rejects(verifyGatewayClientMaskAssets(), /cannot load external/)
+  assert.equal(decoded.length, count, 'Do not request any external logo bytes')
+})
+
+test('client accessibility evidence records the computed native selected value without inventing one', async () => {
+  const requests = []
+  let value = 'Claude Code'
+  const cdp = { send: async (method, args) => {
+    requests.push([method, args])
+    if (method === 'DOM.getDocument') return { root: { nodeId: 1 } }
+    if (method === 'DOM.querySelector') return { nodeId: 2 }
+    return { nodes: [{ ignored: false, role: { value: 'combobox' }, name: { value: 'Coding client' },
+      ...(value ? { value: { value } } : {}) }] }
+  } }
+  assert.deepEqual(await readGatewayClientAccessibility(cdp, ':client:'),
+    { role: 'combobox', name: 'Coding client', value: 'Claude Code', properties: [] })
+  assert.deepEqual(requests[1], ['DOM.querySelector', { nodeId: 1, selector: '[id=":client:"]' }])
+  value = ''
+  assert.equal((await readGatewayClientAccessibility(cdp, ':client:')).value, '', 'Missing AX value stays missing')
 })
 
 test('overlap uses visible scrollport intersections and still detects painted overlaps', async t => {
@@ -269,6 +375,13 @@ test('workflow keeps both native OSes, source baseline and failure evidence', ()
   assert.match(smoke, /\[data-gateway-connection-controls\]:visible/)
   assert.match(smoke, /assert\.equal\(detail\.controls\.length, 2/)
   assert.match(smoke, /detail\.controls\.every\(control => control\.fullyVisible\)/)
+  assert.match(smoke, /-detail-gateway-client-menu\.png/)
+  assert.match(smoke, /detail\.menu\.options\.map\(option => \[option\.id, option\.text\]\), clients/)
+  assert.match(smoke, /verifyIcon\(option\.icon, option\.id\)/)
+  assert.match(smoke, /checks\.escapePreservedSelection = true/)
+  assert.match(smoke, /checks\.restored = true/)
+  assert.match(smoke, /page\.evaluate\(verifyGatewayClientMaskAssets\)/)
+  assert.match(smoke, /assert\.equal\(accessibility\.value, label/)
 })
 
 test('review artifact stays bounded, retains pairs and preserves complete gzip reports', async t => {
@@ -285,6 +398,7 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
     await writeFile(join(source, phase, `${phase}-light-wide-125-general-landing-detail-general-switch.png`), bytes)
     await writeFile(join(source, phase, `${phase}-light-small-200-providers-7-model-routes-settings-tab-monitoring-detail-model-route-tabs.png`), bytes)
     await writeFile(join(source, phase, `${phase}-light-small-200-providers-6-provider-workspace-tab-routes-detail-gateway-connection-controls.png`), bytes)
+    await writeFile(join(source, phase, `${phase}-light-small-200-providers-6-provider-workspace-tab-routes-detail-gateway-client-menu.png`), bytes)
     await writeFile(join(source, phase, 'report.json'), JSON.stringify({ phase, original: true }))
   }
   const result = spawnSync(process.execPath,
@@ -300,6 +414,7 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
   assert.ok(manifest.included.some(group => group.key.endsWith('-detail-general-switch.png')))
   assert.ok(manifest.included.some(group => group.key.endsWith('-detail-model-route-tabs.png')))
   assert.ok(manifest.included.some(group => group.key.endsWith('-detail-gateway-connection-controls.png')))
+  assert.ok(manifest.included.some(group => group.key.endsWith('-detail-gateway-client-menu.png')))
   const report = JSON.parse(gunzipSync(await readFile(join(root,
     'dist/settings-ui-reports/after/report.json.gz'))).toString())
   assert.deepEqual(report, { phase: 'after', original: true })

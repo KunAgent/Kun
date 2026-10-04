@@ -25,3 +25,14 @@ export async function captureReadySettingsDetail({ position, paintFrames, wait, 
     sampleCompletedOffsetMs, captureStartedOffsetMs, captureCompletedOffsetMs: now() - started
   } }
 }
+
+export async function readGatewayClientAccessibility(cdp, elementId) {
+  const { root } = await cdp.send('DOM.getDocument', { depth: 0 })
+  const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId,
+    selector: `[id=${JSON.stringify(elementId)}]` })
+  if (!nodeId) return null
+  const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })
+  const node = nodes.find(node => !node.ignored && node.role?.value === 'combobox')
+  return node ? { name: node.name?.value ?? '', role: node.role?.value ?? '',
+    value: node.value?.value ?? '', properties: node.properties ?? [] } : null
+}

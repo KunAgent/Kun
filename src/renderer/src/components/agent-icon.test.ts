@@ -27,4 +27,13 @@ describe('AgentIcon', () => {
     expect(html).toContain('opencode-logo-dark-square.svg')
     expect(html).not.toContain('opencodego.svg')
   })
+
+  it('uses the official Pi vector mark instead of a font-dependent text logo', () => {
+    const html = renderToStaticMarkup(createElement(AgentIcon, { harnessId: 'pi', size: 20 }))
+    expect(decodeURIComponent(agentIconAssetUrl('pi')!)).toContain('M420 280H280V140H0V0H420V280Z')
+    expect(html).toContain('data-agent-icon="pi"')
+    expect(html).toContain('mask-image:')
+    expect(html).not.toContain('π')
+    expect(html).not.toContain('font-serif')
+  })
 })
