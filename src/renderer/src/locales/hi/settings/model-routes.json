@@ -52,7 +52,7 @@
     "localApi": "स्थानीय API",
     "localApiEnabledLocalOnly": "सक्षम · केवल स्थानीय पहुंच",
     "disabled": "अक्षम",
-    "apiCompatibilityDesc": "OpenAI Chat Completions और प्रतिक्रियाओं के साथ संगत। सार्वजनिक मॉडल ID नीचे दिए गए रूटेड मॉडल से आते हैं।",
+    "apiCompatibilityDesc": "OpenAI Chat Completions, Responses और Anthropic Messages के साथ संगत। सार्वजनिक मॉडल ID नीचे दिए गए रूट किए गए मॉडल से आते हैं।",
     "copyLocalApiAddress": "स्थानीय API पता कॉपी करें",
     "copied": "कॉपी किया गया",
     "copy": "प्रतिलिपि",
@@ -186,6 +186,10 @@
     "guideChatModelMissing": "एक अज्ञात मॉडल 404 (model_not_found) लौटाता है।",
     "exampleChatPrompt": "नमस्ते कुन!",
     "exampleResponsesPrompt": "एक वाक्य में कुन स्थानीय प्रवेश द्वार का परिचय दें।",
-    "statusRequestFailed": "Kun Runtime स्थिति अनुरोध विफल ({{status}})"
+    "statusRequestFailed": "Kun Runtime स्थिति अनुरोध विफल ({{status}})",
+    "targetAccountModel": "खाता / मॉडल",
+    "targetUnavailable": "गेटवे के लिए उपलब्ध नहीं",
+    "targetNativeOnly": "यह खाता केवल अपने मूल Agent के माध्यम से उपलब्ध है, गेटवे मॉडल API के रूप में नहीं।",
+    "stableAliasHint": "क्लाइंट एक ही उपनाम बनाए रखते हैं। खाते और मॉडल में बदलाव नए अनुरोधों पर लागू होते हैं; चल रहे अनुरोध अपना मौजूदा रूट बनाए रखते हैं।"
   }
 }

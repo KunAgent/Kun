@@ -52,7 +52,7 @@
     "localApi": "ローカル API",
     "localApiEnabledLocalOnly": "有効 · ローカルアクセスのみ",
     "disabled": "無効",
-    "apiCompatibilityDesc": "OpenAI Chat Completionsおよびレスポンスと互換性があります。パブリック モデル ID は、以下の配線済みモデルに由来しています。",
+    "apiCompatibilityDesc": "OpenAI Chat Completions、Responses、Anthropic Messages に対応しています。公開モデル ID は以下のルーティングされたモデルで定義されます。",
     "copyLocalApiAddress": "ローカルのAPIアドレスをコピーします",
     "copied": "コピーされました",
     "copy": "コピー",
@@ -186,6 +186,10 @@
     "guideChatModelMissing": "不明なモデルは 404 (model_not_found) を返します。",
     "exampleChatPrompt": "こんにちは、クン！",
     "exampleResponsesPrompt": "Kun ローカル ゲートウェイを一文で紹介します。",
-    "statusRequestFailed": "Kun Runtime ステータス要求が失敗しました ({{status}})"
+    "statusRequestFailed": "Kun Runtime ステータス要求が失敗しました ({{status}})",
+    "targetAccountModel": "アカウント / モデル",
+    "targetUnavailable": "ゲートウェイでは利用不可",
+    "targetNativeOnly": "このアカウントはネイティブ Agent でのみ利用でき、ゲートウェイのモデル API としては利用できません。",
+    "stableAliasHint": "各クライアントは同じエイリアスを使い続けます。アカウントやモデルの変更は新しいリクエストに適用され、実行中のリクエストは元のルートを維持します。"
   }
 }
