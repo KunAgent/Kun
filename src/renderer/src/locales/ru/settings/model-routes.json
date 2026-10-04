@@ -52,7 +52,7 @@
     "localApi": "Местный API",
     "localApiEnabledLocalOnly": "Включено · Только локальный доступ",
     "disabled": "Неполноценный",
-    "apiCompatibilityDesc": "Совместим с OpenAI Chat Completions и ответами. Публичная модель ID взята из маршрутизируемых ниже моделей.",
+    "apiCompatibilityDesc": "Совместимо с OpenAI Chat Completions, Responses и Anthropic Messages. Общедоступные идентификаторы моделей определяются маршрутизированными моделями ниже.",
     "copyLocalApiAddress": "Скопируйте локальный адрес API",
     "copied": "Скопировано",
     "copy": "Копировать",
@@ -186,6 +186,10 @@
     "guideChatModelMissing": "Неизвестная модель возвращает 404 (model_not_found).",
     "exampleChatPrompt": "Привет, Кун!",
     "exampleResponsesPrompt": "Представьте локальный шлюз Kun в одном предложении.",
-    "statusRequestFailed": "Запрос статуса Kun Runtime не выполнен ({{status}})"
+    "statusRequestFailed": "Запрос статуса Kun Runtime не выполнен ({{status}})",
+    "targetAccountModel": "Учётная запись / модель",
+    "targetUnavailable": "недоступно для шлюза",
+    "targetNativeOnly": "Эта учётная запись доступна только через её собственный Agent и не поддерживает API моделей через шлюз.",
+    "stableAliasHint": "Клиенты сохраняют один и тот же псевдоним. Изменения учётной записи и модели применяются к новым запросам; выполняющиеся запросы сохраняют свой маршрут."
   }
 }

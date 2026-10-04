@@ -52,7 +52,7 @@
     "localApi": "API ท้องถิ่น",
     "localApiEnabledLocalOnly": "เปิดใช้งาน · การเข้าถึงเฉพาะที่เท่านั้น",
     "disabled": "พิการ",
-    "apiCompatibilityDesc": "เข้ากันได้กับ OpenAI Chat Completions และการตอบกลับ โมเดลสาธารณะ ID มาจากโมเดลที่กำหนดเส้นทางด้านล่าง",
+    "apiCompatibilityDesc": "รองรับ OpenAI Chat Completions, Responses และ Anthropic Messages โดย ID โมเดลสาธารณะมาจากโมเดลที่กำหนดเส้นทางไว้ด้านล่าง",
     "copyLocalApiAddress": "คัดลอกที่อยู่ API ในเครื่อง",
     "copied": "คัดลอกแล้ว",
     "copy": "สำเนา",
@@ -186,6 +186,10 @@
     "guideChatModelMissing": "โมเดลที่ไม่รู้จักส่งคืน 404 (model_not_found)",
     "exampleChatPrompt": "สวัสดีคุน!",
     "exampleResponsesPrompt": "แนะนำเกตเวย์ท้องถิ่น Kun ในประโยคเดียว",
-    "statusRequestFailed": "การร้องขอสถานะ Kun Runtime ล้มเหลว ({{status}})"
+    "statusRequestFailed": "การร้องขอสถานะ Kun Runtime ล้มเหลว ({{status}})",
+    "targetAccountModel": "บัญชี / โมเดล",
+    "targetUnavailable": "ใช้งานผ่านเกตเวย์ไม่ได้",
+    "targetNativeOnly": "บัญชีนี้ใช้ได้ผ่าน Agent ดั้งเดิมเท่านั้น ไม่สามารถใช้เป็น API โมเดลผ่านเกตเวย์ได้",
+    "stableAliasHint": "ไคลเอนต์ยังคงใช้นามแฝงเดิม การเปลี่ยนบัญชีหรือโมเดลมีผลกับคำขอใหม่ ส่วนคำขอที่กำลังทำงานจะใช้เส้นทางเดิม"
   }
 }
