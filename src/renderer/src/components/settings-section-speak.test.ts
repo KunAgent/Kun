@@ -173,7 +173,7 @@ it('keeps simultaneous runtime and voice downloads independently busy', async ()
 it('keeps runtime cancellation available and ignores the canceled request if it settles late', async () => {
   const request = deferred<LocalSanottsRuntimeDownloadResult>()
   window.kunGui.downloadLocalSanottsRuntime = vi.fn(() => request.promise)
-  window.kunGui.cancelLocalSanottsRuntime = vi.fn(async () => ({ ok: true, status: initialSpeakRuntimeStatus() }))
+  window.kunGui.cancelLocalSanottsRuntime = vi.fn(async () => ({ ok: true as const, status: initialSpeakRuntimeStatus() }))
   await render()
   await act(async () => download('runtime').click())
   expect(download('runtime').textContent).toContain('speakModelCancel')
