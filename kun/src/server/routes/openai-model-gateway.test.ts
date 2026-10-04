@@ -82,13 +82,13 @@ function runtime(
   const pools = [
     {
       id: 'pool', name: 'Pool', modelId: 'local-model', enabled: true, strategy: 'priority' as const,
-      targets: [{ id: 'target', providerId: 'provider', modelId: 'real', enabled: true, weight: 1 }],
+      targets: [{ id: 'target', providerId: 'relay-key', modelId: 'relay-a', enabled: true, weight: 1 }],
       failurePolicy: { failoverHttpStatusCodes: [429, 503], failoverOnNetworkError: true, failoverOnTimeout: true, failoverOnAuthError: true },
       healthPolicy: { failureThreshold: 3, cooldownMs: 60_000, halfOpenMaxAttempts: 1 }
     },
     {
       id: 'coding-pool', name: 'Coding Pool', modelId: 'local-coding', enabled: true, strategy: 'adaptive' as const,
-      targets: [{ id: 'coding-target', providerId: 'provider', modelId: 'real-coding', enabled: true, weight: 1 }],
+      targets: [{ id: 'coding-target', providerId: 'relay-key', modelId: 'relay-b', enabled: true, weight: 1 }],
       failurePolicy: { failoverHttpStatusCodes: [429, 503], failoverOnNetworkError: true, failoverOnTimeout: true, failoverOnAuthError: true },
       healthPolicy: { failureThreshold: 3, cooldownMs: 60_000, halfOpenMaxAttempts: 1 }
     }
@@ -166,13 +166,13 @@ describe('local OpenAI model gateway', () => {
     expect((blocked as { status: number }).status).toBe(404)
   })
 
-  it('reports the effective local gateway state with route status', () => {
-    expect(JSON.parse(routePoolStatus(runtime(true)).body)).toMatchObject({
+  it('reports the effective local gateway state with route status', async () => {
+    expect(JSON.parse((await routePoolStatus(runtime(true))).body)).toMatchObject({
       localGateway: { enabled: true, exposeProviderModels: false },
       pools: expect.arrayContaining([expect.objectContaining({ id: 'pool' })]),
       configuredPools: expect.arrayContaining([expect.objectContaining({ id: 'pool' })])
     })
-    expect(JSON.parse(routePoolStatus(runtime(false)).body)).toMatchObject({
+    expect(JSON.parse((await routePoolStatus(runtime(false))).body)).toMatchObject({
       localGateway: { enabled: false }
     })
   })

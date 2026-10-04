@@ -5,6 +5,7 @@ import { isModelConnectionProfileUsable, type ModelConnectionProfile, type Model
 import type { WorkbenchExecution, WorkbenchRequest } from '../contracts/workbench-links.js'
 import { createThreadRecord } from '../domain/thread.js'
 import { createTurnRecord } from '../domain/turn.js'
+import { exposableProvider } from '../domain/model-gateway-export-policy.js'
 import { parseGatewayModelId } from '../harness/gateway-model-id.js'
 import { legacyProviderKindFor } from '../harness/harness-provider-kind.js'
 import type { HarnessRouter } from '../harness/harness-router.js'
@@ -53,9 +54,9 @@ export class WorkbenchHarnessService {
       providerPool: async (id) => {
         const candidate = snapshot.providers.find((entry) => entry.id === id)
         if (!candidate || !usable(candidate)) return undefined
-        if (credentialMode === 'kun-gateway' && (!httpModel(candidate) || candidate.kind !== 'http' || candidate.authType !== 'api-key')) return undefined
+        if (credentialMode === 'kun-gateway' && !exposableProvider(candidate)) return undefined
         if (harnessId === 'kun' && !httpModel(candidate)) return undefined
-        return { kind: candidate.kind, models: modelIds(candidate) }
+        return { kind: candidate.kind, models: modelIds(candidate), gatewayExportable: exposableProvider(candidate) }
       }, probedModels: this.deps.probedModels })
     if ('error' in resolved) throw new Error(resolved.error)
     const route = resolved.route
@@ -127,7 +128,7 @@ export class WorkbenchHarnessService {
     }
     signal.throwIfAborted()
     const listed = await listHarnessesForManager({ ...this.deps, detector: { status }, providers: async () => providers.map((entry) => ({
-      providerId: entry.id, label: entry.name, kind: entry.kind, models: modelIds(entry)
+      providerId: entry.id, label: entry.name, kind: entry.kind, models: modelIds(entry), gatewayExportable: exposableProvider(entry)
     })) })
     const agents = await Promise.all(listed.agents.slice(0, 30).map(async (agent) => {
       signal.throwIfAborted()

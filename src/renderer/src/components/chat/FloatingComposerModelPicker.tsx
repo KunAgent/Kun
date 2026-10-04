@@ -61,6 +61,8 @@ type Props = {
   composerModelGroups?: ModelProviderModelGroup[]
   emptyModelState?: 'loading' | 'agent-default' | 'unavailable'
   canChangeModel: boolean
+  /** Transport capability limit, independent of upstream model metadata. */
+  allowedReasoningEfforts?: readonly ComposerReasoningEffort[]
   controlVariant?: 'combined' | 'split'
   stretch?: boolean
   composerReasoningEffort?: string
@@ -80,6 +82,7 @@ export function FloatingComposerModelPicker({
   composerModelGroups = [],
   emptyModelState,
   canChangeModel,
+  allowedReasoningEfforts,
   controlVariant = 'combined',
   stretch = false,
   composerReasoningEffort = 'max',
@@ -139,7 +142,8 @@ export function FloatingComposerModelPicker({
   const needsProviderSetup = !emptyModelMessage && shouldShowProviderSetupPrompt(providerMenuGroups)
   const nativeModel = selectedProviderGroup?.nativeHarnessId === 'devin' ? selectedProviderGroup.modelInfo?.[currentModel] : undefined
   const reasoningOptions = reasoningOptionsForModel(currentModelProfile).filter((option) =>
-    selectedProviderGroup?.nativeHarnessId !== 'devin' || nativeModel?.reasoningEfforts?.includes(option.id))
+    (!allowedReasoningEfforts || allowedReasoningEfforts.includes(option.id)) &&
+    (selectedProviderGroup?.nativeHarnessId !== 'devin' || nativeModel?.reasoningEfforts?.includes(option.id)))
   const reasoningEnabled =
     !needsProviderSetup && !emptyModelMessage && Boolean(onComposerReasoningEffortChange) && reasoningOptions.length > 0
   const fastModeState: ComposerFastModeState = onComposerFastModeChange

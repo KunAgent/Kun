@@ -149,6 +149,9 @@ export function diffUsage(current: UsageSnapshot, previous: UsageSnapshot): Usag
     ...diffOptionalField('tokenEconomySavingsUsd', current, previous),
     ...diffOptionalField('tokenEconomySavingsCny', current, previous),
     ...(current.hasError ? { hasError: true } : {}),
+    ...(current.gateway ? { gateway: { ...current.gateway } } : {}),
+    ...(current.requestTtftMs !== undefined ? { requestTtftMs: current.requestTtftMs } : {}),
+    ...(current.requestGenerationMs !== undefined ? { requestGenerationMs: current.requestGenerationMs } : {}),
     ...(current.avgTtftMs !== undefined ? { avgTtftMs: current.avgTtftMs } : {}),
     ...(current.avgTokensPerSecond !== undefined
       ? { avgTokensPerSecond: current.avgTokensPerSecond }

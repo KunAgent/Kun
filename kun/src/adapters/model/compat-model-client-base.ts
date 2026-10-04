@@ -63,6 +63,7 @@ import { decodeCompatNonStreamingResponse } from './compat-non-streaming-decoder
 import type { CompatModelClientConfig, ChatMessage, CompatPostResult } from './compat-model-types.js'
 import { isCodexEndpoint, ignoreModelTraceFailure } from './compat-model-support.js'
 import { isDeepSeekHost } from './model-error-probe.js'
+import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
 
 export class CompatModelClientBase {
   readonly provider = 'compat'
@@ -153,8 +154,23 @@ export class CompatModelClientBase {
         | 'stream_options_fallback'
         | 'request_fallback'
       apiKey: string
+      gatewayRouting?: ModelRequest['gatewayRouting']
     }
   ): Promise<CompatPostResult> {
+    if (trace.gatewayRouting) {
+      try {
+        await trace.gatewayRouting.beforeDispatch?.()
+        trace.gatewayRouting.assertCurrent?.()
+      } catch (error) {
+        return { kind: 'error', code: 'gateway_route_changed',
+          message: error instanceof GatewayRouteChangedError ? error.message : 'Gateway provider configuration changed.',
+          failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+      }
+      if (trace.gatewayRouting.takeAttempt && !trace.gatewayRouting.takeAttempt()) {
+        return { kind: 'error', code: 'route_attempt_budget_exhausted', message: 'Gateway upstream attempt budget exhausted.',
+          failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+      }
+    }
     const bodyText = JSON.stringify(body)
     const traceRound = trace.round
     const traceSink = this.config.debugSink
@@ -170,6 +186,7 @@ export class CompatModelClientBase {
         }))
       : undefined
     try {
+      trace.gatewayRouting?.assertCurrent?.()
       const response = await this.fetchImpl(url, {
         method: 'POST',
         headers,
@@ -183,6 +200,10 @@ export class CompatModelClientBase {
       }
       return { kind: 'response', response }
     } catch (error) {
+      if (error instanceof GatewayRouteChangedError) {
+        return { kind: 'error', code: 'gateway_route_changed', message: error.message,
+          failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+      }
       if (traceRecord) {
         ignoreModelTraceFailure(() => traceSink?.captureHttpError(traceRecord, error))
       }

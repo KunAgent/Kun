@@ -224,7 +224,7 @@ export interface SdkHookMatcher {
 export interface SdkQueryOptions {
   model?: string
   effort?: 'low' | 'medium' | 'high' | 'max'
-  thinking?: { type: 'adaptive' }
+  thinking?: { type: 'adaptive' } | { type: 'disabled' }
   cwd?: string
   systemPrompt?: string | SdkSystemPromptPreset
   /** Base set of Claude Code built-ins. An empty array disables all built-ins. */

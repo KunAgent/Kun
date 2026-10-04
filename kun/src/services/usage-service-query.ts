@@ -58,7 +58,7 @@ export type ThreadUsageRecord = {
   providerId?: string
   relation?: ThreadRelation
   /** Record origin; absent records are native loop usage. */
-  source?: 'native' | 'harness-gateway' | 'harness-reported'
+  source?: 'native' | 'harness-gateway' | 'harness-reported' | 'public-gateway'
   harnessId?: string
   completedAt: string
   usage: UsageSnapshot

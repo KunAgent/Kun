@@ -1,3 +1,4 @@
+import { shellQuote } from '@shared/gateway-client-setup'
 import { settingsButtonClass } from './settings-button'
 import type { ModelRoutePoolV1 } from '@shared/app-settings'
 import type { KunRuntimeSettingsSyncStatusPayload } from '@shared/kun-gui-api'
@@ -20,7 +21,7 @@ import type {
   RouteTestTarget
 } from './settings-section-model-routes'
 
-type GatewayApiTab = 'models' | 'chat' | 'responses'
+type GatewayApiTab = 'models' | 'chat' | 'responses' | 'messages'
 
 export function EmptyRoutePoolState({ onAdd, t }: { onAdd: () => void; t: TFunction }): ReactElement {
   return (
@@ -90,6 +91,7 @@ export function LocalGatewayApiDialog({
             <div className="grid gap-1">
               <ApiGuideTab active={tab === 'models'} onClick={() => setTab('models')} method="GET" path="/models">{t('modelRoutes.modelList')}</ApiGuideTab>
               <ApiGuideTab active={tab === 'chat'} onClick={() => setTab('chat')} method="POST" path="/chat/completions">{t('modelRoutes.chatCompletions')}</ApiGuideTab>
+              <ApiGuideTab active={tab === 'messages'} onClick={() => setTab('messages')} method="POST" path="/messages">Anthropic Messages</ApiGuideTab>
               <ApiGuideTab active={tab === 'responses'} onClick={() => setTab('responses')} method="POST" path="/responses">{t('modelRoutes.responses')}</ApiGuideTab>
             </div>
             <div className="mt-4 rounded-lg border border-ds-border bg-ds-card p-2.5 text-[10.5px] leading-4 text-ds-muted">
@@ -104,7 +106,7 @@ export function LocalGatewayApiDialog({
                 <div className="flex items-center gap-2"><span className={`rounded-md px-1.5 py-0.5 font-mono text-[10.5px] font-semibold ${guide.method === 'GET' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200' : 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200'}`}>{guide.method}</span><h3 className="font-mono text-[14px] font-semibold text-ds-ink">{guide.path}</h3></div>
                 <p className="mt-2 text-[12px] leading-5 text-ds-muted">{guide.description}</p>
               </div>
-              <span className="rounded-full bg-ds-main px-2 py-1 text-[10.5px] text-ds-muted">{t('modelRoutes.openAiCompatible')}</span>
+              <span className="rounded-full bg-ds-main px-2 py-1 text-[10.5px] text-ds-muted">{tab === 'messages' ? 'Anthropic Messages' : t('modelRoutes.openAiCompatible')}</span>
             </div>
 
             <div className="mt-4 rounded-xl border border-ds-border bg-ds-main/45 p-3">
@@ -163,8 +165,14 @@ function gatewayApiGuide(tab: GatewayApiTab, baseUrl: string, modelId: string, t
     path: '/models',
     description: t('modelRoutes.guideModelsDesc'),
     fields: [t('modelRoutes.guideModelsNoBody'), t('modelRoutes.guideModelsEnabledOnly')],
-    notes: [t('modelRoutes.guideModelsResponse'), t('modelRoutes.guideModelsDisabled')],
-    example: `curl --request GET ${baseUrl}/models`
+    notes: [t('gatewayConnection.authRequired'), t('modelRoutes.guideModelsResponse'), t('modelRoutes.guideModelsDisabled')],
+    example: buildGatewayModelsCurlExample(baseUrl)
+  }
+  if (tab === 'messages') return {
+    method: 'POST', path: '/messages', description: t('gatewayConnection.messagesDesc'),
+    fields: [t('modelRoutes.guideFieldModel', { modelId }), 'max_tokens: 256', 'messages: [{ role: \'user\', content: \'Hello\' }]', 'stream: true | false'],
+    notes: [t('gatewayConnection.messagesLimits'), t('gatewayConnection.authRequired')],
+    example: buildGatewayMessagesCurlExample(baseUrl, modelId)
   }
   if (tab === 'responses') return {
     method: 'POST',
@@ -198,28 +206,36 @@ function gatewayApiGuide(tab: GatewayApiTab, baseUrl: string, modelId: string, t
   }
 }
 
+export function buildGatewayModelsCurlExample(baseUrl: string): string {
+  return `curl --request GET ${shellQuote(`${baseUrl}/models`)} \\
+  --header 'Authorization: Bearer <LOCAL_GATEWAY_API_KEY>'`
+}
+
+function gatewayJsonCurl(baseUrl: string, path: string, body: unknown, anthropic = false): string {
+  const headers = anthropic
+    ? ["  --header 'x-api-key: <LOCAL_GATEWAY_API_KEY>'", "  --header 'anthropic-version: 2023-06-01'"]
+    : ["  --header 'Authorization: Bearer <LOCAL_GATEWAY_API_KEY>'"]
+  return [`curl --request POST ${shellQuote(`${baseUrl}${path}`)}`, ...headers,
+    "  --header 'Content-Type: application/json'",
+    `  --data ${shellQuote(JSON.stringify(body, null, 2))}`].join(' \\\n')
+}
+
 export function buildGatewayCurlExample(baseUrl: string, modelId: string, t: TFunction): string {
-  return `curl --request POST ${baseUrl}/chat/completions \\
-  --header 'Authorization: Bearer <LOCAL_GATEWAY_API_KEY>' \\
-  --header 'Content-Type: application/json' \\
-  --data '{
-    "model": "${modelId}",
-    "messages": [
-      { "role": "user", "content": ${JSON.stringify(t('modelRoutes.exampleChatPrompt'))} }
-    ],
-    "stream": false
-  }'`
+  return gatewayJsonCurl(baseUrl, '/chat/completions', {
+    model: modelId, messages: [{ role: 'user', content: t('modelRoutes.exampleChatPrompt') }], stream: false
+  })
+}
+
+export function buildGatewayMessagesCurlExample(baseUrl: string, modelId: string): string {
+  return gatewayJsonCurl(baseUrl, '/messages', {
+    model: modelId, max_tokens: 256, messages: [{ role: 'user', content: 'Hello' }], stream: false
+  }, true)
 }
 
 function buildGatewayResponsesCurlExample(baseUrl: string, modelId: string, t: TFunction): string {
-  return `curl --request POST ${baseUrl}/responses \\
-  --header 'Authorization: Bearer <LOCAL_GATEWAY_API_KEY>' \\
-  --header 'Content-Type: application/json' \\
-  --data '{
-    "model": "${modelId}",
-    "input": ${JSON.stringify(t('modelRoutes.exampleResponsesPrompt'))},
-    "stream": false
-  }'`
+  return gatewayJsonCurl(baseUrl, '/responses', {
+    model: modelId, input: t('modelRoutes.exampleResponsesPrompt'), stream: false
+  })
 }
 
 export const inputClass = 'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink outline-none focus:border-accent/50'

@@ -98,13 +98,13 @@ export function llmDebugCaptureEnabled(
  */
 export function localModelGatewayApplyIssue(
   options: Pick<KunServeRuntimeOptions, 'localModelGateway' | 'host'>,
-  credentials: { hasKey(): boolean }
+  credentials: { hasActiveCredentials(): boolean }
 ): { code: string; message: string } | null {
   if (!options.localModelGateway?.enabled) return null
-  if (!credentials.hasKey()) {
+  if (!credentials.hasActiveCredentials()) {
     return {
       code: 'gateway_key_missing',
-      message: 'local model gateway requires an independent API key; ensure a key before enabling it'
+      message: 'local model gateway requires an active client or shared API key before enabling it'
     }
   }
   if (!isLoopbackHost(options.host)) {

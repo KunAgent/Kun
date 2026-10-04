@@ -52,6 +52,7 @@ import type { BackgroundShellRuntime } from '../../services/background-shell-run
 import type { ModelClient } from '../../ports/model-client.js'
 import type { ModelRoutePoolConfig } from '../../contracts/model-route-pool.js'
 import type { GatewayCredentialService } from '../../services/gateway-credential-service.js'
+import type { GatewayUsageService } from '../../services/gateway-usage-service.js'
 import type { RoutePoolHealthStore } from '../../adapters/model/route-pool-model-client.js'
 import type { RoutePoolTestService } from '../../services/route-pool-test-service.js'
 import type { GraphRuntimeConfig, RolesConfig } from '../../config/kun-config.js'
@@ -368,6 +369,7 @@ export type ServerRuntime = {
     health: RoutePoolHealthStore
     tests: RoutePoolTestService
     credentials: GatewayCredentialService
+    usage?: GatewayUsageService
     /**
      * Capability lookup for a gateway-addressed model (pool model id or a
      * providerId/modelId pair). Lets gateway entry points reject inputs the

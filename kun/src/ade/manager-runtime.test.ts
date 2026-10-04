@@ -420,7 +420,7 @@ describe('ManagerRuntime.createWorker', () => {
     const { runtime } = makeRuntime({
       providerPool: async (providerId) =>
         providerId === 'deepseek'
-          ? { kind: 'http', models: ['deepseek-chat', 'deepseek-reasoner'] }
+          ? { kind: 'http', gatewayExportable: true, models: ['deepseek-chat', 'deepseek-reasoner'] }
           : undefined
     })
     const result = await runtime.createWorker(managerCtx(), {

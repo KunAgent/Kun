@@ -8,7 +8,25 @@ import { z } from 'zod'
  * the values are absent, `cacheHitRate` is reported as `null` rather than
  * guessing at zero.
  */
+/** Request-local gateway metadata. Contains no prompt, output, header values, or secrets. */
+export const GatewayUsageMetadataSchema = z.object({
+  clientId: z.string().min(1),
+  requestId: z.string().min(1),
+  /** Opaque hash bound to the authenticated client; never a Kun thread id. */
+  sessionId: z.string().min(1).optional(),
+  status: z.enum(['completed', 'failed', 'cancelled']),
+  latencyMs: z.number().nonnegative(),
+  retryCount: z.number().int().nonnegative(),
+  failoverCount: z.number().int().nonnegative(),
+  tokenUsage: z.enum(['upstream', 'unavailable']),
+  /** Costs are not a reconciled provider bill, even when upstream supplies them. */
+  costBasis: z.literal('unverified'),
+  httpStatus: z.number().int().min(400).max(599).optional()
+}).strict()
+export type GatewayUsageMetadata = z.infer<typeof GatewayUsageMetadataSchema>
+
 export const UsageSnapshotSchema = z.object({
+  gateway: GatewayUsageMetadataSchema.optional(),
   promptTokens: z.number().int().nonnegative(),
   completionTokens: z.number().int().nonnegative(),
   /** Provider-reported reasoning tokens when separately available. */
@@ -263,7 +281,7 @@ export const TurnUsageCountersSchema = z.object({
 }).strict()
 export type TurnUsageCounters = z.infer<typeof TurnUsageCountersSchema>
 
-export const UsageEventSourceSchema = z.enum(['native', 'harness-gateway', 'harness-reported'])
+export const UsageEventSourceSchema = z.enum(['native', 'harness-gateway', 'harness-reported', 'public-gateway'])
 export type UsageEventSource = z.infer<typeof UsageEventSourceSchema>
 
 export const TurnUsageBucketSchema = TurnUsageCountersSchema.extend({

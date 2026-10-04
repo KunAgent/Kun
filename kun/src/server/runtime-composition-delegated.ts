@@ -125,7 +125,10 @@ export function buildMainDelegatedRuntime(
     harnessCatalog: services.harnesses.catalog,
     graphHarnessSummary,
     resolveDefaultProviderId: async () => (await modelConnections.snapshot()).defaultProviderId,
-    listProviderModels: async (providerId) => (await providerPool.poolEntry(providerId))?.models ?? [],
+    listProviderModels: async (providerId) => {
+      const provider = await providerPool.poolEntry(providerId)
+      return provider?.gatewayExportable ? provider.models : []
+    },
     ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
   }
   const antigravityRuntimeDeps: AntigravityCliRuntimeDeps = {

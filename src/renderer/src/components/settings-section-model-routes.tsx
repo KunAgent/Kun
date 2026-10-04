@@ -1,3 +1,4 @@
+import { GatewayConnectionCenter } from './gateway-connection-center'
 import { settingsButtonClass } from './settings-button'
 import type { ModelProviderSettingsV1, ModelRoutePoolV1, ModelRouteStrategy } from '@shared/app-settings'
 import {
@@ -41,6 +42,8 @@ import { useGatewayCredentialControls } from './use-gateway-credential-controls'
 import { useRuntimeSettingsSyncStatus } from './use-runtime-settings-sync-status'
 
 export type RouteStatus = {
+  exportableModelIds?: string[]
+  gatewayExportPools?: Array<{ id: string; modelId: string; exportable: boolean; targets: Array<{ id: string; providerId: string; modelId: string; exportable: boolean; reason?: string }> }>
   localGateway?: { enabled: boolean; exposeProviderModels?: boolean; credential?: GatewayCredentialStatus }
   pools?: ModelRoutePoolV1[]
   configuredPools?: ModelRoutePoolV1[]
@@ -300,7 +303,7 @@ export function ModelRoutesSettings({
     gatewaySectionIssue && ['gateway_key_missing', 'gateway_disabled'].includes(gatewaySectionIssue.code)
   )
   const gatewayBaseUrl = `${publicBaseUrl.replace(/\/$/, '')}/v1`
-  const sampleModelId = executablePools.find((pool) => pool.enabled && pool.targets.some((target) => target.enabled))?.modelId
+  const sampleModelId = executablePools.find((pool) => pool.enabled && status?.exportableModelIds?.includes(pool.modelId))?.modelId
   const apiExampleModelId = sampleModelId || 'your-public-model-id'
   const curlExample = buildGatewayCurlExample(gatewayBaseUrl, apiExampleModelId, t)
   const copyGatewayText = async (value: string, kind: 'base-url' | 'curl' | 'api-example'): Promise<void> => {
@@ -457,6 +460,7 @@ export function ModelRoutesSettings({
               <ApiCompatibilityPill>GET /models</ApiCompatibilityPill>
               <ApiCompatibilityPill>POST /chat/completions</ApiCompatibilityPill>
               <ApiCompatibilityPill>POST /responses</ApiCompatibilityPill>
+              <ApiCompatibilityPill>POST /messages</ApiCompatibilityPill>
             </div>
           </div>
           <div className="flex items-end gap-2 lg:flex-col lg:items-stretch lg:justify-center">
@@ -478,6 +482,9 @@ export function ModelRoutesSettings({
           onCopy={(value) => void copyGatewayText(value, 'api-example')}
         /> : null}
         </section>
+        <GatewayConnectionCenter translation={t} settings={settings} pools={executablePools} baseUrl={gatewayBaseUrl}
+          gatewayExportPools={status?.gatewayExportPools ?? []} exportableModelIds={status?.exportableModelIds ?? []} synced={configurationSynced && persistenceReady} active={active && activeSettingsTab === 'gateway'} tests={status?.tests ?? []}
+          onEditRoute={(id) => { setSelectedId(id); setActiveSettingsTab('models') }} />
       </SettingsTabPanel>
       <aside className={`${activeSettingsTab === 'gateway' ? 'hidden' : 'grid'} min-w-0 content-start gap-3 border-b border-ds-border-muted pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4`}>
         <div className="flex items-start justify-between gap-2">

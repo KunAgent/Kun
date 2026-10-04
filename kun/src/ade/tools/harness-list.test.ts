@@ -45,10 +45,22 @@ function deps(overrides: Partial<HarnessListDeps> = {}): HarnessListDeps {
 }
 
 describe('listHarnessesForManager', () => {
+  it('keeps native SDK models separate from gateway model export', async () => {
+    const out = await listHarnessesForManager(deps({ providers: async () => [
+      { providerId: 'native', kind: 'agent-sdk', gatewayExportable: false, models: ['native-model'] },
+      { providerId: 'unknown', kind: 'http', models: ['unknown-model'] },
+      { providerId: 'key', kind: 'http', gatewayExportable: true, models: ['key-model'] }
+    ] }))
+    const claude = out.agents.find((entry) => entry.harnessId === 'claude-code')!
+    expect(claude.models.filter((entry) => entry.credentialMode === 'kun-gateway'))
+      .toEqual([{ model: 'kun/key/key-model', providerId: 'key', credentialMode: 'kun-gateway' }])
+    expect(claude.models).toContainEqual({ model: 'native-model', providerId: 'native', credentialMode: 'native-login' })
+  })
+
   it('does not expose any model from an unapproved credential profile', async () => {
     const out = await listHarnessesForManager(deps({
       catalog: { ...catalog, isProfileEnabled: (route: Pick<HarnessRoute, 'harnessId'>) => route.harnessId === 'kun' } as never,
-      providers: async () => [{ providerId: 'deepseek', kind: 'http', models: ['deepseek-chat'] }]
+      providers: async () => [{ providerId: 'deepseek', kind: 'http', gatewayExportable: true, models: ['deepseek-chat'] }]
     }))
     expect(out.agents.filter((agent) => agent.harnessId !== 'kun').every((agent) => agent.models.length === 0)).toBe(true)
     expect(out.agents.find((agent) => agent.harnessId === 'kun')!.models).toHaveLength(1)
@@ -56,8 +68,8 @@ describe('listHarnessesForManager', () => {
 
   it('lists static models under native-login and gateway groups under kun-gateway', async () => {
     const providers: HarnessProviderModelGroup[] = [
-      { providerId: 'deepseek', label: 'DeepSeek', kind: 'http', models: ['deepseek-chat'] },
-      { providerId: 'moonshot', kind: 'http', models: ['kimi-k2'] }
+      { providerId: 'deepseek', label: 'DeepSeek', kind: 'http', gatewayExportable: true, models: ['deepseek-chat'] },
+      { providerId: 'moonshot', kind: 'http', gatewayExportable: true, models: ['kimi-k2'] }
     ]
     const out = await listHarnessesForManager(
       deps({ providers: async () => providers })
@@ -100,7 +112,7 @@ describe('listHarnessesForManager', () => {
     const providers: HarnessProviderModelGroup[] = [
       {
         providerId: 'deepseek',
-        kind: 'http',
+        kind: 'http', gatewayExportable: true,
         models: Array.from({ length: 11 }, (_, index) => `m${index}`)
       }
     ]
@@ -116,7 +128,7 @@ describe('listHarnessesForManager', () => {
 
   it('filters provider-mode groups to the harness connection kind', async () => {
     const providers: HarnessProviderModelGroup[] = [
-      { providerId: 'deepseek', kind: 'http', models: ['deepseek-chat'] },
+      { providerId: 'deepseek', kind: 'http', gatewayExportable: true, models: ['deepseek-chat'] },
       { providerId: 'cursor-prov', kind: 'cursor-sdk', models: ['composer-2'] }
     ]
     const out = await listHarnessesForManager(
@@ -134,7 +146,7 @@ describe('listHarnessesForManager', () => {
 
   it('keeps the manager current model at the head of the kun list', async () => {
     const providers: HarnessProviderModelGroup[] = [
-      { providerId: 'deepseek', kind: 'http', models: ['deepseek-chat'] }
+      { providerId: 'deepseek', kind: 'http', gatewayExportable: true, models: ['deepseek-chat'] }
     ]
     const out = await listHarnessesForManager(
       deps({ providers: async () => providers }),

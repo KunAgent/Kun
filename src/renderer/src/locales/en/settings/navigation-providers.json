@@ -445,7 +445,7 @@
     "localApi": "Local API",
     "localApiEnabledLocalOnly": "Enabled · Local access only",
     "disabled": "Disabled",
-    "apiCompatibilityDesc": "Compatible with OpenAI Chat Completions and Responses. Public model IDs come from the routed models below.",
+    "apiCompatibilityDesc": "Compatible with OpenAI Chat Completions, Responses, and Anthropic Messages. Public model IDs come from the routed models below.",
     "copyLocalApiAddress": "Copy local API address",
     "copied": "Copied",
     "copy": "Copy",
@@ -579,7 +579,11 @@
     "guideChatModelMissing": "An unknown model returns 404 (model_not_found).",
     "exampleChatPrompt": "Hello, Kun!",
     "exampleResponsesPrompt": "Introduce the Kun local gateway in one sentence.",
-    "statusRequestFailed": "Kun Runtime status request failed ({{status}})"
+    "statusRequestFailed": "Kun Runtime status request failed ({{status}})",
+    "targetAccountModel": "Account / model",
+    "targetUnavailable": "unavailable for gateway",
+    "targetNativeOnly": "This account is available only through its native Agent, not as a gateway model API.",
+    "stableAliasHint": "Clients keep the same alias. Account and model changes apply to new requests; in-flight requests keep their route."
   },
   "modelProviderCompactSelect": "Choose provider",
   "modelProviderSearchPlaceholder": "Search providers…",

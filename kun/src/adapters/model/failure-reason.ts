@@ -298,7 +298,11 @@ export function circuitCooldownMs(input: {
   const reason = input.reason ?? 'other'
   const deterministic =
     reason === 'credit' || reason === 'quota' || reason === 'rate' || reason === 'auth'
-  const open = deterministic || input.consecutiveFailures >= input.policy.failureThreshold
+  const retryAfterMs = Number.isFinite(input.retryAfterMs) && (input.retryAfterMs ?? 0) > 0
+    ? Math.min(MAX_RESET_DELAY_MS, input.retryAfterMs!) : undefined
+  // Retry-After is binding even on a 503 or a legacy adapter that omits its
+  // reason. Do not hit the same target again until that window has passed.
+  const open = deterministic || retryAfterMs !== undefined || input.consecutiveFailures >= input.policy.failureThreshold
   if (!open) return { open: false, durationMs: 0 }
   const resetDelayMs = input.resetAt !== undefined
     ? Math.max(0, Math.min(MAX_RESET_DELAY_MS, Date.parse(input.resetAt) - now))
@@ -312,7 +316,7 @@ export function circuitCooldownMs(input: {
       durationMs = resetDelayMs ?? input.policy.quotaCooldownMs ?? 900_000
       break
     case 'rate':
-      durationMs = input.retryAfterMs ?? resetDelayMs ?? input.policy.cooldownMs
+      durationMs = retryAfterMs ?? resetDelayMs ?? input.policy.cooldownMs
       break
     case 'auth':
       durationMs = input.policy.authCooldownMs ?? 1_800_000
@@ -323,7 +327,7 @@ export function circuitCooldownMs(input: {
       durationMs = Math.min(maxCooldownMs, input.policy.cooldownMs * 2 ** exponent)
     }
   }
-  durationMs = Math.max(durationMs, input.retryAfterMs ?? 0)
+  durationMs = Math.max(durationMs, retryAfterMs ?? 0)
   return { open: true, durationMs: Math.min(MAX_RESET_DELAY_MS, durationMs) }
 }
 

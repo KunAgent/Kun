@@ -35,6 +35,7 @@ export type ResolvedWorkerRoute = {
 export type WorkerProviderPoolEntry = {
   kind?: string
   models: string[]
+  gatewayExportable?: boolean
 }
 
 /**
@@ -265,10 +266,16 @@ async function providerRoute(
         'pass model or kun/<provider>/<model>'
     }
   }
+  if (mode === 'kun-gateway' && !input.providerPool) {
+    return { error: 'Gateway provider eligibility is unavailable' }
+  }
   if (input.providerPool) {
     const pool = await input.providerPool(providerId).catch(() => undefined)
     if (!pool) {
       return { error: `provider "${providerId}" is not a configured Kun model connection` }
+    }
+    if (mode === 'kun-gateway' && pool.gatewayExportable !== true) {
+      return { error: `provider "${providerId}" is not eligible for model gateway export` }
     }
     const requiredKind = mode === 'provider' ? legacyProviderKindFor(def.id) : undefined
     if (requiredKind && pool.kind && pool.kind !== requiredKind) {
@@ -277,7 +284,7 @@ async function providerRoute(
           `and cannot serve harness ${def.id}`
       }
     }
-    if (pool.models.length > 0 && !pool.models.includes(chosen)) {
+    if ((mode === 'kun-gateway' || pool.models.length > 0) && !pool.models.includes(chosen)) {
       return { error: `provider "${providerId}" does not offer model "${chosen}"` }
     }
   }

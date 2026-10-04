@@ -1,10 +1,10 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { GatewayCredentialService } from '../../services/gateway-credential-service.js'
+import { GATEWAY_REQUEST_TIMEOUT_MS } from '../../adapters/model/gateway-routing-budget.js'
 
 const DEFAULT_CAPACITY = 20
 const DEFAULT_REFILL_PER_SECOND = 1
 const DEFAULT_CONCURRENCY = 2
-const DEFAULT_TIMEOUT_MS = 120_000
 
 export type GatewayLease = {
   signal: AbortSignal
@@ -63,7 +63,7 @@ export class GatewayRequestGuard {
     const timer = setTimeout(() => {
       timeoutReached = true
       controller.abort(new Error('gateway request timed out'))
-    }, this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+    }, this.options.timeoutMs ?? GATEWAY_REQUEST_TIMEOUT_MS)
     timer.unref?.()
     const release = () => {
       if (released) return

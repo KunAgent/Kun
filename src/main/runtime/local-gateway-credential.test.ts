@@ -53,6 +53,16 @@ describe('reconcileLocalGatewayCredential', () => {
     expect(harness.updateIf).not.toHaveBeenCalled()
   })
 
+  it('does not regenerate a revoked shared key when per-client credentials are active', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ credential: { configured: false }, activeCredentials: true }), { status: 200 })
+    )
+    expect(await reconcileLocalGatewayCredential(settingsWithGateway(true), 'test'))
+      .toEqual({ outcome: 'unchanged' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(harness.updateIf).not.toHaveBeenCalled()
+  })
+
   it('ensures the missing key without touching settings', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify({ credential: { configured: false } }), { status: 200 }))

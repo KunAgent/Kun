@@ -11,7 +11,7 @@ afterEach(async () => {
 })
 
 describe('localModelGatewayApplyIssue', () => {
-  const credentials = (hasKey: boolean) => ({ hasKey: () => hasKey })
+  const credentials = (hasActiveCredentials: boolean) => ({ hasActiveCredentials: () => hasActiveCredentials })
 
   it('passes when the gateway is disabled or absent', () => {
     expect(localModelGatewayApplyIssue({ host: '127.0.0.1' }, credentials(false))).toBeNull()

@@ -28,6 +28,7 @@ import type {
 } from '../ade/tools/harness-list.js'
 import type { ModelConnectionSnapshot } from '../contracts/model-connections.js'
 import { providerModelIds } from './routes/model-gateway-core.js'
+import { exposableProvider } from '../domain/model-gateway-export-policy.js'
 
 type RuntimeServices = Awaited<ReturnType<typeof createRuntimeServices>>
 
@@ -74,12 +75,13 @@ export function createProviderPoolAccess(
       providerId: provider.id,
       label: provider.name,
       kind: provider.kind,
+      gatewayExportable: exposableProvider(provider),
       models: providerModelIds(provider)
     }))
   const poolEntry = async (providerId: string) => {
     const provider = (await snapshot())?.providers
       .find((candidate) => candidate.id === providerId)
-    return provider ? { kind: provider.kind, models: providerModelIds(provider) } : undefined
+    return provider ? { kind: provider.kind, models: providerModelIds(provider), gatewayExportable: exposableProvider(provider) } : undefined
   }
   return { providers, poolEntry }
 }

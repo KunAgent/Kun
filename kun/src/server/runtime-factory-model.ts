@@ -20,6 +20,7 @@ import {
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { subscriptionBillingKind } from '../shared/subscription-billing.js'
 import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
+import { exposableProvider } from '../domain/model-gateway-export-policy.js'
 
 export async function hydrateLegacyCredentialOptions(
   options: KunServeRuntimeOptions,
@@ -84,7 +85,7 @@ export function buildModelClientRouterInput(
     geminiAuth?: GeminiCodeAssistCredential
     refreshable: boolean
   }>
-): { default: ModelClient; providers: Map<string, ModelClient> } {
+): { default: ModelClient; providers: Map<string, ModelClient>; gatewayClients: Map<string, ModelClient> } {
   const streamIdleOverride =
     options.runtime?.streamIdleTimeoutMs !== undefined
       ? { streamIdleTimeoutMs: options.runtime.streamIdleTimeoutMs }
@@ -152,6 +153,7 @@ export function buildModelClientRouterInput(
           ...streamIdleOverride
         })
   const providerClients = new Map<string, ModelClient>()
+  const gatewayClients = new Map<string, ModelClient>()
   for (const [providerId, provider] of Object.entries(options.providers ?? {})) {
     const trimmedId = providerId.trim()
     if (!trimmedId) continue
@@ -219,8 +221,11 @@ export function buildModelClientRouterInput(
           ...streamIdleOverride
         })
     providerClients.set(trimmedId, client)
+    if (exposableProvider({ kind, authType: provider.authType ?? 'api-key',
+      configured: Boolean(provider.apiKey.trim() || provider.credentialSourceId),
+      credentialStatus: 'ready' })) gatewayClients.set(trimmedId, client)
   }
-  return { default: defaultClient, providers: providerClients }
+  return { default: defaultClient, providers: providerClients, gatewayClients }
 }
 
 export function modelContextProfilesByProvider(
