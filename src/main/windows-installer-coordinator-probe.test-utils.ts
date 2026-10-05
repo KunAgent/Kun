@@ -28,13 +28,26 @@ export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: C
       '}',
       marker('entry')
     ].join('\n')
-    const instrumented = trace + '\n' + command
+    const waitForGui = 'if (Get-Process -Id $waitPid -ErrorAction SilentlyContinue) { Wait-Process -Id $waitPid -Timeout 90 -ErrorAction Stop }'
+    const tracedCommand = command
       .replace('Add-Type -TypeDefinition', marker('before-add-type') + '\nAdd-Type -TypeDefinition')
       .replace(/(\[KunOneShotDeadline\]::Start\(\d+, \$false\))/u,
         marker('before-deadline-start') + '\n$1\n' + marker('after-deadline-start'))
       .replace(validation, marker('before-validation') + '; ' + validation + '; ' + marker('after-validation'))
       .replace('$pipe=[IO.Pipes.NamedPipeClientStream]', marker('before-pipe') + '; $pipe=[IO.Pipes.NamedPipeClientStream]')
+      .replace(/(\$writer\.WriteLine\('armed:[^']+'\))/u, '$1; ' + marker('armed-sent'))
+      .replace('$pipe.Dispose()', '$pipe.Dispose(); ' + marker('pipe-disposed'))
+      .replace(waitForGui, marker('before-gui-wait') + '; ' + waitForGui + '; ' + marker('after-gui-wait'))
       .replace('Start-Process -FilePath $exe -ErrorAction Stop; exit 0', 'Start-Process -FilePath $exe -ErrorAction Stop; ' + marker('completed') + '; exit 0')
+    const instrumented = [
+      trace,
+      'try {',
+      tracedCommand,
+      '} catch {',
+      '  Write-CoordinatorProbe ("FAILED " + $_.FullyQualifiedErrorId + " " + $_.Exception.ToString() + " " + $_.ToString() + " " + $_.ScriptStackTrace + " " + $_.InvocationInfo.PositionMessage)',
+      '  throw',
+      '}'
+    ].join('\n')
     const instrumentedArgs = [...commandArgs]
     instrumentedArgs[bootstrapIndex] = trace.replace(marker('entry'), marker('bootstrap-entry')) + '\n' + bootstrap
       .replace(encoded, encodePowershellCommand(instrumented))
