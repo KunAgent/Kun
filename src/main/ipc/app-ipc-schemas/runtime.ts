@@ -221,6 +221,7 @@ function compileEndpoint(
 }
 
 const ENDPOINTS: readonly EndpointTemplate[] = [
+  compileEndpoint('/v1/threads/{threadId}/handoff-preview', ['GET']),
   compileEndpoint('/v1/agents/{agentId}/commitments', ['GET', 'POST']),
   compileEndpoint('/v1/agents/{agentId}/commitments/{commitmentId}', ['GET', 'PATCH']),
   compileEndpoint('/v1/agents/{agentId}/commitments/{commitmentId}/cancel', ['POST']),

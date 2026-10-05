@@ -6,16 +6,20 @@ import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Explicit, paid-account smoke: uses installed native logins, one tiny prompt per
+// Explicit, paid-account smoke: uses installed native logins, three short turns per
 // selected Agent, synthetic workspaces and an isolated Manager/Runtime profile.
 if (!process.argv.includes('--run')) {
-  console.log('Pass --run to send one short real prompt per Agent using existing native accounts.')
+  console.log('Pass --run to send three short real turns per Agent using existing native accounts.')
   process.exit(0)
 }
 const repository = fileURLToPath(new URL('../', import.meta.url))
 const imported = (path) => import(new URL('../kun/dist/' + path, import.meta.url).href)
 const requested = process.argv.includes('--agents') ? process.argv[process.argv.indexOf('--agents') + 1].split(',')
   : ['devin', 'codex', 'opencode', 'deepseek-harness', 'claude-code']
+const turnCount = process.argv.includes('--turns') ? Number(process.argv[process.argv.indexOf('--turns') + 1]) : 3
+const selectedModel = process.env.KUN_SMOKE_MODEL || 'default'
+const checkTools = process.argv.includes('--tools')
+assert.ok(Number.isInteger(turnCount) && turnCount >= 1 && turnCount <= 10, '--turns must be between 1 and 10')
 const managedBinary = (directory, command) => {
   const path = join(homedir(), '.kun', 'agents', directory, 'node_modules', '.bin', command + (process.platform === 'win32' ? '.cmd' : ''))
   return existsSync(path) ? path : command
@@ -73,38 +77,59 @@ try {
     return data
   }
   for (const id of requested) {
-    const started = Date.now(), result = { id, status: 'checking' }
+    const started = Date.now(), result = { id, status: 'checking', turns: [] }
     report.results.push(result); await checkpoint()
     try {
-      const check = await api(`/v1/harnesses/${id}/test`, { level: 'handshake', credentialMode: 'native-login', timeoutMs: 60_000 })
+      const check = await api(`/v1/harnesses/${id}/test`, { level: 'handshake', credentialMode: 'native-login', model: selectedModel, timeoutMs: 60_000 })
       result.readiness = { ok: check.ok, authentication: check.readiness?.authentication,
         checks: check.readiness?.checks, detail: check.readiness?.detail, handshake: check.handshake?.detail }
       if (!check.ok) throw new Error('Native readiness failed')
       const workspace = join(root, 'workspace-' + id); await mkdir(workspace)
+      const fileCode = 'KUN_FILE_' + randomUUID().slice(0, 8)
+      if (checkTools) await writeFile(join(workspace, 'continuation-check.txt'), fileCode + '\n')
       const thread = await api('/v1/threads', { title: 'Native Agent smoke', titleAuto: false, workspace,
-        model: 'default', harnessId: id, credentialMode: 'native-login', mode: 'agent',
+        model: selectedModel, harnessId: id, credentialMode: 'native-login', mode: 'agent',
         approvalPolicy: 'auto', sandboxMode: 'danger-full-access' })
       result.status = 'running'; result.threadId = thread.id; await checkpoint()
-      const startedTurn = await api(`/v1/threads/${thread.id}/turns`, { prompt: 'Reply with exactly KUN_NATIVE_OK. Do not use tools or inspect files.',
-        model: 'default', harnessId: id, credentialMode: 'native-login', mode: 'agent',
-        clientSurface: 'api', disableUserInput: true, approvalPolicy: 'auto', sandboxMode: 'danger-full-access' })
-      const deadline = Date.now() + 120_000
-      let turn
-      while (Date.now() < deadline) {
-        turn = await runtime.runtime.turnService.getTurn(thread.id, startedTurn.turnId)
-        if (turn && ['completed', 'failed', 'aborted'].includes(turn.status)) break
-        await new Promise((resolve) => setTimeout(resolve, 500))
+      const memoryCode = 'KUN_MEMORY_' + randomUUID().slice(0, 8)
+      for (let round = 1; round <= turnCount; round++) {
+        const expected = round === 2 ? memoryCode : round === 3 && checkTools ? fileCode : `KUN_NATIVE_OK_${round}`
+        const prompt = round === 1
+          ? `Remember this code for our conversation: ${memoryCode}. Reply with exactly ${expected}. Do not use tools or inspect files.`
+          : round === 2 ? 'What code did I ask you to remember in my previous message? Reply with just that code. Do not use tools or inspect files.'
+            : round === 3 && checkTools
+              ? 'Read continuation-check.txt in the current working directory and reply with only its contents. Do not change files or access the network.'
+              : `Reply with exactly ${expected}. Do not use tools or inspect files.`
+        const startedTurn = await api(`/v1/threads/${thread.id}/turns`, { prompt,
+          model: selectedModel, harnessId: id, credentialMode: 'native-login', mode: 'agent',
+          clientSurface: 'api', disableUserInput: true, approvalPolicy: 'auto', sandboxMode: 'danger-full-access' })
+        const deadline = Date.now() + 120_000
+        let turn
+        while (Date.now() < deadline) {
+          turn = await runtime.runtime.turnService.getTurn(thread.id, startedTurn.turnId)
+          if (turn && ['completed', 'failed', 'aborted'].includes(turn.status)) break
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        }
+        if (!turn || !['completed', 'failed', 'aborted'].includes(turn.status)) {
+          await runtime.runtime.turnService.interruptTurn({ threadId: thread.id, turnId: startedTurn.turnId })
+          throw new Error('Native turn timed out')
+        }
+        const items = await runtime.runtime.sessionStore.loadItems(thread.id)
+        const text = items.filter((item) => item.turnId === startedTurn.turnId && item.kind === 'assistant_text').map((item) => item.text).join('')
+        result.status = turn.status; result.code = turn.terminalCode
+        const events = await runtime.runtime.sessionStore.loadEventsSince(thread.id, 0)
+        const diagnostics = events.filter((event) => event.turnId === startedTurn.turnId && event.kind === 'delegated_runtime')
+          .map((event) => ({ phase: event.phase, reason: event.reason }))
+        result.turns.push({ round, status: turn.status, outputMatches: text.includes(expected), outputLength: text.length,
+          toolReadCheck: round === 3 && checkTools,
+          diagnostics, handoffs: events.filter((event) => event.turnId === startedTurn.turnId && event.kind === 'handoff_injected').length })
+        result.outputMatches = result.turns.every((entry) => entry.outputMatches)
+        if (turn.error) result.error = redactApprovalSensitiveText(turn.error).slice(0, 700)
+        result.ok = turn.status === 'completed' && result.outputMatches
+        await checkpoint()
+        console.log(JSON.stringify({ id, ...result.turns.at(-1) }))
+        if (!result.ok) break
       }
-      if (!turn || !['completed', 'failed', 'aborted'].includes(turn.status)) {
-        await runtime.runtime.turnService.interruptTurn({ threadId: thread.id, turnId: startedTurn.turnId })
-        throw new Error('Native turn timed out')
-      }
-      const items = await runtime.runtime.sessionStore.loadItems(thread.id)
-      const text = items.filter((item) => item.turnId === startedTurn.turnId && item.kind === 'assistant_text').map((item) => item.text).join('')
-      result.status = turn.status; result.code = turn.terminalCode
-      result.outputMatches = text.includes('KUN_NATIVE_OK')
-      if (turn.error) result.error = redactApprovalSensitiveText(turn.error).slice(0, 700)
-      result.ok = turn.status === 'completed' && result.outputMatches
     } catch (error) { result.ok = false; result.status = 'failed'; result.error = redactApprovalSensitiveText(String(error)).slice(0, 700) }
     result.durationMs = Date.now() - started; await checkpoint()
     console.log(JSON.stringify(result))

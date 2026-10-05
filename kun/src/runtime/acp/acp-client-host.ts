@@ -7,6 +7,7 @@
  * guessed owner.
  */
 import type { TurnItem } from '../../contracts/items.js'
+import { bindTurnMutationContext } from '../../manager/turn-mutation-context.js'
 import {
   makeToolCallItem,
   makeToolResultItem
@@ -125,7 +126,11 @@ export class AcpClientHost {
   }
 
   registerContext(ctx: AcpClientContext): void {
-    this.contexts.set(ctx.sessionId, ctx)
+    this.contexts.set(ctx.sessionId, { ...ctx,
+      approve: bindTurnMutationContext(ctx.approve),
+      ...(ctx.ensureCheckpoint ? { ensureCheckpoint: bindTurnMutationContext(ctx.ensureCheckpoint) } : {}),
+      ...(ctx.recordChange ? { recordChange: bindTurnMutationContext(ctx.recordChange) } : {}),
+      ...(ctx.elicit ? { elicit: bindTurnMutationContext(ctx.elicit) } : {}) })
   }
 
   unregisterContext(sessionId: string): void {

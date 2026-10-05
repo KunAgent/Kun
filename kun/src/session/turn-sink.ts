@@ -35,10 +35,26 @@ const APPROVAL_TOOL_NAMES: Record<HarnessApprovalRequest['kind'], string> = {
 }
 
 export class KunTimelineTurnSink implements HarnessTurnSink {
+  private pending: Promise<void> = Promise.resolve()
+  private failed = false
+  private failure: unknown
   constructor(private readonly deps: KunTimelineTurnSinkDeps) {}
 
   emit(drafts: Parameters<AcpDraftEmitter['emitAll']>[0]): Promise<void> {
-    return this.deps.emitter.emitAll(drafts)
+    const next = this.pending.then(() => {
+      if (this.failed) throw this.failure
+      return this.deps.emitter.emitAll(drafts)
+    })
+    // Native transports deliver notifications synchronously. Observe rejected
+    // writes here even when their caller cannot await, then fail flush rather
+    // than finishing a successful turn with missing output.
+    this.pending = next.catch((error) => { this.failed = true; this.failure = error })
+    return next
+  }
+
+  async flush(): Promise<void> {
+    await this.pending
+    if (this.failed) throw this.failure
   }
 
   async requestApproval(

@@ -3,6 +3,7 @@ import { SessionTurnRuntime, type SessionTurnRuntimeDeps } from './session-turn-
 import { HarnessAgentPool } from './harness-pool.js'
 import type { HarnessAgent, HarnessSession } from './harness-session.js'
 import { resolveSessionTurnContext, type SessionTurnContext } from './session-turn-context.js'
+import { makeAssistantTextItem } from '../domain/item.js'
 
 vi.mock('./session-turn-context.js', () => ({ resolveSessionTurnContext: vi.fn() }))
 const pools: HarnessAgentPool<HarnessAgent>[] = []
@@ -34,10 +35,30 @@ function fixture() {
     turns: { finishTurn }, events: { record }, sessionStore: { loadItems: async () => [] }, ids: { next: () => 'id' }
   } as unknown as SessionTurnRuntimeDeps
   return { runtime: new SessionTurnRuntime(deps), agent, session, pool, prepare, record, finishTurn,
-    disable: () => { enabled = false }, connect: deps.agentFactory.connect }
+    disable: () => { enabled = false }, connect: deps.agentFactory.connect, deps }
 }
 
 describe('session runtime last admission boundaries', () => {
+  it('waits for native output persistence before committing continuation or completing the turn', async () => {
+    const f = fixture()
+    let release!: () => void
+    const pendingWrite = new Promise<void>((resolve) => { release = resolve })
+    const applyItem = vi.fn(async () => pendingWrite)
+    Object.assign(f.deps.turns, { applyItem })
+    vi.mocked(f.session.runTurn).mockImplementation(async (_input, sink) => {
+      void sink.emit([{ kind: 'item_created', threadId: 'thread', turnId: 'turn',
+        item: makeAssistantTextItem({ id: 'answer', threadId: 'thread', turnId: 'turn', text: 'reply', status: 'completed' }) }])
+      return { status: 'completed' }
+    })
+    const running = f.runtime.runTurn('thread', 'turn', new AbortController().signal)
+    await vi.waitFor(() => expect(applyItem).toHaveBeenCalledOnce())
+    expect(f.deps.sessionCoordinator!.commit).not.toHaveBeenCalled()
+    expect(f.finishTurn).not.toHaveBeenCalled()
+    release()
+    expect(await running).toBe('completed')
+    expect(f.deps.sessionCoordinator!.commit).toHaveBeenCalledOnce()
+    expect(f.finishTurn).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
+  })
   it('rejects a reused process when admission changes during session preparation', async () => {
     const f = fixture()
     const prior = await f.pool.acquire('pi:profile', async () => f.agent); prior.release()

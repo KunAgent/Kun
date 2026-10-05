@@ -7,6 +7,7 @@
  * Session lifecycle (thread/turn → Kun binding) lives in `codex-agent.ts`.
  */
 import { KUN_VERSION } from '../../version.js'
+import { bindTurnMutationContext } from '../../manager/turn-mutation-context.js'
 import type { HarnessProcess } from '../../session/harness-process.js'
 import { JsonlTransport } from '../../session/jsonl-transport.js'
 import {
@@ -110,9 +111,10 @@ export class CodexClient {
       set = new Set()
       this.notificationHandlers.set(method, set)
     }
-    set.add(handler)
+    const bound = bindTurnMutationContext(handler)
+    set.add(bound)
     return () => {
-      set.delete(handler)
+      set.delete(bound)
       if (set.size === 0) this.notificationHandlers.delete(method)
     }
   }

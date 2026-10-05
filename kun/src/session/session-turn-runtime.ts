@@ -333,6 +333,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     try {
       await validateLaunch()
       const result = await session.runTurn(input, sink, signal)
+      await sink.flush()
       await finishDelegatedTrace(
         trace,
         result.status === 'completed'
@@ -377,6 +378,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       }
       return outcome
     } catch (error) {
+      await sink.flush().catch(() => undefined)
       await finishDelegatedTrace(trace, { kind: 'error', error })
       trace = undefined
       if (

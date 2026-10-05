@@ -463,7 +463,7 @@ describe('GET /v1/threads/:id/handoff-preview', () => {
       threadId: 'thread_1',
       turnId: 't2',
       seq: 7,
-      timestamp: '2026-01-01T00:00:01.000Z',
+      timestamp: '2026-01-01T00:01:00.000Z',
       reason: 'harness-switch',
       mode: 'full',
       from: { harnessName: 'Kun' },
@@ -533,6 +533,19 @@ describe('GET /v1/threads/:id/handoff-preview', () => {
       new URL('http://kun.local/v1/threads/thread_1/handoff-preview?turnId=t2')
     )
     expect(noEvent.status).toBe(404)
+  })
+
+  test('does not mix later messages into an earlier handoff preview', async () => {
+    const event = recordedEvent(items)
+    const deps = depsFor(event)
+    deps.sessionStore = { loadEventsSince: async () => [event], loadItems: async () => [...items,
+      { ...userItem('later', 't3', 'future private request'), createdAt: '2026-01-01T00:02:00.000Z' }
+    ] } as never
+    const response = await handoffPreviewResponse(deps, 'thread_1', new URL('http://kun.local/v1/threads/thread_1/handoff-preview?turnId=t2'))
+    expect(response.status).toBe(200)
+    const body = JSON.parse(response.body)
+    expect(body.briefDigest).toBe(event.briefDigest)
+    expect(body.brief).not.toContain('future private request')
   })
 })
 

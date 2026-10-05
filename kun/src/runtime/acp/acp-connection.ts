@@ -5,6 +5,7 @@
  * per-session subscribers registered by the session manager.
  */
 import { KUN_VERSION } from '../../version.js'
+import { bindTurnMutationContext } from '../../manager/turn-mutation-context.js'
 import type { AcpProcess } from './acp-process.js'
 import { AcpJsonRpc, type AcpDebugLog, type AcpProcessExitInfo } from './acp-jsonrpc.js'
 import {
@@ -128,9 +129,11 @@ export class AcpConnection {
       set = new Set()
       this.sessionSubscribers.set(sessionId, set)
     }
-    set.add(subscriber)
+    const bound = { onUpdate: bindTurnMutationContext(subscriber.onUpdate),
+      ...(subscriber.onError ? { onError: bindTurnMutationContext(subscriber.onError) } : {}) }
+    set.add(bound)
     return () => {
-      set.delete(subscriber)
+      set.delete(bound)
       if (set.size === 0) this.sessionSubscribers.delete(sessionId)
     }
   }

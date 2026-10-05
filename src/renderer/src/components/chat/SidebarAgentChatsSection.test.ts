@@ -105,7 +105,7 @@ beforeEach(() => {
   mocks.activeThreadId = 'thread'
   mocks.navigation = { roomId: 'dm-alpha', pending: false, error: '' }
   mocks.page = { entries: [entry('alpha'), entry('beta'), entry('gamma'), entry('delta')], busy: false, error: '', nextCursor: undefined }
-  mocks.request.mockReset().mockResolvedValue({ roomId: 'dm-alpha', seen: false })
+  mocks.request.mockReset().mockResolvedValue({ initialized: true, roomId: 'dm-alpha', seen: false })
   mocks.refresh.mockReset(); mocks.more.mockReset(); mocks.query.mockReset(); mocks.openRoom.mockReset()
   mocks.openAgent.mockReset().mockResolvedValue(undefined)
   mocks.pin.mockReset()
@@ -125,13 +125,21 @@ describe('Code agent conversations sidebar', () => {
     expect(host.querySelectorAll('.sidebar-agent-chat-row')).toHaveLength(3)
     expect(host.querySelector('.sidebar-agent-chat-preview')?.textContent).toBe('Finished the analysis')
     expect(mocks.query).toHaveBeenCalledWith({ kind: 'agents', search: '' }, 'dm-alpha', true)
-    expect(mocks.request).toHaveBeenCalledExactlyOnceWith('/v1/agents/chat-entry', 'POST', {
-      action: 'initialize', clientRequestId: 'initialize-request'
-    })
+    expect(mocks.request).toHaveBeenCalledExactlyOnceWith('/v1/agents/chat-entry', 'GET')
     expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(mocks.openRoom).not.toHaveBeenCalled()
     expect(mocks.openAgent).not.toHaveBeenCalled()
     expect(host.querySelector('[aria-current="page"]')).toBeNull()
+  })
+
+  it('creates the default chat only when the read-only bootstrap check says it is missing', async () => {
+    mocks.request.mockResolvedValueOnce({ initialized: false })
+    await render()
+    expect(mocks.request.mock.calls).toEqual([
+      ['/v1/agents/chat-entry', 'GET'],
+      ['/v1/agents/chat-entry', 'POST', { action: 'initialize', clientRequestId: 'initialize-request' }]
+    ])
+    expect(mocks.refresh).toHaveBeenCalledOnce()
   })
 
   it('keeps the selected private chat visible and highlights only on the Agent route', async () => {

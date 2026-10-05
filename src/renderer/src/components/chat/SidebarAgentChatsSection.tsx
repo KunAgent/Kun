@@ -129,7 +129,13 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
     // A healthy HTTP listener can precede the initial configuration apply.
     // Retry the same idempotent operation once before presenting a failure.
     const initialize = (canRetry: boolean): void => {
-      void roomsRequest('/v1/agents/chat-entry', 'POST', request)
+      // Existing conversations can be read while the Rooms coordinator is
+      // recovering its write lease. Do not turn a redundant bootstrap write
+      // into an unavailable warning on every application launch.
+      void roomsRequest<{ initialized: boolean }>('/v1/agents/chat-entry', 'GET')
+        .then(async (entry) => {
+          if (active && !entry.initialized) await roomsRequest('/v1/agents/chat-entry', 'POST', request)
+        })
         .then(() => { if (active) refresh.current() }).catch((cause) => {
           if (!active) return
           if (canRetry) retry = setTimeout(() => initialize(false), 1000)

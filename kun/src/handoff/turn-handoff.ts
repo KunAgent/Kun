@@ -4,6 +4,7 @@ import type {
   DelegatedSessionPreparation
 } from '../runtime/delegated-session-binding.js'
 import { needsHandoff } from './handoff-plan.js'
+import { priorItemsForDelegatedTurn } from '../runtime/delegated-session-binding.js'
 import { buildHandoffBrief, type HandoffBriefResult } from './handoff-brief.js'
 import { extractWorkState } from './work-state.js'
 import type {
@@ -52,6 +53,8 @@ export type TurnHandoff = {
   /** Text to splice into the prompt (replaces the portable transcript). */
   brief: HandoffBriefResult
   event: TurnHandoffEvent
+  /** Routine portable continuation needs history but no user-facing transfer. */
+  background?: boolean
 }
 
 export type BuildTurnHandoffInput = {
@@ -113,7 +116,7 @@ function handoffSource(
  * native session normally or there is no conversational history to hand over.
  */
 export function buildTurnHandoff(input: BuildTurnHandoffInput): TurnHandoff | null {
-  const plan = needsHandoff(input.preparation, input.items)
+  const plan = needsHandoff(input.preparation, priorItemsForDelegatedTurn(input.items, input.currentTurnId))
   if (!plan) return null
   const reason: HandoffReason =
     plan.mode === 'delta' ? 'harness-switch' : handoffReason(input.preparation)
@@ -145,6 +148,8 @@ export function buildTurnHandoff(input: BuildTurnHandoffInput): TurnHandoff | nu
   })
   return {
     brief,
+    ...(input.preparation.route.continuationMode === 'portable' && !input.preparation.rebaseReason &&
+      !input.preparation.parkedDelta ? { background: true } : {}),
     event: {
       kind: 'handoff_injected',
       reason,
@@ -210,6 +215,7 @@ export async function recordHandoffInjected(
   ids: { threadId: string; turnId: string; harnessId: string },
   handoff: TurnHandoff | TurnHandoffEvent | undefined
 ): Promise<void> {
+  if (handoff && 'background' in handoff && handoff.background) return
   const event = handoff ? ('event' in handoff ? handoff.event : handoff) : undefined
   if (event) await record({ ...ids, ...event })
 }

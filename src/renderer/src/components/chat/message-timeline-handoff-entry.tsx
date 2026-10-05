@@ -13,12 +13,17 @@ function useHandoffBrief(block: HandoffBlock): {
   const activeThreadId = useChatStore((s) => s.activeThreadId)
   const [brief, setBrief] = useState<string | null>(null)
   const [error, setError] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const provider = getProvider()
-    if (!provider.getHandoffPreview || !activeThreadId || !block.turnId) return
+    if (!provider.getHandoffPreview || !activeThreadId || !block.turnId) {
+      setLoading(false)
+      setError(true)
+      return
+    }
     let cancelled = false
+    setBrief(null)
     setLoading(true)
     setError(false)
     void provider
@@ -53,7 +58,7 @@ export function HandoffBriefDetail({ block }: { block: HandoffBlock }): ReactEle
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-1 text-[13px] text-ds-muted">
+      <div role="status" className="flex items-center gap-2 py-1 text-[13px] text-ds-muted">
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
       </div>
     )

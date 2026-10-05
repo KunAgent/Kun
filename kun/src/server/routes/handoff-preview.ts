@@ -47,7 +47,11 @@ export async function handoffPreviewResponse(
   }
   const thread = await deps.threadService.get(threadId)
   if (!thread) return ERRORS.notFound('thread not found')
-  const items = await deps.sessionStore.loadItems(threadId)
+  const turnIndex = thread.turns.findIndex((turn) => turn.id === parsed.data.turnId)
+  const turns = turnIndex < 0 ? undefined : new Set(thread.turns.slice(0, turnIndex + 1).map((turn) => turn.id))
+  const recordedAt = Date.parse(event.timestamp)
+  const items = (await deps.sessionStore.loadItems(threadId)).filter((item) =>
+    (!turns || turns.has(item.turnId)) && Date.parse(item.createdAt) <= recordedAt)
   const taskWorkspace = deps.taskWorkspaces
     ?.list({ ownerThreadId: threadId })
     .filter((record) => record.path === thread.workspace)

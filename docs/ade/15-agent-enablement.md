@@ -49,11 +49,14 @@ setup, which would invalidate the configuration proof before the first turn.
 
 ## Real native-account smoke
 
-`node scripts/smoke-native-agent-turns.mjs --run` sends one tiny real prompt per
+`node scripts/smoke-native-agent-turns.mjs --run` sends three short real turns per
 selected Agent through Kun's HTTP thread and turn APIs. It uses existing native
 logins, an isolated Manager/Runtime and empty temporary workspaces. It can
 consume subscription/API quota; it is never part of automatic enablement.
 Use `--agents devin,codex,opencode,deepseek-harness,claude-code` to choose targets.
+The second turn checks conversation memory. `--tools` makes the third turn read
+a generated file in the test workspace; `--turns` overrides the round count.
+`KUN_SMOKE_MODEL` selects an explicit native model instead of the Agent default.
 `KUN_SMOKE_NATIVE_PROXY` supplies the desktop's resolved HTTP proxy for native
 Codex/Claude requests when running this script outside Electron. Explicit
 `KUN_SMOKE_*_BINARY` paths override discovery. Reports under
@@ -65,6 +68,23 @@ scenario. Settings trial requests use the selected readiness route, including
 its native default model, instead of picking the first model in a catalog.
 Trial preflight also uses that same credential route; a gateway trial must not
 start an extra native-profile probe or require a separate native account.
+
+## Consecutive turns
+
+Native output and approval callbacks capture the current turn's mutation fence
+when registered. A pooled process's stdout can still run under its first turn's
+async context; it must never lend that stale authority to later responses, or
+borrow a newer turn's authority for an old callback. Native timelines drain
+serialized writes before session checkpointing and turn completion.
+
+All supported delegated transports, including Codex app-server and Pi RPC,
+persist native continuation bindings. New threads do not transfer their own
+first message as history. Routine portable continuation replays context in the
+background; actual Agent switches and session recovery retain a handoff marker.
+Handoff previews use the read-only desktop bridge endpoint and exclude messages
+created after the recorded handoff.
+The Agent chat sidebar reads an existing bootstrap before trying to create it,
+so recovering the Rooms write lease cannot make existing chats look unavailable.
 
 ## Antigravity native account
 

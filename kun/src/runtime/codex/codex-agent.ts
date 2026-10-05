@@ -5,6 +5,7 @@
  * user input) to the owning session by codex threadId.
  */
 import { tmpdir } from 'node:os'
+import { bindTurnMutationContext } from '../../manager/turn-mutation-context.js'
 import { nativeAgentNetworkEnv } from '../../harness/native-agent-network.js'
 import { startHarnessProcess } from '../../session/harness-process.js'
 import type { HarnessProcess } from '../../session/harness-process.js'
@@ -218,9 +219,10 @@ export class CodexAgent implements HarnessAgent {
     this.sessionOwners.set(codexThreadId, input.threadId)
     const router: CodexRequestRouter = {
       register: (_key, handler) => {
-        this.turnHandlers.set(codexThreadId, handler)
+        const bound = bindTurnMutationContext(handler)
+        this.turnHandlers.set(codexThreadId, bound)
         return () => {
-          if (this.turnHandlers.get(codexThreadId) === handler) {
+          if (this.turnHandlers.get(codexThreadId) === bound) {
             this.turnHandlers.delete(codexThreadId)
           }
         }

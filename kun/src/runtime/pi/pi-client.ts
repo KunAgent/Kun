@@ -1,3 +1,4 @@
+import { bindTurnMutationContext } from '../../manager/turn-mutation-context.js'
 /**
  * PiClient (P6-09): thin RPC peer for `pi --mode rpc` over `JsonlTransport`.
  *
@@ -76,9 +77,10 @@ export class PiClient {
       set = new Set()
       this.eventHandlers.set(type, set)
     }
-    set.add(handler)
+    const bound = bindTurnMutationContext(handler)
+    set.add(bound)
     return () => {
-      set.delete(handler)
+      set.delete(bound)
       if (!set.size) this.eventHandlers.delete(type)
     }
   }
