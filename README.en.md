@@ -2,11 +2,11 @@
   <img src="src/asset/img/kun.png" width="88" alt="Kun blue K mark">
 </p>
 
-<h1 align="center">Kun — your local-first personal AI assistant</h1>
+<h1 align="center">Kun — your local-first personal AI workbench</h1>
 
 <p align="center">
-  Manage goals, knowledge, tasks, and your AI team on your own computer.<br>
-  Stay in touch with a personal Agent, collaborate in Rooms, and get work done in Code / Work.
+  Keep goals, knowledge, tasks, and AI collaboration on your own computer.<br>
+  Stay in touch with a personal Agent, collaborate in Rooms, and deliver work in Code / Work.
 </p>
 
 <p align="center">
@@ -32,11 +32,11 @@
 
 ## What is Kun?
 
-Kun is a personal AI assistant that runs on your computer and helps you manage work from an initial idea to a finished result. Start with “help me move this forward”: a personal Agent can clarify the goal, organize source material, remember relevant preferences, track commitments, and move into a document or code workspace when needed. Progress, decisions that need you, and deliverables stay connected to their context.
+Kun is an AI workbench that runs on your computer. It connects long-lived personal Agents, multi-Agent Rooms, the Code development workspace, and the Work document workspace to the same local runtime, so discussion, execution, approval, and delivery stay connected.
 
-One person can work with an AI team with clear responsibilities. Talk privately with an Agent, bring several Agents into Rooms to discuss a plan, and let authorized executors handle the work. You decide what they can access, what they can do, and when to accept or apply a result.
+Start with one Agent and one concrete task. Add more Agents to a Room when the work needs different perspectives, then move into Code or Work when it is time to execute. You decide what each Agent can access, what it can do, and when a result is accepted.
 
-### One workflow, complementary entry points
+### Core entry points
 
 | Entry point | What it does for you |
 | --- | --- |
@@ -45,7 +45,7 @@ One person can work with an AI team with clear responsibilities. Talk privately 
 | **Code + ADE** | Execute and deliver software tasks. Code provides projects, terminals, Git / Worktrees, diffs, and a Design canvas; ADE's Agent connections and collaboration are integrated into Code. |
 | **Work** | Work with knowledge and documents. Draft Markdown; preview, quote, and analyze PDF / Office documents; analyze spreadsheets, edit supported XLSX content, create presentations, or organize ideas on a whiteboard. |
 
-A personal Agent is an identity you keep talking to; the execution Agent selected in Code runs a particular development task. Each has its own configuration and permissions. Start with one Agent and one concrete task, then add a team or a specialized workspace when useful.
+A personal Agent is an identity you keep talking to; the execution Agent selected in Code runs a particular development task. Each has its own configuration and permissions, so you can start small and add a team or specialized workspace when useful.
 
 > This README describes the `develop` branch. Features in downloaded builds depend on the release; ADE collaboration still requires an experimental feature switch, and external Agents and connected apps have their own setup requirements.
 
@@ -81,6 +81,14 @@ ADE's capabilities are integrated into the Code workbench, so everyday developme
 - **Keep design connected to code.** Kun's Design canvas supports prototypes, design systems, and Design → Code context. Kun-specific Design, Graph, and plan workflows require the Kun execution Agent.
 
 External Agents need their corresponding programs, accounts, or model sources. Use the app's detection and trial-run results to check readiness; an available adapter is not a guarantee that every account or network has been verified. See [Code and ADE integration](docs/ade/14-code-workbench-integration.md) for configuration and implementation details.
+
+## Work: turn source material into deliverables
+
+Work is the space for everyday knowledge, document, and content tasks, including tasks that do not need a Git repository.
+
+- **Start from local material.** Open folders; preview, quote, and analyze PDF / Office documents so answers and drafts stay tied to inspectable sources.
+- **Produce in one workspace.** Draft Markdown, analyze spreadsheets, edit supported XLSX content, create presentations, or organize ideas on a whiteboard.
+- **Let Agents help without losing boundaries.** A personal Agent can start document tasks or edits within its access policy; task cards, sources, and results remain traceable to the original conversation.
 
 ## Three things to try
 
@@ -126,7 +134,7 @@ Starting with 0.3.8, standalone TUI archives are no longer distributed; use the 
 - **Background work needs a running computer.** By default, closing the desktop main window quits the app and stops its managed work. Reminders and background tasks require Kun to run and the computer to stay awake; online tasks also need a network connection. An optional independent host must be explicitly started with `kun host start` and cannot own the same profile alongside the default GUI. See [runtime ownership and lifecycle](docs/rooms-persistent-host.md).
 - **Check connected-app readiness.** MCP, Skills, Hooks, Loops, scheduled tasks, and extensions can add capabilities. Google Workspace is currently **Experimental / Developer Preview** and needs user-managed Google Cloud and OAuth setup. Gmail / Calendar writes require per-action approval; Drive is read-only. See [integration scope and setup](docs/google-workspace-cli.md).
 
-## Code and Work interface examples
+## Interface preview
 
 These existing repository assets show Code and Work using isolated demo data. They are not new screenshots of every current entry point and contain no real project, account, or conversation data.
 
