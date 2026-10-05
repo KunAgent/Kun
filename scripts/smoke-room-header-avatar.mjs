@@ -20,6 +20,7 @@ const fixtureId = normalizePath(join(repository, '__room_header_avatar_fixture.t
 const fixtureUrl = '/__room_header_avatar_fixture.tsx'
 const measurements = []
 const errors = []
+const assertionErrors = []
 const externalRequests = []
 const variants = ['builtin', 'missing', 'custom-builtin', 'uploaded', 'broken-upload', 'missing-upload']
 const html = '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module" src="' + fixtureUrl + '"></script></body></html>'
@@ -69,7 +70,9 @@ try {
         for (const variant of variants) {
           await show({ variant })
           const after = await geometry()
-          assertFixed(after, { fontScale, dpr, variant })
+          try { assertFixed(after, { fontScale, dpr, variant }) } catch (error) {
+            assertionErrors.push({ theme, fontScale, width, embedded, variant, message: String(error) })
+          }
           measurements.push({ phase: 'after', theme, fontScale, width, embedded, variant, ...after })
           if (evidence && dpr === 1 && fontScale === 1 && width === 1280 && embedded && variant === 'builtin') {
             await page.screenshot({ path: join(evidence, `after-${theme}.png`) })
@@ -84,6 +87,7 @@ try {
   await server.close()
   server = undefined
   await assertBuiltAssets()
+  assert.deepEqual(assertionErrors, [], 'every avatar layout must satisfy the geometry and identity contract')
   assert.deepEqual(errors, [], 'real components must render without uncaught browser errors')
   assert.deepEqual(externalRequests, [], 'fixture must remain offline apart from its own local asset server')
   console.log(`Room header avatar: ${measurements.length} layouts, image replacement, navigation and built asset decoding PASS`)
@@ -96,7 +100,7 @@ try {
 } finally {
   if (evidence) {
     await writeFile(join(evidence, 'geometry.json'), JSON.stringify(measurements, null, 2))
-    await writeFile(join(evidence, 'errors.json'), JSON.stringify({ errors, externalRequests }, null, 2))
+    await writeFile(join(evidence, 'errors.json'), JSON.stringify({ errors, assertionErrors, externalRequests }, null, 2))
   }
   await browser?.close()
   await server?.close()
@@ -240,7 +244,8 @@ async function geometry() {
 function assertFixed(actual, { fontScale, dpr, variant }) {
   const detail = JSON.stringify(actual)
   assert.equal(actual.dpr, dpr)
-  assert.equal(actual.avatar.display, 'inline-flex', detail)
+  // Flex items are blockified: Chromium reports flex for authored inline-flex.
+  assert.ok(['flex', 'inline-flex'].includes(actual.avatar.display), detail)
   assert.equal(actual.avatar.label, 'Kun')
   assert.ok(Math.abs(actual.avatar.width - 36 * fontScale) < 1, detail)
   for (const dimension of ['width', 'height']) {
