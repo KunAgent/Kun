@@ -5,6 +5,7 @@ import { dirname, join, relative } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { scheduleBoundedUpdateRollback } from './update-transaction-helper'
 import { createRollbackCoordinatorProbe, createRollbackGuiParent } from './windows-installer-coordinator-probe.test-utils'
+import { assertGuiExitWaitRace, stopRecoveredProcess, waitForRecoveredProcess } from './windows-installer-process-wait.test-utils'
 import { readInstallerUpdateTransaction } from './gui-updater-pending'
 
 // The transaction reader is given an explicit recoveryRoot. It must not load
@@ -20,7 +21,7 @@ const artifactRoot = process.env.KUN_INSTALLER_TEST_ARTIFACT_ROOT
 let fixtureIndex = 0
 
 type Fixture = ReturnType<typeof fixture>
-type Action = 'StopProcesses' | 'ValidateUpdateRollback' | 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
+type Action = 'ValidateUpdateRollback' | 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
 
 function payload(root: string, executable: string): void {
   mkdirSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'cli'), { recursive: true })
@@ -238,6 +239,8 @@ describe('Windows transaction test diagnostics', () => {
 })
 
 windowsOnly('Windows automatic update transaction', () => {
+  it('handles GUI exit between process observation and waiting', assertGuiExitWaitRace, 30_000)
+
   it('restores from an environment rebuilt from the transaction without a result file', async () => {
     const input = fixture()
     input.transaction = join(input.root, 'recovery', 'abc-update.json')
@@ -269,11 +272,12 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(transaction(transactionPath)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
   }, 180_000)
 
-  it.each([false, true])('completes Unicode-path rollback after readiness (real GUI parent exit: %s)', async (realParentExit) => {
+  it.each([false, false, false, true, true, true])('completes uninstrumented Unicode rollback %# (real GUI parent exit: %s)', async (realParentExit) => {
     const input = fixture(false, true)
     input.transaction = join(input.root, 'recovery', 'abc-update.json')
     // A real executable permits the recovered application's independent launch.
     copyFileSync(process.execPath, join(input.source, 'DeepSeek GUI.exe'))
+    const recoveredExecutable = realpathSync.native(join(input.source, 'DeepSeek GUI.exe'))
     assertSucceeded(run(input, 'Prepare'), 'Prepare')
     payload(input.stage, 'Kun.exe')
     assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
@@ -284,7 +288,8 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(record).not.toBeNull()
     const gui = realParentExit ? createRollbackGuiParent() :
       spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
-    const probe = createRollbackCoordinatorProbe(input.diagnostic, realParentExit ? gui : undefined)
+    const probe = createRollbackCoordinatorProbe(input.diagnostic, realParentExit ? gui : undefined, false)
+    let recoveredPid: number | undefined
     try {
       await scheduleBoundedUpdateRollback(helper, {
         ...record!.recoveryEnvironment,
@@ -293,13 +298,9 @@ windowsOnly('Windows automatic update transaction', () => {
       expect(gui.exitCode).toBeNull()
       expect(transaction(input.transaction).Phase).toBe('payload_switched')
       gui.kill()
-      if (realParentExit) {
-        await vi.waitFor(() => expect(readFileSync(input.diagnostic, 'utf8')).toContain('COORDINATOR completed'),
-          { timeout: 30_000, interval: 100 })
-      } else {
-        expect(await probe.completion(), probe.output()).toBe(0)
-      }
-      expect(readFileSync(input.diagnostic, 'utf8')).toContain('COORDINATOR entry')
+      if (!realParentExit) expect(await probe.completion(), probe.output()).toBe(0)
+      recoveredPid = await waitForRecoveredProcess(recoveredExecutable)
+      expect(readFileSync(input.diagnostic, 'utf8')).toContain('SUCCESS action=FinalizeUpdateTransaction')
       expect(existsSync(input.transaction)).toBe(false)
       expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
       expect(existsSync(input.target)).toBe(false)
@@ -308,9 +309,7 @@ windowsOnly('Windows automatic update transaction', () => {
     } finally {
       gui.kill()
       probe.kill()
-      // The recovered Node fixture may open a REPL in its independent console.
-      // Stop only this fixture's app roots before afterEach removes its files.
-      assertSucceeded(run(input, 'StopProcesses'), 'StopProcesses after rollback smoke')
+      stopRecoveredProcess(recoveredExecutable, recoveredPid)
     }
   }, 60_000)
 

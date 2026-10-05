@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { openUpdateRollbackReadiness, powershellRollbackReadiness } from './update-rollback-readiness'
+import { openUpdateRollbackReadiness, powershellCaptureGuiProcess, powershellRollbackReadiness, powershellWaitForGuiExit } from './update-rollback-readiness'
 import { access, readFile } from 'node:fs/promises'
 import { join, win32 } from 'node:path'
 import { encodePowershellCommand, ONE_SHOT_HELPER_TIMEOUT_SECONDS, powershellHelperDeadline } from './one-shot-helper-script'
@@ -73,8 +73,9 @@ export async function scheduleBoundedUpdateRollback(
       // its status/output cannot terminate or bypass the coordinator.
       '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action ValidateUpdateRollback -Bounded',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+      ...powershellCaptureGuiProcess(),
       ...powershellRollbackReadiness(readiness.pipeName, readiness.token),
-      'if (Get-Process -Id $waitPid -ErrorAction SilentlyContinue) { Wait-Process -Id $waitPid -Timeout 90 -ErrorAction Stop }',
+      powershellWaitForGuiExit(),
       '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action RecoverUpdateTransaction -Bounded',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
       '$resultPath=[IO.Path]::GetTempFileName()',

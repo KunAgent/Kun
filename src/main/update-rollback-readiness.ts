@@ -87,3 +87,13 @@ export function powershellRollbackReadiness(pipeName: string, token: string): st
     '$pipe.Dispose()'
   ]
 }
+
+/** Capture identity and cache its OS handle while the GUI is still waiting for readiness. */
+export function powershellCaptureGuiProcess(): string[] {
+  return ['$gui=[Diagnostics.Process]::GetProcessById($waitPid)', '$null=$gui.Handle']
+}
+
+/** An already-exited GUI satisfies the wait; never resolve its PID again after acknowledgment. */
+export function powershellWaitForGuiExit(): string {
+  return 'try { if (-not $gui.WaitForExit(90000)) { throw "The GUI did not exit before rollback." } } finally { $gui.Dispose() }'
+}

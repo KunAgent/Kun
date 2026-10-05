@@ -2,9 +2,10 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { encodePowershellCommand } from './one-shot-helper-script'
+import { powershellWaitForGuiExit } from './update-rollback-readiness'
 
 /** CI-only instrumentation; the production command and readiness gate stay intact. */
-export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: ChildProcess) {
+export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: ChildProcess, instrument = true) {
   let child: ChildProcess | undefined
   let output = ''
   let closed = false
@@ -28,7 +29,7 @@ export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: C
       '}',
       marker('entry')
     ].join('\n')
-    const waitForGui = 'if (Get-Process -Id $waitPid -ErrorAction SilentlyContinue) { Wait-Process -Id $waitPid -Timeout 90 -ErrorAction Stop }'
+    const waitForGui = powershellWaitForGuiExit()
     const tracedCommand = command
       .replace('Add-Type -TypeDefinition', marker('before-add-type') + '\nAdd-Type -TypeDefinition')
       .replace(/(\[KunOneShotDeadline\]::Start\(\d+, \$false\))/u,
@@ -49,9 +50,11 @@ export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: C
       '}'
     ].join('\n')
     const instrumentedArgs = [...commandArgs]
-    instrumentedArgs[bootstrapIndex] = trace.replace(marker('entry'), marker('bootstrap-entry')) + '\n' + bootstrap
-      .replace(encoded, encodePowershellCommand(instrumented))
-      .replace('$coordinator.WaitForExit()', marker('bootstrap-waiting') + '\n$coordinator.WaitForExit()')
+    if (instrument) {
+      instrumentedArgs[bootstrapIndex] = trace.replace(marker('entry'), marker('bootstrap-entry')) + '\n' + bootstrap
+        .replace(encoded, encodePowershellCommand(instrumented))
+        .replace('$coordinator.WaitForExit()', marker('bootstrap-waiting') + '\n$coordinator.WaitForExit()')
+    }
     const recovery = dirname(diagnostic)
     writeFileSync(join(recovery, 'result-bootstrap-command.txt'), bootstrap)
     writeFileSync(join(recovery, 'result-coordinator-command.txt'), command)
@@ -61,7 +64,7 @@ export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: C
     const summaryPath = join(dirname(recovery), 'fixture-summary.json')
     const summary = JSON.parse(readFileSync(summaryPath, 'utf8')) as Record<string, unknown>
     writeFileSync(summaryPath, JSON.stringify({ ...summary, coordinator: {
-      executable, resolvedCandidates: where.stdout, whereStatus: where.status,
+      instrumented: instrument, executable, resolvedCandidates: where.stdout, whereStatus: where.status,
       args: commandArgs.map((arg, index) => index === bootstrapIndex ? `<${arg.length} bootstrap characters>` : arg),
       commandCharacters: command.length,
       originalArgumentCharacters: commandArgs.join(' ').length,
