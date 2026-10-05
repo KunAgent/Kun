@@ -7,6 +7,10 @@ import { paperMatrixMarkdown } from '../../../paper/paper-evidence-actions'
 import { PaperMatrixCellEditor } from './PaperMatrixCellEditor'
 import { evidenceButton, evidenceInput, evidencePrimaryButton, PaperEvidencePane } from './PaperEvidencePane'
 
+const IDENTITY_COLUMN_WIDTH = 160
+const AXIS_COLUMN_WIDTH = 208
+const stickyCellLayer = { transform: 'translateZ(0)' } as const
+
 export function PaperMatrixWorkspace({ workspaceRoot, selected, onClose }: {
   workspaceRoot: string
   selected: PaperLibraryEntry[]
@@ -129,14 +133,20 @@ export function PaperMatrixWorkspace({ workspaceRoot, selected, onClose }: {
             <p className="text-[11px] tabular-nums text-ds-muted">{t('paperMatrixSummary', { papers: current.rows.length, axes: current.axes.length })}</p>
             <button type="button" className="inline-flex min-h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40" disabled={busy || !selected.length} onClick={() => void act(() => update({ addUnitDirs: selected.map((entry) => entry.unitDir) }))}><Plus size={13} />{t('paperMatrixAdd')} ({selected.length})</button>
           </div>
-          <div className="min-h-40 flex-1 overflow-auto rounded-xl border border-ds-border-muted bg-ds-card" data-testid="paper-matrix-table-scroll">
-            <table className="w-full border-separate border-spacing-0 text-left text-xs">
+          <div className="isolate min-h-40 flex-1 overflow-auto rounded-xl border border-ds-border-muted bg-ds-card" data-testid="paper-matrix-table-scroll">
+            {/* Explicit grid width avoids intrinsic overflow changing sticky paint bounds.
+                Give each sticky cell its own layer so text and borders move with it. */}
+            <table className="table-fixed border-separate border-spacing-0 text-left text-xs" style={{ width: IDENTITY_COLUMN_WIDTH + current.axes.length * AXIS_COLUMN_WIDTH, minWidth: '100%' }}>
+              <colgroup>
+                <col style={{ width: IDENTITY_COLUMN_WIDTH }} />
+                {current.axes.map((axis) => <col key={axis} style={{ width: AXIS_COLUMN_WIDTH }} />)}
+              </colgroup>
               <thead><tr>
-                <th scope="col" className="sticky left-0 top-0 z-30 min-w-40 border-b border-r border-ds-border-muted bg-ds-subtle px-4 py-3 text-[11px] font-medium text-ds-muted">{t('paperMatrixPapers')}</th>
-                {current.axes.map((axis) => <th scope="col" key={axis} className="sticky top-0 z-20 min-w-52 border-b border-ds-border-muted bg-ds-subtle px-4 py-3 text-[11px] font-medium text-ds-muted">{t(`paperMatrixAxis_${axis}`)}</th>)}
+                <th scope="col" style={stickyCellLayer} className="sticky left-0 top-0 z-30 border-b border-r border-ds-border-muted bg-ds-subtle px-4 py-3 text-[11px] font-medium text-ds-muted">{t('paperMatrixPapers')}</th>
+                {current.axes.map((axis) => <th scope="col" key={axis} style={stickyCellLayer} className="sticky top-0 z-20 border-b border-ds-border-muted bg-ds-subtle px-4 py-3 text-[11px] font-medium text-ds-muted">{t(`paperMatrixAxis_${axis}`)}</th>)}
               </tr></thead>
               <tbody>{current.rows.map((row, index) => <tr key={row.unitDir}>
-                <th scope="row" className="sticky left-0 z-10 w-48 min-w-40 max-w-56 border-b border-r border-ds-border-muted bg-ds-card px-4 py-4 align-top font-normal">
+                <th scope="row" style={stickyCellLayer} className="sticky left-0 z-10 border-b border-r border-ds-border-muted bg-ds-card px-4 py-4 align-top font-normal">
                   <span className="mb-1.5 block text-[10px] tabular-nums text-ds-faint">{String(index + 1).padStart(2, '0')}</span>
                   <span className="line-clamp-3 break-words text-xs font-medium leading-relaxed text-ds-ink" title={row.title}>{row.title}</span>
                   <span className="mt-1.5 block truncate text-[10px] text-ds-faint" title={row.citeKey}>{row.citeKey}</span>

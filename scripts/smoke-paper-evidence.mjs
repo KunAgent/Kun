@@ -122,7 +122,25 @@ app.on('window-all-closed',()=>app.quit());`)
     const identity = scroller.querySelector('tbody th')
     return scroller.scrollLeft > 0 && Math.abs(identity.getBoundingClientRect().left - scroller.getBoundingClientRect().left) < 3
   })
+  const scrollPaint = await page.evaluate(() => {
+    const table = document.querySelector('[data-testid=paper-matrix-table-scroll] table')
+    const identity = table.querySelector('tbody th')
+    const title = identity.querySelector('[title]')
+    const inspect = element => {
+      const rect = element.getBoundingClientRect(), style = getComputedStyle(element)
+      return { tag: element.tagName, text: element.textContent, x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+        position: style.position, zIndex: style.zIndex, transform: style.transform, background: style.backgroundColor }
+    }
+    const box = title.getBoundingClientRect()
+    return { table: inspect(table), identity: inspect(identity), title: inspect(title),
+      tableClientWidth: table.clientWidth, tableScrollWidth: table.scrollWidth,
+      covering: document.elementsFromPoint(box.x + box.width / 2, box.y + box.height / 2).slice(0, 5).map(inspect) }
+  })
+  await writeFile(join(evidence, 'matrix-scroll-paint.json'), JSON.stringify(scrollPaint, null, 2))
+  assert.ok(scrollPaint.title.x >= scrollPaint.identity.x && scrollPaint.title.x < scrollPaint.identity.x + scrollPaint.identity.width,
+    'paper title text must remain inside the sticky identity column')
   await screenshot('08-matrix-narrow-dark-scrolled')
+  await page.screenshot({ path: join(evidence, '11-matrix-scrolled-viewport.png'), fullPage: false })
   await page.evaluate(() => window.paperFixture.render({ corrupt: true }))
   await page.getByRole('alert').filter({ hasText: 'corrupt' }).waitFor()
   await screenshot('05-corrupt-store-preserved')

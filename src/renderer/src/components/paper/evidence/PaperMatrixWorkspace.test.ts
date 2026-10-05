@@ -145,6 +145,26 @@ describe('PaperMatrixWorkspace persistence', () => {
     expect(tree.root.findAllByType('th')[0].props.className).toContain('sticky left-0 top-0')
   })
 
+  it('gives the scrollable grid explicit column geometry and independent sticky paint layers', async () => {
+    api.paperMatricesRead.mockResolvedValue({ ok: true, revision: 1, matrices: [{ ...matrix, axes: ['method', 'dataset'],
+      cells: [unknownCell, { ...unknownCell, axis: 'dataset' }] }] })
+    tree = await render(createElement(PaperMatrixWorkspace, { workspaceRoot: '/library', selected: [entry], onClose: vi.fn() }))
+    const table = tree.root.findByType('table')
+    expect(table.props.className).toContain('table-fixed')
+    expect(table.props.style).toEqual({ width: 160 + 2 * 208, minWidth: '100%' })
+    expect(table.findAllByType('col').map((column) => column.props.style.width)).toEqual([160, 208, 208])
+    const headers = table.findAllByType('th')
+    expect(headers).toHaveLength(4)
+    for (const header of headers) {
+      expect(header.props.className).toContain('sticky')
+      expect(header.props.style.transform).toBe('translateZ(0)')
+    }
+    const identity = table.findByProps({ scope: 'row' })
+    expect(nodeText(identity)).toContain(entry.meta.title)
+    expect(nodeText(identity)).toContain(matrix.rows[0].citeKey)
+    expect(tree.root.findByProps({ 'data-testid': 'paper-matrix-table-scroll' }).props.className).toContain('isolate')
+  })
+
   it('refuses to combine matrices and evidence from different revisions', async () => {
     api.paperEvidenceRead.mockResolvedValue({ ok: true, revision: 2, items: [evidence] })
     tree = await render(createElement(PaperMatrixWorkspace, { workspaceRoot: '/library', selected: [entry], onClose: vi.fn() }))
