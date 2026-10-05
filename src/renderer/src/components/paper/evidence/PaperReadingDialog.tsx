@@ -43,14 +43,14 @@ export function PaperReadingDialog({ request, onClose }: { request: PaperReading
     void window.kunGui.paperEvidenceMaterial({ workspaceRoot: request.workspaceRoot, unitDir: request.unitDir }).then((result) => { if (active) setMaterial({ scope, value: result }) }).catch((cause) => { if (active) setError(String(cause)) })
     return () => { active = false }
   }, [request.workspaceRoot, request.unitDir, scope])
-  const fullText = request.selection?.text ?? (material?.ok ? material.sourceText : request.meta.abstract ?? '')
+  const fullText = request.selection?.text ?? (material?.ok ? material.sourceText : '')
   const tooLong = fullText.length > PAPER_CONTEXT_MAX_CHARS
   const limited = !request.selection && (!material?.ok || material.abstractOnly || material.textPartial || tooLong)
   const insufficient = !request.selection && purpose !== 'quick-screen' && limited
   const staleSelection = Boolean(request.selection && (!request.selection.pdfSha256 || !material?.ok || material.paperVersion?.pdfSha256 !== request.selection.pdfSha256))
   const sourceText = fullText.slice(0, PAPER_CONTEXT_MAX_CHARS)
   const start = async (): Promise<void> => {
-    if (lock.current || privacy !== 'model-provider' || insufficient || staleSelection || !sourceText.trim()) return
+    if (lock.current || !material?.ok || privacy !== 'model-provider' || insufficient || staleSelection || !sourceText.trim()) return
     lock.current = true
     setBusy(true)
     setError('')
@@ -113,7 +113,7 @@ export function PaperReadingDialog({ request, onClose }: { request: PaperReading
       {insufficient ? <p className="text-xs text-amber-700 dark:text-amber-300">{t('paperReadingInsufficient')}</p> : null}
       {!providerId || !model || model === 'auto' ? <p className="text-xs text-amber-700 dark:text-amber-300">{t('paperReadingFixedModel')}</p> : null}
       {error ? <p role="alert" className="text-xs text-red-500">{error}</p> : null}
-      <button type="button" className={evidenceButton} disabled={busy || !material || privacy !== 'model-provider' || insufficient || staleSelection || !sourceText.trim() || !providerId || !model || model === 'auto'} onClick={() => void start()}>{t('paperReadingStart')}</button>
+      <button type="button" className={evidenceButton} disabled={busy || !material?.ok || privacy !== 'model-provider' || insufficient || staleSelection || !sourceText.trim() || !providerId || !model || model === 'auto'} onClick={() => void start()}>{t('paperReadingStart')}</button>
     </section>
   </div>
 }

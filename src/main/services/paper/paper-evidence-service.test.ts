@@ -203,6 +203,22 @@ describe('trusted paper evidence', () => {
       figureConfidence: { high: 1, medium: 0, low: 1 }, figuresSource: 'pdf-caption', figuresVersionBound: false })
   })
 
+  it.each([undefined, 'Fresh local abstract'])('uses only current local metadata when a declared PDF is missing (%s)', async (abstract) => {
+    await writeFile(join(unit, 'paper.json'), JSON.stringify({ ...metadata, abstract }))
+    await rm(join(unit, 'paper.pdf'))
+    expect(await readPaperEvidenceMaterial(root, 'papers/paper')).toMatchObject({
+      ok: true, paperVersion: null, sourceText: abstract ?? '', abstractOnly: true,
+      textPartial: true, pageCount: 0, extractedPages: [], missingTextPages: []
+    })
+    expect(extractEvidencePdfText).not.toHaveBeenCalled()
+  })
+
+  it('does not substitute an abstract for invalid PDF bytes', async () => {
+    await writeFile(join(unit, 'paper.json'), JSON.stringify({ ...metadata, abstract: 'Do not substitute this abstract' }))
+    await writeFile(join(unit, 'paper.pdf'), 'not a PDF')
+    await expect(readPaperEvidenceMaterial(root, 'papers/paper')).rejects.toMatchObject({ code: 'invalid-pdf' })
+  })
+
   it('returns metadata-only material honestly and prevents evidence promotion without PDF', async () => {
     const { pdfFile: _pdf, ...withoutPdf } = metadata
     await writeFile(join(unit, 'paper.json'), JSON.stringify({ ...withoutPdf, abstract: 'Only an abstract.' }))

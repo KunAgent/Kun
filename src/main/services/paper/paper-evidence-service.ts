@@ -34,11 +34,18 @@ export async function readPaperEvidenceMaterial(root: string, unitDir: string): 
   for (const figure of figureIndex?.items ?? []) figureConfidence[figure.confidence] += 1
   const figures = { figuresStatus: figureIndex ? meta.preprocess?.figuresStatus ?? 'ok' : 'none',
     figuresSource: figureIndex?.source, figureConfidence, figuresVersionBound: false } as const
-  if (!meta.pdfFile) {
-    return { ok: true, paperVersion: null, sourceText: meta.abstract ?? '', pageCount: 0,
-      extractedPages: [], missingTextPages: [], textPartial: true, abstractOnly: true, ...figures }
+  const metadataOnly = (): PaperEvidenceMaterialResult => ({ ok: true, paperVersion: null,
+    sourceText: meta.abstract ?? '', pageCount: 0, extractedPages: [], missingTextPages: [],
+    textPartial: true, abstractOnly: true, ...figures })
+  if (!meta.pdfFile) return metadataOnly()
+  let source: Awaited<ReturnType<typeof readPaperVersion>>
+  try { source = await readPaperVersion(unitDirAbs) } catch (error) {
+    // Only an absent PDF permits the freshly read local abstract. Other source
+    // errors fail closed; the renderer must never substitute a cached abstract.
+    if (error instanceof PaperEvidenceError && error.code === 'missing-pdf') return metadataOnly()
+    throw error
   }
-  const { snapshot, bytes } = await readPaperVersion(unitDirAbs)
+  const { snapshot, bytes } = source
   const text = await extractEvidencePdfText(bytes)
   const after = await readPaperVersion(unitDirAbs)
   if (after.snapshot.pdfSha256 !== snapshot.pdfSha256) throw new PaperEvidenceError('stale-pdf', 'The PDF changed during extraction. Reload it and try again.')

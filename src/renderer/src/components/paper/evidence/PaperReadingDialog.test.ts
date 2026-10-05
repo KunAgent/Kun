@@ -50,6 +50,18 @@ describe('PaperReadingDialog bounded consent', () => {
     expect(state.chat.sendMessage).not.toHaveBeenCalled()
   })
 
+  it.each(['invalid-unit', 'io', 'corrupt-identity'])('does not send a cached abstract after a failed %s material read', async (code) => {
+    api.paperEvidenceMaterial.mockResolvedValue({ ok: false, code, message: 'Current source could not be verified' })
+    tree = await render(createElement(PaperReadingDialog, { request: { ...request,
+      meta: { ...request.meta, abstract: 'A stale cached abstract must not be sent' } }, onClose: vi.fn() }))
+    await consent()
+    expect(button(tree, 'paperReadingStart').props.disabled).toBe(true)
+    await click(tree, 'paperReadingStart')
+    expect(state.chat.ensureWriteThreadForWorkspace).not.toHaveBeenCalled()
+    expect(state.chat.sendMessage).not.toHaveBeenCalled()
+    expect(nodeText(tree.root)).toContain('Current source could not be verified')
+  })
+
   it.each(['close', 'Escape'])('closing with %s never dispatches a model turn', async (how) => {
     const onClose = vi.fn()
     tree = await render(createElement(PaperReadingDialog, { request, onClose }))
@@ -121,12 +133,15 @@ describe('PaperReadingDialog bounded consent', () => {
   })
 
   it('falls back to labeled metadata-only screening when PDF material is missing', async () => {
-    api.paperEvidenceMaterial.mockResolvedValue({ ok: false, code: 'missing', message: 'PDF is missing' })
-    tree = await render(createElement(PaperReadingDialog, { request, onClose: vi.fn() }))
-    expect(nodeText(tree.root)).toContain('PDF is missing')
+    api.paperEvidenceMaterial.mockResolvedValue({ ...material, paperVersion: null,
+      sourceText: 'Fresh local abstract from the requested unit', pageCount: 0,
+      extractedPages: [], missingTextPages: [], textPartial: true, abstractOnly: true })
+    tree = await render(createElement(PaperReadingDialog, { request: { ...request,
+      meta: { ...request.meta, abstract: 'Stale cached metadata must not be used' } }, onClose: vi.fn() }))
+    expect(nodeText(tree.root)).toContain('paperReadingAbstractOnly')
     await consent()
     await click(tree, 'paperReadingStart')
-    expect(state.chat.sendMessage.mock.calls[0][2].paperContext.sources[0].text).toBe(entry.meta.abstract)
+    expect(state.chat.sendMessage.mock.calls[0][2].paperContext.sources[0].text).toBe('Fresh local abstract from the requested unit')
     expect(state.chat.sendMessage.mock.calls[0][0]).toContain('limited-material screening')
   })
 
