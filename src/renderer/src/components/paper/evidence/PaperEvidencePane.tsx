@@ -108,12 +108,12 @@ export function PaperEvidenceCard({ evidence, workspaceRoot, onSave, onSource }:
       <textarea rows={2} maxLength={16000} className={evidenceInput} value={draft[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} />
     </label>)}
     <label className="block text-[11px] text-ds-muted">{t('paperEvidenceClaimKind')}
-      <select className={evidenceInput} value={draft.claimKind} onChange={(event) => setDraft({ ...draft, claimKind: event.target.value as PaperEvidence['claimKind'] })}>
+      <select aria-label={t('paperEvidenceClaimKind')} className={evidenceInput} value={draft.claimKind} onChange={(event) => setDraft({ ...draft, claimKind: event.target.value as PaperEvidence['claimKind'] })}>
         {(['author-reported', 'user-judgment', 'ai-inference'] as const).map((kind) => <option key={kind} value={kind}>{t(`paperEvidence_${kind}`)}</option>)}
       </select>
     </label>
     <label className="block text-[11px] text-ds-muted">{t('paperEvidenceVerification')}
-      <select className={evidenceInput} value={draft.verification} onChange={(event) => setDraft({ ...draft, verification: event.target.value as PaperEvidence['verification'] })}>
+      <select aria-label={t('paperEvidenceVerification')} className={evidenceInput} value={draft.verification} onChange={(event) => setDraft({ ...draft, verification: event.target.value as PaperEvidence['verification'] })}>
         {(['unverified', 'user-verified', 'rejected'] as const).map((kind) => <option key={kind} value={kind}>{t(`paperEvidence_${kind}`)}</option>)}
       </select>
     </label>

@@ -42,14 +42,17 @@ export async function readPaperEvidenceMaterial(root: string, unitDir: string): 
   const text = await extractEvidencePdfText(bytes)
   const after = await readPaperVersion(unitDirAbs)
   if (after.snapshot.pdfSha256 !== snapshot.pdfSha256) throw new PaperEvidenceError('stale-pdf', 'The PDF changed during extraction. Reload it and try again.')
-  const extractedPages = text.pages.filter((page) => page.text.trim()).map((page) => page.page)
+  const readablePages = text.pages.filter((page) => page.text.trim())
+  const extractedPages = readablePages.map((page) => page.page)
   const extracted = new Set(extractedPages)
   const missingTextPages = Array.from({ length: text.pageCount }, (_, index) => index + 1).filter((page) => !extracted.has(page))
   return { ok: true, paperVersion: withPaperArxivVersion(snapshot, text.pages.find((page) => page.page === 1)?.text ?? ''),
-    sourceText: text.pages.map((page) => `<!-- page ${page.page} -->\n${page.text}`).join('\n\n'),
+    sourceText: readablePages.length
+      ? readablePages.map((page) => `<!-- page ${page.page} -->\n${page.text}`).join('\n\n')
+      : meta.abstract?.trim() ?? '',
     pageCount: text.pageCount, extractedPages, missingTextPages,
-    textPartial: text.truncated || missingTextPages.length > 0,
-    abstractOnly: false, ...figures }
+    textPartial: !readablePages.length || text.truncated || missingTextPages.length > 0,
+    abstractOnly: !readablePages.length, ...figures }
 }
 
 export async function promotePaperEvidence(root: string, input: {

@@ -168,6 +168,31 @@ describe('trusted paper evidence', () => {
       extractedPages: [1], missingTextPages: [2], textPartial: true, abstractOnly: false })
   })
 
+  it.each([
+    { name: 'empty extraction without an abstract', pages: [], abstract: undefined, expected: '' },
+    { name: 'scanned pages without an abstract', pages: [{ page: 1, text: '' }, { page: 2, text: '   ' }], abstract: undefined, expected: '' },
+    { name: 'scanned pages with a whitespace-only abstract', pages: [{ page: 1, text: '' }], abstract: '  ', expected: '' },
+    { name: 'scanned pages with a readable abstract', pages: [{ page: 1, text: '' }, { page: 2, text: '' }], abstract: 'Author-provided abstract.', expected: 'Author-provided abstract.' }
+  ])('does not present page markers as readable material for $name', async ({ pages, abstract, expected }) => {
+    vi.mocked(extractEvidencePdfText).mockResolvedValue({ pageCount: 2, pages, truncated: false })
+    await writeFile(join(unit, 'paper.json'), JSON.stringify({ ...metadata, abstract }))
+    const material = await readPaperEvidenceMaterial(root, 'papers/paper')
+    expect(material).toMatchObject({ ok: true, sourceText: expected, abstractOnly: true, textPartial: true,
+      pageCount: 2, extractedPages: [], missingTextPages: [1, 2], paperVersion: { pdfSha256: hash, pdfFile: 'paper.pdf' } })
+    if (!material.ok) throw new Error(material.message)
+    expect(material.sourceText).not.toContain('<!-- page')
+    expect(material.paperVersion?.arxivVersion).toBeUndefined()
+  })
+
+  it('includes page markers only for pages with actual extracted text', async () => {
+    const material = await readPaperEvidenceMaterial(root, 'papers/paper')
+    if (!material.ok) throw new Error(material.message)
+    expect(material.sourceText).toContain(`<!-- page 1 -->\narXiv:2401.12345v3 ${quote}`)
+    expect(material.sourceText).not.toContain('<!-- page 2 -->')
+    expect(material.abstractOnly).toBe(false)
+    expect(material.missingTextPages).toEqual([2])
+  })
+
   it('reports actual figure-index extraction confidence without inventing version binding', async () => {
     await mkdir(join(unit, 'figures'))
     await writeFile(join(unit, 'figures/index.json'), JSON.stringify({ version: 1, source: 'pdf-caption', items: [

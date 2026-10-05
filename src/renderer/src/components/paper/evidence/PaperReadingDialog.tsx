@@ -83,7 +83,7 @@ export function PaperReadingDialog({ request, onClose }: { request: PaperReading
     <section role="dialog" aria-modal="true" aria-label={t('paperReadingTitle')} data-testid="paper-reading-dialog" className="max-h-[90vh] w-full max-w-xl space-y-3 overflow-auto rounded-xl border border-ds-border bg-ds-card p-4 shadow-xl">
       <header className="flex items-center gap-3"><h2 className="flex-1 text-sm font-semibold text-ds-ink">{t('paperReadingTitle')}</h2><button type="button" className={evidenceButton} disabled={busy} onClick={onClose}>{t('close')}</button></header>
       <p className="text-sm text-ds-ink">{request.meta.title}</p>
-      <label className="block text-xs text-ds-muted">{t('paperReadingOpen')}<select className={evidenceInput} value={purpose} onChange={(event) => setPurpose(event.target.value as PaperReadingPurpose)}>
+      <label className="block text-xs text-ds-muted">{t('paperReadingOpen')}<select aria-label={t('paperReadingOpen')} className={evidenceInput} value={purpose} onChange={(event) => setPurpose(event.target.value as PaperReadingPurpose)}>
         {(['quick-screen', 'method-deep-read', 'reproduction-prep', 'review-critique'] as const).map((value) => <option key={value} value={value}>{t(`paperReading_${value}`)}</option>)}
       </select></label>
       <div className="rounded-lg border border-ds-border-muted bg-ds-subtle p-3 text-xs text-ds-muted">

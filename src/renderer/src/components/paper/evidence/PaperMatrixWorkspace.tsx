@@ -101,7 +101,7 @@ export function PaperMatrixWorkspace({ workspaceRoot, selected, onClose }: {
         <p className="text-xs text-ds-muted">{t('paperMatrixNoRank')}</p>
         {error ? <p role="alert" className="text-xs text-red-500">{error}</p> : null}
         <div className="flex flex-wrap items-end gap-2">
-          <label className="min-w-44 flex-1 text-xs text-ds-muted">{t('paperMatrixChoose')}<select className={evidenceInput} value={matrixId} onChange={(event) => { setMatrixId(event.target.value); setUndo(null) }}>
+          <label className="min-w-44 flex-1 text-xs text-ds-muted">{t('paperMatrixChoose')}<select aria-label={t('paperMatrixChoose')} className={evidenceInput} value={matrixId} onChange={(event) => { setMatrixId(event.target.value); setUndo(null) }}>
             <option value="">{t('paperMatrixNew')}</option>{matrices.map((matrix) => <option key={matrix.id} value={matrix.id}>{matrix.title}</option>)}
           </select></label>
           <button type="button" className={evidenceButton} disabled={busy} onClick={() => void act(load)}>{t('paperEvidenceReload')}</button>

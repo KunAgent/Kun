@@ -45,7 +45,7 @@ export function PaperMatrixCellEditor({ workspaceRoot, cell, evidence, onSave, o
           <button type="button" className="mt-1 text-xs text-accent" disabled={busy} onClick={() => void act(() => inspectPaperEvidence(workspaceRoot, item))}>{t('paperEvidenceSource')}</button>
         </div>)}
       </fieldset>
-      <label className="block text-xs text-ds-muted">{t('paperMatrixComparability')}<select className={evidenceInput} disabled={draft.status === 'not-reported'} value={draft.comparability} onChange={(event) => setDraft({ ...draft, comparability: event.target.value as PaperMatrixCell['comparability'] })}>
+      <label className="block text-xs text-ds-muted">{t('paperMatrixComparability')}<select aria-label={t('paperMatrixComparability')} className={evidenceInput} disabled={draft.status === 'not-reported'} value={draft.comparability} onChange={(event) => setDraft({ ...draft, comparability: event.target.value as PaperMatrixCell['comparability'] })}>
         {(['unknown', 'comparable', 'not-comparable'] as const).map((value) => <option key={value} value={value}>{t(`paperMatrix_${value}`)}</option>)}
       </select></label>
       <label className="block text-xs text-ds-muted">{t('paperMatrixReason')}<textarea rows={2} maxLength={16000} className={evidenceInput} disabled={draft.status === 'not-reported'} value={draft.comparabilityReason} onChange={(event) => setDraft({ ...draft, comparabilityReason: event.target.value })} /></label>
