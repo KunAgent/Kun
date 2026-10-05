@@ -24,7 +24,7 @@ import { WorkspaceModeTabs } from '../chat/WorkspaceModeTabs'
 import { useChatStore } from '../../store/chat-store'
 import { RoomSettings, roomButtonClass } from './RoomSettings'
 import { RoomComposer } from './RoomComposer'
-import { RoomComposerModelButton } from './RoomComposerModelButton'
+import { RoomDirectModelPicker } from './RoomDirectModelPicker'
 import { RoomHeader } from './RoomHeader'
 import { RoomMemberDetails } from './RoomMemberDetails'
 import { roomsClient } from './rooms-client'
@@ -248,7 +248,9 @@ export function RoomsWorkspaceView({
   const privateChat = room?.conversationKind === 'user_agent'
   const agentId = privateChat ? room?.members[0]?.participantAgentId : undefined
   const agentProfile = useAgentResource<{ agent: AgentIdentity }>(agentId ? agentPath(agentId) : null)
-  const agentModels = useAgentResource<AgentModels>(agentId ? agentPath(agentId) + '/models' : null)
+  const [modelUpdating, setModelUpdating] = useState(false)
+  useEffect(() => setModelUpdating(false), [room?.id])
+  const agentModels = useAgentResource<AgentModels>(agentId && room ? agentPath(agentId) + '/models?room_id=' + encodeURIComponent(room.id) : null)
   const setupPending = agentProfile.data?.agent.setup?.status === 'pending'
   const choiceInputs = privateChat ? direct.data?.userInputs ?? [] : []
   const openRun = (runId: string): void => { drawer.open({ kind: 'run', runId }); panel.openCollaboration() }
@@ -384,7 +386,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
           onApps={() => setAppsOpen(true)}
           onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId}
-          embedded={embeddedPrivate} onToggleLeftSidebar={onToggleLeftSidebar} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
+          onManageAgents={() => drawer.open({ kind: 'directory' })} embedded={embeddedPrivate} onToggleLeftSidebar={onToggleLeftSidebar} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
           onSidebar={() => setSidebarOpen(true)}
           onSearch={() => setSearchOpen((value) => !value)}
           onApps={() => setAppsOpen(true)}
@@ -483,8 +485,9 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
               <RoomComposer
                 compactControls={embeddedPrivate}
-                modelControl={privateChat && embeddedPrivate ? <RoomComposerModelButton model={agentModels.data?.main}
-                  onClick={() => drawer.open({ kind: 'models' })} /> : undefined}
+                modelUpdating={modelUpdating}
+                modelControl={privateChat ? <RoomDirectModelPicker key={room.id} room={room} agentRevision={agentModels.data?.agent.revision} onBusyChange={setModelUpdating}
+                  onSaved={async () => { agentModels.refresh(); await state.refresh() }} /> : undefined}
               key={room.id + '-composer'}
               room={room}
               tasks={state.tasks}
@@ -502,6 +505,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center text-ds-muted">
             <MessagesSquare size={36} />
             <p>{t('roomsEmpty')}</p>
+            <button type="button" className={roomButtonClass} onClick={() => drawer.open({ kind: 'directory' })}>{t('directManageAllAgents')}</button>
             <button
               className={roomButtonClass}
               onClick={() => setNewChatOpen(true)}

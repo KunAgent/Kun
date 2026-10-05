@@ -1,5 +1,6 @@
 'use strict'
 const assert = require('node:assert/strict')
+const { confirmAgentCreationModel } = require('./smoke-agent-creation-model.cjs')
 const { createServer } = require('node:http')
 const { readFile, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
@@ -271,12 +272,14 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
 
     await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New agent conversation', exact: true }).click()
     await page.getByRole('button', { name: 'Define in chat', exact: true }).click()
+    const createdModelRef = await confirmAgentCreationModel({ page, request })
     let other
     await poll(async () => {
       other = (await request(page, '/v1/agents')).agents.find((value) => value.id !== entry.agentId)
       const selected = (await roomWorkbenchSnapshot(page)).privateRoomId
       return Boolean(other && selected && selected !== entry.roomId)
     }, 15000, 'select another private Agent while the old browser is active')
+    assert.deepEqual(other.modelRef, createdModelRef)
     const otherRoomId = (await roomWorkbenchSnapshot(page)).privateRoomId
     assert(otherRoomId)
     await openBrowser()
@@ -417,6 +420,21 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
 // Electron native dialogs are not renderer pages. Stub only this disposable
 // application's exact restart question, once; all tool/browser consent is clicked
 // through its real existing UI. Never intercept a broad class of approvals.
+async function assertNativeRestartConsent(application) {
+  const read = () => application.evaluate(() => globalThis.__workspaceSmokeRestartDialog.calls)
+  let calls
+  try { calls = await read() }
+  catch (error) {
+    const owner = application.process()
+    // Restart can transiently invalidate the inspector's evaluation context on
+    // macOS. Retry only this read, once, while the same Electron owner is alive.
+    // Never repeat the restart or the native confirmation action.
+    if (!String(error).includes('Execution context was destroyed') ||
+      !owner || owner.exitCode !== null || owner.signalCode !== null) throw error
+    calls = await read()
+  }
+  assert.equal(calls, 1, 'Native Runtime restart must be confirmed exactly once')
+}
 async function restartOwnedRuntime(page, application) {
   await application.evaluate(({ dialog }) => {
     const state = { original: dialog.showMessageBox, calls: 0 }
@@ -436,7 +454,7 @@ async function restartOwnedRuntime(page, application) {
   try {
     const result = await page.evaluate(() => window.kunGui.restartKunServe())
     assert.equal(result.accepted, true, JSON.stringify(result))
-    assert.equal(await application.evaluate(() => globalThis.__workspaceSmokeRestartDialog.calls), 1)
+    await assertNativeRestartConsent(application)
   } finally {
     await application.evaluate(({ dialog }) => {
       const state = globalThis.__workspaceSmokeRestartDialog
@@ -455,4 +473,4 @@ async function waitForPrivateRoomSurface(page, roomId) {
   await surface.locator('.rooms-workbench-rail [data-room-tool="browser"]').waitFor(ready)
   return surface
 }
-module.exports = { exercisePersonalAgentWorkspace, startWorkspaceBrowserPage, waitForPrivateRoomSurface }
+module.exports = { exercisePersonalAgentWorkspace, startWorkspaceBrowserPage, waitForPrivateRoomSurface, assertNativeRestartConsent }

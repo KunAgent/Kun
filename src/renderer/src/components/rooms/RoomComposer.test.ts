@@ -101,6 +101,19 @@ describe('RoomComposer', () => {
     )
   }
 
+  it('preserves the draft and blocks keyboard and button sends while the model is updating', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send, { modelUpdating: true })
+    input('Keep this draft')
+    expect(renderer.root.findByProps({ 'aria-label': i18n.t('roomsSend') }).props.disabled).toBe(true)
+    await submit()
+    expect(send).not.toHaveBeenCalled()
+    expect(renderer.root.findByType('textarea').props.value).toBe('Keep this draft')
+    await act(async () => renderer.update(createElement(RoomComposer, { room, tasks: [], onSend: send, modelUpdating: false })))
+    await submit()
+    expect(send).toHaveBeenCalledOnce()
+  })
+
   it('shares Code speech settings and local Whisper credential policy in personal and group composers', async () => {
     const runtime = defaultKunRuntimeSettings()
     runtime.speechToText = { ...runtime.speechToText, enabled: true,

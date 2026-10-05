@@ -1,5 +1,6 @@
 'use strict'
 const assert = require('node:assert/strict')
+const { confirmAgentCreationModel } = require('./smoke-agent-creation-model.cjs')
 const { mkdir, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
 
@@ -181,6 +182,7 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
   assert.equal(await picker.getByRole('button', { name: 'Group chat', exact: true }).count(), 1,
     'The same Rooms picker offers group creation')
   await picker.getByRole('button', { name: 'Define in chat', exact: true }).click()
+  const createdModelRef = await confirmAgentCreationModel({ page, request })
   await picker.waitFor({ state: 'hidden' })
   await poll(async () => {
     const selected = (await roomWorkbenchSnapshot(page)).roomsRoomId
@@ -192,6 +194,7 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
   const secondAgent = (await request(page, '/v1/agents')).agents.find((agent) =>
     agent.id === secondPrivate.members[0].participantAgentId)
   assert(secondAgent)
+  assert.deepEqual(secondAgent.modelRef, createdModelRef)
   await waitRoomsConversation(page, poll, secondPrivate.id, secondAgent.name)
   assert.equal((await roomWorkbenchSnapshot(page)).route, 'rooms', 'Private creation stays in Rooms')
   await capture('workbench-04-rooms-new-private-chat')
