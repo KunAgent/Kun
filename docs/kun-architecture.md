@@ -54,6 +54,10 @@ plan worktree、bash 默认 cwd 和 `.kun/project.json` 仍只跟随主目录；
   经 RoomRuntime 校验原请求、权限快照、workspace/epoch 和取消状态后，先持久化 request，再通过原房间队列执行。
   不扫描历史线程接管未知 turn；同根后台通知可连续交付，但新用户请求或权限变更会使旧通知失效。
   历史 run inspector 永远只读，不得因查看历史重新执行工具。
+- 新建内置个人助手小 Kun（`agent-default-kun` / `templateId: kun`）私聊时，
+  将完整的 Full access 权限档位持久化到房间，composer 与后续运行时读取同一份策略。
+  自定义/模板 Agent、只读 profile、显式目录限制仍使用受限默认值。已有私聊的显式策略、
+  历史缺失策略的受限兼容语义与已接纳回合快照不变；任务与外部 harness 的独立授权门禁也不变。
 - GUI 结构化结果使用 Code 的 canonical mapper/renderer（chart、visualization、generatedFiles）；
   文件引用来自成功的结构化 tool result，并验证文件存在及 canonical path 在工作区内，不能从模型文字或目录时间戳猜交付物。
 - Excalidraw apply 不会先把旧的本地草稿写回磁盘。保存带读取版本，冲突时保留草稿并提示保存副本后重载；

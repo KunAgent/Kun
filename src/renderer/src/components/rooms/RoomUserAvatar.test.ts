@@ -25,3 +25,34 @@ it('shows a selected preview independently and falls back to Kun when an uploade
   expect(renderer.root.findByProps({ 'data-avatar-id': 'designer' })).toBeTruthy()
   expect(useRoomUserProfile.getState().profile.avatar).toBeNull()
 })
+it('preserves custom builtins and recovers from a broken uploaded portrait', () => {
+  const props = { id: 'developer', label: 'My Agent' }
+  act(() => { renderer = create(createElement(RoomAvatar, { ...props, avatar: { kind: 'builtin', id: 'scientist' } })) })
+  expect(renderer.root.findByProps({ 'data-avatar-id': 'scientist' })).toBeTruthy()
+  act(() => renderer.update(createElement(RoomAvatar, { ...props, avatar: { kind: 'uploaded', attachmentId: 'good' } })))
+  expect(renderer.root.findByType('img').props.src).toBe('data:image/jpeg;base64,good')
+  act(() => renderer.root.findByType('img').props.onError())
+  expect(renderer.root.findAllByType('img')).toHaveLength(0)
+  expect(renderer.root.findByProps({ 'data-avatar-id': 'coder' })).toBeTruthy()
+  act(() => renderer.update(createElement(RoomAvatar, { ...props, avatar: { kind: 'builtin', id: 'explorer' } })))
+  expect(renderer.root.findByProps({ 'data-avatar-id': 'explorer' })).toBeTruthy()
+})
+it('keeps a visible identity for unknown, missing and loading portraits', () => {
+  const props = { id: 'developer', label: 'My Agent' }
+  for (const avatar of [undefined, null, { kind: 'builtin', id: 'unknown' }, { kind: 'uploaded', attachmentId: 'missing' }]) {
+    act(() => {
+      if (renderer) renderer.unmount()
+      renderer = create(createElement(RoomAvatar, { ...props, avatar: avatar as Parameters<typeof RoomAvatar>[0]['avatar'] }))
+    })
+    expect(renderer.root.findByProps({ 'data-avatar-id': 'coder' })).toBeTruthy()
+    expect(renderer.root.findByProps({ role: 'img' }).props['aria-label']).toBe('My Agent')
+  }
+})
+it('does not cycle between a broken upload and a broken user fallback image', () => {
+  act(() => { renderer = create(createElement(RoomAvatar, { id: 'user', label: 'You', avatar: { kind: 'uploaded', attachmentId: 'good' } })) })
+  act(() => renderer.root.findByType('img').props.onError())
+  expect(renderer.root.findByType('img').props.src).toContain('kun_greet.png')
+  act(() => renderer.root.findByType('img').props.onError())
+  expect(renderer.root.findAllByType('img')).toHaveLength(0)
+  expect(renderer.root.findAllByProps({ className: 'rooms-avatar-art' })).toHaveLength(1)
+})

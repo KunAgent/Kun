@@ -9,12 +9,12 @@ export function cacheRoomAvatar(id: string, image: RoomPreviewImage): void {
   avatars.set(id, `data:${image.mimeType};base64,${image.dataBase64}`)
 }
 export function useRoomUploadedAvatar(id?: string): string | undefined {
-  const [url, setUrl] = useState<string>()
+  const [loaded, setLoaded] = useState<{ id: string; url: string | undefined }>()
   useEffect(() => {
-    if (!id) { setUrl(undefined); return }
+    if (!id) { setLoaded(undefined); return }
     const cached = avatars.get(id)
-    if (cached) { setUrl(cached); return }
-    setUrl(undefined)
+    if (cached) { setLoaded({ id, url: cached }); return }
+    setLoaded(undefined)
     let active = true
     let promise = pending.get(id)
     if (!promise) {
@@ -24,8 +24,8 @@ export function useRoomUploadedAvatar(id?: string): string | undefined {
       }).catch(() => undefined).finally(() => pending.delete(id))
       pending.set(id, promise)
     }
-    void promise.then((value) => { if (active) setUrl(value) })
+    void promise.then((value) => { if (active) setLoaded({ id, url: value }) })
     return () => { active = false }
   }, [id])
-  return url
+  return id && loaded?.id === id ? loaded.url : id ? avatars.get(id) : undefined
 }
