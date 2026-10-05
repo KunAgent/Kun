@@ -3,6 +3,10 @@ import {
   LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID,
   LOCAL_SANOTTS_RUNTIME_FILES,
   LOCAL_SANOTTS_RUNTIME_ID,
+  LOCAL_SANOTTS_RUNTIME_REVISION,
+  LOCAL_SANOTTS_VOICE_REVISION,
+  LOCAL_SANOTTS_ESPEAK_REVISION,
+  localSanottsRuntimeFileUrl,
   isLocalSanottsDownloadSourceId,
   localSanottsAssetUrl,
   localSanottsDownloadSourceById,
@@ -11,6 +15,7 @@ import {
 } from './local-sanotts'
 import {
   LOCAL_SANOTTS_VOICE_AUTO_ID,
+  LOCAL_SANOTTS_VOICES,
   isLocalSanottsVoiceId,
   isLocalSanottsVoiceSetting,
   localSanottsVoiceById,
@@ -26,6 +31,20 @@ describe('sanoTTS catalog', () => {
       expect(file.sizeBytes).toBeGreaterThan(0)
       expect(file.maxBytes).toBeGreaterThan(file.sizeBytes)
     }
+  })
+
+  it('counts complete voice assets including pinned offline Russian pronunciation sources', () => {
+    for (const voice of LOCAL_SANOTTS_VOICES) {
+      expect(voice.sizeBytes).toBe(voice.files.reduce((total, file) => total + file.sizeBytes, 0))
+    }
+    const russian = localSanottsVoiceById('russian')
+    for (const fileName of ['ru_rules', 'ru_list', 'ru_emoji', 'ru_listx']) {
+      expect(russian.files.some(file => file.fileName === fileName)).toBe(true)
+      expect(localSanottsVoiceFileUrl('russian', fileName, 'hf-mirror')).toContain(
+        `raw.githubusercontent.com/espeak-ng/espeak-ng/${LOCAL_SANOTTS_ESPEAK_REVISION}/dictsource/`
+      )
+    }
+    expect(localSanottsVoiceFileUrl('russian', 'ru_listx', 'huggingface')).toContain('/extra/ru_listx')
   })
 
   it('maps UI locale onto a shipped voice without writing auto away', () => {
@@ -46,10 +65,20 @@ describe('sanoTTS catalog', () => {
     expect(localSanottsDownloadSourceById('missing').id).toBe(LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID)
     expect(localSanottsAssetUrl('huggingface', 'snt_g2p.wasm')).toContain('huggingface.co/ampixa/sanoTTS')
     expect(localSanottsVoiceFileUrl('chinese', 'meta.json', 'github-pages')).toBe(
-      'https://ampixa.github.io/sanoTTS/voices/chinese/meta.json'
+      `https://raw.githubusercontent.com/Ampixa/sanoTTS/${LOCAL_SANOTTS_RUNTIME_REVISION}/web/voices/chinese/meta.json`
     )
     expect(localSanottsVoiceById('chinese').id).toBe('chinese')
     expect(LOCAL_SANOTTS_RUNTIME_ID).toBe('sanotts-runtime')
+  })
+
+  it('pins all source revisions and routes runtime away from voice-only mirrors', () => {
+    for (const id of ['huggingface', 'hf-mirror', 'github-pages']) {
+      expect(localSanottsRuntimeFileUrl('snt_g2p.wasm', id)).toContain(`/${LOCAL_SANOTTS_RUNTIME_REVISION}/web/`)
+      expect(localSanottsDownloadSourcesForRetry(id, 'runtime').map(source => source.id)).toEqual(['github-pages'])
+      expect(localSanottsVoiceFileUrl('amy', 'meta.json', id)).toContain(id === 'github-pages'
+        ? `/${LOCAL_SANOTTS_RUNTIME_REVISION}/web/`
+        : `/resolve/${LOCAL_SANOTTS_VOICE_REVISION}/web/`)
+    }
   })
 
   it('tries the preferred source first and then the rest of the catalog', () => {

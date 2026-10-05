@@ -190,6 +190,9 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Test local speech downloads and worker paths
+        run: npx vitest run src/main/services/local-sanotts src/shared/local-sanotts
+
       - name: Build ad-hoc macOS packages (x64 and arm64)
         run: npm run dist:mac
 
@@ -239,6 +242,9 @@ jobs:
 
       - name: Install root dependencies
         run: npm ci
+
+      - name: Test local speech downloads and worker paths
+        run: npx vitest run src/main/services/local-sanotts src/shared/local-sanotts
 
       - name: Smoke Windows mini window interaction and restoration
         timeout-minutes: 5

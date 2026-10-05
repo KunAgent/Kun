@@ -8,6 +8,7 @@ import {
   LOCAL_SANOTTS_RUNTIME_SIZE_BYTES,
   type LocalSanottsAssetState,
   type LocalSanottsDownloadSourceStatus,
+  type LocalSanottsVoiceStatus,
   type LocalSanottsRuntimeStatus
 } from '@shared/local-sanotts'
 import { localSanottsVoiceById, type LocalSanottsVoiceId } from '@shared/local-sanotts-voices'
@@ -26,11 +27,12 @@ export type SpeakRuntimePanelProps = {
   autoDownload: boolean
   runtime: LocalSanottsRuntimeStatus | null
   voiceId: LocalSanottsVoiceId
-  voiceState: LocalSanottsAssetState
-  voiceSizeBytes: number
+  voiceStatus: LocalSanottsVoiceStatus
   sourceStatuses: LocalSanottsDownloadSourceStatus[] | null
   sourceCheckBusy: boolean
-  busyAsset: 'runtime' | 'voice' | null
+  runtimeBusy: boolean
+  runtimeCanceling: boolean
+  voiceBusy: boolean
   notice: InlineNotice | null
   onSelectDownloadSource: (sourceId: string) => void
   onToggleAutoDownload: (enabled: boolean) => void
@@ -46,11 +48,9 @@ export type SpeakRuntimePanelProps = {
  * selected voice weights.
  */
 export function SpeakRuntimePanel(props: SpeakRuntimePanelProps): ReactElement {
-  const { t, runtime, busyAsset } = props
+  const { t, runtime } = props
   const runtimeState = runtime?.state ?? 'not_downloaded'
   const voice = localSanottsVoiceById(props.voiceId)
-  const runtimeBusy = busyAsset === 'runtime'
-  const voiceBusy = busyAsset === 'voice'
   return (
     <SettingsCard title={t('speakRuntimeCard')} description={t('speakRuntimeCardDesc')}>
       <SettingRow
@@ -70,6 +70,7 @@ export function SpeakRuntimePanel(props: SpeakRuntimePanelProps): ReactElement {
                 </option>
               ))}
             </select>
+            <p className="text-[11.5px] leading-4 text-ds-faint">{t('speakDownloadSourceRuntimeHint')}</p>
             <div className="grid gap-1.5 text-[12px] text-ds-muted">
               {props.sourceCheckBusy && !props.sourceStatuses ? (
                 <span className="inline-flex items-center gap-1.5">
@@ -109,7 +110,9 @@ export function SpeakRuntimePanel(props: SpeakRuntimePanelProps): ReactElement {
         downloadedBytes={runtime?.downloadedBytes}
         totalBytes={runtime?.totalBytes}
         speedBytesPerSecond={runtime?.speedBytesPerSecond}
-        busy={runtimeBusy}
+        busy={props.runtimeBusy}
+        canceling={props.runtimeCanceling}
+        message={runtime?.message}
         t={t}
         onDownload={props.onDownloadRuntime}
         onCancel={props.onCancelRuntime}
@@ -119,9 +122,13 @@ export function SpeakRuntimePanel(props: SpeakRuntimePanelProps): ReactElement {
         testId="speak-voice"
         title={voice.label}
         hint={t('speakVoiceHint')}
-        sizeBytes={props.voiceSizeBytes}
-        state={props.voiceState}
-        busy={voiceBusy}
+        sizeBytes={props.voiceStatus.sizeBytes}
+        state={props.voiceStatus.state}
+        downloadedBytes={props.voiceStatus.downloadedBytes}
+        totalBytes={props.voiceStatus.totalBytes}
+        speedBytesPerSecond={props.voiceStatus.speedBytesPerSecond}
+        message={props.voiceStatus.message}
+        busy={props.voiceBusy}
         t={t}
         onDownload={props.onDownloadVoice}
       />
@@ -151,6 +158,8 @@ function AssetCard(props: {
   totalBytes?: number
   speedBytesPerSecond?: number
   busy: boolean
+  canceling?: boolean
+  message?: string
   t: (key: string, options?: Record<string, unknown>) => string
   onDownload: () => void
   onCancel?: () => void
@@ -160,6 +169,7 @@ function AssetCard(props: {
   return (
     <div
       data-speak-asset={props.testId}
+      data-state={state}
       className="flex min-w-0 flex-col gap-2 rounded-xl border border-ds-border bg-ds-card px-3 py-2.5"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -179,36 +189,48 @@ function AssetCard(props: {
         </span>
       </div>
       <p className="text-[11.5px] leading-4 text-ds-faint">{props.hint}</p>
+      {state === 'error' && props.message ? (
+        <p role="alert" className="break-words text-[11.5px] text-rose-500">{props.message}</p>
+      ) : null}
       {state === 'downloading' ? (
-        <div className="flex items-center gap-2 text-[11.5px] tabular-nums text-ds-muted">
-          <span>
-            {formatBytes(props.downloadedBytes)}
-            {props.totalBytes ? ` / ${formatBytes(props.totalBytes)}` : ''}
-          </span>
-          <span>{formatTransferRate(props.speedBytesPerSecond, t('speakDownloadStarting'))}</span>
+        <div className="space-y-1.5">
+          <progress
+            aria-label={props.title}
+            value={Math.min(props.downloadedBytes ?? 0, props.totalBytes ?? props.sizeBytes)}
+            max={props.totalBytes || props.sizeBytes}
+            className="h-1.5 w-full accent-accent"
+          />
+          <div className="flex flex-wrap items-center gap-2 text-[11.5px] tabular-nums text-ds-muted">
+            <span>
+              {formatBytes(props.downloadedBytes) || '0 MB'} / {formatBytes(props.totalBytes ?? props.sizeBytes)}
+            </span>
+            <span>{formatTransferRate(props.speedBytesPerSecond, t('speakDownloadStarting'))}</span>
+          </div>
         </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         {state === 'downloading' && props.onCancel ? (
           <button className={settingsButtonClass()}
             type="button"
+            disabled={props.canceling}
+            aria-busy={Boolean(props.canceling)}
             onClick={props.onCancel}
           >
             <Square className="h-3.5 w-3.5" strokeWidth={1.9} />
             {t('speakModelCancel')}
           </button>
         ) : (
-          <button aria-busy={Boolean(props.busy)} className={settingsButtonClass()}
+          <button aria-busy={props.busy || state === 'downloading'} className={settingsButtonClass()}
             type="button"
-            disabled={props.busy || state === 'ready'}
+            disabled={props.busy || state === 'ready' || state === 'downloading'}
             onClick={props.onDownload}
           >
-            {props.busy ? (
+            {props.busy || state === 'downloading' ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
             ) : (
               <Download className="h-3.5 w-3.5" strokeWidth={1.9} />
             )}
-            {state === 'ready' ? t('speakModelDownloaded') : t('speakModelDownload')}
+            {state === 'ready' ? t('speakModelDownloaded') : state === 'downloading' ? t('speakModelStateDownloading') : t('speakModelDownload')}
           </button>
         )}
         {state === 'ready' && props.onDelete ? (

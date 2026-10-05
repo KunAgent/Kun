@@ -16,7 +16,7 @@
   "speakPreviewPlay": "再生",
   "speakPreviewStop": "停止",
   "speakDownloadSource": "ダウンロード元",
-  "speakDownloadSourceDesc": "まず選択したミラーからランタイム WASM と声ファイルを取得します。失敗した場合は他のソースを自動的に試します。",
+  "speakDownloadSourceDesc": "音声モデルの優先ダウンロード元を選びます。失敗した場合は、ほかの音声モデルの配信元を自動的に試します。",
   "speakDownloadSourceChecking": "ダウンロード元を確認しています...",
   "speakDownloadSourceAvailable": "{{source}} は {{ms}} ms で到達可能",
   "speakDownloadSourceUnavailable": "{{source}} は利用できません: {{reason}}",
@@ -51,5 +51,6 @@
   "speakRuntimeCard": "sanoTTS ランタイム",
   "speakRuntimeCardDesc": "共有 G2P WASM と選択した声。使用前に SHA-256 で検証します。",
   "speakRuntimeHint": "約 3.5 MB。ライセンス {{license}}。",
-  "speakVoiceHint": "選択した言語の声の重み。"
+  "speakVoiceHint": "選択した言語の声の重み。",
+  "speakDownloadSourceRuntimeHint": "共通ランタイムとロシア語の発音辞書は公式 GitHub の固定バージョンからダウンロードします。この設定は音声モデル用です。Hugging Face ミラーには音声モデルのみがあります。"
 }

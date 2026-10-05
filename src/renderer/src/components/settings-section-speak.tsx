@@ -1,12 +1,10 @@
 import { settingsButtonClass } from './settings-button'
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { Loader2, Play, Square, Volume2 } from 'lucide-react'
 import { isAppLocale } from '@shared/app-locales'
 import {
   LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID,
-  type LocalSanottsAssetState,
-  type LocalSanottsDownloadSourceStatus,
-  type LocalSanottsRuntimeStatus
+  type LocalSanottsDownloadSourceStatus
 } from '@shared/local-sanotts'
 import {
   LOCAL_SANOTTS_VOICE_AUTO_ID,
@@ -24,6 +22,7 @@ import {
   type InlineNotice
 } from './settings-controls'
 import { SpeakRuntimePanel } from './settings-section-speak-runtime'
+import { initialSpeakRuntimeStatus, initialSpeakVoiceStatus, useSpeakAssetStatuses } from './settings-section-speak-assets'
 import {
   SPEAK_LANGUAGE_FILTERS,
   SPEAK_SPEED_MAX,
@@ -67,17 +66,19 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
   const speakPhase = useSpeakStore((state) => state.phase)
   const speakError = useSpeakStore((state) => state.error)
   const trackKeys = useSpeakTrackStore((state) => state.keys)
-  const [runtime, setRuntime] = useState<LocalSanottsRuntimeStatus | null>(null)
-  const [readyVoices, setReadyVoices] = useState<LocalSanottsVoiceId[]>([])
   const [sourceStatuses, setSourceStatuses] = useState<LocalSanottsDownloadSourceStatus[] | null>(null)
   const [sourceCheckBusy, setSourceCheckBusy] = useState(false)
-  const [busyAsset, setBusyAsset] = useState<'runtime' | 'voice' | null>(null)
+  const [runtimeAction, setRuntimeAction] = useState<'download' | 'cancel' | 'delete' | null>(null)
+  const runtimeActionId = useRef(0)
+  const [busyVoices, setBusyVoices] = useState<LocalSanottsVoiceId[]>([])
   const [trackUsage, setTrackUsage] = useState<LocalSanottsTrackUsage | null>(null)
   const [clearingTracks, setClearingTracks] = useState(false)
   const [notice, setNotice] = useState<InlineNotice | null>(null)
   const [languageFilter, setLanguageFilter] = useState<SpeakLanguageFilter>('all')
   const resolvedVoiceId = resolveLocalSanottsVoiceId(speak.voice, locale)
   const selectedVoice = localSanottsVoiceById(resolvedVoiceId)
+  const { runtime, voices, refreshStatuses, updateRuntime, updateVoice } = useSpeakAssetStatuses(resolvedVoiceId)
+  const voiceStatus = voices[resolvedVoiceId] ?? initialSpeakVoiceStatus(resolvedVoiceId)
   const [sampleText, setSampleText] = useState(speakPreviewSample(selectedVoice.language))
 
   const updateSpeak = useCallback(
@@ -87,27 +88,6 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
     },
     [speak, updateKun]
   )
-
-  const refreshStatuses = useCallback(async (): Promise<void> => {
-    if (typeof window.kunGui?.getLocalSanottsRuntimeStatus !== 'function') return
-    const [nextRuntime, voices] = await Promise.all([
-      window.kunGui.getLocalSanottsRuntimeStatus(),
-      window.kunGui.listDownloadedLocalSanottsVoices()
-    ])
-    setRuntime(nextRuntime)
-    setReadyVoices(voices)
-  }, [])
-
-  useEffect(() => {
-    void refreshStatuses().catch(() => undefined)
-  }, [refreshStatuses])
-
-  useEffect(() => {
-    if (typeof window.kunGui?.onLocalSanottsAssetProgress !== 'function') return
-    return window.kunGui.onLocalSanottsAssetProgress(() => {
-      void refreshStatuses().catch(() => undefined)
-    })
-  }, [refreshStatuses])
 
   useEffect(() => {
     if (typeof window.kunGui?.checkLocalSanottsDownloadSources !== 'function') return
@@ -137,51 +117,58 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
     return groups
   }, [languageFilter, selectedVoice])
   const previewing = speakPhase !== 'idle'
-  const voiceState: LocalSanottsAssetState = readyVoices.includes(resolvedVoiceId)
-    ? 'ready'
-    : 'not_downloaded'
-
   const runRuntimeAction = async (action: 'download' | 'cancel' | 'delete'): Promise<void> => {
     const bridge = window.kunGui
     if (!bridge) return
+    const actionId = ++runtimeActionId.current
     setNotice(null)
-    setBusyAsset('runtime')
+    setRuntimeAction(action)
+    if (action === 'download') {
+      updateRuntime({ ...initialSpeakRuntimeStatus(), state: 'downloading', downloadedBytes: 0 })
+    }
     try {
-      if (action === 'download') {
-        const result = await bridge.downloadLocalSanottsRuntime({ sourceId: speak.downloadSource })
-        if (!result.ok) setNotice({ tone: 'error', message: result.message })
-      } else if (action === 'cancel') {
-        await bridge.cancelLocalSanottsRuntime()
-      } else {
-        const result = await bridge.deleteLocalSanottsRuntime()
-        if (!result.ok) setNotice({ tone: 'error', message: result.message })
+      const result = action === 'download'
+        ? await bridge.downloadLocalSanottsRuntime({ sourceId: speak.downloadSource })
+        : action === 'cancel'
+          ? await bridge.cancelLocalSanottsRuntime()
+          : await bridge.deleteLocalSanottsRuntime()
+      if (runtimeActionId.current !== actionId) return
+      if (result.status) updateRuntime(result.status)
+      if (!result.ok) {
+        if (result.status?.state === 'ready') setNotice({ tone: 'error', message: result.message })
+        else updateRuntime({ ...(result.status ?? initialSpeakRuntimeStatus()), state: 'error', message: result.message })
       }
     } catch (error) {
-      setNotice({ tone: 'error', message: error instanceof Error ? error.message : String(error) })
+      if (runtimeActionId.current === actionId) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (action === 'download') updateRuntime({ ...initialSpeakRuntimeStatus(), state: 'error', message })
+        else {
+          setNotice({ tone: 'error', message })
+          await refreshStatuses()
+        }
+      }
     } finally {
-      setBusyAsset(null)
-      await refreshStatuses().catch(() => undefined)
+      if (runtimeActionId.current === actionId) setRuntimeAction(null)
     }
   }
 
   const onDownloadVoice = async (): Promise<void> => {
     const bridge = window.kunGui
     if (!bridge) return
+    const voiceId = resolvedVoiceId
     setNotice(null)
-    setBusyAsset('voice')
+    setBusyVoices((ids) => [...ids, voiceId])
+    updateVoice({ ...initialSpeakVoiceStatus(voiceId), state: 'downloading', downloadedBytes: 0 })
     try {
       const status = await bridge.downloadLocalSanottsVoice({
-        voiceId: resolvedVoiceId,
+        voiceId,
         sourceId: speak.downloadSource
       })
-      if (status.state !== 'ready') {
-        setNotice({ tone: 'error', message: status.message || t('speakVoiceMissing') })
-      }
+      updateVoice(status)
     } catch (error) {
-      setNotice({ tone: 'error', message: error instanceof Error ? error.message : String(error) })
+      updateVoice({ ...initialSpeakVoiceStatus(voiceId), state: 'error', message: error instanceof Error ? error.message : String(error) })
     } finally {
-      setBusyAsset(null)
-      await refreshStatuses().catch(() => undefined)
+      setBusyVoices((ids) => ids.filter((id) => id !== voiceId))
     }
   }
 
@@ -327,7 +314,7 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
                       {speakVoiceOptionLabel(
                         t,
                         voice,
-                        readyVoices.includes(voice.id) ? 'ready' : 'not_downloaded'
+                        voices[voice.id]?.state ?? 'not_downloaded'
                       )}
                     </option>
                   ))}
@@ -411,11 +398,12 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
         autoDownload={speak.autoDownload}
         runtime={runtime}
         voiceId={resolvedVoiceId}
-        voiceState={voiceState}
-        voiceSizeBytes={selectedVoice.sizeBytes}
+        voiceStatus={voiceStatus}
         sourceStatuses={sourceStatuses}
         sourceCheckBusy={sourceCheckBusy}
-        busyAsset={busyAsset}
+        runtimeBusy={runtimeAction !== null}
+        runtimeCanceling={runtimeAction === 'cancel'}
+        voiceBusy={busyVoices.includes(resolvedVoiceId)}
         notice={null}
         onSelectDownloadSource={(sourceId) => updateSpeak({ downloadSource: sourceId })}
         onToggleAutoDownload={(autoDownload) => updateSpeak({ autoDownload })}
