@@ -41,6 +41,9 @@ import {
 } from '../loop/compaction-summary.js'
 import type { ContextCompactionConfig } from '../loop/model-context-profile.js'
 import { reserveExtensionModelRequest } from '../loop/turn-budget-gate.js'
+import { executableHistory } from '../loop/executable-history.js'
+import { restoreUnexecutedHistory } from '../loop/preserve-unexecuted-history.js'
+import { isRejectedQueuedTurn, latestExecutedTurn } from '../domain/queue-execution-state.js'
 import { makeGoalContextItem, makeUserItem, makeErrorItem } from '../domain/item.js'
 import { appendTurnItem, createTurnRecord, finishTurn, replaceTurnItem, startTurn as startTurnRecord } from '../domain/turn.js'
 import { finalizeTurnItems } from '../domain/turn-item-finalization.js'
@@ -105,7 +108,7 @@ async compact(this: TurnService, input: {
         const prefix = this['deps'].prefix ?? createImmutablePrefix({
           pinnedConstraints: ['user: preserve recent turns']
         })
-        const history = effectiveHistoryAfterLatestCompaction(snapshot.items)
+        const history = effectiveHistoryAfterLatestCompaction(executableHistory(snapshot.items, current))
           .filter((item) => item.kind !== 'error')
         const retainedIds = new Set(retainedTail.map((item) => item.id))
         const keepRecent = history.filter((item) => retainedIds.has(item.id)).length
@@ -174,8 +177,14 @@ async compact(this: TurnService, input: {
         }
       })
     }
-    const turnId = input.turnId ?? thread.turns[thread.turns.length - 1]?.id ?? this['deps'].ids.next('turn')
-    const bindingTurn = thread.turns.find((candidate) => candidate.id === turnId)
+    const bindingTurn = input.turnId
+      ? thread.turns.find((candidate) => candidate.id === input.turnId)
+      : latestExecutedTurn({ turns: thread.turns.filter((turn) => !turn.admissionPending && !turn.steeredToTurnId) })
+    if (input.turnId && (!bindingTurn || bindingTurn.status === 'queued' || bindingTurn.admissionPending ||
+      bindingTurn.steeredToTurnId || isRejectedQueuedTurn(bindingTurn))) {
+      throw new TurnConflictError('compaction source must identify an executable turn')
+    }
+    const turnId = bindingTurn?.id ?? this['deps'].ids.next('turn')
     const {
       providerId: fallbackProviderId,
       accountId: fallbackAccountId
@@ -195,7 +204,10 @@ async compact(this: TurnService, input: {
       threadId: input.threadId,
       maxAttempts: 2,
       build: async (snapshot, attempt) => {
-        const history = effectiveHistoryAfterLatestCompaction(snapshot.items)
+        const current = await this['deps'].threadStore.get(input.threadId)
+        if (!current) throw new Error(`thread not found: ${input.threadId}`)
+        const executableItems = executableHistory(snapshot.items, current)
+        const history = effectiveHistoryAfterLatestCompaction(executableItems)
           .filter((item) => item.kind !== 'error')
         let result = this['deps'].compactor.compact({
           threadId: input.threadId,
@@ -332,16 +344,17 @@ async compact(this: TurnService, input: {
             })
           }
         }
+        const compactedItems = insertCompactionIntoVisibleHistory({
+          visibleItems: executableItems,
+          compactedItems: result.next,
+          summaryItem: result.summaryItem,
+          threadId: input.threadId,
+          activeTurnId: turnId,
+          nowIso: this['deps'].nowIso
+        })
         return {
           changed: true,
-          items: insertCompactionIntoVisibleHistory({
-            visibleItems: snapshot.items,
-            compactedItems: result.next,
-            summaryItem: result.summaryItem,
-            threadId: input.threadId,
-            activeTurnId: turnId,
-            nowIso: this['deps'].nowIso
-          }),
+          items: restoreUnexecutedHistory(snapshot.items, executableItems, compactedItems),
           value: result
         }
       }
@@ -468,6 +481,8 @@ async finishTurn(this: TurnService, input: {
         await this['deps'].threadStore.upsert({
           ...touchThread(current, this['deps'].nowIso()),
           turns,
+          ...(input.status === 'aborted' && turn.status === 'running'
+            ? { queueControl: { reason: 'user_stop' as const, sourceTurnId: turn.id, pausedAt: this['deps'].nowIso() } } : {}),
           status: threadStatusAfterTurnTransition(current.status, turns),
           updatedAt: this['deps'].nowIso()
         })

@@ -233,6 +233,8 @@ async markTurnAdmissionCompleted(this: TurnService,
       })
       const next: ThreadRecord = {
         ...current,
+        ...(existing.status === 'running' && current.queueControl
+          ? { queueControl: undefined } : {}),
         ...(locks.agentSurface ? { agentSurface: locks.agentSurface } : {}),
         ...(locks.designProfile ? { designProfile: locks.designProfile } : {}),
         ...(locks.approvalPolicy ? { approvalPolicy: locks.approvalPolicy } : {}),

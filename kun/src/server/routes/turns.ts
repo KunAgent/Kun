@@ -164,6 +164,7 @@ export async function resumeQueuedTurns(
   onStarted: (threadId: string, turnId: string) => void
 ): Promise<JsonResponse | Response> {
   try {
+    await turns.resumeQueuedTurns(threadId)
     const started = await turns.startNextQueuedTurn(threadId)
     turns.notifyTurnQueued(threadId)
     if (!started) return jsonResponse({ threadId, started: false as const })

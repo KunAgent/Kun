@@ -155,6 +155,10 @@ describe('update transaction state parity with the installer script', () => {
     }
   })
 
+  it('requires interrupted finalization to finish before permitting a new install', () => {
+    expect(UPDATE_TRANSACTION_STATE_FACTS.finalizing.allowsNewInstall).toBe(false)
+  })
+
   it('resolves unknown states to the conservative fallback', () => {
     const fallback = resolveUpdateTransactionFacts('nonsense')
     expect(fallback.countsAsInstalled).toBe(false)

@@ -95,6 +95,8 @@ export interface TurnServiceOperations {
    * full capacity, closing, or no queued turns). Transiently unadmittable
    * queued turns are marked failed and skipped within the same call.
    */
+  pauseQueuedTurns(threadId: string, reason: 'user_stop' | 'restart_recovery', sourceTurnId: string): Promise<void>;
+  resumeQueuedTurns(threadId: string): Promise<void>;
   startNextQueuedTurn(threadId: string): Promise<{ turnId: string } | null>;
   /** Abort a queued turn before it starts; running turns must use interrupt. */
   cancelQueuedTurn(input: {

@@ -215,6 +215,8 @@ export const TurnSchema = z.object({
   steeredToTurnId: z.string().optional(),
   createdAt: z.string(),
   startedAt: z.string().optional(),
+  /** Last executable history item before durable queue promotion. */
+  queueExecutionAnchorItemId: z.string().optional(),
   finishedAt: z.string().optional(),
   items: z.array(TurnItem).default([]),
   attachmentIds: z.array(z.string().min(1)).default([]),

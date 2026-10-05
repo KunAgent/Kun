@@ -97,6 +97,7 @@ export abstract class AgentLoopBase {
       nowIso: opts.nowIso
     })
     const summaryCompaction = new HistoryCompactionService({
+      threadStore: opts.threadStore,
       sessionStore: opts.sessionStore,
       compactor: opts.compactor,
       prefix: opts.prefix,

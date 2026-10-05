@@ -358,6 +358,14 @@ export const ThreadSchemaBase = z.object({
    * model budget by auto-resuming the same thread on every boot.
    */
   lastAutoResumeAt: z.string().optional(),
+  /** Exact interrupted source superseded by an explicit queue resume. */
+  queueResumeSourceTurnId: z.string().min(1).optional(),
+  /** Execution barrier, distinct from durable queued inputs. Only explicit resume clears Stop. */
+  queueControl: z.object({
+    reason: z.enum(['user_stop', 'restart_recovery']),
+    sourceTurnId: z.string().min(1),
+    pausedAt: z.string()
+  }).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   turns: z.array(TurnSchema).default([])

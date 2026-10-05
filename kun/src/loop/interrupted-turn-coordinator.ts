@@ -1,3 +1,4 @@
+import { latestExecutedTurn, hasRunningTurn, restartSourceIsCurrent } from '../domain/queue-execution-state.js'
 import { touchThread } from '../domain/thread.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
@@ -77,7 +78,7 @@ export class InterruptedTurnCoordinator {
       launch: (threadId) => this.launchResumeTurn(threadId),
       canResume: async (threadId) => this.canResume(threadId),
       isThreadBusy: async (threadId) =>
-        (await this.deps.threadStore.get(threadId))?.status === 'running',
+        hasRunningTurn(await this.deps.threadStore.get(threadId)),
       markResumed: async (threadId) => this.markResumed(threadId),
       ...(options.setTimer ? { setTimer: options.setTimer } : {}),
       ...(options.log ? { log: options.log } : {}),
@@ -114,7 +115,7 @@ export class InterruptedTurnCoordinator {
     for (const source of sources) {
       const thread = await this.deps.threadStore.get(source.threadId)
       if (thread?.roomContext && thread.roomContext.kind !== 'conversation') continue
-      const latest = thread?.turns.at(-1)
+      const latest = latestExecutedTurn(thread)
       if (latest?.id !== source.turnId || latest.status !== 'failed') continue
       this.recoverySourceTurnByThread.set(source.threadId, source.turnId)
       if (await this.resume.resumeInterrupted(source.threadId)) resumed += 1
@@ -125,11 +126,10 @@ export class InterruptedTurnCoordinator {
   private async canResume(threadId: string): Promise<boolean> {
     if (!this.enabled) return false
     const thread = await this.deps.threadStore.get(threadId)
-    if (!thread || thread.roomContext && thread.roomContext.kind !== 'conversation') return false
+    if (!thread || thread.queueControl?.reason === 'user_stop' || thread.roomContext && thread.roomContext.kind !== 'conversation') return false
     if (thread.relation === 'side' && thread.roomContext?.kind !== 'conversation') return false
     const sourceTurnId = this.recoverySourceTurnByThread.get(threadId)
-    const latest = thread.turns.at(-1)
-    if (!sourceTurnId || latest?.id !== sourceTurnId || latest.status !== 'failed') return false
+    if (!sourceTurnId || !restartSourceIsCurrent(thread, sourceTurnId)) return false
     // A still-active goal normally owns restart recovery. A failed child needs
     // the structured parent decision context instead, so reconciliation omits
     // that parent from goal auto-resume and allows this one continuation turn.
@@ -159,7 +159,7 @@ export class InterruptedTurnCoordinator {
     const thread = await this.deps.threadStore.get(threadId)
     const sourceTurnId = this.recoverySourceTurnByThread.get(threadId)
     if (!thread || !sourceTurnId) return
-    const lastTurn = thread.turns[thread.turns.length - 1]
+    const lastTurn = latestExecutedTurn(thread)
     const recoveryContext = childRecoveryContext(this.childRecoveryByThread.get(threadId) ?? [])
     if (thread.roomContext) {
       try {

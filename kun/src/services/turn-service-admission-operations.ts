@@ -1,3 +1,4 @@
+import { restartSourceIsCurrent, insertRecoveryTurn } from '../domain/queue-execution-state.js'
 import { resolveTurnReviewRequests } from './review-composer-context.js'
 import { createHash } from 'node:crypto'
 import { assertRoomTurnAdmission } from './room-thread-admission-policy.js'
@@ -142,11 +143,7 @@ async startTurn(this: TurnService, input: {
           }
         }
         if (options.expectedLatestFailedTurnId) {
-          const latest = thread.turns.at(-1)
-          if (
-            latest?.id !== options.expectedLatestFailedTurnId ||
-            latest.status !== 'failed'
-          ) {
+          if (!restartSourceIsCurrent(thread, options.expectedLatestFailedTurnId)) {
             throw new TurnConflictError(
               `restart recovery source is no longer latest: ${options.expectedLatestFailedTurnId}`
             )
@@ -160,7 +157,8 @@ async startTurn(this: TurnService, input: {
         if (thread.status === 'archived') {
           throw new TurnConflictError(`thread is archived: ${input.threadId}`)
         }
-        if (thread.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')) {
+        if (thread.turns.some((turn) => turn.status === 'running' ||
+          (turn.status === 'queued' && !options.expectedLatestFailedTurnId))) {
           throw new TurnConflictError(`thread already has an active turn: ${input.threadId}`)
         }
         thread = promotePendingExecutionConfig(thread)
@@ -347,7 +345,8 @@ async startTurn(this: TurnService, input: {
             ...touchThread(thread, this['deps'].nowIso()),
             status: 'running' as const,
             ...(pendingThreadSurface ? { agentSurface: pendingThreadSurface } : {}),
-            turns: [...thread.turns, startedTurn]
+            turns: options.expectedLatestFailedTurnId
+              ? insertRecoveryTurn(thread.turns, startedTurn) : [...thread.turns, startedTurn]
           }
           await this['deps'].threadStore.upsert({ ...next, updatedAt: this['deps'].nowIso() })
           if (runtimeContext) {

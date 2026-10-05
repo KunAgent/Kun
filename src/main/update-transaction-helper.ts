@@ -1,8 +1,10 @@
 import { app } from 'electron'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { openUpdateRollbackReadiness, powershellRollbackReadiness } from './update-rollback-readiness'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { encodePowershellCommand, ONE_SHOT_HELPER_TIMEOUT_SECONDS, powershellHelperDeadline } from './one-shot-helper-script'
+import { isUpdateTransactionState, type UpdateTransactionState } from './update-transaction-states'
 import type { InstallerRecoveryEnvironment } from './gui-updater-pending'
 import {
   clearGuiUpdateRecovery,
@@ -48,13 +50,16 @@ export function runBoundedUpdateTransaction(
   })
 }
 
-export function scheduleBoundedUpdateRollback(
+export async function scheduleBoundedUpdateRollback(
   scriptPath: string,
   environment: InstallerRecoveryEnvironment,
   pid: number,
   spawnHelper: typeof spawn = spawn
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
+  const readiness = openUpdateRollbackReadiness()
+  let child: ChildProcess | undefined
+  try {
+    await readiness.listening
     const encode = (value: string) => Buffer.from(value, 'utf8').toString('base64')
     const assignments = Object.entries(environment).map(([key, value]) =>
       `$env:${key}=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(value)}'))`
@@ -63,6 +68,9 @@ export function scheduleBoundedUpdateRollback(
       `$script=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(scriptPath)}'))`,
       `$waitPid=${pid}`,
       ...assignments,
+      '& $script -Action ValidateUpdateRollback',
+      'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+      ...powershellRollbackReadiness(readiness.pipeName, readiness.token),
       'if (Get-Process -Id $waitPid -ErrorAction SilentlyContinue) { Wait-Process -Id $waitPid -Timeout 90 -ErrorAction Stop }',
       '& $script -Action RecoverUpdateTransaction',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
@@ -74,14 +82,26 @@ export function scheduleBoundedUpdateRollback(
       'exit 0'
     ].join('; ')
     const encoded = encodePowershellCommand(command)
-    const elevated = environment.KUN_INSTALLER_INSTALL_MODE === 'all'
+    const elevated = environment.KUN_INSTALLER_INSTALL_MODE?.toLowerCase() === 'all'
     const args = elevated
-      ? ['-NoProfile', '-Command', `${powershellHelperDeadline()}\nStart-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile','-EncodedCommand','${encoded}' -ErrorAction Stop\nexit 0`]
-      : ['-NoProfile', '-EncodedCommand', encoded]
-    const child = spawnHelper('powershell.exe', args, { detached: true, stdio: 'ignore', windowsHide: true })
-    child.once('error', reject)
-    child.once('spawn', () => { child.unref(); resolve() })
-  })
+      ? ['-NoProfile', '-Command', `${powershellHelperDeadline()}\nStart-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}' -ErrorAction Stop\nexit 0`]
+      : ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded]
+    child = spawnHelper('powershell.exe', args, { detached: true, stdio: 'ignore', windowsHide: true })
+    child.once('error', readiness.cancel)
+    child.once('exit', (code) => {
+      // RunAs returning zero means only that elevation launched. The elevated
+      // process must validate recovery and complete the nonce-bound handshake.
+      if (!elevated || code !== 0) readiness.cancel(new Error(`Update rollback launcher exited with ${code} before readiness.`))
+    })
+    await readiness.ready
+    child.unref()
+  } catch (error) {
+    readiness.cancel(error instanceof Error ? error : new Error(String(error)))
+    child?.kill()
+    throw error
+  } finally {
+    readiness.dispose()
+  }
 }
 
 async function resolveScript(deps: UpdateTransactionHelperDeps): Promise<string> {
@@ -114,21 +134,32 @@ export type FinalizeUpdateTransactionOutcome =
   | { kind: 'already-finalized', phase: string }
   | { kind: 'unconfirmed', reason: string }
 
-/**
- * Read the installer-owned transaction file to confirm its terminal phase.
- * Returns null when the file is missing or unreadable; callers treat that as
- * "unconfirmed" and keep every recovery artifact.
- */
+type TransactionRead =
+  | { kind: 'missing' }
+  | { kind: 'present', phase: UpdateTransactionState }
+  | { kind: 'unconfirmed', reason: string }
+
+/** Only ENOENT proves absence. Invalid or unreadable state never permits cleanup. */
 async function readTransactionPhase(
   environment: InstallerRecoveryEnvironment
-): Promise<string | null> {
+): Promise<TransactionRead> {
   const transactionPath = environment.KUN_INSTALLER_TRANSACTION
-  if (!transactionPath) return null
+  if (!transactionPath) return { kind: 'unconfirmed', reason: 'Transaction path is not configured.' }
+  let raw: string
   try {
-    const value = JSON.parse(await readFile(transactionPath, 'utf8')) as Record<string, unknown>
-    return typeof value.Phase === 'string' ? value.Phase : null
-  } catch {
-    return null
+    raw = await readFile(transactionPath, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
+    return { kind: 'unconfirmed', reason: `Cannot read transaction: ${String(error)}` }
+  }
+  try {
+    // Windows PowerShell 5 writes Set-Content -Encoding UTF8 with a BOM.
+    const value: unknown = JSON.parse(raw.replace(/^\uFEFF/u, ''))
+    const phase = value && typeof value === 'object' && 'Phase' in value ? value.Phase : undefined
+    if (!isUpdateTransactionState(phase)) return { kind: 'unconfirmed', reason: 'Invalid transaction phase.' }
+    return { kind: 'present', phase }
+  } catch (error) {
+    return { kind: 'unconfirmed', reason: `Cannot parse transaction: ${String(error)}` }
   }
 }
 
@@ -165,22 +196,13 @@ export async function finalizeUpdateTransactionAndCleanup(
   }
 
   const before = await readTransactionPhase(input.environment)
-  if (before === null && input.environment.KUN_INSTALLER_TRANSACTION) {
-    // No transaction file at all: nothing the installer owns can block a new
-    // update, so converging the GUI records is safe.
+  if (before.kind === 'unconfirmed') return before
+  if (before.kind === 'missing') {
     await clearRecords()
     return { kind: 'already-finalized', phase: 'missing' }
   }
-  if (before === 'rolled_back' || before === 'finalizing') {
-    // Terminal states that no longer need a finalize round-trip. The payload
-    // backup is only removed when the state authorizes it (rolled_back);
-    // finalizing still owns artifacts a repeated finalize must clean up.
-    if (before === 'rolled_back') {
-      await cleanupBackup(input.backupDir).catch(() => undefined)
-    }
-    await clearRecords()
-    return { kind: 'already-finalized', phase: before }
-  }
+  // Even rolled_back and finalizing still own cleanup work. Resume the
+  // idempotent helper and keep GUI recovery until the transaction is removed.
 
   try {
     await runHelper('FinalizeUpdateTransaction', input.environment)
@@ -192,10 +214,11 @@ export async function finalizeUpdateTransactionAndCleanup(
   // FinalizeUpdateTransaction deletes the transaction file on success, so a
   // missing file after a successful helper run is the confirmation signal.
   const after = await readTransactionPhase(input.environment)
-  if (after !== null) {
+  if (after.kind === 'unconfirmed') return after
+  if (after.kind === 'present') {
     return {
       kind: 'unconfirmed',
-      reason: `transaction file still reports phase ${after} after finalize`
+      reason: `transaction file still reports phase ${after.phase} after finalize`
     }
   }
   await cleanupBackup(input.backupDir).catch(() => undefined)

@@ -44,11 +44,10 @@ type WorkflowWebhookOptions = {
 export class WorkflowWebhookServer {
   private server: Server | null = null
   private serverKey = ''
-  // Synchronous /workflow/run + internal runs execute inside this server's
-  // event loop. Cap concurrent awaited runs so several slow workflows cannot
-  // pile up unbounded work in the main process.
+  // Reserve before reading a body and retain the lease through execution,
+  // including webhook runs whose HTTP response is sent before completion.
   private activeRuns = 0
-  private static readonly MAX_CONCURRENT_SYNC_RUNS = 4
+  private static readonly MAX_CONCURRENT_RUNS = 4
 
   constructor(private readonly options: WorkflowWebhookOptions) {}
 
@@ -87,6 +86,7 @@ export class WorkflowWebhookServer {
   }
 
   private async handleWebhookRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let release: (() => void) | undefined
     try {
       const settings = await this.options.loadSettings()
       const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
@@ -106,15 +106,17 @@ export class WorkflowWebhookServer {
         pathname === '/workflow/internal/run' ||
         pathname === '/workflow/internal/hook-run'
       ) {
+        if (pathname !== '/workflow/internal/list') {
+          release = this.acquireRun(res)
+          if (!release) return
+        }
         await this.handleInternalRequest(pathname, req, res, settings)
         return
       }
       // Public local API: run any workflow by name/id and get its output back.
       if (pathname === '/workflow/run') {
-        if (this.activeRuns >= WorkflowWebhookServer.MAX_CONCURRENT_SYNC_RUNS) {
-          writeJson(res, 503, { ok: false, message: 'Too many concurrent workflow runs; retry later.' })
-          return
-        }
+        release = this.acquireRun(res)
+        if (!release) return
         const body = await readRequestBody(req)
         const parsed = parseJsonObject(body) ?? {}
         const idOrName = String(parsed.workflow ?? parsed.name ?? parsed.workflowId ?? '').trim()
@@ -123,13 +125,7 @@ export class WorkflowWebhookServer {
           return
         }
         const workspaceOverride = typeof parsed.workspaceRoot === 'string' ? parsed.workspaceRoot : undefined
-        this.activeRuns += 1
-        let result: Awaited<ReturnType<WorkflowWebhookOptions['runWorkflowByRef']>>
-        try {
-          result = await this.options.runWorkflowByRef(idOrName, parsed.input, workspaceOverride)
-        } finally {
-          this.activeRuns -= 1
-        }
+        const result = await this.options.runWorkflowByRef(idOrName, parsed.input, workspaceOverride)
         writeJson(res, result.ok ? 200 : 400, result)
         return
       }
@@ -150,23 +146,46 @@ export class WorkflowWebhookServer {
         writeJson(res, 404, { ok: false, message: 'No enabled workflow matches this webhook.' })
         return
       }
+      release = this.acquireRun(res)
+      if (!release) return
       const body = await readRequestBody(req)
       const parsed = parseJsonObject(body)
       const runId = randomUUID()
-      void this.options.runWorkflowInternal(match.workflow, match.nodeId, 'webhook', runId, {
+      const task = this.options.runWorkflowInternal(match.workflow, match.nodeId, 'webhook', runId, {
         json: parsed ?? body,
         text: body
       })
-      writeJson(res, 200, { ok: true, runId })
+      try {
+        writeJson(res, 200, { ok: true, runId })
+      } finally {
+        // Keep admission until the run settles, even if writing the response fails.
+        await task
+      }
     } catch (error) {
       this.options.logError('workflow-webhook', 'Webhook request failed', {
         message: error instanceof Error ? error.message : String(error)
       })
       try {
-        writeJson(res, 500, { ok: false, message: 'Internal error.' })
+        if (!res.headersSent && !res.destroyed) writeJson(res, 500, { ok: false, message: 'Internal error.' })
       } catch {
         /* response already sent */
       }
+    } finally {
+      release?.()
+    }
+  }
+
+  private acquireRun(res: ServerResponse): (() => void) | undefined {
+    if (this.activeRuns >= WorkflowWebhookServer.MAX_CONCURRENT_RUNS) {
+      writeJson(res, 503, { ok: false, message: 'Too many concurrent workflow runs; retry later.' })
+      return undefined
+    }
+    this.activeRuns += 1
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      this.activeRuns -= 1
     }
   }
 
