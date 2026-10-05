@@ -78,6 +78,9 @@ app.on('window-all-closed',()=>app.quit());`)
   assert.equal(await page.getByText('We did not improve recall on the held-out split.', { exact: true }).textContent(), original)
   await page.evaluate(() => { for (const element of document.querySelectorAll('*')) if (element.scrollTop) element.scrollTop = 0 })
   await screenshot('01-evidence-source-and-judgment')
+  await page.evaluate(() => window.paperFixture.setTheme('dark'))
+  await screenshot('10-evidence-dark')
+  await page.evaluate(() => window.paperFixture.setTheme('light'))
   await page.evaluate(() => window.paperFixture.render({ stale: true }))
   await page.getByRole('button', { name: 'Inspect original source', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: 'PDF changed' }).waitFor()
@@ -114,6 +117,11 @@ app.on('window-all-closed',()=>app.quit());`)
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'narrow viewport must contain horizontal scrolling within matrix')
   await screenshot('04-matrix-narrow-dark')
   await page.getByRole('table').evaluate(table => { table.parentElement.scrollLeft = 300 })
+  await page.waitForFunction(() => {
+    const scroller = document.querySelector('[data-testid=paper-matrix-table-scroll]')
+    const identity = scroller.querySelector('tbody th')
+    return scroller.scrollLeft > 0 && Math.abs(identity.getBoundingClientRect().left - scroller.getBoundingClientRect().left) < 3
+  })
   await screenshot('08-matrix-narrow-dark-scrolled')
   await page.evaluate(() => window.paperFixture.render({ corrupt: true }))
   await page.getByRole('alert').filter({ hasText: 'corrupt' }).waitFor()
@@ -164,7 +172,10 @@ app.on('window-all-closed',()=>app.quit());`)
   await rm(temporary, { recursive: true, force: true })
 }
 async function screenshot(name) {
+  // Capture settled theme/scroll paint, not an intermediate transition frame.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  await page.waitForTimeout(250)
   const path = join(evidence, name + '.png')
-  if (name.startsWith('01-') || name.startsWith('02-')) await page.getByTestId('paper-evidence-pane').screenshot({ path })
+  if (name.startsWith('01-') || name.startsWith('02-') || name.startsWith('10-')) await page.getByTestId('paper-evidence-pane').screenshot({ path })
   else await page.screenshot({ path, fullPage: true })
 }
