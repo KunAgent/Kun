@@ -76,11 +76,12 @@ function RoomComposerEditor({
   draftId,
   replyTarget,
   topicChoices = [],
-  onSend, onStop, onConnectProject, onClearReply, responding, autoFocus = true, quickTools = false, modelControl, compactControls = true
+  onSend, onStop, onConnectProject, onClearReply, responding, autoFocus = true, quickTools = false, modelControl, modelUpdating = false, compactControls = true
 }: {
   onStop?: () => void
   onClearReply?: () => void
   modelControl?: ReactNode
+  modelUpdating?: boolean
   compactControls?: boolean
   /** Show emoji / mention / attach / poll directly in the toolbar (desktop IM layout). */
   quickTools?: boolean
@@ -333,6 +334,7 @@ function RoomComposerEditor({
     setDraft((current) => ({ ...current, ...value, ...(value.mentions ? { mentions: [...new Set(value.mentions)] } : {}) }))
 
   const submit = async (): Promise<void> => {
+    if (modelUpdating) return
     if (
       busy || voice.status !== 'idle' || voice.insertionPending ||
       unavailableMembers.length > 0 ||
@@ -433,7 +435,7 @@ function RoomComposerEditor({
           showTopic={!draftId && (room.collaborationMode === 'peer' || Boolean(draft.rootRequestId))}
           intent={draft.intent} busy={busy} uploading={uploading} disabled={disabled}
           attachmentLimit={draft.attachments.length + uploads.pending.length >= 20}
-          canSend={voice.status === 'idle' && !voice.insertionPending && uploads.pending.length === 0 && unavailableMembers.length === 0 && Boolean(draft.body.trim() || draft.attachments.length || draft.references.length)}
+          canSend={!modelUpdating && voice.status === 'idle' && !voice.insertionPending && uploads.pending.length === 0 && unavailableMembers.length === 0 && Boolean(draft.body.trim() || draft.attachments.length || draft.references.length)}
           onAttach={() => fileRef.current?.click()}
           onMention={() => editorRef.current?.insertText('@')}
           onEmoji={(emoji) => { setTimeout(() => editorRef.current?.insertText(emoji), 0) }} onPoll={() => setPollOpen((value) => !value)}

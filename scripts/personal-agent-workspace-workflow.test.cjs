@@ -77,3 +77,24 @@ test('native workspace smoke uses ordinary collapse and reopen without forcing c
   assert.match(smoke, /const send = async \(text\) => \{[\s\S]*?await collapseWorkspacePanel\(\)[\s\S]*?await editor\(\)\.fill\(text\)/)
   assert.doesNotMatch(smoke, /force:\s*true|dispatchEvent\(|evaluate\([^\n]*click/)
 })
+
+test('Agent model confirmation and management run in the prepared native fixture on both platforms', () => {
+  const workflow = parse(source('.github/workflows/personal-agent-workspace-smoke.yml'))
+  const steps = workflow.jobs['native-workspace'].steps
+  const commands = steps.map((step) => step.run ?? '')
+  const models = commands.findIndex((command) => command.includes('--agent-models-only'))
+  assert(models > commands.indexOf('npm run build'))
+  assert(models > commands.indexOf('npm run ensure:electron'))
+  assert(models > commands.findIndex((command) => command.includes('--personal-workspace-only')))
+  assert.match(commands[models], /smoke-development-direct-chat\.cjs/)
+  assert(commands.some((command) => command.includes('app-ipc-schemas.agent-model-selection.test.ts')))
+  assert.equal(steps[models].if, undefined)
+  assert.equal(steps[models]['continue-on-error'], undefined)
+  const upload = steps.find((step) => step.with?.path === 'dist/agent-model-controls')
+  assert.equal(upload.if, 'always()')
+  assert.match(upload.with.name, /matrix.os/)
+  for (const path of ['scripts/smoke-agent-model*', 'scripts/smoke-agent-creation-model.cjs',
+    'kun/src/agents/agent-chat-entry.ts', 'kun/src/agents/agent-models*']) {
+    assert(workflow.on.pull_request.paths.includes(path))
+  }
+})

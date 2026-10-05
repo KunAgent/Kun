@@ -1,7 +1,7 @@
 'use strict'
 const assert = require('node:assert/strict')
 const test = require('node:test')
-const { startWorkspaceBrowserPage } = require('./smoke-personal-agent-workspace.cjs')
+const { startWorkspaceBrowserPage, assertNativeRestartConsent } = require('./smoke-personal-agent-workspace.cjs')
 
 test('browser fixture serves one isolated loopback document without remote dependencies', async (t) => {
   const fixture = await startWorkspaceBrowserPage()
@@ -397,4 +397,54 @@ test('recovery action row wins span flex specificity and wraps labels within its
   const buttons = css.match(/\.direct-failed-actions button\s*\{([^}]+)\}/)?.[1]
   assert.match(buttons, /white-space:\s*normal/)
   assert.match(buttons, /overflow-wrap:\s*anywhere/)
+})
+
+test('restart consent inspection retries only one transient read while the Electron owner is alive', async () => {
+  let reads = 0
+  const app = { process: () => ({ exitCode: null, signalCode: null }), evaluate: async () => {
+    if (++reads === 1) throw new Error('Execution context was destroyed, most likely because of a navigation.')
+    return 1
+  } }
+  await assertNativeRestartConsent(app)
+  assert.equal(reads, 2)
+})
+
+test('restart consent inspection still fails missing/repeated consent, persistent context loss, and owner exit', async () => {
+  for (const count of [0, 2, undefined]) {
+    await assert.rejects(assertNativeRestartConsent({ evaluate: async () => count }), /confirmed exactly once/)
+  }
+  let reads = 0
+  const contextError = new Error('Execution context was destroyed')
+  const app = { process: () => ({ exitCode: null, signalCode: null }), evaluate: async () => { reads++; throw contextError } }
+  await assert.rejects(assertNativeRestartConsent(app), /Execution context was destroyed/)
+  assert.equal(reads, 2)
+  for (const state of [{ exitCode: 0, signalCode: null }, { exitCode: null, signalCode: 'SIGTERM' }]) {
+    reads = 0
+    await assert.rejects(assertNativeRestartConsent({ ...app, process: () => state }), /Execution context was destroyed/)
+    assert.equal(reads, 1)
+  }
+  reads = 0
+  await assert.rejects(assertNativeRestartConsent({ ...app, evaluate: async () => { reads++; throw new Error('Other failure') } }), /Other failure/)
+  assert.equal(reads, 1)
+})
+
+test('approval smoke asserts the personal default and deliberately changes it through protected UI', async () => {
+  const { prepareWorkspaceApprovalMode } = require('./smoke-personal-agent-workspace.cjs')
+  const actions = [], reads = []
+  let mode = 'full-access'
+  const control = (name) => ({ waitFor: async () => actions.push('wait:' + name),
+    click: async () => { actions.push('click:' + name); if (name === 'Apply settings') mode = 'ask-for-approval' } })
+  const picker = { locator: (selector) => control(selector), getByRole: (_role, { name }) => control(name) }
+  const page = { locator: (selector) => selector === '.room-permission-picker' ? picker : control(selector) }
+  const consent = { getByRole: (_role, { name }) => control(name), evaluate: async () => false }
+  await prepareWorkspaceApprovalMode({ page, roomId: 'personal',
+    application: { waitForEvent: async (name) => { actions.push('event:' + name); return consent } },
+    request: async (_page, path) => { reads.push(path); return { mode } },
+    poll: async (predicate) => assert(await predicate()), capture: async (name) => actions.push('capture:' + name) })
+  assert(reads.every((path) => path === '/v1/rooms/personal/direct/permissions'))
+  assert(actions.indexOf('event:window') < actions.indexOf('click:[role="menuitemradio"][data-permission-mode="ask-for-approval"]'))
+  assert(actions.includes('click:Apply settings'))
+  assert.equal(mode, 'ask-for-approval')
+  assert(actions.includes('wait:[data-permission-mode="full-access"]'))
+  assert(actions.includes('wait:[data-permission-mode="ask-for-approval"]'))
 })

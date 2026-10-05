@@ -1,0 +1,7 @@
+.direct-composer-model-picker { min-width: 0; max-width: 320px; display: grid; gap: 3px; }
+.direct-composer-model-picker select { width: 100%; min-width: 0; padding: 5px 8px; border: 1px solid var(--ds-border); border-radius: 8px; color: var(--ds-text); background: var(--ds-bg-main); font-size: 12px; text-overflow: ellipsis; }
+.direct-composer-model-picker select:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.direct-composer-model-picker small { color: var(--ds-text-muted); font-size: 10px; line-height: 1.3; }
+.direct-composer-model-picker [role="alert"] { display: grid; font-size: 11px; color: var(--ds-danger, #bd4545); overflow-wrap: anywhere; }
+.direct-composer-model-picker [role="alert"] button { text-align: start; text-decoration: underline; }
+@media (max-width: 600px) { .direct-composer-model-picker { max-width: min(220px, 45vw); } }

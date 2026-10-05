@@ -1,4 +1,4 @@
-import { defaultAgentExecutionPolicy } from '../agents/agent-permission-snapshot.js'
+import { newAgentExecutionPolicy } from '../agents/agent-permission-snapshot.js'
 import { freezeAgentPermissions } from '../agents/agent-permission-snapshot.js'
 import { prepareAgentTaskParticipants } from '../agents/agent-task-participants.js'
 import type { AgentIdentityService } from '../agents/agent-identity-service.js'
@@ -83,7 +83,6 @@ export class RoomService {
     const members = body.members ?? (this.agents ? await this.agents.defaultMembers(repositories.map((repo) => repo.id)) : defaultRoomMembers(repositories.map((repo) => repo.id)))
     let room = RoomSchema.parse({ schemaVersion: 1, id: internal?.id ?? roomId(),
       conversationKind: internal?.conversationKind ?? 'group', name: body.name,
-      ...(internal?.conversationKind === 'user_agent' ? { privateExecutionPolicy: defaultAgentExecutionPolicy() } : {}),
       description: body.description, ...(body.avatar ? { avatar: body.avatar } : {}),
       collaborationMode: body.collaborationMode ?? 'peer',
       maxConcurrentTasks: body.maxConcurrentTasks,
@@ -92,6 +91,11 @@ export class RoomService {
     await this.assertUploadedAvatars([...room.members, { avatar: room.avatar }])
     const binding = this.agents ? await this.agents.prepareRoom(room) : undefined
     room = binding?.room ?? room
+    if (room.conversationKind === 'user_agent') {
+      const member = room.members.find((item) => item.id === room.defaultMemberId)
+      const agent = member?.participantAgentId ? await this.agents?.get(member.participantAgentId) : undefined
+      room.privateExecutionPolicy = newAgentExecutionPolicy(agent, agent && this.agents?.profiles()[agent.presetId])
+    }
     const result = { room }
     const committed = await this.store.commit({
       requestId: key, fingerprint: roomFingerprint(body),

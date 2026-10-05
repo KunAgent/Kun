@@ -48,6 +48,15 @@ describe('RoomDirectHeader session sidebar button', () => {
   })
   afterEach(() => { if (renderer) act(() => renderer.unmount()) })
 
+  it('exposes all Agent settings directly from embedded private chat', async () => {
+    const onManageAgents = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomDirectHeader, { ...baseProps(), embedded: true, onManageAgents })) })
+    const button = renderer.root.findByProps({ 'aria-label': 'Manage all Agents' })
+    act(() => button.props.onClick())
+    expect(onManageAgents).toHaveBeenCalledOnce()
+    expect(renderer.root.findByProps({ 'aria-label': 'More actions' }).props['aria-expanded']).toBe(false)
+  })
+
   it('toggles the Agent session sidebar and reflects its open state', async () => {
     const props = baseProps()
     await act(async () => { renderer = create(createElement(RoomDirectHeader, props)) })

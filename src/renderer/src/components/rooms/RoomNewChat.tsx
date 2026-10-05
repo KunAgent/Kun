@@ -3,6 +3,8 @@ import { Search, Users, MessageSquare, PenLine, LoaderCircle, AlertCircle, Rotat
 import { useTranslation } from 'react-i18next'
 import type { AgentIdentity } from '@shared/rooms-api'
 import { RoomModal } from './RoomModal'
+import { RoomCreationModelPicker } from './RoomCreationModelPicker'
+import './room-new-chat-actions.css'
 import { RoomAvatar } from './RoomAvatar'
 import { agentMember, useAgentCatalog, useAgentResource } from './agent-client'
 import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
@@ -14,11 +16,13 @@ export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus
 }) {
   const { t } = useTranslation('common')
   const [query, setQuery] = useState(''), [groupChoice, setGroupChoice] = useState(initialGroup), [templatesOpen, setTemplatesOpen] = useState(false)
+  const [choosingModel, setChoosingModel] = useState(false)
   const group = selectionMode === 'group' || (selectionMode === 'all' && groupChoice)
   const allowPrivate = selectionMode !== 'group'
   const [selected, setSelected] = useState<AgentIdentity[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const catalog = useAgentCatalog(query)
   const templates = useAgentResource<{ templates: AgentIdentity[] }>('/v1/agents/templates', allowPrivate && templatesOpen)
+  const creationDismiss = useRef(onClose)
   const pending = useRef<{ key: string; id: string } | null>(null)
   const inFlight = useRef(false), mounted = useRef(true)
   const retry = useRef<(() => void) | null>(null)
@@ -46,18 +50,21 @@ export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus
   const openAgent = (agentId: string): void => {
     void run('open:' + agentId, async () => { await onAgent(agentId) }, closeAfterAgent)
   }
-  const create = (templateId?: string) => void run('create:' + (templateId ?? ''), async (clientRequestId) => {
+  const create = (templateId: string) => void run('create:' + (templateId ?? ''), async (clientRequestId) => {
     const result = await roomsRequest<{ roomId: string }>('/v1/agents/quick-create', 'POST', {
-      clientRequestId, templateId, ...(!templateId ? { name: t('directNewAgentName'), setupMode: 'chat' } : {})
+      clientRequestId, templateId
     })
     if (mounted.current) onOpen(result.roomId)
   })
+  if (choosingModel) return <RoomModal title={t('directCreationModelTitle')} busy={busy} onClose={() => creationDismiss.current()}>
+    <RoomCreationModelPicker onBack={() => setChoosingModel(false)} onClose={onClose} onOpen={onOpen} onBusyChange={setBusy} onDismissReady={(dismiss) => { creationDismiss.current = dismiss }} />
+  </RoomModal>
   return <RoomModal title={t(selectionMode === 'group' ? 'directCreateGroup' : 'directNewChat')} busy={busy} onClose={onClose}>
     <div className="direct-new-chat" aria-busy={busy}>
       {busy ? <p className="direct-new-chat-status" role="status"><LoaderCircle size={16} className="animate-spin" aria-hidden="true" />{t('directPreparingChat')}</p> : null}
       <label className="direct-recipient"><span>{t('directTo')}</span><Search size={17} /><input type="search" disabled={busy} autoFocus={autoFocus} aria-label={t('directFindAgent')} value={query} placeholder={t('directFindAgent')} onChange={(e) => setQuery(e.target.value)} /></label>
       {selectionMode === 'group' ? <p className="rooms-run-note">{t('roomsGroupPickerHint')}</p> : <div className="direct-create-actions">
-        <button disabled={busy} onClick={() => create()}><MessageSquare size={18} />{t('directDefineByChat')}</button>
+        <button disabled={busy} onClick={() => setChoosingModel(true)}><MessageSquare size={18} />{t('directDefineByChat')}</button>
         {onFill ? <button disabled={busy} onClick={() => { onFill(); onClose() }}><PenLine size={18} />{t('directFillYourself')}</button> : null}
         {selectionMode === 'all' ? <button aria-pressed={group} disabled={busy} onClick={() => setGroupChoice(!groupChoice)}><Users size={18} />{t('directCreateGroup')}</button> : null}
       </div>}
@@ -69,11 +76,11 @@ export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus
       </button>)}{catalog.cursor ? <button disabled={busy || catalog.busy} onClick={() => void catalog.more()}>{t('roomsLoadMore')}</button> : null}</div>
       {allowPrivate ? <button className="direct-template-toggle" disabled={busy} aria-expanded={templatesOpen} onClick={() => setTemplatesOpen(!templatesOpen)}>{t('directTemplates')}<ChevronDown size={14} aria-hidden="true" /></button> : null}
       {allowPrivate && templatesOpen ? <div className="direct-template-list">{templates.data?.templates.filter((item) => item.defaultRole !== 'coordinator').map((item) =>
-        <button disabled={busy} key={item.templateId} onClick={() => create(item.templateId)}><RoomAvatar avatar={item.avatar} label={item.name} id={item.templateId} size={30} /><span>{item.name}</span></button>)}</div> : null}
-      {group ? <button className="rooms-run-primary" disabled={busy || selected.length < 2} onClick={() => void run('group:' + selected.map((agent) => agent.id).join(','), async (id) => {
+        <button disabled={busy} key={item.templateId} onClick={() => { if (item.templateId) create(item.templateId) }}><RoomAvatar avatar={item.avatar} label={item.name} id={item.templateId} size={30} /><span>{item.name}</span></button>)}</div> : null}
+      {group ? <button type="button" className="rooms-run-primary direct-start-group" aria-busy={busy} disabled={busy || selected.length < 2} onClick={() => void run('group:' + selected.map((agent) => agent.id).join(','), async (id) => {
         const result = await roomsClient.create({ name: selected.map((agent) => agent.name).join('、').slice(0, 80), description: '', repositories: [], members: selected.map((agent) => agentMember(agent)), defaultMemberId: selected[0].id, collaborationMode: 'peer' }, id)
         if (mounted.current) onOpen(result.room.id)
-      })}>{t('directStartGroup', { count: selected.length })}</button> : null}
+      })}>{busy ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> : <Users size={18} aria-hidden="true" />}<span>{t('directStartGroup', { count: selected.length })}</span></button> : null}
       {error || catalog.error || templates.error ? <div className="direct-new-chat-error" role="alert">
         <AlertCircle size={18} aria-hidden="true" /><div>
           <p>{/room coordinator (lease|ownership)|Conversation service is starting or reconnecting/i.test(error || catalog.error || templates.error)

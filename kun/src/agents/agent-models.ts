@@ -1,3 +1,4 @@
+import { RoomStoreConflictError } from '../rooms/room-store.js'
 import type { RoomMember } from '../contracts/rooms.js'
 import type { AgentIdentity } from '../contracts/agent-identities.js'
 import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
@@ -42,14 +43,15 @@ export async function agentModelOptions(deps: RoomRuntimeDeps, agent?: AgentIden
   const complete = (binding: AgentModelBinding | undefined) => binding ? { ...binding, accountId: binding.accountId ?? snapshot?.providers.find((item) => item.id === binding.providerId)?.accountId } : undefined
   const inherited = complete({ model: preset?.model ?? fallback.model, providerId: preset?.providerId ?? fallback.providerId,
     accountId: !preset?.providerId || preset.providerId === fallback.providerId ? fallback.accountId : undefined })!
-  const main = complete(agent?.modelRef ?? inherited)!
-  const fast = complete(agentFastModel(deps, agent ?? {}, main))
   const room = roomId ? await deps.store.get<import('../contracts/rooms.js').Room>('room', roomId) : undefined
-  const override = room?.value.members.find((member) => member.participantAgentId === agent?.id)?.modelRef
+  const matchesRoom = room?.value.conversationKind === 'user_agent' && room.value.members.some((member) => member.participantAgentId === agent?.id)
+  const override = matchesRoom ? room?.value.privateModelRef : undefined
+  const main = complete(override ?? agent?.modelRef ?? inherited)!
+  const fast = complete(agentFastModel(deps, agent ?? {}, main))
   const history = agent && deps.store ? await deps.store.list<import('../contracts/room-runs.js').RoomRunRecord>('room_run', { participantAgentId: agent.id, status: 'completed', limit: 100, summaryOnly: true }) : []
   const verifiedAt = (binding: AgentModelBinding | undefined) => history.find((row) => binding && row.value.model === binding.model && row.value.providerId === binding.providerId && row.value.accountId === binding.accountId)?.value.endedAt
   return { options, main, fast, mainVerifiedAt: verifiedAt(main), fastVerifiedAt: verifiedAt(fast), inheritedMain: inherited,
-    inheritedFast: complete(agentFastModel(deps, {}, main)), mainSource: agent?.modelRef ? 'agent' : preset?.model ? 'preset' : 'default',
+    inheritedFast: complete(agentFastModel(deps, {}, main)), mainSource: override ? 'room' : agent?.modelRef ? 'agent' : preset?.model ? 'preset' : 'default',
     fastSource: agent?.fastModelRef ? 'agent' : deps.peerModels?.roles()?.smallModel ? 'default' : 'main',
     roomOverride: override, mainAvailable: modelAvailable(options, main), fastAvailable: modelAvailable(options, fast, true) }
 }
@@ -63,4 +65,13 @@ export async function assertAgentModel(deps: RoomRuntimeDeps, binding: AgentMode
   const snapshot = await deps.modelSnapshot()
   const provider = snapshot.providers.find((item) => item.id === binding.providerId)
   if (!provider || !liveConnection(provider) || binding.accountId && binding.accountId !== provider.accountId || !isModelConnectionProfileUsable(provider) || !provider.models.includes(binding.model)) throw new Error('The selected model is unavailable; choose an available model')
+}
+
+/** Explicit selections must pin the exact account; omitted accounts cannot follow a replacement. */
+export async function assertExplicitAgentModel(deps: RoomRuntimeDeps, binding: AgentModelBinding) {
+  const { options } = await agentModelOptions(deps)
+  if (!options.some((option) => option.available && option.providerId === binding.providerId &&
+    option.accountId === binding.accountId && option.model === binding.model)) {
+    throw new RoomStoreConflictError('The selected model is unavailable; refresh and choose a configured provider, account and model')
+  }
 }

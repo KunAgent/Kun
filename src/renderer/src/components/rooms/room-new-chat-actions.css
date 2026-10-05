@@ -1,0 +1,29 @@
+.direct-new-chat .direct-start-group,
+.direct-creation-model-actions .rooms-run-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ds-control) 75%, black);
+  color: var(--ds-control-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter .15s ease, transform .15s ease;
+}
+.direct-new-chat .direct-start-group { display: flex; margin: 16px 0 0 auto; }
+.direct-new-chat .direct-start-group:hover:not(:disabled),
+.direct-creation-model-actions .rooms-run-primary:hover:not(:disabled) { filter: brightness(1.05); }
+.direct-new-chat .direct-start-group:active:not(:disabled),
+.direct-creation-model-actions .rooms-run-primary:active:not(:disabled) { transform: translateY(1px); filter: brightness(.94); }
+.direct-new-chat .direct-start-group:focus-visible,
+.direct-creation-model-actions .rooms-run-primary:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 3px; }
+.direct-new-chat .direct-start-group:disabled,
+.direct-creation-model-actions .rooms-run-primary:disabled { opacity: .45; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .direct-new-chat .direct-start-group, .direct-creation-model-actions .rooms-run-primary { transition: none; }
+}

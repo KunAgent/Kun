@@ -1,4 +1,5 @@
 import './rooms-polish.css'
+import './agent-model-management.css'
 import { useRoomSidebarMotion } from './useRoomSidebarMotion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -139,6 +140,7 @@ export function RoomSidebar({ selectedRoomId, onSelect, onCreateAgent, onSearch,
         </div> : null}
       </div>}
     {page.error || actionError ? <div role="alert" className="rooms-run-error">{page.error || actionError}<button onClick={page.refresh}>{t('roomsRefresh')}</button></div> : null}
+    <button type="button" className="agent-manager-entry" onClick={onManage}><SlidersHorizontal size={16} aria-hidden="true" />{t('directManageAllAgents')}</button>
     <footer className="rooms-im-sidebar-footer"><button className="rooms-sidebar-self" aria-label={t('roomsMyAvatar')} onClick={onProfile}><RoomAvatar id="user" label={t('roomsMyAvatar')} size={30} /><span>{t('roomsSidebarYou')}</span></button>
       <RoomPopover label={t('roomsSidebarManage')} trigger={<Settings size={17} />} className="rooms-icon-button" align="end">
         {(close) => <div className="rooms-menu-list"><button onClick={() => { close(); onProfile() }}>{t('roomsMyAvatar')}</button>
