@@ -49,11 +49,11 @@ export function AgentIcon({
     ? { role: 'img' as const, 'aria-label': label }
     : { 'aria-hidden': true as const }
 
-  if (harnessId === 'opencode') {
+  if (harnessId === 'opencode' || harnessId === 'opencode2') {
     // OpenCode and OpenCode Go are different brands. These square marks come
     // from OpenCode's own brand assets and retain their two-tone appearance.
     return (
-      <span {...accessibility} className={`relative inline-flex shrink-0 ${className}`} style={style} data-agent-icon="opencode">
+      <span {...accessibility} className={`relative inline-flex shrink-0 ${className}`} style={style} data-agent-icon={harnessId}>
         <img src={openCodeLightUrl} alt="" aria-hidden="true" className="h-full w-full dark:hidden" />
         <img src={openCodeDarkUrl} alt="" aria-hidden="true" className="hidden h-full w-full dark:block" />
       </span>

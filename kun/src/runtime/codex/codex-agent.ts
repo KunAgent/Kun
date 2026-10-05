@@ -249,12 +249,18 @@ function threadParams(
   model?: string
   approvalPolicy: 'untrusted'
   approvalsReviewer: 'user'
+  sandbox: 'read-only'
 } {
   return {
     cwd: input.workspacePath,
     ...(input.model ? { model: input.model } : {}),
     approvalPolicy: 'untrusted',
-    approvalsReviewer: 'user'
+    approvalsReviewer: 'user',
+    // Session setup must not inherit a native writable default: newer Codex
+    // versions persist project trust during thread/start in that case. This
+    // invalidates admission and may load project processes before a turn.
+    // turn/start applies the actual host-authorized sandbox for each turn.
+    sandbox: 'read-only'
   }
 }
 

@@ -30,6 +30,7 @@ export const BUILTIN_HARNESS_IDS = [
   'gemini-cli',
   'codex',
   'opencode',
+  'opencode2',
   'devin',
   'pi',
   'deepseek-harness'

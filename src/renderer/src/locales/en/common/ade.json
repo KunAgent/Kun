@@ -1,4 +1,13 @@
 {
+  "agentRuntimeError": {
+    "permission": "This Agent does not support the selected permission mode. Review its permissions in Agent connections, then retry.",
+    "changed": "The Agent configuration changed. Check and enable it again in Agent connections, then retry.",
+    "setup": "This Agent is not ready. Complete its setup and readiness check in Agent connections.",
+    "authentication": "The Agent could not authenticate. Check its native sign-in and network connection, then retry.",
+    "model": "The selected Agent model is unavailable. Refresh its models or select Agent default model.",
+    "update": "This model requires a newer Agent CLI. Update it or choose another supported model, then retry.",
+    "openSettings": "Agent connections"
+  },
   "composerModelsLoading": "Loading models…",
   "composerModelsUnavailable": "Models unavailable",
   "composerModelsUnavailableHint": "The model list could not be loaded. Your saved model sources are unchanged; try again shortly.",
@@ -536,6 +545,11 @@
     "modelHint": "Changing the model or configuration requires a fresh readiness check.",
     "nativeDefault": "Agent default",
     "loadModels": "Load available models",
+    "refreshModels": "Refresh models",
+    "modelsUnavailable": "Models could not be loaded. Retry or enter a model ID.",
+    "noModels": "No models loaded yet. You can use the Agent default or enter a model ID.",
+    "customModel": "Enter a model ID",
+    "useModel": "Use model",
     "enable": "Check and enable",
     "disable": "Disable this profile",
     "cancel": "Cancel check",

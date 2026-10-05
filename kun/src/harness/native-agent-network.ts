@@ -22,7 +22,9 @@ export function bindNativeAgentNetwork(
   const policy = definition.id === 'codex' && definition.transport === 'codex-app-server'
     ? snapshot?.codex
     : definition.id === 'claude-code' && definition.transport === 'agent-sdk'
-      ? snapshot?.['claude-code'] : undefined
+      ? snapshot?.['claude-code']
+      : definition.id === 'antigravity' && definition.transport === 'antigravity-cli'
+        ? snapshot?.antigravity : undefined
   if (!policy) return definition
   // An opaque symbol survives internal object spreads; JSON and public schemas omit it.
   const context = {}

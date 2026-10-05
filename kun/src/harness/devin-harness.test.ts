@@ -58,7 +58,7 @@ describe('Devin ACP integration', () => {
     expect(definition.staticModels).toEqual([])
     expect(definition.setup?.login).toMatchObject({ command: 'devin', args: ['auth', 'login'] })
     expect(definition.capabilities.facts.sandbox).toBe('none')
-    expect(resolvePermissionMode(definition, undefined, false, false)).toBe('normal')
+    expect(resolvePermissionMode(definition, undefined, false, false)).toBe('ask')
   })
 
   it('reports missing and failed-handshake installations accurately', async () => {

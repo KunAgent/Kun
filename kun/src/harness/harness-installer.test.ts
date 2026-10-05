@@ -49,6 +49,11 @@ describe('Agent installation plans', () => {
     expect(env.PATH?.startsWith('/custom/bin')).toBe(true)
     expect(env.PATH).toContain('/fixture/.local/bin')
   })
+  it.each(['darwin', 'linux'] as const)('uses the supported Antigravity bootstrap arguments on %s', async (platform) => {
+    const agy = new HarnessCatalog().get('antigravity')!
+    expect(await harnessInstallPlan(agy, 'install', platform, async (cmd) => '/bin/' + cmd))
+      .toMatchObject({ available: true, command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash' })
+  })
 })
 
 describe('Agent installation jobs', () => {

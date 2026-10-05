@@ -9,9 +9,10 @@ import type { KunServeRuntimeOptions } from '../server/runtime-factory-types.js'
 import { deepSeekHarnessProfileFingerprint, hasDeepSeekHarnessNativeKey } from './deepseek-harness-profile.js'
 import { nativeHarnessCredentialEnv } from './harness-secret-env.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
+import { openCode2CredentialEvidence } from './opencode2-credentials.js'
 
 export type ReadinessOptions = Partial<Pick<KunServeRuntimeOptions,
-  'providers' | 'harnesses' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId'>>
+  'providers' | 'harnesses' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId' | 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'>>
 
 export function harnessProfile(route: Pick<HarnessRoute, 'harnessId' | 'credentialMode' | 'providerId'>): HarnessEnabledProfile {
   return { harnessId: route.harnessId, credentialMode: route.credentialMode,
@@ -78,8 +79,10 @@ function nativeProfileFiles(definition: HarnessDefinition, overrides: Record<str
   const configs = definition.id === 'codex' ? [join(env.CODEX_HOME || join(home, '.codex'), 'config.toml')]
     : definition.id === 'claude-code' ? [join(env.CLAUDE_CONFIG_DIR || join(home, '.claude'), 'settings.json')]
     : definition.id === 'pi' ? ['settings.json', 'models.json'].map((name) => join(env.PI_CODING_AGENT_DIR || join(home, '.pi/agent'), name))
-    : definition.id === 'opencode' ? [env.OPENCODE_CONFIG || join(env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode/opencode.json'),
-      join(env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode/opencode.jsonc')] : []
+    : definition.id === 'antigravity' ? [join(home, '.gemini', 'antigravity-cli', 'settings.json')]
+    : definition.id === 'opencode' || definition.id === 'opencode2'
+      ? [env.OPENCODE_CONFIG || join(env.OPENCODE_CONFIG_DIR || join(env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode'), 'opencode.json'),
+        join(env.OPENCODE_CONFIG_DIR || join(env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode'), 'opencode.jsonc')] : []
   return [...credentials, ...configs]
 }
 const NATIVE_KEYS: Record<string, readonly string[]> = {
@@ -93,6 +96,7 @@ export function nativeProfileEnv(definition: HarnessDefinition): Record<string, 
   return nativeHarnessCredentialEnv(definition, { ...process.env, ...definition.launch?.env })
 }
 export function nativeHasKey(definition: HarnessDefinition, env: Record<string, string>): boolean {
+  if (definition.id === 'opencode2') return openCode2CredentialEvidence({ ...process.env, ...definition.launch?.env, ...env }).configured
   if (definition.id === 'deepseek-harness') return hasDeepSeekHarnessNativeKey({ ...process.env, ...definition.launch?.env, ...env })
   const keys = NATIVE_KEYS[definition.id] ?? []
   if (keys.some((key) => key !== 'CLAUDE_CODE_OAUTH_TOKEN' && key !== 'GOOGLE_APPLICATION_CREDENTIALS' && Boolean(env[key]?.trim()))) return true
@@ -135,7 +139,9 @@ export function readinessFingerprint(input: {
     binaryPath: options.harnesses?.binaryPaths?.[definition.id], binary,
     runtimeBinaryEnv: [process.env.KUN_CLAUDE_BINARY, process.env.KUN_ANTIGRAVITY_BINARY, process.env.KUN_CODEX_BINARY, process.env.KUN_RUNTIME_PROVIDER_KIND],
     defaults: options.harnesses?.defaults?.[definition.id],
+    permissionPolicy: [options.approvalPolicy, options.sandboxMode, options.approvalReviewer],
     dsh: definition.id === 'deepseek-harness' ? deepSeekHarnessProfileFingerprint({ ...process.env, ...definition.launch?.env, ...input.secretEnv }) : undefined,
+    opencode2: definition.id === 'opencode2' ? openCode2CredentialEvidence({ ...process.env, ...definition.launch?.env, ...input.secretEnv }).fingerprint : undefined,
     provider: readinessProvider(options, route), secretEnv: input.secretEnv,
     env: nativeProfileEnv(definition), files: nativeProfileFiles(definition, input.secretEnv).map((path) => [path, fileFingerprint(path)])
   })).digest('hex')

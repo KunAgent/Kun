@@ -7,6 +7,19 @@ describe('format runtime error', () => {
     await i18n.changeLanguage('en')
   })
 
+  it.each([
+    ['policy_denied', "Devin did not advertise the requested permission mode 'normal'.", 'permission'],
+    ['agent_error', 'Agent launch has no current readiness proof', 'changed'],
+    ['agent_error', 'Failed to authenticate. API Error: 403 Request not allowed', 'authentication'],
+    ['agent_error', "The model requires a newer version of Codex. Please upgrade to the latest app or CLI.", 'update']
+  ])('explains native Agent failure %s with a direct setup action', async (code, message, key) => {
+    await i18n.changeLanguage('zh')
+    const view = describeRuntimeError(JSON.stringify({ code, message }))
+    expect(view.message).toBe(i18n.t(`common:agentRuntimeError.${key}`))
+    expect(view.settingsAction).toBe('harnesses')
+    expect(view.detail).toContain(message)
+  })
+
   it('uses code fields for localized summaries and settings actions', () => {
     const error = new Error(JSON.stringify({
       code: 'missing_api_key',

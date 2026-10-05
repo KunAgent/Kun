@@ -80,6 +80,7 @@ function AgentChatRow({ entry, selected, disabled, onOpen, menu }: {
 export function SidebarAgentChatsSection(props: Props): ReactElement {
   const { t } = props
   const route = useChatStore((state) => state.route)
+  const runtimeOffline = useChatStore((state) => state.runtimeConnection === 'offline')
   const roomId = useAgentChatNavigationStore((state) => state.roomId)
   const error = useAgentChatNavigationStore((state) => state.error)
   const pending = useAgentChatNavigationStore((state) => state.pending)
@@ -106,7 +107,7 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
   const [initializationVersion, setInitializationVersion] = useState(0)
   const drag = useRef<{ pointerId: number; y: number; height: number } | null>(null)
   const page = useRoomSidebar({ kind: 'agents', search,
-    ...(listState === 'archived' ? { archivedOnly: true } : listState === 'deleted' ? { deletedOnly: true } : {}) }, roomId ?? '')
+    ...(listState === 'archived' ? { archivedOnly: true } : listState === 'deleted' ? { deletedOnly: true } : {}) }, roomId ?? '', props.runtimeReady)
   const refresh = useRef(page.refresh)
   refresh.current = page.refresh
   useEffect(() => {
@@ -119,16 +120,24 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
     return () => { offChat(); offAgent(); dialog.current.picker = false; dialog.current.profile = false }
   }, [])
   useEffect(() => {
-    if (!props.runtimeReady) return
+    if (!props.runtimeReady) { setInitializationError(''); return }
     let active = true
+    let retry: ReturnType<typeof setTimeout> | undefined
+    const request = { action: 'initialize', clientRequestId: roomRequestId() }
     setInitializationError('')
     // Seed the default identity without selecting a chat or consuming onboarding.
-    void roomsRequest('/v1/agents/chat-entry', 'POST', {
-      action: 'initialize', clientRequestId: roomRequestId()
-    }).then(() => { if (active) refresh.current() }).catch((cause) => {
-      if (active) setInitializationError(cause instanceof Error ? cause.message : String(cause))
-    })
-    return () => { active = false }
+    // A healthy HTTP listener can precede the initial configuration apply.
+    // Retry the same idempotent operation once before presenting a failure.
+    const initialize = (canRetry: boolean): void => {
+      void roomsRequest('/v1/agents/chat-entry', 'POST', request)
+        .then(() => { if (active) refresh.current() }).catch((cause) => {
+          if (!active) return
+          if (canRetry) retry = setTimeout(() => initialize(false), 1000)
+          else setInitializationError(cause instanceof Error ? cause.message : String(cause))
+        })
+    }
+    initialize(true)
+    return () => { active = false; clearTimeout(retry) }
   }, [props.runtimeReady, initializationVersion])
   useEffect(() => { setHiddenEntries(new Set()); setActionError('') }, [listState, search])
   useEffect(() => {
@@ -240,13 +249,14 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
           {pending ? <LoaderCircle size={12} className="animate-spin" /> : null}
         </button>
         <div className="flex items-center gap-0.5">
-          <SidebarIconButton title={t('agentChatsSearch')} active={searchOpen} className="h-7 w-7"
+          <SidebarIconButton title={t('agentChatsSearch')} active={searchOpen} disabled={!props.runtimeReady} className="h-7 w-7"
             onClick={() => { setCollapsed(false); setSearchOpen(!searchOpen); if (searchOpen) setSearch('') }}>
             <Search size={14} />
           </SidebarIconButton>
           <SidebarIconButton title={t('agentChatsStart')} disabled={!props.runtimeReady || pending}
             className="h-7 w-7" onClick={openNewChat}><Plus size={14} /></SidebarIconButton>
           <RoomPopover label={`${t('sidebarConversations')} · ${t('roomsMoreActions')}`} trigger={<MoreHorizontal size={14} />}
+            disabled={!props.runtimeReady}
             className="sidebar-agent-chats-list-menu rooms-icon-button" align="end" width={220}>
             {(close) => <div className="rooms-menu-list">{(['active', 'archived', 'deleted'] as const).map((value) =>
               <button type="button" key={value} aria-pressed={listState === value} onClick={() => { close(); setListState(value) }}>
@@ -263,6 +273,11 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
           {t(listState === 'archived' ? 'roomsArchivedConversations' : 'roomsRecentlyDeleted')}<X size={12} />
         </button> : null}
         <div className="sidebar-agent-chats-list" data-kun-drag-scroll>
+          {!props.runtimeReady ? <div role="status" aria-live="polite" data-agent-chats-waiting
+            className="flex min-h-16 items-center justify-center gap-2 text-xs text-ds-faint">
+            {!runtimeOffline ? <LoaderCircle size={14} className="animate-spin" /> : null}
+            {t(runtimeOffline ? 'runtimeActionNeedsConnection' : 'waitingForKun')}
+          </div> : <>
           {entries.map((entry) => <AgentChatRow key={entry.id} entry={entry}
             selected={Boolean(selectedRoomId && entry.roomId === selectedRoomId)}
             disabled={!props.runtimeReady || pending || entry.archived || entry.deleted || busyEntries.has(entry.id) || (!entry.roomId && !entry.agentId)}
@@ -295,8 +310,9 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
           </div> : null}
           {hasHistory && listState === 'active' ? <SidebarConversationsSection {...props} activeThreadId={route === 'agent-chat' ? null : props.activeThreadId}
             titleKey="agentChatsLegacyHistory" /> : null}
+          </>}
         </div>
-        {listState === 'active' && !search.trim() && (page.entries.length > 3 || page.nextCursor) ? <button type="button"
+        {props.runtimeReady && listState === 'active' && !search.trim() && (page.entries.length > 3 || page.nextCursor) ? <button type="button"
           className="sidebar-agent-chats-more" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
           {t(expanded ? 'agentChatsShowLess' : 'agentChatsViewAll', { count: page.entries.length })}
         </button> : null}

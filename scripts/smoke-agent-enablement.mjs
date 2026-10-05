@@ -57,7 +57,7 @@ app.on('window-all-closed', () => app.quit())
     resolve: { alias: { '@renderer': resolve(root, 'src/renderer/src'), '@shared': resolve(root, 'src/shared'),
       '@kun/extension-api': resolve(root, 'packages/extension-api/src/index.ts'),
       '@kun/provider-catalog': resolve(root, 'packages/provider-catalog/src/index.ts') } },
-    server: { host: '127.0.0.1', port: 0 }, plugins: [{ name: 'agent-enablement-fixture',
+    server: { host: '127.0.0.1', port: 0, watch: { ignored: ['**/dist/**', '**/out/**', '**/resources/bundled-extensions/**'] } }, plugins: [{ name: 'agent-enablement-fixture',
       configureServer(vite) {
         vite.middlewares.use(async (request, response, next) => {
           if (!request.url?.startsWith('/__agent_enablement')) return next()
@@ -83,7 +83,7 @@ app.on('window-all-closed', () => app.quit())
   await screenshotMenu('disabled-composer-menu')
 
   await page.evaluate(() => window.agentEnablementFixture.setOutcome('success'))
-  await panel().locator('[data-agent-profile-model]').fill('fixture-model')
+  await customModel('fixture-model')
   await enable().click()
   await state('ready')
   assert.ok((await menuIds()).includes('pi'))
@@ -134,7 +134,7 @@ app.on('window-all-closed', () => app.quit())
   report.assertions.push('Repeated clicks create one check; cancel rejects a late successful response')
 
   await pendingCheck()
-  await panel().locator('[data-agent-profile-model]').fill('different-model')
+  await customModel('different-model')
   await page.evaluate(() => window.agentEnablementFixture.resolvePending(true))
   await settled()
   assert.equal((await snapshot()).enabledProfiles.length, 0)
@@ -143,7 +143,8 @@ app.on('window-all-closed', () => app.quit())
 
   await reset()
   await pendingCheck()
-  await panel().locator('[data-agent-profile-mode]').selectOption('kun-gateway')
+  await panel().locator('[data-agent-profile-mode]').click()
+  await page.locator('[data-agent-setting-option="kun-gateway"]').click()
   await page.evaluate(() => window.agentEnablementFixture.resolvePending(true))
   await settled()
   assert.equal((await snapshot()).enabledProfiles.length, 0)
@@ -181,6 +182,42 @@ app.on('window-all-closed', () => app.quit())
   await screenshot('deepseek-enabled-auth-unverified')
   await screenshotMenu('deepseek-composer-menu')
   report.assertions.push('DeepSeek Preview becomes selectable while remote authentication and quota remain explicitly unverified')
+
+  await page.evaluate(() => window.agentEnablementFixture.selectAgent('devin'))
+  await page.locator('[data-agent-enablement="devin"]').waitFor()
+  await enable().click(); await state('ready')
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(async theme => { await window.agentEnablementFixture.language('zh'); window.agentEnablementFixture.theme(theme) }, theme)
+    await panel().locator('[data-agent-profile-model]').click()
+    const menu = page.locator('[data-agent-settings-model-menu]')
+    await menu.locator('[data-devin-model="swe-2-high"]').waitFor()
+    await settled()
+    assert.equal(await menu.locator('[data-devin-model^="fusion-"]').count(), 0)
+    assert.equal(await menu.locator('[data-devin-model="swe-2-high"]').innerText(), 'SWE-2')
+    assert.ok(await menu.locator('[data-provider-icon]').count() > 0)
+    const bounds = await menu.boundingBox()
+    const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
+    assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width + 1 && bounds.y + bounds.height <= viewport.height + 1)
+    const anchor = await panel().locator('[data-agent-profile-model]').boundingBox()
+    assert.ok(bounds.y + bounds.height <= anchor.y + 1 || bounds.y >= anchor.y + anchor.height - 1,
+      'The settled model popup stays above or below its trigger')
+    await screenshot(`settings-devin-models-${theme}`)
+    await menu.locator('[data-devin-model-category="fusion"]').click()
+    assert.match(await menu.innerText(), /GPT-6 Astra High Thinking/)
+    assert.match(await menu.innerText(), /SWE-2 Medium/)
+    await screenshot(`settings-devin-fusion-${theme}`)
+    await menu.locator('input[type="search"]').fill('SWE-2')
+    await menu.locator('[data-devin-model="swe-2-high"]').click()
+    await page.waitForFunction(() => window.agentEnablementFixture.snapshot().defaults.devin?.model === 'swe-2-high')
+    assert.match(await panel().locator('[data-agent-profile-model]').innerText(), /SWE-2/)
+    await panel().locator('[data-agent-profile-mode]').click()
+    await page.locator('[data-agent-settings-listbox]').waitFor()
+    await screenshot(`settings-connection-menu-${theme}`)
+    await page.keyboard.press('Escape')
+  }
+  report.assertions.push('Settings reuse the Devin search, brands and Fusion list, save exact native IDs, and keep themed portals inside the viewport')
+  await page.evaluate(() => window.agentEnablementFixture.selectAgent('deepseek-harness'))
+  await page.locator('[data-agent-enablement="deepseek-harness"]').waitFor()
 
   for (const language of ['en', 'zh']) for (const theme of ['light', 'dark']) {
     await page.evaluate(async ({ language, theme }) => {
@@ -232,6 +269,21 @@ app.on('window-all-closed', () => app.quit())
   }
   report.assertions.push('English/Chinese light/dark narrow/wide controls remain named, reachable and unclipped at 100/150/200% native zoom')
   report.assertions.push('Every layout verifies the saved and rendered theme plus opaque computed backgrounds; captures name the actual CSS viewport and show the profile and enablement controls')
+  await electron.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0]
+    window.setContentSize(900, 1000); window.webContents.setZoomFactor(2)
+  })
+  await page.evaluate(() => window.agentEnablementFixture.selectAgent('devin'))
+  await page.locator('[data-agent-enablement="devin"]').waitFor()
+  await panel().locator('[data-agent-profile-model]').click()
+  const zoomedMenu = page.locator('[data-agent-settings-model-menu]')
+  await zoomedMenu.locator('[data-devin-model-list]').waitFor(); await settled()
+  const zoomedBounds = await zoomedMenu.boundingBox()
+  const zoomedViewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
+  assert.ok(zoomedBounds.x >= 0 && zoomedBounds.y >= 0 && zoomedBounds.x + zoomedBounds.width <= zoomedViewport.width + 1 && zoomedBounds.y + zoomedBounds.height <= zoomedViewport.height + 1)
+  await screenshot('settings-devin-models-zoom2')
+  await page.keyboard.press('Escape')
+  report.assertions.push('The Devin settings model popup remains inside a narrow viewport at 200% native zoom')
   assert.deepEqual(report.pageErrors, [], 'Production components render without exceptions')
   assert.deepEqual(report.blockedRequests, [], 'Offline fixture must not attempt external network requests')
   report.status = 'passed'
@@ -254,6 +306,12 @@ app.on('window-all-closed', () => app.quit())
 }
 function panel() { return page.locator('[data-agent-enablement]') }
 function enable() { return panel().locator('[data-agent-enable]') }
+async function customModel(model) {
+  await panel().locator('[data-agent-profile-model]').click()
+  await page.locator('[data-agent-custom-model]').click()
+  await page.locator('[data-agent-custom-model-input]').fill(model)
+  await page.locator('[data-agent-custom-model-apply]').click()
+}
 async function state(value) { await page.waitForFunction(value => document.querySelector('[data-agent-enablement]')?.getAttribute('data-agent-enablement-state') === value, value) }
 async function snapshot() { return page.evaluate(() => window.agentEnablementFixture.snapshot()) }
 async function settled() { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))) }

@@ -12,6 +12,19 @@ HTMLElement.prototype.scrollIntoView = () => undefined
 document.body.innerHTML = '<div id="root"></div>'
 afterAll(() => vi.unstubAllGlobals())
 
+async function chooseCustomModel(value: string): Promise<void> {
+  document.querySelector<HTMLButtonElement>('[data-agent-profile-model]')!.click()
+  await vi.waitFor(() => expect(document.querySelector('[data-agent-custom-model]')).toBeTruthy())
+  document.querySelector<HTMLButtonElement>('[data-agent-custom-model]')!.click()
+  await vi.waitFor(() => expect(document.querySelector('[data-agent-custom-model-input]')).toBeTruthy())
+  const input = document.querySelector<HTMLInputElement>('[data-agent-custom-model-input]')!
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  document.querySelector<HTMLButtonElement>('[data-agent-custom-model-apply]')!.click()
+  await vi.waitFor(() => expect(document.querySelector('[data-agent-settings-model-menu]')).toBeNull())
+}
+
 it('runs the real settings check, composer gate and late-result cancellation with no real account', async () => {
   await import('./AgentEnablementSmokeFixture')
   const fixture = (window as unknown as { agentEnablementFixture: {
@@ -22,9 +35,7 @@ it('runs the real settings check, composer gate and late-result cancellation wit
   const state = (value: string) => vi.waitFor(() => expect(document.querySelector('[data-agent-enablement]')?.getAttribute('data-agent-enablement-state'), document.body.textContent?.slice(-2500)).toBe(value), { timeout: 20_000 })
   const click = (selector: string) => document.querySelector<HTMLButtonElement>(selector)!.click()
   await fixture.reset(); await state('disabled')
-  const model = document.querySelector<HTMLInputElement>('[data-agent-profile-model]')!
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(model, 'fixture-model')
-  model.dispatchEvent(new Event('input', { bubbles: true }))
+  await chooseCustomModel('fixture-model')
   await new Promise((resolve) => setTimeout(resolve, 0))
   click('[data-agent-enable]'); await state('ready')
   expect(fixture.snapshot().defaults.pi.model).toBe('fixture-model')
@@ -80,9 +91,7 @@ it('applies the saved theme through SettingsView and retains it after saves and 
     expect(changed).toHaveBeenCalledWith(expect.objectContaining({ detail: expect.objectContaining({ theme: 'dark' }) }))
     await vi.waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'))
     expect((await window.kunGui.getSettings()).theme).toBe('dark')
-    const model = document.querySelector<HTMLInputElement>('[data-agent-profile-model]')!
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(model, 'theme-persistence-model')
-    model.dispatchEvent(new Event('input', { bubbles: true }))
+    await chooseCustomModel('theme-persistence-model')
     await vi.waitFor(() => expect(fixture.snapshot().defaults.pi.model).toBe('theme-persistence-model'))
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect((await window.kunGui.getSettings()).theme).toBe('dark')

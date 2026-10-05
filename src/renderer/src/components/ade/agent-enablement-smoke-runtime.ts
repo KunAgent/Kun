@@ -1,4 +1,4 @@
-import type { AdeHarnessRow, AdeHarnessTestRequest, AdeHarnessTestResult } from '@shared/ade-harnesses'
+import type { AdeHarnessModels, AdeHarnessRow, AdeHarnessTestRequest, AdeHarnessTestResult } from '@shared/ade-harnesses'
 import type { KunHarnessEnabledProfileV1, KunHarnessSettingsV1 } from '@shared/app-settings'
 import type { RuntimeRequestResult } from '@shared/kun-gui-api'
 
@@ -10,14 +10,30 @@ const harnessProfileKey = (profile: KunHarnessEnabledProfileV1): string => JSON.
     ? '' : profile.providerId?.trim() || 'default'
 ])
 
+const devinModels: NonNullable<AdeHarnessModels['modelInfo']> = [
+  { id: 'adaptive', displayName: 'Adaptive' },
+  { id: 'swe-2-high', displayName: 'SWE-2' },
+  { id: 'swe-1-7-lightning-medium', displayName: 'SWE-1.7 Lightning' },
+  { id: 'claude-fable-5-1-medium', displayName: 'Claude Fable 5.1' },
+  { id: 'claude-opus-5-5-medium', displayName: 'Claude Opus 5.5' },
+  { id: 'gpt-6-astra-medium', displayName: 'GPT-6 Astra' },
+  { id: 'gpt-6-sol-medium', displayName: 'GPT-6 Sol' },
+  { id: 'gemini-3-8-flash-medium', displayName: 'Gemini 3.8 Flash' },
+  { id: 'glm-5-2', displayName: 'GLM-5.2' },
+  { id: 'kimi-k3-high', displayName: 'Kimi K3' },
+  { id: 'fusion-gpt-6-astra-high-sidekick-swe-2-medium', displayName: 'Fusion (GPT-6 Astra High Thinking + SWE-2 Medium)', category: 'fusion' },
+  { id: 'fusion-claude-opus-5-5-high-sidekick-swe-2-medium', displayName: 'Fusion (Claude Opus 5.5 High Thinking + SWE-2 Medium)', category: 'fusion' }
+]
 const fixtureRows: AdeHarnessRow[] = [
   ['kun', 'Kun', 'native-loop'], ['pi', 'Pi', 'pi-rpc'],
   ['deepseek-harness', 'DeepSeek Harness', 'acp'], ['claude-code', 'Claude Code', 'agent-sdk'],
-  ['gemini-cli', 'Gemini CLI', 'acp']
+  ['gemini-cli', 'Gemini CLI', 'acp'], ['devin', 'Devin', 'acp']
 ].map(([id, displayName, transport]) => ({
   definition: { id, displayName, transport: transport as AdeHarnessRow['definition']['transport'],
-    credentialModes: id === 'kun' ? ['provider'] : id === 'deepseek-harness' ? ['native-login'] : ['native-login', 'kun-gateway'],
-    permissionModes: [], modelSource: 'static', staticModels: ['fixture-model'], builtin: true,
+    credentialModes: id === 'kun' ? ['provider'] : id === 'deepseek-harness' || id === 'devin' ? ['native-login'] : ['native-login', 'kun-gateway'],
+    permissionModes: id === 'devin' ? [{ id: 'normal', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
+      { id: 'bypass', label: 'Full access', kunPermissionMode: 'full-access' }] : [],
+    modelSource: id === 'devin' ? 'probe' : 'static', staticModels: id === 'devin' ? [] : ['fixture-model'], builtin: true,
     availability: id === 'deepseek-harness' ? 'preview' : id === 'gemini-cli' ? 'retired' : 'active' },
   status: { harnessId: id, installed: 'yes', version: id === 'deepseek-harness' ? '0.2.0-rc.2' : '1.0.0',
     ready: 'yes', login: id === 'kun' ? 'not-required' : 'unknown', checkedAt: new Date().toISOString() }
@@ -49,6 +65,7 @@ export function createAgentEnablementSmokeRuntime(settings: () => KunHarnessSett
       if (!match) return null
       const row = rows().find((entry) => entry.definition.id === match[1])
       if (!row) return null
+      if (match[2] === 'models' && match[1] === 'devin') return response({ harnessId: 'devin', models: devinModels.map((model) => model.id), modelInfo: devinModels })
       if (match[2] === 'models') return response({ harnessId: match[1], models: ['fixture-model'],
         groups: [{ providerId: 'fixture-provider', label: 'Offline provider', models: ['fixture-model'] }] })
       if (match[2] === 'probe') return response(row)

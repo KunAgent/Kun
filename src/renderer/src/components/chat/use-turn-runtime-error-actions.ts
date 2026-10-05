@@ -9,6 +9,7 @@ import { useChatStore } from '../../store/chat-store'
 export function useTurnRuntimeErrorActions(): {
   continueInterruptedTask: (code?: string) => void
   openProviderSettings: () => void
+  openAgentSettings: () => void
 } {
   const { t } = useTranslation('common')
   const sendMessage = useChatStore((s) => s.sendMessage)
@@ -23,6 +24,7 @@ export function useTurnRuntimeErrorActions(): {
         )
       )
     },
-    openProviderSettings: () => openSettings('providers')
+    openProviderSettings: () => openSettings('providers'),
+    openAgentSettings: () => openSettings('agentsHarnesses')
   }
 }

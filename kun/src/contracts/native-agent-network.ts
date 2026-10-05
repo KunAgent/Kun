@@ -15,6 +15,7 @@ export const NativeAgentNetworkPolicy = z.discriminatedUnion('source', [
 export const NativeAgentNetworkSnapshot = z.object({
   installer: NativeAgentNetworkPolicy.optional(),
   codex: NativeAgentNetworkPolicy.optional(),
+  antigravity: NativeAgentNetworkPolicy.optional(),
   'claude-code': NativeAgentNetworkPolicy.optional()
 }).strict()
 export type NativeAgentNetworkSnapshot = z.infer<typeof NativeAgentNetworkSnapshot>

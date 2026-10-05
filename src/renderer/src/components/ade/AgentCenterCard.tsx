@@ -12,6 +12,7 @@ import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { SettingRow } from '../settings-controls'
 import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-enablement'
 import { AgentEnablementPanel } from './AgentEnablementPanel'
+import { AgentSettingsSelect } from './AgentSettingsSelect'
 import { AgentInstallControl } from './AgentInstallControl'
 import {
   agentCardModel,
@@ -329,16 +330,11 @@ export function AgentCenterCard({
             title={tSettings('adeSettings.harnessPermissionMode')}
             description={tSettings('adeSettings.harnessPermissionModeDesc')}
             control={
-              <select
-                className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
+              <AgentSettingsSelect label={tSettings('adeSettings.harnessPermissionMode')}
                 value={settings.defaults[definition.id]?.permissionMode ?? ''}
-                onChange={(event) => onSetPermissionMode(event.target.value)}
-              >
-                <option value="">{tSettings('adeSettings.harnessPermissionModeDefault')}</option>
-                {definition.permissionModes.map((mode) => (
-                  <option key={mode.id} value={mode.id}>{mode.label}</option>
-                ))}
-              </select>
+                onChange={onSetPermissionMode}
+                options={[{ value: '', label: tSettings('adeSettings.harnessPermissionModeDefault') },
+                  ...definition.permissionModes.map((mode) => ({ value: mode.id, label: mode.label }))]} />
             }
           />
         ) : null}

@@ -71,7 +71,8 @@ export type HarnessRuntimeComposition = {
  * re-apply does not need to rebuild the detector.
  */
 export function createHarnessComposition(
-  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir' | 'nativeAgentNetwork' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId'>,
+  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir' | 'nativeAgentNetwork' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId'> &
+    Partial<Pick<KunServeRuntimeOptions, 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'>>,
   deps: { revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null> } = {}
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({

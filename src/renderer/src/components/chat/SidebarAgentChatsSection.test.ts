@@ -39,8 +39,8 @@ vi.mock('../rooms/room-sidebar-actions', () => ({
 }))
 vi.mock('../rooms/rooms-client', () => ({ roomsRequest: mocks.request, roomRequestId: () => 'initialize-request' }))
 vi.mock('../rooms/useRoomSidebar', () => ({
-  useRoomSidebar: (query: unknown, key: unknown) => {
-    mocks.query(query, key)
+  useRoomSidebar: (query: unknown, key: unknown, enabled: boolean) => {
+    mocks.query(query, key, enabled)
     return { ...mocks.page, refresh: mocks.refresh, more: mocks.more, togglePin: mocks.pin }
   }
 }))
@@ -115,7 +115,7 @@ beforeEach(() => {
   mocks.setNavigation.mockReset().mockImplementation((state: Partial<typeof mocks.navigation>) => { Object.assign(mocks.navigation, state) })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
-afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals() })
+afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('Code agent conversations sidebar', () => {
   it('shows persistent identities and previews without selecting a chat during initialization', async () => {
@@ -124,7 +124,7 @@ describe('Code agent conversations sidebar', () => {
     await render()
     expect(host.querySelectorAll('.sidebar-agent-chat-row')).toHaveLength(3)
     expect(host.querySelector('.sidebar-agent-chat-preview')?.textContent).toBe('Finished the analysis')
-    expect(mocks.query).toHaveBeenCalledWith({ kind: 'agents', search: '' }, 'dm-alpha')
+    expect(mocks.query).toHaveBeenCalledWith({ kind: 'agents', search: '' }, 'dm-alpha', true)
     expect(mocks.request).toHaveBeenCalledExactlyOnceWith('/v1/agents/chat-entry', 'POST', {
       action: 'initialize', clientRequestId: 'initialize-request'
     })
@@ -196,7 +196,7 @@ describe('Code agent conversations sidebar', () => {
     mocks.page.entries = [entry('alpha', { archived: true })]
     openMenu('sidebarConversations')
     await menuAction('roomsArchivedConversations')
-    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'agents', search: '', archivedOnly: true }, '')
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'agents', search: '', archivedOnly: true }, '', true)
     expect(button('alpha').disabled).toBe(true)
     openMenu('alpha')
     await menuAction('roomsRestoreArchivedConversation')
@@ -219,7 +219,7 @@ describe('Code agent conversations sidebar', () => {
     mocks.page.entries = [entry('alpha', { deleted: true })]
     openMenu('sidebarConversations')
     await menuAction('roomsRecentlyDeleted')
-    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'agents', search: '', deletedOnly: true }, '')
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'agents', search: '', deletedOnly: true }, '', true)
     expect(button('alpha').disabled).toBe(true)
     openMenu('alpha')
     await menuAction('roomsRestoreConversation')
@@ -299,14 +299,50 @@ describe('Code agent conversations sidebar', () => {
   })
 
   it('leaves unavailable runtime actions disabled and retries default initialization after a failure', async () => {
+    vi.useFakeTimers()
     await render(props({ runtimeReady: false }))
     expect(mocks.request).not.toHaveBeenCalled()
     expect(button('agentChatsStart').disabled).toBe(true)
-    mocks.request.mockRejectedValueOnce(new Error('offline'))
+    mocks.request.mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('offline'))
     await render()
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('agentChatsUnavailable')
     await act(async () => host.querySelector<HTMLButtonElement>('[role="alert"] button')!.click())
-    expect(mocks.request).toHaveBeenCalledTimes(2)
+    expect(mocks.request).toHaveBeenCalledTimes(3)
     expect(host.querySelector('[role="alert"]')).toBeNull()
+  })
+  it('recovers transient startup initialization with the same idempotent request', async () => {
+    vi.useFakeTimers()
+    mocks.request.mockRejectedValueOnce(new Error('runtime still applying settings'))
+    await render()
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+    expect(mocks.request).toHaveBeenCalledTimes(2)
+    expect(mocks.request.mock.calls[0]).toEqual(mocks.request.mock.calls[1])
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+    expect(mocks.refresh).toHaveBeenCalledOnce()
+  })
+  it('cancels pending initialization recovery when Kun disconnects', async () => {
+    vi.useFakeTimers()
+    mocks.request.mockRejectedValueOnce(new Error('starting'))
+    await render()
+    await render(props({ runtimeReady: false }))
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+    expect(mocks.request).toHaveBeenCalledOnce()
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+  })
+  it('hides cached Agent rows and unavailable errors until Kun has finished loading', async () => {
+    mocks.page.error = 'runtime still starting'
+    mocks.navigation.error = 'early connection failure'
+    await render(props({ runtimeReady: false }))
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'agents', search: '' }, 'dm-alpha', false)
+    expect(host.querySelector('[data-agent-chats-waiting]')?.textContent).toContain('waitingForKun')
+    expect(host.querySelectorAll('.sidebar-agent-chat-row')).toHaveLength(0)
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+    expect(host.textContent).not.toContain('agentChatsViewAll')
+    mocks.page.error = ''; mocks.navigation.error = ''
+    await render()
+    expect(host.querySelector('[data-agent-chats-waiting]')).toBeNull()
+    expect(host.querySelectorAll('.sidebar-agent-chat-row')).toHaveLength(3)
   })
 })

@@ -205,7 +205,7 @@ export type CodexThreadStartParams = {
   cwd?: string
   approvalPolicy?: CodexAskForApproval
   approvalsReviewer?: 'user' | 'auto_review' | 'guardian_subagent'
-  sandbox?: CodexSandboxPolicy
+  sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access'
   baseInstructions?: string
   developerInstructions?: string
   ephemeral?: boolean

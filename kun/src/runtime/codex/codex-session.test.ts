@@ -453,6 +453,7 @@ describe('CodexAgent', () => {
     expect((req.params as { approvalsReviewer: string }).approvalsReviewer).toBe(
       'user'
     )
+    expect(req.params).toMatchObject({ sandbox: 'read-only', approvalPolicy: 'untrusted' })
   })
 
   it('resumes via thread/resume and marks replayedHistory=false', async () => {
@@ -471,8 +472,9 @@ describe('CodexAgent', () => {
     const session = await promise
     expect(session.providerSessionId).toBe('cx-thread-old')
     expect(session.replayedHistory).toBe(false)
-    const req = writes.at(-1) as { method: string }
+    const req = writes.at(-1) as { method: string; params: unknown }
     expect(req.method).toBe('thread/resume')
+    expect(req.params).toMatchObject({ sandbox: 'read-only', approvalPolicy: 'untrusted' })
   })
 
   it('surfaces resume failures as harness_not_ready for portable rebase', async () => {

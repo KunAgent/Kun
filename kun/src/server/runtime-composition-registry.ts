@@ -1,3 +1,4 @@
+import { nativeAgentNetworkEnv } from '../harness/native-agent-network.js'
 import {
   join,
   CapabilityRegistry,
@@ -154,6 +155,7 @@ export function createRuntimeRegistry(
       !child.allowedReadPaths &&
       !child.allowedWritePaths
       ? ({
+          nativeNetworkEnv: () => nativeAgentNetworkEnv(services.harnesses.catalog.get('antigravity')),
           readiness: services.harnesses.readiness,
           providerConfigs: core.activeOptions.providers ?? {},
           providerIds: antigravityProviderIds,

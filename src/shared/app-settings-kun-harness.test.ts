@@ -11,6 +11,22 @@ import {
 } from './app-settings-kun-harness'
 
 describe('normalizeKunHarnessSettings', () => {
+  it('preserves independent OpenCode2 opt-in, binary, defaults and disabled state', () => {
+    const settings = normalizeKunHarnessSettings({
+      enabledProfiles: [{ harnessId: 'opencode2', credentialMode: 'native-login' }],
+      disabledIds: ['opencode'], binaryPaths: { opencode2: '/selected/opencode2' },
+      defaults: { opencode2: { model: 'openai/gpt-5.2' } },
+      defaultHarnessId: 'opencode2', agentOrder: ['opencode2', 'opencode'],
+      custom: [{ id: 'opencode2', command: '/wrong/custom' }]
+    })
+    expect(settings.enabledProfiles).toEqual([{ harnessId: 'opencode2', credentialMode: 'native-login' }])
+    expect(settings.binaryPaths.opencode2).toBe('/selected/opencode2')
+    expect(settings.defaults.opencode2?.model).toBe('openai/gpt-5.2')
+    expect(settings.defaultHarnessId).toBe('opencode2')
+    expect(settings.disabledIds).toEqual(['opencode'])
+    expect(settings.agentOrder.slice(0, 2)).toEqual(['opencode2', 'opencode'])
+    expect(settings.custom).toEqual([])
+  })
   it('keeps Devin builtin settings and rejects a custom definition impersonating it', () => {
     const normalized = normalizeKunHarnessSettings({
       disabledIds: ['devin'],

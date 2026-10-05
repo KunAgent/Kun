@@ -69,7 +69,7 @@ export function useAdeComposerControls(input: {
   } | null>(null)
   const previousKunSelection = useRef<{ providerId: string; model: string } | null>(null)
   useEffect(() => { previousKunSelection.current = null }, [activeThreadId, workspaceRoot])
-  const harnessDefaults = useHarnessDefaults()
+  const harnessDefaults = useHarnessDefaults(enabled)
   const rows = useHarnessStore((state) => state.rows)
   const rowsLoading = useHarnessStore((state) => state.rowsLoading)
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
@@ -102,7 +102,7 @@ export function useAdeComposerControls(input: {
   useEffect(() => {
     // P4-02: hold the first list briefly so mid-flight detections settle
     // instead of pinning a provisional "unknown" verdict.
-    if (enabled) void loadHarnesses(false, { waitMs: 3_000 })
+    if (enabled) void loadHarnesses(true, { waitMs: 3_000 })
   }, [enabled])
   useEffect(() => {
     if (enabled && harnessId !== 'kun') void loadHarnessModels(harnessId)

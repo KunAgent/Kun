@@ -1,5 +1,6 @@
 import { useEffect, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { KeyRound, Network, UserRound } from 'lucide-react'
 import type { AdeHarnessCredentialMode, AdeHarnessRow } from '@shared/ade-harnesses'
 import type { KunHarnessDefaultsEntryV1, KunHarnessSettingsV1 } from '@shared/app-settings'
 import { harnessProfileReady } from '@shared/harness-enablement'
@@ -7,8 +8,8 @@ import { loadHarnessModels, loadHarnessProviderGroups, useHarnessStore } from '.
 import { useChatStore } from '../../store/chat-store'
 import { SettingRow } from '../settings-controls'
 import { useAgentEnablement } from './use-agent-enablement'
-
-const fieldClass = 'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink focus:border-accent/40 focus:outline-none'
+import { AgentSettingsSelect } from './AgentSettingsSelect'
+import { AgentSettingsModelPicker } from './AgentSettingsModelPicker'
 
 /** Profile selection and enablement are intentionally one reviewable, cancellable operation. */
 export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
@@ -29,39 +30,41 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
   const ready = gate.enabled && !gate.error && !gate.checking && harnessProfileReady(row, gate.profile)
   useEffect(() => {
     if (!native) void loadHarnessProviderGroups(id)
-    // A model list is not an account probe. Native lookup stays an explicit action.
+    // Opening the model picker is the explicit native catalog lookup.
   }, [id, native])
   const change = (value: Partial<KunHarnessDefaultsEntryV1>): void => {
     gate.cancel()
     patch({ defaults: { ...settings.defaults, [id]: { ...defaults, ...value } } })
   }
-  const modelOptions = native ? models?.models ?? row.definition.staticModels
-    : groups?.groups.find((entry) => entry.providerId === gate.profile.providerId)?.models ?? []
+  const selectedGroup = groups?.groups.find((entry) => entry.providerId === gate.profile.providerId)
+  const modelOptions = native ? models?.models ?? row.definition.staticModels : selectedGroup?.models ?? []
   return <section className="mt-3 space-y-3 rounded-xl border border-ds-border-muted p-3"
     data-agent-enablement={id} data-agent-enablement-state={gate.checking ? 'checking' : gate.error ? 'failed' : ready ? 'ready' : gate.enabled ? 'needs-check' : 'disabled'}>
     <p className="text-[12px] text-ds-muted">{t('agentEnablement.explanation')}</p>
-    <SettingRow title={t('agentEnablement.profile')} control={<select className={fieldClass}
-      data-agent-profile-mode aria-label={t('agentEnablement.profile')} value={gate.profile.credentialMode}
-      onChange={(event) => change({ credentialMode: event.target.value as AdeHarnessCredentialMode, providerId: undefined, model: undefined })}>
-      {row.definition.credentialModes.map((mode) => <option key={mode} value={mode}>{t(`adeCredential.${mode === 'native-login' ? 'nativeLogin' : mode === 'kun-gateway' ? 'kunGateway' : 'provider'}`)}</option>)}
-    </select>} />
-    {native && nativeAccounts.length > 0 ? <SettingRow title={t('agentEnablement.nativeAccount')} control={<select className={fieldClass}
-      data-agent-profile-provider aria-label={t('agentEnablement.nativeAccount')} value={gate.profile.providerId ?? ''}
-      onChange={(event) => change({ providerId: event.target.value || undefined, model: undefined })}>
-      <option value="">{t('agentEnablement.systemAccount')}</option>
-      {nativeAccounts.map((account) => <option key={account.providerId} value={account.providerId}>{account.label}</option>)}
-    </select>} /> : null}
-    {!native ? <SettingRow title={t('agentEnablement.provider')} control={<select className={fieldClass}
-      data-agent-profile-provider aria-label={t('agentEnablement.provider')} value={gate.profile.providerId ?? ''}
-      onChange={(event) => change({ providerId: event.target.value || undefined, model: undefined })}>
-      <option value="">{t('agentEnablement.chooseProvider')}</option>
-      {(groups?.groups ?? []).map((group) => <option key={group.providerId} value={group.providerId}>{group.label}</option>)}
-    </select>} /> : null}
+    <SettingRow title={t('agentEnablement.profile')} control={<AgentSettingsSelect
+      marker="data-agent-profile-mode" label={t('agentEnablement.profile')} value={gate.profile.credentialMode}
+      onChange={(value) => change({ credentialMode: value as AdeHarnessCredentialMode, providerId: undefined, model: undefined })}
+      options={row.definition.credentialModes.map((mode) => ({ value: mode,
+        label: t(`adeCredential.${mode === 'native-login' ? 'nativeLogin' : mode === 'kun-gateway' ? 'kunGateway' : 'provider'}`),
+        icon: mode === 'native-login' ? <UserRound size={15} /> : mode === 'kun-gateway' ? <Network size={15} /> : <KeyRound size={15} /> }))} />} />
+    {native && nativeAccounts.length > 0 ? <SettingRow title={t('agentEnablement.nativeAccount')} control={<AgentSettingsSelect
+      marker="data-agent-profile-provider" label={t('agentEnablement.nativeAccount')} value={gate.profile.providerId ?? ''}
+      onChange={(value) => change({ providerId: value || undefined, model: undefined })}
+      options={[{ value: '', label: t('agentEnablement.systemAccount'), icon: <UserRound size={15} /> },
+        ...nativeAccounts.map((account) => ({ value: account.providerId, label: account.label, icon: <UserRound size={15} /> }))]} />} /> : null}
+    {!native ? <SettingRow title={t('agentEnablement.provider')} control={<AgentSettingsSelect
+      marker="data-agent-profile-provider" label={t('agentEnablement.provider')} value={gate.profile.providerId ?? ''}
+      onChange={(value) => change({ providerId: value || undefined, model: undefined })}
+      options={[{ value: '', label: t('agentEnablement.chooseProvider') },
+        ...(groups?.groups ?? []).map((group) => ({ value: group.providerId, label: group.label, icon: <KeyRound size={15} /> }))]} />} /> : null}
     <SettingRow title={t('agentEnablement.model')} description={t('agentEnablement.modelHint')}
-      control={<input className={fieldClass} data-agent-profile-model aria-label={t('agentEnablement.model')} list={`agent-models-${id}`} value={defaults.model ?? ''}
-        placeholder={t('agentEnablement.nativeDefault')} onChange={(event) => change({ model: event.target.value || undefined })} />} />
-    <datalist id={`agent-models-${id}`}>{modelOptions.map((model) => <option key={model} value={model} />)}</datalist>
-    {native && gate.enabled ? <button type="button" className="min-h-6 text-[12px] text-ds-muted underline" onClick={() => void loadHarnessModels(id, true)}>{t('agentEnablement.loadModels')}</button> : null}
+      control={<AgentSettingsModelPicker key={`${id}:${gate.profile.credentialMode}:${gate.profile.providerId ?? ''}`}
+        harnessId={id} native={native} value={defaults.model ?? ''} modelIds={modelOptions}
+        modelInfo={native ? models?.modelInfo : selectedGroup?.modelInfo}
+        loading={native ? models?.loading : groups?.loading} error={native ? models?.error : groups?.error}
+        onChange={(value) => change({ model: value || undefined })}
+        onLoad={native ? gate.enabled ? (force) => { void loadHarnessModels(id, force) } : undefined
+          : (force) => { void loadHarnessProviderGroups(id, force) }} />} />
     <div className="flex flex-wrap items-center gap-2">
       {gate.checking ? <button type="button" onClick={gate.cancel} data-agent-enable-cancel
         data-settings-action="secondary" data-settings-size="default" className="rounded-lg border border-ds-border px-3 py-1.5 text-[12px] text-ds-ink">{t('agentEnablement.cancel')}</button>

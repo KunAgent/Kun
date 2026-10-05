@@ -5,6 +5,8 @@
  * agent's name, version, capabilities, and auth methods.
  */
 import { tmpdir } from 'node:os'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { AcpConnection } from '../runtime/acp/acp-connection.js'
 import { AcpClientHost } from '../runtime/acp/acp-client-host.js'
 import {
@@ -22,6 +24,8 @@ import {
 } from './harness-secret-env.js'
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
 import { raceProbeAbort } from './probe-abort.js'
+import { applyDevinSessionPermission } from '../runtime/acp/devin-session-permissions.js'
+import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
 
 export type AcpHandshakeProbeDeps = {
   spawn?: AcpSpawnFn
@@ -31,6 +35,8 @@ export type AcpHandshakeProbeDeps = {
   env?: Record<string, string>
   /** Optional local session metadata; never sends a prompt or authenticates. */
   includeModels?: boolean
+  /** Exercise the same pre-prompt model/mode setup as a real turn, without inference. */
+  session?: { model?: string; permissionMode?: string }
   /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
   resolveSecretEnv?: HarnessSecretRefResolver
 }
@@ -80,6 +86,7 @@ export async function probeAcpHandshake(
     }
   }
   const conn = AcpConnection.start({ process, identity: 'handshake-probe' })
+  let workspace: string | undefined
   // Fail-closed mediation: client requests during the handshake get a
   // sessionUnavailable reply instead of touching a real workspace.
   new AcpClientHost().attach(conn)
@@ -87,12 +94,17 @@ export async function probeAcpHandshake(
     const init = await raceProbeAbort(conn.initialize({ timeoutMs }), signal)
     signal.throwIfAborted()
     let models: string[] | undefined
-    if (deps.includeModels) {
+    if (deps.includeModels || deps.session) {
+      workspace = await mkdtemp(join(tmpdir(), 'kun-acp-readiness-'))
       const raw = await raceProbeAbort(conn.rpc.request(ACP_AGENT_METHODS.sessionNew,
-        { cwd: tmpdir(), mcpServers: [] }, { timeoutMs }), signal)
+        { cwd: workspace, mcpServers: [] }, { timeoutMs }), signal)
       signal.throwIfAborted()
       const session = AcpNewSessionResultSchema.parse(raw)
-      models = acpModelCatalog({ harnessId: definition.id, ...session }).models
+      if (deps.includeModels) models = acpModelCatalog({ harnessId: definition.id, ...session }).models
+      if (deps.session) {
+        await raceProbeAbort(applyAcpSessionModel(conn, { ...session, models: parseAcpLegacyModels(session.models) }, deps.session.model), signal)
+        if (definition.id === 'devin') await raceProbeAbort(applyDevinSessionPermission(conn, session, deps.session.permissionMode), signal)
+      }
     }
     const caps = init.agentCapabilities
     const mcpTransports = [
@@ -146,5 +158,6 @@ export async function probeAcpHandshake(
     }
   } finally {
     await conn.close().catch(() => undefined)
+    if (workspace) await rm(workspace, { recursive: true, force: true }).catch(() => undefined)
   }
 }

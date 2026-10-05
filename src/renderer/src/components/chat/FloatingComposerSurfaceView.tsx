@@ -50,6 +50,7 @@ export function FloatingComposerSurfaceView({
     worktreeBranch
   } = context
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
+  const runtimeOffline = useChatStore((state) => state.runtimeConnection === 'offline')
   const modelCatalogStatus = useChatStore((state) => state.composerModelCatalogStatus)
   const kunComposer = adeComposerEnabled && !side && adeComposer?.harnessId === 'kun'
   const modelGroups: ModelProviderModelGroup[] = kunComposer ? composerModelGroups.filter(isKunModelProviderGroup) : composerModelGroups
@@ -271,7 +272,7 @@ export function FloatingComposerSurfaceView({
               dismissLabel={t('composerDismissError')}
             />
           ) : null}
-          <div
+          {runtimeReady ? <div
             className={`ds-composer-toolbar flex min-h-9 min-w-0 items-center gap-2 ${
               showToolbarStartControls ? 'justify-between' : 'justify-end'
             }`}
@@ -588,9 +589,17 @@ export function FloatingComposerSurfaceView({
                 </>
               )}
             </div>
-          </div>
+          </div> : <div className="ds-composer-toolbar flex min-h-10 items-center gap-2 px-1 text-xs text-ds-faint"
+            data-composer-waiting-for-kun role="status" aria-live="polite">
+            {!runtimeOffline ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            <span>{t(runtimeOffline ? 'composerOfflineHint' : 'waitingForKun')}</span>
+            {primaryActionKind === 'interrupt' ? <button type="button" onClick={() => onInterrupt()}
+              aria-label={t('interrupt')} className="ml-auto flex h-10 w-10 items-center justify-center rounded-full">
+              <Square className="h-3.5 w-3.5 fill-current" />
+            </button> : null}
+          </div>}
         </div>
-        <FloatingComposerFooterView context={context} />
+        {runtimeReady ? <FloatingComposerFooterView context={context} /> : null}
         {continueDialogOpen && adeComposer?.continuation ? (
           <CodexReferenceDialog
             workspaceRoot={effectiveWorkspaceRoot}

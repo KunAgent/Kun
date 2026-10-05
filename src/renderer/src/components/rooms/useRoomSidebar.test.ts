@@ -7,10 +7,35 @@ const mocks = vi.hoisted(() => ({ request: vi.fn(), subscribe: vi.fn() }))
 vi.mock('./rooms-client', () => ({ roomsRequest: mocks.request }))
 vi.mock('./useRoomEvents', () => ({ subscribeRoomEvents: mocks.subscribe, roomEventsLive: () => true }))
 let renderer: ReactTestRenderer, value: ReturnType<typeof useRoomSidebar>
-function Probe({ query = {}, selected = '' }: { query?: RoomSidebarQuery; selected?: string }) { value = useRoomSidebar(query, selected); return null }
-beforeEach(() => { vi.useFakeTimers(); vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); mocks.request.mockReset(); mocks.subscribe.mockReturnValue(() => {}) })
+function Probe({ query = {}, selected = '', enabled = true }: { query?: RoomSidebarQuery; selected?: string; enabled?: boolean }) { value = useRoomSidebar(query, selected, enabled); return null }
+beforeEach(() => { vi.useFakeTimers(); vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); mocks.request.mockReset(); mocks.subscribe.mockReset().mockReturnValue(() => {}) })
 afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.useRealTimers(); vi.unstubAllGlobals() })
 async function flush() { await act(async () => { await vi.advanceTimersByTimeAsync(250) }) }
+it('defers requests, subscriptions and polling until Kun is ready, then loads automatically', async () => {
+  mocks.request.mockResolvedValue({ entries: [{ id: 'ready-agent' }] })
+  await act(async () => { renderer = create(createElement(Probe, { enabled: false })) })
+  act(() => { value.refresh(); value.more() })
+  await act(async () => { await vi.advanceTimersByTimeAsync(30_000) })
+  expect(mocks.request).not.toHaveBeenCalled(); expect(mocks.subscribe).not.toHaveBeenCalled()
+  expect(value.entries).toEqual([]); expect(value.error).toBe('')
+  await act(async () => renderer.update(createElement(Probe, { enabled: true })))
+  expect(value.busy).toBe(true)
+  await flush()
+  expect(mocks.request).toHaveBeenCalledOnce(); expect(value.entries[0].id).toBe('ready-agent')
+})
+it('aborts in-flight loading when Kun disconnects and discards late startup failures', async () => {
+  let reject!: (error: Error) => void
+  mocks.request.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail }))
+  await act(async () => { renderer = create(createElement(Probe)) }); await flush()
+  const signal = mocks.request.mock.calls[0][3]
+  await act(async () => renderer.update(createElement(Probe, { enabled: false })))
+  expect(signal.aborted).toBe(true)
+  await act(async () => reject(new Error('runtime not ready')))
+  expect(value.error).toBe('')
+  mocks.request.mockResolvedValue({ entries: [{ id: 'recovered-agent' }] })
+  await act(async () => renderer.update(createElement(Probe, { enabled: true }))); await flush()
+  expect(value.error).toBe(''); expect(value.entries[0].id).toBe('recovered-agent')
+})
 it('refreshes an initially empty list after initialization navigates before SSE is connected', async () => {
   mocks.request.mockResolvedValueOnce({ entries: [] })
   await act(async () => { renderer = create(createElement(Probe)) }); await flush()

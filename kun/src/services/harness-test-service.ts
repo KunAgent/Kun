@@ -60,7 +60,20 @@ export async function runHarnessTest(
     return { ...base, ok: detect.ok && !signal?.aborted, durationMs: Date.now() - started }
   }
 
-  const handshake = await timed(() => runHandshake(runtime, definition, detect.status, signal))
+  // A trial must probe the selected credential route. The legacy native-only
+  // handshake would start Pi/OpenCode with the user's native profile even
+  // after gateway readiness succeeded, failing before the actual test turn.
+  const handshake = await timed(async () => {
+    if (!harnesses.readiness) return runHandshake(runtime, definition, detect.status, signal)
+    try {
+      await harnesses.readiness.assertReady(harnesses.readiness.route(definition, input), signal)
+      return { ok: true, supported: true, protocol: definition.transport,
+        detail: 'Selected profile local readiness passed; no model prompt sent' }
+    } catch {
+      return { ok: false, supported: true, protocol: definition.transport,
+        detail: 'Selected profile readiness failed; check the Agent connection and retry' }
+    }
+  })
   if (input.level === 'handshake') {
     return { ...base, handshake, ok: handshake.ok || !handshake.supported, durationMs: Date.now() - started }
   }
@@ -146,11 +159,12 @@ async function runTrial(
 ): Promise<Omit<HarnessTestTrial, 'durationMs'>> {
   const timeoutMs = input.timeoutMs ?? HARNESS_TEST_TIMEOUT_MS
   const workspace = await mkdtemp(join(tmpdir(), 'kun-harness-test-'))
-  const model =
-    input.model ??
-    runtime.harnesses?.probedModels?.(definition)?.[0] ??
-    definition.staticModels[0] ??
-    runtime.defaultModel
+  // Trial and admission must use the same profile/model. Choosing the first
+  // discovered model (or Kun's model) can fail a healthy native subscription.
+  const route = runtime.harnesses?.readiness?.route(definition, input)
+  const credentialMode = route?.credentialMode ?? input.credentialMode ?? definition.credentialModes[0]
+  const providerId = route?.providerId ?? input.providerId
+  const model = route?.model ?? input.model ?? (credentialMode === 'native-login' ? 'default' : runtime.defaultModel ?? 'default')
   let threadId: string | null = null
   let cleanupDeferred = false
   try {
@@ -162,6 +176,8 @@ async function runTrial(
         workspace,
         model,
         harnessId: definition.id,
+        credentialMode,
+        ...(providerId ? { providerId } : {}),
         mode: 'agent',
         approvalPolicy: 'never',
         sandboxMode: 'read-only'
@@ -176,9 +192,9 @@ async function runTrial(
       request: {
         prompt: HARNESS_TEST_PROMPT,
         model,
-        ...(input.providerId ? { providerId: input.providerId } : {}),
+        ...(providerId ? { providerId } : {}),
         harnessId: definition.id,
-        ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
+        credentialMode,
         mode: 'agent',
         clientSurface: 'api',
         disableUserInput: true,

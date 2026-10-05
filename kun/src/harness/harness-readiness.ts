@@ -10,13 +10,15 @@ import { probePiHandshake } from './pi-handshake-probe.js'
 import { legacyProviderKindFor } from './harness-provider-kind.js'
 import { parseGatewayModelId } from './gateway-model-id.js'
 import { exposableProvider } from '../domain/model-gateway-export-policy.js'
-import { nativeAgentNetworkStatus } from './native-agent-network.js'
+import { nativeAgentNetworkEnv, nativeAgentNetworkStatus } from './native-agent-network.js'
 import { raceProbeAbort } from './probe-abort.js'
 import { harnessProfile, harnessProfileKey, nativeHasKey,
   readinessFingerprint, readinessProvider, type ReadinessOptions } from './harness-readiness-profile.js'
 import { readinessProbeEnvironment } from './harness-readiness-env.js'
 import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { spawnCaptured } from './harness-detector.js'
+import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
+import { antigravityCredentialEvidence } from './antigravity-credentials.js'
 
 const PROOF_TTL_MS = 5 * 60_000
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -255,6 +257,9 @@ export class HarnessReadinessService {
     if (!definition) throw new Error('Unknown harness')
     const options = this.deps.options()
     const secretEnv = await resolveHarnessSecretEnv(definition, this.deps.resolveSecretEnv)
+    const nativeEvidence = definition.id === 'antigravity' && route.credentialMode === 'native-login'
+      ? await antigravityCredentialEvidence({ ...process.env, ...definition.launch?.env, ...secretEnv }) : undefined
+    if (nativeEvidence) secretEnv.__KUN_READINESS_NATIVE_AUTH = nativeEvidence.fingerprint
     const candidate = readinessProvider(options, route)
     const provider = route.credentialMode === 'native-login' && (!route.providerId || route.providerId === 'default') &&
       candidate?.kind !== legacyProviderKindFor(definition.id) ? undefined : candidate
@@ -267,12 +272,13 @@ export class HarnessReadinessService {
     const env = { ...definition.launch?.env, ...secretEnv,
       ...nativeHarnessCredentialEnv(definition, { ...process.env, ...definition.launch?.env, ...secretEnv }) }
     delete env.__KUN_READINESS_PROVIDER
+    delete env.__KUN_READINESS_NATIVE_AUTH
     if (definition.id === 'claude-code' && route.credentialMode === 'native-login') {
       delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ANTHROPIC_BASE_URL
     }
     let configured = definition.availability !== 'retired' && definition.credentialModes.includes(route.credentialMode)
     let detail: string | undefined
-    let hasKey = nativeHasKey(definition, env) || (!definition.builtin && Object.entries(secretEnv).some(([key, value]) =>
+    let hasKey = nativeEvidence?.configured || nativeHasKey(definition, env) || (!definition.builtin && Object.entries(secretEnv).some(([key, value]) =>
       /^(?:OPENAI|ANTHROPIC|DEEPSEEK|GEMINI|GOOGLE|WINDSURF|MISTRAL|GROQ|OPENROUTER|XAI)_API_KEY$/.test(key) && Boolean(value.trim())))
     if (route.credentialMode !== 'native-login') {
       hasKey = Boolean(apiKey)
@@ -321,6 +327,10 @@ export class HarnessReadinessService {
     switch (definition.transport) {
       case 'native-loop': return { ok: true, supported: true, protocol: 'native-loop' }
       case 'acp': return probeAcpHandshake(definition, command, { ...options,
+        session: { model: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' ? snapshot.route.model : undefined,
+          permissionMode: harnessTurnPermissionMode(definition, { ...this.deps.options(),
+            requested: this.deps.options().harnesses?.defaults?.[definition.id]?.permissionMode,
+            unattended: false, allowUnattendedFullAccess: false }) },
         includeModels: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' })
       case 'codex-app-server': return probeCodexHandshake(definition, command, { ...options,
         includeModels: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' })
@@ -330,7 +340,8 @@ export class HarnessReadinessService {
       }
       case 'cursor-sdk': return probeCursorSdkReadiness(signal)
       case 'antigravity-cli': {
-        const result = await spawnCaptured(command, ['models'], { timeoutMs: 10_000, signal, env })
+        const result = await spawnCaptured(command, ['models'], { timeoutMs: 10_000, signal,
+          env: { ...nativeAgentNetworkEnv(definition, process.env, env), ...env } })
         const models = [...new Set(result.stdout.match(/\b[a-z][a-z0-9]*(?:[-.][a-z0-9]+)+\b/gi) ?? [])]
         return { ok: !result.timedOut && result.exitCode === 0 && models.length > 0, supported: true, models,
           protocol: 'antigravity-models', detail: 'Local agy models check; no model prompt sent' }

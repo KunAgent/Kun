@@ -9,6 +9,8 @@ import type { ExtensionResultPreviewSource } from '../../extensions/ControlledCo
 import { isBackgroundShellNoticeBlock, splitThink, type Turn } from './message-timeline-turns'
 import type { TurnRuntimeErrorBlock } from './derive-turn-sections'
 import { useTurnRuntimeErrorActions } from './use-turn-runtime-error-actions'
+import { describeRuntimeError } from '../../lib/format-runtime-error'
+import { harnessRuntimeErrorKey } from '../../lib/harness-runtime-error'
 
 const TIMELINE_JUMP_RAIL_FALLBACK_LEFT_PX = 16
 const TIMELINE_JUMP_RAIL_STAGE_INSET_PX = 16
@@ -244,10 +246,12 @@ export function TimelineRuntimeError({
   /** Optional "continue the interrupted task" action shown for restart interrupts. */
   onContinue?: () => void
 }): ReactElement {
-  const { openProviderSettings } = useTurnRuntimeErrorActions()
+  const { openProviderSettings, openAgentSettings } = useTurnRuntimeErrorActions()
   const { t } = useTranslation('common')
   const code = block.code?.trim() ?? ''
-  const detail = block.detail?.trim() ?? ''
+  const errorView = describeRuntimeError(JSON.stringify({ code, message: block.text }))
+  const agentError = errorView.settingsAction === 'harnesses' || Boolean(harnessRuntimeErrorKey(code, block.detail ?? ''))
+  const detail = block.detail?.trim() || (agentError ? errorView.detail : '') || ''
   const requestFailure = block.modelRequestFailure
   const providerResponded = requestFailure?.requestState === 'provider_responded'
   const sentNoResponse = requestFailure?.requestState === 'sent_no_response'
@@ -287,7 +291,7 @@ export function TimelineRuntimeError({
       : requestNotSent
         ? t('modelErrorNotSentSummary')
         : ''
-  const message = (localizedMessage || sourceSummary || block.text.trim() || block.detail?.trim() || block.code?.trim() || '')
+  const message = (localizedMessage || sourceSummary || (agentError ? errorView.message : '') || block.text.trim() || block.detail?.trim() || block.code?.trim() || '')
   const showCode = Boolean(code && !message.toLowerCase().includes(code.toLowerCase()))
   const providerIdentity = [requestFailure?.providerId, requestFailure?.model].filter(Boolean).join(' · ')
   const providerCode = requestFailure?.providerCode?.trim() || (providerResponded ? code : '')
@@ -382,6 +386,12 @@ export function TimelineRuntimeError({
           </details>
         ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-2">
+          {agentError ? (
+            <button type="button" data-testid="timeline-runtime-error-agent-settings" onClick={openAgentSettings}
+              className="inline-flex items-center gap-1.5 rounded-md border border-orange-300/60 px-2.5 py-1 text-[12.5px] font-medium text-orange-800 transition-colors hover:bg-orange-100/60 dark:border-orange-700/60 dark:text-orange-200 dark:hover:bg-orange-900/30">
+              {t('agentRuntimeError.openSettings')}
+            </button>
+          ) : null}
           {onContinue && (
             code === 'orphaned_after_restart' ||
             code === 'owner_lease_expired' ||

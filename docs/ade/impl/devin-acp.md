@@ -16,7 +16,8 @@ The following official sources were checked on 2026-09-30:
 - [The ACP registry definition](https://github.com/agentclientprotocol/registry/blob/main/devin/agent.json)
   launches the official binary with the `acp` argument on each platform.
 - [Permissions](https://docs.devin.ai/cli/reference/permissions) distinguishes
-  Normal, Accept Edits, Bypass, and sandboxed execution. Kun defaults to Normal.
+  Normal, Accept Edits, Bypass, and sandboxed execution in the CLI. ACP mode
+  identifiers must come from the installed session's advertised options.
 - [ACP authentication](https://agentclientprotocol.com/protocol/v1/authentication)
   defines `authMethods` as available login choices, not current login state.
   A session operation can explicitly reject with `auth_required`.
@@ -46,9 +47,14 @@ that protocol directly. No user or workspace hook files are modified.
 - A nonempty `authMethods` list does not block session creation or model
   discovery. A real authentication error shows a CLI login instruction.
 - Before every new or resumed Devin session receives a prompt, its requested
-  permission mode must be advertised and selected. Normal's documented `auto`
-  alias is accepted. An unsupported selection fails before prompting; no
-  fallback to a saved Bypass mode is allowed.
+  permission mode must be advertised and selected. CLI 3000.11.3 advertises
+  `ask`, `accept-edits` and `bypass`, without `normal`. Legacy `normal`/`auto`
+  may fall back to the narrower read-only `ask`; `ask` never widens to Normal.
+  A conflicting config response or unsupported mode fails before prompting.
+  Without a native override, Kun maps the captured composer permission to a
+  supported mode. A saved Bypass preference cannot exceed the host ceiling.
+  Writable approval-gated turns negotiate legacy Normal and may narrow to Ask;
+  read-only or restricted unattended turns request Ask and never widen to Normal.
 - Accept Edits and Bypass require Kun's full-access permission level. No
   `--respect-workspace-trust false` or implicit permission bypass is injected.
 - ACP alone does not prove OS sandboxing. The catalog reports `sandbox: none`,
@@ -56,15 +62,17 @@ that protocol directly. No user or workspace hook files are modified.
 - Native resume depends on `loadSession` from the installed agent; the existing
   portable handoff remains the fallback when native history is unavailable.
 
-## Validation and remaining local check
+## Validation
 
 Synthetic ACP fixtures cover advertised authentication with an existing login,
 model discovery without a prompt, modern and legacy model application, streamed completion, native resume,
 permission restoration, rejected mode selection, and authentication errors.
 They are protocol regression tests, not recorded Devin production traffic.
 
-The validation machine has no `devin` CLI on PATH or in the usual CLI install
-locations. No CLI was installed, no account was modified, and no paid turn was
-sent. An authenticated production smoke test remains unverified. On a machine
-with Devin CLI installed, use the Agent settings connection check and a
-user-authorized task to verify the account's actual modes/models and resume.
+On 2026-10-05, CLI 3000.11.3 completed a user-authorized native-login text turn
+through an isolated Kun HTTP runtime and returned the expected marker. Its
+actual session metadata was used to validate the new permission mapping.
+This proves the tested account/model text path; native resume, every model,
+and tool execution still require their separate regression/scenario coverage.
+Use `scripts/smoke-native-agent-turns.mjs --run --agents devin` for an explicit
+real-account check; local readiness alone does not consume model quota.

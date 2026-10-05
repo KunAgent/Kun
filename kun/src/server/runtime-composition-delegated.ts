@@ -1,3 +1,4 @@
+import { nativeAgentNetworkEnv } from '../harness/native-agent-network.js'
 /**
  * Delegated-turn-runtime dep assembly for the main serve scope. Extracted
  * from runtime-composition-agent.ts to keep that file under the line-count
@@ -132,6 +133,7 @@ export function buildMainDelegatedRuntime(
     ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
   }
   const antigravityRuntimeDeps: AntigravityCliRuntimeDeps = {
+    nativeNetworkEnv: () => nativeAgentNetworkEnv(services.harnesses.catalog.get('antigravity')),
     resolveCredentialSource: resolveLegacyRequestCredentials,
     readiness: services.harnesses.readiness,
     providerConfigs,

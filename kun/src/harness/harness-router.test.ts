@@ -42,6 +42,17 @@ const makeRouter = (over: Partial<ConstructorParameters<typeof HarnessRouter>[0]
   })
 
 describe('HarnessRouter', () => {
+  it('routes OpenCode2 through ACP without borrowing V1 consent', () => {
+    const runtime = stubRuntime()
+    const router = makeRouter({ catalog: new HarnessCatalog({ custom: () => [], enabledProfiles: () => [
+      { harnessId: 'opencode2', credentialMode: 'native-login' }
+    ] }), runtimes: () => ({ acp: runtime }) })
+    const result = router.resolve(thread(), turn({ harnessId: 'opencode2', credentialMode: 'native-login', providerId: undefined, model: 'openai/gpt-5.2' }))
+    expect(result).toMatchObject({ ok: true, resolved: { route: {
+      harnessId: 'opencode2', credentialMode: 'native-login', model: 'openai/gpt-5.2'
+    } } })
+    expect(router.resolve(thread(), turn({ harnessId: 'opencode', credentialMode: 'native-login', providerId: undefined })).ok).toBe(false)
+  })
   it('blocks Kun canvas and Graph lead intent even when the external engine has Kun tools', () => {
     const router = makeRouter({ runtimes: () => ({
       'agent-sdk': stubRuntime({ capabilities: () => agentSdkCapabilities() })

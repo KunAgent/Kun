@@ -39,6 +39,49 @@ Runtime admission enforces the same rule as the composer, including legacy
 provider inference, delegated tasks and router-disabled fallback paths. A hidden
 or disabled option is not permission to invoke that agent through another API.
 
+ACP checks also create a temporary empty session and validate an explicit
+model and Devin's permission selector. An initialize-only success cannot hide
+a failed session configuration. The probe never sends a prompt and reclaims
+its process and temporary workspace. Codex session setup explicitly uses the
+read-only sandbox; each turn then receives its authorized sandbox. This avoids
+inheriting a native writable default and triggering project-trust writes during
+setup, which would invalidate the configuration proof before the first turn.
+
+## Real native-account smoke
+
+`node scripts/smoke-native-agent-turns.mjs --run` sends one tiny real prompt per
+selected Agent through Kun's HTTP thread and turn APIs. It uses existing native
+logins, an isolated Manager/Runtime and empty temporary workspaces. It can
+consume subscription/API quota; it is never part of automatic enablement.
+Use `--agents devin,codex,opencode,deepseek-harness,claude-code` to choose targets.
+`KUN_SMOKE_NATIVE_PROXY` supplies the desktop's resolved HTTP proxy for native
+Codex/Claude requests when running this script outside Electron. Explicit
+`KUN_SMOKE_*_BINARY` paths override discovery. Reports under
+`dist/native-agent-turns/` retain separate runs and contain sanitized outcomes.
+
+The smoke checks terminal completion and actual assistant output, not only
+protocol metadata. It does not cover every model, tool, quota, resume or fork
+scenario. Settings trial requests use the selected readiness route, including
+its native default model, instead of picking the first model in a catalog.
+Trial preflight also uses that same credential route; a gateway trial must not
+start an extra native-profile probe or require a separate native account.
+
+## Antigravity native account
+
+The explicit `antigravity` native-login route is independent of a Kun model
+provider. Its default-model sentinel leaves model choice to `agy`; named
+provider connections remain restricted to the Antigravity provider kind.
+On macOS, readiness checks attributes of the native Keychain entry only
+(`gemini` service, `antigravity` account), without retrieving its password.
+Native `antigravity-oauth-token` files are bounded, read-only credential
+evidence. Both are configured evidence, never proof of remote authentication.
+Removal or replacement invalidates the process-local readiness proof.
+
+Desktop system proxy policy reaches both the non-inference `models` probe and
+actual CLI turns. Explicit environment settings keep priority; local Kun
+services retain loopback proxy bypass. The current official Unix bootstrap
+does not accept the old `--skip-aliases` argument.
+
 ## DeepSeek Harness privacy
 
 The official harness is a separate agent lifecycle, not a DeepSeek model preset.

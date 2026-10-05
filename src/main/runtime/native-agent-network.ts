@@ -10,6 +10,7 @@ const destinations = {
     'https://static.devin.ai/', 'https://opencode.ai/install', 'https://claude.ai/install.sh',
     'https://formulae.brew.sh/', 'https://ghcr.io/', 'https://antigravity.google/cli/install.sh', 'https://storage.googleapis.com/'],
   codex: ['https://chatgpt.com/backend-api/codex/responses', 'https://api.openai.com/v1/responses'],
+  antigravity: ['https://daily-cloudcode-pa.googleapis.com/', 'https://cloudcode-pa.googleapis.com/', 'https://oauth2.googleapis.com/'],
   'claude-code': ['https://api.anthropic.com/v1/messages']
 } as const
 
@@ -51,7 +52,7 @@ export async function refreshNativeAgentNetworkBeforeProbe(
   method: string,
   send: (body: string) => Promise<{ ok: boolean; status: number }>
 ): Promise<void> {
-  if (method !== 'POST' || !/^\/v1\/harnesses\/(?:(codex|claude-code)\/(probe|test)|[^/]+\/install)(?:\?|$)/u.test(path)) return
+  if (method !== 'POST' || !/^\/v1\/harnesses\/(?:(codex|claude-code|antigravity)\/(probe|test)|[^/]+\/install)(?:\?|$)/u.test(path)) return
   // Test/old hosts without an Electron session have no desktop policy to refresh.
   const snapshot = await resolveNativeAgentNetworkSnapshot()
   const result = await send(JSON.stringify({ nativeAgentNetwork: snapshot }))

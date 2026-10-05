@@ -53,11 +53,12 @@ export function harnessPermissionDefault(
   return kunToolPermissionModeSettings(kunMode as KunToolPermissionMode)
 }
 
-export function useHarnessDefaults(): Record<string, KunHarnessDefaultsEntryV1> {
+export function useHarnessDefaults(enabled = true): Record<string, KunHarnessDefaultsEntryV1> {
   const [defaults, setDefaults] =
     useState<Record<string, KunHarnessDefaultsEntryV1>>(snapshot)
 
   useEffect(() => {
+    if (!enabled) return
     let cancelled = false
     const apply = (settings: AppSettingsV1): void => {
       if (cancelled) return
@@ -86,7 +87,7 @@ export function useHarnessDefaults(): Record<string, KunHarnessDefaultsEntryV1> 
       window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)
       stopSync?.()
     }
-  }, [])
+  }, [enabled])
 
   return defaults
 }

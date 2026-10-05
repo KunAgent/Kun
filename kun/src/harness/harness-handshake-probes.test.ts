@@ -1,4 +1,5 @@
 import { PassThrough } from 'node:stream'
+import { existsSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { probeAcpHandshake } from './acp-handshake-probe.js'
 import { probeCodexHandshake } from './codex-handshake-probe.js'
@@ -191,6 +192,32 @@ describe('ACP session model metadata', () => {
         .toMatchObject({ ok: false })
       expect(child.stop).toHaveBeenCalledOnce()
     })
+})
+
+describe('ACP launch configuration readiness', () => {
+  it('checks session setup even for the default model without sending a prompt', async () => {
+    const child = fixture()
+    spawn.mockResolvedValue(child.process)
+    expect(await probeAcpHandshake(catalog.get('opencode')!, 'fixture', { session: {} })).toMatchObject({ ok: true })
+    expect(child.requests.map((request) => request.method)).toEqual(['initialize', 'session/new'])
+    const workspace = (child.requests[1].params as { cwd: string }).cwd
+    expect(workspace).toContain('kun-acp-readiness-')
+    expect(existsSync(workspace)).toBe(false)
+    expect(child.stop).toHaveBeenCalledOnce()
+  })
+  it('does not declare readiness when initialization succeeds but session creation fails', async () => {
+    spawn.mockResolvedValue(fixture({ sessionError: true }).process)
+    expect(await probeAcpHandshake(catalog.get('opencode')!, 'fixture', { session: {} }))
+      .toMatchObject({ ok: false, detail: expect.stringContaining('metadata unavailable') })
+  })
+  it('rejects an unsupported Devin permission mode during readiness', async () => {
+    const child = fixture({ session: { sessionId: 'fixture', modes: { currentModeId: 'ask',
+      availableModes: [{ id: 'ask', name: 'Ask' }] } } })
+    spawn.mockResolvedValue(child.process)
+    expect(await probeAcpHandshake(catalog.get('devin')!, 'fixture', { session: { permissionMode: 'bypass' } }))
+      .toMatchObject({ ok: false, detail: expect.stringContaining('permission mode') })
+    expect(child.requests.some((request) => request.method === 'session/prompt')).toBe(false)
+  })
 })
 
 describe('Codex explicit model metadata', () => {

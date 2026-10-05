@@ -6,6 +6,8 @@ import type { HarnessDefinition, HarnessStatus } from '../contracts/harness.js'
 import type { ServeProviderConfig } from '../config/kun-config-application.js'
 import type { SpawnCaptured } from './harness-detector.js'
 import { raceProbeAbort } from './probe-abort.js'
+import { openCode2CredentialEvidence } from './opencode2-credentials.js'
+import { antigravityCredentialEvidence } from './antigravity-credentials.js'
 
 export type HarnessLoginState = HarnessStatus['login']
 
@@ -35,6 +37,7 @@ export async function probeHarnessLogin(
     case 'claude-code': state = await probeClaudeCodeLogin(deps, command, env); break
     case 'cursor': state = probeProviderCredential(deps, 'cursor-sdk'); break
     case 'antigravity': state = await probeAntigravityLogin(deps, env); break
+    case 'opencode2': state = openCode2CredentialEvidence(env).configured ? 'unknown' : 'signed-out'; break
     case 'devin':
     case 'windsurf':
       state = def.transport !== 'acp' ? 'unknown' : await probeDevinLogin(deps, command, env)
@@ -111,6 +114,9 @@ async function probeAntigravityLogin(
   if (probeProviderCredential(deps, 'antigravity-cli') === 'unknown' ||
       nonempty(env.GOOGLE_API_KEY) || nonempty(env.GEMINI_API_KEY)) return 'unknown'
   const home = deps.homeDir ?? env.HOME ?? env.USERPROFILE ?? homedir()
+  if ((await antigravityCredentialEvidence({ ...env, HOME: home }, {
+    spawn: deps.spawnCaptured, signal: deps.signal
+  })).configured) return 'unknown'
   const adcPath = env.GOOGLE_APPLICATION_CREDENTIALS ?? join(
     env.CLOUDSDK_CONFIG ?? join(home, '.config', 'gcloud'), 'application_default_credentials.json'
   )

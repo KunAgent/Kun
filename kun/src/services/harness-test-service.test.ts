@@ -240,6 +240,7 @@ describe('runHarnessTest', () => {
     // lists — and is deleted after the run either way.
     expect(fakes.created[0]?.options.relation).toBe('side')
     expect(fakes.created[0]?.request.titleAuto).toBe(false)
+    expect(fakes.created[0]?.request).toMatchObject({ model: 'default', credentialMode: 'native-login' })
     expect(fakes.threadService.delete).toHaveBeenCalledWith('thr-test')
     for (const dir of fakes.workspaces) expect(existsSync(dir)).toBe(false)
     const turnRequest = fakes.turnService.startTurn.mock.calls[0]?.[0]?.request
@@ -323,5 +324,31 @@ describe('runHarnessTest', () => {
     const result = await runHarnessTest(runtime, definition, { level: 'trial' })
     expect(result.handshake?.supported).toBe(false)
     expect(result.trial?.ok).toBe(true)
+  })
+
+  it('uses the exact readiness route rather than a probed or Kun model in a trial', async () => {
+    const fakes = trialFakes({ turnStatus: 'completed' })
+    const definition = cliDefinition()
+    const runtime = runtimeWith(definition, { runTurn: async () => 'completed' } as unknown as ServerRuntime, fakes)
+    runtime.harnesses!.readiness = { assertReady: async () => 'checked', route: () => ({ harnessId: definition.id, credentialMode: 'native-login',
+      providerId: 'subscription', model: 'selected-model' }) } as never
+    runtime.harnesses!.probedModels = () => ['wrong-first-model']
+    expect((await runHarnessTest(runtime, definition, { level: 'trial' })).ok).toBe(true)
+    expect(fakes.created[0]?.request).toMatchObject({ model: 'selected-model', providerId: 'subscription', credentialMode: 'native-login' })
+    expect(fakes.turnService.startTurn.mock.calls[0]?.[0]?.request).toMatchObject({ model: 'selected-model', providerId: 'subscription', credentialMode: 'native-login' })
+  })
+
+  it('keeps a Pi gateway trial on its checked profile without probing native credentials', async () => {
+    const fakes = trialFakes({ turnStatus: 'completed' })
+    const definition = { ...cliDefinition(), id: 'pi', transport: 'pi-rpc' as const }
+    const runtime = runtimeWith(definition, { runTurn: async () => 'completed' } as unknown as ServerRuntime, fakes)
+    const route = { harnessId: 'pi', credentialMode: 'kun-gateway', providerId: 'deepseek', model: 'deepseek-flash' }
+    const assertReady = vi.fn(async () => 'checked')
+    runtime.harnesses!.readiness = { route: () => route, assertReady } as never
+    const result = await runHarnessTest(runtime, definition, { level: 'trial', credentialMode: 'kun-gateway', providerId: 'deepseek', model: 'deepseek-flash' })
+    expect(result.ok).toBe(true)
+    expect(result.handshake?.detail).toContain('Selected profile')
+    expect(assertReady).toHaveBeenCalledWith(route, undefined)
+    expect(fakes.turnService.startTurn.mock.calls[0]?.[0]?.request).toMatchObject(route)
   })
 })

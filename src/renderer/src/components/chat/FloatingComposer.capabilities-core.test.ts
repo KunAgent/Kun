@@ -257,7 +257,7 @@ describe('FloatingComposer capability controls', () => {
     expect(shouldSurfaceComposerUserInput('design', true)).toBe(false)
   })
 
-  it('hides the default slash footer hint but keeps status hints', async () => {
+  it('hides the default slash footer hint and waits for Kun during startup', async () => {
     const previousLanguage = i18n.language
     await i18n.changeLanguage('en')
     useChatStore.setState({
@@ -295,15 +295,11 @@ describe('FloatingComposer capability controls', () => {
           runtimeReady: true
         })
       )
-      const offlineHtml = renderToStaticMarkup(
-        createElement(FloatingComposer, {
-          ...baseProps,
-          runtimeReady: false
-        })
-      )
-
+      useChatStore.setState({ runtimeConnection: 'checking' })
+      const loadingHtml = renderToStaticMarkup(createElement(FloatingComposer, { ...baseProps, runtimeReady: false }))
       expect(readyHtml).not.toContain('Type / for commands')
-      expect(offlineHtml).toContain('Reconnect the runtime before sending another message.')
+      expect(loadingHtml).toContain('Waiting for Kun')
+      expect(loadingHtml).not.toContain('Reconnect the runtime before sending another message.')
     } finally {
       await i18n.changeLanguage(previousLanguage)
     }

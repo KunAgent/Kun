@@ -291,8 +291,8 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     capabilities: ANTIGRAVITY_CAPABILITIES,
     setup: {
       install: [
-        { platform: 'darwin', command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --skip-aliases' },
-        { platform: 'linux', command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --skip-aliases' },
+        { platform: 'darwin', command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash' },
+        { platform: 'linux', command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash' },
         { platform: 'win32', command: 'irm https://antigravity.google/cli/install.ps1 | iex' }
       ],
       login: { command: 'agy', args: [] },
@@ -522,6 +522,30 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     builtin: true
   },
   {
+    id: 'opencode2',
+    displayName: 'OpenCode2',
+    transport: 'acp',
+    detect: { command: 'opencode2', aliases: [], versionArgs: ['--version'] },
+    launch: { command: 'opencode2', args: ['acp'], env: {} },
+    credentialModes: ['native-login'],
+    permissionModes: [
+      { id: 'plan', label: 'Plan', kunPermissionMode: 'ask-for-approval' },
+      { id: 'build', label: 'Build', kunPermissionMode: 'full-access' }
+    ],
+    modelSource: 'probe',
+    staticModels: [],
+    capabilities: ACP_DEFAULT_CAPABILITIES,
+    // V2 has a separate command, credential store and config dialect. Do not
+    // borrow V1's executable, history IDs or generated gateway configuration.
+    setup: {
+      install: [{ platform: 'any', command: 'npm install -g @opencode-ai/cli@next' }],
+      login: { command: 'opencode2', args: ['auth', 'login', '--standalone'] },
+      docsUrl: 'https://dev.opencode.ai/v2/docs/'
+    },
+    availability: 'preview',
+    builtin: true
+  },
+  {
     id: 'devin',
     displayName: 'Devin',
     transport: 'acp',
@@ -530,7 +554,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     launch: { command: 'devin', args: ['acp'], env: {} },
     credentialModes: ['native-login'],
     permissionModes: [
-      { id: 'normal', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
+      { id: 'ask', label: 'Ask (read-only)', kunPermissionMode: 'ask-for-approval' },
       { id: 'accept-edits', label: 'Accept edits', kunPermissionMode: 'full-access' },
       { id: 'bypass', label: 'Full access', kunPermissionMode: 'full-access' }
     ],

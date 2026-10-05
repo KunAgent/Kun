@@ -26,6 +26,10 @@ import { AdeOneOnOneDialog } from './AdeOneOnOneDialog'
 let root: Root
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  // Node 25 exposes a partial host localStorage without a backing file.
+  const storage = new Map<string, string>()
+  vi.stubGlobal('localStorage', { clear: () => storage.clear(), getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) })
   localStorage.clear()
   fixture.providerId = undefined
   fixture.rows = [withHarnessReadiness({ definition: { id: 'claude-code', displayName: 'Claude Code', transport: 'agent-sdk',

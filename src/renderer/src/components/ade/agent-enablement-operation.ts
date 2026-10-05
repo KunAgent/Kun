@@ -7,7 +7,7 @@ export class AgentEnablementError extends Error {
 export function agentReadinessFailure(result: AdeHarnessTestResult): AgentEnablementError {
   const failed = result.readiness?.checks.find((check) => !check.ok)
   const detail = result.readiness?.detail || failed?.detail || result.handshake?.detail || result.detect.status.message || ''
-  const pluginFailure = result.harnessId === 'opencode' && failed?.id === 'protocol' &&
+  const pluginFailure = ['opencode', 'opencode2'].includes(result.harnessId) && failed?.id === 'protocol' &&
     /fn\d* is not a function|(?:plugin.*(?:failed|error)|(?:failed|error).*plugin)/i.test(detail)
   return new AgentEnablementError(pluginFailure ? 'agentEnablement.opencodePluginFailed'
     : failed ? `agentEnablement.failures.${failed.id}` : 'agentEnablement.failed', detail)

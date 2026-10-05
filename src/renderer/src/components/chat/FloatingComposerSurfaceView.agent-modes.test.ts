@@ -9,11 +9,11 @@ import i18n from '../../i18n'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 import { FloatingComposerSurfaceView } from './FloatingComposerSurfaceView'
 
-const state = vi.hoisted(() => ({ composerHarnessId: '', setComposerHarness: vi.fn() }))
+const state = vi.hoisted(() => ({ composerHarnessId: '', runtimeConnection: 'ready', setComposerHarness: vi.fn() }))
 vi.mock('../../store/chat-store', () => ({
   useChatStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), { getState: () => state })
 }))
-vi.mock('./FloatingComposerFooterView', () => ({ FloatingComposerFooterView: () => null }))
+vi.mock('./FloatingComposerFooterView', () => ({ FloatingComposerFooterView: () => createElement('div', { 'data-usage-footer': true }) }))
 vi.mock('./KnowledgeBasePicker', () => ({ KnowledgeBasePicker: () => null }))
 vi.mock('../../history-reference/CodexReferenceDialog', () => ({ CodexReferenceDialog: () => null }))
 
@@ -31,6 +31,7 @@ beforeEach(async () => {
   ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   await i18n.changeLanguage('en')
   state.composerHarnessId = ''
+  state.runtimeConnection = 'ready'
   state.setComposerHarness.mockClear()
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -74,6 +75,34 @@ async function render(): Promise<void> {
 }
 
 describe('unified composer Agent control wiring', () => {
+  it('shows connection recovery guidance after a real disconnect instead of an endless loading indicator', async () => {
+    context.runtimeReady = false; state.runtimeConnection = 'offline'
+    await render()
+    expect(host.querySelector('[data-composer-waiting-for-kun]')?.textContent).toContain('Reconnect the runtime before sending another message.')
+    expect(host.querySelector('[data-agent-mode-trigger]')).toBeNull()
+  })
+  it('reveals Agent/model/usage controls only after Kun is ready and preserves the draft', async () => {
+    context.runtimeReady = false
+    await render()
+    expect(host.querySelector('[data-composer-waiting-for-kun]')).not.toBeNull()
+    expect(host.querySelector('[data-agent-mode-trigger]')).toBeNull()
+    expect(host.querySelector('[data-test-model-providers]')).toBeNull()
+    expect(host.querySelector('[data-usage-footer]')).toBeNull()
+    expect(host.querySelector('textarea')?.value).toBe('Keep this draft')
+    context.runtimeReady = true
+    await render()
+    expect(host.querySelector('[data-composer-waiting-for-kun]')).toBeNull()
+    expect(host.querySelector('[data-agent-mode-trigger]')).not.toBeNull()
+    expect(host.querySelector('[data-test-model-providers]')).not.toBeNull()
+    expect(host.querySelector('[data-usage-footer]')).not.toBeNull()
+    expect(host.querySelector('textarea')?.value).toBe('Keep this draft')
+  })
+  it('keeps interruption available during runtime reconnection', async () => {
+    context.runtimeReady = false; context.primaryActionKind = 'interrupt'; context.onInterrupt = vi.fn()
+    await render()
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-composer-waiting-for-kun] button')!.click())
+    expect(context.onInterrupt).toHaveBeenCalledOnce()
+  })
   it('pins an unchanged implicit Kun Code selection without resetting its model or mode', async () => {
     await render()
     await act(async () => host.querySelector<HTMLButtonElement>('[data-agent-mode-trigger]')!.click())

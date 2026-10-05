@@ -43,7 +43,7 @@ import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
 import { defaultCredentialMode } from '../harness/resolve-turn-harness.js'
-import { resolvePermissionMode } from '../harness/harness-admission.js'
+import { harnessTurnPermissionMode } from '../harness/harness-turn-permissions.js'
 import { isUnattendedTurn } from '../harness/usage-for-turn.js'
 import type { DelegatedSessionCoordinator } from '../runtime/delegated-session-binding.js'
 import { parkDelegatedGraphTurnAfterRecovery } from '../runtime/delegated-graph-turn-policy.js'
@@ -265,12 +265,6 @@ export async function resolveSessionTurnContext(
   if (!turn.actingModelRoute) {
     await deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute })
   }
-  const permissionModeId = resolvePermissionMode(
-    definition,
-    deps.harnessDefaults?.(definition.id)?.permissionMode,
-    isUnattendedTurn(turn),
-    deps.allowUnattendedFullAccess === true
-  )
   const approvalPolicy =
     deps.enforceReadOnly === true
       ? 'never'
@@ -286,6 +280,11 @@ export async function resolveSessionTurnContext(
     thread.approvalReviewer ??
     deps.defaultApprovalReviewer ??
     DEFAULT_APPROVAL_REVIEWER
+  const permissionModeId = harnessTurnPermissionMode(definition, {
+    requested: deps.harnessDefaults?.(definition.id)?.permissionMode,
+    approvalPolicy, sandboxMode, approvalReviewer, unattended: isUnattendedTurn(turn),
+    allowUnattendedFullAccess: deps.allowUnattendedFullAccess === true
+  })
 
   const {
     credentialIdentity,

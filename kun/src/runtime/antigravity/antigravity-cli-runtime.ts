@@ -1,4 +1,5 @@
 import type { spawn } from 'node:child_process'
+import type { HarnessRoute } from '../../contracts/harness.js'
 import type { ServeProviderConfig } from '../../config/kun-config.js'
 import type {
   ActingTurnModelRoute,
@@ -55,6 +56,7 @@ const ANTIGRAVITY_MODEL_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/i
 const ANTIGRAVITY_MODEL_ID_MAX_LENGTH = 128
 
 export interface AntigravityCliRuntimeDeps {
+  nativeNetworkEnv?: () => Record<string, string>
   readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'validateTurn'>
   resolveCredentialSource?: (sourceId: string) => Promise<{ apiKey: string } | null>
   providerConfigs: Record<string, ServeProviderConfig>
@@ -97,6 +99,7 @@ export interface AntigravityCliRuntimeDeps {
 }
 
 export function normalizeAntigravityModel(model: string | undefined): string {
+  if (model?.trim() === 'default') return 'default'
   const normalized = model?.trim().replace(/^models\//, '').replace(/-(?:low|medium|high)$/i, '')
   if (
     !normalized
@@ -129,7 +132,7 @@ export function buildAntigravityArgs(input: {
   const args = [
     '--print',
     prompt,
-    '--model', normalizeAntigravityModel(input.model),
+    ...(input.model === 'default' ? [] : ['--model', normalizeAntigravityModel(input.model)]),
     '--effort', normalizeAntigravityEffort(input.effort),
     '--print-timeout', `${Math.max(1, Math.ceil(input.timeoutMs / 1000))}s`
   ]
@@ -153,6 +156,11 @@ export function buildAntigravityArgs(input: {
 
 export class AntigravityCliRuntime implements DelegatedTurnRuntime {
   constructor(private readonly deps: AntigravityCliRuntimeDeps) {}
+
+  handlesRoute(route: HarnessRoute): boolean {
+    return route.harnessId === 'antigravity' && route.credentialMode === 'native-login' &&
+      (!route.providerId || route.providerId === 'default' || this.deps.providerIds.has(route.providerId))
+  }
 
   handlesProvider(providerId: string | undefined): boolean {
     if (providerId && this.deps.providerIds.has(providerId)) return true
@@ -306,7 +314,8 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
     const sandboxMode = this.deps.enforceReadOnly === true
       ? 'read-only'
       : turn.sandboxMode ?? thread.sandboxMode
-    const provider = this.deps.providerConfigs[resolvedProviderId]
+    const selectedProvider = this.deps.providerConfigs[resolvedProviderId]
+    const provider = selectedProvider?.kind === 'antigravity-cli' ? selectedProvider : undefined
     const capabilities = antigravityCapabilities()
     const preparation = this.deps.sessionCoordinator
       ? await this.deps.sessionCoordinator.prepare({
@@ -444,7 +453,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       await this.deps.readiness?.validateTurn(threadId, turnId, signal)
       const output = await runAntigravityProcess({
         binaryPath,
-        ...(credential?.apiKey ? { env: { GEMINI_API_KEY: credential.apiKey } } : {}),
+        env: { ...this.deps.nativeNetworkEnv?.(), ...(credential?.apiKey ? { GEMINI_API_KEY: credential.apiKey } : {}) },
         args,
         cwd: thread.workspace,
         signal,

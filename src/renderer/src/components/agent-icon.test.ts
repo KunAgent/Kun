@@ -20,9 +20,9 @@ describe('AgentIcon', () => {
     expect(html).not.toContain('data-agent-icon="unknown"')
   })
 
-  it('uses OpenCode brand artwork rather than the OpenCode Go provider mark', () => {
-    const html = renderToStaticMarkup(createElement(AgentIcon, { harnessId: 'opencode', size: 20 }))
-    expect(html).toContain('data-agent-icon="opencode"')
+  it.each(['opencode', 'opencode2'])('uses OpenCode brand artwork for %s while retaining its identity', (harnessId) => {
+    const html = renderToStaticMarkup(createElement(AgentIcon, { harnessId, size: 20 }))
+    expect(html).toContain(`data-agent-icon="${harnessId}"`)
     expect(html).toContain('opencode-logo-light-square.svg')
     expect(html).toContain('opencode-logo-dark-square.svg')
     expect(html).not.toContain('opencodego.svg')

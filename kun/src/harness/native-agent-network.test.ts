@@ -10,10 +10,17 @@ import { checkHarnessAdmission } from './harness-admission.js'
 
 afterEach(() => vi.unstubAllEnvs())
 const snapshot = { codex: { source: 'system', proxyUrl: 'http://proxy.invalid:7890/' },
+  antigravity: { source: 'system', proxyUrl: 'http://proxy.invalid:7890/' },
   'claude-code': { source: 'system', proxyUrl: 'http://proxy.invalid:7890/' } } as const
 const codex = () => new HarnessCatalog({ custom: () => [], nativeAgentNetwork: () => snapshot }).get('codex')!
 
 describe('runtime-only native Agent network selection', () => {
+  it('applies the desktop proxy only to the native Antigravity CLI definition', () => {
+    const definition = new HarnessCatalog({ custom: () => [], nativeAgentNetwork: () => snapshot }).get('antigravity')!
+    expect(nativeAgentNetworkEnv(definition, {}).HTTPS_PROXY).toBe(snapshot.antigravity.proxyUrl)
+    expect(JSON.stringify(definition)).not.toContain('proxy.invalid')
+    expect(nativeAgentNetworkEnv({ ...definition, id: 'custom' }, {})).toEqual({})
+  })
   it('carries policy through a private definition clone without serializing its address', () => {
     const original = codex()
     const clone = { ...original, launch: { ...original.launch!, command: '/other/codex' } }

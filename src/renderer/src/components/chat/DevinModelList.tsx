@@ -8,11 +8,12 @@ import type { ComposerModelMenuGroup, ComposerReasoningEffort } from './floating
 import { devinModelPresentation, readDevinRecentModels, rememberDevinModel } from './devin-model-presentation'
 
 /** Devin's native model catalog. Labels are presentation only; selections always return exact wire IDs. */
-export function DevinModelList({ group, currentModel, currentReasoning, reasoningOptions, onReasoningChange, onPick, t, maxHeight }: {
+export function DevinModelList({ group, currentModel, currentReasoning, reasoningOptions, onReasoningChange, onPick, t, maxHeight, fitContainer = false }: {
   group: ComposerModelMenuGroup; currentModel: string; currentReasoning: ComposerReasoningEffort
   reasoningOptions: { id: ComposerReasoningEffort; labelKey: string }[]
   onReasoningChange?: (value: ComposerReasoningEffort) => void
   onPick: (id: string) => void; t: TFunction; maxHeight: number
+  fitContainer?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [fusion, setFusion] = useState(currentModel.startsWith('fusion-'))
@@ -40,12 +41,12 @@ export function DevinModelList({ group, currentModel, currentReasoning, reasonin
     </span>
     {model.id === currentModel ? <Check size={15} className="shrink-0 text-accent" /> : null}
   </button>
-  return <div className="flex min-h-0 flex-col" style={{ height: Math.max(140, maxHeight - 12) }} data-devin-model-list>
-    <label className="mx-1 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-lg border border-ds-border px-2.5 text-ds-faint">
+  return <div className="flex min-h-0 flex-col" style={{ height: fitContainer ? '100%' : Math.max(140, maxHeight - 12) }} data-devin-model-list>
+    <label className="mx-1 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-lg border border-ds-border px-2.5 text-ds-faint focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/10">
       <Search size={14} />
       <input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
         aria-label={t('composerModelSearchPlaceholder')} placeholder={t('composerModelSearchPlaceholder')}
-        className="h-full min-w-0 flex-1 bg-transparent text-[12px] text-ds-ink outline-none" />
+        className="h-full min-w-0 flex-1 bg-transparent text-[12px] text-ds-ink outline-none focus-visible:!outline-none focus-visible:!ring-0" />
     </label>
     <div className="mx-1 mb-2 flex shrink-0 rounded-lg bg-ds-main p-0.5" aria-label={t('composerModel')}>
       {[false, true].map((value) => <button key={String(value)} type="button" aria-pressed={fusion === value}

@@ -39,8 +39,10 @@ vi.mock('../../lib/harness-defaults', () => ({ useHarnessDefaults: () => fixture
 vi.mock('./use-ade-worktree-git', () => ({ useAdeWorktreeGit: () => ({ status: 'not-git' }) }))
 vi.mock('./use-code-project-defaults', () => ({ useCodeProjectDefaults: () => undefined }))
 import { useAdeComposerControls } from './use-ade-composer-controls'
+import { loadHarnesses, loadHarnessModels, loadHarnessProviderGroups } from '../../store/harness-store'
 
 beforeEach(() => {
+  vi.mocked(loadHarnesses).mockClear(); vi.mocked(loadHarnessModels).mockClear(); vi.mocked(loadHarnessProviderGroups).mockClear()
   fixture.defaults = {}
   fixture.chat.composerHarnessId = 'claude-code'
   fixture.chat.composerCredentialMode = 'native-login'
@@ -61,6 +63,28 @@ beforeEach(() => {
 })
 
 describe('external Agent model discovery', () => {
+  it('waits for runtime readiness before loading the Agent catalog and native models', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    function Probe({ ready }: { ready: boolean }) {
+      useAdeComposerControls({ enabled: ready, activeThreadId: null, workspaceRoot: '/repo',
+        threadHarnessId: undefined, threadTaskWorkspaceId: undefined, threadHasUserMessages: false,
+        hasConfiguredProvider: true })
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    try {
+      await act(async () => root.render(createElement(Probe, { ready: false })))
+      expect(loadHarnesses).not.toHaveBeenCalled(); expect(loadHarnessModels).not.toHaveBeenCalled()
+      expect(loadHarnessProviderGroups).not.toHaveBeenCalled()
+      await act(async () => root.render(createElement(Probe, { ready: true })))
+      expect(loadHarnesses).toHaveBeenCalledOnce()
+      expect(loadHarnesses).toHaveBeenCalledWith(true, { waitMs: 3_000 })
+      expect(loadHarnessModels).toHaveBeenCalledWith('claude-code')
+    } finally {
+      await act(async () => root.unmount())
+      ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+    }
+  })
   it('preserves the selected native account when its default model arrives', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     fixture.chat.composerProviderId = 'native-account'

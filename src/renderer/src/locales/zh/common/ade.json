@@ -1,4 +1,13 @@
 {
+  "agentRuntimeError": {
+    "permission": "此 Agent 不支持当前权限模式。请前往「Agent 接入」检查权限配置后重试。",
+    "changed": "Agent 配置已变化。请前往「Agent 接入」重新检查并启用后重试。",
+    "setup": "此 Agent 尚未就绪。请在「Agent 接入」完成配置与就绪检查。",
+    "authentication": "Agent 认证未通过。请检查原生账号的登录状态和网络连接后重试。",
+    "model": "所选 Agent 模型不可用。请刷新模型列表，或选择「Agent 默认模型」。",
+    "update": "此模型需要新版 Agent CLI。请更新 Agent，或选择其他受支持的模型后重试。",
+    "openSettings": "前往 Agent 接入"
+  },
   "composerModelsLoading": "正在加载模型…",
   "composerModelsUnavailable": "模型暂时不可用",
   "composerModelsUnavailableHint": "模型列表未能加载，已保存的模型来源没有改变，请稍后重试。",
@@ -575,6 +584,11 @@
     "modelHint": "修改模型或配置后，需要重新检查就绪状态。",
     "nativeDefault": "Agent 默认模型",
     "loadModels": "加载可用模型",
+    "refreshModels": "刷新模型",
+    "modelsUnavailable": "模型列表暂不可用，可重试或手动输入模型 ID。",
+    "noModels": "暂无已加载的模型，可使用 Agent 默认模型或手动输入模型 ID。",
+    "customModel": "输入模型 ID",
+    "useModel": "使用模型",
     "enable": "检查并启用",
     "disable": "停用此配置",
     "cancel": "取消检查",

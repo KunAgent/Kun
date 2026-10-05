@@ -368,7 +368,7 @@ export function FloatingComposer({
   const adeComposerEnabled = !side &&
     (route === 'chat' || route === 'ade' || activeThread?.workspaceMode === 'ade')
   const adeComposer = useAdeComposerControls({
-    enabled: adeComposerEnabled === true,
+    enabled: adeComposerEnabled === true && runtimeReady,
     activeThreadId, workspaceRoot: effectiveWorkspaceRoot,
     threadHarnessId: activeThread?.harnessId,
     threadTaskWorkspaceId: activeThread?.taskWorkspaceId,
