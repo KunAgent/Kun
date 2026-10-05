@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
@@ -201,4 +204,28 @@ it('bounds account metadata checks and closes the query on cancellation', async 
   })), timeoutMs: 20 })
   await expect(probe.probeReadiness(definition, {}, new AbortController().signal)).rejects.toThrow()
   expect(close).toHaveBeenCalled()
+})
+
+
+it('refreshes the catalog after an in-place CLI update even while an old probe is pending', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'kun-model-upgrade-'))
+  try {
+    const path = join(dir, 'claude'); await writeFile(path, 'old binary')
+    let finish!: (value: { value: string }[]) => void
+    const supportedModels = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+      .mockResolvedValue([{ value: 'new-model' }])
+    const probe = new AgentSdkModelProbe({ binaryPath: () => path, loadSdk: fakeSdk(() => ({ supportedModels, close: vi.fn() })) })
+    const old = probe.probe(definition)
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    await writeFile(path, 'upgraded binary')
+    probe.invalidate()
+    expect(await probe.probe(definition)).toEqual(['new-model'])
+    finish([{ value: 'old-model' }]); await old
+    expect(probe.peek(definition)).toEqual(['new-model'])
+    expect(supportedModels).toHaveBeenCalledTimes(2)
+    await writeFile(path, 'newer in-place binary')
+    expect(probe.peek(definition)).toBeUndefined()
+    expect(await probe.probe(definition)).toEqual(['new-model'])
+    expect(supportedModels).toHaveBeenCalledTimes(3)
+  } finally { await rm(dir, { recursive: true, force: true }) }
 })

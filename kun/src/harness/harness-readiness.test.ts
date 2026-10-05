@@ -222,3 +222,31 @@ it('requires a reported catalog for an explicit native model even when account s
   expect(result.readiness?.checks.find((check) => check.id === 'protocol')?.ok).toBe(false)
   expect(result.ok).toBe(false)
 })
+
+
+it('drains a preparing turn during updates and blocks only new admissions', async () => {
+  const f = await fixture(); f.enable()
+  let finish!: (value: { ok: boolean; supported: boolean; protocol: string }) => void
+  f.handshake.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+  const signal = new AbortController().signal
+  const first = f.service.prepareTurn('thread', 'first', route, f.service.configurationSignature(route), signal)
+  await vi.waitFor(() => expect(finish).toBeDefined())
+  const release = f.service.beginMaintenance('opencode')
+  expect(f.service.inUse('opencode')).toBe(true)
+  await expect(f.service.prepareTurn('thread', 'second', route, f.service.configurationSignature(route), signal)).rejects.toThrow('update is in progress')
+  finish({ ok: true, supported: true, protocol: 'acp' })
+  await first
+  await expect(f.service.validateTurn('thread', 'first', signal)).resolves.toBeTruthy()
+  f.service.releaseTurn('thread', 'first')
+  expect(f.service.inUse('opencode')).toBe(false)
+  release()
+  await expect(f.service.prepareTurn('thread', 'second', route, f.service.configurationSignature(route), signal)).resolves.toBeUndefined()
+})
+
+it('does not leave a failed launch reservation blocking a later update', async () => {
+  const f = await fixture(); f.enable()
+  vi.spyOn(f.service, 'validateTurn').mockRejectedValueOnce(new Error('credential changed'))
+  await expect(f.service.prepareTurn('thread', 'failed', route, f.service.configurationSignature(route), new AbortController().signal))
+    .rejects.toThrow('credential changed')
+  expect(f.service.inUse('opencode')).toBe(false)
+})

@@ -1,3 +1,4 @@
+import { harnessExecutableIdentity } from './harness-executable-identity.js'
 /**
  * Codex app-server model probing for `GET /v1/harnesses/:id/models` (P6-07).
  * Spawns a throwaway `codex app-server`, runs `initialize` + `model/list`,
@@ -30,9 +31,15 @@ export type CodexModelProbeDeps = {
 }
 
 export class CodexModelProbe {
+  private revision = 0
+  invalidate(): void { this.revision += 1; this.cache.clear(); this.pending.clear() }
+  fetchedAt(definition: HarnessDefinition): string | undefined {
+    const value = this.cache.get(this.cacheKey(definition))?.fetchedAt
+    return value ? new Date(value).toISOString() : undefined
+  }
   private readonly cache = new Map<
     string,
-    { expiresAt: number; catalog: HarnessModelCatalog; command: string }
+    { expiresAt: number; fetchedAt?: number; catalog: HarnessModelCatalog; command: string; binaryIdentity?: string }
   >()
   private readonly pending = new Map<string, Promise<HarnessModelCatalog>>()
 
@@ -41,7 +48,7 @@ export class CodexModelProbe {
   /** Spawn-free read; undefined when no fresh successful list is cached. */
   peek(definition: HarnessDefinition): string[] | undefined {
     const cached = this.cache.get(this.cacheKey(definition))
-    return cached && cached.expiresAt > this.nowMs() && cached.catalog.models.length > 0
+    return cached && cached.binaryIdentity === harnessExecutableIdentity(cached.command) && cached.expiresAt > this.nowMs() && cached.catalog.models.length > 0
       ? cached.catalog.models
       : undefined
   }
@@ -55,19 +62,19 @@ export class CodexModelProbe {
     const command = await resolveCodexExecutable(override ?? definition.launch?.command ?? '', Boolean(override))
     const key = this.cacheKey(definition)
     const cached = this.cache.get(key)
-    if (cached && cached.command === command && cached.expiresAt > this.nowMs()) return cached.catalog
+    if (cached && cached.command === command && cached.binaryIdentity === harnessExecutableIdentity(command) && cached.expiresAt > this.nowMs()) return cached.catalog
     const pendingKey = `${key}:${command}`
     const inFlight = this.pending.get(pendingKey)
     if (inFlight) return inFlight
     const task = this.probeUncached(definition, command).then((catalog) => {
-      this.cache.set(key, { command, catalog,
-        expiresAt: this.nowMs() + (this.deps.cacheMs ?? CODEX_MODEL_PROBE_CACHE_MS) })
+      this.cache.set(key, { command, catalog, binaryIdentity: harnessExecutableIdentity(command),
+        fetchedAt: this.nowMs(), expiresAt: this.nowMs() + (this.deps.cacheMs ?? CODEX_MODEL_PROBE_CACHE_MS) })
       return catalog
     }).catch(() => {
       const catalog = { models: [], modelInfo: [] }
-      this.cache.set(key, { command, catalog, expiresAt: this.nowMs() + 30_000 })
+      this.cache.set(key, { command, catalog, binaryIdentity: harnessExecutableIdentity(command), fetchedAt: this.nowMs(), expiresAt: this.nowMs() + 30_000 })
       return catalog
-    }).finally(() => this.pending.delete(pendingKey))
+    }).finally(() => { if (this.pending.get(pendingKey) === task) this.pending.delete(pendingKey) })
     this.pending.set(pendingKey, task)
     return task
   }
@@ -106,6 +113,7 @@ export class CodexModelProbe {
   private cacheKey(definition: HarnessDefinition): string {
     const home = definition.launch?.env?.CODEX_HOME ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
     return JSON.stringify({
+      revision: this.revision, binary: harnessExecutableIdentity(this.deps.binaryPath?.(definition.id) ?? definition.launch?.command),
       id: definition.id,
       home,
       auth: fileIdentity(join(home, 'auth.json')),

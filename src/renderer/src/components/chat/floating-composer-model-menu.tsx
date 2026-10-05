@@ -1,4 +1,4 @@
-import type { CSSProperties, Dispatch, ReactElement, RefObject, SetStateAction } from 'react'
+import type { CSSProperties, Dispatch, ReactElement, ReactNode, RefObject, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import type { TFunction } from 'i18next'
 import { Brain, Gauge, Search } from 'lucide-react'
@@ -15,6 +15,7 @@ import {
 import { MenuSectionTitle, MenuSeparator, ModelCapabilityBadge, PickerRow, ProviderRow, SubmenuRow } from './floating-composer-model-picker-rows'
 
 type ComposerModelMenuProps = {
+  footer?: ReactNode
   className: string
   menuOpen: boolean
   canOpenModelControls: boolean
@@ -164,6 +165,7 @@ export function renderComposerModelMenu({
               })
             )}
           </div>
+          {props.footer}
         </div>
         {controlVariant === 'combined' && reasoningPanelOpen && reasoningEnabled ? (
           <div

@@ -1,3 +1,4 @@
+import agentUpdates from './common/agent-updates.json'
 import roomsPolish from './common/rooms-polish.json'
 import executionTasks from './common/execution-tasks.json'
 import roomsApproval from './common/rooms-approval.json'
@@ -41,6 +42,7 @@ import agentHarness from './common/agent-harness.json'
 import ade from './common/ade.json'
 
 const common = {
+  ...agentUpdates,
   ...roomsInitIm,
   ...roomsDirect,
   ...roomsApproval,

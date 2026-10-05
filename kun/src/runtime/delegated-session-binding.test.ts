@@ -494,3 +494,20 @@ describe('DelegatedSessionCoordinator', () => {
     await expect(access(stateDir)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })
+
+
+test('resumes compatible native capability upgrades while retaining account and history boundaries', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kun-native-upgrade-'))
+  const coordinator = new DelegatedSessionCoordinator(new FileDelegatedSessionBindingStore(root))
+  const original = route({ providerKind: 'codex-app-server', capabilityFingerprint: delegatedCapabilityFingerprint('old-version') })
+  const prior = [user('turn_1', 'remember this')]
+  const prepared = await coordinator.prepare({ threadId: 'thread_1', route: original, priorItems: [] })
+  await coordinator.commit({ preparation: prepared, committedItems: prior, lastCommittedTurnId: 'turn_1', nativeSessionId: 'codex-native-1' })
+  const updated = { ...original, capabilityFingerprint: delegatedCapabilityFingerprint('stable-v2') }
+  await expect(coordinator.prepare({ threadId: 'thread_1', route: updated, priorItems: prior, allowNativeCapabilityResume: true }))
+    .resolves.toMatchObject({ resumed: true, nativeSessionId: 'codex-native-1' })
+  await expect(coordinator.prepare({ threadId: 'thread_1', route: { ...updated, credentialIdentity: 'different-account' }, priorItems: prior, allowNativeCapabilityResume: true }))
+    .resolves.toMatchObject({ resumed: false, rebaseReason: 'route_changed' })
+  await expect(coordinator.prepare({ threadId: 'thread_1', route: updated, priorItems: [user('turn_1', 'edited')], allowNativeCapabilityResume: true }))
+    .resolves.toMatchObject({ resumed: false, rebaseReason: 'history_changed' })
+})

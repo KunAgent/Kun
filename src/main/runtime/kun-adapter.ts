@@ -327,11 +327,17 @@ export function resolveRuntimeRequestTimeoutMs(
 ): number {
   if (requestedTimeoutMs !== undefined) return requestedTimeoutMs
   const pathname = pathNorm.split('?')[0] ?? pathNorm
+  if ((method === 'GET' && /^\/v1\/harnesses\/[^/]+\/updates$/u.test(pathname)) ||
+      (method === 'POST' && /^\/v1\/harnesses\/[^/]+\/updates\/check$/u.test(pathname))) {
+    // Version detection, alternative local installations and release metadata
+    // are sequential; the ordinary GET budget can expire before they finish.
+    return DEFAULT_RUNTIME_POST_TIMEOUT_MS
+  }
   if (method === 'POST' && /^\/v1\/harnesses\/[^/]+\/test$/u.test(pathname)) {
     // Trial can run for 300s, plus detection, handshake, interrupt and cleanup.
     return HARNESS_TEST_TIMEOUT_MS
   }
-  if ((method === 'POST' && (/^\/v1\/harnesses\/[^/]+\/probe$/u.test(pathname) ||
+  if ((method === 'POST' && (/^\/v1\/harnesses\/[^/]+\/(?:probe|updates\/activate)$/u.test(pathname) ||
     pathname === '/v1/harnesses/probe-definition')) ||
     (method === 'GET' && /^\/v1\/harnesses\/[^/]+\/models$/u.test(pathname))) {
     return HARNESS_PROBE_TIMEOUT_MS

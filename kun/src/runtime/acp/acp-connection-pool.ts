@@ -67,6 +67,10 @@ export class AcpConnectionPool {
     this.pool.releaseForUnit(unitId)
   }
 
+  retireIdlePrefix(prefix: string, keep: string): Promise<void> {
+    return this.pool.retireIdlePrefix(prefix, keep)
+  }
+
   async dispose(): Promise<void> {
     await this.pool.dispose()
   }

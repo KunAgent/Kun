@@ -498,6 +498,7 @@ export function FloatingComposerSurfaceView({
                   ) : null}
                   {hideModelPicker ? null : (
                     <FloatingComposerModelPicker
+                      agentHarnessId={externalAgent && adeComposer?.credentialMode === 'native-login' ? adeComposer.harnessId : undefined}
                       compact={compact}
                       mode={modelPickerMode}
                       composerModel={composerModel}

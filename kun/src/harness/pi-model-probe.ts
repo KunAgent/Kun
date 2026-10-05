@@ -1,3 +1,4 @@
+import { harnessExecutableIdentity } from './harness-executable-identity.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import { resolveExecutable } from '../process/owned-process.js'
 import { harnessExecutableEnv } from './harness-executable-env.js'
@@ -8,6 +9,8 @@ import { raceProbeAbort } from './probe-abort.js'
 
 /** Pi model discovery uses only get_state/get_available_models; never a prompt. */
 export class PiModelProbe {
+  private revision = 0
+  invalidate(): void { this.revision++; this.cache.clear() }
   private cache = new Map<string, { key: string; models: string[]; expires: number }>()
   constructor(private readonly deps: {
     binaryPath?: (id: string) => string | undefined
@@ -43,7 +46,7 @@ export class PiModelProbe {
     } catch { return [] }
   }
   private key(definition: HarnessDefinition): string {
-    return readinessFingerprint({ options: {}, definition,
+    return `${this.revision}:${harnessExecutableIdentity(this.deps.binaryPath?.(definition.id) ?? definition.launch?.command)}:` + readinessFingerprint({ options: {}, definition,
       route: { harnessId: definition.id, credentialMode: 'native-login', model: 'default' },
       secretEnv: {}, command: this.deps.binaryPath?.(definition.id) ?? definition.launch?.command })
   }

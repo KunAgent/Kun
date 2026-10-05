@@ -1,3 +1,4 @@
+import { AgentModelCatalogFooter } from '../ade/AgentModelCatalogFooter'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { Brain, ChevronDown, Gauge, Search } from 'lucide-react'
@@ -53,6 +54,7 @@ export {
 } from './floating-composer-model-picker-logic'
 
 type Props = {
+  agentHarnessId?: string
   compact: boolean
   mode: 'select' | 'combobox'
   composerModel: string
@@ -74,6 +76,7 @@ type Props = {
   onConfigureProviders?: () => void
 }
 export function FloatingComposerModelPicker({
+  agentHarnessId,
   compact,
   mode,
   composerModel,
@@ -504,6 +507,7 @@ export function FloatingComposerModelPicker({
 
   const renderMenu = (className: string): ReactElement | null =>
     renderComposerModelMenu({
+      footer: agentHarnessId && agentHarnessId !== 'kun' ? <AgentModelCatalogFooter harnessId={agentHarnessId} selectedModel={composerModel} /> : undefined,
       className, menuOpen, canOpenModelControls, menuRef, menuStyle, controlVariant,
       reasoningEnabled, needsProviderSetup, reasoningRowRef, reasoningPanelOpen,
       emptyModelMessage,

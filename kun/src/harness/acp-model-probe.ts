@@ -1,3 +1,4 @@
+import { harnessExecutableIdentity } from './harness-executable-identity.js'
 /**
  * ACP model probing for `GET /v1/harnesses/:id/models` (docs/ade/03 §12.2).
  * Opens a throwaway connection, calls `session/new`, and reads the `model`
@@ -37,9 +38,15 @@ export type AcpModelProbeDeps = {
 }
 
 export class AcpModelProbe {
+  private revision = 0
+  invalidate(): void { this.revision += 1; this.cache.clear(); this.pending.clear() }
+  fetchedAt(definition: HarnessDefinition): string | undefined {
+    const value = this.cache.get(this.cacheKey(definition))?.fetchedAt
+    return value ? new Date(value).toISOString() : undefined
+  }
   private readonly cache = new Map<
     string,
-    { expiresAt: number; catalog: HarnessModelCatalog }
+    { expiresAt: number; fetchedAt?: number; catalog: HarnessModelCatalog }
   >()
   private readonly pending = new Map<string, Promise<HarnessModelCatalog>>()
 
@@ -75,7 +82,7 @@ export class AcpModelProbe {
       .then((catalog) => {
         if (this.cache.size >= 32) this.cache.delete(this.cache.keys().next().value!)
         this.cache.set(key, {
-          expiresAt: this.nowMs() + (this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS),
+          fetchedAt: this.nowMs(), expiresAt: this.nowMs() + (this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS),
           catalog
         })
         return catalog
@@ -84,7 +91,7 @@ export class AcpModelProbe {
         // A failed probe is cached briefly as empty so the route does not
         // hammer a broken binary on every poll.
         const catalog = { models: [], modelInfo: [] }
-        this.cache.set(key, { expiresAt: this.nowMs() + 30_000, catalog })
+        this.cache.set(key, { fetchedAt: this.nowMs(), expiresAt: this.nowMs() + 30_000, catalog })
         return catalog
       })
       .finally(() => {
@@ -146,6 +153,7 @@ export class AcpModelProbe {
 
   private cacheKey(definition: HarnessDefinition, selectedModel?: string): string {
     return JSON.stringify({
+      revision: this.revision, binary: harnessExecutableIdentity(this.deps.binaryPath?.(definition.id) ?? definition.launch?.command),
       id: definition.id,
       ...(selectedModel ? { selectedModel } : {}),
       command: this.deps.binaryPath?.(definition.id) ?? definition.launch?.command,

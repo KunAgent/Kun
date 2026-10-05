@@ -37,7 +37,7 @@ type HarnessStoreState = {
   rowsLoadedAt?: number
   rowsLoading: boolean
   rowsError?: string
-  models: Record<string, { models: string[]; modelInfo?: AdeHarnessModels['modelInfo']; detailsModel?: string; loadedAt?: number; loading: boolean; error?: string }>
+  models: Record<string, { models: string[]; modelInfo?: AdeHarnessModels['modelInfo']; detailsModel?: string; catalogStatus?: AdeHarnessModels['catalogStatus']; loadedAt?: number; loading: boolean; error?: string }>
   /**
    * Provider-grouped models for `provider`/`kun-gateway` credential modes
    * (12 §7.2): the exposable providers each harness turn could address. The
@@ -185,6 +185,15 @@ export async function loadHarnesses(
   }
 }
 
+export function invalidateHarnessModels(id: string): void {
+  modelRequestGeneration.set(id, generationFor(id) + 1)
+  useHarnessStore.setState((state) => {
+    const models = { ...state.models }, providerGroups = { ...state.providerGroups }
+    delete models[id]; delete providerGroups[id]
+    return { models, providerGroups }
+  })
+}
+
 export async function loadHarnessModels(harnessId: string, force = false, selectedModel?: string): Promise<void> {
   const provider = getProvider()
   if (!provider.listHarnessModels) return
@@ -196,7 +205,8 @@ export async function loadHarnessModels(harnessId: string, force = false, select
     models: { ...state.models, [harnessId]: { ...existing, models: existing?.models ?? [], loading: true } }
   }))
   try {
-    const result = selectedModel ? await provider.listHarnessModels(harnessId, undefined, selectedModel) : await provider.listHarnessModels(harnessId)
+    const result = force ? await provider.listHarnessModels(harnessId, undefined, selectedModel, { refresh: true })
+      : selectedModel ? await provider.listHarnessModels(harnessId, undefined, selectedModel) : await provider.listHarnessModels(harnessId)
     if (selectedModel && !result.models.length) throw new Error('Native model details are temporarily unavailable')
     if (generation !== generationFor(harnessId)) return
     useHarnessStore.setState((state) => ({
@@ -204,7 +214,7 @@ export async function loadHarnessModels(harnessId: string, force = false, select
         const previous = existing?.modelInfo?.find((old) => old.id === entry.id)
         return { ...(entry.reasoningEfforts === undefined && previous?.reasoningEfforts !== undefined
           ? { reasoningEfforts: previous.reasoningEfforts, defaultReasoningEffort: previous.defaultReasoningEffort } : {}), ...entry }
-      }), detailsModel: selectedModel,
+      }), detailsModel: selectedModel, catalogStatus: result.catalogStatus,
         loadedAt: Date.now(), loading: false } }
     }))
   } catch (error) {

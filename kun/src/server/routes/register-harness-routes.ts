@@ -1,3 +1,4 @@
+import { registerHarnessUpdateRoutes } from './register-harness-update-routes.js'
 import type { Router } from '../router.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { authorize } from './route-auth.js'
@@ -15,6 +16,7 @@ import {
 
 export function registerHarnessRoutes(router: Router, runtime: ServerRuntime): void {
   registerHarnessInstallRoutes(router, runtime)
+  registerHarnessUpdateRoutes(router, runtime)
   router.add('GET', '/v1/harnesses', (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return listHarnesses(runtime, request)

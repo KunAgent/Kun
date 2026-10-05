@@ -335,7 +335,8 @@ export interface AgentProvider {
   listHarnessModels?(
     harnessId: string,
     credentialMode?: string,
-    selectedModel?: string
+    selectedModel?: string,
+    options?: { refresh?: boolean }
   ): Promise<import('@shared/ade-harnesses').AdeHarnessModels>
   /** Force fresh detection for one harness; returns the updated row. */
   probeHarness?(

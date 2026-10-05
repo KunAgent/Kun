@@ -259,6 +259,8 @@ export type ServerRuntime = {
    */
   harnesses?: {
     catalog: HarnessCatalog
+    updates?: import('../../harness/harness-updates.js').HarnessUpdates
+    invalidateModels?: (id: string) => void
     readiness?: import('../../harness/harness-readiness.js').HarnessReadinessService
     detector: HarnessDetector
     /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */

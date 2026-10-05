@@ -4,6 +4,13 @@ import { runtimeRequestPayloadSchema } from './app-ipc-schemas/runtime'
 describe('ADE harness desktop HTTP boundary', () => {
   it.each([
     ['/v1/harnesses', ['GET']],
+    ['/v1/harnesses/claude-code/updates', ['GET']],
+    ['/v1/harnesses/claude-code/updates/check', ['POST']],
+    ['/v1/harnesses/claude-code/updates/start', ['POST']],
+    ['/v1/harnesses/claude-code/updates/activate', ['POST']],
+    ['/v1/harnesses/claude-code/updates/cancel', ['POST']],
+    ['/v1/harnesses/claude-code/updates/rollback', ['POST']],
+    ['/v1/harnesses/claude-code/models?refresh=1', ['GET']],
     ['/v1/harnesses?wait_ms=3000', ['GET']],
     ['/v1/harnesses/claude-code/models', ['GET']],
     ['/v1/harnesses/claude-code/models?credential_mode=kun-gateway', ['GET']],
@@ -50,6 +57,8 @@ describe('ADE harness desktop HTTP boundary', () => {
     }
   })
   it.each([
+    '/v1/harnesses/claude-code/updates/execute',
+    '/v1/harnesses/claude-code/updates/start/extra',
     '/v1/harnesses/claude-code',
     '/v1/harnesses/claude-code/probe/extra',
     '/v1/harnesses//probe',

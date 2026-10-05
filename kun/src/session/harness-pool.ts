@@ -110,6 +110,13 @@ export class HarnessAgentPool<T extends PooledAgent> {
     }
   }
 
+  /** Retire only idle processes superseded by an executable upgrade. */
+  async retireIdlePrefix(prefix: string, keep: string): Promise<void> {
+    for (const [key, entry] of this.entries) {
+      if (key !== keep && key.startsWith(prefix) && entry.refs === 0 && !entry.closing) await this.closeEntry(key, entry)
+    }
+  }
+
   async dispose(): Promise<void> {
     for (const [key, entry] of [...this.entries]) {
       await this.closeEntry(key, entry)

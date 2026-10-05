@@ -1,3 +1,4 @@
+import { harnessExecutableIdentity } from '../../harness/harness-executable-identity.js'
 import { sessionInstructions } from '../../session/session-instructions.js'
 /**
  * ACP delegated runtime (docs/ade/03 §6). `runTurn` owns a full Kun turn
@@ -162,11 +163,14 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       credentialIdentity,
       credentialEnv,
       secretEnv,
-      poolKey,
+      poolKey: basePoolKey,
       limits,
       intent,
       redactedRequestValues
     } = resolved.ctx
+    const command = this.deps.readiness?.commandForTurn(threadId, turnId) ?? this.deps.binaryPath?.(definition.id) ?? definition.launch?.command
+    const poolKey = `${basePoolKey}:executable:${harnessExecutableIdentity(command)}`
+    await this.pool.retireIdlePrefix?.(`${basePoolKey}:executable:`, poolKey)
     let items = resolved.ctx.items
 
     const lease = await acquireAcpConnection(this.deps, this.pool, this.host, this.sessions, {

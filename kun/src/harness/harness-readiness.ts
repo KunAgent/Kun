@@ -48,6 +48,8 @@ export class HarnessReadinessService {
   private readonly warmed = new Map<string, string>()
   private readonly launches = new Map<string, { route: HarnessRoute; identity: string; signature: string }>()
   private readonly generations = new Map<string, number>()
+  private readonly maintenance = new Set<string>()
+  private readonly preparing = new Map<string, string>()
   constructor(private readonly deps: HarnessReadinessDeps) {}
 
   route(definition: HarnessDefinition, input: Pick<HarnessTestRequest, 'credentialMode' | 'providerId' | 'model'>): HarnessRoute {
@@ -153,9 +155,11 @@ export class HarnessReadinessService {
 
   warmProfiles(id: string): void {
     const definition = this.deps.catalog.get(id)
-    if (!definition || id === 'kun') return
+    if (!definition || id === 'kun' || this.maintenance.has(id)) return
     for (const profile of this.deps.catalog.enabledProfiles(id)) {
-      const route = this.route(definition, profile)
+      // Native account readiness is independent of a saved model that a client
+      // upgrade may retire. The exact requested model is checked at turn admission.
+      const route = this.route(definition, { ...profile, ...(profile.credentialMode === 'native-login' ? { model: 'default' } : {}) })
       const key = harnessProfileKey(route)
       const signature = this.configurationSignature(route)
       const proof = this.proofs.get(proofKey(route))
@@ -195,11 +199,31 @@ export class HarnessReadinessService {
     return `${this.deps.revision?.() ?? 0}:${readinessFingerprint({ options: this.deps.options(), definition, route, secretEnv: {} })}`
   }
   async prepareTurn(threadId: string, turnId: string, route: HarnessRoute, signature: string, signal: AbortSignal): Promise<void> {
+    if (this.maintenance.has(route.harnessId)) throw new Error('Agent update is in progress; retry when it finishes')
+    const key = `${threadId}:${turnId}`
+    this.preparing.set(key, route.harnessId)
+    try {
     if (signature !== this.configurationSignature(route)) throw new Error('Agent profile changed before launch; retry the turn')
     const identity = await this.assertReady(route, signal)
     if (signature !== this.configurationSignature(route)) throw new Error('Agent profile changed during readiness check; retry the turn')
     this.launches.set(`${threadId}:${turnId}`, { route, identity, signature })
     await this.validateTurn(threadId, turnId, signal)
+    } catch (error) { this.launches.delete(key); throw error }
+    finally { this.preparing.delete(key) }
+  }
+
+  /** Stop new admissions while existing turns drain; never interrupt those turns. */
+  beginMaintenance(id: string): () => void {
+    if (this.maintenance.has(id)) throw new Error('Agent update is already in progress')
+    this.maintenance.add(id)
+    return () => this.maintenance.delete(id)
+  }
+  inUse(id: string): boolean {
+    return [...this.preparing.values()].includes(id) || [...this.launches.values()].some((entry) => entry.route.harnessId === id)
+  }
+  invalidateHarness(id: string): void {
+    for (const [key, proof] of this.proofs) if (proof.route.harnessId === id) this.invalidateProfile(harnessProfileKey(proof.route))
+    for (const key of this.warmed.keys()) if (JSON.parse(key)[0] === id) this.warmed.delete(key)
   }
   async validateTurn(threadId: string, turnId: string, signal: AbortSignal, actualRoute?: HarnessRoute): Promise<string> {
     const launch = this.launches.get(`${threadId}:${turnId}`)

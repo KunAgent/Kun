@@ -50,10 +50,12 @@ export function createKunHarnessesClient() {
     async listHarnessModels(
       harnessId: string,
       credentialMode?: string,
-      selectedModel?: string
+      selectedModel?: string,
+      options?: { refresh?: boolean }
     ): Promise<AdeHarnessModels> {
+      const path = kunHarnessModelsPath(harnessId, credentialMode, selectedModel)
       const response = await rendererRuntimeClient.runtimeRequest(
-        kunHarnessModelsPath(harnessId, credentialMode, selectedModel), 'GET'
+        options?.refresh ? `${path}${path.includes('?') ? '&' : '?'}refresh=1` : path, 'GET'
       )
       if (!response.ok) {
         throw runtimeErrorToError(

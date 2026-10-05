@@ -1,3 +1,4 @@
+import { harnessExecutableIdentity } from '../harness/harness-executable-identity.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SessionTurnRuntime, type SessionTurnRuntimeDeps } from './session-turn-runtime.js'
 import { HarnessAgentPool } from './harness-pool.js'
@@ -74,7 +75,7 @@ describe('session runtime last admission boundaries', () => {
   })
   it('rejects a reused process when admission changes during session preparation', async () => {
     const f = fixture()
-    const prior = await f.pool.acquire('pi:profile', async () => f.agent); prior.release()
+    const prior = await f.pool.acquire(`pi:profile:executable:${harnessExecutableIdentity('fake-pi')}`, async () => f.agent); prior.release()
     f.prepare.mockImplementationOnce(async () => { f.disable(); return { resumed: true } })
     expect(await f.runtime.runTurn('thread', 'turn', new AbortController().signal)).toBe('failed')
     expect(f.agent.startSession).not.toHaveBeenCalled()
@@ -91,7 +92,7 @@ describe('session runtime last admission boundaries', () => {
   it('cancels a queued acquisition before the preceding connection settles', async () => {
     const f = fixture(); const controller = new AbortController()
     let finish!: (agent: HarnessAgent) => void
-    const first = f.pool.acquire('pi:profile', () => new Promise((resolve) => { finish = resolve }))
+    const first = f.pool.acquire(`pi:profile:executable:${harnessExecutableIdentity('fake-pi')}`, () => new Promise((resolve) => { finish = resolve }))
     await vi.waitFor(() => expect(finish).toBeDefined())
     const acquire = vi.spyOn(f.pool, 'acquire')
     const turn = f.runtime.runTurn('thread', 'turn', controller.signal)

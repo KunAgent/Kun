@@ -149,7 +149,7 @@ export class CodexAgent implements HarnessAgent {
       continuation: 'native',
       fingerprint: {
         protocol: 'codex-app-server',
-        version: this.info.agentVersion
+        version: 'v2'
       }
     }
   }

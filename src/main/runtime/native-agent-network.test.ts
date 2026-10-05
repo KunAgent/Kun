@@ -50,7 +50,8 @@ describe('desktop native Agent network policy', () => {
       installer: { source: 'direct' }, codex: { source: 'direct' }, antigravity: { source: 'direct' }, 'claude-code': { source: 'direct' }
     } })
     await refreshNativeAgentNetworkBeforeProbe('/v1/harnesses/antigravity/test', 'POST', send)
-    expect(send).toHaveBeenCalledTimes(2)
+    await refreshNativeAgentNetworkBeforeProbe('/v1/harnesses/claude-code/updates/start', 'POST', send)
+    expect(send).toHaveBeenCalledTimes(3)
   })
 
   it('fails a rejected refresh explicitly and tolerates an old runtime without the endpoint', async () => {

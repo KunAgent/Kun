@@ -1,3 +1,4 @@
+import { checkHarnessUpdate, useHarnessUpdateStore } from '../../store/harness-update-store'
 import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
@@ -91,6 +92,15 @@ export function useAdeComposerControls(input: {
   const harnessId = effectiveHarnessId(composerHarnessId, threadHarnessId, providerKind)
   const row = rows.find((entry) => entry.definition.id === harnessId)
   const rowFingerprint = harnessModelFingerprint(row)
+  useEffect(() => {
+    if (!enabled) return
+    for (const item of rows) {
+      if (!item.definition.builtin || item.definition.id === 'kun' || item.enabled !== true || item.status.installed !== 'yes') continue
+      const previous = useHarnessUpdateStore.getState().entries[item.definition.id]?.info
+      const changed = Boolean(previous && (previous.current.path !== item.status.resolvedCommand || previous.current.version !== item.status.version))
+      void checkHarnessUpdate(item.definition.id, changed)
+    }
+  }, [enabled, rows])
   const modelCache = useHarnessStore((state) => state.models[harnessId])
   const providerGroupCache = useHarnessStore((state) => state.providerGroups[harnessId])
   const session = useHarnessStore((state) =>

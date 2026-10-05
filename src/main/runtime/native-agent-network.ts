@@ -52,7 +52,7 @@ export async function refreshNativeAgentNetworkBeforeProbe(
   method: string,
   send: (body: string) => Promise<{ ok: boolean; status: number }>
 ): Promise<void> {
-  if (method !== 'POST' || !/^\/v1\/harnesses\/(?:(codex|claude-code|antigravity)\/(probe|test)|[^/]+\/install)(?:\?|$)/u.test(path)) return
+  if (method !== 'POST' || !/^\/v1\/harnesses\/(?:(codex|claude-code|antigravity)\/(probe|test)|[^/]+\/(?:install|updates\/(?:check|start|activate|rollback)))(?:\?|$)/u.test(path)) return
   // Test/old hosts without an Electron session have no desktop policy to refresh.
   const snapshot = await resolveNativeAgentNetworkSnapshot()
   const result = await send(JSON.stringify({ nativeAgentNetwork: snapshot }))

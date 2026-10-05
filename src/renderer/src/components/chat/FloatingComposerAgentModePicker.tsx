@@ -1,3 +1,4 @@
+import { hasHarnessUpdate, useHarnessUpdateStore } from '../../store/harness-update-store'
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, Code2, History, Loader2, Palette, Settings2 } from 'lucide-react'
@@ -38,6 +39,7 @@ export function FloatingComposerAgentModePicker({
   disabled?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
+  useHarnessUpdateStore((state) => state.entries)
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState<Selection | null>(null)
   const [placement, setPlacement] = useState<TaskSurfaceMenuPlacement>({
@@ -230,7 +232,7 @@ export function FloatingComposerAgentModePicker({
                     className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition hover:bg-ds-hover focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-55">
                     <AgentIcon harnessId={id} size={16} className="shrink-0" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{row.definition.displayName}</span>
+                      <span className="block truncate font-medium">{row.definition.displayName}{hasHarnessUpdate(id) ? <span className="ml-2 text-[10px] text-accent">{t('agentUpdate.badge')}</span> : null}</span>
                       {reason ? <span className="block text-[11px] leading-4 text-ds-faint">{reason}</span> : null}
                     </span>
                     {selected ? <Check className="h-4 w-4 shrink-0 text-accent" aria-hidden /> : null}

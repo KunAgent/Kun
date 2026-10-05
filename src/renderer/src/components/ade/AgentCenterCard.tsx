@@ -1,3 +1,4 @@
+import { AgentUpdateControl } from './AgentUpdateControl'
 import { useState, type ReactElement } from 'react'
 import { ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
 import type { AdeHarnessRow, AdeHarnessTestResult } from '@shared/ade-harnesses'
@@ -280,6 +281,7 @@ export function AgentCenterCard({
         </div>
       </div>
 
+      {!isKun ? <AgentUpdateControl row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} t={t} /> : null}
       {!isKun && definition.transport !== 'terminal' ? <AgentEnablementPanel row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} /> : null}
       {definition.builtin && (definition.setup?.install?.length || definition.setup?.adapter) ? (
         <AgentInstallControl harnessId={definition.id} action={model.reasonCode === 'adapter_missing' ? 'adapter' : 'install'}

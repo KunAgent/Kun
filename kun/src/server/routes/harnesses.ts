@@ -181,6 +181,18 @@ export async function listHarnessModels(
   if (!definition || definition.availability === 'retired') return ERRORS.notFound(`unavailable harness: ${parsedId.data}`)
 
   const url = new URL(request.url)
+  if (url.searchParams.get('refresh') === '1') harnesses.invalidateModels?.(definition.id)
+  const cachedModels = harnesses.probedModels?.(definition)
+  const reply = (body: Record<string, unknown>, source: 'native' | 'cache' | 'fallback' | 'provider' | 'static') => {
+    const detected = harnesses.detector?.cachedStatus?.(definition.id)
+    const probe = definition.transport === 'agent-sdk' ? harnesses.agentSdkModels
+      : definition.transport === 'codex-app-server' ? harnesses.codexModels : harnesses.acpModels
+    return jsonResponse({ ...body, catalogStatus: { source,
+      fetchedAt: probe?.fetchedAt?.(definition) ?? new Date().toISOString(),
+      ...(detected?.version ? { version: detected.version } : {}),
+      ...(detected?.resolvedCommand ? { command: detected.resolvedCommand } : {}),
+      ...(source === 'fallback' ? { message: 'model_catalog_unavailable' } : {}) } })
+  }
   const credentialMode = url.searchParams.get('credential_mode') ?? undefined
   if (credentialMode && !definition.credentialModes.some((mode) => mode === credentialMode)) {
     return ERRORS.validation(`credentialMode ${credentialMode} is not supported by ${definition.id}`)
@@ -208,12 +220,12 @@ export async function listHarnessModels(
         })) } : {})
       }))
       .filter((group) => group.models.length > 0)
-    return jsonResponse({ harnessId: definition.id, credentialMode, models: [], groups })
+    return reply({ harnessId: definition.id, credentialMode, models: [], groups }, 'provider')
   }
 
   if (definition.modelSource === 'probe' && harnesses.catalog.isDisabled(definition.id)) {
-    return jsonResponse({ harnessId: definition.id, models: harnesses.probedModels?.(definition) ?? definition.staticModels,
-      reason: 'check_required', message: 'Run Check & enable before loading native models' })
+    return reply({ harnessId: definition.id, models: harnesses.probedModels?.(definition) ?? definition.staticModels,
+      reason: 'check_required', message: 'Run Check & enable before loading native models' }, 'fallback')
   }
 
   const providerModels = (kind: string | undefined): string[] => {
@@ -229,25 +241,26 @@ export async function listHarnessModels(
 
   switch (definition.modelSource) {
     case 'static':
-      return jsonResponse({ harnessId: definition.id, models: definition.staticModels })
+      return reply({ harnessId: definition.id, models: definition.staticModels }, 'static')
     case 'provider':
-      return jsonResponse({
+      return reply({
         harnessId: definition.id,
         models: providerModels(legacyProviderKindFor(definition.id))
-      })
+      }, 'provider')
     case 'probe': {
       if (definition.transport === 'pi-rpc' && harnesses.piModels) {
-        return jsonResponse({ harnessId: definition.id, models: await harnesses.piModels.probe(definition, request.signal) })
+        const models = await harnesses.piModels.probe(definition, request.signal)
+        return reply({ harnessId: definition.id, models }, models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
       }
       if (definition.transport === 'acp' && harnesses.acpModels?.probeCatalog) {
         const selectedModel = url.searchParams.get('selected_model')?.trim() || undefined
         if (selectedModel && selectedModel.length > 1024) return ERRORS.validation('invalid model id')
         const catalog = await harnesses.acpModels.probeCatalog(definition, selectedModel)
-        return jsonResponse({ harnessId: definition.id, ...catalog })
+        return reply({ harnessId: definition.id, ...catalog }, catalog.models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
       }
       if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {
         const catalog = await harnesses.codexModels.probeCatalog(definition)
-        return jsonResponse({ harnessId: definition.id, ...catalog })
+        return reply({ harnessId: definition.id, ...catalog }, catalog.models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
       }
       const probed =
         definition.transport === 'acp'
@@ -258,11 +271,11 @@ export async function listHarnessModels(
               ? await harnesses.codexModels?.probe(definition)
               : undefined
       if (probed && probed.length > 0) {
-        return jsonResponse({ harnessId: definition.id, models: probed })
+        return reply({ harnessId: definition.id, models: probed }, cachedModels ? 'cache' : 'native')
       }
       // A probe that fails (missing binary, auth gate, timeout) falls back to
       // the harness's static list rather than failing the models request.
-      return jsonResponse({ harnessId: definition.id, models: definition.staticModels })
+      return reply({ harnessId: definition.id, models: definition.staticModels }, 'fallback')
     }
   }
 }

@@ -1,3 +1,4 @@
+import { harnessExecutableIdentity } from '../harness/harness-executable-identity.js'
 import { sessionInstructions } from './session-instructions.js'
 /**
  * `SessionTurnRuntime` (docs/ade/impl/p6a §1.2): the shared
@@ -171,7 +172,8 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     const requestedCommand = this.deps.readiness?.commandForTurn(threadId, turnId) ?? override ?? definition.launch?.command ?? ''
     const command = this.deps.transport === 'codex-app-server'
       ? await resolveCodexExecutable(requestedCommand, Boolean(override)) : requestedCommand
-    const poolKey = this.deps.transport === 'codex-app-server' ? `${ctx.poolKey}:executable:${command}` : ctx.poolKey
+    const poolKey = `${ctx.poolKey}:executable:${harnessExecutableIdentity(command)}`
+    await this.pool.retireIdlePrefix?.(`${ctx.poolKey}:executable:`, poolKey)
 
     const validateLaunch = async (): Promise<void> => {
       signal.throwIfAborted()
@@ -429,6 +431,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         ),
         continuationMode: caps.continuation
       },
+      allowNativeCapabilityResume: this.deps.transport === 'codex-app-server',
       priorItems: priorItemsForDelegatedTurn(ctx.items, ctx.turn.id)
     })
     const input = {

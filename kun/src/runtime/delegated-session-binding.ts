@@ -151,10 +151,13 @@ export class DelegatedSessionCoordinator {
     threadId: string
     route: DelegatedSessionRoute
     priorItems: readonly TurnItem[]
+    /** An adapter with compatible native restore can validate a client-version change on resume. */
+    allowNativeCapabilityResume?: boolean
   }): Promise<DelegatedSessionPreparation> {
     const priorHistoryDigest = delegatedHistoryDigest(input.priorItems)
     const binding = await this.store.load(input.threadId)
-    const routeMatches = binding ? sameRoute(binding, input.route) : false
+    const routeMatches = binding ? sameRoute(binding, input.route) || Boolean(input.allowNativeCapabilityResume &&
+      sameRoute({ ...binding, capabilityFingerprint: input.route.capabilityFingerprint }, input.route)) : false
     const portableAligned = Boolean(
       binding &&
       routeMatches &&
@@ -298,7 +301,8 @@ export class DelegatedSessionCoordinator {
             }
           }
         : {}),
-      rebaseReason: rebaseReason(binding, input.route, priorHistoryDigest)
+      rebaseReason: rebaseReason(binding && routeMatches && input.allowNativeCapabilityResume
+        ? { ...binding, capabilityFingerprint: input.route.capabilityFingerprint } : binding, input.route, priorHistoryDigest)
     }
   }
 

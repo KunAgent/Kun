@@ -132,6 +132,10 @@ describe('runtimeRequestViaHost', () => {
 
   it('allows harness cold probes and trial turns to finish through Main', () => {
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/models', 'GET')).toBe(90_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates', 'GET')).toBe(60_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates/check', 'POST')).toBe(60_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates/activate', 'POST')).toBe(90_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates', 'GET', 25_000)).toBe(25_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/gemini-cli/probe', 'POST')).toBe(90_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/probe-definition', 'POST')).toBe(90_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/test', 'POST')).toBe(420_000)

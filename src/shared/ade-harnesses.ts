@@ -147,6 +147,7 @@ export type AdeHarnessProviderModelGroup = {
 
 /** `GET /v1/harnesses/:id/models` response (01 §9). */
 export type AdeHarnessModels = {
+  catalogStatus?: import('../../kun/src/contracts/harness-update').HarnessModelCatalogStatus
   harnessId: string
   models: string[]
   modelInfo?: import('../../kun/src/contracts/harness-models').HarnessModelInfo[]

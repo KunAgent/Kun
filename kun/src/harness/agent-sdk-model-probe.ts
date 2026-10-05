@@ -1,3 +1,4 @@
+import { harnessExecutableIdentity } from './harness-executable-identity.js'
 /**
  * Claude Code model probing for `GET /v1/harnesses/:id/models` (P3-07).
  * Opens a throwaway `query()` handle — with an empty prompt iterable so no
@@ -42,7 +43,13 @@ function loadAgentSdk(): Promise<SdkApi> {
 async function* emptyProbePrompt(): AsyncIterable<never> {}
 
 export class AgentSdkModelProbe {
-  private readonly cache = new Map<string, { expiresAt: number; models: string[] }>()
+  private revision = 0
+  invalidate(): void { this.revision += 1; this.cache.clear(); this.pending.clear() }
+  fetchedAt(definition: HarnessDefinition): string | undefined {
+    const value = this.cache.get(this.cacheKey(definition))?.fetchedAt
+    return value ? new Date(value).toISOString() : undefined
+  }
+  private readonly cache = new Map<string, { expiresAt: number; fetchedAt?: number; models: string[] }>()
   private readonly pending = new Map<string, Promise<string[]>>()
 
   constructor(private readonly deps: AgentSdkModelProbeDeps = {}) {}
@@ -73,13 +80,13 @@ export class AgentSdkModelProbe {
     const task = this.probeUncached(definition)
       .then((models) => {
         this.cache.set(key, {
-          expiresAt: this.nowMs() + (this.deps.cacheMs ?? AGENT_SDK_MODEL_PROBE_CACHE_MS),
+          fetchedAt: this.nowMs(), expiresAt: this.nowMs() + (this.deps.cacheMs ?? AGENT_SDK_MODEL_PROBE_CACHE_MS),
           models
         })
         return models
       })
       .catch(() => {
-        this.cache.set(key, { expiresAt: this.nowMs() + 30_000, models: [] })
+        this.cache.set(key, { fetchedAt: this.nowMs(), expiresAt: this.nowMs() + 30_000, models: [] })
         return [] as string[]
       })
       .finally(() => {
@@ -133,7 +140,7 @@ export class AgentSdkModelProbe {
   }
 
   private cacheKey(definition: HarnessDefinition): string {
-    return `${definition.id}:${this.deps.binaryPath?.(definition.id) ?? ''}:${nativeAgentNetworkStatus(definition).networkFingerprint}`
+    return `${this.revision}:${harnessExecutableIdentity(this.deps.binaryPath?.(definition.id))}:${definition.id}:${this.deps.binaryPath?.(definition.id) ?? ''}:${nativeAgentNetworkStatus(definition).networkFingerprint}`
   }
 
   private nowMs(): number {

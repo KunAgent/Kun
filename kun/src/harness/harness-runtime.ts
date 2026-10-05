@@ -1,3 +1,6 @@
+import { HarnessUpdates } from './harness-updates.js'
+import { harnessUpdateCompatible } from './harness-update-compatibility.js'
+import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
 import { HarnessReadinessService } from './harness-readiness.js'
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -44,6 +47,8 @@ export type HarnessRuntimeComposition = {
   /** Codex app-server `model/list` probing (P6-07). */
   codexModels: CodexModelProbe
   piModels: PiModelProbe
+  updates: HarnessUpdates
+  invalidateModels(id: string): void
   installNetwork?: () => import('../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
   /**
    * Spawn-free read of the freshest probed model list, dispatched by
@@ -133,7 +138,40 @@ export function createHarnessComposition(
   const readiness = new HarnessReadinessService({ options, catalog, detector, revision: deps.revision,
     resolveSecretEnv: deps.resolveSecretEnv, resolveProviderCredential: deps.resolveProviderCredential,
     sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal) })
+  const invalidateModels = (_id: string): void => {
+    agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate()
+  }
+  const updates = new HarnessUpdates({
+    definition: (id) => catalog.get(id), detect: (id) => detector.status(id, { force: true }),
+    beginMaintenance: (id) => readiness.beginMaintenance(id), inUse: (id) => readiness.inUse(id),
+    invalidate: (id) => { invalidateModels(id); readiness.invalidateHarness(id) },
+    afterActivate: async (id) => {
+      const definition = catalog.get(id), profile = catalog.enabledProfiles(id)[0]
+      if (!definition || !profile) return
+      const result = await readiness.test(definition, { level: 'handshake', ...profile,
+        ...(profile.credentialMode === 'native-login' ? { model: 'default' } : {}), timeoutMs: 60_000 })
+      if (!harnessUpdateCompatible(result)) throw new Error(result.readiness?.detail || result.readiness?.checks.find((check) => !check.ok)?.detail || 'Updated Agent could not be verified on the active configuration')
+    },
+    network: () => options().nativeAgentNetwork?.installer,
+    verify: async (id, path, signal) => {
+      const original = options()
+      const override = { ...original, harnesses: HarnessesConfigSchema.parse({
+        ...original.harnesses, binaryPaths: { ...original.harnesses?.binaryPaths, [id]: path }
+      }) }
+      const probe = createHarnessComposition(() => override, deps)
+      const definition = probe.catalog.get(id)
+      if (!definition) throw new Error('Agent definition is unavailable')
+      const status = await probe.detector.status(id, { force: true, signal })
+      if (!status.version || status.versionSupported === false) throw new Error('Agent version is incompatible with this Kun build')
+      const profile = original.harnesses?.enabledProfiles?.find((entry) => entry.harnessId === id) ?? { credentialMode: definition.credentialModes[0] }
+      const result = await probe.readiness.test(definition, { level: 'handshake', ...profile,
+        ...(profile.credentialMode === 'native-login' ? { model: 'default' } : {}), timeoutMs: 60_000 }, signal)
+      if (!harnessUpdateCompatible(result)) throw new Error(result.readiness?.detail || 'Agent compatibility verification failed; the current selection was kept')
+      return { version: status.version, models: result.handshake?.models ?? [] }
+    }
+  })
   return {
+    updates, invalidateModels,
     catalog,
     readiness,
     detector,
