@@ -61,7 +61,7 @@ try {
         const before = await geometry()
         measurements.push({ phase: 'before', theme, fontScale, width, embedded, ...before })
         assert.equal(before.avatar.display, 'grid')
-        assert.ok(before.art.height < 1, 'the original selector must reproduce the invisible builtin art')
+        assert.ok(before.art.width * before.art.height < 1, 'the original selector must reproduce the invisible builtin art')
         if (evidence && dpr === 1 && fontScale === 1 && width === 1280 && embedded) {
           await page.screenshot({ path: join(evidence, `before-${theme}.png`) })
         }
