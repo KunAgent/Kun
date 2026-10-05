@@ -41,6 +41,19 @@ async function consent(): Promise<void> {
 }
 
 describe('PaperReadingDialog bounded consent', () => {
+  it('keeps advanced source and background details collapsed while consent and material quality remain visible', async () => {
+    tree = await render(createElement(PaperReadingDialog, { request, onClose: vi.fn() }))
+    const details = tree.root.findAllByType('details')
+    expect(details).toHaveLength(2)
+    expect(details.every((node) => !node.props.open)).toBe(true)
+    expect(nodeText(details[0])).toContain('paperEvidenceSourceChecks')
+    expect(nodeText(details[1])).toContain('paperReadingBackground')
+    expect(tree.root.findByProps({ type: 'radio', value: 'model-provider' }).parent?.type).toBe('label')
+    expect(nodeText(tree.root)).toContain('paperReadingPages')
+    expect(button(tree, 'paperReadingStart').props.disabled).toBe(true)
+    expect(state.chat.sendMessage).not.toHaveBeenCalled()
+  })
+
   it('defaults to local-only and performs no model or thread call even if submit callback is invoked', async () => {
     tree = await render(createElement(PaperReadingDialog, { request, onClose: vi.fn() }))
     expect(tree.root.findByProps({ type: 'radio', value: 'local-only' }).props.checked).toBe(true)

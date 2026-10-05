@@ -90,5 +90,9 @@
   "paperReadingFigures": "图表：{{status}} · 高置信 {{high}} / 中 {{medium}} / 低 {{low}}",
   "paperReadingFiguresUnbound": "图表提取置信度不代表已绑定 PDF 版本，也不代表结论正确。",
   "paperReadingStaleSelection": "选中文字的 PDF 版本未知或已变化。请重新打开论文，再选择原文。",
-  "paperReadingFixedModel": "请先在对话模型选择器中选定固定模型与服务商；限域阅读暂不支持自动路由或外部 Agent SDK。"
+  "paperReadingFixedModel": "请先在对话模型选择器中选定固定模型与服务商；限域阅读暂不支持自动路由或外部 Agent SDK。",
+  "paperEvidenceEdit": "编辑判断",
+  "paperEvidenceSourceChecks": "来源校验",
+  "paperMatrixPapers": "论文",
+  "paperMatrixSummary": "{{papers}} 篇论文 · {{axes}} 个维度"
 }

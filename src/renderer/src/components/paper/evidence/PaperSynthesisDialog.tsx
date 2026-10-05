@@ -5,7 +5,7 @@ import type { PaperReadingRequest } from '../../../paper/paper-reading-request'
 import { paperEvidenceCitation } from '../../../paper/paper-evidence-actions'
 import { useChatStore } from '../../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
-import { evidenceButton } from './PaperEvidencePane'
+import { evidenceButton, evidencePrimaryButton } from './PaperEvidencePane'
 
 export function PaperSynthesisDialog({ request, onClose }: { request: PaperReadingRequest; onClose: () => void }): ReactElement {
   const { t } = useTranslation('common')
@@ -75,18 +75,18 @@ export function PaperSynthesisDialog({ request, onClose }: { request: PaperReadi
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
     finally { lock.current = false; setBusy(false) }
   }
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onKeyDown={(event) => { if (event.key === 'Escape' && !busy) onClose() }}>
-    <section role="dialog" aria-modal="true" aria-label={t('paperReadingScope')} className="max-h-[90vh] w-full max-w-xl space-y-3 overflow-auto rounded-xl border border-ds-border bg-ds-card p-4 shadow-xl">
-      <header className="flex items-center gap-2"><h2 className="flex-1 text-sm font-semibold text-ds-ink">{t(request.synthesis === 'related-work' ? 'writePaperRelatedWork' : 'writePaperCompare')}</h2><button type="button" className={evidenceButton} disabled={busy} onClick={onClose}>{t('close')}</button></header>
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onKeyDown={(event) => { if (event.key === 'Escape' && !busy) onClose() }}>
+    <section role="dialog" aria-modal="true" aria-label={t('paperReadingScope')} className="max-h-[90vh] w-full max-w-2xl space-y-5 overflow-auto rounded-2xl border border-ds-border bg-ds-card p-6 shadow-2xl">
+      <header className="flex items-center gap-3 border-b border-ds-border-muted pb-4"><h2 className="flex-1 text-base font-semibold text-ds-ink">{t(request.synthesis === 'related-work' ? 'writePaperRelatedWork' : 'writePaperCompare')}</h2><button type="button" className={evidenceButton} disabled={busy} onClick={onClose}>{t('close')}</button></header>
       <p className="text-xs text-ds-muted">{t('paperMatrixNoRank')}</p>
-      <ul className="space-y-2 text-xs text-ds-ink">{(request.papers ?? []).map((paper) => <li key={paper.unitDir}>{paper.meta.title}{limits.includes(paper.meta.title) ? <span className="block text-amber-700 dark:text-amber-300">{t('paperEvidencePartial')}</span> : null}</li>)}</ul>
+      <ul className="divide-y divide-ds-border-muted rounded-xl border border-ds-border-muted bg-ds-subtle/40 px-4 text-sm leading-relaxed text-ds-ink">{(request.papers ?? []).map((paper) => <li key={paper.unitDir} className="py-3">{paper.meta.title}{limits.includes(paper.meta.title) ? <span className="block text-amber-700 dark:text-amber-300">{t('paperEvidencePartial')}</span> : null}</li>)}</ul>
       <p className="text-xs text-ds-muted">{t('paperReadingScope')}: {total} / {PAPER_CONTEXT_MAX_CHARS} chars</p>
       {total > PAPER_CONTEXT_MAX_CHARS ? <p role="alert" className="text-xs text-red-500">Choose fewer papers; the selected material exceeds the bounded context. Nothing is silently truncated.</p> : null}
       {!providerId || !model || model === 'auto' ? <p className="text-xs text-amber-700 dark:text-amber-300">{t('paperReadingFixedModel')}</p> : null}
       {error ? <p role="alert" className="text-xs text-red-500">{error}</p> : null}
       <label className="flex items-center gap-2 text-xs text-ds-ink"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />{t('paperReadingProvider')}: {providerId || '—'} / {model || '—'}</label>
       <p className="text-xs text-ds-muted">{t('paperReadingDisclosure')}</p>
-      <button type="button" className={evidenceButton} disabled={busy || !sources || !enabled || total > PAPER_CONTEXT_MAX_CHARS || !providerId || !model || model === 'auto'} onClick={() => void send()}>{t('paperReadingStart')}</button>
+      <button type="button" className={`${evidencePrimaryButton} px-4 py-2.5`} disabled={busy || !sources || !enabled || total > PAPER_CONTEXT_MAX_CHARS || !providerId || !model || model === 'auto'} onClick={() => void send()}>{t('paperReadingStart')}</button>
     </section>
   </div>
 }

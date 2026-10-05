@@ -65,6 +65,20 @@ describe('PaperMatrixCellEditor explicit manual claims', () => {
       status: 'not-reported', value: '', evidenceIds: [], comparability: 'unknown', comparabilityReason: '' }] })
   })
 
+  it('cancels an edited cell without persisting and allows clearing an incomplete comparability draft', async () => {
+    const onSave = vi.fn(async () => undefined)
+    const onClose = vi.fn()
+    tree = await render(createElement(PaperMatrixCellEditor, { workspaceRoot: '/library', cell: { ...unknownCell,
+      status: 'reported', value: 'Original value', evidenceIds: [evidence.id] }, evidence: [evidence], onSave, onClose }))
+    await change(tree.root.findByType('select'), 'not-comparable')
+    expect(button(tree, 'paperEvidenceSaveEdits').props.disabled).toBe(true)
+    await change(tree.root.findAllByProps({ type: 'checkbox' })[0], true)
+    expect(button(tree, 'paperEvidenceSaveEdits').props.disabled).toBe(false)
+    await click(tree, 'cancel')
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
   it('serializes rapid save clicks and closes only after a successful response', async () => {
     const pending = deferred<void>()
     const onSave = vi.fn(() => pending.promise)
@@ -92,7 +106,7 @@ describe('PaperMatrixWorkspace persistence', () => {
     const cells = tree.root.findAllByType('td')
     expect(cells).toHaveLength(1)
     expect(nodeText(cells[0])).toContain('paperMatrixUnknown')
-    expect(nodeText(cells[0])).toContain('paperMatrix_unknown')
+    expect(nodeText(cells[0])).not.toContain('paperMatrix_unknown')
     expect(api.paperMatrixUpdate).not.toHaveBeenCalled()
   })
 
@@ -113,6 +127,22 @@ describe('PaperMatrixWorkspace persistence', () => {
       patch: { cells: [{ unitDir: entry.unitDir, axis: 'method', value: '', status: 'not-reported', evidenceIds: [], comparability: 'unknown', comparabilityReason: '' }] } })
     await click(tree, 'paperMatrixAdd (')
     expect(api.paperMatrixUpdate.mock.calls[2][0].patch).toEqual({ addUnitDirs: [entry.unitDir] })
+  })
+
+  it('keeps saved matrix controls compact and only adds axes after explicit confirmation', async () => {
+    tree = await render(createElement(PaperMatrixWorkspace, { workspaceRoot: '/library', selected: [entry], onClose: vi.fn() }))
+    expect(tree.root.findAllByProps({ type: 'checkbox' })).toHaveLength(0)
+    expect(button(tree, 'paperMatrixAxes').props['aria-expanded']).toBe(false)
+    await click(tree, 'paperMatrixAxes')
+    expect(button(tree, 'paperMatrixAxes').props['aria-expanded']).toBe(true)
+    expect(tree.root.findAllByProps({ type: 'checkbox' })).toHaveLength(12)
+    expect(api.paperMatrixUpdate).not.toHaveBeenCalled()
+    await click(tree, 'paperMatrixAddAxes')
+    expect(api.paperMatrixUpdate.mock.calls[0][0]).toMatchObject({ matrixId: matrix.id, expectedRevision: 1,
+      patch: { addAxes: ['task', 'method', 'dataset', 'metric', 'result', 'conditions', 'limitations'] } })
+    expect(tree.root.findAllByProps({ type: 'checkbox' })).toHaveLength(0)
+    expect(tree.root.findByProps({ 'data-testid': 'paper-matrix-table-scroll' }).props.className).toContain('overflow-auto')
+    expect(tree.root.findAllByType('th')[0].props.className).toContain('sticky left-0 top-0')
   })
 
   it('refuses to combine matrices and evidence from different revisions', async () => {
