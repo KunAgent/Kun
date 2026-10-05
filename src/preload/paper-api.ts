@@ -8,6 +8,14 @@ import type { PaperProgressEvent } from '../shared/paper/paper-types'
  * `index.ts` to keep that file under the line limit.
  */
 export const paperApi: KunGuiPaperApi = {
+  paperEvidenceRead: (payload) => ipcRenderer.invoke('paper-evidence:read', payload),
+  paperEvidenceMaterial: (payload) => ipcRenderer.invoke('paper-evidence:material', payload),
+  paperEvidenceSource: (payload) => ipcRenderer.invoke('paper-evidence:source', payload),
+  paperEvidencePromote: (payload) => ipcRenderer.invoke('paper-evidence:promote', payload),
+  paperEvidenceUpdate: (payload) => ipcRenderer.invoke('paper-evidence:update', payload),
+  paperMatricesRead: (payload) => ipcRenderer.invoke('paper-matrices:read', payload),
+  paperMatrixCreate: (payload) => ipcRenderer.invoke('paper-matrices:create', payload),
+  paperMatrixUpdate: (payload) => ipcRenderer.invoke('paper-matrices:update', payload),
   paperImport: (payload) => ipcRenderer.invoke('paper:import', payload),
   paperImportBatch: (payload) => ipcRenderer.invoke('paper:import-batch', payload),
   paperReadUnit: (payload) => ipcRenderer.invoke('paper:read-unit', payload),

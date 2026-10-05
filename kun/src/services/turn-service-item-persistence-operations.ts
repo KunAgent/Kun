@@ -87,6 +87,8 @@ async applyAssistantDelta(this: TurnService,
     if (item.kind !== 'assistant_text' && item.kind !== 'assistant_reasoning') {
       throw new TypeError(`assistant delta requires assistant item: ${item.kind}`)
     }
+    // Scoped paper output must carry its rendering policy before any text is shown.
+    if (item.renderMode === 'plain-text') return this.applyItem(threadId, item)
     if (!Number.isSafeInteger(deltaOffset) || deltaOffset < 0) {
       throw new RangeError(`assistant delta offset must be a non-negative safe integer: ${deltaOffset}`)
     }

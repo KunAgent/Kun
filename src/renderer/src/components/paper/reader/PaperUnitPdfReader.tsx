@@ -10,13 +10,13 @@ import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { openPaperViewTab } from '../../../paper/paper-view'
 import {
-  nextPaperMarkId,
   removePaperHighlight,
   removePaperMarkCard,
-  upsertPaperMarkCard,
   usePaperMarksStore
 } from '../../../paper/paper-marks-store'
 import { usePaperMarks } from '../../../paper/use-paper-marks'
+import { usePaperPdfFingerprint } from '../../../paper/use-paper-pdf-fingerprint'
+import { usePaperReadingRequest } from '../../../paper/paper-reading-request'
 import { paperUnitDirForFile, paperUnitSlugFromDir } from '../../../write/paper/paper-unit'
 import { usePaperStore } from '../../../write/paper/paper-store'
 import { rendererRuntimeClient } from '../../../agent/runtime-client'
@@ -29,8 +29,8 @@ import {
 } from '../../../paper/paper-reader-layout'
 import type { PaperReferenceItem } from '@shared/paper/paper-references-types'
 import type { PaperFigureItemV1 } from '@shared/paper/paper-types'
-import type { PaperRect, PaperVisualMark } from '@shared/paper/paper-marks-types'
-import { cropPageRegionPng } from '../../../paper/paper-visual-mark'
+import type { PaperVisualMark } from '@shared/paper/paper-marks-types'
+import { usePaperRegionCapture } from './use-paper-region-capture'
 import { usePaperImmersive } from './use-paper-immersive'
 import { usePaperSelection, type PendingPaperSelection } from './use-paper-selection'
 import { usePaperTranslateCard } from './use-paper-translate-card'
@@ -78,7 +78,9 @@ export function PaperUnitPdfReader({
   // R2.3: the secondary-group twin renders overlay-only and mirrors scroll.
   const translated = pdfView === 'translated'
   const unitRelDir = paperUnitDirForFile(unitDirAbs, workspaceRoot)
-  const marks = usePaperMarksStore((s) => s.items)
+  const pdfSha256 = usePaperPdfFingerprint(dataBase64)
+  const allMarks = usePaperMarksStore((s) => s.items)
+  const marks = useMemo(() => allMarks.filter((mark) => pdfSha256 && mark.pdfSha256 === pdfSha256), [allMarks, pdfSha256])
   const markCards = usePaperMarksStore((s) => s.cards)
   const marksCount = usePaperMarksStore((s) => s.items.length + Object.keys(s.cards).length)
   const [regionSelectActive, setRegionSelectActive] = useState(false)
@@ -108,6 +110,7 @@ export function PaperUnitPdfReader({
   const selection = usePaperSelection({
     rootRef,
     workspaceRoot,
+    paper: libraryEntry ? { unitDir: unitRelDir, meta: libraryEntry.meta, pdfSha256 } : undefined,
     onSelectionChange,
     onAutoTranslate: autoTranslateSelection
       ? (sel) => selectionTranslateRef.current(sel)
@@ -142,7 +145,7 @@ export function PaperUnitPdfReader({
     scrollToPage,
     schedulePageSync,
     jumpSearch
-  } = useWritePdfNavigation({ filePath, pdfDocument, pageCount, pageTexts, scrollerRef })
+  } = useWritePdfNavigation({ filePath, pdfDocument, pageCount, pageTexts, scrollerRef, pdfSha256 })
 
   usePaperReaderPosition({
     pdfDocument,
@@ -409,47 +412,22 @@ export function PaperUnitPdfReader({
     return null
   }, [pageTexts])
 
-  // R2.4: render the dragged region at 2x, persist PNG + card, then open the
-  // gutter card editor for a comment.
-  const captureRegion = useCallback((page: number, rect: PaperRect): void => {
-    const doc = pdfDocument
-    if (!doc) return
-    void (async () => {
-      try {
-        const pageProxy = await doc.getPage(page)
-        const capture = await cropPageRegionPng(pageProxy, rect)
-        const api = window.kunGui?.paperSaveVisualMark
-        if (!capture || typeof api !== 'function') return
-        const result = await api({
-          workspaceRoot,
-          unitDir: unitRelDir,
-          mark: { id: nextPaperMarkId(), page, rect },
-          pngBase64: capture.base64
-        })
-        if (!result.ok) {
-          setRegionNotice(result.message)
-          return
-        }
-        setRegionNotice('')
-        upsertPaperMarkCard(result.mark, capture.dataUrl)
-        setRegionSelectActive(false)
-      } catch (cause) {
-        setRegionNotice(cause instanceof Error ? cause.message : String(cause))
-      }
-    })()
-  }, [pdfDocument, workspaceRoot, unitRelDir])
+  const captureRegion = usePaperRegionCapture({
+    pdfDocument, pdfSha256, workspaceRoot, unitDir: unitRelDir,
+    onNotice: setRegionNotice, onComplete: () => setRegionSelectActive(false)
+  })
 
   const visualMarksByPage = useMemo(() => {
     const map = new Map<number, PaperVisualMark[]>()
     for (const card of Object.values(markCards)) {
       const mark = card as PaperVisualMark
-      if (mark?.kind !== 'visual' || typeof mark.page !== 'number' || !mark.rect) continue
+      if (mark?.kind !== 'visual' || typeof mark.page !== 'number' || !mark.rect || !pdfSha256 || mark.pdfSha256 !== pdfSha256) continue
       const list = map.get(mark.page)
       if (list) list.push(mark)
       else map.set(mark.page, [mark])
     }
     return map
-  }, [markCards])
+  }, [markCards, pdfSha256])
 
   const readerServices = useMemo<PaperReaderServices>(() => ({
     workspaceRoot,
@@ -552,6 +530,12 @@ export function PaperUnitPdfReader({
       data-immersive={immersive ? 'true' : undefined}
       className="write-pdf-viewer relative flex h-full min-h-0 min-w-0 flex-col"
     >
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ds-border-muted px-3 py-1.5">
+        {libraryEntry ? <button type="button" className="rounded px-2 py-1 text-xs text-accent hover:bg-ds-hover" onClick={() => usePaperReadingRequest.getState().open({ workspaceRoot, unitDir: unitRelDir, meta: libraryEntry.meta })}>{t('paperReadingOpen')}</button> : null}
+        <button type="button" className="rounded px-2 py-1 text-xs text-ds-muted hover:bg-ds-hover" onClick={() => setDrawerOpen((open) => !open)}>{t('paperEvidenceTitle')}</button>
+        <span className="min-w-0 truncate text-[11px] text-ds-faint">{pdfSha256 ? `PDF ${pdfSha256.slice(0, 12)}` : t('paperEvidenceLoadingVersion')}</span>
+        {marks.length < allMarks.length ? <span className="text-[11px] text-amber-700 dark:text-amber-300" title={t('paperEvidenceHiddenMarks')}>{t('paperEvidence_legacy-unbound')}</span> : null}
+      </div>
       <div className="flex min-h-0 min-w-0 flex-1">
         {drawerOpen ? (
           <PaperReaderDrawer
@@ -560,6 +544,7 @@ export function PaperUnitPdfReader({
             paperTitle={libraryEntry?.meta.title ?? ''}
             pdfFile={unitPdfFile}
             pdfDocument={pdfDocument}
+            pdfSha256={pdfSha256}
             onJumpToPage={scrollToPage}
             onDeleteMark={(id) => {
               removePaperHighlight(id)

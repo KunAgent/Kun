@@ -92,7 +92,21 @@ export class MultiProviderModelClient implements ModelClient {
     return client
   }
 
+  paperReadOnlyDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): () => void {
+    const client = this.resolve(request.providerId)
+    if (!client.paperReadOnlyDispatchGuard) throw new Error('This provider cannot enforce paper read-only transport')
+    const guard = client.paperReadOnlyDispatchGuard(request)
+    const generation = this.gatewayGeneration
+    return () => {
+      if (generation !== this.gatewayGeneration || client !== this.resolve(request.providerId)) {
+        throw new Error('Paper provider changed after disclosure; submit again with the new selection')
+      }
+      guard()
+    }
+  }
+
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    request.paperReadOnly?.assertCurrent()
     request.gatewayRouting?.assertCurrent?.()
     const providerId = request.providerId?.trim().toLowerCase() || 'default'
     const selection = request.routeSelection

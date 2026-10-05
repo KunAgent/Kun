@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { PaperTurnContextSchema, type PaperTurnContext } from '../contracts/paper-turn-context.js'
 import type {
   ActingTurnModelRoute,
   GuiDesignArtifactContextJson,
@@ -33,6 +35,7 @@ export function createTurnRecord(input: {
   clientRequestId?: string
   clientRequestFingerprint?: string
   admissionPending?: boolean
+  paperContext?: PaperTurnContext
   prompt: string
   messageSource?: UserMessageSource
   subagentResume?: SubagentResumeRequest
@@ -74,6 +77,7 @@ export function createTurnRecord(input: {
   createdAt?: string
   status?: TurnStatus
 }): TurnEntity {
+  const paperContext = input.paperContext ? PaperTurnContextSchema.parse(input.paperContext) : undefined
   const model = input.model?.trim()
   const providerId = input.providerId?.trim()
   const accountId = input.accountId?.trim()
@@ -89,6 +93,11 @@ export function createTurnRecord(input: {
     ...(input.admissionPending ? { admissionPending: true as const } : {}),
     status: input.status ?? 'queued',
     prompt: input.prompt,
+    ...(paperContext ? {
+      paperContext,
+      paperContextSha256: createHash('sha256').update(JSON.stringify(paperContext)).digest('hex'),
+      paperModelRequests: 0
+    } : {}),
     ...(input.messageSource ? { messageSource: input.messageSource } : {}),
     ...(input.subagentResume ? { subagentResume: { ...input.subagentResume } } : {}),
     orchestration: input.orchestration ?? 'direct',
@@ -114,7 +123,7 @@ export function createTurnRecord(input: {
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
     ...(input.clientSurface ? { clientSurface: input.clientSurface } : {}),
     ...(input.approvalPolicy ? { approvalPolicy: input.approvalPolicy } : {}),
-    ...(input.sandboxMode ? { sandboxMode: input.sandboxMode } : {}),
+    ...(input.paperContext ? { sandboxMode: 'read-only' as const } : input.sandboxMode ? { sandboxMode: input.sandboxMode } : {}),
     ...(input.approvalReviewer ? { approvalReviewer: input.approvalReviewer } : {}),
     ...(input.guiPlan ? { guiPlan: input.guiPlan } : {}),
     ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),

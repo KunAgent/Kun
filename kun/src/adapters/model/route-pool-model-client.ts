@@ -108,7 +108,18 @@ export class RoutePoolModelClient implements ModelClient {
     return this.poolForRequest(request) !== undefined
   }
 
+  paperReadOnlyDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): () => void {
+    if (this.poolForRequest(request)) throw new Error('Paper reading requires a fixed provider and model, without automatic failover')
+    if (!this.direct.paperReadOnlyDispatchGuard) throw new Error('Paper read-only transport is unavailable')
+    const guard = this.direct.paperReadOnlyDispatchGuard(request)
+    return () => {
+      if (this.poolForRequest(request)) throw new Error('Paper routing changed after disclosure')
+      guard()
+    }
+  }
+
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    request.paperReadOnly?.assertCurrent()
     return request.gatewayRouting
       ? withGatewayRoutingBudget(request, (bounded) => this.streamRouted(bounded))
       : this.streamRouted(request)

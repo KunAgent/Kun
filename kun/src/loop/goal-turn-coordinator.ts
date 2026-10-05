@@ -66,6 +66,7 @@ export class GoalTurnCoordinator {
         if (thread?.roomContext && thread.roomContext.kind !== 'conversation') return null
         const expectedSource = this.restartSourceTurnByThread.get(threadId)
         const latest = thread?.turns.at(-1)
+        if (latest?.paperContext) return null
         if (expectedSource && (latest?.id !== expectedSource || latest.status !== 'failed')) {
           return null
         }
@@ -89,7 +90,7 @@ export class GoalTurnCoordinator {
     let resumed = 0
     for (const source of sources) {
       const latest = (await this.deps.threadStore.get(source.threadId))?.turns.at(-1)
-      if (latest?.id !== source.turnId || latest.status !== 'failed') continue
+      if (latest?.id !== source.turnId || latest.status !== 'failed' || latest.paperContext) continue
       this.restartSourceTurnByThread.set(source.threadId, source.turnId)
       if (await this.resume.resumeInterrupted(source.threadId)) resumed += 1
     }

@@ -29,11 +29,9 @@ import { PaperMetaEditDialog } from './library/PaperMetaEditDialog'
 import { PaperMoveGroupDialog } from './library/PaperMoveGroupDialog'
 import { PaperLibraryTable } from './library/PaperLibraryTable'
 import { PaperLibraryToolbar } from './library/PaperLibraryToolbar'
-import {
-  buildPaperMultiPrompt,
-  paperMultiOutputPath,
-  type PaperMultiTask
-} from '../../paper/paper-multi-prompt'
+import { PaperMatrixWorkspace } from './evidence/PaperMatrixWorkspace'
+import type { PaperMultiTask } from '../../paper/paper-multi-prompt'
+import { usePaperReadingRequest } from '../../paper/paper-reading-request'
 import { newPaperRequestId, usePaperStore } from '../../write/paper/paper-store'
 import type {
   PaperLibraryEntry,
@@ -108,6 +106,7 @@ export function PaperLibraryView({
   )
 
   const [dropActive, setDropActive] = useState(false)
+  const [matrixOpen, setMatrixOpen] = useState(false)
   const [menu, setMenu] = useState<{ entry: PaperLibraryEntry; x: number; y: number } | null>(null)
   const [editEntry, setEditEntry] = useState<PaperLibraryEntry | null>(null)
   const [moveUnits, setMoveUnits] = useState<string[] | null>(null)
@@ -269,10 +268,7 @@ export function PaperLibraryView({
   const runMultiTask = (task: PaperMultiTask): void => {
     const chosen = entries.filter((entry) => selection.has(entry.unitDir))
     if (chosen.length === 0 || !onSubmitPrompt) return
-    const prompt = buildPaperMultiPrompt({ task, entries: chosen, outputPath: paperMultiOutputPath(task) })
-    useWriteWorkspaceStore.getState().setAssistantOpen(true)
-    onSubmitPrompt(prompt)
-    clearSelection()
+    usePaperReadingRequest.getState().open({ workspaceRoot, unitDir: chosen[0].unitDir, meta: chosen[0].meta, synthesis: task, papers: chosen.map(({ unitDir, meta }) => ({ unitDir, meta })) })
   }
 
   const allVisibleSelected = visible.length > 0 && visible.every((e) => selection.has(e.unitDir))
@@ -311,6 +307,8 @@ export function PaperLibraryView({
     })()
   }
 
+  if (matrixOpen) return <PaperMatrixWorkspace workspaceRoot={workspaceRoot} selected={entries.filter((entry) => selection.has(entry.unitDir))} onClose={() => setMatrixOpen(false)} />
+
   return (
     <div
       className={`flex min-h-0 min-w-0 flex-1 flex-col ${dropActive ? 'bg-accent-tint/[0.04]' : ''}`}
@@ -335,6 +333,10 @@ export function PaperLibraryView({
         t={t}
       />
 
+      <div className="flex flex-wrap items-center gap-2 border-b border-ds-border-muted px-4 py-2">
+        <button type="button" data-testid="paper-open-matrix" className="rounded-md border border-ds-border-muted px-3 py-1.5 text-xs text-accent hover:bg-ds-hover" onClick={() => setMatrixOpen(true)}>{t('paperMatrixTitle')}</button>
+        <span className="text-xs text-ds-muted">{t('paperReadingLocalControls')}</span>
+      </div>
       {selection.size > 0 ? (
         <div className="flex items-center gap-2 border-b border-ds-border-muted bg-accent-tint/[0.05] px-4 py-2">
           <span className="text-[12px] font-medium text-ds-ink">

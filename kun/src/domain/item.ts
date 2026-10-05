@@ -158,6 +158,7 @@ export function makeAssistantTextItem(input: {
   turnId: string
   threadId: string
   text: string
+  renderMode?: 'plain-text'
   status?: 'running' | 'completed' | 'failed'
   createdAt?: string
 }): TurnItem {
@@ -169,7 +170,8 @@ export function makeAssistantTextItem(input: {
     status: input.status ?? 'running',
     createdAt: input.createdAt ?? new Date().toISOString(),
     kind: 'assistant_text',
-    text: input.text
+    text: input.text,
+    ...(input.renderMode ? { renderMode: input.renderMode } : {})
   }
 }
 
@@ -178,6 +180,7 @@ export function makeAssistantReasoningItem(input: {
   turnId: string
   threadId: string
   text: string
+  renderMode?: 'plain-text'
   status?: 'running' | 'completed' | 'failed'
   createdAt?: string
 }): TurnItem {
@@ -189,7 +192,8 @@ export function makeAssistantReasoningItem(input: {
     status: input.status ?? 'running',
     createdAt: input.createdAt ?? new Date().toISOString(),
     kind: 'assistant_reasoning',
-    text: input.text
+    text: input.text,
+    ...(input.renderMode ? { renderMode: input.renderMode } : {})
   }
 }
 

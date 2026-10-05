@@ -168,6 +168,7 @@ export const turnServiceQueueOperations = {
       clientRequestFingerprint: fingerprintStartTurnRequest(input.request),
       admissionPending: true,
       prompt: input.request.prompt,
+      paperContext: input.request.paperContext,
       messageSource: input.request.messageSource,
       subagentResume: input.request.subagentResume,
       model: turnModel,
@@ -372,6 +373,7 @@ export const turnServiceQueueOperations = {
           if (candidate.admissionPending) return null
           const requestSnapshot: StartTurnRequest = {
             prompt: candidate.prompt,
+            paperContext: candidate.paperContext,
             orchestration: candidate.orchestration ?? 'direct',
             attachmentIds: candidate.attachmentIds ?? [],
             composerContexts: candidate.composerContexts ?? [],

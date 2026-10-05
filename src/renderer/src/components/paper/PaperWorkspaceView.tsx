@@ -11,6 +11,9 @@ import { PaperImportDialogHost } from './PaperImportDialogHost'
 import { PaperLibraryOnboarding } from './PaperLibraryOnboarding'
 import { PaperMetadataDrawer } from './sidebar/PaperMetadataDrawer'
 import { PaperTaskRing } from './PaperTaskRing'
+import { PaperReadingDialogHost } from './evidence/PaperReadingDialog'
+import { usePaperReadingRequest } from '../../paper/paper-reading-request'
+import { paperUnitDirFromKnownUnits, paperUnitDirForFile } from '../../write/paper/paper-unit'
 
 export type PaperWorkspaceViewProps = {
   leftSidebarCollapsed: boolean
@@ -97,7 +100,14 @@ export function PaperWorkspaceView({
     usePaperModeStore.getState().setComposerBridge({
       input,
       setInput,
-      ...(onSubmitPrompt ? { submit: onSubmitPrompt } : {}),
+      ...(onSubmitPrompt ? { submit: (value: string) => {
+        const workspace = useWriteWorkspaceStore.getState()
+        const papers = usePaperModeStore.getState().entries
+        const unit = paperUnitDirFromKnownUnits(workspace.workspaceRoot, workspace.activeFilePath ?? '', papers.map((entry) => entry.unitDir))
+        const entry = unit ? papers.find((paper) => paper.unitDir === paperUnitDirForFile(unit, workspace.workspaceRoot)) : undefined
+        if (entry) usePaperReadingRequest.getState().open({ workspaceRoot: workspace.workspaceRoot, unitDir: entry.unitDir, meta: entry.meta, question: value })
+        else onSubmitPrompt(value)
+      } } : {}),
       ...(onAttachImage ? { attachImage: onAttachImage } : {})
     })
     return () => {
@@ -175,6 +185,7 @@ export function PaperWorkspaceView({
         </div>
         {rightPanel}
       </div>
+      <PaperReadingDialogHost />
       <PaperImportDialogHost
         workspaceRoot={workspaceRoot}
         paperReading={paperReading}

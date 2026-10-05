@@ -66,7 +66,8 @@ export function normalizeKunTurnItem(
           kind: item.kind === 'assistant_text' ? 'agent_message' : 'agent_reasoning',
           status: item.status,
           createdAt: item.createdAt,
-          text: item.text ?? ''
+          text: item.text ?? '',
+          ...(item.renderMode ? { renderMode: item.renderMode } : {})
         }
       }
     case 'approval':

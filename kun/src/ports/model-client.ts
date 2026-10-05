@@ -74,6 +74,8 @@ export type ModelStreamChunk = (
  * conversation history, and any tools that are currently advertised.
  */
 export type ModelRequest = {
+  /** Host-only paper transport fence: single physical attempt and exact provider generation. */
+  paperReadOnly?: { assertCurrent: () => void; takeAttempt: () => boolean }
   threadId: string
   turnId: string
   /** Internal correlation carried through every concrete Provider attempt. */
@@ -275,6 +277,8 @@ export type ModelToolSpec = {
 export interface ModelClient {
   readonly provider: string
   readonly model: string
+  /** Returns a trusted exact-route fence, or throws before any paper text is transmitted. */
+  paperReadOnlyDispatchGuard?(request: Pick<ModelRequest, 'model' | 'providerId'>): () => void
   /** Captures a fail-closed generation proof for model gateway admission. */
   gatewayDispatchGuard?(): () => void
   /**

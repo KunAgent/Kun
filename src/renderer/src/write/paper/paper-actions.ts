@@ -5,12 +5,9 @@ import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { normalizePath } from '../write-workspace-store-helpers'
 import { newPaperRequestId, usePaperStore } from './paper-store'
 import { openPaperInterpretation, openPaperUnit } from './paper-open-layout'
-import { buildPaperInterpretPrompt } from './paper-interpret-prompt'
+import { usePaperReadingRequest } from '../../paper/paper-reading-request'
 import {
-  nextInterpretationFileName,
-  PAPER_INTERPRET_SUFFIX,
-  PAPER_TEXT_FILE,
-  paperUnitSlugFromDir
+  PAPER_INTERPRET_SUFFIX
 } from './paper-unit'
 
 export type PaperTranslate = (key: string, options?: Record<string, unknown>) => string
@@ -204,52 +201,7 @@ export type InterpretDeps = PaperActionDeps & {
  * generated `-解读*.md` after the turn ends (see `checkPendingInterpretation`).
  */
 export async function interpretPaper(deps: InterpretDeps): Promise<void> {
-  const { t, workspaceRoot, unitDir, meta } = deps
-
-  if (!await useWriteWorkspaceStore.getState().flushSave(workspaceRoot)) {
-    paperNotice({ tone: 'error', message: t('writePaperSaveFailed') })
-    return
-  }
-
-  const listing = await window.kunGui.listWorkspaceDirectory({ workspaceRoot, path: unitDir })
-  const entries = listing.ok ? listing.entries : []
-  const hasPaperText = entries.some(
-    (entry) => entry.type === 'file' && entry.name === PAPER_TEXT_FILE
-  )
-  if (!hasPaperText && deps.settings.autoPreprocess) {
-    const ok = await preprocessPaper(deps)
-    if (!ok) return
-  }
-
-  const slug = meta.slug || paperUnitSlugFromDir(unitDir)
-  const outputName = nextInterpretationFileName(
-    slug,
-    entries.filter((entry) => entry.type === 'file').map((entry) => entry.name)
-  )
-  const outputPath = `${unitDir}/${outputName}`
-  const figuresFailed = meta.preprocess?.figuresStatus === 'failed'
-
-  const prompt = buildPaperInterpretPrompt({
-    unitDir,
-    meta,
-    outputPath,
-    template: deps.settings.interpretTemplate,
-    language: deps.settings.outputLanguage,
-    visionCapable: deps.visionCapable,
-    figuresFailed
-  })
-
-  usePaperStore.getState().setPendingInterpretation({
-    workspaceRoot,
-    unitDir,
-    outputDir: unitDir,
-    fileStem: outputName.replace(/\.md$/i, ''),
-    plannedPath: outputPath,
-    startedAt: Date.now()
-  })
-  useWriteWorkspaceStore.getState().setAssistantOpen(true)
-  if (deps.onSubmitPrompt) deps.onSubmitPrompt(prompt)
-  else deps.setInput(deps.input.trim() ? `${deps.input.trim()}\n\n${prompt}` : prompt)
+  usePaperReadingRequest.getState().open({ workspaceRoot: deps.workspaceRoot, unitDir: deps.unitDir, meta: deps.meta })
 }
 
 /**

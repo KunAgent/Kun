@@ -155,8 +155,15 @@ export class CompatModelClientBase {
         | 'request_fallback'
       apiKey: string
       gatewayRouting?: ModelRequest['gatewayRouting']
+      paperReadOnly?: ModelRequest['paperReadOnly']
     }
   ): Promise<CompatPostResult> {
+    if (trace.paperReadOnly) {
+      trace.paperReadOnly.assertCurrent()
+      if (!trace.paperReadOnly.takeAttempt()) return { kind: 'error', code: 'paper_request_budget_exhausted',
+        message: 'Paper reading permits one upstream request; explicitly submit again to retry.',
+        failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+    }
     if (trace.gatewayRouting) {
       try {
         await trace.gatewayRouting.beforeDispatch?.()
@@ -186,9 +193,11 @@ export class CompatModelClientBase {
         }))
       : undefined
     try {
+      trace.paperReadOnly?.assertCurrent()
       trace.gatewayRouting?.assertCurrent?.()
       const response = await this.fetchImpl(url, {
         method: 'POST',
+        ...(trace.paperReadOnly ? { redirect: 'error' as const } : {}),
         headers,
         body: bodyText,
         signal

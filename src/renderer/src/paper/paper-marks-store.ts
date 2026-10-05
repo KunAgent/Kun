@@ -134,6 +134,7 @@ export function newPaperHighlight(input: {
   page: number
   rects: [number, number, number, number][]
   quote: string
+  pdfSha256?: string
 }): PaperHighlight {
   const now = new Date().toISOString()
   return {
@@ -143,6 +144,7 @@ export function newPaperHighlight(input: {
     page: input.page,
     rects: input.rects,
     quote: input.quote.slice(0, 8000),
+    ...(input.pdfSha256 ? { pdfSha256: input.pdfSha256 } : {}),
     createdAt: now,
     updatedAt: now
   }

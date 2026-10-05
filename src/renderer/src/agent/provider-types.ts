@@ -1,3 +1,4 @@
+import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
 import type {
   CoreAttachmentContentResponseJson,
   CoreAttachmentMetadataJson,
@@ -469,6 +470,7 @@ export interface AgentProvider {
       ackNoticeIds?: string[]
       /** Managed plan-build turn; Kun enforces isolated-worktree admission (07 §10). */
       planBuild?: boolean
+      paperContext?: PaperTurnContext
       writeContext?: WriteTurnContext
     }
   ): Promise<{

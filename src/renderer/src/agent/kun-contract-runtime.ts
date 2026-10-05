@@ -21,7 +21,6 @@ import type {
   DesignImagePlacementTarget,
   DesignTaskProfile
 } from './design-task-profile'
-
 export type CoreRuntimeInfoJson = {
   host: string
   port: number
@@ -264,6 +263,7 @@ export type CoreTurnJson = {
 }
 
 export type CoreTurnItemJson = {
+  renderMode?: 'plain-text'
   sourceHistoryOrder?: { referenceId: string; turnIndex: number; itemIndex: number }
   sourceAttachments?: Array<{ index: number; name: string; mimeType?: string }>
   id: string

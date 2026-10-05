@@ -70,6 +70,9 @@ async steerTurn(this: TurnService, input: {
     messageSource?: UserMessageSource
     attachmentIds?: string[]
   }): Promise<void> {
+    if ((await this.getTurn(input.threadId, input.turnId))?.paperContext) {
+      throw new TurnConflictError('Paper reading context is frozen; ask a new question in a new turn')
+    }
     const finishAdmission = this['beginExecutionAdmission']()
     try {
     if (input.operationId) {

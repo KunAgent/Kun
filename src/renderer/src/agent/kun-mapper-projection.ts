@@ -374,7 +374,8 @@ export function userMessageEventFromItem(item: CoreTurnItemJson): UserMessageEve
 
 export function assistantTextBlockFromItem(item: CoreTurnItemJson): ChatBlock | null {
   if (!item.text?.trim()) return null
-  return { kind: 'assistant', id: item.id, turnId: item.turnId, createdAt: itemCreatedAt(item), text: item.text }
+  return { kind: 'assistant', id: item.id, turnId: item.turnId, createdAt: itemCreatedAt(item), text: item.text,
+    ...(item.renderMode ? { renderMode: item.renderMode } : {}) }
 }
 
 export function reasoningBlockFromItem(item: CoreTurnItemJson): ChatBlock | null {
@@ -384,7 +385,8 @@ export function reasoningBlockFromItem(item: CoreTurnItemJson): ChatBlock | null
     id: item.id,
     turnId: item.turnId,
     createdAt: itemCreatedAt(item),
-    text: item.text
+    text: item.text,
+    ...(item.renderMode ? { renderMode: item.renderMode } : {})
   }
 }
 

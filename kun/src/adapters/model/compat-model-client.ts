@@ -42,13 +42,17 @@ export type { CompatModelClientConfig } from './compat-model-types.js'
 
 /** Multi-provider HTTP model client with compatible endpoint formats. */
 export class CompatModelClient extends CompatModelStreamingClient implements ModelClient {
+  paperReadOnlyDispatchGuard(): () => void { return () => undefined }
+
   async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     // External gateway content never enters native prompt/trajectory diagnostics,
     // even when a global or per-thread debug policy requests full capture.
-    if (request.gatewayRouting) {
+    if (request.gatewayRouting || request.paperReadOnly) {
       try {
         for await (const chunk of this.streamInner(request, null)) {
-          yield gatewaySafeModelChunk(this.attributeUsage(chunk, request))
+          const safe = gatewaySafeModelChunk(this.attributeUsage(chunk, request))
+          yield request.paperReadOnly && safe.kind === 'error'
+            ? { ...safe, message: safe.message.replace('Gateway upstream', 'Paper model') } : safe
         }
       } catch (error) {
         if (!request.abortSignal.aborted) yield gatewaySafeThrownError(error)
@@ -195,7 +199,8 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       attempt: ++attemptOrdinal,
       reason,
       apiKey: credentials.apiKey,
-      ...(request.gatewayRouting ? { gatewayRouting: request.gatewayRouting } : {})
+      ...(request.gatewayRouting ? { gatewayRouting: request.gatewayRouting } : {}),
+      ...(request.paperReadOnly ? { paperReadOnly: request.paperReadOnly } : {})
     })
     let result = await post(body, 'initial')
     let transportRetryAttempt = 0

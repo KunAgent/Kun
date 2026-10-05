@@ -128,6 +128,7 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.designProfile ? { designProfile: message.designProfile } : {}),
     ...(message.designDocumentTarget ? { designDocumentTarget: message.designDocumentTarget } : {}),
     ...(message.writeContext ? { writeContext: toWriteTurnContext(message.writeContext) } : {}),
+    ...(message.paperContext ? { paperContext: message.paperContext } : {}),
     ...(message.designImagePlacementTarget
       ? { designImagePlacementTarget: message.designImagePlacementTarget }
       : {}),
@@ -200,7 +201,7 @@ export async function drainBackgroundQueuedMessage(
         settings,
         prompt: next.text
       })
-      const checkpointRequestId = next.backgroundCheckpointRequestId ?? startWorkspaceCheckpointSnapshot({
+      const checkpointRequestId = next.paperContext ? undefined : next.backgroundCheckpointRequestId ?? startWorkspaceCheckpointSnapshot({
         settings,
         threads: state.threads,
         activeThreadId: threadId,

@@ -1,3 +1,4 @@
+import { PaperTurnContextSchema, validatePaperTurnCombination } from './paper-turn-context.js'
 import { z } from 'zod'
 import { SteeringDeliverySchema } from './steering-delivery.js'
 import { TurnItem, UserFileReferenceSchema, UserMessageSource } from './items.js'
@@ -187,6 +188,9 @@ export const TurnSchema = z.object({
   admissionPending: z.literal(true).optional(),
   status: TurnStatus,
   prompt: z.string(),
+  paperContext: PaperTurnContextSchema.optional(),
+  paperContextSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  paperModelRequests: z.number().int().min(0).max(1).optional(),
   messageSource: UserMessageSource.optional(),
   /** Explicit one-click continuation request for an interrupted generic child. */
   subagentResume: SubagentResumeRequestSchema.optional(),
@@ -302,6 +306,7 @@ export type Turn = z.infer<typeof TurnSchema>
 
 export const StartTurnRequest = z.object({
   prompt: z.string().min(1),
+  paperContext: PaperTurnContextSchema.optional(),
   /** Retry-stable client-generated admission key, scoped to this thread. */
   clientRequestId: z.string().trim().min(1).max(256).optional(),
   /**
@@ -426,6 +431,7 @@ export const StartTurnRequest = z.object({
    */
   enqueueIfBusy: z.boolean().optional()
 }).superRefine((value, ctx) => {
+  validatePaperTurnCombination(value, ctx)
   if (Boolean(value.designProfile) !== Boolean(value.designDocumentTarget)) {
     ctx.addIssue({
       code: 'custom',

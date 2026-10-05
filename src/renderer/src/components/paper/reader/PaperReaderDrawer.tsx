@@ -11,8 +11,10 @@ import { newPaperRequestId, usePaperStore } from '../../../write/paper/paper-sto
 import { PaperFiguresPane } from './PaperFiguresPane'
 import { PaperCitationGraph } from './PaperCitationGraph'
 import { currentImportParentDir } from '../../../paper/paper-import-target'
+import { promotePaperEvidence } from '../../../paper/paper-evidence-actions'
+import { PaperEvidencePane } from '../evidence/PaperEvidencePane'
 
-type DrawerTab = 'outline' | 'figures' | 'annotations' | 'references' | 'citations'
+type DrawerTab = 'outline' | 'figures' | 'annotations' | 'references' | 'citations' | 'evidence'
 
 /**
  * Reader side drawer (plan §6.4): table of contents, annotation list, and
@@ -24,6 +26,7 @@ export function PaperReaderDrawer({
   paperTitle = '',
   pdfFile,
   pdfDocument,
+  pdfSha256,
   onJumpToPage,
   onDeleteMark,
   t
@@ -33,15 +36,26 @@ export function PaperReaderDrawer({
   paperTitle?: string
   pdfFile?: string
   pdfDocument: PDFDocumentProxy | null
+  pdfSha256?: string
   onJumpToPage: (page: number) => void
   onDeleteMark: (id: string) => void
   t: TFunction
 }): ReactElement {
   const [tab, setTab] = useState<DrawerTab>('annotations')
+  const [evidenceBusy, setEvidenceBusy] = useState(false)
+  const [evidenceError, setEvidenceError] = useState('')
+  const saveEvidence = async (id: string): Promise<void> => {
+    if (evidenceBusy) return
+    setEvidenceBusy(true)
+    setEvidenceError('')
+    try { await promotePaperEvidence(workspaceRoot, unitDir, id); setTab('evidence') }
+    catch (cause) { setEvidenceError(cause instanceof Error ? cause.message : String(cause)) }
+    finally { setEvidenceBusy(false) }
+  }
   return (
-    <aside className="flex w-[260px] shrink-0 flex-col border-r border-ds-border-muted bg-ds-card">
-      <div className="flex shrink-0 gap-1 border-b border-ds-border-muted p-1.5">
-        {(['outline', 'figures', 'annotations', 'references', 'citations'] as const).map((key) => (
+    <aside className="flex w-[min(360px,80vw)] shrink-0 flex-col border-r border-ds-border-muted bg-ds-card">
+      <div className="flex shrink-0 flex-wrap gap-1 border-b border-ds-border-muted p-1.5">
+        {(['outline', 'figures', 'annotations', 'evidence', 'references', 'citations'] as const).map((key) => (
           <button
             key={key}
             type="button"
@@ -50,12 +64,13 @@ export function PaperReaderDrawer({
             }`}
             onClick={() => setTab(key)}
           >
-            {t(`writePaperReaderTab_${key}`)}
+            {key === 'evidence' ? t('paperEvidenceTitle') : t(`writePaperReaderTab_${key}`)}
           </button>
         ))}
       </div>
+      {evidenceError ? <p role="alert" className="p-2 text-xs text-red-500">{evidenceError}</p> : null}
       <div className="min-h-0 flex-1 overflow-auto p-2">
-        {tab === 'outline' ? (
+        {tab === 'evidence' ? <PaperEvidencePane workspaceRoot={workspaceRoot} unitDir={unitDir} /> : tab === 'outline' ? (
           <OutlinePane pdfDocument={pdfDocument} onJumpToPage={onJumpToPage} t={t} />
         ) : tab === 'figures' ? (
           <PaperFiguresPane
@@ -71,6 +86,9 @@ export function PaperReaderDrawer({
             pdfFile={pdfFile}
             onJumpToPage={onJumpToPage}
             onDelete={onDeleteMark}
+            onSaveEvidence={(id) => void saveEvidence(id)}
+            evidenceBusy={evidenceBusy}
+            pdfSha256={pdfSha256}
             t={t}
           />
         ) : (
@@ -177,6 +195,9 @@ function AnnotationsPane({
   pdfFile,
   onJumpToPage,
   onDelete,
+  onSaveEvidence,
+  evidenceBusy,
+  pdfSha256,
   t
 }: {
   unitDir: string
@@ -184,6 +205,9 @@ function AnnotationsPane({
   pdfFile?: string
   onJumpToPage: (page: number) => void
   onDelete: (id: string) => void
+  onSaveEvidence: (id: string) => void
+  evidenceBusy: boolean
+  pdfSha256?: string
   t: TFunction
 }): ReactElement {
   const items = usePaperMarksStore((s) => s.items)
@@ -195,6 +219,7 @@ function AnnotationsPane({
     quote?: string
     comment?: string
     translation?: string
+    pdfSha256?: string
   }[]
   const copyCitation = (quote: string, page: number, comment?: string): void => {
     void navigator.clipboard
@@ -213,15 +238,18 @@ function AnnotationsPane({
           <button
             type="button"
             className="block w-full text-left"
+            disabled={!pdfSha256 || mark.pdfSha256 !== pdfSha256}
             onClick={() => onJumpToPage(mark.page)}
           >
+            {!mark.pdfSha256 || mark.pdfSha256 !== pdfSha256 ? <p className="text-[11px] text-amber-700 dark:text-amber-300">{t('paperEvidenceHiddenMarks')}</p> : null}
             <span className="text-[10.5px] text-ds-faint">{t('writePdfPageLabel', { page: mark.page })}</span>
             <p className="line-clamp-2 text-[12px] leading-4 text-ds-ink">{mark.quote}</p>
             {mark.comment ? (
               <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-4 text-ds-muted">{mark.comment}</p>
             ) : null}
           </button>
-          <span className="mt-1 hidden items-center gap-2 group-hover:flex">
+          <button type="button" className="mt-2 text-xs text-accent disabled:opacity-40" disabled={evidenceBusy} onClick={() => onSaveEvidence(mark.id)}>{t('paperEvidenceSave')}</button>
+          <span className="mt-1 flex flex-wrap items-center gap-2">
             <button
               type="button"
               className="inline-flex items-center text-[11px] text-ds-muted hover:text-accent"
@@ -255,6 +283,7 @@ function AnnotationsPane({
             <button
               type="button"
               className="block w-full text-left"
+              disabled={visual && (!pdfSha256 || card.pdfSha256 !== pdfSha256)}
               onClick={() => onJumpToPage(card.page)}
             >
               <span className="text-[10.5px] text-ds-faint">
@@ -268,6 +297,7 @@ function AnnotationsPane({
                 <p className="mt-0.5 line-clamp-3 text-[11.5px] leading-4 text-ds-muted">{card.translation}</p>
               ) : null}
             </button>
+            {visual ? <button type="button" className="mt-2 text-xs text-accent disabled:opacity-40" disabled={evidenceBusy} onClick={() => onSaveEvidence(card.id)}>{t('paperEvidenceSave')}</button> : null}
             {visual ? (
               <span className="mt-1 hidden items-center gap-2 group-hover:flex">
                 <button

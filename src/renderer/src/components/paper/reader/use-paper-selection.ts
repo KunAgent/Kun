@@ -12,6 +12,8 @@ import {
 } from '../../../paper/paper-marks-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
+import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
+import { usePaperReadingRequest } from '../../../paper/paper-reading-request'
 
 export type PendingPaperSelection = {
   text: string
@@ -35,10 +37,12 @@ export function usePaperSelection({
   rootRef,
   workspaceRoot,
   onSelectionChange,
+  paper,
   onAutoTranslate
 }: {
   rootRef: RefObject<HTMLElement | null>
   workspaceRoot: string
+  paper?: { unitDir: string; meta: PaperUnitMeta; pdfSha256?: string }
   onSelectionChange: ((selection: WriteEditorSelectionState) => void) | undefined
   /** R1.3: fired 250ms after a stable selection when auto-translate is on. */
   onAutoTranslate?: (sel: PendingPaperSelection) => void
@@ -184,7 +188,7 @@ export function usePaperSelection({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [pending, clearPendingSelection])
+  }, [pending, clearPendingSelection, paper])
 
   const beginDrag = useCallback((): void => {
     draggingRef.current = true
@@ -203,17 +207,18 @@ export function usePaperSelection({
   }, [captureSelectionSoon])
 
   const addHighlight = useCallback((color: PaperHighlightColor, comment?: string): void => {
-    if (!pending) return
+    if (!pending || (paper && !paper.pdfSha256)) return
     const mark = newPaperHighlight({
       color,
       page: pending.page,
       rects: pending.rects,
       quote: pending.text
     })
+    if (paper?.pdfSha256) mark.pdfSha256 = paper.pdfSha256
     if (comment) mark.comment = comment
     usePaperMarksStore.setState((s) => ({ items: [...s.items, mark], dirty: true }))
     clearPendingSelection()
-  }, [pending, clearPendingSelection])
+  }, [pending, clearPendingSelection, paper])
 
   // 「加入对话」: convert the published selection into a composer quote chip
   // (opens the assistant panel as a side effect).
@@ -244,11 +249,14 @@ export function usePaperSelection({
         }
       }
     }))
-    useWriteWorkspaceStore.getState().quoteCurrentSelection(workspaceRoot)
+    if (paper) {
+      usePaperReadingRequest.getState().open({ workspaceRoot, unitDir: paper.unitDir, meta: paper.meta, selection: { text: sel.text, page: sel.page, pdfSha256: paper.pdfSha256 }, question })
+      return
+    }
     const bridge = usePaperModeStore.getState().composerBridge
     if (bridge?.submit) bridge.submit(question)
     else bridge?.setInput(question)
-  }, [pending, workspaceRoot])
+  }, [pending, workspaceRoot, paper])
 
   return {
     pending,

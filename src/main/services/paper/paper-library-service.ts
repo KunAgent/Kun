@@ -5,7 +5,7 @@
  * and contained inside the workspace by the IPC layer.
  */
 import { basename, join, relative, sep } from 'node:path'
-import { lstat, mkdir, readdir, readFile, rename } from 'node:fs/promises'
+import { lstat, mkdir, readdir, readFile } from 'node:fs/promises'
 import {
   paperUnitMetaSchema,
   upgradePaperMeta,
@@ -17,6 +17,7 @@ import type {
   PaperLibraryMetaPatch
 } from '../../../shared/paper/paper-library-types'
 import { atomicWriteFile } from '../../atomic-json-file'
+import { renamePaperUnitWithEvidence } from './paper-evidence-relocation'
 import { pathExists } from '../workspace-paths'
 import {
   PaperUnitError,
@@ -230,7 +231,7 @@ export async function movePaperUnitToGroup(
   if (await pathExists(target)) {
     throw new PaperUnitError('io', `A paper already exists at ${toSlashes(relative(rootAbs, target))}.`)
   }
-  await rename(unitDirAbs, target)
+  await renamePaperUnitWithEvidence(rootAbs, unitDirAbs, target)
   return { unitDirAbs: target, unitDir: toSlashes(relative(rootAbs, target)) }
 }
 

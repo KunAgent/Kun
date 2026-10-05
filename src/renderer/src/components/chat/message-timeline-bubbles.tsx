@@ -157,7 +157,7 @@ function MessageBubbleImpl({
       <LiveAssistantStreamingProvider streaming={effectiveStreaming}>
         <div className="group/message flex min-w-0 max-w-full flex-col" data-timeline-block-id={block.id}>
           <div className="ds-markdown ds-chat-answer min-w-0 max-w-full text-ds-ink">
-            <AssistantMarkdown text={block.text} streaming={effectiveStreaming} />
+            <AssistantMarkdown plainText={block.renderMode === 'plain-text'} text={block.text} streaming={effectiveStreaming} />
           </div>
         {!streaming ? (
           <div className={assistantActionRowClass(speakingBlockId === block.id)} data-assistant-action-row>
@@ -229,7 +229,7 @@ function MessageBubbleImpl({
         data-timeline-block-id={block.id}
       >
         <div className="ds-markdown">
-          <AssistantMarkdown text={block.text} streaming={false} />
+          <AssistantMarkdown plainText={block.renderMode === 'plain-text'} text={block.text} streaming={false} />
         </div>
       </div>
     )
