@@ -1,3 +1,4 @@
+import { latestExecutedTurn } from '../domain/queue-execution-state.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -231,10 +232,15 @@ async markTurnAdmissionCompleted(this: TurnService,
         const { admissionPending: _pending, ...committed } = turn
         return { ...committed, admissionCompletedAt: completedAt }
       })
+      const stopped = latestExecutedTurn(current)
+      const resumesFreshInput = existing.status === 'queued' && existing.queueResumeSourceTurnId &&
+        stopped?.id === existing.queueResumeSourceTurnId && stopped.status === 'aborted' &&
+        current.queueControl?.reason !== 'restart_recovery'
       const next: ThreadRecord = {
         ...current,
-        ...(existing.status === 'running' && current.queueControl
-          ? { queueControl: undefined } : {}),
+        ...(resumesFreshInput
+          ? { queueControl: undefined, queueResumeSourceTurnId: stopped.id }
+          : existing.status === 'running' && current.queueControl ? { queueControl: undefined } : {}),
         ...(locks.agentSurface ? { agentSurface: locks.agentSurface } : {}),
         ...(locks.designProfile ? { designProfile: locks.designProfile } : {}),
         ...(locks.approvalPolicy ? { approvalPolicy: locks.approvalPolicy } : {}),

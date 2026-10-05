@@ -321,3 +321,17 @@ describe('Stop linearization', () => {
     }
   })
 })
+
+describe('fresh work after Stop', () => {
+  it('allows a new committed input when Stop left no older queued inputs', async () => {
+    const h = createDispatcherHarness()
+    await createThread(h, 'fresh-after-stop')
+    const active = await h.turns.startTurn({ threadId: 'fresh-after-stop', request: { prompt: 'A' } })
+    try {
+      await h.turns.interruptTurn({ threadId: 'fresh-after-stop', turnId: active.turnId })
+      const next = await h.turns.enqueueTurn({ threadId: 'fresh-after-stop', request: { prompt: 'New independent task' } })
+      await vi.waitFor(() => expect(h.runTurn).toHaveBeenCalledExactlyOnceWith('fresh-after-stop', next.turnId))
+      expect((await h.threadStore.get('fresh-after-stop'))?.queueResumeSourceTurnId).toBe(active.turnId)
+    } finally { await h.dispatcher.dispose() }
+  })
+})

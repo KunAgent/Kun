@@ -217,6 +217,8 @@ export const TurnSchema = z.object({
   startedAt: z.string().optional(),
   /** Last executable history item before durable queue promotion. */
   queueExecutionAnchorItemId: z.string().optional(),
+  /** Fresh input admitted after Stop when no older queued input existed. */
+  queueResumeSourceTurnId: z.string().optional(),
   finishedAt: z.string().optional(),
   items: z.array(TurnItem).default([]),
   attachmentIds: z.array(z.string().min(1)).default([]),

@@ -1,4 +1,4 @@
-import { isQueueExecutionBlocked } from '../domain/queue-execution-state.js'
+import { isQueueExecutionBlocked, latestExecutedTurn } from '../domain/queue-execution-state.js'
 import { executableHistory } from '../loop/executable-history.js'
 import { resolveTurnReviewRequests } from './review-composer-context.js'
 import type { ThreadRecord } from '../contracts/threads.js'
@@ -235,10 +235,14 @@ export const turnServiceQueueOperations = {
     let current = thread
     for (let attempt = 0; attempt < 3; attempt += 1) {
       assertQueueCapacity(current, input.threadId)
+      const stopped = latestExecutedTurn(current)
+      const freshAfterStop = queuedTurns(current).length === 0 && stopped?.status === 'aborted' &&
+        current.queueControl?.reason !== 'restart_recovery'
       const next: ThreadRecord = {
         ...touchThread(current, now),
         status: 'running',
-        turns: [...current.turns, queuedTurn],
+        turns: [...current.turns, { ...queuedTurn,
+          ...(freshAfterStop ? { queueResumeSourceTurnId: stopped.id } : {}) }],
         updatedAt: now
       }
       const committed = await this['commitThreadRecordCAS'](next, current.revision ?? 0)
