@@ -107,7 +107,7 @@ try {
 function configuration() {
   return { configFile: false, root: repository, esbuild: { jsx: 'automatic' },
     optimizeDeps: { entries: [] }, css: { postcss: repository },
-    resolve: { alias: { '/src': resolve(repository, 'src'), '@renderer': resolve(repository, 'src/renderer/src'), '@shared': resolve(repository, 'src/shared') } },
+    resolve: { alias: { '@renderer': resolve(repository, 'src/renderer/src'), '@shared': resolve(repository, 'src/shared') } },
     plugins: [{ name: 'room-header-avatar-fixture', enforce: 'pre',
       resolveId(id) { if (id === fixtureUrl || id === fixtureId) return fixtureId },
       load(id) { if (id === fixtureId) return fixtureSource() },
@@ -276,7 +276,13 @@ async function buildFixture() {
   const index = join(temporary, 'index.html')
   const outDir = join(temporary, 'dist')
   await writeFile(index, html)
-  await build({ ...configuration(), root: temporary, base: './', logLevel: 'warn', build: {
+  const config = configuration()
+  // The dev server already serves /src from its repository root. A Windows
+  // absolute /src alias breaks its static asset route; only the temporary
+  // production fixture needs that alias, normalized to Vite's URL form.
+  await build({ ...config, root: temporary,
+    resolve: { alias: { ...config.resolve.alias, '/src': normalizePath(resolve(repository, 'src')) } },
+    base: './', logLevel: 'warn', build: {
     outDir, emptyOutDir: true, target: 'chrome128', modulePreload: false, reportCompressedSize: false,
     rollupOptions: { input: index } } })
   builtServer = createHttpServer(async (request, response) => {
