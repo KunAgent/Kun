@@ -278,22 +278,26 @@ async function assertNavigationAndImageReplacement() {
   assert.deepEqual(await page.evaluate(() => [window.avatarFixture.calls.profile, window.avatarFixture.calls.session]), [1, 1])
 }
 async function buildFixture() {
-  const index = join(temporary, 'index.html')
   const outDir = join(temporary, 'dist')
-  await writeFile(index, html)
-  const config = configuration()
-  // The dev server already serves /src from its repository root. A Windows
-  // absolute /src alias breaks its static asset route; only the temporary
-  // production fixture needs that alias, normalized to Vite's URL form.
-  await build({ ...config, root: temporary,
-    resolve: { alias: { ...config.resolve.alias, '/src': normalizePath(resolve(repository, 'src')),
-      react: normalizePath(resolve(repository, 'node_modules/react')),
-      'react-dom': normalizePath(resolve(repository, 'node_modules/react-dom')) } },
+  // Build the real component as the entry and write its tiny HTML host afterward.
+  // An HTML entry on Windows' separate temp drive is not relative to Vite's
+  // repository root and can produce invalid ../ asset names.
+  const built = await build({ ...configuration(),
     esbuild: { jsx: 'automatic', jsxDev: false },
     define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     base: './', mode: 'production', logLevel: 'warn', build: {
-    outDir, emptyOutDir: true, target: 'chrome128', modulePreload: false, reportCompressedSize: false,
-    rollupOptions: { input: index } } })
+      outDir, emptyOutDir: true, target: 'chrome128', assetsInlineLimit: 0,
+      modulePreload: false, reportCompressedSize: false, rollupOptions: { input: fixtureId }
+    } })
+  const output = (Array.isArray(built) ? built : [built]).flatMap(result => result.output ?? [])
+  const entry = output.find(item => item.type === 'chunk' && item.isEntry)
+  assert.ok(entry, 'the production fixture must emit its real component entry')
+  const css = [...(entry.viteMetadata?.importedCss ?? [])]
+  assert.ok(css.length, 'the production fixture must include the real component styles')
+  const host = html.replace('<script type="module" src="' + fixtureUrl + '"></script>',
+    css.map(file => '<link rel="stylesheet" href="./' + file + '">').join('') +
+    '<script type="module" src="./' + entry.fileName + '"></script>')
+  await writeFile(join(outDir, 'index.html'), host)
   builtServer = createHttpServer(async (request, response) => {
     try {
       const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname)
