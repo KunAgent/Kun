@@ -1,4 +1,6 @@
 import { EventEmitter } from 'node:events'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { spawn as nodeSpawn } from 'node:child_process'
 import type { Socket } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -86,6 +88,44 @@ describe('one-shot update helper deadlines', () => {
     await scheduled
     expect(test.child.unref).toHaveBeenCalledOnce()
     expect(test.child.kill).not.toHaveBeenCalled()
+  })
+
+  it('isolates every migration exit and reads the executable from its Unicode result file', async () => {
+    const test = fixture()
+    const scheduled = scheduleBoundedUpdateRollback('C:\\Kun\\recover.ps1', environment, 123, test.spawnHelper)
+    const { command } = await launched(test)
+    try {
+      expect(command).toContain("$powershell=Join-Path $PSHOME 'powershell.exe'")
+      for (const action of ['ValidateUpdateRollback', 'RecoverUpdateTransaction', 'ResolveRecoveryExecutable', 'FinalizeUpdateTransaction']) {
+        expect(command).toContain(`& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action ${action} -Bounded`)
+      }
+      expect(command).not.toContain('& $script -Action')
+      expect(command).toContain('$resultPath=[IO.Path]::GetTempFileName()')
+      expect(command).toContain('-Action ResolveRecoveryExecutable -Bounded -ResultPath $resultPath')
+      expect(command).toContain('[IO.File]::ReadAllText($resultPath, [Text.Encoding]::Unicode)')
+      expect(command).toContain('finally { Remove-Item -LiteralPath $resultPath -Force')
+      expect(command).not.toContain('Select-Object -Last 1')
+    } finally {
+      // Settle the simulated helper even when a command assertion fails.
+      await acknowledge(command)
+      await scheduled
+    }
+  })
+
+  it('keeps every native action independently bounded without limiting ordinary installer runs', () => {
+    const script = readFileSync(join(process.cwd(), 'build/windows-installer-migration.ps1'), 'utf8')
+    expect(script).toContain('[switch]$Bounded')
+    expect(script).toMatch(/if \(\$Bounded\) \{[\s\S]*?Environment\.Exit\(124\)[\s\S]*?300000[\s\S]*?\[KunInstallerActionDeadline\]::Start\(\)/)
+  })
+
+  it('never treats a zero-exit actual helper as ready without its handshake', async () => {
+    const test = fixture()
+    const scheduled = scheduleBoundedUpdateRollback('recover.ps1', environment, 123, test.spawnHelper)
+    const rejected = expect(scheduled).rejects.toThrow('exited with 0 before readiness')
+    await launched(test)
+    test.child.emit('exit', 0)
+    await rejected
+    expect(test.child.unref).not.toHaveBeenCalled()
   })
 
   it('does not authorize GUI exit when only the elevation launcher spawned or exited successfully', async () => {

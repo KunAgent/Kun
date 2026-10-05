@@ -30,11 +30,11 @@ function payload(root: string, executable: string): void {
   writeFileSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'manager', 'manager-entry.js'), 'manager')
 }
 
-function fixture(inPlace = false) {
+function fixture(inPlace = false, unicodePath = false) {
   const fixtureName = `fixture-${String(++fixtureIndex).padStart(2, '0')}-${inPlace ? 'in-place' : 'rename'}`
   // Production failpoints deliberately require a real temporary test root.
   // The CI artifact directory is only an output destination, never execution state.
-  const root = join(tmpdir(), `kun-installer-migration-smoke-${process.pid}-${fixtureName}`)
+  const root = join(tmpdir(), `kun-installer-migration-smoke-${process.pid}-${fixtureName}${unicodePath ? '-\u4f60\u597d' : ''}`)
   roots.push({ root, artifactDirectory: artifactRoot ? join(artifactRoot, fixtureName) : undefined })
   rmSync(root, { recursive: true, force: true })
   mkdirSync(root, { recursive: true })
@@ -268,8 +268,8 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(transaction(transactionPath)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
   }, 180_000)
 
-  it('acknowledges over a real pipe before GUI exit and then completes rollback', async () => {
-    const input = fixture()
+  it('acknowledges over a real pipe before GUI exit and then completes rollback from a Unicode path', async () => {
+    const input = fixture(false, true)
     input.transaction = join(input.root, 'recovery', 'abc-update.json')
     // A real executable permits the recovered application's independent launch.
     copyFileSync(process.execPath, join(input.source, 'DeepSeek GUI.exe'))
@@ -283,9 +283,14 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(record).not.toBeNull()
     const gui = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
     let helperProcess: ChildProcess | undefined
+    let helperOutput = ''
     let completed: Promise<number | null> | undefined
     const launch: typeof spawn = ((...args: Parameters<typeof spawn>) => {
-      helperProcess = spawn(...args)
+      const [command, commandArgs, options] = args
+      helperProcess = spawn(command, commandArgs, { ...options, stdio: ['ignore', 'pipe', 'pipe'] })
+      const capture = (chunk: Buffer) => { helperOutput = (helperOutput + chunk.toString()).slice(-16_384) }
+      helperProcess.stdout?.on('data', capture)
+      helperProcess.stderr?.on('data', capture)
       completed = new Promise<number | null>((resolve, reject) => {
         helperProcess!.once('exit', resolve)
         helperProcess!.once('error', reject)
@@ -293,14 +298,19 @@ windowsOnly('Windows automatic update transaction', () => {
       return helperProcess
     }) as typeof spawn
     try {
-      await scheduleBoundedUpdateRollback(helper, record!.recoveryEnvironment, gui.pid!, launch)
+      await scheduleBoundedUpdateRollback(helper, {
+        ...record!.recoveryEnvironment,
+        ...{ KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnostic }
+      }, gui.pid!, launch)
       expect(gui.exitCode).toBeNull()
       expect(transaction(input.transaction).Phase).toBe('payload_switched')
       gui.kill()
-      expect(await completed).toBe(0)
+      expect(await completed, helperOutput).toBe(0)
       expect(existsSync(input.transaction)).toBe(false)
       expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
       expect(existsSync(input.target)).toBe(false)
+    } catch (error) {
+      throw new Error(`${String(error)}\nHelper output:\n${helperOutput}`, { cause: error })
     } finally {
       gui.kill()
       helperProcess?.kill()
@@ -318,7 +328,8 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(record).not.toBeNull()
     await expect(scheduleBoundedUpdateRollback(helper, {
       ...record!.recoveryEnvironment,
-      ...{ KUN_INSTALLER_FAULT_INJECTION: '1', KUN_INSTALLER_FAULT_POINT: 'rollback.before_ready' }
+      ...{ KUN_INSTALLER_FAULT_INJECTION: '1', KUN_INSTALLER_FAULT_POINT: 'rollback.before_ready',
+        KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnostic }
     }, process.pid)).rejects.toThrow('before readiness')
     expect(transaction(input.transaction).Phase).toBe('prepared')
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)

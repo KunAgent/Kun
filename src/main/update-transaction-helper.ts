@@ -67,16 +67,26 @@ export async function scheduleBoundedUpdateRollback(
     const command = `${powershellHelperDeadline()}\n` + [
       `$script=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(scriptPath)}'))`,
       `$waitPid=${pid}`,
+      "$powershell=Join-Path $PSHOME 'powershell.exe'",
       ...assignments,
-      '& $script -Action ValidateUpdateRollback',
+      // Actions use exit, so each runs in a native child:
+      // its status/output cannot terminate or bypass the coordinator.
+      '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action ValidateUpdateRollback -Bounded',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
       ...powershellRollbackReadiness(readiness.pipeName, readiness.token),
       'if (Get-Process -Id $waitPid -ErrorAction SilentlyContinue) { Wait-Process -Id $waitPid -Timeout 90 -ErrorAction Stop }',
-      '& $script -Action RecoverUpdateTransaction',
+      '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action RecoverUpdateTransaction -Bounded',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
-      '$exe=((& $script -Action ResolveRecoveryExecutable | Select-Object -Last 1).Trim())',
-      'if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($exe)) { exit 1 }',
-      '& $script -Action FinalizeUpdateTransaction',
+      '$resultPath=[IO.Path]::GetTempFileName()',
+      [
+        'try {',
+        '  & $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action ResolveRecoveryExecutable -Bounded -ResultPath $resultPath | Out-Null',
+        '  if ($LASTEXITCODE -ne 0) { throw "Recovery executable resolution failed." }',
+        '  $exe=[IO.File]::ReadAllText($resultPath, [Text.Encoding]::Unicode).Trim()',
+        '} finally { Remove-Item -LiteralPath $resultPath -Force -ErrorAction SilentlyContinue }'
+      ].join('\n'),
+      'if ([string]::IsNullOrWhiteSpace($exe)) { exit 1 }',
+      '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action FinalizeUpdateTransaction -Bounded',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
       'Start-Process -FilePath $exe -ErrorAction Stop',
       'exit 0'
