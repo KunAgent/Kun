@@ -94,6 +94,22 @@ describe('AgentModelSettings immediate apply', () => {
 
   const select = (label: string) => renderer.root.findByProps({ 'aria-label': label })
 
+  it('labels role-default scope and immediate save semantics', async () => {
+    await render()
+    expect(renderer.root.findAllByType('p').some((item) => String(item.children).includes('Existing conversation overrides and active requests stay unchanged'))).toBe(true)
+    expect(renderer.root.findAllByType('p').some((item) => String(item.children).includes('Model changes save immediately'))).toBe(true)
+  })
+
+  it('does not notify another Agent editor after an old save completes', async () => {
+    let resolve!: (value: unknown) => void
+    api.saveAgentModels.mockImplementationOnce(() => new Promise((yes) => { resolve = yes }))
+    const saved = await render()
+    act(() => select('Main model').props.onChange({ target: { value: modelBindingKey(api.snapshot.options[1]) } }))
+    act(() => renderer.unmount())
+    await act(async () => resolve({ agent: { ...api.snapshot.agent, revision: 3 } }))
+    expect(saved).not.toHaveBeenCalled()
+  })
+
   it('treats a model without a provider id as inheritance', async () => {
     const unavailable = { ...api.snapshot.options[0], model: 'legacy-model', providerId: undefined }
     api.snapshot = { ...api.snapshot, options: [...api.snapshot.options, unavailable] }
@@ -120,6 +136,7 @@ describe('AgentModelSettings immediate apply', () => {
       fastModelRef: api.snapshot.agent.fastModelRef
     })
     expect(onSaved).toHaveBeenCalledOnce()
+    expect(renderer.root.findByProps({ role: 'status' }).children).toEqual(['Model saved'])
     expect(renderer.root.findAllByProps({ className: 'rooms-run-primary' })).toHaveLength(0)
   })
 
@@ -162,6 +179,7 @@ describe('AgentModelSettings immediate apply', () => {
     expect(renderer.root.findAllByType('fieldset').every((node) => node.props.disabled)).toBe(true)
     await act(async () => { finish(new Error('revision conflict')) })
     expect(select('Main model').props.value).toBe(modelBindingKey(api.snapshot.agent.modelRef))
+    expect(api.refresh).toHaveBeenCalledOnce()
     expect(renderer.root.findAllByProps({ role: 'alert' }).some((node) =>
       String(node.children).includes('revision conflict')
     )).toBe(true)

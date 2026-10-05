@@ -57,7 +57,7 @@ describe('Rooms managed mutation readiness', () => {
   it('admits chat quick-create received before coordinator startup and replays without duplicate setup', async () => {
     const { composition, call, start } = await fixture()
     const settled = vi.fn()
-    const input = { clientRequestId: 'chat-before-start', setupMode: 'chat' }
+    const input = { clientRequestId: 'chat-before-start', setupMode: 'chat', modelRef: { providerId: 'default', model: 'fake' } }
     const creating = call('/v1/agents/quick-create', input).then((result) => { settled(); return result })
     expect((await call('/v1/rooms')).status).toBe(200)
     expect(settled).not.toHaveBeenCalled()

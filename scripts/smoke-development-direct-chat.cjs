@@ -8,6 +8,7 @@ const { exercisePersonalAgentIm, exercisePersonalAgentImStorage } = require('./s
 const { exercisePersonalAgentWorkspace } = require('./smoke-personal-agent-workspace.cjs')
 const { startDirectModel } = require('./smoke-direct-model.cjs')
 const { exerciseDirectChat } = require('./smoke-direct-controls.cjs')
+const { exerciseAgentModelControls } = require('./smoke-agent-model-controls.cjs')
 const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
 const { exerciseRoomApprovals } = require('./smoke-room-approvals.cjs')
 const { exerciseAgentChatWorkbench, openAgentPrivateChat } = require('./smoke-agent-chat-workbench.cjs')
@@ -45,6 +46,8 @@ async function main() {
   const repositoryRoot = resolve(__dirname, '..')
   assert(!(process.argv.includes('--personal-workspace-only') && process.argv.includes('--real-model')),
     'Personal workspace evidence must stay offline')
+  assert(!(process.argv.includes('--agent-models-only') && process.argv.includes('--real-model')),
+    'Agent model controls evidence must stay offline')
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 180_000)
   const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'rooms-direct-smoke'))
   for (const entry of ['out/main/index.js', 'kun/dist/cli/serve-entry.js']) {
@@ -155,7 +158,8 @@ async function main() {
     await page.waitForLoadState('domcontentloaded')
     await resize(electronApplication, 1360, 900)
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-    const exercise = process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
+    const exercise = process.argv.includes('--agent-models-only') ? exerciseAgentModelControls
+      : process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
       : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
@@ -167,7 +171,9 @@ async function main() {
       switchCode: () => switchMode(page, 'chat'),
       openPrivate: (name) => openAgentPrivateChat({ page, name, switchCode: () => switchMode(page, 'chat') }),
       approve: (ref) => installNativeConsentFixture(electronApplication, ref) })
-    const direct = await (process.argv.includes('--personal-workspace-only')
+    const direct = await (process.argv.includes('--agent-models-only')
+      ? withTimeout(exercised, 180_000, 'exercising the offline Agent model controls')
+      : process.argv.includes('--personal-workspace-only')
       ? withTimeout(exercised, 300_000, 'exercising the offline personal workspace')
       : process.argv.includes('--personal-im-storage-only')
       ? withTimeout(exercised, 15_000, 'probing actual OS credential storage; verification blocked')

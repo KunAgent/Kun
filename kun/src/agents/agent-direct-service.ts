@@ -105,9 +105,10 @@ export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, r
   const turn = thread?.turns.find((turn) => turn.clientRequestId === 'private-' + value.id + '-' + (value.stepAttempt ?? 0))
   if (!['failed', 'cancelled'].includes(value.status) || value.admissionAttempted && (!turn || ['queued', 'running'].includes(turn.status))) throw new RoomStoreConflictError('Reconcile the original execution before retrying')
   const currentRoom = await rooms.service.get(roomId)
-  const id = 'request-' + randomUUID(), snapshot = await rooms.agents.freeze({ ...value.roomSnapshot, privateExecutionPolicy: currentRoom.privateExecutionPolicy })
+  const id = 'request-' + randomUUID(), snapshot = await rooms.agents.freeze({ ...value.roomSnapshot,
+    privateModelRef: currentRoom.privateModelRef, privateExecutionPolicy: currentRoom.privateExecutionPolicy })
   await freezeAgentPermissions(rooms.agents, snapshot)
-  const request: RoomRequestState = { clientSurface: value.clientSurface, imConnectionId: value.imConnectionId, id, roomId, privateProtocol: 'direct-v1', status: 'pending', rootRequestId: id,
+  const request: RoomRequestState = { privateModel: await rooms.service.directBinding(snapshot), clientSurface: value.clientSurface, imConnectionId: value.imConnectionId, id, roomId, privateProtocol: 'direct-v1', status: 'pending', rootRequestId: id,
     sourceMessageId: value.sourceMessageId, roomSnapshot: snapshot, message: value.message, threadId: 'private-pending-' + id }
   await store.commit({ requestId: key, fingerprint, checks: [{ kind: 'request', id: requestId, expectedRevision: input.expectedRevision },
     { kind: 'request', id, expectedRevision: null }], puts: [{ kind: 'request', id, roomId, value: request }],

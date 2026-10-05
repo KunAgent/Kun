@@ -10,7 +10,7 @@ import { agentPath, useAgentResource } from './agent-client'
 import { roomRequestId, roomsRequest } from './rooms-client'
 import './agents.css'
 
-const TABS = ['profile', 'conversations', 'memory', 'runs'] as const
+const TABS = ['profile', 'models', 'conversations', 'memory', 'runs'] as const
 
 export function AgentDetails({ agentId, active, onSaved, onOpen, onConversation, onRun, onSource }: {
   agentId?: string; active: boolean; onSaved: (agent: AgentIdentity) => void; onOpen: (id: string) => void;
@@ -19,8 +19,7 @@ export function AgentDetails({ agentId, active, onSaved, onOpen, onConversation,
 }) {
   const { t } = useTranslation('common')
   const resource = useAgentResource<{ agent: AgentIdentity }>(agentId ? agentPath(agentId) : null, active)
-  const [modelsOpen, setModelsOpen] = useState(false)
-  const [tab, setTab] = useState<'profile' | 'conversations' | 'memory' | 'runs'>('profile')
+  const [tab, setTab] = useState<'profile' | 'models' | 'conversations' | 'memory' | 'runs'>('profile')
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const agent = resource.data?.agent
   const action = async (kind: 'archive' | 'copy') => {
@@ -60,7 +59,7 @@ export function AgentDetails({ agentId, active, onSaved, onOpen, onConversation,
               <Copy size={15} aria-hidden="true" />{t('agentsCopy')}
             </button>
           </div>
-          <button type="button" className="agent-details-models" onClick={() => setModelsOpen(true)}>
+          <button type="button" className="agent-details-models" onClick={() => setTab('models')}>
             <SlidersHorizontal size={15} aria-hidden="true" />{t('directModels')}
           </button>
           {agent.archivedAt ? <p className="rooms-run-note agent-details-archive-note">{t('agentsArchiveHint')}</p> : null}
@@ -71,13 +70,13 @@ export function AgentDetails({ agentId, active, onSaved, onOpen, onConversation,
           </nav>
           <div className="agent-details-panel">
             {tab === 'profile' ? <AgentProfileForm agent={agent} active={active} onSaved={onSaved} /> : null}
+            {tab === 'models' ? <AgentModelSettings agentId={agent.id} variant="panel" onClose={() => setTab('profile')} onSaved={resource.refresh} /> : null}
             {tab === 'memory' ? <AgentMemoryPanel agentId={agent.id} active={active} onSource={onSource} /> : null}
             {tab === 'conversations' ? <AgentConversations agentId={agent.id} active={active} onOpen={onConversation} /> : null}
             {tab === 'runs' ? <AgentRuns agentId={agent.id} active={active} onRun={onRun} /> : null}
           </div>
         </div>
       </div>
-      {modelsOpen ? <AgentModelSettings agentId={agent.id} onClose={() => setModelsOpen(false)} onSaved={resource.refresh} /> : null}
     </> : !resource.error ? <p className="rooms-run-note">{t('roomsLoading')}</p> : null}
     {error || resource.error ? <p role="alert" className="rooms-run-error">{error || resource.error}</p> : null}
   </div>

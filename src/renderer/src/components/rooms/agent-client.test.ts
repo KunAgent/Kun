@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('./rooms-client', () => ({ roomsRequest: mocks.request, roomRequestId: () => 'request' }))
 vi.mock('./useRoomEvents', () => ({ subscribeRoomEvents: () => () => undefined }))
-import { useAgentResource } from './agent-client'
+import { loadAgentModelsMap, useAgentResource } from './agent-client'
 
 describe('Agent resource response scope', () => {
   let renderer: ReactTestRenderer
@@ -48,5 +48,16 @@ describe('Agent resource response scope', () => {
     expect(current.data).toBeNull()
     await act(async () => complete({ workspace: '/new-project' }))
     expect(current.data?.workspace).toBe('/new-project')
+  })
+})
+
+
+describe('Agent model lookup scope', () => {
+  it('scopes private readiness to its room without changing group lookup', async () => {
+    mocks.request.mockReset().mockResolvedValue({ agent: { id: 'a' }, mainAvailable: true })
+    await loadAgentModelsMap(['a'], 'room/one')
+    expect(mocks.request).toHaveBeenLastCalledWith('/v1/agents/a/models?room_id=room%2Fone')
+    await loadAgentModelsMap(['a'])
+    expect(mocks.request).toHaveBeenLastCalledWith('/v1/agents/a/models')
   })
 })

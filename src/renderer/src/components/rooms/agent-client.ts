@@ -35,11 +35,11 @@ export async function saveAgentModels(
     fastModelRef: input.fastModelRef ?? null
   })
 }
-export async function loadAgentModelsMap(ids: string[]) {
+export async function loadAgentModelsMap(ids: string[], roomId?: string) {
   const unique = [...new Set(ids.filter(Boolean))]
   const entries = await Promise.all(unique.map(async (id) => {
     try {
-      return [id, await roomsRequest<AgentModelSnapshot>(agentPath(id) + '/models')] as const
+      return [id, await roomsRequest<AgentModelSnapshot>(agentPath(id) + '/models' + (roomId ? '?room_id=' + encodeURIComponent(roomId) : ''))] as const
     } catch {
       return [id, undefined] as const
     }
@@ -115,7 +115,7 @@ export function useAgentResource<T>(path: string | null, active = true, scopeKey
     error: snapshot.scope === scope ? snapshot.error : '', refresh: () => setVersion((value) => value + 1) }
 }
 
-export function useRoomAgentModels(room: { members: RoomMember[]; revision?: number }) {
+export function useRoomAgentModels(room: { id?: string; conversationKind?: string; members: RoomMember[]; revision?: number }) {
   const key = room.members
     .filter((member) => member.participantAgentId && !member.removedAt)
     .map((member) => member.participantAgentId!)
@@ -128,13 +128,13 @@ export function useRoomAgentModels(room: { members: RoomMember[]; revision?: num
       return
     }
     let active = true
-    void loadAgentModelsMap(key.split(',')).then((value) => {
+    void loadAgentModelsMap(key.split(','), room.conversationKind === 'user_agent' ? room.id : undefined).then((value) => {
       if (active) setData(value)
     })
     return () => {
       active = false
     }
-  }, [key, room.revision])
+  }, [key, room.id, room.conversationKind, room.revision])
   return data
 }
 

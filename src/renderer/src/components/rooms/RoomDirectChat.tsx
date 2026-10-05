@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { WorkbenchActiveChip } from './WorkbenchActiveChip'
-import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, RotateCcw, Search, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -47,11 +47,11 @@ export function RoomNoticeDismiss({ onDismiss }: { onDismiss: () => void }) {
   return <button type="button" className="rooms-notice-dismiss" aria-label={t('roomsDismissNotice')} title={t('roomsDismissNotice')}
     onClick={onDismiss}><X size={13} aria-hidden="true" /></button>
 }
-export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReminders, onReset, onConnect, onApps, onTasks, onSession, sessionOpen, sessionDisabled, embedded = false, onToggleLeftSidebar }: {
+export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReminders, onReset, onConnect, onApps, onTasks, onSession, sessionOpen, sessionDisabled, embedded = false, onToggleLeftSidebar, onManageAgents }: {
   room: Room; models?: AgentModels | null; onSidebar: () => void; onSearch: () => void; onProfile: () => void; onModels: () => void
   onFiles: () => void; onReminders: () => void; onReset: () => void; onConnect: () => void; onApps?: () => void; onTasks: () => void
   onSession: () => void; sessionOpen: boolean; sessionDisabled: boolean
-  embedded?: boolean; onToggleLeftSidebar?: () => void
+  embedded?: boolean; onToggleLeftSidebar?: () => void; onManageAgents?: () => void
 }) {
   const { t } = useTranslation('common')
   const member = room.members[0]
@@ -68,6 +68,7 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
       <FolderOpen size={14} /><span>{room.privateWorkspace?.replaceAll('\\', '/').split('/').at(-1) ?? t('agentPrivateWorkspace')}</span><ChevronDown size={12} /></button> : null}
     <WorkbenchActiveChip roomId={room.id} />
     <div className="direct-header-spacer" />
+    {onManageAgents ? <button type="button" className="rooms-icon-button" aria-label={t('directManageAllAgents')} title={t('directManageAllAgents')} onClick={onManageAgents}><SlidersHorizontal size={18} /></button> : null}
     <button className="rooms-icon-button" aria-label={t('roomsSearchMessages')} onClick={onSearch}><Search size={18} /></button>
     <button type="button" className="rooms-icon-button" aria-label={t('roomsViewAgentSession')} title={t('roomsViewAgentSession')}
       aria-pressed={sessionOpen} disabled={sessionDisabled} onClick={onSession}><PanelRight size={18} /></button>

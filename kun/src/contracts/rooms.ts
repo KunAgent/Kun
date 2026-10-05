@@ -70,6 +70,7 @@ export const RoomSchema = z.object({
   conversationKind: ConversationKind.optional(),
   participantAgentIds: z.array(ParticipantAgentId).max(100).optional(),
   privateExecutionPolicy: RoomExecutionPolicySchema.optional(),
+  privateModelRef: AgentModelRef.optional(),
   privateWorkspace: z.string().max(4096).optional(),
   privateEpoch: z.number().int().nonnegative().optional(),
   schemaVersion: z.literal(1),
