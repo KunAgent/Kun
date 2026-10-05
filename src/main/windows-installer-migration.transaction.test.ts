@@ -1,9 +1,10 @@
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { scheduleBoundedUpdateRollback } from './update-transaction-helper'
+import { createRollbackCoordinatorProbe } from './windows-installer-coordinator-probe.test-utils'
 import { readInstallerUpdateTransaction } from './gui-updater-pending'
 
 // The transaction reader is given an explicit recoveryRoot. It must not load
@@ -282,38 +283,24 @@ windowsOnly('Windows automatic update transaction', () => {
     )
     expect(record).not.toBeNull()
     const gui = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
-    let helperProcess: ChildProcess | undefined
-    let helperOutput = ''
-    let completed: Promise<number | null> | undefined
-    const launch: typeof spawn = ((...args: Parameters<typeof spawn>) => {
-      const [command, commandArgs, options] = args
-      helperProcess = spawn(command, commandArgs, { ...options, stdio: ['ignore', 'pipe', 'pipe'] })
-      const capture = (chunk: Buffer) => { helperOutput = (helperOutput + chunk.toString()).slice(-16_384) }
-      helperProcess.stdout?.on('data', capture)
-      helperProcess.stderr?.on('data', capture)
-      completed = new Promise<number | null>((resolve, reject) => {
-        helperProcess!.once('exit', resolve)
-        helperProcess!.once('error', reject)
-      })
-      return helperProcess
-    }) as typeof spawn
+    const probe = createRollbackCoordinatorProbe(input.diagnostic)
     try {
       await scheduleBoundedUpdateRollback(helper, {
         ...record!.recoveryEnvironment,
         ...{ KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnostic }
-      }, gui.pid!, launch)
+      }, gui.pid!, probe.launch)
       expect(gui.exitCode).toBeNull()
       expect(transaction(input.transaction).Phase).toBe('payload_switched')
       gui.kill()
-      expect(await completed, helperOutput).toBe(0)
+      expect(await probe.completion(), probe.output()).toBe(0)
       expect(existsSync(input.transaction)).toBe(false)
       expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
       expect(existsSync(input.target)).toBe(false)
     } catch (error) {
-      throw new Error(`${String(error)}\nHelper output:\n${helperOutput}`, { cause: error })
+      throw new Error(`${String(error)}\n${await probe.drain()}`, { cause: error })
     } finally {
       gui.kill()
-      helperProcess?.kill()
+      probe.kill()
     }
   }, 60_000)
 
@@ -326,13 +313,22 @@ windowsOnly('Windows automatic update transaction', () => {
       { platform: 'win32', recoveryRoot: join(input.root, 'recovery') }
     )
     expect(record).not.toBeNull()
-    await expect(scheduleBoundedUpdateRollback(helper, {
-      ...record!.recoveryEnvironment,
-      ...{ KUN_INSTALLER_FAULT_INJECTION: '1', KUN_INSTALLER_FAULT_POINT: 'rollback.before_ready',
-        KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnostic }
-    }, process.pid)).rejects.toThrow('before readiness')
-    expect(transaction(input.transaction).Phase).toBe('prepared')
-    expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
+    const probe = createRollbackCoordinatorProbe(input.diagnostic)
+    try {
+      await expect(scheduleBoundedUpdateRollback(helper, {
+        ...record!.recoveryEnvironment,
+        ...{ KUN_INSTALLER_FAULT_INJECTION: '1', KUN_INSTALLER_FAULT_POINT: 'rollback.before_ready',
+          KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnostic }
+      }, process.pid, probe.launch)).rejects.toThrow('exited with 1 before readiness')
+      await probe.drain()
+      expect(readFileSync(input.diagnostic, 'utf8')).toContain('KUN_INSTALLER_FAULT_INJECTION:rollback.before_ready')
+      expect(transaction(input.transaction).Phase).toBe('prepared')
+      expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
+    } catch (error) {
+      throw new Error(`${String(error)}\n${await probe.drain()}`, { cause: error })
+    } finally {
+      probe.kill()
+    }
   }, 60_000)
 
   it('rejects readiness when the required in-place payload backup is missing', () => {
