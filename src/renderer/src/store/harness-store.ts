@@ -12,8 +12,8 @@ import { getProvider } from '../agent/registry'
 /**
  * Harness catalog + per-thread session surface (docs/ade/12 §7.2).
  *
- * - `rows` is the `GET /v1/harnesses` cache; settings edits or the picker's
- *   open handler force a reload (`probe` stays server-side).
+ * - `rows` is the `GET /v1/harnesses` cache; ordinary menu opens reuse it.
+ *   Settings changes and explicit refreshes invalidate it (`probe` stays server-side).
  * - `models[harnessId]` is the lazy `GET /v1/harnesses/:id/models` cache.
  * - `sessions[threadId]` is the last `harness_session_state` event (03 §7.3):
  *   native slash commands + config options the composer renders.
@@ -86,6 +86,7 @@ const generationFor = (id: string): number => modelRequestGeneration.get(id) ?? 
 const DETECTING_POLL_MS = 2_000
 const DETECTING_POLL_BUDGET_MS = 30_000
 const LOAD_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000]
+export const HARNESS_CATALOG_TTL_MS = 30_000
 
 let expiryTimer: ReturnType<typeof setTimeout> | null = null
 let pollTimer: ReturnType<typeof setTimeout> | null = null
@@ -134,7 +135,8 @@ export async function loadHarnesses(
   const provider = getProvider()
   if (!provider.listHarnesses) return
   const state = useHarnessStore.getState()
-  if (state.rowsLoading || (state.rowsLoadedAt !== undefined && !force)) return
+  const fresh = state.rowsLoadedAt !== undefined && now() - state.rowsLoadedAt < HARNESS_CATALOG_TTL_MS
+  if (state.rowsLoading || (fresh && !force)) return
   const requestGeneration = ++catalogGeneration
   useHarnessStore.setState({ rowsLoading: true, rowsError: undefined })
   try {
@@ -313,8 +315,8 @@ export function harnessRowAvailable(row: AdeHarnessRow): boolean {
  * and `adeHarnessNextStep.*` from this — never the raw message.
  */
 export function harnessRowUnavailableCode(row: AdeHarnessRow): string | null {
-  if (row.status.detecting === true) return 'detecting'
   if (harnessRowAvailable(row)) return null
+  if (row.status.detecting === true) return 'detecting'
   const status = row.status
   if (row.definition.id === 'gemini-cli' || row.definition.availability === 'retired') return 'disabled'
   if (status.reasonCode && status.reasonCode !== 'disabled') return status.reasonCode
@@ -382,7 +384,7 @@ export function harnessUnavailableNextStepKey(code: string): string | null {
 export function applyHarnessEnablementSettings(settings: import('@shared/app-settings').KunHarnessSettingsV1,
   invalidateReadiness = false): void {
   catalogGeneration += 1
-  useHarnessStore.setState((state) => ({ rowsLoading: false, rows: state.rows.map((row) => {
+  useHarnessStore.setState((state) => ({ rowsLoading: false, rowsLoadedAt: undefined, rows: state.rows.map((row) => {
     if (row.definition.id === 'kun') return row
     const enabledProfiles = settings.disabledIds.includes(row.definition.id) ? [] :
       (settings.enabledProfiles ?? []).filter((entry) => entry.harnessId === row.definition.id)
@@ -404,6 +406,8 @@ function scheduleReadinessExpiry(rows: AdeHarnessRow[]): void {
     useHarnessStore.setState((state) => ({ rows: state.rows.map((row) => ({ ...row,
       readyProfiles: (row.readyProfiles ?? []).filter((profile) => Date.parse(profile.expiresAt ?? '') > Date.now()) })) }))
     scheduleReadinessExpiry(useHarnessStore.getState().rows)
+    // Expired proofs must be revalidated even when the catalog's short UI cache is fresh.
+    void loadHarnesses(true)
   }, Math.max(1, Math.min(...expirations) - Date.now() + 1))
   // Catalog caches must not keep a non-browser test process alive.
   if (typeof expiryTimer === 'object' && 'unref' in expiryTimer) expiryTimer.unref()

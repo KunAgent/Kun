@@ -78,8 +78,34 @@ describe('external Agent model discovery', () => {
       expect(loadHarnessProviderGroups).not.toHaveBeenCalled()
       await act(async () => root.render(createElement(Probe, { ready: true })))
       expect(loadHarnesses).toHaveBeenCalledOnce()
-      expect(loadHarnesses).toHaveBeenCalledWith(true, { waitMs: 3_000 })
+      expect(loadHarnesses).toHaveBeenCalledWith(false, { waitMs: 3_000 })
       expect(loadHarnessModels).toHaveBeenCalledWith('claude-code')
+    } finally {
+      await act(async () => root.unmount())
+      ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+    }
+  })
+  it('opens a cached menu without a forced wait or a blocking loading indicator', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    fixture.harnesses.rows = [withHarnessReadiness({ definition: {
+      id: 'devin', displayName: 'Devin', transport: 'acp', credentialModes: ['native-login'],
+      permissionModes: [], modelSource: 'probe', staticModels: [], builtin: true
+    }, status: { harnessId: 'devin', installed: 'yes', login: 'signed-in', checkedAt: '' } })]
+    fixture.harnesses.rowsLoading = true
+    let controls!: ReturnType<typeof useAdeComposerControls>
+    function Probe() {
+      controls = useAdeComposerControls({ enabled: true, activeThreadId: null, workspaceRoot: '/repo',
+        threadHarnessId: undefined, threadTaskWorkspaceId: undefined, threadHasUserMessages: false, hasConfiguredProvider: true })
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    try {
+      await act(async () => root.render(createElement(Probe)))
+      expect(controls.rowsLoading).toBe(false)
+      expect(controls.rows[0]?.definition.id).toBe('devin')
+      vi.mocked(loadHarnesses).mockClear()
+      await act(async () => controls.refreshRows())
+      expect(loadHarnesses).toHaveBeenCalledExactlyOnceWith()
     } finally {
       await act(async () => root.unmount())
       ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false

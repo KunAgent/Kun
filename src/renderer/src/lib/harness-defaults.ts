@@ -32,6 +32,17 @@ export function harnessDefaultsSnapshot(): Record<string, KunHarnessDefaultsEntr
   return snapshot
 }
 
+/** Only connection-affecting settings invalidate runtime readiness, not theme/draft edits. */
+export function harnessCatalogSettingsFingerprint(settings: AppSettingsV1): string {
+  const runtime = getKunRuntimeSettings(settings)
+  return JSON.stringify({
+    harnesses: runtime.harnesses, provider: settings.provider,
+    binaryPath: runtime.binaryPath, port: runtime.port, dataDir: runtime.dataDir,
+    apiKey: runtime.apiKey, baseUrl: runtime.baseUrl, providerId: runtime.providerId,
+    endpointFormat: runtime.endpointFormat
+  })
+}
+
 /**
  * Resolve `defaults[harnessId].permissionMode` (a harness-native level id
  * like `acceptEdits`) to the composer execution-settings triple, via the
@@ -60,22 +71,32 @@ export function useHarnessDefaults(enabled = true): Record<string, KunHarnessDef
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
+    let settingsRevision = 0
+    let catalogFingerprint: string | undefined
     const apply = (settings: AppSettingsV1): void => {
       if (cancelled) return
+      catalogFingerprint = harnessCatalogSettingsFingerprint(settings)
       snapshot = harnessDefaultsFromApp(settings)
       setDefaults(snapshot)
     }
     try {
-      void rendererRuntimeClient.getSettings().then(apply).catch(() => undefined)
+      const revision = settingsRevision
+      void rendererRuntimeClient.getSettings().then((settings) => {
+        if (revision === settingsRevision) apply(settings)
+      }).catch(() => undefined)
     } catch {
       // Bridge unavailable (unit tests): keep the empty snapshot.
     }
     const onSettingsChanged = (event: Event): void => {
       const settings = (event as CustomEvent<AppSettingsV1>).detail
       if (settings) {
+        settingsRevision += 1
+        const changed = catalogFingerprint !== harnessCatalogSettingsFingerprint(settings)
         apply(settings)
-        applyHarnessEnablementSettings(getKunRuntimeSettings(settings).harnesses, true)
-        void loadHarnesses(true)
+        if (changed) {
+          applyHarnessEnablementSettings(getKunRuntimeSettings(settings).harnesses, true)
+          void loadHarnesses(true)
+        }
       }
     }
     window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)

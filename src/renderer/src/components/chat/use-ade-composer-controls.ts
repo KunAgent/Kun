@@ -71,7 +71,8 @@ export function useAdeComposerControls(input: {
   useEffect(() => { previousKunSelection.current = null }, [activeThreadId, workspaceRoot])
   const harnessDefaults = useHarnessDefaults(enabled)
   const rows = useHarnessStore((state) => state.rows)
-  const rowsLoading = useHarnessStore((state) => state.rowsLoading)
+  // A background refresh should not make a populated menu look like a cold start.
+  const rowsLoading = useHarnessStore((state) => state.rowsLoading && state.rows.length === 0)
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
   const composerCredentialMode = useChatStore((state) => state.composerCredentialMode)
   const composerProviderId = useChatStore((state) => state.composerProviderId)
@@ -100,9 +101,8 @@ export function useAdeComposerControls(input: {
   )
 
   useEffect(() => {
-    // P4-02: hold the first list briefly so mid-flight detections settle
-    // instead of pinning a provisional "unknown" verdict.
-    if (enabled) void loadHarnesses(true, { waitMs: 3_000 })
+    // Preload once when Kun is ready; remounts reuse the shared catalog cache.
+    if (enabled) void loadHarnesses(false, { waitMs: 3_000 })
   }, [enabled])
   useEffect(() => {
     if (enabled && harnessId !== 'kun') void loadHarnessModels(harnessId)
@@ -295,7 +295,7 @@ export function useAdeComposerControls(input: {
     isNativeHarness,
     rowUnavailableCode: harnessRowUnavailableCode,
     refreshRows: () => {
-      void loadHarnesses(true, { waitMs: 3_000 })
+      void loadHarnesses()
       if (harnessId !== 'kun') void loadHarnessModels(harnessId)
     },
     pickList,

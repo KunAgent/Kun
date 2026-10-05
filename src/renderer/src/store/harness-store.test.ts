@@ -6,6 +6,8 @@ import {
   loadHarnessModels,
   loadHarnessProviderGroups,
   resetHarnessPolling,
+  applyHarnessEnablementSettings,
+  HARNESS_CATALOG_TTL_MS,
   useHarnessStore
 } from './harness-store'
 
@@ -76,6 +78,54 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
     provider.listHarnesses.mockResolvedValue([row('kun')])
     await loadHarnesses(true, { waitMs: 3_000 })
     expect(provider.listHarnesses).toHaveBeenCalledWith({ waitMs: 3_000, includeDisabled: true })
+  })
+
+  it('reuses a fresh catalog across repeated opens and keeps rows during one background refresh', async () => {
+    const cached = row('devin')
+    provider.listHarnesses.mockResolvedValue([cached])
+    await loadHarnesses()
+    for (let open = 0; open < 5; open++) await loadHarnesses()
+    expect(provider.listHarnesses).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(HARNESS_CATALOG_TTL_MS + 1)
+    let finish!: (rows: AdeHarnessRow[]) => void
+    provider.listHarnesses.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const refresh = loadHarnesses()
+    expect(useHarnessStore.getState()).toMatchObject({ rows: [cached], rowsLoading: true })
+    await loadHarnesses()
+    expect(provider.listHarnesses).toHaveBeenCalledTimes(2)
+    finish([row('devin', { version: 'new' })])
+    await refresh
+    expect(useHarnessStore.getState().rows[0]?.status.version).toBe('new')
+    await loadHarnesses()
+    expect(provider.listHarnesses).toHaveBeenCalledTimes(2)
+  })
+
+  it('explicit refresh bypasses the cache and revoked profiles cannot be restored by an older request', async () => {
+    const cached = row('devin')
+    provider.listHarnesses.mockResolvedValue([cached])
+    await loadHarnesses()
+    let finish!: (rows: AdeHarnessRow[]) => void
+    provider.listHarnesses.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const refresh = loadHarnesses(true)
+    applyHarnessEnablementSettings({ disabledIds: ['devin'], enabledProfiles: [], defaults: {}, custom: [], binaryPaths: {},
+      defaultHarnessId: 'kun', agentOrder: [], terminalAgents: [] }, true)
+    expect(useHarnessStore.getState().rowsLoadedAt).toBeUndefined()
+    expect(useHarnessStore.getState().rows[0]?.readyProfiles).toEqual([])
+    finish([cached])
+    await refresh
+    expect(useHarnessStore.getState().rows[0]?.enabled).toBe(false)
+    provider.listHarnesses.mockResolvedValue([])
+    await loadHarnesses()
+    expect(provider.listHarnesses).toHaveBeenCalledTimes(3)
+  })
+
+  it('retains cached rows after a refresh error while retrying in the background', async () => {
+    const cached = row('devin')
+    provider.listHarnesses.mockResolvedValueOnce([cached]).mockRejectedValueOnce(new Error('offline'))
+    await loadHarnesses()
+    await vi.advanceTimersByTimeAsync(HARNESS_CATALOG_TTL_MS + 1)
+    await loadHarnesses()
+    expect(useHarnessStore.getState()).toMatchObject({ rows: [cached], rowsLoading: false, rowsError: 'offline' })
   })
 
   it('polls while a row is still detecting and stops once it settles', async () => {
@@ -217,6 +267,7 @@ describe('harnessRowUnavailableCode (P4-05)', () => {
   it('prefers the wire reasonCode and honors the detecting sentinel', async () => {
     const { harnessRowUnavailableCode } = await import('./harness-store')
     expect(harnessRowUnavailableCode(detectingRow())).toBe('detecting')
+    expect(harnessRowUnavailableCode(row('devin', { detecting: true }))).toBeNull()
     expect(
       harnessRowUnavailableCode(row('a', { installed: 'no', reasonCode: 'adapter_missing' }))
     ).toBe('adapter_missing')

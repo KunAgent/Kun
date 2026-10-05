@@ -45,7 +45,10 @@ export function harnessProfileEnabled(settings: Pick<KunHarnessSettingsV1, 'enab
 /** Only unexpired runtime proofs for explicitly enabled exact routes can enter a picker. */
 export function readyHarnessProfiles(row: AdeHarnessRow, now = Date.now()): KunHarnessEnabledProfileV1[] {
   if (row.definition.id === 'gemini-cli' || row.definition.availability === 'retired' || row.enabled !== true ||
-    row.status.detecting || row.status.installed !== 'yes' || row.status.versionSupported === false) return []
+    (row.status.installed !== 'yes' && !(row.status.installed === 'unknown' && row.status.detecting)) ||
+    row.status.versionSupported === false) return []
+  // A metadata refresh may be detecting while the runtime still supplies a
+  // current proof for this exact profile. Never extend or invent that proof.
   return (row.readyProfiles ?? []).filter((profile) => profile.harnessId === row.definition.id &&
     row.definition.credentialModes.includes(profile.credentialMode) &&
     typeof profile.expiresAt === 'string' && Date.parse(profile.expiresAt) > now &&

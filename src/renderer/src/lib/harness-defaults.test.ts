@@ -3,13 +3,21 @@ import type { AppSettingsV1 } from '@shared/app-settings'
 import {
   harnessDefaultsFromApp,
   harnessPermissionDefault,
-  harnessDefaultsSnapshot
+  harnessDefaultsSnapshot,
+  harnessCatalogSettingsFingerprint
 } from './harness-defaults'
 
 const settingsWith = (harnesses: unknown): AppSettingsV1 =>
   ({ agents: { kun: { harnesses } } }) as unknown as AppSettingsV1
 
 describe('harnessDefaultsFromApp', () => {
+  it('ignores display/workspace settings but notices Agent and provider changes', () => {
+    const initial = settingsWith({ enabledProfiles: [{ harnessId: 'devin', credentialMode: 'native-login' }] })
+    const key = harnessCatalogSettingsFingerprint(initial)
+    expect(harnessCatalogSettingsFingerprint({ ...initial, theme: 'dark', workspaceRoot: '/new', uiFontScale: 1.1 } as AppSettingsV1)).toBe(key)
+    expect(harnessCatalogSettingsFingerprint(settingsWith({ enabledProfiles: [] }))).not.toBe(key)
+    expect(harnessCatalogSettingsFingerprint({ ...initial, provider: { baseUrl: 'https://example.com' } } as AppSettingsV1)).not.toBe(key)
+  })
   it('returns normalized defaults including folded legacy permission modes', () => {
     const settings = settingsWith({
       defaults: { codex: { model: 'gpt-5.4', isolation: 'local' } },

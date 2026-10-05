@@ -41,4 +41,16 @@ describe('explicit exact agent profile enablement', () => {
   it('legacy disable still overrides a profile opt-in', () => {
     expect(harnessProfileEnabled({ ...defaultKunHarnessSettings(), enabledProfiles: [native], disabledIds: ['claude-code'] }, native)).toBe(false)
   })
+  it('keeps a current exact proof selectable during metadata refresh, but never revives expired proofs', () => {
+    const current = row()
+    current.status.detecting = true
+    expect(harnessProfileReady(current, native)).toBe(true)
+    current.status.installed = 'unknown'
+    expect(harnessProfileReady(current, native)).toBe(true)
+    expect(readyHarnessProfiles({ ...current, status: { ...current.status, detecting: false } })).toEqual([])
+    expect(readyHarnessProfiles({ ...current, enabled: false })).toEqual([])
+    expect(readyHarnessProfiles({ ...current, status: { ...current.status, installed: 'no' } })).toEqual([])
+    expect(readyHarnessProfiles({ ...current, readyProfiles: [] })).toEqual([])
+    expect(readyHarnessProfiles(current, Date.now() + 120_000)).toEqual([])
+  })
 })
