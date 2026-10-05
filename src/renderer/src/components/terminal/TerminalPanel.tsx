@@ -23,6 +23,7 @@ import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 import { terminalBackend, terminalTargetCreateExtras } from './terminal-backend'
 import { fitVisibleTerminal, resizeTerminalSession } from './terminal-dimensions'
 import { useTerminalOpenAt } from './terminal-open'
+import { watchAgentSetupLogin } from './agent-setup-refresh'
 import { terminalSessionIdForWorkspace, terminalWorkspaceSessionKey } from './terminal-session'
 import { TerminalTabContextMenu } from './TerminalTabContextMenu'
 import { TerminalNewTabMenu, type TerminalNewTabMenuAnchor } from './TerminalNewTabMenu'
@@ -89,6 +90,14 @@ export function TerminalPanel({
   const activeTabIdRef = useRef(activeTabId)
   const workspaceKey = terminalWorkspaceSessionKey(workspaceRoot)
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
+  const setupHarnessId = activeTab?.probeHarnessId
+  useEffect(() => {
+    if (!active || !setupHarnessId) return
+    return watchAgentSetupLogin({
+      probe: async () => getProvider().probeHarness?.(setupHarnessId),
+      refresh: () => loadHarnesses(true)
+    })
+  }, [active, setupHarnessId])
   const [terminalColors, setTerminalColors] = useState<TerminalColorSettingsV1>(() => defaultTerminalColors())
   const terminalColorsRef = useRef(terminalColors)
   // P4-09: ids of tabs whose setup command was already written into the PTY.

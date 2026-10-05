@@ -1,4 +1,5 @@
 import type { AppSettingsV1 } from '../shared/app-settings'
+import type { KunRuntimeSettingsSyncStatusPayload } from '../shared/kun-gui-api'
 import type { DesktopStartupState } from './desktop-startup-state'
 import type { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
 
@@ -73,9 +74,21 @@ export function createStartupSettingsApply(
       settings: AppSettingsV1,
       source: string
     ) => Promise<{ result: 'applied' | 'restart_required' | 'skipped' | 'superseded' | 'failed' }>
+    settingsSync?: {
+      current: () => KunRuntimeSettingsSyncStatusPayload
+      publish: (status: Omit<KunRuntimeSettingsSyncStatusPayload, 'at'>) => void
+    }
     logWarn: (category: string, message: string, detail?: unknown) => void
   }
 ): Promise<void> {
+  const sync = deps.settingsSync
+  const initial = sync?.current()
+  const publish = (state: KunRuntimeSettingsSyncStatusPayload['state'], message?: string): void => {
+    // A later saved snapshot owns its own acknowledgment, including failures.
+    if (!sync || initial?.state !== 'idle' || sync.current().generation !== initial.generation) return
+    sync.publish({ state, generation: initial.generation, ...(message ? { message } : {}) })
+  }
+  publish('syncing')
   let settleApply!: () => void
   const applied = new Promise<void>((resolve) => {
     settleApply = resolve
@@ -84,16 +97,23 @@ export function createStartupSettingsApply(
     try {
       const startupSettings = deps.settledRuntimeSettings ?? settings
       const result = await deps.applyManagedRuntimeSettingsHot(startupSettings, 'startup-settings')
+      if (result.result === 'applied') publish('synced')
+      else if (result.result === 'skipped') publish('unavailable', 'Kun Runtime is not running.')
+      else if (result.result !== 'superseded') publish('failed', 'Kun startup configuration could not be applied. Retry saving the configuration.')
       if (result.result === 'restart_required') {
         deps.logWarn(
           'startup-settings',
           'Kun attached successfully, but the configured default model could not be hot-applied.'
         )
       }
+    } catch (error) {
+      publish('failed', 'Kun startup configuration could not be applied. Retry saving the configuration.')
+      throw error
     } finally {
       settleApply()
     }
   }, (error) => {
+    settleApply()
     deps.logWarn('startup-settings', 'Kun startup settings apply failed', {
       message: error instanceof Error ? error.message : String(error)
     })

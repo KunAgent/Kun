@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 import type { HarnessDefinition, HarnessStatus } from '../contracts/harness.js'
 import type { ServeProviderConfig } from '../config/kun-config-application.js'
 import type { SpawnCaptured } from './harness-detector.js'
@@ -36,10 +37,7 @@ export async function probeHarnessLogin(
     case 'antigravity': state = await probeAntigravityLogin(deps, env); break
     case 'devin':
     case 'windsurf':
-      // The documented Devin ACP key is WINDSURF_API_KEY. The unrelated
-      // Devin REST API key cannot authenticate this protocol.
-      state = def.transport !== 'acp' ? 'unknown'
-        : nonempty(env.WINDSURF_API_KEY) ? 'unknown' : 'signed-out'
+      state = def.transport !== 'acp' ? 'unknown' : await probeDevinLogin(deps, command, env)
       break
     case 'pi': {
       const home = deps.homeDir ?? env.HOME ?? env.USERPROFILE ?? homedir()
@@ -51,6 +49,28 @@ export async function probeHarnessLogin(
   }
   deps.signal?.throwIfAborted()
   return state
+}
+
+async function probeDevinLogin(
+  deps: HarnessLoginProbeDeps,
+  command: string | undefined,
+  env: Record<string, string | undefined>
+): Promise<HarnessLoginState> {
+  if (command && deps.spawnCaptured) {
+    const result = await raceProbeAbort(deps.spawnCaptured(command, ['auth', 'status'], {
+      timeoutMs: 10_000, signal: deps.signal, env
+    }), deps.signal).catch(() => undefined)
+    deps.signal?.throwIfAborted()
+    if (result && !result.timedOut) {
+      // Do not propagate stdout: status includes private account details.
+      const output = stripVTControlCharacters(result.stdout).trim()
+      if (result.exitCode === 0 && /^Logged in(?: \(via (?:Devin|Windsurf)\))?\.?$/im.test(output)) return 'signed-in'
+      if (/^(?:Not logged in|Logged out|Not authenticated)\.?$/im.test(output)) return 'signed-out'
+    }
+    // Unsupported versions or unavailable status are not proof of logout.
+    return 'unknown'
+  }
+  return nonempty(env.WINDSURF_API_KEY) ? 'unknown' : 'signed-out'
 }
 
 async function probeClaudeCodeLogin(

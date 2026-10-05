@@ -169,6 +169,20 @@ describe('Runtime settings generation ownership', () => {
     harness.classifyHotApply.mockReturnValue({ result: 'applied', message: '' })
   })
 
+  it.each(['idle', 'failed', 'unavailable'] as const)('retries unchanged configuration after %s instead of declaring success', async (state) => {
+    const settings = browserSettings(false)
+    harness.mainState.settledRuntimeSettings = settings
+    harness.mainState.runtimeSettingsSyncStatus = { state, generation: 0, at: '' }
+    const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const reservation = reserveRuntimeSettingsApply(settings, settings)
+    expect(reservation.shouldApply).toBe(true)
+    queueRuntimeSettingsApply(settings, settings, reservation, async () => undefined)
+    await harness.runtimeSupervisor.waitForIdle()
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(harness.mainState.runtimeSettingsSyncStatus).toMatchObject({ state: 'synced', generation: reservation.generation })
+  })
+
   it('keeps the current runtime running when hot configuration validation fails', async () => {
     const current = browserSettings(false)
     harness.classifyHotApply.mockReturnValue({ result: 'failed', message: 'invalid credentials' })

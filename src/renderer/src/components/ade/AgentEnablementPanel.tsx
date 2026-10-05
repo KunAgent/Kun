@@ -26,7 +26,7 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
   const providerAccounts = useChatStore((state) => state.composerModelGroups)
   const nativeAccounts = providerAccounts.filter((group) => row.definition.transport === 'agent-sdk' && group.kind === 'agent-sdk')
   const native = gate.profile.credentialMode === 'native-login'
-  const ready = gate.enabled && harnessProfileReady(row, gate.profile)
+  const ready = gate.enabled && !gate.error && !gate.checking && harnessProfileReady(row, gate.profile)
   useEffect(() => {
     if (!native) void loadHarnessProviderGroups(id)
     // A model list is not an account probe. Native lookup stays an explicit action.
@@ -68,11 +68,15 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
         : <button type="button" data-agent-enable onClick={() => gate.enabled ? gate.disable() : void gate.enable()}
           data-settings-action={gate.enabled ? 'secondary' : 'primary'} data-settings-size="default"
           className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-medium text-white">{t(gate.enabled ? 'agentEnablement.disable' : 'agentEnablement.enable')}</button>}
-      <span role="status" aria-live="polite" className="text-[12px] text-ds-muted">{t(gate.checking ? 'agentEnablement.checking' : ready ? 'agentEnablement.ready' : gate.enabled ? 'agentEnablement.needsCheck' : 'agentEnablement.disabled')}</span>
+      <span role="status" aria-live="polite" className="text-[12px] text-ds-muted">{t(gate.checking ? `agentEnablement.phases.${gate.phase}` : ready ? 'agentEnablement.ready' : gate.enabled ? 'agentEnablement.needsCheck' : 'agentEnablement.disabled')}</span>
     </div>
     {gate.enabled && !gate.checking ? <button type="button" data-agent-recheck onClick={() => { gate.disable(); void gate.enable() }}
       className="min-h-6 text-[12px] text-ds-muted underline">{t('agentEnablement.recheck')}</button> : null}
     {gate.error ? <p role="alert" className="break-words text-[12px] text-ds-status-danger">{gate.error.startsWith('agentEnablement.') ? t(gate.error) : gate.error}</p> : null}
+    {gate.errorDetail ? <details className="break-words text-[11px] text-ds-muted">
+      <summary className="cursor-pointer">{t('agentEnablement.errorDetails')}</summary>
+      <p className="mt-1 whitespace-pre-wrap">{gate.errorDetail}</p>
+    </details> : null}
     {gate.result?.readiness ? <div className="space-y-1 text-[11px] text-ds-muted" data-agent-readiness-result>
       {gate.result.readiness.checks.map((check) => <div key={check.id} data-agent-readiness-check={check.id} data-ok={check.ok}>
         {check.ok ? '✓ ' : '✗ '}{t(`agentEnablement.checks.${check.id}`)}{check.detail ? `: ${check.detail}` : ''}

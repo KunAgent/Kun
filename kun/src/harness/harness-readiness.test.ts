@@ -49,6 +49,10 @@ describe('explicit per-profile readiness', () => {
   })
   it('does not infer native authentication from initialize, authMethods or an arbitrary model list', async () => {
     const f = await fixture()
+    const definition = f.catalog.get('opencode')!
+    // This negative case must not consume the developer's real OAuth account.
+    vi.spyOn(f.catalog, 'get').mockReturnValue({ ...definition,
+      launch: { ...definition.launch!, env: { XDG_DATA_HOME: dirname(f.command) } } })
     const result = await f.service.test(f.catalog.get('opencode')!, { level: 'handshake', credentialMode: 'native-login' })
     expect(result.ok).toBe(false)
     expect(result.readiness?.checks.find((check) => check.id === 'credentials')?.ok).toBe(false)

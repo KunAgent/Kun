@@ -63,6 +63,9 @@ export function nativeCredentialFiles(definition: HarnessDefinition, overrideEnv
     case 'claude-code': return [join(env.CLAUDE_CONFIG_DIR || join(home, '.claude'), '.credentials.json')]
     case 'codex': return [join(env.CODEX_HOME || join(home, '.codex'), 'auth.json')]
     case 'opencode': return [join(env.XDG_DATA_HOME || join(home, '.local/share'), 'opencode/auth.json')]
+    case 'devin': return [join(process.platform === 'win32'
+      ? env.APPDATA || join(home, 'AppData/Roaming')
+      : env.XDG_DATA_HOME || join(home, '.local/share'), 'devin/credentials.toml')]
     case 'pi': return [join(env.PI_CODING_AGENT_DIR || join(home, '.pi/agent'), 'auth.json')]
     case 'antigravity': return [env.GOOGLE_APPLICATION_CREDENTIALS || join(env.CLOUDSDK_CONFIG || join(home, '.config/gcloud'), 'application_default_credentials.json')]
     default: return []
@@ -108,7 +111,12 @@ export function nativeHasKey(definition: HarnessDefinition, env: Record<string, 
     return nativeCredentialFiles(definition, env).some((path) => Object.values(object(path)).some((value) => {
       if (!value || typeof value !== 'object') return false
       const entry = value as Record<string, unknown>
-      return ['api', 'api_key'].includes(String(entry.type)) && typeof entry.key === 'string' && entry.key.trim().length > 0
+      if (['api', 'api_key'].includes(String(entry.type))) return typeof entry.key === 'string' && entry.key.trim().length > 0
+      // Both engines own refresh and authentication. A complete OAuth record is
+      // configured evidence, just like an API key; it is never verified login.
+      return entry.type === 'oauth' && typeof entry.access === 'string' && entry.access.trim().length > 0 &&
+        typeof entry.refresh === 'string' && entry.refresh.trim().length > 0 &&
+        typeof entry.expires === 'number' && Number.isFinite(entry.expires) && entry.expires > 0
     }))
   }
   return false

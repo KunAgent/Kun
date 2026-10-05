@@ -48,6 +48,26 @@ describe('local login evidence', () => {
     expect(await probeHarnessLogin(def('devin'), { ...deps(), env: { DEVIN_API_KEY: 'fixture' } })).toBe('signed-out')
     expect(await probeHarnessLogin(def('devin'), { ...deps(), env: { WINDSURF_API_KEY: 'fixture' } })).toBe('unknown')
   })
+  it.each([
+    ['Logged in (via Devin).\nEmail: private@example.test', 0, 'signed-in'],
+    ['Logged in (via Windsurf).', 0, 'signed-in'],
+    ['\u001b[32mLogged in.\u001b[0m', 0, 'signed-in'],
+    ['Not logged in.', 1, 'signed-out'],
+    ['Logged in (via Devin).', 1, 'unknown'],
+    ['Authentication failed', 0, 'unknown'],
+    ['Example: Logged in (via Devin).', 0, 'unknown']
+  ] as const)('uses explicit selected Devin account status: %s', async (stdout, exitCode, expected) => {
+    const spawnCaptured = vi.fn(async () => ({ stdout, stderr: '', timedOut: false, exitCode }))
+    expect(await probeHarnessLogin(def('devin'), { ...deps(), spawnCaptured }, '/selected/devin')).toBe(expected)
+    expect(spawnCaptured).toHaveBeenCalledWith('/selected/devin', ['auth', 'status'], expect.objectContaining({ signal: undefined }))
+  })
+  it('does not infer Devin login after a timeout or cancellation', async () => {
+    const controller = new AbortController()
+    const spawnCaptured = vi.fn(async () => ({ stdout: 'Logged in.', stderr: '', timedOut: true, exitCode: 0 }))
+    expect(await probeHarnessLogin(def('devin'), { ...deps(), spawnCaptured }, '/selected/devin')).toBe('unknown')
+    spawnCaptured.mockImplementation(async () => { controller.abort(); return { stdout: 'Logged in.', stderr: '', timedOut: false, exitCode: 0 } })
+    await expect(probeHarnessLogin(def('devin'), { ...deps(), spawnCaptured, signal: controller.signal }, '/selected/devin')).rejects.toThrow()
+  })
   it('does not authenticate Pi from auth file presence', async () => {
     await file('.pi/agent/auth.json', { anthropic: { key: 'fixture' } })
     expect(await probeHarnessLogin(def('pi'), deps())).toBe('unknown')

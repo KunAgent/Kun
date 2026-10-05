@@ -600,6 +600,22 @@
       "protocol": "协议就绪状态"
     },
     "nativeAccount": "原生账号配置",
-    "systemAccount": "系统 CLI 账号"
+    "systemAccount": "系统 CLI 账号",
+    "saveFailed": "配置保存失败，请重试并查看设置页的保存错误。",
+    "settingsApplyFailed": "配置已保存，但运行时应用失败。请展开错误详情后重试。",
+    "settingsTimeout": "等待配置生效超时。请重试；若持续失败，请查看错误详情。",
+    "errorDetails": "错误详情",
+    "opencodePluginFailed": "OpenCode 启动时本机插件加载失败。请更新 OpenCode 和插件，或在 OpenCode 中修复插件配置后重试。",
+    "phases": {
+      "preparing": "正在保存并同步配置…",
+      "checking": "正在检查安装、登录和协议…",
+      "activating": "正在保存并确认启用…"
+    },
+    "failures": {
+      "installation": "未找到可用的 Agent。请安装或指定正确的命令路径。",
+      "configuration": "连接配置不可用。请检查所选供应商、模型或代理设置。",
+      "credentials": "未确认可用的登录或凭据。请使用下方“登录”完成认证后重新检查。",
+      "protocol": "Agent 协议或所选模型检查失败。请查看详情，确认版本和模型后重试。"
+    }
   }
 }

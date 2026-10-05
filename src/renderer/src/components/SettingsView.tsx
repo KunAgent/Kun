@@ -568,7 +568,7 @@ export function SettingsView(): ReactElement {
     saveIssue,
     retrySave: () => { void flushPendingSave() },
     beforeAdeCollaborationSave: flushPendingSave,
-    beforeAgentEnablementCheck: flushPendingSave,
+    beforeAgentEnablementCheck: () => flushPendingSave(true),
     onAdeCollaborationSaved,
     onAdeCollaborationDraftChange,
     onAdeProjectDraftChange,

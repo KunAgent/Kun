@@ -91,7 +91,7 @@ export function reserveRuntimeSettingsApply(
   }
   const generation = runtimeSettingsIntents.reserve()
   const applyMode = runtimeSettingsApplyMode(mainState.settledRuntimeSettings ?? prev, next)
-  if (applyMode === 'none' && !runtimeSupervisor.hasPendingOperation()) {
+  if (applyMode === 'none' && !runtimeSupervisor.hasPendingOperation() && mainState.runtimeSettingsSyncStatus.state === 'synced') {
     mainState.settledRuntimeSettings = next
     publishRuntimeSettingsSyncStatus({ state: 'synced', generation })
     return { generation, shouldApply: false }

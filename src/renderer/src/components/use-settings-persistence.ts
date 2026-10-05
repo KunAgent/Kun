@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import {
   type AppSettingsPatch,
   type AppSettingsV1
@@ -19,7 +20,8 @@ type SettingsPatch = AppSettingsPatch
 
 export function useSettingsPersistence(scope: Record<string, any>): Record<string, any> {
   const { closeSettings, openInitialSetup, applyI18n, reloadUiSettings, probeRuntime, form, setForm, setSaveStatus, setSaveError, setSaveIssue, saveTimer, statusTimer, draftVersion, pendingSnapshotRef, persistedSettingsRef, flushOnUnmountRef, settingsPlatform, settingsHomeDir } = scope
-  const persistSettings = async (snapshot: AppSettingsV1, version: number): Promise<boolean> => {
+  const inFlight = useRef<Promise<boolean> | null>(null)
+  const saveSnapshot = async (snapshot: AppSettingsV1, version: number): Promise<boolean> => {
     if (!hasValidPort(snapshot)) return false
     setSaveStatus('saving')
     setSaveError(null)
@@ -42,9 +44,8 @@ export function useSettingsPersistence(scope: Record<string, any>): Record<strin
           ? await rendererRuntimeClient.setSettings(patch)
           : await rendererRuntimeClient.getSettings({ forceRefresh: true })
       )
-      if (version !== draftVersion.current) return false
-
       persistedSettingsRef.current = next
+      if (version !== draftVersion.current) return false
       setForm(next)
       emitRendererSettingsChanged(next)
       await applyI18n(readRemoteLocaleOverride() ?? next.locale)
@@ -65,9 +66,21 @@ export function useSettingsPersistence(scope: Record<string, any>): Record<strin
       setSaveError(message)
       setSaveIssue(parseSettingsSaveIssue(message, snapshot))
       setSaveStatus('error')
+      pendingSnapshotRef.current = snapshot
       void window.kunGui?.logError?.('settings', 'Failed to apply settings', { message }).catch(() => undefined)
       return false
     }
+  }
+
+  const persistSettings = (snapshot: AppSettingsV1, version: number): Promise<boolean> => {
+    const previous = inFlight.current
+    const task = (async () => {
+      if (previous) await previous
+      return saveSnapshot(snapshot, version)
+    })()
+    inFlight.current = task
+    void task.finally(() => { if (inFlight.current === task) inFlight.current = null })
+    return task
   }
 
   const scheduleSave = (next: AppSettingsV1): void => {
@@ -95,10 +108,10 @@ export function useSettingsPersistence(scope: Record<string, any>): Record<strin
     }, 450)
   }
 
-  const flushPendingSave = async (): Promise<boolean> => {
+  const flushPendingDraft = async (): Promise<boolean> => {
     const snapshot = pendingSnapshotRef.current as AppSettingsV1 | null
     pendingSnapshotRef.current = null
-    if (!snapshot) return true
+    if (!snapshot) return inFlight.current ?? true
     if (!hasValidPort(snapshot)) return false
     draftVersion.current += 1
     const version = draftVersion.current
@@ -115,6 +128,19 @@ export function useSettingsPersistence(scope: Record<string, any>): Record<strin
     return persistSettings(snapshot, version)
   }
 
+  const flushPendingSave = async (reconcileRuntime = false): Promise<boolean> => {
+    if (!await flushPendingDraft()) return false
+    if (reconcileRuntime) {
+      const sync = await window.kunGui.getRuntimeSettingsSyncStatus()
+      if (sync.state === 'idle' || sync.state === 'failed' || sync.state === 'unavailable') {
+        // Retry application of the latest durable settings, never overwrite a
+        // newer snapshot with the render closure's form just to trigger sync.
+        await rendererRuntimeClient.setSettings({})
+      }
+    }
+    return true
+  }
+
   // Recomputed every render so the unmount cleanup always sees current values.
   // Persists the pending snapshot directly over IPC (no React state writes,
   // since the component is unmounting) and broadcasts the change so other
@@ -123,16 +149,18 @@ export function useSettingsPersistence(scope: Record<string, any>): Record<strin
     const snapshot = pendingSnapshotRef.current
     pendingSnapshotRef.current = null
     if (!snapshot || !hasValidPort(snapshot)) return
-    const expandedSnapshot = expandSettingsHomePathsForUse(snapshot, settingsHomeDir, settingsPlatform)
-    const expandedBase = expandSettingsHomePathsForUse(
-      persistedSettingsRef.current ?? snapshot,
-      settingsHomeDir,
-      settingsPlatform
-    )
-    const patch = diffSettingsPatch(expandedBase, expandedSnapshot)
-    if (isRemoteWeb()) delete patch.locale
-    void rendererRuntimeClient
-      .setSettings(patch)
+    const previous = inFlight.current
+    const persist = async (): Promise<AppSettingsV1> => {
+      if (previous) await previous
+      const expandedSnapshot = expandSettingsHomePathsForUse(snapshot, settingsHomeDir, settingsPlatform)
+      const expandedBase = expandSettingsHomePathsForUse(
+        persistedSettingsRef.current ?? snapshot, settingsHomeDir, settingsPlatform
+      )
+      const patch = diffSettingsPatch(expandedBase, expandedSnapshot)
+      if (isRemoteWeb()) delete patch.locale
+      return rendererRuntimeClient.setSettings(patch)
+    }
+    void persist()
       .then((saved) => {
         const next = coerceRendererSettings(saved)
         persistedSettingsRef.current = next

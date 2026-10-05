@@ -561,7 +561,23 @@
       "protocol": "Protocol readiness"
     },
     "nativeAccount": "Native account profile",
-    "systemAccount": "System CLI account"
+    "systemAccount": "System CLI account",
+    "saveFailed": "Settings could not be saved. Retry and review the save error in Settings.",
+    "settingsApplyFailed": "Settings were saved, but Runtime could not apply them. Review the details and retry.",
+    "settingsTimeout": "Timed out waiting for settings to apply. Retry and review the details if this persists.",
+    "errorDetails": "Error details",
+    "opencodePluginFailed": "OpenCode could not load a local plugin. Update OpenCode and its plugins, or repair the plugin configuration in OpenCode, then retry.",
+    "phases": {
+      "preparing": "Saving and synchronizing settings…",
+      "checking": "Checking installation, login, and protocol…",
+      "activating": "Saving and confirming activation…"
+    },
+    "failures": {
+      "installation": "No supported Agent found. Install it or select the correct command path.",
+      "configuration": "Connection configuration is unavailable. Check the selected provider, model, or proxy.",
+      "credentials": "No usable login or credential was confirmed. Sign in below, then check again.",
+      "protocol": "Agent protocol or model check failed. Review the details, version, and model before retrying."
+    }
   },
   "adeHarnessUnavailable": {
     "readinessRequired": "Readiness check required",

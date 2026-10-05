@@ -4,8 +4,9 @@ import type { KunHarnessSettingsV1 } from '@shared/app-settings'
 import { harnessProfileEnabled, harnessProfileKey, selectedHarnessProfile } from '@shared/harness-enablement'
 import { getProvider } from '../../agent/registry'
 import { registerAgentEnablementCancellation } from './agent-enablement-cancellation'
-import { waitForAgentSettings } from './agent-enablement-settings'
+import { AGENT_SETTINGS_TIMEOUT_MS, waitForAgentSettings } from './agent-enablement-settings'
 import { loadHarnesses } from '../../store/harness-store'
+import { AgentEnablementError, abortableAgentOperation, agentConfigurationKey, agentReadinessFailure } from './agent-enablement-operation'
 
 export const AGENT_ENABLEMENT_TIMEOUT_MS = 60_000
 
@@ -20,8 +21,8 @@ export function useAgentEnablement(input: {
   const profile = selectedHarnessProfile(row, settings)
   const profileKey = harnessProfileKey(profile)
   const enabled = harnessProfileEnabled(settings, profile)
-  const fingerprint = JSON.stringify({ profileKey, definition: row.definition,
-    command: row.status.resolvedCommand, version: row.status.version, network: row.status.networkFingerprint,
+  const fingerprint = agentConfigurationKey({ profileKey, definition: row.definition,
+    network: row.status.networkFingerprint,
     binary: settings.binaryPaths[row.definition.id], defaults: settings.defaults[row.definition.id],
     custom: settings.custom.find((entry) => entry.id === row.definition.id) })
   const current = useRef({ fingerprint, settings, patch })
@@ -31,6 +32,8 @@ export function useAgentEnablement(input: {
   const [checking, setChecking] = useState(false)
   const [result, setResult] = useState<AdeHarnessTestResult | null>(null)
   const [error, setError] = useState('')
+  const [errorDetail, setErrorDetail] = useState('')
+  const [phase, setPhase] = useState<'preparing' | 'checking' | 'activating'>('preparing')
   const cancel = (): void => {
     generation.current += 1
     active.current?.abort()
@@ -38,6 +41,7 @@ export function useAgentEnablement(input: {
     setChecking(false)
     setResult(null)
     setError('')
+    setErrorDetail('')
   }
   useEffect(() => { cancel() }, [fingerprint])
   useEffect(() => registerAgentEnablementCancellation(cancel), [])
@@ -69,53 +73,65 @@ export function useAgentEnablement(input: {
     setChecking(true)
     setResult(null)
     setError('')
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let timedOut = false
+    setErrorDetail('')
+    const assertCurrent = (): void => {
+      controller.signal.throwIfAborted()
+      if (generation.current !== epoch || current.current.fingerprint !== captured) throw new Error('agentEnablement.cancelled')
+    }
+    const stage = async <T,>(next: typeof phase, timeoutMs: number, operation: () => Promise<T>): Promise<T> => {
+      assertCurrent()
+      setPhase(next)
+      const timer = setTimeout(() => controller.abort(new AgentEnablementError(
+        next === 'checking' ? 'agentEnablement.timeout' : 'agentEnablement.settingsTimeout'
+      )), timeoutMs)
+      try { return await abortableAgentOperation(operation(), controller.signal) }
+      finally { clearTimeout(timer) }
+    }
     try {
-      const deadline = new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => {
-          timedOut = true
-          controller.abort()
-          reject(new Error('agentEnablement.timeout'))
-        }, AGENT_ENABLEMENT_TIMEOUT_MS)
+      await stage('preparing', AGENT_SETTINGS_TIMEOUT_MS, async () => {
+        if (input.beforeCheck && !await input.beforeCheck()) throw new AgentEnablementError('agentEnablement.saveFailed')
+        assertCurrent()
+        await waitForAgentSettings(settings, controller.signal, { harnessId: profile.harnessId })
       })
-      const operation = async (): Promise<AdeHarnessTestResult> => {
-        if (input.beforeCheck) {
-          if (!await input.beforeCheck()) throw new Error('agentEnablement.settingsUnavailable')
-          await waitForAgentSettings(settings, controller.signal)
-        }
-        controller.signal.throwIfAborted()
-        if (generation.current !== epoch || current.current.fingerprint !== captured) throw new Error('agentEnablement.cancelled')
-        return test(row.definition.id, {
+      const checked = await stage('checking', AGENT_ENABLEMENT_TIMEOUT_MS, () => test(row.definition.id, {
         level: 'handshake', credentialMode: profile.credentialMode,
         ...(profile.providerId ? { providerId: profile.providerId } : {}),
         ...(settings.defaults[row.definition.id]?.model ? { model: settings.defaults[row.definition.id]!.model } : {}),
         timeoutMs: AGENT_ENABLEMENT_TIMEOUT_MS - 5_000
-      }, { signal: controller.signal })
-      }
-      const checked = await Promise.race([operation(), deadline])
-      if (generation.current !== epoch || current.current.fingerprint !== captured || controller.signal.aborted) return
+      }, { signal: controller.signal }))
+      assertCurrent()
       setResult(checked)
       if (!checked.ok || checked.harnessId !== profile.harnessId || checked.readiness?.usable !== true ||
         checked.readiness.profileKey !== profileKey) {
-        setError(checked.readiness?.detail || checked.handshake?.detail || checked.detect.status.message || 'agentEnablement.failed')
+        const failure = agentReadinessFailure(checked)
+        setError(failure.message)
+        setErrorDetail(failure.detail)
         return
       }
       const latest = current.current
-      latest.patch({
+      const activation = {
         enabledProfiles: [...(latest.settings.enabledProfiles ?? []).filter((entry) => harnessProfileKey(entry) !== profileKey), profile],
         disabledIds: latest.settings.disabledIds.filter((id) => id !== profile.harnessId)
+      }
+      await stage('activating', AGENT_SETTINGS_TIMEOUT_MS, async () => {
+        latest.patch(activation)
+        if (input.beforeCheck && !await input.beforeCheck()) throw new AgentEnablementError('agentEnablement.saveFailed')
+        assertCurrent()
+        await waitForAgentSettings({ ...latest.settings, ...activation }, controller.signal, {
+          harnessId: profile.harnessId, enabledProfile: profile
+        })
+        assertCurrent()
+        await loadHarnesses(true)
       })
-      void loadHarnesses(true)
     } catch (cause) {
       if (generation.current === epoch && current.current.fingerprint === captured) {
-        setError(timedOut ? 'agentEnablement.timeout' : cause instanceof Error ? cause.message : String(cause))
+        setError(cause instanceof AgentEnablementError ? cause.message : 'agentEnablement.failed')
+        setErrorDetail(cause instanceof AgentEnablementError ? cause.detail : cause instanceof Error ? cause.message : String(cause))
       }
     } finally {
-      if (timer) clearTimeout(timer)
       if (active.current === controller) active.current = null
       if (generation.current === epoch) setChecking(false)
     }
   }
-  return { profile, enabled, checking, result, error, enable, disable, cancel }
+  return { profile, enabled, checking, phase, result, error, errorDetail, enable, disable, cancel }
 }

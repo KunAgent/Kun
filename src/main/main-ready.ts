@@ -22,7 +22,8 @@ import {
   shutdownActiveServiceManagerForUpdate
 } from './main-migrations'
 import {
-  applyManagedRuntimeSettingsHot
+  applyManagedRuntimeSettingsHot,
+  publishRuntimeSettingsSyncStatus
 } from './main-runtime-settings'
 import {
   runtimeSupervisor
@@ -282,6 +283,10 @@ export function startMainApp(): Promise<void> {
         runtimeSupervisor,
         settledRuntimeSettings: mainState.settledRuntimeSettings,
         applyManagedRuntimeSettingsHot,
+        settingsSync: {
+          current: () => mainState.runtimeSettingsSyncStatus,
+          publish: publishRuntimeSettingsSyncStatus
+        },
         logWarn
       }),
       loadGuiUpdaterModule,
