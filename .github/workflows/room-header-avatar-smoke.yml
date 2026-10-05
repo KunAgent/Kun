@@ -1,0 +1,71 @@
+name: Room header avatar smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/room-header-avatar-smoke.yml'
+      - 'scripts/smoke-room-header-avatar.mjs'
+      - 'src/renderer/src/components/rooms/RoomAvatar.tsx'
+      - 'src/renderer/src/components/rooms/RoomDirectChat.tsx'
+      - 'src/renderer/src/components/rooms/RoomsWorkspaceView.tsx'
+      - 'src/renderer/src/components/rooms/RoomSidebar.tsx'
+      - 'src/renderer/src/components/rooms/room-avatar-catalog.ts'
+      - 'src/renderer/src/components/rooms/room-uploaded-avatar.ts'
+      - 'src/renderer/src/components/rooms/rooms*.css'
+      - 'src/renderer/src/styles/**'
+      - 'src/renderer/src/index.css'
+      - 'src/asset/img/room-avatars/**'
+      - 'src/asset/img/kun_greet.png'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'postcss.config.js'
+      - 'tailwind.config.js'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: room-header-avatar-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-header-avatar:
+    name: Windows header avatar layout and built assets
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kun/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Locate the runner's installed Chrome
+        shell: pwsh
+        run: |
+          $command = Get-Command chrome.exe -ErrorAction SilentlyContinue
+          $candidates = @(
+            $command.Source,
+            "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+            "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+          )
+          $chrome = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $chrome) { throw 'The Windows runner does not have Google Chrome installed.' }
+          "CHROME_PATH=$chrome" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Verify original failure, fixed layouts and built asset decoding
+        env:
+          KUN_AVATAR_EVIDENCE: dist/room-header-avatar
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: node scripts/smoke-room-header-avatar.mjs
+      - name: Upload before and after evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-room-header-avatar
+          path: dist/room-header-avatar
+          if-no-files-found: warn
+          retention-days: 7

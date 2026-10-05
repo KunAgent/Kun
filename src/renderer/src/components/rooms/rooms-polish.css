@@ -17,7 +17,7 @@
   .rooms-workspace[data-rooms-workspace] .rooms-timeline-scroll { padding-inline: .75rem; }
 }
 .rooms-workspace[data-rooms-workspace] .direct-chat-title { min-width: 0; flex: 0 1 auto; }
-.rooms-workspace[data-rooms-workspace] .direct-chat-title > span { min-width: 0; display: grid; text-align: left; }
+.rooms-workspace[data-rooms-workspace] .direct-chat-title > .direct-chat-title-text { min-width: 0; display: grid; text-align: left; }
 .rooms-workspace[data-rooms-workspace] .direct-chat-title strong, .rooms-workspace[data-rooms-workspace] .direct-chat-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rooms-workspace[data-rooms-workspace] .direct-chat-title small { max-width: 240px; font-size: 11px; color: var(--ds-text-muted); font-weight: 400; }
 .rooms-workspace[data-rooms-workspace] .rooms-header-title { min-width: 4rem; }

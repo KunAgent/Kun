@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import kunGreet from '../../../../asset/img/kun_greet.png'
 import { useRoomUserProfile } from './room-user-profile'
 import type { RoomMember, RoomAvatarReference } from '@shared/rooms-api'
@@ -60,18 +60,19 @@ export function RoomAvatar({
   const isUser = user || identity === 'user'
   const reference = avatar !== undefined ? avatar : isUser ? profileAvatar : member?.avatar
   const uploaded = useRoomUploadedAvatar(reference?.kind === 'uploaded' ? reference.attachmentId : undefined)
+  const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(() => new Set())
   const builtinId = reference?.kind === 'builtin' ? reference.id : undefined
   const selected = ROOM_AVATARS.find((item) => item.id === builtinId)
   const style = {
     '--rooms-avatar-size': `${size / 16}rem`,
     '--rooms-avatar-tone': identityTone(identity)
   } as CSSProperties
+  const image = uploaded && !failedImages.has(uploaded) ? uploaded : isUser && !selected && !failedImages.has(kunGreet) ? kunGreet : undefined
   const content = (
     <>
-      {uploaded ? (
-        <img className="rooms-avatar-art object-cover" src={uploaded} alt="" aria-hidden="true" />
-      ) : isUser && !selected ? (
-        <img className="rooms-avatar-art rooms-user-kun" src={kunGreet} alt="" aria-hidden="true" />
+      {image ? (
+        <img key={image} className={`rooms-avatar-art ${image === kunGreet ? 'rooms-user-kun' : 'object-cover'}`}
+          src={image} alt="" aria-hidden="true" onError={() => setFailedImages((failed) => new Set([...failed, image]))} />
       ) : (
         <RoomAvatarPortrait index={selected?.index ?? avatarForIdentity(identity).index} />
       )}
