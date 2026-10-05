@@ -283,7 +283,9 @@ export const ToolCallTurnItem = TurnItemBase.extend({
       reasoningItems: z.array(z.record(z.string(), z.unknown())).min(1).max(16)
     }).strict().optional()
   }).strict().optional(),
-  summary: z.string().optional()
+  summary: z.string().optional(),
+  /** Client-only tool evidence, separate from executable arguments. */
+  meta: z.record(z.string(), z.unknown()).optional()
 })
 export type ToolCallTurnItem = z.infer<typeof ToolCallTurnItem>
 export type ToolCallProviderMetadata = NonNullable<ToolCallTurnItem['providerMetadata']>

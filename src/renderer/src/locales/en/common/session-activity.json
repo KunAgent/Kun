@@ -396,5 +396,15 @@
   "writeTableAlignLeft": "Align left",
   "writeTableAlignCenter": "Align center",
   "writeTableAlignRight": "Align right",
-  "writeCopyMarkdown": "Copy as Markdown"
+  "writeCopyMarkdown": "Copy as Markdown",
+  "acpTool": {
+    "cwd": "Working directory",
+    "exitCode": "Exit code {{code}}",
+    "summaryOnly": "The Agent returned a summary without the file contents.",
+    "waiting": "Waiting for tool output…",
+    "noOutput": "The tool returned no output.",
+    "truncated": "Showing the retained portion of a longer result.",
+    "input": "Input parameters",
+    "rawOutput": "Raw output"
+  }
 }

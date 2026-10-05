@@ -27,7 +27,7 @@ export type AcpDraftEmitterDeps = {
 export class AcpDraftEmitter {
   // Keyed by item id so transports that stream several items per turn (Codex
   // interleaves agentMessage/reasoning itemIds) never corrupt each other's
-  // offsets. ACP emits a single id per kind, so its behavior is unchanged.
+  // offsets. ACP also segments on text/thought/tool boundaries.
   private readonly textAccums = new Map<string, string>()
   private readonly reasoningAccums = new Map<string, string>()
   private readonly materializedItems = new Set<string>()
@@ -82,7 +82,7 @@ export class AcpDraftEmitter {
               })
         await this.deps.turns.applyAssistantDelta(
           this.threadId,
-          running,
+          { ...running, createdAt: item.createdAt },
           item.text,
           draft.deltaOffset
         )

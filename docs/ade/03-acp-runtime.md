@@ -256,10 +256,14 @@ private async cancel(conn: AcpConnection, sessionId: string) {
 
 | update | Kun |
 | --- | --- |
-| `agent_message_chunk`（text） | `assistant_text_delta`（增量 chunk，不是累计全文——这是 Claude SDK 接入时踩过的坑）；turn 结束时 `item_created`/`item_completed` 写完整 `assistant_text` |
+| `agent_message_chunk`（text） | `assistant_text_delta`（增量 chunk）；文本、思考、新工具调用或 messageId 切换时完成当前段，下一段使用独立 itemId 和从零开始的 deltaOffset |
 | `agent_message_chunk`（image） | 保存为附件，追加 markdown 引用 |
-| `agent_thought_chunk` | `assistant_reasoning_delta`，结束时写 `assistant_reasoning` |
+| `agent_thought_chunk` | `assistant_reasoning_delta`，同样按连续片段落盘，不跨文本和工具边界合并 |
 | `user_message_chunk` | 加载阶段丢弃；提示阶段忽略（Kun 自己写用户消息） |
+
+`acp-text-segments.ts` 在新工具条目之前完成前一段文本，保证流式事件与重新加载的持久化
+顺序一致。前端复用 Kun 的时间线：运行中按原序显示，结束后将中间文本、思考和工具
+折叠到“已处理”，最后一段答复单独保留。旧记录中已合并且缺少分段信息的文本不猜测拆分。
 
 ### 7.2 工具调用
 
@@ -283,6 +287,13 @@ function toolItemKind(kind: AcpToolKind): 'tool_call' | 'command_execution' | 'f
 | `locations` | 写进 item metadata，UI 可点击跳转 |
 
 `tool_call` 和 `tool_call_update` 可能乱序或重复：映射器按 `toolCallId` 维护状态机，重复的终态忽略，未见过 `tool_call` 就先到的 update 先建占位。
+
+工具参数、标题和输出更新通过 `item_updated` 持续投影，完成后的补充信息只更新详情，
+不重复发送完成事件。更新按字段合并，缺省/null 不清除已有值，content 数组按快照替换。
+`meta.delegatedTool` 保存有界的显示证据（路径、命令、输入、原始输出、文本、diff、终端），
+与模型使用的简短 output 分开。路径等结构字段先提取再截断大内容，摘要不能覆盖完整正文。
+受管文件读取只有在存在唯一匹配的活跃工具时才关联实际读取快照；没有收到的内容明确显示缺失。
+前端仅对同一轮、完全相同且未截断的原生 diff 与受管写入回执去重，保留原始审计记录。
 
 ### 7.3 其它
 
@@ -340,6 +351,8 @@ async writeTextFile({ sessionId, path, content }) {
 - 审批：命令执行按 Kun 策略判定；如果本轮已经为对应工具调用允许过，不再二次询问。
 - `output` / `wait_for_exit` / `kill` / `release`：直接映射到受管 shell 的对应操作；`release` 后句柄失效。
 - 输出受 `outputByteLimit` 和 Kun 工具输出上限双重限制，截断时返回 `truncated: true`。
+- 终端输出节流更新到关联工具；prompt 结束前刷新并等待事件落盘，随后停止接收本轮更新。
+  release 回收进程和计时器，已保存的输出仍可查看，不向下一轮借用写入权限。
 
 ### 8.3 权限
 

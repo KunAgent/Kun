@@ -1,3 +1,4 @@
+import type { DelegatedTerminalPresentation } from '../../contracts/delegated-tool-presentation.js'
 /**
  * Agent → client method host (docs/ade/03 §8). Registers the fs/*,
  * terminal/*, and session/request_permission handlers on a connection's
@@ -61,6 +62,8 @@ export type AcpClientContext = {
   /** Ensures the turn's workspace checkpoint before mutations. */
   ensureCheckpoint?: () => Promise<void>
   /** Records an item (the Changes-panel file_change pair) on the timeline. */
+  onReadFile?: (path: string, content: string) => void
+  onTerminalUpdate?: (snapshot: DelegatedTerminalPresentation) => void
   recordChange?: (item: TurnItem) => void | Promise<void>
   /** Scoped env for agent terminals — the same stripped env the agent got. */
   terminalEnv?: NodeJS.ProcessEnv
@@ -129,6 +132,8 @@ export class AcpClientHost {
     this.contexts.set(ctx.sessionId, { ...ctx,
       approve: bindTurnMutationContext(ctx.approve),
       ...(ctx.ensureCheckpoint ? { ensureCheckpoint: bindTurnMutationContext(ctx.ensureCheckpoint) } : {}),
+      ...(ctx.onReadFile ? { onReadFile: bindTurnMutationContext(ctx.onReadFile) } : {}),
+      ...(ctx.onTerminalUpdate ? { onTerminalUpdate: bindTurnMutationContext(ctx.onTerminalUpdate) } : {}),
       ...(ctx.recordChange ? { recordChange: bindTurnMutationContext(ctx.recordChange) } : {}),
       ...(ctx.elicit ? { elicit: bindTurnMutationContext(ctx.elicit) } : {}) })
   }
@@ -173,7 +178,9 @@ export class AcpClientHost {
     const parsed = parseAcpParams(AcpReadTextFileParamsSchema, params)
     const ctx = this.contextFor(parsed.sessionId)
     const abs = await resolveInside(ctx.readRoots, parsed.path)
-    return readTextFile(abs, { line: parsed.line, limit: parsed.limit })
+    const result = await readTextFile(abs, { line: parsed.line, limit: parsed.limit })
+    ctx.onReadFile?.(abs, result.content)
+    return result
   }
 
   private async handleWriteFile(params: unknown): Promise<Record<string, never>> {
@@ -333,7 +340,8 @@ export class AcpClientHost {
       args,
       env,
       cwd,
-      outputByteLimit: parsed.outputByteLimit
+      outputByteLimit: parsed.outputByteLimit,
+      onUpdate: ctx.onTerminalUpdate
     })
   }
 

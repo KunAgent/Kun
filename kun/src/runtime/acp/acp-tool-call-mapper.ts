@@ -1,3 +1,4 @@
+import { acpToolPresentation, type AcpToolEvidence } from './acp-tool-presentation.js'
 /**
  * ACP tool_call / tool_call_update → Kun item drafts (docs/ade/03 §7.2).
  * Pure functions so every mapping is unit-testable without a process; the
@@ -72,6 +73,7 @@ function wireFields(call: AcpToolCallWire) {
 /** First-seen `tool_call` or placeholder for an out-of-order update. */
 export function toKunToolCallItem(input: {
   call: AcpToolCallWire
+  evidence?: AcpToolEvidence
   itemId: string
   threadId: string
   turnId: string
@@ -84,6 +86,7 @@ export function toKunToolCallItem(input: {
     callId: call.toolCallId,
     toolName: acpToolName(call.kind),
     toolKind: toolItemKind(call.kind),
+    meta: { delegatedTool: acpToolPresentation(input.call, input.evidence) },
     arguments: {
       ...(call.title ? { title: call.title } : {}),
       ...(call.kind ? { kind: call.kind } : {}),
@@ -156,6 +159,7 @@ function collectOutput(call: AcpToolCallWire): {
  */
 export function toKunToolResult(input: {
   call: AcpToolCallWire
+  evidence?: AcpToolEvidence
   itemId: string
   threadId: string
   turnId: string
@@ -183,6 +187,7 @@ export function toKunToolResult(input: {
     toolName: acpToolName(wire.kind),
     toolKind: toolItemKind(wire.kind),
     output,
+    meta: { delegatedTool: acpToolPresentation(input.call, input.evidence) },
     isError: input.outcome !== 'completed',
     status: input.outcome === 'interrupted' ? 'aborted' : input.outcome
   })

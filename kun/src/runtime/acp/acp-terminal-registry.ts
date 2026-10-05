@@ -1,3 +1,4 @@
+import type { DelegatedTerminalPresentation } from '../../contracts/delegated-tool-presentation.js'
 /**
  * ACP terminal/* client methods (docs/ade/03 §8.2). Each handle is an owned
  * process — `spawnOwnedProcess` launch, `stopOwnedProcess` reclamation — so
@@ -26,6 +27,11 @@ type TerminalHandle = {
   sessionId: string
   turnId: string
   child: ChildProcess
+  command: string
+  cwd: string
+  publish: () => void
+  released?: boolean
+  timer?: ReturnType<typeof setTimeout>
   /** Newest bytes retained, capped at byteLimit. */
   buffer: Buffer
   /** Total bytes ever seen — truncated when > buffer.byteLength. */
@@ -43,6 +49,7 @@ export type AcpTerminalCreateInput = {
   env?: NodeJS.ProcessEnv
   cwd: string
   outputByteLimit?: number | null
+  onUpdate?: (snapshot: DelegatedTerminalPresentation) => void
 }
 
 export type AcpTerminalSpawn = (
@@ -74,6 +81,12 @@ export class AcpTerminalRegistry {
     return this.terminals.size
   }
 
+  flushForTurn(turnId: string): void {
+    for (const handle of this.terminals.values()) {
+      if (handle.turnId === turnId) handle.publish()
+    }
+  }
+
   async create(input: AcpTerminalCreateInput): Promise<{ terminalId: string }> {
     const id = `acp_term_${++this.counter}`
     const byteLimit = Math.min(
@@ -95,7 +108,14 @@ export class AcpTerminalRegistry {
       id,
       sessionId: input.sessionId,
       turnId: input.turnId,
-      child,
+      child, command: [input.command, ...(input.args ?? [])].join(' '), cwd: input.cwd,
+      publish: () => {
+        if (handle.released) return
+        clearTimeout(handle.timer); handle.timer = undefined
+        input.onUpdate?.({ terminalId: id, command: handle.command, cwd: handle.cwd,
+          output: handle.buffer.toString('utf8'), truncated: handle.totalBytes > handle.buffer.byteLength,
+          ...(handle.exited ?? {}) })
+      },
       buffer: Buffer.alloc(0),
       totalBytes: 0,
       byteLimit,
@@ -103,6 +123,7 @@ export class AcpTerminalRegistry {
       exitPromise
     }
     const append = (chunk: Buffer | string): void => {
+      if (handle.released) return
       const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk
       handle.totalBytes += bytes.byteLength
       handle.buffer = Buffer.concat([handle.buffer, bytes])
@@ -111,18 +132,24 @@ export class AcpTerminalRegistry {
           handle.buffer.byteLength - handle.byteLimit
         )
       }
+      if (!handle.timer) {
+        handle.timer = setTimeout(() => handle.publish(), 1_000)
+        handle.timer.unref?.()
+      }
     }
     child.stdout?.on('data', append)
     child.stderr?.on('data', append)
     const onExit = (exitCode: number | null, signal: NodeJS.Signals | null): void => {
       if (handle.exited) return
       handle.exited = { exitCode, signal }
+      handle.publish()
       resolveExit(handle.exited)
     }
     child.once('exit', onExit)
     child.once('error', () => onExit(null, null))
     if (child.exitCode !== null && child.exitCode !== undefined) onExit(child.exitCode, child.signalCode)
     this.terminals.set(id, handle)
+    handle.publish()
     exitPromise.catch(() => undefined)
     return { terminalId: id }
   }
@@ -174,6 +201,8 @@ export class AcpTerminalRegistry {
   async release(terminalId: string): Promise<Record<string, never>> {
     const handle = this.terminals.get(terminalId)
     if (!handle) return {}
+    handle.publish()
+    handle.released = true
     this.terminals.delete(terminalId)
     if (!handle.exited) {
       await this.stop(handle.child).catch(() => undefined)

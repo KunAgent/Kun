@@ -1,3 +1,4 @@
+import { acpToolPresentation } from './acp-tool-presentation'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -369,6 +370,8 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     }
   }
   const presentation = inferToolPresentation(item)
+  const acp = acpToolPresentation(item)
+  if (acp) Object.assign(meta, acp.meta)
   const payload = payloadFor(item)
   const paperSearch = paperSearchMetaFromToolItem(item)
   if (paperSearch) meta.paperSearch = paperSearch
@@ -393,7 +396,7 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     summary,
     status: componentDesignStatusOverride(item, componentPrototype) ?? diagramStatusOverride(item, diagramPrototype) ?? delegateTaskStatusOverride(item, payload) ?? toolStatus(item),
     toolKind: presentation.toolKind,
-    ...(presentation.filePath ? { filePath: presentation.filePath } : {}),
+    ...((acp?.filePath ?? presentation.filePath) ? { filePath: acp?.filePath ?? presentation.filePath } : {}),
     ...(detail ? { detail } : {}),
     meta
   }

@@ -1,3 +1,5 @@
+import { acpToolPresentation, type AcpToolEvidence } from './acp-tool-presentation.js'
+import type { DelegatedTerminalPresentation } from '../../contracts/delegated-tool-presentation.js'
 /**
  * ACP `session/update` → Kun runtime event drafts (docs/ade/03 §7).
  * The mapper is pure: it accumulates per-turn text/reasoning and the
@@ -8,14 +10,11 @@
  * `tool_call`) or duplicate terminal states; state lives in `toolCalls`
  * and `flush()` interrupts anything left open at turn end.
  */
+import { AcpTextSegments } from './acp-text-segments.js'
 import type { TurnItem } from '../../contracts/items.js'
 import type { ThreadTodoList } from '../../contracts/threads.js'
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
-import {
-  makeAssistantReasoningItem,
-  makeAssistantTextItem
-} from '../../domain/item.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
 import {
   acpConfigOptionValues,
@@ -63,19 +62,20 @@ export type AcpObservedFacts = {
 }
 
 export class AcpEventMapper {
-  private textAccum = ''
-  private reasoningAccum = ''
-  private textItemId?: string
-  private reasoningItemId?: string
+  private readonly messages: AcpTextSegments
   private readonly toolCalls = new Map<string, ToolCallState>()
   private toolReadyCount = 0
+  private readonly fileContents = new Map<string, string>()
+  private readonly terminalSnapshots = new Map<string, DelegatedTerminalPresentation>()
   private readonly facts: AcpObservedFacts = {
     sawAvailableCommands: false,
     sawUsageTelemetry: false,
     sawUsageTokens: false
   }
 
-  constructor(private readonly ctx: AcpEventMapperContext) {}
+  constructor(private readonly ctx: AcpEventMapperContext) {
+    this.messages = new AcpTextSegments(ctx)
+  }
 
   get observedFacts(): AcpObservedFacts {
     return this.facts
@@ -137,40 +137,14 @@ export class AcpEventMapper {
    * that never reached a terminal status.
    */
   flush(): RuntimeEventDraft[] {
-    const drafts: RuntimeEventDraft[] = []
-    if (this.textAccum) {
-      this.textItemId ||= this.ctx.nextId('item_text')
-      drafts.push(this.itemCreated(
-        this.textItemId,
-        makeAssistantTextItem({
-          id: this.textItemId,
-          turnId: this.ctx.turnId,
-          threadId: this.ctx.threadId,
-          text: this.textAccum,
-          status: 'completed'
-        })
-      ))
-    }
-    if (this.reasoningAccum) {
-      this.reasoningItemId ||= this.ctx.nextId('item_reasoning')
-      drafts.push(this.itemCreated(
-        this.reasoningItemId,
-        makeAssistantReasoningItem({
-          id: this.reasoningItemId,
-          turnId: this.ctx.turnId,
-          threadId: this.ctx.threadId,
-          text: this.reasoningAccum,
-          status: 'completed'
-        })
-      ))
-    }
+    const drafts = this.messages.flush()
     for (const [callId, state] of this.toolCalls) {
       if (state.phase === 'finished') continue
       state.phase = 'finished'
       drafts.push(this.toolFinished(
         callId,
         toKunToolResult({
-          call: state.call,
+          call: state.call, evidence: this.evidenceFor(callId),
           itemId: this.resultItemId(callId),
           threadId: this.ctx.threadId,
           turnId: this.ctx.turnId,
@@ -193,21 +167,11 @@ export class AcpEventMapper {
     if (content.type === 'text') {
       const text = (content as { text: string }).text
       if (!text) return []
-      if (channel === 'text') {
-        this.textAccum += text
-        this.textItemId ||= this.ctx.nextId('item_text')
-        return [this.delta('assistant_text_delta', this.textItemId, text)]
-      }
-      this.reasoningAccum += text
-      this.reasoningItemId ||= this.ctx.nextId('item_reasoning')
-      return [this.delta('assistant_reasoning_delta', this.reasoningItemId, text)]
+      return this.messages.append(channel, text, (update as { messageId?: string }).messageId)
     }
     if (content.type === 'resource_link' && channel === 'text') {
       const link = content as { uri: string; name: string }
-      const text = `[${link.name || link.uri}](${link.uri})`
-      this.textAccum += text
-      this.textItemId ||= this.ctx.nextId('item_text')
-      return [this.delta('assistant_text_delta', this.textItemId, text)]
+      return this.messages.append(channel, `[${link.name || link.uri}](${link.uri})`)
     }
     // Binary/embedded content: attachment persistence is a runtime concern
     // (P1-05); record a note so the update is not silently lost.
@@ -220,8 +184,12 @@ export class AcpEventMapper {
   private mapToolCall(update: AcpToolCallWire): RuntimeEventDraft[] {
     const callId = update.toolCallId
     const existing = this.toolCalls.get(callId)
-    if (existing?.phase === 'finished') return []
-    const drafts: RuntimeEventDraft[] = []
+    if (existing?.phase === 'finished') {
+      if (!Object.keys(update).some((key) => !['sessionUpdate', 'toolCallId', 'status'].includes(key))) return []
+      existing.call = mergeCallWire(existing.call, update)
+      return this.refreshEvidence(callId, existing)
+    }
+    const drafts = existing ? [] : this.messages.flush()
     let state = existing
     if (!state) {
       const itemId = this.ctx.nextId('item_tool')
@@ -232,7 +200,7 @@ export class AcpEventMapper {
         this.itemCreated(
           itemId,
           toKunToolCallItem({
-            call: update,
+            call: update, evidence: this.evidenceFor(callId),
             itemId,
             threadId: this.ctx.threadId,
             turnId: this.ctx.turnId
@@ -246,7 +214,7 @@ export class AcpEventMapper {
         this.itemUpdated(
           state.itemId,
           toKunToolCallItem({
-            call: state.call,
+            call: state.call, evidence: this.evidenceFor(callId),
             itemId: state.itemId,
             threadId: this.ctx.threadId,
             turnId: this.ctx.turnId
@@ -261,8 +229,12 @@ export class AcpEventMapper {
   private mapToolCallUpdate(update: AcpToolCallWire): RuntimeEventDraft[] {
     const callId = update.toolCallId
     const existing = this.toolCalls.get(callId)
-    if (existing?.phase === 'finished') return []
-    const drafts: RuntimeEventDraft[] = []
+    if (existing?.phase === 'finished') {
+      if (!Object.keys(update).some((key) => !['sessionUpdate', 'toolCallId', 'status'].includes(key))) return []
+      existing.call = mergeCallWire(existing.call, update)
+      return this.refreshEvidence(callId, existing)
+    }
+    const drafts = existing ? [] : this.messages.flush()
     let state = existing
     if (!state) {
       // Out-of-order update: create the placeholder first (03 §7.2).
@@ -274,7 +246,7 @@ export class AcpEventMapper {
         this.itemCreated(
           itemId,
           toKunToolCallItem({
-            call: update,
+            call: update, evidence: this.evidenceFor(callId),
             itemId,
             threadId: this.ctx.threadId,
             turnId: this.ctx.turnId
@@ -284,6 +256,9 @@ export class AcpEventMapper {
       )
     } else {
       state.call = mergeCallWire(state.call, update)
+      drafts.push(this.itemUpdated(state.itemId, toKunToolCallItem({
+        call: state.call, evidence: this.evidenceFor(callId), itemId: state.itemId, threadId: this.ctx.threadId, turnId: this.ctx.turnId
+      })))
     }
     drafts.push(...this.applyToolStatus(callId, state, update))
     return drafts
@@ -300,7 +275,7 @@ export class AcpEventMapper {
       state.phase = 'started'
       drafts.push(this.toolStarted(
         toKunToolCallItem({
-          call: state.call,
+          call: state.call, evidence: this.evidenceFor(callId),
           itemId: state.itemId,
           threadId: this.ctx.threadId,
           turnId: this.ctx.turnId
@@ -316,13 +291,47 @@ export class AcpEventMapper {
       drafts.push(this.toolFinished(
         callId,
         toKunToolResult({
-          call: state.call,
+          call: state.call, evidence: this.evidenceFor(callId),
           itemId: this.resultItemId(callId),
           threadId: this.ctx.threadId,
           turnId: this.ctx.turnId,
           outcome: status
         })
       ))
+    }
+    return drafts
+  }
+
+  recordFileRead(path: string, content: string): RuntimeEventDraft[] {
+    const matches = [...this.toolCalls].filter(([, state]) => state.phase !== 'finished' &&
+      state.call.kind === 'read' && acpToolPresentation(state.call).filePath === path)
+    // ACP filesystem requests carry no toolCallId. Never guess between concurrent reads.
+    if (matches.length !== 1) return []
+    const [callId, state] = matches[0]
+    this.fileContents.set(callId, content.slice(0, 64 * 1024 + 1))
+    return this.refreshEvidence(callId, state)
+  }
+
+  recordTerminal(snapshot: DelegatedTerminalPresentation): RuntimeEventDraft[] {
+    this.terminalSnapshots.set(snapshot.terminalId, snapshot)
+    return [...this.toolCalls].flatMap(([callId, state]) =>
+      state.call.content?.some((entry) => entry.type === 'terminal' &&
+        (entry as { terminalId: string }).terminalId === snapshot.terminalId)
+        ? this.refreshEvidence(callId, state) : [])
+  }
+
+  private evidenceFor(callId: string): AcpToolEvidence {
+    return { fileContent: this.fileContents.get(callId), terminals: [...this.terminalSnapshots.values()] }
+  }
+
+  private refreshEvidence(callId: string, state: ToolCallState): RuntimeEventDraft[] {
+    const input = { call: state.call, evidence: this.evidenceFor(callId),
+      threadId: this.ctx.threadId, turnId: this.ctx.turnId }
+    const drafts = [this.itemUpdated(state.itemId, toKunToolCallItem({ ...input, itemId: state.itemId }))]
+    if (state.phase === 'finished') {
+      const itemId = this.resultItemId(callId)
+      drafts.push(this.itemUpdated(itemId, toKunToolResult({ ...input, itemId,
+        outcome: state.call.status === 'failed' ? 'failed' : 'completed' })))
     }
     return drafts
   }
@@ -488,39 +497,6 @@ export class AcpEventMapper {
 
   // ---- draft constructors ----------------------------------------------------
 
-  private delta(
-    kind: 'assistant_text_delta' | 'assistant_reasoning_delta',
-    itemId: string,
-    chunk: string
-  ): RuntimeEventDraft {
-    return {
-      kind,
-      threadId: this.ctx.threadId,
-      turnId: this.ctx.turnId,
-      itemId,
-      deltaOffset:
-        kind === 'assistant_text_delta'
-          ? this.textAccum.length - chunk.length
-          : this.reasoningAccum.length - chunk.length,
-      item:
-        kind === 'assistant_text_delta'
-          ? makeAssistantTextItem({
-              id: itemId,
-              turnId: this.ctx.turnId,
-              threadId: this.ctx.threadId,
-              text: chunk,
-              status: 'running'
-            })
-          : makeAssistantReasoningItem({
-              id: itemId,
-              turnId: this.ctx.turnId,
-              threadId: this.ctx.threadId,
-              text: chunk,
-              status: 'running'
-            })
-    }
-  }
-
   private itemCreated(itemId: string, item: TurnItem): RuntimeEventDraft {
     return {
       kind: 'item_created',
@@ -607,17 +583,8 @@ export class AcpEventMapper {
 }
 
 function mergeCallWire(base: AcpToolCallWire, next: AcpToolCallWire): AcpToolCallWire {
-  const merged = { ...base, ...next }
-  // Content arrays accumulate: an update's content augments the call's.
-  const baseContent = 'content' in base ? base.content ?? undefined : undefined
-  const nextContent = 'content' in next ? next.content ?? undefined : undefined
-  if (baseContent?.length || nextContent?.length) {
-    ;(merged as { content?: unknown }).content = [
-      ...(baseContent ?? []),
-      ...(nextContent ?? [])
-    ]
-  }
-  return merged
+  const supplied = Object.fromEntries(Object.entries(next).filter(([, value]) => value != null))
+  return { ...base, ...supplied } as AcpToolCallWire
 }
 
 function sanitizeId(id: string): string {

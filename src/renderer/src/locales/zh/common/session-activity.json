@@ -396,5 +396,15 @@
   "writeTableAlignLeft": "左对齐",
   "writeTableAlignCenter": "居中对齐",
   "writeTableAlignRight": "右对齐",
-  "writeCopyMarkdown": "复制为 Markdown"
+  "writeCopyMarkdown": "复制为 Markdown",
+  "acpTool": {
+    "cwd": "工作目录",
+    "exitCode": "退出码 {{code}}",
+    "summaryOnly": "Agent 仅返回了摘要，未提供文件正文。",
+    "waiting": "正在等待工具输出…",
+    "noOutput": "工具未返回输出。",
+    "truncated": "内容较长，当前显示保留的片段。",
+    "input": "输入参数",
+    "rawOutput": "原始输出"
+  }
 }

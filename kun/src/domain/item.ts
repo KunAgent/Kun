@@ -207,6 +207,7 @@ export function makeToolCallItem(input: {
   arguments: Record<string, unknown>
   providerMetadata?: ToolCallProviderMetadata
   summary?: string
+  meta?: Record<string, unknown>
   status?: 'pending' | 'running' | 'completed' | 'failed'
 }): TurnItem {
   const projected = projectToolArgumentsForPersistence(input.arguments)
@@ -224,7 +225,8 @@ export function makeToolCallItem(input: {
     toolKind: input.toolKind ?? 'tool_call',
     arguments: projected.arguments,
     ...(input.providerMetadata ? { providerMetadata: input.providerMetadata } : {}),
-    summary
+    summary,
+    ...(input.meta ? { meta: input.meta } : {})
   }
 }
 

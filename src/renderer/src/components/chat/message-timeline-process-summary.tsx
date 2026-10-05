@@ -1,3 +1,4 @@
+import { formatFilePathForDisplay } from '../../lib/diff-stats'
 import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LucideIcon } from 'lucide-react'
@@ -328,7 +329,7 @@ export function ProcessSummaryText({
   return (
     <>
       {before}
-      <ProcessFileReference path={path} workspaceRoot={workspaceRoot}>{path}</ProcessFileReference>
+      <ProcessFileReference path={path} workspaceRoot={workspaceRoot}>{block.meta?.acpKind ? (formatFilePathForDisplay(path, workspaceRoot) ?? path) : path}</ProcessFileReference>
       {after}
     </>
   )

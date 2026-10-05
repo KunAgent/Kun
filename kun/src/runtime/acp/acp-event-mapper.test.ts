@@ -98,17 +98,20 @@ describe('AcpEventMapper', () => {
     ])
     expect(kinds(drafts)).toEqual([
       'assistant_reasoning_delta',
+      'item_created',
       'assistant_text_delta',
+      'item_created',
       'assistant_reasoning_delta'
     ])
     const flushed = mapper.flush()
-    const reasoning = flushed.find(
+    const completed = [...drafts, ...flushed].filter((d) => d.kind === 'item_created')
+    const reasoning = completed.filter(
       (d) => (itemOf(d) as { kind: string }).kind === 'assistant_reasoning'
     )
-    const text = flushed.find(
+    const text = completed.find(
       (d) => (itemOf(d) as { kind: string }).kind === 'assistant_text'
     )
-    expect((reasoning && (itemOf(reasoning) as { text: string }).text)).toBe('thinking more')
+    expect(reasoning.map((draft) => (itemOf(draft) as { text: string }).text)).toEqual(['thinking ', 'more'])
     expect((text && (itemOf(text) as { text: string }).text)).toBe('answer')
   })
 
@@ -135,7 +138,9 @@ describe('AcpEventMapper', () => {
     expect(kinds(drafts)).toEqual([
       'item_created',
       'tool_call_ready',
+      'item_updated',
       'tool_call_started',
+      'item_updated',
       'tool_call_finished'
     ])
     const call = itemOf(drafts[0]) as Record<string, unknown>
@@ -145,7 +150,7 @@ describe('AcpEventMapper', () => {
       callId: 'call-1',
       status: 'pending'
     })
-    const result = itemOf(drafts[3]) as Record<string, unknown>
+    const result = itemOf(drafts.at(-1)!) as Record<string, unknown>
     expect(result).toMatchObject({
       kind: 'tool_result',
       callId: 'call-1',
@@ -173,6 +178,7 @@ describe('AcpEventMapper', () => {
       'item_created',
       'tool_call_ready',
       'tool_call_started',
+      'item_updated',
       'item_updated',
       'tool_call_finished'
     ])

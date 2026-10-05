@@ -1,3 +1,4 @@
+import { AcpToolDetail } from './AcpToolDetail'
 import { SourceHistoryReadDetail } from '../../history-reference/SourceHistoryReadDetail'
 import type { ReactElement } from 'react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
@@ -29,6 +30,11 @@ import {
 import { HandoffBriefDetail } from './message-timeline-handoff-entry'
 
 export function toolNameForBlock(block: ToolBlock): string {
+  if (typeof block.meta?.acpKind === 'string') {
+    const names: Record<string, string> = { read: 'read_file', search: 'search_files', execute: 'shell', edit: 'edit_file',
+      delete: 'edit_file', move: 'edit_file', 'fs.write': 'write_file', fetch: 'fetch' }
+    if (typeof names[block.meta.acpKind] === 'string') return names[block.meta.acpKind]
+  }
   const rawSummary = block.summary?.trim() ?? ''
   return (extractToolName(rawSummary) || readMetaString(block.meta, 'toolName') || '').toLowerCase()
 }
@@ -53,6 +59,7 @@ export function toolFilePath(block: ToolBlock): string | undefined {
 
 
 export type ProcessDetail =
+  | { kind: 'acp-tool' }
   | { kind: 'none' }
   | { kind: 'reasoning'; text: string }
   | { kind: 'assistant'; text: string }
@@ -267,6 +274,9 @@ export function summarizeToolBlock(
 ): string {
   const rawSummary = block.summary?.trim() ?? ''
   const toolName = toolNameForBlock(block)
+  if (block.meta?.acpKind && toolName.startsWith('acp:')) {
+    return readMetaString(block.meta, 'acpTitle') || t('toolActionTool')
+  }
   const paperTool = paperToolName(toolName)
   if (paperTool) return summarizePaperToolBlock(block, paperTool, t)
   const label = builtInToolLabel(toolName, t) || humanizeToolName(toolName) || formatToolTitle(block, t)
@@ -344,6 +354,7 @@ export function getProcessDetail(block: ChatBlock, summaryText?: string): Proces
     return text.trim() ? { kind: 'assistant', text } : { kind: 'none' }
   }
   if (block.kind === 'tool') {
+    if (block.meta?.acpKind) return { kind: 'acp-tool' }
     const paperTool = paperToolName(toolNameForBlock(block))
     const paper = paperTool ? paperToolProcessDetail(block, paperTool) : null
     if (paper) return { kind: 'paper', paper }
@@ -422,6 +433,7 @@ export function ProcessEntryDetail({
       </div>
     )
   }
+  if (detail.kind === 'acp-tool' && block.kind === 'tool') return <AcpToolDetail block={block} />
   if (detail.kind === 'tool') {
     if (block.kind === 'tool' && toolNameForBlock(block) === 'read_source_history' && !/^(codex|claude-code|opencode):/u.test(block.turnId ?? '')) {
       return <SourceHistoryReadDetail block={block} />

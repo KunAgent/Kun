@@ -208,6 +208,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       turnId
     )
     let emitQueue: Promise<void> = Promise.resolve()
+    let acceptEvidence = true
     let streamError: AcpError | undefined
     let rejectStream!: (error: AcpError) => void
     const streamFailure = new Promise<never>((_resolve, reject) => { rejectStream = reject })
@@ -389,6 +390,16 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         signal
       ),
       recordChange: (item) => this.deps.turns.applyItem(threadId, item),
+      onReadFile: (path, content) => {
+        if (!acceptEvidence || signal.aborted || streamError) return
+        const drafts = mapper.recordFileRead(path, content)
+        emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
+      },
+      onTerminalUpdate: (snapshot) => {
+        if (!acceptEvidence || signal.aborted || streamError) return
+        const drafts = mapper.recordTerminal(snapshot)
+        emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
+      },
       elicit: acpElicitForTurn(this.deps, thread, turn, signal),
       terminalEnv: acpChildEnv(this.deps, definition, credentialEnv, secretEnv),
       signal,
@@ -432,6 +443,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         { timeoutMs: limits.maxWallTimeMs }
       ), streamFailure])
       promptSettled = true
+      this.host.terminals.flushForTurn(turnId)
+      acceptEvidence = false
       await emitQueue
       const parsed = AcpPromptResultSchema.safeParse(raw)
       if (!parsed.success) {
@@ -480,6 +493,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       return outcome
     } catch (error) {
       promptSettled = true
+      this.host.terminals.flushForTurn(turnId)
+      acceptEvidence = false
       if (streamError) {
         conn.rpc.notify(ACP_AGENT_METHODS.sessionCancel, { sessionId: session.sessionId })
         this.pool.markUnhealthy(poolKey)
@@ -507,6 +522,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       await this.failFromAcpError(threadId, turnId, error, false, definition.id)
       return 'failed'
     } finally {
+      acceptEvidence = false
       if (cancelTimer) clearTimeout(cancelTimer)
       signal.removeEventListener('abort', onAbort)
       unsubscribeSessionErrors()

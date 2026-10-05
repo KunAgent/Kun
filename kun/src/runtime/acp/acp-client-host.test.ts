@@ -272,6 +272,9 @@ describe('AcpClientHost', () => {
         child.kill('SIGKILL')
       }
     })
+    const snapshots: unknown[] = []
+    h.ctx.onTerminalUpdate = (snapshot) => snapshots.push(snapshot)
+    h.host.registerContext(h.ctx)
     const created = await h.call<{ terminalId: string }>(ACP_CLIENT_METHODS.terminalCreate, {
       sessionId: 'sess-1',
       command: process.execPath,
@@ -279,6 +282,7 @@ describe('AcpClientHost', () => {
       outputByteLimit: 16
     })
     await h.host.terminals.waitForExit(created.terminalId)
+    expect(snapshots.at(-1)).toMatchObject({ terminalId: created.terminalId, cwd: expect.stringContaining('/acp-host-'), truncated: true, exitCode: 0 })
     const out = await h.call<{ output: string; truncated: boolean; exitStatus?: { exitCode: number | null } }>(
       ACP_CLIENT_METHODS.terminalOutput,
       { sessionId: 'sess-1', terminalId: created.terminalId }
