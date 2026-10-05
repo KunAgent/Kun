@@ -11,18 +11,18 @@ const request = {
 }
 
 describe('Codex discovery', () => {
-  it('uses the verified catalog version in both URL and headers to discover GPT-6', async () => {
+  it('uses the verified catalog version in both URL and headers to discover GPT-6.1', async () => {
     const fetcher = vi.fn(async (url: string | URL, init?: RequestInit) => {
-      expect(new URL(url).searchParams.get('client_version')).toBe('0.153.3')
-      expect(new Headers(init?.headers).get('User-Agent')).toContain('codex_cli_rs/0.153.3')
+      expect(new URL(url).searchParams.get('client_version')).toBe('0.160.0')
+      expect(new Headers(init?.headers).get('User-Agent')).toContain('codex_cli_rs/0.160.0')
       return new Response(JSON.stringify({ models: [
-        { slug: 'gpt-6-astra', visibility: 'list', input_modalities: ['text', 'image'],
+        { slug: 'gpt-6.1-sol', visibility: 'list', input_modalities: ['text', 'image'],
           context_window: 272000, use_responses_lite: true }
       ] }))
     })
     expect(await probeModelProvider(request, undefined, fetcher)).toMatchObject({
-      ok: true, modelIds: ['gpt-6-astra'],
-      modelProfiles: { 'gpt-6-astra': { responsesMode: 'lite', contextWindowTokens: 272000 } }
+      ok: true, modelIds: ['gpt-6.1-sol'],
+      modelProfiles: { 'gpt-6.1-sol': { responsesMode: 'lite', contextWindowTokens: 272000 } }
     })
     expect(fetcher).toHaveBeenCalledTimes(1)
   })

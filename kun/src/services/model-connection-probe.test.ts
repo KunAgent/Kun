@@ -31,13 +31,17 @@ it('discovers Codex models through the registry custom endpoint path', async () 
   )
 })
 
-it('discovers only listed gpt-6-sol and gpt-6-luna for the active subscription', async () => {
-  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ models: [
-    { slug: 'gpt-6-sol', visibility: 'list' },
-    { slug: 'gpt-6-luna', visibility: 'list', supported_in_api: false },
-    { slug: 'gpt-6-hidden', visibility: 'hide' }
-  ] })))
-  await expect(probeModels(input)).resolves.toEqual(['gpt-6-sol', 'gpt-6-luna'])
+it('requests the current catalog and keeps listed GPT-6.1 subscription models', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => {
+    expect(new URL(url).searchParams.get('client_version')).toBe('0.160.0')
+    return Response.json({ models: [
+      { slug: 'gpt-6.1-sol', visibility: 'list' },
+      { slug: 'gpt-6-sol', visibility: 'list' },
+      { slug: 'gpt-6-luna', visibility: 'list', supported_in_api: false },
+      { slug: 'gpt-6-hidden', visibility: 'hide' }
+    ] })
+  }))
+  await expect(probeModels(input)).resolves.toEqual(['gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-luna'])
 })
 
 it('does not report configured models as a successful discovery on API failure', async () => {
