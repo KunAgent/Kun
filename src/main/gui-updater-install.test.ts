@@ -12,7 +12,7 @@ const clearResult = vi.fn(async () => { result = null })
 const clearRecovery = vi.fn(async () => { recovery = null })
 const cleanupBackup = vi.fn(async () => undefined)
 const runUpdateTransactionHelper = vi.fn(async () => undefined)
-const scheduleUpdateRollbackAfterExit = vi.fn(async () => undefined)
+const scheduleUpdateRollbackAfterExit = vi.fn(async (): Promise<void> => undefined)
 const writeGuiUpdateRecoveryRecord = vi.fn(async (value: Record<string, unknown>) => {
   recovery = value
   return value
@@ -347,6 +347,44 @@ describe('GuiUpdateInstaller reconciliation', () => {
       expect.objectContaining({ KUN_INSTALLER_TRANSACTION: 'C:\\recovery\\abc-update.json' })
     )
     expect(cleanupBackup).not.toHaveBeenCalled()
+    expect(clearRecovery).not.toHaveBeenCalled()
+  })
+
+  it.each(['UAC denied', 'helper startup failed', 'readiness timed out', 'stale acknowledgment'])(
+    'keeps the GUI and recovery alive when rollback readiness fails: %s', async (message) => {
+      const { app } = await import('electron')
+      pending = null
+      recovery = {
+        schemaVersion: 2, installedVersion: '0.2.0', channel: 'stable', verifiedAt: new Date().toISOString(),
+        healthAttempts: 3, backupExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+        recoveryEnvironment: { KUN_INSTALLER_TRANSACTION: 'C:\\recovery\\transaction.json' }
+      }
+      scheduleUpdateRollbackAfterExit.mockRejectedValueOnce(new Error(message))
+      await (await installer()).reconcile(healthCheck)
+      expect(app.quit).not.toHaveBeenCalled()
+      expect(clearRecovery).not.toHaveBeenCalled()
+      expect(clearPending).not.toHaveBeenCalled()
+      expect(cleanupBackup).not.toHaveBeenCalled()
+      expect(recovery).not.toBeNull()
+    }
+  )
+
+  it('quits only after the actual rollback helper is ready', async () => {
+    const { app } = await import('electron')
+    pending = null
+    recovery = {
+      schemaVersion: 2, installedVersion: '0.2.0', channel: 'stable', verifiedAt: new Date().toISOString(),
+      healthAttempts: 3, backupExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+      recoveryEnvironment: { KUN_INSTALLER_TRANSACTION: 'C:\\recovery\\transaction.json' }
+    }
+    let ready!: () => void
+    scheduleUpdateRollbackAfterExit.mockImplementationOnce(() => new Promise<void>((resolve) => { ready = resolve }))
+    const reconciliation = (await installer()).reconcile(healthCheck)
+    await vi.waitFor(() => expect(scheduleUpdateRollbackAfterExit).toHaveBeenCalled())
+    expect(app.quit).not.toHaveBeenCalled()
+    ready()
+    await reconciliation
+    expect(app.quit).toHaveBeenCalledOnce()
     expect(clearRecovery).not.toHaveBeenCalled()
   })
 

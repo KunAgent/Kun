@@ -73,7 +73,7 @@
   "paperReadingMaterial": "可用材料",
   "paperReadingStart": "开始限域阅读",
   "paperReadingProvider": "所选模型服务商",
-  "paperReadingLocal": "仅本地工作台 · 不发送 AI 请求",
+  "paperReadingLocal": "本次请求仅本地处理 · 不调用 AI",
   "paperReadingDisclosure": "仅将列出的文本发送给此模型。最多一次模型请求；不使用工具、下载、子代理或修改文件。",
   "paperReadingNoLocalModel": "证据与矩阵可在本地使用，无需 AI。本地模型推理暂不可用；不会发送请求。",
   "paperReadingAbstractOnly": "仅摘要或元数据",
@@ -88,5 +88,7 @@
   "paperEvidenceHiddenMarks": "部分批注属于其他或未知 PDF 版本；复用页码前请在批注列表检查。",
   "paperReadingImageNoteOnly": "讨论批注文字（图片仅保留在本地）",
   "paperReadingFigures": "图表：{{status}} · 高置信 {{high}} / 中 {{medium}} / 低 {{low}}",
-  "paperReadingFiguresUnbound": "图表提取置信度不代表已绑定 PDF 版本，也不代表结论正确。"
+  "paperReadingFiguresUnbound": "图表提取置信度不代表已绑定 PDF 版本，也不代表结论正确。",
+  "paperReadingStaleSelection": "选中文字的 PDF 版本未知或已变化。请重新打开论文，再选择原文。",
+  "paperReadingFixedModel": "请先在对话模型选择器中选定固定模型与服务商；限域阅读暂不支持自动路由或外部 Agent SDK。"
 }

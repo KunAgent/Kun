@@ -10,12 +10,13 @@ import {
   usePaperMarksStore,
   newPaperHighlight
 } from '../../../paper/paper-marks-store'
-import { usePaperModeStore } from '../../../paper/paper-mode-store'
-import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
-import { usePaperReadingRequest } from '../../../paper/paper-reading-request'
+import { openBoundedPaperReading } from '../../../paper/paper-reading-entry'
 
 export type PendingPaperSelection = {
+  workspaceRoot: string
+  unitDir: string
+  pdfSha256?: string
   text: string
   page: number
   /** Normalized 0..1 rects for marks persistence. */
@@ -36,12 +37,16 @@ export type PendingPaperSelection = {
 export function usePaperSelection({
   rootRef,
   workspaceRoot,
+  unitDir,
+  pdfSha256,
   onSelectionChange,
   paper,
   onAutoTranslate
 }: {
   rootRef: RefObject<HTMLElement | null>
   workspaceRoot: string
+  unitDir: string
+  pdfSha256?: string
   paper?: { unitDir: string; meta: PaperUnitMeta; pdfSha256?: string }
   onSelectionChange: ((selection: WriteEditorSelectionState) => void) | undefined
   /** R1.3: fired 250ms after a stable selection when auto-translate is on. */
@@ -114,6 +119,7 @@ export function usePaperSelection({
     if (draggingRef.current) return
     const first = rects[0]
     const sel: PendingPaperSelection = {
+      workspaceRoot, unitDir, pdfSha256,
       text: next.text,
       page: first?.page ?? next.pageStart ?? 1,
       rects: normalized,
@@ -143,7 +149,7 @@ export function usePaperSelection({
         }, 250)
       }
     }
-  }, [publishSelection, rootRef])
+  }, [publishSelection, rootRef, workspaceRoot, unitDir, pdfSha256])
 
   const captureSelectionSoon = useCallback((): void => {
     if (selectionTimerRef.current != null) window.clearTimeout(selectionTimerRef.current)
@@ -180,6 +186,15 @@ export function usePaperSelection({
     publishSelection(emptyPdfSelection())
   }, [publishSelection])
 
+  // A pending passage belongs to the exact viewer bytes that captured it.
+  useEffect(() => {
+    clearPendingSelection()
+    autoTranslateKeyRef.current = ''
+  }, [workspaceRoot, unitDir, pdfSha256, clearPendingSelection])
+
+  const selectionMatches = useCallback((selected: PendingPaperSelection): boolean => Boolean(pdfSha256 &&
+    selected.pdfSha256 === pdfSha256 && selected.workspaceRoot === workspaceRoot && selected.unitDir === unitDir), [pdfSha256, workspaceRoot, unitDir])
+
   // Esc clears an open selection popup.
   useEffect(() => {
     if (!pending) return
@@ -188,7 +203,7 @@ export function usePaperSelection({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [pending, clearPendingSelection, paper])
+  }, [pending, clearPendingSelection, pdfSha256, unitDir, selectionMatches, workspaceRoot])
 
   const beginDrag = useCallback((): void => {
     draggingRef.current = true
@@ -207,32 +222,32 @@ export function usePaperSelection({
   }, [captureSelectionSoon])
 
   const addHighlight = useCallback((color: PaperHighlightColor, comment?: string): void => {
-    if (!pending || (paper && !paper.pdfSha256)) return
+    if (!pending || !selectionMatches(pending) || usePaperMarksStore.getState().unitDir !== unitDir || usePaperMarksStore.getState().workspaceRoot !== workspaceRoot) return
     const mark = newPaperHighlight({
       color,
       page: pending.page,
       rects: pending.rects,
       quote: pending.text
     })
-    if (paper?.pdfSha256) mark.pdfSha256 = paper.pdfSha256
+    mark.pdfSha256 = pdfSha256
     if (comment) mark.comment = comment
     usePaperMarksStore.setState((s) => ({ items: [...s.items, mark], dirty: true }))
     clearPendingSelection()
-  }, [pending, clearPendingSelection, paper])
+  }, [pending, clearPendingSelection, pdfSha256, unitDir, selectionMatches, workspaceRoot])
 
-  // 「加入对话」: convert the published selection into a composer quote chip
-  // (opens the assistant panel as a side effect).
+  // Selected text enters the same explicit, frozen-context reading dialog.
   const addToConversation = useCallback((): void => {
-    useWriteWorkspaceStore.getState().quoteCurrentSelection(workspaceRoot)
-    setPending(null)
-    setAskOpen(false)
-  }, [workspaceRoot])
+    if (!pending || !selectionMatches(pending)) return
+    void openBoundedPaperReading({ workspaceRoot, unitDir, meta: paper?.meta,
+      selection: { text: pending.text, page: pending.page, pdfSha256: pending.pdfSha256 } })
+    clearPendingSelection()
+  }, [pending, selectionMatches, workspaceRoot, unitDir, paper, clearPendingSelection])
 
   // Quick ask: persist an `ask` mark card, quote the passage, submit the
   // question to the paper-scoped thread.
   const submitQuickAsk = useCallback((question: string): void => {
     const sel = pending
-    if (!sel) return
+    if (!sel || !selectionMatches(sel) || usePaperMarksStore.getState().unitDir !== unitDir || usePaperMarksStore.getState().workspaceRoot !== workspaceRoot) return
     const markId = nextPaperMarkId()
     usePaperMarksStore.setState((s) => ({
       dirty: true,
@@ -249,14 +264,9 @@ export function usePaperSelection({
         }
       }
     }))
-    if (paper) {
-      usePaperReadingRequest.getState().open({ workspaceRoot, unitDir: paper.unitDir, meta: paper.meta, selection: { text: sel.text, page: sel.page, pdfSha256: paper.pdfSha256 }, question })
-      return
-    }
-    const bridge = usePaperModeStore.getState().composerBridge
-    if (bridge?.submit) bridge.submit(question)
-    else bridge?.setInput(question)
-  }, [pending, workspaceRoot, paper])
+    void openBoundedPaperReading({ workspaceRoot, unitDir, meta: paper?.meta,
+      selection: { text: sel.text, page: sel.page, pdfSha256 }, question })
+  }, [pending, workspaceRoot, unitDir, pdfSha256, paper, selectionMatches])
 
   return {
     pending,

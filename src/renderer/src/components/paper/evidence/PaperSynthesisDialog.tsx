@@ -82,6 +82,7 @@ export function PaperSynthesisDialog({ request, onClose }: { request: PaperReadi
       <ul className="space-y-2 text-xs text-ds-ink">{(request.papers ?? []).map((paper) => <li key={paper.unitDir}>{paper.meta.title}{limits.includes(paper.meta.title) ? <span className="block text-amber-700 dark:text-amber-300">{t('paperEvidencePartial')}</span> : null}</li>)}</ul>
       <p className="text-xs text-ds-muted">{t('paperReadingScope')}: {total} / {PAPER_CONTEXT_MAX_CHARS} chars</p>
       {total > PAPER_CONTEXT_MAX_CHARS ? <p role="alert" className="text-xs text-red-500">Choose fewer papers; the selected material exceeds the bounded context. Nothing is silently truncated.</p> : null}
+      {!providerId || !model || model === 'auto' ? <p className="text-xs text-amber-700 dark:text-amber-300">{t('paperReadingFixedModel')}</p> : null}
       {error ? <p role="alert" className="text-xs text-red-500">{error}</p> : null}
       <label className="flex items-center gap-2 text-xs text-ds-ink"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />{t('paperReadingProvider')}: {providerId || '—'} / {model || '—'}</label>
       <p className="text-xs text-ds-muted">{t('paperReadingDisclosure')}</p>

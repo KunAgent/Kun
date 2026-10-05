@@ -28,7 +28,7 @@ let api: {
 }
 beforeEach(() => {
   vi.clearAllMocks()
-  usePaperMarksStore.setState({ unitDir: 'papers/a', items: [], cards: {}, removedIds: [], dirty: false })
+  usePaperMarksStore.setState({ workspaceRoot: '/library', unitDir: 'papers/a', items: [], cards: {}, removedIds: [], dirty: false })
   api = {
     paperMarksWrite: vi.fn(async (payload) => ({ ok: true, items: payload.items })),
     paperEvidenceRead: vi.fn(async () => ({ ok: true, revision: 7, items: [] })),
@@ -40,7 +40,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.unstubAllGlobals()
-  usePaperMarksStore.setState({ unitDir: '', items: [], cards: {}, removedIds: [], dirty: false })
+  usePaperMarksStore.setState({ workspaceRoot: '', unitDir: '', items: [], cards: {}, removedIds: [], dirty: false })
 })
 
 describe('reader evidence promotion', () => {

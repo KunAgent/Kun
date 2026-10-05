@@ -123,6 +123,7 @@ describe('startMemoryPressureMonitor', () => {
   })
 
   it('reclaims a different bounded idle batch on each sustained warning poll', async () => {
+    vi.useFakeTimers()
     vi.spyOn(process, 'memoryUsage').mockReturnValue({ rss: 150 } as never)
     const deps = makeDeps({
       config: {
@@ -137,13 +138,27 @@ describe('startMemoryPressureMonitor', () => {
       } as never
     })
     const monitor = startMemoryPressureMonitor(deps)
-    await new Promise((resolve) => setTimeout(resolve, 45))
-    monitor.stop()
+    const compact = deps.turnService.compact as ReturnType<typeof vi.fn>
 
-    const compacted = (deps.turnService.compact as ReturnType<typeof vi.fn>).mock.calls
-      .map((call) => call[0].threadId)
-    expect(new Set(compacted)).toEqual(new Set(['idle-1', 'idle-2', 'idle-3']))
-    vi.restoreAllMocks()
+    try {
+      expect(compact).not.toHaveBeenCalled()
+      for (let index = 1; index <= 3; index += 1) {
+        // Drain each async sweep before advancing to the next poll.
+        await vi.advanceTimersByTimeAsync(10)
+        expect(compact).toHaveBeenCalledTimes(index)
+        expect(compact).toHaveBeenLastCalledWith({
+          threadId: `idle-${index}`, request: { reason: 'memory_pressure' }, auto: true
+        })
+      }
+      await vi.advanceTimersByTimeAsync(10)
+      expect(compact).toHaveBeenCalledTimes(3)
+      const compacted = compact.mock.calls.map((call) => call[0].threadId)
+      expect(new Set(compacted)).toEqual(new Set(['idle-1', 'idle-2', 'idle-3']))
+    } finally {
+      monitor.stop()
+      vi.restoreAllMocks()
+      vi.useRealTimers()
+    }
   })
 
   it('stops polling after stop()', async () => {

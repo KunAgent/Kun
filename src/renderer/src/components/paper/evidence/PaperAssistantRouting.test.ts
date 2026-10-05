@@ -6,6 +6,7 @@ import { usePaperReadingRequest } from '../../../paper/paper-reading-request'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { useChatStore } from '../../../store/chat-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
+import { usePaperStore } from '../../../write/paper/paper-store'
 import { entry, render } from './paper-evidence-test-support'
 
 vi.mock('react-i18next', async (importOriginal) => ({ ...(await importOriginal<typeof import('react-i18next')>()),
@@ -38,6 +39,7 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   usePaperReadingRequest.setState({ request: null })
   usePaperModeStore.setState({ entries: [entry], readerPage: null })
+  usePaperStore.setState({ unitsByDir: {} })
   useWriteWorkspaceStore.setState({ workspaceRoot: '/library', activeFilePath: '/library/papers/a/paper.pdf', workSurface: 'papers' })
   useChatStore.setState({ activeThreadId: null, writeAssistantVisibleThreadId: null })
 })
@@ -60,5 +62,28 @@ describe('existing paper assistant Q&A routing', () => {
     await act(async () => tree!.root.findByProps({ 'data-testid': 'composer-submit' }).props.onClick())
     expect(config.onSend).toHaveBeenCalledTimes(1)
     expect(usePaperReadingRequest.getState().request).toBeNull()
+  })
+
+  it.each([true, false])('never falls through to unscoped send for a recognized paper missing library metadata (loading=%s)', async (entriesLoading) => {
+    usePaperModeStore.setState({ entries: [], entriesLoading })
+    usePaperStore.setState({ unitsByDir: { [entry.unitDir]: { ...entry.meta, version: 1, pdfFile: 'paper.pdf' } } })
+    const config = props()
+    tree = await render(createElement(WriteAssistantPanel, config))
+    await act(async () => tree!.root.findByProps({ 'data-testid': 'composer-submit' }).props.onClick())
+    expect(config.onSend).not.toHaveBeenCalled()
+  })
+
+  it('recovers the recognized paper metadata locally before opening its bounded request', async () => {
+    const paperReadUnit = vi.fn(async () => ({ ok: true, unitDir: entry.unitDir, meta: entry.meta, figures: null }))
+    vi.stubGlobal('window', { kunGui: { paperReadUnit } })
+    usePaperModeStore.setState({ entries: [], entriesLoading: true })
+    usePaperStore.setState({ unitsByDir: { [entry.unitDir]: { ...entry.meta, version: 1, pdfFile: 'paper.pdf' } } })
+    const config = props()
+    tree = await render(createElement(WriteAssistantPanel, config))
+    await act(async () => tree!.root.findByProps({ 'data-testid': 'composer-submit' }).props.onClick())
+    expect(config.onSend).not.toHaveBeenCalled()
+    expect(paperReadUnit).toHaveBeenCalledWith({ workspaceRoot: '/library', unitDir: entry.unitDir })
+    expect(usePaperReadingRequest.getState().request).toEqual({ workspaceRoot: '/library', unitDir: entry.unitDir,
+      meta: entry.meta, question: config.input })
   })
 })

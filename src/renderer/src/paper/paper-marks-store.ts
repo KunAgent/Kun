@@ -12,6 +12,8 @@ import type {
  * payload but are keyed under `cards` by mark id.
  */
 export type PaperMarksState = {
+  /** Library ownership; identical relative unit paths in different libraries are distinct. */
+  workspaceRoot: string
   /** Unit dir the marks belong to ('' = unloaded). */
   unitDir: string
   items: PaperHighlight[]
@@ -34,6 +36,7 @@ export type PaperMarksState = {
 }
 
 const initialMarksState = (): PaperMarksState => ({
+  workspaceRoot: '',
   unitDir: '',
   items: [],
   cards: {},

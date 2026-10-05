@@ -123,7 +123,8 @@ Still Stage 1, not claimed complete or silently moved to Stage 2:
 
 - Supported local-model inference transport. The local-only choice currently
   allows local evidence/matrix work and sends no AI request; inference fails
-  closed. Fixed configured native HTTP providers are the only scoped-AI route.
+  closed. These controls apply to the explicit reading request, not a global
+  offline setting; existing search and translation retain their own settings. Fixed configured native HTTP providers are the only scoped-AI route.
 - Chunked close reading above the 80,000-character frozen-context cap. Quick
   screening discloses truncation; deeper reading is blocked on partial text.
   Up to 12 selected papers fit a bounded synthesis request; oversized requests
@@ -142,3 +143,9 @@ Still Stage 1, not claimed complete or silently moved to Stage 2:
   It bounds calls but does not invent currency-cost estimates.
 - Manual external directory moves need explicit re-linking; the app must not
   guess identity by title or silently remap an unknown old annotation version.
+
+Metadata-loading and navigation guards are fail-closed: recognized paper Q&A,
+inline chat actions and selected-passage asks cannot fall back to generic agent
+submission while library metadata is absent. Pending selections retain their
+capture-time workspace, unit and PDF hash; changed or unavailable identities
+require a new selection rather than relabeling old text with new PDF bytes.

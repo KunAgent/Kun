@@ -145,6 +145,91 @@ describe('frozen paper runtime policy', () => {
     expect(h.requests).toEqual([])
   })
 
+  it('requires explicit queue resume after Stop and fences late paper output from the next turn', async () => {
+    let releaseOld!: () => void
+    const oldTransport = new Promise<void>((resolve) => { releaseOld = resolve })
+    let modelCalls = 0
+    const h = await harness(async function* () {
+      if (++modelCalls === 1) {
+        yield { kind: 'assistant_text_delta', text: 'Retained stopped evidence' }
+        await oldTransport // Deliberately model a transport that delivers after cancellation.
+        yield { kind: 'assistant_text_delta', text: 'LATE_OLD_RESPONSE' }
+      } else {
+        yield { kind: 'assistant_text_delta', text: 'Answer from the resumed frozen context' }
+      }
+      yield { kind: 'completed', stopReason: 'stop' }
+    })
+    const first = await h.turns.startTurn({ threadId: 'paper', request: request() })
+    const context = paper({ sources: [{ paperId: 'p2', title: 'Second', locator: 'p4', sourceVersion: 'v2', text: 'SECOND_FROZEN_SOURCE' }] })
+    const frozen = structuredClone(context)
+    const queued = await h.turns.enqueueTurn({ threadId: 'paper', request: { ...request(context), clientRequestId: 'paper-second' } })
+    const running = h.loop.runTurn('paper', first.turnId)
+    try {
+      await vi.waitFor(async () => expect(JSON.stringify(await h.sessionStore.loadItems('paper'))).toContain('Retained stopped evidence'))
+      await expect(h.turns.interruptTurn({ threadId: 'paper', turnId: first.turnId })).resolves.toEqual({ status: 'aborted' })
+      expect((await h.threadStore.get('paper'))?.queueControl).toMatchObject({ reason: 'user_stop', sourceTurnId: first.turnId })
+      expect(await h.turns.startNextQueuedTurn('paper')).toBeNull()
+      const later = await h.turns.enqueueTurn({ threadId: 'paper', request: {
+        prompt: 'UNEXECUTED_OUTSIDE_CONTEXT', agentSurface: 'write', clientRequestId: 'later-unrelated'
+      } })
+      expect(await h.turns.startNextQueuedTurn('paper')).toBeNull()
+      context.sources[0].text = 'MUTATED_AFTER_QUEUE'
+      await h.turns.resumeQueuedTurns('paper')
+      expect(await h.turns.startNextQueuedTurn('paper')).toEqual({ turnId: queued.turnId })
+      expect((await h.turns.getTurn('paper', queued.turnId))?.queueExecutionAnchorItemId).toBeTruthy()
+      await expect(h.loop.runTurn('paper', queued.turnId)).resolves.toBe('completed')
+      releaseOld()
+      await expect(running).resolves.toBe('aborted')
+      expect(h.requests).toHaveLength(2)
+      expect(h.requests[1].tools).toEqual([])
+      expect(h.requests[1].history).toHaveLength(1)
+      const transmitted = JSON.stringify(h.requests[1])
+      expect(transmitted).toContain('SECOND_FROZEN_SOURCE')
+      expect(transmitted).not.toMatch(/PRIVATE_|Retained stopped evidence|LATE_OLD_RESPONSE|UNEXECUTED_OUTSIDE_CONTEXT|MUTATED_AFTER_QUEUE/)
+      const stored = await h.turns.getTurn('paper', queued.turnId)
+      expect(stored).toMatchObject({ status: 'completed', paperContext: frozen, paperModelRequests: 1, sandboxMode: 'read-only' })
+      expect((await h.turns.getTurn('paper', first.turnId))?.paperModelRequests).toBe(1)
+      expect((await h.turns.getTurn('paper', later.turnId))?.status).toBe('queued')
+      const outputs = (await h.sessionStore.loadItems('paper')).filter((item) => item.kind === 'assistant_text')
+      expect(outputs).toEqual(expect.arrayContaining([
+        expect.objectContaining({ turnId: first.turnId, renderMode: 'plain-text', text: 'Retained stopped evidence' }),
+        expect.objectContaining({ turnId: queued.turnId, renderMode: 'plain-text', text: 'Answer from the resumed frozen context' })
+      ]))
+      expect(JSON.stringify(outputs)).not.toContain('LATE_OLD_RESPONSE')
+      expect(h.execute).not.toHaveBeenCalled()
+    } finally { releaseOld(); await running }
+  })
+
+  it('never auto-resumes a failed paper behind queued inputs, including an active goal', async () => {
+    const h = await harness(async function* () {
+      yield { kind: 'assistant_text_delta', text: 'Partial paper result' }
+      yield { kind: 'error', message: 'Connection interrupted', code: 'stream_read_error' }
+    })
+    const first = await h.turns.startTurn({ threadId: 'paper', request: request() })
+    const queued = await h.turns.enqueueTurn({ threadId: 'paper', request: {
+      prompt: 'Queued unrelated question', clientRequestId: 'queued-after-paper', agentSurface: 'write'
+    } })
+    await expect(h.loop.runTurn('paper', first.turnId)).resolves.toBe('failed')
+    const thread = (await h.threadStore.get('paper'))!
+    await h.threadStore.upsert({ ...thread, goal: { threadId: 'paper', objective: 'An older active goal', status: 'active', tokensUsed: 0, timeUsedSeconds: 0,
+      createdAt: h.options.nowIso(), updatedAt: h.options.nowIso() } })
+    await h.turns.pauseQueuedTurns('paper', 'restart_recovery', first.turnId)
+    const restarted = new AgentLoop(h.options), sources = [{ threadId: 'paper', turnId: first.turnId }]
+    expect(await restarted.resumeInterruptedTurns(sources)).toBe(0)
+    expect(await restarted.resumeInterruptedGoals(sources)).toBe(0)
+    expect(await h.turns.startNextQueuedTurn('paper')).toBeNull()
+    expect(h.requests).toHaveLength(1)
+    expect((await h.threadStore.get('paper'))?.turns).toHaveLength(2)
+    await h.turns.resumeQueuedTurns('paper')
+    expect((await h.threadStore.get('paper'))?.queueResumeSourceTurnId).toBe(first.turnId)
+    expect(await h.turns.startNextQueuedTurn('paper')).toEqual({ turnId: queued.turnId })
+    expect(await restarted.resumeInterruptedTurns(sources)).toBe(0)
+    expect(await restarted.resumeInterruptedGoals(sources)).toBe(0)
+    expect(h.requests).toHaveLength(1)
+    await h.turns.finishTurn({ threadId: 'paper', turnId: queued.turnId, status: 'completed' })
+    restarted.shutdownGoalResume(); restarted.shutdownInterruptedResume()
+  })
+
   it('never dispatches a paper turn into an alternate SDK harness', async () => {
     const h = await harness()
     const runTurn = vi.fn()

@@ -90,7 +90,7 @@ export function PaperUnitPdfReader({
   const tone = useWriteWorkspaceStore((s) => s.paperMode.reader.paperTone)
   const translateJob = usePaperStore((s) => s.busy['translate-document'])
 
-  usePaperMarks(workspaceRoot, unitRelDir)
+  usePaperMarks(workspaceRoot, unitRelDir, !translated)
 
   const localRootRef = useRef<HTMLDivElement | null>(null)
   const rootRef = viewerRef ?? localRootRef
@@ -110,6 +110,8 @@ export function PaperUnitPdfReader({
   const selection = usePaperSelection({
     rootRef,
     workspaceRoot,
+    unitDir: unitRelDir,
+    pdfSha256,
     paper: libraryEntry ? { unitDir: unitRelDir, meta: libraryEntry.meta, pdfSha256 } : undefined,
     onSelectionChange,
     onAutoTranslate: autoTranslateSelection

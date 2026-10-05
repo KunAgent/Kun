@@ -1,3 +1,4 @@
+import { latestExecutedTurn, hasRunningTurn, restartSourceIsCurrent } from '../domain/queue-execution-state.js'
 import type { ThreadGoal, ThreadRecord } from '../contracts/threads.js'
 import { touchThread } from '../domain/thread.js'
 import type { ThreadStore } from '../ports/thread-store.js'
@@ -63,18 +64,22 @@ export class GoalTurnCoordinator {
       launch: (threadId) => this.launchResumeTurn(threadId),
       getActiveGoalKey: async (threadId) => {
         const thread = await this.deps.threadStore.get(threadId)
+        if (thread?.queueControl?.reason === 'user_stop') return null
         if (thread?.roomContext && thread.roomContext.kind !== 'conversation') return null
         const expectedSource = this.restartSourceTurnByThread.get(threadId)
-        const latest = thread?.turns.at(-1)
+        const latest = latestExecutedTurn(thread)
         if (latest?.paperContext) return null
-        if (expectedSource && (latest?.id !== expectedSource || latest.status !== 'failed')) {
+        if (expectedSource && !restartSourceIsCurrent(thread, expectedSource)) {
           return null
         }
         const goal = thread?.goal
         return goal && goal.status === 'active' ? goalResumeKey(threadId, goal) : null
       },
-      isThreadBusy: async (threadId) =>
-        (await this.deps.threadStore.get(threadId))?.status === 'running',
+      isThreadBusy: async (threadId) => {
+        const thread = await this.deps.threadStore.get(threadId)
+        return this.restartSourceTurnByThread.has(threadId)
+          ? hasRunningTurn(thread) : thread?.status === 'running'
+      },
       ...this.deps.goalResume
     })
   }
@@ -89,7 +94,7 @@ export class GoalTurnCoordinator {
   async resumeInterruptedGoals(sources: readonly RestartRecoverySource[]): Promise<number> {
     let resumed = 0
     for (const source of sources) {
-      const latest = (await this.deps.threadStore.get(source.threadId))?.turns.at(-1)
+      const latest = latestExecutedTurn(await this.deps.threadStore.get(source.threadId))
       if (latest?.id !== source.turnId || latest.status !== 'failed' || latest.paperContext) continue
       this.restartSourceTurnByThread.set(source.threadId, source.turnId)
       if (await this.resume.resumeInterrupted(source.threadId)) resumed += 1
@@ -278,7 +283,7 @@ export class GoalTurnCoordinator {
     const goal = thread?.goal
     const sourceTurnId = this.restartSourceTurnByThread.get(threadId)
     if (!thread || thread.roomContext && thread.roomContext.kind !== 'conversation' || !goal || goal.status !== 'active') return
-    const lastTurn = thread.turns[thread.turns.length - 1]
+    const lastTurn = latestExecutedTurn(thread)
     if (thread.roomContext) {
       try {
         if (lastTurn) await dispatchRoomContinuation(this.deps.threadStore, {

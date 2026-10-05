@@ -22,6 +22,14 @@ async function readIdentity(path: string): Promise<Identity | null> {
   }
 }
 
+/** Read-only lookup for consumers such as BibTeX export; never creates identity. */
+export async function readPaperEvidenceIdentity(unitDirAbs: string): Promise<Identity | null> {
+  const root = await canonicalPath(unitDirAbs)
+  const inProgress = pending.get(root)
+  if (inProgress) return inProgress
+  return readIdentity(await resolveTargetPathWithinWorkspace(PAPER_EVIDENCE_IDENTITY_FILE, root))
+}
+
 /** Created on first evidence use, carried with the unit, and never regenerated from edited metadata. */
 export async function ensurePaperEvidenceIdentity(unitDirAbs: string, meta: PaperUnitMetaV2, declaredKey?: string): Promise<Identity> {
   const root = await canonicalPath(unitDirAbs)

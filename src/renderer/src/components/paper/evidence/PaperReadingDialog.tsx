@@ -47,9 +47,10 @@ export function PaperReadingDialog({ request, onClose }: { request: PaperReading
   const tooLong = fullText.length > PAPER_CONTEXT_MAX_CHARS
   const limited = !request.selection && (!material?.ok || material.abstractOnly || material.textPartial || tooLong)
   const insufficient = !request.selection && purpose !== 'quick-screen' && limited
+  const staleSelection = Boolean(request.selection && (!request.selection.pdfSha256 || !material?.ok || material.paperVersion?.pdfSha256 !== request.selection.pdfSha256))
   const sourceText = fullText.slice(0, PAPER_CONTEXT_MAX_CHARS)
   const start = async (): Promise<void> => {
-    if (lock.current || privacy !== 'model-provider' || insufficient || !sourceText.trim()) return
+    if (lock.current || privacy !== 'model-provider' || insufficient || staleSelection || !sourceText.trim()) return
     lock.current = true
     setBusy(true)
     setError('')
@@ -61,8 +62,8 @@ export function PaperReadingDialog({ request, onClose }: { request: PaperReading
         sources: [{
           paperId: material?.ok && material.paperVersion ? material.paperVersion.canonicalId : request.meta.arxivId || request.meta.doi || request.unitDir,
           title: request.meta.title,
-          locator: request.selection ? `page ${request.selection.page}` : material?.ok && !material.abstractOnly ? 'PDF extraction with page markers' : 'abstract / metadata only',
-          sourceVersion: request.selection?.pdfSha256 ?? (material?.ok ? material.paperVersion?.pdfSha256 : undefined),
+          locator: request.selection ? `selected passage starting on page ${request.selection.page}` : material?.ok && !material.abstractOnly ? 'PDF extraction with page markers' : 'abstract / metadata only',
+          sourceVersion: request.selection ? request.selection.pdfSha256 : (material?.ok ? material.paperVersion?.pdfSha256 : undefined),
           text: sourceText
         }]
       })
@@ -108,9 +109,11 @@ export function PaperReadingDialog({ request, onClose }: { request: PaperReading
         <label className="flex items-center gap-2 text-xs text-ds-ink"><input type="radio" name="paper-privacy" value="model-provider" checked={privacy === 'model-provider'} onChange={() => setPrivacy('model-provider')} />{t('paperReadingProvider')}: {providerId || '—'} / {model || '—'}</label>
         <p className="text-xs text-ds-muted">{t(privacy === 'local-only' ? 'paperReadingNoLocalModel' : 'paperReadingDisclosure')}</p>
       </fieldset>
+      {staleSelection && material ? <p className="text-xs text-amber-700 dark:text-amber-300">{t('paperReadingStaleSelection')}</p> : null}
       {insufficient ? <p className="text-xs text-amber-700 dark:text-amber-300">{t('paperReadingInsufficient')}</p> : null}
+      {!providerId || !model || model === 'auto' ? <p className="text-xs text-amber-700 dark:text-amber-300">{t('paperReadingFixedModel')}</p> : null}
       {error ? <p role="alert" className="text-xs text-red-500">{error}</p> : null}
-      <button type="button" className={evidenceButton} disabled={busy || !material || privacy !== 'model-provider' || insufficient || !sourceText.trim() || !providerId || !model || model === 'auto'} onClick={() => void start()}>{t('paperReadingStart')}</button>
+      <button type="button" className={evidenceButton} disabled={busy || !material || privacy !== 'model-provider' || insufficient || staleSelection || !sourceText.trim() || !providerId || !model || model === 'auto'} onClick={() => void start()}>{t('paperReadingStart')}</button>
     </section>
   </div>
 }

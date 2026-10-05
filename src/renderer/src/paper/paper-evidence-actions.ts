@@ -7,7 +7,7 @@ import { usePaperMarksStore } from './paper-marks-store'
 export async function promotePaperEvidence(workspaceRoot: string, unitDir: string, markId: string): Promise<void> {
   await flushPaperMarks(workspaceRoot, unitDir)
   const marks = usePaperMarksStore.getState()
-  if (marks.unitDir === unitDir && marks.dirty) throw new Error('Annotation changes are not saved yet. Retry before creating evidence.')
+  if (marks.workspaceRoot === workspaceRoot && marks.unitDir === unitDir && marks.dirty) throw new Error('Annotation changes are not saved yet. Retry before creating evidence.')
   const read = await window.kunGui.paperEvidenceRead({ workspaceRoot })
   if (!read.ok) throw new Error(read.message)
   const saved = await window.kunGui.paperEvidencePromote({ workspaceRoot, unitDir, markId, expectedRevision: read.revision })

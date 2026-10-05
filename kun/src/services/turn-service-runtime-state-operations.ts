@@ -1,3 +1,4 @@
+import { latestExecutedTurn } from '../domain/queue-execution-state.js'
 import { flushDurableSteering } from './durable-steering.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
@@ -251,6 +252,7 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
           }
         }
         try {
+          await this.pauseQueuedTurns(thread.id, 'restart_recovery', turn.id)
           await this.finishTurn({
             threadId: thread.id,
             turnId: turn.id,
@@ -290,18 +292,19 @@ async reconcileManagerSettledInterruptions(this: TurnService, input: {
     const candidateSources = new Map<string, RestartRecoverySource>()
     for (const summary of summaries) {
       if (
-        summary.status !== 'idle' ||
+        summary.status === 'archived' ||
         (summary.relation !== 'primary' && summary.relation !== 'fork')
       ) continue
       try {
         const thread = await this['deps'].threadStore.get(summary.id)
         if (
           !thread ||
-          thread.status !== 'idle' ||
+          thread.status === 'archived' ||
           (thread.relation !== 'primary' && thread.relation !== 'fork') ||
-          thread.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')
+          thread.queueControl?.reason === 'user_stop' ||
+          thread.turns.some((turn) => turn.status === 'running')
         ) continue
-        const latest = thread.turns.at(-1)
+        const latest = latestExecutedTurn(thread)
         if (!latest || latest.status !== 'failed') continue
 
         let sessionItems: TurnItem[] | undefined
@@ -322,6 +325,7 @@ async reconcileManagerSettledInterruptions(this: TurnService, input: {
             )
         }
         if (!recoverable) continue
+        await this.pauseQueuedTurns(thread.id, 'restart_recovery', latest.id)
         sessionItems ??= await this['deps'].sessionStore.loadItems(thread.id)
         const checkpointed = await recordInterruptionCheckpoint(this, {
           threadId: thread.id,

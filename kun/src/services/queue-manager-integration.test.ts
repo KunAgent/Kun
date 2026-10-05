@@ -1,3 +1,4 @@
+import { latestExecutedTurn } from '../domain/queue-execution-state.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -263,5 +264,21 @@ describe('queue through a real Manager and remote stores', () => {
     expect(recovered?.turns[0].admissionPending).toBeUndefined()
     expect(await restarted.startNextQueuedTurn('thread-test')).toEqual({ turnId: 'durable' })
     await restarted.finishTurn({ threadId: 'thread-test', turnId: 'durable', status: 'completed' })
+  })
+})
+
+describe('restart continuation and queued model history', () => {
+  it('executes recovery before queued input and presents B as the next user request', async () => {
+    const h = await harness()
+    const a = await h.turns.startTurn({ threadId: 'thread-test', request: { prompt: 'A' } })
+    const b = await h.turns.enqueueTurn({ threadId: 'thread-test', request: { prompt: 'B' } })
+    await h.turns.pauseQueuedTurns('thread-test', 'restart_recovery', a.turnId)
+    await h.turns.finishTurn({ threadId: 'thread-test', turnId: a.turnId, status: 'failed', code: 'orphaned_after_restart' })
+    expect(await h.loop.resumeInterruptedTurns([{ threadId: 'thread-test', turnId: a.turnId }])).toBe(1)
+    await vi.waitFor(() => expect(h.seen).toHaveLength(2))
+    expect(h.seen[0]).toContain('Continue the task that was interrupted')
+    expect(h.seen[1]).toBe('B')
+    expect(latestExecutedTurn(await h.threadStore.get('thread-test'))?.id).toBe(b.turnId)
+    await vi.waitFor(async () => expect((await h.threadStore.get('thread-test'))?.turns.find((turn) => turn.id === b.turnId)?.status).toBe('completed'))
   })
 })

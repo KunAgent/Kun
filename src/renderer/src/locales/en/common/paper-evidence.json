@@ -73,7 +73,7 @@
   "paperReadingMaterial": "Available material",
   "paperReadingStart": "Start bounded reading",
   "paperReadingProvider": "Selected model provider",
-  "paperReadingLocal": "Local workspace only · no AI request",
+  "paperReadingLocal": "This request stays local · no AI call",
   "paperReadingDisclosure": "Only the listed text is sent to this model. One model request; no tools, downloads, subagents or file changes.",
   "paperReadingNoLocalModel": "Local evidence and matrices work without AI. Local-only model inference is not available; no request will be sent.",
   "paperReadingAbstractOnly": "Abstract / metadata only",
@@ -88,5 +88,7 @@
   "paperEvidenceHiddenMarks": "Some annotations belong to another or unknown PDF version; inspect them in the annotation list before reusing their page anchors.",
   "paperReadingImageNoteOnly": "Discuss annotation text (image stays local)",
   "paperReadingFigures": "Figures: {{status}} · high {{high}} / medium {{medium}} / low {{low}}",
-  "paperReadingFiguresUnbound": "Figure extraction confidence does not establish a PDF version or semantic correctness."
+  "paperReadingFiguresUnbound": "Figure extraction confidence does not establish a PDF version or semantic correctness.",
+  "paperReadingStaleSelection": "The selected passage has an unknown or different PDF version. Reload the paper and select it again.",
+  "paperReadingFixedModel": "Choose a fixed model and provider in the conversation model picker. Automatic routing and external agent SDKs are not supported for bounded reading yet."
 }

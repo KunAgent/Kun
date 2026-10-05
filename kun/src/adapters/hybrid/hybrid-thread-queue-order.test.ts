@@ -17,3 +17,16 @@ describe('hydrated durable queue order', () => {
     expect(result.turns.map((turn) => turn.prompt)).toEqual(['C', 'B'])
   })
 })
+
+describe('hydrated recovery execution order', () => {
+  it('keeps a newer recovery before the older-created input it precedes', () => {
+    const thread = createThreadRecord({ id: 'thread', title: '', workspace: '/tmp', model: 'test' })
+    const queued = createTurnRecord({ id: 'B', threadId: thread.id, prompt: 'B', status: 'running', createdAt: '2026-09-01T00:00:00Z' })
+    const recovery = createTurnRecord({ id: 'A2', threadId: thread.id, prompt: 'A2', status: 'completed', createdAt: '2026-09-01T00:00:01Z' })
+    const result = hydrateThreadItems({ ...thread, turns: [recovery, queued] }, [
+      makeUserItem({ id: 'B-user', threadId: thread.id, turnId: 'B', text: 'B' }),
+      makeUserItem({ id: 'A2-user', threadId: thread.id, turnId: 'A2', text: 'A2' })
+    ], { preserveExistingItemsWhenNoFileItems: true })
+    expect(result.turns.map((turn) => turn.id)).toEqual(['A2', 'B'])
+  })
+})

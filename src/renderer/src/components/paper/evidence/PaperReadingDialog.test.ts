@@ -78,10 +78,31 @@ describe('PaperReadingDialog bounded consent', () => {
       agentSurface: 'write', expectedThreadId: 'thread-a', waitForRuntimeAdmission: true,
       paperContext: { version: 1, scope: 'selected-passage', privacy: 'model-provider', purpose: 'quick-screen',
         providerId: 'configured-provider', model: 'selected-model', maxModelRequests: 1,
-        sources: [{ paperId: evidence.paperVersion.canonicalId, title: entry.meta.title, locator: 'page 4', sourceVersion: hash,
+        sources: [{ paperId: evidence.paperVersion.canonicalId, title: entry.meta.title, locator: 'selected passage starting on page 4', sourceVersion: hash,
           text: 'A selected claim with 2.3 ms, not 10%.' }] }
     })
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('never borrows the current disk hash for an unhashed selected passage', async () => {
+    tree = await render(createElement(PaperReadingDialog, { request: { ...request,
+      selection: { text: 'A selection whose viewer hash is not ready', page: 4 } }, onClose: vi.fn() }))
+    await consent()
+    expect(button(tree, 'paperReadingStart').props.disabled).toBe(true)
+    await click(tree, 'paperReadingStart')
+    expect(state.chat.ensureWriteThreadForWorkspace).not.toHaveBeenCalled()
+    expect(state.chat.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('blocks a selected passage whose viewer version differs from current material', async () => {
+    api.paperEvidenceMaterial.mockResolvedValue({ ...material, paperVersion: { ...evidence.paperVersion, pdfSha256: 'b'.repeat(64) } })
+    tree = await render(createElement(PaperReadingDialog, { request: { ...request,
+      selection: { text: 'A selection from the previous PDF', page: 4, pdfSha256: hash } }, onClose: vi.fn() }))
+    await consent()
+    expect(button(tree, 'paperReadingStart').props.disabled).toBe(true)
+    await click(tree, 'paperReadingStart')
+    expect(state.chat.ensureWriteThreadForWorkspace).not.toHaveBeenCalled()
+    expect(state.chat.sendMessage).not.toHaveBeenCalled()
   })
 
   it.each(['textPartial', 'abstractOnly'] as const)('blocks deeper reading for %s while permitting labeled quick screening', async (flag) => {
