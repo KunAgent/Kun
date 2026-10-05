@@ -62,7 +62,7 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
   return <header className="rooms-main-titlebar rooms-header direct-header">
     {embedded ? <button className="rooms-icon-button" aria-label={t('sidebarToggle')} onClick={onToggleLeftSidebar}><PanelLeft size={18} /></button>
       : <button className="rooms-icon-button rooms-sidebar-toggle" aria-label={t('roomsLabel')} onClick={onSidebar}><Menu size={19} /></button>}
-    <button className="direct-chat-title" onClick={onProfile}><RoomAvatar member={member} label={member.displayName} size={36} /><span><strong>{member.displayName}</strong>{!embedded ? <small>{modelLabel(current?.main)}</small> : null}</span></button>
+    <button className="direct-chat-title" onClick={onProfile}><RoomAvatar member={member} label={member.displayName} size={36} /><span className="direct-chat-title-text"><strong>{member.displayName}</strong>{!embedded ? <small>{modelLabel(current?.main)}</small> : null}</span></button>
     {embedded ? <span className="rooms-private-badge">{t('agentPrivateChatLabel')}</span> : null}
     {embedded ? <button className="direct-workspace-control" onClick={onConnect} title={room.privateWorkspace ?? t('agentPrivateWorkspace')}>
       <FolderOpen size={14} /><span>{room.privateWorkspace?.replaceAll('\\', '/').split('/').at(-1) ?? t('agentPrivateWorkspace')}</span><ChevronDown size={12} /></button> : null}

@@ -15,6 +15,7 @@ import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { RoomRuntime } from '../rooms/room-runtime.js'
 import type { RoomRequestState, RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import { quickCreateAgent } from './agent-chat-entry.js'
+import { openAgentConversation } from './agent-conversations.js'
 import { controlDirectRequest, updateDirectWorkspace, directActivity } from './agent-direct-service.js'
 import { AgentDirectRunner } from './agent-direct-runner.js'
 import { enqueuePrivateContinuation } from '../rooms/room-continuation-service.js'
@@ -56,7 +57,8 @@ async function fixture(outputPath = 'hello.txt', model?: ModelClient) {
   const store = new SqliteRoomStore({ path: join(root, 'rooms.sqlite') })
   const deps: RoomRuntimeDeps = { dataDir: root, store, threads: h.threads, threadStore: h.threadStore,
     turns: h.turns, sessions: h.sessionStore, approvals: h.approvalGate, inputs: h.userInputGate,
-    runTurn: (id, turnId) => h.loop.runTurn(id, turnId), model: () => ({ model: 'first', providerId: 'test' }), profiles: () => ({}), assertOwnership: async () => {} }
+    runTurn: (id, turnId) => h.loop.runTurn(id, turnId), model: () => ({ model: 'first', providerId: 'test' }),
+    profiles: () => ({ general: { mode: 'subagent', toolPolicy: 'inherit' } }), assertOwnership: async () => {} }
   const runtime = new RoomRuntime(deps), runner = new AgentDirectRunner(deps, runtime.service)
   const created = await quickCreateAgent(runtime.agents, { clientRequestId: 'create' }, true)
   const advance = async (id: string) => {
@@ -287,11 +289,25 @@ it('keeps ordinary assistant text internal and fails visibly after bounded publi
   expect(f.seen).toHaveLength(1 + IM_PUBLICATION_MAX_RECOVERY_STEPS)
 })
 
+it('uses the fresh personal Full access policy in both the permission picker and admitted runtime', async () => {
+  const f = await fixture()
+  const approvals = vi.spyOn(f.h.approvalGate, 'request')
+  const state = await agentPermissions(f.runtime, f.created.roomId)
+  expect(state.mode).toBe('full-access')
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'default-policy', body: 'Create hello.txt' })
+  const done = await f.advance(sent.requestId)
+  const thread = await f.h.threads.getMetadata(done.threadId)
+  expect(done.roomSnapshot.privateExecutionPolicy).toEqual(state.policy)
+  expect(thread).toMatchObject(state.policy)
+  expect(done.status).toBe('completed')
+  expect(approvals).not.toHaveBeenCalled()
+})
+
 it('freezes accepted permissions and applies full access only to the next private turn', async () => {
   const f = await fixture()
   const approvals = vi.spyOn(f.h.approvalGate, 'request')
   const state = await agentPermissions(f.runtime, f.created.roomId)
-  expect(state.mode).toBe('ask-for-approval')
+  expect(state.mode).toBe('full-access')
   await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'restrict-first', expectedRevision: state.revision, mode: 'ask-for-approval' })
   const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'before-policy', body: 'Keep context: ALPHA. Create hello.txt.' })
   const restricted = await agentPermissions(f.runtime, f.created.roomId)
@@ -331,15 +347,17 @@ it('defaults a directory-limited Agent to ask-for-approval instead of full acces
   execFileSync('git', ['init', '--quiet', outside])
   execFileSync('git', ['-C', outside, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', '-c', 'commit.gpgSign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-m', 'test: initialize scope'])
   const f = await fixture()
-  const agent = await f.runtime.agents.get(f.created.agentId)
-  await f.runtime.agents.update(agent.id, { clientRequestId: 'restrict-agent', expectedRevision: agent.revision, allowedRepositoryRoots: [outside] })
-  const state = await agentPermissions(f.runtime, f.created.roomId)
+  const { agent } = await f.runtime.agents.create({ clientRequestId: 'restricted-agent', name: 'Scoped Agent', allowedRepositoryRoots: [outside] })
+  const { room } = await openAgentConversation(f.runtime.agents, f.runtime.service, agent.id)
+  const state = await agentPermissions(f.runtime, room.id)
   expect(state.mode).toBe('ask-for-approval')
   expect(state.fullAccessUnavailable).toBe('agent_directory_limits')
 })
 
 it('uses current confirmed permissions for a new retry while retaining the original workspace', async () => {
   const f = await fixture()
+  const initial = await agentPermissions(f.runtime, f.created.roomId)
+  await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'restrict-retry', expectedRevision: initial.revision, mode: 'ask-for-approval' })
   const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'retry-policy', body: 'Create hello.txt' })
   const original = (await f.store.get<RoomRequestState>('request', sent.requestId))!
   await controlDirectRequest(f.runtime, f.created.roomId, sent.requestId, { action: 'stop', clientRequestId: 'cancel-retry', expectedRevision: original.revision })

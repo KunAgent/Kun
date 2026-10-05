@@ -427,3 +427,24 @@ test('restart consent inspection still fails missing/repeated consent, persisten
   await assert.rejects(assertNativeRestartConsent({ ...app, evaluate: async () => { reads++; throw new Error('Other failure') } }), /Other failure/)
   assert.equal(reads, 1)
 })
+
+test('approval smoke asserts the personal default and deliberately changes it through protected UI', async () => {
+  const { prepareWorkspaceApprovalMode } = require('./smoke-personal-agent-workspace.cjs')
+  const actions = [], reads = []
+  let mode = 'full-access'
+  const control = (name) => ({ waitFor: async () => actions.push('wait:' + name),
+    click: async () => { actions.push('click:' + name); if (name === 'Apply settings') mode = 'ask-for-approval' } })
+  const picker = { locator: (selector) => control(selector), getByRole: (_role, { name }) => control(name) }
+  const page = { locator: (selector) => selector === '.room-permission-picker' ? picker : control(selector) }
+  const consent = { getByRole: (_role, { name }) => control(name), evaluate: async () => false }
+  await prepareWorkspaceApprovalMode({ page, roomId: 'personal',
+    application: { waitForEvent: async (name) => { actions.push('event:' + name); return consent } },
+    request: async (_page, path) => { reads.push(path); return { mode } },
+    poll: async (predicate) => assert(await predicate()), capture: async (name) => actions.push('capture:' + name) })
+  assert(reads.every((path) => path === '/v1/rooms/personal/direct/permissions'))
+  assert(actions.indexOf('event:window') < actions.indexOf('click:[role="menuitemradio"][data-permission-mode="ask-for-approval"]'))
+  assert(actions.includes('click:Apply settings'))
+  assert.equal(mode, 'ask-for-approval')
+  assert(actions.includes('wait:[data-permission-mode="full-access"]'))
+  assert(actions.includes('wait:[data-permission-mode="ask-for-approval"]'))
+})

@@ -1,4 +1,4 @@
-import { defaultAgentExecutionPolicy } from './agent-permission-snapshot.js'
+import { newAgentExecutionPolicy } from './agent-permission-snapshot.js'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { AgentIdentitySchema, AgentModelRef } from '../contracts/agent-identities.js'
@@ -39,7 +39,7 @@ export async function quickCreateAgent(directory: AgentIdentityService, raw: unk
     ...(interview ? { setup: { status: 'pending' as const, startedAt: now } } : {}) })
   const roomId = agentStableId('agent-direct', id)
   const room = RoomSchema.parse({ schemaVersion: 1, id: roomId, name: agent.name, description: agent.title,
-    privateExecutionPolicy: defaultAgentExecutionPolicy(),
+    privateExecutionPolicy: newAgentExecutionPolicy(agent, directory.profiles()[agent.presetId]),
     conversationKind: 'user_agent', collaborationMode: 'peer', members: [directory.asMember(agent)], defaultMemberId: id,
     participantAgentIds: [id], repositories: [], revision: 0, createdAt: now, updatedAt: now })
   const result = { agentId: id, roomId }
