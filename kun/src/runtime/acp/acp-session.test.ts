@@ -177,13 +177,37 @@ describe('AcpSessionManager', () => {
     expect(resumed.replayedHistory).toBe(false)
     expect(resumed.models?.currentModelId).toBe('legacy-alternative')
     expect(requests('session/set_model').map((entry) => entry.params)).toEqual([
-      { sessionId: first.sessionId, modelId: 'legacy-alternative' },
       { sessionId: first.sessionId, modelId: 'legacy-alternative' }
     ])
-    expect(requests('session/set_mode').map((entry) => entry.params?.modeId)).toEqual(['normal', 'normal'])
+    expect(requests('session/set_mode').map((entry) => entry.params?.modeId)).toEqual(['normal'])
     expect(requests('session/set_config_option')).toEqual([])
     resumed.detach()
     await conn.close()
+  })
+
+  test('reuses a live session without disk-load capability, and rebases only after reconnect', async () => {
+    const { conn, requests } = await startFixture('live-only.json')
+    await conn.initialize()
+    const { manager } = makeManager()
+    const first = await manager.ensureSession(makeCtx({ model: undefined }), conn)
+    const history = [userItem('turn_1', 'remember secret')]
+    await manager.commit(first, { committedItems: history, lastCommittedTurnId: 'turn_1' })
+    first.detach()
+    const next = makeCtx({ turnId: 'turn_2', model: undefined, items: history })
+    const second = await manager.ensureSession(next, conn)
+    expect(second.sessionId).toBe(first.sessionId)
+    expect(second.replayedHistory).toBe(false)
+    expect(second.preparation.resumed).toBe(true)
+    expect(requests('session/new')).toHaveLength(1)
+    expect(requests('session/load')).toHaveLength(0)
+    second.detach()
+    const replacement = await startFixture('live-only.json')
+    await replacement.conn.initialize()
+    const restored = await manager.ensureSession(next, replacement.conn)
+    expect(restored.preparation.rebaseReason).toBe('native_state_unavailable')
+    expect(restored.replayedHistory).toBe(true)
+    expect(replacement.requests('session/load')).toHaveLength(0)
+    expect(replacement.requests('session/new')).toHaveLength(1)
   })
 
   test('rejects an unadvertised legacy model before a prompt or binding is accepted', async () => {
@@ -263,6 +287,9 @@ describe('AcpSessionManager', () => {
     const binding = await coordinator.store.load('thread_1')
     await coordinator.store.save({ ...binding!, nativeSessionId: 'sess-loadable' })
 
+    // A new connection must restore the persisted session once.
+    const restoredConnection = await startFixture('load-replay.json')
+    await restoredConnection.conn.initialize()
     const sink: SessionUpdate[] = []
     const second = await manager.ensureSession(
       makeCtx({
@@ -270,13 +297,13 @@ describe('AcpSessionManager', () => {
         model: undefined,
         items: [userItem('turn_0', 'earlier'), userItem('turn_1', 'now')]
       }),
-      conn,
+      restoredConnection.conn,
       (update) => sink.push(update as SessionUpdate)
     )
     expect(second.sessionId).toBe('sess-loadable')
     expect(second.phase).toBe('ready')
     expect(second.replayedHistory).toBe(false)
-    expect(requestsOf(journal, 'session/load')).toHaveLength(1)
+    expect(requestsOf(restoredConnection.journal, 'session/load')).toHaveLength(1)
     // Replayed user/agent/tool_call updates were filtered in loading phase.
     expect(sink).toHaveLength(0)
     // config_option_update during load was absorbed.
@@ -370,7 +397,7 @@ describe('AcpConnectionPool', () => {
     await pool.dispose()
   })
 
-  test('connection exit marks hosted session bindings native_state_unavailable', async () => {
+  test('connection exit preserves disk-backed native sessions for restore', async () => {
     const { conn } = await startFixture('basic-chat.json')
     await conn.initialize()
     const { manager, coordinator } = makeManager()
@@ -388,7 +415,7 @@ describe('AcpConnectionPool', () => {
     await manager.handleConnectionExit(conn, 'gemini-cli')
 
     const after = await coordinator.store.load('thread_1')
-    expect(after?.nativeSessionId).toBeUndefined()
+    expect(after?.nativeSessionId).toBe('sess-basic')
     const preparation = await coordinator.prepare({
       threadId: 'thread_1',
       route: {
@@ -402,8 +429,8 @@ describe('AcpConnectionPool', () => {
       },
       priorItems: [userItem('turn_1', 'hi')]
     })
-    expect(preparation.resumed).toBe(false)
-    expect(preparation.rebaseReason).toBe('native_state_unavailable')
+    expect(preparation.resumed).toBe(true)
+    expect(preparation.rebaseReason).toBeUndefined()
     await conn.close()
   })
 })

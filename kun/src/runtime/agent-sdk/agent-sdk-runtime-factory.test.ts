@@ -313,7 +313,7 @@ describe('createAgentSdkRuntime delegated session binding', () => {
           : turn)
       }
       const isolated = await restartedDeps.loadTurnContext('th', 't2')
-      expect(isolated?.resumeSessionId).toBeUndefined()
+      expect(isolated?.resumeSessionId).toBe('session_persisted')
       expect(isolated?.historyTranscript).toContain('first')
     } finally {
       await rm(root, { recursive: true, force: true })

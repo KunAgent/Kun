@@ -418,3 +418,13 @@ describe('kgw token guard', () => {
     expect((await dispatchRequest(router, req('/v1/threads', 'kun_local_abc'), guard)).status).toBe(404)
   })
 })
+
+it('rejects a prior-turn MCP grant even while another turn is running', async () => {
+  const execute = vi.fn()
+  const f = makeFixture({ execute })
+  const token = f.tokens.issue({ threadId: f.thread.id, harnessId: 'gemini-cli',
+    credentialIdentity: 'native-session', scopes: ['kun-tools'], turnId: 'previous-turn' })
+  const response = await post(f.runtime, rpc('tools/call', { name: 'memory_search', arguments: {} }), token)
+  expect((await response.json()).result.isError).toBe(true)
+  expect(execute).not.toHaveBeenCalled()
+})

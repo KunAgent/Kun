@@ -139,6 +139,8 @@ export interface SdkTurnContext {
    * Mirrors the native loop's `contextInstructions`.
    */
   contextInstructions?: string[]
+  /** Request-local controls/persona must be delivered on every turn. */
+  turnLocalInstructions?: readonly string[]
   activeSkillIds?: string[]
 }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -19,6 +19,7 @@ const requested = process.argv.includes('--agents') ? process.argv[process.argv.
 const turnCount = process.argv.includes('--turns') ? Number(process.argv[process.argv.indexOf('--turns') + 1]) : 3
 const selectedModel = process.env.KUN_SMOKE_MODEL || 'default'
 const checkTools = process.argv.includes('--tools')
+const restartAfter = process.argv.includes('--restart-after') ? Number(process.argv[process.argv.indexOf('--restart-after') + 1]) : 0
 assert.ok(Number.isInteger(turnCount) && turnCount >= 1 && turnCount <= 10, '--turns must be between 1 and 10')
 const managedBinary = (directory, command) => {
   const path = join(homedir(), '.kun', 'agents', directory, 'node_modules', '.bin', command + (process.platform === 'win32' ? '.cmd' : ''))
@@ -59,13 +60,14 @@ const checkpoint = () => writeFile(join(evidence, reportName), JSON.stringify(re
 try {
   manager = await startServiceManager({ controlDir: join(root, 'control'), dataDir: join(root, 'data'),
     settingsPath: join(root, 'settings.json'), managerToken: randomUUID(), instanceId: randomUUID(), startedAt: new Date().toISOString() })
-  runtime = await startKunServe({ host: '127.0.0.1', port: 0, dataDir: join(root, 'data'), runtimeToken: token,
+  const runtimeOptions = { host: '127.0.0.1', port: 0, dataDir: join(root, 'data'), runtimeToken: token,
     apiKey: 'unused-native-smoke-key', baseUrl: 'http://127.0.0.1:1', model: 'default',
     approvalPolicy: 'auto', sandboxMode: 'danger-full-access', approvalReviewer: 'user',
     tokenEconomyMode: false, insecure: false, runtimeFlavor: 'development', discoveryDir: join(root, 'discovery'),
     capabilities, nativeAgentNetwork, sharedMcpConfigPath: join(root, 'empty-mcp.json'), serviceManager: { discovery: manager.discovery },
     harnesses: { binaryPaths: paths, enabledProfiles: requested.map((harnessId) => ({ harnessId, credentialMode: 'native-login' })),
-      disabledIds: [], defaults: {}, custom: [] } })
+      disabledIds: [], defaults: {}, custom: [] } }
+  runtime = await startKunServe(runtimeOptions)
   heartbeat = setInterval(() => void heartbeatRuntimeWithManager({ manager: { discovery: manager.discovery },
     flavor: 'development', instanceId: runtime.instanceId }).catch(() => undefined), 5000)
   const api = async (path, body) => {
@@ -120,15 +122,29 @@ try {
         const events = await runtime.runtime.sessionStore.loadEventsSince(thread.id, 0)
         const diagnostics = events.filter((event) => event.turnId === startedTurn.turnId && event.kind === 'delegated_runtime')
           .map((event) => ({ phase: event.phase, reason: event.reason }))
-        result.turns.push({ round, status: turn.status, outputMatches: text.includes(expected), outputLength: text.length,
+        const bindingPath = join(root, 'data', 'delegated-sessions', 'bindings', createHash('sha256').update(thread.id).digest('hex') + '.json')
+        let binding
+        for (let attempt = 0; attempt < 20; attempt++) {
+          binding = await readFile(bindingPath, 'utf8').then(JSON.parse).catch(() => null)
+          if (binding?.lastCommittedTurnId === startedTurn.turnId) break
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        const nativeSessionId = binding?.nativeSessionId
+        const sameNativeSession = round === 1 || nativeSessionId === result.turns[0].nativeSessionId
+        result.turns.push({ round, nativeSessionId, sameNativeSession, status: turn.status, outputMatches: text.includes(expected), outputLength: text.length,
           toolReadCheck: round === 3 && checkTools,
           diagnostics, handoffs: events.filter((event) => event.turnId === startedTurn.turnId && event.kind === 'handoff_injected').length })
         result.outputMatches = result.turns.every((entry) => entry.outputMatches)
         if (turn.error) result.error = redactApprovalSensitiveText(turn.error).slice(0, 700)
-        result.ok = turn.status === 'completed' && result.outputMatches
+        result.ok = turn.status === 'completed' && result.outputMatches && Boolean(nativeSessionId) && sameNativeSession
         await checkpoint()
         console.log(JSON.stringify({ id, ...result.turns.at(-1) }))
         if (!result.ok) break
+        if (round === restartAfter && round < turnCount) {
+          await runtime.close()
+          runtime = await startKunServe(runtimeOptions)
+          result.runtimeRestartedAfterRound = round
+        }
       }
     } catch (error) { result.ok = false; result.status = 'failed'; result.error = redactApprovalSensitiveText(String(error)).slice(0, 700) }
     result.durationMs = Date.now() - started; await checkpoint()

@@ -35,7 +35,7 @@ function fixture() {
     turns: { finishTurn }, events: { record }, sessionStore: { loadItems: async () => [] }, ids: { next: () => 'id' }
   } as unknown as SessionTurnRuntimeDeps
   return { runtime: new SessionTurnRuntime(deps), agent, session, pool, prepare, record, finishTurn,
-    disable: () => { enabled = false }, connect: deps.agentFactory.connect, deps }
+    ctx, disable: () => { enabled = false }, connect: deps.agentFactory.connect, deps }
 }
 
 describe('session runtime last admission boundaries', () => {
@@ -58,6 +58,19 @@ describe('session runtime last admission boundaries', () => {
     expect(await running).toBe('completed')
     expect(f.deps.sessionCoordinator!.commit).toHaveBeenCalledOnce()
     expect(f.finishTurn).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
+  })
+  it('separates native Codex instructions from turn-local user context', async () => {
+    const f = fixture()
+    f.ctx.definition = { ...f.ctx.definition, id: 'codex' }
+    f.ctx.instructionBlocks = ['Stable host policy', 'Current user persona']
+    f.ctx.turnDynamicContext = { instructions: ['Current user persona'], blocks: [], privateValues: [], historyItems: [] }
+    expect(await f.runtime.runTurn('thread', 'turn', new AbortController().signal)).toBe('completed')
+    const setup = vi.mocked(f.agent.startSession).mock.calls[0][0]
+    expect(setup.systemInstructions).toContain('Stable host policy')
+    expect(setup.systemInstructions).not.toContain('Current user persona')
+    const prompt = vi.mocked(f.session.runTurn).mock.calls[0][0]
+    expect(prompt.instructionBlocks).toEqual(['Current user persona'])
+    expect(prompt.userText).toBe('hello')
   })
   it('rejects a reused process when admission changes during session preparation', async () => {
     const f = fixture()

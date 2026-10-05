@@ -103,6 +103,9 @@ export async function handleKunToolsMcp(
 
   const body = await readJsonBody(request, MCP_BODY_LIMIT_BYTES)
   if (!body.ok) return body.response
+  if (tokens.verifyScope(bearer(request), 'kun-tools') !== grant) {
+    return jsonResponse({ code: 'unauthorized', message: 'grant expired' }, 401)
+  }
   const message: unknown = body.value
   // Batch requests are rejected outright: a batch would let several calls
   // share one credential check and muddy per-request identity.
@@ -155,7 +158,8 @@ async function handleToolMethod(
   message: JsonRpcMessage
 ): Promise<JsonResponse> {
   const thread = await runtime.threadService.get(grant.threadId)
-  const turn = activeTurn(thread)
+  const active = activeTurn(thread)
+  const turn = active && (!grant.turnId || grant.turnId === active.id) ? active : undefined
   if (message.method === 'tools/list') {
     if (!turn) return rpcError(id, NO_ACTIVE_TURN, 'no active turn for this session')
     const tools = await host.listTools(grant.threadId, turn.id)

@@ -170,6 +170,8 @@ function parseBinding(value: unknown): DelegatedSessionBinding | null {
     !boundedString(record.model) ||
     !hexDigest(record.capabilityFingerprint) ||
     !hexDigest(record.synchronizedHistoryDigest) ||
+    (record.synchronizedInstructionDigest !== undefined &&
+      !hexDigest(record.synchronizedInstructionDigest)) ||
     !boundedString(record.lastCommittedTurnId) ||
     !boundedString(record.createdAt) ||
     !boundedString(record.updatedAt) ||
@@ -201,6 +203,8 @@ function isParkedSession(value: unknown): value is ParkedSession {
   const continuationMode = record.continuationMode
   return (
     hexDigest(record.key) &&
+    (record.synchronizedInstructionDigest === undefined ||
+      hexDigest(record.synchronizedInstructionDigest)) &&
     (
       providerKind === 'agent-sdk' ||
       providerKind === 'cursor-sdk' ||

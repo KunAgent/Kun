@@ -122,6 +122,30 @@ describe('PiAgent', () => {
     expect(agent.sessionThreadIds()).toEqual(['kun-thread-1'])
   })
 
+  it('appends on the live session but creates an isolated session for a new thread', async () => {
+    const { agent, writes, emit } = await setup()
+    const input = sessionInput({ model: undefined })
+    const first = agent.startSession(input)
+    await new Promise((r) => setImmediate(r))
+    respond(writes, emit, { sessionFile: '/sessions/one.jsonl' })
+    await first
+    const next = agent.resumeSession({ ...input, turnId: 'next', preparation: {
+      ...input.preparation, resumed: true, nativeSessionId: '/sessions/one.jsonl'
+    } })
+    await new Promise((r) => setImmediate(r))
+    expect(writes.at(-1)).toMatchObject({ type: 'get_state' })
+    expect(writes.some((w) => (w as { type: string }).type === 'switch_session')).toBe(false)
+    respond(writes, emit, { sessionFile: '/sessions/one.jsonl' })
+    expect((await next).providerSessionId).toBe('/sessions/one.jsonl')
+    const other = agent.startSession({ ...input, threadId: 'another-thread' })
+    await new Promise((r) => setImmediate(r))
+    expect(writes.at(-1)).toMatchObject({ type: 'new_session' })
+    respond(writes, emit, {})
+    await new Promise((r) => setImmediate(r))
+    respond(writes, emit, { sessionFile: '/sessions/two.jsonl' })
+    expect((await other).providerSessionId).toBe('/sessions/two.jsonl')
+  })
+
   it('skips set_model when the session has no model', async () => {
     const { agent, writes, emit } = await setup()
     const promise = agent.startSession(sessionInput({ model: undefined }))

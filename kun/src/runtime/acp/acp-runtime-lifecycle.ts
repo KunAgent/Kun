@@ -104,7 +104,7 @@ export async function acquireAcpConnection(
       debug: deps.debug
     })
     host.attach(conn)
-    // Hosted bindings must be rebased if this process dies (§4.3).
+    // Drop live handles on exit; preserve native IDs when disk loading is supported.
     const detachExit = pool.onExit(input.poolKey, () => {
       detachExit()
       void sessions

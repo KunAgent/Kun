@@ -78,6 +78,8 @@ export type HarnessSessionStartInput = {
   reasoningEffort?: string
   /** Resolved harness permission-level id (definition.permissionModes). */
   permissionModeId?: string
+  /** Current host instructions; transports with a native developer field use it. */
+  systemInstructions?: readonly string[]
   /** Prior items snapshot for coordinator.prepare. */
   items: readonly TurnItem[]
   preparation: DelegatedSessionPreparation

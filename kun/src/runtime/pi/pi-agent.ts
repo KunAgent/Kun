@@ -53,6 +53,7 @@ export class PiAgent implements HarnessAgent {
   /** 'kun' under kun-gateway (generated models.json); undefined otherwise. */
   private readonly gatewayProviderId: string | undefined
   private sessionOwner: string | undefined
+  private sessionPath: string | undefined
 
   private constructor(
     client: PiClient,
@@ -170,6 +171,9 @@ export class PiAgent implements HarnessAgent {
   }
 
   async startSession(input: HarnessSessionStartInput): Promise<HarnessSession> {
+    if (this.sessionOwner && await this.client.newSession()) {
+      throw new HarnessTransportError('harness_not_ready', 'pi new_session was cancelled by an extension')
+    }
     return this.bindSession(input)
   }
 
@@ -182,6 +186,9 @@ export class PiAgent implements HarnessAgent {
         'harness_not_ready',
         'no native pi session to resume'
       )
+    }
+    if (this.sessionOwner === input.threadId && this.sessionPath === sessionPath) {
+      return this.bindSession(input)
     }
     try {
       const vetoed = await this.client.switchSession(sessionPath)
@@ -233,6 +240,7 @@ export class PiAgent implements HarnessAgent {
     }
     const state = await this.client.getState()
     this.sessionOwner = input.threadId
+    this.sessionPath = state.sessionFile ?? input.preparation.nativeSessionId
     return new PiSession(
       this.client,
       state.sessionFile ?? input.preparation.nativeSessionId ?? '',

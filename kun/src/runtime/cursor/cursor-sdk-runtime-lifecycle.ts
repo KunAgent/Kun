@@ -1,3 +1,4 @@
+import { cursorSessionPrompt } from './cursor-session-prompt.js'
 import { cursorTurnFailure } from './cursor-turn-failure.js'
 import type { Run, SDKAgent, SDKUserMessage } from '@cursor/sdk'
 import { goalContextTexts } from '../../contracts/items.js'
@@ -7,7 +8,7 @@ import { normalizeTurnLimits } from '../../loop/turn-limits.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
 import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
-import { buildHistoryTranscript, composeSdkPromptText, DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES } from '../agent-sdk/sdk-context-assembler.js'
+import { buildHistoryTranscript, DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES } from '../agent-sdk/sdk-context-assembler.js'
 import { filterGoalContextsForGoalKey, goalContextKey } from '../../loop/continuation-instructions.js'
 import { delegatedCapabilityFingerprint, delegatedCredentialIdentity, delegatedRouteKey, priorItemsForDelegatedTurn, type DelegatedSessionPreparation } from '../delegated-session-binding.js'
 import { recordHandoffInjected, resolveTurnHandoff, type TurnHandoff } from '../../handoff/turn-handoff.js'
@@ -262,17 +263,13 @@ export async function runCursorSdkTurnOwned(
       })
     let turnHandoff = resolveHandoff(preparation)
     let handoffBriefDigest = turnHandoff?.brief.digest
-    const buildPrompt = (includeHistory: boolean): string => composeSdkPromptText({
-      ...(turnHandoff
-        ? { handoffBrief: turnHandoff.brief.text }
-        : includeHistory
-          ? { historyTranscript: ensureHistoryTranscript() }
-          : {}),
-      userText,
-      instructionBlocks
+    const buildPrompt = (includeHistory: boolean): string => cursorSessionPrompt({
+      preparation, handoff: turnHandoff?.brief.text, includeHistory,
+      history: ensureHistoryTranscript, userText, instructionBlocks,
+      turnLocalInstructions: turnDynamicContext.instructions
     })
     const resumeNativeSession = Boolean(
-      preparation?.resumed && turnDynamicContext.instructions.length === 0
+      preparation?.resumed
     )
     let prompt = buildPrompt(!resumeNativeSession)
     let sdkMessage: string | SDKUserMessage = resolvedImages.images.length > 0
@@ -644,9 +641,7 @@ export async function runCursorSdkTurnOwned(
               goalContextKeyForHistory
             ),
             lastCommittedTurnId: turnId,
-            nativeSessionId: turnDynamicContext.instructions.length > 0
-              ? undefined
-              : agent.agentId,
+            nativeSessionId: agent.agentId,
             ...(handoffBriefDigest ? { handoffBriefDigest } : {})
           })
         } catch {

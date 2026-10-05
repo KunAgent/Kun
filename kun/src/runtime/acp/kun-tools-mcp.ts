@@ -1,11 +1,8 @@
 /**
- * Kun Tools MCP descriptor factory for ACP sessions (docs/ade/05 §3.3, P3-08).
- * Every turn's `session/new` / `session/load` carries a descriptor whose
- * `kun-tools` token is minted fresh for that turn: the token rides inside the
- * descriptor — an HTTP `Authorization` header or the stdio child's
- * `KUN_TOOLS_TOKEN` env — never on argv. `revokeTurn` drops the grant when
- * the turn ends; thread teardown already revokes by thread via
- * `HarnessTokenService.revokeThread`.
+ * Native-session MCP descriptors stay stable while exact-turn grants are
+ * activated/revoked around each prompt. A new native session gets a new opaque
+ * identity. Revoked/in-flight grants cannot borrow authority from a later turn.
+ * Tokens travel only in headers/env; never on argv or in persisted bindings.
  */
 import type { HarnessId } from '../../contracts/harness.js'
 import {
@@ -36,6 +33,8 @@ export type KunToolsMcpInput = {
   turnId: string
   harnessId: HarnessId
   credentialIdentity: string
+  /** Opaque connection-local native session identity; never shared across sessions. */
+  sessionKey?: string
   mcpCapabilities?: AcpMcpCapabilities | undefined
 }
 
@@ -57,10 +56,10 @@ export class KunToolsMcpProvider {
     const token = this.deps.tokens.issue({
       threadId: input.threadId,
       harnessId: input.harnessId,
-      // Rotate per descriptor issue: tokens are deterministic on identity, so
-      // the counter turns each session/load into a fresh grant while turn-end
-      // revocation still covers every grant minted for the turn.
-      credentialIdentity: `${input.credentialIdentity}\u0000kun-tools\u0000${input.turnId}\u0000${this.issueCount++}`,
+      // Live native sessions retain their bearer; every activation carries a
+      // new exact-turn grant object. Legacy callers still rotate per issue.
+      credentialIdentity: `${input.credentialIdentity}\u0000kun-tools\u0000${input.sessionKey ?? `${input.turnId}:${this.issueCount++}`}`,
+      turnId: input.turnId,
       scopes: ['kun-tools']
     })
     const grants = this.turnGrants.get(input.turnId) ?? []
@@ -107,7 +106,7 @@ export class KunToolsMcpProvider {
     const grants = this.turnGrants.get(turnId)
     if (!grants) return
     this.turnGrants.delete(turnId)
-    for (const grantId of grants) this.deps.tokens.revokeGrant(grantId)
+    for (const grantId of grants) this.deps.tokens.revokeGrant(grantId, turnId)
   }
 }
 

@@ -39,6 +39,7 @@ export type ParkedSession = DelegatedSessionRoute & {
   /** delegatedRouteKey() of the parked route. */
   key: string
   nativeSessionId?: string
+  synchronizedInstructionDigest?: string
   synchronizedHistoryDigest: string
   /** History item count at commit, used by prefix validation on restore. */
   priorItemCount?: number
@@ -52,6 +53,7 @@ export type DelegatedSessionBinding = DelegatedSessionRoute & {
   threadId: string
   generation: number
   nativeSessionId?: string
+  synchronizedInstructionDigest?: string
   synchronizedHistoryDigest: string
   /** History item count at commit, used by prefix validation on restore. */
   priorItemCount?: number
@@ -69,6 +71,9 @@ export type DelegatedSessionPreparation = {
   generation: number
   route: DelegatedSessionRoute
   priorHistoryDigest: string
+  synchronizedInstructionDigest?: string
+  /** Current instruction digest, committed only after a delivered turn. */
+  instructionDigest?: string
   nativeSessionId?: string
   resumed: boolean
   /** Set when this resume restored a parked session (docs/ade/08 §5). */
@@ -172,6 +177,7 @@ export class DelegatedSessionCoordinator {
         route: input.route,
         priorHistoryDigest,
         nativeSessionId: binding.nativeSessionId,
+        synchronizedInstructionDigest: binding.synchronizedInstructionDigest,
         resumed: true
       }
     }
@@ -222,6 +228,7 @@ export class DelegatedSessionCoordinator {
           route: input.route,
           priorHistoryDigest,
           nativeSessionId: candidate.nativeSessionId,
+          synchronizedInstructionDigest: candidate.synchronizedInstructionDigest,
           resumed: true,
           parkedDelta: {
             lastCommittedTurnId: candidate.lastCommittedTurnId,
@@ -322,6 +329,7 @@ export class DelegatedSessionCoordinator {
       ...input.preparation.route,
       continuationMode,
       ...(nativeSessionId ? { nativeSessionId } : {}),
+      synchronizedInstructionDigest: input.preparation.instructionDigest,
       synchronizedHistoryDigest: delegatedHistoryDigest(input.committedItems),
       // The prefix check counts the post-filter item stream the runtimes feed
       // into prepare(); runtime_context_source items never reach that stream.
@@ -506,6 +514,7 @@ function toParkedSession(
     capabilityFingerprint: binding.capabilityFingerprint,
     continuationMode: binding.continuationMode,
     ...(binding.nativeSessionId ? { nativeSessionId: binding.nativeSessionId } : {}),
+    synchronizedInstructionDigest: binding.synchronizedInstructionDigest,
     synchronizedHistoryDigest: binding.synchronizedHistoryDigest,
     ...(binding.priorItemCount !== undefined
       ? { priorItemCount: binding.priorItemCount }

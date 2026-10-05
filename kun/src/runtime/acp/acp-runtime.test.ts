@@ -178,13 +178,13 @@ describe('AcpRuntime.runTurn', () => {
     expect(failures[0]?.detail).toContain('ENOENT')
   })
 
-  test('a second turn resumes the bound session via session/load', async () => {
+  test('a second turn appends only its user text to the same live native session', async () => {
     const h = await makeHarness('resume.json')
     expect(
       await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)
     ).toBe('completed')
 
-    // Second turn on the same coordinator: binding resolves to session/load.
+    // Second turn uses the live session, without replay/loading.
     // The new user item lands only after turn_1's commit so the stored
     // history digest stays a strict prefix of turn_2's prior items.
     h.thread.turns.push({ id: 'turn_2', harnessId: 'fake-acp' })
@@ -204,7 +204,11 @@ describe('AcpRuntime.runTurn', () => {
       new AbortController().signal
     )
     expect(outcome).toBe('completed')
-    expect(h.requests('session/load')).toHaveLength(1)
+    expect(h.requests('session/load')).toHaveLength(0)
+    expect(h.requests('session/new')).toHaveLength(1)
+    const prompts = h.requests('session/prompt')
+    expect(prompts[1].params?.sessionId).toBe(prompts[0].params?.sessionId)
+    expect(prompts[1].params?.prompt).toEqual([{ type: 'text', text: 'second' }])
     // Replayed history during load never reached the timeline.
     expect(h.deltas.map((d) => d.delta).join('')).not.toContain('replayed turn')
     expect(h.deltas.map((d) => d.delta).join('')).toContain('second reply')

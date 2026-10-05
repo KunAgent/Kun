@@ -30,6 +30,8 @@ export type HarnessTokenRoute = {
 export type HarnessTokenGrant = {
   grantId: string
   threadId: string
+  /** When set, tools may execute only for this exact admitted turn. */
+  turnId?: string
   harnessId: HarnessId
   scopes: readonly HarnessTokenScope[]
   /** Route-pool models this grant may address through the gateway. */
@@ -42,6 +44,8 @@ export type HarnessTokenGrant = {
 
 export type HarnessTokenIssueInput = {
   threadId: string
+  /** When set, tools may execute only for this exact admitted turn. */
+  turnId?: string
   harnessId: HarnessId
   /** Stable identity of the harness credential/env the token is bound to. */
   credentialIdentity: string
@@ -74,6 +78,7 @@ export class HarnessTokenService {
     const grant: HarnessTokenGrant = {
       grantId,
       threadId: input.threadId,
+      ...(input.turnId ? { turnId: input.turnId } : {}),
       harnessId: input.harnessId,
       scopes,
       routes: input.routes ?? [],
@@ -83,7 +88,7 @@ export class HarnessTokenService {
     }
     // Preserve the identity used by active request guards across deterministic reissue.
     const existing = this.grants.get(grantId)
-    if (existing) Object.assign(existing, grant)
+    if (existing && existing.turnId === grant.turnId) Object.assign(existing, grant)
     else this.grants.set(grantId, grant)
     return `${HARNESS_TOKEN_PREFIX}${grantId}.${hmacHex(this.secret, grantId)}`
   }
@@ -127,7 +132,8 @@ export class HarnessTokenService {
   }
 
   /** Revoke a single grant by id (turn-scoped expiry such as `kun-tools`). */
-  revokeGrant(grantId: string): boolean {
+  revokeGrant(grantId: string, expectedTurnId?: string): boolean {
+    if (expectedTurnId && this.grants.get(grantId)?.turnId !== expectedTurnId) return false
     return this.grants.delete(grantId)
   }
 

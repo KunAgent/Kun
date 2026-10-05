@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 /**
  * Thread ↔ ACP session management (docs/ade/03 §5). Reuses
  * DelegatedSessionCoordinator for route matching, parked sessions, and
@@ -45,6 +46,8 @@ export type AcpSessionRequest = {
   reasoningEffort?: string
   /** Kun Tools MCP server descriptors; user MCP servers are not forwarded. */
   mcpServers?: McpServer[]
+  /** Stable native-session descriptor, activated for this turn only. */
+  sessionMcpServers?: (sessionKey: string) => McpServer[]
   /** Full item list; prior items are derived via priorItemsForDelegatedTurn. */
   items: readonly TurnItem[]
   /** Revalidate after coordinator awaits and before starting/resuming a session. */
@@ -53,6 +56,7 @@ export type AcpSessionRequest = {
 
 export type AcpSessionHandle = {
   sessionId: string
+  mcpSessionKey?: string
   preparation: DelegatedSessionPreparation
   /**
    * 'loading' until `session/load` resolves — update consumers must drop
@@ -85,6 +89,8 @@ export type AcpSessionManagerDeps = {
 const SESSION_REQUEST_TIMEOUT_MS = 30_000
 
 export class AcpSessionManager {
+  private readonly live = new WeakMap<AcpConnection, Map<string, AcpSessionHandle>>()
+
   constructor(private readonly deps: AcpSessionManagerDeps) {}
 
   /**
@@ -109,14 +115,38 @@ export class AcpSessionManager {
         workspace: ctx.workspacePath,
         model: ctx.model ?? 'default',
         capabilityFingerprint: delegatedCapabilityFingerprint(capabilities ?? {}),
-        continuationMode: capabilities?.loadSession ? 'native' : 'portable'
+        // All ACP agents accept more prompts on a live session. loadSession
+        // only determines whether it can be restored after process exit.
+        continuationMode: 'native'
       },
       priorItems: priorItemsForDelegatedTurn(ctx.items, ctx.turnId)
     })
 
     if (preparation.resumed && preparation.nativeSessionId) {
+      const cached = this.live.get(conn)?.get(preparation.nativeSessionId)
+      if (cached && !conn.closed) {
+        await ctx.validateLaunch?.()
+        if (cached.mcpSessionKey) ctx.sessionMcpServers?.(cached.mcpSessionKey)
+        const handle = { ...cached, preparation, replayedHistory: false, detach: () => unsubscribe() }
+        const unsubscribe = conn.subscribeSession(handle.sessionId, {
+          onUpdate: (update) => { absorbLoadingUpdate(handle, update); sink?.(update) }
+        })
+        try {
+          await this.applyConfigOptions(conn, handle, ctx)
+          this.remember(conn, handle)
+          return handle
+        } catch (error) {
+          unsubscribe()
+          throw error
+        }
+      }
+      if (!capabilities?.loadSession) {
+        const rebased = await this.deps.coordinator.rejectResume(preparation)
+        return this.createFresh(conn, ctx, rebased, sink)
+      }
       const handle: AcpSessionHandle = {
         sessionId: preparation.nativeSessionId,
+        mcpSessionKey: randomUUID(),
         preparation,
         phase: 'loading',
         replayedHistory: false,
@@ -138,7 +168,7 @@ export class AcpSessionManager {
           {
             sessionId: preparation.nativeSessionId,
             cwd: ctx.workspacePath,
-            mcpServers: ctx.mcpServers ?? []
+            mcpServers: ctx.sessionMcpServers?.(handle.mcpSessionKey!) ?? ctx.mcpServers ?? []
           },
           { timeoutMs: this.deps.sessionRequestTimeoutMs ?? SESSION_REQUEST_TIMEOUT_MS }
         )
@@ -155,6 +185,7 @@ export class AcpSessionManager {
         handle.phase = 'ready'
         conn.registerSession(handle.sessionId, ctx.threadId)
         await this.applyConfigOptions(conn, handle, ctx)
+        this.remember(conn, handle)
         return handle
       } catch (error) {
         if (error instanceof AcpError && (
@@ -183,9 +214,10 @@ export class AcpSessionManager {
     sink?: AcpSessionUpdateSink
   ): Promise<AcpSessionHandle> {
     await ctx.validateLaunch?.()
+    const mcpSessionKey = randomUUID()
     const raw = await conn.rpc.request(
       ACP_AGENT_METHODS.sessionNew,
-      { cwd: ctx.workspacePath, mcpServers: ctx.mcpServers ?? [] },
+      { cwd: ctx.workspacePath, mcpServers: ctx.sessionMcpServers?.(mcpSessionKey) ?? ctx.mcpServers ?? [] },
       { timeoutMs: this.deps.sessionRequestTimeoutMs ?? SESSION_REQUEST_TIMEOUT_MS }
     )
     const parsed = AcpNewSessionResultSchema.safeParse(raw)
@@ -200,6 +232,7 @@ export class AcpSessionManager {
     })
     const handle: AcpSessionHandle = {
       sessionId: parsed.data.sessionId,
+      mcpSessionKey,
       preparation,
       phase: 'ready',
       // Fresh agent session: the prompt carries the handoff brief (08).
@@ -217,7 +250,17 @@ export class AcpSessionManager {
       conn.unregisterSession(handle.sessionId)
       throw error
     }
+    this.remember(conn, handle)
     return handle
+  }
+
+  private remember(conn: AcpConnection, handle: AcpSessionHandle): void {
+    let sessions = this.live.get(conn)
+    if (!sessions) {
+      sessions = new Map()
+      this.live.set(conn, sessions)
+    }
+    sessions.set(handle.sessionId, handle)
   }
 
   /**
@@ -313,10 +356,13 @@ export class AcpSessionManager {
   }
 
   /**
-   * The hosting process exited: every session bound to this connection is
-   * marked native_state_unavailable so the next turn rebuilds portable (§4.3).
+   * Forget live handles on process exit. Persisted sessions remain loadable;
+   * only agents without disk restoration require a one-time history rebase.
    */
   async handleConnectionExit(conn: AcpConnection, harnessId: string): Promise<void> {
+    this.live.delete(conn)
+    // Disk-backed native sessions survive the process that hosted them.
+    if (conn.initResult?.agentCapabilities?.loadSession) return
     for (const threadId of conn.sessionThreadIds()) {
       await this.deps.coordinator.markNativeStateUnavailable({
         threadId,

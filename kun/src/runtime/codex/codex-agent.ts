@@ -34,6 +34,7 @@ export class CodexAgent implements HarnessAgent {
   private readonly process: HarnessProcess
   /** codex threadId → owning Kun threadId (pool dormancy + rebase marking). */
   private readonly sessionOwners = new Map<string, string>()
+  private readonly sessionInstructions = new Map<string, string>()
   /** codex threadId → per-turn inbound-request handler. */
   private readonly turnHandlers = new Map<
     string,
@@ -48,6 +49,14 @@ export class CodexAgent implements HarnessAgent {
     this.client = client
     this.process = proc
     this.info = info
+    for (const method of ['thread/closed', 'thread/archived']) {
+      this.client.onNotification(method, (params) => {
+        const threadId = (params as { threadId?: string })?.threadId
+        if (!threadId) return
+        this.sessionOwners.delete(threadId)
+        this.sessionInstructions.delete(threadId)
+      })
+    }
     this.client.onRequest(async (method, params) => {
       const threadId = (params as { threadId?: string })?.threadId
       const handler = threadId ? this.turnHandlers.get(threadId) : undefined
@@ -173,6 +182,10 @@ export class CodexAgent implements HarnessAgent {
         'no native codex session to resume'
       )
     }
+    if (this.sessionOwners.get(nativeId) === input.threadId && !this.client.closed
+      && this.sessionInstructions.get(nativeId) === input.systemInstructions?.join('\n\n')) {
+      return this.bindSession(nativeId, input)
+    }
     try {
       const thread = await this.client.threadResume({
         threadId: nativeId,
@@ -217,6 +230,7 @@ export class CodexAgent implements HarnessAgent {
     input: HarnessSessionStartInput
   ): CodexSession {
     this.sessionOwners.set(codexThreadId, input.threadId)
+    if (input.systemInstructions) this.sessionInstructions.set(codexThreadId, input.systemInstructions.join('\n\n'))
     const router: CodexRequestRouter = {
       register: (_key, handler) => {
         const bound = bindTurnMutationContext(handler)
@@ -240,6 +254,7 @@ export class CodexAgent implements HarnessAgent {
   async close(): Promise<void> {
     this.turnHandlers.clear()
     this.sessionOwners.clear()
+    this.sessionInstructions.clear()
     await this.client.close()
   }
 }
@@ -252,9 +267,11 @@ function threadParams(
   approvalPolicy: 'untrusted'
   approvalsReviewer: 'user'
   sandbox: 'read-only'
+  developerInstructions?: string
 } {
   return {
     cwd: input.workspacePath,
+    ...(input.systemInstructions ? { developerInstructions: input.systemInstructions.join('\n\n') } : {}),
     ...(input.model ? { model: input.model } : {}),
     approvalPolicy: 'untrusted',
     approvalsReviewer: 'user',

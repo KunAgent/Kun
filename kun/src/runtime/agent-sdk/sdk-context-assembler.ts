@@ -1,3 +1,4 @@
+import { sessionInstructions } from '../../session/session-instructions.js'
 /**
  * Pure assembly of the per-turn context that kun injects into a subscription
  * (Claude Agent SDK) turn. The SDK owns the loop, but — unlike kun's native
@@ -241,7 +242,7 @@ export function composeSdkPromptText(parts: SdkPromptParts): string {
 export function composeSdkTurnText(
   ctx: Pick<
     import('./agent-sdk-runtime-contracts.js').SdkTurnContext,
-    'preserveExactUserPrompt' | 'userText' | 'handoffBrief' | 'historyTranscript' | 'contextInstructions'
+    'preserveExactUserPrompt' | 'userText' | 'handoffBrief' | 'historyTranscript' | 'contextInstructions' | 'sessionPreparation' | 'turnLocalInstructions'
   >,
   resumed: boolean
 ): string {
@@ -253,6 +254,6 @@ export function composeSdkTurnText(
         ? { historyTranscript: ctx.historyTranscript }
         : {}),
     userText: ctx.userText,
-    ...(ctx.contextInstructions?.length ? { instructionBlocks: ctx.contextInstructions } : {})
+    instructionBlocks: sessionInstructions(ctx.sessionPreparation, ctx.contextInstructions ?? [], !resumed, ctx.turnLocalInstructions)
   })
 }

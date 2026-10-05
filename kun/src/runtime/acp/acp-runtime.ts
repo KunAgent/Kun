@@ -1,3 +1,4 @@
+import { sessionInstructions } from '../../session/session-instructions.js'
 /**
  * ACP delegated runtime (docs/ade/03 §6). `runTurn` owns a full Kun turn
  * against an external ACP agent: pool-acquire a connection by
@@ -229,15 +230,20 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
     }
 
-    const kunToolsServers = this.deps.kunToolsMcp?.servers({
-      threadId,
-      turnId,
-      harnessId: definition.id,
-      credentialIdentity,
-      mcpCapabilities: conn.initResult?.agentCapabilities?.mcpCapabilities as
-        | AcpMcpCapabilities
-        | undefined
-    }) ?? []
+    let kunToolsServers: import('./acp-schema.js').McpServer[] = []
+    const sessionMcpServers = (sessionKey: string) => {
+      kunToolsServers = this.deps.kunToolsMcp?.servers({
+        sessionKey,
+        threadId,
+        turnId,
+        harnessId: definition.id,
+        credentialIdentity,
+        mcpCapabilities: conn.initResult?.agentCapabilities?.mcpCapabilities as
+          | AcpMcpCapabilities
+          | undefined
+      }) ?? []
+      return kunToolsServers
+    }
     let session: AcpSessionHandle
     try {
       await this.deps.readiness?.validateTurn(threadId, turnId, signal)
@@ -251,7 +257,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           model,
           permissionModeId,
           reasoningEffort: turn.reasoningEffort,
-          mcpServers: kunToolsServers,
+          sessionMcpServers,
           items,
           validateLaunch: async () => {
             await this.deps.readiness?.validateTurn(threadId, turnId, signal)
@@ -278,7 +284,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     })
 
     const preparation = session.preparation
-    const turnHandoff = session.replayedHistory
+    const turnHandoff = session.replayedHistory || session.preparation.parkedDelta
       ? resolveTurnHandoff({
           enabled: this.deps.deterministicHandoff !== false,
           preparation,
@@ -322,7 +328,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
               DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
             )
           : undefined,
-      instructionBlocks,
+      instructionBlocks: sessionInstructions(preparation, [
+        ...instructionBlocks, buildClientSurfaceInstruction(resolveTurnClientSurface(turn))
+      ], false, turnDynamicContext.instructions),
       userText: userMessageTextWithComposerContexts(userItem),
       images: await resolveAcpImages(
         this.deps.attachmentStore,
@@ -334,10 +342,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       attachmentPaths: attachmentFallbackPaths(userItem),
       imageCapable,
       fileReferences: userItem.fileReferences ?? [],
-      workspacePath: workspace,
-      clientSurfaceInstruction: buildClientSurfaceInstruction(
-        resolveTurnClientSurface(turn)
-      )
+      workspacePath: workspace
     })
 
     const approveCore = makeDelegatedAwaitApproval(

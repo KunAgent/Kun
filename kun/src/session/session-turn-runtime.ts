@@ -1,3 +1,4 @@
+import { sessionInstructions } from './session-instructions.js'
 /**
  * `SessionTurnRuntime` (docs/ade/impl/p6a §1.2): the shared
  * `DelegatedTurnRuntime` for session-protocol transports
@@ -282,7 +283,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         : {})
     })
 
-    const turnHandoff = session.replayedHistory
+    const turnHandoff = session.replayedHistory || session.preparation.parkedDelta
       ? resolveTurnHandoff({
           enabled: this.deps.deterministicHandoff !== false,
           preparation: session.preparation,
@@ -439,6 +440,10 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       permissionModeId: ctx.permissionModeId,
       reasoningEffort: ctx.turn.reasoningEffort,
       items: ctx.items,
+      systemInstructions: [
+        ...ctx.instructionBlocks.filter((block) => !ctx.turnDynamicContext?.instructions?.includes(block)),
+        buildClientSurfaceInstruction(resolveTurnClientSurface(ctx.turn))
+      ],
       preparation,
       signal
     }
@@ -486,7 +491,11 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     handoffBrief: string | undefined
   ): HarnessTurnInput {
     return {
-      instructionBlocks: ctx.instructionBlocks,
+      instructionBlocks: sessionInstructions(session.preparation, ctx.definition.id === 'codex'
+        ? ctx.turnDynamicContext?.instructions ?? [] : [
+        ...ctx.instructionBlocks,
+        buildClientSurfaceInstruction(resolveTurnClientSurface(ctx.turn))
+      ], false, ctx.turnDynamicContext?.instructions ?? []),
       userText: userMessageTextWithComposerContexts(ctx.userItem),
       images: [],
       attachmentPaths: [],
@@ -503,9 +512,6 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
               DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
             )
           : undefined,
-      clientSurfaceInstruction: buildClientSurfaceInstruction(
-        resolveTurnClientSurface(ctx.turn)
-      ),
       kunPermissionMode: ctx.permissionModeId ?? 'default',
       approvalPolicy: ctx.approvalPolicy ?? 'ask',
       sandboxMode: ctx.sandboxMode

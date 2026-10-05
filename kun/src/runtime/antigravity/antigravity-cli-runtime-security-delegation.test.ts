@@ -1,3 +1,4 @@
+import { antigravityTestOutput } from './antigravity-test-output.js'
 import type { ChildProcess, spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { mkdtemp } from 'node:fs/promises'
@@ -483,7 +484,7 @@ describe('AntigravityCliRuntime', () => {
       status: 'completed',
       delegated: {
         providerKind: 'antigravity-cli',
-        phase: 'portable',
+        phase: 'rebased',
         contextManagement: 'sdk-managed',
         nativeHistory: 'none'
       },
@@ -531,12 +532,8 @@ function successfulSpawn(
     child.stderr = new PassThrough()
     child.kill = () => true
     queueMicrotask(() => {
-      if (typeof output === 'string') {
-        child.stdout.end(output)
-      } else {
-        for (const chunk of output) child.stdout.write(chunk)
-        child.stdout.end()
-      }
+      for (const chunk of antigravityTestOutput(output)) child.stdout.write(chunk)
+      child.stdout.end()
       child.stderr.end()
       child.emit('exit', 0, null)
     })

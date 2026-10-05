@@ -1,3 +1,5 @@
+import { sessionInstructions } from '../../session/session-instructions.js'
+import { parseAntigravityResult } from './antigravity-result.js'
 import type { spawn } from 'node:child_process'
 import type { HarnessRoute } from '../../contracts/harness.js'
 import type { ServeProviderConfig } from '../../config/kun-config.js'
@@ -121,6 +123,7 @@ export function normalizeAntigravityEffort(
 
 export function buildAntigravityArgs(input: {
   prompt: string
+  nativeSessionId?: string
   model?: string
   effort?: TurnReasoningEffort
   timeoutMs: number
@@ -132,6 +135,8 @@ export function buildAntigravityArgs(input: {
   const args = [
     '--print',
     prompt,
+    '--output-format', 'json',
+    ...(input.nativeSessionId ? ['--conversation', input.nativeSessionId] : []),
     ...(input.model === 'default' ? [] : ['--model', normalizeAntigravityModel(input.model)]),
     '--effort', normalizeAntigravityEffort(input.effort),
     '--print-timeout', `${Math.max(1, Math.ceil(input.timeoutMs / 1000))}s`
@@ -339,15 +344,12 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
               sandboxMode,
               capabilities
             }),
-            // The supported non-interactive CLI output does not provide a
-            // validated conversation id. Never use process-global --continue.
-            continuationMode: 'portable'
+            continuationMode: 'native'
           },
           priorItems: priorItemsForDelegatedTurn(items, turnId)
         })
       : undefined
-    // Antigravity has no native continuation: every turn is portable, so the
-    // deterministic handoff brief replaces the raw transcript (docs/ade/08 §4).
+    // Native history stays with the CLI; only switches/recovery need a brief.
     const turnHandoff = resolveTurnHandoff({
       enabled: this.deps.deterministicHandoff !== false,
       preparation,
@@ -361,17 +363,18 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       ...(turnHandoff
         ? { handoffBrief: turnHandoff.brief.text }
         : {
-            historyTranscript: buildHistoryTranscript(
+            historyTranscript: preparation?.resumed ? undefined : buildHistoryTranscript(
               items,
               turnId,
               DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
             )
           }),
       userText: userMessageTextWithComposerContexts(userItem),
-      instructionBlocks
+      instructionBlocks: sessionInstructions(preparation, instructionBlocks, false, turnDynamicContext.instructions)
     })
     const args = buildAntigravityArgs({
       prompt,
+      nativeSessionId: preparation?.resumed ? preparation.nativeSessionId : undefined,
       model,
       effort,
       timeoutMs: limits.maxWallTimeMs,
@@ -386,7 +389,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       providerKind: 'antigravity-cli',
       providerId: resolvedProviderId,
       harnessId: 'antigravity',
-      phase: 'portable',
+      phase: preparation?.resumed ? 'resumed' : 'rebased',
       ...(preparation?.rebaseReason ? { reason: preparation.rebaseReason } : {}),
       capabilities,
       capabilitiesV2: capabilitiesV2FromLegacy(capabilities, ANTIGRAVITY_CAPABILITIES)
@@ -419,7 +422,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
         toolCount: 0,
         activeSkillIds: [],
         contextManagement: 'sdk-managed',
-        nativeHistory: 'none'
+        nativeHistory: preparation?.resumed ? 'unknown' : 'none'
       })
     }
     let trace = await startAntigravityTrace(this.deps.debugSink, {
@@ -438,10 +441,10 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       sandboxMode,
       delegated: {
         providerKind: 'antigravity-cli',
-        phase: 'portable',
+        phase: preparation?.resumed ? 'resumed' : 'rebased',
         ...(preparation?.rebaseReason ? { reason: preparation.rebaseReason } : {}),
         contextManagement: 'sdk-managed',
-        nativeHistory: 'none',
+        nativeHistory: preparation?.resumed ? 'unknown' : 'none',
         capabilities
       }
     })
@@ -470,8 +473,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
         await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
         return 'aborted'
       }
-      const text = output.trim()
-      if (!text) throw new Error('Antigravity CLI returned an empty response')
+      const { text, conversationId } = parseAntigravityResult(output, preparation?.resumed ? preparation.nativeSessionId : undefined)
       await finishAntigravityTrace(trace, { kind: 'completed', text })
       trace = undefined
       await this.persistAssistantText(threadId, turnId, text)
@@ -495,6 +497,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
               goalContextKeyForHistory
             ),
             lastCommittedTurnId: turnId,
+            nativeSessionId: conversationId,
             ...(turnHandoff ? { handoffBriefDigest: turnHandoff.brief.digest } : {})
           })
         } catch {
@@ -562,7 +565,7 @@ function estimateAntigravityTokens(text: string): number {
 
 export function antigravityCapabilities(): DelegatedRuntimeCapabilities {
   return {
-    nativeResume: false,
+    nativeResume: true,
     structuredStreaming: false,
     kunTools: false,
     externalApproval: false,

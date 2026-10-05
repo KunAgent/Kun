@@ -1,3 +1,4 @@
+import { sessionInstructions } from '../session/session-instructions.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,6 +18,7 @@ it.each<DelegatedProviderKind>(['codex-app-server', 'pi-rpc', 'acp', 'agent-sdk'
         credentialIdentity: 'test-account', capabilityFingerprint: delegatedCapabilityFingerprint({ version: 'one' }),
         continuationMode: 'native' as const }
       const preparation = await coordinator.prepare({ threadId: 'thread', route, priorItems: [] })
+      expect(sessionInstructions(preparation, ['Host policy'])).toEqual(['Host policy'])
       const firstUser = makeUserItem({ id: 'user-1', threadId: 'thread', turnId: 'turn-1', text: 'Remember blue' })
       expect(buildTurnHandoff({ preparation, currentTurnId: 'turn-1', items: [firstUser] })).toBeNull()
       const items = [firstUser, makeAssistantTextItem({ id: 'reply-1', threadId: 'thread', turnId: 'turn-1', text: 'Remembered', status: 'completed' })]
@@ -25,6 +27,9 @@ it.each<DelegatedProviderKind>(['codex-app-server', 'pi-rpc', 'acp', 'agent-sdk'
       const restored = new DelegatedSessionCoordinator(new FileDelegatedSessionBindingStore(root))
       const second = await restored.prepare({ threadId: 'thread', route, priorItems: items })
       expect(second).toMatchObject({ resumed: true, generation: 1, nativeSessionId: 'native-thread' })
+      expect(sessionInstructions(second, ['Host policy'])).toEqual([])
+      expect(sessionInstructions(second, ['Updated policy']).join('\n')).toContain('Updated policy')
+      expect(sessionInstructions(second, []).join('\n')).toContain('No additional Kun instructions')
       expect(buildTurnHandoff({ preparation: second, currentTurnId: 'turn-2', items })).toBeNull()
     } finally { await rm(root, { recursive: true, force: true }) }
   })

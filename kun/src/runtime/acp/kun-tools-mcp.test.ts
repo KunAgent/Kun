@@ -101,6 +101,40 @@ describe('KunToolsMcpProvider', () => {
     expect(makeProvider('').provider.canDeliver()).toBe(false)
   })
 
+  it('keeps a native session descriptor stable while replacing its exact-turn authority', () => {
+    const { tokens, provider } = makeProvider()
+    const issue = (turnId: string, sessionKey = 'live-session') => {
+      const descriptor = provider.servers({ ...CTX, turnId, sessionKey })[0] as { env: Array<{ name: string; value: string }> }
+      return descriptor.env.find((e) => e.name === 'KUN_TOOLS_TOKEN')!.value
+    }
+    const first = issue('turn_1')
+    const oldGrant = tokens.verify(first)
+    expect(oldGrant?.turnId).toBe('turn_1')
+    provider.revokeTurn('turn_1')
+    expect(tokens.verify(first)).toBeNull()
+    const second = issue('turn_2')
+    expect(second).toBe(first)
+    expect(tokens.verify(second)?.turnId).toBe('turn_2')
+    expect(tokens.verify(second)).not.toBe(oldGrant)
+    expect(oldGrant?.turnId).toBe('turn_1')
+    provider.revokeTurn('turn_1')
+    expect(tokens.verify(second)?.turnId).toBe('turn_2')
+    expect(issue('turn_3', 'different-session')).not.toBe(second)
+    provider.revokeTurn('turn_2')
+    expect(tokens.verify(second)).toBeNull()
+  })
+
+  it('does not let delayed cleanup revoke the next activation of a native session', () => {
+    const { tokens, provider } = makeProvider()
+    const first = provider.servers({ ...CTX, sessionKey: 'same' })[0] as { env: Array<{ name: string; value: string }> }
+    const token = first.env.find((e) => e.name === 'KUN_TOOLS_TOKEN')!.value
+    provider.servers({ ...CTX, sessionKey: 'same', turnId: 'turn_2' })
+    provider.revokeTurn('turn_1')
+    expect(tokens.verify(token)?.turnId).toBe('turn_2')
+    provider.revokeTurn('turn_2')
+    expect(tokens.verify(token)).toBeNull()
+  })
+
   it('rotates the token per turn and revokeTurn invalidates it', () => {
     const { tokens, provider } = makeProvider()
     const first = provider.servers({ ...CTX })[0] as {

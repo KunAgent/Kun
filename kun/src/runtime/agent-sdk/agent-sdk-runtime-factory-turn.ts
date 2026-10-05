@@ -456,14 +456,11 @@ export function createAgentSdkTurnRuntimeDeps(
         model: gatewayEnv?.model ?? model,
         ...(billingKind ? { billingKind } : {}),
         ...(turn?.reasoningEffort ? { reasoningEffort: turn.reasoningEffort } : {}),
-        ...(preparation?.nativeSessionId && turnDynamicContext.instructions.length === 0
+        ...(preparation?.nativeSessionId
           ? { resumeSessionId: preparation.nativeSessionId }
           : {}),
         ...(claudeConfigDir ? { claudeConfigDir } : {}),
         ...(preparation ? { sessionPreparation: preparation } : {}),
-        ...(turnDynamicContext.instructions.length
-          ? { disableNativeContinuation: true }
-          : {}),
         ...(deps.contextProfile
           ? { contextProfile: deps.contextProfile(model ?? 'claude-default') }
           : {}),
@@ -487,6 +484,7 @@ export function createAgentSdkTurnRuntimeDeps(
             ? { historyTranscript }
             : {}),
         ...(contextInstructions.length ? { contextInstructions } : {}),
+        turnLocalInstructions: turnDynamicContext.instructions,
         ...(activeSkillIds.length ? { activeSkillIds: [...activeSkillIds] } : {})
       }
     },

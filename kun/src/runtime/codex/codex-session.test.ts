@@ -456,6 +456,29 @@ describe('CodexAgent', () => {
     expect(req.params).toMatchObject({ sandbox: 'read-only', approvalPolicy: 'untrusted' })
   })
 
+  it('keeps a live native thread and stores host context in developer instructions', async () => {
+    const { client, proc, writes, emit } = newClient()
+    const agent = await agentWith(client, proc)
+    const initial = sessionInput({ systemInstructions: ['Host policy'] })
+    const pending = agent.startSession(initial)
+    expect(writes.at(-1)).toMatchObject({ method: 'thread/start', params: { developerInstructions: 'Host policy' } })
+    respondToLast(writes, emit, { thread: { id: 'cx-live' } })
+    const first = await pending
+    first.detach()
+    const count = writes.length
+    const second = await agent.resumeSession({ ...initial, turnId: 'next', preparation: {
+      ...initial.preparation, resumed: true, nativeSessionId: first.providerSessionId
+    } })
+    expect(second.providerSessionId).toBe(first.providerSessionId)
+    expect(writes).toHaveLength(count)
+    const changed = agent.resumeSession({ ...initial, systemInstructions: ['Changed policy'], preparation: {
+      ...initial.preparation, resumed: true, nativeSessionId: first.providerSessionId
+    } })
+    expect(writes.at(-1)).toMatchObject({ method: 'thread/resume', params: { threadId: 'cx-live', developerInstructions: 'Changed policy' } })
+    respondToLast(writes, emit, { thread: { id: 'cx-live' } })
+    expect((await changed).providerSessionId).toBe(first.providerSessionId)
+  })
+
   it('resumes via thread/resume and marks replayedHistory=false', async () => {
     const { client, proc, writes, emit } = newClient()
     const agent = await agentWith(client, proc)

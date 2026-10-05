@@ -73,7 +73,7 @@ export const CURSOR_CAPABILITIES: HarnessCapabilities = {
 }
 
 const antigravityStatuses: HarnessCapabilityStatuses = {
-  nativeResume: up('antigravity cli has no native session resume'),
+  nativeResume: { supported: true },
   fork: up('antigravity cli has no native session fork'),
   rewind: up('antigravity cli has no native session rewind'),
   structuredStreaming: up('antigravity cli emits final text only'),
