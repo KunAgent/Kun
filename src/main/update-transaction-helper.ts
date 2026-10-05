@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { openUpdateRollbackReadiness, powershellRollbackReadiness } from './update-rollback-readiness'
 import { access, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { encodePowershellCommand, ONE_SHOT_HELPER_TIMEOUT_SECONDS, powershellHelperDeadline } from './one-shot-helper-script'
 import { isUpdateTransactionState, type UpdateTransactionState } from './update-transaction-states'
 import type { InstallerRecoveryEnvironment } from './gui-updater-pending'
@@ -93,15 +93,27 @@ export async function scheduleBoundedUpdateRollback(
     ].join('; ')
     const encoded = encodePowershellCommand(command)
     const elevated = environment.KUN_INSTALLER_INSTALL_MODE?.toLowerCase() === 'all'
-    const args = elevated
-      ? ['-NoProfile', '-Command', `${powershellHelperDeadline()}\nStart-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}' -ErrorAction Stop\nexit 0`]
-      : ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded]
-    child = spawnHelper('powershell.exe', args, { detached: true, stdio: 'ignore', windowsHide: true })
+    const powershell = win32.join(process.env.SystemRoot ?? 'C:\\Windows',
+      'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    // libuv's detached flag uses DETACHED_PROCESS, which makes Windows
+    // PowerShell exit before executing its command (nodejs/node#51018).
+    // Start-Process supplies an independent hidden console instead. Its child
+    // survives this short-lived bootstrap and the GUI; only readiness permits quit.
+    const bootstrap = `${powershellHelperDeadline()}\n` + [
+      `$coordinator=Start-Process -FilePath '${powershell.replace(/'/gu, "''")}'${elevated ? ' -Verb RunAs' : ''} -WindowStyle Hidden -PassThru -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}' -ErrorAction Stop`,
+      '$null=$coordinator.Handle',
+      '$coordinator.WaitForExit()',
+      '$exitCode=$coordinator.ExitCode',
+      'if ($null -eq $exitCode) { exit 1 }',
+      'exit $exitCode'
+    ].join('\n')
+    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', bootstrap]
+    child = spawnHelper(powershell, args, { detached: false, stdio: 'ignore', windowsHide: true })
     child.once('error', readiness.cancel)
     child.once('exit', (code) => {
-      // RunAs returning zero means only that elevation launched. The elevated
-      // process must validate recovery and complete the nonce-bound handshake.
-      if (!elevated || code !== 0) readiness.cancel(new Error(`Update rollback launcher exited with ${code} before readiness.`))
+      // The bootstrap waits for the actual coordinator, including after UAC.
+      // Even exit zero cannot replace that coordinator's readiness handshake.
+      readiness.cancel(new Error(`Update rollback launcher exited with ${code} before readiness.`))
     })
     await readiness.ready
     child.unref()

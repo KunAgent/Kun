@@ -36,8 +36,10 @@ afterEach(() => vi.restoreAllMocks())
 async function launched(test: ReturnType<typeof fixture>, elevated = false) {
   await vi.waitFor(() => expect(test.spawn).toHaveBeenCalledOnce(), { interval: 1 })
   const call = test.spawn.mock.calls[0] as unknown as [string, string[], { detached: boolean }]
-  const encoded = elevated ? call[1].at(-1)!.match(/'-EncodedCommand','([^']+)'/)![1] : call[1].at(-1)!
-  return { call, command: Buffer.from(encoded, 'base64').toString('utf16le') }
+  const bootstrap = call[1].at(-1)!
+  const encoded = bootstrap.match(/'-EncodedCommand','([^']+)'/)![1]
+  expect(bootstrap.includes('-Verb RunAs')).toBe(elevated)
+  return { call, bootstrap, command: Buffer.from(encoded, 'base64').toString('utf16le') }
 }
 
 async function acknowledge(command: string, stale = false) {
@@ -73,14 +75,21 @@ describe('one-shot update helper deadlines', () => {
     let ready = false
     const scheduled = scheduleBoundedUpdateRollback('C:\\Kun\\recover.ps1', environment, 123, test.spawnHelper)
     scheduled.then(() => { ready = true })
-    const { call, command } = await launched(test)
+    const { call, command, bootstrap } = await launched(test)
+    expect(call[0]).toMatch(/WindowsPowerShell\\v1\.0\\powershell\.exe$/u)
+    expect(bootstrap).toContain('-WindowStyle Hidden -PassThru')
+    expect(bootstrap).toContain('$coordinator.WaitForExit()')
+    expect(bootstrap).toContain('$null=$coordinator.Handle')
+    expect(bootstrap).toContain('if ($null -eq $exitCode) { exit 1 }')
+    expect(bootstrap).toContain('exit $exitCode')
+    expect(bootstrap).not.toContain('-NoNewWindow')
     expect(command).toContain('Wait-Process -Id $waitPid -Timeout 90 -ErrorAction Stop')
     expect(command).toContain('Start-Process -FilePath $exe -ErrorAction Stop; exit 0')
     expect(command).toContain('[KunOneShotDeadline]::Start(300000, $false)')
     expect(command.indexOf('-Action ValidateUpdateRollback')).toBeLessThan(command.indexOf("WriteLine('ready:"))
     expect(command.indexOf("WriteLine('armed:")).toBeLessThan(command.indexOf('Wait-Process'))
     expect(command).toContain('$accepted.Wait(5000)')
-    expect(call[2].detached).toBe(true)
+    expect(call[2].detached).toBe(false)
     test.child.emit('spawn')
     await Promise.resolve()
     expect(ready).toBe(false)
@@ -118,24 +127,23 @@ describe('one-shot update helper deadlines', () => {
     expect(script).toMatch(/if \(\$Bounded\) \{[\s\S]*?Environment\.Exit\(124\)[\s\S]*?300000[\s\S]*?\[KunInstallerActionDeadline\]::Start\(\)/)
   })
 
-  it('never treats a zero-exit actual helper as ready without its handshake', async () => {
+  it.each(['current', 'all'])('never treats a zero-exit %s coordinator as ready without its handshake', async (mode) => {
     const test = fixture()
-    const scheduled = scheduleBoundedUpdateRollback('recover.ps1', environment, 123, test.spawnHelper)
+    const scheduled = scheduleBoundedUpdateRollback('recover.ps1', { ...environment, KUN_INSTALLER_INSTALL_MODE: mode }, 123, test.spawnHelper)
     const rejected = expect(scheduled).rejects.toThrow('exited with 0 before readiness')
-    await launched(test)
+    await launched(test, mode === 'all')
     test.child.emit('exit', 0)
     await rejected
     expect(test.child.unref).not.toHaveBeenCalled()
   })
 
-  it('does not authorize GUI exit when only the elevation launcher spawned or exited successfully', async () => {
+  it('does not authorize GUI exit when only the elevation bootstrap spawned', async () => {
     const test = fixture()
     let ready = false
     const scheduled = scheduleBoundedUpdateRollback('C:\\Kun\\recover.ps1', { ...environment, KUN_INSTALLER_INSTALL_MODE: 'all' }, 123, test.spawnHelper)
     scheduled.then(() => { ready = true })
     const { command } = await launched(test, true)
     test.child.emit('spawn')
-    test.child.emit('exit', 0)
     await Promise.resolve()
     expect(ready).toBe(false)
     await acknowledge(command)
@@ -171,7 +179,7 @@ describe('one-shot update helper deadlines', () => {
     const scheduled = scheduleBoundedUpdateRollback('recover.ps1', { ...environment, KUN_INSTALLER_INSTALL_MODE: 'all' }, 123, test.spawnHelper)
     const rejected = expect(scheduled).rejects.toThrow('readiness timed out')
     await launched(test, true)
-    test.child.emit('exit', 0)
+    test.child.emit('spawn')
     await rejected
     expect(test.child.unref).not.toHaveBeenCalled()
     expect(test.child.kill).toHaveBeenCalledOnce()

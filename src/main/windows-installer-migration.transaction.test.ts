@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { scheduleBoundedUpdateRollback } from './update-transaction-helper'
-import { createRollbackCoordinatorProbe } from './windows-installer-coordinator-probe.test-utils'
+import { createRollbackCoordinatorProbe, createRollbackGuiParent } from './windows-installer-coordinator-probe.test-utils'
 import { readInstallerUpdateTransaction } from './gui-updater-pending'
 
 // The transaction reader is given an explicit recoveryRoot. It must not load
@@ -20,7 +20,7 @@ const artifactRoot = process.env.KUN_INSTALLER_TEST_ARTIFACT_ROOT
 let fixtureIndex = 0
 
 type Fixture = ReturnType<typeof fixture>
-type Action = 'ValidateUpdateRollback' | 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
+type Action = 'StopProcesses' | 'ValidateUpdateRollback' | 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
 
 function payload(root: string, executable: string): void {
   mkdirSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'cli'), { recursive: true })
@@ -269,7 +269,7 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(transaction(transactionPath)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
   }, 180_000)
 
-  it('acknowledges over a real pipe before GUI exit and then completes rollback from a Unicode path', async () => {
+  it.each([false, true])('completes Unicode-path rollback after readiness (real GUI parent exit: %s)', async (realParentExit) => {
     const input = fixture(false, true)
     input.transaction = join(input.root, 'recovery', 'abc-update.json')
     // A real executable permits the recovered application's independent launch.
@@ -282,8 +282,9 @@ windowsOnly('Windows automatic update transaction', () => {
       { platform: 'win32', recoveryRoot: join(input.root, 'recovery') }
     )
     expect(record).not.toBeNull()
-    const gui = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
-    const probe = createRollbackCoordinatorProbe(input.diagnostic)
+    const gui = realParentExit ? createRollbackGuiParent() :
+      spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    const probe = createRollbackCoordinatorProbe(input.diagnostic, realParentExit ? gui : undefined)
     try {
       await scheduleBoundedUpdateRollback(helper, {
         ...record!.recoveryEnvironment,
@@ -292,7 +293,13 @@ windowsOnly('Windows automatic update transaction', () => {
       expect(gui.exitCode).toBeNull()
       expect(transaction(input.transaction).Phase).toBe('payload_switched')
       gui.kill()
-      expect(await probe.completion(), probe.output()).toBe(0)
+      if (realParentExit) {
+        await vi.waitFor(() => expect(readFileSync(input.diagnostic, 'utf8')).toContain('COORDINATOR completed'),
+          { timeout: 30_000, interval: 100 })
+      } else {
+        expect(await probe.completion(), probe.output()).toBe(0)
+      }
+      expect(readFileSync(input.diagnostic, 'utf8')).toContain('COORDINATOR entry')
       expect(existsSync(input.transaction)).toBe(false)
       expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
       expect(existsSync(input.target)).toBe(false)
@@ -301,6 +308,9 @@ windowsOnly('Windows automatic update transaction', () => {
     } finally {
       gui.kill()
       probe.kill()
+      // The recovered Node fixture may open a REPL in its independent console.
+      // Stop only this fixture's app roots before afterEach removes its files.
+      assertSucceeded(run(input, 'StopProcesses'), 'StopProcesses after rollback smoke')
     }
   }, 60_000)
 
