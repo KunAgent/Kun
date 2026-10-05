@@ -220,10 +220,52 @@ jobs:
             dist/Kun-*-mac-*.blockmap
             dist/latest-mac.yml
 
+  windows-recovery:
+    name: Windows recovery safety
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kun/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Test Windows update rollback failpoints
+        env:
+          KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
+        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts
+
+      - name: Upload Windows transaction diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-windows-installer-transaction-diagnostics
+          if-no-files-found: warn
+          retention-days: 3
+          path: |
+            artifacts/windows-installer-transaction/**/diagnostic.log
+            artifacts/windows-installer-transaction/**/journal.json
+            artifacts/windows-installer-transaction/**/transaction.json
+            artifacts/windows-installer-transaction/**/result-*.txt
+            artifacts/windows-installer-transaction/**/fixture-summary.json
+
+      - name: Test Windows installer recovery safety
+        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts
+
   package-windows:
     name: Build Windows NSIS installer (PR)
     runs-on: windows-latest
-    needs: quality
+    needs: [quality, windows-recovery]
     timeout-minutes: 240
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -257,28 +299,6 @@ jobs:
           name: pr-windows-mini-window
           path: dist/mini-window-smoke
           if-no-files-found: warn
-
-      - name: Test Windows update rollback failpoints
-        env:
-          KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
-        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts
-
-      - name: Test Windows installer recovery safety
-        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts
-
-      - name: Upload Windows transaction diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-windows-installer-transaction-diagnostics
-          if-no-files-found: warn
-          retention-days: 3
-          path: |
-            artifacts/windows-installer-transaction/**/diagnostic.log
-            artifacts/windows-installer-transaction/**/journal.json
-            artifacts/windows-installer-transaction/**/transaction.json
-            artifacts/windows-installer-transaction/**/result-*.txt
-            artifacts/windows-installer-transaction/**/fixture-summary.json
 
       - name: Build Windows NSIS installer
         run: npm run dist:win
@@ -317,6 +337,7 @@ jobs:
       - package-linux-arm64
       - package-macos
       - package-windows
+      - windows-recovery
     if: always()
     steps:
       - name: Require every PR job to succeed
@@ -329,6 +350,7 @@ jobs:
               ['Build Linux package (ARM64)', '${{ needs['package-linux-arm64'].result }}'],
               ['Build ad-hoc macOS packages (PR)', '${{ needs['package-macos'].result }}'],
               ['Build Windows NSIS installer (PR)', '${{ needs['package-windows'].result }}'],
+              ['Windows recovery safety', '${{ needs['windows-recovery'].result }}'],
             ]
             const unsuccessful = results.filter(([, result]) => result !== 'success')
             if (unsuccessful.length > 0) {
@@ -348,6 +370,7 @@ jobs:
       - package-linux-arm64
       - package-macos
       - package-windows
+      - windows-recovery
     if: >-
       ${{
         always() &&
@@ -370,6 +393,7 @@ jobs:
               ['Build Linux package (ARM64)', '${{ needs['package-linux-arm64'].result }}'],
               ['Build ad-hoc macOS packages (PR)', '${{ needs['package-macos'].result }}'],
               ['Build Windows NSIS installer (PR)', '${{ needs['package-windows'].result }}'],
+              ['Windows recovery safety', '${{ needs['windows-recovery'].result }}'],
             ]
             const failed = jobResults.filter(([, result]) => result !== 'success')
             const failedJobs = failed.map(([name, result]) => `- ${name} (${result})`).join('\n')

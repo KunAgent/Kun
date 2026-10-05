@@ -1,8 +1,11 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { scheduleBoundedUpdateRollback } from './update-transaction-helper'
+import { createRollbackCoordinatorProbe, createRollbackGuiParent } from './windows-installer-coordinator-probe.test-utils'
+import { assertGuiExitWaitRace, stopRecoveredProcess, waitForRecoveredProcess } from './windows-installer-process-wait.test-utils'
 import { readInstallerUpdateTransaction } from './gui-updater-pending'
 
 // The transaction reader is given an explicit recoveryRoot. It must not load
@@ -18,7 +21,7 @@ const artifactRoot = process.env.KUN_INSTALLER_TEST_ARTIFACT_ROOT
 let fixtureIndex = 0
 
 type Fixture = ReturnType<typeof fixture>
-type Action = 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
+type Action = 'ValidateUpdateRollback' | 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
 
 function payload(root: string, executable: string): void {
   mkdirSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'cli'), { recursive: true })
@@ -29,11 +32,11 @@ function payload(root: string, executable: string): void {
   writeFileSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'manager', 'manager-entry.js'), 'manager')
 }
 
-function fixture(inPlace = false) {
+function fixture(inPlace = false, unicodePath = false) {
   const fixtureName = `fixture-${String(++fixtureIndex).padStart(2, '0')}-${inPlace ? 'in-place' : 'rename'}`
   // Production failpoints deliberately require a real temporary test root.
   // The CI artifact directory is only an output destination, never execution state.
-  const root = join(tmpdir(), `kun-installer-migration-smoke-${process.pid}-${fixtureName}`)
+  const root = join(tmpdir(), `kun-installer-migration-smoke-${process.pid}-${fixtureName}${unicodePath ? '-\u4f60\u597d' : ''}`)
   roots.push({ root, artifactDirectory: artifactRoot ? join(artifactRoot, fixtureName) : undefined })
   rmSync(root, { recursive: true, force: true })
   mkdirSync(root, { recursive: true })
@@ -236,6 +239,8 @@ describe('Windows transaction test diagnostics', () => {
 })
 
 windowsOnly('Windows automatic update transaction', () => {
+  it('handles GUI exit between process observation and waiting', assertGuiExitWaitRace, 30_000)
+
   it('restores from an environment rebuilt from the transaction without a result file', async () => {
     const input = fixture()
     input.transaction = join(input.root, 'recovery', 'abc-update.json')
@@ -266,6 +271,82 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
     expect(transaction(transactionPath)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
   }, 180_000)
+
+  it.each([false, false, false, true, true, true])('completes uninstrumented Unicode rollback %# (real GUI parent exit: %s)', async (realParentExit) => {
+    const input = fixture(false, true)
+    input.transaction = join(input.root, 'recovery', 'abc-update.json')
+    // A real executable permits the recovered application's independent launch.
+    copyFileSync(process.execPath, join(input.source, 'DeepSeek GUI.exe'))
+    const recoveredExecutable = realpathSync.native(join(input.source, 'DeepSeek GUI.exe'))
+    assertSucceeded(run(input, 'Prepare'), 'Prepare')
+    payload(input.stage, 'Kun.exe')
+    assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
+    const record = await readInstallerUpdateTransaction(
+      { oldVersion: '0.1.0', newVersion: '0.2.0' },
+      { platform: 'win32', recoveryRoot: join(input.root, 'recovery') }
+    )
+    expect(record).not.toBeNull()
+    const gui = realParentExit ? createRollbackGuiParent() :
+      spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    const probe = createRollbackCoordinatorProbe(input.diagnostic, realParentExit ? gui : undefined, false)
+    let recoveredPid: number | undefined
+    try {
+      await scheduleBoundedUpdateRollback(helper, {
+        ...record!.recoveryEnvironment,
+        ...{ KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnostic }
+      }, gui.pid!, probe.launch)
+      expect(gui.exitCode).toBeNull()
+      expect(transaction(input.transaction).Phase).toBe('payload_switched')
+      gui.kill()
+      if (!realParentExit) expect(await probe.completion(), probe.output()).toBe(0)
+      recoveredPid = await waitForRecoveredProcess(recoveredExecutable)
+      expect(readFileSync(input.diagnostic, 'utf8')).toContain('SUCCESS action=FinalizeUpdateTransaction')
+      expect(existsSync(input.transaction)).toBe(false)
+      expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
+      expect(existsSync(input.target)).toBe(false)
+    } catch (error) {
+      throw new Error(`${String(error)}\n${await probe.drain()}`, { cause: error })
+    } finally {
+      gui.kill()
+      probe.kill()
+      stopRecoveredProcess(recoveredExecutable, recoveredPid)
+    }
+  }, 60_000)
+
+  it('rejects real helper startup failures before acknowledging readiness', async () => {
+    const input = fixture()
+    input.transaction = join(input.root, 'recovery', 'abc-update.json')
+    assertSucceeded(run(input, 'Prepare'), 'Prepare')
+    const record = await readInstallerUpdateTransaction(
+      { oldVersion: '0.1.0', newVersion: '0.2.0' },
+      { platform: 'win32', recoveryRoot: join(input.root, 'recovery') }
+    )
+    expect(record).not.toBeNull()
+    const probe = createRollbackCoordinatorProbe(input.diagnostic)
+    try {
+      await expect(scheduleBoundedUpdateRollback(helper, {
+        ...record!.recoveryEnvironment,
+        ...{ KUN_INSTALLER_FAULT_INJECTION: '1', KUN_INSTALLER_FAULT_POINT: 'rollback.before_ready',
+          KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnostic }
+      }, process.pid, probe.launch)).rejects.toThrow('exited with 1 before readiness')
+      await probe.drain()
+      expect(readFileSync(input.diagnostic, 'utf8')).toContain('KUN_INSTALLER_FAULT_INJECTION:rollback.before_ready')
+      expect(transaction(input.transaction).Phase).toBe('prepared')
+      expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
+    } catch (error) {
+      throw new Error(`${String(error)}\n${await probe.drain()}`, { cause: error })
+    } finally {
+      probe.kill()
+    }
+  }, 60_000)
+
+  it('rejects readiness when the required in-place payload backup is missing', () => {
+    const input = fixture(true)
+    assertSucceeded(run(input, 'Prepare'), 'Prepare')
+    rmSync(transaction(input.transaction).BackupRoot, { recursive: true, force: true })
+    assertExpectedFailure(run(input, 'ValidateUpdateRollback'), 'ValidateUpdateRollback')
+    expect(transaction(input.transaction).Phase).toBe('prepared')
+  })
 
   it('keeps the legacy payload untouched when staged validation fails', () => {
     const input = fixture()
@@ -358,7 +439,8 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
   })
 
-  it('retires an out-of-place legacy payload only during finalization', () => {
+  it.each(['finalize.after_phase', 'finalize.after_first_cleanup', 'finalize.before_transaction_removal'])(
+    'resumes interrupted finalization without losing the transaction: %s', (fault) => {
     const input = fixture()
     assertSucceeded(run(input, 'Prepare'), 'Prepare')
     payload(input.stage, 'Kun.exe')
@@ -377,7 +459,7 @@ windowsOnly('Windows automatic update transaction', () => {
     assertSucceeded(run(input, 'CommitUpdateTransaction'), 'CommitUpdateTransaction')
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
     assertExpectedFailure(
-      run(input, 'FinalizeUpdateTransaction', 'finalize.after_first_cleanup'),
+      run(input, 'FinalizeUpdateTransaction', fault),
       'FinalizeUpdateTransaction'
     )
     expect(transaction(input.transaction).Phase).toBe('finalizing')

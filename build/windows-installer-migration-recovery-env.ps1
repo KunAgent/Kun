@@ -49,3 +49,47 @@ function Assert-InstallerRecoveryFields($Transaction) {
     }
   }
 }
+
+# Readiness is checked inside the process that will perform recovery, after
+# elevation when required, before asking the running GUI to release its files.
+function Assert-UpdateRollbackReady {
+  if ((Get-NormalizedInstallMode) -eq 'all') {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+      throw 'All-users update rollback requires an elevated helper.'
+    }
+  }
+  $transaction = Read-UpdateTransaction
+  if ($null -eq $transaction) { throw 'The automatic update transaction is unavailable.' }
+  if (@('prepared', 'payload_switched', 'awaiting_health', 'cleanup_pending', 'committed',
+        'rollback_pending', 'rolling_back', 'rollback_incomplete', 'aborted', 'rolled_back') -notcontains [string]$transaction.Phase) {
+    throw 'The automatic update transaction cannot be rolled back.'
+  }
+  Assert-InstallerRecoveryFields $transaction
+  $root = if ([bool]$transaction.InPlace -and [string]$transaction.Phase -ne 'rolled_back') {
+    Normalize-FullPath ([string]$transaction.BackupRoot)
+  } else {
+    Normalize-FullPath ([string]$transaction.Source)
+  }
+  Assert-RecoveryPayload $root
+  Assert-NoReparsePointsInTree (Get-Item -LiteralPath $root) 'Automatic update recovery payload'
+  $journal = Read-Journal
+  if ($null -ne $journal) {
+    foreach ($record in @(Get-JournalRecords $journal)) {
+      Get-ValidatedJournalRecord $record | Out-Null
+    }
+  }
+  if ([string]$transaction.Phase -ne 'rolled_back') {
+    foreach ($record in @($transaction.Shortcuts)) {
+      if (@($record.PSObject.Properties).Count -eq 0) { continue }
+      $backup = [string]$record.Backup
+      if (-not (Test-Path -LiteralPath $backup -PathType Leaf) -or (Test-ReparsePoint $backup)) {
+        throw "The shortcut recovery file is unavailable: $backup"
+      }
+      $stream = [IO.File]::OpenRead($backup)
+      $stream.Dispose()
+    }
+  }
+  Invoke-InstallerFaultPoint 'rollback.before_ready'
+}

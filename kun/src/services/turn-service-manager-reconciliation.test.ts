@@ -242,3 +242,23 @@ describe('managed Runtime restart reconciliation', () => {
     await expect(test.recovered.reconcileManagerSettledInterruptions()).resolves.toEqual([])
   })
 })
+
+describe('Manager recovery ahead of queued inputs', () => {
+  it('checkpoints the executed source while preserving later queue order and Stop', async () => {
+    const test = await fixture(async () => null)
+    const threadId = test.started.threadId
+    const b = await test.original.enqueueTurn({ threadId, request: { prompt: 'B' } })
+    const c = await test.original.enqueueTurn({ threadId, request: { prompt: 'C' } })
+    await persistManagerSettlement(test)
+    expect(await test.recovered.reconcileManagerSettledInterruptions()).toEqual([
+      { threadId, turnId: test.started.turnId }
+    ])
+    expect(await test.recovered.startNextQueuedTurn(threadId)).toBeNull()
+    const paused = await test.threadStore.get(threadId)
+    expect(paused?.queueControl).toMatchObject({ reason: 'restart_recovery', sourceTurnId: test.started.turnId })
+    expect(paused?.turns.filter((turn) => turn.status === 'queued').map((turn) => turn.id)).toEqual([b.turnId, c.turnId])
+    await test.recovered.pauseQueuedTurns(threadId, 'user_stop', test.started.turnId)
+    expect(await test.recovered.reconcileManagerSettledInterruptions()).toEqual([])
+    expect((await test.threadStore.get(threadId))?.queueControl?.reason).toBe('user_stop')
+  })
+})

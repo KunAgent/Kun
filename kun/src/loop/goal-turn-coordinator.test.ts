@@ -349,3 +349,19 @@ describe('GoalTurnCoordinator', () => {
   })
 
 })
+
+describe('goal restart with queued inputs', () => {
+  it('selects the executed goal source and preserves its surface ahead of B/C', async () => {
+    const h = harness()
+    const thread = activeThread()
+    thread.turns[0]!.status = 'failed'
+    thread.turns.push(...['B', 'C'].map((id) => createTurnRecord({ id, threadId, prompt: id, status: 'queued', clientSurface: 'gui' })))
+    await h.threadStore.upsert({ ...thread, status: 'running', queueControl: {
+      reason: 'restart_recovery', sourceTurnId: turnId, pausedAt: '2026-07-11T00:00:00.000Z'
+    } })
+    expect(await h.coordinator.resumeInterruptedGoals([{ threadId, turnId }])).toBe(1)
+    expect(h.startTurn).toHaveBeenCalledWith(expect.objectContaining({ request: expect.objectContaining({ clientSurface: 'tui' }) }),
+      { expectedLatestFailedTurnId: turnId })
+    h.coordinator.shutdown()
+  })
+})

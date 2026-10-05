@@ -251,6 +251,8 @@ export class GuiUpdateInstaller {
       return
     }
     try {
+      // Scheduling resolves only when the actual (possibly elevated) helper
+      // validated recovery and is ready to wait for this GUI to exit.
       await scheduleUpdateRollbackAfterExit(recovery.recoveryEnvironment)
       this.deps.emit({ status: 'error', info: this.deps.stateInfo(), code: 'install_failed',
         message: 'Kun Runtime health checks failed repeatedly. Restoring the previous version.' })

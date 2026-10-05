@@ -307,7 +307,10 @@ async interruptTurn(this: TurnService, input: { threadId: string; turnId: string
         const turns = current.turns.map((candidate) =>
           candidate.id === input.turnId
             ? this['finalizeOpenItems'](
-                finishTurn(input.discard ? { ...candidate, items: this['keepUserItems'](candidate.items) } : candidate, 'aborted'),
+                finishTurn({
+                  ...(input.discard ? { ...candidate, items: this['keepUserItems'](candidate.items) } : candidate),
+                  ...(candidate.status === 'queued' ? { terminalCode: 'queue_cancelled' } : {})
+                }, 'aborted'),
                 'aborted'
               )
             : candidate
@@ -315,6 +318,7 @@ async interruptTurn(this: TurnService, input: { threadId: string; turnId: string
         await this['deps'].threadStore.upsert({
           ...touchThread(current, this['deps'].nowIso()),
           turns,
+          ...(turn.status === 'running' ? { queueControl: { reason: 'user_stop' as const, sourceTurnId: turn.id, pausedAt: this['deps'].nowIso() } } : {}),
           status: threadStatusAfterTurnTransition(current.status, turns),
           updatedAt: this['deps'].nowIso()
         })

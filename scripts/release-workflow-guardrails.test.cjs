@@ -96,6 +96,36 @@ test('PR quality catches production advisories before the stable release merge',
   assert.equal(audit.run, 'npm run audit:production')
 })
 
+test('native Windows recovery runs early and fails closed before packaging and PR acceptance', () => {
+  const workflow = readWorkflow('pr-checks.yml')
+  const recovery = workflow.jobs['windows-recovery']
+  assert.equal(recovery['runs-on'], 'windows-latest')
+  assert.equal(recovery.needs, undefined)
+  assert.equal(recovery.if, undefined)
+  assert.equal(recovery['continue-on-error'], undefined)
+  assert.equal(recovery['timeout-minutes'], 20)
+  assert.deepEqual(workflow.permissions, { contents: 'read' })
+  assert.equal(recovery.permissions, undefined)
+  for (const step of recovery.steps) assert.equal(step['continue-on-error'], undefined)
+  for (const [name, file] of [
+    ['Test Windows update rollback failpoints', 'transaction'],
+    ['Test Windows installer recovery safety', 'recovery-safety']
+  ]) {
+    const step = stepByName(recovery, name)
+    assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts`)
+    assert.equal(step.if, undefined)
+  }
+  assert.deepEqual(workflow.jobs['package-windows'].needs, ['quality', 'windows-recovery'])
+  for (const name of ['pr-gate', 'report-pr-check-feedback']) {
+    const job = workflow.jobs[name]
+    assert.ok(job.needs.includes('windows-recovery'))
+    assert.ok(job.steps.some(step => step.with?.script?.includes("needs['windows-recovery'].result")))
+  }
+  assert.equal(workflow.jobs['pr-gate'].if, 'always()')
+  assert.match(workflow.jobs['pr-gate'].steps[0].with.script, /result !== 'success'/)
+  assert.match(workflow.jobs['pr-gate'].steps[0].with.script, /core\.setFailed/)
+})
+
 test('stable Linux ARM64 packaging retains the proven PR timeout budget', () => {
   const workflow = readWorkflow('release.yml')
 

@@ -289,7 +289,7 @@ export class WorkflowRuntime {
       } catch {
         live.set(nodeId, 'error')
       } finally {
-        this.runCoordinator.finishSingleNode(workflowId, LIVE_STATUS_LINGER_MS)
+        this.runCoordinator.finishSingleNode(workflowId, LIVE_STATUS_LINGER_MS, live)
       }
     })()
     this.trackRunTask(task)
@@ -499,55 +499,55 @@ export class WorkflowRuntime {
     initialPayload: WorkflowPayload = { json: {}, text: '' },
     workspaceOverride?: string
   ): Promise<WorkflowRunResult> {
-    if (this.runCoordinator.isRunning(workflow.id)) {
+    if (!this.runCoordinator.begin(workflow.id, workflow.nodes.map((node) => node.id))) {
       return { ok: false, message: 'Workflow is already running.' }
     }
-    this.runCoordinator.begin(workflow.id, workflow.nodes.map((node) => node.id))
-    const signal = this.runCoordinator.signal(workflow.id) ?? this.stopController.signal
-
-    const startedAt = new Date()
-    const run: WorkflowRunV1 = {
-      id: runId,
-      trigger: triggerLabel,
-      status: 'running',
-      startedAt: startedAt.toISOString(),
-      finishedAt: '',
-      message: '',
-      nodeResults: []
-    }
-    await this.updateWorkflow(workflow.id, (current) => ({
-      ...current,
-      lastStatus: 'running',
-      lastMessage: 'Running',
-      nextRunAt: '',
-      updatedAt: startedAt.toISOString(),
-      runs: [...current.runs, run].slice(-MAX_WORKFLOW_RUNS)
-    }))
-
-    let runStatus: WorkflowRunStatus = 'success'
-    let runMessage = ''
-    let nodeResults: WorkflowNodeRunResultV1[] = []
     try {
-      const settings = await this.loadSettings()
-      const result = await this.nodeExecution.runGraph(workflow, triggerNodeId, initialPayload, {
-        settings,
-        statusWorkflowId: workflow.id,
-        cancelId: workflow.id,
-        runId,
-        depth: 0,
-        signal,
-        workspaceOverride
-      })
-      runStatus = result.status
-      nodeResults = result.nodeResults
-      runMessage = runStatus === 'success' ? summarizeRun(nodeResults) : result.errorMessage
-    } catch (error) {
-      runStatus = 'error'
-      runMessage = error instanceof Error ? error.message : String(error)
-      this.deps.logError('workflow', 'Workflow run failed', { message: runMessage, workflowId: workflow.id })
-    } finally {
+      const signal = this.runCoordinator.signal(workflow.id) ?? this.stopController.signal
+      const startedAt = new Date()
+      const run: WorkflowRunV1 = {
+        id: runId,
+        trigger: triggerLabel,
+        status: 'running',
+        startedAt: startedAt.toISOString(),
+        finishedAt: '',
+        message: '',
+        nodeResults: []
+      }
+      const startError = await this.persistRunUpdate(workflow.id, runId, 'start', (current) => ({
+        ...current,
+        lastStatus: 'running',
+        lastMessage: 'Running',
+        nextRunAt: '',
+        updatedAt: startedAt.toISOString(),
+        runs: [...current.runs, run].slice(-MAX_WORKFLOW_RUNS)
+      }))
+      if (startError) return { ok: false, message: startError }
+
+      let runStatus: WorkflowRunStatus = 'success'
+      let runMessage = ''
+      let nodeResults: WorkflowNodeRunResultV1[] = []
+      try {
+        const settings = await this.loadSettings()
+        const result = await this.nodeExecution.runGraph(workflow, triggerNodeId, initialPayload, {
+          settings,
+          statusWorkflowId: workflow.id,
+          cancelId: workflow.id,
+          runId,
+          depth: 0,
+          signal,
+          workspaceOverride
+        })
+        runStatus = signal.aborted ? 'error' : result.status
+        nodeResults = result.nodeResults
+        runMessage = signal.aborted ? 'Canceled.' : runStatus === 'success' ? summarizeRun(nodeResults) : result.errorMessage
+      } catch (error) {
+        runStatus = 'error'
+        runMessage = error instanceof Error ? error.message : String(error)
+        this.deps.logError('workflow', 'Workflow run failed', { message: runMessage, workflowId: workflow.id })
+      }
       const finishedAt = new Date()
-      await this.updateWorkflow(workflow.id, (current) => ({
+      const finishError = await this.persistRunUpdate(workflow.id, runId, 'finish', (current) => ({
         ...current,
         lastRunAt: finishedAt.toISOString(),
         lastStatus: runStatus,
@@ -560,9 +560,30 @@ export class WorkflowRuntime {
             : entry
         )
       }))
+      if (finishError) {
+        return { ok: false, message: [runMessage, finishError].filter(Boolean).join(' ') }
+      }
+      return { ok: runStatus !== 'error', runId, status: runStatus, message: runMessage }
+    } finally {
+      // Ownership cannot depend on a successful settings read/write or error report.
       this.runCoordinator.finish(workflow.id, runId, LIVE_STATUS_LINGER_MS)
     }
-    return { ok: runStatus !== 'error', runId, status: runStatus, message: runMessage }
+  }
+
+  private async persistRunUpdate(
+    workflowId: string,
+    runId: string,
+    phase: 'start' | 'finish',
+    updater: (workflow: WorkflowV1) => WorkflowV1
+  ): Promise<string | undefined> {
+    try {
+      await this.updateWorkflow(workflowId, updater)
+      return undefined
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.deps.logError('workflow-persistence', 'Failed to save workflow run', { workflowId, runId, phase, message })
+      return `Failed to save workflow run ${phase}: ${message}`
+    }
   }
 
   /**

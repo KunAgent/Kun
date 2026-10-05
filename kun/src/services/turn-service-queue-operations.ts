@@ -1,3 +1,5 @@
+import { isQueueExecutionBlocked, latestExecutedTurn } from '../domain/queue-execution-state.js'
+import { executableHistory } from '../loop/executable-history.js'
 import { resolveTurnReviewRequests } from './review-composer-context.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import { enqueueTurnDurably, reconcilePendingQueueAdmissions } from './queue-admission.js'
@@ -233,10 +235,14 @@ export const turnServiceQueueOperations = {
     let current = thread
     for (let attempt = 0; attempt < 3; attempt += 1) {
       assertQueueCapacity(current, input.threadId)
+      const stopped = latestExecutedTurn(current)
+      const freshAfterStop = queuedTurns(current).length === 0 && stopped?.status === 'aborted' &&
+        current.queueControl?.reason !== 'restart_recovery'
       const next: ThreadRecord = {
         ...touchThread(current, now),
         status: 'running',
-        turns: [...current.turns, queuedTurn],
+        turns: [...current.turns, { ...queuedTurn,
+          ...(freshAfterStop ? { queueResumeSourceTurnId: stopped.id } : {}) }],
         updatedAt: now
       }
       const committed = await this['commitThreadRecordCAS'](next, current.revision ?? 0)
@@ -362,7 +368,7 @@ export const turnServiceQueueOperations = {
         while (true) {
           if (this['deps'].lifecycleFence?.isClosing(input.threadId)) return null
           const thread = await this['deps'].threadStore.get(input.threadId)
-          if (!thread || thread.status === 'archived') return null
+          if (!thread || thread.status === 'archived' || isQueueExecutionBlocked(thread)) return null
           if (thread.turns.some((turn) => turn.status === 'running')) return null
           if (await this['deps'].executionLeases?.owner(input.threadId)) return null
           const candidate = queuedTurns(thread)[0]
@@ -416,12 +422,14 @@ export const turnServiceQueueOperations = {
               this['leasedTurns'].set(candidate.id, lease)
             }
             const now = this['deps'].nowIso()
-            const startedTurn = candidate.admissionPending
+            const promotedTurn = candidate.admissionPending
               ? (() => {
                   const { admissionPending: _pending, ...committed } = startTurnRecord(candidate, now)
                   return { ...committed, admissionCompletedAt: now }
                 })()
               : startTurnRecord(candidate, now)
+            const history = executableHistory(await this['deps'].sessionStore.loadItems(input.threadId), thread)
+            const startedTurn = { ...promotedTurn, queueExecutionAnchorItemId: history.at(-1)?.id }
             const next: ThreadRecord = {
               ...touchThread(thread, now),
               ...(designAdmission.locksSurface && designAdmission.effectiveSurface

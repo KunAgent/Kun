@@ -67,6 +67,7 @@ import { turnServiceCompactionOperations } from './turn-service-compaction-opera
 import { turnServicePruneOperations } from './turn-service-prune-operations.js'
 import type { ThreadSnapshotStore } from './thread-snapshot-store.js'
 import { turnServiceGraphOperations } from './turn-service-graph-operations.js'
+import { turnServiceQueueControlOperations } from './turn-service-queue-control.js'
 import { turnServiceQueueOperations } from './turn-service-queue-operations.js'
 import { turnServiceRuntimeStateOperations } from './turn-service-runtime-state-operations.js'
 import { turnServiceItemPersistenceOperations } from './turn-service-item-persistence-operations.js'
@@ -492,6 +493,7 @@ installServiceOperations(
   turnServicePruneOperations,
   turnServiceGraphOperations,
   turnServiceQueueOperations,
+  turnServiceQueueControlOperations,
   turnServiceRuntimeStateOperations,
   turnServiceItemPersistenceOperations
 )

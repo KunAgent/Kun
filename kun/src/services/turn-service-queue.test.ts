@@ -255,7 +255,9 @@ describe('durable per-thread turn queue', () => {
     expect(h.settled).toEqual(['thr_q'])
     const thread = await h.threadStore.get('thr_q')
     expect(thread?.turns.map((turn) => turn.status)).toEqual(['aborted', 'queued'])
-    // A manual resume promotes the queued turn afterwards.
+    // Only explicit resume authorizes promotion after Stop.
+    expect(await h.turns.startNextQueuedTurn('thr_q')).toBeNull()
+    await h.turns.resumeQueuedTurns('thr_q')
     const resumed = await h.turns.startNextQueuedTurn('thr_q')
     expect(resumed).not.toBeNull()
   })
