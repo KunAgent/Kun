@@ -59,6 +59,7 @@ jobs:
       - name: Verify original failure, fixed layouts and built asset decoding
         env:
           KUN_AVATAR_EVIDENCE: dist/room-header-avatar
+          NODE_OPTIONS: --max-old-space-size=4096
         run: node scripts/smoke-room-header-avatar.mjs
       - name: Upload before and after evidence
         if: always()

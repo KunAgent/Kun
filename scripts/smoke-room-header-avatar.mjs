@@ -286,8 +286,12 @@ async function buildFixture() {
   // absolute /src alias breaks its static asset route; only the temporary
   // production fixture needs that alias, normalized to Vite's URL form.
   await build({ ...config, root: temporary,
-    resolve: { alias: { ...config.resolve.alias, '/src': normalizePath(resolve(repository, 'src')) } },
-    base: './', logLevel: 'warn', build: {
+    resolve: { alias: { ...config.resolve.alias, '/src': normalizePath(resolve(repository, 'src')),
+      react: normalizePath(resolve(repository, 'node_modules/react')),
+      'react-dom': normalizePath(resolve(repository, 'node_modules/react-dom')) } },
+    esbuild: { jsx: 'automatic', jsxDev: false },
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+    base: './', mode: 'production', logLevel: 'warn', build: {
     outDir, emptyOutDir: true, target: 'chrome128', modulePreload: false, reportCompressedSize: false,
     rollupOptions: { input: index } } })
   builtServer = createHttpServer(async (request, response) => {
