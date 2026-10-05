@@ -222,7 +222,14 @@ async function geometry() {
     const src = art instanceof HTMLImageElement ? art.currentSrc : style.backgroundImage.match(/^url\(["']?(.*?)["']?\)$/)?.[1]
     const image = new Image()
     image.src = src || ''
-    await image.decode()
+    try { await image.decode() } catch (error) {
+      const response = src ? await fetch(src).catch(() => undefined) : undefined
+      const bytes = response ? new Uint8Array(await response.arrayBuffer()) : undefined
+      throw new Error(JSON.stringify({ message: String(error), src, backgroundImage: style.backgroundImage,
+        inlineBackground: art.style.backgroundImage, status: response?.status,
+        contentType: response?.headers.get('content-type'), bytes: bytes?.length,
+        prefix: bytes ? Array.from(bytes.slice(0, 32)) : undefined }))
+    }
     return { dpr: devicePixelRatio, avatar: { ...bounds(avatar), display: getComputedStyle(avatar).display,
       label: avatar.getAttribute('aria-label') }, art: { ...bounds(art), tag: art.tagName,
       portrait: art.getAttribute('data-avatar-id'), src, backgroundSize: style.backgroundSize,
