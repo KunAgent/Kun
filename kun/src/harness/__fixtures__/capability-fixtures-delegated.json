@@ -219,7 +219,7 @@
     {
       "name": "antigravity",
       "legacy": {
-        "nativeResume": false,
+        "nativeResume": true,
         "structuredStreaming": false,
         "kunTools": false,
         "externalApproval": false,
@@ -230,9 +230,7 @@
       "base": {
         "statuses": {
           "nativeResume": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no native session resume"
+            "supported": true
           },
           "fork": {
             "supported": false,
@@ -349,9 +347,7 @@
       "expected": {
         "statuses": {
           "nativeResume": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no native session resume"
+            "supported": true
           },
           "fork": {
             "supported": false,

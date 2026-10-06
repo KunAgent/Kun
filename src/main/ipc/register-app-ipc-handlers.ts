@@ -18,6 +18,7 @@ import { registerAppSettingsIpcHandlers } from './register-app-settings-ipc-hand
 import { registerAppUiPluginIpcHandlers } from './register-app-ui-plugin-ipc-handlers'
 import { registerAppWorkspaceIpcHandlers } from './register-app-workspace-ipc-handlers'
 import { configureRuntimeModelExecutor } from '../services/runtime-model-requests'
+import { registerAgentIntegrationIpcHandlers } from './register-agent-integration-ipc-handlers'
 
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   configureRuntimeModelExecutor(async (input) => {
@@ -45,6 +46,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     assertReady: options.assertRendererRuntimeReady
   })
   registerAppRuntimeIpcHandlers(options)
+  registerAgentIntegrationIpcHandlers(options)
   registerAppWorkspaceIpcHandlers(options)
   registerAppUiPluginIpcHandlers(options)
   registerAppKunConfigIpcHandlers(options)

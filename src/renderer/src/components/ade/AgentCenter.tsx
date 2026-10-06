@@ -4,16 +4,15 @@ import type {
   KunHarnessSettingsV1,
   KunRuntimeSettingsV1
 } from '@shared/app-settings'
-import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-enablement'
 import { getProvider } from '../../agent/registry'
-import { applyHarnessEnablementSettings, harnessUnavailableLabelKey, loadHarnesses, useHarnessStore } from '../../store/harness-store'
+import { applyHarnessEnablementSettings, loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { SettingsCard } from '../settings-controls'
 import { AgentCenterCard } from './AgentCenterCard'
-import { agentCardModel } from './agent-center-actions'
+import { AgentCatalogControls, AgentCatalogRail } from './AgentCenterCatalog'
+import { filterAgentCatalog, orderedAgentCatalog, type AgentCatalogFilter } from './agent-center-catalog'
 import { exportCustomEntry } from './agent-center-custom-form'
 import { AgentCenterAddWizard } from './agent-center-add-wizard'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
-import { AgentIcon } from '../agent-icon'
 
 export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1 {
   return kun.harnesses ?? {
@@ -60,6 +59,9 @@ export function AgentCenter({
   const [probingId, setProbingId] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [catalogFilter, setCatalogFilter] = useState<AgentCatalogFilter>('all')
+  const [search, setSearch] = useState('')
+  const [probeError, setProbeError] = useState('')
 
   useEffect(() => {
     // P4-02: always re-detect on open; waitMs lets an inflight pass settle.
@@ -74,6 +76,8 @@ export function AgentCenter({
   useEffect(() => {
     if (!settingsHarnessId) return
     setSelectedId(settingsHarnessId)
+    setCatalogFilter('all')
+    setSearch('')
     useHarnessStore.setState({ settingsHarnessId: undefined })
   }, [settingsHarnessId])
 
@@ -84,9 +88,12 @@ export function AgentCenter({
 
   const probe = async (harnessId: string): Promise<void> => {
     setProbingId(harnessId)
+    setProbeError('')
     try {
       await getProvider().probeHarness?.(harnessId)
       await loadHarnesses(true)
+    } catch (error) {
+      setProbeError(error instanceof Error ? error.message : String(error))
     } finally {
       setProbingId(null)
     }
@@ -102,66 +109,39 @@ export function AgentCenter({
     return result
   }
 
-  const ordered = rows.filter((row) => row.definition.id !== 'gemini-cli' && row.definition.availability !== 'retired').sort((a, b) => {
-    const order = settings.agentOrder
-    const ai = order.indexOf(a.definition.id)
-    const bi = order.indexOf(b.definition.id)
-    if (ai !== -1 || bi !== -1) {
-      return (ai === -1 ? order.length : ai) - (bi === -1 ? order.length : bi)
-    }
-    return a.definition.displayName.localeCompare(b.definition.displayName)
-  })
-  const selectedRow = ordered.find((row) => row.definition.id === selectedId)
-    ?? ordered.find((row) => row.definition.id === settings.defaultHarnessId)
-    ?? ordered.find((row) => row.definition.id === 'kun')
-    ?? ordered[0]
+  const ordered = orderedAgentCatalog(rows, settings.agentOrder)
+  const visibleRows = filterAgentCatalog(ordered, catalogFilter, search)
+  const selectedRow = visibleRows.find((row) => row.definition.id === selectedId)
+    ?? visibleRows.find((row) => row.definition.id === settings.defaultHarnessId)
+    ?? visibleRows.find((row) => row.definition.id === 'kun')
+    ?? visibleRows[0]
   const platform = typeof window === 'undefined' ? 'darwin' : (window.kunGui?.platform ?? 'darwin')
 
   return (
     <div data-agent-center>
       <SettingsCard title={t('adeAgentCenter.title')}>
         <div className="flex items-start justify-between gap-3 pb-2">
-          <div className="text-[12px] text-ds-faint">{t('adeAgentCenter.desc')}</div>
+          <div className="text-[12px] text-ds-faint">{t('agentIntegrations.catalogDescription')}</div>
           <button data-settings-action="primary" data-settings-size="default" type="button" onClick={() => setAddOpen(true)} className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90" data-agent-add-open>
             {t('agentAdd.title')}
           </button>
         </div>
-        {rowsError ? (
-          <div className="rounded-lg border border-red-200/80 bg-red-50/80 px-3 py-2 text-[12px] text-red-700 dark:border-red-800/40 dark:bg-red-500/10 dark:text-red-300">
-            {rowsError}
+        <AgentCatalogControls filter={catalogFilter} search={search} onFilter={setCatalogFilter} onSearch={setSearch} t={t} />
+        {rowsLoading ? <p role="status" aria-live="polite" className="mb-3 text-[12px] text-ds-faint">{t('agentIntegrations.loadingCatalog')}</p> : null}
+        {rowsError || probeError ? (
+          <div role="alert" className="mb-3 rounded-lg border border-red-200/80 bg-red-50/80 px-3 py-2 text-[12px] text-red-700 dark:border-red-800/40 dark:bg-red-500/10 dark:text-red-300">
+            <p>{t('agentIntegrations.catalogError')}</p>
+            <p className="mt-1 break-words text-[11px]">{rowsError || probeError}</p>
+            <button type="button" onClick={() => { setProbeError(''); void loadHarnesses(true) }} disabled={rowsLoading}
+              className="mt-1 rounded px-1 py-1 underline focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">{t('adeAgentAction.retry')}</button>
           </div>
         ) : null}
-        {ordered.length === 0 && !rowsLoading ? (
-          <div className="px-1 py-3 text-[13px] text-ds-faint">{tSettings('adeSettings.harnessesEmpty')}</div>
+        {visibleRows.length === 0 && !rowsLoading ? (
+          <div className="px-1 py-3 text-[13px] text-ds-faint">{t(ordered.length ? 'agentIntegrations.noMatches' : 'agentIntegrations.emptyCatalog')}</div>
         ) : (
           <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(11rem,13rem)_minmax(0,1fr)]">
-            <div role="listbox" className="flex min-w-0 flex-col gap-1 border-b border-ds-border-muted pb-3 md:border-b-0 md:border-r md:pb-0 md:pr-3"
-              aria-label={tSettings('adeSettings.harnessesTitle')}>
-              {ordered.map((row) => {
-                const id = row.definition.id
-                const model = agentCardModel(row, {
-                  enabled: id === 'kun' || harnessProfileEnabled(settings, selectedHarnessProfile(row, settings)),
-                  platform,
-                  isDefault: settings.defaultHarnessId === id
-                })
-                const selected = selectedRow?.definition.id === id
-                return <button key={id} type="button" role="option" data-agent-list-id={id}
-                  data-selected={selected || undefined}
-                  aria-selected={selected}
-                  onClick={() => setSelectedId(id)}
-                  className={`min-w-0 rounded-xl border-l-2 px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
-                    selected ? 'border-accent bg-accent/10 text-ds-ink' : 'border-transparent text-ds-muted hover:bg-ds-hover'
-                  }`}>
-                  <span className="flex min-w-0 items-center gap-2 text-[13px] font-medium" title={row.definition.displayName}>
-                    <AgentIcon harnessId={id} size={16} className="text-ds-muted" />
-                    <span className="truncate">{row.definition.displayName}</span>
-                  </span>
-                  <span className="block truncate text-[11px] text-ds-faint">
-                    {model.reasonCode ? t(harnessUnavailableLabelKey(model.reasonCode)) : tSettings(`adeSettings.agentState_${model.state}`)}
-                  </span>
-                </button>
-              })}
-            </div>
+            <AgentCatalogRail rows={visibleRows} selectedId={selectedRow?.definition.id} settings={settings} platform={platform}
+              onSelect={setSelectedId} t={t} tSettings={tSettings} />
             <div className="min-w-0">
               {selectedRow && !addOpen ? [selectedRow].map((row) => {
             const id = row.definition.id

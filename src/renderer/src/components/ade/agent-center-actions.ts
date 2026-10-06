@@ -11,7 +11,7 @@ import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 export type AgentCardAction =
   | { kind: 'install'; labelKey: string; action: 'install' | 'adapter' }
   | { kind: 'command'; labelKey: string; command: string; note?: string }
-  | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason' | 'test' | 'configureProvider'; labelKey: string }
+  | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason' | 'test' | 'configureProvider' | 'openApplication'; labelKey: string }
   | { kind: 'docs'; labelKey: string; url: string }
   | { kind: 'none' }
 
@@ -48,12 +48,17 @@ export function setupInstallCommand(
 }
 
 export function setupLoginCommand(
-  setup: AdeHarnessSetup | undefined
+  setup: AdeHarnessSetup | undefined,
+  resolvedCommand?: string,
+  platform = 'darwin'
 ): { command: string; note?: string } | null {
   const login = setup?.login
   if (!login) return null
-  const args = login.args.join(' ').trim()
-  return { command: args ? `${login.command} ${args}` : login.command, note: login.note }
+  const executable = resolvedCommand || login.command
+  const quote = (value: string): string => /^[a-z0-9_./:-]+$/i.test(value) ? value
+    : platform === 'win32' ? `'${value.replaceAll("'", "''")}'` : `'${value.replaceAll("'", "'\\''")}'`
+  const command = [executable, ...login.args].map(quote).join(' ')
+  return { command: platform === 'win32' && quote(executable) !== executable ? `& ${command}` : command, note: login.note }
 }
 
 function commandAction(
@@ -71,30 +76,39 @@ function commandAction(
  */
 export function agentCardModel(
   row: AdeHarnessRow,
-  options: { enabled: boolean; platform: string; isDefault: boolean }
+  options: { enabled: boolean; platform: string; isDefault: boolean; ready?: boolean }
 ): AgentCardModel {
   const { enabled, isDefault } = options
   const setup = row.definition.builtin ? row.definition.setup : undefined
+  const loginCommand = setupLoginCommand(setup, row.status.installed === 'yes' ? row.status.resolvedCommand : undefined, options.platform)
   const hasDetail = Boolean(row.status.message?.trim())
 
-  if (row.definition.transport === 'terminal' && row.status.installed === 'yes') {
-    return { state: 'ready', reasonCode: null, primary: ACTION.none, secondary: [] }
+  if (row.definition.transport === 'application') {
+    const docsUrl = row.definition.setup?.docsUrl ?? row.definition.application?.configurationDocsUrl
+    return {
+      state: row.status.detecting ? 'detecting' : row.status.installed === 'yes' ? 'ready' : 'unavailable',
+      reasonCode: row.status.detecting || row.status.installed === 'yes' ? null : 'not_installed',
+      primary: row.status.installed === 'yes'
+        ? { kind: 'openApplication', labelKey: 'agentIntegrations.openApplication' }
+        : docsUrl ? { kind: 'docs', labelKey: 'agentIntegrations.installInstructions', url: docsUrl } : ACTION.probe,
+      secondary: [ACTION.probe]
+    }
   }
 
-  if (!enabled && row.definition.transport !== 'terminal') {
+  if (!enabled) {
     return {
       state: 'disabled',
       reasonCode: 'disabled',
       primary: ACTION.enable,
       secondary: [
-        ...(setup?.login ? [commandAction('adeAgentAction.login', setupLoginCommand(setup))] : []),
+        ...(setup?.login ? [commandAction('adeAgentAction.login', loginCommand)] : []),
         ...(usesProviderOnlySdk(row) ? [{ kind: 'configureProvider' as const, labelKey: 'adeAgentAction.configureProvider' }] : [ACTION.specifyPath]),
         ...(setup?.docsUrl ? [{ kind: 'docs' as const, labelKey: 'adeAgentAction.docs', url: setup.docsUrl }] : [])
       ]
     }
   }
 
-  const code = harnessRowUnavailableCode(row)
+  const code = row.definition.transport === 'terminal' && options.ready === true ? null : harnessRowUnavailableCode(row)
   if (code === 'detecting') {
     return { state: 'detecting', reasonCode: null, primary: ACTION.none, secondary: [] }
   }
@@ -111,7 +125,7 @@ export function agentCardModel(
 
   const unknownLogin = row.status.login === 'unknown' && row.status.installed === 'yes' &&
     row.definition.credentialModes.includes('native-login') && setup?.login
-    ? commandAction('adeAgentAction.login', setupLoginCommand(setup)) : null
+    ? commandAction('adeAgentAction.login', loginCommand) : null
 
   if (code === null) {
     // A settled row can still carry an advisory wire reasonCode (e.g. a
@@ -125,7 +139,11 @@ export function agentCardModel(
         state: 'ready',
         reasonCode: advisory,
         primary: ACTION.none,
-        secondary: advisory ? [ACTION.probe] : []
+        secondary: [
+          ...(unknownLogin ? [unknownLogin] : []),
+          ...(advisory ? [ACTION.probe] : []),
+          ...(setup?.docsUrl ? [{ kind: 'docs' as const, labelKey: 'adeAgentAction.docs', url: setup.docsUrl }] : [])
+        ]
       }
     }
     return {
@@ -175,7 +193,7 @@ export function agentCardModel(
       primary = ACTION.probe
       break
     case 'signed_out': {
-      const login = commandAction('adeAgentAction.login', setupLoginCommand(setup))
+      const login = commandAction('adeAgentAction.login', loginCommand)
       primary = login.kind === 'command' ? login : ACTION.probe
       secondary.push(ACTION.probe)
       break

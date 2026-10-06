@@ -326,3 +326,16 @@ describe('harness/ade settings bridge', () => {
     }
   })
 })
+
+it('preserves exact gateway bindings through normalized settings, hot apply and config serialization', async () => {
+  const binding = { main: { routeId: 'daily-coding', allowedConnectionIds: ['provider-a', 'provider-b'] } }
+  const profile = { harnessId: 'opencode', credentialMode: 'kun-gateway', gatewayBinding: binding }
+  const runtime = runtimeWith(kunRuntimePatchSchema.parse({ harnesses: { enabledProfiles: [profile] } }))
+  const projected = harnessesConfigForRuntime(runtime.harnesses)
+  expect(projected.enabledProfiles).toEqual([profile])
+  const profiles = projected.enabledProfiles as Array<{ gatewayBinding?: unknown }>
+  expect(profiles[0]!.gatewayBinding).not.toBe(runtime.harnesses.enabledProfiles[0]!.gatewayBinding)
+  const settings = normalizeAppSettings({ provider: defaultModelProviderSettings(), agents: { kun: runtime } } as AppSettingsV1)
+  const body = buildManagedRuntimeHotApplyBody(settings, { harnesses: projected } as Parameters<typeof buildManagedRuntimeHotApplyBody>[1])
+  expect(body.harnesses?.enabledProfiles).toEqual([profile])
+})

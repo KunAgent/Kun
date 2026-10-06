@@ -259,6 +259,8 @@ export type ServerRuntime = {
    */
   harnesses?: {
     catalog: HarnessCatalog
+    integration?: import('../../harness/harness-runtime.js').HarnessRuntimeComposition['integration']
+    resolveIntegration?: import('../../harness/harness-runtime.js').HarnessRuntimeComposition['resolveIntegration']
     updates?: import('../../harness/harness-updates.js').HarnessUpdates
     invalidateModels?: (id: string) => void
     readiness?: import('../../harness/harness-readiness.js').HarnessReadinessService

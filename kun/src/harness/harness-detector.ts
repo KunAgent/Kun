@@ -1,4 +1,5 @@
 import semver from 'semver'
+import { stripVTControlCharacters } from 'node:util'
 import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -18,7 +19,10 @@ import { harnessExecutableEnv } from './harness-executable-env.js'
 import { prepareDeepSeekHarnessLaunch } from './deepseek-harness-launch.js'
 import { buildHarnessEnv } from './harness-env.js'
 import { raceProbeAbort } from './probe-abort.js'
+import { harnessIntegrationInfo } from './harness-integration.js'
+import { executablePackageVersion, isApplicationLauncher } from './harness-executable-metadata.js'
 import { redactApprovalSensitiveText } from '../domain/approval.js'
+import { sdkProcessBaseEnv } from '../runtime/agent-sdk/sdk-process-environment.js'
 
 const VERSION_TIMEOUT_MS = 5_000
 const DEFAULT_TTL_MS = 60_000
@@ -52,7 +56,7 @@ export const spawnCaptured: SpawnCaptured = async (command, args, options) => {
     signal.throwIfAborted()
     pending = spawnOwnedProcess(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
-      env: buildHarnessEnv({ base: harnessExecutableEnv(), add: options.env })
+      env: buildHarnessEnv({ base: harnessExecutableEnv(sdkProcessBaseEnv()), add: options.env })
     })
     child = await raceProbeAbort(pending, signal)
     signal.throwIfAborted()
@@ -287,6 +291,13 @@ export class HarnessDetector {
       })
     }
     const override = this.deps.overrides()[id]?.binaryPath?.trim()
+    if (def.transport === 'application') {
+      const info = await wait(harnessIntegrationInfo(def, { binaryPath: override, resolve: this.deps.resolveExecutable }))
+      return store({ harnessId: id, installed: info.application ? 'yes' : 'no', login: 'not-required', checkedAt,
+        resolvedCommand: info.application?.path ?? override, applicationPath: info.application?.path,
+        configurationPaths: info.configurations.filter((target) => target.exists).map((target) => target.path),
+        ...(info.application ? {} : { reasonCode: 'not_installed' as const }) })
+    }
     // SDK transports are bundled with the app; without a detect section they
     // are always installed, and only the login probe matters.
     if (!override && !def.detect && def.transport !== 'acp' && def.transport !== 'terminal') {
@@ -336,6 +347,8 @@ export class HarnessDetector {
         ? await wait(this.readVersion(def, command, signal))
         : undefined
     const probeCommand = command ?? def.id
+    if (version && 'identityMismatch' in version && version.identityMismatch) return store({ harnessId: id, installed: 'no', login: 'unknown', checkedAt,
+      reasonCode: 'not_installed', message: `The resolved command does not identify ${def.displayName}; specify the correct Agent executable` })
     if (version === undefined) {
       const login = await wait(this.deps.probeLogin(def, probeCommand, { signal }).catch(() => 'unknown' as HarnessLoginState))
       return store({
@@ -391,6 +404,7 @@ export class HarnessDetector {
     if (override) {
       const resolved = await raceProbeAbort(resolve(override), signal)
       signal.throwIfAborted()
+      if (resolved && def.detect?.rejectApplicationLauncher && await isApplicationLauncher(resolved)) return undefined
       return resolved
     }
     if (!def.detect) return undefined
@@ -401,6 +415,7 @@ export class HarnessDetector {
       signal.throwIfAborted()
       const resolved = await raceProbeAbort(resolve(candidate), signal)
       signal.throwIfAborted()
+      if (resolved && def.detect.rejectApplicationLauncher && await isApplicationLauncher(resolved)) continue
       if (resolved) return resolved
     }
     return undefined
@@ -410,8 +425,13 @@ export class HarnessDetector {
     def: HarnessDefinition,
     command: string,
     signal: AbortSignal
-  ): Promise<{ text: string; semver: string | null } | undefined> {
+  ): Promise<{ text: string; semver: string | null; identityMismatch?: boolean } | undefined> {
     if (!def.detect) return undefined
+    if (def.detect.versionPackage) {
+      const version = await executablePackageVersion(command, def.detect.versionPackage)
+      signal.throwIfAborted()
+      return { text: version ?? '', semver: version ?? null }
+    }
     const pattern = def.detect.versionPattern
       ? new RegExp(def.detect.versionPattern)
       : DEFAULT_VERSION_PATTERN
@@ -426,6 +446,9 @@ export class HarnessDetector {
       .catch(() => undefined)
     signal.throwIfAborted()
     if (!result || result.timedOut || result.exitCode !== 0) return undefined
+    if (def.detect.identityPattern && !new RegExp(def.detect.identityPattern, 'i').test(stripVTControlCharacters(result.stdout))) {
+      return { text: '', semver: null, identityMismatch: true }
+    }
     const firstLine = result.stdout.split('\n')[0]?.trim() ?? ''
     const match = firstLine.match(pattern) ?? result.stdout.match(pattern)
     const text = match?.[0]

@@ -162,11 +162,31 @@ describe('agentCardModel', () => {
     const row = makeRow({ builtin: false })
     row.definition.transport = 'terminal'
     const model = agentCardModel(row, {
-      enabled: true, platform: 'darwin', isDefault: false
+      enabled: true, platform: 'darwin', isDefault: false, ready: true
     })
     expect(model.state).toBe('ready')
     expect(model.primary.kind).toBe('none')
     expect(model.secondary).toEqual([])
+  })
+
+  it('requires terminal enablement and a runtime proof instead of assuming installation is enough', () => {
+    const row = makeRow()
+    row.definition.transport = 'terminal'
+    expect(agentCardModel(row, { enabled: false, platform: 'darwin', isDefault: false }).state).toBe('disabled')
+    expect(agentCardModel(row, { enabled: true, platform: 'darwin', isDefault: false }).state).toBe('unavailable')
+    expect(agentCardModel(row, { enabled: true, platform: 'darwin', isDefault: false, ready: true }).state).toBe('ready')
+  })
+
+  it('uses application installation and documentation without chat actions', () => {
+    const row = makeRow({ status: { installed: 'no' }, setup: SETUP })
+    row.definition.transport = 'application'
+    expect(agentCardModel(row, { enabled: false, platform: 'darwin', isDefault: false })).toMatchObject({
+      state: 'unavailable', primary: { kind: 'docs', labelKey: 'agentIntegrations.installInstructions' }
+    })
+    row.status.installed = 'yes'
+    const model = agentCardModel(row, { enabled: false, platform: 'darwin', isDefault: false })
+    expect(model.primary.kind).toBe('openApplication')
+    expect(model.secondary.map((action) => action.kind)).toEqual(['probe'])
   })
 
   it('P4-13: a missing terminal agent still surfaces install-path actions', () => {
@@ -194,4 +214,11 @@ describe('setupLoginCommand', () => {
     expect(setupLoginCommand(SETUP)).toMatchObject({ command: 'x auth login' })
     expect(setupLoginCommand({ login: { command: 'x', args: [] } })).toMatchObject({ command: 'x' })
   })
+})
+
+it('uses the checked native login executable and quotes shell-sensitive paths instead of another PATH alias', () => {
+  const value = setupLoginCommand({ login: { command: 'agent', args: ['login'] } }, '/Users/fixture/Agent $(touch bad)/agent', 'darwin')
+  expect(value?.command).toBe("'/Users/fixture/Agent $(touch bad)/agent' login")
+  expect(setupLoginCommand({ login: { command: 'agent', args: ['login'] } }, 'C:\\Program Files\\Cursor\\agent.exe', 'win32')?.command)
+    .toBe("& 'C:\\Program Files\\Cursor\\agent.exe' login")
 })

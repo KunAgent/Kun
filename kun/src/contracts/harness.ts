@@ -18,7 +18,8 @@ export const HarnessTransportSchema = z.enum([
   'acp',
   'codex-app-server',
   'pi-rpc',
-  'terminal'
+  'terminal',
+  'application'
 ])
 export type HarnessTransport = z.infer<typeof HarnessTransportSchema>
 
@@ -107,6 +108,9 @@ const HarnessDetectSchema = z
     aliases: z.array(z.string().min(1).max(256)).max(8).default([]),
     versionArgs: z.array(z.string().max(64)).max(4).default(['--version']),
     versionPattern: z.string().max(256).optional(),
+    identityPattern: z.string().max(256).optional(),
+    rejectApplicationLauncher: z.boolean().optional(),
+    versionPackage: z.string().min(1).max(128).optional(),
     minVersion: z.string().max(32).optional(),
     exactVersion: z.string().max(64).optional(),
     /**
@@ -152,6 +156,23 @@ const HarnessLaunchSchema = z
   })
   .strict()
 
+const IntegrationLocationSchema = z.object({
+  platform: z.enum(['darwin', 'linux', 'win32', 'any']),
+  root: z.enum(['home', 'config', 'app-data', 'local-app-data', 'program-files', 'applications']),
+  path: z.string().min(1).max(256).refine((path) => !path.startsWith('/') && !path.startsWith('\\') && !path.includes('\0') && !/^[a-z]:/i.test(path) &&
+    !path.split(/[\\/]/).includes('..'), 'Integration paths must stay within their declared root')
+}).strict()
+
+export const HarnessApplicationSchema = z.object({
+  kind: z.enum(['desktop', 'editor', 'extension']),
+  locations: z.array(IntegrationLocationSchema).max(16).default([]),
+  configLocations: z.array(IntegrationLocationSchema).max(16).default([]),
+  /** Exact product identity where a launcher name is shared by distinct builds. */
+  productName: z.string().max(128).optional(),
+  configurationDocsUrl: z.string().url().max(512).optional()
+}).strict()
+export type HarnessApplication = z.infer<typeof HarnessApplicationSchema>
+
 export const HarnessDefinitionSchema = z
   .object({
     id: HarnessIdSchema,
@@ -161,6 +182,14 @@ export const HarnessDefinitionSchema = z
     detect: HarnessDetectSchema.optional(),
     /** Launch command for acp / terminal transports; SDK transports decide internally. */
     launch: HarnessLaunchSchema.optional(),
+    application: HarnessApplicationSchema.optional(),
+    configurationLocations: z.array(IntegrationLocationSchema).max(16).optional(),
+    /** Curated CLI policy; missing selectors never authorize guessing a native mode. */
+    acpPermission: z.object({
+      modeAliases: z.record(z.string().max(64), z.array(z.string().min(1).max(64)).max(8)).optional(),
+      configOptionId: z.string().min(1).max(64).optional(),
+      requireMode: z.boolean().optional()
+    }).strict().optional(),
     /**
      * Alternate transport bindings (P6-07): when `harnesses.transportOverrides`
      * selects one of these transports, the catalog emits the definition with
@@ -177,7 +206,7 @@ export const HarnessDefinitionSchema = z
             /** Transport-specific setup guidance (for example an ACP adapter). */
             setup: HarnessSetupSchema.optional(),
             /** Overrides definition-level poolScope when this variant applies. */
-            poolScope: z.enum(['credential', 'workspace']).optional()
+            poolScope: z.enum(['credential', 'workspace', 'thread']).optional()
           })
           .strict()
       )
@@ -188,7 +217,7 @@ export const HarnessDefinitionSchema = z
      * pool by workspace too — required when the process binds its cwd at spawn
      * (pi rpc) and cannot re-target per session.
      */
-    poolScope: z.enum(['credential', 'workspace']).optional(),
+    poolScope: z.enum(['credential', 'workspace', 'thread']).optional(),
     /** Terminal (tier-0) launch details for PTY agents. */
     terminal: z
       .object({
@@ -272,6 +301,8 @@ export const HarnessStatusSchema = z
     ready: z.enum(['yes', 'no', 'unknown']).optional(),
     login: z.enum(['signed-in', 'signed-out', 'unknown', 'not-required']),
     resolvedCommand: z.string().max(4_096).optional(),
+    applicationPath: z.string().max(4_096).optional(),
+    configurationPaths: z.array(z.string().max(4_096)).max(16).optional(),
     checkedAt: z.string().datetime(),
     /**
      * True while a detection pass is inflight for this harness (P4-02):

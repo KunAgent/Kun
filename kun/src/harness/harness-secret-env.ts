@@ -8,6 +8,7 @@
 import type { HarnessDefinition } from '../contracts/harness.js'
 import { resolveDeepSeekHarnessNativeKey } from './deepseek-harness-profile.js'
 import type { ExtensionCredentialStore } from '../services/extension-credential-store.js'
+import { NATIVE_AGENT_CREDENTIAL_ENV_KEYS, nativeAgentCredentialEnv } from './native-agent-credentials.js'
 
 /** Resolves an opaque credential-store reference to its secret value. */
 export type HarnessSecretRefResolver = (
@@ -70,6 +71,7 @@ export async function resolveHarnessSecretEnv(
 
 /** Engine-specific ambient credentials allowed only for an explicitly chosen native profile. */
 export const NATIVE_HARNESS_CREDENTIAL_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
+  ...NATIVE_AGENT_CREDENTIAL_ENV_KEYS,
   'deepseek-harness': ['DEEPSEEK_API_KEY'],
   // Official ACP command reference documents WINDSURF_API_KEY, not DEVIN_API_KEY.
   devin: ['WINDSURF_API_KEY'],
@@ -89,6 +91,9 @@ export function nativeHarnessCredentialEnv(
     return value === undefined ? {} : { DEEPSEEK_API_KEY: value }
   }
   const allowed = new Set(NATIVE_HARNESS_CREDENTIAL_ENV_KEYS[definition.id] ?? [])
-  return Object.fromEntries(Object.entries(base).flatMap(([key, value]) =>
-    allowed.has(key.toUpperCase()) && value?.trim() ? [[key.toUpperCase(), value]] : []))
+  const selected = { ...nativeAgentCredentialEnv(definition.id, base),
+    ...Object.fromEntries(Object.entries(base).flatMap(([key, value]) =>
+      allowed.has(key.toUpperCase()) && value?.trim() ? [[key.toUpperCase(), value]] : [])) }
+  // A provider's environment reference cannot turn private host control into a native API key.
+  return Object.fromEntries(Object.entries(selected).filter(([key]) => !/^(?:KUN_|DS_GUI_|DEEPSEEK_GUI_|ELECTRON_|NODE_)/i.test(key)))
 }

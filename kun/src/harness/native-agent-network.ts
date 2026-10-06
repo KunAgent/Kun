@@ -24,7 +24,8 @@ export function bindNativeAgentNetwork(
     : definition.id === 'claude-code' && definition.transport === 'agent-sdk'
       ? snapshot?.['claude-code']
       : definition.id === 'antigravity' && definition.transport === 'antigravity-cli'
-        ? snapshot?.antigravity : undefined
+        ? snapshot?.antigravity
+        : definition.transport === 'acp' || definition.transport === 'terminal' ? snapshot?.harnesses?.[definition.id] : undefined
   if (!policy) return definition
   // An opaque symbol survives internal object spreads; JSON and public schemas omit it.
   const context = {}

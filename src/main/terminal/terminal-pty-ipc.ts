@@ -15,6 +15,7 @@
  *  - `useConpty` is a no-op on non-Windows, so we always pass it.
  */
 import { homedir } from 'node:os'
+import { isAbsolute } from 'node:path'
 import { spawnPtyBehindGate } from './pty-launch-gate'
 import { registerOwnedProcessGroup } from '../../../kun/src/process/owned-process.js'
 import type { BrowserWindow, IpcMain, WebContents } from 'electron'
@@ -157,14 +158,16 @@ function buildShellEnv(colorMode: TerminalColorMode): NodeJS.ProcessEnv {
 
 /**
  * ADE terminal-agent launch plan (05 §6.1). The command comes from the kun
- * harness row (never from renderer-supplied argv), the execution unit is
- * registered before spawn, and `launch` extras carry managed hook config.
+ * Runtime admission snapshot (never renderer argv or a fresh PATH lookup).
+ * The execution unit is registered before spawn; final validation checks the
+ * exact enabled profile and the command whose readiness proof was captured.
  */
 type AgentLaunchPlan = {
   file: string
   args: string[]
   env: Record<string, string>
   unitId: string
+  admissionId: string
   kunCli: KunCliLaunch | null
 }
 
@@ -192,27 +195,6 @@ async function resolveAgentLaunch(
   runtimeFetch: RuntimeFetch,
   resolveKunCli?: () => Promise<KunCliLaunch | null>
 ): Promise<AgentLaunchPlan | { error: string }> {
-  const listRes = await runtimeFetch('/v1/harnesses').catch(() => null)
-  const rows = listRes?.ok ? ((await readJson(listRes))?.harnesses as unknown[] | undefined) : undefined
-  const row = (rows ?? []).find(
-    (entry): entry is { definition: Record<string, unknown>; status?: Record<string, unknown> } =>
-      Boolean(entry && typeof entry === 'object' &&
-        (entry as { definition?: { id?: unknown } }).definition?.id === agent.harnessId)
-  )
-  const terminal = (row?.definition?.terminal ?? undefined) as
-    | { argv?: unknown; taskFlag?: unknown }
-    | undefined
-  if (!row || !Array.isArray(terminal?.argv)) {
-    return { error: `Harness '${agent.harnessId}' is not available as a terminal agent.` }
-  }
-  const command =
-    typeof row.status?.resolvedCommand === 'string' && row.status.resolvedCommand
-      ? row.status.resolvedCommand
-      : typeof (row.definition.detect as { command?: unknown } | undefined)?.command === 'string'
-        ? (row.definition.detect as { command: string }).command
-        : null
-  if (!command) return { error: `Harness '${agent.harnessId}' has no launch command.` }
-
   const unitRes = await runtimeFetch('/v1/execution-units', {
     method: 'POST',
     body: JSON.stringify({
@@ -224,13 +206,22 @@ async function resolveAgentLaunch(
       ...(agent.parentThreadId ? { parentThreadId: agent.parentThreadId } : {})
     })
   }).catch(() => null)
-  const unit = unitRes?.ok ? await readJson(unitRes) : null
+  const unit = unitRes ? await readJson(unitRes) : null
+  if (!unitRes?.ok) return { error: typeof unit?.message === 'string' ? unit.message.slice(0, 512)
+    : 'Kun could not prepare this terminal Agent. Test and enable its profile in Agent settings.' }
   const unitId = typeof unit?.unitId === 'string' ? unit.unitId : null
   if (!unitId) {
     return { error: 'Failed to register the terminal agent with kun.' }
   }
   const tokens = unit?.tokens as { workerCallback?: unknown; hookIngest?: unknown } | undefined
-  const launch = unit?.launch as { args?: unknown; env?: unknown } | undefined
+  const launch = unit?.launch as { command?: unknown; argv?: unknown; taskFlag?: unknown;
+    args?: unknown; env?: unknown; admissionId?: unknown } | undefined
+  if (typeof launch?.command !== 'string' || !isAbsolute(launch.command) ||
+    !Array.isArray(launch.argv) || !launch.argv.every((arg) => typeof arg === 'string') ||
+    typeof launch.admissionId !== 'string' || !launch.admissionId.trim()) {
+    reportAgentEvent(runtimeFetch, `/v1/execution-units/${encodeURIComponent(unitId)}/exit`, { exitCode: 1, signal: 'invalid-launch' })
+    return { error: 'Kun did not provide a checked terminal Agent command. Test and enable its profile again.' }
+  }
   const endpoint = typeof unit?.endpoint === 'string' ? unit.endpoint : ''
   const env: Record<string, string> = { KUN_UNIT_ID: unitId }
   if (endpoint) env.KUN_WORKER_ENDPOINT = endpoint
@@ -241,7 +232,7 @@ async function resolveAgentLaunch(
       if (typeof value === 'string') env[key] = value
     }
   }
-  const argv = [...(terminal.argv as string[])]
+  const argv = [...launch.argv]
   let task = agent.task?.trim()
   if (task) {
     // `argv` injection is the design-doc default; a harness may also declare
@@ -250,15 +241,25 @@ async function resolveAgentLaunch(
     if (env.KUN_WORKER_ENDPOINT && env.KUN_WORKER_TOKEN) {
       task += TERMINAL_AGENT_CALLBACK_APPENDIX
     }
-    if (typeof terminal.taskFlag === 'string' && terminal.taskFlag) {
-      argv.push(terminal.taskFlag, task)
+    if (typeof launch.taskFlag === 'string' && launch.taskFlag) {
+      argv.push(launch.taskFlag, task)
     } else {
       argv.push(task)
     }
   }
   const extraArgs = Array.isArray(launch?.args) ? launch.args.filter((a): a is string => typeof a === 'string') : []
   const kunCli = (await resolveKunCli?.().catch(() => null)) ?? null
-  return { file: command, args: [...argv, ...extraArgs], env, unitId, kunCli }
+  return { file: launch.command, args: [...argv, ...extraArgs], env, unitId, admissionId: launch.admissionId, kunCli }
+}
+
+async function validateAgentLaunch(plan: AgentLaunchPlan, runtimeFetch: RuntimeFetch): Promise<void> {
+  const response = await runtimeFetch(`/v1/execution-units/${encodeURIComponent(plan.unitId)}/validate-launch`, {
+    method: 'POST', body: JSON.stringify({ admissionId: plan.admissionId })
+  }).catch(() => null)
+  const body = response ? await readJson(response) : null
+  if (!response?.ok) throw new Error(typeof body?.message === 'string' ? body.message.slice(0, 512)
+    : 'Terminal Agent launch is no longer ready. Test and enable its profile in Agent settings.')
+  if (body?.command !== plan.file) throw new Error('Terminal Agent command changed before launch. Test and enable its profile again.')
 }
 
 function reportAgentEvent(
@@ -466,7 +467,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
           env,
           // ConPTY on Windows, ignored elsewhere.
           useConpty: true
-        }, cancelled)
+        }, cancelled, agentPlan ? () => validateAgentLaunch(agentPlan!, options.runtimeFetch!) : undefined)
         pty = launch.pty
         break
       } catch (error) {
@@ -537,6 +538,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         await disposeSession(request.sessionId, true)
         return { ok: false as const, message: 'Terminal service is stopping.' }
       }
+      if (agentPlan) await validateAgentLaunch(agentPlan, options.runtimeFetch!)
       launch?.release()
       session.ready = true
       return { ok: true as const, sessionId: request.sessionId }

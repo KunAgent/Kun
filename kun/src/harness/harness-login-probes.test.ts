@@ -81,3 +81,14 @@ describe('local login evidence', () => {
     expect(spawnCaptured).not.toHaveBeenCalled()
   })
 })
+
+it('does not resurrect host model keys or private Kun tokens during a native account probe', async () => {
+  const spawnCaptured = vi.fn(async () => ({ stdout: '{}', stderr: '', timedOut: false, exitCode: 0 }))
+  await probeHarnessLogin(def('devin'), { ...deps(), spawnCaptured, env: {
+    HOME: '/fixture/home', WINDSURF_API_KEY: 'selected-native', ANTHROPIC_API_KEY: 'host-key',
+    OPENAI_API_KEY: 'unrelated', KUN_RUNTIME_TOKEN: 'private-runtime', KUN_BROWSER_USE_BRIDGE_TOKEN: 'private-bridge'
+  } }, '/fixture/devin')
+  const env = (spawnCaptured.mock.calls[0] as unknown as [string, string[], { env: Record<string, string> }])[2].env
+  expect(env).toMatchObject({ HOME: '/fixture/home', WINDSURF_API_KEY: 'selected-native' })
+  for (const key of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'KUN_RUNTIME_TOKEN', 'KUN_BROWSER_USE_BRIDGE_TOKEN']) expect(env[key]).toBeUndefined()
+})

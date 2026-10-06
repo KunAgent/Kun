@@ -14,13 +14,14 @@ export type AdeHarnessTransport =
   | 'codex-app-server'
   | 'pi-rpc'
   | 'terminal'
+  | 'application'
 
 /**
  * Transports that host delegated turns (P6-07): every transport except the
  * built-in native loop and PTY `terminal`. Renderer wire types and event
  * guards share this union instead of repeating it.
  */
-export type AdeDelegatedTransport = Exclude<AdeHarnessTransport, 'native-loop' | 'terminal'>
+export type AdeDelegatedTransport = Exclude<AdeHarnessTransport, 'native-loop' | 'terminal' | 'application'>
 
 /** Runtime guard set mirroring `AdeDelegatedTransport` for wire validation. */
 export const ADE_DELEGATED_TRANSPORTS: ReadonlySet<string> = new Set<AdeDelegatedTransport>([
@@ -43,6 +44,9 @@ export type AdeHarnessPermissionMode = {
 }
 
 export type AdeHarnessDefinition = {
+  application?: import('../../kun/src/contracts/harness').HarnessApplication
+  configurationLocations?: import('../../kun/src/contracts/harness').HarnessDefinition['configurationLocations']
+  acpPermission?: import('../../kun/src/contracts/harness').HarnessDefinition['acpPermission']
   gateway?: import('../../kun/src/contracts/harness').HarnessGateway
   id: string
   displayName: string
@@ -98,6 +102,8 @@ export type AdeHarnessStatus = {
   ready?: 'yes' | 'no' | 'unknown'
   login: 'signed-in' | 'signed-out' | 'unknown' | 'not-required'
   resolvedCommand?: string
+  applicationPath?: string
+  configurationPaths?: string[]
   /** Connection policy only; proxy addresses and credentials stay in the host. */
   networkSource?: 'environment' | 'system' | 'direct' | 'explicit-required'
   networkFingerprint?: string

@@ -4,6 +4,7 @@ import {
   type NativeAgentNetworkPolicy
 } from '../../../kun/src/contracts/native-agent-network.js'
 import { electronProxyRuleUrl, electronSystemProxyRules } from '../electron-system-proxy'
+import { NATIVE_CLI_DESTINATIONS } from '../../../kun/src/contracts/native-agent-destinations.js'
 
 const destinations = {
   installer: ['https://registry.npmjs.org/', 'https://github.com/', 'https://cli.devin.ai/install.sh',
@@ -19,7 +20,7 @@ export async function resolveNativeAgentNetworkSnapshot(
   resolveRules: (url: string) => Promise<string> = electronSystemProxyRules
 ): Promise<NativeAgentNetworkSnapshot> {
   const result: NativeAgentNetworkSnapshot = {}
-  await Promise.all(Object.entries(destinations).map(async ([id, urls]) => {
+  const policies = await Promise.all(Object.entries({ ...destinations, ...NATIVE_CLI_DESTINATIONS }).map(async ([id, urls]) => {
     let policy: NativeAgentNetworkPolicy
     try {
       const choices = await Promise.all(urls.map(async (url) => {
@@ -37,8 +38,13 @@ export async function resolveNativeAgentNetworkSnapshot(
     } catch {
       policy = { source: 'explicit-required' }
     }
-    result[id as keyof NativeAgentNetworkSnapshot] = policy
+    return { id, policy }
   }))
+  result.harnesses = {}
+  for (const { id, policy } of policies) {
+    if (id in destinations) result[id as keyof typeof destinations] = policy
+    else result.harnesses[id] = policy
+  }
   return result
 }
 
@@ -52,7 +58,7 @@ export async function refreshNativeAgentNetworkBeforeProbe(
   method: string,
   send: (body: string) => Promise<{ ok: boolean; status: number }>
 ): Promise<void> {
-  if (method !== 'POST' || !/^\/v1\/harnesses\/(?:(codex|claude-code|antigravity)\/(probe|test)|[^/]+\/(?:install|updates\/(?:check|start|activate|rollback)))(?:\?|$)/u.test(path)) return
+  if (method !== 'POST' || !/^\/v1\/harnesses\/[^/]+\/(?:probe|test|install|updates\/(?:check|start|activate|rollback))(?:\?|$)/u.test(path)) return
   // Test/old hosts without an Electron session have no desktop policy to refresh.
   const snapshot = await resolveNativeAgentNetworkSnapshot()
   const result = await send(JSON.stringify({ nativeAgentNetwork: snapshot }))

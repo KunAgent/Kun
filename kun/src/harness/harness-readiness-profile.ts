@@ -11,6 +11,7 @@ import { deepSeekHarnessProfileFingerprint, hasDeepSeekHarnessNativeKey } from '
 import { nativeHarnessCredentialEnv } from './harness-secret-env.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
 import { openCode2CredentialEvidence } from './opencode2-credentials.js'
+import { nativeAgentCredentialFiles, nativeAgentCredentialsConfigured } from './native-agent-credentials.js'
 
 export type ReadinessOptions = Partial<Pick<KunServeRuntimeOptions,
   'providers' | 'routePools' | 'harnesses' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId' | 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'>>
@@ -73,7 +74,7 @@ export function nativeCredentialFiles(definition: HarnessDefinition, overrideEnv
       : env.XDG_DATA_HOME || join(home, '.local/share'), 'devin/credentials.toml')]
     case 'pi': return [join(env.PI_CODING_AGENT_DIR || join(home, '.pi/agent'), 'auth.json')]
     case 'antigravity': return [env.GOOGLE_APPLICATION_CREDENTIALS || join(env.CLOUDSDK_CONFIG || join(home, '.config/gcloud'), 'application_default_credentials.json')]
-    default: return []
+    default: return nativeAgentCredentialFiles(definition.id, env)
   }
 }
 function nativeProfileFiles(definition: HarnessDefinition, overrides: Record<string, string>): string[] {
@@ -100,6 +101,9 @@ export function nativeProfileEnv(definition: HarnessDefinition): Record<string, 
   return nativeHarnessCredentialEnv(definition, { ...process.env, ...definition.launch?.env })
 }
 export function nativeHasKey(definition: HarnessDefinition, env: Record<string, string>): boolean {
+  const nativeBase = Object.fromEntries(Object.entries({ ...process.env, ...definition.launch?.env, ...env })
+    .filter(([key]) => !/^(?:KUN_|DS_GUI_|DEEPSEEK_GUI_|ELECTRON_|NODE_)/i.test(key)))
+  if (nativeAgentCredentialsConfigured(definition.id, nativeBase)) return true
   if (definition.id === 'opencode2') return openCode2CredentialEvidence({ ...process.env, ...definition.launch?.env, ...env }).configured
   if (definition.id === 'deepseek-harness') return hasDeepSeekHarnessNativeKey({ ...process.env, ...definition.launch?.env, ...env })
   const keys = NATIVE_KEYS[definition.id] ?? []

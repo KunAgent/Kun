@@ -13,6 +13,7 @@ export const NativeAgentNetworkPolicy = z.discriminatedUnion('source', [
 
 /** Desktop-owned transient network policy; never part of persisted KunConfig. */
 export const NativeAgentNetworkSnapshot = z.object({
+  harnesses: z.record(z.string().regex(/^[a-z][a-z0-9-]{1,47}$/), NativeAgentNetworkPolicy).optional(),
   installer: NativeAgentNetworkPolicy.optional(),
   codex: NativeAgentNetworkPolicy.optional(),
   antigravity: NativeAgentNetworkPolicy.optional(),

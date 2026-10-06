@@ -20,6 +20,7 @@ import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { spawnCaptured } from './harness-detector.js'
 import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
 import { antigravityCredentialEvidence } from './antigravity-credentials.js'
+import { probeFxNativeCredentials } from './fx-native-credential-probe.js'
 
 const PROOF_TTL_MS = 5 * 60_000
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -100,24 +101,35 @@ export class HarnessReadinessService {
       status = await raceProbeAbort(this.deps.detector.status(definition.id, { force: true, signal: bounded }), bounded)
       if (snapshot.identity !== (await raceProbeAbort(this.snapshot(route), bounded)).identity) throw new Error('Configuration or credentials changed during the check; test again')
       snapshot = await raceProbeAbort(this.snapshot(route, status.resolvedCommand), bounded)
-      const installation = status.installed === 'yes' && status.versionSupported !== false
+      const terminalLaunch = definition.transport === 'terminal'
+      const installation = status.installed === 'yes' && status.versionSupported !== false &&
+        (!terminalLaunch || Boolean(status.resolvedCommand?.trim()))
+      if (definition.id === 'fx' && route.credentialMode === 'native-login' && installation &&
+        snapshot.configured && !snapshot.hasKey && input.level !== 'detect') {
+        // Keychain-only native login is configured evidence, never verified
+        // authentication. Status does not start a session or send a prompt.
+        const evidence = await raceProbeAbort(probeFxNativeCredentials(status.resolvedCommand,
+          { env: snapshot.env, signal: bounded }), bounded)
+        snapshot.hasKey = evidence.configured === true
+      }
       checks.push({ id: 'installation', ok: installation, detail: installation ? 'Installed supported runtime' : 'Install a supported runtime and retry' })
       checks.push({ id: 'configuration', ok: snapshot.configured, ...(snapshot.detail ? { detail: snapshot.detail } : {}) })
-      if (installation && snapshot.configured && input.level !== 'detect') {
+      if (!terminalLaunch && installation && snapshot.configured && input.level !== 'detect') {
         const hsStarted = this.now()
         handshake = { ...await raceProbeAbort(this.handshake(snapshot, status, bounded), bounded), durationMs: this.now() - hsStarted }
       }
-      const nativeEvidence = route.credentialMode === 'native-login' && (handshake?.authentication === 'verified' ||
+      const requiresLogin = route.credentialMode === 'native-login' && handshake?.authRequired === true
+      const nativeEvidence = !terminalLaunch && !requiresLogin && route.credentialMode === 'native-login' && (handshake?.authentication === 'verified' ||
         ((!route.providerId || route.providerId === 'default') &&
           !(definition.id === 'claude-code' && snapshot.env.CLAUDE_CODE_OAUTH_TOKEN) && status.login === 'signed-in'))
-      authentication = nativeEvidence ? 'verified' : snapshot.hasKey ? 'unverified' : 'missing'
+      authentication = requiresLogin ? 'missing' : nativeEvidence ? 'verified' : terminalLaunch || snapshot.hasKey ? 'unverified' : 'missing'
       // Initializing ACP or returning model names is never evidence of authentication.
-      const credentials = definition.transport === 'native-loop' || snapshot.hasKey || (route.credentialMode === 'native-login' && nativeEvidence)
-      checks.push({ id: 'credentials', ok: credentials, detail: nativeEvidence ? 'Local account status verified; quota not tested' :
+      const credentials = !requiresLogin && (terminalLaunch || definition.transport === 'native-loop' || snapshot.hasKey || (route.credentialMode === 'native-login' && nativeEvidence))
+      checks.push({ id: 'credentials', ok: credentials, detail: requiresLogin ? 'The Agent requires login. Sign in with its native CLI and retry.' : terminalLaunch ? 'Terminal launch checked; sign-in is handled by the CLI when opened' : nativeEvidence ? 'Local account status verified; quota not tested' :
         snapshot.hasKey ? 'Credential configured; authentication and quota not tested' : 'No verified local account or configured API credential' })
       const localSdk = definition.transport === 'cursor-sdk' && handshake?.protocol === 'cursor-sdk-local-api'
-      const protocol = definition.transport === 'native-loop' || (handshake?.ok === true && (handshake.supported || localSdk) && (route.credentialMode !== 'native-login' || handshake.authRequired !== true))
-      const modelMatches = route.credentialMode !== 'native-login' || (handshake?.models === undefined
+      const protocol = terminalLaunch || definition.transport === 'native-loop' || (handshake?.ok === true && (handshake.supported || localSdk) && (route.credentialMode !== 'native-login' || handshake.authRequired !== true))
+      const modelMatches = terminalLaunch || route.credentialMode !== 'native-login' || (handshake?.models === undefined
         ? route.model === 'default'
         : handshake.models.length > 0 && (route.model === 'default' || handshake.models.includes(route.model)))
       checks.push({ id: 'protocol', ok: protocol && modelMatches, ...(handshake?.detail ? { detail: handshake.detail } : {}) })
@@ -306,8 +318,11 @@ export class HarnessReadinessService {
     }
     let configured = definition.availability !== 'retired' && definition.credentialModes.includes(route.credentialMode)
     let detail: string | undefined
-    let hasKey = nativeEvidence?.configured || nativeHasKey(definition, env) || (!definition.builtin && Object.entries(secretEnv).some(([key, value]) =>
-      /^(?:OPENAI|ANTHROPIC|DEEPSEEK|GEMINI|GOOGLE|WINDSURF|MISTRAL|GROQ|OPENROUTER|XAI)_API_KEY$/.test(key) && Boolean(value.trim())))
+    // Custom secrets are explicit user bindings. Their names are agent-owned,
+    // so a vendor-name allowlist would reject valid tokens such as KIMI_API_KEY.
+    // Presence is configuration evidence only, never verified authentication.
+    let hasKey = nativeEvidence?.configured || nativeHasKey(definition, env) || (!definition.builtin &&
+      (definition.launch?.secretEnv ?? []).some((entry) => Boolean(secretEnv[entry.name]?.trim())))
     if (route.gatewayBinding) {
       try {
         if (route.credentialMode !== 'kun-gateway' || !definition.gateway || !this.deps.resolveGatewayAliases) throw new Error('Agent alias routing is unavailable')

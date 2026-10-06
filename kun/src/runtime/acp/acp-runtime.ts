@@ -169,8 +169,12 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       redactedRequestValues
     } = resolved.ctx
     const command = this.deps.readiness?.commandForTurn(threadId, turnId) ?? this.deps.binaryPath?.(definition.id) ?? definition.launch?.command
-    const poolKey = `${basePoolKey}:executable:${harnessExecutableIdentity(command)}`
-    await this.pool.retireIdlePrefix?.(`${basePoolKey}:executable:`, poolKey)
+    // Single-session ACP servers can continue one thread, but must never host
+    // another thread's active session on the same connection.
+    const scopedPoolKey = definition.poolScope === 'thread'
+      ? `${basePoolKey}:thread:${JSON.stringify([threadId, workspace])}` : basePoolKey
+    const poolKey = `${scopedPoolKey}:executable:${harnessExecutableIdentity(command)}`
+    await this.pool.retireIdlePrefix?.(`${scopedPoolKey}:executable:`, poolKey)
     let items = resolved.ctx.items
 
     const lease = await acquireAcpConnection(this.deps, this.pool, this.host, this.sessions, {
@@ -261,6 +265,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           harnessId: definition.id,
           model,
           permissionModeId,
+          acpPermission: definition.acpPermission,
           reasoningEffort: turn.reasoningEffort,
           sessionMcpServers,
           items,

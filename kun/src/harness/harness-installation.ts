@@ -20,8 +20,8 @@ export async function describeHarnessInstallation(id: string, status: HarnessSta
   const target = await realpath(path).catch(() => path)
   const canonicalHome = await realpath(home).catch(() => resolve(home))
   const normalized = target.replace(/\\/g, '/')
-  if (/\.app\/Contents\//.test(normalized)) {
-    return { ...base, source: 'application', owner: normalized.match(/([^/]+)\.app\/Contents\//)?.[1] }
+  if (/\.app(?:\/Contents\/|$)/.test(normalized)) {
+    return { ...base, source: 'application', owner: normalized.match(/([^/]+)\.app(?:\/Contents\/|$)/)?.[1] }
   }
   if (normalized.includes('/node_modules/@anthropic-ai/claude-agent-sdk') || normalized.includes('/agent-sdk/')) {
     return { ...base, source: 'kun-bundled', owner: 'Kun' }

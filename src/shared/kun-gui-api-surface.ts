@@ -26,6 +26,7 @@ import type {
   WorkflowRuntimeStatus
 } from './app-settings'
 import type { GoogleWorkspaceSurface } from './google-workspace'
+import type { HarnessIntegrationOpenRequest, HarnessIntegrationOpenResult } from '../../kun/src/contracts/harness-integration'
 import type { DesktopTitleBarMode } from './desktop-title-bar'
 import type {
   BuiltinGitHubMcpAuthorizationConfirmation,
@@ -625,6 +626,7 @@ export type KunGuiApi = GoogleWorkspaceSurface & ExtensionIpcApi & RemoteSshApi 
   getWindowMiniMode: () => Promise<boolean>
   onWindowMiniMode: (handler: (mini: boolean) => void) => () => void
   openExternal: (url: string) => Promise<void>
+  openAgentIntegration: (input: HarnessIntegrationOpenRequest) => Promise<HarnessIntegrationOpenResult>
   getComputerUsePermissions: () => Promise<ComputerUsePermissions>
   requestComputerUsePermission: (
     kind: ComputerUsePermissionKind

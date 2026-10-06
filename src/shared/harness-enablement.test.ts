@@ -21,9 +21,9 @@ describe('explicit exact agent profile enablement', () => {
     expect(harnessProfileKey({ ...native, providerId: 'account-a' })).not.toBe(harnessProfileKey({ ...native, providerId: 'account-b' }))
     expect(normalizeEnabledProfiles([{ ...native, providerId: 'account-a' }])).toEqual([{ ...native, providerId: 'account-a' }])
   })
-  it('ignores malformed profiles and retired Gemini without changing histories or saved defaults', () => {
+  it('keeps explicit Gemini profiles while ignoring malformed profiles and preserving saved defaults', () => {
     expect(normalizeEnabledProfiles([{ ...native, harnessId: 'gemini-cli' }, { ...native, harnessId: 'kun' },
-      { ...native, credentialMode: 'unknown' }, native, native])).toEqual([native])
+      { ...native, credentialMode: 'unknown' }, native, native])).toEqual([{ ...native, harnessId: 'gemini-cli' }, native])
     const settings = normalizeKunHarnessSettings({ defaults: { 'gemini-cli': { model: 'old' } }, enabledProfiles: [{ ...native, harnessId: 'gemini-cli' }] })
     expect(settings.defaults['gemini-cli']?.model).toBe('old')
   })
@@ -53,4 +53,16 @@ describe('explicit exact agent profile enablement', () => {
     expect(readyHarnessProfiles({ ...current, readyProfiles: [] })).toEqual([])
     expect(readyHarnessProfiles(current, Date.now() + 120_000)).toEqual([])
   })
+})
+
+it('keeps terminal readiness separate from the chat picker and rejects application proofs', async () => {
+  const { terminalHarnessProfileReady } = await import('./harness-enablement')
+  const current = row(); current.definition.transport = 'terminal'
+  expect(readyHarnessProfiles(current)).toEqual([])
+  expect(terminalHarnessProfileReady(current, native)).toBe(true)
+  expect(terminalHarnessProfileReady(current, { ...native, providerId: 'other' })).toBe(false)
+  expect(terminalHarnessProfileReady(current, native, Date.now() + 120_000)).toBe(false)
+  current.definition.transport = 'application'
+  expect(readyHarnessProfiles(current)).toEqual([])
+  expect(terminalHarnessProfileReady(current, native)).toBe(false)
 })

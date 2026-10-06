@@ -104,3 +104,14 @@ describe('runtime-only native Agent network selection', () => {
     expect(query).toHaveBeenCalledTimes(2)
   })
 })
+
+it('binds explicit native CLI policy by identity while keeping application entries and addresses out of public rows', () => {
+  const catalog = new HarnessCatalog({ custom: () => [], nativeAgentNetwork: () => ({ harnesses: {
+    kimi: { source: 'system', proxyUrl: 'http://native-proxy.invalid:8080/' },
+    vscode: { source: 'system', proxyUrl: 'http://native-proxy.invalid:8080/' }
+  } }) })
+  const kimi = catalog.get('kimi')!
+  expect(nativeAgentNetworkEnv(kimi, {}).HTTPS_PROXY).toBe('http://native-proxy.invalid:8080/')
+  expect(JSON.stringify(kimi)).not.toContain('native-proxy.invalid')
+  expect(nativeAgentNetworkEnv(catalog.get('vscode'), {})).toEqual({})
+})

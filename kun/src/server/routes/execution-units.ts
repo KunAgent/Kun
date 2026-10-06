@@ -5,6 +5,7 @@ import { HarnessIdSchema } from '../../contracts/harness.js'
 import type { TerminalAgentRegistry } from '../../services/terminal-agent-registry.js'
 import type { HarnessTokenService } from '../../harness/harness-token-service.js'
 import type { HarnessCatalog } from '../../harness/harness-catalog.js'
+import { prepareTerminalLaunch, rememberTerminalLaunch, releaseTerminalLaunch, validateTerminalLaunch } from './terminal-launch-admission.js'
 
 /**
  * Execution-unit lifecycle surface for host-launched tier-0 units
@@ -66,8 +67,12 @@ export async function executionUnitCreateResponse(
   }
   const route = { harnessId: body.harnessId, credentialMode: 'native-login' as const, model: 'default' }
   if (!deps.catalog.isProfileEnabled(route) || !deps.readiness) return jsonResponse({ code: 'harness_unavailable', message: 'Test and enable this Agent profile before launching it' }, 409)
+  const signature = deps.readiness.configurationSignature(route)
   try { await deps.readiness.assertReady(route, request.signal) }
   catch { return jsonResponse({ code: 'harness_not_ready', message: 'Agent profile is not ready; test it in settings' }, 409) }
+  const admission = await prepareTerminalLaunch(deps.readiness, route, request.signal, signature).catch(() => undefined)
+  if (!admission) return jsonResponse({ code: 'harness_not_ready', message: 'Agent launch proof changed; check it in settings' }, 409)
+  try {
   const record = await deps.registry.register({
     harnessId: body.harnessId,
     title: body.title,
@@ -86,6 +91,7 @@ export async function executionUnitCreateResponse(
   const launch = hooks?.events.length && deps.hookWriter
     ? await deps.hookWriter(record.unitId, hooks).catch(() => null)
     : null
+  rememberTerminalLaunch(deps.registry, record.unitId, admission)
   return jsonResponse({
     unitId: record.unitId,
     tokens: {
@@ -97,8 +103,21 @@ export async function executionUnitCreateResponse(
      * Launch additions managed hooks inject (05 §6.2): extra argv flags or
      * env (config dirs) the PTY spawn merges verbatim.
      */
-    launch: { args: launch?.args ?? [], env: launch?.env ?? {} }
+    launch: { command: admission.command, argv: [...definition.terminal.argv], taskFlag: definition.terminal.taskFlag,
+      admissionId: admission.id, args: launch?.args ?? [], env: launch?.env ?? {} }
   })
+  } catch (error) {
+    deps.readiness.releaseTurn(admission.key, admission.id)
+    throw error
+  }
+}
+
+export async function executionUnitValidateLaunchResponse(deps: Pick<ExecutionUnitRouteDeps, 'registry'>,
+  request: Request, unitId: string): Promise<JsonResponse> {
+  const parsed = z.object({ admissionId: z.string().uuid() }).strict().safeParse(await request.json().catch(() => undefined))
+  if (!parsed.success) return jsonResponse({ code: 'validation_error', message: 'Invalid terminal launch admission' }, 400)
+  try { return jsonResponse({ command: await validateTerminalLaunch(deps.registry, unitId, parsed.data.admissionId, request.signal) }) }
+  catch (error) { return jsonResponse({ code: 'harness_not_ready', message: error instanceof Error ? error.message : 'Terminal launch is unavailable' }, 409) }
 }
 
 export async function executionUnitExitResponse(
@@ -113,6 +132,7 @@ export async function executionUnitExitResponse(
     return jsonResponse({ code: 'validation_error', message: 'invalid exit body' }, 400)
   }
   const record = await deps.registry.reportExit(unitId, parsed.data)
+  releaseTerminalLaunch(deps.registry, unitId)
   if (!record) return jsonResponse({ code: 'not_found', message: 'unknown execution unit' }, 404)
   return jsonResponse({ unitId, closed: true })
 }

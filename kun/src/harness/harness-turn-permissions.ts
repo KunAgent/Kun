@@ -17,6 +17,9 @@ export function harnessTurnPermissionMode(definition: HarnessDefinition, input: 
   const allowed = definition.permissionModes.filter((mode) => KUN_TOOL_PERMISSION_MODES.indexOf(mode.kunPermissionMode) <= ceiling)
   if (!allowed.length) throw new HarnessTransportError('policy_denied',
     `${definition.displayName} has no permission mode within the current task's allowed scope`)
+  // Equal Kun upper bounds do not make native modes equally strict: plan may
+  // forbid writes while default still allows them after an external approval.
+  if (readOnly) return allowed[0]!.id
   const requested = input.requested?.trim()
   // Older Devin ACP versions call their approval-gated mode normal/auto.
   // Negotiate that mode only when the host allows writes with approval; newer

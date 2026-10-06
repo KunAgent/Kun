@@ -309,7 +309,7 @@ export function receiveHarnessSessionState(state: AdeHarnessSessionState): void 
  * so every turn picker (composer, one-on-one, subagent profile) hides them.
  */
 export function harnessRowRunsTurns(row: AdeHarnessRow): boolean {
-  return row.definition.transport !== 'terminal'
+  return row.definition.transport !== 'terminal' && row.definition.transport !== 'application'
 }
 
 /** Harness availability for pickers: installed + handshake-ready + signed in. */
@@ -329,7 +329,7 @@ export function harnessRowUnavailableCode(row: AdeHarnessRow): string | null {
   if (harnessRowAvailable(row)) return null
   if (row.status.detecting === true) return 'detecting'
   const status = row.status
-  if (row.definition.id === 'gemini-cli' || row.definition.availability === 'retired') return 'disabled'
+  if (row.definition.availability === 'retired') return 'disabled'
   if (status.reasonCode && status.reasonCode !== 'disabled') return status.reasonCode
   if (row.enabled !== true) return 'disabled'
   if (status.installed === 'no') return 'not_installed'

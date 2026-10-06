@@ -6,6 +6,7 @@ import {
   consumePendingTerminalRequest,
   hasPendingTerminalRequest,
   openTerminalAt,
+  openTerminal,
   openTerminalWithSetup,
   TERMINAL_OPEN_AT_EVENT,
   useTerminalOpenAt
@@ -93,6 +94,26 @@ describe('terminal-open request channel', () => {
     act(() => openTerminalAt('/repo'))
     expect(state.tabs).toHaveLength(1)
     expect(state.activeTabId).toBe('main')
+    act(() => renderer.unmount())
+  })
+
+  it('opens a typed agent target without reusing a local shell or prefilling a command', () => {
+    const { state, renderer } = mountHarness([
+      { id: 'main', index: 1, target: { kind: 'local', cwd: '/repo' } }
+    ])
+    act(() => openTerminal({ cwd: '/repo', agent: { harnessId: 'aider', title: 'Aider' }, title: 'Aider' }))
+    expect(state.tabs).toHaveLength(2)
+    expect(state.tabs[1].target).toEqual({ kind: 'agent', cwd: '/repo', harnessId: 'aider', title: 'Aider' })
+    expect(state.tabs[1].prefill).toBeUndefined()
+    expect(state.activeTabId).toBe(state.tabs[1].id)
+    act(() => renderer.unmount())
+  })
+
+  it('keeps an agent request made in settings until the workbench mounts', () => {
+    openTerminal({ cwd: '/repo', agent: { harnessId: 'aider', title: 'Aider' } })
+    const { state, renderer } = mountHarness()
+    expect(state.tabs[0].target).toEqual({ kind: 'agent', cwd: '/repo', harnessId: 'aider', title: 'Aider' })
+    expect(hasPendingTerminalRequest()).toBe(false)
     act(() => renderer.unmount())
   })
 

@@ -4,6 +4,7 @@ import { authorize } from './route-auth.js'
 import { ERRORS } from './runtime-error.js'
 import {
   executionUnitCreateResponse,
+  executionUnitValidateLaunchResponse,
   executionUnitExitResponse,
   executionUnitInterruptHintResponse
 } from './execution-units.js'
@@ -33,6 +34,11 @@ export function registerExecutionUnitRoutes(router: Router, runtime: ServerRunti
     const resolved = deps()
     if (!resolved) return ERRORS.unavailable('execution units are unavailable')
     return executionUnitCreateResponse(resolved, request)
+  })
+  router.add('POST', '/v1/execution-units/:unitId/validate-launch', async (request, context) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if (!runtime.ade?.terminalAgents) return ERRORS.unavailable('execution units are unavailable')
+    return executionUnitValidateLaunchResponse({ registry: runtime.ade.terminalAgents }, request, context.params.unitId!)
   })
   router.add('POST', '/v1/execution-units/:unitId/exit', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

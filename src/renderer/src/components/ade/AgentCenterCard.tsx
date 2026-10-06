@@ -11,10 +11,12 @@ import { AgentIcon } from '../agent-icon'
 import { useChatStore } from '../../store/chat-store'
 import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { SettingRow } from '../settings-controls'
-import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-enablement'
+import { harnessProfileEnabled, selectedHarnessProfile, terminalHarnessProfileReady } from '@shared/harness-enablement'
 import { AgentEnablementPanel } from './AgentEnablementPanel'
 import { AgentSettingsSelect } from './AgentSettingsSelect'
 import { AgentInstallControl } from './AgentInstallControl'
+import { AgentCenterApplicationCard } from './AgentCenterApplicationCard'
+import { AgentCenterTerminalControl } from './AgentCenterTerminalControl'
 import {
   agentCardModel,
   type AgentCardAction,
@@ -118,10 +120,14 @@ export function AgentCenterCard({
   const [testing, setTesting] = useState<false | 'handshake' | 'trial'>(false)
   const [testResult, setTestResult] = useState<AdeHarnessTestResult | null>(null)
 
+  if (definition.transport === 'application') return <AgentCenterApplicationCard row={row} settings={settings} probing={probing}
+    onProbe={onProbe} onSetBinaryPath={onSetBinaryPath} beforeSave={beforeEnableCheck} t={t} />
+
   const model = agentCardModel(row, {
     enabled,
     platform,
-    isDefault: settings.defaultHarnessId === definition.id
+    isDefault: settings.defaultHarnessId === definition.id,
+    ...(definition.transport === 'terminal' ? { ready: terminalHarnessProfileReady(row, selectedHarnessProfile(row, settings)) } : {})
   })
   const busy = probing || testing !== false || model.state === 'detecting'
 
@@ -185,7 +191,7 @@ export function AgentCenterCard({
         setReasonOpen((open) => !open)
         break
       case 'docs':
-        window.open(action.url, '_blank', 'noopener,noreferrer')
+        void window.kunGui.openExternal(action.url).catch(() => undefined)
         break
       default:
         break
@@ -281,8 +287,9 @@ export function AgentCenterCard({
         </div>
       </div>
 
-      {!isKun ? <AgentUpdateControl row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} t={t} /> : null}
-      {!isKun && definition.transport !== 'terminal' ? <AgentEnablementPanel row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} /> : null}
+      {!isKun && definition.transport !== 'terminal' ? <AgentUpdateControl row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} t={t} /> : null}
+      {!isKun ? <AgentEnablementPanel row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} /> : null}
+      {definition.transport === 'terminal' ? <AgentCenterTerminalControl row={row} settings={settings} t={t} /> : null}
       {definition.builtin && (definition.setup?.install?.length || definition.setup?.adapter) ? (
         <AgentInstallControl harnessId={definition.id} action={model.reasonCode === 'adapter_missing' ? 'adapter' : 'install'}
           needed={status.installed !== 'yes' || status.versionSupported === false} t={t} />

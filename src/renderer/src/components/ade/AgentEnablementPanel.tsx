@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { KeyRound, Network, UserRound } from 'lucide-react'
 import type { AdeHarnessCredentialMode, AdeHarnessRow } from '@shared/ade-harnesses'
 import type { KunHarnessDefaultsEntryV1, KunHarnessSettingsV1 } from '@shared/app-settings'
-import { harnessProfileReady } from '@shared/harness-enablement'
+import { harnessProfileReady, terminalHarnessProfileReady } from '@shared/harness-enablement'
 import { loadHarnessModels, loadHarnessProviderGroups, useHarnessStore } from '../../store/harness-store'
 import { useChatStore } from '../../store/chat-store'
 import { SettingRow } from '../settings-controls'
@@ -28,7 +28,9 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
   const providerAccounts = useChatStore((state) => state.composerModelGroups)
   const nativeAccounts = providerAccounts.filter((group) => row.definition.transport === 'agent-sdk' && group.kind === 'agent-sdk')
   const native = gate.profile.credentialMode === 'native-login'
-  const ready = gate.enabled && !gate.error && !gate.checking && harnessProfileReady(row, gate.profile)
+  const terminal = row.definition.transport === 'terminal'
+  const ready = gate.enabled && !gate.error && !gate.checking && (terminal
+    ? terminalHarnessProfileReady(row, gate.profile) : harnessProfileReady(row, gate.profile))
   useEffect(() => {
     if (!native) void loadHarnessProviderGroups(id)
     // Opening the model picker is the explicit native catalog lookup.
@@ -42,7 +44,7 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
   const modelOptions = native ? models?.models ?? row.definition.staticModels : selectedAlias ? [selectedAlias.modelId] : selectedGroup?.models ?? []
   return <section className="mt-3 space-y-3 rounded-xl border border-ds-border-muted p-3"
     data-agent-enablement={id} data-agent-enablement-state={gate.checking ? 'checking' : gate.error ? 'failed' : ready ? 'ready' : gate.enabled ? 'needs-check' : 'disabled'}>
-    <p className="text-[12px] text-ds-muted">{t('agentEnablement.explanation')}</p>
+    <p className="text-[12px] text-ds-muted">{t(terminal ? 'agentIntegrations.terminalExplanation' : 'agentEnablement.explanation')}</p>
     <SettingRow title={t('agentEnablement.profile')} control={<AgentSettingsSelect
       marker="data-agent-profile-mode" label={t('agentEnablement.profile')} value={gate.profile.credentialMode}
       onChange={(value) => change({ credentialMode: value as AdeHarnessCredentialMode, providerId: undefined, gatewayBinding: undefined, model: undefined })}
@@ -66,21 +68,22 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
         ...(groups?.groups ?? []).map((group) => ({ value: group.providerId, label: group.label, icon: <KeyRound size={15} /> }))]} />} /> : null}
     {gate.profile.gatewayBinding ? <AgentAliasSettings binding={gate.profile.gatewayBinding} aliases={groups?.aliasGroups ?? []}
       supportsSmall={Boolean(row.definition.gateway?.env.smallModel)} change={(gatewayBinding) => change({ gatewayBinding })} /> : null}
-    <SettingRow title={t('agentEnablement.model')} description={t('agentEnablement.modelHint')}
+    {terminal && native ? <p className="text-[12px] text-ds-muted" data-agent-terminal-model-hint>{t('agentIntegrations.terminalModelManaged')}</p>
+      : <SettingRow title={t('agentEnablement.model')} description={t('agentEnablement.modelHint')}
       control={<AgentSettingsModelPicker key={`${id}:${gate.profile.credentialMode}:${gate.profile.providerId ?? ''}`}
         harnessId={id} native={native} value={defaults.model ?? ''} modelIds={modelOptions}
         modelInfo={native ? models?.modelInfo : selectedGroup?.modelInfo}
         loading={native ? models?.loading : groups?.loading} error={native ? models?.error : groups?.error}
         onChange={(value) => change({ model: value || undefined })}
         onLoad={native ? gate.enabled ? (force) => { void loadHarnessModels(id, force) } : undefined
-          : (force) => { void loadHarnessProviderGroups(id, force) }} />} />
+          : (force) => { void loadHarnessProviderGroups(id, force) }} />} />}
     <div className="flex flex-wrap items-center gap-2">
       {gate.checking ? <button type="button" onClick={gate.cancel} data-agent-enable-cancel
         data-settings-action="secondary" data-settings-size="default" className="rounded-lg border border-ds-border px-3 py-1.5 text-[12px] text-ds-ink">{t('agentEnablement.cancel')}</button>
         : <button type="button" data-agent-enable onClick={() => gate.enabled ? gate.disable() : void gate.enable()}
           data-settings-action={gate.enabled ? 'secondary' : 'primary'} data-settings-size="default"
           className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-medium text-white">{t(gate.enabled ? 'agentEnablement.disable' : 'agentEnablement.enable')}</button>}
-      <span role="status" aria-live="polite" className="text-[12px] text-ds-muted">{t(gate.checking ? `agentEnablement.phases.${gate.phase}` : ready ? 'agentEnablement.ready' : gate.enabled ? 'agentEnablement.needsCheck' : 'agentEnablement.disabled')}</span>
+      <span role="status" aria-live="polite" className="text-[12px] text-ds-muted">{t(gate.checking ? `agentEnablement.phases.${gate.phase}` : ready ? terminal ? 'agentIntegrations.terminalReady' : 'agentEnablement.ready' : gate.enabled ? 'agentEnablement.needsCheck' : 'agentEnablement.disabled')}</span>
     </div>
     {gate.enabled && !gate.checking ? <button type="button" data-agent-recheck onClick={() => { gate.disable(); void gate.enable() }}
       className="min-h-6 text-[12px] text-ds-muted underline">{t('agentEnablement.recheck')}</button> : null}

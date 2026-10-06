@@ -12,6 +12,12 @@ import { checkHarnessAdmission } from '../../harness/harness-admission.js'
 import { makeHarness, tempDirs, type Harness } from '../../../tests/helpers/acp-runtime-test-support.js'
 
 describe('AcpRuntime.runTurn', () => {
+  test('does not prompt an unknown Agent when its permission mode cannot be established', async () => {
+    const h = await makeHarness('permission.json', { definition: { acpPermission: undefined } })
+    expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('failed')
+    expect(h.finished[0]).toMatchObject({ code: 'policy_denied', error: expect.stringContaining('permission mode') })
+    expect(h.requests('session/prompt')).toHaveLength(0)
+  })
   test('runs a full turn: prompt, streamed text, completion, committed binding', async () => {
     const h = await makeHarness('basic-chat.json')
     const outcome = await h.runtime.runTurn(

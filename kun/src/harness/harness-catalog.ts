@@ -144,7 +144,7 @@ export class HarnessCatalog {
   isDisabled(id: HarnessId): boolean {
     if (id === 'kun') return false
     const definition = this.get(id)
-    return !definition || definition.availability === 'retired' ||
+    return !definition || definition.transport === 'application' || definition.availability === 'retired' ||
       (this.deps.disabled?.() ?? []).includes(id) ||
       !(this.deps.enabledProfiles?.() ?? []).some((profile) =>
         profile.harnessId === id && definition.credentialModes.includes(profile.credentialMode) &&
@@ -170,6 +170,7 @@ export class HarnessCatalog {
     providerId?: string
     gatewayBinding?: HarnessGatewayBinding
   }): boolean {
+    if (this.get(route.harnessId)?.transport === 'application') return false
     if (route.harnessId === 'kun') return route.credentialMode === 'provider'
     if (this.isDisabled(route.harnessId)) return false
     if (!this.get(route.harnessId)?.credentialModes.includes(route.credentialMode)) return false

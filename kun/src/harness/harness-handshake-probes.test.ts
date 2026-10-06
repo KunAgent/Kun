@@ -18,7 +18,15 @@ const probes = [
 ]
 const spawn = vi.mocked(startHarnessProcess)
 beforeEach(() => { spawn.mockReset() })
-function fixture(options: { silent?: boolean; account?: unknown; accountError?: boolean; models?: unknown[]; modelError?: boolean; modelHang?: boolean; session?: unknown; sessionError?: boolean; sessionHang?: boolean } = {}) {
+it('classifies an actual ACP auth_required response as login required without authenticating or prompting', async () => {
+  const child = fixture({ authRequired: true })
+  spawn.mockResolvedValue(child.process)
+  const result = await probeAcpHandshake(catalog.get('droid')!, 'fixture', { session: {} })
+  expect(result).toMatchObject({ ok: false, authRequired: true, authentication: 'missing', detail: expect.stringContaining('requires login') })
+  expect(child.requests.map((request) => request.method)).toEqual(['initialize', 'session/new'])
+  expect(child.stop).toHaveBeenCalledOnce()
+})
+function fixture(options: { silent?: boolean; account?: unknown; accountError?: boolean; models?: unknown[]; modelError?: boolean; modelHang?: boolean; session?: unknown; sessionError?: boolean; authRequired?: boolean; sessionHang?: boolean } = {}) {
   const stdin = new PassThrough(), stdout = new PassThrough()
   let exited!: () => void
   const exit = new Promise<{ code: number; signal: null }>((resolve) => {
@@ -38,8 +46,9 @@ function fixture(options: { silent?: boolean; account?: unknown; accountError?: 
         ? { id: request.id, error: { code: -32000, message: 'model catalog unavailable' } }
         : { id: request.id, result: { data: options.models ?? [], nextCursor: null } }
       : request.method === 'session/new'
-      ? options.sessionError
-        ? { id: request.id, error: { code: -32000, message: 'metadata unavailable' } }
+      ? options.sessionError || options.authRequired
+        ? { id: request.id, error: { code: options.authRequired ? -32000 : -32603,
+            message: options.authRequired ? 'Authentication required' : 'metadata unavailable' } }
         : { id: request.id, result: options.session ?? { sessionId: 'fixture' } }
       : request.type === 'get_available_models'
       ? { id: request.id, type: 'response', command: request.type, success: !options.modelError,

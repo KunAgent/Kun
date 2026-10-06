@@ -79,6 +79,9 @@ export async function makeHarness(scenarioFile: string, input: {
     id: 'fake-acp',
     displayName: 'Fake ACP',
     transport: 'acp',
+    // The fixture delegates tool approvals to the client; some scenarios
+    // additionally expose an Ask mode under the native id `ask`.
+    acpPermission: { requireMode: false, modeAliases: { default: ['ask'] } },
     launch: {
       command: process.execPath,
       args: [FIXTURE_AGENT],

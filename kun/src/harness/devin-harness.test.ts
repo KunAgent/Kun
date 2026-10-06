@@ -141,7 +141,7 @@ describe('Devin ACP integration', () => {
       .toEqual(['shared', 'config-model'])
   })
 
-  it('reapplies the safe mode when resuming the same native session', async () => {
+  it('reuses a live native session and reapplies its safe mode after reconnecting', async () => {
     const f = await fixtureDefinition()
     const proc = await startAcpProcess({ command: 'devin', args: ['acp'], env: f.definition.launch.env, spawn: spawnFixture })
     const conn = AcpConnection.start({ process: proc, identity: 'local-login' })
@@ -153,7 +153,18 @@ describe('Devin ACP integration', () => {
     const item = { id: 'user', role: 'user', kind: 'user_message', status: 'completed', threadId: 'thread', turnId: 'first', text: 'hello', createdAt: new Date().toISOString() } as TurnItem
     await manager.commit(first, { committedItems: [item], lastCommittedTurnId: 'first' })
     first.detach()
-    const resumed = await manager.ensureSession({ ...ctx, turnId: 'second', items: [item] }, conn)
+    const live = await manager.ensureSession({ ...ctx, turnId: 'second', items: [item] }, conn)
+    expect(live.sessionId).toBe(first.sessionId)
+    expect(live.replayedHistory).toBe(false)
+    live.detach()
+    const liveFrames = (await f.journal()).filter((entry) => entry.dir === 'in').map((entry) => entry.frame)
+    expect(liveFrames.filter((frame) => frame.method === 'session/load')).toHaveLength(0)
+    expect(liveFrames.filter((frame) => frame.method === 'session/new')).toHaveLength(1)
+    const restoredProcess = await startAcpProcess({ command: 'devin', args: ['acp'], env: f.definition.launch.env, spawn: spawnFixture })
+    const restoredConnection = AcpConnection.start({ process: restoredProcess, identity: 'local-login' })
+    connections.push(restoredConnection)
+    await restoredConnection.initialize()
+    const resumed = await manager.ensureSession({ ...ctx, turnId: 'second', items: [item] }, restoredConnection)
     expect(resumed.sessionId).toBe(first.sessionId)
     expect(resumed.replayedHistory).toBe(false)
     resumed.detach()

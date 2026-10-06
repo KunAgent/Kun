@@ -30,7 +30,12 @@ async function harness(enabled = true) {
   const tokens = new HarnessTokenService()
   const catalog = new HarnessCatalog({ custom: () => [], enabledProfiles: () => enabled
     ? [{ harnessId: 'claude-code', credentialMode: 'native-login' }] : [] })
-  const readiness = { assertReady: vi.fn(async () => 'offline-fixture') }
+  const readiness = { assertReady: vi.fn(async () => 'offline-fixture'),
+    configurationSignature: vi.fn(() => 'fixture-signature'),
+    readyProfiles: vi.fn(async () => [{ harnessId: 'claude-code', credentialMode: 'native-login', expiresAt: new Date(Date.now() + 60000).toISOString() }]),
+    prepareTurn: vi.fn(async () => undefined), validateTurn: vi.fn(async () => 'offline-fixture'),
+    commandForTurn: vi.fn(() => '/fixture/claude'), releaseTurn: vi.fn()
+  }
   const registry = new TerminalAgentRegistry({
     dataDir,
     activity: store,
@@ -164,4 +169,20 @@ describe('execution-unit routes', () => {
     expect(await registry.consumeInterruptHint('tu_1')).toBe(true)
     expect((await request('POST', '/v1/execution-units/nope/interrupt-hint')).status).toBe(404)
   })
+})
+
+it('pins the terminal executable and fences disable/expiry/exit before native execution', async () => {
+  const { request, readiness } = await harness()
+  const created = await request('POST', '/v1/execution-units', CREATE_BODY)
+  expect(created.status).toBe(200)
+  const launch = created.body.launch as { command: string; argv: string[]; admissionId: string }
+  expect(launch).toMatchObject({ command: '/fixture/claude', argv: [], admissionId: expect.any(String) })
+  const path = `/v1/execution-units/${created.body.unitId}/validate-launch`
+  expect((await request('POST', path, { admissionId: launch.admissionId })).body.command).toBe('/fixture/claude')
+  expect((await request('POST', path, { admissionId: launch.admissionId, command: '/injected' })).status).toBe(400)
+  readiness.validateTurn.mockRejectedValueOnce(new Error('Agent profile is disabled'))
+  expect((await request('POST', path, { admissionId: launch.admissionId })).status).toBe(409)
+  await request('POST', `/v1/execution-units/${created.body.unitId}/exit`, { exitCode: 0 })
+  expect(readiness.releaseTurn).toHaveBeenCalled()
+  expect((await request('POST', path, { admissionId: launch.admissionId })).status).toBe(409)
 })

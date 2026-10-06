@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import { MAX_RENDERER_TABS, type TerminalTab } from './terminal-panel-support'
+import type { TerminalAgentCreate } from '@shared/terminal'
 
 /**
  * Cross-surface "open a terminal" request (docs/ade/11 §7.1 recovery
@@ -11,6 +12,8 @@ import { MAX_RENDERER_TABS, type TerminalTab } from './terminal-panel-support'
 export const TERMINAL_OPEN_AT_EVENT = 'kun:terminal-open-at'
 
 export type TerminalOpenRequest = {
+  /** The host resolves this registered integration into an owned PTY launch. */
+  agent?: TerminalAgentCreate
   /** Open the local shell at this directory. */
   cwd?: string
   /**
@@ -65,7 +68,9 @@ function requestTab(request: TerminalOpenRequest, index: number): TerminalTab {
     id: `tab-${Date.now().toString(36)}-${index}`,
     index,
     title: request.title ?? (cwd ? (cwd.split('/').filter(Boolean).pop() ?? cwd) : undefined),
-    target: { kind: 'local', ...(cwd ? { cwd } : {}) },
+    target: request.agent
+      ? { kind: 'agent', ...request.agent, ...(cwd ? { cwd } : {}) }
+      : { kind: 'local', ...(cwd ? { cwd } : {}) },
     ...(request.prefill ? { prefill: request.prefill } : {}),
     ...(request.probeHarnessId ? { probeHarnessId: request.probeHarnessId } : {})
   }
@@ -83,7 +88,7 @@ export function useTerminalOpenAt(
 ): void {
   const openRequestTab = useCallback((request: TerminalOpenRequest) => {
     const cwd = request.cwd
-    if (cwd && !request.prefill) {
+    if (cwd && !request.prefill && !request.agent) {
       const existing = tabsRef.current.find(
         (tab) => tab.target.kind === 'local' && tab.target.cwd === cwd && !tab.prefill
       )

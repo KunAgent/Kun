@@ -1,3 +1,4 @@
+import { BUILTIN_HARNESS_IDS } from '../../kun/src/contracts/builtin-harness-ids.js'
 import { HarnessGatewayBindingSchema } from '../../kun/src/contracts/harness-gateway-binding.js'
 import type {
   KunAdeSettingsV1,
@@ -23,19 +24,7 @@ import { normalizeAdeProjectDefaultsMap } from './ade-project-defaults'
  */
 
 /** Builtin harness ids; custom entries colliding with these are dropped. */
-export const BUILTIN_HARNESS_IDS = [
-  'kun',
-  'claude-code',
-  'cursor',
-  'antigravity',
-  'gemini-cli',
-  'codex',
-  'opencode',
-  'opencode2',
-  'devin',
-  'pi',
-  'deepseek-harness'
-] as const
+export { BUILTIN_HARNESS_IDS } from '../../kun/src/contracts/builtin-harness-ids.js'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)

@@ -1,6 +1,8 @@
 import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../contracts/harness-gateway-binding.js'
 import { HarnessUpdates } from './harness-updates.js'
 import { harnessUpdateCompatible } from './harness-update-compatibility.js'
+import { harnessIntegrationInfo, resolveHarnessIntegrationTarget } from './harness-integration.js'
+import type { HarnessIntegrationInfo, HarnessIntegrationOpenRequest, HarnessIntegrationTarget } from '../contracts/harness-integration.js'
 import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
 import { HarnessReadinessService } from './harness-readiness.js'
 import { dirname, join } from 'node:path'
@@ -49,6 +51,8 @@ export type HarnessRuntimeComposition = {
   codexModels: CodexModelProbe
   piModels: PiModelProbe
   updates: HarnessUpdates
+  integration(id: string): Promise<HarnessIntegrationInfo | undefined>
+  resolveIntegration(request: HarnessIntegrationOpenRequest): Promise<HarnessIntegrationTarget | undefined>
   invalidateModels(id: string): void
   installNetwork?: () => import('../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
   /**
@@ -173,6 +177,14 @@ export function createHarnessComposition(
     }
   })
   return {
+    integration: async (id) => {
+      const definition = catalog.get(id)
+      return definition ? harnessIntegrationInfo(definition, { binaryPath: options().harnesses?.binaryPaths?.[id] }) : undefined
+    },
+    resolveIntegration: async (request) => {
+      const definition = catalog.get(request.harnessId)
+      return definition ? resolveHarnessIntegrationTarget(definition, request, { binaryPath: options().harnesses?.binaryPaths?.[request.harnessId] }) : undefined
+    },
     updates, invalidateModels,
     catalog,
     readiness,

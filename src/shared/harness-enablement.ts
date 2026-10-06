@@ -17,7 +17,7 @@ export function normalizeEnabledProfiles(value: unknown): KunHarnessEnabledProfi
     if (!entry || typeof entry !== 'object') continue
     const { harnessId, credentialMode, providerId, gatewayBinding } = entry as Record<string, unknown>
     if (typeof harnessId !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(harnessId) ||
-      harnessId === 'kun' || harnessId === 'gemini-cli' ||
+      harnessId === 'kun' ||
       !['native-login', 'provider', 'kun-gateway'].includes(String(credentialMode))) continue
     if (providerId !== undefined && (typeof providerId !== 'string' || !providerId.trim() || providerId.length > 128)) continue
     const binding = gatewayBinding === undefined ? undefined : HarnessGatewayBindingSchema.safeParse(gatewayBinding)
@@ -44,13 +44,13 @@ export function selectedHarnessProfile(row: AdeHarnessRow, settings: KunHarnessS
 export function harnessProfileEnabled(settings: Pick<KunHarnessSettingsV1, 'enabledProfiles' | 'disabledIds'>,
   profile: KunHarnessEnabledProfileV1): boolean {
   if (profile.harnessId === 'kun') return true
-  return profile.harnessId !== 'gemini-cli' && !settings.disabledIds.includes(profile.harnessId) &&
+  return !settings.disabledIds.includes(profile.harnessId) &&
     (settings.enabledProfiles ?? []).some((entry) => harnessProfileKey(entry) === harnessProfileKey(profile))
 }
 
 /** Only unexpired runtime proofs for explicitly enabled exact routes can enter a picker. */
 export function readyHarnessProfiles(row: AdeHarnessRow, now = Date.now()): KunHarnessEnabledProfileV1[] {
-  if (row.definition.id === 'gemini-cli' || row.definition.availability === 'retired' || row.enabled !== true ||
+  if (row.definition.transport === 'application' || row.definition.transport === 'terminal' || row.definition.availability === 'retired' || row.enabled !== true ||
     (row.status.installed !== 'yes' && !(row.status.installed === 'unknown' && row.status.detecting)) ||
     row.status.versionSupported === false) return []
   // A metadata refresh may be detecting while the runtime still supplies a
@@ -64,4 +64,14 @@ export function readyHarnessProfiles(row: AdeHarnessRow, now = Date.now()): KunH
 export function harnessProfileReady(row: AdeHarnessRow, profile: KunHarnessEnabledProfileV1): boolean {
   return row.definition.id === 'kun' || readyHarnessProfiles(row).some((entry) =>
     harnessProfileKey(entry) === harnessProfileKey(profile))
+}
+
+/** PTY readiness is separate from admission to the chat model picker. */
+export function terminalHarnessProfileReady(row: AdeHarnessRow, profile: KunHarnessEnabledProfileV1, now = Date.now()): boolean {
+  if (row.definition.transport !== 'terminal' || row.enabled !== true || row.status.installed !== 'yes' ||
+    row.status.versionSupported === false) return false
+  return (row.readyProfiles ?? []).some((proof) => proof.harnessId === row.definition.id &&
+    harnessProfileKey(proof) === harnessProfileKey(profile) &&
+    typeof proof.expiresAt === 'string' && Date.parse(proof.expiresAt) > now &&
+    (row.enabledProfiles ?? []).some((enabled) => harnessProfileKey(enabled) === harnessProfileKey(proof)))
 }

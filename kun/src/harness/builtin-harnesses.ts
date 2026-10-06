@@ -2,6 +2,8 @@ import { KUN_TOOL_PERMISSION_MODES } from '../contracts/policy.js'
 import { CODEX_APP_SERVER_MIN_VERSION } from '../runtime/codex/codex-protocol.js'
 import { PI_MIN_VERSION } from '../runtime/pi/pi-protocol.js'
 import { DEEPSEEK_HARNESS_DEFINITION } from './deepseek-harness-definition.js'
+import { expandedCliHarnesses } from './expanded-cli-harnesses.js'
+import { APPLICATION_HARNESSES } from './application-harnesses.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import {
   allSupportedStatuses,
@@ -303,8 +305,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
   {
     id: 'gemini-cli',
     displayName: 'Gemini CLI',
-    // Kept for persisted history; never offered or admitted for new work.
-    availability: 'retired',
+    availability: 'active',
     transport: 'acp',
     // `--acp` is the current flag; `--experimental-acp` still works on older
     // releases but is deprecated upstream (docs/ade/impl/p1 §P1-05).
@@ -329,8 +330,8 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       ],
       login: {
         command: 'gemini',
-        args: ['auth', 'login'],
-        note: 'OAuth sign-in; /auth inside a session switches methods'
+        args: [],
+        note: 'Start Gemini CLI to sign in; /auth inside a session switches methods'
       },
       docsUrl: 'https://github.com/google-gemini/gemini-cli'
     },
@@ -576,5 +577,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       docsUrl: 'https://docs.devin.ai/cli/acp/zed'
     },
     builtin: true
-  }
+  },
+  ...expandedCliHarnesses(ACP_DEFAULT_CAPABILITIES),
+  ...APPLICATION_HARNESSES
 ]

@@ -25,7 +25,9 @@ import {
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
 import { raceProbeAbort } from './probe-abort.js'
 import { applyDevinSessionPermission } from '../runtime/acp/devin-session-permissions.js'
+import { applyAcpSessionPermission } from '../runtime/acp/acp-session-permissions.js'
 import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
+import { isAcpAuthenticationRequired } from '../runtime/acp/acp-authentication.js'
 
 export type AcpHandshakeProbeDeps = {
   spawn?: AcpSpawnFn
@@ -104,6 +106,7 @@ export async function probeAcpHandshake(
       if (deps.session) {
         await raceProbeAbort(applyAcpSessionModel(conn, { ...session, models: parseAcpLegacyModels(session.models) }, deps.session.model), signal)
         if (definition.id === 'devin') await raceProbeAbort(applyDevinSessionPermission(conn, session, deps.session.permissionMode), signal)
+        else await raceProbeAbort(applyAcpSessionPermission(conn, session, deps.session.permissionMode, definition.acpPermission), signal)
       }
     }
     const caps = init.agentCapabilities
@@ -151,8 +154,11 @@ export async function probeAcpHandshake(
       ok: false,
       supported: true,
       protocol: 'acp',
+      ...(isAcpAuthenticationRequired(error) ? { authRequired: true, authentication: 'missing' as const } : {}),
       detail:
-        error instanceof AcpError && error.code === 'request_timeout'
+        isAcpAuthenticationRequired(error)
+          ? 'The Agent requires login. Sign in with its native CLI, then check and enable this profile again.'
+          : error instanceof AcpError && error.code === 'request_timeout'
           ? `probe timed out after ${timeoutMs}ms`
           : detail
     }

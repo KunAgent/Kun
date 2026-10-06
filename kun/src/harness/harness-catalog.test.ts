@@ -137,17 +137,17 @@ describe('explicit profile enablement', () => {
     expect(catalog.isProfileEnabled({ harnessId: 'claude-code', credentialMode: 'kun-gateway' })).toBe(false)
     expect(catalog.enabledProfiles('codex')).toEqual([{ harnessId: 'codex', credentialMode: 'native-login' }])
   })
-  it('cannot revive retired Gemini, disabled profiles, or unsupported credential modes', () => {
+  it('restores opted-in Gemini while keeping disabled profiles and unsupported credential modes blocked', () => {
     const catalog = new HarnessCatalog({ custom: () => [], disabled: () => ['codex'], enabledProfiles: () => [
       { harnessId: 'gemini-cli', credentialMode: 'native-login' },
       { harnessId: 'codex', credentialMode: 'native-login' },
       { harnessId: 'deepseek-harness', credentialMode: 'kun-gateway', providerId: 'deepseek' }
     ] })
-    expect(catalog.get('gemini-cli')?.availability).toBe('retired')
-    expect(catalog.isDisabled('gemini-cli')).toBe(true)
+    expect(catalog.get('gemini-cli')?.availability).toBe('active')
+    expect(catalog.isDisabled('gemini-cli')).toBe(false)
     expect(catalog.isDisabled('codex')).toBe(true)
     expect(catalog.isDisabled('deepseek-harness')).toBe(true)
-    expect(catalog.listAvailable().map((entry) => entry.id)).toEqual(['kun'])
+    expect(catalog.listAvailable().map((entry) => entry.id)).toEqual(['kun', 'gemini-cli'])
   })
   it('promotes Pi and exposes the reviewed DeepSeek preview without hidden flags', () => {
     const catalog = new HarnessCatalog({ custom: () => [], enabledProfiles: () => [

@@ -247,7 +247,8 @@ export function harnessesConfigForRuntime(
   return {
     enabledProfiles: [...(harnesses?.enabledProfiles ?? [])]
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
-      .map(({ harnessId, credentialMode, providerId }) => ({ harnessId, credentialMode, ...(providerId ? { providerId } : {}) })),
+      .map(({ harnessId, credentialMode, providerId, gatewayBinding }) => ({ harnessId, credentialMode,
+        ...(gatewayBinding ? { gatewayBinding: structuredClone(gatewayBinding) } : providerId ? { providerId } : {}) })),
     disabledIds: [...(harnesses?.disabledIds ?? [])].sort(),
     binaryPaths: sortedRecord(harnesses?.binaryPaths),
     custom,

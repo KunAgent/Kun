@@ -19,6 +19,10 @@ type FakePtyModule = {
 }
 
 function fakePtyModule(): FakePtyModule {
+  const exitCallbacks = new Set<(result: { exitCode: number; signal?: number }) => void>()
+  const emitExit = (result: { exitCode: number; signal?: number }): void => {
+    for (const cb of [...exitCallbacks]) cb(result)
+  }
   const holder: FakePtyModule = {
     written: [],
     spawn(file: string, args: string | string[], options): IPty {
@@ -35,12 +39,13 @@ function fakePtyModule(): FakePtyModule {
           return { dispose: vi.fn() }
         },
         onExit: (cb: (result: { exitCode: number; signal?: number }) => void) => {
-          holder.exitCb = cb
-          return { dispose: vi.fn() }
+          exitCallbacks.add(cb)
+          holder.exitCb = emitExit
+          return { dispose: () => exitCallbacks.delete(cb) }
         },
         write: (data: string) => { holder.written.push(data) },
         resize: vi.fn(),
-        kill: vi.fn(),
+        kill: vi.fn(() => emitExit({ exitCode: 1 })),
         process: 'sh'
       } as unknown as IPty
       holder.spawnArgs = { file, args: argv, options: options as { env?: Record<string, string> } }
@@ -79,31 +84,19 @@ function setup(
   }
 }
 
-const HARNESSES = {
-  harnesses: [{
-    definition: {
-      id: 'claude-code',
-      detect: { command: 'claude' },
-      terminal: { argv: ['--dangerously-skip-permissions'], taskFlag: '-t' }
-    },
-    status: { resolvedCommand: '/usr/local/bin/claude', installed: 'yes' }
-  }]
-}
-
 function fakeRuntime(calls: Array<{ path: string; body: unknown }>): RuntimeFetch {
   return async (path, init) => {
     calls.push({ path, body: init?.body ? JSON.parse(init.body) : undefined })
-    if (path === '/v1/harnesses') {
-      return new Response(JSON.stringify(HARNESSES), { status: 200 })
-    }
     if (path === '/v1/execution-units') {
       return new Response(JSON.stringify({
         unitId: 'tu_77',
         tokens: { workerCallback: 'kgw_worker', hookIngest: 'kgw_hook' },
         endpoint: 'http://127.0.0.1:18899',
-        launch: { args: ['--settings', '/tmp/ade/hooks/tu_77.json'], env: { KUN_HOOK_DIR: '/tmp/ade/hooks/tu_77' } }
+        launch: { command: '/usr/local/bin/claude', argv: ['--dangerously-skip-permissions'], taskFlag: '-t', admissionId: 'proof_77',
+          args: ['--settings', '/tmp/ade/hooks/tu_77.json'], env: { KUN_HOOK_DIR: '/tmp/ade/hooks/tu_77' } }
       }), { status: 200 })
     }
+    if (path === '/v1/execution-units/tu_77/validate-launch') return new Response(JSON.stringify({ command: '/usr/local/bin/claude' }), { status: 200 })
     return new Response('{}', { status: 200 })
   }
 }
@@ -118,8 +111,7 @@ describe('terminal agent PTY launch', () => {
       agent: { harnessId: 'claude-code', title: 'claude term', task: 'fix the flake' }
     }) as { ok: boolean }
     expect(result.ok).toBe(true)
-    expect(calls[0].path).toBe('/v1/harnesses')
-    expect(calls[1]).toMatchObject({
+    expect(calls[0]).toMatchObject({
       path: '/v1/execution-units',
       body: {
         kind: 'terminal-agent',
@@ -129,7 +121,7 @@ describe('terminal agent PTY launch', () => {
       }
     })
     // args: gate argv = [marker, token, file, ...argv] — the harness command
-    // comes from resolvedCommand, flags+task and hook extras follow.
+    // comes from the checked Runtime snapshot, flags+task and hooks follow.
     const spawned = ptyModule.spawnArgs!
     expect(spawned.args[5]).toBe('/usr/local/bin/claude')
     const taskArg = spawned.args[8]
@@ -146,6 +138,10 @@ describe('terminal agent PTY launch', () => {
     expect(env.KUN_HOOK_TOKEN).toBe('kgw_hook')
     expect(env.KUN_WORKER_ENDPOINT).toBe('http://127.0.0.1:18899')
     expect(env.KUN_HOOK_DIR).toBe('/tmp/ade/hooks/tu_77')
+    expect(calls.filter((call) => call.path.endsWith('/validate-launch'))).toEqual([
+      { path: '/v1/execution-units/tu_77/validate-launch', body: { admissionId: 'proof_77' } },
+      { path: '/v1/execution-units/tu_77/validate-launch', body: { admissionId: 'proof_77' } }
+    ])
   })
 
   it('puts the bundled kun bin dir first on PATH and exports KUN_CLI', async () => {
@@ -219,5 +215,74 @@ describe('terminal agent PTY launch', () => {
     }) as { ok: boolean; message: string }
     expect(result.ok).toBe(false)
     expect(calls.at(-1)?.path).toBe('/v1/execution-units/tu_77/exit')
+  })
+
+  it('rejects disabled profiles at the Runtime boundary without spawning a PTY', async () => {
+    const { ptyModule, call } = setup(async () => new Response(JSON.stringify({
+      message: 'Test and enable this Agent profile before launching it'
+    }), { status: 409 }))
+    expect(await call('terminal:create', { sessionId: 'disabled-agent', agent: { harnessId: 'claude-code', title: 't' } }))
+      .toMatchObject({ ok: false, message: expect.stringContaining('Test and enable') })
+    expect(ptyModule.spawnArgs).toBeUndefined()
+  })
+
+  it('revalidates after asynchronous CLI setup and rejects an expired or disabled proof', async () => {
+    const calls: Array<{ path: string; body: unknown }> = []
+    const base = fakeRuntime(calls)
+    let disabled = false
+    const runtime: RuntimeFetch = async (path, init) => path.endsWith('/validate-launch') && disabled
+      ? new Response(JSON.stringify({ message: 'Terminal Agent readiness proof expired; test it again' }), { status: 409 })
+      : base(path, init)
+    const { ptyModule, call } = setup(runtime, fakePtyModule(), {
+      resolveKunCli: async () => { disabled = true; return null }
+    })
+    expect(await call('terminal:create', { sessionId: 'expired-agent', agent: { harnessId: 'claude-code', title: 't' } }))
+      .toMatchObject({ ok: false, message: expect.stringContaining('readiness proof expired') })
+    expect(ptyModule.spawnArgs).toBeUndefined()
+    expect(calls.at(-1)).toMatchObject({ path: '/v1/execution-units/tu_77/exit' })
+  })
+
+  it('does not replace the checked command when Runtime validation reports a different executable', async () => {
+    const calls: Array<{ path: string; body: unknown }> = []
+    const base = fakeRuntime(calls)
+    const runtime: RuntimeFetch = async (path, init) => path.endsWith('/validate-launch')
+      ? new Response(JSON.stringify({ command: '/other/claude' }), { status: 200 }) : base(path, init)
+    const { ptyModule, call } = setup(runtime)
+    expect(await call('terminal:create', { sessionId: 'changed-command', agent: { harnessId: 'claude-code', title: 't' } }))
+      .toMatchObject({ ok: false, message: expect.stringContaining('command changed before launch') })
+    expect(ptyModule.spawnArgs).toBeUndefined()
+  })
+
+  it.skipIf(process.platform === 'win32')('never opens the owned POSIX gate when the profile changes during ownership registration', async () => {
+    const calls: Array<{ path: string; body: unknown }> = []
+    const base = fakeRuntime(calls)
+    let validations = 0
+    const runtime: RuntimeFetch = async (path, init) => {
+      if (path.endsWith('/validate-launch') && ++validations === 2) return new Response(JSON.stringify({
+        message: 'Agent profile changed before launch; test it again'
+      }), { status: 409 })
+      return base(path, init)
+    }
+    const { ptyModule, call } = setup(runtime)
+    expect(await call('terminal:create', { sessionId: 'changed-after-spawn', agent: { harnessId: 'claude-code', title: 't' } }))
+      .toMatchObject({ ok: false, message: expect.stringContaining('profile changed before launch') })
+    expect(ptyModule.written).toEqual([])
+    expect(calls.at(-1)).toMatchObject({ path: '/v1/execution-units/tu_77/exit' })
+  })
+
+  it('rejects a launch response without an admission token instead of guessing a command', async () => {
+    const calls: Array<{ path: string; body: unknown }> = []
+    const base = fakeRuntime(calls)
+    const runtime: RuntimeFetch = async (path, init) => {
+      const response = await base(path, init)
+      if (path !== '/v1/execution-units') return response
+      const body = await response.json()
+      delete body.launch.admissionId
+      return new Response(JSON.stringify(body), { status: 200 })
+    }
+    const { ptyModule, call } = setup(runtime)
+    expect(await call('terminal:create', { sessionId: 'missing-admission', agent: { harnessId: 'claude-code', title: 't' } }))
+      .toMatchObject({ ok: false, message: expect.stringContaining('checked terminal Agent command') })
+    expect(ptyModule.spawnArgs).toBeUndefined()
   })
 })

@@ -36,4 +36,15 @@ describe('native permission mapping', () => {
     const onlyFull = { ...definition, permissionModes: definition.permissionModes.filter((mode) => mode.kunPermissionMode === 'full-access') }
     expect(() => harnessTurnPermissionMode(onlyFull, { ...full, sandboxMode: 'read-only' })).toThrow('no permission mode')
   })
+  it('keeps read-only and unattended work in the strictest native mode despite equal approval bounds', () => {
+    const definition = { ...catalog.get('devin')!, id: 'test-modes', permissionModes: [
+      { id: 'plan', label: 'Plan (read-only)', kunPermissionMode: 'ask-for-approval' as const },
+      { id: 'default', label: 'Default (writes after approval)', kunPermissionMode: 'ask-for-approval' as const },
+      { id: 'bypass', label: 'Bypass', kunPermissionMode: 'full-access' as const }
+    ] }
+    expect(harnessTurnPermissionMode(definition, { ...full, sandboxMode: 'read-only' })).toBe('plan')
+    expect(harnessTurnPermissionMode(definition, { ...full, sandboxMode: 'read-only', requested: 'default' })).toBe('plan')
+    expect(harnessTurnPermissionMode(definition, { ...full, unattended: true, requested: 'default' })).toBe('plan')
+    expect(harnessTurnPermissionMode(definition, { ...full, approvalPolicy: 'on-request', sandboxMode: 'workspace-write' })).toBe('default')
+  })
 })

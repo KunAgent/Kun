@@ -14,6 +14,7 @@ import {
   type DelegatedSessionPreparation
 } from '../delegated-session-binding.js'
 import type { TurnItem } from '../../contracts/items.js'
+import type { HarnessDefinition } from '../../contracts/harness.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
 import type { AcpConnection, AcpSessionUpdateSink } from './acp-connection.js'
 import {
@@ -30,6 +31,7 @@ import {
   type SessionUpdate
 } from './acp-schema.js'
 import { applyDevinSessionPermission } from './devin-session-permissions.js'
+import { applyAcpSessionPermission } from './acp-session-permissions.js'
 import { isAcpAuthenticationRequired } from './acp-authentication.js'
 import { AcpModelSelectionError, applyAcpSessionModel, parseAcpLegacyModels, type AcpLegacyModels } from './acp-legacy-models.js'
 
@@ -43,6 +45,7 @@ export type AcpSessionRequest = {
   model?: string
   /** Resolved harness permission-level id (02 §5.3). */
   permissionModeId?: string
+  acpPermission?: HarnessDefinition['acpPermission']
   reasoningEffort?: string
   /** Kun Tools MCP server descriptors; user MCP servers are not forwarded. */
   mcpServers?: McpServer[]
@@ -154,8 +157,8 @@ export class AcpSessionManager {
       }
       const unsubscribe = conn.subscribeSession(handle.sessionId, {
         onUpdate: (update) => {
+          absorbLoadingUpdate(handle, update)
           if (handle.phase === 'loading') {
-            absorbLoadingUpdate(handle, update)
             return
           }
           sink?.(update)
@@ -227,9 +230,6 @@ export class AcpSessionManager {
         'session/new response is missing required fields'
       )
     }
-    const unsubscribe = conn.subscribeSession(parsed.data.sessionId, {
-      onUpdate: (update) => sink?.(update)
-    })
     const handle: AcpSessionHandle = {
       sessionId: parsed.data.sessionId,
       mcpSessionKey,
@@ -242,6 +242,9 @@ export class AcpSessionManager {
       models: parseAcpLegacyModels(parsed.data.models),
       detach: () => unsubscribe()
     }
+    const unsubscribe = conn.subscribeSession(parsed.data.sessionId, {
+      onUpdate: (update) => { absorbLoadingUpdate(handle, update); sink?.(update) }
+    })
     conn.registerSession(handle.sessionId, ctx.threadId)
     try {
       await this.applyConfigOptions(conn, handle, ctx)
@@ -264,9 +267,8 @@ export class AcpSessionManager {
   }
 
   /**
-   * Model selections and Devin permission modes must be accepted before a
-   * prompt is sent. Other unmatched options retain the agent's default and
-   * record a debug note (§5.3).
+   * Model and permission selections must be accepted before a prompt is sent.
+   * Only optional reasoning options can retain an unmatched agent default.
    */
   async applyConfigOptions(
     conn: AcpConnection,
@@ -276,26 +278,11 @@ export class AcpSessionManager {
     await applyAcpSessionModel(conn, session, ctx.model)
     if (ctx.harnessId === 'devin') {
       await applyDevinSessionPermission(conn, session, ctx.permissionModeId)
+    } else {
+      await applyAcpSessionPermission(conn, session, ctx.permissionModeId, ctx.acpPermission)
     }
     const options = session.configOptions
-    if (!options?.length) {
-      if (ctx.harnessId === 'devin') return
-      // Legacy fallback: only the mode category existed before config options.
-      const modeId = ctx.permissionModeId
-      const modes = session.modes
-      if (
-        modeId &&
-        modes &&
-        modes.currentModeId !== modeId &&
-        modes.availableModes.some((mode) => mode.id === modeId)
-      ) {
-        await conn.rpc.request(ACP_AGENT_METHODS.sessionSetMode, {
-          sessionId: session.sessionId,
-          modeId
-        })
-      }
-      return
-    }
+    if (!options?.length) return
     const byCategory = new Map<string, AcpConfigOption>()
     for (const option of options) {
       if (option.category && !byCategory.has(option.category)) {
@@ -305,11 +292,6 @@ export class AcpSessionManager {
     await this.setIfDifferent(conn, session, byCategory.get('thought_level'), [
       ...(ctx.reasoningEffort ? effortCandidates(ctx.reasoningEffort) : [])
     ])
-    if (ctx.harnessId !== 'devin') {
-      await this.setIfDifferent(conn, session, byCategory.get('mode'), [
-        ...(ctx.permissionModeId ? [ctx.permissionModeId] : [])
-      ])
-    }
   }
 
   private async setIfDifferent(

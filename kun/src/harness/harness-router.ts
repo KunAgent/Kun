@@ -126,6 +126,10 @@ export class HarnessRouter {
         )
       }
     }
+    if (definition.transport === 'application' || definition.transport === 'terminal') {
+      return { ok: false, error: new HarnessAdmissionError('route_unsupported',
+        `${definition.displayName} runs through its ${definition.transport === 'terminal' ? 'native terminal' : 'application'} entry in the Agent Center`) }
+    }
     if (this.deps.catalog.isDisabled?.(harnessId)) {
       return {
         ok: false,

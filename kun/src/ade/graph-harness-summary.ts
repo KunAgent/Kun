@@ -26,7 +26,8 @@ const SUITABILITY: Record<HarnessTransport, string> = {
   acp: 'external CLI agent over ACP; runs its own tools',
   'codex-app-server': 'native codex app-server session; steer/fork/approvals',
   'pi-rpc': 'pi agent over RPC; runs its own tools',
-  terminal: 'interactive terminal agent'
+  terminal: 'interactive terminal agent',
+  application: 'external application; starts through its configured launcher'
 }
 
 export type GraphHarnessSummaryDeps = {

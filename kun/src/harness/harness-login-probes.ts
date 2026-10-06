@@ -8,6 +8,9 @@ import type { SpawnCaptured } from './harness-detector.js'
 import { raceProbeAbort } from './probe-abort.js'
 import { openCode2CredentialEvidence } from './opencode2-credentials.js'
 import { antigravityCredentialEvidence } from './antigravity-credentials.js'
+import { sdkProcessBaseEnv } from '../runtime/agent-sdk/sdk-process-environment.js'
+import { nativeHarnessCredentialEnv } from './harness-secret-env.js'
+import { nativeAgentNetworkEnv } from './native-agent-network.js'
 
 export type HarnessLoginState = HarnessStatus['login']
 
@@ -30,7 +33,15 @@ export async function probeHarnessLogin(
   command?: string
 ): Promise<HarnessLoginState> {
   deps.signal?.throwIfAborted()
-  const env = { ...(deps.env ?? process.env), ...def.launch?.env }
+  const source = { ...(deps.env ?? process.env), ...def.launch?.env }
+  const env = { ...sdkProcessBaseEnv(source), ...nativeAgentNetworkEnv(def, source), ...nativeHarnessCredentialEnv(def, source) }
+  // Only local configuration pointers accompany the selected native credential.
+  const pointers: Record<string, string[]> = { 'claude-code': ['CLAUDE_CONFIG_DIR'], codex: ['CODEX_HOME'],
+    antigravity: ['CLOUDSDK_CONFIG', 'GOOGLE_APPLICATION_CREDENTIALS'], pi: ['PI_CODING_AGENT_DIR'],
+    opencode: ['OPENCODE_CONFIG_DIR', 'OPENCODE_CONFIG'] }
+  for (const key of pointers[def.id] ?? []) {
+    if (source[key]) env[key] = source[key]
+  }
   let state: HarnessLoginState
   switch (def.id) {
     case 'kun': return 'not-required'

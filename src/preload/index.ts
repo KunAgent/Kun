@@ -474,6 +474,7 @@ const api = {
     return () => ipcRenderer.removeListener('window:mini-mode', wrapped)
   },
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  openAgentIntegration: (input) => ipcRenderer.invoke('agent:open-integration', input),
   getComputerUsePermissions: () => ipcRenderer.invoke('computer-use:permissions'),
   requestComputerUsePermission: (kind) =>
     ipcRenderer.invoke('computer-use:request-permission', kind),

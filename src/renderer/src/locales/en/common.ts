@@ -39,6 +39,7 @@ import paper from './common/paper.json'
 import paperEvidence from './common/paper-evidence.json'
 import mobileWork from './common/mobile-work.json'
 import agentHarness from './common/agent-harness.json'
+import agentIntegrations from './common/agent-integrations.json'
 import ade from './common/ade.json'
 
 const common = {
@@ -88,6 +89,7 @@ const common = {
   ...paperEvidence,
   ...mobileWork,
   ...agentHarness,
+  ...agentIntegrations,
   ...ade,
 }
 

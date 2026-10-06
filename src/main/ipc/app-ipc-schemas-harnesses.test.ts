@@ -4,6 +4,8 @@ import { runtimeRequestPayloadSchema } from './app-ipc-schemas/runtime'
 describe('ADE harness desktop HTTP boundary', () => {
   it.each([
     ['/v1/harnesses', ['GET']],
+    ['/v1/harnesses/vscode/integration', ['GET']],
+    ['/v1/harnesses/vscode/integration/resolve', ['POST']],
     ['/v1/harnesses/claude-code/updates', ['GET']],
     ['/v1/harnesses/claude-code/updates/check', ['POST']],
     ['/v1/harnesses/claude-code/updates/start', ['POST']],
@@ -57,6 +59,8 @@ describe('ADE harness desktop HTTP boundary', () => {
     }
   })
   it.each([
+    '/v1/harnesses/vscode/integration/open-shell',
+    '/v1/harnesses/vscode/integration/resolve/extra',
     '/v1/harnesses/claude-code/updates/execute',
     '/v1/harnesses/claude-code/updates/start/extra',
     '/v1/harnesses/claude-code',
