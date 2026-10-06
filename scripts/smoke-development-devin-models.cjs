@@ -17,7 +17,11 @@ async function writeDevinModelStub(root) {
 if (process.argv.includes('--version')) { console.log('Devin CLI 3000.11.3'); process.exit(0) }
 const rows = ${JSON.stringify(rows)}
 let selected = rows[0][0]
+// Devin CLI 3000.11.3 advertises these session modes; Kun selects one before every prompt.
+let mode = 'accept-edits'
 const config = () => [
+ { id:'mode', name:'Session Mode', category:'mode', type:'select', currentValue:mode,
+ options:['accept-edits','smart','ask','plan','bypass'].map(value=>({value,name:value})) },
  { id:'model', name:'Model', category:'model', type:'select', currentValue:selected,
  options:rows.map(([value,name])=>({value,name,_meta:{'cognition.ai/supportsImages':!value.startsWith('glm')}})) },
  { id:'thought_level',name:'Reasoning',category:'thought_level',type:'select',currentValue:'medium',
@@ -32,6 +36,7 @@ require('node:readline').createInterface({input:process.stdin}).on('line', line 
  if(msg.method==='session/new'||msg.method==='session/load')result={sessionId:'devin-model-session',configOptions:config()}
  if(msg.method==='session/set_config_option') {
   if(msg.params.configId==='model')selected=msg.params.value
+  if(msg.params.configId==='mode')mode=msg.params.value
   result={configOptions:config()}
   send({jsonrpc:'2.0',method:'session/update',params:{sessionId:'devin-model-session',update:{sessionUpdate:'config_option_update',configOptions:config()}}})
  }
@@ -73,6 +78,19 @@ async function runDevinModelFlow({ page, poll, capture, resize }) {
   assert.deepEqual(await list.locator('select option').evaluateAll(options => options.map(option => option.value)), ['low', 'medium', 'high'])
   assert.match(await list.innerText(), /Recently used|最近使用/u)
   await capture('devin-models-3-recent-and-reasoning')
+  await page.keyboard.press('Escape')
+  // Kun's permission levels must say which native Devin mode they run in.
+  const permission = page.locator('.ds-composer-permission-button')
+  assert.equal(await permission.getAttribute('data-native-permission-mode'), 'ask')
+  await permission.click()
+  const menu = page.locator('.ds-composer-permission-menu')
+  await menu.waitFor()
+  assert.deepEqual(await menu.locator('.ds-composer-permission-option-native').evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute('data-native-permission-mode'))), ['ask', 'smart', 'bypass'])
+  assert.match(await menu.innerText(), /Devin/u)
+  await capture('devin-models-5-permission')
+  await page.keyboard.press('Escape')
+  await open()
   await resize(960, 700)
   await capture('devin-models-4-narrow')
   const box = await list.boundingBox()
@@ -81,6 +99,7 @@ async function runDevinModelFlow({ page, poll, capture, resize }) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   return ['Native labels and provider icons replace opaque IDs', 'Fusion combinations have a separate category and readable partner names',
     'Search spans model names and Fusion combinations while selection preserves the native ID',
-    'Selected-model reasoning choices and recently used models update in the existing picker', 'The model panel fits a 960px workbench without overflow']
+    'Selected-model reasoning choices and recently used models update in the existing picker',
+    'Each Kun permission level shows the native Devin mode it runs in', 'The model panel fits a 960px workbench without overflow']
 }
 module.exports = { writeDevinModelStub, runDevinModelFlow }

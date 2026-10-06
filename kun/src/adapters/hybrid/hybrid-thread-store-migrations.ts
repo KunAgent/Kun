@@ -68,6 +68,7 @@ export function migrateHybridThreadStore(db: BetterSqliteDatabase): void {
   addColumnIfMissing(db, 'threads', "approval_reviewer TEXT NOT NULL DEFAULT 'user'")
   migrateHybridUsageBackfillState(db)
   migrateHybridUsageIndexes(db)
+  migrateHybridLegacyHarnessUsage(db)
   addColumnIfMissing(db, 'threads', 'agent_surface TEXT')
   addColumnIfMissing(db, 'threads', 'workspace_mode TEXT')
   addColumnIfMissing(db, 'usage_events', 'provider_id TEXT')
@@ -98,5 +99,24 @@ export function migrateHybridUsageBackfillState(db: BetterSqliteDatabase): void 
       // Reopen all rows exactly once when this recovery state is introduced.
       db.exec('UPDATE threads SET usage_backfilled = 0, usage_backfill_high_water = 0')
     }
+  })()
+}
+
+/** `PRAGMA user_version` of the thread index; unused before this marker. */
+export const HYBRID_LEGACY_HARNESS_USAGE_VERSION = 1
+
+/**
+ * Re-run the usage backfill once so raw pre-ledger external-Agent reports
+ * are tagged `harness-legacy` from their turn's `delegated_runtime` event
+ * (see domain/usage-legacy-harness.ts). Rows are replaced in place; the
+ * stored snapshot values, and therefore live counter seeding, are unchanged.
+ * The marker lives in user_version so the doctor's column contract holds.
+ */
+export function migrateHybridLegacyHarnessUsage(db: BetterSqliteDatabase): void {
+  const version = Number(db.pragma('user_version', { simple: true }) ?? 0)
+  if (version >= HYBRID_LEGACY_HARNESS_USAGE_VERSION) return
+  db.transaction(() => {
+    db.exec('UPDATE threads SET usage_backfilled = 0, usage_backfill_high_water = 0')
+    db.pragma(`user_version = ${HYBRID_LEGACY_HARNESS_USAGE_VERSION}`)
   })()
 }

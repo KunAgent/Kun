@@ -1,8 +1,9 @@
-import { collectSessionEventsOfKind } from '../adapters/session-event-query.js'
+import { collectSessionEvents } from '../adapters/session-event-query.js'
 import type { UsageEvent } from '../contracts/events.js'
 import { emptyUsageSnapshot } from '../contracts/usage.js'
 import type { ThreadRecord, ThreadSummary } from '../contracts/threads.js'
 import { diffUsage, hasUsage } from '../domain/usage.js'
+import { isLegacyHarnessUsage, UsageDeltaFold } from '../domain/usage-legacy-harness.js'
 import { UsageIndexUnavailableError } from '../manager/usage-errors.js'
 import type {
   SessionStore,
@@ -419,17 +420,22 @@ async function loadUsageRecordsForSource(
     item.thread ?? hydrated ?? item.summary
   if (!thread) return []
   const records: ThreadUsageRecord[] = []
-  let latestPersisted = emptyUsageSnapshot()
-  const usageEvents = (await collectSessionEventsOfKind(
-    source.sessionStore,
-    thread.id,
-    'usage'
-  )).sort((a, b) => a.seq - b.seq)
+  const fold = new UsageDeltaFold()
+  // One pass: usage plus the turns that ran on an external Agent, whose raw
+  // pre-ledger reports are increments rather than snapshots.
+  const scanned = await collectSessionEvents(source.sessionStore, thread.id,
+    (event) => event.kind === 'usage' || event.kind === 'delegated_runtime')
+  const usageEvents = scanned.filter((event): event is UsageEvent & { kind: 'usage' } => event.kind === 'usage')
+    .sort((a, b) => a.seq - b.seq)
+  const delegatedTurns = new Map<string, string>()
+  for (const event of scanned) {
+    if (event.kind === 'delegated_runtime' && event.turnId) delegatedTurns.set(event.turnId, event.harnessId ?? event.providerId)
+  }
 
   for (const event of usageEvents) {
-    const delta = diffUsage(event.usage, latestPersisted)
-    latestPersisted = event.usage
-    if (!hasUsage(delta) || !timestampInUsageRange(event.timestamp, options)) continue
+    const legacy = isLegacyHarnessUsage(event, delegatedTurns)
+    const delta = fold.next(event.usage, legacy)
+    if (!delta || !timestampInUsageRange(event.timestamp, options)) continue
     records.push({
       threadId: thread.id,
       ...(event.turnId ? { turnId: event.turnId } : {}),
@@ -437,15 +443,16 @@ async function loadUsageRecordsForSource(
       ...(usageRecordProvider(thread, event)
         ? { providerId: usageRecordProvider(thread, event) }
         : {}),
-      ...(event.source ? { source: event.source } : {}),
-      ...(event.harnessId ? { harnessId: event.harnessId } : {}),
+      ...(legacy ? { source: 'harness-reported' as const } : event.source ? { source: event.source } : {}),
+      ...(event.harnessId ?? (legacy ? delegatedTurns.get(event.turnId!) : undefined)
+        ? { harnessId: event.harnessId ?? delegatedTurns.get(event.turnId!) } : {}),
       relation: thread.relation,
       completedAt: event.timestamp,
       usage: delta
     })
   }
 
-  const liveRemainder = diffUsage(source.usageService.forThread(thread.id), latestPersisted)
+  const liveRemainder = diffUsage(source.usageService.forThread(thread.id), fold.previous)
   const liveTimestamp = thread.updatedAt || source.nowIso()
   if (hasUsage(liveRemainder) && timestampInUsageRange(liveTimestamp, options)) {
     const turnId = latestTurnId(thread)

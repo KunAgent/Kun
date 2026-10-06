@@ -188,6 +188,17 @@ async function main() {
       }]
     }
     if (roomsHarnessOnly) configureRoomsHarnessFixture(settings, isolatedEnvironment)
+    // External Agents are opt-in; the offline Devin catalog fixture needs its consented profile.
+    if (devinModelsOnly || agentModeOnly) {
+      settings.agents.kun.harnesses.enabledProfiles = [{ harnessId: 'devin', credentialMode: 'native-login' }]
+      // Local-stub credential evidence only; never a real account or service.
+      isolatedEnvironment.WINDSURF_API_KEY = 'devin-models-offline-fixture-no-service-access'
+    }
+    if (nativeModelOnly) {
+      settings.agents.kun.harnesses.enabledProfiles = [{ harnessId: 'codex', credentialMode: 'native-login' }]
+      // Local-stub credential evidence only; the Codex stub never contacts a service.
+      isolatedEnvironment.OPENAI_API_KEY = 'codex-models-offline-fixture-no-service-access'
+    }
     const allocatedPorts = new Set([runtimePort, rendererPort, new URL(modelFixture.baseUrl).port].map(Number))
     const nextPort = async () => {
       let port

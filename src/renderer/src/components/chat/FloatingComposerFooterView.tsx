@@ -149,7 +149,10 @@ export function FloatingComposerFooterView({
             <BarChart3 className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
             {threadUsage ? (
               <>
-                <span className="ds-composer-usage-metric ds-composer-usage-tokens shrink-0 tabular-nums">
+                <span
+                  className="ds-composer-usage-metric ds-composer-usage-tokens shrink-0 tabular-nums"
+                  {...(agentBilled ? { title: t('agentUpdate.usageReportedByAgent'), 'data-usage-reported-by-agent': 'true' } : {})}
+                >
                   {t('sessionUsageFooterTokens', {
                     tokens: formatCompactNumber(threadUsage.totalTokens)
                   })}

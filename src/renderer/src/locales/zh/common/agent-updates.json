@@ -66,6 +66,20 @@
     "usageBilledByAgentTitle": "Token 数由 Agent 自行上报。它通过自己的账号或订阅计费，因此 Kun 不显示本地价格。",
     "settingsChanged": "更新期间 Agent 路径已被修改，请重新检查。",
     "rollback": "恢复旧版本",
-    "modelMissing": "当前模型列表已不包含所选模型，请选择可用模型后再发送。"
+    "modelMissing": "当前模型列表已不包含所选模型，请选择可用模型后再发送。",
+    "nativePermission": "{{agent}} 实际模式：{{mode}}",
+    "nativePermissionReadOnly": "{{agent}} 实际模式：{{mode}}（只读，不会修改文件）",
+    "nativePermissionReadOnlyShort": "只读",
+    "nativeModes": {
+      "ask": "问答",
+      "smart": "智能审批",
+      "accept-edits": "自动接受编辑",
+      "bypass": "跳过权限",
+      "normal": "常规",
+      "plan": "规划",
+      "read-only": "只读",
+      "default": "默认"
+    },
+    "usageReportedByAgent": "由 Agent 上报"
   }
 }

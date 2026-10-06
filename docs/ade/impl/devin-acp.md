@@ -102,3 +102,32 @@ This proves the tested account/model text path; native resume, every model,
 and tool execution still require their separate regression/scenario coverage.
 Use `scripts/smoke-native-agent-turns.mjs --run --agents devin` for an explicit
 real-account check; local readiness alone does not consume model quota.
+
+## Follow-up review fixes (2026-10-06)
+
+- Kun-gateway turns are metered by the loopback gateway (`harness-gateway`);
+  ACP, Codex and Pi drop their own usage report on those turns so a call is
+  never counted twice. Claude SDK already did.
+- Claude Agent SDK `total_cost_usd` is a running session total (resumed
+  queries include earlier spend), so it is converted to a per-result
+  increment per session (`sdk-session-cost.ts`); result `usage` is per query.
+  Cursor's usage message is emitted once per turn.
+- Usage recorded before the harness ledger existed is re-classified, not
+  rewritten: a one-time re-backfill (`PRAGMA user_version = 1` on the thread
+  index) tags raw external-Agent rows `harness-legacy` using each turn's
+  `delegated_runtime` event, and aggregation counts them per turn
+  (`domain/usage-legacy-harness.ts`). Stored values, and live-counter
+  seeding, are unchanged. The JSONL fallback applies the same rule.
+- Manual `/compact` is refused (409) and the memory-pressure sweep skips
+  threads whose latest turn ran on an external Agent: the Agent owns its
+  context, and changing Kun's copy would discard its native session.
+- The model probe keeps one warm `acp` process per launch identity for 60 s,
+  shared by catalog and per-model detail lookups; refresh starts a fresh one.
+- Background update checks reuse the detector's settled status instead of
+  forcing `devin --version` + `devin auth status` (seconds on slow networks);
+  an explicit "Check for updates" still re-detects.
+- The composer permission menu shows the native mode each Kun level maps to
+  for the selected Agent and flags read-only levels (Devin's ask level).
+- Known trade-off: a reused readiness proof does not re-check login for up
+  to five minutes; a sign-out surfaces as an authentication error on the
+  next prompt, with the CLI login instruction.

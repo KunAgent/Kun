@@ -106,6 +106,17 @@ async function runAgentModeFlow({ page, capture, poll, runtimeRequest }) {
   await capture('mode-4-devin-conversation')
   checks.push('An actual ACP subprocess applies the selected model and streams its response through Kun')
 
+  // A follow-up to the same Agent continues its native session: no hand-off
+  // or "restored in a new session" notice may appear in the timeline.
+  await composer.fill('Second Devin turn in the same session.')
+  await page.locator('.ds-composer-primary-action').click()
+  await poll(async () => {
+    const current = await runtimeRequest(page, `/v1/threads/${thread.id}`)
+    return current.turns.filter((turn) => turn.status === 'completed').length >= 2
+  }, 60_000, 'second turn on the same Devin session')
+  assert.doesNotMatch(await page.locator('body').innerText(), /交接给|Handed context off|恢复上下文|restored context/u)
+  checks.push('A follow-up turn with the same Agent continues its native session without a hand-off')
+
   const invalid = await page.evaluate(async (threadId) => {
     const documentTarget = { documentId: 'fixture-doc', boardArtifactId: 'fixture-board' }
     return window.kunGui.runtimeRequest(`/v1/threads/${threadId}/turns`, 'POST', JSON.stringify({

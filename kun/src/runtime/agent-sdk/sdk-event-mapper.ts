@@ -21,6 +21,7 @@
  * (deltas absent) the `item_created` alone carries the whole message.
  */
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
+import { sdkCostIncrement } from './sdk-session-cost.js'
 import { redactBrowserUseActionForPersistence } from '../../contracts/browser-use.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import { DEFAULT_MODEL_STREAM_LIMITS } from '../../adapters/model/model-stream-resource-budget.js'
@@ -51,6 +52,8 @@ export interface SdkEventMapperContext {
   model?: string
   /** Optional test/runtime overrides; production defaults mirror native model-stream limits. */
   streamLimits?: Partial<SdkStreamResourceLimits>
+  /** Whether the query producing the next result resumed an existing session. */
+  resumedQuery?: () => boolean
 }
 
 export interface SdkTurnFinal {
@@ -315,7 +318,7 @@ export class SdkEventMapper {
     const usage = mapSdkUsage(
       message.usage as SdkUsage | undefined,
       Number(message.num_turns ?? 1),
-      typeof message.total_cost_usd === 'number' ? (message.total_cost_usd as number) : undefined,
+      sdkCostIncrement(message.session_id, message.total_cost_usd, this.ctx.resumedQuery?.()),
       { billingKind: this.ctx.billingKind, model: this.ctx.model }
     )
     // A result is terminal for one SDK query. No later tool result may legally

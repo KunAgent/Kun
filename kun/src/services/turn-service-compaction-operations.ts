@@ -75,6 +75,14 @@ async compact(this: TurnService, input: {
   }): Promise<CompactResponse> {
     const thread = await this['deps'].threadStore.get(input.threadId)
     if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+    // An external Agent owns its own context window. Compacting Kun's copy of
+    // the history would not shrink the Agent's context, and the changed
+    // history makes the next turn discard the Agent's native session.
+    const externalHarness = thread.turns.at(-1)?.harnessId ?? thread.harnessId
+    if (externalHarness && externalHarness !== 'kun') {
+      if (input.auto) return { threadId: input.threadId, replacedTokens: 0, summary: '', pinnedConstraints: [] }
+      throw new TurnConflictError(`compaction is managed by the external Agent (${externalHarness}) for this thread`)
+    }
     if (input.request.cutoffTurnId) {
       return this['withThreadMutation'](input.threadId, async () => {
         const current = await this['deps'].threadStore.get(input.threadId)

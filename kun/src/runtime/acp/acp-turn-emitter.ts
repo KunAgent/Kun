@@ -35,7 +35,13 @@ export class AcpDraftEmitter {
   constructor(
     private readonly deps: AcpDraftEmitterDeps,
     private readonly threadId: string,
-    private readonly turnId: string
+    private readonly turnId: string,
+    /**
+     * Kun-gateway turns are metered call by call by the loopback gateway
+     * (`source: 'harness-gateway'`); the agent's own report of the same calls
+     * would count them twice.
+     */
+    private readonly options: { gatewayMetered?: boolean } = {}
   ) {}
 
   async emitAll(drafts: readonly RuntimeEventDraft[]): Promise<void> {
@@ -43,6 +49,7 @@ export class AcpDraftEmitter {
   }
 
   async emit(draft: RuntimeEventDraft): Promise<void> {
+    if (draft.kind === 'usage' && this.options.gatewayMetered) return
     const item = 'item' in draft ? (draft.item as TurnItem | undefined) : undefined
     switch (draft.kind) {
       case 'assistant_text_delta':

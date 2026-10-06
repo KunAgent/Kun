@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { harnessDisplayNames } from '../../lib/harness-display-name'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatCompactNumber } from '../../hooks/use-thread-usage'
@@ -336,6 +337,9 @@ export function ModelUsagePanel({
                   style={{ backgroundColor: MODEL_USAGE_COLORS[(modelPageStart + index) % MODEL_USAGE_COLORS.length] }}
                 />
                 <span className="truncate">{bucket.model}</span>
+                {bucket.harnessIds?.length ? (
+                  <span className="shrink-0 text-ds-faint" data-model-usage-agent>{harnessDisplayNames(bucket.harnessIds)}</span>
+                ) : null}
               </span>
               <span className="min-w-0 truncate whitespace-nowrap text-right tabular-nums text-ds-faint">
                 {t('usageHeatmapModelTokenBreakdown', {

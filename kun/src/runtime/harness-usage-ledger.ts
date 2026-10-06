@@ -15,9 +15,11 @@ export type HarnessUsageMode = 'increment' | 'turn-snapshot'
 
 export const HARNESS_USAGE_MODES: Readonly<Record<HarnessTransport, HarnessUsageMode>> = {
   'native-loop': 'increment',
+  // Result `usage` covers one query's main loop; cost is converted to an
+  // increment in sdk-session-cost.ts because `total_cost_usd` is cumulative.
   'agent-sdk': 'increment',
   'antigravity-cli': 'increment',
-  // Cursor's streaming `usage` messages are not documented as deltas.
+  // @cursor/sdk: "Per-turn token usage, emitted once at turn end".
   'cursor-sdk': 'turn-snapshot',
   acp: 'increment',
   'codex-app-server': 'increment',

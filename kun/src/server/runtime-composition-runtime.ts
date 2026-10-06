@@ -543,6 +543,7 @@ export function createServerRuntimeComposition(
         () => { agent.activityHibernation.stop() },
         async () => { await services.memoryDistillation.shutdown() },
         () => services.harnesses.updates.dispose(),
+        () => services.harnesses.acpModels.dispose(),
         () => services.googleWorkspace.shutdown(),
         () => backgroundShellRuntime.shutdown(),
         () => extensionJobs.handleRuntimeShutdown(),

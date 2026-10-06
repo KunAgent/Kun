@@ -1,3 +1,4 @@
+import agentUpdates from './common/agent-updates.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
 import phoneComposer from './common/phone-composer.json'
@@ -19,6 +20,7 @@ import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
 
 const common = {
+  ...agentUpdates,
   ...shellWorkflow,
   ...workflowConnect,
   ...phoneComposer,

@@ -19,6 +19,7 @@ import {
   kunToolPermissionModeSettings
 } from '@shared/app-settings'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
+import type { NativePermissionPreview } from '../../lib/harness-native-permission'
 
 export type ComposerExecutionSettings = {
   approvalPolicy: ApprovalPolicy
@@ -26,7 +27,14 @@ export type ComposerExecutionSettings = {
   approvalReviewer: ApprovalReviewer
 }
 
+/** The selected external Agent and the native mode each Kun level maps to. */
+export type AgentPermissionContext = {
+  agentName: string
+  preview: (mode: KunToolPermissionMode) => NativePermissionPreview | null
+}
+
 type Props = {
+  agentPermission?: AgentPermissionContext
   disabledModes?: Partial<Record<KunToolPermissionMode, string>>
   value: ComposerExecutionSettings
   applying?: boolean
@@ -89,6 +97,7 @@ function permissionDescriptionKey(mode: KunToolPermissionMode): string {
 }
 
 export function FloatingComposerExecutionPicker({
+  agentPermission,
   value,
   disabledModes,
   applying = false,
@@ -106,7 +115,10 @@ export function FloatingComposerExecutionPicker({
   const currentPermissionOption = permissionOption(permissionMode)
   const fullAccess = permissionMode === 'full-access'
   const PermissionIcon = currentPermissionOption.Icon
-  const title = `${t('composerPermissionShort')}: ${t(permissionLabelKey(permissionMode))}. ${t(permissionDescriptionKey(permissionMode))}`
+  const currentNative = agentPermission?.preview(permissionMode) ?? null
+  const nativeNote = currentNative && agentPermission ? nativePermissionNote(t, agentPermission.agentName, currentNative) : ''
+  const title = `${t('composerPermissionShort')}: ${t(permissionLabelKey(permissionMode))}. ${t(permissionDescriptionKey(permissionMode))}` +
+    (nativeNote ? ` ${nativeNote}` : '')
 
   const updateMenuPosition = useCallback((menu: 'approval' | 'sandbox' = openMenu ?? 'approval'): void => {
     const button = approvalButtonRef.current
@@ -167,6 +179,7 @@ export function FloatingComposerExecutionPicker({
         className="ds-composer-permission-menu fixed z-50 max-w-[calc(100vw-24px)] overflow-hidden rounded-[18px] border border-ds-border-muted bg-white px-2 py-2 text-[13px] text-ds-ink shadow-[0_18px_48px_rgba(20,47,95,0.14)] dark:bg-ds-card"
       >
         <FloatingComposerPermissionMenuContent
+          agentPermission={agentPermission}
           permissionMode={permissionMode}
           disabledModes={disabledModes}
           onSelect={(option, event) => applyTrustedComposerExecutionChange(
@@ -205,7 +218,8 @@ export function FloatingComposerExecutionPicker({
               ? 'text-orange-600 hover:text-orange-700 focus-visible:outline-orange-500 dark:text-orange-300 dark:hover:text-orange-200 dark:focus-visible:outline-orange-300'
               : 'text-ds-muted hover:text-ds-ink focus-visible:outline-ds-accent'
           }`}
-          title={`${t(permissionLabelKey(permissionMode))}. ${t(permissionDescriptionKey(permissionMode))}`}
+          title={`${t(permissionLabelKey(permissionMode))}. ${t(permissionDescriptionKey(permissionMode))}${nativeNote ? ` ${nativeNote}` : ''}`}
+          data-native-permission-mode={currentNative?.id}
           aria-expanded={openMenu === 'approval'}
           aria-haspopup="menu"
           aria-label={t('composerPermissionShort')}
@@ -218,6 +232,7 @@ export function FloatingComposerExecutionPicker({
           ) : (
             <span className="ds-composer-permission-label max-w-[112px] truncate">
               {t(permissionLabelKey(permissionMode))}
+              {currentNative?.readOnly ? ` · ${t('agentUpdate.nativePermissionReadOnlyShort')}` : ''}
             </span>
           )}
           <ChevronDown
@@ -239,12 +254,23 @@ export function applyTrustedComposerExecutionChange(
   return runTrustedUserActivation(event, () => onChange(patch))
 }
 
+function nativePermissionNote(
+  t: (key: string, values?: Record<string, unknown>) => string,
+  agentName: string,
+  preview: NativePermissionPreview
+): string {
+  const mode = t(`agentUpdate.nativeModes.${preview.id}`, { defaultValue: preview.label })
+  return t(preview.readOnly ? 'agentUpdate.nativePermissionReadOnly' : 'agentUpdate.nativePermission', { agent: agentName, mode })
+}
+
 export function FloatingComposerPermissionMenuContent({
+  agentPermission,
   permissionMode,
   disabledModes,
   onSelect,
   onOpenPermissionSettings
 }: {
+  agentPermission?: AgentPermissionContext
   permissionMode: KunToolPermissionMode
   disabledModes?: Partial<Record<KunToolPermissionMode, string>>
   onSelect: (mode: KunToolPermissionMode, event: MouseEvent<HTMLButtonElement>) => void
@@ -273,9 +299,14 @@ export function FloatingComposerPermissionMenuContent({
         ) : null}
       </div>
       <div role="presentation" className="ds-composer-permission-options">
-        {APPROVAL_OPTIONS.map((option) => (
+        {APPROVAL_OPTIONS.map((option) => {
+          const native = agentPermission?.preview(option.value) ?? null
+          return (
           <ExecutionRow
             key={option.value}
+            native={native && agentPermission
+              ? { text: nativePermissionNote(t, agentPermission.agentName, native), readOnly: native.readOnly, id: native.id }
+              : undefined}
             mode={option.value}
             disabledReason={disabledModes?.[option.value]}
             selected={permissionMode === option.value}
@@ -284,13 +315,15 @@ export function FloatingComposerPermissionMenuContent({
             Icon={option.Icon}
             onClick={(event) => onSelect(option.value, event)}
           />
-        ))}
+          )
+        })}
       </div>
     </>
   )
 }
 
 function ExecutionRow({
+  native,
   mode,
   disabledReason,
   selected,
@@ -299,6 +332,7 @@ function ExecutionRow({
   Icon,
   onClick
 }: {
+  native?: { text: string; readOnly: boolean; id: string }
   mode: KunToolPermissionMode
   disabledReason?: string
   selected: boolean
@@ -342,6 +376,16 @@ function ExecutionRow({
         >
           {disabledReason ?? description}
         </span>
+        {native ? (
+          <span
+            data-native-permission-mode={native.id}
+            className={`ds-composer-permission-option-native mt-1 block text-[11.5px] font-medium leading-[1.4] ${
+              native.readOnly ? 'text-amber-700 dark:text-amber-300' : 'text-ds-muted'
+            }`}
+          >
+            {native.text}
+          </span>
+        ) : null}
       </span>
       {selected ? (
         <Check

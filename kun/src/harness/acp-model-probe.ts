@@ -34,6 +34,8 @@ export const ACP_MODEL_PROBE_CACHE_MS = 10 * 60 * 1_000
 export const ACP_MODEL_PROBE_FAILURE_CACHE_MS = 30_000
 const ACP_PROBE_SESSION_TIMEOUT_MS = 30_000
 const ACP_PROBE_RETRY_DELAY_MS = 1_000
+/** A warm probe process is reused for this long after its last lookup. */
+export const ACP_PROBE_IDLE_MS = 60_000
 
 export type AcpModelProbeDeps = {
   /** Settings `harnesses.binaryPaths` override for `launch.command`. */
@@ -47,7 +49,11 @@ export type AcpModelProbeDeps = {
   retryDelayMs?: number
   /** Diagnostic sink for failed probes; defaults to stderr (the Kun log). */
   log?: (line: string) => void
+  /** Idle lifetime of the reused probe process; tests pass small values. */
+  idleMs?: number
 }
+
+type PooledProbe = { conn: AcpConnection; users: number; timer?: ReturnType<typeof setTimeout> }
 
 class AcpModelProbeFailure extends Error {
   constructor(readonly reason: HarnessModelCatalogError) { super(reason.message ?? reason.code) }
@@ -87,6 +93,13 @@ export class AcpModelProbe {
     }
     this.bump(id)
     for (const key of [...this.cache.keys()]) if (harnessOfKey(key) === id) this.cache.delete(key)
+    // An explicit refresh gets a fresh process (for example after a login).
+    for (const [key, entry] of [...this.connections]) if (harnessOfKey(key) === id && entry.users === 0) this.drop(key, entry)
+  }
+
+  /** Close every warm probe process (runtime shutdown). */
+  dispose(): void {
+    for (const [key, entry] of [...this.connections]) this.drop(key, entry)
   }
   fetchedAt(definition: HarnessDefinition, selectedModel?: string): string | undefined {
     const value = this.cache.get(this.cacheKey(definition, selectedModel))?.fetchedAt
@@ -103,6 +116,13 @@ export class AcpModelProbe {
    * instead of collapsing a working model menu to empty.
    */
   private readonly lastGood = new Map<string, HarnessModelCatalog>()
+  /**
+   * One warm `acp` process per launch identity. A cold Agent start can take
+   * seconds and also boots the user's own MCP servers, so the catalog lookup
+   * and every per-model detail lookup share it until it idles out.
+   */
+  private readonly connections = new Map<string, PooledProbe>()
+  private readonly connecting = new Map<string, Promise<PooledProbe>>()
 
   constructor(private readonly deps: AcpModelProbeDeps = {}) {}
 
@@ -173,6 +193,74 @@ export class AcpModelProbe {
   }
 
   private async probeUncached(definition: HarnessDefinition, selectedModel?: string): Promise<HarnessModelCatalog> {
+    const lease = await this.acquire(definition)
+    const conn = lease.conn
+    try {
+      const raw = await conn.rpc.request(
+        ACP_AGENT_METHODS.sessionNew,
+        { cwd: tmpdir(), mcpServers: [] },
+        { timeoutMs: ACP_PROBE_SESSION_TIMEOUT_MS }
+      )
+      const parsed = AcpNewSessionResultSchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new AcpModelProbeFailure({ code: 'protocol_error', message: 'session/new returned an unrecognized result' })
+      }
+      const session = { ...parsed.data, models: parseAcpLegacyModels(parsed.data.models) }
+      const initial = acpModelCatalog({ harnessId: definition.id, ...parsed.data })
+      const off = conn.subscribeSession(session.sessionId, { onUpdate: (update) => {
+        if (update.sessionUpdate === 'config_option_update') {
+          session.configOptions = (update as { configOptions: AcpConfigOption[] }).configOptions
+        }
+      } })
+      try {
+        if (selectedModel) await applyAcpSessionModel(conn, session, selectedModel)
+        const catalog = acpModelCatalog({ harnessId: definition.id, configOptions: session.configOptions,
+          models: session.models ? { ...(parsed.data.models as object), currentModelId: session.models.currentModelId } : parsed.data.models,
+          defaultModel: initial.modelInfo.find((entry) => entry.isDefault)?.id })
+        lease.release(true)
+        return catalog
+      } finally { off() }
+    } catch (error) {
+      // A failed lookup never leaves a possibly wedged process in the pool.
+      lease.release(false)
+      throw error
+    }
+  }
+
+  private async acquire(definition: HarnessDefinition): Promise<{ conn: AcpConnection; release(healthy: boolean): void }> {
+    const key = this.identityKey(definition)
+    let entry = this.connections.get(key)
+    if (entry?.conn.closed) { this.drop(key, entry); entry = undefined }
+    if (!entry) {
+      let pending = this.connecting.get(key)
+      if (!pending) {
+        pending = this.connect(definition).then((conn) => {
+          const created: PooledProbe = { conn, users: 0 }
+          this.connections.set(key, created)
+          conn.onExit(() => this.drop(key, created))
+          return created
+        }).finally(() => this.connecting.delete(key))
+        this.connecting.set(key, pending)
+      }
+      entry = await pending
+    }
+    const leased = entry
+    leased.users += 1
+    if (leased.timer) { clearTimeout(leased.timer); leased.timer = undefined }
+    let released = false
+    return { conn: leased.conn, release: (healthy) => {
+      if (released) return
+      released = true
+      leased.users -= 1
+      if (!healthy) { this.drop(key, leased); return }
+      if (leased.users === 0 && this.connections.get(key) === leased) {
+        leased.timer = setTimeout(() => this.drop(key, leased), this.deps.idleMs ?? ACP_PROBE_IDLE_MS)
+        leased.timer.unref?.()
+      }
+    } }
+  }
+
+  private async connect(definition: HarnessDefinition): Promise<AcpConnection> {
     const command =
       this.deps.binaryPath?.(definition.id) ?? definition.launch?.command ?? ''
     if (!command) throw new AcpModelProbeFailure({ code: 'spawn_failed', message: 'No launch command is configured' })
@@ -199,31 +287,17 @@ export class AcpModelProbe {
     new AcpClientHost().attach(conn)
     try {
       await conn.initialize()
-      const raw = await conn.rpc.request(
-        ACP_AGENT_METHODS.sessionNew,
-        { cwd: tmpdir(), mcpServers: [] },
-        { timeoutMs: ACP_PROBE_SESSION_TIMEOUT_MS }
-      )
-      const parsed = AcpNewSessionResultSchema.safeParse(raw)
-      if (!parsed.success) {
-        throw new AcpModelProbeFailure({ code: 'protocol_error', message: 'session/new returned an unrecognized result' })
-      }
-      const session = { ...parsed.data, models: parseAcpLegacyModels(parsed.data.models) }
-      const initial = acpModelCatalog({ harnessId: definition.id, ...parsed.data })
-      const off = conn.subscribeSession(session.sessionId, { onUpdate: (update) => {
-        if (update.sessionUpdate === 'config_option_update') {
-          session.configOptions = (update as { configOptions: AcpConfigOption[] }).configOptions
-        }
-      } })
-      try {
-        if (selectedModel) await applyAcpSessionModel(conn, session, selectedModel)
-        return acpModelCatalog({ harnessId: definition.id, configOptions: session.configOptions,
-          models: session.models ? { ...(parsed.data.models as object), currentModelId: session.models.currentModelId } : parsed.data.models,
-          defaultModel: initial.modelInfo.find((entry) => entry.isDefault)?.id })
-      } finally { off() }
-    } finally {
+      return conn
+    } catch (error) {
       await conn.close().catch(() => undefined)
+      throw error
     }
+  }
+
+  private drop(key: string, entry: PooledProbe): void {
+    if (this.connections.get(key) === entry) this.connections.delete(key)
+    if (entry.timer) clearTimeout(entry.timer)
+    void entry.conn.close().catch(() => undefined)
   }
 
   private store(key: string, catalog: HarnessModelCatalog, ttlMs: number): void {

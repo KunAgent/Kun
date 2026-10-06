@@ -336,6 +336,9 @@ export function useAdeComposerControls(input: {
     aliasGroupKey: composerGatewayBinding ? aliasCredentialGroupKey(composerGatewayBinding) : undefined,
     harnessLabel,
     isNativeHarness,
+    /** Native permission ladder of the selected Agent plus its saved preference. */
+    permissionModes: row?.definition.permissionModes,
+    requestedPermissionMode: harnessDefaults[harnessId]?.permissionMode,
     rowUnavailableCode: harnessRowUnavailableCode,
     refreshRows: () => {
       void loadHarnesses()

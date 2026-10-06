@@ -95,4 +95,28 @@ describe('AcpModelProbe', () => {
     expect(acpModelProbeError(new AcpError('harness_protocol_error', 'bad frame'))).toMatchObject({ code: 'protocol_error' })
     expect(acpModelProbeError(new Error('spawn devin ENOENT'))).toMatchObject({ code: 'spawn_failed' })
   })
+
+  it('reuses one warm Agent process for the catalog and per-model detail lookups', async () => {
+    const f = await sequence(working)
+    const probe = new AcpModelProbe({ spawn: f.spawnFixture, retryDelayMs: 0, log: () => undefined })
+    try {
+      expect((await probe.probeCatalog(devin)).models).toEqual(['available-model'])
+      expect((await probe.probeCatalog(devin, 'available-model')).models).toEqual(['available-model'])
+      expect(f.spawned()).toBe(1)
+      probe.invalidate('devin')
+      await probe.probeCatalog(devin)
+      expect(f.spawned()).toBe(2)
+    } finally { probe.dispose() }
+  })
+
+  it('closes an idle probe process and starts a fresh one on the next lookup', async () => {
+    const f = await sequence(working)
+    const probe = new AcpModelProbe({ spawn: f.spawnFixture, retryDelayMs: 0, idleMs: 10, cacheMs: 0, log: () => undefined })
+    try {
+      await probe.probeCatalog(devin)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      await probe.probeCatalog(devin)
+      expect(f.spawned()).toBe(2)
+    } finally { probe.dispose() }
+  })
 })

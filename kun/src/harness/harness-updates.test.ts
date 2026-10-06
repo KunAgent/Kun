@@ -75,3 +75,18 @@ it('rejects changed executables and reports failed network checks as unknown', a
   expect(await f.service.check('claude-code', true)).toMatchObject({ status: 'unknown', error: expect.stringContaining('offline') })
   expect(f.run).not.toHaveBeenCalled()
 })
+it('reuses settled detection for a background check and re-detects only when forced', async () => {
+  const detect = vi.fn(async (id: string): Promise<HarnessStatus> => ({ harnessId: id, installed: 'yes', login: 'signed-in', checkedAt: '', resolvedCommand: '/bin/devin', version: '3000.11.3' }))
+  const service = new HarnessUpdates({
+    definition: (id) => BUILTIN_HARNESSES.find((entry) => entry.id === id), detect,
+    currentStatus: (id) => ({ harnessId: id, installed: 'yes', login: 'unknown', checkedAt: '', resolvedCommand: '/bin/devin', version: '3000.11.3' }),
+    describe: async (_id, status) => ({ source: 'homebrew', path: status.resolvedCommand, version: status.version,
+      fingerprint: harnessExecutableIdentity(status.resolvedCommand) }),
+    candidate: async () => undefined, latest: async () => '3000.11.3',
+    verify: vi.fn(), invalidate: vi.fn(), inUse: () => false, beginMaintenance: () => () => undefined
+  })
+  expect(await service.check('devin')).toMatchObject({ status: 'current' })
+  expect(detect).not.toHaveBeenCalled()
+  await service.check('devin', true)
+  expect(detect).toHaveBeenCalledTimes(1)
+})

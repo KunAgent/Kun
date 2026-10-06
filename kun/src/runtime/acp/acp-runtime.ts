@@ -213,7 +213,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     const emitter = new AcpDraftEmitter(
       { turns: this.deps.turns, events: this.deps.events },
       threadId,
-      turnId
+      turnId,
+      // credentialEnv is non-empty only for kun-gateway routes (native login is {}).
+      { gatewayMetered: Object.keys(credentialEnv).length > 0 }
     )
     let emitQueue: Promise<void> = Promise.resolve()
     let acceptEvidence = true

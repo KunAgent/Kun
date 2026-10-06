@@ -252,7 +252,9 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     const emitter = new AcpDraftEmitter(
       { turns: this.deps.turns, events: this.deps.events },
       threadId,
-      turnId
+      turnId,
+      // credentialEnv is non-empty only for kun-gateway routes (native login is {}).
+      { gatewayMetered: Object.keys(ctx.credentialEnv).length > 0 }
     )
     const approveCore = makeDelegatedAwaitApproval(
       {

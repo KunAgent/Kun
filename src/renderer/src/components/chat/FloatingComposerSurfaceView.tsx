@@ -1,4 +1,6 @@
 import { useState, type ReactElement } from 'react'
+import { nativePermissionPreview } from '../../lib/harness-native-permission'
+import type { KunToolPermissionMode } from '@shared/app-settings'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
 import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDialog'
 import { useChatStore } from '../../store/chat-store'
@@ -429,6 +431,11 @@ export function FloatingComposerSurfaceView({
                 ) : null}
                 {showExecutionSettingsPicker && executionSettings && onExecutionSettingsChange ? (
                   <FloatingComposerExecutionPicker
+                    agentPermission={externalAgent && adeComposer ? {
+                      agentName: adeComposer.harnessLabel,
+                      preview: (mode: KunToolPermissionMode) => nativePermissionPreview(adeComposer.harnessId, adeComposer.permissionModes, mode,
+                        adeComposer.requestedPermissionMode)
+                    } : undefined}
                     value={executionSettings}
                     applying={executionSettingsApplying}
                     disabled={!canCompose || busy}

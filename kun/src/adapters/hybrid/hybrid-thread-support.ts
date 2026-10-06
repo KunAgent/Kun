@@ -3,11 +3,14 @@ import { dirname } from 'node:path'
 import type { Database as BetterSqliteDatabase } from 'better-sqlite3'
 import type { RuntimeEvent } from '../../contracts/events.js'
 import type { TurnItem } from '../../contracts/items.js'
-import { emptyUsageSnapshot, UsageSnapshotSchema, type UsageSnapshot } from '../../contracts/usage.js'
-import { diffUsage, hasUsage } from '../../domain/usage.js'
+import { UsageSnapshotSchema, type UsageSnapshot } from '../../contracts/usage.js'
+import { LEGACY_HARNESS_USAGE_SOURCE, UsageDeltaFold } from '../../domain/usage-legacy-harness.js'
 import type { SessionLatestUsageSnapshot, SessionUsageRecord } from '../../ports/session-store.js'
 
-export type UsageRuntimeEvent = Extract<RuntimeEvent, { kind: 'usage' }>
+export type UsageRuntimeEvent = Extract<RuntimeEvent, { kind: 'usage' }> & {
+  /** Set by the usage backfill for raw pre-ledger external-Agent reports. */
+  legacyHarness?: true
+}
 
 export type UsageRow = {
   thread_id: string
@@ -36,7 +39,7 @@ export function previewFromItems(items: TurnItem[]): string {
   return ''
 }
 
-export function usageRowFromEvent(event: RuntimeEvent & { kind: 'usage' }): UsageRow {
+export function usageRowFromEvent(event: UsageRuntimeEvent): UsageRow {
   return {
     thread_id: event.threadId,
     seq: event.seq,
@@ -44,7 +47,7 @@ export function usageRowFromEvent(event: RuntimeEvent & { kind: 'usage' }): Usag
     turn_id: event.turnId ?? null,
     model: event.model ?? null,
     provider_id: event.providerId ?? null,
-    source: event.source ?? null,
+    source: event.legacyHarness ? LEGACY_HARNESS_USAGE_SOURCE : event.source ?? null,
     harness_id: event.harnessId ?? null,
     relation: null,
     usage_json: JSON.stringify(event.usage)
@@ -52,23 +55,25 @@ export function usageRowFromEvent(event: RuntimeEvent & { kind: 'usage' }): Usag
 }
 
 export function usageRecordsFromRows(rows: UsageRow[]): SessionUsageRecord[] {
-  const previousByThread = new Map<string, UsageSnapshot>()
+  const folds = new Map<string, UsageDeltaFold>()
   const records: SessionUsageRecord[] = []
   for (const row of rows) {
     const usage = parseUsageSnapshot(row.usage_json)
     if (!usage) continue
-    const previous = previousByThread.get(row.thread_id) ?? emptyUsageSnapshot()
-    const delta = diffUsage(usage, previous)
-    previousByThread.set(row.thread_id, usage)
-    if (!hasUsage(delta)) continue
+    const fold = folds.get(row.thread_id) ?? new UsageDeltaFold()
+    folds.set(row.thread_id, fold)
+    const legacy = row.source === LEGACY_HARNESS_USAGE_SOURCE
+    const delta = fold.next(usage, legacy)
+    if (!delta) continue
     records.push({
       threadId: row.thread_id,
       ...(row.turn_id ? { turnId: row.turn_id } : {}),
       ...(row.model ? { model: row.model } : {}),
       ...(row.provider_id ? { providerId: row.provider_id } : {}),
-      ...(row.source === 'native' || row.source === 'harness-gateway' || row.source === 'harness-reported' || row.source === 'public-gateway' || row.source === 'utility'
-        ? { source: row.source }
-        : {}),
+      ...(legacy ? { source: 'harness-reported' as const }
+        : row.source === 'native' || row.source === 'harness-gateway' || row.source === 'harness-reported' || row.source === 'public-gateway' || row.source === 'utility'
+          ? { source: row.source }
+          : {}),
       ...(row.harness_id ? { harnessId: row.harness_id } : {}),
       ...(row.relation === 'primary' || row.relation === 'fork' || row.relation === 'side'
         ? { relation: row.relation }

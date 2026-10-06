@@ -155,6 +155,10 @@ export function createHarnessComposition(
   }
   const updates = new HarnessUpdates({
     definition: (id) => catalog.get(id), detect: (id) => detector.status(id, { force: true }),
+    currentStatus: (id) => {
+      const status = detector.cachedStatus(id)
+      return status && !status.detecting && status.installed === 'yes' && status.resolvedCommand ? status : undefined
+    },
     beginMaintenance: (id) => readiness.beginMaintenance(id), inUse: (id) => readiness.inUse(id),
     invalidate: (id) => { invalidateModels(id); readiness.invalidateHarness(id) },
     afterActivate: async (id) => {

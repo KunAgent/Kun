@@ -66,6 +66,20 @@
     "usageBilledByAgent": "Billed by Agent",
     "usageBilledByAgentTitle": "Token counts are reported by the Agent. It bills through its own account or subscription, so Kun shows no local price.",
     "settingsChanged": "Agent selection changed while updating; check again.",
-    "rollback": "Restore previous version"
+    "rollback": "Restore previous version",
+    "nativePermission": "{{agent}} runs in: {{mode}}",
+    "nativePermissionReadOnly": "{{agent}} runs in: {{mode}} (read-only, will not change files)",
+    "nativePermissionReadOnlyShort": "read-only",
+    "nativeModes": {
+      "ask": "Ask",
+      "smart": "Smart",
+      "accept-edits": "Accept edits",
+      "bypass": "Bypass permissions",
+      "normal": "Normal",
+      "plan": "Plan",
+      "read-only": "Read only",
+      "default": "Default"
+    },
+    "usageReportedByAgent": "Reported by the Agent"
   }
 }

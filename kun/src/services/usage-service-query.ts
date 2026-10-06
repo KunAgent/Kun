@@ -77,6 +77,7 @@ export type ThreadUsageAccumulator = ThreadUsageBucket & {
 
 export type ModelUsageAccumulator = ModelUsageBucket & {
   threadIds: Set<string>
+  harnessIds: Set<string>
   hasCacheTelemetry: boolean
 }
 

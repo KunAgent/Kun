@@ -86,7 +86,7 @@ export async function listHarnesses(
       Object.assign(status, nativeAgentNetworkStatus(definition))
       const enabledProfiles = harnesses.catalog.enabledProfiles?.(definition.id) ?? []
       const readyProfiles = await harnesses.readiness?.readyProfiles(definition.id) ?? []
-      harnesses.readiness?.warmProfiles(definition.id)
+      // Warming already started for every row above; only report its state.
       if (harnesses.readiness?.checking(definition.id)) status.detecting = true
       const row: Record<string, unknown> = { definition, status, enabled: !harnesses.catalog.isDisabled(definition.id), enabledProfiles, readyProfiles }
       if (usage && runtime.harnessAdmission && status) {

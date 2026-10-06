@@ -10,6 +10,8 @@ import { readUsageSummaryCache, writeUsageSummaryCache } from './usage-summary-c
 
 export type ModelUsageBucket = Omit<DailyUsageBucket, 'date'> & {
   model: string
+  /** External Agents whose turns reported this model's usage. */
+  harnessIds?: string[]
 }
 
 export type ModelUsageScope = 'all' | 'primary' | 'side'
@@ -58,6 +60,7 @@ type RawUsageCounters = {
 
 type RawModelUsageBucket = RawUsageCounters & {
   model?: unknown
+  harness_ids?: unknown
 }
 
 type RawModelUsageDayBucket = RawUsageCounters & {
@@ -117,9 +120,13 @@ function normalizeCounters(raw: RawUsageCounters): Omit<DailyUsageBucket, 'date'
 
 function normalizeModelBucket(raw: RawModelUsageBucket): ModelUsageBucket {
   const model = typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : 'unknown'
+  const harnessIds = Array.isArray(raw.harness_ids)
+    ? raw.harness_ids.filter((id): id is string => typeof id === 'string' && Boolean(id.trim()))
+    : []
   return {
     model,
-    ...normalizeCounters(raw)
+    ...normalizeCounters(raw),
+    ...(harnessIds.length ? { harnessIds } : {})
   }
 }
 

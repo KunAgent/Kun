@@ -1,4 +1,5 @@
 import { BarChart3, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { harnessDisplayNames } from '../../lib/harness-display-name'
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -328,6 +329,9 @@ export function SidebarUsagePanel({
                     <div className="flex items-center justify-between gap-3 text-[10.5px]">
                       <span className="min-w-0 flex-1 truncate font-medium text-ds-ink" title={bucket.model}>
                         {bucket.model}
+                        {bucket.harnessIds?.length ? (
+                          <span className="ml-1 font-normal text-ds-faint" data-model-usage-agent>{harnessDisplayNames(bucket.harnessIds)}</span>
+                        ) : null}
                       </span>
                       <span className="shrink-0 tabular-nums text-ds-muted">
                         {percent.toFixed(percent >= 10 ? 0 : 1)}%

@@ -19,6 +19,12 @@ const active = (job?: HarnessUpdateJob) => job && ['waiting', 'running', 'verify
 export type HarnessUpdatesDeps = {
   definition(id: string): HarnessDefinition | undefined
   detect(id: string): Promise<HarnessStatus>
+  /**
+   * Settled detection already held by the catalog. A background update check
+   * reuses it: forcing detection re-runs the Agent's login probe, which can
+   * take many seconds on a slow network and is irrelevant to versions.
+   */
+  currentStatus?(id: string): HarnessStatus | undefined
   verify(id: string, path: string, signal: AbortSignal): Promise<{ version: string; models: string[] }>
   beginMaintenance(id: string): () => void
   inUse(id: string): boolean
@@ -48,14 +54,14 @@ export class HarnessUpdates {
       cached.value.current.fingerprint === harnessExecutableIdentity(cached.value.current.path)) return this.withJob(cached.value)
     const existing = this.pending.get(id)
     if (existing) return this.withJob(await existing)
-    const pending = this.checkOnce(definition).finally(() => this.pending.delete(id))
+    const pending = this.checkOnce(definition, force).finally(() => this.pending.delete(id))
     this.pending.set(id, pending)
     return this.withJob(await pending)
   }
 
-  private async checkOnce(definition: HarnessDefinition): Promise<HarnessUpdateState> {
+  private async checkOnce(definition: HarnessDefinition, force = false): Promise<HarnessUpdateState> {
     const id = definition.id
-    const status = await this.deps.detect(id)
+    const status = (!force ? this.deps.currentStatus?.(id) : undefined) ?? await this.deps.detect(id)
     const current = await (this.deps.describe ?? describeHarnessInstallation)(id, status, this.deps.home)
     const recipe = definition.builtin ? HARNESS_UPDATE_RECIPES[id] : undefined
     const candidate = recipe ? await (this.deps.candidate ?? localHarnessCandidate)(id, current) : undefined

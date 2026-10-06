@@ -128,6 +128,7 @@ export function buildModelUsageResponse(records: readonly ThreadUsageRecord[], q
     const model = resolveUsageModel(record)
     const providerId = resolveUsageProviderId(record)
     const modelBucket = modelBuckets.get(model) ?? emptyModelBucket(model)
+    if (record.harnessId && record.harnessId !== 'kun') modelBucket.harnessIds.add(record.harnessId)
     for (const bucket of [dayBucket, modelBucket]) {
       const added = addUsageCounters(
         bucket, record.usage, model, record.completedAt, providerId

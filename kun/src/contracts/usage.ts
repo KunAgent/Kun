@@ -220,7 +220,9 @@ export const ThreadUsageResponseSchema = UsageResponseSchema.extend({
 export type ThreadUsageResponse = z.infer<typeof ThreadUsageResponseSchema>
 
 export const ModelUsageBucketSchema = DailyUsageCountersSchema.extend({
-  model: z.string().min(1)
+  model: z.string().min(1),
+  /** External Agents whose turns reported usage for this model. */
+  harness_ids: z.array(z.string().min(1)).optional()
 })
 export type ModelUsageBucket = z.infer<typeof ModelUsageBucketSchema>
 

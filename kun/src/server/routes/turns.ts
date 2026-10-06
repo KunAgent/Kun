@@ -389,6 +389,7 @@ export async function compactTurn(
     })
     return jsonResponse(response)
   } catch (error) {
+    if (error instanceof TurnConflictError) return ERRORS.conflict(error.message)
     if (error instanceof Error && /not found/i.test(error.message)) {
       return ERRORS.notFound(error.message)
     }

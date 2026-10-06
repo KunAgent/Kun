@@ -140,7 +140,7 @@ export class AgentSdkRuntime {
       threadId,
       turnId,
       ...(ctx.billingKind ? { billingKind: ctx.billingKind, model: ctx.model } : {}),
-      nextId: (p) => this.deps.nextId(p),
+      nextId: (p) => this.deps.nextId(p), resumedQuery: () => Boolean(ctx.resumeSessionId),
       streamLimits: {
         ...sdkStreamLimits,
         // A delegated SDK assistant message is one native model step. Keep the
