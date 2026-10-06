@@ -91,6 +91,7 @@ export function providersConfigForRuntime(
         : {}),
       ...(provider.endpointFormat ? { endpointFormat: provider.endpointFormat } : {}),
       ...(provider.endpoints ? { endpoints: provider.endpoints } : {}),
+      ...(provider.balanceUrl ? { balanceUrl: provider.balanceUrl } : {}),
       models: [...provider.models],
       modelCapabilities: modelCapabilitiesForProviderConfig(provider),
       ...(selectedModel ? { selectedModel } : {}),

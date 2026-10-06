@@ -53,6 +53,7 @@ export type ProviderQuotaProbeKind =
   | 'stepfun-global'
   | 'aihubmix'
   | 'new-api'
+  | 'custom-balance'
   | SubscriptionQuotaProbeKind
 
 export type ProviderQuotaProbe = {
@@ -385,5 +386,17 @@ export function classifyProviderQuotaProbe(
       dashboardUrl: 'https://platform.openai.com/settings/organization/billing/overview'
     }
   }
+  // A balance endpoint the user named, only on the host that already receives the key.
+  const custom = customBalanceUrl(provider)
+  if (custom) return { kind: 'custom-balance', source: 'Custom balance endpoint', dashboardUrl: custom.origin }
   return null
+}
+
+/** The user's balance URL when it is HTTPS on the provider's own host; otherwise undefined. */
+export function customBalanceUrl(provider: Pick<ProviderQuotaProbeProfile, 'balanceUrl' | 'baseUrl'>): URL | undefined {
+  if (!provider.balanceUrl || !provider.baseUrl) return undefined
+  try {
+    const url = new URL(provider.balanceUrl)
+    return url.protocol === 'https:' && url.host === new URL(provider.baseUrl).host && !url.username && !url.password ? url : undefined
+  } catch { return undefined }
 }

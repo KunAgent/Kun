@@ -447,6 +447,7 @@ export async function createRuntimeModelComposition(
           kind: profile.kind,
           configured: Boolean(config),
           ...(profile.baseUrl ? { baseUrl: profile.baseUrl } : {}),
+          ...(core.activeOptions.providers?.[profile.id]?.balanceUrl ? { balanceUrl: core.activeOptions.providers[profile.id]!.balanceUrl } : {}),
           apiKey,
           ...(config?.authProfile ? { authProfile: config.authProfile } : {}),
           proxyUrl: config?.modelProxyUrl ?? '',

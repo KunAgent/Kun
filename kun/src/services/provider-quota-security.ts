@@ -14,12 +14,13 @@ const hosts: Record<ProviderQuotaProbeKind, string[]> = {
   'gemini-cli-subscription': ['cloudcode-pa.googleapis.com', 'oauth2.googleapis.com'], 'opencode-go-local': ['opencode.ai'],
   'siliconflow-cn': ['api.siliconflow.cn'], 'siliconflow-global': ['api.siliconflow.com'],
   'stepfun-cn': ['api.stepfun.com'], 'stepfun-global': ['api.stepfun.ai'], aihubmix: ['aihubmix.com'],
-  // A new-api relay is asked on the provider's own host, which already receives its key.
-  'new-api': []
+  // A new-api relay or a user-named balance endpoint is asked on the provider's own host, which already receives its key.
+  'new-api': [],
+  'custom-balance': []
 }
 
 function quotaHosts(provider: ProviderQuotaProbeProfile, kind: ProviderQuotaProbeKind): string[] {
-  if (kind !== 'new-api') return hosts[kind]
+  if (kind !== 'new-api' && kind !== 'custom-balance') return hosts[kind]
   try { return [new URL(provider.baseUrl ?? '').host] } catch { return [] }
 }
 
@@ -41,6 +42,6 @@ export function scopedQuotaFetch(fetcher: ProviderQuotaFetch, provider: Provider
 export function providerQuotaIdentity(provider: ProviderQuotaProbeProfile): string {
   const headers = Object.fromEntries(Object.entries(provider.headers ?? {}).filter(([name]) => name.toLowerCase() !== 'session_id').sort(([a], [b]) => a.localeCompare(b)))
   return createHash('sha256').update(JSON.stringify({ id: provider.id, kind: provider.kind, presetId: provider.presetId,
-    baseUrl: provider.baseUrl, configured: provider.configured, key: provider.apiKey, credentialSourceId: provider.credentialSourceId,
+    baseUrl: provider.baseUrl, balanceUrl: provider.balanceUrl, configured: provider.configured, key: provider.apiKey, credentialSourceId: provider.credentialSourceId,
     headers, authProfile: provider.authProfile, proxyUrl: provider.proxyUrl })).digest('hex')
 }

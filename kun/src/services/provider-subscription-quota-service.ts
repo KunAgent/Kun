@@ -65,6 +65,8 @@ export type ProviderQuotaProbeProfile = {
   headers?: Record<string, string>
   credentialSourceId?: string
   proxyUrl?: string
+  /** User-named balance endpoint on the provider's own host (fragment = JSON pointer). */
+  balanceUrl?: string
 }
 
 export type SubscriptionQuotaProbeKind =

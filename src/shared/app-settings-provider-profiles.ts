@@ -198,6 +198,7 @@ export function normalizeModelProviderProfile(
   const music = normalizeModelProviderMusicCapability(input?.music)
   const video = normalizeModelProviderVideoCapability(input?.video)
   const endpoints = normalizeModelProviderEndpoints(input?.endpoints)
+  const balanceUrl = normalizeProviderBalanceUrl(input?.balanceUrl, baseUrl)
   const catalogSources = normalizeModelProviderCatalogSources(input?.catalogSources) ??
     (resolvedPresetSource?.mode === 'api' ? resolvedPresetSource.preset.catalogSources : undefined)
   const iconId = normalizeProviderIconId(input?.iconId)
@@ -214,6 +215,7 @@ export function normalizeModelProviderProfile(
     baseUrl,
     endpointFormat,
     ...(endpoints ? { endpoints } : {}),
+    ...(balanceUrl ? { balanceUrl } : {}),
     ...(catalogSources ? { catalogSources: [...catalogSources] } : {}),
     ...(iconId ? { iconId } : {}),
     useProxy: typeof input?.useProxy === 'boolean' ? input.useProxy : missingUseProxy,
@@ -508,4 +510,16 @@ export function shouldUpgradeGeneratedPresetReasoning(
     preset.requestProtocol !== 'none' &&
     stored.defaultEffort === 'auto' &&
     stored.supportedEfforts.every((effort) => effort === 'auto' || effort === 'off')
+}
+
+/** Keeps a balance URL only when it is HTTPS on the provider's own host, which already receives its key. */
+export function normalizeProviderBalanceUrl(value: unknown, baseUrl: string): string | undefined {
+  if (typeof value !== 'string' || !value.trim() || value.length > 2_048) return undefined
+  try {
+    const url = new URL(value.trim())
+    if (url.protocol !== 'https:' || url.username || url.password || url.host !== new URL(baseUrl).host) return undefined
+    return url.toString()
+  } catch {
+    return undefined
+  }
 }

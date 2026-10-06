@@ -60,3 +60,44 @@ export function parseNewApiKeyBalance(payload: unknown): ProviderQuotaMetric[] {
     ...(used !== undefined ? { used: used / 500_000, limit: (used + available) / 500_000,
       usedPercent: used + available > 0 ? Math.min(100, Math.max(0, used / (used + available) * 100)) : 0 } : {}) }]
 }
+
+const BALANCE_PATHS = [
+  ['balance'], ['total_balance'], ['available_balance'], ['remaining'], ['remain'], ['credits'], ['credit'],
+  ['data', 'balance'], ['data', 'total_balance'], ['data', 'available_balance'], ['data', 'remaining'], ['data', 'credits'],
+  ['balance_infos', '0', 'total_balance'], ['data', 'totalBalance'], ['totalBalance']
+]
+
+function at(root: unknown, path: readonly string[]): unknown {
+  let current = root
+  for (const part of path) {
+    if (current === null || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[part]
+  }
+  return current
+}
+
+/** RFC 6901 pointer (`/data/balance`), given as the balance URL's fragment. */
+export function jsonPointerPath(pointer: string): string[] | null {
+  if (!pointer.startsWith('/')) return null
+  return pointer.slice(1).split('/').map((part) => decodeURIComponent(part).replace(/~1/g, '/').replace(/~0/g, '~'))
+}
+
+/**
+ * A provider's own balance endpoint. The value is read at the pointer in the
+ * balance URL's fragment, or from the field names relays commonly use. The
+ * currency comes from a `currency` field when present.
+ */
+export function parseCustomBalance(payload: unknown, pointer?: string): ProviderQuotaMetric[] {
+  const root = record(payload, 'The balance endpoint returned an invalid response.')
+  const explicit = pointer ? jsonPointerPath(pointer) : null
+  if (pointer && !explicit) throw new Error('The balance URL fragment must be a JSON pointer such as #/data/balance.')
+  const paths = explicit ? [explicit] : BALANCE_PATHS
+  for (const path of paths) {
+    const value = numberValue(at(root, path))
+    if (value === undefined) continue
+    const parent = path.length > 1 ? at(root, path.slice(0, -1)) : root
+    const currency = [at(parent, ['currency']), at(root, ['currency']), at(root, ['data', 'currency'])].find((item) => typeof item === 'string' && item.length <= 16)
+    return [{ id: 'balance', label: 'Balance', unit: typeof currency === 'string' ? currency.toUpperCase() : 'USD', remaining: value }]
+  }
+  throw new Error(explicit ? `No number at ${pointer} in the balance response.` : 'No balance field was found; add #/path/to/value to the balance URL.')
+}

@@ -208,6 +208,7 @@ export const modelProviderPatchSchema = z.object({
       responses: z.string().trim().max(MAX_URL_LENGTH).optional(),
       messages: z.string().trim().max(MAX_URL_LENGTH).optional()
     }).strict().nullable().optional(),
+    balanceUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     catalogSources: z.array(z.string().trim().min(1).max(64)).max(8).optional(),
     iconId: z.string().trim().min(1).max(128).optional(),
     useProxy: z.boolean().optional(),

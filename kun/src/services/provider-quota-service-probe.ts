@@ -13,8 +13,8 @@ import {
   type SubscriptionQuotaProbeKind,
   type SubscriptionQuotaRuntime
 } from './provider-subscription-quota.js'
-import { MAX_RESPONSE_BYTES, type ProbeContext, type ProviderQuotaProbeKind, ProviderQuotaRequestError, QUOTA_TIMEOUT_MS } from './provider-quota-service-core.js'
-import { parseAiHubMixBalance, parseNewApiKeyBalance, parseSiliconFlowBalance, parseStepFunBalance } from './provider-quota-balance-parsers.js'
+import { customBalanceUrl, MAX_RESPONSE_BYTES, type ProbeContext, type ProviderQuotaProbeKind, ProviderQuotaRequestError, QUOTA_TIMEOUT_MS } from './provider-quota-service-core.js'
+import { parseAiHubMixBalance, parseCustomBalance, parseNewApiKeyBalance, parseSiliconFlowBalance, parseStepFunBalance } from './provider-quota-balance-parsers.js'
 import { parseDeepSeekQuota, parseKimiCodeQuota, parseMiniMaxQuota, parseMoonshotQuota, parseOpenAiQuota, parseOpenRouterQuota, parseZaiQuota } from './provider-quota-service-provider-parsers.js'
 
 export async function runProbe(
@@ -79,6 +79,13 @@ export async function runProbe(
   }
   if (kind === 'new-api') {
     return { metrics: parseNewApiKeyBalance(await requestJson(`${new URL(provider.baseUrl ?? '').origin}/api/usage/token`, context)) }
+  }
+  if (kind === 'custom-balance') {
+    const url = customBalanceUrl(provider)
+    if (!url) throw new ProviderQuotaRequestError('The balance URL must be HTTPS on the provider host.')
+    const pointer = url.hash ? decodeURIComponent(url.hash.slice(1)) : undefined
+    url.hash = ''
+    return { metrics: parseCustomBalance(await requestJson(url.toString(), context), pointer) }
   }
   if (kind === 'kimi-code') {
     return {

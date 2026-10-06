@@ -366,6 +366,12 @@ describe('model route pool settings', () => {
     expect(normalizeModelProviderSettings({
       localGateway: { enabled: true, name: '  Team Relay  ' }
     }).localGateway).toEqual({ enabled: true, name: 'Team Relay', exposeProviderModels: false })
+    // A balance URL survives only as HTTPS on the provider's own host.
+    const provider = (balanceUrl: string) => normalizeModelProviderSettings({ providers: [{ id: 'relay', name: 'Relay', apiKey: 'k',
+      baseUrl: 'https://relay.example/v1', endpointFormat: 'chat_completions', models: ['m'], balanceUrl } as never] }).providers.find((entry) => entry.id === 'relay')?.balanceUrl
+    expect(provider('https://relay.example/api/balance#/data/left')).toBe('https://relay.example/api/balance#/data/left')
+    expect(provider('https://other.example/api/balance')).toBeUndefined()
+    expect(provider('http://relay.example/api/balance')).toBeUndefined()
     // The discovery file is on by default; only an explicit off is stored.
     expect(normalizeModelProviderSettings({ localGateway: { enabled: true, advertiseDiscovery: false } }).localGateway.advertiseDiscovery).toBe(false)
     expect('advertiseDiscovery' in normalizeModelProviderSettings({ localGateway: { enabled: true, advertiseDiscovery: true as never } }).localGateway).toBe(false)

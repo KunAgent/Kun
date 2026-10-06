@@ -196,6 +196,8 @@ export const ServeProviderConfigSchema = z
       responses: z.string().min(1).max(2_048).optional(),
       messages: z.string().min(1).max(2_048).optional()
     }).strict().optional(),
+    /** HTTPS balance endpoint on the provider's own host; the URL fragment is a JSON pointer to the value. */
+    balanceUrl: z.string().url().max(2_048).optional(),
     endpointFormat: z
       .preprocess(normalizeModelEndpointFormat, z.enum(MODEL_ENDPOINT_FORMATS))
       .default(DEFAULT_MODEL_ENDPOINT_FORMAT)
