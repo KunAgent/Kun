@@ -68,6 +68,7 @@ export const KUN_MANAGER_CAPABILITIES = [
   'runtime-slots-v1',
   'shared-data-v1',
   'artifact-memory-data-v1',
+  'memory-lifecycle-v1',
   'atomic-json-v1',
   'history-reference-cleanup-v1',
   'history-reference-recovery-v1',
@@ -100,7 +101,7 @@ export const ArtifactStoreOperationSchema = z.enum([
   'put', 'releaseOwner', 'delete', 'list', 'get', 'readRange', 'stat'
 ])
 export const MemoryStoreOperationSchema = z.enum([
-  'distillationPending', 'commitDistillation', 'getById',
+  'distillationPending', 'commitDistillation', 'getById', 'history', 'lifecycle', 'isForgotten', 'erasureReceipt',
   'create', 'createWithId', 'update', 'delete', 'purge', 'list', 'listDirectives', 'retrieve', 'diagnostics',
   'feedbackReady', 'feedbackAppend', 'feedbackEvent', 'feedbackAggregate',
   'feedbackAggregates', 'feedbackDiagnostics', 'feedbackConfirm', 'feedbackCorrect'

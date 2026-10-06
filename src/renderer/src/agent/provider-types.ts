@@ -540,10 +540,10 @@ export interface AgentProvider {
   }): Promise<CoreMemoryRecordJson>
   updateMemory?(
     memoryId: string,
-    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; authority?: CoreMemoryRecordJson['authority']; disabled?: boolean },
+    patch: { expectedRevision: number; content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; authority?: CoreMemoryRecordJson['authority']; disabled?: boolean },
     options?: { workspace?: string; project?: string }
   ): Promise<CoreMemoryRecordJson>
-  deleteMemory?(memoryId: string, options?: { workspace?: string; project?: string }): Promise<CoreMemoryRecordJson>
+  deleteMemory?(memoryId: string, options?: { workspace?: string; project?: string; expectedRevision?: number }): Promise<CoreMemoryRecordJson>
   getMemoryDiagnostics?(): Promise<CoreMemoryDiagnosticsJson>
   confirmMemory?(
     memoryId: string,
@@ -564,7 +564,8 @@ export interface AgentProvider {
       validTo?: string | null
       expiresAt?: string | null
     },
-    access?: { workspace?: string; project?: string }
+    access: { workspace?: string; project?: string } | undefined,
+    expectedRevision: number
   ): Promise<CoreMemoryCorrectResultJson>
   listMemoryDistillationCandidates?(workspace: string): Promise<CorePendingMemoryCandidateJson[]>
   decideMemoryDistillationCandidate?(

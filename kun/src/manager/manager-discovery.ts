@@ -8,7 +8,7 @@ import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { isLoopbackHost } from '../server/loopback-host.js'
 import { AppSessionOwnerSchema, sameAppSessionOwner } from '../contracts/app-session-owner.js'
 
-export const KUN_MANAGER_PROTOCOL_VERSION = 5 as const
+export const KUN_MANAGER_PROTOCOL_VERSION = 6 as const
 export const KUN_MANAGER_DISCOVERY_VERSION = 1 as const
 export const KUN_MANAGER_DISCOVERY_FILENAME = 'manager.json'
 const MANAGER_START_LOCK_FILENAME = '.manager-start.lock'

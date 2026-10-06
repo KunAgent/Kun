@@ -23,7 +23,7 @@ describe('KunRuntimeProvider memory feedback actions', () => {
       expect(path).toBe('/v1/memory/mem_1/correct')
       expect(method).toBe('POST')
       expect(body).toBe(JSON.stringify({
-        operationId: 'op_correct',
+        operationId: 'op_correct', expectedRevision: 4,
         access: { project: 'project-a' },
         replacement: { content: 'Corrected fact', confidence: 0.9 }
       }))
@@ -52,12 +52,17 @@ describe('KunRuntimeProvider memory feedback actions', () => {
       'mem_1',
       'op_correct',
       { content: 'Corrected fact', confidence: 0.9 },
-      { project: 'project-a' }
+      { project: 'project-a' },
+      4
     )).resolves.toMatchObject({
       previousMemoryId: 'mem_1',
       replacementMemoryId: 'mem_correction_1'
     })
 
+    expect(runtimeRequest).toHaveBeenNthCalledWith(2, '/v1/memory/mem_1/correct', 'POST', JSON.stringify({
+      operationId: 'op_correct', expectedRevision: 4, access: { project: 'project-a' },
+      replacement: { content: 'Corrected fact', confidence: 0.9 }
+    }))
     expect(runtimeRequest).toHaveBeenNthCalledWith(
       1,
       '/v1/memory/mem_1/confirm',

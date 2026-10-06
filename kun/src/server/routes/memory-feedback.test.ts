@@ -80,6 +80,7 @@ describe('memory feedback routes', () => {
         method: 'POST',
         body: JSON.stringify({
           operationId: 'op_2',
+          expectedRevision: 1,
           access: { project: 'project-a' },
           replacement: { content: 'Corrected fact', confidence: 0.9 }
         })
@@ -91,6 +92,7 @@ describe('memory feedback routes', () => {
     expect(response.status).toBe(200)
     expect(correct).toHaveBeenCalledWith({
       operationId: 'op_2',
+      expectedRevision: 1,
       memoryId: 'mem_1',
       access: { project: 'project-a' },
       replacement: { content: 'Corrected fact', confidence: 0.9 }

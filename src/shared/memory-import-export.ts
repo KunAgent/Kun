@@ -53,6 +53,10 @@ const MemoryPortableSourceSchema = z.object({
   locator: z.string().min(1).max(1_024).optional(),
   excerpt: z.string().min(1).max(512).optional(),
   contentHash: z.string().min(1).max(128).optional(),
+  receiptId: z.string().min(1).max(256).optional(),
+  repositorySha: z.string().min(1).max(128).optional(),
+  artifactIds: z.array(z.string().min(1).max(256)).max(8).optional(),
+  outcome: z.enum(['succeeded', 'failed', 'aborted', 'unknown']).optional(),
   trust: z.enum(['explicit-user', 'observed', 'inferred', 'imported', 'legacy'])
 }).strict()
 
@@ -126,6 +130,10 @@ export type MemoryExportRecord = {
     locator?: string
     excerpt?: string
     contentHash?: string
+    receiptId?: string
+    repositorySha?: string
+    artifactIds?: string[]
+    outcome?: 'succeeded' | 'failed' | 'aborted' | 'unknown'
     trust: 'explicit-user' | 'observed' | 'inferred' | 'imported' | 'legacy'
   }>
   createdAt: string
@@ -142,6 +150,7 @@ export type MemoryMarkdownExportPayload = {
 export type MemoryMarkdownExportSavePayload = {
   markdown: string
   defaultFileName?: string
+  projectKnowledge?: { project: string; approvedIds: string[] }
 }
 
 export type MemoryMarkdownExportSaveResult =

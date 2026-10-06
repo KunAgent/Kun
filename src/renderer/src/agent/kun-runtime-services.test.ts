@@ -401,7 +401,7 @@ describe('KunRuntimeProvider', () => {
           })
         }
       }
-      if (path === '/v1/memory/mem_1?workspace=%2Ftmp%2Fworkspace' && method === 'DELETE') {
+      if (path === '/v1/memory/mem_1?workspace=%2Ftmp%2Fworkspace&expected_revision=2' && method === 'DELETE') {
         return {
           ok: true,
           status: 200,
@@ -423,19 +423,19 @@ describe('KunRuntimeProvider', () => {
     const provider = new KunRuntimeProvider()
 
     await expect(provider.listMemories({ workspace: '/tmp/workspace', includeDeleted: false })).resolves.toHaveLength(1)
-    await expect(provider.updateMemory('mem_1', { disabled: true }, { workspace: '/tmp/workspace' })).resolves.toMatchObject({
+    await expect(provider.updateMemory('mem_1', { disabled: true, expectedRevision: 1 }, { workspace: '/tmp/workspace' })).resolves.toMatchObject({
       id: 'mem_1',
       disabledAt: 't1'
     })
-    await expect(provider.updateMemory('mem_1', { disabled: false }, { workspace: '/tmp/workspace' })).resolves.toMatchObject({
+    await expect(provider.updateMemory('mem_1', { disabled: false, expectedRevision: 2 }, { workspace: '/tmp/workspace' })).resolves.toMatchObject({
       id: 'mem_1',
       updatedAt: 't2'
     })
     expect(memoryPatches).toEqual([
-      JSON.stringify({ disabled: true }),
-      JSON.stringify({ disabled: false })
+      JSON.stringify({ disabled: true, expectedRevision: 1 }),
+      JSON.stringify({ disabled: false, expectedRevision: 2 })
     ])
-    await expect(provider.deleteMemory('mem_1', { workspace: '/tmp/workspace' })).resolves.toMatchObject({
+    await expect(provider.deleteMemory('mem_1', { workspace: '/tmp/workspace', expectedRevision: 2 })).resolves.toMatchObject({
       id: 'mem_1',
       deletedAt: 't2'
     })

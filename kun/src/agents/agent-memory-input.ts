@@ -1,3 +1,4 @@
+import { memoryInjectionReceipt } from '../memory/memory-injection-receipt.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { RoomRequestState, RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
@@ -31,6 +32,6 @@ export async function freezeAgentMemoryInput(deps: RoomRuntimeDeps, thread: Thre
     checks: [{ kind: 'context', id, expectedRevision: null }],
     puts: [{ kind: 'context', id, roomId: scope.roomId, value: { id, roomId: scope.roomId,
       rootRequestId: scope.rootRequestId, memberId: scope.memberId, participantAgentId: scope.participantAgentId,
-      originalHash, prompt: combined, memoryIds: memory.records.map((record) => record.id) } }] })
+      originalHash, prompt: combined, memoryReceipt: memoryInjectionReceipt(memory.records, memory.text), memoryIds: memory.records.map((record) => record.id) } }] })
   return combined
 }

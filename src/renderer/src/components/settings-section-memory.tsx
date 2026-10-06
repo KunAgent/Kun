@@ -19,6 +19,7 @@ import {
   Toggle
 } from './settings-controls'
 import { MemoryImportDialog, MemoryRecordDialog } from './settings-section-memory-dialogs'
+import { ProjectKnowledgePanel } from './memory/ProjectKnowledgePanel'
 import { MemoryDiagnosticsPanel } from './settings-section-memory-diagnostics'
 import { MemoryCandidatesPanel } from './settings-section-memory-candidates'
 import { MemoryRecordList, projectForMemory } from './settings-section-memory-list'
@@ -243,7 +244,7 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
   }
 
   const setDirective = async (record: CoreMemoryRecordJson, directive: boolean): Promise<void> => {
-    const ok = await updateMemoryRecord(record.id, { authority: directive ? 'directive' : 'reference' })
+    const ok = await updateMemoryRecord(record.id, { authority: directive ? 'directive' : 'reference', expectedRevision: record.revision ?? 1 })
     if (!ok) setNotice(t('memoryDirectiveUpdateFailed'))
   }
 
@@ -350,9 +351,9 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
         ...(draft.scope === 'user' ? {} : { targetPath })
       })
     } else if (dialog?.mode === 'edit') {
-      ok = await updateMemoryRecord(dialog.memory.id, mutation)
+      ok = await updateMemoryRecord(dialog.memory.id, { ...mutation, expectedRevision: dialog.memory.revision ?? 1 })
     } else if (dialog?.mode === 'correct') {
-      ok = await correctMemoryRecord(dialog.memory.id, mutation)
+      ok = await correctMemoryRecord(dialog.memory.id, mutation, dialog.memory.revision ?? 1)
     }
     if (ok) closeDialog()
     else setMemoryDialogNotice(t('memorySaveFailed'))
@@ -414,6 +415,7 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
               />
             }
           />
+          <ProjectKnowledgePanel records={memoryRecords ?? []} create={createMemoryRecord} update={updateMemoryRecord} />
           <MemoryDiagnosticsPanel
             diagnostics={memoryDiagnostics}
             fallbackRecordCount={memoryRecords?.length ?? 0}
@@ -485,6 +487,7 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
           onDraftChange={setDraft}
           onSave={() => void saveDraft()}
           feedbackEnabled={memoryDiagnostics?.feedback?.enabled === true}
+          onLifecycleChanged={() => { closeDialog(); void ctx.refreshKunDiagnostics?.() }}
         />
       ) : null}
 

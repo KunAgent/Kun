@@ -1,3 +1,4 @@
+import { agentMemoryCaptureInput } from './agent-memory-forgetting.js'
 import type { RoomReview } from '../contracts/room-deliveries.js'
 import type { AgentHandoff } from '../contracts/agent-handoffs.js'
 import type { Room } from '../contracts/rooms.js'
@@ -29,13 +30,14 @@ export class AgentMemoryCoordinator {
   async tick(): Promise<boolean> {
     if (this.closed || !this.deps.agentMemory || !this.deps.memoryStore) return false
     await this.deps.agentMemory.recoverEdits()
+    await this.deps.agentMemory.scrubForgotten()
     await this.discover()
     if (this.active) {
       const row = await this.deps.store.get<AgentMemoryCapture>('agent_memory_job', this.active.jobId)
-      if (row && !await this.allowed(row.value)) this.active.controller.abort(new Error('memory source cancelled or disabled'))
+      if (row && (row.value.phase !== 'capture' || !await this.allowed(row.value))) this.active.controller.abort(new Error('memory source cancelled or disabled'))
       if (!this.active.done) return true
       const active = this.active; this.active = undefined
-      if (row) await this.apply(row, active.result!)
+      if (row?.value.phase === 'capture') await this.apply(row, active.result!)
     }
     if (!await this.deps.agentMemory.available()) return false
     const jobs = await this.deps.store.list<AgentMemoryCapture>('agent_memory_job', {
@@ -131,6 +133,7 @@ export class AgentMemoryCoordinator {
       const memoryConversationId = handoff && origin?.value.members.some((member) => member.participantAgentId === agentId && member.enabled && !member.removedAt) ? handoff.sourceRoomId : event.roomId
       const previous = await this.deps.store.get<AgentMemoryCapture>('agent_memory_job', jobId)
       const old = previous?.value
+      if (old && old.phase !== 'capture') continue // Forgotten capture identities are terminal.
       if (old && event.seq <= old.sourceSeq) continue
       const value: AgentMemoryCapture = { id: jobId, phase: 'capture', roomId: event.roomId,
         rootRequestId: rootId, participantAgentId: agentId, memberId, taskScopeId, handoffId: handoff?.id, memoryConversationId,
@@ -201,6 +204,7 @@ export class AgentMemoryCoordinator {
     let saved = 0, pending = 0
     if (allowed && !result.error) {
       for (const value of result.candidates) {
+        if (await this.deps.agentMemory!.store().isForgotten?.(agentMemoryCaptureInput(job, value.candidate))) continue
         const candidateId = agentStableId('agent-memory-candidate', job.runId!, value.candidate.content)
         const record: AgentMemoryCandidate = { id: candidateId, phase: 'candidate', participantAgentId: job.participantAgentId,
           roomId: job.roomId, rootRequestId: job.rootRequestId, status: 'pending', ...value,

@@ -201,3 +201,14 @@ describe('buildMemoryMarkdownExport', () => {
     expect(parseMemoryImport('```kun-memory-v3\n{}\n```').kind).toBe('invalid-portable')
   })
 })
+
+describe('portable observed receipts', () => {
+  it('retains host receipt metadata as informational archive data', () => {
+    const markdown = buildMemoryMarkdownExport({ records: [{ id: 'receipt-memory', content: 'Build completed', scope: 'project', project: '/repo',
+      createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
+      sources: [{ id: 'receipt-source', kind: 'tool', trust: 'observed', receiptId: 'receipt-1', repositorySha: 'abc123', artifactIds: ['artifact-1'], outcome: 'succeeded' }] }] })
+    const parsed = parseMemoryImport(markdown)
+    expect(parsed.kind).toBe('portable')
+    if (parsed.kind === 'portable') expect(parsed.records[0].sources[0]).toMatchObject({ receiptId: 'receipt-1', outcome: 'succeeded' })
+  })
+})

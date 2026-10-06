@@ -191,6 +191,10 @@ export type ManagerArtifactStoreOperation =
   | 'stat'
 
 export type ManagerMemoryStoreOperation =
+  | 'erasureReceipt'
+  | 'isForgotten'
+  | 'history'
+  | 'lifecycle'
   | 'getById'
   | 'distillationPending'
   | 'commitDistillation'

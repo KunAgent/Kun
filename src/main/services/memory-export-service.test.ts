@@ -49,3 +49,14 @@ describe('exportMemoryMarkdown', () => {
     })).resolves.toEqual({ ok: false, canceled: true })
   })
 })
+
+describe('project-only export boundary', () => {
+  it('rejects a mismatched project before opening a destination dialog', async () => {
+    const markdown = '```kun-project-knowledge\n' + JSON.stringify({ format: 'kun-project-knowledge', version: 1,
+      project: '/other', records: [{ id: 'p1', content: 'Project fact', type: 'fact', authority: 'reference', tags: [] }] }) + '\n```'
+    vi.mocked(dialog.showSaveDialog).mockClear()
+    const result = await exportMemoryMarkdown({ markdown, projectKnowledge: { project: '/approved', approvedIds: ['p1'] } })
+    expect(result).toMatchObject({ ok: false, canceled: false })
+    expect(dialog.showSaveDialog).not.toHaveBeenCalled()
+  })
+})

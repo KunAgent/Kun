@@ -8,6 +8,7 @@ import { readJsonBody } from '../server/read-json-body.js'
 import { jsonResponse } from '../server/response.js'
 import { Router } from '../server/router.js'
 import { GraphRunConflictError } from '../graph/graph-run-store.js'
+import { managerMemoryErrorResponse } from './manager-memory-errors.js'
 import { KUN_VERSION } from '../version.js'
 import {
   KUN_MANAGER_PROTOCOL_VERSION
@@ -114,6 +115,7 @@ export function buildServiceManagerRouter(input: {
     : KUN_MANAGER_CAPABILITIES.filter((capability) =>
         capability !== 'shared-data-v1' &&
         capability !== 'artifact-memory-data-v1' &&
+        capability !== 'memory-lifecycle-v1' &&
         capability !== 'atomic-json-v1' &&
         capability !== 'history-reference-cleanup-v1' &&
         capability !== 'history-reference-recovery-v1' &&
@@ -487,6 +489,8 @@ export function buildServiceManagerRouter(input: {
         return jsonResponse({ result })
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid memory-store request', error.issues)
+        const response = managerMemoryErrorResponse(error)
+        if (response) return response
         throw error
       }
     }

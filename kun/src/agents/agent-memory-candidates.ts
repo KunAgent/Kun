@@ -13,6 +13,7 @@ export const AgentMemoryCandidateDecision = z.object({
 }).strict()
 export async function listAgentMemoryCandidates(service: AgentMemoryService, agentId: string, cursor?: number) {
   await service.agents.get(agentId)
+  await service.scrubForgotten()
   const rows = await service.agents.store.list<AgentMemoryCandidate>('agent_memory_job', {
     participantAgentId: agentId, phase: 'candidate', status: ['pending', 'conflicted'], limit: 21, beforeSeq: cursor })
   const candidates = []
@@ -29,6 +30,7 @@ export async function listAgentMemoryCandidates(service: AgentMemoryService, age
 }
 export async function decideAgentMemoryCandidate(service: AgentMemoryService, agentId: string, candidateId: string, raw: unknown) {
   const input = AgentMemoryCandidateDecision.parse(raw)
+  await service.scrubForgotten()
   const key = agentStableId('agent-memory-decision', candidateId, input.clientRequestId)
   const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex')
   const receipt = await service.agents.store.getRequest(key)

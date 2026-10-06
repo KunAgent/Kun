@@ -6,6 +6,10 @@ import { registerRoomProfileRoutes } from './register-room-profile-routes.js'
 import { registerAgentHandoffRoutes } from './register-agent-handoff-routes.js'
 import { registerAgentIdentityRoutes } from './register-agent-identity-routes.js'
 import { z } from 'zod'
+import { MemoryForgottenError } from '../../memory/memory-forgetting.js'
+import { MemoryErasureIncompleteError } from '../../memory/memory-erasure-error.js'
+import { MemoryNotFoundError } from '../../memory/memory-not-found-error.js'
+import { MemoryRevisionConflictError } from '../../memory/memory-revisions.js'
 import { RoomIdSchema } from '../../contracts/rooms.js'
 import { RoomRuleRequestSchema, RoomTaskActionSchema } from '../../contracts/rooms-api.js'
 import { RoomTaskStatusSchema } from '../../contracts/room-tasks.js'
@@ -71,6 +75,9 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     } catch (error) {
       if (error instanceof RoomBodyError) return error.response
       if (error instanceof z.ZodError) return ERRORS.validation('invalid room request', error.issues)
+      if (error instanceof MemoryNotFoundError) return ERRORS.notFound(error.message)
+      if (error instanceof MemoryErasureIncompleteError) return ERRORS.unavailable(error.message)
+      if (error instanceof MemoryForgottenError || error instanceof MemoryRevisionConflictError) return ERRORS.conflict(error.message)
       if (error instanceof RoomCoordinatorUnavailableError) return jsonResponse({
         code: 'room_coordinator_unavailable', message: error.message
       }, 503)

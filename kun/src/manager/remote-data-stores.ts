@@ -1,3 +1,6 @@
+import { MemoryErasureIncompleteError } from '../memory/memory-erasure-error.js'
+import { MemoryLifecycleResult, MemoryHistoryResult, type MemoryLifecycleRequest } from '../contracts/memory-lifecycle.js'
+import { MemoryRevisionConflictError } from '../memory/memory-revisions.js'
 import type { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
 import { MemoryDistillationCommitResult } from '../contracts/memory-distillation-storage.js'
 import { MemoryDistillationConflictError } from '../memory/memory-distillation-apply.js'
@@ -454,6 +457,33 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
     const result = MemoryDistillationCommitResult.parse(await this.call('commitDistillation', candidate))
     if (!result.ok) throw new MemoryDistillationConflictError(result.conflict)
     return result.record
+  }
+
+  async erasureReceipt(operationId: string): Promise<string[]> {
+    return z.array(z.string()).parse(await this.call('erasureReceipt', { operationId }))
+  }
+
+  async isForgotten(input: MemoryCreateRequest, id?: string): Promise<boolean> {
+    return z.boolean().parse(await this.call('isForgotten', { input: {
+      content: input.content, scope: input.scope, workspace: input.workspace, project: input.project,
+      agentContext: input.agentContext, sources: input.sources, consolidation: input.consolidation, supersedes: input.supersedes
+    }, id }))
+  }
+
+  async history(id: string, access?: MemoryAccess) {
+    return MemoryHistoryResult.parse(await this.call('history', { id, access }))
+  }
+
+  async lifecycle(id: string, request: MemoryLifecycleRequest, access?: MemoryAccess) {
+    const result = z.discriminatedUnion('ok', [
+      z.object({ ok: z.literal(true), result: MemoryLifecycleResult }),
+      z.object({ ok: z.literal(false), conflict: z.string(), incomplete: z.boolean().optional() })
+    ]).parse(await this.call('lifecycle', { id, request, access }))
+    if (!result.ok) {
+      if (result.incomplete) throw new MemoryErasureIncompleteError()
+      throw new MemoryRevisionConflictError(result.conflict)
+    }
+    return result.result
   }
 
   async getById(id: string, access?: MemoryAccess): Promise<MemoryRecord> {

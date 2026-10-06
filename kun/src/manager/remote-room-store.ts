@@ -1,3 +1,4 @@
+import type { RoomMemoryErasure } from '../rooms/room-memory-erasure.js'
 import type { RoomSidebarQuery, RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
 import {
@@ -83,6 +84,13 @@ export class RemoteRoomStore implements RoomStore {
       requestId: z.string(), status: z.string(), total: z.number(), revision: z.string()
     }).passthrough()) }).strict().parse(await this.call('requestOutcomes', input)) as {
       initializing: boolean; outcomes: RoomRequestOutcome[] }
+  }
+
+  async scrubMemoryData(input: RoomMemoryErasure): Promise<{ scrubbed: number }> {
+    await this.options.ready?.()
+    const fence = this.fence()
+    if (!fence) throw new RoomStoreConflictError('room coordinator ownership is required')
+    return z.object({ scrubbed: z.number().int().nonnegative() }).parse(await this.call('scrubMemoryData', { input, fence }))
   }
 
   async close(): Promise<void> {}

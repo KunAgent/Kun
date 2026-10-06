@@ -16,7 +16,7 @@ import type { ModelClient } from '../ports/model-client.js'
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 
 const resources: Array<{ root: string; store: SqliteRoomStore; capture: AgentMemoryCoordinator }> = []
-async function fixture() {
+async function fixture(compare = false) {
   const root = await mkdtemp(join(tmpdir(), 'kun-agent-capture-'))
   const store = new SqliteRoomStore({ path: join(root, 'rooms.sqlite') })
   const agents = new AgentIdentityService(store, () => ({}))
@@ -37,7 +37,9 @@ async function fixture() {
     const source = JSON.parse('text' in text ? text.text : '{}')
     yield { kind: 'assistant_text_delta', text: JSON.stringify({ candidates: [{
       content: 'Reports use Chinese and include source links.', type: 'preference', confidence: .9, importance: .7,
-      tags: [], sourceIds: [source.sources[0].id], durability: 'durable', comparisons: []
+      tags: [], sourceIds: [source.sources[0].id], durability: 'durable', comparisons: compare && source.existing[0] ? [{
+        memoryId: source.existing[0].id, relation: 'update', reason: 'Consolidate new reporting preference.'
+      }] : []
     }] }) }
   } }
   const deps = { store, agentMemory: memory, memoryStore, model: () => ({ model: 'fixture' }),
@@ -50,7 +52,7 @@ async function fixture() {
       authorMemberId: actor.id, authorAgentId: actor.id, body: 'I will include source links in Chinese reports.',
       sourceRequestId: sent.requestId, clientRequestId: undefined, status: 'final', ...overrides } }],
     events: [{ roomId: room.id, kind: 'message.created', payload: { id } }] })
-  return { store, memory, agents, actor, capture, room, publish, calls: () => calls }
+  return { store, memory, agents, actor, capture, room, publish, sourceMessageId: sent.message.id, calls: () => calls }
 }
 afterEach(async () => {
   for (const { root, store, capture } of resources.splice(0)) {
@@ -96,4 +98,23 @@ it('never captures work after an agent disables automatic memory', async () => {
   await f.capture.tick()
   expect(f.calls()).toBe(0)
   expect((await f.memory.list(f.actor.id, {})).memories).toHaveLength(0)
+})
+
+
+it('leaves a conflicting inference pending instead of overwriting a user-locked correction', async () => {
+  const f = await fixture(true)
+  const existing = await f.memory.create(f.actor.id, { clientRequestId: 'user-correction', conversationId: f.room.id,
+    sourceMessageIds: [f.sourceMessageId], content: 'Reports must use Chinese and preserve complete source links.', type: 'preference' })
+  expect(existing.memory.agentContext?.locked).toBe(true)
+  await f.capture.tick()
+  await f.publish('response-after-correction')
+  await f.capture.tick(); await setImmediate(); await f.capture.tick()
+  const actual = await f.memory.find(f.actor.id, existing.memory.id)
+  expect(actual.content).toBe(existing.memory.content)
+  expect(actual.agentContext?.locked).toBe(true)
+  expect(actual.authority).toBe('reference')
+  const proposals = await f.store.list<import('./agent-memory-capture-types.js').AgentMemoryCandidate>('agent_memory_job', { phase: 'candidate' })
+  expect(proposals).toHaveLength(1)
+  expect(proposals[0]!.value).toMatchObject({ status: 'pending', reason: 'user_locked', targetId: existing.memory.id })
+  expect(proposals[0]!.value.candidate.consolidation?.sourceMemoryIds).toContain(existing.memory.id)
 })

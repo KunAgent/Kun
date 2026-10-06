@@ -302,7 +302,9 @@ describe('pure memory distillation decisions', () => {
 
       expect(decision).toMatchObject({ action: relation, memoryId: existing.id })
       if (decision.action !== 'skip') {
-        expect(decision.candidate.sources).toEqual(evidenceInput().sources)
+        expect(decision.candidate.sources).toEqual(expect.arrayContaining(evidenceInput().sources))
+        expect(decision.candidate.sources).toEqual(expect.arrayContaining(existing.sources))
+        expect(decision.candidate.consolidation?.sourceMemoryIds).toContain(existing.id)
       }
     }
   })

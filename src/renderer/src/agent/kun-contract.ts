@@ -194,11 +194,15 @@ export type CoreAttachmentDiagnosticsJson = {
 
 export type CoreMemoryRecordJson = {
   schemaVersion?: 2
+  revision?: number
+  history?: CoreMemoryHistoryJson[]
+  consolidation?: CoreMemoryConsolidationJson
   id: string
   content: string
   scope: 'user' | 'workspace' | 'project'
   workspace?: string
   project?: string
+  projectIdentity?: string
   sourceThreadId?: string
   sourceTurnId?: string
   tags?: string[]
@@ -229,7 +233,26 @@ export type CoreMemorySourceEvidenceJson = {
   locator?: string
   excerpt?: string
   contentHash?: string
+  receiptId?: string
+  repositorySha?: string
+  artifactIds?: string[]
+  outcome?: 'succeeded' | 'failed' | 'aborted' | 'unknown'
   trust: 'explicit-user' | 'observed' | 'inferred' | 'imported' | 'legacy'
+}
+
+export type CoreMemoryConsolidationJson = {
+  sourceMemoryIds: string[]
+  reason: string
+  evidenceStatus: 'observed-success' | 'observed-failure' | 'aborted' | 'unverified' | 'user-stated'
+  sourceSessionIds: string[]
+}
+
+export type CoreMemoryHistoryJson = {
+  revision: number
+  changedAt: string
+  operation: 'create' | 'update' | 'disable' | 'restore' | 'forget' | 'rollback' | 'supersede'
+  snapshot: Pick<CoreMemoryRecordJson, 'content' | 'tags' | 'type' | 'authority' | 'confidence' |
+    'importance' | 'sources' | 'observedAt' | 'expiresAt' | 'validFrom' | 'validTo' | 'disabledAt' | 'consolidation'>
 }
 
 export type CorePendingMemoryCandidateJson = {

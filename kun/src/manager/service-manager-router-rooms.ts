@@ -1,3 +1,4 @@
+import { RoomMemoryErasure } from '../rooms/room-memory-erasure.js'
 import { RoomSidebarQuery } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
 import { Router } from '../server/router.js'
@@ -26,7 +27,7 @@ import { isManagerPersistenceDegraded, managerPersistenceDegradedResponse } from
 export const ROOM_COORDINATOR_RESOURCE = 'rooms-coordinator'
 const Id = z.string().min(1).max(256)
 const Operations = z.enum(['get', 'list', 'listRooms', 'sidebarPage', 'replyPage', 'searchRooms', 'roomRepositories', 'runSummary',
-  'commit', 'getRequest', 'events', 'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
+  'commit', 'scrubMemoryData', 'getRequest', 'events', 'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
 
 export function addManagerRoomRoutes(router: Router, input: {
   managerToken: string
@@ -38,7 +39,7 @@ export function addManagerRoomRoutes(router: Router, input: {
     request, input.managerToken, async () => {
       const operation = Operations.safeParse(context.params.operation)
       if (!operation.success) return validation('invalid room-store operation')
-      if (operation.data === 'commit' && isManagerPersistenceDegraded(input.statePersistence)) {
+      if (['commit', 'scrubMemoryData'].includes(operation.data) && isManagerPersistenceDegraded(input.statePersistence)) {
         return managerPersistenceDegradedResponse()
       }
       const body = await readJsonBody(request, MAX_MANAGER_DATA_BODY_BYTES)
@@ -102,6 +103,12 @@ export function addManagerRoomRoutes(router: Router, input: {
             if (value.fence) assertCurrent(value.fence)
             result = await input.roomStore.commit(value.input,
               value.fence ? () => assertCurrent(value.fence!) : undefined)
+            break
+          }
+          case 'scrubMemoryData': {
+            const value = z.object({ input: RoomMemoryErasure, fence: ManagerResourceFenceSchema }).strict().parse(body.value)
+            assertCurrent(value.fence)
+            result = await input.roomStore.scrubMemoryData(value.input, () => assertCurrent(value.fence))
             break
           }
           case 'assertOwnership': {

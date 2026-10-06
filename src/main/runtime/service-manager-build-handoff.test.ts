@@ -13,7 +13,7 @@ function manager(): ServiceManagerConnection {
   return {
     discovery: {
       version: 1,
-      protocolVersion: 5,
+      protocolVersion: 6,
       instanceId: 'manager-old',
       pid: 900,
       startedAt: '2026-08-19T00:00:00.000Z',

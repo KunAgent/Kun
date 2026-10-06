@@ -1,10 +1,11 @@
+import { mergeMemoryEvidence } from './memory-consolidation.js'
 import { canonicalMemoryHash } from './memory-record-normalizer.js'
 import { normalizeMemoryCandidateContent } from '../contracts/memory-distillation.js'
 import type {
   MemoryDistillationApplyReceipt,
   PendingMemoryCandidate
 } from '../contracts/memory-distillation-runtime.js'
-import type { MemoryRecord, MemorySourceEvidence } from '../contracts/memory.js'
+import type { MemoryRecord } from '../contracts/memory.js'
 import { isMemoryActive, type MemoryStore } from './memory-store.js'
 
 type DistillationWriteStore = Pick<MemoryStore, 'list' | 'update' | 'createWithId'>
@@ -87,7 +88,8 @@ async function writeMemoryDistillationCandidate(
     type: current.candidate.type,
     importance: current.candidate.importance,
     observedAt: current.candidate.observedAt,
-    sources: current.candidate.sources
+    sources: current.candidate.sources,
+    consolidation: current.candidate.consolidation
   }
   if (current.proposedAction.action === 'update') {
     if (!target) throw new MemoryDistillationConflictError('the update target is unavailable')
@@ -98,7 +100,8 @@ async function writeMemoryDistillationCandidate(
       type: input.type,
       importance: input.importance,
       observedAt: input.observedAt,
-      sources: mergeSources(input.sources, target.sources)
+      sources: mergeMemoryEvidence(input.sources, target.sources),
+      consolidation: input.consolidation
     }, { workspace: current.target.workspace })
   }
   if (!store.createWithId) {
@@ -164,7 +167,7 @@ export function memoryRecordMatchesDistillationCandidate(
   current: PendingMemoryCandidate
 ): boolean {
   const candidate = current.candidate
-  const sourceIds = new Set(record.sources.map((source) => source.id))
+  const sources = new Map(record.sources.map((source) => [source.id, source]))
   return record.scope === 'workspace' &&
     !record.deletedAt && !record.disabledAt && !record.supersededAt &&
     record.authority === 'reference' &&
@@ -174,19 +177,10 @@ export function memoryRecordMatchesDistillationCandidate(
     record.importance === candidate.importance &&
     record.observedAt === candidate.observedAt &&
     sameStrings(record.tags, candidate.tags) &&
-    candidate.sources.every((source) => sourceIds.has(source.id)) &&
+    candidate.sources.every((source) => JSON.stringify(sources.get(source.id)) === JSON.stringify(source)) &&
+    JSON.stringify(record.consolidation) === JSON.stringify(candidate.consolidation) &&
     (current.proposedAction.action !== 'supersede' ||
       record.supersedes === current.proposedAction.memoryId)
-}
-
-function mergeSources(
-  candidate: readonly MemorySourceEvidence[],
-  existing: readonly MemorySourceEvidence[]
-): MemorySourceEvidence[] {
-  const seen = new Set<string>()
-  return [...candidate, ...existing]
-    .filter((source) => !seen.has(source.id) && Boolean(seen.add(source.id)))
-    .slice(0, 8)
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {
