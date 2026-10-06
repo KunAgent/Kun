@@ -164,7 +164,8 @@ export function WriteEditorTabBar({
   const dragPathRef = useRef<string | null>(null)
 
   return (
-    <div className={`write-editor-tabbar flex min-h-[44px] min-w-0 items-stretch border-b bg-ds-card/88 ${focused ? 'border-accent/35' : 'border-ds-border-muted'}`}>
+    <div className="write-editor-tabbar flex h-[52px] min-w-0 shrink-0 items-center border-b"
+      data-focused={focused && hasSecondGroup ? 'true' : undefined}>
       {primary ? (
         <div className={`flex shrink-0 items-center px-2 ${leftSidebarCollapsed ? 'ds-window-controls-collapsed-titlebar-inset' : ''}`}>
           <SidebarTitlebarToggleButton
@@ -177,7 +178,7 @@ export function WriteEditorTabBar({
       <div
         role="tablist"
         aria-label={t('writeOpenFiles')}
-        className="flex min-w-0 flex-1 items-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault()
@@ -238,8 +239,8 @@ export function WriteEditorTabBar({
               onAuxClick={(event) => {
                 if (event.button === 1 && !pinned) onClose(key)
               }}
-              className={`group relative flex max-w-[220px] shrink-0 cursor-default items-center gap-2 border-r border-ds-border-muted px-3 text-[12.5px] transition ${
-                active ? 'bg-ds-card font-semibold text-ds-ink' : 'bg-ds-hover/35 text-ds-muted hover:bg-ds-hover/70'
+              className={`write-editor-tab group relative flex max-w-[220px] shrink-0 cursor-default items-center gap-2 ${
+                active ? 'is-active' : ''
               }`}
             >
               <span className={`flex min-w-0 flex-1 items-center ${active ? 'text-ds-ink [&_svg]:text-accent' : 'text-ds-muted [&_svg]:text-ds-faint'}`}>
@@ -264,13 +265,12 @@ export function WriteEditorTabBar({
                   </>
                 )}
               </span>
-              {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-accent" /> : null}
             </div>
           )
         })}
       </div>
 
-      <div className="relative flex shrink-0 items-center gap-0.5 border-l border-ds-border-muted px-1.5">
+      <div className="relative flex shrink-0 items-center gap-0.5 px-2">
         <button type="button" className="write-tabbar-action" onClick={() => setAddOpen((open) => !open)} title={t('writeAddTab')} aria-label={t('writeAddTab')}>
           <Plus className="h-4 w-4" />
         </button>

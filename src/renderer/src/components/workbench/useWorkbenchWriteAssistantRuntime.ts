@@ -24,7 +24,7 @@ export function useWorkbenchWriteAssistantRuntime({
   composerPickList,
   composerModelGroups
 }: WorkbenchWriteAssistantRuntimeOptions) {
-  const writeAssistantOpen = useWriteWorkspaceStore((s) => s.assistantOpen)
+  const writeAssistantOpen = useWriteWorkspaceStore((s) => s.writeRightPanel.expanded)
   const setWriteAssistantOpen = useWriteWorkspaceStore((s) => s.setAssistantOpen)
   const writeAssistantModel = useWriteWorkspaceStore((s) => s.assistantModel)
   const writeAssistantProviderId = useWriteWorkspaceStore((s) => s.assistantProviderId)

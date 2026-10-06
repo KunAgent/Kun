@@ -179,6 +179,20 @@ export class WriteReviewSession {
     this.afterResolve()
   }
 
+  /** Plain-text before/after of each pending chunk for the review panel. */
+  chunkSummaries(): Array<{ id: string; kind: 'added' | 'removed' | 'modified'; before: string; after: string }> {
+    const { doc } = this.editor.state
+    const chunks = writeReviewPluginKey.getState(this.editor.state)?.chunks ?? []
+    return chunks.map((chunk) => ({
+      id: chunk.id,
+      kind: chunk.kind,
+      before: chunk.original.map((node) => node.textContent).join('\n'),
+      after: chunk.kind === 'removed'
+        ? ''
+        : doc.textBetween(chunk.from, Math.min(chunk.to, doc.content.size), '\n')
+    }))
+  }
+
   /** Position of chunk `index` for prev/next navigation. */
   chunkPos(index: number): number | null {
     const chunks = writeReviewPluginKey.getState(this.editor.state)?.chunks ?? []

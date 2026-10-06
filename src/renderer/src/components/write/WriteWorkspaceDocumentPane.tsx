@@ -443,6 +443,7 @@ export function WriteWorkspaceDocumentPane({
               onImagePasteError={onImagePasteError}
               onReviewStateChange={onMarkdownReviewStateChange}
               handleRef={richHandleRef}
+              publishToPanels={focused}
             />
           ) : (
             <WriteMarkdownEditor

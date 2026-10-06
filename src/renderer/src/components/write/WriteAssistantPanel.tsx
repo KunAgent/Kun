@@ -1,13 +1,14 @@
 import { useEffect, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
-  FolderOpen,
   FileText,
   GraduationCap,
   ListTodo,
   Loader2,
   MessageSquareQuote,
+  PanelRightClose,
   Plus,
+  TextSelect,
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -124,7 +125,6 @@ export function WriteAssistantPanel({
   onOpenSettings,
   onConfigureProviders,
   onNewConversation,
-  onPickWorkspace,
   onCollapse,
   className = ''
 }: Props): ReactElement {
@@ -263,14 +263,12 @@ export function WriteAssistantPanel({
     <aside
       className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${className}`}
     >
-      <div className="write-assistant-header ds-sidebar-surface-chrome shrink-0 border-b border-ds-border-muted">
-        <div className="flex h-14 min-w-0 items-center gap-1.5 px-4">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <WriteAssistantSparkleIcon className="h-[19px] w-[19px] shrink-0 text-accent" />
-            <span className="min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-ds-ink">
-              {t('writeAssistant')}
-            </span>
-          </div>
+      <div className="write-assistant-header ds-sidebar-surface-chrome shrink-0">
+        <div className="flex h-[52px] min-w-0 items-center gap-1 border-b border-ds-border-muted pl-4 pr-2.5">
+          <WriteAssistantSparkleIcon className="write-ai-tint h-[18px] w-[18px] shrink-0" />
+          <span className="ml-2 min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-ds-ink">
+            {t('writeAssistant')}
+          </span>
           {conversationHistory ? (
             <WriteResourceConversationHistoryPopover
               model={conversationHistory}
@@ -280,56 +278,49 @@ export function WriteAssistantPanel({
           ) : null}
           <button
             type="button"
-            onClick={onPickWorkspace}
-            className="ds-sidebar-toggle-button shrink-0"
-            aria-label={t('writeAssistantChangeWorkspace')}
-            title={t('writeAssistantChangeWorkspace')}
-          >
-            <FolderOpen className="h-4 w-4" strokeWidth={1.85} />
-          </button>
-          <button
-            type="button"
             onClick={startNewConversation}
             disabled={!canCreateConversation}
-            className="ds-sidebar-toggle-button shrink-0 disabled:cursor-not-allowed disabled:opacity-45"
+            className="write-panel-icon-button disabled:cursor-not-allowed disabled:opacity-45"
             aria-label={t('writeAssistantNewConversation')}
             title={t('writeAssistantNewConversation')}
           >
-            <Plus className="h-4 w-4" strokeWidth={2.1} />
+            <Plus className="h-4 w-4" strokeWidth={2} />
           </button>
           <button
             type="button"
             onClick={onCollapse}
-            className="ds-sidebar-toggle-button ml-0.5 shrink-0"
+            className="write-panel-icon-button"
             aria-label={t('rightPanelCollapse')}
             title={t('rightPanelCollapse')}
           >
-            <X className="h-4 w-4" strokeWidth={1.85} />
+            <PanelRightClose className="h-4 w-4" strokeWidth={1.75} />
           </button>
         </div>
-        <div className="min-w-0 border-t border-ds-border-muted/70 px-4 py-2.5">
-          <div
-            className="flex min-w-0 items-center gap-2 text-[11.5px] font-medium text-ds-muted"
-            title={paperContextLabel ?? activeFileLabel}
-          >
+        <div className="flex min-w-0 items-center gap-1.5 border-b border-ds-border-muted px-4 py-2.5">
+          <span className="write-context-chip min-w-0" title={paperContextLabel ?? activeFileLabel}>
             {papersSurface && activePaperEntry ? (
-              <GraduationCap className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
+              <GraduationCap className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             ) : (
-              <FileText className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
+              <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             )}
-            <span className="shrink-0">
+            <span className="sr-only">
               {papersSurface ? t('writePaperContextPaper') : t('writePromptActiveFile')}
             </span>
-            <span className="text-ds-faint" aria-hidden="true">·</span>
             <span className="min-w-0 truncate">
               {papersSurface && paperContextLabel ? paperContextLabel : activeFileName}
             </span>
             {papersSurface && readerPage ? (
-              <span className="shrink-0 text-ds-faint">
+              <span className="shrink-0 opacity-70">
                 p.{readerPage.page}/{readerPage.pageCount || '–'}
               </span>
             ) : null}
-          </div>
+          </span>
+          {selection.charCount > 0 && !viewingChildThread ? (
+            <span className="write-context-chip is-accent shrink-0">
+              <TextSelect className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              {t('workAssistantSelectionChip', { count: selection.charCount })}
+            </span>
+          ) : null}
         </div>
       </div>
 

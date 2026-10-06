@@ -63,6 +63,13 @@ const CODE_TABS_WIDTH_CONSTRAINTS: WorkbenchWidthConstraints = {
   fixedChromeWidth: RAIL_WIDTH
 }
 
+// Work's rail is fixed chrome beside the panel, like the Code rail.
+const WRITE_WIDTH_CONSTRAINTS: WorkbenchWidthConstraints = {
+  mainMinWidth: MAIN_MIN_WIDTH,
+  rightPanelMax: RIGHT_PANEL_MAX,
+  fixedChromeWidth: RAIL_WIDTH
+}
+
 function clampWidth(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
@@ -196,6 +203,7 @@ export function workbenchWidthConstraintsForRightPanel(
   _rightPanelMode: RightPanelMode
 ): WorkbenchWidthConstraints {
   if (route === 'chat' || route === 'ade') return CODE_TABS_WIDTH_CONSTRAINTS
+  if (route === 'write') return WRITE_WIDTH_CONSTRAINTS
   return DEFAULT_WIDTH_CONSTRAINTS
 }
 

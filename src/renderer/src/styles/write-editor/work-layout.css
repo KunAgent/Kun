@@ -1,0 +1,358 @@
+/* Work four-column layout: editor tab row, right panels and the Work rail.
+   AI affordances use the skill violet; navigation/selection stays accent. */
+
+.write-ai-tint {
+  color: var(--ds-skill, #7a68e8);
+}
+
+/* Editor tab row: 52px so its hairline aligns with the panel headers. */
+.write-editor-tabbar {
+  border-bottom-color: var(--ds-border-muted);
+  background: var(--ds-surface-card);
+}
+
+.write-editor-tabbar[data-focused='true'] {
+  border-bottom-color: color-mix(in srgb, var(--ds-accent) 36%, var(--ds-border-muted));
+}
+
+.write-editor-tab {
+  height: 32px;
+  padding: 0 8px 0 11px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.write-editor-tab:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.write-editor-tab.is-active {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text);
+  font-weight: 600;
+}
+
+.write-editor-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ds-accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+/* Format bar under the tab row. */
+.write-workspace-view .write-format-bar {
+  height: 44px;
+  padding: 0 10px;
+  background: var(--ds-surface-card);
+  backdrop-filter: none;
+}
+
+.write-workspace-view .write-format-toolbar-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--ds-text-muted);
+}
+
+.write-workspace-view .write-format-toolbar-button:hover {
+  color: var(--ds-text);
+}
+
+.write-workspace-view [data-inline-completion-state='on'] {
+  color: var(--ds-skill, #7a68e8);
+}
+
+/* Right panel chrome. */
+.write-right-panel {
+  background: var(--ds-bg-sidebar);
+}
+
+.write-panel-icon-button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--ds-text-faint);
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.write-panel-icon-button:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.write-panel-text-button {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+}
+
+.write-panel-text-button:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.write-context-chip {
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--ds-border);
+  border-radius: 7px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text-muted);
+  font-size: 12px;
+}
+
+.write-context-chip.is-accent {
+  border-color: transparent;
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent);
+}
+
+/* Assistant panel: flat surfaces in place of the old gradient wash. */
+.write-assistant-panel.write-assistant-panel {
+  background: var(--ds-bg-sidebar);
+  box-shadow: none;
+}
+
+.write-assistant-panel .write-assistant-header {
+  background: var(--ds-bg-sidebar);
+}
+
+.write-assistant-panel .write-assistant-body {
+  background: var(--ds-bg-sidebar);
+}
+
+/* Outline panel. */
+.write-outline-panel-item {
+  display: flex;
+  min-height: 32px;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+  border-radius: 8px;
+  color: var(--ds-text-muted);
+  font-size: 13px;
+  text-align: left;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.write-outline-panel-item.is-top {
+  color: var(--ds-text);
+  font-weight: 600;
+}
+
+.write-outline-panel-item:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.write-outline-panel-item.is-active {
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent);
+  font-weight: 600;
+}
+
+.write-outline-panel-dot {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--ds-border-strong);
+}
+
+.write-outline-panel-item.is-active .write-outline-panel-dot {
+  background: var(--ds-accent);
+}
+
+/* Review panel. */
+.write-review-card,
+.write-reference-card {
+  overflow: hidden;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  background: var(--ds-surface-card);
+}
+
+.write-review-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.write-review-text.is-added {
+  background: var(--ds-diff-added-soft);
+  color: var(--ds-text);
+}
+
+.write-review-text.is-removed {
+  background: var(--ds-diff-removed-soft);
+  color: var(--ds-diff-removed);
+  text-decoration: line-through;
+}
+
+.write-review-button {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+}
+
+.write-review-button:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.write-review-button.is-strong {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-elevated);
+  color: var(--ds-text);
+}
+
+.write-review-footer-button {
+  height: 34px;
+  flex: 1;
+  border: 1px solid var(--ds-border);
+  border-radius: 10px;
+  color: var(--ds-text);
+  font-size: 13px;
+}
+
+.write-review-footer-button:hover {
+  background: var(--ds-surface-hover);
+}
+
+/* Neutral ink primary: keeps the strongest action apart from accent navigation. */
+.write-review-footer-button.is-primary {
+  border-color: transparent;
+  background: var(--ds-control);
+  color: var(--ds-control-foreground);
+  font-weight: 600;
+}
+
+.write-review-footer-button.is-primary:hover {
+  background: color-mix(in srgb, var(--ds-control) 88%, var(--ds-bg-main));
+}
+
+/* References panel. */
+.write-reference-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 8px 10px 12px;
+}
+
+.write-reference-card:hover {
+  border-color: var(--ds-border-strong);
+}
+
+.write-reference-text {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ds-text);
+  font-size: 12.5px;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+/* History panel. */
+.write-history-item {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  color: var(--ds-text);
+  text-align: left;
+  transition: background-color 140ms ease;
+}
+
+.write-history-item:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+}
+
+.write-history-item.is-current {
+  background: var(--ds-surface-hover);
+  font-weight: 600;
+}
+
+.write-history-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Rail badges: accent for pending work, neutral for counts. */
+.write-rail-badge {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 2px solid var(--ds-bg-sidebar);
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.write-rail-badge.is-accent {
+  background: var(--ds-accent);
+  color: var(--ds-control-foreground);
+}
+
+[data-theme='dark'] .write-rail-badge.is-accent {
+  color: #10151f;
+}
+
+.write-rail-badge.is-neutral {
+  background: var(--ds-border-strong);
+  color: var(--ds-text);
+}
+
+.write-rail-running-dot {
+  position: absolute;
+  bottom: -1px;
+  left: -1px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--ds-bg-sidebar);
+  border-radius: 999px;
+  background: var(--ds-status-dot-success, #128a4a);
+  box-sizing: content-box;
+}
+
+/* Selection menu: AI actions read in the skill violet. */
+.write-inline-agent-action-row > svg:first-child {
+  color: var(--ds-skill, #7a68e8);
+}

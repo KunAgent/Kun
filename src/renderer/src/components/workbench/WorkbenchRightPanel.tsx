@@ -34,6 +34,7 @@ import { WorkbenchRightSidebar } from './WorkbenchRightSidebar'
 import { workbenchDividerClassName } from './workbench-divider'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { X } from 'lucide-react'
+import type { WriteRightPanelContentProps } from '../write/WriteRightPanelContent'
 
 const ChangeInspector = lazy(() =>
   import('../ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
@@ -58,8 +59,8 @@ const CodeCanvasPanel = lazy(() =>
 const SubagentDetailPanel = lazy(() =>
   import('../subagents/SubagentDetailPanel').then((module) => ({ default: module.SubagentDetailPanel }))
 )
-const WriteAssistantPanel = lazy(() =>
-  import('../write/WriteAssistantPanel').then((module) => ({ default: module.WriteAssistantPanel }))
+const WriteRightPanelContent = lazy(() =>
+  import('../write/WriteRightPanelContent').then((module) => ({ default: module.WriteRightPanelContent }))
 )
 const SddAssistantPanel = lazy(() =>
   import('../sdd/SddAssistantPanel').then((module) => ({ default: module.SddAssistantPanel }))
@@ -80,7 +81,6 @@ const GraphModePanel = lazy(() =>
   import('../graph/GraphModePanel').then((module) => ({ default: module.GraphModePanel }))
 )
 
-type WriteAssistantPanelProps = ComponentProps<typeof WriteAssistantPanel>
 type SddAssistantPanelProps = ComponentProps<typeof SddAssistantPanel>
 type ChangeInspectorProps = ComponentProps<typeof ChangeInspector>
 type DevBrowserPanelProps = ComponentProps<typeof DevBrowserPanel>
@@ -114,7 +114,7 @@ export type WorkbenchRightPanelProps = {
   onBeginResize: PointerEventHandler<HTMLDivElement>
   design: DesignRightPanelContentProps
   writeAssistantOpen: boolean
-  write: Omit<WriteAssistantPanelProps, 'className'>
+  write: WriteRightPanelContentProps['write']
   sdd: Omit<SddAssistantPanelProps, 'draft' | 'className'> & {
     draft: SddAssistantPanelProps['draft'] | null
   }
@@ -204,7 +204,7 @@ export function WorkbenchRightPanel({
           {design.panelMode !== 'hidden' ? (
             <DesignRightPanelContent {...design} />
           ) : route === 'write' && writeAssistantOpen ? (
-            <WriteAssistantPanel {...write} className="h-full max-h-full w-full" />
+            <WriteRightPanelContent write={write} onOpenAgentSettings={mcpSkills.onOpenSettings} onCollapse={onCollapse} />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sddAi && sdd.draft ? (
             <SddAssistantPanel {...sdd} draft={sdd.draft} className="h-full max-h-full w-full" />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.subagents ? (

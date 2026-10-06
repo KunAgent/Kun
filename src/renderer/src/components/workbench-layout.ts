@@ -58,6 +58,10 @@ export {
   type WorkbenchWidthConstraints
 } from './workbench-layout-storage'
 import {
+  WRITE_RIGHT_PANEL_DEFAULT_WIDTH,
+  WRITE_RIGHT_PANEL_WIDTH_KEY
+} from '../write/write-right-panel-state'
+import {
   CODE_PANEL_PREFERRED,
   GRAPH_PANEL_PREFERRED,
   LEFT_PANEL_COLLAPSED_KEY,
@@ -138,12 +142,18 @@ export function useWorkbenchLayout({
     // only wins once the user has toggled it deliberately.
     readStoredBoolean(LEFT_PANEL_COLLAPSED_KEY, isRemoteWeb() && isNarrowViewportNow())
   )
-  const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
+  const [codeRightWidth, setCodeRightWidth] = useState(() => {
     const scoped = widthsRegistryRef.current.workspaces[initialScopeRef.current]
     if (scoped) return scoped
     const legacy = readStoredWidth(RIGHT_PANEL_WIDTH_KEY, RIGHT_PANEL_DEFAULT)
     return codeRightTabs.expanded ? Math.max(legacy, CODE_PANEL_PREFERRED) : legacy
   })
+  // Work keeps its own right-panel width so resizing Code never moves it.
+  const [writeRightWidth, setWriteRightWidth] = useState(() =>
+    readStoredWidth(WRITE_RIGHT_PANEL_WIDTH_KEY, WRITE_RIGHT_PANEL_DEFAULT_WIDTH)
+  )
+  const rightSidebarWidth = route === 'write' ? writeRightWidth : codeRightWidth
+  const setRightSidebarWidth = route === 'write' ? setWriteRightWidth : setCodeRightWidth
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState(() =>
     readStoredWidth(TERMINAL_HEIGHT_KEY, TERMINAL_HEIGHT_DEFAULT)
@@ -166,11 +176,11 @@ export function useWorkbenchLayout({
   const widthConstraints = workbenchWidthConstraintsForRightPanel(route, rightPanelMode)
   useEffect(() => {
     if (rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.graph) return
-    setRightSidebarWidth((width) => Math.max(width, GRAPH_PANEL_PREFERRED))
+    setCodeRightWidth((width) => Math.max(width, GRAPH_PANEL_PREFERRED))
   }, [rightPanelMode])
   const ensureInitialCodePanelWidth = useCallback((): void => {
     if (codeRightTabsRef.current.tabs.length === 0) {
-      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+      setCodeRightWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
     }
   }, [])
 
@@ -183,17 +193,21 @@ export function useWorkbenchLayout({
   }, [leftSidebarCollapsed])
 
   useEffect(() => {
-    persistWidth(RIGHT_PANEL_WIDTH_KEY, rightSidebarWidth)
+    persistWidth(RIGHT_PANEL_WIDTH_KEY, codeRightWidth)
     const scope = initialScopeRef.current
     widthsRegistryRef.current = {
       version: 1,
       workspaces: {
         ...widthsRegistryRef.current.workspaces,
-        [scope]: rightSidebarWidth
+        [scope]: codeRightWidth
       }
     }
     persistCodeRightWidthsRegistry(widthsRegistryRef.current)
-  }, [rightSidebarWidth])
+  }, [codeRightWidth])
+
+  useEffect(() => {
+    persistWidth(WRITE_RIGHT_PANEL_WIDTH_KEY, writeRightWidth)
+  }, [writeRightWidth])
 
   useEffect(() => {
     const scope = initialScopeRef.current
@@ -237,9 +251,9 @@ export function useWorkbenchLayout({
     )
     setCodeRightTabs(nextTabs)
     const nextWidth = widthsRegistryRef.current.workspaces[nextScope]
-    if (nextWidth) setRightSidebarWidth(nextWidth)
+    if (nextWidth) setCodeRightWidth(nextWidth)
     else if (nextTabs.expanded) {
-      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+      setCodeRightWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
     }
   }, [activeThreadId, codeRightTabs, workspaceRoot])
 
@@ -349,6 +363,7 @@ export function useWorkbenchLayout({
     rightPanelVisible,
     rightSidebarWidth,
     route,
+    setRightSidebarWidth,
     widthConstraints
   ])
 

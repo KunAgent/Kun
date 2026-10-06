@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import type { PaperWorkbenchChrome } from '../../../paper/paper-chrome-context'
+import type { WriteRightPanelState } from '../../../write/write-right-panel-state'
 
 /**
  * Immersive reading mode (R1.2): hides the tab rail, left sidebar, and right
@@ -20,14 +21,14 @@ export function usePaperImmersive({
   toggleImmersive: () => void
 } {
   const [immersive, setImmersive] = useState(false)
-  const savedChromeRef = useRef<{ leftCollapsed: boolean; assistantOpen: boolean } | null>(null)
+  const savedChromeRef = useRef<{ leftCollapsed: boolean; rightPanel: WriteRightPanelState } | null>(null)
   const chromeRef = useRef(chrome)
   chromeRef.current = chrome
 
   const enter = useCallback((): void => {
     savedChromeRef.current = {
       leftCollapsed: chromeRef.current?.leftSidebarCollapsed ?? false,
-      assistantOpen: useWriteWorkspaceStore.getState().assistantOpen
+      rightPanel: useWriteWorkspaceStore.getState().writeRightPanel
     }
     chromeRef.current?.setLeftSidebarCollapsed(true)
     useWriteWorkspaceStore.getState().setAssistantOpen(false)
@@ -43,7 +44,7 @@ export function usePaperImmersive({
     const saved = savedChromeRef.current
     if (saved) {
       chromeRef.current?.setLeftSidebarCollapsed(saved.leftCollapsed)
-      useWriteWorkspaceStore.getState().setAssistantOpen(saved.assistantOpen)
+      useWriteWorkspaceStore.getState().setWriteRightPanelState(saved.rightPanel)
       savedChromeRef.current = null
     }
     setImmersive(false)
@@ -70,7 +71,7 @@ export function usePaperImmersive({
     if (savedChromeRef.current) {
       const saved = savedChromeRef.current
       chromeRef.current?.setLeftSidebarCollapsed(saved.leftCollapsed)
-      useWriteWorkspaceStore.getState().setAssistantOpen(saved.assistantOpen)
+      useWriteWorkspaceStore.getState().setWriteRightPanelState(saved.rightPanel)
       savedChromeRef.current = null
     }
   }, [])

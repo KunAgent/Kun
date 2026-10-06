@@ -3,6 +3,8 @@ import { WorkbenchConversationStage, type WorkbenchConversationStageProps } from
 import { normalizeWorkbenchRoute } from './workbench-route'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { PaperNoticeToast } from '../paper/PaperNoticeToast'
+import { WriteSideRail } from '../write/WriteSideRail'
+import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 
 const PluginMarketplaceView = lazy(() =>
   import('../PluginMarketplaceView').then((module) => ({ default: module.PluginMarketplaceView }))
@@ -79,6 +81,10 @@ function WorkbenchPaneFallback(): ReactElement {
  */
 function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
   const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
+  // The Work rail sits right of the panel on both surfaces; phone-sized remote
+  // layouts keep the tab-bar assistant toggle instead.
+  const remoteMobile = useRemoteMobileLayout()
+  const rightPanel = <>{write.rightPanel}{remoteMobile ? null : <WriteSideRail />}</>
   if (workSurface === 'papers') {
     return (
       <PaperWorkspaceView
@@ -89,7 +95,7 @@ function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
         onSubmitPrompt={write.onSubmitPrompt}
         onAttachImage={write.onAttachImage}
         onOpenAgentSettings={write.onOpenAgentSettings}
-        rightPanel={write.rightPanel}
+        rightPanel={rightPanel}
       />
     )
   }
@@ -103,7 +109,7 @@ function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
         onSubmitPrompt={write.onSubmitPrompt}
         onOpenAgentSettings={write.onOpenAgentSettings}
       />
-      {write.rightPanel}
+      {rightPanel}
     </div>
   )
 }

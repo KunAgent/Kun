@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import type { Editor } from '@tiptap/core'
 import { workHeadingSlug } from '../../write/work-link'
+import type { WriteOutlineEntry } from '../../write/write-editor-bridge'
 
 type Props = {
   editor: Editor | null
@@ -8,14 +9,9 @@ type Props = {
   scrollHost: HTMLElement | null
 }
 
-type OutlineEntry = {
-  pos: number
-  level: number
-  text: string
-  slug: string
-}
+type OutlineEntry = WriteOutlineEntry
 
-function collectHeadings(editor: Editor): OutlineEntry[] {
+export function collectHeadings(editor: Editor): OutlineEntry[] {
   const entries: OutlineEntry[] = []
   editor.state.doc.forEach((node, pos) => {
     if (node.type.name !== 'heading') return

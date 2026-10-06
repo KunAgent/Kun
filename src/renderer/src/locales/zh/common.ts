@@ -41,6 +41,7 @@ import mobileWork from './common/mobile-work.json'
 import agentHarness from './common/agent-harness.json'
 import agentIntegrations from './common/agent-integrations.json'
 import ade from './common/ade.json'
+import workLayout from './common/work-layout.json'
 
 const common = {
   ...agentUpdates,
@@ -91,6 +92,7 @@ const common = {
   ...agentHarness,
   ...agentIntegrations,
   ...ade,
+  ...workLayout,
 }
 
 export default common
