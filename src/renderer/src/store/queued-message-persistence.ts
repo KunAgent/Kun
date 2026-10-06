@@ -1,3 +1,4 @@
+import { PaperTurnContextSchema } from '@shared/paper/paper-turn-context'
 import { browserStorage, type BrowserStorageLike } from '../lib/browser-storage'
 import { queueAdmissionPending } from './queue-admission-fence'
 import type { ChatBlock } from '../agent/types'
@@ -109,6 +110,8 @@ function normalizeQueuedMessage(value: unknown): QueuedUserMessage | null {
   const id = normalizedString(source.id)
   const text = normalizedString(source.text)
   if (!id || !text) return null
+  const paper = source.paperContext === undefined ? undefined : PaperTurnContextSchema.safeParse(source.paperContext)
+  if (paper && !paper.success) return null
   const hasWriteContext = source.writeContext !== undefined
   const writeContext = normalizeWriteContext(source.writeContext)
   if (hasWriteContext && !writeContext) return null
@@ -162,6 +165,8 @@ function normalizeQueuedMessage(value: unknown): QueuedUserMessage | null {
   else delete normalized.sandboxMode
   if (isApprovalReviewer(source.approvalReviewer)) normalized.approvalReviewer = source.approvalReviewer
   else delete normalized.approvalReviewer
+  if (paper?.success) normalized.paperContext = paper.data
+  else delete normalized.paperContext
   if (writeContext) normalized.writeContext = writeContext
   else delete normalized.writeContext
   const placementTarget = normalizeDesignImagePlacementTarget(source.designImagePlacementTarget)

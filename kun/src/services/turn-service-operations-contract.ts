@@ -233,6 +233,7 @@ export interface TurnServiceOperations {
       | 'toolCatalogToolCount'
       | 'toolCatalogDrift'
       | 'requiredToolGate'
+      | 'paperModelRequests'
       | 'extensionModelRequests'
       | 'extensionToolInvocations'
       | 'workspaceCheckpointId'

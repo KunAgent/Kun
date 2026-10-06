@@ -277,6 +277,7 @@ async startTurn(this: TurnService, input: {
             clientRequestFingerprint: requestFingerprint,
             admissionPending: true,
             prompt: input.request.prompt,
+            paperContext: input.request.paperContext,
             messageSource: input.request.messageSource,
             subagentResume: input.request.subagentResume,
             model: turnModel,

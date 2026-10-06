@@ -1,7 +1,6 @@
 import { BrowserWindow, clipboard, dialog } from 'electron'
 import { createRequire } from 'node:module'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -10,6 +9,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { renderWorkMarkdownToHtml } from '../../shared/markdown/render-html'
 import { highlightExportCodeBlocks } from './write-export-highlight'
+import { katexExportCss } from './write-export-math'
 import type {
   WriteExportFormat,
   WriteExportPayload,
@@ -359,27 +359,6 @@ export async function buildWriteClipboardHtmlFragment(options: {
 
 export function buildWriteExportFileName(sourcePath: string, format: WriteExportFormat): string {
   return `${basenameWithoutExtension(sourcePath)}${exportExtension(format)}`
-}
-
-/**
- * KaTeX stylesheet with font URLs rewritten to absolute file:// paths so
- * exported HTML/PDF render KaTeX markup even where no system math fonts
- * exist (common on Linux). Cached after first read; empty on failure —
- * the MathML output still covers fonted environments then.
- */
-let katexCssCache: string | null = null
-
-function katexExportCss(): string {
-  if (katexCssCache !== null) return katexCssCache
-  try {
-    const cssPath = require.resolve('katex/dist/katex.min.css')
-    const fontsBase = `${pathToFileURL(dirname(cssPath)).href}/`
-    katexCssCache = readFileSync(cssPath, 'utf8')
-      .replace(/url\(fonts\//g, `url(${fontsBase}fonts/`)
-  } catch {
-    katexCssCache = ''
-  }
-  return katexCssCache
 }
 
 export async function buildWriteExportHtmlDocument(options: {

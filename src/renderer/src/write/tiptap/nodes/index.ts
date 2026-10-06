@@ -60,11 +60,11 @@ export function buildWorkConstructExtensions(runtime?: {
     FootnoteReference,
     InlineHtml,
     BlockMath.configure({
-      katexOptions: { throwOnError: false },
+      katexOptions: { throwOnError: false, displayMode: true, trust: false },
       onClick: (node, pos) => mathEditorFor(node, pos, 'block')
     }),
     WorkInlineMath.configure({
-      katexOptions: { throwOnError: false },
+      katexOptions: { throwOnError: false, displayMode: false, trust: false },
       onClick: (node, pos) => mathEditorFor(node, pos, 'inline')
     }),
     WriteMathInput

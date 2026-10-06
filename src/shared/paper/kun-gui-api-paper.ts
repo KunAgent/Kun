@@ -1,3 +1,4 @@
+import type { PaperEvidenceApi } from './paper-evidence-types'
 import type { PaperSearchResult, PaperSearchSource } from './paper-search'
 import type {
   PaperCoolNotesResult,
@@ -198,6 +199,7 @@ export type PaperReaderApi = {
     workspaceRoot: string
     unitDir: string
     items: unknown[]
+    expectedPdfSha256?: string
     removedIds?: string[]
   }) => Promise<PaperMarksResult>
   paperTranslateSelection: (payload: {
@@ -241,6 +243,7 @@ export type PaperReaderApi = {
       comment?: string
     }
     pngBase64: string
+    expectedPdfSha256?: string
   }) => Promise<
     | { ok: true; mark: PaperVisualMark }
     | { ok: false; code: string; message: string }
@@ -333,3 +336,4 @@ export type KunGuiPaperApi =
   & PaperLibraryApi
   & PaperReaderApi
   & PaperDiscoverApi
+  & PaperEvidenceApi

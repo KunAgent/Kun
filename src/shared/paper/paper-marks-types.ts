@@ -26,6 +26,7 @@ export const paperHighlightSchema = z
   .object({
     id: z.string().min(1).max(80),
     kind: z.literal('highlight'),
+    pdfSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     color: paperHighlightColorSchema,
     page: z.number().int().min(1),
     rects: z.array(paperRectSchema).min(1).max(64),
@@ -85,6 +86,7 @@ export const paperVisualMarkSchema = z
   .object({
     id: z.string().min(1).max(80),
     kind: z.literal('visual'),
+    pdfSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     page: z.number().int().min(1),
     rect: paperRectSchema,
     comment: z.string().max(8000).optional(),

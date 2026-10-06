@@ -1,6 +1,6 @@
 export type KnowledgeSourceNavigationLocation =
   | { kind: 'text'; lineStart: number; lineEnd: number }
-  | { kind: 'pdf'; pageStart: number; pageEnd: number }
+  | { kind: 'pdf'; pageStart: number; pageEnd: number; expectedSha256?: string }
   | { kind: 'word'; paragraphStart: number; paragraphEnd: number }
   | { kind: 'presentation'; slideStart: number; slideEnd: number }
   | { kind: 'spreadsheet'; sheetName: string; range: string }

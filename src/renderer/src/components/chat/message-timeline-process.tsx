@@ -228,6 +228,7 @@ export function ProcessSectionRow({
             <div className="ds-markdown text-[13.5px] leading-6 text-ds-faint">
               <AssistantMarkdown
                 text={reasoningText}
+                plainText={section.blocks.some((block) => block.renderMode === 'plain-text')}
                 streaming={active && processing}
                 hideHtmlComments
               />

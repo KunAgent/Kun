@@ -128,7 +128,7 @@ export class CompatRequestCodecs {
       model: input.model,
       stream: input.stream,
       messages: this.deps.splitOpenAiMessages(input.messages),
-      ...(input.request.gatewayRouting ? { store: false } : {})
+      ...((input.request.gatewayRouting || input.request.paperReadOnly) ? { store: false } : {})
     }
     if (input.maxTokens !== undefined) body.max_tokens = input.maxTokens
     applySamplingParams(body, input)
@@ -218,7 +218,7 @@ export class CompatRequestCodecs {
       model: input.model,
       stream: input.stream,
       input: input.isCodexLite ? [...litePrefix, ...responseInput] : responseInput,
-      ...(input.request.gatewayRouting ? { store: false } : {}),
+      ...((input.request.gatewayRouting || input.request.paperReadOnly) ? { store: false } : {}),
       ...(input.isCodexLite
         ? {
             store: false,

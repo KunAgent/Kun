@@ -2,6 +2,7 @@ import type { ModelStreamChunk } from '../../ports/model-client.js'
 import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
 
 const GATEWAY_DIAGNOSTICS: Record<string, string> = {
+  paper_request_budget_exhausted: 'Paper reading permits one upstream request; explicitly submit again to retry.',
   gateway_route_changed: 'Gateway provider configuration changed. Retry the request.',
   route_attempt_budget_exhausted: 'Gateway upstream attempt budget exhausted.',
   route_deadline_exceeded: 'Gateway routing deadline exceeded.',

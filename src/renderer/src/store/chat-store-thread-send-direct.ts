@@ -53,7 +53,6 @@ import {
   isAdeProjectDefaultsStaleError,
   requestAdeProjectDefaultsRefresh
 } from '../lib/ade-project-defaults-refresh'
-
 /**
  * A queued message freezes the model captured when it was enqueued. Draining
  * that queue after the user already switched models must not write the stale
@@ -299,7 +298,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         model: composerModel
       })
       const settings = await rendererRuntimeClient.getSettings()
-      const workspaceCheckpointRequestId = startWorkspaceCheckpointSnapshot({
+      const paperContext = queued?.paperContext ?? overrides?.paperContext
+      const workspaceCheckpointRequestId = paperContext ? undefined : startWorkspaceCheckpointSnapshot({
         settings,
         threads: get().threads,
         activeThreadId,
@@ -341,6 +341,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         designProfile: acceptedDesignProfile
       } = await p.sendUserMessage(activeThreadId, runtimeText, {
         clientRequestId,
+        ...(paperContext ? { paperContext } : {}),
         mode,
         orchestration,
         agentSurface: requestedAgentSurface ??

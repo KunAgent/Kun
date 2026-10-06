@@ -1,6 +1,5 @@
 import { app, ipcMain } from 'electron'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { z } from 'zod'
 import {
   paperArxivTodayPayloadSchema,
   paperFetchFeedPayloadSchema,
@@ -32,7 +31,8 @@ import type {
   PaperTranslateDocumentResult,
   PaperTranslateTextResult
 } from '../../shared/paper/paper-library-types'
-import { paperHighlightSchema } from '../../shared/paper/paper-marks-types'
+import { paperVisualMarkSchema } from '../../shared/paper/paper-marks-types'
+import { validatePaperHighlightBindings, validatePaperMarkBinding } from '../services/paper/paper-evidence-mark-binding'
 import {
   normalizeWritePaperReadingSettings,
   normalizeWritePapersDir
@@ -44,6 +44,7 @@ import {
   expandHomePath,
   resolveTargetPathWithinWorkspace
 } from '../services/workspace-paths'
+import { PaperEvidenceError } from '../services/paper/paper-evidence-store'
 import { PaperUnitError } from '../services/paper/paper-unit-service'
 import {
   readPaperUnitMetaV2,
@@ -55,6 +56,7 @@ import {
   listPaperMarkCards,
   mergeWritePaperAnnotations,
   readPaperAnnotations,
+  readPaperMarkCard,
   writePaperMarkCard,
   writePaperVisualMarkPng
 } from '../services/paper/paper-marks-service'
@@ -82,7 +84,7 @@ function resolvePath(raw: string): string {
 }
 
 function paperError<T>(error: unknown, fallbackCode: string, fallbackMessage: string): T {
-  if (error instanceof PaperUnitError) {
+  if (error instanceof PaperUnitError || error instanceof PaperEvidenceError) {
     return { ok: false, code: error.code, message: error.message } as T
   }
   return {
@@ -166,14 +168,14 @@ export function registerAppPaperReaderIpcHandlers(
         const { unitDirAbs } = await unitDirAbsFor(request.workspaceRoot, request.unitDir)
         // Split the payload: highlights merge into annotations.json; translate/
         // ask cards persist as per-id files under marks/.
-        const highlights = z.array(paperHighlightSchema).parse(
-          (request.items as { kind?: string }[]).filter((item) => item?.kind === 'highlight')
-        )
+        const highlights = await validatePaperHighlightBindings(unitDirAbs, request.items, request.expectedPdfSha256)
         const cards = (request.items as { kind?: string }[]).filter(
           (item) => item && (item.kind === 'translate' || item.kind === 'ask' || item.kind === 'visual')
         )
         for (const card of cards) {
-          await writePaperMarkCard(unitDirAbs, card)
+          const visual = paperVisualMarkSchema.safeParse(card)
+          await writePaperMarkCard(unitDirAbs, visual.success
+            ? await validatePaperMarkBinding(unitDirAbs, visual.data, request.expectedPdfSha256) : card)
         }
         for (const removedId of request.removedIds ?? []) {
           await deletePaperMarkCard(unitDirAbs, removedId)
@@ -211,9 +213,10 @@ export function registerAppPaperReaderIpcHandlers(
         if (!meta) {
           return { ok: false as const, code: 'invalid-unit' as const, message: 'paper.json is missing or invalid.' }
         }
-        const imagePath = await writePaperVisualMarkPng(unitDirAbs, request.mark.id, png)
+        if (await readPaperMarkCard(unitDirAbs, request.mark.id)) throw new PaperEvidenceError('mark-exists', 'Create a new visual mark instead of overwriting an existing capture.')
+        const imagePath = `assets/${request.mark.id}.png`
         const now = new Date().toISOString()
-        const card = {
+        const card = await validatePaperMarkBinding(unitDirAbs, {
           id: request.mark.id,
           kind: 'visual' as const,
           page: request.mark.page,
@@ -222,7 +225,8 @@ export function registerAppPaperReaderIpcHandlers(
           image: { path: imagePath },
           createdAt: now,
           updatedAt: now
-        }
+        }, request.expectedPdfSha256)
+        await writePaperVisualMarkPng(unitDirAbs, request.mark.id, png)
         await writePaperMarkCard(unitDirAbs, card)
         return { ok: true as const, mark: card }
       } catch (error) {

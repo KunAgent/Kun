@@ -408,6 +408,7 @@ async updateTurnMetadata(this: TurnService,
       | 'toolCatalogToolCount'
       | 'toolCatalogDrift'
       | 'requiredToolGate'
+      | 'paperModelRequests'
       | 'extensionModelRequests'
       | 'extensionToolInvocations'
       | 'workspaceCheckpointId'
@@ -422,6 +423,7 @@ async updateTurnMetadata(this: TurnService,
         turn.id === turnId
           ? {
               ...turn,
+              ...reservePaperModelRequest(turn, patch.paperModelRequests),
               ...(patch.activeSkillIds ? { activeSkillIds: [...patch.activeSkillIds] } : {}),
               ...(patch.injectedMemoryIds ? { injectedMemoryIds: [...patch.injectedMemoryIds] } : {}),
               ...(patch.injectedMemorySummaries
@@ -593,4 +595,14 @@ function extractInterruptionSummary(input: {
 function boundText(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value
   return `${value.slice(0, maxChars)}…`
+}
+
+
+/** Called inside the existing serialized/CAS thread mutation, never after network dispatch. */
+function reservePaperModelRequest(turn: Turn, requested: number | undefined): Partial<Turn> {
+  if (requested === undefined) return {}
+  if (!turn.paperContext || requested !== 1 || (turn.paperModelRequests ?? 0) >= 1) {
+    throw new Error('Paper model request budget is consumed or invalid; it cannot be reset')
+  }
+  return { paperModelRequests: 1 }
 }

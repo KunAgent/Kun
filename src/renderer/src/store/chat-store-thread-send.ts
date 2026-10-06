@@ -1,3 +1,4 @@
+import { createPaperTurnContext } from '@shared/paper/paper-turn-context'
 import { codeDefaultRouteError } from './chat-store-code-default-route'
 import { designSubmissionMatchesCodeThread, kunWorkflowSendBlocked } from './chat-store-kun-capability-guard'
 import type { ChatBlock, NormalizedThread, ReviewTarget } from '../agent/types'
@@ -217,7 +218,17 @@ export async function sendThreadMessage(
     // chunk finishes loading on a cold start. Warm it as soon as the user
     // commits a turn so the fallback plain-text frame is as short as possible.
     void prepareAssistantMarkdownRenderer().catch(() => undefined)
-    const queued = overrides?.queued
+    let queued = overrides?.queued
+    let paperContext = queued?.paperContext ?? overrides?.paperContext
+    if (paperContext) {
+      try {
+        paperContext = createPaperTurnContext(paperContext)
+        overrides = { ...overrides, paperContext }
+        if (queued) queued = { ...queued, paperContext }
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Invalid paper context' }); return false
+      }
+    }
     const clientRequestId = queued?.clientRequestId?.trim() ||
       overrides?.clientRequestId?.trim() ||
       createClientTurnRequestId()
@@ -233,7 +244,7 @@ export async function sendThreadMessage(
       : queued?.designDocumentTarget ?? overrides?.designDocumentTarget
     const designImagePlacementTarget = queued?.designImagePlacementTarget ?? overrides?.designImagePlacementTarget
     const messageSource = queued?.messageSource ?? overrides?.messageSource
-    const persona = resolveTurnPersona(
+    const persona = paperContext ? '' : resolveTurnPersona(
       get().composerPersonaEnabled,
       queued?.persona,
       overrides?.persona,
@@ -457,6 +468,7 @@ export async function sendThreadMessage(
             ? { guiDesignArtifact: queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact }
             : {}),
           ...(writeContext ? { writeContext } : {}),
+          ...(paperContext ? { paperContext: createPaperTurnContext(paperContext) } : {}),
           ...(attachmentIds?.length ? { attachmentIds } : {}),
           ...(attachments?.length ? { attachments } : {}),
           ...(fileReferences?.length ? { fileReferences } : {}),
@@ -575,6 +587,7 @@ export async function sendThreadMessage(
         ? { guiDesignArtifact: queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact }
         : {}),
       ...(writeContext ? { writeContext } : {}),
+          ...(paperContext ? { paperContext: createPaperTurnContext(paperContext) } : {}),
       ...(snapshotApprovalPolicy ? { approvalPolicy: snapshotApprovalPolicy } : {}),
       ...(snapshotSandboxMode ? { sandboxMode: snapshotSandboxMode } : {}),
       ...(snapshotApprovalReviewer ? { approvalReviewer: snapshotApprovalReviewer } : {}),

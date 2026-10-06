@@ -162,6 +162,11 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         return statusFromSettlement(settlement, 'failed')
       }
     }
+    if (turnRecord?.paperContext && delegatedSdkRuntime) {
+      const settlement = await settle({ status: 'failed', code: 'paper_transport_unsupported',
+        error: 'Paper reading requires a bounded native API model; external agent runtimes are not supported.' })
+      return statusFromSettlement(settlement, 'failed')
+    }
     // Keep the legacy provider dispatcher subject to the same product boundary.
     if (delegatedSdkRuntime && owningThread && turnRecord) {
       const intentError = unsupportedKunTurnIntent(turnHarnessId ?? 'external', effectiveKunTurnIntent(owningThread, turnRecord), {
@@ -241,7 +246,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       return finalStatus
     }
     try {
-      goalTimer = await this.goalTurns.begin(threadId)
+      goalTimer = turnRecord?.paperContext ? null : await this.goalTurns.begin(threadId)
       if (delegatedSdkRuntime && owningThread?.roomContext &&
         delegatedSdkRuntime.capabilities(delegatedProviderId)?.roomToolPolicy !== true) {
         throw new Error('This provider cannot enforce the room tool policy; select an API model or a supported SDK provider.')
@@ -254,7 +259,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       const resumedGraphLead = owningThread?.turns
         .find((candidate) => candidate.id === turnId)
         ?.graphLeadLifecycle?.resumedAt !== undefined
-      const denial = resumedGraphLead
+      const denial = resumedGraphLead || turnRecord?.paperContext
         ? undefined
         : await runTurnStartLifecycleHooks(this.lifecycleHookDeps(), { threadId, turnId })
       if (denial) {
@@ -287,7 +292,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       // Fire-and-forget: start LLM title generation as soon as the first-turn
       // user message is in place, in parallel with the main reply. Only uses
       // user input; never blocks the agent loop.
-      if (!resumedGraphLead) {
+      if (!resumedGraphLead && !turnRecord?.paperContext) {
         void this.threadTitle.generateAfterTurn(threadId, turnId, signal).catch(() => {})
       }
       if (delegatedSdkRuntime) {
@@ -416,7 +421,9 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         // Accounting/resume are post-settlement conveniences. A late store or
         // event failure must not hide an already durable terminal outcome, nor
         // skip the unconditional transient-state cleanup below.
-        if (suspended) {
+        if (turnRecord?.paperContext) {
+          this.goalTurns.suppressResume(turnId)
+        } else if (suspended) {
           await this.goalTurns.afterSuspended(threadId, goalTimer)
         } else {
           await this.goalTurns.afterTerminal({
@@ -437,7 +444,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         }
         this.turnFailures.delete(turnId)
         this.telemetry.clearPromptPressure(threadId)
-        if (!suspended) {
+        if (!suspended && !turnRecord?.paperContext) {
           await runTurnEndLifecycleHooks(this.lifecycleHookDeps(), {
             threadId,
             turnId,

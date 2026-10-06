@@ -1,3 +1,4 @@
+import { createPaperTurnContext } from '@shared/paper/paper-turn-context'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultClawSettings } from '@shared/app-settings'
 import type { AgentProvider } from '../agent/types'
@@ -64,6 +65,21 @@ describe('background queued message delivery', () => {
     rendererRuntimeClient.invalidateSettings()
     vi.unstubAllGlobals()
     threadActionSharedState.drainingQueuedMessageThreadIds.clear()
+  })
+
+  it('keeps frozen paper policy when draining an inactive conversation', async () => {
+    const paperContext = createPaperTurnContext({ version: 1, scope: 'current-paper', privacy: 'model-provider',
+      purpose: 'Explain', providerId: 'api', model: 'model', maxModelRequests: 1,
+      sources: [{ paperId: 'p1', title: 'Frozen', text: 'Evidence' }] })
+    saveQueuedMessagesForThread('thread-a', [{ id: 'q-paper', text: 'Question', deliveryState: 'pending',
+      agentSurface: 'write', model: 'model', providerId: 'api', paperContext }])
+    const h = harness()
+    const sendUserMessage = vi.fn(async () => ({ threadId: 'thread-a', turnId: 'paper-turn' }))
+    await drainBackgroundQueuedMessage({ threadId: 'thread-a', provider: provider(sendUserMessage),
+      set: h.set, get: h.get, onTurnStarted: vi.fn() })
+    expect(sendUserMessage).toHaveBeenCalledWith('thread-a', 'Question', expect.objectContaining({ paperContext }))
+    expect((sendUserMessage.mock.calls[0] as unknown as [string, string, object])?.[2]).not.toHaveProperty('workspaceCheckpointRequestId')
+    expect(h.get().activeThreadId).toBe('thread-b')
   })
 
   it('sends A next queued message after A completes without mutating active B', async () => {

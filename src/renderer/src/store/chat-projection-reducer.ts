@@ -352,14 +352,16 @@ export function reduceChatProjection(
             id: item.itemId,
             turnId: item.turnId,
             createdAt: item.createdAt,
-            text: item.text
+            text: item.text,
+            ...(item.renderMode ? { renderMode: item.renderMode } : {})
           }
         : {
             kind: 'reasoning',
             id: item.itemId,
             turnId: item.turnId,
             createdAt: item.createdAt,
-            text: item.text
+            text: item.text,
+            ...(item.renderMode ? { renderMode: item.renderMode } : {})
           }
       const patch: Partial<ChatState> = {
         blocks: upsertProjectedTimelineBlock(state, block),

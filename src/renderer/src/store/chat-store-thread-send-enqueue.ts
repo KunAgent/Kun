@@ -105,7 +105,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       settings,
       prompt: trimmedText
     })
-    const checkpointRequestId = startWorkspaceCheckpointSnapshot({
+    const checkpointRequestId = (queued?.paperContext ?? overrides?.paperContext) ? undefined : startWorkspaceCheckpointSnapshot({
       settings,
       threads: initialState.threads,
       activeThreadId,
@@ -139,6 +139,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(designDocumentTarget ? { designDocumentTarget } : {}),
       ...(designImagePlacementTarget ? { designImagePlacementTarget } : {}),
       ...(writeContext ? { writeContext: toWriteTurnContext(writeContext) } : {}),
+      ...((queued?.paperContext ?? overrides?.paperContext) ? { paperContext: queued?.paperContext ?? overrides?.paperContext } : {}),
       ...(persona ? { persona } : {}),
       ...((queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact)
         ? { guiDesignArtifact: queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact }
@@ -167,6 +168,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(designDocumentTarget ? { designDocumentTarget } : {}),
       ...(designImagePlacementTarget ? { designImagePlacementTarget } : {}),
       ...(writeContext ? { writeContext } : {}),
+      ...((queued?.paperContext ?? overrides?.paperContext) ? { paperContext: queued?.paperContext ?? overrides?.paperContext } : {}),
       ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
       ...(displayText ? { displayText } : {}),
       ...(mode ? { mode } : {}),

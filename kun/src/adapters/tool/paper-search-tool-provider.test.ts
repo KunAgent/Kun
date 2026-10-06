@@ -142,7 +142,7 @@ describe('paper search tool provider (P1.1/P4)', () => {
     expect(list.papers[0]).toMatchObject({ verified: true, priority: 'must' })
     expect(list.papers[0].paper?.doi).toBe('10.1145/repoaudit')
     expect(list.papers[1]).toMatchObject({ id: '10.9999/invented', verified: false })
-    expect(String(result.output)).toContain('1 verified')
+    expect(String(result.output)).toContain('1 identities found; claims not verified')
   })
 
   it('paper_report rejects an empty list', async () => {

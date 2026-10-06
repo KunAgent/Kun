@@ -11,6 +11,10 @@ import { PaperImportDialogHost } from './PaperImportDialogHost'
 import { PaperLibraryOnboarding } from './PaperLibraryOnboarding'
 import { PaperMetadataDrawer } from './sidebar/PaperMetadataDrawer'
 import { PaperTaskRing } from './PaperTaskRing'
+import { PaperReadingDialogHost } from './evidence/PaperReadingDialog'
+import { openBoundedPaperReading } from '../../paper/paper-reading-entry'
+import { usePaperStore } from '../../write/paper/paper-store'
+import { paperUnitDirFromKnownUnits, paperUnitDirForFile } from '../../write/paper/paper-unit'
 
 export type PaperWorkspaceViewProps = {
   leftSidebarCollapsed: boolean
@@ -90,6 +94,17 @@ export function PaperWorkspaceView({
     if (empty) closeEditorGroup(empty.id)
   }, [editorLayout, closeEditorGroup])
 
+  const submitPaperPrompt = useCallback((value: string): void => {
+    if (!onSubmitPrompt) return
+    const workspace = useWriteWorkspaceStore.getState()
+    const papers = usePaperModeStore.getState().entries
+    const dirs = [...papers.map((entry) => entry.unitDir), ...Object.keys(usePaperStore.getState().unitsByDir)]
+    const unit = paperUnitDirFromKnownUnits(workspace.workspaceRoot, workspace.activeFilePath ?? '', dirs)
+    const entry = unit ? papers.find((paper) => paper.unitDir === paperUnitDirForFile(unit, workspace.workspaceRoot)) : undefined
+    if (unit) void openBoundedPaperReading({ workspaceRoot: workspace.workspaceRoot, unitDir: paperUnitDirForFile(unit, workspace.workspaceRoot), meta: entry?.meta, question: value })
+    else onSubmitPrompt(value)
+  }, [onSubmitPrompt])
+
   // Register the composer bridge for sidebar/reader actions (interpret,
   // quick-ask cards, suggested prompts). Re-registered per render so `input`
   // stays fresh.
@@ -97,7 +112,7 @@ export function PaperWorkspaceView({
     usePaperModeStore.getState().setComposerBridge({
       input,
       setInput,
-      ...(onSubmitPrompt ? { submit: onSubmitPrompt } : {}),
+      ...(onSubmitPrompt ? { submit: submitPaperPrompt } : {}),
       ...(onAttachImage ? { attachImage: onAttachImage } : {})
     })
     return () => {
@@ -106,7 +121,7 @@ export function PaperWorkspaceView({
         usePaperModeStore.getState().setComposerBridge(null)
       }
     }
-  }, [input, setInput, onSubmitPrompt, onAttachImage])
+  }, [input, setInput, onSubmitPrompt, onAttachImage, submitPaperPrompt])
 
   // Index the active library whenever the mounted root changes; the store's
   // workspaceRoot is the library root on this surface. Entries arrive
@@ -162,7 +177,7 @@ export function PaperWorkspaceView({
                   onToggleLeftSidebar={onToggleLeftSidebar}
                   input={input}
                   setInput={setInput}
-                  onSubmitPrompt={onSubmitPrompt}
+                  onSubmitPrompt={onSubmitPrompt ? submitPaperPrompt : undefined}
                   onOpenAgentSettings={onOpenAgentSettings}
                 />
               </WritePdfRendererProvider>
@@ -175,6 +190,7 @@ export function PaperWorkspaceView({
         </div>
         {rightPanel}
       </div>
+      <PaperReadingDialogHost />
       <PaperImportDialogHost
         workspaceRoot={workspaceRoot}
         paperReading={paperReading}

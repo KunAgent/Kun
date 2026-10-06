@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createExtensionContext, type HostTransport } from '@kun/extension-api'
 import { createThreadRecord } from '../domain/thread.js'
 import { createTurnRecord } from '../domain/turn.js'
@@ -47,7 +47,14 @@ describe('extension read surfaces through the managed Runtime broker', () => {
         baseUrl: 'http://127.0.0.1:1', runtimeToken: 'extension-read-runtime'
       }
     })
+    const roomsStarted = vi.spyOn(runtime.rooms!, 'start')
     runtime.startBackgroundMaintenance?.()
+    await vi.waitFor(() => expect(roomsStarted).toHaveBeenCalledOnce(), { timeout: 10_000 })
+    roomsStarted.mockRestore()
+    // Keep the Manager lease for fixture writes, but stop and drain the room
+    // scheduler before sending the read fixture. Otherwise that message can
+    // create an unrelated discussion turn during the exact capacity checks.
+    await runtime.rooms!.close()
     const broker = runtime.extensionPlatform!.broker
     const permissions = ['agent.capacity.read', 'rooms.read', 'agent.threads.readOwn', 'agent.run']
     const principal: ExtensionPrincipal = {

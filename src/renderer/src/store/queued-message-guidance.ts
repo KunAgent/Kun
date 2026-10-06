@@ -12,6 +12,7 @@ export type QueuedMessageGuidanceInput = {
   guiDesignCanvas?: boolean
   guiDesignMode?: boolean
   guiDesignArtifact?: unknown
+  paperContext?: unknown
   writeContext?: unknown
 }
 
@@ -40,7 +41,7 @@ export function queuedMessageGuidancePayload(
     message.fileReferences?.length ||
     message.composerContexts?.length ||
     message.guiDesignArtifact ||
-    message.writeContext
+    message.writeContext || message.paperContext
   ) {
     return null
   }

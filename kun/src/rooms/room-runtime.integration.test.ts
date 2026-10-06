@@ -13,7 +13,7 @@ import { roomResultProvider } from './room-result-tools.js'
 import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
 import { buildBuiltinLocalTools } from '../adapters/tool/builtin-tools.js'
 import { RoomRuntime } from './room-runtime.js'
-import type { RoomTaskExecution } from './room-runtime-types.js'
+import type { RoomRequestState, RoomTaskExecution } from './room-runtime-types.js'
 
 const exec = promisify(execFile)
 const cleanups: Array<() => Promise<void>> = []
@@ -100,6 +100,20 @@ async function fixture(structuredResults = false, malformedResults = false) {
 }
 
 describe('Rooms real queue, AgentLoop and Git integration', () => {
+  it('automatically runs a discussion message and releases capacity after its request settles', async () => {
+    const f = await fixture()
+    const sent = await f.runtime.service.send(f.room.id, {
+      clientRequestId: 'automatic-discussion', body: 'Discuss the current design', executionIntent: 'discussion'
+    })
+    await vi.waitFor(async () => {
+      const request = await f.store.get<RoomRequestState>('request', sent.requestId)
+      expect(request?.value.status).toBe('completed')
+    }, { timeout: 10_000 })
+    expect([...f.calls.keys()]).toEqual([expect.stringMatching(/^room-discussion-/)])
+    expect(await f.h.turns.capacitySnapshot()).toMatchObject({ activeTurns: 0, queuedTurns: 0, busy: false })
+    expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
+  }, 15_000)
+
   it.each([false, true])('delivers and reviews an actual isolated tool change without duplicate execution (structured results: %s)', async (structuredResults) => {
     const f = await fixture(structuredResults)
     const enqueue = f.h.turns.enqueueTurn.bind(f.h.turns)

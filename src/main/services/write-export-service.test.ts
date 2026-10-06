@@ -105,6 +105,7 @@ describe('write-export-service helpers', () => {
     expect(html).toContain('katex-html')
     expect(html).toContain('.katex')
     expect(html).toContain('fonts/KaTeX')
+    expect(html).toContain('.markdown-body .katex-display')
   })
 
   it('renders clipboard html fragments for plain text content', async () => {

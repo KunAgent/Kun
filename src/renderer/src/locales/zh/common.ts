@@ -35,6 +35,7 @@ import speak from './common/speak.json'
 import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
+import paperEvidence from './common/paper-evidence.json'
 import mobileWork from './common/mobile-work.json'
 import agentHarness from './common/agent-harness.json'
 import ade from './common/ade.json'
@@ -82,6 +83,7 @@ const common = {
   ...speak,
   ...remoteAccess,
   ...paper,
+  ...paperEvidence,
   ...mobileWork,
   ...agentHarness,
   ...ade,

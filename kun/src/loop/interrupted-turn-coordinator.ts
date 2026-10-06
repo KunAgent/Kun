@@ -116,7 +116,7 @@ export class InterruptedTurnCoordinator {
       const thread = await this.deps.threadStore.get(source.threadId)
       if (thread?.roomContext && thread.roomContext.kind !== 'conversation') continue
       const latest = latestExecutedTurn(thread)
-      if (latest?.id !== source.turnId || latest.status !== 'failed') continue
+      if (latest?.id !== source.turnId || latest.status !== 'failed' || latest.paperContext) continue
       this.recoverySourceTurnByThread.set(source.threadId, source.turnId)
       if (await this.resume.resumeInterrupted(source.threadId)) resumed += 1
     }
@@ -129,7 +129,8 @@ export class InterruptedTurnCoordinator {
     if (!thread || thread.queueControl?.reason === 'user_stop' || thread.roomContext && thread.roomContext.kind !== 'conversation') return false
     if (thread.relation === 'side' && thread.roomContext?.kind !== 'conversation') return false
     const sourceTurnId = this.recoverySourceTurnByThread.get(threadId)
-    if (!sourceTurnId || !restartSourceIsCurrent(thread, sourceTurnId)) return false
+    const latest = latestExecutedTurn(thread)
+    if (latest?.paperContext || !sourceTurnId || !restartSourceIsCurrent(thread, sourceTurnId)) return false
     // A still-active goal normally owns restart recovery. A failed child needs
     // the structured parent decision context instead, so reconciliation omits
     // that parent from goal auto-resume and allows this one continuation turn.

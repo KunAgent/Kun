@@ -578,7 +578,8 @@ function sameStableTimelineBlock(left: ChatBlock, right: ChatBlock): boolean {
     return (
       left.turnId === right.turnId &&
       left.createdAt === right.createdAt &&
-      left.text === right.text
+      left.text === right.text &&
+      left.renderMode === right.renderMode
     )
   }
   return left === right

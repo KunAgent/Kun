@@ -5,7 +5,7 @@
  * and contained inside the workspace by the IPC layer.
  */
 import { basename, join, relative, sep } from 'node:path'
-import { lstat, mkdir, readdir, readFile, rename } from 'node:fs/promises'
+import { lstat, mkdir, readdir, readFile } from 'node:fs/promises'
 import {
   paperUnitMetaSchema,
   upgradePaperMeta,
@@ -17,6 +17,8 @@ import type {
   PaperLibraryMetaPatch
 } from '../../../shared/paper/paper-library-types'
 import { atomicWriteFile } from '../../atomic-json-file'
+import { renamePaperUnitWithEvidence } from './paper-evidence-relocation'
+import { readPaperEvidenceIdentity } from './paper-evidence-identity'
 import { pathExists } from '../workspace-paths'
 import {
   PaperUnitError,
@@ -230,7 +232,7 @@ export async function movePaperUnitToGroup(
   if (await pathExists(target)) {
     throw new PaperUnitError('io', `A paper already exists at ${toSlashes(relative(rootAbs, target))}.`)
   }
-  await rename(unitDirAbs, target)
+  await renamePaperUnitWithEvidence(rootAbs, unitDirAbs, target)
   return { unitDirAbs: target, unitDir: toSlashes(relative(rootAbs, target)) }
 }
 
@@ -352,6 +354,13 @@ export function scannedUnitToEntry(
 
 // ---- BibTeX -------------------------------------------------------------------
 
+/** Prefer authored keys; otherwise reuse a previously captured identity without creating one. */
+async function metaForPaperBibtexExport(unitDirAbs: string, meta: PaperUnitMetaV2): Promise<PaperUnitMetaV2> {
+  if (meta.citeKey?.trim() || meta.bibtex?.trim()) return meta
+  const identity = await readPaperEvidenceIdentity(unitDirAbs)
+  return identity ? { ...meta, citeKey: identity.citeKey } : meta
+}
+
 /** `.bib` text for one unit dir or the whole scanned library. */
 export async function exportPaperBibtex(
   rootAbs: string,
@@ -361,10 +370,11 @@ export async function exportPaperBibtex(
   if (unitDirAbs) {
     const meta = await readPaperUnitMetaV2(unitDirAbs)
     if (!meta) throw new PaperUnitError('invalid-unit', 'paper.json is missing or invalid.')
-    return `${generatePaperBibtex([meta])}`
+    return generatePaperBibtex([await metaForPaperBibtexExport(unitDirAbs, meta)])
   }
   const units = await scanPaperLibrary(rootAbs, papersDirAbs)
-  return generatePaperBibtex(units.map((unit) => unit.meta))
+  const metas = await Promise.all(units.map((unit) => metaForPaperBibtexExport(unit.dirAbs, unit.meta)))
+  return generatePaperBibtex(metas)
 }
 
 export type PaperBibtexImportEntry = {

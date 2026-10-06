@@ -16,6 +16,7 @@ import type { CoreRuntimeSkillJson } from '../../agent/kun-contract'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
 import { useChatStore } from '../../store/chat-store'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { openBoundedPaperReading } from '../../paper/paper-reading-entry'
 import { usePaperStore } from '../../write/paper/paper-store'
 import { paperUnitDirForFile, paperUnitDirFromKnownUnits } from '../../write/paper/paper-unit'
 import {
@@ -595,7 +596,11 @@ export function WriteAssistantPanel({
             onPickAttachments={onPickAttachments}
             onPasteClipboardImage={onPasteClipboardImage}
             onRemoveAttachment={onRemoveAttachment}
-            onSend={onSend}
+            onSend={() => {
+              if (papersSurface && activeUnitRel && !viewingChildThread) {
+                void openBoundedPaperReading({ workspaceRoot, unitDir: activeUnitRel, meta: activePaperEntry?.meta, question: input })
+              } else onSend()
+            }}
             onInterrupt={onInterrupt}
             onConfigureProviders={onConfigureProviders}
           />

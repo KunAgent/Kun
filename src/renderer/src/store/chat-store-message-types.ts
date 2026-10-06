@@ -1,3 +1,4 @@
+import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
 import type {
   AttachmentReference,
   UserFileReference
@@ -79,6 +80,7 @@ export type QueuedUserMessage = {
   designDocumentTarget?: DesignDocumentTarget
   designImagePlacementTarget?: DesignImagePlacementTarget
   guiDesignArtifact?: GuiDesignArtifactMessageContext
+  paperContext?: PaperTurnContext
   writeContext?: WriteAssistantMessageContext
   /** Execution settings frozen at enqueue time; empty fields fall back to runtime defaults. */
   approvalPolicy?: ApprovalPolicy
@@ -168,6 +170,7 @@ export type SendMessageOverrides = {
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
   composerContexts?: ComposerContextAttachment[]
+  paperContext?: PaperTurnContext
   writeContext?: WriteAssistantMessageContext
 }
 

@@ -31,7 +31,7 @@ export function readPaperReaderLayout(): PaperReaderLayoutPreset {
   } catch {
     // localStorage may be unavailable (SSR/tests) — fall back to default.
   }
-  return 'notes'
+  return 'read'
 }
 
 export function storePaperReaderLayout(preset: PaperReaderLayoutPreset): void {

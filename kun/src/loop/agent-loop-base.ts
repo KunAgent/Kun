@@ -1,3 +1,4 @@
+import { runPaperModelStep } from './paper-model-step.js'
 import { flushDurableSteering } from '../services/durable-steering.js'
 import { createImmutablePrefix, type ImmutablePrefix } from '../cache/immutable-prefix.js'
 import type { PipelineStage } from '../contracts/events.js'
@@ -401,7 +402,9 @@ export abstract class AgentLoopBase {
     stepIndex = 0,
     maxToolCallsPerStep = normalizeTurnLimits(this.opts.turnLimits).maxToolCallsPerStep
   ): Promise<ModelRoundOutcome> {
-    return this.modelSteps.run(threadId, turnId, signal, stepIndex, maxToolCallsPerStep)
+    const paper = await runPaperModelStep({ opts: this.opts, engine: this.modelRoundEngine, threadId, turnId, signal,
+      rememberFailure: (id, failure) => this.rememberTurnFailure(id, failure) })
+    return paper ?? this.modelSteps.run(threadId, turnId, signal, stepIndex, maxToolCallsPerStep)
   }
 
   protected async dispatchToolCalls(input: ToolDispatchInput): Promise<ToolDispatchOutcome> {
@@ -437,6 +440,10 @@ export abstract class AgentLoopBase {
     })
     const context = thread ? applyRoomToolPolicy(executionContext, thread) : executionContext
     const turn = thread?.turns.find((candidate) => candidate.id === input.turnId)
+    if (turn?.paperContext) {
+      await this.toolCallDispatcher.suppressAll(input, 'Frozen paper reading has no tools or context expansion')
+      return 'budget_exhausted'
+    }
     const used = turn?.extensionToolInvocations ?? 0
     const maximum = thread?.extensionBudget?.maxToolInvocations
     if (maximum !== undefined && used + input.calls.length > maximum) {

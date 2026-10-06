@@ -1,3 +1,4 @@
+import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
 import { getKunThreadDetail } from './kun-runtime-thread-detail'
 import type {
   AgentProvider,
@@ -538,6 +539,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       ackNoticeIds?: string[]
       /** Managed plan-build turn; Kun enforces isolated-worktree admission. */
       planBuild?: boolean
+      paperContext?: PaperTurnContext
       writeContext?: WriteTurnContext
     }
   ): Promise<{
@@ -653,6 +655,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     if (options?.ackNoticeIds?.length) {
       body.ackNoticeIds = options.ackNoticeIds
     }
+    if (options?.paperContext) body.paperContext = options.paperContext
     if (options?.writeContext) {
       body.writeContext = options.writeContext
     }

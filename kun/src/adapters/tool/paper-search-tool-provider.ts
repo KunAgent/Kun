@@ -110,7 +110,8 @@ const REPORT_DESCRIPTION = [
   'Submit the final recommended-paper list for a literature search, rendered in the chat as importable cards.',
   'Every papers[].id MUST be the arXiv id, DOI, or papers.cool id of a paper already returned by paper_search or',
   'paper_citations in this conversation — never invent ids. Ids that cannot be verified stay visible but are',
-  'marked unverified. Give each paper a one-sentence reason, an optional thematic group, and a priority',
+  'marked unverified. Verification here means identity found in tool results only, never claim truth or full-text support.',
+  'Give each paper a one-sentence reason, an optional thematic group, and a priority',
   '(must = core reading, should = recommended, optional = background).'
 ].join(' ')
 
@@ -313,7 +314,7 @@ export function buildPaperSearchToolProvider(options: PaperSearchToolOptions): C
           ? ` ${unverified} entr${unverified === 1 ? 'y was' : 'ies were'} not among the papers found earlier — shown as unverified.`
           : ''
       return {
-        output: `paper_report recorded: ${entries.length} recommended paper${entries.length === 1 ? '' : 's'} (${verified} verified).${warning}`,
+        output: `paper_report recorded: ${entries.length} recommended paper${entries.length === 1 ? '' : 's'} (${verified} identities found; claims not verified).${warning}`,
         meta: {
           paperList: {
             version: 1,
