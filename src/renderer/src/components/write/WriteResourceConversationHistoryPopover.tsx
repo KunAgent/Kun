@@ -183,7 +183,7 @@ export function WriteResourceConversationHistoryPopover({
         : undefined
 
   return (
-    <div ref={rootRef} className="relative min-w-0 shrink">
+    <div ref={rootRef} className="min-w-0 shrink">
       <button
         type="button"
         onClick={toggleOpen}
@@ -210,7 +210,7 @@ export function WriteResourceConversationHistoryPopover({
         <div
           role="dialog"
           aria-label={t(kindStrings.title)}
-          className="absolute right-0 top-[calc(100%+9px)] z-[70] w-[360px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-ds-border bg-ds-card shadow-[0_22px_64px_rgba(20,47,95,0.22)] dark:shadow-[0_22px_64px_rgba(0,0,0,0.42)]"
+          className="absolute right-3 top-[calc(100%_+_9px)] z-[70] flex max-h-[calc(100dvh_-_200px)] w-[min(360px,calc(100%_-_24px))] flex-col overflow-hidden rounded-2xl border border-ds-border bg-ds-card shadow-[0_22px_64px_rgba(20,47,95,0.22)] dark:shadow-[0_22px_64px_rgba(0,0,0,0.42)]"
           data-testid="write-resource-conversation-history"
         >
           <div className="border-b border-ds-border-muted px-3.5 pb-3 pt-3.5">
@@ -266,7 +266,7 @@ export function WriteResourceConversationHistoryPopover({
             </label>
           </div>
 
-          <div className="max-h-[330px] overflow-y-auto p-2">
+          <div className="min-h-0 max-h-[330px] overflow-y-auto p-2">
             {visibleEntries.length > 0 ? visibleEntries.map((entry) => {
               const sourceIndex = model.entries.findIndex((candidate) => candidate.id === entry.id)
               const title = conversationTitle(entry, sourceIndex, t)

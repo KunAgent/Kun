@@ -263,7 +263,7 @@ export function WriteAssistantPanel({
     <aside
       className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${className}`}
     >
-      <div className="write-assistant-header ds-sidebar-surface-chrome shrink-0">
+      <div className="write-assistant-header ds-sidebar-surface-chrome relative shrink-0">
         <div className="flex h-[52px] min-w-0 items-center gap-1 border-b border-ds-border-muted pl-4 pr-2.5">
           <WriteAssistantSparkleIcon className="write-ai-tint h-[18px] w-[18px] shrink-0" />
           <span className="ml-2 min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-ds-ink">
