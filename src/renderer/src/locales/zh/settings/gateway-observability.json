@@ -1,0 +1,57 @@
+{
+  "gatewayLimits": {
+    "noLimits": "未设置 token 或费用上限",
+    "limited": "已达上限",
+    "tokens": "Token {{used}} / {{total}}（本{{period}}）",
+    "cost": "费用 ${{used}} / ${{total}}（本{{period}}）",
+    "costEnforced": "超出即拒绝",
+    "costAlert": "仅提醒",
+    "resets": "{{time}} 重置",
+    "inFlight": "进行中 {{active}} / {{max}}",
+    "periods": {
+      "day": "日",
+      "week": "周",
+      "month": "月"
+    }
+  },
+  "gatewayRoutes": {
+    "title": "最近路由",
+    "description": "每个外部请求由哪个供应商和模型处理、为什么走到那里，以及每次回退尝试。不保留提示词内容。",
+    "empty": "还没有网关请求。已连接 agent 的请求会实时出现在这里。",
+    "refresh": "刷新",
+    "pause": "暂停",
+    "resume": "继续",
+    "time": "时间",
+    "caller": "调用方",
+    "asked": "请求模型",
+    "served": "实际处理",
+    "why": "原因",
+    "result": "结果",
+    "running": "进行中",
+    "status": {
+      "completed": "完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
+    "triedFailed": "{{model}} 失败：{{reason}}",
+    "firstToken": "首 token {{ms}} ms",
+    "duration": "{{ms}} ms",
+    "decisions": {
+      "rule": "规则",
+      "manual": "手动选择",
+      "affinity": "沿用上一轮",
+      "overflow": "因上下文长度改道",
+      "failover-group": "账号组",
+      "strategy": "路由策略",
+      "failover": "回退"
+    }
+  },
+  "gatewayDiscovery": {
+    "title": "发现文件",
+    "on": "本机上的 agent 可以通过 {{path}} 找到网关。",
+    "off": "已关闭。需要手动把网关地址告诉 agent。",
+    "toggle": "发布发现文件",
+    "copyPath": "复制路径",
+    "copied": "已复制"
+  }
+}

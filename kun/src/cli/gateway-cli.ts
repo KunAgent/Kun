@@ -25,8 +25,10 @@ export const GATEWAY_CLI_USAGE = `Gateway and agents:
   kun gateway models [--json]            Models the gateway serves, with windows and reasoning
   kun gateway keys                       Client keys
   kun gateway keys create <name> [--model <id>]   Create a key (printed once)
+  kun gateway keys limit <client-id> [--json]   Window usage, remaining allowance and reset time
   kun gateway keys revoke <client-id>
   kun gateway keys rotate <client-id>    Rotate a key (printed once)
+  kun gateway routes [--json]            Recent requests: model asked, served, why and fallbacks
   kun gateway middleware                 Middleware counters
   kun agents                             Agents on this computer and their models
   kun agents connect <agent> <model> [--effort <level>] [--small <model>] [--dry-run]
@@ -86,7 +88,7 @@ async function gatewayCommand(argv: readonly string[], io: GatewayCliIo, request
   if (sub === 'status') {
     const hello = await json(request, '/api/hello')
     const gateway = (hello.gateway ?? {}) as Record<string, unknown>
-    io.stdout.write(`Kun ${String(hello.version ?? '')}\n  gateway: ${gateway.enabled ? 'on' : 'off'}\n  OpenAI base:    ${String(gateway.v1 ?? '')}\n  Anthropic base: ${String(gateway.anthropic ?? '')}\n  Gemini base:    ${String(gateway.anthropic ?? '')}\n  route trace:    ${String(gateway.routeTrace ?? '')}\n`)
+    io.stdout.write(`Kun ${String(hello.version ?? '')}\n  gateway: ${gateway.enabled ? 'on' : 'off'}\n  OpenAI base:    ${String(gateway.v1 ?? '')}\n  Anthropic base: ${String(gateway.anthropic ?? '')}\n  Gemini base:    ${String(gateway.anthropic ?? '')}\n  route trace:    ${String(gateway.routeTrace ?? '')}\n  key limits:     ${String(gateway.limit ?? '')}\n`)
     return 0
   }
   if (sub === 'models') {
@@ -115,12 +117,28 @@ async function gatewayCommand(argv: readonly string[], io: GatewayCliIo, request
       io.stderr.write('This key is shown once. Store it now.\n')
       return 0
     }
+    if (action === 'limit' && target) {
+      const limit = await json(request, `/v1/model-gateway/clients/${encodeURIComponent(target)}/limit`)
+      if (argv.includes('--json')) { io.stdout.write(JSON.stringify(limit, null, 2) + '\n'); return 0 }
+      io.stdout.write(formatLimit(limit))
+      return 0
+    }
     if ((action === 'revoke' || action === 'rotate') && target) {
       const result = await json(request, `/v1/model-gateway/clients/${encodeURIComponent(target)}${action === 'rotate' ? '/rotate' : ''}`,
         action === 'rotate' ? 'POST' : 'DELETE', action === 'rotate' ? {} : undefined)
       io.stdout.write(action === 'rotate' ? `${String(result.key)}\n` : 'Revoked.\n')
       return 0
     }
+  }
+  if (sub === 'routes') {
+    const result = await json(request, '/v1/model-gateway/route-traces')
+    const traces = (Array.isArray(result.traces) ? result.traces : []) as Record<string, unknown>[]
+    if (argv.includes('--json')) { io.stdout.write(JSON.stringify(traces, null, 2) + '\n'); return 0 }
+    io.stdout.write(traces.length ? table([['TIME', 'AGENT', 'ASKED', 'SERVED', 'WHY', 'TRIES', 'STATUS'], ...traces.slice(-30).map((trace) => [
+      String(trace.startedAt).slice(11, 19), String(trace.agent ?? trace.client ?? '-'), String(trace.asked),
+      String(trace.served ?? trace.model ?? '-'), String(trace.decision ?? '-') + (trace.rule ? `:${String(trace.rule)}` : ''),
+      String((trace.tries as unknown[] | undefined)?.length ?? 0), String(trace.status ?? 'running')])]) : 'No gateway requests yet.\n')
+    return 0
   }
   if (sub === 'middleware') {
     const result = await json(request, '/v1/model-gateway/middleware')
@@ -131,6 +149,19 @@ async function gatewayCommand(argv: readonly string[], io: GatewayCliIo, request
   }
   io.stderr.write(GATEWAY_CLI_USAGE)
   return 2
+}
+
+function formatLimit(limit: Record<string, unknown>): string {
+  const lines = [`${limit.limited ? 'LIMITED' : 'ok'}  ${String((limit.client as { name?: string; id?: string } | undefined)?.name ?? '')}`]
+  const rate = limit.rate as Record<string, number> | undefined
+  if (rate) lines.push(`  rate: ${rate.requestsPerMinute}/min, burst ${rate.burst}, ${rate.active}/${rate.maxConcurrent} in flight`)
+  const tokens = limit.tokenBudget as Record<string, unknown> | undefined
+  if (tokens) lines.push(`  tokens: ${String(tokens.used)} / ${String(tokens.tokens)} this ${String(tokens.period)} (${String(tokens.mode)}), resets ${String(tokens.resetsAt)}`)
+  const cost = limit.cost as Record<string, unknown> | undefined
+  if (cost) lines.push(`  cost: $${String(cost.used)} / $${String(cost.usd)} this ${String(cost.period)}${cost.enforce ? ' (enforced)' : ' (alert)'}, resets ${String(cost.resetsAt)}`)
+  const models = limit.models
+  lines.push(`  models: ${models === 'all' ? 'all' : Array.isArray(models) && models.length ? models.join(', ') : 'none'}`)
+  return lines.join('\n') + '\n'
 }
 
 function printAgents(result: Extract<AgentWiringResult, { ok: true }>, io: GatewayCliIo): void {

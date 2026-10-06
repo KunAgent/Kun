@@ -32,7 +32,7 @@ import { capabilitySupportsRequest } from './route-capability-contract.js'
 import { GatewayRouteChangedError, gatewayTargetMatches } from '../../domain/model-gateway-export-policy.js'
 import { GATEWAY_MAX_ROUTE_ATTEMPTS, withGatewayRoutingBudget } from './gateway-routing-budget.js'
 import { RouteAffinity } from './route-affinity.js'
-import { demoteOverflow, effortFor, estimateRequestTokens, flattenNestedPools, orderByDecision, RouteRuleEngine } from './route-rules.js'
+import { demoteOverflow, effortFor, estimateRequestTokens, flattenNestedPools, orderByDecision, routeDecisionSource, RouteRuleEngine } from './route-rules.js'
 
 export { RoutePoolHealthStore } from './route-pool-health-store.js'
 export type {
@@ -318,7 +318,7 @@ export class RoutePoolModelClient implements ModelClient {
       return
     }
     const decision = group ? {} : await this.rules.decide(pool, request)
-    const preferred = this.affinity.prefer(pool, request, group
+    const base = group
       ? orderFailoverGroupTargets({
           group,
           request,
@@ -329,10 +329,13 @@ export class RoutePoolModelClient implements ModelClient {
           state: this.groupState,
           now: this.now()
         })
-      : this.orderTargets(pool, eligible))
+      : this.orderTargets(pool, eligible)
+    const preferred = this.affinity.prefer(pool, request, base)
     const ruled = orderByDecision(preferred, decision)
     const ordered = pool.overflowMove === false ? ruled
       : demoteOverflow(ruled, estimateRequestTokens(request), (modelId, providerId) => this.capabilities(modelId, providerId))
+    // What put the first member first, for route traces.
+    const firstSource = routeDecisionSource({ base, preferred, ruled, ordered, decision, group: Boolean(group), manual: pool.strategy === 'manual' })
     const failures: string[] = []
     let lastRejection: { providerId: string; modelId: string; reason?: string; message?: string } | undefined
     const attempts = request.gatewayRouting || request.routingBudget ? ordered.slice(0, GATEWAY_MAX_ROUTE_ATTEMPTS) : ordered
@@ -351,7 +354,9 @@ export class RoutePoolModelClient implements ModelClient {
         providerId: target.providerId,
         modelId: target.modelId,
         requestedModelId: request.model,
-        ...(decision.ruleId ? { ruleId: decision.ruleId } : {})
+        ...(decision.ruleId ? { ruleId: decision.ruleId } : {}),
+        decision: index === 0 ? firstSource : 'failover',
+        ...(decision.intent ? { intent: decision.intent } : {})
       }
       const effort = effortFor(target, decision, request.reasoningEffort)
       let committed = false

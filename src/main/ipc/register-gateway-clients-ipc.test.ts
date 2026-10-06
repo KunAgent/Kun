@@ -13,6 +13,17 @@ function fixture(body: unknown, status = 200) {
 }
 beforeEach(() => { vi.clearAllMocks() })
 describe('gateway client desktop bridge', () => {
+  it('reads a key\'s limits, keeping only documented fields and the requested client id', async () => {
+    const { invoke, request } = fixture({ client: { id: 'spoofed', name: 'Agent · Codex' }, limited: true, models: ['coding', 3], secret: 'x',
+      rate: { requestsPerMinute: 60, burst: 20, maxConcurrent: 2, active: 1, extra: 9 },
+      tokenBudget: { mode: 'weird', period: 'day', timeZone: 'UTC', tokens: 1000, used: 1000, left: 0, resetsAt: '2030-01-02T00:00:00.000Z' } })
+    const result = await invoke({}, { action: 'limit', clientId: 'gc_1' })
+    expect(request).toHaveBeenCalledWith('/v1/model-gateway/clients/gc_1/limit', 'GET', undefined)
+    expect(result.limit).toEqual({ client: { id: 'gc_1', name: 'Agent · Codex' }, limited: true, models: ['coding'],
+      rate: { requestsPerMinute: 60, burst: 20, maxConcurrent: 2, active: 1 },
+      tokenBudget: { mode: 'hard', period: 'day', timeZone: 'UTC', tokens: 1000, used: 1000, left: 0, resetsAt: '2030-01-02T00:00:00.000Z' } })
+    await expect(invoke({}, { action: 'limit', clientId: '../x' })).rejects.toThrow('Invalid gateway client ID')
+  })
   it('copies the one-time key in Main and strips every extra secret field', async () => {
     const { invoke, request, ready } = fixture({ client: { clientId: 'gc_123', name: 'Codex', createdAt: '2026-10-04', key: 'nested-secret' }, key: 'kun_local_secret', unrelated: 'other-secret' })
     const result = await invoke({}, { action: 'create', name: ' Codex ' })

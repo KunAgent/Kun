@@ -1,0 +1,57 @@
+{
+  "gatewayLimits": {
+    "noLimits": "토큰·비용 한도 없음",
+    "limited": "한도 도달",
+    "tokens": "토큰 {{used}} / {{total}} (이번 {{period}})",
+    "cost": "비용 ${{used}} / ${{total}} (이번 {{period}})",
+    "costEnforced": "초과 시 거부",
+    "costAlert": "알림만",
+    "resets": "{{time}}에 초기화",
+    "inFlight": "진행 중 {{active}} / {{max}}",
+    "periods": {
+      "day": "일",
+      "week": "주",
+      "month": "달"
+    }
+  },
+  "gatewayRoutes": {
+    "title": "최근 경로",
+    "description": "외부 요청마다 어느 제공자와 모델이 응답했는지, 그 이유와 시도한 대체 경로를 보여 줍니다. 프롬프트 내용은 저장하지 않습니다.",
+    "empty": "아직 게이트웨이 요청이 없습니다. 연결된 에이전트의 요청이 들어오면 여기에 표시됩니다.",
+    "refresh": "새로 고침",
+    "pause": "일시 중지",
+    "resume": "다시 시작",
+    "time": "시간",
+    "caller": "호출자",
+    "asked": "요청 모델",
+    "served": "응답한 모델",
+    "why": "이유",
+    "result": "결과",
+    "running": "진행 중",
+    "status": {
+      "completed": "완료",
+      "failed": "실패",
+      "cancelled": "취소됨"
+    },
+    "triedFailed": "{{model}} 실패: {{reason}}",
+    "firstToken": "첫 토큰 {{ms}} ms",
+    "duration": "{{ms}} ms",
+    "decisions": {
+      "rule": "규칙",
+      "manual": "수동 선택",
+      "affinity": "이전 턴과 동일",
+      "overflow": "컨텍스트 길이로 이동",
+      "failover-group": "계정 그룹",
+      "strategy": "경로 전략",
+      "failover": "대체"
+    }
+  },
+  "gatewayDiscovery": {
+    "title": "검색 파일",
+    "on": "이 컴퓨터의 에이전트는 {{path}}에서 게이트웨이를 찾을 수 있습니다.",
+    "off": "꺼짐. 에이전트에 게이트웨이 주소를 직접 입력하세요.",
+    "toggle": "검색 파일 게시",
+    "copyPath": "경로 복사",
+    "copied": "복사됨"
+  }
+}

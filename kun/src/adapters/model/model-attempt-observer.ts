@@ -26,7 +26,9 @@ export async function* observeModelAttempts(request: ModelRequest,
     }
   } catch (error) {
     if (!(error instanceof GatewayBudgetError)) throw error
-    yield { kind: 'error', code: error.code, message: error.message,
+    // Callers can read the window, remaining allowance and reset time from GET /v1/kun/limit.
+    const limited = error.code === 'token_budget_exceeded' || error.code === 'cost_limit_exceeded'
+    yield { kind: 'error', code: error.code, message: limited ? `${error.message} See GET /v1/kun/limit for when it resets.` : error.message,
       failure: { category: 'request', reason: 'request', localAdmission: true, httpStatus: error.code === 'token_budget_exceeded' || error.code === 'cost_limit_exceeded' ? 429
         : error.code === 'token_budget_unbounded' ? 400 : 503, failoverAllowed: false } }
   } finally { await finish() }

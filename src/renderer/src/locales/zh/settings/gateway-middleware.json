@@ -35,6 +35,12 @@
       "system-prompt": "系统提示词",
       "think-tags": "思考标签",
       "script": "脚本"
-    }
+    },
+    "folder": "脚本目录",
+    "openFolder": "打开目录",
+    "createExample": "创建示例脚本",
+    "exampleCreated": "已创建 {{file}}。在下方添加脚本条目即可启用。",
+    "exampleExists": "{{file}} 已存在。",
+    "noScripts": "目录里还没有 .js 文件。"
   }
 }

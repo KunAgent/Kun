@@ -366,6 +366,9 @@ describe('model route pool settings', () => {
     expect(normalizeModelProviderSettings({
       localGateway: { enabled: true, name: '  Team Relay  ' }
     }).localGateway).toEqual({ enabled: true, name: 'Team Relay', exposeProviderModels: false })
+    // The discovery file is on by default; only an explicit off is stored.
+    expect(normalizeModelProviderSettings({ localGateway: { enabled: true, advertiseDiscovery: false } }).localGateway.advertiseDiscovery).toBe(false)
+    expect('advertiseDiscovery' in normalizeModelProviderSettings({ localGateway: { enabled: true, advertiseDiscovery: true as never } }).localGateway).toBe(false)
   })
 
   it('keeps valid concrete targets and allows a routed alias to match a concrete model', () => {

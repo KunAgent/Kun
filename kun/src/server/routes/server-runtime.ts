@@ -390,6 +390,10 @@ export type ServerRuntime = {
     experimentalSubscriptionExports?(): string[]
     /** Request/reply transforms for external gateway traffic. Optional for test scaffolds. */
     middleware?: import('./gateway-middleware.js').GatewayMiddlewareHost
+    /** Whether the user wants the discovery file published (default true). */
+    advertiseDiscovery?(): boolean
+    /** Live discovery-file state, set by the production server once it listens. */
+    discovery?: { status(): { allowed: boolean; advertised: boolean; path: string } }
   }
   defaultModel?: string
   /**

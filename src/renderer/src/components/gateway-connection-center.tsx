@@ -11,6 +11,8 @@ import { settingsButtonClass } from './settings-button'
 import { GatewayClientCredentials } from './gateway-client-credentials'
 import { GatewayAgentsPanel } from './gateway-agents-panel'
 import { GatewayMiddlewarePanel } from './gateway-middleware-panel'
+import { GatewayRouteTracePanel } from './gateway-route-trace-panel'
+import { GatewayDiscoveryRow } from './gateway-discovery-row'
 import { GatewayExtensionExportsPanel, GatewaySubscriptionExportPanel } from './gateway-extension-exports-panel'
 import { GatewayClientSelect } from './gateway-client-select'
 import type { RoutePoolTestRecord, RouteStatus } from './settings-section-model-routes'
@@ -62,7 +64,9 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
     useChatStore.getState().openSettings('agentsHarnesses')
   }
   return <div className="mt-4 grid min-w-0 gap-4">
+  {onChange ? <GatewayDiscoveryRow settings={settings} onChange={onChange} active={active} t={t} /> : null}
   <GatewayAgentsPanel active={active} translation={t} />
+  <GatewayRouteTracePanel active={active} t={t} />
   {onChange ? <GatewayMiddlewarePanel settings={settings} onChange={onChange} active={active} t={t} /> : null}
   {onChange ? <GatewayExtensionExportsPanel settings={settings} onChange={onChange} active={active} t={t} /> : null}
   {onChange ? <GatewaySubscriptionExportPanel settings={settings} onChange={onChange} t={t} /> : null}

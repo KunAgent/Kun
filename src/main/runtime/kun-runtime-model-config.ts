@@ -159,7 +159,8 @@ export function localModelGatewayConfigForRuntime(settings: AppSettingsV1) {
   return { enabled: localGateway.enabled, exposeProviderModels: localGateway.exposeProviderModels,
     ...(localGateway.middleware?.length ? { middleware: localGateway.middleware } : {}),
     ...(localGateway.extensionExports?.length ? { extensionExports: localGateway.extensionExports } : {}),
-    ...(localGateway.experimentalSubscriptionExports?.length ? { experimentalSubscriptionExports: localGateway.experimentalSubscriptionExports } : {}) }
+    ...(localGateway.experimentalSubscriptionExports?.length ? { experimentalSubscriptionExports: localGateway.experimentalSubscriptionExports } : {}),
+    ...(localGateway.advertiseDiscovery === false ? { advertiseDiscovery: false } : {}) }
 }
 
 export function tokenEconomyConfigForRuntime(

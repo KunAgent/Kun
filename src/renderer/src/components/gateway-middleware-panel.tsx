@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next'
-import { Layers, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { FilePlus2, FolderOpen, Layers, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { ModelProviderSettingsV1 } from '@shared/app-settings'
 import type { GatewayMiddlewareConfig, GatewayMiddlewareStats } from '../../../../kun/src/contracts/gateway-middleware.js'
@@ -34,7 +34,7 @@ function parseMapping(text: string): Record<string, string> {
   return out
 }
 
-function EntryFields({ entry, t, update }: { entry: GatewayMiddlewareConfig; t: TFunction; update: (next: GatewayMiddlewareConfig) => void }): ReactElement {
+function EntryFields({ entry, t, update, files }: { entry: GatewayMiddlewareConfig; t: TFunction; update: (next: GatewayMiddlewareConfig) => void; files: string[] }): ReactElement {
   if (entry.type === 'model-map') {
     return <label className="grid gap-1 text-[11px] text-ds-muted">{t('gatewayMiddleware.mapping')}
       <textarea rows={3} defaultValue={mappingText(entry.mapping)} placeholder="fast = deepseek/deepseek-v4-flash" spellCheck={false}
@@ -66,9 +66,11 @@ function EntryFields({ entry, t, update }: { entry: GatewayMiddlewareConfig; t: 
       <option value="strip">{t('gatewayMiddleware.thinkStrip')}</option>
     </select>
   }
+  const listId = `gateway-middleware-files-${entry.id}`
   return <label className="grid gap-1 text-[11px] text-ds-muted">{t('gatewayMiddleware.scriptFile')}
-    <input defaultValue={entry.file} spellCheck={false} className={`${inputClass} font-mono`}
+    <input defaultValue={entry.file} spellCheck={false} list={listId} className={`${inputClass} font-mono`}
       onBlur={(event) => /^[A-Za-z0-9._-]+\.js$/.test(event.target.value.trim()) && update({ ...entry, file: event.target.value.trim() })} />
+    <datalist id={listId}>{files.map((file) => <option key={file} value={file} />)}</datalist>
     <span className="text-ds-faint">{t('gatewayMiddleware.scriptHint')}</span>
   </label>
 }
@@ -82,15 +84,34 @@ export function GatewayMiddlewarePanel({ settings, onChange, active, t }: {
 }): ReactElement {
   const entries = settings.localGateway.middleware ?? []
   const [stats, setStats] = useState<GatewayMiddlewareStats[]>([])
+  const [folder, setFolder] = useState<{ directory: string; files: string[] } | null>(null)
+  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const [adding, setAdding] = useState<MiddlewareType>('model-map')
   const save = (next: GatewayMiddlewareConfig[]): void => onChange({ ...settings, localGateway: { ...settings.localGateway, middleware: next } })
   const refresh = useCallback(async () => {
     try {
       const result = await window.kunGui.runtimeRequest('/v1/model-gateway/middleware', 'GET')
-      if (result.ok) setStats((JSON.parse(result.body) as { middleware?: GatewayMiddlewareStats[] }).middleware ?? [])
+      if (!result.ok) return
+      const body = JSON.parse(result.body) as { middleware?: GatewayMiddlewareStats[]; directory?: string; files?: string[] }
+      setStats(body.middleware ?? [])
+      setFolder(typeof body.directory === 'string' ? { directory: body.directory, files: Array.isArray(body.files) ? body.files : [] } : null)
     } catch { /* counters are informational */ }
   }, [])
   useEffect(() => { if (active) void refresh() }, [active, refresh])
+  const createExample = async (): Promise<void> => {
+    try {
+      const result = await window.kunGui.runtimeRequest('/v1/model-gateway/middleware/example', 'POST', '{}')
+      const body = JSON.parse(result.body || '{}') as { file?: string; message?: string }
+      const file = body.file ?? 'example-middleware.js'
+      setMessage(result.ok ? { tone: 'ok', text: t('gatewayMiddleware.exampleCreated', { file }) }
+        : result.status === 409 ? { tone: 'error', text: t('gatewayMiddleware.exampleExists', { file }) } : { tone: 'error', text: body.message ?? `HTTP ${result.status}` })
+      await refresh()
+    } catch (error) { setMessage({ tone: 'error', text: error instanceof Error ? error.message : String(error) }) }
+  }
+  const openFolder = async (): Promise<void> => {
+    const result = await window.kunGui.openGatewayMiddlewareFolder?.()
+    if (result && !result.ok) setMessage({ tone: 'error', text: result.message ?? t('gatewayMiddleware.openFolder') })
+  }
   const move = (index: number, delta: number): void => {
     const next = [...entries]
     const [entry] = next.splice(index, 1)
@@ -113,6 +134,16 @@ export function GatewayMiddlewarePanel({ settings, onChange, active, t }: {
         <button type="button" className={settingsButtonClass()} aria-label={t('gatewayMiddleware.refresh')} onClick={() => void refresh()}><RefreshCw className="h-3.5 w-3.5" /></button>
       </div>
     </div>
+    {folder ? <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg bg-ds-main px-3 py-2 text-[11.5px]" data-gateway-middleware-folder>
+      <span className="text-ds-muted">{t('gatewayMiddleware.folder')}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-ds-ink" title={folder.directory}>{folder.directory}</span>
+      <span className="text-ds-faint">{folder.files.length ? folder.files.join(', ') : t('gatewayMiddleware.noScripts')}</span>
+      <button type="button" className={settingsButtonClass({ size: 'compact' })} onClick={() => void openFolder()}>
+        <FolderOpen className="h-3.5 w-3.5" />{t('gatewayMiddleware.openFolder')}</button>
+      <button type="button" className={settingsButtonClass({ size: 'compact' })} onClick={() => void createExample()}>
+        <FilePlus2 className="h-3.5 w-3.5" />{t('gatewayMiddleware.createExample')}</button>
+    </div> : null}
+    {message ? <p role={message.tone === 'error' ? 'alert' : 'status'} className={`text-[11.5px] ${message.tone === 'error' ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-200'}`}>{message.text}</p> : null}
     {!entries.length ? <p className="rounded-lg bg-ds-main px-3 py-2 text-[11.5px] text-ds-muted">{t('gatewayMiddleware.empty')}</p> : null}
     <ol className="grid gap-2">
       {entries.map((entry, index) => {
@@ -131,7 +162,7 @@ export function GatewayMiddlewarePanel({ settings, onChange, active, t }: {
             <button type="button" className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon' })} aria-label={t('gatewayMiddleware.remove')}
               onClick={() => save(entries.filter((item) => item.id !== entry.id))}><Trash2 className="h-3.5 w-3.5" /></button>
           </div>
-          <EntryFields entry={entry} t={t} update={update} />
+          <EntryFields entry={entry} t={t} update={update} files={folder?.files ?? []} />
           {stat?.loadError ? <p role="alert" className="text-[11px] text-red-600">{t('gatewayMiddleware.loadError', { error: stat.loadError })}</p> : null}
           {stat?.lastError ? <p className="text-[11px] text-amber-700 dark:text-amber-200">{t('gatewayMiddleware.lastError', { error: stat.lastError })}</p> : null}
         </li>

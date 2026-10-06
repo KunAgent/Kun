@@ -212,7 +212,8 @@ export function normalizeModelProviderSettings(
       ...(Array.isArray(input?.localGateway?.experimentalSubscriptionExports) && input.localGateway.experimentalSubscriptionExports.length
         ? { experimentalSubscriptionExports: [...new Set(input.localGateway.experimentalSubscriptionExports
           .filter((id): id is string => typeof id === 'string' && id.trim().length > 0 && id.length <= 128).map((id) => id.trim()))].slice(0, 10) }
-        : {})
+        : {}),
+      ...(input?.localGateway?.advertiseDiscovery === false ? { advertiseDiscovery: false as const } : {})
     }
   }
 }

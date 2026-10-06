@@ -17,7 +17,13 @@ export type ModelRouteTargetMetadata = {
   requestedModelId: string
   /** Route rule that put this target first for the turn, when one matched. */
   ruleId?: string
+  /** Why this target was tried: what put it first, or `failover` after an earlier target failed. */
+  decision?: RouteDecisionSource
+  /** Intent the pool's classifier assigned to the turn. */
+  intent?: string
 }
+
+export type RouteDecisionSource = 'rule' | 'manual' | 'affinity' | 'overflow' | 'failover-group' | 'strategy' | 'failover'
 
 /**
  * Durable route identity for a historical turn. This contains no credential

@@ -13,7 +13,7 @@ import { rawGatewayCredential, splitAttributedKey } from './routes/gateway-calle
  * else — including every other `/v1/*` route — is rejected before dispatch.
  */
 const SCOPE_PATH_PREFIXES: Record<HarnessTokenScope, readonly string[]> = {
-  gateway: ['/v1/messages', '/v1/chat/completions', '/v1/responses', '/v1/models', '/v1/kun/route', '/v1beta/models'],
+  gateway: ['/v1/messages', '/v1/chat/completions', '/v1/responses', '/v1/models', '/v1/kun/route', '/v1/kun/limit', '/v1beta/models'],
   'kun-tools': ['/mcp/kun'],
   'worker-callback': ['/v1/worker-callbacks/'],
   'hook-ingest': ['/v1/activity/hooks']

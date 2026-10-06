@@ -12,6 +12,12 @@ export function cancelGatewayClientRequests(runtime: ServerRuntime, clientId: st
   return owner ? guards.get(owner)?.get(clientId)?.guard.cancelAll() ?? 0 : 0
 }
 
+/** Requests the client has in flight now. */
+export function gatewayClientActiveRequests(runtime: ServerRuntime, clientId: string): number {
+  const owner = runtime.modelGateway?.credentials
+  return owner ? guards.get(owner)?.get(clientId)?.guard.activeCount() ?? 0 : 0
+}
+
 export function clientGuardFor(runtime: ServerRuntime, clientId: string, policy: GatewayClientPolicy): GatewayRequestGuard {
   const owner = runtime.modelGateway!.credentials
   let clients = guards.get(owner)

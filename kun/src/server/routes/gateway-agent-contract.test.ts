@@ -7,6 +7,7 @@ import type { ServerRuntime } from './server-runtime.js'
 import { gatewayMessages } from './anthropic-messages-gateway.js'
 import { gatewayChatCompletions, gatewayModels } from './openai-model-gateway.js'
 import { gatewayHello, gatewayRouteTrace } from './gateway-discovery-routes.js'
+import { gatewayClientLimit } from './gateway-limit.js'
 import { gatewayCallerAgent, splitAttributedKey, userAgentProduct } from './gateway-caller-agent.js'
 import { GatewayContinuationStore } from './gateway-continuations.js'
 import { GatewayRouteTraceStore } from './gateway-route-trace.js'
@@ -168,6 +169,15 @@ describe('route trace', () => {
       status: 'completed', tries: [{ providerId: 'alpha', modelId: 'a1', fail: 'quota' }, { providerId: 'beta', modelId: 'b1' }] })
     const other = await gatewayRouteTrace(rt, new Request('http://x/v1/kun/route?session=sess-2', { headers: { authorization: `Bearer ${KEY}` } }))
     expect(JSON.parse((other as { body: string }).body)).toEqual({ route: null, seq: 0 })
+  })
+  it('lets a key read its own limits and refuses unknown keys', async () => {
+    const rt = runtime(new ScriptedModel([[]]))
+    const own = await gatewayClientLimit(rt, new Request('http://x/v1/kun/limit', { headers: { authorization: `Bearer kun-codex.${KEY}` } }))
+    expect(JSON.parse((own as { body: string }).body)).toMatchObject({ limited: false, models: 'all' })
+    const denied = await gatewayClientLimit(rt, new Request('http://x/v1/kun/limit', { headers: { authorization: 'Bearer nope' } }))
+    expect((denied as { status: number }).status).toBe(401)
+    const hello = JSON.parse(gatewayHello(rt, new Request('http://127.0.0.1:18899/api/hello')).body)
+    expect(hello.gateway.limit).toBe('http://127.0.0.1:18899/v1/kun/limit')
   })
   it('long-polls until the session moves past the given sequence', async () => {
     const store = new GatewayRouteTraceStore()

@@ -35,6 +35,12 @@
       "system-prompt": "システムプロンプト",
       "think-tags": "思考タグ",
       "script": "スクリプト"
-    }
+    },
+    "folder": "スクリプトフォルダー",
+    "openFolder": "フォルダーを開く",
+    "createExample": "サンプルスクリプトを作成",
+    "exampleCreated": "{{file}} を作成しました。下でスクリプト項目として有効にしてください。",
+    "exampleExists": "{{file}} は既に存在します。",
+    "noScripts": "フォルダーに .js ファイルはまだありません。"
   }
 }

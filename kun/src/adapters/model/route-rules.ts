@@ -7,7 +7,7 @@ import {
   type ModelRouteRule,
   type ModelRouteTargetConfig
 } from '../../contracts/model-route-pool.js'
-import type { ModelClient, ModelRequest } from '../../ports/model-client.js'
+import type { ModelClient, ModelRequest, RouteDecisionSource } from '../../ports/model-client.js'
 
 /**
  * Turn-level routing decisions for a route pool: rules that put a member
@@ -93,6 +93,17 @@ export function demoteOverflow(targets: ModelRouteTargetConfig[], tokens: number
 
 export function orderByDecision(targets: ModelRouteTargetConfig[], decision: RouteDecision): ModelRouteTargetConfig[] {
   return decision.use ? promote(targets, (target) => targetMatchesUse(target.id, decision.use!)) : targets
+}
+
+/** What put the first member of a turn's order first, for route traces. Later steps win: overflow, then rule, then affinity. */
+export function routeDecisionSource(input: { base: ModelRouteTargetConfig[]; preferred: ModelRouteTargetConfig[]; ruled: ModelRouteTargetConfig[]
+  ordered: ModelRouteTargetConfig[]; decision: RouteDecision; group: boolean; manual: boolean }): RouteDecisionSource {
+  const first = input.ordered[0]
+  if (first !== input.ruled[0]) return 'overflow'
+  if (first && input.decision.use && targetMatchesUse(first.id, input.decision.use)) return 'rule'
+  if (input.preferred[0] !== input.base[0]) return 'affinity'
+  if (input.group) return 'failover-group'
+  return input.manual ? 'manual' : 'strategy'
 }
 
 /** Reasoning to send a member at: its own pin, else the rule's for the rule's member, else the caller's. */

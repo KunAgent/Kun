@@ -36,6 +36,9 @@ export class GatewayMiddlewareHost {
 
   constructor(private readonly directory: string, private readonly configured: () => readonly GatewayMiddlewareConfig[]) {}
 
+  /** The only folder scripts can be loaded from. */
+  get folder(): string { return this.directory }
+
   private active(): GatewayMiddlewareConfig[] {
     return this.configured().filter((entry) => entry.enabled)
   }

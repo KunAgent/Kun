@@ -28,8 +28,9 @@ export function gatewayUpstream(runtime: ServerRuntime, request: Request, auth: 
   const middleware = runtime.modelGateway?.middleware
   const middlewareContext = { model: asked, ...(agent ? { agent } : {}) }
   middleware?.transformRequest(modelRequest, middlewareContext)
+  const client = auth.kind === 'public' ? auth.client?.name : undefined
   const trace = gatewayRouteTraceStore(owner).begin(session, { requestId: modelRequest.turnId, asked,
-    ...(agent ? { agent } : {}), ...(modelRequest.reasoningEffort ? { effort: modelRequest.reasoningEffort } : {}) })
+    ...(agent ? { agent } : {}), ...(client ? { client } : {}), ...(modelRequest.reasoningEffort ? { effort: modelRequest.reasoningEffort } : {}) })
   const upstream = runtime.modelClient!.stream(modelRequest)
   return traceGatewayStream(captureGatewayContinuations(middleware ? middleware.wrapStream(upstream, middlewareContext) : upstream,
     continuations, callerId), trace)

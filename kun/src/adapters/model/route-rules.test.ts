@@ -7,7 +7,7 @@ import { ModelRoutePoolConfigSchema, type ModelRoutePoolConfig } from '../../con
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { RouteAffinity } from './route-affinity.js'
 import { RoutePoolModelClient } from './route-pool-model-client.js'
-import { demoteOverflow, flattenNestedPools, ruleMatches, type RuleContext } from './route-rules.js'
+import { demoteOverflow, flattenNestedPools, routeDecisionSource, ruleMatches, type RuleContext } from './route-rules.js'
 
 const capability = (model: string): ModelCapabilityMetadata => ({
   id: model, inputModalities: ['text', 'image'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
@@ -108,11 +108,49 @@ describe('route decisions', () => {
     await drain(client.stream(request('hi', { reasoningEffort: 'high' })))
     expect(direct.seen[0]).toEqual({ target: 'strong', effort: 'low' })
   })
+  it('labels why the first member was tried and marks later members as failover', async () => {
+    const decisionFor = async (client: RoutePoolModelClient, text: string, patch: Partial<ModelRequest> = {}) =>
+      (await drain(client.stream(request(text, patch)))).find((chunk) => chunk.route)?.route
+    const ruled = new RoutePoolModelClient(new Direct(), [pool({ rules: [{ id: 'tests', enabled: true, use: 'strong', when: { contains: 'test' } }] })], capability)
+    expect(await decisionFor(ruled, 'fix the tests')).toMatchObject({ targetId: 'strong', decision: 'rule', ruleId: 'tests' })
+    expect(await decisionFor(ruled, 'hello', { turnId: 'turn-9' })).toMatchObject({ targetId: 'fast', decision: 'strategy' })
+    const manual = new RoutePoolModelClient(new Direct(), [pool({ strategy: 'manual', pick: 'strong' })], capability)
+    expect(await decisionFor(manual, 'hi')).toMatchObject({ targetId: 'strong', decision: 'manual' })
+    const intent = new RoutePoolModelClient(new Direct('tests'), [pool({ classifier: { providerId: 'p-fast', modelId: 'fast', intents: ['tests'] },
+      rules: [{ id: 'by-intent', enabled: true, use: 'strong', when: { intent: 'tests' } }] })], capability)
+    expect(await decisionFor(intent, 'suite is red')).toMatchObject({ decision: 'rule', intent: 'tests' })
+    class Failing extends Direct {
+      override async *stream(input: ModelRequest): AsyncIterable<ModelStreamChunk> {
+        if (input.model === 'fast') {
+          yield { kind: 'error', code: 'upstream', message: 'busy', failure: { category: 'quota', reason: 'rate', httpStatus: 429, failoverAllowed: true } }
+          return
+        }
+        yield* super.stream(input)
+      }
+    }
+    const failover = new RoutePoolModelClient(new Failing(), [pool()], capability)
+    const routes = (await drain(failover.stream(request('hi')))).filter((chunk) => chunk.route).map((chunk) => chunk.route!)
+    expect(routes.at(-1)).toMatchObject({ targetId: 'strong', decision: 'failover' })
+  })
   it('moves a request off a member whose window it would nearly fill', () => {
     const targets = pool({ targets: [{ id: 'small', providerId: 'p-small', modelId: 'small', enabled: true, weight: 1 },
       { id: 'fast', providerId: 'p-fast', modelId: 'fast', enabled: true, weight: 1 }] }).targets
     expect(demoteOverflow(targets, 960, capability).map((target) => target.id)).toEqual(['fast', 'small'])
     expect(demoteOverflow(targets, 100, capability).map((target) => target.id)).toEqual(['small', 'fast'])
+  })
+})
+
+describe('route decision source', () => {
+  const [a, b, c] = pool().targets as [ModelRoutePoolConfig['targets'][number], ModelRoutePoolConfig['targets'][number], ModelRoutePoolConfig['targets'][number]]
+  const input = (patch: Partial<Parameters<typeof routeDecisionSource>[0]>) => ({ base: [a, b, c], preferred: [a, b, c], ruled: [a, b, c],
+    ordered: [a, b, c], decision: {}, group: false, manual: false, ...patch })
+  it('names the last step that changed the first member', () => {
+    expect(routeDecisionSource(input({}))).toBe('strategy')
+    expect(routeDecisionSource(input({ manual: true }))).toBe('manual')
+    expect(routeDecisionSource(input({ group: true }))).toBe('failover-group')
+    expect(routeDecisionSource(input({ preferred: [b, a, c], ruled: [b, a, c], ordered: [b, a, c] }))).toBe('affinity')
+    expect(routeDecisionSource(input({ ruled: [c, a, b], ordered: [c, a, b], decision: { ruleId: 'r', use: 'small' } }))).toBe('rule')
+    expect(routeDecisionSource(input({ ruled: [c, a, b], ordered: [a, c, b], decision: { ruleId: 'r', use: 'small' } }))).toBe('overflow')
   })
 })
 

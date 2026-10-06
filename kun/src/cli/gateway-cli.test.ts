@@ -49,6 +49,21 @@ describe('kun gateway', () => {
     expect(harness.out()).toBe('kun_local_x\n')
     expect(harness.err()).toContain('shown once')
   })
+  it('prints a key\'s limits and the recent route list', async () => {
+    const harness = io({
+      'GET /v1/model-gateway/clients/gc_1/limit': { client: { id: 'gc_1', name: 'Agent · Codex' }, limited: true, models: ['coding'],
+        rate: { requestsPerMinute: 60, burst: 20, maxConcurrent: 2, active: 1 },
+        tokenBudget: { mode: 'hard', period: 'day', tokens: 1000, used: 1000, left: 0, resetsAt: '2030-01-02T00:00:00.000Z' } },
+      'GET /v1/model-gateway/route-traces': { seq: 3, traces: [{ startedAt: '2030-01-01T10:11:12.000Z', agent: 'codex', asked: 'coding',
+        served: 'beta/b1', decision: 'rule', rule: 'tests', tries: [{}, {}], status: 'completed' }] }
+    })
+    expect(await runGatewayCliCommand('gateway', ['keys', 'limit', 'gc_1'], harness.value)).toBe(0)
+    expect(harness.out()).toContain('LIMITED  Agent · Codex')
+    expect(harness.out()).toContain('tokens: 1000 / 1000 this day (hard), resets 2030-01-02T00:00:00.000Z')
+    expect(harness.out()).toContain('1/2 in flight')
+    expect(await runGatewayCliCommand('gateway', ['routes'], harness.value)).toBe(0)
+    expect(harness.out()).toMatch(/10:11:12\s+codex\s+coding\s+beta\/b1\s+rule:tests\s+2\s+completed/)
+  })
   it('reports a missing runtime clearly', async () => {
     const harness = io({}, { runtimeRequest: undefined, env: { KUN_DATA_DIR: join(home, 'none'), KUN_RUNTIME_DISCOVERY_DIR: join(home, 'none') } })
     expect(await runGatewayCliCommand('gateway', ['status'], harness.value)).toBe(1)

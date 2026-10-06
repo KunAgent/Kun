@@ -1,5 +1,5 @@
 import { clipboard, ipcMain } from 'electron'
-import type { GatewayClientCredential, GatewayClientResult, GatewayClientUsage } from '../../shared/gateway-clients'
+import type { GatewayClientCredential, GatewayClientLimit, GatewayClientResult, GatewayClientUsage } from '../../shared/gateway-clients'
 import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import { assertTrustedWorkbenchSender } from './app-ipc-handler-utils'
 
@@ -33,10 +33,11 @@ export function registerGatewayClientsIpc(options: Pick<RegisterAppIpcHandlersOp
         throw new Error('Invalid public model alias')
       }
       body = JSON.stringify({ name: request.name.trim(), ...(request.modelId ? { modelId: request.modelId } : {}) })
-    } else if (request.action === 'revoke' || request.action === 'usage' || request.action === 'rotate') {
+    } else if (request.action === 'revoke' || request.action === 'usage' || request.action === 'rotate' || request.action === 'limit') {
       if (typeof request.clientId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(request.clientId)) throw new Error('Invalid gateway client ID')
       path += `/${encodeURIComponent(request.clientId)}`
       if (request.action === 'usage') path += '/usage'
+      else if (request.action === 'limit') path += '/limit'
       else if (request.action === 'rotate') { path += '/rotate'; method = 'POST'; body = '{}' }
       else {
         if (request.cancelActive !== undefined && typeof request.cancelActive !== 'boolean') throw new Error('Invalid cancellation option')
@@ -57,6 +58,7 @@ export function registerGatewayClientsIpc(options: Pick<RegisterAppIpcHandlersOp
       return { ok: true, status: response.status, client, copied: true }
     }
     if (request.action === 'usage') return { ok: true, status: response.status, usage: usageMetadata(parsed, String(request.clientId)) }
+    if (request.action === 'limit') return { ok: true, status: response.status, limit: limitMetadata(parsed, String(request.clientId)) }
     if (request.action === 'revoke') return { ok: true, status: response.status, revoked: parsed.revoked === true }
     return { ok: true, status: response.status,
       clients: Array.isArray(parsed.clients) ? parsed.clients.map(clientMetadata).filter((client): client is GatewayClientCredential => Boolean(client)) : [] }
@@ -84,4 +86,26 @@ function usageMetadata(value: Record<string, unknown>, clientId: string): Gatewa
         promptTokens: number(usage.promptTokens), completionTokens: number(usage.completionTokens),
         cacheHitTokens: number(usage.cacheHitTokens), tokenUsage: string(gateway.tokenUsage) }
     }) }
+}
+
+/** Keeps only the documented limit fields; the runtime response holds no secrets, but nothing unexpected passes either. */
+export function limitMetadata(value: Record<string, unknown>, clientId: string): GatewayClientLimit {
+  const record = (item: unknown): Record<string, unknown> | undefined => item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : undefined
+  const number = (item: unknown): number => typeof item === 'number' && Number.isFinite(item) ? item : 0
+  const string = (item: unknown): string => typeof item === 'string' ? item : ''
+  const client = record(value.client)
+  const tokens = record(value.tokenBudget)
+  const cost = record(value.cost)
+  const rate = record(value.rate)
+  return {
+    client: { id: clientId, ...(typeof client?.name === 'string' ? { name: client.name } : {}) },
+    limited: value.limited === true,
+    ...(value.models === 'all' ? { models: 'all' as const } : Array.isArray(value.models) ? { models: value.models.filter((item): item is string => typeof item === 'string').slice(0, 500) } : {}),
+    ...(rate ? { rate: { requestsPerMinute: number(rate.requestsPerMinute), burst: number(rate.burst), maxConcurrent: number(rate.maxConcurrent), active: number(rate.active) } } : {}),
+    ...(tokens ? { tokenBudget: { mode: tokens.mode === 'soft' ? 'soft' as const : 'hard' as const, period: string(tokens.period), timeZone: string(tokens.timeZone),
+      tokens: number(tokens.tokens), used: number(tokens.used), left: number(tokens.left), resetsAt: string(tokens.resetsAt) } } : {}),
+    ...(cost ? { cost: { period: string(cost.period), timeZone: string(cost.timeZone), usd: number(cost.usd), used: number(cost.used),
+      left: number(cost.left), enforce: cost.enforce === true, resetsAt: string(cost.resetsAt) } } : {}),
+    ...(typeof value.expiresAt === 'string' ? { expiresAt: value.expiresAt } : {})
+  }
 }

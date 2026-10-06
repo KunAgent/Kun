@@ -35,6 +35,12 @@
       "system-prompt": "System prompt",
       "think-tags": "Think tags",
       "script": "Script"
-    }
+    },
+    "folder": "Script folder",
+    "openFolder": "Open folder",
+    "createExample": "Create example script",
+    "exampleCreated": "Created {{file}}. Enable it below as a script entry.",
+    "exampleExists": "{{file}} already exists.",
+    "noScripts": "No .js files in the folder yet."
   }
 }

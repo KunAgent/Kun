@@ -1,8 +1,10 @@
 /** Secret-free desktop view of public gateway client credentials. */
 export { GatewayClientPolicySchema, legacyGatewayClientPolicy } from '../../kun/src/contracts/gateway-client-policy.js'
 export type GatewayClientCredential = { clientId: string; name: string; createdAt: string; revokedAt?: string; rotatedAt?: string; scopeMode?: 'scoped' | 'legacy-unrestricted' }
+export type { GatewayClientLimit } from '../../kun/src/contracts/gateway-client-limit.js'
+import type { GatewayClientLimit } from '../../kun/src/contracts/gateway-client-limit.js'
 export type GatewayClientAction = { action: 'list' } | { action: 'create'; name: string; modelId?: string } |
-  { action: 'revoke'; clientId: string; cancelActive?: boolean } | { action: 'usage' | 'rotate'; clientId: string }
+  { action: 'revoke'; clientId: string; cancelActive?: boolean } | { action: 'usage' | 'rotate' | 'limit'; clientId: string }
 export type GatewayClientResult = {
   ok: boolean
   status: number
@@ -11,6 +13,7 @@ export type GatewayClientResult = {
   copied?: boolean
   revoked?: boolean
   usage?: GatewayClientUsage
+  limit?: GatewayClientLimit
   error?: string
 }
 

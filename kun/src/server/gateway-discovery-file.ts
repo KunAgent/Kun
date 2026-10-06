@@ -35,7 +35,8 @@ export async function publishGatewayDiscovery(input: { baseUrl: string; version:
   }
   await mkdir(dirname(file), { recursive: true })
   const temp = `${file}.${process.pid}.tmp`
-  await writeFile(temp, JSON.stringify(record, null, 2) + '\n', { mode: 0o644 })
+  // Holds no secrets, but only this user's agents need it.
+  await writeFile(temp, JSON.stringify(record, null, 2) + '\n', { mode: 0o600 })
   await rename(temp, file)
   return file
 }
@@ -48,5 +49,36 @@ export async function removeGatewayDiscovery(instanceId: string): Promise<void> 
     if (current.instanceId === instanceId) await rm(file, { force: true })
   } catch {
     // Missing or foreign files are left alone.
+  }
+}
+
+/**
+ * Keeps the discovery file in line with the user's setting while the runtime
+ * runs: published when wanted, removed when the setting is turned off.
+ */
+export class GatewayDiscoveryPublisher {
+  private published = false
+  private running: Promise<void> = Promise.resolve()
+
+  constructor(private readonly input: { baseUrl: string; version: string; instanceId: string },
+    private readonly wanted: () => boolean, private readonly allowed = true) {}
+
+  status(): { allowed: boolean; advertised: boolean; path: string } {
+    return { allowed: this.allowed, advertised: this.published, path: gatewayDiscoveryFilePath() }
+  }
+
+  /** Publishes or removes the file to match the setting. Calls are serialized. */
+  reconcile(): Promise<void> {
+    this.running = this.running.then(async () => {
+      const want = this.allowed && this.wanted()
+      if (want && !this.published) { await publishGatewayDiscovery(this.input); this.published = true }
+      else if (!want && this.published) { await removeGatewayDiscovery(this.input.instanceId); this.published = false }
+    }).catch((error) => { console.warn('[kun] gateway discovery update failed:', error) })
+    return this.running
+  }
+
+  async stop(): Promise<void> {
+    await this.running
+    if (this.published) { await removeGatewayDiscovery(this.input.instanceId); this.published = false }
   }
 }

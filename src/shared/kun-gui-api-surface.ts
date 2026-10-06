@@ -336,6 +336,8 @@ export type KunGuiApi = GoogleWorkspaceSurface & ExtensionIpcApi & RemoteSshApi 
   gatewayLaunchProfile: (request: import('./gateway-launch-profile').GatewayLaunchProfileRequest) => Promise<import('./gateway-launch-profile').GatewayLaunchProfileResult>
   gatewayClients: (request: import('./gateway-clients').GatewayClientAction) => Promise<import('./gateway-clients').GatewayClientResult>
   agentWiring: (request: import('./agent-wiring').AgentWiringAction) => Promise<import('./agent-wiring').AgentWiringResult>
+  /** Opens the runtime's gateway middleware script folder (path resolved by Main from the runtime). */
+  openGatewayMiddlewareFolder: () => Promise<{ ok: boolean; message?: string }>
   gatewayCredential: (action: 'status' | 'ensure' | 'copy' | 'rotate' | 'revoke') => Promise<GatewayCredentialResult>
   getRuntimeSettingsSyncStatus: () => Promise<KunRuntimeSettingsSyncStatusPayload>
   remoteAccessGetStatus: () => Promise<RemoteAccessStatus>

@@ -628,6 +628,8 @@ export type LocalModelGatewaySettingsV1 = {
   extensionExports?: { providerId: string; accountId: string }[]
   /** Experimental: ChatGPT subscription connections shared through the gateway (off unless listed). */
   experimentalSubscriptionExports?: string[]
+  /** Publish ~/.kun/gateway.json for agents on this computer. Stored only when turned off. */
+  advertiseDiscovery?: false
 }
 
 export type ModelProviderSettingsV1 = {

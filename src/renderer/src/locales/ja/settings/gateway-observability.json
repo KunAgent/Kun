@@ -1,0 +1,57 @@
+{
+  "gatewayLimits": {
+    "noLimits": "トークン・コストの上限なし",
+    "limited": "上限に到達",
+    "tokens": "トークン {{used}} / {{total}}（今{{period}}）",
+    "cost": "コスト ${{used}} / ${{total}}（今{{period}}）",
+    "costEnforced": "超過で拒否",
+    "costAlert": "通知のみ",
+    "resets": "{{time}} にリセット",
+    "inFlight": "処理中 {{active}} / {{max}}",
+    "periods": {
+      "day": "日",
+      "week": "週",
+      "month": "月"
+    }
+  },
+  "gatewayRoutes": {
+    "title": "最近のルート",
+    "description": "外部リクエストごとに、どのプロバイダーとモデルが応答したか、その理由、試したフォールバックを表示します。プロンプト本文は保存しません。",
+    "empty": "まだゲートウェイへのリクエストはありません。接続したエージェントのリクエストがここに表示されます。",
+    "refresh": "更新",
+    "pause": "一時停止",
+    "resume": "再開",
+    "time": "時刻",
+    "caller": "呼び出し元",
+    "asked": "要求モデル",
+    "served": "応答元",
+    "why": "理由",
+    "result": "結果",
+    "running": "実行中",
+    "status": {
+      "completed": "完了",
+      "failed": "失敗",
+      "cancelled": "キャンセル"
+    },
+    "triedFailed": "{{model}} 失敗: {{reason}}",
+    "firstToken": "最初のトークン {{ms}} ms",
+    "duration": "{{ms}} ms",
+    "decisions": {
+      "rule": "ルール",
+      "manual": "手動選択",
+      "affinity": "前のターンと同じ",
+      "overflow": "コンテキスト長で移動",
+      "failover-group": "アカウントグループ",
+      "strategy": "ルート戦略",
+      "failover": "フォールバック"
+    }
+  },
+  "gatewayDiscovery": {
+    "title": "検出ファイル",
+    "on": "このコンピューター上のエージェントは {{path}} からゲートウェイを見つけられます。",
+    "off": "オフ。エージェントにゲートウェイのアドレスを手動で設定してください。",
+    "toggle": "検出ファイルを公開",
+    "copyPath": "パスをコピー",
+    "copied": "コピーしました"
+  }
+}

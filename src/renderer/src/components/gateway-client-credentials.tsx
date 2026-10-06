@@ -1,5 +1,6 @@
 import { GatewayClientUsage } from './gateway-client-usage'
 import { GatewayClientPolicyEditor } from './gateway-client-policy-editor'
+import { GatewayClientLimitBar } from './gateway-client-limit'
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GatewayClientCredential, GatewayClientUsage as Usage } from '@shared/gateway-clients'
@@ -89,6 +90,7 @@ export function GatewayClientCredentials({ clientName, active, modelId }: { clie
       <button type="button" className={settingsButtonClass()} disabled={pending || Boolean(client.revokedAt)} onClick={() => void rotate(client)}>{t('providerConfiguration.rotateKey')}</button>
       <button type="button" className={settingsButtonClass({ variant: 'danger' })} disabled={pending || Boolean(client.revokedAt)} onClick={() => void revoke(client)}>{t('gatewayConnection.revoke')}</button>
       <button type="button" className={settingsButtonClass({ variant: 'danger-ghost' })} disabled={pending || Boolean(client.revokedAt)} onClick={() => void revoke(client, true)}>{t('providerConfiguration.revokeAndCancel')}</button>
+      {!client.revokedAt ? <GatewayClientLimitBar clientId={client.clientId} active={active} t={t} /> : null}
       {!client.revokedAt ? <GatewayClientPolicyEditor client={client} /> : null}
     </div>)}
     {usage ? <GatewayClientUsage usage={usage} clientName={clients.find((client) => client.clientId === usage.clientId)?.name ?? usage.clientId} /> : null}

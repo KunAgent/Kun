@@ -17,7 +17,7 @@ import { startMemoryPressureMonitor } from './memory-pressure-monitor.js'
 import type { KunServeHandle, KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { reconcileRuntimeAfterRestart } from './runtime-restart-reconciliation.js'
 import { startRuntimeStartupManagerHeartbeat } from './runtime-startup-manager-heartbeat.js'
-import { publishGatewayDiscovery, removeGatewayDiscovery } from './gateway-discovery-file.js'
+import { GatewayDiscoveryPublisher } from './gateway-discovery-file.js'
 
 const MANAGER_SETTLEMENT_RECOVERY_WINDOW_MS = 5 * 60_000
 
@@ -163,10 +163,13 @@ export async function startKunServe(
   // Only the production loopback runtime advertises itself to external agents;
   // development and test runtimes must not take over the shared rendezvous.
   const advertiseGateway = options.advertiseGatewayDiscovery === true && runtimeFlavor === 'production' && isLoopbackHost(server.host)
-  if (advertiseGateway) {
-    void publishGatewayDiscovery({ baseUrl: runtimeBaseUrl(server.host === '0.0.0.0' ? '127.0.0.1' : server.host, server.port),
-      version: KUN_SERVICE_VERSION, instanceId }).catch((error) => console.warn('[kun] gateway discovery publish failed:', error))
-  }
+  const gatewayDiscovery = new GatewayDiscoveryPublisher({ baseUrl: runtimeBaseUrl(server.host === '0.0.0.0' ? '127.0.0.1' : server.host, server.port),
+    version: KUN_SERVICE_VERSION, instanceId }, () => runtime.modelGateway?.advertiseDiscovery?.() !== false, advertiseGateway)
+  if (runtime.modelGateway) runtime.modelGateway.discovery = gatewayDiscovery
+  void gatewayDiscovery.reconcile()
+  // The setting is hot-applied through the model-connections registry; follow it.
+  const discoveryTimer = advertiseGateway ? setInterval(() => { void gatewayDiscovery.reconcile() }, 5_000) : undefined
+  discoveryTimer?.unref?.()
   runtime.startBackgroundMaintenance?.()
   // Background sweep after listen: settle turns orphaned by a crash so
   // clients stop spinning on them, without delaying readiness. Then resume
@@ -223,7 +226,7 @@ export async function startKunServe(
             registeredWithManager = false
           }
         },
-        async () => { if (advertiseGateway) await removeGatewayDiscovery(instanceId) },
+        async () => { if (discoveryTimer) clearInterval(discoveryTimer); await gatewayDiscovery.stop() },
         async () => {
           await removeRuntimeDiscovery(
             options.discoveryDir ?? options.dataDir,

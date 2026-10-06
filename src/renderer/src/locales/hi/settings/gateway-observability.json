@@ -1,0 +1,57 @@
+{
+  "gatewayLimits": {
+    "noLimits": "कोई टोकन या लागत सीमा नहीं",
+    "limited": "सीमा पूरी हुई",
+    "tokens": "टोकन {{used}} / {{total}} इस {{period}}",
+    "cost": "लागत ${{used}} / ${{total}} इस {{period}}",
+    "costEnforced": "लागू",
+    "costAlert": "केवल चेतावनी",
+    "resets": "{{time}} पर रीसेट",
+    "inFlight": "चल रहे {{active}} / {{max}}",
+    "periods": {
+      "day": "दिन",
+      "week": "सप्ताह",
+      "month": "महीने"
+    }
+  },
+  "gatewayRoutes": {
+    "title": "हाल के रूट",
+    "description": "हर बाहरी अनुरोध किस प्रदाता और मॉडल ने संभाला, क्यों, और कौन से विकल्प आज़माए गए। प्रॉम्प्ट का पाठ कभी नहीं रखा जाता।",
+    "empty": "अभी तक कोई गेटवे अनुरोध नहीं। जुड़े एजेंट के अनुरोध आते ही यहाँ दिखेंगे।",
+    "refresh": "रीफ़्रेश",
+    "pause": "रोकें",
+    "resume": "जारी रखें",
+    "time": "समय",
+    "caller": "कॉलर",
+    "asked": "माँगा गया",
+    "served": "किसने दिया",
+    "why": "कारण",
+    "result": "परिणाम",
+    "running": "चल रहा",
+    "status": {
+      "completed": "पूरा",
+      "failed": "विफल",
+      "cancelled": "रद्द"
+    },
+    "triedFailed": "{{model}} विफल: {{reason}}",
+    "firstToken": "पहला टोकन {{ms}} ms",
+    "duration": "{{ms}} ms",
+    "decisions": {
+      "rule": "नियम",
+      "manual": "मैन्युअल चयन",
+      "affinity": "पिछली बारी जैसा",
+      "overflow": "संदर्भ आकार के कारण बदला",
+      "failover-group": "खाता समूह",
+      "strategy": "रूट रणनीति",
+      "failover": "विकल्प"
+    }
+  },
+  "gatewayDiscovery": {
+    "title": "डिस्कवरी फ़ाइल",
+    "on": "इस कंप्यूटर के एजेंट {{path}} से गेटवे ढूँढ सकते हैं।",
+    "off": "बंद। एजेंट में गेटवे पता खुद डालें।",
+    "toggle": "डिस्कवरी फ़ाइल प्रकाशित करें",
+    "copyPath": "पथ कॉपी करें",
+    "copied": "कॉपी हुआ"
+  }
+}

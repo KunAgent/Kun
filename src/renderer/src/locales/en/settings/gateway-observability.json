@@ -1,0 +1,57 @@
+{
+  "gatewayLimits": {
+    "noLimits": "No token or cost limit",
+    "limited": "Limit reached",
+    "tokens": "Tokens {{used}} / {{total}} this {{period}}",
+    "cost": "Cost ${{used}} / ${{total}} this {{period}}",
+    "costEnforced": "enforced",
+    "costAlert": "alert only",
+    "resets": "resets {{time}}",
+    "inFlight": "{{active}} / {{max}} in flight",
+    "periods": {
+      "day": "day",
+      "week": "week",
+      "month": "month"
+    }
+  },
+  "gatewayRoutes": {
+    "title": "Recent routes",
+    "description": "Which provider and model served each external request, why it went there, and every fallback tried. Prompt text is never kept.",
+    "empty": "No gateway requests yet. Requests from connected agents appear here as they arrive.",
+    "refresh": "Refresh",
+    "pause": "Pause",
+    "resume": "Resume",
+    "time": "Time",
+    "caller": "Caller",
+    "asked": "Asked",
+    "served": "Served by",
+    "why": "Why",
+    "result": "Result",
+    "running": "running",
+    "status": {
+      "completed": "done",
+      "failed": "failed",
+      "cancelled": "cancelled"
+    },
+    "triedFailed": "{{model}} failed: {{reason}}",
+    "firstToken": "first token {{ms}} ms",
+    "duration": "{{ms}} ms",
+    "decisions": {
+      "rule": "Rule",
+      "manual": "Manual pick",
+      "affinity": "Same as last turn",
+      "overflow": "Moved for context size",
+      "failover-group": "Account group",
+      "strategy": "Route strategy",
+      "failover": "Fallback"
+    }
+  },
+  "gatewayDiscovery": {
+    "title": "Discovery file",
+    "on": "Agents on this computer can find the gateway through {{path}}.",
+    "off": "Off. Give agents the gateway address by hand.",
+    "toggle": "Publish discovery file",
+    "copyPath": "Copy path",
+    "copied": "Copied"
+  }
+}

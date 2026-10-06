@@ -35,6 +35,12 @@
       "system-prompt": "System prompt",
       "think-tags": "แท็กความคิด",
       "script": "สคริปต์"
-    }
+    },
+    "folder": "โฟลเดอร์สคริปต์",
+    "openFolder": "เปิดโฟลเดอร์",
+    "createExample": "สร้างสคริปต์ตัวอย่าง",
+    "exampleCreated": "สร้าง {{file}} แล้ว เปิดใช้เป็นรายการสคริปต์ด้านล่าง",
+    "exampleExists": "มี {{file}} อยู่แล้ว",
+    "noScripts": "ยังไม่มีไฟล์ .js ในโฟลเดอร์"
   }
 }

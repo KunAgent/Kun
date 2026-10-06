@@ -68,13 +68,6 @@ export async function allowGatewayClientModel(runtime: ServerRuntime, clientId: 
   }
 }
 
-/** Middleware counters (calls, average time, failures, load errors) for the gateway settings page. */
-export function gatewayAdminMiddleware(runtime: ServerRuntime): JsonResponse {
-  const host = runtime.modelGateway?.middleware
-  if (!host) return privateResponse({ middleware: [] })
-  return privateResponse({ middleware: host.stats() })
-}
-
 /** Extension providers that declared gateway export, with their accounts and the current selection. */
 export async function gatewayAdminExtensionExports(runtime: ServerRuntime): Promise<JsonResponse> {
   const platform = runtime.extensionPlatform

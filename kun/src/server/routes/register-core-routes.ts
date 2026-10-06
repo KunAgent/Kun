@@ -72,7 +72,9 @@ import { gatewayJsonResponse } from './gateway-json-response.js'
 import { strictRuntimeTokenAuthorized } from './gateway-request-guard.js'
 import { handleKunToolsMcp } from './kun-tools-mcp.js'
 import { gatewayHello, gatewayRouteTrace } from './gateway-discovery-routes.js'
-import { allowGatewayClientModel, gatewayAdminCatalog, gatewayAdminExtensionExports, gatewayAdminMiddleware } from './gateway-agent-admin.js'
+import { allowGatewayClientModel, gatewayAdminCatalog, gatewayAdminExtensionExports } from './gateway-agent-admin.js'
+import { registerGatewayAdminExtras } from './gateway-admin-extras.js'
+import { gatewayClientLimit } from './gateway-limit.js'
 import { geminiGenerate, geminiModels } from './gemini-gateway.js'
 
 export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void {
@@ -84,6 +86,7 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('GET', '/v1beta/models', (request) => geminiModels(runtime, request))
   router.add('POST', '/v1beta/models/*call', (request, ctx) => geminiGenerate(runtime, request, ctx.params.call))
   router.add('GET', '/v1/kun/route', (request) => gatewayRouteTrace(runtime, request))
+  router.add('GET', '/v1/kun/limit', (request) => gatewayClientLimit(runtime, request))
   router.add('POST', '/v1/chat/completions', (request) => gatewayChatCompletions(runtime, request))
   router.add('POST', '/v1/responses', (request) => gatewayResponses(runtime, request))
   router.add('POST', '/v1/messages', (request) => gatewayMessages(runtime, request))
@@ -113,10 +116,7 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
     if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
     return gatewayAdminExtensionExports(runtime)
   })
-  router.add('GET', '/v1/model-gateway/middleware', (request) => {
-    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
-    return gatewayAdminMiddleware(runtime)
-  })
+  registerGatewayAdminExtras(router, runtime, strictGatewayAdmin)
   router.add('POST', '/v1/model-gateway/clients/:id/allow', (request, ctx) => {
     if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
     return allowGatewayClientModel(runtime, ctx.params.id, request)

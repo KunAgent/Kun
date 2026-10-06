@@ -464,6 +464,12 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint('/v1/model-gateway/middleware', ['GET']),
   // Exportable extension providers with account labels; no credentials.
   compileEndpoint('/v1/model-gateway/extension-exports', ['GET']),
+  // Recent gateway route decisions: model ids, agents and timings, never prompt text or keys.
+  compileEndpoint('/v1/model-gateway/route-traces', ['GET']),
+  // Whether ~/.kun/gateway.json is published and its path.
+  compileEndpoint('/v1/model-gateway/discovery', ['GET']),
+  // Writes a fixed commented starter script into the runtime's own middleware folder; never overwrites.
+  compileEndpoint('/v1/model-gateway/middleware/example', ['POST']),
   compileEndpoint(KUN_THREADS_TEMPLATE, ['GET', 'POST']),
   compileEndpoint(KUN_THREAD_STATES_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_STATE_TEMPLATE, ['GET']),

@@ -122,7 +122,9 @@ export const LocalModelGatewayConfigSchema = z.object({
   /** Extension providers the user exports, each with the one account requests use. */
   extensionExports: z.array(z.object({ providerId: z.string().min(1).max(160), accountId: z.string().min(1).max(160) }).strict()).max(50).optional(),
   /** Experimental: ChatGPT subscription connections the user chose to share through the gateway. */
-  experimentalSubscriptionExports: z.array(z.string().min(1).max(128)).max(10).optional()
+  experimentalSubscriptionExports: z.array(z.string().min(1).max(128)).max(10).optional(),
+  /** Publish ~/.kun/gateway.json so agents on this computer can find the gateway. On unless false. */
+  advertiseDiscovery: z.boolean().optional()
 }).strict()
 export type LocalModelGatewayConfig = z.infer<typeof LocalModelGatewayConfigSchema>
 

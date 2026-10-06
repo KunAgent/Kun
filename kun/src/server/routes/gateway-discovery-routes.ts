@@ -21,7 +21,8 @@ export function gatewayHello(runtime: ServerRuntime, request: Request): JsonResp
       v1: `${origin}/v1`,
       anthropic: origin,
       sessionHeader: GATEWAY_SESSION_HEADER,
-      routeTrace: `${origin}/v1/kun/route`
+      routeTrace: `${origin}/v1/kun/route`,
+      limit: `${origin}/v1/kun/limit`
     }
   })
 }

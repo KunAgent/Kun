@@ -110,6 +110,7 @@ const api = {
   gatewayLaunchProfile: (request) => ipcRenderer.invoke('gateway:launch-profile', request),
   gatewayClients: (request) => ipcRenderer.invoke('gateway:clients', request),
   agentWiring: (request) => ipcRenderer.invoke('agent-wiring', request),
+  openGatewayMiddlewareFolder: () => ipcRenderer.invoke('gateway-middleware:open-dir'),
   gatewayCredential: (action) => ipcRenderer.invoke('gateway:credential', action),
   getRuntimeSettingsSyncStatus: () =>
     ipcRenderer.invoke('runtime:settings-sync-status:get'),
