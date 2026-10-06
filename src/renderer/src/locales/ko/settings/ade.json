@@ -75,6 +75,7 @@
     "harnessPermissionMode": "기본 권한 수준",
     "harnessPermissionModeDesc": "턴이 권한을 지정하지 않을 때 적용되는 모드.",
     "harnessPermissionModeDefault": "harness 기본값",
+    "harnessPermissionModeFollowsKun": "{{agent}}의 권한은 입력창 권한 수준을 따릅니다(샌드박스와 승인은 Kun이 설정). 별도의 Agent 모드는 지원하지 않습니다.",
     "acpTitle": "사용자 지정 ACP 에이전트",
     "acpDesc": "Agent Client Protocol을 구사하는 에이전트를 추가합니다. 사용자 지정 에이전트는 여기서만 명시적으로 추가할 수 있습니다 — 프로젝트 파일이 자동으로 프로그램을 실행하지 않습니다.",
     "acpFormName": "표시 이름 (예: my-agent)",

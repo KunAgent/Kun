@@ -75,6 +75,7 @@
     "harnessPermissionMode": "ระดับสิทธิ์เริ่มต้น",
     "harnessPermissionModeDesc": "โหมดสิทธิ์ที่ใช้เมื่อเทิร์นไม่ได้ระบุ",
     "harnessPermissionModeDefault": "ค่าเริ่มต้นของ harness",
+    "harnessPermissionModeFollowsKun": "{{agent}} ใช้ระดับสิทธิ์ตามช่องป้อนข้อความ (Kun กำหนดแซนด์บ็อกซ์และการอนุมัติ) ไม่รองรับการกำหนดโหมดของ Agent แยกต่างหาก",
     "acpTitle": "เอเจนต์ ACP กำหนดเอง",
     "acpDesc": "เพิ่มเอเจนต์ที่พูด Agent Client Protocol เพิ่มได้เฉพาะที่นี่เท่านั้น — ไฟล์โปรเจกต์ไม่มีวันเริ่มโปรแกรมเอง",
     "acpFormName": "ชื่อที่แสดง (เช่น my-agent)",

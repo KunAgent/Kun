@@ -35,3 +35,16 @@ it('reads reasoning choices for the selected model without changing the native d
   expect(result.modelInfo[0].reasoningEfforts).toBeUndefined()
   expect(result.modelInfo[1].reasoningEfforts).toEqual(['medium', 'high', 'max'])
 })
+
+it('folds legacy reasoning variants into their base model and marks models without levels', () => {
+  const result = acpModelCatalog({ harnessId: 'opencode', models: { currentModelId: 'openai/gpt-5.2/high', availableModels: [
+    { modelId: 'openai/gpt-5.2', name: 'GPT-5.2' }, { modelId: 'openai/gpt-5.2/high', name: 'GPT-5.2 (high)' },
+    { modelId: 'openai/gpt-5.2/low' }, { modelId: 'openai/gpt-5.2/xhigh' }, { modelId: 'openai/gpt-5.2/fast' },
+    { modelId: 'local/llama' }, { modelId: 'orphan/model/high' }
+  ] } })
+  expect(result.models).toEqual(['openai/gpt-5.2', 'openai/gpt-5.2/fast', 'local/llama', 'orphan/model/high'])
+  expect(result.modelInfo[0]).toMatchObject({ id: 'openai/gpt-5.2', displayName: 'GPT-5.2', isDefault: true,
+    reasoningEfforts: ['low', 'high', 'max'], defaultReasoningEffort: 'high' })
+  // Reasoning is chosen only through variants, so the rest have no levels to offer.
+  expect(result.modelInfo.slice(1).map((entry) => entry.reasoningEfforts)).toEqual([[], [], []])
+})

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { FloatingComposerModelPicker } from './FloatingComposerModelPicker'
 import { harnessModelProfiles } from '../../lib/ade-composer-harness'
+import { nativeReasoningChoices } from './floating-composer-model-picker-logic'
 
 let host: HTMLDivElement
 let root: Root
@@ -52,6 +53,30 @@ describe('Model picker after Agent selection moves to the mode control', () => {
     await act(async () => source.click())
     expect([...document.querySelectorAll<HTMLOptionElement>('[data-devin-model-list] select option')].map((option) => option.value))
       .toEqual(['medium', 'high'])
+  })
+
+  it('offers an Agent model only the levels it advertises, plus Auto', async () => {
+    expect(nativeReasoningChoices({ reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] }))
+      .toEqual(['auto', 'low', 'medium', 'high', 'max'])
+    expect(nativeReasoningChoices({ reasoningEfforts: ['xhigh'] })).toEqual([])
+    expect(nativeReasoningChoices({ reasoningEfforts: [] })).toEqual([])
+    expect(nativeReasoningChoices({})).toBeUndefined()
+    const codexGroup = (efforts: string[]) => [{ providerId: 'ade-cred:native-login', label: 'Native sign-in', nativeHarnessId: 'codex',
+      modelIds: ['gpt'], modelInfo: { gpt: { id: 'gpt', reasoningEfforts: efforts, defaultReasoningEffort: 'low' } } }]
+    const onReasoning = vi.fn()
+    const render = (effort: string, efforts: string[]) => act(async () => root.render(createElement(FloatingComposerModelPicker, {
+      compact: false, mode: 'select', composerModel: 'gpt', composerPickList: ['gpt'], composerModelGroups: codexGroup(efforts),
+      composerReasoningEffort: effort, onComposerReasoningEffortChange: onReasoning, canChangeModel: true, onComposerModelChange: vi.fn()
+    })))
+    // Kun's "off" is not a Codex level: fall back to the model's own default.
+    await render('off', ['low', 'medium', 'high', 'xhigh', 'max'])
+    expect(onReasoning).toHaveBeenLastCalledWith('low')
+    onReasoning.mockClear()
+    await render('auto', ['low', 'medium', 'high', 'xhigh', 'max'])
+    expect(onReasoning).not.toHaveBeenCalled()
+    // A model without levels (e.g. an OpenCode model with no variants) shows no reasoning control.
+    await render('high', [])
+    expect(onReasoning).not.toHaveBeenCalled()
   })
 
   it('uses native image metadata and does not label unknown capabilities as text-only', async () => {

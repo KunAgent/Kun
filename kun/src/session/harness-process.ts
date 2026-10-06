@@ -77,7 +77,8 @@ export class HarnessProcess {
 
   /** Credential-bearing fragments removed; safe for logs and error text. */
   sanitizedStderrTail(): string {
-    return redactApprovalSensitiveText(this.stderrText).slice(-4_096)
+    // Terminal colour codes from CLIs (e.g. OpenCode's error banner) are noise in UI text.
+    return redactApprovalSensitiveText(stripTerminalEscapes(this.stderrText)).slice(-4_096)
   }
 
   async stop(graceMs = 1_000, timeoutMs = 5_000): Promise<void> {
@@ -136,4 +137,10 @@ export async function startHarnessProcess(input: {
     input.signal.throwIfAborted()
   }
   return process
+}
+
+/** Remove ANSI/VT control sequences (colours, cursor moves) from captured CLI output. */
+export function stripTerminalEscapes(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)|\u001b[@-Z\\-_]/g, '')
 }

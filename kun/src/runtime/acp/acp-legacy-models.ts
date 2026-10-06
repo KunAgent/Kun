@@ -21,6 +21,29 @@ export function parseAcpLegacyModels(value: unknown): AcpLegacyModels | undefine
   }
 }
 
+const LEGACY_VARIANTS_FOR_EFFORT: Readonly<Record<string, readonly string[]>> = {
+  off: ['none', 'minimal'], low: ['low', 'minimal'], medium: ['medium'], high: ['high'], max: ['max', 'xhigh', 'high']
+}
+
+/**
+ * The legacy model id that carries the requested reasoning level, when the
+ * agent advertises reasoning as `<model>/<variant>` (OpenCode). Agents with a
+ * modern model selector, unknown models and unmatched levels keep `modelId`.
+ */
+export function acpLegacyVariantModel(
+  session: { models?: AcpLegacyModels; configOptions?: AcpConfigOption[] | null },
+  modelId: string | undefined,
+  reasoningEffort: string | undefined
+): string | undefined {
+  const available = session.models?.availableModels
+  if (!modelId || !reasoningEffort || !available?.includes(modelId) ||
+    session.configOptions?.some((option) => option.category === 'model')) return modelId
+  for (const variant of LEGACY_VARIANTS_FOR_EFFORT[reasoningEffort.trim().toLowerCase()] ?? []) {
+    if (available.includes(`${modelId}/${variant}`)) return `${modelId}/${variant}`
+  }
+  return modelId
+}
+
 /** A rejected model selection must not be mistaken for a missing saved session. */
 export class AcpModelSelectionError extends AcpError {
   constructor(message: string) {

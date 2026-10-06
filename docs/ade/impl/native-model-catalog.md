@@ -47,3 +47,22 @@ Kun 本轮没有直接读取其他应用的账号缓存，也没有复制登录�
 --locale zh --scale 2 --evidence dist/native-model-catalog-zh-smoke` 运行。该夹具使用两页模型目录，
 经过真实 Electron、preload、Main、Kun 与本机 RPC 子进程，验证默认值、八条识图标签和选择保持。
 它与真实账号的只读目录验证相互补充，不替代付费推理或跨平台打包验证。
+
+## 推理档位、权限与 OpenCode 启动（2026-10-06）
+
+- 推理档位按模型进入目录 `reasoningEfforts`，输入框只提供 Kun 有同名档位的级别（low/medium/high/max）加“自动”：
+  - Codex：原样保留 `supportedReasoningEfforts`；`xhigh`/`ultra` 暂无 Kun 档位，不显示。
+    `auto`/`off` 不发送 `effort`，沿用 Codex 配置或模型默认值。
+  - Claude Code：`supportedModels()` 的 `supportedEffortLevels` 映射为 Kun 档位，`supportsEffort: false` 表示无档位。
+    目录保留 `default` 行指向的推荐模型、显示名、说明和原生顺序，推荐模型排第一并标记为默认。
+  - OpenCode：旧版把每个推理档位列成 `<model>/<variant>` 模型。目录把这些变体折叠回基础模型，
+    每轮按所选档位通过 `session/set_model` 选中对应变体（`acpLegacyVariantModel`）。
+    没有变体、也没有 `thought_level` 选项的模型档位为空，不显示推理控件。
+- 用户没有为某个外部 Agent 模型选过档位时默认“自动”，即交给 Agent 自己的默认值，不套用 Kun 的 `max`。
+- 权限：Codex 运行时不读取原生模式 id，按 Kun 权限档设置 sandbox（询问、代我审批 → workspace-write；
+  完全访问 → danger-full-access），每个请求都经过 Kun 审批（`approvalPolicy: untrusted`）。
+  Claude Code 由权限档映射为 default/bypassPermissions。两者的“默认权限档”设置不生效，
+  Agent 中心改为说明跟随输入框权限，输入框预览显示实际运行方式。
+- ACP 初始化和就绪检查上限为 60 秒，覆盖 OpenCode 首次运行约 32 秒的初始化。
+  启动阶段崩溃不重试；错误文本去除终端颜色控制符。
+- 续接绑定保存失败会写调试日志；Codex 跟进轮次复用原生线程有 `SessionTurnRuntime` 级回归测试。

@@ -78,7 +78,12 @@
       "normal": "ปกติ",
       "plan": "วางแผน",
       "read-only": "อ่านอย่างเดียว",
-      "default": "ค่าเริ่มต้น"
+      "default": "ค่าเริ่มต้น",
+      "acceptEdits": "ยอมรับการแก้ไขอัตโนมัติ",
+      "bypassPermissions": "ข้ามการตรวจสิทธิ์",
+      "workspace-write": "เขียนในเวิร์กสเปซ",
+      "danger-full-access": "เข้าถึงเต็มรูปแบบ",
+      "build": "บิลด์"
     },
     "usageReportedByAgent": "รายงานโดย Agent"
   }

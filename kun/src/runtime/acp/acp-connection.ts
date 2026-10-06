@@ -19,7 +19,8 @@ import {
   type SessionUpdate
 } from './acp-schema.js'
 
-export const ACP_INITIALIZE_TIMEOUT_MS = 20_000
+/** Cold starts include first-run bootstraps (OpenCode ~32s); see acp-readiness-probe. */
+export const ACP_INITIALIZE_TIMEOUT_MS = 60_000
 
 export type AcpSessionUpdateSink = (
   update: SessionUpdate | { sessionUpdate: string }

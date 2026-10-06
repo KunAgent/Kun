@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
+import { AgentSdkModelProbe, agentSdkModelCatalog } from './agent-sdk-model-probe.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { SdkApi, SdkQueryResult } from '../runtime/agent-sdk/sdk-protocol.js'
 
@@ -59,8 +59,43 @@ describe('AgentSdkModelProbe', () => {
       nowMs: () => 1_000
     })
     const models = await probe.probe(definition)
-    expect(models).toEqual(['claude-fable-5-1', 'claude-opus-5', 'claude-sonnet-5'])
+    // Claude Code's recommended default first, then its own order.
+    expect(models).toEqual(['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'])
     expect(close).toHaveBeenCalled()
+  })
+
+  it('keeps the recommended default and display names in the catalog', async () => {
+    const probe = new AgentSdkModelProbe({
+      loadSdk: fakeSdk(() => ({
+        supportedModels: async () => [
+          { value: 'default', resolvedModel: 'claude-sonnet-5', displayName: 'Default (recommended)' },
+          { value: 'opus', resolvedModel: 'claude-opus-5', displayName: 'Opus', description: 'Most capable' },
+          { value: 'sonnet', resolvedModel: 'claude-sonnet-5', displayName: 'Sonnet' }
+        ],
+        close: () => undefined
+      }))
+    })
+    const catalog = await probe.probeCatalog(definition)
+    expect(catalog.models).toEqual(['claude-sonnet-5', 'claude-opus-5'])
+    expect(catalog.modelInfo).toEqual([
+      { id: 'claude-sonnet-5', displayName: 'Sonnet', isDefault: true },
+      { id: 'claude-opus-5', displayName: 'Opus', description: 'Most capable' }
+    ])
+  })
+
+  it('lists each model\'s reasoning levels in Kun\'s vocabulary', () => {
+    const catalog = agentSdkModelCatalog([
+      { value: 'default', resolvedModel: 'claude-sonnet-5', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high'] },
+      { value: 'opus', resolvedModel: 'claude-opus-5', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      { value: 'haiku', resolvedModel: 'claude-haiku-5', supportsEffort: false },
+      { value: 'legacy', resolvedModel: 'claude-legacy' }
+    ])
+    expect(catalog.modelInfo).toEqual([
+      { id: 'claude-sonnet-5', isDefault: true, reasoningEfforts: ['low', 'medium', 'high'] },
+      { id: 'claude-opus-5', reasoningEfforts: ['low', 'medium', 'high', 'max'] },
+      { id: 'claude-haiku-5', reasoningEfforts: [] },
+      { id: 'claude-legacy' }
+    ])
   })
 
   it('falls back to value when resolvedModel is absent', async () => {
@@ -138,11 +173,7 @@ describe('AgentSdkModelProbe', () => {
     })
     expect(probe.peek(definition)).toBeUndefined()
     await probe.probe(definition)
-    expect(probe.peek(definition)).toEqual([
-      'claude-fable-5-1',
-      'claude-opus-5',
-      'claude-sonnet-5'
-    ])
+    expect(probe.peek(definition)).toEqual(['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'])
     expect(calls).toBe(1)
   })
 

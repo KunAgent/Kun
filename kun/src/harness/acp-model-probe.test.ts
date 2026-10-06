@@ -94,6 +94,8 @@ describe('AcpModelProbe', () => {
     expect(acpModelProbeError(new AcpError('request_timeout', 'session/new timed out'))).toMatchObject({ code: 'timeout' })
     expect(acpModelProbeError(new AcpError('harness_protocol_error', 'bad frame'))).toMatchObject({ code: 'protocol_error' })
     expect(acpModelProbeError(new Error('spawn devin ENOENT'))).toMatchObject({ code: 'spawn_failed' })
+    // A process that dies during startup (e.g. an incompatible plugin) is reported, not respawned.
+    expect(acpModelProbeError(new AcpError('harness_crashed', 'opencode exited with code 1'))).toMatchObject({ code: 'spawn_failed' })
   })
 
   it('reuses one warm Agent process for the catalog and per-model detail lookups', async () => {

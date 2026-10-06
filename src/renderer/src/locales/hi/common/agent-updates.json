@@ -78,7 +78,12 @@
       "normal": "सामान्य",
       "plan": "योजना",
       "read-only": "केवल पढ़ना",
-      "default": "डिफ़ॉल्ट"
+      "default": "डिफ़ॉल्ट",
+      "acceptEdits": "संपादन स्वीकारें",
+      "bypassPermissions": "अनुमतियाँ छोड़ें",
+      "workspace-write": "वर्कस्पेस लेखन",
+      "danger-full-access": "पूर्ण पहुँच",
+      "build": "बिल्ड"
     },
     "usageReportedByAgent": "Agent द्वारा रिपोर्ट किया गया"
   }

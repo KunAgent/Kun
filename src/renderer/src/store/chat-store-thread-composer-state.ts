@@ -7,6 +7,7 @@ import {
   composerModeForThread,
   composerReasoningEffortForSelection,
   fallbackComposerModel,
+  isNativeAgentRoute,
   providerIdForComposerModel,
   providerIdMatchesComposerModel,
   readThreadComposerMode,
@@ -133,6 +134,8 @@ export function resolveThreadComposerState(
   const model = selection?.model ?? ''
   const providerId = selection?.providerId ?? ''
   const stored = thread ? readThreadComposerSelection(thread.id) : null
+  const composerHarnessId = stored?.harnessId ?? thread?.executionConfig?.route.harnessId ?? thread?.harnessId ?? ''
+  const composerCredentialMode = stored?.credentialMode ?? thread?.executionConfig?.route.credentialMode ?? ''
   return {
     composerMode: composerModeForThread(
       thread && thread.mode !== undefined
@@ -145,10 +148,11 @@ export function resolveThreadComposerState(
     composerReasoningEffort: composerReasoningEffortForSelection(
       state.composerModelGroups,
       model,
-      providerId
+      providerId,
+      { nativeAgent: isNativeAgentRoute(composerHarnessId, composerCredentialMode) }
     ),
-    composerHarnessId: stored?.harnessId ?? thread?.executionConfig?.route.harnessId ?? thread?.harnessId ?? '',
-    composerCredentialMode: stored?.credentialMode ?? thread?.executionConfig?.route.credentialMode ?? '',
+    composerHarnessId,
+    composerCredentialMode,
     composerGatewayBinding: stored ? stored.gatewayBinding : thread?.executionConfig?.route.gatewayBinding
   }
 }

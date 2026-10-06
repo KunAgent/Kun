@@ -75,6 +75,7 @@
     "harnessPermissionMode": "Default permission level",
     "harnessPermissionModeDesc": "Follow composer permissions by default. An Agent preference remains limited by the current task's permissions.",
     "harnessPermissionModeDefault": "Follow composer permissions",
+    "harnessPermissionModeFollowsKun": "{{agent}} follows the composer permission level (Kun sets its sandbox and approvals); a separate Agent mode is not supported.",
     "acpTitle": "Custom ACP agent",
     "acpDesc": "Add an agent that speaks the Agent Client Protocol. Custom agents can only be added here — project files never start programs automatically.",
     "acpFormName": "Display name (e.g. my-agent)",

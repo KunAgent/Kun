@@ -20,7 +20,7 @@ import {
   composerReasoningRailThumbCenter, currentBodyZoom, estimatedModelSubmenuHeight,
   estimatedReasoningSubmenuHeight, filterComposerModelIds, fullModelLabel,
   modelProfileForModel, modelProfileForSelection, modelIdsMatch,
-  normalizeComposerReasoningEffort, normalizeComposerReasoningEffortValue,
+  nativeReasoningChoices, normalizeComposerReasoningEffort, normalizeComposerReasoningEffortValue,
   orderComposerReasoningRailEfforts, reasoningLabelKey, reasoningOptionsForModel,
   shouldShowProviderSetupPrompt,
   type ComposerModelMenuGroup,
@@ -156,10 +156,13 @@ export function FloatingComposerModelPicker({
         : emptyModelState === 'agent-not-ready' ? 'agentUpdate.composerNotReadyHint'
           : emptyModelState === 'unavailable' ? 'composerModelsUnavailableHint' : 'composerAgentDefaultModelHint') : undefined
   const needsProviderSetup = !emptyModelMessage && shouldShowProviderSetupPrompt(providerMenuGroups)
-  const nativeModel = selectedProviderGroup?.nativeHarnessId === 'devin' ? selectedProviderGroup.modelInfo?.[currentModel] : undefined
-  const reasoningOptions = reasoningOptionsForModel(currentModelProfile).filter((option) =>
-    (!allowedReasoningEfforts || allowedReasoningEfforts.includes(option.id)) &&
-    (selectedProviderGroup?.nativeHarnessId !== 'devin' || nativeModel?.reasoningEfforts?.includes(option.id)))
+  const nativeHarnessId = selectedProviderGroup?.nativeHarnessId
+  const nativeModel = nativeHarnessId ? selectedProviderGroup?.modelInfo?.[currentModel] : undefined
+  // Other Agents list per-model levels with the catalog; offer only those (plus Auto).
+  const nativeChoices = nativeHarnessId && nativeHarnessId !== 'devin' ? nativeReasoningChoices(nativeModel) : undefined
+  const reasoningOptions = (nativeChoices ? REASONING_OPTIONS : reasoningOptionsForModel(currentModelProfile)).filter((option) =>
+    (!allowedReasoningEfforts || allowedReasoningEfforts.includes(option.id)) && (!nativeChoices || nativeChoices.includes(option.id)) &&
+    (nativeHarnessId !== 'devin' || nativeModel?.reasoningEfforts?.includes(option.id)))
   const reasoningEnabled =
     !needsProviderSetup && !emptyModelMessage && Boolean(onComposerReasoningEffortChange) && reasoningOptions.length > 0
   const fastModeState: ComposerFastModeState = onComposerFastModeChange
@@ -167,10 +170,9 @@ export function FloatingComposerModelPicker({
     : 'hidden'
   const showFastModeButton = fastModeState !== 'hidden'
   const fastModeEnabled = fastModeState === 'supported' && composerFastMode
-  const normalizedReasoning = normalizeComposerReasoningEffort(
-    composerReasoningEffort,
-    currentModelProfile
-  )
+  const normalizedReasoning = nativeChoices
+    ? normalizeComposerReasoningEffortValue(composerReasoningEffort) ?? 'auto'
+    : normalizeComposerReasoningEffort(composerReasoningEffort, currentModelProfile)
   const currentReasoning = reasoningOptions.some((option) => option.id === normalizedReasoning) ? normalizedReasoning
     : reasoningOptions.find((option) => option.id === nativeModel?.defaultReasoningEffort)?.id ?? reasoningOptions[0]?.id ?? normalizedReasoning
   const currentReasoningLabel = t(reasoningLabelKey(currentReasoning))

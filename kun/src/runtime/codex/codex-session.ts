@@ -88,7 +88,7 @@ export class CodexSession implements HarnessSession {
         threadId: this.providerSessionId,
         input: wireInput,
         ...(input.model ? { model: input.model } : {}),
-        ...(input.reasoningEffort ? { effort: input.reasoningEffort } : {}),
+        ...(codexEffort(input.reasoningEffort) ? { effort: codexEffort(input.reasoningEffort) } : {}),
         cwd: input.workspacePath,
         approvalPolicy: 'untrusted', // every request reaches Kun's gate
         sandboxPolicy: toCodexSandboxPolicy(
@@ -424,4 +424,14 @@ function toCodexUserInput(input: HarnessTurnInput): CodexUserInput[] {
     out.push({ type: 'localImage', path: attachment })
   }
   return out
+}
+
+/**
+ * Codex accepts only the effort names a model advertises (low..ultra). Kun's
+ * `auto` means "model default" and `off` has no Codex equivalent, so neither
+ * is sent; the model's configured default applies instead.
+ */
+export function codexEffort(effort: string | undefined): string | undefined {
+  const value = effort?.trim().toLowerCase()
+  return value && value !== 'auto' && value !== 'off' ? value : undefined
 }

@@ -75,6 +75,7 @@
     "harnessPermissionMode": "既定の権限レベル",
     "harnessPermissionModeDesc": "ターンが権限を指定しないときに適用されるモード。",
     "harnessPermissionModeDefault": "harness 既定",
+    "harnessPermissionModeFollowsKun": "{{agent}} の権限は入力欄の権限レベルに従います（サンドボックスと承認は Kun が設定）。Agent 独自のモードは指定できません。",
     "acpTitle": "カスタム ACP エージェント",
     "acpDesc": "Agent Client Protocol を話すエージェントを追加。カスタムエージェントはここでのみ明示的に追加できます — プロジェクトのファイルが自動でプログラムを起動することはありません。",
     "acpFormName": "表示名 (例: my-agent)",

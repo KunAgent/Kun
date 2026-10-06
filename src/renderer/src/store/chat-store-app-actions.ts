@@ -22,6 +22,7 @@ import {
 import type { ComposerPlanMode } from './chat-store-helpers'
 import {
   composerReasoningEffortForSelection,
+  isNativeAgentRoute,
   persistComposerIsolation,
   persistComposerMode,
   persistComposerPersonaId,
@@ -197,7 +198,8 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         composerReasoningEffort: composerReasoningEffortForSelection(
           state.composerModelGroups,
           modelId,
-          nextProviderId
+          nextProviderId,
+          { nativeAgent: isNativeAgentRoute(state.composerHarnessId, state.composerCredentialMode) }
         )
       })
       const trimmed = modelId.trim()

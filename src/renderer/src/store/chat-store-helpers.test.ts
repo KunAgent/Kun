@@ -22,6 +22,7 @@ import {
   reconcileCodeWorkspaceRoots,
   composerModeForThread,
   composerReasoningEffortForSelection,
+  isNativeAgentRoute,
   normalizeComposerReasoningEffortMap,
   persistComposerReasoningEffort,
   readStoredComposerReasoningEffort,
@@ -437,6 +438,18 @@ describe('chat-store Claw helpers', () => {
 
     expect(composerReasoningEffortForSelection(groups, 'reasoning-model', 'provider-a')).toBe('medium')
     expect(readStoredComposerReasoningEffort('reasoning-model', 'provider-a')).toBe('medium')
+  })
+
+  it('leaves an external Agent at its own level until the user picks one for that model', () => {
+    expect(composerReasoningEffortForSelection([], 'gpt-6.1-sol', '', { nativeAgent: true })).toBe('auto')
+    expect(readStoredComposerReasoningEffort('gpt-6.1-sol', '')).toBe('max')
+    persistComposerReasoningEffort('gpt-6.1-sol', '', 'high')
+    expect(composerReasoningEffortForSelection([], 'gpt-6.1-sol', '', { nativeAgent: true })).toBe('high')
+    expect(isNativeAgentRoute('codex', '')).toBe(true)
+    expect(isNativeAgentRoute('codex', 'native-login')).toBe(true)
+    expect(isNativeAgentRoute('claude-code', 'kun-gateway')).toBe(false)
+    expect(isNativeAgentRoute('kun', '')).toBe(false)
+    expect(isNativeAgentRoute('', '')).toBe(false)
   })
 
   it('caps the stored reasoning preference registry', () => {

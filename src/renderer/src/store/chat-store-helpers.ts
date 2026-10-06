@@ -139,9 +139,18 @@ export function readStoredComposerReasoningEffort(
   modelId: string,
   providerId = ''
 ): ModelReasoningEffort {
+  return storedComposerReasoningEffort(modelId, providerId) ?? 'max'
+}
+
+/** The effort last picked for this model, if any. */
+export function storedComposerReasoningEffort(modelId: string, providerId = ''): ModelReasoningEffort | undefined {
   const key = composerReasoningEffortStorageKey(modelId, providerId)
-  if (!key) return 'max'
-  return loadComposerReasoningEffortMap()[key] ?? 'max'
+  return key ? loadComposerReasoningEffortMap()[key] : undefined
+}
+
+/** Whether a route runs an external Agent on its own sign-in (not a Kun provider). */
+export function isNativeAgentRoute(harnessId: string | undefined, credentialMode: string | undefined): boolean {
+  return Boolean(harnessId?.trim()) && harnessId !== 'kun' && credentialMode !== 'provider' && credentialMode !== 'kun-gateway'
 }
 
 export function persistComposerReasoningEffort(
@@ -184,8 +193,11 @@ export function persistComposerPersonaId(presetId: string): void {
 export function composerReasoningEffortForSelection(
   modelGroups: readonly ModelProviderModelGroup[],
   modelId: string,
-  providerId = ''
+  providerId = '',
+  options: { nativeAgent?: boolean } = {}
 ): ModelReasoningEffort {
+  // An external Agent keeps its own configured level until the user picks one for that model.
+  if (options.nativeAgent) return storedComposerReasoningEffort(modelId, providerId) ?? 'auto'
   const stored = readStoredComposerReasoningEffort(modelId, providerId)
   const profile = modelProfileForComposerSelection(modelGroups, modelId, providerId)
   const resolved = profile?.reasoning

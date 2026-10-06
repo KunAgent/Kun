@@ -33,7 +33,7 @@ import {
 import { applyDevinSessionPermission } from './devin-session-permissions.js'
 import { applyAcpSessionPermission } from './acp-session-permissions.js'
 import { isAcpAuthenticationRequired } from './acp-authentication.js'
-import { AcpModelSelectionError, applyAcpSessionModel, parseAcpLegacyModels, type AcpLegacyModels } from './acp-legacy-models.js'
+import { AcpModelSelectionError, acpLegacyVariantModel, applyAcpSessionModel, parseAcpLegacyModels, type AcpLegacyModels } from './acp-legacy-models.js'
 
 /** Per-turn input the runtime hands to the session manager. */
 export type AcpSessionRequest = {
@@ -275,7 +275,7 @@ export class AcpSessionManager {
     session: AcpSessionHandle,
     ctx: AcpSessionRequest
   ): Promise<void> {
-    await applyAcpSessionModel(conn, session, ctx.model)
+    await applyAcpSessionModel(conn, session, acpLegacyVariantModel(session, ctx.model, ctx.reasoningEffort))
     if (ctx.harnessId === 'devin') {
       await applyDevinSessionPermission(conn, session, ctx.permissionModeId)
     } else {

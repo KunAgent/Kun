@@ -339,6 +339,7 @@ export function useAdeComposerControls(input: {
     /** Native permission ladder of the selected Agent plus its saved preference. */
     permissionModes: row?.definition.permissionModes,
     requestedPermissionMode: harnessDefaults[harnessId]?.permissionMode,
+    transport: row?.definition.transport,
     rowUnavailableCode: harnessRowUnavailableCode,
     refreshRows: () => {
       void loadHarnesses()

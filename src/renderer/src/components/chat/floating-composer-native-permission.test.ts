@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nextProvider } from 'react-i18next'
 import { describe, expect, it } from 'vitest'
 import i18n from '../../i18n'
-import { nativePermissionPreview } from '../../lib/harness-native-permission'
+import { nativePermissionPreview, permissionFollowsKunLevel } from '../../lib/harness-native-permission'
 import { FloatingComposerPermissionMenuContent } from './FloatingComposerExecutionPicker'
 
 const devinModes = [
@@ -21,6 +21,27 @@ describe('native permission preview', () => {
     expect(nativePermissionPreview('devin', devinModes, 'full-access', 'accept-edits')).toMatchObject({ id: 'accept-edits' })
     expect(nativePermissionPreview('devin', devinModes, 'ask-for-approval', 'bypass')).toMatchObject({ id: 'ask' })
     expect(nativePermissionPreview('devin', [], 'full-access')).toBeNull()
+  })
+
+  it('shows what Codex and Claude Code actually run, which follows the Kun level only', () => {
+    const codexModes = [
+      { id: 'read-only', label: 'Read only', kunPermissionMode: 'ask-for-approval' },
+      { id: 'auto', label: 'Auto', kunPermissionMode: 'full-access' },
+      { id: 'full-access', label: 'Full access', kunPermissionMode: 'full-access' }
+    ]
+    expect(nativePermissionPreview('codex', codexModes, 'ask-for-approval', 'read-only', 'codex-app-server'))
+      .toEqual({ id: 'workspace-write', label: 'Workspace write', readOnly: false })
+    expect(nativePermissionPreview('codex', codexModes, 'approve-for-me', undefined, 'codex-app-server')).toMatchObject({ id: 'workspace-write' })
+    expect(nativePermissionPreview('codex', codexModes, 'full-access', undefined, 'codex-app-server')).toMatchObject({ id: 'danger-full-access' })
+    const claudeModes = [
+      { id: 'default', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
+      { id: 'acceptEdits', label: 'Accept edits', kunPermissionMode: 'full-access' },
+      { id: 'bypassPermissions', label: 'Full access', kunPermissionMode: 'full-access' }
+    ]
+    // The SDK runtime ignores a saved native preference such as acceptEdits.
+    expect(nativePermissionPreview('claude-code', claudeModes, 'full-access', 'acceptEdits', 'agent-sdk')).toMatchObject({ id: 'bypassPermissions' })
+    expect(nativePermissionPreview('claude-code', claudeModes, 'approve-for-me', undefined, 'agent-sdk')).toMatchObject({ id: 'default', readOnly: false })
+    expect(['codex-app-server', 'agent-sdk', 'acp', 'pi-rpc'].map(permissionFollowsKunLevel)).toEqual([true, true, false, false])
   })
 
   it('tells the user which native mode each Kun level runs and flags read-only', async () => {

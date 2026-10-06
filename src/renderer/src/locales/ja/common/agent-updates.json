@@ -78,7 +78,12 @@
       "normal": "通常",
       "plan": "計画",
       "read-only": "読み取り専用",
-      "default": "既定"
+      "default": "既定",
+      "acceptEdits": "編集を自動承認",
+      "bypassPermissions": "権限をスキップ",
+      "workspace-write": "ワークスペース書き込み",
+      "danger-full-access": "フルアクセス",
+      "build": "ビルド"
     },
     "usageReportedByAgent": "Agent が報告"
   }

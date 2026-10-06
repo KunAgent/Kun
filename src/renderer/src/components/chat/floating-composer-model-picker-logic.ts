@@ -522,6 +522,20 @@ export function modelProfileForSelection(
   return undefined
 }
 
+/**
+ * Levels an external Agent model accepts, in Kun's vocabulary, led by `auto`
+ * (leave the level to the Agent). `undefined` when the Agent did not describe
+ * the model; Devin uses its own per-model details lookup instead.
+ */
+export function nativeReasoningChoices(
+  model: { reasoningEfforts?: readonly string[] } | undefined
+): ComposerReasoningEffort[] | undefined {
+  const efforts = model?.reasoningEfforts
+  if (!efforts) return undefined
+  const levels = LEGACY_REASONING_EFFORTS.filter((effort) => efforts.includes(effort))
+  return levels.length ? ['auto', ...levels] : []
+}
+
 export function reasoningOptionsForModel(
   profile: Pick<ModelProviderModelProfileV1, 'reasoning'> | undefined
 ): Array<{ id: ComposerReasoningEffort; labelKey: string }> {

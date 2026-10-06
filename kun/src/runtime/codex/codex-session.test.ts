@@ -12,7 +12,7 @@ import { HarnessTransportError } from '../../session/harness-session.js'
 import type { DelegatedSessionPreparation } from '../delegated-session-binding.js'
 import { CodexAgent } from './codex-agent.js'
 import { CodexClient } from './codex-client.js'
-import { CodexSession, type CodexRequestRouter } from './codex-session.js'
+import { CodexSession, codexEffort, type CodexRequestRouter } from './codex-session.js'
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 
 // ---- fakes -------------------------------------------------------------------
@@ -532,5 +532,13 @@ describe('CodexAgent', () => {
     const reply = writes.at(-1) as { id: string; error?: { code: number } }
     expect(reply.id).toBe('srv-9')
     expect(reply.error).toBeDefined()
+  })
+
+  it('sends only Codex effort names; Kun auto/off leave the model default', () => {
+    expect(codexEffort('high')).toBe('high')
+    expect(codexEffort(' MAX ')).toBe('max')
+    expect(codexEffort('auto')).toBeUndefined()
+    expect(codexEffort('off')).toBeUndefined()
+    expect(codexEffort(undefined)).toBeUndefined()
   })
 })

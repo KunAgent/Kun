@@ -75,6 +75,7 @@
     "harnessPermissionMode": "डिफ़ॉल्ट अनुमति स्तर",
     "harnessPermissionModeDesc": "टर्न अनुमति न बताए तब लागू होने वाला मोड।",
     "harnessPermissionModeDefault": "हार्नेस डिफ़ॉल्ट",
+    "harnessPermissionModeFollowsKun": "{{agent}} कंपोज़र के अनुमति स्तर का पालन करता है (सैंडबॉक्स और अनुमोदन Kun तय करता है); अलग Agent मोड समर्थित नहीं है।",
     "acpTitle": "कस्टम ACP एजेंट",
     "acpDesc": "Agent Client Protocol बोलने वाला एजेंट जोड़ें। कस्टम एजेंट केवल यहीं से जोड़े जा सकते हैं — प्रोजेक्ट फ़ाइलें स्वयं प्रोग्राम नहीं चलातीं।",
     "acpFormName": "प्रदर्शन नाम (जैसे my-agent)",

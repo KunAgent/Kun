@@ -78,7 +78,12 @@
       "normal": "常规",
       "plan": "规划",
       "read-only": "只读",
-      "default": "默认"
+      "default": "默认",
+      "acceptEdits": "自动接受编辑",
+      "bypassPermissions": "跳过权限",
+      "workspace-write": "工作区可写",
+      "danger-full-access": "完全访问",
+      "build": "构建"
     },
     "usageReportedByAgent": "由 Agent 上报"
   }

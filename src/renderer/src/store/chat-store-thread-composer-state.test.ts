@@ -410,6 +410,19 @@ describe('thread composer state restoration', () => {
     expect(restored.composerReasoningEffort).toBe('high')
   })
 
+  it('restores an external Agent thread at Auto until a level is picked for its model', () => {
+    const { state } = buildHarness()
+    rememberThreadComposerSelection('thread-a', 'gpt-6.1-sol', '', 'user', { harnessId: 'codex', credentialMode: 'native-login' })
+    state.threads = [{ ...thread('thread-a'), harnessId: 'codex' }]
+    state.composerPickList = ['gpt-6.1-sol']
+
+    const restored = resolveThreadComposerState(state, state.threads[0])
+
+    expect(restored.composerHarnessId).toBe('codex')
+    expect(restored.composerModel).toBe('gpt-6.1-sol')
+    expect(restored.composerReasoningEffort).toBe('auto')
+  })
+
   it('prefers a thread provider identity when no stored composer selection exists', () => {
     const { state } = buildHarness()
     state.threads = [thread('thread-legacy', {

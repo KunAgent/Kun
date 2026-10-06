@@ -26,8 +26,10 @@ import {
 } from './harness-secret-env.js'
 
 // P4-03: 10s misjudged cold ACP starts (Gemini needed ~8.6s alone, worse
-// under parallel probes). 30s leaves headroom without hanging the list.
-export const ACP_READINESS_TIMEOUT_MS = 30_000
+// under parallel probes). OpenCode bootstraps its config directory on the
+// first run after an install or upgrade (~32s measured on 1.1.47), so allow
+// a full minute; checks run in the background and never block the list.
+export const ACP_READINESS_TIMEOUT_MS = 60_000
 
 export type AcpReadiness = { ready: 'yes' | 'no' | 'unknown'; detail?: string }
 

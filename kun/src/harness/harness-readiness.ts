@@ -29,7 +29,8 @@ export const PROOF_REFRESH_AHEAD_MS = 90_000
 const PROOF_REUSE_MIN_REMAINING_MS = 15_000
 const WARM_RETRY_BASE_MS = 15_000
 const WARM_RETRY_MAX_MS = 5 * 60_000
-const DEFAULT_TIMEOUT_MS = 30_000
+// Matches the ACP cold-start budget so a first-run bootstrap is not misread as unready.
+const DEFAULT_TIMEOUT_MS = 60_000
 export type ReadyHarnessProfile = HarnessEnabledProfile & { expiresAt: string }
 type Handshake = Omit<HarnessTestHandshake, 'durationMs'>
 type Snapshot = { definition: HarnessDefinition; route: HarnessRoute; secretEnv: Record<string, string>;

@@ -14,6 +14,7 @@ import { SettingRow } from '../settings-controls'
 import { harnessProfileEnabled, selectedHarnessProfile, terminalHarnessProfileReady } from '@shared/harness-enablement'
 import { AgentEnablementPanel } from './AgentEnablementPanel'
 import { AgentSettingsSelect } from './AgentSettingsSelect'
+import { permissionFollowsKunLevel } from '../../lib/harness-native-permission'
 import { AgentInstallControl } from './AgentInstallControl'
 import { AgentCenterApplicationCard } from './AgentCenterApplicationCard'
 import { AgentCenterTerminalControl } from './AgentCenterTerminalControl'
@@ -334,7 +335,13 @@ export function AgentCenterCard({
             <span className="break-all font-mono">{status.resolvedCommand}</span>
           </div>
         ) : null}
-        {definition.permissionModes.length ? (
+        {definition.permissionModes.length && permissionFollowsKunLevel(definition.transport) ? (
+          <SettingRow
+            title={tSettings('adeSettings.harnessPermissionMode')}
+            description={tSettings('adeSettings.harnessPermissionModeFollowsKun', { agent: definition.displayName })}
+            control={<span className="text-xs text-ds-muted">{tSettings('adeSettings.harnessPermissionModeDefault')}</span>}
+          />
+        ) : definition.permissionModes.length ? (
           <SettingRow
             title={tSettings('adeSettings.harnessPermissionMode')}
             description={tSettings('adeSettings.harnessPermissionModeDesc')}

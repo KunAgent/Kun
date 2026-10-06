@@ -66,6 +66,9 @@ export function acpModelProbeError(error: unknown): HarnessModelCatalogError {
   if (isAcpAuthenticationRequired(error)) return { code: 'auth_required', ...(message ? { message } : {}) }
   if (error instanceof AcpError) {
     if (error.code === 'request_timeout') return { code: 'timeout', ...(message ? { message } : {}) }
+    // A process that exits during startup (bad plugin, missing runtime) fails
+    // the same way again; report it instead of spawning a second copy.
+    if (error.code === 'harness_crashed') return { code: 'spawn_failed', ...(message ? { message } : {}) }
     if (error.code === 'agent_error') return { code: 'agent_error', ...(message ? { message } : {}) }
     if (error.code === 'harness_protocol_error') return { code: 'protocol_error', ...(message ? { message } : {}) }
     return { code: 'unavailable', ...(message ? { message } : {}) }
@@ -73,7 +76,7 @@ export function acpModelProbeError(error: unknown): HarnessModelCatalogError {
   return { code: 'spawn_failed', ...(message ? { message } : {}) }
 }
 
-/** Login and protocol failures are stable; agent/timeout/crash failures are worth one retry. */
+/** Login, protocol and startup-crash failures are stable; agent and timeout failures are worth one retry. */
 function retryable(reason: HarnessModelCatalogError): boolean {
   return reason.code === 'agent_error' || reason.code === 'timeout' || reason.code === 'unavailable'
 }

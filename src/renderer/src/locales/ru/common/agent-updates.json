@@ -78,7 +78,12 @@
       "normal": "Обычный",
       "plan": "План",
       "read-only": "Только чтение",
-      "default": "По умолчанию"
+      "default": "По умолчанию",
+      "acceptEdits": "Принимать правки",
+      "bypassPermissions": "Без проверки разрешений",
+      "workspace-write": "Запись в рабочей области",
+      "danger-full-access": "Полный доступ",
+      "build": "Сборка"
     },
     "usageReportedByAgent": "Данные от Agent"
   }

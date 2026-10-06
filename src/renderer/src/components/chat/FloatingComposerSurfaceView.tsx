@@ -434,7 +434,7 @@ export function FloatingComposerSurfaceView({
                     agentPermission={externalAgent && adeComposer ? {
                       agentName: adeComposer.harnessLabel,
                       preview: (mode: KunToolPermissionMode) => nativePermissionPreview(adeComposer.harnessId, adeComposer.permissionModes, mode,
-                        adeComposer.requestedPermissionMode)
+                        adeComposer.requestedPermissionMode, adeComposer.transport)
                     } : undefined}
                     value={executionSettings}
                     applying={executionSettingsApplying}

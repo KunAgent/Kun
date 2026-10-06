@@ -78,7 +78,12 @@
       "normal": "일반",
       "plan": "계획",
       "read-only": "읽기 전용",
-      "default": "기본"
+      "default": "기본",
+      "acceptEdits": "편집 자동 수락",
+      "bypassPermissions": "권한 건너뛰기",
+      "workspace-write": "작업 공간 쓰기",
+      "danger-full-access": "전체 액세스",
+      "build": "빌드"
     },
     "usageReportedByAgent": "Agent가 보고함"
   }

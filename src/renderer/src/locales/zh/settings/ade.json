@@ -75,6 +75,7 @@
     "harnessPermissionMode": "默认权限档",
     "harnessPermissionModeDesc": "默认跟随输入框权限。指定 Agent 权限后，仍以当前任务允许的范围为上限。",
     "harnessPermissionModeDefault": "跟随输入框权限",
+    "harnessPermissionModeFollowsKun": "{{agent}} 的权限跟随输入框权限档（由 Kun 设置沙箱与审批），不支持单独指定 Agent 模式。",
     "acpTitle": "自定义 ACP agent",
     "acpDesc": "添加支持 Agent Client Protocol 的 agent。自定义 agent 只能在此显式添加——项目文件不会自动启动任何程序。",
     "acpFormName": "显示名称（如 my-agent）",

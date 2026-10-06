@@ -78,7 +78,12 @@
       "normal": "Normal",
       "plan": "Plan",
       "read-only": "Read only",
-      "default": "Default"
+      "default": "Default",
+      "acceptEdits": "Accept edits",
+      "bypassPermissions": "Bypass permissions",
+      "workspace-write": "Workspace write",
+      "danger-full-access": "Full access",
+      "build": "Build"
     },
     "usageReportedByAgent": "Reported by the Agent"
   }

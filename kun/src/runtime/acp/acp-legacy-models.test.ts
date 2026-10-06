@@ -3,7 +3,7 @@ import { AcpError } from './acp-schema.js'
 import type { AcpConnection } from './acp-connection.js'
 import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
 import { AcpSessionManager, type AcpSessionHandle } from './acp-session-manager.js'
-import { applyAcpLegacyModel, applyAcpSessionModel } from './acp-legacy-models.js'
+import { acpLegacyVariantModel, applyAcpLegacyModel, applyAcpSessionModel } from './acp-legacy-models.js'
 import type { AcpConfigOption } from './acp-schema.js'
 
 function connection(request = vi.fn(async () => ({}))) {
@@ -56,6 +56,23 @@ describe('ACP legacy model selection', () => {
     expect(request).toHaveBeenCalledExactlyOnceWith('session/set_config_option', {
       sessionId: 'session', configId: 'model', value: 'two'
     })
+  })
+
+  it('maps a reasoning level onto the advertised legacy variant', async () => {
+    const models = { currentModelId: 'gpt', availableModels: ['gpt', 'gpt/low', 'gpt/high', 'gpt/xhigh', 'other'] }
+    expect(acpLegacyVariantModel({ models }, 'gpt', 'high')).toBe('gpt/high')
+    expect(acpLegacyVariantModel({ models }, 'gpt', 'max')).toBe('gpt/xhigh')
+    expect(acpLegacyVariantModel({ models }, 'gpt', 'auto')).toBe('gpt')
+    expect(acpLegacyVariantModel({ models }, 'gpt', 'medium')).toBe('gpt')
+    expect(acpLegacyVariantModel({ models }, 'other', 'high')).toBe('other')
+    expect(acpLegacyVariantModel({ models, configOptions: [{ id: 'model', category: 'model', type: 'select',
+      currentValue: 'gpt', options: [{ value: 'gpt', name: 'GPT' }] }] as AcpConfigOption[] }, 'gpt', 'high')).toBe('gpt')
+    const { conn, request } = connection()
+    const manager = new AcpSessionManager({ coordinator: {} as DelegatedSessionCoordinator })
+    await manager.applyConfigOptions(conn, { sessionId: 'session', models: { ...models } } as AcpSessionHandle, {
+      threadId: 'thread', turnId: 'turn', workspacePath: '/tmp', harnessId: 'opencode', model: 'gpt', reasoningEffort: 'high', items: []
+    })
+    expect(request).toHaveBeenCalledWith('session/set_model', { sessionId: 'session', modelId: 'gpt/high' })
   })
 
   it.each([

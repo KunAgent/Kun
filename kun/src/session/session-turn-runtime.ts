@@ -486,8 +486,10 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         lastCommittedTurnId: ctx.turn.id,
         nativeSessionId: session.providerSessionId
       })
-    } catch {
-      // Portable history stays authoritative if the binding cannot be saved.
+    } catch (error) {
+      // Portable history stays authoritative if the binding cannot be saved,
+      // but the next turn will hand off instead of resuming; leave a trace.
+      this.debug(`continuation binding not saved: ${String(error)}`)
     }
   }
 

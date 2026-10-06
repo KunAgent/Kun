@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { ADE_PROJECT_DEFAULTS_REFRESH_EVENT } from '../../lib/ade-project-defaults-refresh'
-import { composerReasoningEffortForSelection } from '../../store/chat-store-helpers'
+import { composerReasoningEffortForSelection, isNativeAgentRoute } from '../../store/chat-store-helpers'
 import { useChatStore } from '../../store/chat-store'
 import type { ChatState } from '../../store/chat-store-types'
 import type { AdeProjectDefaultsSnapshot } from '@shared/ade-project-defaults'
@@ -64,7 +64,8 @@ export function codeProjectDefaultsPatch(
       composerModel: resolved.route.model,
       composerProviderId: resolved.route.providerId,
       composerReasoningEffort: composerReasoningEffortForSelection(
-        state.composerModelGroups, resolved.route.model, resolved.route.providerId
+        state.composerModelGroups, resolved.route.model, resolved.route.providerId,
+        { nativeAgent: isNativeAgentRoute(resolved.route.harnessId, resolved.route.credentialMode) }
       )
     } : {}),
     ...(route && !userSelectedRoute ? {
@@ -73,7 +74,8 @@ export function codeProjectDefaultsPatch(
       composerModel: route.model,
       composerProviderId: route.providerId ?? '',
       composerReasoningEffort: composerReasoningEffortForSelection(
-        state.composerModelGroups, route.model, route.providerId ?? ''
+        state.composerModelGroups, route.model, route.providerId ?? '',
+        { nativeAgent: isNativeAgentRoute(route.harnessId, route.credentialMode) }
       )
     } : {}),
     ...(snapshot.value.collaborationEnabled !== undefined &&

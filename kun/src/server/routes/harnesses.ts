@@ -278,10 +278,15 @@ export async function listHarnessModels(
         const catalog = await harnesses.codexModels.probeCatalog(definition)
         return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
       }
+      if (definition.transport === 'agent-sdk' && harnesses.agentSdkModels?.probeCatalog) {
+        // Keeps Claude Code's recommended default and labels; empty falls through to staticModels.
+        const catalog = await harnesses.agentSdkModels.probeCatalog(definition)
+        if (catalog.models.length > 0) return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
+      }
       const probed =
         definition.transport === 'acp'
           ? await harnesses.acpModels?.probe(definition)
-          : definition.transport === 'agent-sdk'
+          : definition.transport === 'agent-sdk' && !harnesses.agentSdkModels?.probeCatalog
             ? await harnesses.agentSdkModels?.probe(definition)
             : definition.transport === 'codex-app-server'
               ? await harnesses.codexModels?.probe(definition)
