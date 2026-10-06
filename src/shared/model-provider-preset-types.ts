@@ -45,6 +45,7 @@ export type ModelProviderPresetId =
   | 'minimax'
   | 'aliyun'
   | 'tencentcloud'
+  | 'cheaperinference'
   | 'opper'
   | 'vercel-ai-gateway'
   | 'stepfun'

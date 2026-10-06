@@ -356,6 +356,16 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
     apiKeyUrl: 'https://accounts.x.ai'
   },
 {
+    id: 'cheaperinference',
+    name: 'Cheaper Inference',
+    origin: 'relay',
+    baseUrl: 'https://api.cheaperinference.com/v1',
+    endpointFormat: 'chat_completions',
+    models: [],
+    docsUrl: 'https://cheaperinference.com/docs',
+    apiKeyUrl: 'https://cheaperinference.com/signup'
+  },
+{
     id: 'opper',
     name: 'Opper',
     baseUrl: 'https://api.opper.ai/v3/compat',
