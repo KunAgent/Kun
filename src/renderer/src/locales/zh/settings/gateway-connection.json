@@ -80,6 +80,8 @@
     "noUsage": "此客户端尚无已记录的模型请求。",
     "eligibleTargets": "可用的公开网关目标",
     "skippedTargets": "公开网关已跳过 {{count}} 个已配置目标",
-    "targetStatusPending": "正在等待运行时确认目标可用性"
+    "targetStatusPending": "正在等待运行时确认目标可用性",
+    "sessionsTitle": "会话（{{count}}）",
+    "sessionRow": "{{requests}} 次请求 · {{tokens}} tokens"
   }
 }

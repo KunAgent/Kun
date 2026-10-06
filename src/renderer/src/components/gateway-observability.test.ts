@@ -111,3 +111,17 @@ describe('middleware folder', () => {
     expect(openGatewayMiddlewareFolder).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('usage by session', () => {
+  it('groups requests per agent session, busiest first, ignoring requests without one', async () => {
+    const { usageBySession } = await import('./gateway-client-usage')
+    const groups = usageBySession([
+      { timestamp: '2030-01-01T10:00:00Z', sessionId: 's1', promptTokens: 10, completionTokens: 5 },
+      { timestamp: '2030-01-01T11:00:00Z', sessionId: 's2', promptTokens: 100, completionTokens: 50 },
+      { timestamp: '2030-01-01T12:00:00Z', sessionId: 's1', promptTokens: 1, completionTokens: 1 },
+      { timestamp: '2030-01-01T13:00:00Z' }
+    ])
+    expect(groups).toEqual([{ sessionId: 's2', requests: 1, tokens: 150, last: '2030-01-01T11:00:00Z' },
+      { sessionId: 's1', requests: 2, tokens: 17, last: '2030-01-01T12:00:00Z' }])
+  })
+})

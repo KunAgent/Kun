@@ -215,3 +215,23 @@ describe('discovery', () => {
     await expect(readFile(process.env.KUN_GATEWAY_DISCOVERY_FILE, 'utf8')).rejects.toThrow()
   })
 })
+
+describe('agent session ids', () => {
+  it('reads Codex and Claude Code headers, Claude Code metadata and Kimi cache keys, and ignores the rest', async () => {
+    const { gatewaySessionHint } = await import('./gateway-caller-agent.js')
+    const request = (headers: Record<string, string> = {}) => new Request('http://x/v1/messages', { headers })
+    expect(gatewaySessionHint(request({ session_id: 'codex-1' }))).toBe('codex-1')
+    expect(gatewaySessionHint(request({ 'x-claude-code-session-id': 'cc-1' }))).toBe('cc-1')
+    expect(gatewaySessionHint(request(), { metadata: { user_id: '{"device_id":"d","session_id":"4fdd74e7-bc52"}' } })).toBe('4fdd74e7-bc52')
+    expect(gatewaySessionHint(request(), { prompt_cache_key: 'session_fd45a3d6' })).toBe('session_fd45a3d6')
+    expect(gatewaySessionHint(request(), { prompt_cache_key: 'tenant-cache' })).toBeUndefined()
+    expect(gatewaySessionHint(request({ session_id: 'bad id!' }), { metadata: { user_id: 'plain-user' } })).toBeUndefined()
+  })
+  it('groups traces by the agent session when the client sends no Kun session header', async () => {
+    const model = new ScriptedModel([[{ kind: 'assistant_text_delta', text: 'hi' }, { kind: 'completed', stopReason: 'stop' }]])
+    const rt = runtime(model)
+    await gatewayChatCompletions(rt, post('/v1/chat/completions', { model: 'coding', prompt_cache_key: 'session_abc', messages: [{ role: 'user', content: 'hi' }] }))
+    const trace = await gatewayRouteTrace(rt, new Request('http://x/v1/kun/route?session=session_abc', { headers: { authorization: `Bearer ${KEY}` } }))
+    expect(JSON.parse((trace as { body: string }).body).route).toMatchObject({ asked: 'coding', done: true })
+  })
+})

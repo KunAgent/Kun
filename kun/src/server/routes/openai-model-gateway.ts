@@ -174,11 +174,11 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
     const normalized = gatewayClientInput(shape === 'chat' ? input : responsesToChatInput(input, namespaces), verdict.auth)
     modelRequest = makeModelRequest({ ...normalized, model: resolved.model }, lease.signal, resolved.providerId,
       grant ? { threadId: grant.threadId, turnId: turnId ?? `gateway_${grant.grantId}` } : undefined)
-    recorder = await beginGatewayUsage(runtime, verdict.auth, request, model, resolved)
+    recorder = await beginGatewayUsage(runtime, verdict.auth, request, model, resolved, input)
     if (recorder) modelRequest = makeModelRequest({ ...normalized, model: resolved.model }, lease.signal, resolved.providerId, recorder.attribution)
     modelRequest.gatewayRouting = { ...resolved.gatewayRouting,
       callerId: grant ? `harness:${grant.grantId}` : `client:${publicAuth?.client?.clientId ?? 'legacy'}`,
-      affinity: gatewayAffinityIdentity(request, verdict.auth, turnId),
+      affinity: gatewayAffinityIdentity(request, verdict.auth, turnId, input),
       beforeDispatch: gatewayDispatchAuthorization(runtime, request, verdict.auth, resolved.gatewayRouting.beforeDispatch) }
   } catch (error) {
     lease.release()

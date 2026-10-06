@@ -67,3 +67,29 @@ export function gatewayCallerAgent(request: Request): string | undefined {
     normalizedAgent(request.headers.get('x-kun-agent')) ??
     userAgentProduct(request.headers.get('user-agent'))
 }
+
+const SESSION_TEXT = /^[A-Za-z0-9._-]{1,128}$/
+
+/**
+ * The calling agent's own session id, when it reveals one: Codex and Claude
+ * Code send it as a header; Claude Code also puts it in `metadata.user_id`
+ * (a JSON string), and Kimi Code sends `prompt_cache_key: session_<id>`.
+ * Used only to group usage and route traces; never for authorization.
+ */
+export function gatewaySessionHint(request: Request, body?: Record<string, unknown>): string | undefined {
+  for (const name of ['session_id', 'x-claude-code-session-id']) {
+    const value = request.headers.get(name)?.trim()
+    if (value && SESSION_TEXT.test(value)) return value
+  }
+  const metadata = body?.metadata
+  const userId = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>).user_id : undefined
+  if (typeof userId === 'string' && userId.startsWith('{') && userId.length <= 4_096) {
+    try {
+      const session = (JSON.parse(userId) as { session_id?: unknown }).session_id
+      if (typeof session === 'string' && SESSION_TEXT.test(session)) return session
+    } catch { /* not the Claude Code shape */ }
+  }
+  const cacheKey = body?.prompt_cache_key
+  if (typeof cacheKey === 'string' && /^session[_-]/.test(cacheKey) && SESSION_TEXT.test(cacheKey)) return cacheKey
+  return undefined
+}

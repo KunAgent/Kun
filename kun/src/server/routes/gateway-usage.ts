@@ -2,7 +2,7 @@ import type { ModelStreamChunk } from '../../ports/model-client.js'
 import { GATEWAY_SESSION_HEADER, gatewaySessionId, type GatewayUsageRecorder } from '../../services/gateway-usage-service.js'
 import type { GatewayAuth } from './model-gateway-core.js'
 import type { ServerRuntime } from './server-runtime.js'
-import { gatewayCallerAgent } from './gateway-caller-agent.js'
+import { gatewayCallerAgent, gatewaySessionHint } from './gateway-caller-agent.js'
 
 export type { GatewayUsageRecorder } from '../../services/gateway-usage-service.js'
 
@@ -18,7 +18,8 @@ export async function beginGatewayUsage(
   auth: GatewayAuth,
   request: Request,
   requestedModelId: string,
-  resolved: { model: string; providerId?: string }
+  resolved: { model: string; providerId?: string },
+  body?: Record<string, unknown>
 ): Promise<GatewayUsageRecorder | undefined> {
   if (auth.kind !== 'public') return undefined
   // Validate even for embedders without persistence. A header never names a Kun thread.
@@ -29,7 +30,9 @@ export async function beginGatewayUsage(
   if (!runtime.modelGateway?.usage || !auth.client) return undefined
   try {
     const agent = gatewayCallerAgent(request)
-    return await runtime.modelGateway.usage.begin({ client: auth.client, sessionHeader, requestedModelId, resolved, ...(agent ? { agent } : {}) })
+    // Without Kun's own session header, group by the agent's session id when it reveals one.
+    const session = sessionHeader ?? gatewaySessionHint(request, body) ?? null
+    return await runtime.modelGateway.usage.begin({ client: auth.client, sessionHeader: session, requestedModelId, resolved, ...(agent ? { agent } : {}) })
   } catch {
     throw new GatewayUsageError(503, 'Gateway usage storage is unavailable.')
   }

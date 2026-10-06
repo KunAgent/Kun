@@ -21,8 +21,9 @@ export function gatewayUpstream(runtime: ServerRuntime, request: Request, auth: 
   const callerId = gatewayCallerId(auth)
   const continuations = gatewayContinuationStore(owner)
   restoreGatewayContinuations(modelRequest, continuations, callerId)
-  let session: string | undefined
-  try { session = gatewayAffinityIdentity(request, auth).session } catch { session = undefined }
+  // The protocol handler already resolved the session (header or the agent's own id).
+  let session = modelRequest.gatewayRouting?.affinity?.session
+  if (!session) try { session = gatewayAffinityIdentity(request, auth).session } catch { session = undefined }
   const agent = gatewayCallerAgent(request)
   if (agent && modelRequest.gatewayRouting) modelRequest.gatewayRouting.agent = agent
   const middleware = runtime.modelGateway?.middleware

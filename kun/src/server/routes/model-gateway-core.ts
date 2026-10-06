@@ -26,6 +26,7 @@ import { gatewayJsonResponse as jsonResponse } from './gateway-json-response.js'
 import { GatewayRequestGuard, type GatewayLease } from './gateway-request-guard.js'
 import { gatewayPolicyActive, legacyGatewayClientPolicy, type GatewayClientPolicy } from '../../contracts/gateway-client-policy.js'
 import { clientGuardFor, clientRouteTargets, clientDirectTargets, combinedGatewayLease, gatewayRequestProtocol } from './gateway-client-policy.js'
+import { gatewaySessionHint } from './gateway-caller-agent.js'
 import { GATEWAY_SESSION_HEADER, gatewaySessionId } from '../../services/gateway-usage-service.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { rawGatewayCredential, splitAttributedKey } from './gateway-caller-agent.js'
@@ -145,18 +146,15 @@ export function gatewayClientInput(input: Record<string, unknown>, auth: Gateway
   return requested === undefined ? { ...input, max_tokens: max } : input
 }
 
-export function gatewayAffinityIdentity(request: Request, auth: GatewayAuth, turnId?: string): { turn?: string; session?: string } {
+export function gatewayAffinityIdentity(request: Request, auth: GatewayAuth, turnId?: string, body?: Record<string, unknown>): { turn?: string; session?: string } {
   if (auth.kind === 'harness') return { session: auth.grant.threadId, turn: turnId ?? auth.grant.turnId }
   const caller = auth.client?.clientId ?? 'legacy'
   const explicit = request.headers.get(GATEWAY_SESSION_HEADER)
   let session: string | undefined
   if (explicit !== null) session = gatewaySessionId(caller, explicit)
   else {
-    // Optional client-owned metadata: Codex sends `session_id`, Claude Code `x-claude-code-session-id`.
-    for (const name of ['session_id', 'x-claude-code-session-id']) {
-      try { session = gatewaySessionId(caller, request.headers.get(name)) } catch { session = undefined }
-      if (session) break
-    }
+    // Optional client-owned session ids (headers, Claude Code metadata, Kimi cache key).
+    try { session = gatewaySessionId(caller, gatewaySessionHint(request, body) ?? null) } catch { session = undefined }
   }
   return { session,
     turn: gatewaySessionId(`${caller}:turn`, request.headers.get('x-kun-gateway-turn-id')) }

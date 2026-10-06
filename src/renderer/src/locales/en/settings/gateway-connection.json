@@ -80,6 +80,8 @@
     "noUsage": "No recorded model requests for this client yet.",
     "eligibleTargets": "Eligible public targets",
     "skippedTargets": "{{count}} configured targets are skipped by the public gateway",
-    "targetStatusPending": "Waiting for authoritative target availability"
+    "targetStatusPending": "Waiting for authoritative target availability",
+    "sessionsTitle": "Sessions ({{count}})",
+    "sessionRow": "{{requests}} requests · {{tokens}} tokens"
   }
 }

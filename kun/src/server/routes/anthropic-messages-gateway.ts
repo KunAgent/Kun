@@ -145,7 +145,7 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
       grant ? { threadId: grant.threadId, turnId: turnId ?? `gateway_${grant.grantId}` } : undefined)
     modelRequest.gatewayRouting = { ...resolved.gatewayRouting,
       callerId: grant ? `harness:${grant.grantId}` : `client:${publicAuth?.client?.clientId ?? 'legacy'}`,
-      affinity: gatewayAffinityIdentity(request, gate.auth, turnId),
+      affinity: gatewayAffinityIdentity(request, gate.auth, turnId, asRecord(body.value)),
       beforeDispatch: gatewayDispatchAuthorization(runtime, request, gate.auth, resolved.gatewayRouting.beforeDispatch) }
     if (modelRequest.reasoningEffort === 'off') {
       for (const target of resolved.gatewayRouting.allowedTargets) {
@@ -170,12 +170,12 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
   }
   let recorder: GatewayUsageRecorder | undefined
   try {
-    recorder = await beginGatewayUsage(runtime, gate.auth, request, model, resolved)
+    recorder = await beginGatewayUsage(runtime, gate.auth, request, model, resolved, asRecord(body.value))
     if (recorder) {
       modelRequest = makeModelRequest(gatewayClientInput({ ...input, model: resolved.model }, gate.auth), lease.signal, resolved.providerId, recorder.attribution)
       modelRequest.gatewayRouting = { ...resolved.gatewayRouting,
         callerId: grant ? `harness:${grant.grantId}` : `client:${publicAuth?.client?.clientId ?? 'legacy'}`,
-        affinity: gatewayAffinityIdentity(request, gate.auth, turnId),
+        affinity: gatewayAffinityIdentity(request, gate.auth, turnId, asRecord(body.value)),
         beforeDispatch: gatewayDispatchAuthorization(runtime, request, gate.auth, resolved.gatewayRouting.beforeDispatch) }
     }
   } catch (error) {

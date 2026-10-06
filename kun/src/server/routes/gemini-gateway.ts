@@ -130,11 +130,11 @@ export async function geminiGenerate(runtime: ServerRuntime, request: Request, c
     let recorder: GatewayUsageRecorder | undefined
     try {
       const normalized = gatewayClientInput(input, auth)
-      recorder = await beginGatewayUsage(runtime, auth, request, parsed.model, resolved)
+      recorder = await beginGatewayUsage(runtime, auth, request, parsed.model, resolved, raw)
       modelRequest = makeModelRequest({ ...normalized, model: resolved.model }, lease.signal, resolved.providerId,
         recorder?.attribution ?? (grant ? { threadId: grant.threadId, turnId: turnId ?? `gateway_${grant.grantId}` } : undefined))
       modelRequest.gatewayRouting = { ...resolved.gatewayRouting, callerId: gatewayCallerId(auth),
-        affinity: gatewayAffinityIdentity(request, auth, turnId),
+        affinity: gatewayAffinityIdentity(request, auth, turnId, raw),
         beforeDispatch: gatewayDispatchAuthorization(runtime, request, auth, resolved.gatewayRouting.beforeDispatch) }
     } catch (error) {
       await recorder?.finish('failed').catch(() => undefined)
