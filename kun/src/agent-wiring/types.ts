@@ -21,6 +21,7 @@ export type WiringSlot =
   | { file: string; format: 'toml-key'; key: string }
   | { file: string; format: 'toml-table'; table: string }
   | { file: string; format: 'dotenv'; key: string }
+  | { file: string; format: 'yaml'; path: string[] }
 
 export type WiringEdit =
   | { slot: WiringSlot; value: unknown }
@@ -28,7 +29,7 @@ export type WiringEdit =
    * An array Kun shares with the user (Droid's custom_models): Kun's own
    * entries are replaced and later removed; the user's entries are kept.
    */
-  | { slot: Extract<WiringSlot, { format: 'json' }>; ownedArray: { items: unknown[]; owns(item: unknown): boolean } }
+  | { slot: Extract<WiringSlot, { format: 'json' | 'yaml' }>; ownedArray: { items: unknown[]; owns(item: unknown): boolean } }
 
 export type GatewayModelInfo = {
   id: string
@@ -92,7 +93,7 @@ export type AgentWiringRecord = {
   updatedAt?: string
   originals: Record<string, StashedValue>
   createdFiles: string[]
-  ownedArrays: { file: string; path: string[] }[]
+  ownedArrays: { file: string; path: string[]; format?: 'json' | 'yaml' }[]
   /**
    * Per file: whether a pre-connection backup exists and the hash of what Kun
    * last wrote. An untouched file is restored from the backup byte for byte.

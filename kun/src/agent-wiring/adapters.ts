@@ -1,30 +1,14 @@
 import { join } from 'node:path'
 import { getDotenv } from './edit/dotenv.js'
-import { getJsoncValue } from './edit/jsonc.js'
 import { getTomlTable, getTomlTopLevel } from './edit/toml.js'
-import type { AgentAdapter, GatewayModelInfo, WiringContext, WiringEdit, WiringTarget } from './types.js'
+import { displayName, safeJson, v1, xdgConfig, xhighEffort } from './adapter-helpers.js'
+import { EXTRA_AGENT_ADAPTERS } from './adapters-extra.js'
+import type { AgentAdapter, WiringContext, WiringEdit } from './types.js'
 
 /**
  * Agents Kun can wire to its gateway. Each adapter names only the keys Kun
  * owns; everything else in the agent's config is the user's.
  */
-const v1 = (origin: string): string => `${origin.replace(/\/+$/, '')}/v1`
-const xdgConfig = (ctx: WiringContext): string => ctx.env.XDG_CONFIG_HOME?.trim() || join(ctx.home, '.config')
-
-function safeJson(read: (file: string) => string, file: string, path: string[]): unknown {
-  try { return getJsoncValue(read(file), path) } catch { return undefined }
-}
-
-function displayName(model: GatewayModelInfo): string {
-  return model.displayName ?? model.id
-}
-
-/** Kun effort → a scale that tops out at `xhigh` (Codex, Pi). */
-function xhighEffort(effort: string | undefined): string | undefined {
-  if (!effort || effort === 'auto') return undefined
-  return effort === 'max' ? 'xhigh' : effort
-}
-
 const claudeCode: AgentAdapter = {
   id: 'claude-code',
   name: 'Claude Code',
@@ -297,7 +281,7 @@ export function ownsDroidEntry(item: unknown): boolean {
   return typeof name === 'string' && name.endsWith(DROID_SUFFIX)
 }
 
-export const AGENT_ADAPTERS: readonly AgentAdapter[] = [claudeCode, codex, openCode, pi, geminiCli, crush, droid]
+export const AGENT_ADAPTERS: readonly AgentAdapter[] = [claudeCode, codex, openCode, pi, geminiCli, crush, droid, ...EXTRA_AGENT_ADAPTERS]
 
 export function agentAdapter(id: string): AgentAdapter | undefined {
   return AGENT_ADAPTERS.find((adapter) => adapter.id === id)

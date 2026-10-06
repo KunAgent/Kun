@@ -2,7 +2,9 @@ import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { AGENT_ADAPTERS, agentAdapter } from './adapters.js'
-import { applyWiringEdits, readFileText, restoreWiring, writeFileAtomic } from './engine.js'
+import { createTwoFilesPatch } from 'diff'
+import { applyWiringEdits, planWiringEdits, readFileText, restoreWiring, writeFileAtomic } from './engine.js'
+import type { AgentWiringFilePreview } from './protocol.js'
 import type { AgentAdapter, AgentWiringRecord, AgentWiringStatus, WiringContext, WiringProfile, WiringState, WiringTarget } from './types.js'
 
 const PROFILE_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,47}$/u
@@ -105,15 +107,38 @@ export class AgentWiringService {
     }
   }
 
-  /** Connects or switches an agent. The first connection stashes the user's original values. */
-  connect(id: string, target: WiringTarget, clientId?: string): AgentWiringStatus {
-    const adapter = this.adapter(id)
+  private validTarget(adapter: AgentAdapter, target: WiringTarget): void {
     if (!target.model.trim() || !target.key || !/^https?:\/\//.test(target.origin)) {
       throw new AgentWiringError('Choose a model and make sure the gateway is running', 'invalid_target')
     }
     if (target.effort && adapter.efforts.length && !adapter.efforts.includes(target.effort) && target.effort !== 'auto') {
       throw new AgentWiringError(`${adapter.name} cannot be set to reasoning '${target.effort}'`, 'invalid_target')
     }
+  }
+
+  /**
+   * What `connect` would write, as unified diffs, without touching disk.
+   * `mask` replaces the key wherever it appears so previews can be shown.
+   */
+  preview(id: string, target: WiringTarget, mask: string): AgentWiringFilePreview[] {
+    const adapter = this.adapter(id)
+    this.validTarget(adapter, target)
+    const current = this.load().agents[id]
+    const record = current?.connected ? structuredClone(current) : emptyRecord()
+    let writes
+    try { writes = planWiringEdits(adapter.edits(this.ctx, target), record) } catch (cause) {
+      throw new AgentWiringError(`Could not read ${adapter.name}'s config: ${cause instanceof Error ? cause.message : String(cause)}`, 'config_unreadable')
+    }
+    const hide = (text: string): string => text.split(target.key).join(mask)
+    return writes.map((write) => ({ file: write.file, created: !write.before && !existsSync(write.file),
+      diff: createTwoFilesPatch(write.file, write.file, hide(write.before), hide(write.after), '', '', { context: 2 })
+        .split('\n').slice(2).join('\n') }))
+  }
+
+  /** Connects or switches an agent. The first connection stashes the user's original values. */
+  connect(id: string, target: WiringTarget, clientId?: string): AgentWiringStatus {
+    const adapter = this.adapter(id)
+    this.validTarget(adapter, target)
     const state = this.load()
     const record = state.agents[id] ?? emptyRecord()
     if (!record.connected) Object.assign(record, emptyRecord())

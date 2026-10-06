@@ -1,6 +1,6 @@
 import { AgentWiringError, AgentWiringService } from './service.js'
 import { agentAdapter } from './adapters.js'
-import { gatewayModelInfo, type AgentWiringAction, type AgentWiringOverview, type AgentWiringResult } from './protocol.js'
+import { gatewayModelInfo, type AgentWiringAction, type AgentWiringOverview, type AgentWiringPreview, type AgentWiringResult } from './protocol.js'
 import type { GatewayModelInfo } from './types.js'
 
 export type RuntimeRequest = (path: string, method?: string, body?: string) => Promise<{ ok: boolean; status: number; body: string }>
@@ -60,9 +60,22 @@ export class AgentWiringBridge {
     return { key: `kun-${agentId}.${created.key}`, clientId: client.clientId }
   }
 
-  private async connect(agentId: string, model: string, origin: string, catalog: GatewayModelInfo[], smallModel?: string, effort?: string): Promise<void> {
+  private served(catalog: GatewayModelInfo[], model: string, smallModel?: string): void {
     if (!catalog.some((entry) => entry.id === model)) throw new AgentWiringError(`'${model}' is not a model the gateway serves`, 'invalid_target')
     if (smallModel && !catalog.some((entry) => entry.id === smallModel)) throw new AgentWiringError(`'${smallModel}' is not a model the gateway serves`, 'invalid_target')
+  }
+
+  /** The diff a connection would make. No gateway client is created; the key is shown masked. */
+  private preview(agentId: string, model: string, origin: string, catalog: GatewayModelInfo[], smallModel?: string, effort?: string): AgentWiringPreview {
+    this.served(catalog, model, smallModel)
+    const mask = `kun-${agentId}.********`
+    const key = this.service.currentKey(agentId, origin) ?? mask
+    const files = this.service.preview(agentId, { origin, key, model, ...(smallModel ? { smallModel } : {}), ...(effort ? { effort } : {}), models: catalog }, mask)
+    return { agentId, files, restartRequired: agentAdapter(agentId)?.restartRequired === true }
+  }
+
+  private async connect(agentId: string, model: string, origin: string, catalog: GatewayModelInfo[], smallModel?: string, effort?: string): Promise<void> {
+    this.served(catalog, model, smallModel)
     const adapter = agentAdapter(agentId)
     // Agents that keep their own list may switch to any listed model, so their key may use every model.
     const allowed = adapter?.keepsModelList ? [model, ...catalog.map((entry) => entry.id).filter((id) => id !== model)]
@@ -93,6 +106,10 @@ export class AgentWiringBridge {
       if (action.action === 'sync') {
         const applied = this.service.syncCatalog(catalog, origin)
         return { ok: true, applied, ...await this.overview() }
+      }
+      if (action.action === 'preview') {
+        const preview = this.preview(action.agentId, action.model, origin, catalog, action.smallModel, action.effort)
+        return { ok: true, preview, ...await this.overview() }
       }
       if (action.action === 'connect') {
         await this.connect(action.agentId, action.model, origin, catalog, action.smallModel, action.effort)

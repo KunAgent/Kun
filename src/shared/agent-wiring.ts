@@ -2,6 +2,8 @@ export type { AgentWiringStatus, GatewayModelInfo, WiringProfile } from '../../k
 export {
   gatewayModelInfo,
   type AgentWiringAction,
+  type AgentWiringFilePreview,
   type AgentWiringOverview,
+  type AgentWiringPreview,
   type AgentWiringResult
 } from '../../kun/src/agent-wiring/protocol.js'

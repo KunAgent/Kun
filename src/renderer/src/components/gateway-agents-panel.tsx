@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { Fragment, useCallback, useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Bookmark, ChevronDown, Loader2, RefreshCw, Save, Users, X } from 'lucide-react'
-import type { AgentWiringAction, AgentWiringOverview } from '@shared/agent-wiring'
+import type { AgentWiringAction, AgentWiringOverview, AgentWiringPreview } from '@shared/agent-wiring'
+import { GatewayAgentPreview } from './gateway-agent-preview'
 import { GatewayAgentRow, type AgentConnectRequest } from './gateway-agent-row'
 import { settingsButtonClass } from './settings-button'
 
@@ -22,6 +23,7 @@ export function GatewayAgentsPanel({ active, translation }: { active: boolean; t
   const [notice, setNotice] = useState<Notice | null>(null)
   const [showMissing, setShowMissing] = useState(false)
   const [profileName, setProfileName] = useState('')
+  const [pending, setPending] = useState<{ request: AgentConnectRequest; preview: AgentWiringPreview } | null>(null)
 
   const run = useCallback(async (action: AgentWiringAction, busy?: string): Promise<boolean> => {
     if (busy) setBusyAgent(busy)
@@ -29,8 +31,15 @@ export function GatewayAgentsPanel({ active, translation }: { active: boolean; t
     try {
       const result = await window.kunGui.agentWiring(action)
       if (!result.ok) { setNotice({ tone: 'error', text: result.error }); return false }
-      const { ok: _ok, notice: hint, applied, failed, ...next } = result
+      const { ok: _ok, notice: hint, applied, failed, preview, ...next } = result
       setOverview(next)
+      if (action.action === 'preview') {
+        if (preview) setPending({ request: { model: action.model, ...(action.smallModel ? { smallModel: action.smallModel } : {}),
+          ...(action.effort ? { effort: action.effort } : {}) }, preview })
+        setNotice(null)
+        return true
+      }
+      if (action.action === 'connect') setPending(null)
       if (failed?.length) {
         setNotice({ tone: 'warn', text: t('gatewayAgents.profilePartial', { failed: failed.map((entry) => `${entry.agentId}: ${entry.error}`).join('; ') }) })
       } else if (action.action === 'connect') {
@@ -68,7 +77,9 @@ export function GatewayAgentsPanel({ active, translation }: { active: boolean; t
   const profiles = Object.entries(overview?.profiles ?? {})
   const gatewayOff = overview !== null && !overview.gatewayEnabled
   const disabled = gatewayOff || !overview?.models.length
-  const connect = (agentId: string, request: AgentConnectRequest): void => { void run({ action: 'connect', agentId, ...request }, agentId) }
+  // Connecting shows the exact config diff first; nothing is written until it is confirmed.
+  const connect = (agentId: string, request: AgentConnectRequest): void => { void run({ action: 'preview', agentId, ...request }, agentId) }
+  const confirm = (): void => { if (pending) void run({ action: 'connect', agentId: pending.preview.agentId, ...pending.request }, pending.preview.agentId) }
   const noticeClass = { ok: 'text-emerald-700 dark:text-emerald-200', warn: 'text-amber-700 dark:text-amber-200', error: 'text-red-600' }
 
   return <section className="grid min-w-0 gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-agents>
@@ -96,9 +107,13 @@ export function GatewayAgentsPanel({ active, translation }: { active: boolean; t
     {!overview && loading ? <p className="text-[12px] text-ds-faint">{t('gatewayAgents.loading')}</p> : null}
     {overview && !visible.length ? <p className="text-[12px] text-ds-muted">{t('gatewayAgents.noneInstalled')}</p> : null}
     <ul className="grid min-w-0 gap-2">
-      {visible.map((agent) => <GatewayAgentRow key={agent.id} agent={agent} models={overview?.models ?? []}
-        t={t} busy={busyAgent === agent.id} disabled={disabled || (busyAgent !== null && busyAgent !== agent.id)}
-        onConnect={(request) => connect(agent.id, request)} onDisconnect={() => void run({ action: 'disconnect', agentId: agent.id }, agent.id)} />)}
+      {visible.map((agent) => <Fragment key={agent.id}>
+        <GatewayAgentRow agent={agent} models={overview?.models ?? []}
+          t={t} busy={busyAgent === agent.id} disabled={disabled || (busyAgent !== null && busyAgent !== agent.id) || (pending !== null && pending.preview.agentId !== agent.id)}
+          onConnect={(request) => connect(agent.id, request)} onDisconnect={() => { setPending(null); void run({ action: 'disconnect', agentId: agent.id }, agent.id) }} />
+        {pending?.preview.agentId === agent.id ? <li className="min-w-0"><GatewayAgentPreview preview={pending.preview} agentName={agent.name}
+          busy={busyAgent === agent.id} t={t} onConfirm={confirm} onCancel={() => setPending(null)} /></li> : null}
+      </Fragment>)}
     </ul>
     {missing.length ? <div>
       <button type="button" className="inline-flex items-center gap-1 text-[11.5px] font-medium text-ds-muted hover:text-ds-ink"

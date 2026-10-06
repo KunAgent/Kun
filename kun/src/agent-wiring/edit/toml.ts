@@ -7,7 +7,7 @@
  * so a `[` inside one is never mistaken for a header.
  */
 export type TomlScalar = string | number | boolean
-export type TomlTable = Record<string, TomlScalar | Record<string, string>>
+export type TomlTable = Record<string, TomlScalar | string[] | Record<string, string>>
 
 type Line = { text: string; header?: string; key?: string; inMultiline: boolean }
 
@@ -28,6 +28,34 @@ function unquoteKey(raw: string): string {
   return raw
 }
 
+/** Splits a dotted key into its parts, keeping dots inside quoted parts (`models."kun/glm-4.6"`). */
+export function splitTomlKey(name: string): string[] {
+  const parts: string[] = []
+  let index = 0
+  while (index < name.length) {
+    while (name[index] === ' ' || name[index] === '\t') index += 1
+    const quote = name[index]
+    if (quote === '"' || quote === "'") {
+      let end = index + 1
+      while (end < name.length && name[end] !== quote) end += quote === '"' && name[end] === '\\' ? 2 : 1
+      parts.push(unquoteKey(name.slice(index, end + 1)))
+      index = end + 1
+    } else {
+      let end = index
+      while (end < name.length && name[end] !== '.') end += 1
+      parts.push(name.slice(index, end).trim())
+      index = end
+    }
+    while (name[index] === ' ' || name[index] === '\t') index += 1
+    if (name[index] === '.') index += 1
+  }
+  return parts
+}
+
+function canonicalTable(name: string): string {
+  return JSON.stringify(splitTomlKey(name))
+}
+
 function scan(lines: string[]): Line[] {
   const out: Line[] = []
   let multiline: '"""' | "'''" | null = null
@@ -39,7 +67,7 @@ function scan(lines: string[]): Line[] {
     }
     const header = ARRAY_HEADER.test(text) ? undefined : HEADER.exec(text)?.[1]
     const key = header ? undefined : KEY.exec(text)?.[1]
-    out.push({ text, inMultiline: false, ...(header ? { header: header.split('.').map((part) => unquoteKey(part.trim())).join('.') } : {}),
+    out.push({ text, inMultiline: false, ...(header ? { header: canonicalTable(header) } : {}),
       ...(key ? { key: unquoteKey(key) } : {}) })
     for (const quote of ['"""', "'''"] as const) {
       const count = text.split(quote).length - 1
@@ -54,8 +82,9 @@ function firstHeader(lines: Line[]): number {
   return index < 0 ? lines.length : index
 }
 
-export function formatTomlValue(value: TomlScalar | Record<string, string>): string {
+export function formatTomlValue(value: TomlScalar | string[] | Record<string, string>): string {
   if (typeof value === 'string') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map((entry) => JSON.stringify(entry)).join(', ')}]`
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return `{ ${Object.entries(value).map(([key, entry]) => `${formatTomlKey(key)} = ${JSON.stringify(entry)}`).join(', ')} }`
 }
@@ -64,8 +93,11 @@ function formatTomlKey(key: string): string {
   return /^[A-Za-z0-9_-]+$/.test(key) ? key : JSON.stringify(key)
 }
 
-function parseScalar(raw: string): TomlScalar | undefined {
+function parseScalar(raw: string): TomlScalar | string[] | undefined {
   const value = raw.replace(/\s+#.*$/, '').trim()
+  if (/^\[\s*(?:"(?:[^"\\]|\\.)*"\s*,?\s*)*\]$/.test(value)) {
+    return [...value.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((match) => JSON.parse(`"${match[1]}"`) as string)
+  }
   if (/^"(?:[^"\\]|\\.)*"$/.test(value)) return JSON.parse(value) as string
   if (/^'[^']*'$/.test(value)) return value.slice(1, -1)
   if (value === 'true' || value === 'false') return value === 'true'
@@ -73,7 +105,7 @@ function parseScalar(raw: string): TomlScalar | undefined {
   return undefined
 }
 
-function lineValue(text: string): TomlScalar | undefined {
+function lineValue(text: string): TomlScalar | string[] | undefined {
   const index = text.indexOf('=')
   return index < 0 ? undefined : parseScalar(text.slice(index + 1))
 }
@@ -81,7 +113,11 @@ function lineValue(text: string): TomlScalar | undefined {
 export function getTomlTopLevel(text: string, key: string): TomlScalar | undefined {
   const lines = scan(splitLines(text).lines)
   const end = firstHeader(lines)
-  for (let index = 0; index < end; index += 1) if (lines[index]!.key === key) return lineValue(lines[index]!.text)
+  for (let index = 0; index < end; index += 1) {
+    if (lines[index]!.key !== key) continue
+    const value = lineValue(lines[index]!.text)
+    return Array.isArray(value) ? undefined : value
+  }
   return undefined
 }
 
@@ -106,7 +142,8 @@ export function setTomlTopLevel(text: string, key: string, value: TomlScalar | u
 }
 
 function tableRange(lines: Line[], name: string): { start: number; end: number } | null {
-  const start = lines.findIndex((line) => line.header === name)
+  const wanted = canonicalTable(name)
+  const start = lines.findIndex((line) => line.header === wanted)
   if (start < 0) return null
   let end = start + 1
   while (end < lines.length && lines[end]!.header === undefined && !ARRAY_HEADER.test(lines[end]!.text)) end += 1
@@ -115,11 +152,11 @@ function tableRange(lines: Line[], name: string): { start: number; end: number }
   return { start, end }
 }
 
-export function getTomlTable(text: string, name: string): Record<string, TomlScalar> | undefined {
+export function getTomlTable(text: string, name: string): Record<string, TomlScalar | string[]> | undefined {
   const lines = scan(splitLines(text).lines)
   const range = tableRange(lines, name)
   if (!range) return undefined
-  const out: Record<string, TomlScalar> = {}
+  const out: Record<string, TomlScalar | string[]> = {}
   for (let index = range.start + 1; index < range.end; index += 1) {
     const line = lines[index]!
     if (!line.key || line.inMultiline) continue
@@ -134,7 +171,7 @@ export function setTomlTable(text: string, name: string, table: TomlTable | unde
   const { lines: raw, eol, trailing } = splitLines(text)
   const lines = scan(raw)
   const range = tableRange(lines, name)
-  const header = `[${name.split('.').map(formatTomlKey).join('.')}]`
+  const header = `[${splitTomlKey(name).map(formatTomlKey).join('.')}]`
   const body = table ? [header, ...Object.entries(table).map(([key, value]) => `${formatTomlKey(key)} = ${formatTomlValue(value)}`)] : []
   if (range) {
     raw.splice(range.start, range.end - range.start, ...body)
@@ -149,4 +186,14 @@ export function setTomlTable(text: string, name: string, table: TomlTable | unde
     raw.push(...body)
   } else return text
   return raw.join(eol) + (trailing || !text || table ? eol : '')
+}
+
+/** Every `[table]` header in the file, each as its key parts. */
+export function listTomlTables(text: string): string[][] {
+  return scan(splitLines(text).lines).flatMap((line) => line.header ? [JSON.parse(line.header) as string[]] : [])
+}
+
+/** Formats key parts as a table name `setTomlTable` accepts. */
+export function tomlTableName(parts: readonly string[]): string {
+  return parts.map(formatTomlKey).join('.')
 }

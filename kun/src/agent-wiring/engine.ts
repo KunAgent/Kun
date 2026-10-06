@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync
 import { dirname } from 'node:path'
 import { getDotenv, setDotenv } from './edit/dotenv.js'
 import { getJsoncValue, setJsoncValue } from './edit/jsonc.js'
+import { getYamlValue, setYamlValue } from './edit/yaml.js'
 import { getTomlTable, getTomlTopLevel, setTomlTable, setTomlTopLevel, type TomlScalar, type TomlTable } from './edit/toml.js'
 import type { AgentWiringRecord, StashedValue, WiringEdit, WiringSlot } from './types.js'
 
@@ -12,6 +13,7 @@ export function slotId(slot: WiringSlot): string {
     case 'toml-key': return `${slot.file}#toml:${slot.key}`
     case 'toml-table': return `${slot.file}#table:${slot.table}`
     case 'dotenv': return `${slot.file}#env:${slot.key}`
+    case 'yaml': return `${slot.file}#yaml:${JSON.stringify(slot.path)}`
   }
 }
 
@@ -31,6 +33,7 @@ export function readSlot(text: string, slot: WiringSlot): unknown {
     case 'toml-key': return getTomlTopLevel(body, slot.key)
     case 'toml-table': return getTomlTable(body, slot.table)
     case 'dotenv': return getDotenv(body, slot.key)
+    case 'yaml': return getYamlValue(body, slot.path)
   }
 }
 
@@ -43,6 +46,7 @@ export function writeSlot(text: string, slot: WiringSlot, value: unknown): strin
     case 'toml-key': out = setTomlTopLevel(body, slot.key, value as TomlScalar | undefined); break
     case 'toml-table': out = setTomlTable(body, slot.table, value as TomlTable | undefined); break
     case 'dotenv': out = setDotenv(body, slot.key, value === undefined ? undefined : String(value)); break
+    case 'yaml': out = setYamlValue(body, slot.path, value); break
   }
   return bom + out
 }
@@ -63,20 +67,23 @@ export function writeFileAtomic(file: string, content: string): void {
 function isEmptyDocument(text: string, slot: WiringSlot): boolean {
   const trimmed = text.replace(BOM, '').trim()
   if (!trimmed) return true
-  return slot.format === 'json' && /^\{\s*\}$/.test(trimmed)
+  return (slot.format === 'json' || slot.format === 'yaml') && /^\{\s*\}$/.test(trimmed)
 }
 
+export type PlannedWrite = { file: string; before: string; after: string }
+
 /**
- * Applies edits to every file, recording each slot's original value the first
- * time Kun touches it, so later model switches never overwrite the stash.
+ * Computes every file's new text without touching disk, recording each
+ * slot's original value in `record` the first time Kun touches it, so later
+ * model switches never overwrite the stash. Used by connect and by preview.
  */
-export function applyWiringEdits(edits: WiringEdit[], record: AgentWiringRecord): void {
+export function planWiringEdits(edits: WiringEdit[], record: AgentWiringRecord, read: (file: string) => string = readFileText): PlannedWrite[] {
   const byFile = new Map<string, WiringEdit[]>()
   for (const edit of edits) byFile.set(edit.slot.file, [...byFile.get(edit.slot.file) ?? [], edit])
   // Read and transform every file first so a parse error leaves nothing half-written.
-  const writes: { file: string; before: string; after: string }[] = []
+  const writes: PlannedWrite[] = []
   for (const [file, fileEdits] of byFile) {
-    const before = readFileText(file)
+    const before = read(file)
     let text = before
     for (const edit of fileEdits) {
       if ('ownedArray' in edit) {
@@ -84,14 +91,14 @@ export function applyWiringEdits(edits: WiringEdit[], record: AgentWiringRecord)
         const kept = Array.isArray(current) ? current.filter((item) => !edit.ownedArray.owns(item)) : []
         text = writeSlot(text, edit.slot, [...kept, ...edit.ownedArray.items])
         if (!record.ownedArrays.some((entry) => entry.file === file && JSON.stringify(entry.path) === JSON.stringify(edit.slot.path))) {
-          record.ownedArrays.push({ file, path: [...edit.slot.path] })
+          record.ownedArrays.push({ file, path: [...edit.slot.path], ...(edit.slot.format === 'yaml' ? { format: 'yaml' as const } : {}) })
         }
         continue
       }
       const id = slotId(edit.slot)
-      if (edit.slot.format === 'json') {
+      if (edit.slot.format === 'json' || edit.slot.format === 'yaml') {
         for (let size = 1; size < edit.slot.path.length; size += 1) {
-          const parent = { file, format: 'json' as const, path: edit.slot.path.slice(0, size) }
+          const parent = { ...edit.slot, path: edit.slot.path.slice(0, size) }
           const parentId = slotId(parent)
           if (!record.originals[parentId] && readSlot(text, parent) === undefined) {
             record.originals[parentId] = { slot: parent, absent: true, pruneIfEmpty: true }
@@ -108,6 +115,12 @@ export function applyWiringEdits(edits: WiringEdit[], record: AgentWiringRecord)
     }
     if (text !== before) writes.push({ file, before, after: text })
   }
+  return writes
+}
+
+/** Applies planned edits to disk, keeping a byte-exact backup of each file the first time Kun writes it. */
+export function applyWiringEdits(edits: WiringEdit[], record: AgentWiringRecord): void {
+  const writes = planWiringEdits(edits, record)
   record.files ??= {}
   for (const write of writes) {
     const known = record.files[write.file]
@@ -164,7 +177,7 @@ export function restoreWiring(record: AgentWiringRecord, owns: (file: string, pa
       text = writeSlot(text, entry.slot, entry.absent ? undefined : entry.value)
     }
     for (const owned of record.ownedArrays.filter((entry) => entry.file === file)) {
-      const slot = { file, format: 'json' as const, path: owned.path }
+      const slot: WiringSlot = owned.format === 'yaml' ? { file, format: 'yaml', path: owned.path } : { file, format: 'json', path: owned.path }
       const current = readSlot(text, slot)
       if (Array.isArray(current)) {
         const kept = current.filter((item) => !owns(file, owned.path, item))
@@ -180,5 +193,5 @@ export function restoreWiring(record: AgentWiringRecord, owns: (file: string, pa
 }
 
 function depth(slot: WiringSlot): number {
-  return slot.format === 'json' ? slot.path.length : 1
+  return slot.format === 'json' || slot.format === 'yaml' ? slot.path.length : 1
 }

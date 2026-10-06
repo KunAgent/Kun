@@ -71,6 +71,15 @@ describe('kun agents and quota', () => {
     expect(harness.calls).toContain('DELETE /v1/model-gateway/clients/gc_9')
     expect(await runGatewayCliCommand('agents', ['connect', 'codex', 'ghost'], harness.value)).toBe(1)
   })
+  it('prints a masked diff for --dry-run and writes nothing', async () => {
+    const harness = io(runtime)
+    expect(await runGatewayCliCommand('agents', ['connect', 'codex', 'coding', '--dry-run'], harness.value)).toBe(0)
+    expect(harness.out()).toContain('(new file)')
+    expect(harness.out()).toContain('+model = "coding"')
+    expect(harness.out()).toContain('kun-codex.********')
+    expect(harness.out()).toContain('Dry run: nothing was written')
+    expect(harness.calls).not.toContain('POST /v1/model-gateway/clients')
+  })
   it('waits until an exhausted window renews', async () => {
     let now = Date.parse('2026-10-06T10:00:00Z')
     let readings = 0

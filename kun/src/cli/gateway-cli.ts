@@ -29,7 +29,7 @@ export const GATEWAY_CLI_USAGE = `Gateway and agents:
   kun gateway keys rotate <client-id>    Rotate a key (printed once)
   kun gateway middleware                 Middleware counters
   kun agents                             Agents on this computer and their models
-  kun agents connect <agent> <model> [--effort <level>] [--small <model>]
+  kun agents connect <agent> <model> [--effort <level>] [--small <model>] [--dry-run]
   kun agents disconnect <agent>
   kun agents sync                        Rewrite model lists in agents that keep a copy
   kun agents profiles                    Saved profiles
@@ -46,7 +46,7 @@ function flag(argv: readonly string[], name: string): string | undefined {
 function positional(argv: readonly string[]): string[] {
   const out: string[] = []
   for (let index = 0; index < argv.length; index += 1) {
-    if (argv[index]!.startsWith('--')) { if (!['--json', '--refresh'].includes(argv[index]!)) index += 1; continue }
+    if (argv[index]!.startsWith('--')) { if (!['--json', '--refresh', '--dry-run'].includes(argv[index]!)) index += 1; continue }
     out.push(argv[index]!)
   }
   return out
@@ -147,7 +147,8 @@ async function agentsCommand(argv: readonly string[], io: GatewayCliIo, request:
   else if (sub === 'connect' && first && second) {
     const effort = flag(argv, '--effort')
     const small = flag(argv, '--small')
-    action = { action: 'connect', agentId: first, model: second, ...(effort ? { effort } : {}), ...(small ? { smallModel: small } : {}) }
+    action = { action: argv.includes('--dry-run') ? 'preview' : 'connect', agentId: first, model: second,
+      ...(effort ? { effort } : {}), ...(small ? { smallModel: small } : {}) }
   } else if (sub === 'disconnect' && first) action = { action: 'disconnect', agentId: first }
   else if (sub === 'sync') action = { action: 'sync' }
   else if (sub === 'profiles') action = { action: 'list' }
@@ -161,6 +162,12 @@ async function agentsCommand(argv: readonly string[], io: GatewayCliIo, request:
     const names = Object.entries(result.profiles)
     io.stdout.write(names.length ? names.map(([name, profile]) => `${name}: ${Object.entries(profile).map(([agent, selection]) => `${agent}=${selection.model}`).join(', ')}`).join('\n') + '\n' : 'No saved profiles.\n')
     return 0
+  }
+  if (action.action === 'preview') {
+    const files = result.preview?.files ?? []
+    io.stdout.write(files.length ? files.map((file) => `${file.created ? '(new file) ' : ''}${file.file}\n${file.diff}`).join('\n')
+      : 'Nothing in this agent\'s config needs to change.\n')
+    io.stdout.write('Dry run: nothing was written. Keys are masked.\n')
   }
   if (action.action === 'connect') io.stdout.write(`${action.agentId} now uses ${action.model} through Kun.${result.notice === 'restart' ? ' Start a new session to pick it up.' : ''}\n`)
   if (action.action === 'disconnect') io.stdout.write(`${action.agentId} is back on its own settings.\n`)

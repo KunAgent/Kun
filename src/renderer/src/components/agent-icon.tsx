@@ -78,7 +78,9 @@ const AGENT_MONOGRAMS: Readonly<Record<string, string>> = {
   t3code: 'T3',
   hanako: 'H',
   alma: 'A',
-  cindy: 'C'
+  cindy: 'C',
+  continue: 'Co',
+  aider: 'Ai'
 }
 
 export function agentIconMonogram(harnessId: string): string | undefined {

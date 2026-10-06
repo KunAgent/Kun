@@ -4,6 +4,7 @@ import type { AgentWiringStatus, GatewayModelInfo, WiringProfile } from './types
 export type AgentWiringAction =
   | { action: 'list' }
   | { action: 'connect'; agentId: string; model: string; smallModel?: string; effort?: string }
+  | { action: 'preview'; agentId: string; model: string; smallModel?: string; effort?: string }
   | { action: 'disconnect'; agentId: string }
   | { action: 'sync' }
   | { action: 'save-profile'; name: string }
@@ -18,8 +19,12 @@ export type AgentWiringOverview = {
   profiles: Record<string, WiringProfile>
 }
 
+/** One config file a connection would change; keys in the diff are masked. */
+export type AgentWiringFilePreview = { file: string; created: boolean; diff: string }
+export type AgentWiringPreview = { agentId: string; files: AgentWiringFilePreview[]; restartRequired: boolean }
+
 export type AgentWiringResult =
-  | ({ ok: true; notice?: string; applied?: string[]; failed?: { agentId: string; error: string }[] } & AgentWiringOverview)
+  | ({ ok: true; notice?: string; applied?: string[]; failed?: { agentId: string; error: string }[]; preview?: AgentWiringPreview } & AgentWiringOverview)
   | { ok: false; error: string; code?: string }
 
 /** Maps a `/v1/model-gateway/catalog` row onto the model facts agent configs can use. */

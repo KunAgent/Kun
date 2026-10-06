@@ -44,6 +44,29 @@ describe('agent wiring bridge', () => {
     expect(disconnected.ok).toBe(true)
     expect(calls.some((call) => call.path === '/v1/model-gateway/clients/gc_9' && call.method === 'DELETE')).toBe(true)
   })
+  it('previews a connection as a masked diff without creating a client or touching disk', async () => {
+    const { request, calls } = runtime()
+    const service = new AgentWiringService(createWiringContext({ home, env: { PATH: '' }, stateFile: join(home, 'state.json'), which: () => undefined }))
+    const bridge = new AgentWiringBridge(request, service)
+    const result = await bridge.handle({ action: 'preview', agentId: 'codex', model: 'coding', effort: 'high' })
+    if (!result.ok || !result.preview) throw new Error('expected a preview')
+    expect(result.preview).toMatchObject({ agentId: 'codex', restartRequired: true })
+    const [file] = result.preview.files
+    expect(file).toMatchObject({ file: join(home, '.codex', 'config.toml'), created: true })
+    expect(file!.diff).toContain('+model = "coding"')
+    expect(file!.diff).toContain('kun-codex.********')
+    expect(calls.some((call) => call.path === '/v1/model-gateway/clients' && call.method === 'POST')).toBe(false)
+    expect(() => readFileSync(join(home, '.codex', 'config.toml'), 'utf8')).toThrow()
+    // Once connected, the preview masks the real key and shows only what would change.
+    await bridge.handle({ action: 'connect', agentId: 'codex', model: 'coding' })
+    const again = await bridge.handle({ action: 'preview', agentId: 'codex', model: 'alpha/a1' })
+    if (!again.ok || !again.preview) throw new Error('expected a preview')
+    const diff = again.preview.files[0]!.diff
+    expect(diff).not.toContain('kun_local_abc')
+    expect(diff).toContain('-model = "coding"')
+    expect(diff).toContain('+model = "alpha/a1"')
+    expect(parseAgentWiringAction({ action: 'preview', agentId: 'codex', model: 'coding' })).toEqual({ action: 'preview', agentId: 'codex', model: 'coding' })
+  })
   it('refuses models the gateway does not serve', async () => {
     const service = new AgentWiringService(createWiringContext({ home, env: { PATH: '' }, stateFile: join(home, 'state.json'), which: () => undefined }))
     const result = await new AgentWiringBridge(runtime().request, service).handle({ action: 'connect', agentId: 'pi', model: 'ghost' })

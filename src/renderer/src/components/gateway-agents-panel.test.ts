@@ -38,12 +38,14 @@ describe('agent rows', () => {
 })
 
 describe('agents panel', () => {
-  it('loads agents, connects one and reports the restart hint', async () => {
+  it('previews the config diff, connects only after confirmation and reports the restart hint', async () => {
     const overview = { origin: 'http://127.0.0.1:18899', gatewayEnabled: true, models, profiles: { Focus: { 'claude-code': { model: 'coding' } } },
       agents: [base, { ...base, id: 'crush', name: 'Crush', installed: false }] }
+    const preview = { agentId: 'claude-code', restartRequired: true, files: [{ file: '/Users/me/.claude/settings.json', created: false,
+      diff: '@@ -1,3 +1,4 @@\n {\n+  "model": "coding",\n   "theme": "dark"\n }' }] }
     const agentWiring = vi.fn(async (action: { action: string }): Promise<AgentWiringResult> => action.action === 'connect'
       ? { ok: true, notice: 'restart', ...overview, agents: [{ ...base, connected: true, model: 'coding' }, overview.agents[1]!] }
-      : { ok: true, ...overview })
+      : action.action === 'preview' ? { ok: true, preview, ...overview } : { ok: true, ...overview })
     ;(globalThis as { window?: unknown }).window = { kunGui: { agentWiring, openExternal: vi.fn() } }
     let renderer!: ReturnType<typeof create>
     await act(async () => { renderer = create(createElement(GatewayAgentsPanel, { active: true })) })
@@ -52,9 +54,30 @@ describe('agents panel', () => {
     expect(text(renderer.root)).toContain('Focus')
     const connect = renderer.root.findAll((node) => node.type === 'button' && text(node) === 'Connect')[0]!
     await act(async () => { connect.props.onClick() })
+    expect(agentWiring).toHaveBeenCalledWith({ action: 'preview', agentId: 'claude-code', model: 'coding' })
+    expect(agentWiring).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'connect' }))
+    expect(text(renderer.root)).toContain('Changes Kun will make for Claude Code')
+    expect(text(renderer.root)).toContain('~/.claude/settings.json')
+    expect(text(renderer.root)).toContain('+  "model": "coding",')
+    const apply = renderer.root.findAll((node) => node.type === 'button' && text(node) === 'Apply changes')[0]!
+    await act(async () => { apply.props.onClick() })
     expect(agentWiring).toHaveBeenCalledWith({ action: 'connect', agentId: 'claude-code', model: 'coding' })
+    expect(text(renderer.root)).not.toContain('Changes Kun will make for Claude Code')
     expect(text(renderer.root)).toContain('Claude Code now uses Kun. Start a new session to pick up the change.')
     expect(text(renderer.root)).toContain('1 connected')
+  })
+  it('cancels a preview without writing anything', async () => {
+    const overview = { origin: 'http://127.0.0.1:18899', gatewayEnabled: true, models, profiles: {}, agents: [base] }
+    const agentWiring = vi.fn(async (action: { action: string }): Promise<AgentWiringResult> => action.action === 'preview'
+      ? { ok: true, preview: { agentId: 'claude-code', restartRequired: true, files: [] }, ...overview } : { ok: true, ...overview })
+    ;(globalThis as { window?: unknown }).window = { kunGui: { agentWiring, openExternal: vi.fn() } }
+    let renderer!: ReturnType<typeof create>
+    await act(async () => { renderer = create(createElement(GatewayAgentsPanel, { active: true })) })
+    await act(async () => { renderer.root.findAll((node) => node.type === 'button' && text(node) === 'Connect')[0]!.props.onClick() })
+    expect(text(renderer.root)).toContain("Nothing in this agent's config needs to change.")
+    await act(async () => { renderer.root.findAll((node) => node.type === 'button' && text(node) === 'Cancel')[0]!.props.onClick() })
+    expect(text(renderer.root)).not.toContain('Changes Kun will make')
+    expect(agentWiring).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'connect' }))
   })
   it('explains why connecting is unavailable when the gateway is off', async () => {
     const agentWiring = vi.fn(async (): Promise<AgentWiringResult> => ({ ok: true, origin: 'http://x', gatewayEnabled: false, models: [], profiles: {}, agents: [base] }))
