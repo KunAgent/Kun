@@ -429,7 +429,11 @@ export function createNavigationModeActions(
   },
 
   createWriteThread: async (workspaceRoot, activeFilePath, options = {}) => {
+    let createdThreadId: string | undefined
+    const activationAllowed = (): boolean => options.activationGuard?.(createdThreadId) !== false
+    if (!activationAllowed()) return null
     const targetWorkspace = normalizeWorkspaceRoot(workspaceRoot) || (await readActiveWriteWorkspace(get().workspaceRoot))
+    if (!activationAllowed()) return null
     if (!targetWorkspace) {
       set({ error: i18n.t('common:workspaceRequiredToCreateThread') })
       return null
@@ -438,7 +442,9 @@ export function createNavigationModeActions(
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return null
     }
-    if (!(await workspaceDirectoryExists(targetWorkspace))) {
+    const workspaceExists = await workspaceDirectoryExists(targetWorkspace)
+    if (!activationAllowed()) return null
+    if (!workspaceExists) {
       set({ error: workspaceMissingError() })
       await showWorkspaceMissingDialog(targetWorkspace)
       return null
@@ -452,6 +458,7 @@ export function createNavigationModeActions(
             primaryAgentAvailableOnSurface(profile, 'write')
         )
         : undefined
+      if (!activationAllowed()) return null
       const thread = await p.createThread({
         workspace: targetWorkspace,
         title: options.title?.trim() || WRITE_ASSISTANT_THREAD_TITLE,
@@ -470,6 +477,10 @@ export function createNavigationModeActions(
           ...(personaProfile.systemPrompt ? { systemPrompt: personaProfile.systemPrompt } : {})
         } : {})
       })
+      createdThreadId = thread.id
+      // Preserve the admitted creation ID for explicit recovery, but never
+      // promote a stale result through the resource-binding registry.
+      if (!activationAllowed()) return thread.id
       saveWriteThreadRegistry(markWriteThread(
         targetWorkspace,
         thread.id,
@@ -477,15 +488,18 @@ export function createNavigationModeActions(
         activeFilePath
       ))
       set((s) => ({
-        route: 'write',
-        ...(pickedAgentId ? { composerAgentId: '' } : {}),
+        ...(activationAllowed() ? { route: 'write' as const, ...(pickedAgentId ? { composerAgentId: '' } : {}) } : {}),
         threads: s.threads.some((item) => item.id === thread.id) ? s.threads : [thread, ...s.threads],
-        error: null
+        ...(activationAllowed() ? { error: null } : {})
       }))
       await get().refreshThreads()
-      await get().selectThread(thread.id)
+      if (activationAllowed()) {
+        if (options.activationGuard) await get().selectThread(thread.id, { selectionGuard: activationAllowed })
+        else await get().selectThread(thread.id)
+      }
       return thread.id
     } catch (e) {
+      if (!activationAllowed()) return null
       set({
         error: formatRuntimeError(e),
         ...(shouldOpenSettingsForError(e)
@@ -496,13 +510,16 @@ export function createNavigationModeActions(
     }
   },
 
-  selectWriteThread: async (threadId, workspaceRoot, activeFilePath) => {
+  selectWriteThread: async (threadId, workspaceRoot, activeFilePath, options = {}) => {
+    const activationAllowed = (): boolean => options.activationGuard?.() !== false
+    if (!activationAllowed()) return
     const targetId = threadId.trim()
     if (!targetId) return
     const thread = get().threads.find((item) => item.id === targetId)
     const targetWorkspace = normalizeWorkspaceRoot(workspaceRoot) ||
       normalizeWorkspaceRoot(thread?.workspace) ||
       (await readActiveWriteWorkspace(get().workspaceRoot))
+    if (!activationAllowed()) return
     if (targetWorkspace) {
       saveWriteThreadRegistry(markWriteThread(
         targetWorkspace,
@@ -512,7 +529,8 @@ export function createNavigationModeActions(
       ))
     }
     set({ route: 'write' })
-    await get().selectThread(targetId)
+    if (options.activationGuard) await get().selectThread(targetId, { selectionGuard: activationAllowed })
+    else await get().selectThread(targetId)
   },
 
   ensureDesignThreadForWorkspace: async (workspaceRoot, docId) => {

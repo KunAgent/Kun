@@ -253,7 +253,7 @@ export type WriteWorkspaceState = {
   openFile: (
     workspaceRoot: string,
     path: string,
-    options?: { groupId?: WriteEditorGroupId; viewMode?: WritePreviewMode }
+    options?: { groupId?: WriteEditorGroupId; viewMode?: WritePreviewMode; reveal?: boolean }
   ) => Promise<void>
   loadWhiteboards: (workspaceRoot: string) => Promise<void>
   createWhiteboard: (workspaceRoot: string, options: {

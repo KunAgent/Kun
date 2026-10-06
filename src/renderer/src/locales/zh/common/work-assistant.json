@@ -1,0 +1,13 @@
+{
+  "workAssistantDocuments": "文档工作区",
+  "workAssistantBackToWorkspace": "返回工作区（Alt+←）",
+  "workAssistantDock": "在侧边栏继续",
+  "workAssistantExpand": "打开完整会话",
+  "workAssistantPageTitle": "今天想完成什么工作？",
+  "workAssistantPageDescription": "提出问题、添加文件，或从文献库选择论文准备批量任务。只有发送或确认后才会开始执行。",
+  "workAssistantConversations": "会话",
+  "workAssistantChoosePapers": "选择论文，准备批量任务",
+  "workAssistantResearchHosted": "会话正在办公助手中继续。",
+  "workAssistantResearchRestore": "在这里显示会话",
+  "workAssistantWorkspaceHistory": "工作区会话"
+}

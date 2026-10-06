@@ -1,3 +1,4 @@
+import { useWorkAssistantNavigation } from './work-assistant-navigation'
 import i18n from '../i18n'
 import {
   isWriteCodeFilePath,
@@ -169,7 +170,7 @@ export function createWriteFileActions({
               openedKey = itemKey
               break
             }
-            await get().openFile(normalized, tab.path, { groupId: group.id, viewMode: tab.viewMode })
+            await get().openFile(normalized, tab.path, { groupId: group.id, viewMode: tab.viewMode, reveal: false })
             if (!navigationIsCurrent(generation, normalized)) return
             if (get().documentsByPath[writeDocumentKey(tab.path)]) {
               openedKey = itemKey
@@ -196,7 +197,7 @@ export function createWriteFileActions({
       }
       const remembered = readRememberedActiveFile(normalized)
       if (remembered.trim() && isWriteWorkspaceFilePath(remembered)) {
-        await get().openFile(normalized, remembered, { groupId: 'primary' })
+        await get().openFile(normalized, remembered, { groupId: 'primary', reveal: false })
       } else if (remembered.trim()) {
         rememberActiveFile(normalized, null)
       }
@@ -294,6 +295,7 @@ export function createWriteFileActions({
         return
       }
       if (!fileRequestIsCurrent(groupId, generation, workspaceRoot)) return
+      if (options.reveal !== false) useWorkAssistantNavigation.getState().openWorkspace()
       const viewMode = options.viewMode ?? defaultWriteViewModeForPath(path)
       const current = get()
       if (

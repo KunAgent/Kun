@@ -1,0 +1,99 @@
+/* Full-page Work shares Code's canvas palette. These local variables never
+   change the user's global dark colors or the independent paper-library skin. */
+.write-assistant-panel.work-assistant-page {
+  --work-assistant-canvas: var(--ds-bg-main);
+  --work-assistant-field: color-mix(in srgb, var(--ds-bg-main) 72%, var(--ds-surface-card));
+  --work-assistant-line: var(--ds-border-muted);
+  background: var(--work-assistant-canvas);
+  background-image: none;
+  box-shadow: none;
+}
+
+.write-assistant-panel.work-assistant-page :is(.write-assistant-header, .write-assistant-body, .write-assistant-footer) {
+  background: var(--work-assistant-canvas);
+  background-image: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.write-assistant-panel.work-assistant-page .write-assistant-footer .ds-composer-shell.ds-chat-composer {
+  background: var(--work-assistant-field);
+  border-color: var(--work-assistant-line);
+  box-shadow: none;
+}
+
+.write-assistant-panel.work-assistant-page .write-assistant-footer .ds-composer-shell.ds-chat-composer:focus-within {
+  border-color: var(--ds-focus-ring);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ds-focus-ring) 20%, transparent);
+}
+
+.work-assistant-page .write-assistant-ready > div:first-child,
+.work-assistant-page .work-assistant-choose-papers,
+.work-assistant-page .write-assistant-action-row {
+  background: transparent;
+  background-image: none;
+  border-color: var(--work-assistant-line);
+  box-shadow: none;
+}
+
+.work-assistant-page .write-assistant-action-row > span:first-child {
+  color: var(--ds-text-muted);
+  background: color-mix(in srgb, var(--work-assistant-canvas) 94%, var(--ds-text));
+}
+
+.work-assistant-page .write-assistant-action-row .text-ds-faint,
+.paper-batch-assistant .paper-batch-sources .text-ds-faint {
+  color: var(--ds-text-muted);
+}
+
+.work-assistant-page :is(.work-assistant-choose-papers, .write-assistant-action-row):hover {
+  background: var(--work-assistant-field);
+  border-color: var(--ds-border);
+  box-shadow: none;
+}
+
+.paper-batch-assistant {
+  --paper-batch-canvas: var(--work-assistant-canvas, var(--ds-bg-main));
+  --paper-batch-field: var(--work-assistant-field, color-mix(in srgb, var(--ds-bg-main) 72%, var(--ds-surface-card)));
+  background: var(--paper-batch-canvas);
+  border-color: var(--ds-border-muted);
+  box-shadow: none;
+}
+
+.paper-batch-assistant :is(header, footer, .paper-batch-sources, .paper-batch-model-summary) {
+  background: transparent;
+  background-image: none;
+  border-color: var(--ds-border-muted);
+  box-shadow: none;
+}
+
+.paper-batch-assistant :is(select, textarea) {
+  background: var(--paper-batch-field);
+  color: var(--ds-text);
+  border-color: var(--ds-border-muted);
+}
+
+.paper-batch-assistant .paper-batch-model-summary {
+  border-top: 1px solid var(--ds-border-muted);
+  border-radius: 0;
+  padding-inline: 0;
+}
+
+.paper-batch-assistant .paper-batch-start {
+  background: var(--ds-control);
+  color: var(--ds-control-foreground);
+  border-color: var(--ds-control);
+}
+
+.paper-batch-assistant .paper-batch-start:disabled {
+  background: var(--paper-batch-field);
+  color: var(--ds-text-faint);
+  border-color: var(--ds-border-muted);
+  opacity: 1;
+}
+
+.paper-batch-assistant :is(select, textarea, button, input):focus-visible,
+.work-assistant-page .work-assistant-choose-papers:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}

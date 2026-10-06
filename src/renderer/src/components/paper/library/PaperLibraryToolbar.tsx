@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { FileDown, FileWarning, Import, Info, RefreshCw, Search, X } from 'lucide-react'
-import type { PaperLibraryFilter } from '@shared/paper/paper-library-types'
+import { paperGroupLabel } from '../../../paper/paper-group-label'
+import type { PaperLibraryEntry, PaperLibraryFilter } from '@shared/paper/paper-library-types'
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string
 
@@ -28,6 +29,7 @@ export function PaperLibraryToolbar({
   counts,
   tags,
   groups,
+  entries = [],
   shown,
   loading,
   missingPdf,
@@ -43,6 +45,7 @@ export function PaperLibraryToolbar({
   counts: { total: number; unread: number; reading: number; read: number }
   tags: string[]
   groups: string[]
+  entries?: readonly PaperLibraryEntry[]
   shown: number
   loading: boolean
   missingPdf: number
@@ -130,7 +133,10 @@ export function PaperLibraryToolbar({
           className={selectClass}
         >
           <option value="">{t('writePaperFilterGroupAll')}</option>
-          {groups.map((group) => <option key={group} value={group}>{group}</option>)}
+          {groups.map((group) => {
+            const display = paperGroupLabel(group, entries, t)
+            return <option key={group} value={group}>{display.identifier ? `${display.label} · ${group}` : group}</option>
+          })}
         </select>
       ) : null}
 

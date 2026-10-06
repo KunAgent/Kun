@@ -34,6 +34,7 @@ type WriteAssistantPanelProps = Omit<ComponentProps<typeof WriteAssistantPanel>,
 
 export type WriteRightPanelContentProps = {
   write: WriteAssistantPanelProps
+  fullPage?: boolean
   onOpenAgentSettings: () => void
   onCollapse: () => void
 }
@@ -44,13 +45,15 @@ export type WriteRightPanelContentProps = {
  */
 export function WriteRightPanelContent({
   write,
+  fullPage = false,
   onOpenAgentSettings,
   onCollapse
 }: WriteRightPanelContentProps): ReactElement {
-  const { activeId, workspaceRoot } = useWriteWorkspaceStore(useShallow((state) => ({
+  const { activeId: selectedId, workspaceRoot } = useWriteWorkspaceStore(useShallow((state) => ({
     activeId: state.writeRightPanel.activeId,
     workspaceRoot: state.workspaceRoot
   })))
+  const activeId = fullPage ? 'assistant' : selectedId
   const activeThreadId = useChatStore((state) => state.activeThreadId)
   const [visited, setVisited] = useState<Set<WriteRightPanelId>>(() => new Set([activeId]))
 
@@ -61,7 +64,7 @@ export function WriteRightPanelContent({
   const renderPanel = (id: WriteRightPanelId): ReactElement => {
     switch (id) {
       case 'assistant':
-        return <WriteAssistantPanel {...write} className="h-full max-h-full w-full" />
+        return <WriteAssistantPanel {...write} presentation={fullPage ? 'page' : 'sidebar'} className="h-full max-h-full w-full" />
       case 'outline':
         return <WriteOutlinePanel onCollapse={onCollapse} />
       case 'review':

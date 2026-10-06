@@ -1,0 +1,75 @@
+name: Work assistant native smoke
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/work-assistant-smoke.yml'
+      - 'scripts/*work-assistant*'
+      - 'scripts/fixtures/work-assistant*'
+      - 'src/renderer/src/components/write/**'
+      - 'src/renderer/src/components/workbench/**'
+      - 'src/renderer/src/components/paper/**'
+      - 'src/renderer/src/paper/**'
+      - 'src/renderer/src/write/**'
+      - 'src/renderer/src/locales/*/common/work-assistant.json'
+      - 'src/renderer/src/locales/*/common/paper-batch.json'
+      - 'src/renderer/src/styles/write-editor/**'
+      - 'package.json'
+      - 'package-lock.json'
+permissions:
+  contents: read
+concurrency:
+  group: work-assistant-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-work-assistant:
+    name: Work assistant on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      KUN_WORK_ASSISTANT_EVIDENCE: dist/work-assistant-smoke
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - name: Verify navigation, source admission and exact batch lifecycle
+        run: >-
+          npx vitest run --maxWorkers=1
+          src/renderer/src/write/work-assistant-navigation.test.ts
+          src/renderer/src/write/work-assistant-scope.test.ts
+          src/renderer/src/write/work-whiteboard.test.ts
+          src/renderer/src/paper/paper-batch-actions.test.ts
+          src/renderer/src/paper/paper-batch-navigation.test.ts
+          src/renderer/src/paper/paper-batch-runtime-contract.test.ts
+          src/renderer/src/paper/paper-group-label.test.ts
+          src/renderer/src/components/paper/batch/PaperBatchAssistantPanel.test.ts
+          src/renderer/src/components/paper/research/PaperResearchView.render.test.ts
+          src/renderer/src/components/workbench/useWorkbenchWriteAssistantRuntime.test.ts
+          src/renderer/src/components/write/WriteAssistantPanel.test.ts
+          src/renderer/src/components/write/WriteAssistantPanel.subagent.test.ts
+          src/renderer/src/components/write/WriteResourceConversationHistoryPopover.test.ts
+          src/renderer/src/write/write-workspace-file-actions.test.ts
+          src/renderer/src/store/chat-store-navigation-design-code.test.ts
+      - name: Verify fixture production-style and layout assertions
+        run: node --test scripts/work-assistant-smoke.test.mjs
+      - name: Verify supplemental DOM wiring (not native evidence)
+        run: node scripts/test-work-assistant-fixture.mjs
+      - run: npm run ensure:electron
+      - name: Exercise production UI in sandboxed native Electron with offline fixture
+        run: node scripts/smoke-work-assistant-workspace.mjs
+      - name: Upload labelled native screenshots and exact report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: work-assistant-${{ matrix.os }}
+          path: dist/work-assistant-smoke
+          if-no-files-found: warn
+          retention-days: 14

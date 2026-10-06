@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import { ChevronRight, FolderInput } from 'lucide-react'
+import { ChevronRight, FolderInput, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { normalizePath } from '../../../write/write-workspace-store-helpers'
@@ -8,6 +8,8 @@ import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { setImportFolder } from '../../../paper/paper-import-target'
 import { switchPaperLibrary } from '../../../paper/paper-mode-actions'
 import { usePaperRowMenu } from '../library/use-paper-row-menu'
+import { paperGroupLabel, paperEntriesInGroup } from '../../../paper/paper-group-label'
+import { openPaperBatchAssistant } from '../../../paper/paper-batch-actions'
 import { PaperTreeRow } from './PaperTreeRow'
 import { PaperNewFolderRow } from './PaperNewFolderRow'
 import { readCollapsedGroups, writeCollapsedGroups } from './paper-sidebar-collapse'
@@ -140,6 +142,8 @@ export function PaperTree({
         const ancestors = parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join('/'))
         if (ancestors.some((parent) => isCollapsed(parent))) return null
         if (query && !items.length && !group.toLowerCase().includes(query)) return null
+        const display = paperGroupLabel(group, entries, t)
+        const groupEntries = paperEntriesInGroup(entries, group)
         const collapsedGroup = isCollapsed(group)
         const hasChildFolder = sections.groups.some(([other]) => other.startsWith(`${group}/`))
         return (
@@ -147,17 +151,18 @@ export function PaperTree({
             <button
               type="button"
               onClick={() => toggle(group)}
-              title={group}
+              title={display.identifier ? `${display.label} · ${group}` : group}
               style={{ paddingLeft: 6 + depth * 14 }}
-              className="flex h-7 w-full items-center gap-1 rounded-md px-1.5 pr-8 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+              className="flex min-h-7 w-full items-center gap-1 rounded-md px-1.5 py-1 pr-14 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
             >
               <ChevronRight
                 className={`h-3 w-3 shrink-0 transition-transform ${collapsedGroup ? '' : 'rotate-90'}`}
                 strokeWidth={2}
               />
-              <span className="min-w-0 flex-1 truncate">{parts[depth]}</span>
-              <span className="shrink-0 text-[10.5px] text-ds-faint group-hover/folder:invisible">{items.length}</span>
+              <span className="min-w-0 flex-1 text-left"><span className="block truncate">{display.label}</span>{display.identifier ? <span className="block truncate text-[9.5px] font-normal text-ds-faint">{display.identifier}</span> : null}</span>
+              <span className="shrink-0 text-[10.5px] text-ds-faint group-hover/folder:invisible">{groupEntries.length}</span>
             </button>
+            <button type="button" onClick={() => void openPaperBatchAssistant({ workspaceRoot: libraryRoot, entries: groupEntries, sourceLabel: `${display.label} · ${group}` })} disabled={!groupEntries.length} title={t('paperBatchGroupAction')} aria-label={`${t('paperBatchGroupAction')}: ${display.label}`} className="absolute right-7 top-1 flex h-5 w-5 items-center justify-center rounded text-ds-faint transition hover:bg-ds-main hover:text-accent disabled:opacity-25"><Sparkles size={13} /></button>
             <button
               type="button"
               onClick={() => void importInto(group)}

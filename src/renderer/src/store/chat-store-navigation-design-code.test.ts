@@ -332,6 +332,63 @@ describe('chat-store navigation workspace selection', () => {
     expect(harness.state.composerAgentId).toBe('')
   })
 
+  it('retains a late Work creation ID without registry promotion or newer-navigation override', async () => {
+    const pending = deferred<NormalizedThread>()
+    const createThread = vi.fn(() => pending.promise)
+    registryMock.getProvider.mockReturnValue({ createThread })
+    const storage = new MemoryStorage()
+    vi.stubGlobal('window', { localStorage: storage, kunGui: {
+      workspaceDirectoryExists: vi.fn(async () => true)
+    } })
+    const harness = buildHarness()
+    let active = true
+    const creation = harness.actions.createWriteThread('/library', '', { activationGuard: () => active })
+    await vi.waitFor(() => expect(createThread).toHaveBeenCalledOnce())
+    active = false
+    harness.state.route = 'chat'
+    harness.state.activeThreadId = 'newer-selection'
+    pending.resolve(thread({ id: 'late-batch', workspace: '/library', agentSurface: 'write' }))
+    await expect(creation).resolves.toBe('late-batch')
+    expect(harness.selectThread).not.toHaveBeenCalled()
+    expect(harness.state.route).toBe('chat')
+    expect(harness.state.activeThreadId).toBe('newer-selection')
+    expect(harness.refreshThreads).not.toHaveBeenCalled()
+    expect(readWriteThreadRegistry(storage).workspaces['/library']).toBeUndefined()
+  })
+
+  it('passes Work creation activation guards through async thread selection', async () => {
+    const createThread = vi.fn(async () => thread({ id: 'batch', workspace: '/library', agentSurface: 'write' }))
+    registryMock.getProvider.mockReturnValue({ createThread })
+    vi.stubGlobal('window', { localStorage: new MemoryStorage(), kunGui: {
+      workspaceDirectoryExists: vi.fn(async () => true)
+    } })
+    const harness = buildHarness()
+    let active = true
+    await harness.actions.createWriteThread('/library', '', { activationGuard: () => active })
+    expect(harness.selectThread).toHaveBeenCalledWith('batch', { selectionGuard: expect.any(Function) })
+    const guard = harness.selectThread.mock.calls[0][1].selectionGuard
+    expect(guard()).toBe(true)
+    active = false
+    expect(guard()).toBe(false)
+  })
+
+  it('guards canonical Work selection before registry promotion and during hydration', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('window', { localStorage: storage })
+    const harness = buildHarness()
+    let active = false
+    await harness.actions.selectWriteThread('result', '/library', '', { activationGuard: () => active })
+    expect(harness.selectThread).not.toHaveBeenCalled()
+    expect(readWriteThreadRegistry(storage).workspaces['/library']).toBeUndefined()
+    expect(harness.state.route).toBe('chat')
+    active = true
+    await harness.actions.selectWriteThread('result', '/library', '', { activationGuard: () => active })
+    expect(harness.selectThread).toHaveBeenCalledWith('result', { selectionGuard: expect.any(Function) })
+    expect(readWriteThreadRegistry(storage).workspaces['/library'].activeThreadId).toBe('result')
+    active = false
+    expect(harness.selectThread.mock.calls[0][1].selectionGuard()).toBe(false)
+  })
+
   it('does not bind a Code-only primary Agent to a Work thread', async () => {
     const created = thread({
       id: 'thr_write_default',

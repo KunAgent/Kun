@@ -38,6 +38,7 @@ import type {
   PaperLibrarySortKey,
   PaperUnitReadingActivity
 } from '@shared/paper/paper-library-types'
+import { openPaperBatchAssistant } from '../../paper/paper-batch-actions'
 import { currentImportFolder, currentImportParentDir } from '../../paper/paper-import-target'
 
 function statusLabelKey(status: string | undefined): string {
@@ -321,6 +322,7 @@ export function PaperLibraryView({
         counts={counts}
         tags={tags}
         groups={groups}
+        entries={entries}
         shown={visible.length}
         loading={entriesLoading}
         missingPdf={counts.missingPdf}
@@ -335,13 +337,15 @@ export function PaperLibraryView({
 
       <div className="flex flex-wrap items-center gap-2 border-b border-ds-border-muted px-4 py-2">
         <button type="button" data-testid="paper-open-matrix" className="rounded-md border border-ds-border-muted px-3 py-1.5 text-xs text-accent hover:bg-ds-hover" onClick={() => setMatrixOpen(true)}>{t('paperMatrixTitle')}</button>
+        <button type="button" data-testid="paper-batch-visible" className="inline-flex items-center gap-1.5 rounded-md border border-accent/20 px-3 py-1.5 text-xs text-accent hover:bg-ds-hover disabled:opacity-40" disabled={!visible.length} onClick={() => void openPaperBatchAssistant({ workspaceRoot, entries: visible, sourceLabel: filter.group || t('paperBatchVisibleAction') })}><Sparkles size={13} />{t('paperBatchVisibleAction')}</button>
         <span className="text-xs text-ds-muted">{t('paperReadingLocalControls')}</span>
       </div>
       {selection.size > 0 ? (
-        <div className="flex items-center gap-2 border-b border-ds-border-muted bg-accent-tint/[0.05] px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-ds-border-muted bg-accent-tint/[0.05] px-4 py-2">
           <span className="text-[12px] font-medium text-ds-ink">
             {t('writePaperSelected', { count: selection.size })}
           </span>
+          <button type="button" data-testid="paper-batch-selected" onClick={() => void openPaperBatchAssistant({ workspaceRoot, entries: entries.filter((entry) => selection.has(entry.unitDir)), sourceLabel: t('paperBatchSelectedAction') })} className="inline-flex h-6 items-center gap-1 rounded-full border border-accent/30 px-2 text-[11.5px] text-accent hover:bg-accent/10"><Sparkles size={12} />{t('paperBatchSelectedAction')}</button>
           {(['unread', 'reading', 'read'] as const).map((status) => (
             <button
               key={status}

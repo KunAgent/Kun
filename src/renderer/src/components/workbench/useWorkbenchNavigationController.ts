@@ -1,3 +1,4 @@
+import { useWorkAssistantNavigation } from '../../write/work-assistant-navigation'
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
 import { useWorkbenchChatStarters } from './use-workbench-chat-starters'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
@@ -405,6 +406,7 @@ export function useWorkbenchNavigationController({
   }, [beginNavigation, navigationIsCurrent, openAde, setConnectPhoneSidebarOpen])
 
   const openWriteMode = useCallback((): void => {
+    useWorkAssistantNavigation.getState().openAssistant()
     const requestId = beginNavigation()
     setConnectPhoneSidebarOpen(false)
     void openWrite({ activationGuard: () => navigationIsCurrent(requestId) })

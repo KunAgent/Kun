@@ -1,6 +1,10 @@
-import { lazy, Suspense, type ReactElement, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactElement, type ReactNode } from 'react'
 import { WorkbenchConversationStage, type WorkbenchConversationStageProps } from './WorkbenchConversationStage'
 import { normalizeWorkbenchRoute } from './workbench-route'
+import { ensureWorkAssistantScope } from '../../write/work-assistant-scope'
+import { paperResearchStageActive } from '../../paper/paper-view'
+import { useWorkAssistantNavigation } from '../../write/work-assistant-navigation'
+import { WorkAssistantChromeContext } from '../write/WorkAssistantChromeContext'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { PaperNoticeToast } from '../paper/PaperNoticeToast'
 import { WriteSideRail } from '../write/WriteSideRail'
@@ -26,6 +30,9 @@ const WriteWorkspaceView = lazy(() =>
 )
 const PaperWorkspaceView = lazy(() =>
   import('../paper/PaperWorkspaceView').then((module) => ({ default: module.PaperWorkspaceView }))
+)
+const PaperWorkspaceDialogs = lazy(() =>
+  import('../paper/PaperWorkspaceDialogs').then((module) => ({ default: module.PaperWorkspaceDialogs }))
 )
 const RoomsWorkspaceView = lazy(() =>
   import('../rooms/RoomsWorkspaceView').then((module) => ({ default: module.RoomsWorkspaceView }))
@@ -81,36 +88,49 @@ function WorkbenchPaneFallback(): ReactElement {
  */
 function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
   const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
-  // The Work rail sits right of the panel on both surfaces; phone-sized remote
-  // layouts keep the tab-bar assistant toggle instead.
+  const surface = useWorkAssistantNavigation((s) => s.surface)
+  const fullPage = surface === 'assistant'
+  const emptyResearch = useWriteWorkspaceStore((s) => paperResearchStageActive(s) && !s.paperResearch.sessionId)
+  useEffect(() => { if (fullPage && emptyResearch) ensureWorkAssistantScope() }, [fullPage, emptyResearch])
   const remoteMobile = useRemoteMobileLayout()
-  const rightPanel = <>{write.rightPanel}{remoteMobile ? null : <WriteSideRail />}</>
-  if (workSurface === 'papers') {
-    return (
-      <PaperWorkspaceView
-        leftSidebarCollapsed={write.leftSidebarCollapsed}
-        onToggleLeftSidebar={write.onToggleLeftSidebar}
-        input={write.input}
-        setInput={write.setInput}
-        onSubmitPrompt={write.onSubmitPrompt}
-        onAttachImage={write.onAttachImage}
-        onOpenAgentSettings={write.onOpenAgentSettings}
-        rightPanel={rightPanel}
-      />
-    )
-  }
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.altKey && event.key === 'ArrowLeft' && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault()
+        useWorkAssistantNavigation.getState().back()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   return (
-    <div className="flex min-h-0 flex-1">
-      <WriteWorkspaceView
-        leftSidebarCollapsed={write.leftSidebarCollapsed}
-        onToggleLeftSidebar={write.onToggleLeftSidebar}
-        input={write.input}
-        setInput={write.setInput}
-        onSubmitPrompt={write.onSubmitPrompt}
-        onOpenAgentSettings={write.onOpenAgentSettings}
-      />
-      {rightPanel}
+    <WorkAssistantChromeContext.Provider value={write}>
+    <div className="relative flex min-h-0 min-w-0 flex-1" data-work-surface={surface}>
+      {/* Keep document tabs, selections and scroll mounted while presenting the
+          single assistant beside them. Docking never creates another session. */}
+      <div className={fullPage ? 'hidden' : 'flex min-h-0 min-w-0 flex-1'} aria-hidden={fullPage}>
+        {workSurface === 'papers' ? (
+          <PaperWorkspaceView
+            leftSidebarCollapsed={write.leftSidebarCollapsed}
+            onToggleLeftSidebar={write.onToggleLeftSidebar}
+            input={write.input} setInput={write.setInput}
+            onSubmitPrompt={write.onSubmitPrompt} onAttachImage={write.onAttachImage}
+            onOpenAgentSettings={write.onOpenAgentSettings} rightPanel={null} dialogsExternal
+          />
+        ) : (
+          <WriteWorkspaceView
+            leftSidebarCollapsed={write.leftSidebarCollapsed}
+            onToggleLeftSidebar={write.onToggleLeftSidebar}
+            input={write.input} setInput={write.setInput}
+            onSubmitPrompt={write.onSubmitPrompt} onOpenAgentSettings={write.onOpenAgentSettings}
+          />
+        )}
+      </div>
+      {write.rightPanel}
+      {workSurface === 'papers' ? <PaperWorkspaceDialogs /> : null}
+      {fullPage || remoteMobile ? null : <WriteSideRail />}
     </div>
+    </WorkAssistantChromeContext.Provider>
   )
 }
 

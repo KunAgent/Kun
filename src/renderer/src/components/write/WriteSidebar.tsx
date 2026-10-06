@@ -41,6 +41,8 @@ import {
 } from '../../write/write-resource-activity'
 import { WorkWhiteboardTitleDialog } from './WorkWhiteboardTitleDialog'
 import { useWorkWhiteboardCreation } from './use-work-whiteboard-creation'
+import { WorkAssistantNav } from './WorkAssistantNav'
+import { useWorkAssistantNavigation } from '../../write/work-assistant-navigation'
 import { WriteEntryDialog, type WriteEntryDialogKind } from './WriteEntryDialog'
 import { ConnectPhoneSidebarPanel } from '../chat/ConnectPhoneView'
 import { WorkspaceModeTabs } from '../chat/WorkspaceModeTabs'
@@ -399,6 +401,7 @@ export function WriteSidebar({
           onWriteOpen={onWriteOpen}
         />
         <PaperModeToggle />
+        <WorkAssistantNav showWorkspace />
         <SidebarCommandRow
           icon={<FilePlus2 className="h-4 w-4" strokeWidth={1.9} />}
           label={t('writeCreateFile')}
@@ -581,7 +584,7 @@ export function WriteSidebar({
                         [workspacePath]: current[workspacePath] !== true
                       }))}
                       onCreate={() => void createWorkWhiteboard()}
-                      onOpen={openWhiteboard}
+                      onOpen={(id) => { useWorkAssistantNavigation.getState().openWorkspace(); openWhiteboard(id) }}
                       onToggleMenu={(boardId) => setWhiteboardMenuId((current) => current === boardId ? null : boardId)}
                       onRename={(board) => {
                         setWhiteboardMenuId(null)
@@ -601,7 +604,7 @@ export function WriteSidebar({
                       error={treeError}
                       rootLoading={rootLoading}
                       onToggleDir={(path) => void toggleDirectory(workspaceRoot, path)}
-                      onSelectFile={(path) => void openFile(workspaceRoot, path)}
+                      onSelectFile={(path) => { useWorkAssistantNavigation.getState().openWorkspace(); void openFile(workspaceRoot, path) }}
                       onCreateFile={(directoryPath) => void openCreateFileDialog(directoryPath)}
                       onCreateDirectory={(directoryPath) => void openCreateDirectoryDialog(directoryPath)}
                       onRenameEntry={openRenameEntryDialog}

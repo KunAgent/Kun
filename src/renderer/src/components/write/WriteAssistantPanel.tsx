@@ -1,4 +1,4 @@
-import { useEffect, type ReactElement } from 'react'
+import { useContext, useEffect, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   FileText,
@@ -7,6 +7,8 @@ import {
   Loader2,
   MessageSquareQuote,
   PanelRightClose,
+  Maximize2,
+  ArrowLeft,
   Plus,
   TextSelect,
   X
@@ -16,6 +18,7 @@ import type { AttachmentReference, RuntimeConnectionStatus, ChatBlock } from '..
 import type { CoreRuntimeSkillJson } from '../../agent/kun-contract'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
 import { useChatStore } from '../../store/chat-store'
+import { openPaperViewTab } from '../../paper/paper-view'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { openBoundedPaperReading } from '../../paper/paper-reading-entry'
 import { usePaperStore } from '../../write/paper/paper-store'
@@ -40,6 +43,13 @@ import { WritePaperAssistantActions } from './WritePaperAssistantActions'
 import { WritePresentationViewChip } from './WritePresentationViewChip'
 import { WriteResourceConversationHistoryPopover } from './WriteResourceConversationHistoryPopover'
 import { useWriteResourceConversationHistory } from './useWriteResourceConversationHistory'
+import { ensureWorkAssistantScope, revealWorkAssistant } from '../../write/work-assistant-scope'
+import { useWorkAssistantNavigation } from '../../write/work-assistant-navigation'
+import { COMPOSER_FOCUS_REQUEST_EVENT } from '../chat/floating-composer-commands'
+import { PaperBatchAssistantPanel } from '../paper/batch/PaperBatchAssistantPanel'
+import { usePaperBatchStore } from '../../paper/paper-batch-store'
+import { WorkAssistantChromeContext } from './WorkAssistantChromeContext'
+import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { useChildThreadViewer } from './useChildThreadViewer'
 
 type Props = {
@@ -83,6 +93,7 @@ type Props = {
   onPickWorkspace: () => void
   onCollapse: () => void
   className?: string
+  presentation?: 'sidebar' | 'page'
 }
 
 const EMPTY_SKILL_COMMANDS: CoreRuntimeSkillJson[] = []
@@ -125,10 +136,19 @@ export function WriteAssistantPanel({
   onOpenSettings,
   onConfigureProviders,
   onNewConversation,
+  onPickWorkspace,
   onCollapse,
-  className = ''
+  className = '',
+  presentation = 'sidebar'
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const fullPage = presentation === 'page'
+  const chrome = useContext(WorkAssistantChromeContext)
+  const paperBatch = usePaperBatchStore((state) => state.batch)
+  const configuringBatch = paperBatch?.phase === 'setup'
+  useEffect(() => {
+    if (fullPage) window.dispatchEvent?.(new Event(COMPOSER_FOCUS_REQUEST_EVENT))
+  }, [fullPage])
   // Field-level subscription: keeps the assistant panel from re-rendering on
   // fileContent updates emitted for every keystroke in the editor.
   const {
@@ -215,6 +235,7 @@ export function WriteAssistantPanel({
     !conversationHistory?.running &&
     !conversationHistory?.workflowLocked
   const startNewConversation = (): void => {
+    if (fullPage && ensureWorkAssistantScope()) { onNewConversation(); return }
     if (!conversationHistory) {
       onNewConversation()
       return
@@ -261,10 +282,20 @@ export function WriteAssistantPanel({
 
   return (
     <aside
-      className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${className}`}
+      data-testid="work-assistant-panel"
+      data-presentation={presentation}
+      className={`write-assistant-panel ${fullPage ? 'work-assistant-page' : ''} ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${className}`}
     >
       <div className="write-assistant-header ds-sidebar-surface-chrome shrink-0">
         <div className="flex h-[52px] min-w-0 items-center gap-1 border-b border-ds-border-muted pl-4 pr-2.5">
+          {fullPage && chrome?.leftSidebarCollapsed ? <SidebarTitlebarToggleButton
+            title={t('sidebarExpand')} onClick={chrome.onToggleLeftSidebar} /> : null}
+          {fullPage ? <button type="button"
+            onClick={() => useWorkAssistantNavigation.getState().openWorkspace()}
+            className="write-panel-icon-button" title={t('workAssistantBackToWorkspace')}
+            aria-label={t('workAssistantBackToWorkspace')}>
+            <ArrowLeft className="h-4 w-4" />
+          </button> : null}
           <WriteAssistantSparkleIcon className="write-ai-tint h-[18px] w-[18px] shrink-0" />
           <span className="ml-2 min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-ds-ink">
             {t('writeAssistant')}
@@ -286,7 +317,19 @@ export function WriteAssistantPanel({
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
           </button>
-          <button
+          <button type="button"
+            onClick={() => {
+              if (fullPage) {
+                useWriteWorkspaceStore.getState().openWriteRightPanel('assistant')
+                useWorkAssistantNavigation.getState().dockAssistant()
+              } else revealWorkAssistant()
+            }}
+            className="write-panel-icon-button"
+            aria-label={t(fullPage ? 'workAssistantDock' : 'workAssistantExpand')}
+            title={t(fullPage ? 'workAssistantDock' : 'workAssistantExpand')}>
+            {fullPage ? <PanelRightClose className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+          {!fullPage ? <button
             type="button"
             onClick={onCollapse}
             className="write-panel-icon-button"
@@ -294,7 +337,7 @@ export function WriteAssistantPanel({
             title={t('rightPanelCollapse')}
           >
             <PanelRightClose className="h-4 w-4" strokeWidth={1.75} />
-          </button>
+          </button> : null}
         </div>
         <div className="flex min-w-0 items-center gap-1.5 border-b border-ds-border-muted px-4 py-2.5">
           <span className="write-context-chip min-w-0" title={paperContextLabel ?? activeFileLabel}>
@@ -325,6 +368,9 @@ export function WriteAssistantPanel({
       </div>
 
       <div className="write-assistant-body ds-sidebar-surface-body flex min-h-0 flex-1 flex-col overflow-hidden">
+        {paperBatch && !viewingChildThread ? <div className={`min-h-0 overflow-hidden ${hasParentTimeline && !configuringBatch ? 'max-h-[65%] shrink' : 'flex-1'}`} style={hasParentTimeline && !configuringBatch ? { height: '65%' } : undefined}>
+          <PaperBatchAssistantPanel providerId={composerProviderId ?? ''} model={composerModel} />
+        </div> : null}
         {viewingChildThread ? (
           <>
             <div
@@ -363,7 +409,7 @@ export function WriteAssistantPanel({
                   onOpenSettings={onOpenSettings}
                   onSelectSuggestion={(text) => setInput(text)}
                   onOpenChildThread={openChildThread}
-                  compactCards
+                  compactCards={!fullPage}
                 />
               ) : (
                 <div className="flex min-h-40 flex-1 items-center justify-center px-6 text-center text-[12.5px] leading-5 text-ds-muted">
@@ -373,7 +419,7 @@ export function WriteAssistantPanel({
             </div>
           </>
         ) : hasParentTimeline ? (
-          <div className="write-assistant-timeline flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className={configuringBatch ? 'hidden' : 'write-assistant-timeline flex min-h-0 flex-1 flex-col overflow-hidden'}>
             <LazyMessageTimeline
               blocks={blocks}
               liveReasoning={liveReasoning}
@@ -384,21 +430,30 @@ export function WriteAssistantPanel({
               onOpenSettings={onOpenSettings}
               onSelectSuggestion={(text) => setInput(text)}
               onOpenChildThread={openChildThread}
-              compactCards
+              compactCards={!fullPage}
             />
           </div>
-        ) : (
+        ) : paperBatch ? null : (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 py-5">
             <div className="write-assistant-ready flex flex-col items-center px-3 pb-8 pt-12 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-[16px] border border-accent/12 bg-accent/[0.07] text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.62)]">
                 <WriteAssistantSparkleIcon className="h-6 w-6" />
               </div>
               <h3 className="mt-5 text-[17px] font-semibold tracking-[-0.025em] text-ds-ink">
-                {t('writeAssistantEmptyTitle')}
+                {t(fullPage ? 'workAssistantPageTitle' : 'writeAssistantEmptyTitle')}
               </h3>
               <p className="mt-2 max-w-[270px] text-[12.5px] leading-5 text-ds-muted">
-                {t('writeAssistantEmptySub')}
+                {t(fullPage ? 'workAssistantPageDescription' : 'writeAssistantEmptySub')}
               </p>
+              {fullPage && papersSurface && workspaceRoot ? <button type="button"
+                onClick={() => openPaperViewTab('library')}
+                className="work-assistant-choose-papers mt-4 rounded-xl border border-ds-border-muted px-4 py-2 text-[13px] font-medium text-ds-ink">
+                {t('workAssistantChoosePapers')}
+              </button> : null}
+              {fullPage && !workspaceRoot ? <button type="button" onClick={papersSurface ? () => openPaperViewTab('library') : onPickWorkspace}
+                className="mt-4 rounded-lg bg-accent px-4 py-2 text-[13px] text-white">
+                {t(papersSurface ? 'writePaperModeLibraryView' : 'writeAddWorkspace')}
+              </button> : null}
             </div>
 
             <div className="write-assistant-actions mt-auto overflow-hidden border-y border-ds-border-muted">
@@ -554,7 +609,7 @@ export function WriteAssistantPanel({
           />
         ) : (
           <FloatingComposer
-            variant="compact"
+            variant={fullPage ? 'default' : 'compact'}
             workspaceRootOverride={workspaceRoot}
             input={input}
             setInput={setInput}
@@ -588,6 +643,7 @@ export function WriteAssistantPanel({
             onPasteClipboardImage={onPasteClipboardImage}
             onRemoveAttachment={onRemoveAttachment}
             onSend={() => {
+              if (fullPage) ensureWorkAssistantScope()
               if (papersSurface && activeUnitRel && !viewingChildThread) {
                 void openBoundedPaperReading({ workspaceRoot, unitDir: activeUnitRel, meta: activePaperEntry?.meta, question: input })
               } else onSend()

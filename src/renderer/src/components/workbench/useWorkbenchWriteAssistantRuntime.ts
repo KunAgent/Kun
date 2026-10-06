@@ -8,7 +8,8 @@ import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { useChatStore } from '../../store/chat-store'
 import {
   activeWriteThreadForWorkspace,
-  readWriteThreadRegistry
+  readWriteThreadRegistry,
+  writeWorkspaceKey
 } from '../../write/write-thread-registry'
 import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
 import { usePaperStore } from '../../write/paper/paper-store'
@@ -108,13 +109,9 @@ export function useWorkbenchWriteAssistantRuntime({
       })
       return
     }
-    // Docs surface keeps the legacy rule: no open file, no selected thread.
-    // On the papers surface the library/discover views fall through to the
-    // library-level (workspace) thread below.
-    if (!activeWriteFilePath && workSurface === 'docs') {
-      if (activeThreadId) chatState.clearActiveThreadSelection()
-      return
-    }
+    // The Work landing page can own a workspace conversation with no file.
+    // Both presentations resolve that same existing scope; navigation never
+    // clears it merely because the document canvas has no selection.
     if (runtimeConnection !== 'ready') {
       if (activeThreadId) chatState.clearActiveThreadSelection()
       return
@@ -139,7 +136,22 @@ export function useWorkbenchWriteAssistantRuntime({
     if (target) {
       if (pendingThreadIdRef.current === target.id) return
       pendingThreadIdRef.current = target.id
-      void chatState.selectWriteThread(target.id, writeWorkspaceRoot, resourcePath).finally(() => {
+      const activationGuard = (): boolean => {
+        const workspace = useWriteWorkspaceStore.getState()
+        const latestChat = useChatStore.getState()
+        if (latestChat.route !== 'write' || latestChat.runtimeConnection !== 'ready' || workspace.activeWhiteboardId ||
+          writeWorkspaceKey(workspace.workspaceRoot) !== writeWorkspaceKey(writeWorkspaceRoot)) return false
+        const latestResource = paperConversationResourcePath({
+          surface: workspace.workSurface, workspaceRoot: workspace.workspaceRoot,
+          activeFilePath: workspace.activeFilePath, unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
+          entriesByDir: workspace.entriesByDir, view: paperModeView(workspace),
+          researchSessionId: workspace.paperResearch.sessionId
+        })
+        return latestResource === resourcePath && activeWriteThreadForWorkspace(
+          writeWorkspaceRoot, latestChat.threads, readWriteThreadRegistry(), latestResource
+        )?.id === target.id
+      }
+      void chatState.selectWriteThread(target.id, writeWorkspaceRoot, resourcePath, { activationGuard }).finally(() => {
         if (pendingThreadIdRef.current === target.id) pendingThreadIdRef.current = null
       })
     } else if (activeThreadId) {

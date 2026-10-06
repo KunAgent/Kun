@@ -396,7 +396,7 @@ export type ChatState = {
   createWriteThread: (
     workspaceRoot?: string,
     activeFilePath?: string,
-    options?: { title?: string; titleAuto?: boolean }
+    options?: { title?: string; titleAuto?: boolean; activationGuard?: (createdThreadId?: string) => boolean }
   ) => Promise<string | null>
   ensureDesignThreadForWorkspace: (workspaceRoot?: string, docId?: string) => Promise<string | null>
   createDesignThread: (
@@ -412,7 +412,8 @@ export type ChatState = {
   selectWriteThread: (
     threadId: string,
     workspaceRoot?: string,
-    activeFilePath?: string
+    activeFilePath?: string,
+    options?: { activationGuard?: () => boolean }
   ) => Promise<void>
   setWriteAssistantVisibleThreadId: (threadId: string | null) => void
   openSettings: (section?: SettingsRouteSection) => void

@@ -1,0 +1,13 @@
+{
+  "workAssistantDocuments": "Documents",
+  "workAssistantBackToWorkspace": "Back to workspace (Alt+Left)",
+  "workAssistantDock": "Continue in sidebar",
+  "workAssistantExpand": "Open full conversation",
+  "workAssistantPageTitle": "What would you like to work on?",
+  "workAssistantPageDescription": "Ask a question, attach a file, or choose papers from your library to prepare a batch task. Nothing runs until you send or confirm.",
+  "workAssistantConversations": "Conversations",
+  "workAssistantChoosePapers": "Choose papers for a batch task",
+  "workAssistantResearchHosted": "The conversation continues in the Work assistant.",
+  "workAssistantResearchRestore": "Show conversation here",
+  "workAssistantWorkspaceHistory": "Workspace conversations"
+}

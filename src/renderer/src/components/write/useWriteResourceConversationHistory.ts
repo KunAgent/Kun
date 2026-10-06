@@ -12,7 +12,8 @@ import {
   readWriteThreadRegistry,
   writeFileKey,
   writeThreadIdsForFile,
-  writeWorkspaceKey
+  writeWorkspaceKey,
+  writeWorkspaceConversationThreadIds
 } from '../../write/write-thread-registry'
 import {
   useWriteWorkspaceStore,
@@ -36,7 +37,7 @@ export type WriteResourceConversationEntry = {
 
 export type WriteResourceConversationHistoryModel = {
   scopeKey: string
-  resourceKind: 'file' | 'whiteboard' | 'paper'
+  resourceKind: 'file' | 'whiteboard' | 'paper' | 'workspace'
   resourceLabel: string
   entries: WriteResourceConversationEntry[]
   running: boolean
@@ -51,12 +52,21 @@ export type WriteResourceConversationHistoryModel = {
 
 type ResourceScope = {
   key: string
-  kind: 'file' | 'whiteboard' | 'paper'
+  kind: 'file' | 'whiteboard' | 'paper' | 'workspace'
   workspaceRoot: string
   resourceId: string
   label: string
   threadIds: string[]
   workflowLocked: boolean
+}
+
+function workspaceScope(workspaceRoot: string): ResourceScope {
+  const record = readWriteThreadRegistry().workspaces[writeWorkspaceKey(workspaceRoot)]
+  return {
+    key: `workspace:${writeWorkspaceKey(workspaceRoot)}`, kind: 'workspace',
+    workspaceRoot, resourceId: workspaceRoot, label: writeBasenameFromPath(workspaceRoot),
+    threadIds: writeWorkspaceConversationThreadIds(record), workflowLocked: false
+  }
 }
 
 function associatedThreadLooksRunning(thread: NormalizedThread | undefined): boolean {
@@ -66,6 +76,12 @@ function associatedThreadLooksRunning(thread: NormalizedThread | undefined): boo
 function scopeMatchesCurrentResource(scope: ResourceScope): boolean {
   const state = useWriteWorkspaceStore.getState()
   if (writeWorkspaceKey(state.workspaceRoot) !== writeWorkspaceKey(scope.workspaceRoot)) return false
+  if (scope.kind === 'workspace') {
+    if (state.activeWhiteboardId) return false
+    return state.workSurface === 'papers'
+      ? ['library', 'discover'].includes(paperModeView(state))
+      : !state.activeFilePath
+  }
   if (scope.kind === 'whiteboard') return state.activeWhiteboardId === scope.resourceId
   if (scope.kind === 'paper') {
     if (state.activeWhiteboardId) return false
@@ -179,6 +195,8 @@ export function useWriteResourceConversationHistory(
   }
 
   const scope = useMemo<ResourceScope | null>(() => {
+    // Thread activation also updates the persisted resource registry.
+    void activeThreadId
     const normalizedWorkspace = normalizeWorkspaceRoot(workspaceRoot)
     if (!normalizedWorkspace) return null
     if (activeWhiteboardId && activeWhiteboard) {
@@ -204,7 +222,7 @@ export function useWriteResourceConversationHistory(
         researchSessionId
       })
       const fileKey = writeFileKey(resource)
-      if (!fileKey) return null
+      if (!fileKey) return workspaceScope(normalizedWorkspace)
       const activeKey = writeFileKey(activeFilePath)
       const isPaperScope = fileKey !== activeKey
       const relDir = normalizePath(fileKey).startsWith(`${normalizePath(normalizedWorkspace)}/`)
@@ -228,7 +246,7 @@ export function useWriteResourceConversationHistory(
       }
     }
     const fileKey = writeFileKey(activeFilePath)
-    if (!fileKey || !activeFilePath) return null
+    if (!fileKey || !activeFilePath) return workspaceScope(normalizedWorkspace)
     return {
       key: `file:${writeWorkspaceKey(normalizedWorkspace)}:${fileKey}`,
       kind: 'file',
@@ -243,7 +261,7 @@ export function useWriteResourceConversationHistory(
       ),
       workflowLocked: false
     }
-  }, [activeFilePath, activeWhiteboard, activeWhiteboardId, paperView, researchSessionId, workSurface, workspaceRoot])
+  }, [activeFilePath, activeWhiteboard, activeWhiteboardId, activeThreadId, paperView, researchSessionId, workSurface, workspaceRoot])
 
   useEffect(() => {
     setCachedThreads({})
@@ -302,6 +320,10 @@ export function useWriteResourceConversationHistory(
       await selectWriteThread(threadId, scope.workspaceRoot, scope.resourceId)
       return
     }
+    if (scope.kind === 'workspace') {
+      await selectWriteThread(threadId, scope.workspaceRoot)
+      return
+    }
     const bound = await bindWhiteboardThread(scope.resourceId, threadId)
     if (bound && scopeMatchesCurrentResource(scope)) {
       await selectWriteThread(threadId, scope.workspaceRoot)
@@ -345,6 +367,10 @@ export function useWriteResourceConversationHistory(
     if (!fallbackThreadId || !scopeMatchesCurrentResource(scope)) return
     if (scope.kind === 'file' || scope.kind === 'paper') {
       await selectWriteThread(fallbackThreadId, scope.workspaceRoot, scope.resourceId)
+      return
+    }
+    if (scope.kind === 'workspace') {
+      await selectWriteThread(fallbackThreadId, scope.workspaceRoot)
       return
     }
     const bound = await bindWhiteboardThread(scope.resourceId, fallbackThreadId)

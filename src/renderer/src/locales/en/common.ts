@@ -1,3 +1,5 @@
+import paperBatch from './common/paper-batch.json'
+import workAssistant from './common/work-assistant.json'
 import agentUpdates from './common/agent-updates.json'
 import roomsPolish from './common/rooms-polish.json'
 import executionTasks from './common/execution-tasks.json'
@@ -93,6 +95,8 @@ const common = {
   ...agentIntegrations,
   ...ade,
   ...workLayout,
+  ...workAssistant,
+  ...paperBatch,
 }
 
 export default common

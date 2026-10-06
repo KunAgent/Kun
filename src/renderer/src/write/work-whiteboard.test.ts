@@ -1,3 +1,4 @@
+import { useWorkAssistantNavigation } from './work-assistant-navigation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceFileReadResult } from '@shared/workspace-file'
 import { clearDesignPersistenceCoordinatorForTests } from '../design/design-persistence-coordinator'
@@ -105,6 +106,18 @@ afterEach(() => {
 })
 
 describe('Work whiteboard registry', () => {
+  it('reveals explicit whiteboard creation without letting registry hydration steal the assistant landing', async () => {
+    useWorkAssistantNavigation.setState({ surface: 'assistant', previous: null, docked: false })
+    await useWriteWorkspaceStore.getState().loadWhiteboards('/work')
+    expect(useWorkAssistantNavigation.getState().surface).toBe('assistant')
+    const board = await useWriteWorkspaceStore.getState().createWhiteboard('/work', { title: 'New plan' })
+    expect(board).not.toBeNull()
+    expect(useWorkAssistantNavigation.getState().surface).toBe('workspace')
+    useWorkAssistantNavigation.getState().openAssistant()
+    useWriteWorkspaceStore.getState().openWhiteboard(board!.id)
+    expect(useWorkAssistantNavigation.getState().surface).toBe('workspace')
+  })
+
   it('parses versioned metadata and rejects unsafe board identities', () => {
     const content = JSON.stringify({
       version: 1,

@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { markWriteThread, saveWriteThreadRegistry } from '../../write/write-thread-registry'
 import { useWorkbenchWriteAssistantRuntime } from './useWorkbenchWriteAssistantRuntime'
 
 function Harness(): null {
@@ -150,4 +151,30 @@ describe('useWorkbenchWriteAssistantRuntime whiteboard binding', () => {
     expect(useWriteWorkspaceStore.getState().whiteboards['board-1']?.title).toBe('Pitch')
     await act(async () => renderer.unmount())
   })
+  it('retains a workspace conversation on the Documents assistant landing without an open file', async () => {
+    const data = new Map<string, string>()
+    vi.stubGlobal('localStorage', { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => data.set(key, value) })
+    saveWriteThreadRegistry(markWriteThread('/work', 'workspace-thread'))
+    useWriteWorkspaceStore.setState({ workSurface: 'docs', activeFilePath: null, activeWhiteboardId: null })
+    const clearActiveThreadSelection = vi.fn()
+    const selectWriteThread = vi.fn<ReturnType<typeof useChatStore.getState>['selectWriteThread']>(async () => undefined)
+    const createWriteThread = vi.fn(async () => 'unexpected')
+    useChatStore.setState({
+      route: 'write', runtimeConnection: 'ready', activeThreadId: 'workspace-thread',
+      threads: [{ id: 'workspace-thread', title: 'Work task', updatedAt: now, model: 'm', mode: 'agent', workspace: '/work', agentSurface: 'write' }],
+      clearActiveThreadSelection, selectWriteThread, createWriteThread
+    })
+    const renderer = await mount()
+    expect(clearActiveThreadSelection).not.toHaveBeenCalled()
+    expect(createWriteThread).not.toHaveBeenCalled()
+    await act(async () => useChatStore.setState({ activeThreadId: null }))
+    expect(selectWriteThread).toHaveBeenCalledWith('workspace-thread', '/work', undefined, { activationGuard: expect.any(Function) })
+    const guard = selectWriteThread.mock.calls[0]?.[3]?.activationGuard
+    expect(guard?.()).toBe(true)
+    useWriteWorkspaceStore.setState({ activeFilePath: '/work/newer.md' })
+    expect(guard?.()).toBe(false)
+    expect(createWriteThread).not.toHaveBeenCalled()
+    await act(async () => renderer.unmount())
+  })
+
 })

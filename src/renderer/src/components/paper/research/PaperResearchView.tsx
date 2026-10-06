@@ -1,3 +1,4 @@
+import { useWorkAssistantNavigation } from '../../../write/work-assistant-navigation'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { Archive, History, Loader2, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -78,6 +79,8 @@ function useElapsed(since: string | undefined, running: boolean): string {
 export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }): ReactElement {
   const { t, i18n } = useTranslation('common')
   const assistant = useWriteAssistantStage()
+  const rightPanelExpanded = useWriteWorkspaceStore((state) => state.writeRightPanel.expanded)
+  const conversationInAssistant = useWorkAssistantNavigation((state) => state.surface === 'assistant' || (state.docked && rightPanelExpanded))
   const libraryRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const libraries = useWriteWorkspaceStore((s) => s.paperMode.libraries)
   const sessionId = useWriteWorkspaceStore((s) => s.paperResearch.sessionId)
@@ -265,7 +268,18 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
 
       <div className={layout.body} data-rail={railOpen ? 'open' : 'closed'}>
         <div ref={stageRef} className={`${layout.stage} flex flex-col`}>
-          {!assistant ? (
+          {conversationInAssistant ? (
+            <div className="flex min-h-0 flex-1 flex-col" data-testid="research-assistant-hosted">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ds-border-muted px-4 py-3 text-xs text-ds-muted">
+                <span>{t('workAssistantResearchHosted')}</span>
+                <button type="button" className="rounded-lg border border-ds-border-muted px-3 py-2 hover:bg-ds-hover"
+                  onClick={() => useWorkAssistantNavigation.getState().openWorkspace()}>
+                  {t('workAssistantResearchRestore')}
+                </button>
+              </div>
+              <PaperResearchPool pool={pool} onFocusBlock={focusBlock} />
+            </div>
+          ) : !assistant ? (
             <div className="m-auto flex items-center gap-2 text-[12.5px] text-ds-faint">
               <Loader2 className="h-4 w-4 animate-spin" />
               {t('paperResearchLoading')}

@@ -84,10 +84,12 @@ export function WriteResourceConversationHistoryPopover({
           trigger: 'writeConversationPaperTrigger',
           title: 'writeConversationPaperTitle'
         }
-      : {
-          trigger: 'writeConversationFileTrigger',
-          title: 'writeConversationFileTitle'
-        }
+      : model.resourceKind === 'workspace'
+        ? { trigger: 'workAssistantWorkspaceHistory', title: 'workAssistantWorkspaceHistory' }
+        : {
+            trigger: 'writeConversationFileTrigger',
+            title: 'writeConversationFileTitle'
+          }
 
   useEffect(() => {
     setOpen(false)
@@ -222,6 +224,8 @@ export function WriteResourceConversationHistoryPopover({
                 <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-ds-faint">
                   {model.resourceKind === 'file' ? (
                     <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+                  ) : model.resourceKind === 'workspace' ? (
+                    <History className="h-3.5 w-3.5" strokeWidth={1.8} />
                   ) : model.resourceKind === 'paper' ? (
                     <GraduationCap className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
                   ) : (

@@ -13,6 +13,8 @@ import {
   SidebarIconButton
 } from '../sidebar/SidebarPrimitives'
 import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
+import { WorkAssistantNav } from '../write/WorkAssistantNav'
+import { useWorkAssistantNavigation } from '../../write/work-assistant-navigation'
 import { PaperModeToggle } from './PaperModeToggle'
 import { PaperSidebarNav } from './sidebar/PaperSidebarNav'
 import { PaperWorkspacesSection } from './sidebar/PaperWorkspacesSection'
@@ -50,6 +52,7 @@ export function PaperSidebar({
   const addClawChannel = useChatStore((s) => s.addClawChannel)
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
   const activePaperView = useWriteWorkspaceStore((s) => activePaperViewId(s.editorLayout))
+  const assistantPage = useWorkAssistantNavigation((s) => s.surface === 'assistant')
   const counts = usePaperModeStore((s) => s.counts)
 
   return (
@@ -106,7 +109,8 @@ export function PaperSidebar({
       ) : (
         <div className="ds-no-drag flex min-h-0 flex-1 flex-col">
           <div className="pt-2">
-            <PaperSidebarNav activeView={activePaperView} total={counts.total} />
+            <WorkAssistantNav />
+            <PaperSidebarNav activeView={assistantPage ? null : activePaperView} total={counts.total} />
           </div>
           <PaperWorkspacesSection />
         </div>

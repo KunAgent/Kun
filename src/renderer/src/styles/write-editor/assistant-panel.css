@@ -64,3 +64,51 @@
     padding-top: 24px;
   }
 }
+
+/* One assistant instance changes presentation; its thread and composer stay put. */
+.work-assistant-page.write-assistant-panel {
+  border-left: 0;
+  background: var(--ds-bg-main);
+  box-shadow: none;
+}
+.work-assistant-page .write-assistant-body {
+  background: var(--ds-bg-main);
+}
+.work-assistant-page .write-assistant-ready {
+  flex-shrink: 0;
+  margin-top: clamp(0px, 7vh, 80px);
+  padding-top: 20px;
+  min-height: 180px;
+}
+.work-assistant-page .write-assistant-ready h3 { font-size: clamp(22px, 2.6vw, 30px); }
+.work-assistant-page .write-assistant-ready p { max-width: 480px; font-size: 14px; line-height: 1.7; }
+.work-assistant-page .write-assistant-actions {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 10px;
+  width: min(100%, 760px);
+  margin: 20px auto auto;
+  border: 0;
+}
+.work-assistant-page .write-assistant-action-row {
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 14px;
+  padding: 14px;
+}
+.work-assistant-page .write-assistant-footer { border-top: 0; padding: 12px 24px 20px; }
+.work-assistant-page .write-assistant-footer > * { width: min(100%, 760px); margin-left: auto; margin-right: auto; }
+/* The footer is already constrained and centered. Timeline percentage insets
+   must not be applied again inside the 760px composer container. */
+.work-assistant-page.write-assistant-panel .write-assistant-footer .ds-floating-composer {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  padding: 0;
+}
+.work-assistant-page.write-assistant-panel .ds-chat-column-inset { padding-left: max(24px, calc((100% - 760px) / 2)); padding-right: max(24px, calc((100% - 760px) / 2)); }
+@media (max-width: 640px) {
+  .work-assistant-page .write-assistant-footer { padding: 8px 12px 12px; }
+  .work-assistant-page .write-assistant-ready { margin-top: 0; padding-bottom: 16px; }
+  .work-assistant-page .write-assistant-actions { grid-template-columns: 1fr; }
+}

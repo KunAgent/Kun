@@ -1,3 +1,4 @@
+import { useWorkAssistantNavigation } from '../write/work-assistant-navigation'
 import { activePaperViewId } from '../write/write-editor-layout'
 import type { WritePaperViewId } from '../write/write-workspace-store-types'
 import type { WriteWorkspaceState } from '../write/write-workspace-store-types'
@@ -49,5 +50,6 @@ export function focusedPaperViewId(
 }
 
 export function openPaperViewTab(view: WritePaperViewId): void {
+  useWorkAssistantNavigation.getState().openWorkspace()
   useWriteWorkspaceStore.getState().openPaperViewTab(view)
 }

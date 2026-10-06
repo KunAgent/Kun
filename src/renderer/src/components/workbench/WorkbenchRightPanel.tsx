@@ -9,6 +9,7 @@ import {
   type PointerEventHandler,
   type ReactElement
 } from 'react'
+import { useWorkAssistantNavigation } from '../../write/work-assistant-navigation'
 import { useTranslation } from 'react-i18next'
 import {
   DesignRightPanelContent,
@@ -156,6 +157,12 @@ export function WorkbenchRightPanel({
 }: WorkbenchRightPanelProps): ReactElement | null {
   const { t } = useTranslation('common')
   const remoteMobile = useRemoteMobileLayout()
+  const workAssistantSurface = useWorkAssistantNavigation((state) => state.surface)
+  const workAssistantPage = route === 'write' && workAssistantSurface === 'assistant'
+  const collapse = (): void => {
+    if (route === 'write' && useWorkAssistantNavigation.getState().docked) useWorkAssistantNavigation.getState().openWorkspace()
+    onCollapse()
+  }
   if ((route === 'chat' || route === 'ade') && rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.sddAi && code) {
     const visibleCodeState = codeRightTabsForGraphVisibility(code.state, graphEnabled)
     if (
@@ -179,21 +186,23 @@ export function WorkbenchRightPanel({
       />
     )
   }
-  if (!visible) return null
-  if (!graphEnabled && rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.graph) return null
+  if (!visible && !workAssistantPage) return null
+  if (!workAssistantPage && !graphEnabled && rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.graph) return null
   return (
     <>
-      <div
+      {!workAssistantPage ? <div
         role="separator"
         aria-orientation="vertical"
         className={workbenchDividerClassName(route)}
         onPointerDown={onBeginResize}
-      />
-      <div data-workbench-right-panel className="ds-sidebar-surface h-full min-h-0 shrink-0" style={{ width }}>
-        {remoteMobile ? (
+      /> : null}
+      <div data-workbench-right-panel data-work-assistant-page={workAssistantPage || undefined}
+        className={`ds-sidebar-surface h-full min-h-0 ${workAssistantPage ? 'min-w-0 flex-1' : 'shrink-0'}`}
+        style={workAssistantPage ? undefined : { width }}>
+        {remoteMobile && !workAssistantPage ? (
           <button
             type="button"
-            onClick={onCollapse}
+            onClick={collapse}
             className="ds-no-drag absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-ds-border-muted bg-ds-card text-ds-muted shadow-md"
             aria-label={t('close')}
           >
@@ -203,8 +212,8 @@ export function WorkbenchRightPanel({
         <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
           {design.panelMode !== 'hidden' ? (
             <DesignRightPanelContent {...design} />
-          ) : route === 'write' && writeAssistantOpen ? (
-            <WriteRightPanelContent write={write} onOpenAgentSettings={mcpSkills.onOpenSettings} onCollapse={onCollapse} />
+          ) : route === 'write' && (writeAssistantOpen || workAssistantPage) ? (
+            <WriteRightPanelContent fullPage={workAssistantPage} write={{ ...write, onCollapse: collapse }} onOpenAgentSettings={mcpSkills.onOpenSettings} onCollapse={collapse} />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sddAi && sdd.draft ? (
             <SddAssistantPanel {...sdd} draft={sdd.draft} className="h-full max-h-full w-full" />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.subagents ? (

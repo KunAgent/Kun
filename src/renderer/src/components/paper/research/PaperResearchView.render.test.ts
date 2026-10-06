@@ -1,3 +1,4 @@
+import { useWorkAssistantNavigation } from '../../../write/work-assistant-navigation'
 /** @vitest-environment jsdom */
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -88,7 +89,8 @@ describe('PaperResearchView', () => {
     host = document.createElement('div')
     document.body.appendChild(host)
     root = createRoot(host)
-    useWriteWorkspaceStore.setState({ workspaceRoot: ROOT, paperResearch: { agentTab: true, sessionId: null } })
+    useWorkAssistantNavigation.setState({ surface: 'workspace', previous: null, docked: false })
+    useWriteWorkspaceStore.setState({ writeRightPanel: { expanded: true, activeId: 'assistant' }, assistantOpen: true, workspaceRoot: ROOT, paperResearch: { agentTab: true, sessionId: null } })
     useChatStore.setState({ threads: [] })
   })
 
@@ -128,4 +130,20 @@ describe('PaperResearchView', () => {
     expect(host.querySelector('[data-testid="timeline"]')).toBeNull()
     expect(host.textContent).toContain('Opening research session')
   })
+  it('renders no second composer when the research conversation is promoted or docked', async () => {
+    await render(assistant())
+    expect(host.querySelectorAll('[data-testid="composer"]')).toHaveLength(1)
+    await act(async () => useWorkAssistantNavigation.getState().openAssistant())
+    expect(host.querySelectorAll('[data-testid="composer"]')).toHaveLength(0)
+    expect(host.querySelector('[data-testid="research-assistant-hosted"]')).not.toBeNull()
+    await act(async () => useWorkAssistantNavigation.getState().dockAssistant())
+    expect(host.querySelectorAll('[data-testid="composer"]')).toHaveLength(0)
+    await act(async () => useWriteWorkspaceStore.getState().toggleWriteRightPanel('assistant'))
+    expect(host.querySelectorAll('[data-testid="composer"]')).toHaveLength(1)
+    await act(async () => useWriteWorkspaceStore.getState().toggleWriteRightPanel('assistant'))
+    expect(host.querySelectorAll('[data-testid="composer"]')).toHaveLength(0)
+    await act(async () => useWorkAssistantNavigation.getState().openWorkspace())
+    expect(host.querySelectorAll('[data-testid="composer"]')).toHaveLength(1)
+  })
+
 })

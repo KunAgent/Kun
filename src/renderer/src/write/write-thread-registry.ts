@@ -510,6 +510,13 @@ function researchThreadIds(record: WriteThreadWorkspaceRecord): Set<string> {
   return ids
 }
 
+/** Candidate history for the workspace conversation, matching runtime selection. */
+export function writeWorkspaceConversationThreadIds(record: WriteThreadWorkspaceRecord | undefined): string[] {
+  if (!record) return []
+  const researchIds = researchThreadIds(record)
+  return record.threadIds.filter((id) => !researchIds.has(id))
+}
+
 export function activeWriteThreadForWorkspace(
   workspaceRoot: string,
   threads: NormalizedThread[],
@@ -529,7 +536,7 @@ export function activeWriteThreadForWorkspace(
     : researchIds?.has(record.activeThreadId) ? undefined : record.activeThreadId
   const candidateIds = fileKey
     ? record.fileThreadHistoryIds[fileKey] ?? (targetThreadId ? [targetThreadId] : [])
-    : record.threadIds.filter((id) => !researchIds?.has(id))
+    : writeWorkspaceConversationThreadIds(record)
   if (fileKey && candidateIds.length === 0) return null
   const candidates = candidateIds
     .map((id) => threads.find((thread) => thread.id === id) ?? null)

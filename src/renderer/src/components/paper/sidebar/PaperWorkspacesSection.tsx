@@ -13,6 +13,7 @@ import {
   removePaperLibrary,
   switchPaperLibrary
 } from '../../../paper/paper-mode-actions'
+import { openPaperBatchAssistant } from '../../../paper/paper-batch-actions'
 import { refreshPaperLibrary } from '../../../paper/paper-library-index'
 import { SidebarIconButton, SidebarSectionHeader } from '../../sidebar/SidebarPrimitives'
 import { PaperTree } from './PaperTree'
@@ -111,6 +112,13 @@ export function PaperWorkspacesSection(): ReactElement {
 
   const onMenuAction = (root: string, action: PaperWorkspaceMenuAction): void => {
     switch (action) {
+      case 'batch-read': {
+        const cached = byRoot[root]
+        void openPaperBatchAssistant({ workspaceRoot: root,
+          ...(cached?.status === 'ready' ? { entries: cached.entries } : {}),
+          sourceLabel: labels.get(root) ?? root })
+        return
+      }
       case 'reveal':
         void revealWorkspacePathInFileManager(root, root)
         return
@@ -292,6 +300,7 @@ export function PaperWorkspacesSection(): ReactElement {
           x={menu.x}
           y={menu.y}
           canRemove={roots.length > 1}
+          canBatchRead={byRoot[menu.root]?.status !== 'ready' || Boolean(byRoot[menu.root]?.entries.length)}
           onAction={(action) => onMenuAction(menu.root, action)}
           onClose={() => setMenu(null)}
         />

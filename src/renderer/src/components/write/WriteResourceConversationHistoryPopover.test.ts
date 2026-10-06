@@ -142,4 +142,13 @@ describe('WriteResourceConversationHistoryPopover', () => {
     expect(buttonWithText(renderer.root, 'Archive thread').props.disabled).toBe(true)
     await act(async () => renderer.unmount())
   })
+  it('labels the assistant landing history as workspace conversations', async () => {
+    const renderer = await renderHistory(model({
+      scopeKey: 'workspace:/work', resourceKind: 'workspace', resourceLabel: 'Work'
+    }))
+    expect(renderer.root.findByProps({ 'aria-label': 'Workspace conversations' })).toBeTruthy()
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('File conversations')
+    await act(async () => renderer.unmount())
+  })
+
 })

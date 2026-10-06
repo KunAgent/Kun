@@ -7,11 +7,10 @@ import { PaperWorkbenchChromeContext, type PaperWorkbenchChrome } from '../../pa
 import { WriteWorkspaceView } from '../write/WriteWorkspaceView'
 import { WritePdfRendererProvider } from '../write/write-pdf-renderer-context'
 import { PaperPdfReader } from './reader/PaperPdfReader'
-import { PaperImportDialogHost } from './PaperImportDialogHost'
+import { PaperWorkspaceDialogs } from './PaperWorkspaceDialogs'
 import { PaperLibraryOnboarding } from './PaperLibraryOnboarding'
 import { PaperMetadataDrawer } from './sidebar/PaperMetadataDrawer'
 import { PaperTaskRing } from './PaperTaskRing'
-import { PaperReadingDialogHost } from './evidence/PaperReadingDialog'
 import { openBoundedPaperReading } from '../../paper/paper-reading-entry'
 import { usePaperStore } from '../../write/paper/paper-store'
 import { paperUnitDirFromKnownUnits, paperUnitDirForFile } from '../../write/paper/paper-unit'
@@ -26,6 +25,7 @@ export type PaperWorkspaceViewProps = {
   onAttachImage?: (input: { dataBase64: string; name: string }) => Promise<boolean>
   onOpenAgentSettings?: () => void
   rightPanel: ReactNode
+  dialogsExternal?: boolean
 }
 
 /**
@@ -43,7 +43,8 @@ export function PaperWorkspaceView({
   onSubmitPrompt,
   onAttachImage,
   onOpenAgentSettings,
-  rightPanel
+  rightPanel,
+  dialogsExternal = false
 }: PaperWorkspaceViewProps): ReactElement {
   const { workspaceRoot, paperReading, paperMode } = useWriteWorkspaceStore(
     useShallow((s) => ({
@@ -190,11 +191,7 @@ export function PaperWorkspaceView({
         </div>
         {rightPanel}
       </div>
-      <PaperReadingDialogHost />
-      <PaperImportDialogHost
-        workspaceRoot={workspaceRoot}
-        paperReading={paperReading}
-      />
+      {!dialogsExternal ? <PaperWorkspaceDialogs /> : null}
     </>
   )
 }

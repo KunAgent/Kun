@@ -1,3 +1,4 @@
+import { useWorkAssistantNavigation } from './work-assistant-navigation'
 import type {
   WorkWhiteboard,
   WorkWhiteboardPhase,
@@ -378,6 +379,7 @@ export function createWorkWhiteboardActions(set: WriteWorkspaceSet, get: WriteWo
       const documentsByPath = captureFocusedDocument(rawState)
       const targetGroup = groupId ?? rawState.editorLayout.focusedGroupId
       if (!rawState.editorLayout.groups.some((group) => group.id === targetGroup)) return
+      useWorkAssistantNavigation.getState().openWorkspace()
       const editorLayout = addEditorItemToGroup(rawState.editorLayout, targetGroup, {
         kind: 'whiteboard',
         boardId,
