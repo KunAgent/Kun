@@ -1,3 +1,5 @@
+import { normalizeRouteEffort } from './app-settings-route-rules'
+import { projectExecutableModelRoutePools, routePoolExtras } from './app-settings-route-projection'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
@@ -15,6 +17,7 @@ import {
   MODEL_REASONING_EFFORTS,
   MODEL_REASONING_REQUEST_PROTOCOLS,
   MODEL_ROUTE_STRATEGIES,
+  NESTED_ROUTE_PROVIDER_ID,
   CUSTOM_IMAGE_GENERATION_PROVIDER_ID,
   CUSTOM_SPEECH_TO_TEXT_PROVIDER_ID,
   CUSTOM_TEXT_TO_SPEECH_PROVIDER_ID,
@@ -261,12 +264,14 @@ export function normalizeModelRoutePools(
       const targetId = normalizeModelProviderId(target?.id) || `${id}-target-${index + 1}`
       if (targetIds.has(targetId)) return []
       targetIds.add(targetId)
+      const effort = normalizeRouteEffort(target?.effort)
       return [{
         id: targetId,
-        providerId,
+        providerId: target?.providerId === NESTED_ROUTE_PROVIDER_ID ? NESTED_ROUTE_PROVIDER_ID : providerId,
         modelId: targetModel,
         enabled: target?.enabled !== false,
-        weight: Math.min(100, Math.max(1, boundedNonNegativeInteger(target?.weight, 1, 100)))
+        weight: Math.min(100, Math.max(1, boundedNonNegativeInteger(target?.weight, 1, 100))),
+        ...(effort ? { effort } : {})
       }]
     })
     const strategy: ModelRouteStrategy = MODEL_ROUTE_STRATEGIES.includes(raw.strategy as ModelRouteStrategy)
@@ -293,6 +298,7 @@ export function normalizeModelRoutePools(
           ttlMs: Math.min(86_400_000, Math.max(60_000, boundedNonNegativeInteger(raw.affinity.ttlMs, 1_800_000, 86_400_000))) }
       } : {}),
       targets,
+      ...routePoolExtras(raw, targetIds),
       failurePolicy: {
         failoverHttpStatusCodes: failureCodes,
         failoverOnNetworkError: raw.failurePolicy?.failoverOnNetworkError !== false,
@@ -313,43 +319,7 @@ export function normalizeModelRoutePools(
   return out
 }
 
-export function resolveModelRouteTargetReference(
-  target: Pick<ModelRouteTargetV1, 'providerId' | 'modelId'>,
-  providers: readonly ModelProviderProfileV1[]
-): ModelRouteTargetResolutionV1 {
-  const providerId = normalizeModelProviderId(target.providerId)
-  const provider = providers.find((candidate) => candidate.id.toLowerCase() === providerId)
-  if (!provider) return { status: 'provider-missing' }
-  const requestedModel = target.modelId.trim().toLowerCase()
-  const modelId = provider.models.find((candidate) => candidate.trim().toLowerCase() === requestedModel)
-  if (!modelId) return { status: 'model-missing', provider }
-  return { status: 'valid', provider, modelId }
-}
-
-/**
- * Projects durable user intent into the concrete configuration Kun may run.
- * Missing references remain in settings but never reach the Runtime.
- */
-export function projectExecutableModelRoutePools(
-  settings: Pick<ModelProviderSettingsV1, 'providers' | 'routePools'>
-): ModelRoutePoolV1[] {
-  return settings.routePools.map((pool) => {
-    const targets = pool.targets.flatMap((target) => {
-      const resolved = resolveModelRouteTargetReference(target, settings.providers)
-      if (resolved.status !== 'valid' || !resolved.provider || !resolved.modelId) return []
-      return [{
-        ...target,
-        providerId: resolved.provider.id,
-        modelId: resolved.modelId
-      }]
-    })
-    return {
-      ...pool,
-      enabled: pool.enabled && targets.some((target) => target.enabled),
-      targets
-    }
-  })
-}
+export { projectExecutableModelRoutePools, resolveModelRouteTargetReference } from './app-settings-route-projection'
 
 export function getModelProviderSettings(settings: AppSettingsV1): ModelProviderSettingsV1 {
   return normalizeModelProviderSettings((settings as { provider?: ModelProviderSettingsPatchV1 }).provider)

@@ -525,8 +525,34 @@ export const MODEL_ROUTE_STRATEGIES = [
   'weighted-round-robin',
   'least-latency',
   'least-used',
-  'adaptive'
+  'adaptive',
+  'manual'
 ] as const
+
+/** Target provider id that names another route alias (nested routing). */
+export const NESTED_ROUTE_PROVIDER_ID = '@route'
+
+export const MODEL_ROUTE_RULE_EFFORTS = ['off', 'low', 'medium', 'high', 'max', 'auto'] as const
+export type ModelRouteRuleEffort = (typeof MODEL_ROUTE_RULE_EFFORTS)[number]
+
+export type ModelRouteRuleV1 = {
+  id: string
+  enabled: boolean
+  use: string
+  effort?: ModelRouteRuleEffort
+  when: {
+    agents?: string[]
+    minTokens?: number
+    maxTokens?: number
+    images?: boolean
+    efforts?: ModelRouteRuleEffort[]
+    hours?: { from: number; to: number }
+    contains?: string
+    intent?: string
+  }
+}
+
+export type ModelRouteClassifierV1 = { providerId: string; modelId: string; intents: string[] }
 
 export type ModelRouteStrategy = (typeof MODEL_ROUTE_STRATEGIES)[number]
 
@@ -536,6 +562,7 @@ export type ModelRouteTargetV1 = {
   modelId: string
   enabled: boolean
   weight: number
+  effort?: ModelRouteRuleEffort
 }
 
 export type ModelRouteTargetReferenceStatus = 'valid' | 'provider-missing' | 'model-missing'
@@ -574,6 +601,10 @@ export type ModelRoutePoolV1 = {
   enabled: boolean
   strategy: ModelRouteStrategy
   targets: ModelRouteTargetV1[]
+  pick?: string
+  rules?: ModelRouteRuleV1[]
+  classifier?: ModelRouteClassifierV1
+  overflowMove?: boolean
   failurePolicy: ModelRouteFailurePolicyV1
   healthPolicy: ModelRouteHealthPolicyV1
 }

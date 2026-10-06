@@ -1,5 +1,6 @@
 import gatewayConnection from './settings/gateway-connection.json'
 import gatewayAgents from './settings/gateway-agents.json'
+import routeRules from './settings/route-rules.json'
 import providerConfiguration from './settings/provider-configuration.json'
 import googleWorkspace from './settings/google-workspace.json'
 import navigationProviders from './settings/navigation-providers.json'
@@ -16,6 +17,7 @@ const settings = {
   ...providerConfiguration,
   ...gatewayConnection,
   ...gatewayAgents,
+  ...routeRules,
   ...googleWorkspace,
   ...navigationProviders,
   ...providerManagement,

@@ -5,6 +5,10 @@ import type { RoutePoolHealthStore, RuntimeHealth } from './route-pool-health-st
 export function orderRouteTargets(pool: ModelRoutePoolConfig, targets: ModelRouteTargetConfig[],
   health: RoutePoolHealthStore, counts: ReadonlyMap<string, number>, cursor: number): ModelRouteTargetConfig[] {
   if (pool.strategy === 'priority') return [...targets]
+  if (pool.strategy === 'manual') {
+    const picked = (target: ModelRouteTargetConfig) => Boolean(pool.pick) && (target.id === pool.pick || target.id.startsWith(`${pool.pick}>`))
+    return [...targets.filter(picked), ...targets.filter((target) => !picked(target))]
+  }
   if (pool.strategy === 'least-latency') return [...targets].sort((a, b) =>
     (health.state(pool.id, a.id).ewmaLatencyMs ?? -1) - (health.state(pool.id, b.id).ewmaLatencyMs ?? -1))
   if (pool.strategy === 'least-used') return [...targets].sort((a, b) =>

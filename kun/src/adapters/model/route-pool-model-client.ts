@@ -32,6 +32,7 @@ import { capabilitySupportsRequest } from './route-capability-contract.js'
 import { GatewayRouteChangedError, gatewayTargetMatches } from '../../domain/model-gateway-export-policy.js'
 import { GATEWAY_MAX_ROUTE_ATTEMPTS, withGatewayRoutingBudget } from './gateway-routing-budget.js'
 import { RouteAffinity } from './route-affinity.js'
+import { demoteOverflow, effortFor, estimateRequestTokens, flattenNestedPools, orderByDecision, RouteRuleEngine } from './route-rules.js'
 
 export { RoutePoolHealthStore } from './route-pool-health-store.js'
 export type {
@@ -52,6 +53,7 @@ export class RoutePoolModelClient implements ModelClient {
   private readonly groupState: FailoverGroupRouteState = createFailoverGroupRouteState()
   private quotaLookup?: (providerId: string) => ProviderQuotaEntry | undefined
   private readonly affinity: RouteAffinity
+  private readonly rules: RouteRuleEngine
 
   constructor(
     private readonly direct: ModelClient,
@@ -61,13 +63,17 @@ export class RoutePoolModelClient implements ModelClient {
     private readonly now: () => number = Date.now
   ) {
     this.affinity = new RouteAffinity(now)
+    this.rules = new RouteRuleEngine(() => this.direct, now)
     this.replacePools(pools)
   }
 
   replacePools(pools: readonly ModelRoutePoolConfig[]): void {
-    this.affinity.clear()
+    // Affinity entries are revalidated against the current targets on use, so a
+    // configuration change does not need to forget which account holds a cache.
+    this.rules.clear()
     this.configured = pools.map((pool) => structuredClone(pool))
-    this.pools = new Map(pools.filter((pool) => pool.enabled).map((pool) => [pool.modelId.toLowerCase(), structuredClone(pool)]))
+    // Nested aliases are flattened once per configuration, with cycle and depth checks.
+    this.pools = new Map(flattenNestedPools(pools).filter((pool) => pool.enabled).map((pool) => [pool.modelId.toLowerCase(), structuredClone(pool)]))
     this.roundRobin.clear()
     this.requestCounts.clear()
     this.health.prune([...this.pools.values(), ...this.failoverPools()])
@@ -91,6 +97,15 @@ export class RoutePoolModelClient implements ModelClient {
       }
     }
     this.health.prune([...this.pools.values(), ...this.failoverPools()])
+  }
+
+  /** Persist conversation affinity so a restart keeps prompt-cache locality. */
+  persistAffinity(file: string): void {
+    this.affinity.persistTo(file)
+  }
+
+  flushAffinity(): void {
+    this.affinity.flush()
   }
 
   /**
@@ -289,7 +304,8 @@ export class RoutePoolModelClient implements ModelClient {
       }
       return
     }
-    const ordered = this.affinity.prefer(pool, request, group
+    const decision = group ? {} : await this.rules.decide(pool, request)
+    const preferred = this.affinity.prefer(pool, request, group
       ? orderFailoverGroupTargets({
           group,
           request,
@@ -300,6 +316,9 @@ export class RoutePoolModelClient implements ModelClient {
           now: this.now()
         })
       : this.orderTargets(pool, eligible))
+    const ruled = orderByDecision(preferred, decision)
+    const ordered = pool.overflowMove === false ? ruled
+      : demoteOverflow(ruled, estimateRequestTokens(request), (modelId, providerId) => this.capabilities(modelId, providerId))
     const failures: string[] = []
     let lastRejection: { providerId: string; modelId: string; reason?: string; message?: string } | undefined
     const attempts = request.gatewayRouting || request.routingBudget ? ordered.slice(0, GATEWAY_MAX_ROUTE_ATTEMPTS) : ordered
@@ -317,8 +336,10 @@ export class RoutePoolModelClient implements ModelClient {
         targetId: target.id,
         providerId: target.providerId,
         modelId: target.modelId,
-        requestedModelId: request.model
+        requestedModelId: request.model,
+        ...(decision.ruleId ? { ruleId: decision.ruleId } : {})
       }
+      const effort = effortFor(target, decision, request.reasoningEffort)
       let committed = false
       let failed = false
       let usageTokens = 0
@@ -350,6 +371,7 @@ export class RoutePoolModelClient implements ModelClient {
           ...request,
           model: target.modelId,
           providerId: target.providerId,
+          ...(effort ? { reasoningEffort: effort } : {}),
           routeSelection: {
             kind: 'route-pool',
             id: pool.id,

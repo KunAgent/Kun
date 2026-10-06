@@ -264,6 +264,7 @@ export async function createRuntimeModelComposition(
     routeHealth
   )
   modelClient.replaceFailoverGroups(core.activeOptions.providerFailover ?? [])
+  modelClient.persistAffinity(join(core.activeOptions.dataDir, 'model-routing', 'affinity.json'))
   /**
    * Timing-instrumented entry point shared by the chat loop, child agents,
    * review, and compaction so every model response reports TTFT and

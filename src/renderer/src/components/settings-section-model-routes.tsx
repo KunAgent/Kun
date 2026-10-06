@@ -40,6 +40,7 @@ import {
   validCodes
 } from './settings-section-model-routes-support'
 import { ModelRouteTargets } from './settings-section-model-routes-targets'
+import { ModelRouteDecisions } from './settings-section-model-routes-rules'
 import { useGatewayCredentialControls } from './use-gateway-credential-controls'
 import { useRuntimeSettingsSyncStatus } from './use-runtime-settings-sync-status'
 
@@ -93,7 +94,8 @@ const strategyTranslationKeys: Record<ModelRouteStrategy, string> = {
   'weighted-round-robin': 'modelRoutes.strategyWeightedRoundRobin',
   'least-latency': 'modelRoutes.strategyLeastLatency',
   'least-used': 'modelRoutes.strategyLeastUsed',
-  adaptive: 'modelRoutes.strategyAdaptive'
+  adaptive: 'modelRoutes.strategyAdaptive',
+  manual: 'routeRules.strategyManual'
 }
 
 export function ModelRoutesSettings({
@@ -545,7 +547,8 @@ export function ModelRoutesSettings({
             <RouteGovernanceFields pool={selected} update={updatePool} inputClass={inputClass} translation={t} />
           </div>
 
-          <ModelRouteTargets settings={settings} pool={selected} metrics={status?.metrics} onUpdate={updatePool} t={t} />
+          <ModelRouteTargets settings={settings} pool={selected} routes={settings.routePools} metrics={status?.metrics} onUpdate={updatePool} t={t} />
+          <ModelRouteDecisions settings={settings} pool={selected} onUpdate={updatePool} t={t} />
 
               <div className="flex justify-end">
                 <button className={settingsButtonClass({ variant: 'danger' })} type="button" onClick={removePool} >

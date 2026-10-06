@@ -31,14 +31,26 @@ describe('gateway account/model target menu', () => {
     let renderer!: ReactTestRenderer
     await act(async () => { renderer = create(createElement(ModelRouteTargets, { settings, pool, t, onUpdate })) })
     const menus = renderer.root.findAllByType('select')
-    expect(menus).toHaveLength(1)
+    // Account/model first, then the member's pinned reasoning.
+    expect(menus).toHaveLength(2)
     await act(async () => menus[0].props.onChange({ target: { value: JSON.stringify(['account/b', 'model/one']) } }))
     expect(onUpdate).toHaveBeenCalledWith({ targets: [{ ...pool.targets[0], providerId: 'account/b' }] })
     expect(pool.modelId).toBe('shared-code')
     onUpdate.mockClear()
     await act(async () => menus[0].props.onChange({ target: { value: JSON.stringify(['native', 'native-only']) } }))
     expect(onUpdate).not.toHaveBeenCalled()
+    await act(async () => menus[1].props.onChange({ target: { value: 'max' } }))
+    expect(onUpdate).toHaveBeenCalledWith({ targets: [{ ...pool.targets[0], effort: 'max' }] })
     await act(async () => renderer.unmount())
+  })
+
+  it('offers other routes as nested members and explains them', async () => {
+    const { settings, pool } = fixture()
+    const other = { ...pool, id: 'other', name: 'Other route', modelId: 'other-alias' }
+    const nested = { ...pool, targets: [{ ...pool.targets[0], providerId: '@route', modelId: 'other-alias' }] }
+    const html = renderToStaticMarkup(createElement(ModelRouteTargets, { settings, pool: nested, routes: [nested, other], t, onUpdate: vi.fn() }))
+    expect(html).toContain('Other route (other-alias)')
+    expect(html).toContain('routeRules.nestedHint')
   })
 
   it('does not advertise native subscription models as gateway choices', () => {

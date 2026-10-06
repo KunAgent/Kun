@@ -15,6 +15,8 @@ export type ModelRouteTargetMetadata = {
   providerId: string
   modelId: string
   requestedModelId: string
+  /** Route rule that put this target first for the turn, when one matched. */
+  ruleId?: string
 }
 
 /**
@@ -128,6 +130,8 @@ export type ModelRequest = {
   gatewayRouting?: {
     /** Server-derived caller identity; never accepted from request JSON. */
     callerId?: string
+    /** Calling agent for route rules (attribution only, never authorization). */
+    agent?: string
     affinity?: { turn?: string; session?: string }
     allowedTargets: ReadonlyArray<{ providerId: string; modelId: string }>
     /** Captured router generation; checked synchronously at every dispatch. */

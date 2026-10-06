@@ -31,6 +31,8 @@ export type GatewayRouteTrace = {
   status?: 'completed' | 'failed' | 'cancelled'
   /** The concrete provider/model that produced the reply. */
   served?: string
+  /** Route rule that decided the turn's first member. */
+  rule?: string
   firstTokenMs?: number
 }
 
@@ -80,6 +82,7 @@ export class GatewayRouteTraceStore {
           sawRoute = true
           trace.model = `${chunk.route.providerId}/${chunk.route.modelId}`
           trace.served = trace.model
+          if (chunk.route.ruleId) trace.rule = chunk.route.ruleId
           if (!trace.tries.length) trace.tries.push({ providerId: chunk.route.providerId, modelId: chunk.route.modelId })
           if (chunk.kind === 'assistant_text_delta' || chunk.kind === 'assistant_reasoning_delta' || chunk.kind === 'tool_call_delta') {
             trace.firstTokenMs = Math.max(0, this.now() - startedAt)
