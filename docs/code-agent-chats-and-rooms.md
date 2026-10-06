@@ -1,82 +1,69 @@
-# Code conversations and Rooms
+# Code conversations (formerly Rooms)
 
-The desktop keeps Code, Work and Rooms as workspace modes. Code contains
-project tasks and a lower Conversations section for persistent Agent private
-chats. Rooms keeps the former Bots IM interface, with Agent private chats,
-group rooms and Agent-to-Agent collaboration. The Code section is an additional
-entry to the same private conversations. Both surfaces share the Code
-right-panel components.
+Rooms is no longer a workspace mode. Agent private chats, group conversations
+and the Agent directory live in Code, next to project tasks. The workspace
+mode menu offers only Code and Work. The persisted `rooms` route and older
+links still resolve, but they open the matching Code conversation instead of a
+separate surface. Room, Agent, message, thread and run identities are unchanged.
 
-## Navigation and history
+## Sidebar
 
-- New task creates an ordinary project task through the existing Code path.
-- Conversations lists Agent identities, avatars, previews and activity. Add
-  selects or creates an Agent and opens its existing private conversation.
-- Projects and Conversations scroll independently. A keyboard-accessible
-  divider controls the Conversations section height.
-- Pin, archive, restore and recoverable deletion remain available for private
-  chats. Older unbound Code threads remain under History in Conversations.
-- The mode dropdown uses Rooms branding. Its IM list shows private and group
-  conversations together by default. Conversation-type filters and the Agent
-  directory remain available.
-- Rooms Add opens one recipient picker for existing Agents, private Agent
-  creation and multi-Agent group creation. The Code Conversations picker opens
-  private chats.
-- Selecting a private conversation in Rooms keeps the Rooms mode and sidebar.
-  Selecting that Agent in Code opens the same room through `agent-chat`, the
-  internal Code presentation route.
-- Code and Rooms remember their selections independently. A private chat has
-  one room ID, message history, Agent configuration and room-owned draft across
-  both entries. Project task drafts and other room drafts retain their own scope.
-  Existing room, Agent, message, thread and run identities remain unchanged.
+- The top of the Code sidebar has two primary actions: New task for a project
+  task, and a conversation button that opens the shared recipient picker.
+- Automation (scheduled tasks and Loop) and Plugins & extensions are grouped
+  into two compact menu rows; the project board keeps its own row when enabled.
+- The Conversations section sits above Projects. It lists Agent private chats
+  and group conversations together, newest activity first, with avatars or a
+  member mosaic, a preview with the group author, an unread marker and a header
+  count of unread conversations. Attention and running work outrank the preview.
+- Four conversations are shown by default; the selected conversation always
+  stays visible and View all expands the list. Agent pair transcripts stay in
+  Agent details instead of the list.
+- The section menu filters all, unread, needs-you and group conversations, and
+  opens the Agent directory, archived conversations and recently deleted ones.
+  Pin, archive, restore and recoverable deletion stay on each row.
+- Older unbound Code threads remain under History inside the section.
 
-## Shared workspace
+## Picker and directory
 
-Files, file previews, browser previews and changes reuse the Code components.
-The existing room drawer is embedded in the shared Collaboration tab, preserving
-its navigation stack and focus restoration. Viewing historical runs is read-only.
+One recipient picker serves the sidebar, the Code home shortcuts and empty
+conversation states. Choosing one Agent opens its private chat; choosing several
+creates a group. Agent creation and the Agent directory open from the same host.
+A slow creation result opens its conversation only while the user is still on
+the route, task and conversation where the picker was opened.
 
-The private file tree follows `directActivity.workspace`, including the Agent's
-owned directory when no external directory is attached. Group file trees follow
-the room's linked repository roots. They never infer the directory from a
-previously active Code task. Every file target retains its own workspace root.
-Changing a private workspace/context epoch or removing a repository invalidates
-the room panel's previous scope.
+## Conversation view
 
-Opening a file updates only the right panel. Main recipient, room selection,
-draft and Code project selection stay independent. Explicit task links still
-open Code, with room provenance retained by the existing workbench link protocol.
-Source-message and run links preserve their target when switching conversations.
+Selecting any private or group conversation opens it inside Code through the
+`agent-chat` route. Private headers keep the Agent identity, workspace and
+session controls. Group headers show members, the collaboration mode (applied
+to new topics), search, details and the room menu. Both headers toggle the Code
+sidebar. Running and attention counts for the open room come from the Code
+conversation list; without a loaded list the header simply omits task counts.
+
+Files, file previews, browser previews and changes reuse the Code right panel.
+The room drawer is embedded in the shared Collaboration tab and keeps its
+navigation stack and focus restoration. Historical runs are read-only.
+
+Private file trees follow `directActivity.workspace`, including the Agent's own
+directory. Group file trees follow the room's linked repository roots and never
+infer the directory from a previously active Code task. Changing a private
+workspace epoch or removing a repository invalidates the panel's previous scope.
 
 ## Composer and execution
 
-Private chats retain their fixed Agent recipient, model settings, permission
-picker, attachments, structured input and existing execution capability in
-both Code and Rooms. Private conversations can perform authorized work from
-either entry.
+Private chats keep their fixed Agent recipient, model settings, permission
+picker, attachments, structured input and execution capability. Group composers
+expose mentions, recipients and Auto/Discuss/Execute intent; member models stay
+configured per member. Room admission, workspace, approval and phase rules are
+unchanged, and UI navigation grants no authority.
 
-Group composers expose mentions, recipients and Auto/Discuss/Execute intent.
-Member models remain configured per member. The existing room admission,
-workspace, approval and phase rules apply; UI navigation grants no authority.
-File-tree citations bind to the private workspace identity or matching room
-repository, rather than adding references from another task.
-
-Asynchronous Agent creation, lookup, content opening and notification navigation
-must not replace a newer task or conversation selection. Inactive collaboration
-pages remain mounted for local state but do not consume active inspector work.
+Notifications, workbench origin chips and send-to-Agent actions open the target
+conversation in Code. Opening a Code conversation acknowledges the attention
+badge that the mode menu shows while Work is active.
 
 ## Validation
 
-Run TypeScript checks, the Rooms/sidebar/palette regression tests, the application
-build and the authored-file line gate. The offline Electron smoke uses synthetic
-Agent identities, groups, tasks and an isolated Manager profile:
-
-```sh
-node scripts/smoke-development-direct-chat.cjs --workbench-only --evidence /tmp/kun-agent-chat-workbench-smoke
-```
-
-It checks Code private selection, private and group creation through the Rooms
-picker, the mixed IM list, project/private/group navigation, shared private
-history and draft, file preview scope, unchanged recipients and reload recovery.
-An offline greeting establishes public history before the cross-surface checks.
-Existing direct-chat delivery and approval smoke use Code Conversations.
+Run TypeScript checks, the sidebar, rooms, workbench route and palette tests,
+the application build and the authored-file line gate. The phone keeps its own
+Rooms screens; their navigation is unaffected by this desktop change.

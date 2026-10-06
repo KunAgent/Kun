@@ -1,10 +1,10 @@
 # Rooms conversation interface
 
-Rooms keeps the former Bots IM conversation interface. Its default list combines
-Agent private chats and group rooms, with filters and an Agent directory.
-Code's lower Conversations section offers another entry to the same private
-chats. Both use the Code right workbench components.
-See [Code conversations and Rooms](./code-agent-chats-and-rooms.md).
+Rooms is no longer a separate workspace mode. Its private chats, group rooms,
+filters and Agent directory are part of the Code sidebar's Conversations
+section, and every conversation opens inside Code with the Code right panel.
+See [Code conversations](./code-agent-chats-and-rooms.md). The layout notes
+below describe the conversation view itself.
 
 The Rooms interface borrows Cumora's conversation hierarchy while using Kun's
 existing light and dark theme tokens. It does not change peer discussion,
@@ -12,11 +12,11 @@ execution intent, approval, task recovery, or delivery protocols.
 
 ## Conversation layout
 
-- A resizable IM list shows local Agent or group avatars, a current message
-  preview, its timestamp, unread markers, and real activity counts. Private
-  and group conversations appear together in the default view.
-- Add opens one picker for an existing Agent, a new private Agent or a group.
-  A private selection keeps the Rooms sidebar and mode visible.
+- The Code sidebar lists Agent or group avatars, a current message preview,
+  its timestamp, unread markers and real activity counts. Private and group
+  conversations appear together in the default view.
+- One picker opens an existing Agent, creates a private Agent or starts a
+  group; every selection stays in Code.
 - Private headers show the Agent identity and model, with profile, memory,
   history, files and context actions. Group headers show the room name,
   members, collaboration mode, search and room settings.

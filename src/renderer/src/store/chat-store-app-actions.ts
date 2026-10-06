@@ -10,7 +10,7 @@ import {
   effectiveCodeWorkspaceRoot,
   readRemovedCodeWorkspaces
 } from '../lib/removed-code-workspaces'
-import type { ChatState, ChatStoreGet, ChatStoreSet, InitialSetupMode, PluginHostRoute, SettingsRouteSection } from './chat-store-types'
+import type { AppRoute, ChatState, ChatStoreGet, ChatStoreSet, InitialSetupMode, PluginHostRoute, SettingsRouteSection } from './chat-store-types'
 import { getProvider } from '../agent/registry'
 import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import {
@@ -39,6 +39,17 @@ import {
 } from './chat-store-thread-composer-state'
 import { useProjectBoardStore } from '../project-board/project-board-store'
 import { effectiveHarnessId } from '../lib/ade-composer-harness'
+
+/**
+ * Retired workspace modes stay readable as persisted or remote route values,
+ * but open inside Code: Design became a Kun surface and Rooms became Code
+ * conversations.
+ */
+function activeAppRoute<R extends AppRoute>(route: R): R | 'chat' | 'agent-chat' {
+  if (route === 'design') return 'chat'
+  if (route === 'rooms') return 'agent-chat'
+  return route
+}
 
 function composerUsesKunWorkflows(state: ChatState): boolean {
   const thread = (state.threads ?? []).find((candidate) => candidate.id === state.activeThreadId) ??
@@ -445,7 +456,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       return task
     },
 
-    setRoute: (route) => set({ route: route === 'design' ? 'chat' : route }),
+    setRoute: (route) => set({ route: activeAppRoute(route) }),
 
     openWrite: async () => {
       set({ route: 'write' })
@@ -456,13 +467,13 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         route: 'settings',
         settingsSection: section,
         settingsReturnRoute: state.route === 'settings'
-          ? state.settingsReturnRoute === 'design' ? 'chat' : state.settingsReturnRoute
-          : state.route === 'design' ? 'chat' : state.route
+          ? activeAppRoute(state.settingsReturnRoute)
+          : activeAppRoute(state.route)
       })),
 
     closeSettings: () =>
       set((state) => ({
-        route: state.settingsReturnRoute === 'design' ? 'chat' : state.settingsReturnRoute
+        route: activeAppRoute(state.settingsReturnRoute)
       })),
 
     openPlugins: (host?: PluginHostRoute) =>

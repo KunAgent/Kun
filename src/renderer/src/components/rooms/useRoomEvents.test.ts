@@ -219,9 +219,9 @@ describe('Room integration notifications', () => {
   })
   it('suppresses an already visible room gate but not a background room gate', async () => {
     await mount()
-    harness.state.route = 'rooms'
+    harness.state.route = 'agent-chat'
     harness.focus.mockReturnValue(true)
-    storage.set('kun.rooms.selected', 'room')
+    storage.set('kun.agentChats.selected', 'room')
     await event(2)
     expect(harness.notify).not.toHaveBeenCalled()
     harness.focus.mockReturnValue(false)
@@ -236,7 +236,7 @@ describe('Room integration notifications', () => {
     )
     rows = [{ ...integration, approvals: [{ id: 'approval-3' }] }]
     harness.focus.mockReturnValue(true)
-    storage.set('kun.rooms.selected', 'another-room')
+    storage.set('kun.agentChats.selected', 'another-room')
     await event(5)
     expect(harness.notify).toHaveBeenCalledTimes(2)
   })
@@ -285,7 +285,7 @@ describe('Room integration notifications', () => {
       )
     ).toBeNull()
   })
-  it('clears the rooms mode badge after the user opens Rooms', async () => {
+  it('clears the conversation badge after the user opens a Code conversation', async () => {
     harness.request.mockImplementation(async (path: string) =>
       path.endsWith('/preferences') ? { preference, revision: 0 } : path.includes('/integrations')
         ? { integrations: rows, integration: rows[0] }
@@ -304,7 +304,7 @@ describe('Room integration notifications', () => {
     })
     expect(renderer.root.findByProps({ 'data-count': 3 })).toBeTruthy()
     const previous = { ...harness.state }
-    harness.state = { route: 'rooms' }
+    harness.state = { route: 'agent-chat' }
     await act(async () => {
       harness.routeListeners.forEach((listener) => listener(harness.state, previous))
     })

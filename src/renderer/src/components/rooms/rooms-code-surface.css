@@ -1,0 +1,25 @@
+/* Code conversation surface. Loaded after rooms-chat-surface.css so Agent
+ * private chats and groups share the Code task header and bubble language. */
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-header {
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 14px 8px 16px;
+  border-bottom-color: var(--ds-border);
+}
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-header-title h1 { font-size: 15px; }
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-header-title p { margin-top: 1px; color: var(--ds-text-muted); }
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-header > .rooms-mode-control select {
+  height: 30px;
+  padding-inline: 10px 22px;
+  color: var(--ds-text);
+  font-size: 12.5px;
+}
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-message-user .rooms-message-bubble {
+  border: 1px solid var(--ds-border);
+  border-radius: 16px 16px 6px 16px;
+  background: var(--ds-bubble-user);
+  color: var(--ds-bubble-user-fg);
+}
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-message-row:not(.rooms-message-user):not(.rooms-message-system) .rooms-message-bubble {
+  border-radius: 6px 16px 16px 16px;
+}

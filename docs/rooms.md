@@ -1,6 +1,7 @@
 # Rooms V1
 
-Rooms is a personal collaboration workspace alongside Code and Work. It uses
+Rooms provides the private and group Agent conversations shown in Code (it is
+no longer a separate workspace mode). It uses
 Kun's existing native AgentLoop and the Renderer -> preload -> Main -> Kun
 HTTP/SSE path. The Service Manager remains the only owner of canonical room
 data; the renderer does not run a second coordinator or agent engine.

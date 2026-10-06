@@ -93,8 +93,7 @@ export function useRoomEvents() {
     if (!window.kunGui?.startSse) return
     const streamId = 'rooms-' + roomRequestId()
     let stopped = false
-    const notificationNavigation = createRoomNotificationNavigator({ isStopped: () => stopped,
-      onGroup: (roomId) => listeners.forEach((listener) => listener({ seq: cursor, roomId, kind: 'navigate' })) })
+    const notificationNavigation = createRoomNotificationNavigator({ isStopped: () => stopped })
     const savedCursor = Number(readBrowserStorageItem('kun.rooms.eventCursor') ?? 0)
     let cursor = Number.isSafeInteger(savedCursor) && savedCursor >= 0 ? savedCursor : 0
     let queue: RoomNotificationQueue | undefined
@@ -213,16 +212,17 @@ export function useRoomEvents() {
       await Promise.allSettled([
         rendererRuntimeClient.startSse('rooms', cursor, streamId, { scope: 'rooms' }), updateBadge()
       ])
-      if (!stopped && useChatStore.getState().route === 'rooms') acknowledgeRoomAttention()
+      if (!stopped && useChatStore.getState().route === 'agent-chat') acknowledgeRoomAttention()
     }
     void initialize().catch(() => { live = false })
+    // Opening any Code conversation acknowledges the cross-mode attention badge.
     const offRoute = typeof useChatStore.subscribe === 'function'
       ? useChatStore.subscribe((state, previous) => {
-          if (state.route !== 'rooms' || previous.route === 'rooms') return
+          if (state.route !== 'agent-chat' || previous.route === 'agent-chat') return
           acknowledgeRoomAttention()
           void updateBadge()
             .then(() => {
-              if (!stopped && useChatStore.getState().route === 'rooms') acknowledgeRoomAttention()
+              if (!stopped && useChatStore.getState().route === 'agent-chat') acknowledgeRoomAttention()
             })
             .catch(() => undefined)
         })

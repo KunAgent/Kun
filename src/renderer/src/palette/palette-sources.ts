@@ -261,7 +261,8 @@ function shortcutCommandEntries(input: PaletteSourcesInput): PaletteEntry[] {
 function routeEntries(input: PaletteSourcesInput): PaletteEntry[] {
   const { t } = input
   return (Object.keys(ROUTE_LABEL_KEYS) as AppRoute[])
-    .filter((route) => route !== 'agent-chat')
+    // Conversations are opened from the Code sidebar; Rooms is no longer a mode.
+    .filter((route) => route !== 'agent-chat' && route !== 'rooms')
     .filter((route) => route !== 'board' || input.projectBoardEnabled === true)
     .filter((route) => route !== 'ade' || input.adeEnabled === true)
     .map((route) => {

@@ -6,12 +6,12 @@ import {
   Columns3,
   LayoutGrid,
   Moon,
-  Plus,
   Puzzle,
   Settings,
   Smartphone,
   Sun,
-  Workflow
+  Workflow,
+  Zap
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
@@ -28,6 +28,7 @@ import { SidebarAttentionPanel } from './SidebarAttentionPanel'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
 import { SidebarAgentChatsSection } from './SidebarAgentChatsSection'
+import { SidebarMenuRow, SidebarNavRow, SidebarPrimaryActions } from './SidebarCodeNav'
 import { SidebarProjectBoardsSection } from './SidebarProjectBoardsSection'
 import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDialog'
 import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
@@ -113,6 +114,7 @@ export function Sidebar({
   onNewConversation
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
+  const iconProps = { className: 'h-4 w-4', strokeWidth: 1.75 }
   const [isDarkMode, setIsDarkMode] = useState(
     () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark'
   )
@@ -234,51 +236,44 @@ export function Sidebar({
         />
 
         {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' ? (
-          <SidebarCommandRow
-            icon={<Plus className="h-4 w-4" strokeWidth={2} />}
-            label={t('newAgent')}
-            onClick={runtimeReady ? onNewChat : undefined}
-            disabled={!runtimeReady}
+          <SidebarPrimaryActions
+            runtimeReady={runtimeReady}
+            newTaskLabel={t('newAgent')}
+            newChatLabel={t('agentChatsStart')}
             disabledHint={t('runtimeActionNeedsConnection')}
-            variant="accent"
+            onNewTask={onNewChat}
           />
         ) : null}
-        {codexReferenceEnabled && activeView === 'chat' ? <SidebarCommandRow
-          icon={<Clock3 className="h-4 w-4" />} label={t('codexHistoryCreate')}
-          onClick={() => setCodexDialogOpen(true)} disabled={!runtimeReady}
-        /> : null}
-        <SidebarCommandRow
-          icon={<LayoutGrid className="h-4 w-4" strokeWidth={1.75} />}
-          label={t('plugins')}
-          onClick={onOpenPlugins}
-          active={pluginsActive}
-        />
-        <SidebarCommandRow
-          icon={<Puzzle className="h-4 w-4" strokeWidth={1.75} />}
-          label={i18n.language.toLowerCase().startsWith('zh') ? '扩展' : 'Extensions'}
-          onClick={onOpenExtensions}
-          active={extensionsActive}
-        />
-        {projectBoardEnabled ? (
-          <SidebarCommandRow
-            icon={<Columns3 className="h-4 w-4" strokeWidth={1.75} />}
-            label={t('projectBoardNav')}
-            onClick={onBoardOpen}
-            active={activeView === 'board'}
+        <nav className="sidebar-code-nav" aria-label={t('sidebarTools')}>
+          {codexReferenceEnabled && activeView === 'chat' ? <SidebarNavRow
+            icon={<Clock3 {...iconProps} />} label={t('codexHistoryCreate')} active={false}
+            disabled={!runtimeReady} onClick={() => setCodexDialogOpen(true)}
+          /> : null}
+          <SidebarMenuRow
+            icon={<Zap {...iconProps} />}
+            label={t('sidebarAutomation')}
+            items={[
+              { id: 'schedule', label: t('schedule'), icon: <Clock3 {...iconProps} />, active: activeView === 'schedule', onSelect: onScheduleOpen },
+              { id: 'workflow', label: t('workflow'), icon: <Workflow {...iconProps} />, active: activeView === 'workflow', onSelect: onWorkflowOpen }
+            ]}
           />
-        ) : null}
-        <SidebarCommandRow
-          icon={<Clock3 className="h-4 w-4" strokeWidth={1.75} />}
-          label={t('schedule')}
-          onClick={onScheduleOpen}
-          active={activeView === 'schedule'}
-        />
-        <SidebarCommandRow
-          icon={<Workflow className="h-4 w-4" strokeWidth={1.75} />}
-          label={t('workflowCreate')}
-          onClick={onWorkflowOpen}
-          active={activeView === 'workflow'}
-        />
+          <SidebarMenuRow
+            icon={<LayoutGrid {...iconProps} />}
+            label={t('sidebarAddons')}
+            items={[
+              { id: 'plugins', label: t('plugins'), icon: <LayoutGrid {...iconProps} />, active: pluginsActive, onSelect: onOpenPlugins },
+              { id: 'extensions', label: i18n.language.toLowerCase().startsWith('zh') ? '扩展' : 'Extensions', icon: <Puzzle {...iconProps} />, active: extensionsActive, onSelect: onOpenExtensions }
+            ]}
+          />
+          {projectBoardEnabled ? (
+            <SidebarNavRow
+              icon={<Columns3 {...iconProps} />}
+              label={t('projectBoardNav')}
+              onClick={onBoardOpen}
+              active={activeView === 'board'}
+            />
+          ) : null}
+        </nav>
       </div>
 
       <div className="ds-no-drag mx-1 my-1" />
@@ -361,6 +356,20 @@ export function Sidebar({
         />
       ) : (
       <>
+      <SidebarAgentChatsSection
+        threads={threads}
+        activeThreadId={activeThreadId}
+        runtimeReady={runtimeReady}
+        conversationRoot={conversationWorkspaceRoot}
+        onNewConversation={onNewConversation}
+        onSelectThread={onSelectThread}
+        onRenameThread={onRenameThread}
+        onPinThread={onPinThread}
+        onArchiveThread={onArchiveThread}
+        onDeleteThread={onDeleteThread}
+        onRestoreThread={onRestoreThread}
+        t={t}
+      />
       {!threadSearch.trim() && (activeView === 'chat' || activeView === 'write') ? (
         <SidebarAttentionPanel
           threads={threads}
@@ -400,20 +409,6 @@ export function Sidebar({
         onDeleteThread={onDeleteThread}
         onRestoreThread={onRestoreThread}
         onSearchQueryChange={onThreadSearchChange}
-        t={t}
-      />
-      <SidebarAgentChatsSection
-        threads={threads}
-        activeThreadId={activeThreadId}
-        runtimeReady={runtimeReady}
-        conversationRoot={conversationWorkspaceRoot}
-        onNewConversation={onNewConversation}
-        onSelectThread={onSelectThread}
-        onRenameThread={onRenameThread}
-        onPinThread={onPinThread}
-        onArchiveThread={onArchiveThread}
-        onDeleteThread={onDeleteThread}
-        onRestoreThread={onRestoreThread}
         t={t}
       />
       </>

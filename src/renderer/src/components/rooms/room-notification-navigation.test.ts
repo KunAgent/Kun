@@ -4,7 +4,7 @@ import { writeBrowserStorageItem } from '../../lib/browser-storage'
 const mocks = vi.hoisted(() => ({
   state: { route: 'chat', activeThreadId: null as string | null, workspaceRoot: '/code' },
   listeners: new Set<(state: { route: string; activeThreadId: string | null; workspaceRoot: string }, previous: { route: string; activeThreadId: string | null; workspaceRoot: string }) => void>(),
-  get: vi.fn(), private: vi.fn(), target: vi.fn(), focus: vi.fn(() => true)
+  get: vi.fn(), open: vi.fn(), focus: vi.fn(() => true)
 }))
 vi.mock('../../store/chat-store', () => ({ useChatStore: {
   getState: () => ({ ...mocks.state, setRoute: (route: string) => changeState({ route }) }),
@@ -13,8 +13,7 @@ vi.mock('../../store/chat-store', () => ({ useChatStore: {
   }
 } }))
 vi.mock('./rooms-client', () => ({ roomsClient: { get: mocks.get } }))
-vi.mock('./agent-chat-navigation', () => ({ openAgentConversationRoom: mocks.private,
-  useAgentChatNavigationStore: { setState: mocks.target } }))
+vi.mock('./agent-chat-navigation', () => ({ openAgentConversationRoom: mocks.open }))
 import { createRoomNotificationNavigator, isFocusedRoomConversation } from './room-notification-navigation'
 
 function changeState(patch: Partial<typeof mocks.state>) {
@@ -26,62 +25,37 @@ const room = (id: string, conversationKind: 'group' | 'user_agent') => ({ id, co
 
 describe('native room notification navigation', () => {
   const storage = new Map<string, string>()
-  const onGroup = vi.fn()
   let navigator: ReturnType<typeof createRoomNotificationNavigator>
   beforeEach(() => {
-    storage.clear(); mocks.listeners.clear(); mocks.get.mockReset(); mocks.private.mockReset(); mocks.target.mockReset(); onGroup.mockReset()
+    storage.clear(); mocks.listeners.clear(); mocks.get.mockReset(); mocks.open.mockReset()
     Object.assign(mocks.state, { route: 'chat', activeThreadId: 'task', workspaceRoot: '/code' })
     vi.stubGlobal('window', { localStorage: { getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => storage.set(key, value) } })
     vi.stubGlobal('document', { hasFocus: mocks.focus })
-    navigator = createRoomNotificationNavigator({ onGroup, isStopped: () => false })
+    navigator = createRoomNotificationNavigator({ isStopped: () => false })
   })
   afterEach(() => { navigator.dispose(); vi.unstubAllGlobals() })
   it('routes a private Agent notification to its original conversation and optional target', async () => {
     mocks.get.mockResolvedValue({ room: room('private', 'user_agent') })
     await navigator.open({ roomId: 'private', runId: 'run', messageId: 'message' })
-    expect(mocks.private).toHaveBeenCalledWith('private', { runId: 'run', messageId: 'message' })
-    expect(onGroup).not.toHaveBeenCalled()
+    expect(mocks.open).toHaveBeenCalledWith('private', { runId: 'run', messageId: 'message' })
     expect(storage.get('kun.rooms.selected')).toBeUndefined()
   })
-  it('routes group notifications to Rooms and publishes its navigation event', async () => {
+  it('opens group notifications as Code conversations instead of a separate mode', async () => {
     mocks.get.mockResolvedValue({ room: room('group', 'group') })
     await navigator.open({ roomId: 'group' })
-    expect(mocks.state.route).toBe('rooms')
-    expect(storage.get('kun.rooms.selected')).toBe('group')
-    expect(onGroup).toHaveBeenCalledWith('group')
-    expect(mocks.private).not.toHaveBeenCalled()
+    expect(mocks.open).toHaveBeenCalledExactlyOnceWith('group', undefined)
+    expect(mocks.state.route).toBe('chat')
+    expect(storage.get('kun.rooms.selected')).toBeUndefined()
   })
-  it('keeps a private notification in Rooms when Rooms is the current mode', async () => {
-    changeState({ route: 'rooms' })
-    writeBrowserStorageItem('kun.rooms.selected', 'group')
-    mocks.get.mockResolvedValue({ room: room('private', 'user_agent') })
-    await navigator.open({ roomId: 'private', runId: 'run', messageId: 'message' })
-    expect(mocks.state.route).toBe('rooms')
-    expect(storage.get('kun.rooms.selected')).toBe('private')
-    expect(onGroup).toHaveBeenCalledWith('private')
-    expect(mocks.target).toHaveBeenCalledWith({ target: { roomId: 'private', runId: 'run', messageId: 'message' } })
-    expect(mocks.private).not.toHaveBeenCalled()
-    expect(storage.get('kun.agentChats.selected')).toBeUndefined()
-  })
-  it('clears an old source target when opening a private Rooms notification without one', async () => {
-    changeState({ route: 'rooms' })
-    mocks.get.mockResolvedValue({ room: room('private', 'user_agent') })
-    await navigator.open({ roomId: 'private' })
-    expect(mocks.target).toHaveBeenCalledWith({ target: null })
-    expect(mocks.private).not.toHaveBeenCalled()
-  })
-  it('cancels a pending Rooms private notification after the user changes modes and returns', async () => {
-    changeState({ route: 'rooms' })
+  it('cancels a pending notification after the user changes routes and returns', async () => {
     let finish: (value: { room: Room }) => void = () => undefined
     mocks.get.mockReturnValue(new Promise((resolve) => { finish = resolve }))
-    const pending = navigator.open({ roomId: 'private' })
-    changeState({ route: 'chat' }); changeState({ route: 'rooms' })
-    finish({ room: room('private', 'user_agent') })
+    const pending = navigator.open({ roomId: 'group' })
+    changeState({ route: 'agent-chat' }); changeState({ route: 'chat' })
+    finish({ room: room('group', 'group') })
     await pending
-    expect(mocks.target).not.toHaveBeenCalled()
-    expect(mocks.private).not.toHaveBeenCalled()
-    expect(onGroup).not.toHaveBeenCalled()
+    expect(mocks.open).not.toHaveBeenCalled()
   })
   it('lets a newer notification click supersede a pending lookup', async () => {
     let finish: (value: { room: Room }) => void = () => undefined
@@ -91,33 +65,28 @@ describe('native room notification navigation', () => {
     await navigator.open({ roomId: 'new' })
     finish({ room: room('old', 'user_agent') })
     await pending
-    expect(onGroup).toHaveBeenCalledExactlyOnceWith('new')
-    expect(mocks.private).not.toHaveBeenCalled()
+    expect(mocks.open).toHaveBeenCalledExactlyOnceWith('new', undefined)
   })
-  it.each(['route', 'room', 'agent', 'task'] as const)('does not steal navigation after a user leaves and returns through %s selection', async (kind) => {
+  it.each(['route', 'agent', 'task'] as const)('does not steal navigation after a user leaves and returns through %s selection', async (kind) => {
     let finish: (value: { room: Room }) => void = () => undefined
     mocks.get.mockReturnValue(new Promise((resolve) => { finish = resolve }))
-    const selectionKey = kind === 'room' ? 'kun.rooms.selected' : 'kun.agentChats.selected'
-    storage.set(selectionKey, 'original')
+    storage.set('kun.agentChats.selected', 'original')
     const pending = navigator.open({ roomId: 'private' })
-    if (kind === 'route') { changeState({ route: 'rooms' }); changeState({ route: 'chat' }) }
+    if (kind === 'route') { changeState({ route: 'agent-chat' }); changeState({ route: 'chat' }) }
     else if (kind === 'task') { changeState({ activeThreadId: 'next' }); changeState({ activeThreadId: 'task' }) }
     else {
-      writeBrowserStorageItem(selectionKey, 'next'); writeBrowserStorageItem(selectionKey, 'original')
+      writeBrowserStorageItem('kun.agentChats.selected', 'next'); writeBrowserStorageItem('kun.agentChats.selected', 'original')
     }
     finish({ room: room('private', 'user_agent') })
     await pending
-    expect(mocks.private).not.toHaveBeenCalled()
-    expect(onGroup).not.toHaveBeenCalled()
+    expect(mocks.open).not.toHaveBeenCalled()
   })
-  it('suppresses notifications only for the focused Agent DM or group room', () => {
-    writeBrowserStorageItem('kun.agentChats.selected', 'private')
+  it('suppresses notifications only for the focused Code conversation', () => {
+    writeBrowserStorageItem('kun.agentChats.selected', 'group')
     changeState({ route: 'agent-chat' })
-    expect(isFocusedRoomConversation('private')).toBe(true)
-    expect(isFocusedRoomConversation('group')).toBe(false)
-    writeBrowserStorageItem('kun.rooms.selected', 'group')
-    changeState({ route: 'rooms' })
     expect(isFocusedRoomConversation('group')).toBe(true)
     expect(isFocusedRoomConversation('private')).toBe(false)
+    changeState({ route: 'chat' })
+    expect(isFocusedRoomConversation('group')).toBe(false)
   })
 })

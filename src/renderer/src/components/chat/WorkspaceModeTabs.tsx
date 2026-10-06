@@ -10,8 +10,7 @@ import {
   Briefcase,
   Check,
   ChevronDown,
-  Code2,
-  MessagesSquare
+  Code2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useRoomAttentionCount } from '../rooms/useRoomEvents'
@@ -31,22 +30,20 @@ type Props = {
   onCodeOpen: () => void
   onWriteOpen: () => void
   onAdeOpen?: () => void
-  onRoomsOpen?: () => void
   disabled?: boolean
   disabledReason?: string
 }
 
-type WorkspaceMode = 'chat' | 'write' | 'rooms' | 'ade'
+/**
+ * Code and Work are the only workspace modes. Agent private and group
+ * conversations live inside Code, so the retired Rooms route is shown as Code.
+ */
+type WorkspaceMode = 'chat' | 'write'
 
 export function WorkspaceModeTabs({
   activeView,
   onCodeOpen,
   onWriteOpen,
-  onRoomsOpen = () => {
-    void import('../../store/chat-store').then(({ useChatStore }) =>
-      useChatStore.getState().setRoute('rooms')
-    )
-  },
   disabled = false,
   disabledReason
 }: Props): ReactElement {
@@ -58,10 +55,7 @@ export function WorkspaceModeTabs({
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const pendingFocusIndexRef = useRef<number | null>(null)
   const menuId = useId()
-  const selectedMode: WorkspaceMode =
-    activeView === 'write' || activeView === 'rooms'
-      ? activeView
-      : 'chat'
+  const selectedMode: WorkspaceMode = activeView === 'write' ? 'write' : 'chat'
   const options = [
     {
       id: 'write' as const,
@@ -76,19 +70,12 @@ export function WorkspaceModeTabs({
       description: t('workspaceModeCodeDescription'),
       Icon: Code2,
       onSelect: onCodeOpen
-    },
-    {
-      id: 'rooms' as const,
-      label: t('roomsLabel'),
-      description: t('roomsDescription'),
-      Icon: MessagesSquare,
-      onSelect: onRoomsOpen
     }
   ]
   const selectedOption =
     options.find((option) => option.id === selectedMode) ?? options[0]
   const SelectedIcon = selectedOption.Icon
-  const modesAriaLabel = `${t('code')} / ${t('workspaceModeWorkLabel')} / ${t('roomsLabel')}`
+  const modesAriaLabel = `${t('code')} / ${t('workspaceModeWorkLabel')}`
 
   useEffect(() => {
     setOpen(false)
@@ -196,7 +183,7 @@ export function WorkspaceModeTabs({
         <span className="workspace-mode-tab-label min-w-0 truncate whitespace-nowrap">
           {selectedOption.label}
         </span>
-        {selectedMode !== 'rooms' && roomAttention > 0 ? (
+        {selectedMode !== 'chat' && roomAttention > 0 ? (
           <span
             className="rounded-full bg-accent/15 px-1.5 text-[10px] text-accent"
             aria-label={t('roomsAttention')}
@@ -249,7 +236,7 @@ export function WorkspaceModeTabs({
                     {description}
                   </span>
                 </span>
-                {id === 'rooms' && !selected && roomAttention > 0 ? (
+                {id === 'chat' && !selected && roomAttention > 0 ? (
                   <span
                     className="rounded-full bg-accent/15 px-1.5 text-[10px] text-accent"
                     aria-label={t('roomsAttention')}

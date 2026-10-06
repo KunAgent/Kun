@@ -117,7 +117,7 @@ export function WorkbenchLeftSidebar({
   const { t } = useTranslation('common')
   const remoteMobile = useRemoteMobileLayout()
   const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
-  if (collapsed || route === 'rooms') return null
+  if (collapsed) return null
   const normalizedRoute = normalizeWorkbenchRoute(route)
   // On a phone the sidebar is an overlay drawer: navigation actions and the
   // backdrop both collapse it again (onBackdropClose toggles collapsed state).

@@ -46,9 +46,8 @@ new rule to their next user request; historical messages need no migration.
   five-person setup. Existing drafts and explicit navigation take precedence.
 - New creates a recipient chooser: existing Agent, group selection, a
   chat-defined Agent, a filled-in profile, or a professional template.
-  Rooms offers all of these through its IM sidebar. Code Conversations uses
-  the private recipient picker. Creating or opening a private Agent in Rooms
-  keeps the Rooms mode and conversation list visible.
+  Code offers all of these through one recipient picker, and creating or
+  opening a private Agent or group keeps the Code sidebar visible.
   Identity and private room commit together. Chat definition starts a
   pending interview (`setup.status = pending`) with structured
   `user_input` cards and `commit_agent_setup`. Filling the profile, using

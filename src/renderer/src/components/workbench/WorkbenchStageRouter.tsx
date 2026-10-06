@@ -5,6 +5,7 @@ import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { PaperNoticeToast } from '../paper/PaperNoticeToast'
 import { WriteSideRail } from '../write/WriteSideRail'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { useAgentChatPicker } from '../rooms/agent-chat-picker'
 
 const PluginMarketplaceView = lazy(() =>
   import('../PluginMarketplaceView').then((module) => ({ default: module.PluginMarketplaceView }))
@@ -27,11 +28,11 @@ const WriteWorkspaceView = lazy(() =>
 const PaperWorkspaceView = lazy(() =>
   import('../paper/PaperWorkspaceView').then((module) => ({ default: module.PaperWorkspaceView }))
 )
-const RoomsWorkspaceView = lazy(() =>
-  import('../rooms/RoomsWorkspaceView').then((module) => ({ default: module.RoomsWorkspaceView }))
-)
 const AgentChatStage = lazy(() =>
   import('../rooms/AgentChatStage').then((module) => ({ default: module.AgentChatStage }))
+)
+const AgentChatPickerHost = lazy(() =>
+  import('../rooms/AgentChatPickerHost').then((module) => ({ default: module.AgentChatPickerHost }))
 )
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
@@ -128,6 +129,7 @@ export function WorkbenchStageRouter({
   extensions
 }: WorkbenchStageRouterProps): ReactElement {
   const normalizedRoute = normalizeWorkbenchRoute(route)
+  const agentChatDialogOpen = useAgentChatPicker((state) => state.dialog !== null)
   return (
     <main
       className={`ds-drag ds-stage-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
@@ -139,10 +141,6 @@ export function WorkbenchStageRouter({
           <Suspense fallback={<WorkbenchPaneFallback />}>
             <AgentChatStage onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins}
               onToggleLeftSidebar={onToggleLeftSidebar} />
-          </Suspense>
-        ) : normalizedRoute === 'rooms' ? (
-          <Suspense fallback={<WorkbenchPaneFallback />}>
-            <RoomsWorkspaceView onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins} />
           </Suspense>
         ) : normalizedRoute === 'extensions' ? (
           <Suspense fallback={<div className="h-full bg-ds-main" />}>
@@ -198,6 +196,7 @@ export function WorkbenchStageRouter({
       </div>
       {imageAnnotationHost}
       {planOverlay}
+      {agentChatDialogOpen ? <Suspense fallback={null}><AgentChatPickerHost /></Suspense> : null}
       {normalizedRoute === 'chat' ? (
         <Suspense fallback={null}>
           <WorkflowRunPanel enabled />

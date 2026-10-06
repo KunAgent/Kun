@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { CodeHomeQuickStart } from './CodeHomeQuickStart'
 import {
   Bot,
   CircleAlert,
@@ -208,6 +209,7 @@ function ChatEmptyHero({
         <p className="mt-3 max-w-[680px] text-[13px] leading-6 text-ds-muted">
           {t('unifiedTaskHeroSub')}
         </p>
+        <CodeHomeQuickStart disabled={!runtimeReady} />
         {!runtimeReady ? (
           <RuntimeHomeStatus
             runtimeError={runtimeError}

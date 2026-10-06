@@ -12,6 +12,7 @@ type Props = {
   t: (key: string) => string
 }
 
+/** Section header matching the Conversations section above it. */
 export function SidebarProjectsHeader({
   allGroupsCollapsed,
   searchVisible,
@@ -22,24 +23,24 @@ export function SidebarProjectsHeader({
   t
 }: Props): ReactElement {
   return (
-    <div className="flex min-h-[38px] items-center justify-between px-2 pb-1.5 pt-3">
+    <div className="flex min-h-[32px] items-center justify-between gap-1.5 pb-1 pl-1 pr-0.5 pt-3">
       <button
         type="button"
         onClick={onToggle}
-        className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-ds-faint transition hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-muted"
+        className="group flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] font-semibold tracking-[0.02em] text-ds-faint transition hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-muted"
         title={t('sidebarProjects')}
         aria-label={t('sidebarProjects')}
       >
         <span className="truncate">{t('sidebarProjects')}</span>
         {allGroupsCollapsed
           ? <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2} />
-          : <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={2} />}
+          : <ChevronDown className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" strokeWidth={2} />}
       </button>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-0.5">
         <SidebarIconButton
           onClick={onToggleSearch}
           active={searchVisible}
-          className="h-7 w-7"
+          className="h-6 w-6"
           title={t('sidebarSearchThreads')}
           ariaLabel={t('sidebarSearchThreads')}
         >
@@ -47,7 +48,7 @@ export function SidebarProjectsHeader({
         </SidebarIconButton>
         <SidebarIconButton
           onClick={onPickWorkspace}
-          className="h-7 w-7"
+          className="h-6 w-6"
           title={workspaceRoot ? t('changeWorkspace') : t('selectWorkspace')}
           ariaLabel={workspaceRoot ? t('changeWorkspace') : t('selectWorkspace')}
         >

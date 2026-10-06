@@ -4,16 +4,15 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RoomSidebarEntry } from '@shared/rooms-api'
 import { SidebarAgentChatsSection } from './SidebarAgentChatsSection'
-import { AGENT_CHATS_HEIGHT_KEY } from './sidebar-agent-chats'
 
 const mocks = vi.hoisted(() => ({
   route: 'chat',
   activeThreadId: 'thread' as string | null,
-  chatListener: undefined as undefined | ((state: { route: string; activeThreadId: string | null }, previous: { route: string; activeThreadId: string | null }) => void),
   navigation: { roomId: 'dm-alpha' as string | null, pending: false, error: '' },
   page: { entries: [] as RoomSidebarEntry[], busy: false, error: '', nextCursor: undefined as string | undefined },
   request: vi.fn(), refresh: vi.fn(), more: vi.fn(), query: vi.fn(), openRoom: vi.fn(), openAgent: vi.fn(),
-  pin: vi.fn(), archive: vi.fn(), deleted: vi.fn(), setRoute: vi.fn(), setNavigation: vi.fn()
+  pin: vi.fn(), archive: vi.fn(), deleted: vi.fn(), setRoute: vi.fn(), setNavigation: vi.fn(),
+  openDialog: vi.fn(), publish: vi.fn()
 }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en-US' } }),
@@ -22,7 +21,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('../../store/chat-store', () => ({
   useChatStore: Object.assign((selector: (state: { route: string }) => unknown) => selector({ route: mocks.route }), {
     getState: () => ({ route: mocks.route, activeThreadId: mocks.activeThreadId, setRoute: mocks.setRoute }),
-    subscribe: (listener: typeof mocks.chatListener) => { mocks.chatListener = listener; return () => { mocks.chatListener = undefined } }
+    subscribe: () => () => undefined
   })
 }))
 vi.mock('../rooms/agent-chat-navigation', () => ({
@@ -33,6 +32,8 @@ vi.mock('../rooms/agent-chat-navigation', () => ({
   openAgentConversation: mocks.openAgent,
   AGENT_CHAT_SELECTED_KEY: 'kun.agentChats.selected'
 }))
+vi.mock('../rooms/agent-chat-picker', () => ({ openAgentChatDialog: mocks.openDialog }))
+vi.mock('../rooms/room-activity-counts', () => ({ publishRoomActivityCounts: mocks.publish }))
 vi.mock('../rooms/room-sidebar-actions', () => ({
   toggleRoomSidebarEntryArchived: mocks.archive,
   setRoomSidebarEntryDeleted: mocks.deleted
@@ -45,24 +46,12 @@ vi.mock('../rooms/useRoomSidebar', () => ({
   }
 }))
 vi.mock('../rooms/RoomAvatar', () => ({
-  RoomAvatar: ({ label }: { label: string }) => createElement('span', { className: 'avatar' }, label)
-}))
-vi.mock('../rooms/RoomNewChat', () => ({
-  RoomNewChat: ({ selectionMode, onAgent, onOpen, onFill, onClose }: {
-    selectionMode: string; onAgent: (id: string) => void; onOpen: (id: string) => void; onFill: () => void; onClose: () => void
-  }) =>
-    createElement('div', { 'data-new-chat': selectionMode },
-      createElement('button', { onClick: () => onAgent('new-agent') }, 'Choose agent'),
-      createElement('button', { onClick: () => { onFill(); onClose() } }, 'Fill agent profile'),
-      createElement('button', { onClick: () => onOpen('new-direct-room') }, 'Created room'))
+  RoomAvatar: ({ label }: { label: string }) => createElement('span', { className: 'avatar' }, label),
+  RoomAvatarGroup: ({ label }: { label: string }) => createElement('span', { className: 'avatar-group' }, label)
 }))
 vi.mock('../rooms/RoomModal', () => ({
-  RoomModal: ({ children, onClose, title }: { children: ReactNode; onClose: () => void; title: string }) => createElement('div', { 'data-profile-modal': true, 'data-modal-title': title },
-    createElement('button', { onClick: onClose }, 'Close profile'), children)
-}))
-vi.mock('../rooms/AgentProfileForm', () => ({
-  AgentProfileForm: ({ onSaved }: { onSaved: (agent: { id: string }) => void }) =>
-    createElement('button', { onClick: () => onSaved({ id: 'manual-agent' }) }, 'Save agent profile')
+  RoomModal: ({ children, onClose, title }: { children: ReactNode; onClose: () => void; title: string }) => createElement('div', { 'data-modal-title': title },
+    createElement('button', { onClick: onClose }, 'Close modal'), children)
 }))
 vi.mock('./SidebarConversationsSection', () => ({
   SidebarConversationsSection: ({ titleKey }: { titleKey: string }) =>
@@ -82,6 +71,9 @@ function entry(id: string, values: Partial<RoomSidebarEntry> = {}): RoomSidebarE
     members: [], pinned: false, archived: false, deleted: false, latestMessageSeq: 0, readSeq: 0,
     runningCount: 0, attentionCount: 0, ...values }
 }
+function group(id: string, values: Partial<RoomSidebarEntry> = {}): RoomSidebarEntry {
+  return entry(id, { kind: 'group', agentId: undefined, roomId: `room-${id}`, ...values })
+}
 async function render(values = props()): Promise<void> {
   await act(async () => root.render(createElement(SidebarAgentChatsSection, values)))
 }
@@ -93,6 +85,7 @@ async function menuAction(label: string): Promise<void> {
   const action = [...document.querySelectorAll<HTMLButtonElement>('.rooms-menu-list button')].find((item) => item.textContent === label)!
   await act(async () => action.click())
 }
+const rows = () => host.querySelectorAll('.sidebar-agent-chat-row')
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   const saved = new Map<string, string>()
@@ -104,11 +97,10 @@ beforeEach(() => {
   mocks.route = 'chat'
   mocks.activeThreadId = 'thread'
   mocks.navigation = { roomId: 'dm-alpha', pending: false, error: '' }
-  mocks.page = { entries: [entry('alpha'), entry('beta'), entry('gamma'), entry('delta')], busy: false, error: '', nextCursor: undefined }
+  mocks.page = { entries: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'].map((id) => entry(id)), busy: false, error: '', nextCursor: undefined }
   mocks.request.mockReset().mockResolvedValue({ initialized: true, roomId: 'dm-alpha', seen: false })
-  mocks.refresh.mockReset(); mocks.more.mockReset(); mocks.query.mockReset(); mocks.openRoom.mockReset()
+  for (const mock of [mocks.refresh, mocks.more, mocks.query, mocks.openRoom, mocks.pin, mocks.openDialog, mocks.publish]) mock.mockReset()
   mocks.openAgent.mockReset().mockResolvedValue(undefined)
-  mocks.pin.mockReset()
   mocks.archive.mockReset().mockResolvedValue(undefined)
   mocks.deleted.mockReset().mockResolvedValue(undefined)
   mocks.setRoute.mockReset().mockImplementation((route: string) => { mocks.route = route })
@@ -117,19 +109,20 @@ beforeEach(() => {
 })
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
-describe('Code agent conversations sidebar', () => {
-  it('shows persistent identities and previews without selecting a chat during initialization', async () => {
+describe('Code conversations sidebar', () => {
+  it('lists private and group conversations without selecting one during initialization', async () => {
     mocks.page.entries[0].latestMessage = { id: 'message', authorKind: 'member', authorLabelSnapshot: 'Alpha',
       createdAt: '2026-09-30T03:00:00Z', preview: 'Finished the analysis', attachmentCount: 0 }
     await render()
-    expect(host.querySelectorAll('.sidebar-agent-chat-row')).toHaveLength(3)
+    expect(rows()).toHaveLength(4)
     expect(host.querySelector('.sidebar-agent-chat-preview')?.textContent).toBe('Finished the analysis')
-    expect(mocks.query).toHaveBeenCalledWith({ kind: 'agents', search: '' }, 'dm-alpha', true)
+    expect(mocks.query).toHaveBeenCalledWith({ kind: 'all', search: '' }, 'dm-alpha', true)
     expect(mocks.request).toHaveBeenCalledExactlyOnceWith('/v1/agents/chat-entry', 'GET')
     expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(mocks.openRoom).not.toHaveBeenCalled()
     expect(mocks.openAgent).not.toHaveBeenCalled()
     expect(host.querySelector('[aria-current="page"]')).toBeNull()
+    expect(mocks.publish).toHaveBeenCalledWith(mocks.page.entries)
   })
 
   it('creates the default chat only when the read-only bootstrap check says it is missing', async () => {
@@ -142,18 +135,18 @@ describe('Code agent conversations sidebar', () => {
     expect(mocks.refresh).toHaveBeenCalledOnce()
   })
 
-  it('keeps the selected private chat visible and highlights only on the Agent route', async () => {
-    mocks.navigation.roomId = 'dm-delta'
+  it('keeps the selected conversation visible and highlights it only on the conversation route', async () => {
+    mocks.navigation.roomId = 'dm-epsilon'
     await render()
-    expect(button('delta')).toBeNull()
+    expect(button('epsilon')).toBeNull()
     mocks.route = 'agent-chat'
     await render()
-    expect(button('delta').getAttribute('aria-current')).toBe('page')
-    expect(host.querySelectorAll('.sidebar-agent-chat-row')).toHaveLength(3)
-    expect(button('gamma')).toBeNull()
+    expect(button('epsilon').getAttribute('aria-current')).toBe('page')
+    expect(rows()).toHaveLength(4)
+    expect(button('delta')).toBeNull()
   })
 
-  it('reopens an existing room, creates a missing DM by Agent identity, and exposes a private-only picker', async () => {
+  it('reopens existing rooms, creates a missing DM by Agent identity and opens the shared picker', async () => {
     mocks.page.entries[1].roomId = undefined
     await render()
     act(() => button('alpha').click())
@@ -161,19 +154,42 @@ describe('Code agent conversations sidebar', () => {
     await act(async () => button('beta').click())
     expect(mocks.openAgent).toHaveBeenCalledWith('beta')
     act(() => button('agentChatsStart').click())
-    expect(host.querySelector('[data-new-chat="private"]')).not.toBeNull()
-    await act(async () => [...host.querySelectorAll('button')].find((item) => item.textContent === 'Choose agent')!.click())
-    expect(mocks.openAgent).toHaveBeenLastCalledWith('new-agent')
+    expect(mocks.openDialog).toHaveBeenCalledExactlyOnceWith('picker')
   })
 
-  it('uses only an unread marker when event sequence gaps are large', async () => {
+  it('opens group conversations in Code and keeps Agent pair transcripts out of the list', async () => {
+    mocks.page.entries = [group('release', { name: 'Release review', latestMessage: { id: 'm', authorKind: 'member',
+      authorLabelSnapshot: 'Codex', createdAt: '2026-09-30T03:00:00Z', preview: 'Needs a test run', attachmentCount: 0 } }),
+    entry('pair', { kind: 'agent_agent', name: 'Pair transcript' })]
+    await render()
+    expect(rows()).toHaveLength(1)
+    expect(button('Pair transcript')).toBeNull()
+    expect(button('Release review').querySelector('.avatar-group')).not.toBeNull()
+    expect(button('Release review').querySelector('.sidebar-agent-chat-preview')?.textContent).toBe('Codex: Needs a test run')
+    act(() => button('Release review').click())
+    expect(mocks.openRoom).toHaveBeenCalledWith('room-release')
+  })
+
+  it('puts attention and running work ahead of the message preview', async () => {
+    mocks.page.entries = [entry('alpha', { runningCount: 1 }), group('team', { runningCount: 2 }),
+      group('review', { attentionCount: 1, runningCount: 1 })]
+    await render()
+    expect(button('alpha').querySelector('.is-working')?.textContent).toBe('conversationReplying')
+    expect(button('team').querySelector('.is-working')?.textContent).toBe('conversationGroupWorking')
+    expect(button('review').querySelector('.sidebar-agent-chat-attention')?.textContent).toBe('roomsAttention')
+    expect(button('review').querySelector('.is-working')).toBeNull()
+  })
+
+  it('uses unread markers and counts unread conversations in the section header', async () => {
     mocks.page.entries[0].latestMessageSeq = 900
     mocks.page.entries[0].readSeq = 1
     await render()
     const unread = button('alpha').querySelector('.sidebar-agent-chat-unread')!
     expect(unread.getAttribute('aria-label')).toBe('roomsUnread')
     expect(unread.textContent).toBe('')
+    expect(button('alpha').classList.contains('is-unread')).toBe(true)
     expect(button('beta').querySelector('.sidebar-agent-chat-unread')).toBeNull()
+    expect(host.querySelector('.sidebar-agent-chats-count')?.textContent).toBe('1')
   })
 
   it('preserves pin and unpin actions in a sibling menu without nested buttons', async () => {
@@ -190,7 +206,7 @@ describe('Code agent conversations sidebar', () => {
     expect(host.querySelector('button button')).toBeNull()
   })
 
-  it('leaves an archived active DM and lets users restore it through archived conversations', async () => {
+  it('leaves an archived active conversation and lets users restore it through archived conversations', async () => {
     mocks.route = 'agent-chat'
     localStorage.setItem('kun.agentChats.selected', 'dm-alpha')
     await render()
@@ -204,7 +220,7 @@ describe('Code agent conversations sidebar', () => {
     mocks.page.entries = [entry('alpha', { archived: true })]
     openMenu('sidebarConversations')
     await menuAction('roomsArchivedConversations')
-    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'agents', search: '', archivedOnly: true }, '', true)
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'all', search: '', archivedOnly: true }, '', true)
     expect(button('alpha').disabled).toBe(true)
     openMenu('alpha')
     await menuAction('roomsRestoreArchivedConversation')
@@ -227,7 +243,7 @@ describe('Code agent conversations sidebar', () => {
     mocks.page.entries = [entry('alpha', { deleted: true })]
     openMenu('sidebarConversations')
     await menuAction('roomsRecentlyDeleted')
-    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'agents', search: '', deletedOnly: true }, '', true)
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'all', search: '', deletedOnly: true }, '', true)
     expect(button('alpha').disabled).toBe(true)
     openMenu('alpha')
     await menuAction('roomsRestoreConversation')
@@ -246,7 +262,7 @@ describe('Code agent conversations sidebar', () => {
     expect(mocks.setRoute).not.toHaveBeenCalled()
   })
 
-  it('does not clear a newer DM selected while an archive request is in flight', async () => {
+  it('does not clear a newer conversation selected while an archive request is in flight', async () => {
     mocks.route = 'agent-chat'
     let complete!: () => void
     mocks.archive.mockImplementationOnce(() => new Promise<void>((resolve) => { complete = resolve }))
@@ -259,51 +275,41 @@ describe('Code agent conversations sidebar', () => {
     expect(mocks.setRoute).not.toHaveBeenCalled()
   })
 
-  it('lets users configure a new Agent and opens its private conversation after saving', async () => {
+  it('filters unread, needs-you and group conversations from the section menu', async () => {
     await render()
-    act(() => button('agentChatsStart').click())
-    act(() => [...host.querySelectorAll('button')].find((item) => item.textContent === 'Fill agent profile')!.click())
-    expect(host.querySelector('[data-new-chat]')).toBeNull()
-    expect(host.querySelector('[data-profile-modal]')).not.toBeNull()
-    await act(async () => [...host.querySelectorAll('button')].find((item) => item.textContent === 'Save agent profile')!.click())
-    expect(mocks.openAgent).toHaveBeenCalledWith('manual-agent')
-    expect(host.querySelector('[data-profile-modal]')).toBeNull()
+    openMenu('sidebarConversations')
+    await menuAction('conversationFilterUnread')
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'all', search: '', unreadOnly: true }, 'dm-alpha', true)
+    expect(host.querySelector('.sidebar-agent-chats-scope')?.textContent).toBe('conversationFilterUnread')
+    openMenu('sidebarConversations')
+    await menuAction('conversationFilterAttention')
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'all', search: '', attentionOnly: true }, 'dm-alpha', true)
+    openMenu('sidebarConversations')
+    await menuAction('conversationFilterGroups')
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'group', search: '' }, 'dm-alpha', true)
+    await act(async () => host.querySelector<HTMLButtonElement>('.sidebar-agent-chats-scope')!.click())
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'all', search: '' }, 'dm-alpha', true)
+    expect(host.querySelector('.sidebar-agent-chats-scope')).toBeNull()
   })
 
-  it('does not let a late creation result override a newer task, even after navigating back', async () => {
+  it('opens the Agent directory from the section menu', async () => {
     await render()
-    act(() => button('agentChatsStart').click())
-    const previous = { route: mocks.route, activeThreadId: mocks.activeThreadId }
-    mocks.chatListener?.({ route: 'rooms', activeThreadId: 'thread' }, previous)
-    mocks.chatListener?.(previous, { route: 'rooms', activeThreadId: 'thread' })
-    act(() => [...host.querySelectorAll('button')].find((item) => item.textContent === 'Created room')!.click())
-    expect(mocks.openRoom).not.toHaveBeenCalled()
+    openMenu('sidebarConversations')
+    await menuAction('agentDirectoryTitle')
+    expect(mocks.openDialog).toHaveBeenCalledExactlyOnceWith('directory')
   })
 
-  it('allows all identities to be browsed while keeping legacy standalone threads in their own list', async () => {
+  it('expands every conversation while keeping legacy standalone threads in their own list', async () => {
     const legacy = { id: 'legacy', workspace: '/tmp/conversations/private-a', title: 'Old discussion',
       updatedAt: '2026-01-01T00:00:00Z', model: 'test', mode: 'agent' as const }
-    mocks.page.entries.push(entry('group', { kind: 'group' }))
+    mocks.page.entries.push(group('team'))
     await render(props({ threads: [legacy] }))
     expect(host.querySelector('[data-legacy-history]')?.textContent).toBe('agentChatsLegacyHistory')
     expect(button('Old discussion')).toBeNull()
-    act(() => [...host.querySelectorAll('button')].find((item) => item.textContent === 'agentChatsViewAll')!.click())
-    expect(host.querySelectorAll('.sidebar-agent-chat-row')).toHaveLength(4)
-    expect(button('group')).toBeNull()
-  })
-
-  it('persists accessible sizing without shrinking below or growing above the supported range', async () => {
-    localStorage.setItem(AGENT_CHATS_HEIGHT_KEY, '250')
-    await render()
-    const resize = host.querySelector<HTMLElement>('[role="separator"]')!
-    const key = (value: string) => act(() => resize.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true })))
-    expect(resize.getAttribute('aria-valuenow')).toBe('250')
-    key('ArrowUp')
-    expect(localStorage.getItem(AGENT_CHATS_HEIGHT_KEY)).toBe('270')
-    key('End'); key('ArrowUp')
-    expect(resize.getAttribute('aria-valuenow')).toBe('360')
-    key('Home'); key('ArrowDown')
-    expect(localStorage.getItem(AGENT_CHATS_HEIGHT_KEY)).toBe('160')
+    expect(rows()).toHaveLength(4)
+    act(() => [...host.querySelectorAll('button')].find((item) => item.textContent === 'conversationViewAll')!.click())
+    expect(rows()).toHaveLength(6)
+    expect(button('team')).not.toBeNull()
   })
 
   it('leaves unavailable runtime actions disabled and retries default initialization after a failure', async () => {
@@ -339,18 +345,18 @@ describe('Code agent conversations sidebar', () => {
     expect(mocks.request).toHaveBeenCalledOnce()
     expect(host.querySelector('[role="alert"]')).toBeNull()
   })
-  it('hides cached Agent rows and unavailable errors until Kun has finished loading', async () => {
+  it('hides cached rows and unavailable errors until Kun has finished loading', async () => {
     mocks.page.error = 'runtime still starting'
     mocks.navigation.error = 'early connection failure'
     await render(props({ runtimeReady: false }))
-    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'agents', search: '' }, 'dm-alpha', false)
+    expect(mocks.query).toHaveBeenLastCalledWith({ kind: 'all', search: '' }, 'dm-alpha', false)
     expect(host.querySelector('[data-agent-chats-waiting]')?.textContent).toContain('waitingForKun')
-    expect(host.querySelectorAll('.sidebar-agent-chat-row')).toHaveLength(0)
+    expect(rows()).toHaveLength(0)
     expect(host.querySelector('[role="alert"]')).toBeNull()
-    expect(host.textContent).not.toContain('agentChatsViewAll')
+    expect(host.textContent).not.toContain('conversationViewAll')
     mocks.page.error = ''; mocks.navigation.error = ''
     await render()
     expect(host.querySelector('[data-agent-chats-waiting]')).toBeNull()
-    expect(host.querySelectorAll('.sidebar-agent-chat-row')).toHaveLength(3)
+    expect(rows()).toHaveLength(4)
   })
 })

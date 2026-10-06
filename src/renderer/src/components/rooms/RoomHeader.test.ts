@@ -23,7 +23,8 @@ const room = {
   conversationKind: 'group',
   pinned: false,
   archivedAt: undefined,
-  members: []
+  members: [],
+  repositories: []
 } as unknown as Room
 
 const baseProps = () => ({
@@ -88,6 +89,27 @@ describe('RoomHeader inline rename', () => {
     await act(async () => { input.props.onKeyDown({ key: 'Enter', preventDefault: vi.fn() }) })
     expect(onUpdate).not.toHaveBeenCalled()
     expect(renderer.root.findAllByType('input')).toHaveLength(0)
+  })
+
+  it('shows the collaboration mode in the header and summarizes members and the linked project', async () => {
+    const onUpdate = vi.fn()
+    const groupRoom = { ...room, members: [{ id: 'a', displayName: 'Avery', enabled: true }, { id: 'b', displayName: 'Codex', enabled: true }],
+      repositories: [{ id: 'repo', displayName: 'DeepSeek-GUI' }] } as unknown as Room
+    await act(async () => { renderer = create(createElement(RoomHeader, { ...baseProps(), room: groupRoom, onUpdate })) })
+    const select = renderer.root.findByProps({ 'aria-label': i18n.t('roomsMode') })
+    expect(select.props.value).toBe('peer')
+    await act(async () => { select.props.onChange({ target: { value: 'directed' } }) })
+    expect(onUpdate).toHaveBeenCalledWith({ collaborationMode: 'directed' })
+    expect(renderer.root.findByType('p').children.join('')).toBe(`${i18n.t('conversationMemberCount', { count: 2 })} · DeepSeek-GUI`)
+  })
+
+  it('toggles the Code sidebar and keeps pair transcripts without a mode control', async () => {
+    const onSidebar = vi.fn()
+    const pair = { ...room, conversationKind: 'agent_agent' } as unknown as Room
+    await act(async () => { renderer = create(createElement(RoomHeader, { ...baseProps(), room: pair, onSidebar })) })
+    await act(async () => { renderer.root.findByProps({ 'aria-label': i18n.t('sidebarToggle') }).props.onClick() })
+    expect(onSidebar).toHaveBeenCalledOnce()
+    expect(renderer.root.findAllByProps({ 'aria-label': i18n.t('roomsMode') })).toHaveLength(0)
   })
 
   it('starts editing from the more-actions menu', async () => {

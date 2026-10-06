@@ -2,14 +2,12 @@ import type { ReactElement } from 'react'
 import { Bot, Eye } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ThreadWorkbenchOrigin } from '@shared/rooms-api'
-import { writeBrowserStorageItem } from '../../lib/browser-storage'
-import { useChatStore } from '../../store/chat-store'
+import { openAgentConversationRoom } from './agent-chat-navigation'
 import { sendThreadToBot, watchThreadWithBot } from './workbench-bridge-actions'
 
-/** Opens the bot conversation that started a Code/Work session. */
+/** Opens the Code conversation (private or group) that started a Code/Work session. */
 export function openWorkbenchOriginChat(origin: ThreadWorkbenchOrigin): void {
-  writeBrowserStorageItem('kun.rooms.selected', origin.roomId)
-  useChatStore.getState().setRoute('rooms')
+  openAgentConversationRoom(origin.roomId)
 }
 
 /** "From bot · Name" chip shown on a session a bot Agent started for the user. */
