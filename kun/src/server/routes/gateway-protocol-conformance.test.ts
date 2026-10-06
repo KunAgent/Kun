@@ -231,14 +231,13 @@ describe('Anthropic supported semantics and explicit rejections', () => {
   it.each([
     { tool_choice: 'auto' }, { tool_choice: {} }, { tool_choice: { type: 'auto', unknown: true } },
     { output_config: 'invalid' }, { output_config: [] }, { thinking: true }, { stream: 'true' },
-    { thinking: { type: 'adaptive' } }, { thinking: { type: 'enabled', budget_tokens: 1024 } },
-    { stop_sequences: ['END'] }, { top_k: 20 }, { output_config: { effort: 'high' } },
+    { thinking: { type: 'enabled', budget_tokens: 1024, extra: true } }, { thinking: { type: 'interleaved' } },
+    { stop_sequences: ['END'] }, { top_k: 20 }, { output_config: { effort: 'ultra' } }, { output_config: { format: {} } },
     { tool_choice: { type: 'any' } }, { tool_choice: { type: 'auto', disable_parallel_tool_use: 'invalid' } },
     { tools: [{ type: 'web_search_20250305', name: 'web_search' }] },
     { system: [{ type: 'document', source: {} }] },
     { messages: [{ role: 'user', content: [{ type: 'document', source: {} }] }] },
-    { messages: [{ role: 'assistant', content: [{ type: 'thinking', thinking: 'private', signature: 'opaque' }] }] },
-    { messages: [{ role: 'assistant', content: [{ type: 'redacted_thinking', data: 'opaque' }] }] },
+    { messages: [{ role: 'user', content: [{ type: 'thinking', thinking: 'not mine', signature: 'opaque' }] }] },
     { messages: [{ role: 'assistant', content: [{ type: 'server_tool_use', id: 'a', name: 'web_search', input: {} }] }] },
     { messages: [{ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'unknown', content: 'orphan' }] }] },
     { messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'url', url: 'https://example.com/x.png' } }] }] }
@@ -250,6 +249,40 @@ describe('Anthropic supported semantics and explicit rejections', () => {
     expect(model.last).toBeUndefined()
     const count = await gatewayCountTokens(runtime(model), request({ messages: user, ...extra }))
     expect(count.status).toBe(400)
+  })
+
+  it.each([
+    [{ thinking: { type: 'enabled', budget_tokens: 1024 } }, 'low'],
+    [{ thinking: { type: 'enabled', budget_tokens: 20_000 } }, 'high'],
+    [{ thinking: { type: 'adaptive' } }, 'auto'],
+    [{ thinking: { type: 'adaptive' }, output_config: { effort: 'xhigh' } }, 'max'],
+    [{ output_config: { effort: 'medium' } }, 'medium']
+  ])('maps Anthropic thinking %j to reasoning effort %s', async (extra, effort) => {
+    const model = new ScriptedModel()
+    const response = await gatewayMessages(runtime(model), request({ messages: user, ...extra }))
+    expect(response.status).toBe(200)
+    expect(model.last?.reasoningEffort).toBe(effort)
+  })
+
+  it('replays thinking text as reasoning history without forwarding client signatures', async () => {
+    const model = new ScriptedModel()
+    const response = await gatewayMessages(runtime(model), request({
+      thinking: { type: 'adaptive' },
+      tools: [{ name: 'read', input_schema: { type: 'object' } }],
+      messages: [
+        { role: 'user', content: 'read it' },
+        { role: 'assistant', content: [
+          { type: 'thinking', thinking: 'I should read', signature: 'kungw1.client-held' },
+          { type: 'redacted_thinking', data: 'opaque' },
+          { type: 'tool_use', id: 'c1', name: 'read', input: {} }
+        ] },
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'c1', content: 'ok' }] }
+      ]
+    }))
+    expect(response.status).toBe(200)
+    expect(model.last!.history.find((item) => item.kind === 'assistant_reasoning')).toMatchObject({ text: 'I should read' })
+    expect(JSON.stringify(model.last!.history)).not.toContain('kungw1.client-held')
+    expect(JSON.stringify(model.last!.history)).not.toContain('opaque')
   })
 
   it('keeps interleaved tool argument streams in independent sequential blocks', async () => {

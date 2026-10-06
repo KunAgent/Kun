@@ -254,15 +254,16 @@ describe('assembleSdkOptions', () => {
     expect(assembleSdkOptions(base).maxTurns).toBeUndefined()
   })
 
-  test('gateway compatibility disables signed thinking and rejects unsupported effort', () => {
+  test('gateway turns keep reasoning through gateway-signed thinking and honor an explicit off', () => {
     const gateway = { baseUrl: 'http://127.0.0.1:18899', token: 'fixture', model: 'kun/p/m',
       env: { baseUrl: 'ANTHROPIC_BASE_URL', token: 'ANTHROPIC_AUTH_TOKEN' }, stripEnv: [] }
-    const options = assembleSdkOptions({ ...base, gateway, reasoningEffort: 'off' })
-    expect(options.thinking).toEqual({ type: 'disabled' })
-    expect(options.effort).toBeUndefined()
-    expect(options.env?.MAX_THINKING_TOKENS).toBe('0')
-    expect(options.env?.CLAUDE_CODE_EFFORT_LEVEL).toBe('unset')
-    expect(() => assembleSdkOptions({ ...base, gateway, reasoningEffort: 'high' })).toThrow('requires reasoning off')
+    const off = assembleSdkOptions({ ...base, gateway, reasoningEffort: 'off' })
+    expect(off.thinking).toEqual({ type: 'disabled' })
+    expect(off.effort).toBeUndefined()
+    const high = assembleSdkOptions({ ...base, gateway, reasoningEffort: 'high' })
+    expect(high).toMatchObject({ effort: 'high', thinking: { type: 'adaptive' } })
+    expect(high.env?.MAX_THINKING_TOKENS).toBeUndefined()
+    expect(high.env?.CLAUDE_CODE_EFFORT_LEVEL).toBeUndefined()
   })
 
   test('maps Claude subscription effort to adaptive-thinking SDK options', () => {

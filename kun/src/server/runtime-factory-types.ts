@@ -91,6 +91,8 @@ export type KunServeRuntimeOptions = {
   clientOwnerKind?: RuntimeClientOwnerKind
   runtimeFlavor?: RuntimeFlavor
   discoveryDir?: string
+  /** Publish `~/.kun/gateway.json` for external agents (production serve only). */
+  advertiseGatewayDiscovery?: boolean
   serviceManager?: ServiceManagerConnection
   logPath?: string
   faultInjection?: FaultInjectionController

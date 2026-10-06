@@ -21,8 +21,9 @@ describe('gateway client setup previews', () => {
     expect(preview.launch).toContain("ANTHROPIC_BASE_URL='http://localhost:18899'")
     expect(preview.launch).toContain('-u CLAUDE_CODE_OAUTH_TOKEN')
     expect(preview.launch).toContain('-u ANTHROPIC_API_KEY')
-    expect(preview.launch).toContain('MAX_THINKING_TOKENS=0 CLAUDE_CODE_EFFORT_LEVEL=unset')
-    expect(preview.launch).toContain('ANTHROPIC_AUTH_TOKEN="$KUN_GATEWAY_API_KEY"')
+    expect(preview.launch).not.toContain('MAX_THINKING_TOKENS')
+    expect(preview.launch).not.toContain('CLAUDE_CODE_EFFORT_LEVEL')
+    expect(preview.launch).toContain('ANTHROPIC_AUTH_TOKEN="kun-claude-code.$KUN_GATEWAY_API_KEY"')
     expect(preview.content).toBeUndefined()
   })
   it('quotes arbitrary aliases instead of allowing shell substitution', () => {

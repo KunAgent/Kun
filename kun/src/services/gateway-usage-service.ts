@@ -41,6 +41,7 @@ export class GatewayUsageService {
     sessionHeader: string | null
     requestedModelId: string
     resolved: { model: string; providerId?: string }
+    agent?: string
   }): Promise<GatewayUsageRecorder> {
     const sessionId = gatewaySessionId(input.client.clientId, input.sessionHeader)
     const threadId = gatewayAuditThreadId(input.client.clientId)
@@ -112,6 +113,7 @@ export class GatewayUsageService {
             clientId: input.client.clientId,
             requestId: turnId,
             ...(sessionId ? { sessionId } : {}),
+            ...(input.agent ? { agent: input.agent } : {}),
             status: failed ? 'failed' : outcome,
             latencyMs: Math.max(0, endedAt - startedAt),
             retryCount,

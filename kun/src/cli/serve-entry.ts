@@ -173,6 +173,7 @@ async function serveMain(argv: readonly string[]): Promise<number> {
           runtimeFlavor,
           ...(ownerKind ? { clientOwnerKind: ownerKind } : {}),
           discoveryDir,
+          advertiseGatewayDiscovery: runtimeFlavor === 'production',
           serviceManager: manager,
           ...(buildId ? { buildId } : {}),
           sharedMcpConfigPath: process.env.KUN_MCP_CONFIG_PATH || join(homedir(), '.kun', 'mcp.json'),

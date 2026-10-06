@@ -46,7 +46,7 @@ export function buildGatewayClientSetup(clientId: GatewayClientId, baseUrl: stri
       content: piModelsConfig(v1, modelId, GATEWAY_KEY_ENV),
       launch: `PI_CODING_AGENT_DIR="$PWD/.kun-gateway/pi" pi --provider kun --model ${shellQuote(modelId)}` }
     case 'claude-code': return { ...common,
-      launch: `env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY \\\n  ANTHROPIC_BASE_URL=${shellQuote(v1.replace(/\/v1$/, ''))} \\\n  ANTHROPIC_AUTH_TOKEN="$KUN_GATEWAY_API_KEY" \\\n  MAX_THINKING_TOKENS=0 CLAUDE_CODE_EFFORT_LEVEL=unset \\\n  ANTHROPIC_MODEL=${shellQuote(modelId)} \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=${shellQuote(modelId)} \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=${shellQuote(modelId)} \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=${shellQuote(modelId)} \\\n  ANTHROPIC_SMALL_FAST_MODEL=${shellQuote(modelId)} claude` }
+      launch: `env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY \\\n  ANTHROPIC_BASE_URL=${shellQuote(v1.replace(/\/v1$/, ''))} \\\n  ANTHROPIC_AUTH_TOKEN="kun-claude-code.$KUN_GATEWAY_API_KEY" \\\n  ANTHROPIC_MODEL=${shellQuote(modelId)} \\\n  ANTHROPIC_DEFAULT_OPUS_MODEL=${shellQuote(modelId)} \\\n  ANTHROPIC_DEFAULT_SONNET_MODEL=${shellQuote(modelId)} \\\n  ANTHROPIC_DEFAULT_HAIKU_MODEL=${shellQuote(modelId)} \\\n  ANTHROPIC_SMALL_FAST_MODEL=${shellQuote(modelId)} claude` }
   }
 }
 

@@ -2,6 +2,7 @@ import { routeCapabilityGuarantees } from '../../adapters/model/route-capability
 import { publicGatewayTarget } from '../../domain/model-gateway-export-policy.js'
 import { randomUUID } from 'node:crypto'
 import { ResponsesToolNamespaces } from './responses-tool-namespaces.js'
+import { describeGatewayModel } from './gateway-models-catalog.js'
 import type { TurnItem } from '../../contracts/items.js'
 import type { ModelConnectionSnapshot } from '../../contracts/model-connections.js'
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-pool.js'
@@ -25,6 +26,7 @@ import { gatewayPolicyActive, legacyGatewayClientPolicy, type GatewayClientPolic
 import { clientGuardFor, clientRouteTargets, clientDirectTargets, combinedGatewayLease, gatewayRequestProtocol } from './gateway-client-policy.js'
 import { GATEWAY_SESSION_HEADER, gatewaySessionId } from '../../services/gateway-usage-service.js'
 import type { ServerRuntime } from './server-runtime.js'
+import { rawGatewayCredential, splitAttributedKey } from './gateway-caller-agent.js'
 
 export { exposableProvider } from '../../domain/model-gateway-export-policy.js'
 
@@ -89,11 +91,9 @@ export type GatewayAuthVerdict =
   | { ok: true; auth: GatewayAuth }
   | { ok: false; reason: 'unauthorized' | 'rate_limited' | 'forbidden' | 'unavailable' }
 
+/** The verified credential: an attribution prefix (`kun-<app>.`) is stripped before verification. */
 export function bearerCandidate(request: Request): string | null {
-  const header = request.headers.get('authorization')
-  const match = /^Bearer ([^\s]+)$/.exec(header ?? '')
-  const candidate = match?.[1] ?? request.headers.get('x-api-key')
-  return candidate && candidate.trim() ? candidate : null
+  return splitAttributedKey(rawGatewayCredential(request)).secret
 }
 
 export async function authorizeGateway(runtime: ServerRuntime, request: Request): Promise<GatewayAuthVerdict> {
@@ -149,7 +149,13 @@ export function gatewayAffinityIdentity(request: Request, auth: GatewayAuth, tur
   const explicit = request.headers.get(GATEWAY_SESSION_HEADER)
   let session: string | undefined
   if (explicit !== null) session = gatewaySessionId(caller, explicit)
-  else { try { session = gatewaySessionId(caller, request.headers.get('session_id')) } catch { /* Optional client-owned metadata. */ } }
+  else {
+    // Optional client-owned metadata: Codex sends `session_id`, Claude Code `x-claude-code-session-id`.
+    for (const name of ['session_id', 'x-claude-code-session-id']) {
+      try { session = gatewaySessionId(caller, request.headers.get(name)) } catch { session = undefined }
+      if (session) break
+    }
+  }
   return { session,
     turn: gatewaySessionId(`${caller}:turn`, request.headers.get('x-kun-gateway-turn-id')) }
 }
@@ -267,14 +273,22 @@ export async function listGatewayModels(runtime: ServerRuntime, grant?: HarnessT
   if (!snapshot) return []
   await runtime.modelConnections?.assertActiveConfiguration?.(snapshot.revision)
   if (policyRevision !== undefined && snapshot.revision !== policyRevision) throw new GatewayRouteChangedError()
+  const capabilities = runtime.modelGateway?.modelCapabilities?.bind(runtime.modelGateway)
   return gatewayModelsFromSnapshot(runtime, snapshot, grant, policy).map((entry) => {
     const pool = runtime.modelGateway?.pools().find((candidate) => candidate.modelId === entry.id)
-    if (!pool) return entry
+    if (!pool) {
+      const direct = entry.id.startsWith(GATEWAY_MODEL_PREFIX) ? parseGatewayModelId(entry.id) : undefined
+      const target = direct ? { providerId: direct.providerId, modelId: direct.model } : publicGatewayTarget(snapshot.providers, entry.id)
+      const provider = target ? snapshot.providers.find((candidate) => candidate.id === target.providerId) : undefined
+      return { ...entry, ...(target ? describeGatewayModel(snapshot, [target], capabilities,
+        { displayName: provider ? `${target.modelId} · ${provider.name}` : undefined, routed: false }) : {}) }
+    }
     const allowed = clientRouteTargets(policy, pool, gatewayPoolTargets(snapshot.providers, pool))
       .filter((target) => !grant || grant.aliasRoutes?.some((alias) => alias.alias === entry.id &&
         alias.targets.some((approved) => approved.providerId === target.providerId && approved.modelId === target.modelId)))
-    return { ...entry, x_kun: { capabilityMode: pool.capabilityMode ?? 'request-filter',
-      guarantees: routeCapabilityGuarantees(allowed.map((target) => runtime.modelGateway?.modelCapabilities?.(target.modelId, target.providerId))) } }
+    return { ...entry, ...describeGatewayModel(snapshot, allowed, capabilities, { displayName: pool.name, routed: true }),
+      x_kun: { capabilityMode: pool.capabilityMode ?? 'request-filter',
+        guarantees: routeCapabilityGuarantees(allowed.map((target) => runtime.modelGateway?.modelCapabilities?.(target.modelId, target.providerId))) } }
   })
 }
 

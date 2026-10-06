@@ -2,6 +2,7 @@ import type { ModelStreamChunk } from '../../ports/model-client.js'
 import { GATEWAY_SESSION_HEADER, gatewaySessionId, type GatewayUsageRecorder } from '../../services/gateway-usage-service.js'
 import type { GatewayAuth } from './model-gateway-core.js'
 import type { ServerRuntime } from './server-runtime.js'
+import { gatewayCallerAgent } from './gateway-caller-agent.js'
 
 export type { GatewayUsageRecorder } from '../../services/gateway-usage-service.js'
 
@@ -27,7 +28,8 @@ export async function beginGatewayUsage(
   }
   if (!runtime.modelGateway?.usage || !auth.client) return undefined
   try {
-    return await runtime.modelGateway.usage.begin({ client: auth.client, sessionHeader, requestedModelId, resolved })
+    const agent = gatewayCallerAgent(request)
+    return await runtime.modelGateway.usage.begin({ client: auth.client, sessionHeader, requestedModelId, resolved, ...(agent ? { agent } : {}) })
   } catch {
     throw new GatewayUsageError(503, 'Gateway usage storage is unavailable.')
   }

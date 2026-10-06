@@ -10,6 +10,8 @@ import type { ServerRuntime } from './server-runtime.js'
 import { beginGatewayUsage, wrapGatewayUsage, GatewayUsageError, type GatewayUsageRecorder, type GatewayUsageStream } from './gateway-usage.js'
 import { ResponsesToolNamespaces } from './responses-tool-namespaces.js'
 import { OpenAiGatewayOutput } from './openai-gateway-output.js'
+import { gatewayUpstream } from './gateway-upstream.js'
+import { gatewayModelsText } from './gateway-models-catalog.js'
 import {
   acquireHarnessGrantLease,
   acquirePublicGatewayLease,
@@ -46,7 +48,11 @@ export async function gatewayModels(runtime: ServerRuntime, request: Request): P
   if (!runtime.modelGateway?.enabled()) return openAiError('Local model gateway is disabled.', 'gateway_disabled', 404)
   try {
     const publicAuth = verdict.auth.kind === 'public' ? verdict.auth : undefined
-    return jsonResponse({ object: 'list', data: await listGatewayModels(runtime, grant, publicAuth?.policy, publicAuth?.policyRevision) })
+    const data = await listGatewayModels(runtime, grant, publicAuth?.policy, publicAuth?.policyRevision)
+    if (new URL(request.url).searchParams.get('format') === 'text') {
+      return { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }, body: gatewayModelsText(data) }
+    }
+    return jsonResponse({ object: 'list', data })
   } catch { return openAiError('Gateway configuration changed; retry discovery.', 'gateway_unavailable', 503) }
 }
 
@@ -186,7 +192,7 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
     : undefined
   const stream = input.stream === true
   try {
-    const chunks = wrapGatewayUsage(harnessGatewayStream(runtime.modelClient.stream(modelRequest), grant), recorder, {
+    const chunks = wrapGatewayUsage(harnessGatewayStream(gatewayUpstream(runtime, request, verdict.auth, modelRequest, model), grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
     return stream

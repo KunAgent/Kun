@@ -15,6 +15,8 @@ export const GatewayUsageMetadataSchema = z.object({
   requestId: z.string().min(1),
   /** Opaque hash bound to the authenticated client; never a Kun thread id. */
   sessionId: z.string().min(1).optional(),
+  /** Calling agent (key prefix, x-kun-agent or User-Agent); attribution only, never authorization. */
+  agent: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/).optional(),
   status: z.enum(['completed', 'failed', 'cancelled']),
   latencyMs: z.number().nonnegative(),
   retryCount: z.number().int().nonnegative(),

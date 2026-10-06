@@ -12,6 +12,8 @@ import type { GatewayLease } from './gateway-request-guard.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { beginGatewayUsage, wrapGatewayUsage, GatewayUsageError, type GatewayUsageRecorder, type GatewayUsageStream } from './gateway-usage.js'
 import { anthropicToChatInput } from './anthropic-gateway-input.js'
+import { gatewayThinkingSignature } from './anthropic-gateway-thinking.js'
+import { gatewayUpstream } from './gateway-upstream.js'
 import {
   type GatewayAuth,
   acquireHarnessGrantLease,
@@ -188,7 +190,8 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
     : undefined
   const stream = input.stream === true
   try {
-    const chunks = wrapGatewayUsage(harnessGatewayStream(runtime.modelClient.stream(modelRequest), grant), recorder, {
+    const upstream = gatewayUpstream(runtime, request, gate.auth, modelRequest, model)
+    const chunks = wrapGatewayUsage(harnessGatewayStream(upstream, grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
     return stream
@@ -259,6 +262,7 @@ function anthropicUsage(usage: unknown): Record<string, number> {
 
 async function anthropicNonStreamingResponse(chunks: GatewayUsageStream, model: string, lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>): Promise<JsonResponse> {
   let text = ''
+  let thinking = ''
   let usage: UsageSnapshot | undefined
   let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined
   const content: AnthropicBlock[] = []
@@ -273,7 +277,7 @@ async function anthropicNonStreamingResponse(chunks: GatewayUsageStream, model: 
       if (result.done) { completed = true; throw new Error('Upstream stream ended without a completion marker') }
       const chunk = result.value
       if (chunk.kind === 'assistant_text_delta') text += chunk.text
-      else if (chunk.kind === 'assistant_reasoning_delta') throw new Error('Anthropic thinking output requires provider signatures and is not supported by the local gateway')
+      else if (chunk.kind === 'assistant_reasoning_delta') thinking += chunk.text
       else if (chunk.kind === 'tool_call_delta') {
         if (completedToolIds.has(chunk.callId)) throw new Error(`Duplicate tool call '${chunk.callId}'`)
         const entry = deltaToolCalls.get(chunk.callId) ?? { name: chunk.toolName ?? '', json: '' }
@@ -307,6 +311,7 @@ async function anthropicNonStreamingResponse(chunks: GatewayUsageStream, model: 
       if (!entry.name) throw new Error(`Missing name for tool call '${callId}'`)
       toolCalls.push({ id: callId, name: entry.name, input: validateToolJson(entry.json) })
     }
+    if (thinking) content.push({ type: 'thinking', thinking, signature: gatewayThinkingSignature() })
     if (text) content.push({ type: 'text', text })
     for (const call of toolCalls) content.push({ type: 'tool_use', id: call.id, name: call.name, input: call.input })
     const response = jsonResponse({
@@ -335,7 +340,7 @@ function anthropicStreamingResponse(chunks: GatewayUsageStream, model: string, l
   let iteratorClosed = false
   let attributed = false
   let blockIndex = 0
-  let openBlock: 'text' | null = null
+  let openBlock: 'text' | 'thinking' | null = null
   const pendingTools = new Map<string, { name: string; deltas: string[] }>()
   const completedTools = new Set<string>()
   let usage: UsageSnapshot | undefined
@@ -364,6 +369,12 @@ function anthropicStreamingResponse(chunks: GatewayUsageStream, model: string, l
   }
   const closeOpenBlock = (controller: ReadableStreamDefaultController<Uint8Array>): void => {
     if (!openBlock) return
+    if (openBlock === 'thinking') {
+      sendEvent(controller, 'content_block_delta', {
+        type: 'content_block_delta', index: blockIndex,
+        delta: { type: 'signature_delta', signature: gatewayThinkingSignature() }
+      })
+    }
     sendEvent(controller, 'content_block_stop', { type: 'content_block_stop', index: blockIndex })
     blockIndex += 1
     openBlock = null
@@ -454,7 +465,22 @@ function anthropicStreamingResponse(chunks: GatewayUsageStream, model: string, l
           })
           return
         }
-        if (chunk.kind === 'assistant_reasoning_delta') throw new Error('Anthropic thinking output requires provider signatures and is not supported by the local gateway')
+        if (chunk.kind === 'assistant_reasoning_delta') {
+          if (!chunk.text) continue
+          if (openBlock !== 'thinking') {
+            closeOpenBlock(controller)
+            sendEvent(controller, 'content_block_start', {
+              type: 'content_block_start', index: blockIndex,
+              content_block: { type: 'thinking', thinking: '', signature: '' }
+            })
+            openBlock = 'thinking'
+          }
+          sendEvent(controller, 'content_block_delta', {
+            type: 'content_block_delta', index: blockIndex,
+            delta: { type: 'thinking_delta', thinking: chunk.text }
+          })
+          return
+        }
         if (chunk.kind === 'tool_call_delta') {
           if (completedTools.has(chunk.callId)) throw new Error(`Duplicate tool call '${chunk.callId}'`)
           const tool = pendingTools.get(chunk.callId) ?? { name: '', deltas: [] }

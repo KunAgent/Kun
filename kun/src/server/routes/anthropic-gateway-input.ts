@@ -1,4 +1,5 @@
 import { asRecord, stringValue } from './model-gateway-core.js'
+import { anthropicReasoningEffort } from './anthropic-gateway-thinking.js'
 
 /** Convert only semantics that the canonical model request can faithfully carry. */
 export function anthropicToChatInput(input: Record<string, unknown>): Record<string, unknown> {
@@ -10,11 +11,8 @@ export function anthropicToChatInput(input: Record<string, unknown>): Record<str
   for (const field of ['thinking', 'tool_choice', 'output_config']) {
     if (input[field] != null && (typeof input[field] !== 'object' || Array.isArray(input[field]))) throw new Error(`${field} must be an object`)
   }
-  const thinking = asRecord(input.thinking)
-  if (input.thinking != null && (thinking.type !== 'disabled' || Object.keys(thinking).some((key) => key !== 'type'))) {
-    throw new Error('Anthropic thinking is not supported; use thinking.type=disabled with this gateway')
-  }
-  if (input.output_config != null && Object.keys(asRecord(input.output_config)).length) throw new Error('Anthropic output_config is not supported by the local gateway')
+  const reasoningEffort = anthropicReasoningEffort(asRecord(input.thinking), asRecord(input.output_config),
+    { thinking: input.thinking != null, outputConfig: input.output_config != null })
   const choice = asRecord(input.tool_choice)
   if (input.tool_choice != null && (Object.keys(choice).some((key) => !['type', 'name', 'disable_parallel_tool_use'].includes(key)) ||
     (choice.type !== 'auto' && choice.type !== 'tool') ||
@@ -41,16 +39,30 @@ export function anthropicToChatInput(input: Record<string, unknown>): Record<str
     if (!Array.isArray(message.content) || !message.content.length) throw new Error('content must be a string or nonempty block array')
     let parts: Record<string, unknown>[] = []
     let toolCalls: Record<string, unknown>[] = []
+    let reasoning: string[] = []
     const flush = () => {
-      if (parts.length || toolCalls.length) messages.push({ role, content: parts, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) })
+      if (parts.length || toolCalls.length || reasoning.length) {
+        messages.push({ role, content: parts, ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
+          ...(reasoning.length ? { reasoning_content: reasoning.join('\n') } : {}) })
+      }
       parts = []
       toolCalls = []
+      reasoning = []
     }
     for (const block of message.content) {
       const record = asRecord(block)
       const type = stringValue(record.type)
       if (type === 'text') parts.push(textBlock(record, 'message'))
-      else if (type === 'image') {
+      else if (type === 'thinking' || type === 'redacted_thinking') {
+        // Replayed thinking: the text returns as reasoning history; signatures
+        // (client-held, possibly gateway-issued) are never forwarded. Real
+        // provider signatures are restored by tool-call id server-side.
+        if (role !== 'assistant') throw new Error('Thinking blocks are supported only in assistant messages')
+        if (type === 'thinking') {
+          if (typeof record.thinking !== 'string') throw new Error('thinking blocks require thinking text')
+          if (record.thinking) reasoning.push(record.thinking)
+        }
+      } else if (type === 'image') {
         if (role !== 'user') throw new Error('Image blocks are supported only in user messages')
         const source = asRecord(record.source)
         if (source.type !== 'base64' || !stringValue(source.media_type).startsWith('image/') || !stringValue(source.data)) {
@@ -85,7 +97,7 @@ export function anthropicToChatInput(input: Record<string, unknown>): Record<str
     return { name: tool.name, description: tool.description, input_schema: tool.input_schema }
   })
   return { model: input.model, messages, tools, stream: input.stream, max_tokens: input.max_tokens,
-    temperature: input.temperature, top_p: input.top_p, reasoning_effort: thinking.type === 'disabled' ? 'off' : undefined,
+    temperature: input.temperature, top_p: input.top_p, reasoning_effort: reasoningEffort,
     ...(typeof choice.disable_parallel_tool_use === 'boolean' ? { parallel_tool_calls: !choice.disable_parallel_tool_use } : {}),
     tool_choice: choice.type === 'tool' ? { type: 'function', function: { name: choice.name } } : undefined }
 }

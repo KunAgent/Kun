@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { GatewayCredentialService } from '../../services/gateway-credential-service.js'
+import { rawGatewayCredential, splitAttributedKey } from './gateway-caller-agent.js'
 import { GATEWAY_REQUEST_TIMEOUT_MS } from '../../adapters/model/gateway-routing-budget.js'
 
 const DEFAULT_CAPACITY = 20
@@ -35,11 +36,9 @@ export class GatewayRequestGuard {
   }
 
   authorize(request: Request): boolean {
-    const header = request.headers.get('authorization')
-    const match = /^Bearer ([^\s]+)$/.exec(header ?? '')
-    // Anthropic-style clients authenticate with `x-api-key` instead of Bearer.
-    const candidate = match?.[1] ?? request.headers.get('x-api-key')
-    return this.credentials.verify(candidate && candidate.trim() ? candidate : null)
+    // Anthropic-style clients authenticate with `x-api-key` instead of Bearer;
+    // an attribution prefix (`kun-<app>.`) is never part of the secret.
+    return this.credentials.verify(splitAttributedKey(rawGatewayCredential(request)).secret)
   }
 
   consumeToken(): boolean {

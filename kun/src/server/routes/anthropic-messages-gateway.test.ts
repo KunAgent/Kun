@@ -247,18 +247,39 @@ describe('anthropic-compatible gateway messages', () => {
     expect((delta?.data.delta as { stop_reason?: string })?.stop_reason).toBe('tool_use')
   })
 
-  it('rejects unsigned reasoning output rather than fabricating Anthropic signatures', async () => {
+  it('streams reasoning as a thinking block with a gateway signature before the answer', async () => {
     const streamed = await gatewayMessages(
       runtime(new ScriptedModel([
-        { kind: 'assistant_reasoning_delta', text: 'ponder' },
+        { kind: 'assistant_reasoning_delta', text: 'pon' },
+        { kind: 'assistant_reasoning_delta', text: 'der' },
         { kind: 'assistant_text_delta', text: 'answer' },
         { kind: 'completed', stopReason: 'stop' }
       ])),
       authorizedRequest({ model: 'local-model', messages: [{ role: 'user', content: 'hi' }], stream: true })
     ) as Response
     const events = sseEvents(await streamed.text())
-    expect(events.find((event) => event.event === 'error')?.data).toMatchObject({ error: { message: expect.stringContaining('signatures') } })
-    expect(events.some((event) => event.event === 'message_stop')).toBe(false)
+    const starts = events.filter((event) => event.event === 'content_block_start').map((event) => (event.data as any).content_block.type)
+    expect(starts).toEqual(['thinking', 'text'])
+    const deltas = events.filter((event) => event.event === 'content_block_delta').map((event) => (event.data as any).delta)
+    expect(deltas.filter((delta) => delta.type === 'thinking_delta').map((delta) => delta.thinking).join('')).toBe('ponder')
+    const signature = deltas.find((delta) => delta.type === 'signature_delta')
+    expect(signature?.signature).toMatch(/^kungw1\.[0-9a-f]{32}$/)
+    expect(deltas.findIndex((delta) => delta.type === 'signature_delta')).toBeLessThan(deltas.findIndex((delta) => delta.type === 'text_delta'))
+    expect(events.some((event) => event.event === 'message_stop')).toBe(true)
+  })
+
+  it('returns reasoning as a leading thinking block for non-streaming requests', async () => {
+    const response = await gatewayMessages(
+      runtime(new ScriptedModel([
+        { kind: 'assistant_reasoning_delta', text: 'ponder' },
+        { kind: 'assistant_text_delta', text: 'answer' },
+        { kind: 'completed', stopReason: 'stop' }
+      ])),
+      authorizedRequest({ model: 'local-model', messages: [{ role: 'user', content: 'hi' }] })
+    )
+    const body = JSON.parse((response as { body: string }).body)
+    expect(body.content.map((block: { type: string }) => block.type)).toEqual(['thinking', 'text'])
+    expect(body.content[0]).toMatchObject({ thinking: 'ponder', signature: expect.stringMatching(/^kungw1\./) })
   })
 
 })
