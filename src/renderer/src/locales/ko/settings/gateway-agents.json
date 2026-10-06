@@ -63,6 +63,9 @@
       "high": "높음",
       "xhigh": "매우 높음",
       "max": "최대"
+    },
+    "notices": {
+      "trusted-folders": "{{agent}}는 신뢰한 폴더에서만 Kun 설정을 읽습니다. 신뢰하지 않은 폴더에서는 Kun을 쓰지 않고 API 키가 없다는 오류로 멈춥니다."
     }
   }
 }

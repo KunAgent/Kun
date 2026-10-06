@@ -17,7 +17,7 @@ describe('Gemini CLI adapter', () => {
     expect(getDotenv(h.read(env), 'GEMINI_API_KEY')).toBe(KEY)
     // Gemini CLI appends /v1beta itself, so the base is the bare origin.
     expect(getDotenv(h.read(env), 'GOOGLE_GEMINI_BASE_URL')).toBe(ORIGIN)
-    expect(h.service.status('gemini-cli', ORIGIN)).toMatchObject({ connected: true, drifted: false, model: 'coding' })
+    expect(h.service.status('gemini-cli', ORIGIN)).toMatchObject({ connected: true, drifted: false, model: 'coding', notice: 'trusted-folders' })
     h.service.disconnect('gemini-cli', ORIGIN)
     expect(h.read(env)).toBe('# keep me\nGEMINI_API_KEY=mine\nOTHER=1\n')
     expect(h.read(settings)).toBe('{ "ui": { "theme": "GitHub" } }\n')

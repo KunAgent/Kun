@@ -28,6 +28,11 @@ describe('agent rows', () => {
     expect(html).not.toContain('value="medium"')
     expect(html).toContain('Fast model for background tasks')
   })
+  it('shows the agent\'s own condition for reading Kun settings', () => {
+    const html = renderToStaticMarkup(createElement(GatewayAgentRow, { t: i18n.getFixedT('en', 'settings'),
+      agent: { ...base, id: 'gemini-cli', name: 'Gemini CLI', notice: 'trusted-folders' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))
+    expect(html).toContain('Gemini CLI reads Kun&#x27;s settings only in folders you have trusted in it.')
+  })
   it('flags drift and offers reconnect plus disconnect', () => {
     const html = renderToStaticMarkup(createElement(GatewayAgentRow, { t: i18n.getFixedT('en', 'settings'),
       agent: { ...base, connected: true, drifted: true, model: 'coding' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))

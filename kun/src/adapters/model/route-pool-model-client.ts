@@ -28,7 +28,7 @@ import {
 import type { FailoverGroupRouteState } from './route-pool-failover-groups.js'
 import { RoutePoolHealthStore } from './route-pool-health-store.js'
 import { orderRouteTargets } from './route-target-order.js'
-import { capabilitySupportsRequest } from './route-capability-contract.js'
+import { capabilitySupportsGatewayRequest, fittedMaxTokens } from './route-capability-contract.js'
 import { GatewayRouteChangedError, gatewayTargetMatches } from '../../domain/model-gateway-export-policy.js'
 import { GATEWAY_MAX_ROUTE_ATTEMPTS, withGatewayRoutingBudget } from './gateway-routing-budget.js'
 import { RouteAffinity } from './route-affinity.js'
@@ -289,7 +289,7 @@ export class RoutePoolModelClient implements ModelClient {
   ): AsyncIterable<ModelStreamChunk> {
     const authorized = pool.targets.filter((target) => target.enabled && gatewayAllowsTarget(request, target))
     if (pool.capabilityMode === 'guaranteed' && authorized.some((target) =>
-      !capabilitySupportsRequest(this.capabilities(target.modelId, target.providerId), request))) {
+      !capabilitySupportsGatewayRequest(this.capabilities(target.modelId, target.providerId), request))) {
       yield { kind: 'error', code: 'route_capability_not_guaranteed', message: 'This request exceeds the route guarantee. Select request capability filtering or change its targets.',
         failure: { category: 'capability', failoverAllowed: false, routePoolId: pool.id } }
       return
@@ -298,7 +298,7 @@ export class RoutePoolModelClient implements ModelClient {
       target.enabled &&
       gatewayAllowsTarget(request, target) &&
       this.targetAvailable(pool, target) &&
-      capabilitySupportsRequest(this.capabilities(target.modelId, target.providerId), request))
+      capabilitySupportsGatewayRequest(this.capabilities(target.modelId, target.providerId), request))
     if (this.quotaLookup && eligible.length > 1) {
       // Quota-aware routing only applies to same-vendor member accounts:
       // a member whose cached quota entry is definitively exhausted is
@@ -391,6 +391,7 @@ export class RoutePoolModelClient implements ModelClient {
           model: target.modelId,
           providerId: target.providerId,
           ...(effort ? { reasoningEffort: effort } : {}),
+          ...(request.gatewayRouting && request.maxTokens ? { maxTokens: fittedMaxTokens(this.capabilities(target.modelId, target.providerId), request) } : {}),
           routeSelection: {
             kind: 'route-pool',
             id: pool.id,

@@ -30,6 +30,26 @@ export function capabilitySupportsRequest(capability: ModelCapabilityMetadata | 
   return !capability.contextWindowTokens || input + (request.maxTokens ?? 0) <= capability.contextWindowTokens
 }
 
+/**
+ * External agents often ask for an output budget as large as their whole
+ * window (Kimi Code sends its context size). For gateway traffic that number
+ * is a ceiling, not a requirement: each target receives the largest budget it
+ * can honor, and only a target with no room left at all is ineligible.
+ */
+export function fittedMaxTokens(capability: ModelCapabilityMetadata | undefined, request: ModelRequest): number | undefined {
+  if (!request.maxTokens || !capability) return request.maxTokens
+  const input = Math.ceil(JSON.stringify([...request.prefix, ...request.history]).length / 4)
+  const room = capability.contextWindowTokens ? capability.contextWindowTokens - input : Number.POSITIVE_INFINITY
+  return Math.max(0, Math.min(request.maxTokens, capability.maxOutputTokens ?? Number.POSITIVE_INFINITY, room))
+}
+
+/** Same as capabilitySupportsRequest, with a gateway caller's max_tokens treated as a ceiling. */
+export function capabilitySupportsGatewayRequest(capability: ModelCapabilityMetadata | undefined, request: ModelRequest): boolean {
+  if (!request.gatewayRouting || !request.maxTokens) return capabilitySupportsRequest(capability, request)
+  const fitted = fittedMaxTokens(capability, request)
+  return fitted !== undefined && fitted >= 1 && capabilitySupportsRequest(capability, { ...request, maxTokens: fitted })
+}
+
 function hasImages(request: ModelRequest): boolean {
   return Boolean(request.attachments?.length) || Object.values(request.messageAttachments ?? {})
     .some((attachments) => attachments.images.length > 0)

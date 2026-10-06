@@ -63,6 +63,9 @@
       "high": "High",
       "xhigh": "Extra high",
       "max": "Max"
+    },
+    "notices": {
+      "trusted-folders": "{{agent}} reads Kun's settings only in folders you have trusted in it. In an untrusted folder it stops with a missing API key error instead of using Kun."
     }
   }
 }

@@ -528,6 +528,12 @@ export function responsesToChatInput(input: Record<string, unknown>, namespaces 
       } else if (type === 'function_call_output') {
         if (!stringValue(record.call_id)) throw new Error('function_call_output requires call_id')
         messages.push({ role: 'tool', tool_call_id: record.call_id, content: record.output })
+      } else if (type === 'reasoning') {
+        // Clients (Codex) replay the reasoning items the gateway returned. Their
+        // text goes back as reasoning history; encrypted_content is never issued
+        // by the gateway, and real provider state is restored by tool-call id.
+        const text = responsesReasoningText(record)
+        if (text) messages.push({ role: 'assistant', content: null, reasoning_content: text })
       } else {
         throw new Error(`Responses input item '${type}' is not supported by the local gateway`)
       }
@@ -539,6 +545,23 @@ export function responsesToChatInput(input: Record<string, unknown>, namespaces 
   if (format.type && format.type !== 'text' && format.type !== 'json_object') throw new Error('Responses text.format is not supported by the local gateway')
   return { ...input, messages, tools: input.tools, max_tokens: input.max_output_tokens,
     reasoning_effort: reasoning.effort, response_format: format.type === 'json_object' ? format : undefined }
+}
+
+function responsesReasoningText(record: Record<string, unknown>): string {
+  const parts: string[] = []
+  for (const field of ['summary', 'content']) {
+    const list = record[field]
+    if (list == null) continue
+    if (!Array.isArray(list)) throw new Error(`reasoning ${field} must be an array`)
+    for (const entry of list) {
+      const part = asRecord(entry)
+      if (!['summary_text', 'reasoning_text'].includes(stringValue(part.type)) || typeof part.text !== 'string') {
+        throw new Error(`reasoning ${field} entries must be summary_text or reasoning_text`)
+      }
+      if (part.text) parts.push(part.text)
+    }
+  }
+  return parts.join('\n')
 }
 
 export function parseTools(value: unknown): ModelToolSpec[] {

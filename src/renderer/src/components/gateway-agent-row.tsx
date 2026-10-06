@@ -118,6 +118,7 @@ export function GatewayAgentRow({ agent, models, busy, disabled, onConnect, onDi
     </p> : null}
     {agent.drifted ? <p className="text-[11px] leading-5 text-amber-700 dark:text-amber-200">{t('gatewayAgents.driftedHint')}</p> : null}
     {agent.connected && agent.pickInAgent ? <p className="text-[11px] leading-5 text-ds-muted">{t('gatewayAgents.pickInAgent', { agent: agent.name })}</p> : null}
+    {agent.notice ? <p className="text-[11px] leading-5 text-amber-700 dark:text-amber-200" data-agent-notice={agent.notice}>{t(`gatewayAgents.notices.${agent.notice}`, { agent: agent.name })}</p> : null}
     {agent.error ? <p role="alert" className="text-[11px] text-red-600">{agent.error}</p> : null}
   </li>
 }

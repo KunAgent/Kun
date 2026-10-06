@@ -63,6 +63,9 @@
       "high": "高",
       "xhigh": "超高",
       "max": "最大"
+    },
+    "notices": {
+      "trusted-folders": "{{agent}} 只在你信任过的文件夹里读取 Kun 的设置。在未信任的文件夹里，它会提示缺少 API key 并停止，而不会走 Kun。"
     }
   }
 }

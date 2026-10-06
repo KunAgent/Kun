@@ -11,6 +11,7 @@ import { createGitHubMcpAuthorizationPreloadApi } from './github-mcp-authorizati
 import { createDataMigrationPreloadApi } from './data-migration'
 import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
+import { quotaReminderPreloadApi } from './quota-reminder-bridge'
 import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
@@ -106,6 +107,7 @@ const api = {
   saveSettingsSilent: (partial) =>
     ipcRenderer.invoke('settings:save-silent', partial),
   ...runtimeRequestPreloadApi,
+  ...quotaReminderPreloadApi,
   setRoomPermissions: (request) => ipcRenderer.invoke('room:permissions:set', request),
   gatewayLaunchProfile: (request) => ipcRenderer.invoke('gateway:launch-profile', request),
   gatewayClients: (request) => ipcRenderer.invoke('gateway:clients', request),
@@ -505,12 +507,6 @@ const api = {
     return () => ipcRenderer.removeListener('browser-use:state', wrapped)
   },
   showTurnCompleteNotification: (payload) => ipcRenderer.invoke('notification:turn-complete', payload),
-  showQuotaReminderNotification: (payload) => ipcRenderer.invoke('notification:quota-reminder', payload),
-  onQuotaReminderClicked: (callback) => {
-    const listener = (): void => callback()
-    ipcRenderer.on('notification:quota-reminder:clicked', listener)
-    return () => ipcRenderer.removeListener('notification:quota-reminder:clicked', listener)
-  },
   setAppBadgeCount: (count) => ipcRenderer.invoke('app:badge-count', count),
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getGuiUpdateState: () => ipcRenderer.invoke('gui:update-state'),

@@ -30,6 +30,70 @@ install exact clients in a temporary npm prefix; the script does not install the
 Use `--resources <packaged-Resources>` to test packaged Runtime modules instead
 of bundling current TypeScript. Keep credentials out of argv and evidence files.
 
+## Agent wiring gate (native config takeover)
+
+`scripts/smoke-agent-wiring-clients.mjs` checks the Agents page path end to end.
+For each installed agent it seeds a realistic user config in an isolated home,
+connects through `kun/src/agent-wiring` exactly as the GUI does, and runs the
+agent's own CLI with no model or base-URL flags. Only the config Kun wrote can
+point the agent at the gateway. The gateway is the real handler set with a route
+pool, a route rule keyed on the calling agent, and a system-prompt middleware,
+over a deterministic fake upstream. External traffic goes to a proxy that drops
+every tunnel. After the runs Kun disconnects, and every seeded file must match its
+original bytes. A second connection then changes an unrelated key in the agent's
+file, and disconnecting must keep that change.
+
+Per scenario the smoke asserts: the agent printed the fixture reply; the request
+reached the upstream; the route rule chose the member for that agent (key
+attribution reached routing); the middleware ran; the route trace recorded
+`decision: rule` for that agent; for the tools scenario a real read tool ran
+and its result reached the next model call; for Claude Code the thinking block
+came back with the upstream signature restored by tool-call id; for agents
+with a reasoning setting the effort reached the upstream.
+
+Command: `node scripts/smoke-agent-wiring-clients.mjs [--client <id>] [--json]`.
+Clients are the binaries already on PATH; the script never installs them.
+
+Run on 2026-10-06, macOS arm64, branch `codex/provider-gateway-followup`. Two
+consecutive full runs gave the same result:
+
+| Agent | Version | Text | Read tool + next call | Exact restore | User edit kept |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code | 2.1.291 | passed | passed, thinking signature restored | yes | yes |
+| Codex | 0.145.0 | passed | passed | yes | yes |
+| OpenCode | 1.1.47 | passed | passed | yes | yes |
+| Gemini CLI | 0.52.0 | passed (trusted folder) | passed | yes | yes |
+| Droid | 0.234.0 | passed, no Factory login needed | passed | yes | yes |
+| Kimi Code | 0.29.0 | passed | passed | yes | yes |
+| Goose, Aider, Pi, Crush, Continue | not installed | not gated | not gated | unit tests only | unit tests only |
+
+Blocked outbound attempts were update, telemetry and registry checks
+(chatgpt.com, github.com, registry.npmjs.org, play.googleapis.com,
+code.kimi.com, telemetry hosts, api.factory.ai). None carried the gateway key.
+
+The first runs found five gateway or fixture problems, fixed before the table above:
+
+- Claude Code 2.1.29x sends `context_management` with a `clear_thinking`
+  edit that keeps everything. The gateway refused it, so every request failed.
+  Clearing edits are now accepted as advisory, and unknown edit types are still refused.
+- Claude Code 2.1.29x sends a `system` role message inside `messages`. It now
+  folds into the system prompt, text blocks only.
+- Codex replays the `reasoning` items the gateway returned. Their summary now
+  returns as reasoning history; encrypted content is ignored because the
+  gateway never issues it.
+- Gemini CLI sends `generationConfig.topK` on every request. It is now
+  accepted as a sampling hint.
+- Kimi Code asks for `max_completion_tokens` equal to its context window, which
+  made every member ineligible. For gateway traffic, max tokens is now a ceiling:
+  each member receives the largest budget it can honor.
+
+Gemini CLI reads `~/.gemini/.env` only in folders the user trusted. In an
+untrusted folder it stops with a missing-key error and does not contact Google
+with the gateway key. The Agents page states this for Gemini CLI. The smoke
+sets `GEMINI_CLI_TRUST_WORKSPACE=true` to stand in for a trusted folder.
+Claude Code ignores a `settings.json` it cannot parse as strict JSON, so the
+smoke seeds strict JSON for it.
+
 ## Fixed scale gate
 
 `kun/src/services/provider-configuration.release-scale.test.ts` exercises 500

@@ -52,6 +52,9 @@ export type WiringTarget = {
   models: GatewayModelInfo[]
 }
 
+/** `trusted-folders`: Gemini CLI loads ~/.gemini/.env only in folders the user trusted. */
+export type AgentWiringNotice = 'trusted-folders'
+
 export type AgentProtocol = 'anthropic' | 'responses' | 'chat' | 'gemini'
 
 export interface AgentAdapter {
@@ -75,6 +78,8 @@ export interface AgentAdapter {
   keepsModelList: boolean
   /** Short instruction shown after connecting, when the model is picked inside the agent. */
   pickInAgent?: boolean
+  /** A condition the agent itself puts on reading Kun's settings, shown while connected. */
+  notice?: AgentWiringNotice
   /** For shared arrays: whether an entry is Kun's own (removed on disconnect). */
   ownsArrayItem?(item: unknown): boolean
 }
@@ -128,6 +133,7 @@ export type AgentWiringStatus = {
   restartRequired: boolean
   keepsModelList: boolean
   pickInAgent: boolean
+  notice?: AgentWiringNotice
   error?: string
 }
 

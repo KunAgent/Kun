@@ -93,7 +93,9 @@ export function geminiToChatInput(model: string, raw: Record<string, unknown>, s
   const allowed = Array.isArray(toolConfig.allowedFunctionNames) ? toolConfig.allowedFunctionNames : []
   if (mode && !['AUTO', 'ANY', 'NONE', 'VALIDATED'].includes(mode)) throw new Error(`Gemini function calling mode '${mode}' is not supported`)
   if (mode === 'ANY' && allowed.length !== 1) throw new Error('Gemini function calling mode ANY requires exactly one allowed function')
-  for (const field of ['stopSequences', 'candidateCount', 'responseSchema', 'responseJsonSchema', 'presencePenalty', 'frequencyPenalty', 'seed', 'topK']) {
+  // topK is a sampling hint Gemini CLI sends on every request; providers without it sample as usual.
+  if (config.topK != null && (typeof config.topK !== 'number' || config.topK < 1)) throw new Error('Gemini generationConfig.topK must be a positive number')
+  for (const field of ['stopSequences', 'candidateCount', 'responseSchema', 'responseJsonSchema', 'presencePenalty', 'frequencyPenalty', 'seed']) {
     if (config[field] != null && !(field === 'candidateCount' && config[field] === 1)) {
       throw new Error(`Gemini generationConfig.${field} is not supported by the local gateway`)
     }

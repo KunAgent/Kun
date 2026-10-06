@@ -103,6 +103,7 @@ export class AgentWiringService {
       ...(record?.clientId ? { clientId: record.clientId } : {}),
       restartRequired: adapter.restartRequired, keepsModelList: adapter.keepsModelList,
       pickInAgent: adapter.pickInAgent === true,
+      ...(adapter.notice ? { notice: adapter.notice } : {}),
       ...(error ? { error } : {})
     }
   }

@@ -180,6 +180,9 @@ const geminiCli: AgentAdapter = {
   protocol: 'gemini',
   homepage: 'https://github.com/google-gemini/gemini-cli',
   bins: ['gemini'],
+  // Gemini CLI skips ~/.gemini/.env in folders the user has not trusted; it then
+  // fails with a missing-key error rather than sending the key to Google.
+  notice: 'trusted-folders',
   files: (ctx) => ({ settings: join(ctx.home, '.gemini', 'settings.json'), env: join(ctx.home, '.gemini', '.env') }),
   configDirs: (ctx) => [join(ctx.home, '.gemini')],
   efforts: [],

@@ -1,12 +1,32 @@
 import { asRecord, stringValue } from './model-gateway-core.js'
 import { anthropicReasoningEffort } from './anthropic-gateway-thinking.js'
 
+/**
+ * Server-side context editing (Claude Code sends `clear_thinking` with
+ * `keep: "all"` on every request). Clearing edits only ever shorten what the
+ * provider sees, so forwarding the full history is a faithful superset; any
+ * other edit type is refused.
+ */
+function acceptContextManagement(value: unknown): void {
+  if (value == null) return
+  const record = asRecord(value)
+  if (Object.keys(record).some((key) => key !== 'edits') || !Array.isArray(record.edits)) {
+    throw new Error('Anthropic context_management must contain only an edits array')
+  }
+  for (const edit of record.edits) {
+    const type = stringValue(asRecord(edit).type)
+    if (!/^clear_(?:thinking|tool_uses)_\d{8}$/.test(type)) throw new Error(`Anthropic context_management edit '${type || 'unknown'}' is not supported by the local gateway`)
+  }
+}
+
 /** Convert only semantics that the canonical model request can faithfully carry. */
 export function anthropicToChatInput(input: Record<string, unknown>): Record<string, unknown> {
-  for (const field of ['stop_sequences', 'top_k', 'context_management', 'container', 'mcp_servers', 'service_tier']) {
+  for (const field of ['stop_sequences', 'top_k', 'container', 'mcp_servers', 'service_tier']) {
     if (input[field] != null) throw new Error(`Anthropic ${field} is not supported by the local gateway`)
   }
-  const supported = new Set(['model', 'messages', 'system', 'max_tokens', 'stream', 'temperature', 'top_p', 'tools', 'tool_choice', 'thinking', 'output_config', 'metadata'])
+  acceptContextManagement(input.context_management)
+  const supported = new Set(['model', 'messages', 'system', 'max_tokens', 'stream', 'temperature', 'top_p', 'tools', 'tool_choice', 'thinking',
+    'output_config', 'metadata', 'context_management'])
   for (const field of Object.keys(input)) if (!supported.has(field)) throw new Error(`Anthropic ${field} is not supported by the local gateway`)
   for (const field of ['thinking', 'tool_choice', 'output_config']) {
     if (input[field] != null && (typeof input[field] !== 'object' || Array.isArray(input[field]))) throw new Error(`${field} must be an object`)
@@ -31,7 +51,15 @@ export function anthropicToChatInput(input: Record<string, unknown>): Record<str
   for (const raw of input.messages) {
     const message = asRecord(raw)
     const role = stringValue(message.role)
-    if (role !== 'user' && role !== 'assistant') throw new Error('Anthropic message role must be user or assistant')
+    if (role === 'system') {
+      // Newer clients (Claude Code 2.1.29x) send context such as the environment
+      // as a system message after the user turn; it folds into the system prompt.
+      if (typeof message.content === 'string') messages.push({ role: 'system', content: message.content })
+      else if (Array.isArray(message.content)) messages.push({ role: 'system', content: message.content.map((block) => textBlock(block, 'system')) })
+      else throw new Error('system message content must be a string or text blocks')
+      continue
+    }
+    if (role !== 'user' && role !== 'assistant') throw new Error('Anthropic message role must be user, assistant or system')
     if (typeof message.content === 'string') {
       messages.push({ role, content: message.content })
       continue
