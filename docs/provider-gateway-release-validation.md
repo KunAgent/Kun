@@ -94,6 +94,21 @@ sets `GEMINI_CLI_TRUST_WORKSPACE=true` to stand in for a trusted folder.
 Claude Code ignores a `settings.json` it cannot parse as strict JSON, so the
 smoke seeds strict JSON for it.
 
+Packaged app check, 2026-10-07, `dist/Kun-0.3.10-mac-arm64.zip` built from
+local develop, extracted and launched with `open -n`:
+
+- The runtime became ready on the configured port 18900 after about 90 seconds;
+  `/health` returned ok. `/api/hello` advertised the route-trace and key-limit
+  endpoints, and `/v1/kun/limit` refused a missing key with 401.
+- `~/.kun/gateway.json` was written with mode 0600, naming the live PID,
+  instance and port. It holds no key.
+- No errors appeared in the Kun log between launch and quit.
+- On quit, the runtime's graceful shutdown hit its 10-second deadline and the
+  process was forced to exit. This was already the behaviour before these changes.
+  In the first build this left a stale discovery file. The discovery file is now
+  withdrawn before runtime shutdown starts, and a repeat run with the same forced
+  exit left no file.
+
 ## Fixed scale gate
 
 `kun/src/services/provider-configuration.release-scale.test.ts` exercises 500
