@@ -100,6 +100,7 @@ export function createHarnessListDeps(input: {
     description?: string
   }>
   providers?: () => Promise<HarnessProviderModelGroup[]>
+  gatewayAliasModel?: HarnessListDeps['gatewayAliasModel']
 }): HarnessListDeps {
   return {
     catalog: input.services.harnesses.catalog,
@@ -108,7 +109,8 @@ export function createHarnessListDeps(input: {
     runtimes: input.harnessRuntimeMap,
     probedModels: (definition) => input.services.harnesses.probedModels(definition),
     ...(input.providers ? { providers: input.providers } : {}),
-    profiles: input.listProfiles
+    profiles: input.listProfiles,
+    gatewayAliasModel: input.gatewayAliasModel
   }
 }
 
@@ -179,6 +181,8 @@ export function createManagerRuntime(input: {
     harnessDefaults: (harnessId) =>
       harnessDefaultsFor(core.activeOptions.harnesses, harnessId),
     selector: {
+      configuredModel: (_harnessId, providerId) => providerId ? core.activeOptions.providers?.[providerId]?.selectedModel ?? core.activeOptions.providers?.[providerId]?.models?.[0] : undefined,
+      gatewayAliasModel: (binding) => core.activeOptions.routePools?.find((pool) => pool.id === binding.main.routeId && pool.enabled)?.modelId,
       profiles: (workspace) =>
         delegationRuntime?.listRoutingProfiles(workspace) ?? Promise.resolve([]),
       quota: createQuotaSnapshot({ list: listQuota }),
@@ -291,7 +295,8 @@ export function registerAdeManagerTooling(input: {
         services: input.services,
         harnessRuntimeMap: input.harnessRuntimeMap,
         listProfiles: () => input.delegationRuntime?.listProfiles() ?? [],
-        providers: input.providerPool.providers
+        providers: input.providerPool.providers,
+        gatewayAliasModel: (binding) => input.core.activeOptions.routePools?.find((pool) => pool.id === binding.main.routeId && pool.enabled)?.modelId
       }),
       managerMayApprove: () =>
         input.core.activeOptions.ade?.managerMayApprove === true,

@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import type {
   ChildRunRecord,
   ChildRoutingMetadata,
@@ -42,6 +43,7 @@ type RunChildInput = {
   routing?: ChildRoutingMetadata
   security?: ChildSecuritySnapshot
   harnessId?: WorkerRecord['route']['harnessId']
+  gatewayBinding?: HarnessGatewayBinding
   credentialMode?: WorkerRecord['route']['credentialMode']
   /** Read-only policy/sandbox ceiling for reviewer workers (10 §5). */
   toolPolicyCeiling?: 'readOnly'
@@ -59,6 +61,7 @@ type ResumeChildInput = {
   prompt: string
   clientRequestId?: string
   harnessId?: WorkerRecord['route']['harnessId']
+  gatewayBinding?: HarnessGatewayBinding
   credentialMode?: WorkerRecord['route']['credentialMode']
   security?: ChildSecuritySnapshot
   expectedResumeCount?: number
@@ -277,7 +280,8 @@ export class DispatchDeliverer {
       clientRequestId: dispatch.dispatchId,
       security: worker.securitySnapshot,
       harnessId: worker.route.harnessId,
-      credentialMode: worker.route.credentialMode
+      credentialMode: worker.route.credentialMode,
+      gatewayBinding: worker.route.gatewayBinding
     }
     const signal = this.signalFor(dispatch.workerId)
     if (prior) {

@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { RoomThreadContextSchema } from './thread-room-context.js'
 import { ExecutionTaskStateSchema } from './execution-tasks.js'
@@ -476,6 +477,7 @@ export const CreateThreadRequest = z.object({
   /** Optional explicit harness identity inherited by new turns. */
   harnessId: HarnessIdSchema.optional(),
   credentialMode: HarnessCredentialModeSchema.optional(),
+  gatewayBinding: HarnessGatewayBindingSchema.optional(),
   /**
    * Owning workspace mode ('code' | 'ade'). Written by the creating client;
    * absent and legacy threads count as 'code'.

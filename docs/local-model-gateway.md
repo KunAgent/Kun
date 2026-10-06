@@ -4,6 +4,9 @@ Kun can give several coding clients a stable model endpoint while keeping
 upstream API credentials inside Kun. This is a model transport within the
 existing Kun runtime, not a second agent runtime.
 
+The [provider configuration contract](provider-configuration-and-gateway.md)
+describes groups, v2 persistence, account scheduling, client scopes and budgets.
+
 ## Choose the right connection
 
 - **API-key model provider:** configure an official HTTP API connection, such as
@@ -77,8 +80,9 @@ state there even though the generated configuration contains no secret.
 ## Export policy and routing
 
 The same policy applies to direct provider IDs, aliases, fallback targets and
-managed harness grants: only configured HTTP API-key providers with ready
-credentials and declared models can be exported. Native SDK, subscription and
+managed harness grants: configured HTTP API-key providers with ready
+credentials, or explicitly anonymous HTTP providers with `not-required`
+credentials, and declared models can be exported. Native SDK, subscription and
 OAuth connections are not exportable. A scoped harness grant narrows the
 eligible route set; it cannot expand it.
 
@@ -119,13 +123,20 @@ are compatibility evidence, not proof that every future client version works.
 
 ## Credentials, sessions and accounting
 
-Use a separate revocable gateway key for each external client. Client keys are
+Use a separate revocable gateway key for each external client. New keys are
+limited to the chosen alias and currently approved accounts; future alias
+changes cannot expand that account allowlist. Legacy keys retain an explicit
+unrestricted migration marker until the user narrows their policy. Client keys are
 stored encrypted by Kun and are distinct from upstream provider secrets and
 short-lived managed harness grants. Creating or revoking a client connection
 is an explicit management action. Revocation rejects new requests immediately;
 already admitted streams retain their current request lease until completion,
 cancellation or deadline. Revoking the legacy shared key does not revoke
-independent client keys; the UI presents those actions separately.
+independent client keys; the UI presents those actions separately. Each client
+key can also be rotated, and revoke can explicitly cancel its active requests.
+Optional token budgets use Manager-persisted per-attempt reservations. Hard
+mode requires a declared account input ceiling plus bounded maximum output.
+Sent requests without usage retain a pending reservation across restart.
 
 Client/session correlation is an attribution aid, not authorization to an
 existing Kun conversation. External callers cannot use a session header to

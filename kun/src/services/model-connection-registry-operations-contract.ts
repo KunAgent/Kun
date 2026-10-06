@@ -26,6 +26,17 @@ import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
 import type { StoredProfileSchema, DeletedProfileTombstoneSchema, CredentialTransactionPreviousSchema, CredentialTransactionSchema, CredentialRefCleanupEntrySchema, RegistryDocumentSchema, RegistryDocument, StoredProfile, CredentialTransaction, PreparedCredentialSecret, ModelConnectionSeed, AuthenticatedModelConnectionInput, MODEL_CONNECTION_CREDENTIAL_SOURCE_PREFIX, isModelConnectionCredentialSourceId, modelConnectionCredentialSourceId, providerIdFromCredentialSource, ModelConnectionConflictError, MaterializedModelConnections, ProjectedCredentialHealth, credentialHealth, readLatestIfChanged, parseCredentialOperationToken, previousCredentialState, boundedCredentialHighWater, appendCredentialRefs, requireCredentialTransaction, credentialReferenceIsLive, processIsAlive, emptyDocument, configuredFallback, reconcileSeedProfile, sameStoredProfile, project, isProfileUsable, mergeProjectedCapability, assertRevision, requireProfile, capabilitiesForModels, sameCapabilities, allocateId, normalizeProviderId, preparedCredentialSecretTimerKey, uniqueModels, sameModels, probeModels, modelsUrl } from './model-connection-registry-core.js'
 
 export interface ModelConnectionRegistryOperations {
+  gatewayClientPolicy(clientId: string): Promise<{ revision: number; policy?: import('../contracts/gateway-client-policy.js').GatewayClientPolicy }>;
+  configurationSnapshot(): Promise<{
+    schemaVersion: 2; revision: number; activeRevision: number;
+    configuration: Omit<import('../contracts/provider-configuration.js').ProviderConfigurationState, 'commits'>;
+    connections: ModelConnectionProfile[]; routePools: RegistryDocument['routePools'];
+    failover: RegistryDocument['failover']; localModelGateway: RegistryDocument['localModelGateway'];
+    fieldSources: Record<string, Record<string, 'connection' | 'group' | 'template'>>;
+  }>;
+  previewConfiguration(raw: unknown): Promise<import('./provider-configuration-operations.js').ConfigurationPreview>;
+  commitConfiguration(raw: unknown): Promise<{ committedRevision: number; applied: boolean;
+    snapshot: Awaited<ReturnType<ModelConnectionRegistryOperations['configurationSnapshot']>> }>;
   initialize(
     seed?: readonly ModelConnectionSeed[] ,
     globals?: {
@@ -65,7 +76,7 @@ export interface ModelConnectionRegistryOperations {
     model: string
   }): Promise<ModelConnectionSnapshot>;
   updateGlobals(raw: unknown): Promise<ModelConnectionSnapshot>;
-  probe(providerId: string): Promise<{ ok: true; models: string[] }>;
+  probe(providerId: string, signal?: AbortSignal): Promise<{ ok: true; models: string[] }>;
   /**
    * Last persisted model-list fetch for the provider
    * (`model-catalog/providers/<id>.json`), or null when never fetched.

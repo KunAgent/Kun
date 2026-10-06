@@ -16,7 +16,8 @@ export const ModelConnectionProxySchema = z.object({
 export const ModelConnectionCredentialStatusSchema = z.enum([
   'ready',
   'missing',
-  'unreadable'
+  'unreadable',
+  'not-required'
 ])
 
 export const ModelConnectionCredentialErrorCodeSchema = z.enum([
@@ -49,12 +50,13 @@ export const ModelConnectionProfileSchema = z.object({
     'gemini-cli-api',
     'gemini-code-assist'
   ]),
-  authType: z.enum(['api-key', 'oauth', 'subscription']),
+  authType: z.enum(['api-key', 'oauth', 'subscription', 'none']),
   baseUrl: z.string().url().optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS),
   endpoints: ModelConnectionEndpointsSchema.optional(),
   useProxy: z.boolean(),
   configured: z.boolean(),
+  enabled: z.boolean().optional(),
   credentialStatus: ModelConnectionCredentialStatusSchema.optional(),
   credentialErrorCode: ModelConnectionCredentialErrorCodeSchema.optional(),
   models: z.array(z.string().min(1).max(512)).max(500),
@@ -100,7 +102,7 @@ export const ModelConnectionConnectRequestSchema = z.object({
     'gemini-cli-api',
     'gemini-code-assist'
   ]).default('http'),
-  authType: z.enum(['api-key', 'oauth', 'subscription']).default('api-key'),
+  authType: z.enum(['api-key', 'oauth', 'subscription', 'none']).default('api-key'),
   baseUrl: z.string().url().optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).default('chat_completions'),
   endpoints: ModelConnectionEndpointsSchema.optional(),
@@ -162,7 +164,7 @@ export const ModelConnectionPatchRequestSchema = z.object({
     'gemini-cli-api',
     'gemini-code-assist'
   ]).optional(),
-  authType: z.enum(['api-key', 'oauth', 'subscription']).optional(),
+  authType: z.enum(['api-key', 'oauth', 'subscription', 'none']).optional(),
   baseUrl: z.string().url().optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).optional(),
   endpoints: ModelConnectionEndpointsSchema.optional(),
@@ -213,6 +215,7 @@ export const ClaudeSdkInstallStatusSchema = z.object({
   message: z.string().optional()
 }).strict()
 
+export type ModelConnectionPatchRequest = z.infer<typeof ModelConnectionPatchRequestSchema>
 export type ModelConnectionProfile = z.infer<typeof ModelConnectionProfileSchema>
 export type ModelConnectionSnapshot = z.infer<typeof ModelConnectionSnapshotSchema>
 export type ModelConnectionCredentialStatus = z.infer<typeof ModelConnectionCredentialStatusSchema>
@@ -224,9 +227,9 @@ export type ModelConnectionCredentialErrorCode = z.infer<typeof ModelConnectionC
  * preventing known-bad credential references from being selected or used.
  */
 export function isModelConnectionProfileUsable(
-  profile: Pick<ModelConnectionProfile, 'configured' | 'credentialStatus'>
+  profile: Pick<ModelConnectionProfile, 'configured' | 'credentialStatus' | 'enabled'>
 ): boolean {
-  return profile.configured &&
+  return profile.configured && profile.enabled !== false &&
     profile.credentialStatus !== 'missing' &&
     profile.credentialStatus !== 'unreadable'
 }

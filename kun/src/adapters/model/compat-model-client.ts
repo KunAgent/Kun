@@ -1,3 +1,5 @@
+import { serialToolStream } from './serial-tool-stream.js'
+import { observeModelAttempts } from './model-attempt-observer.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { goalContextTexts } from '../../contracts/items.js'
 import { startLlmDebugRoundIfEnabled, type LlmDebugRound } from '../../services/llm-debug-recorder.js'
@@ -44,7 +46,13 @@ export type { CompatModelClientConfig } from './compat-model-types.js'
 export class CompatModelClient extends CompatModelStreamingClient implements ModelClient {
   paperReadOnlyDispatchGuard(): () => void { return () => undefined }
 
-  async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+  stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    const stream = (current: ModelRequest) => current.parallelToolCalls === false
+      ? serialToolStream(this.streamObserved(current)) : this.streamObserved(current)
+    return request.attemptObserver ? observeModelAttempts(request, stream) : stream(request)
+  }
+
+  private async *streamObserved(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     // External gateway content never enters native prompt/trajectory diagnostics,
     // even when a global or per-thread debug policy requests full capture.
     if (request.gatewayRouting || request.paperReadOnly) {
@@ -143,7 +151,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     const resolveBaseUrl = isCodex
       ? normalizeCodexResponsesUrl(this.config.baseUrl)
       : this.config.baseUrl
-    const endpointFormat = resolveModelEndpointFormat(
+    const endpointFormat = this.config.customEndpointProtocol ?? resolveModelEndpointFormat(
       isCodex ? 'custom_endpoint' : configuredEndpointFormat,
       resolveBaseUrl
     )
@@ -154,11 +162,23 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       }
       return
     }
-    const url = buildModelEndpointUrl(this.baseUrlForFormat(configuredEndpointFormat), configuredEndpointFormat)
+    let url = this.config.customEndpointProtocol ? this.config.baseUrl
+      : buildModelEndpointUrl(this.baseUrlForFormat(configuredEndpointFormat), configuredEndpointFormat)
     // Codex Responses only accepts streamed requests; explicit stream:false
     // callers (subagents, background distillations) get forced streaming.
-    const stream = isCodex ? true : (request.stream ?? !this.config.nonStreaming)
-    const body = this.buildRequestBody(request, stream, { endpointFormat })
+    const stream = request.fim ? false : isCodex ? true : (request.stream ?? !this.config.nonStreaming)
+    let body = this.buildRequestBody(request, stream, { endpointFormat })
+    if (request.fim) {
+      const endpoint = new URL(this.config.baseUrl)
+      if (endpoint.hostname !== 'api.deepseek.com' || configuredEndpointFormat !== 'chat_completions') {
+        yield { kind: 'error', code: 'fim_unsupported', message: 'The selected connection does not support fill-in-middle completion.' }
+        return
+      }
+      endpoint.pathname = '/beta/completions'
+      url = endpoint.toString()
+      body = { model: requestModel, prompt: request.fim.prompt, suffix: request.fim.suffix,
+        stream: false, max_tokens: request.maxTokens ?? 256, temperature: request.temperature ?? 0 }
+    }
     let credentials: { apiKey: string; headers?: Record<string, string>; refreshable: boolean }
     try {
       credentials = this.config.resolveCredentials
@@ -200,7 +220,11 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       reason,
       apiKey: credentials.apiKey,
       ...(request.gatewayRouting ? { gatewayRouting: request.gatewayRouting } : {}),
-      ...(request.paperReadOnly ? { paperReadOnly: request.paperReadOnly } : {})
+      ...(request.paperReadOnly ? { paperReadOnly: request.paperReadOnly } : {}),
+      ...(request.routingBudget ? { routingBudget: request.routingBudget } : {}),
+      beforeProviderDispatch: request.beforeProviderDispatch,
+      beforeWireDispatch: request.beforeWireDispatch,
+      onWireDispatch: request.onWireDispatch
     })
     let result = await post(body, 'initial')
     let transportRetryAttempt = 0

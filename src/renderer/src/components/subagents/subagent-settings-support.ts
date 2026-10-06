@@ -147,6 +147,9 @@ type WorkspaceAgentJson = {
   allowedTools?: string[]
   blockedTools?: string[]
   surfaces?: KunSubagentSurfaceV1[]
+  harnessId?: string
+  credentialMode?: KunSubagentProfileV1['credentialMode']
+  gatewayBinding?: KunSubagentProfileV1['gatewayBinding']
 }
 
 function workspaceProfileToKun(entry: WorkspaceAgentJson): KunSubagentProfileV1 {
@@ -162,7 +165,10 @@ function workspaceProfileToKun(entry: WorkspaceAgentJson): KunSubagentProfileV1 
     promptPreamble: entry.promptPreamble,
     allowedTools: entry.allowedTools,
     blockedTools: entry.blockedTools,
-    surfaces: entry.surfaces ?? ['code']
+    surfaces: entry.surfaces ?? ['code'],
+    ...(entry.harnessId ? { harnessId: entry.harnessId } : {}),
+    ...(entry.credentialMode ? { credentialMode: entry.credentialMode } : {}),
+    ...(entry.gatewayBinding ? { gatewayBinding: entry.gatewayBinding } : {})
   }
 }
 

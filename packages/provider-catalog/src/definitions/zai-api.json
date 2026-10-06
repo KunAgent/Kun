@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "zai-api",
+  "name": "Z.ai API",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.z.ai/api/paas/v4",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.z.ai/",
+  "credentialUrl": "https://z.ai/manage-apikey/apikey-list"
+}

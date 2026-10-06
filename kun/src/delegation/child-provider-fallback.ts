@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import type { SubagentToolPolicy } from '../contracts/capabilities.js'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '../contracts/policy.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
@@ -12,6 +13,7 @@ import type {
 import { ChildResultExecutionError } from './child-result-materializer.js'
 
 export type ChildExecutionArgs = {
+  gatewayBinding?: HarnessGatewayBinding
   state: ChildExecutionState
   queuedAt: string
   profileName: string | undefined
@@ -73,7 +75,7 @@ export async function executeWithProviderFallback(
   } catch (error) {
     const route = record.parentModelRoute
     if (
-      input.signal.aborted || record.providerFallback || !route ||
+      input.signal.aborted || input.gatewayBinding || record.providerFallback || !route ||
       !(error instanceof ChildResultExecutionError) || error.failure?.source !== 'model' ||
       !fallbackRouteAllowed(route, input) ||
       (canonicalProvider(route.providerId) === canonicalProvider(input.providerId) &&

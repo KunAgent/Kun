@@ -1,3 +1,4 @@
+import { harnessGatewayBindingKey, type HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import {
   HarnessDefinitionSchema,
   type HarnessDefinition,
@@ -147,7 +148,7 @@ export class HarnessCatalog {
       (this.deps.disabled?.() ?? []).includes(id) ||
       !(this.deps.enabledProfiles?.() ?? []).some((profile) =>
         profile.harnessId === id && definition.credentialModes.includes(profile.credentialMode) &&
-        (profile.credentialMode === 'native-login' || Boolean(profile.providerId?.trim())))
+        (profile.credentialMode === 'native-login' || Boolean(profile.providerId?.trim()) || Boolean(profile.gatewayBinding)))
   }
 
   /** Exact opt-ins for startup rechecks and settings; no credential values. */
@@ -167,13 +168,17 @@ export class HarnessCatalog {
     harnessId: HarnessId
     credentialMode: HarnessCredentialMode
     providerId?: string
+    gatewayBinding?: HarnessGatewayBinding
   }): boolean {
     if (route.harnessId === 'kun') return route.credentialMode === 'provider'
     if (this.isDisabled(route.harnessId)) return false
     if (!this.get(route.harnessId)?.credentialModes.includes(route.credentialMode)) return false
     return (this.deps.enabledProfiles?.() ?? []).some((profile) =>
       profile.harnessId === route.harnessId && profile.credentialMode === route.credentialMode &&
-      (route.credentialMode === 'native-login'
+      (route.gatewayBinding || profile.gatewayBinding
+        ? Boolean(route.credentialMode === 'kun-gateway' && route.gatewayBinding && profile.gatewayBinding &&
+          harnessGatewayBindingKey(route.gatewayBinding) === harnessGatewayBindingKey(profile.gatewayBinding))
+        : route.credentialMode === 'native-login'
         ? (profile.providerId?.trim() || 'default') === (route.providerId?.trim() || 'default')
         : (Boolean(route.providerId?.trim()) && profile.providerId?.trim() === route.providerId?.trim())))
   }

@@ -1,3 +1,4 @@
+import { protectLegacyRegistryHeaders, retireLegacyHeaderJournal } from './provider-legacy-header-migration.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -25,6 +26,9 @@ import type { ExtensionCredentialStore } from './extension-credential-store.js'
 import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
 import { type ModelConnectionRegistry, StoredProfileSchema, DeletedProfileTombstoneSchema, CredentialTransactionPreviousSchema, CredentialTransactionSchema, CredentialRefCleanupEntrySchema, RegistryDocumentSchema, type RegistryDocument, type StoredProfile, type CredentialTransaction, type PreparedCredentialSecret, type ModelConnectionSeed, type AuthenticatedModelConnectionInput, MODEL_CONNECTION_CREDENTIAL_SOURCE_PREFIX, isModelConnectionCredentialSourceId, modelConnectionCredentialSourceId, providerIdFromCredentialSource, ModelConnectionConflictError, type MaterializedModelConnections, type ProjectedCredentialHealth, credentialHealth, readLatestIfChanged, parseCredentialOperationToken, previousCredentialState, boundedCredentialHighWater, appendCredentialRefs, requireCredentialTransaction, credentialReferenceIsLive, processIsAlive, emptyDocument, configuredFallback, reconcileSeedProfile, sameStoredProfile, project, isProfileUsable, isAnonymousHttpProfile, isRetiredOpenCodeFreeConnection, mergeProjectedCapability, assertRevision, requireProfile, capabilitiesForModels, sameCapabilities, allocateId, normalizeProviderId, preparedCredentialSecretTimerKey, uniqueModels, sameModels, probeModels, modelsUrl } from './model-connection-registry-core.js'
 import { repairRegistryModelCapabilityLimits } from './model-capability-limits.js'
+import { migrateProviderRegistry, upgradeProviderRegistry } from './provider-registry-migration.js'
+import { upgradeRegistryProxyRouting } from './model-connection-registry-proxy.js'
+import { migrateProviderHeaders, prepareProviderHeaders, providerHeadersPatch, readProviderHeaders, settleProviderHeaders } from './provider-protected-headers.js'
 
 export const modelConnectionRegistryConnectionOperations = {
 async initialize(this: ModelConnectionRegistry,
@@ -36,10 +40,16 @@ async initialize(this: ModelConnectionRegistry,
       localModelGateway?: RegistryDocument['localModelGateway']
     }
   ): Promise<ModelConnectionSnapshot> {
+    await migrateProviderRegistry({ dataDir: this['options'].dataDir, file: this['file'], empty: emptyDocument,
+      validate: (value) => RegistryDocumentSchema.parse(upgradeProviderRegistry(upgradeRegistryProxyRouting(value))),
+      prepareLegacy: (value) => protectLegacyRegistryHeaders(this['options'].dataDir, value, this['options'].credentials) })
+    await retireLegacyHeaderJournal(this['options'].dataDir, this['file'], emptyDocument)
     // AtomicJsonFile upgrades legacy documents while reading. Writing the
     // canonical value here persists the routing marker and concrete booleans
     // before any seed reconciliation or live materialization occurs.
     let current = await this['file'].update(emptyDocument, (document) => document)
+    await migrateProviderHeaders(this)
+    current = await this['file'].read(emptyDocument)
     if (repairRegistryModelCapabilityLimits(current)) {
       current = await this['file'].update(emptyDocument, (document) => {
         const repaired = repairRegistryModelCapabilityLimits(document)
@@ -199,7 +209,7 @@ async snapshot(this: ModelConnectionRegistry): Promise<ModelConnectionSnapshot> 
 async getCustomHeaders(this: ModelConnectionRegistry, providerId: string): Promise<Record<string, string>> {
     const document = await this['file'].read(emptyDocument)
     const profile = requireProfile(document, providerId)
-    return { ...(profile.customHeaders ?? {}) }
+    return readProviderHeaders(this, profile)
   },
 
 async assertRevision(this: ModelConnectionRegistry, expectedRevision: number): Promise<void> {
@@ -278,6 +288,8 @@ async connectAuthenticated(this: ModelConnectionRegistry,
     if (!credential && !externalAuthVerified) {
       throw new Error('authenticated model connection credential is required')
     }
+    const preparedHeaders = await prepareProviderHeaders(this, input.customHeaders)
+    try {
     const profileFor = (
       current: RegistryDocument,
       credentialRef: string | undefined,
@@ -320,7 +332,9 @@ async connectAuthenticated(this: ModelConnectionRegistry,
         credentialSourceId: credentialRef ? undefined : existing?.credentialSourceId,
         ...(legacyCredentialSourceToRetire ? { legacyCredentialSourceToRetire } : {}),
         headers: existing?.headers,
-        customHeaders: input.customHeaders ?? existing?.customHeaders
+        customHeaders: existing?.customHeaders,
+        customHeadersRef: existing?.customHeadersRef, customHeaderNames: existing?.customHeaderNames,
+        ...providerHeadersPatch(existing, preparedHeaders)
       })
     }
 
@@ -442,6 +456,7 @@ async connectAuthenticated(this: ModelConnectionRegistry,
     await this['drainCredentialRefCleanup']()
     await this['retireLegacyCredentialSource'](connectedId)
     return this['projectWithCredentialHealth'](document)
+    } finally { await settleProviderHeaders(this, preparedHeaders) }
   },
 
 async connectInternal(this: ModelConnectionRegistry,
@@ -450,9 +465,12 @@ async connectInternal(this: ModelConnectionRegistry,
     trustedExternalAuth = false
   ): Promise<ModelConnectionSnapshot> {
     const input = ModelConnectionConnectRequestSchema.parse(raw)
+    if (input.authType === 'none' && (input.kind !== 'http' || input.credential?.trim())) {
+      throw new Error('Anonymous HTTP connections must not supply an upstream credential')
+    }
     if (input.kind === 'http' && !input.baseUrl) throw new Error('baseUrl is required for HTTP providers')
     const models = input.probe && input.kind === 'http'
-      ? await this['probeInput'](input)
+      ? uniqueModels([...await this['probeInput'](input), ...input.models])
       : uniqueModels(input.models)
     const usesRequestTimeCredential = input.kind === 'http' && Boolean(credentialSourceId)
     const credential = usesRequestTimeCredential ? '' : input.credential?.trim() ?? ''
@@ -460,6 +478,8 @@ async connectInternal(this: ModelConnectionRegistry,
     if (selectedModel && models.length > 0 && !models.includes(selectedModel)) {
       throw new Error('selected model is not present in the provider model list')
     }
+    const preparedHeaders = await prepareProviderHeaders(this, input.customHeaders)
+    try {
     let connectedId = ''
 
     if (credential) {
@@ -542,7 +562,7 @@ async connectInternal(this: ModelConnectionRegistry,
               : {}),
             selectedModel,
             credentialRef: nextRef,
-            ...(input.customHeaders ? { customHeaders: input.customHeaders } : {}),
+            ...providerHeadersPatch(undefined, preparedHeaders),
             ...(deleted?.legacyCredentialSourceToRetire && this['options'].retireLegacyCredentialSource
               ? { legacyCredentialSourceToRetire: deleted.legacyCredentialSourceToRetire }
               : {})
@@ -589,7 +609,8 @@ async connectInternal(this: ModelConnectionRegistry,
         trustedExternalAuth ||
         (input.kind === 'http' && isAnonymousHttpProfile({
           id: input.id ?? input.name,
-          presetSource: input.presetSource
+          presetSource: input.presetSource,
+          authType: input.authType
         }))
       const profile = StoredProfileSchema.parse({
         id,
@@ -612,7 +633,7 @@ async connectInternal(this: ModelConnectionRegistry,
           : {}),
         selectedModel,
         credentialSourceId,
-        ...(input.customHeaders ? { customHeaders: input.customHeaders } : {}),
+        ...providerHeadersPatch(undefined, preparedHeaders),
         ...(deleted?.legacyCredentialSourceToRetire && this['options'].retireLegacyCredentialSource
           ? { legacyCredentialSourceToRetire: deleted.legacyCredentialSourceToRetire }
           : {})
@@ -634,5 +655,6 @@ async connectInternal(this: ModelConnectionRegistry,
     await this['changed'](document)
     if (document.profiles[connectedId]) await this['retireLegacyCredentialSource'](connectedId)
     return this['projectWithCredentialHealth'](document)
+    } finally { await settleProviderHeaders(this, preparedHeaders) }
   },
 }

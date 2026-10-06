@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "longcat",
+  "name": "LongCat",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.longcat.chat/openai",
+  "endpointFormat": "chat_completions",
+  "models": [
+    "LongCat-2.0-Preview"
+  ],
+  "docsUrl": "https://longcat.chat/platform/docs/zh/",
+  "credentialUrl": "https://longcat.chat/platform/"
+}

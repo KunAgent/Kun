@@ -17,6 +17,9 @@ export type CompatModelClientConfig = {
   model: string
   /** Compatible request/response protocol to use for custom providers. */
   endpointFormat?: ModelEndpointFormat
+  /** Explicit body/stream protocol for an arbitrary full endpoint URL. */
+  inputTokenUpperBound?: number
+  customEndpointProtocol?: 'chat_completions' | 'responses' | 'messages'
   /**
    * Per-protocol base URL overrides for multi-protocol providers that host
    * each endpoint family on a different path. The resolved request format

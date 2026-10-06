@@ -20,11 +20,11 @@ export function resolveDirectSendComposerSelection(input: {
   const overrideModel = overrides?.model?.trim()
   const composerModel = queued ? queued.model ?? '' : overrideModel ??
     (state.route === 'claw' && clawModel ? clawModel : state.composerModel.trim())
-  const { harnessId: composerHarnessId, credentialMode: composerCredentialMode } =
+  const { harnessId: composerHarnessId, credentialMode: composerCredentialMode, gatewayBinding: composerGatewayBinding } =
     resolveSendHarnessSelection({
       queued, overrides, adeEligible,
       composerHarnessId: state.composerHarnessId,
-      composerCredentialMode: state.composerCredentialMode
+      composerCredentialMode: state.composerCredentialMode, composerGatewayBinding: state.composerGatewayBinding
     })
   const nativeLogin = composerHarnessId !== 'kun' && composerCredentialMode === 'native-login'
   const externalProvider = Boolean(composerHarnessId && composerHarnessId !== 'kun')
@@ -34,15 +34,15 @@ export function resolveDirectSendComposerSelection(input: {
     (externalProvider ? state.composerProviderId.trim() : fallbackComposerProviderIdForSend(state))
   // An omitted provider inherits the thread account at admission. Explicitly
   // address the system profile while retaining the empty ID in UI state.
-  const composerProviderId = nativeLogin ? selectedProviderId || 'default' : selectedProviderId
-  const composerAccountId = nativeLogin ? '' : queued ? queued.accountId ?? '' : overrides?.accountId?.trim() ??
+  const composerProviderId = composerGatewayBinding ? '' : nativeLogin ? selectedProviderId || 'default' : selectedProviderId
+  const composerAccountId = composerGatewayBinding ? '' : nativeLogin ? '' : queued ? queued.accountId ?? '' : overrides?.accountId?.trim() ??
     accountIdForComposerSelection(state.composerModelGroups, composerProviderId, composerModel)
   return { composerModel, composerProviderId, composerAccountId,
-    composerHarnessId, composerCredentialMode }
+    composerHarnessId, composerCredentialMode, ...(composerGatewayBinding ? { composerGatewayBinding } : {}) }
 }
 
 export function composerSelectionNeedsProvider(selection: ReturnType<typeof resolveDirectSendComposerSelection>): boolean {
-  if (selection.composerHarnessId === 'kun' && !selection.composerModel.trim()) return true
+  if ((selection.composerHarnessId === 'kun' || selection.composerGatewayBinding) && !selection.composerModel.trim()) return true
   return Boolean(selection.composerHarnessId && selection.composerHarnessId !== 'kun' &&
-    ['provider', 'kun-gateway'].includes(selection.composerCredentialMode) && !selection.composerProviderId)
+    ['provider', 'kun-gateway'].includes(selection.composerCredentialMode) && !selection.composerProviderId && !selection.composerGatewayBinding)
 }

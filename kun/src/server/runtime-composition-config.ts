@@ -434,11 +434,12 @@ export function createRuntimeConfigController(
 	    // Keeping this path read-only guarantees failed preflight cannot leave a
 	    // partially applied provider catalog/default behind.
 	    const materializedConnections = await modelConnections.materializeReadOnly()
-	    if (materializedConnections.providers.size > 0) {
+	    if (materializedConnections.providers.size > 0 || (materializedConnections.registryRevision ?? 0) > 0) {
 	      const selected = materializedConnections.selected
 	      nextOptions = {
 	        ...nextOptions,
 	        activeProviderId: selected?.profile.id,
+                modelConnectionSelectionRequired: true,
 	        ...(selected
 	          ? {
 	              model: selected.model,
@@ -450,7 +451,7 @@ export function createRuntimeConfigController(
 	              headers: selected.config.headers,
 	              geminiAuth: selected.config.geminiAuth
 	            }
-	          : {}),
+	          : { apiKey: '', credentialSourceId: undefined, headers: undefined, geminiAuth: undefined }),
 	        providers: Object.fromEntries(materializedConnections.providers.entries()),
 	        modelProxyUrl: selected?.config.modelProxyUrl,
 	        routePools: materializedConnections.routePools,

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "aliyun",
+  "name": "Aliyun",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "endpointFormat": "chat_completions",
+  "models": [
+    "qwen-max",
+    "qwen-plus",
+    "qwen-flash",
+    "qwen3-coder-plus",
+    "qwq-plus",
+    "qwen-vl-max",
+    "qwen3-vl-plus"
+  ],
+  "docsUrl": "https://help.aliyun.com/zh/model-studio/",
+  "credentialUrl": "https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key",
+  "tokenPlan": {
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "regions": [
+      {
+        "id": "cn",
+        "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "id": "sgp",
+        "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      }
+    ],
+    "endpointFormat": "chat_completions",
+    "models": [
+      "qwen-max",
+      "qwen-plus",
+      "qwen-flash",
+      "qwen3-coder-plus",
+      "qwq-plus",
+      "qwen-vl-max",
+      "qwen3-vl-plus"
+    ],
+    "credentialUrl": "https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key"
+  }
+}

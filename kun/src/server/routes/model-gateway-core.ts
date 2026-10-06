@@ -19,6 +19,9 @@ import type { ModelRequest, ModelStreamChunk, ModelToolSpec } from '../../ports/
 import type { JsonResponse } from '../response.js'
 import { gatewayJsonResponse as jsonResponse } from './gateway-json-response.js'
 import { GatewayRequestGuard, type GatewayLease } from './gateway-request-guard.js'
+import { gatewayPolicyActive, legacyGatewayClientPolicy, type GatewayClientPolicy } from '../../contracts/gateway-client-policy.js'
+import { clientGuardFor, clientRouteTargets, clientDirectTargets, combinedGatewayLease, gatewayRequestProtocol } from './gateway-client-policy.js'
+import { GATEWAY_SESSION_HEADER, gatewaySessionId } from '../../services/gateway-usage-service.js'
 import type { ServerRuntime } from './server-runtime.js'
 
 export { exposableProvider } from '../../domain/model-gateway-export-policy.js'
@@ -77,12 +80,12 @@ export function authorizePublicGateway(runtime: ServerRuntime, request: Request)
  * fail closed — a `kgw_` token is never accepted as a public credential.
  */
 export type GatewayAuth =
-  | { kind: 'public'; client?: GatewayClientIdentity }
+  | { kind: 'public'; client?: GatewayClientIdentity; policy?: GatewayClientPolicy; policyRevision?: number }
   | { kind: 'harness'; grant: HarnessTokenGrant }
 
 export type GatewayAuthVerdict =
   | { ok: true; auth: GatewayAuth }
-  | { ok: false; reason: 'unauthorized' | 'rate_limited' }
+  | { ok: false; reason: 'unauthorized' | 'rate_limited' | 'forbidden' | 'unavailable' }
 
 export function bearerCandidate(request: Request): string | null {
   const header = request.headers.get('authorization')
@@ -91,17 +94,74 @@ export function bearerCandidate(request: Request): string | null {
   return candidate && candidate.trim() ? candidate : null
 }
 
-export function authorizeGateway(runtime: ServerRuntime, request: Request): GatewayAuthVerdict {
+export async function authorizeGateway(runtime: ServerRuntime, request: Request): Promise<GatewayAuthVerdict> {
   const candidate = bearerCandidate(request)
+  const alternate = request.headers.get('x-api-key')
+  if (request.headers.get('authorization')?.trim() && alternate && request.headers.get('authorization') !== `Bearer ${alternate}`) {
+    return { ok: false, reason: 'unauthorized' }
+  }
   if (candidate?.startsWith(HARNESS_TOKEN_PREFIX)) {
     const grant = runtime.harnessTokens?.verifyScope(candidate, 'gateway')
+    if (grant?.turnId) {
+      try { if (await gatewayRunningTurnId(runtime, grant.threadId) !== grant.turnId) return { ok: false, reason: 'unauthorized' } }
+      catch { return { ok: false, reason: 'unauthorized' } }
+    }
     return grant ? { ok: true, auth: { kind: 'harness', grant } } : { ok: false, reason: 'unauthorized' }
   }
   const guard = guardFor(runtime)
   if (!guard || !guard.authorize(request)) return { ok: false, reason: 'unauthorized' }
-  if (!guard.consumeToken()) return { ok: false, reason: 'rate_limited' }
   const client = runtime.modelGateway?.credentials.identify?.(candidate) ?? undefined
-  return { ok: true, auth: { kind: 'public', ...(client ? { client } : {}) } }
+  let policy = client ? runtime.modelGateway?.credentials.defaultClientPolicy?.(client.clientId) ?? legacyGatewayClientPolicy()
+    : legacyGatewayClientPolicy()
+  let policyRevision: number | undefined
+  try {
+    const current = await runtime.modelConnections?.gatewayClientPolicy?.(client?.clientId ?? 'legacy')
+    if (current) { policy = current.policy ?? policy; policyRevision = current.revision }
+  } catch { return { ok: false, reason: 'unavailable' } }
+  if (!gatewayPolicyActive(policy)) return { ok: false, reason: 'unauthorized' }
+  const protocol = gatewayRequestProtocol(request)
+  if (protocol && !policy.allowedProtocols.includes(protocol)) return { ok: false, reason: 'forbidden' }
+  if (!clientGuardFor(runtime, client?.clientId ?? 'legacy', policy).consumeToken() || !guard.consumeToken()) {
+    return { ok: false, reason: 'rate_limited' }
+  }
+  return { ok: true, auth: { kind: 'public', policy, policyRevision, ...(client ? { client } : {}) } }
+}
+
+export function acquirePublicGatewayLease(runtime: ServerRuntime, request: Request, auth: GatewayAuth): GatewayLease | null {
+  const global = guardFor(runtime)?.acquire(request.signal) ?? null
+  if (auth.kind !== 'public' || !auth.policy) return global
+  return combinedGatewayLease(global, clientGuardFor(runtime, auth.client?.clientId ?? 'legacy', auth.policy).acquire(request.signal))
+}
+
+export function gatewayClientInput(input: Record<string, unknown>, auth: GatewayAuth): Record<string, unknown> {
+  const max = auth.kind === 'public' ? auth.policy?.maxOutputTokens : undefined
+  if (max === undefined) return input
+  const requested = input.max_tokens ?? input.max_completion_tokens ?? input.max_output_tokens
+  if (typeof requested === 'number' && requested > max) throw new Error('max_tokens exceeds the gateway client policy')
+  return requested === undefined ? { ...input, max_tokens: max } : input
+}
+
+export function gatewayAffinityIdentity(request: Request, auth: GatewayAuth, turnId?: string): { turn?: string; session?: string } {
+  if (auth.kind === 'harness') return { session: auth.grant.threadId, turn: turnId ?? auth.grant.turnId }
+  const caller = auth.client?.clientId ?? 'legacy'
+  const explicit = request.headers.get(GATEWAY_SESSION_HEADER)
+  let session: string | undefined
+  if (explicit !== null) session = gatewaySessionId(caller, explicit)
+  else { try { session = gatewaySessionId(caller, request.headers.get('session_id')) } catch { /* Optional client-owned metadata. */ } }
+  return { session,
+    turn: gatewaySessionId(`${caller}:turn`, request.headers.get('x-kun-gateway-turn-id')) }
+}
+
+export function gatewayDispatchAuthorization(runtime: ServerRuntime, request: Request, auth: GatewayAuth,
+  existing?: () => Promise<void>): () => Promise<void> {
+  const candidate = bearerCandidate(request)
+  return async () => {
+    const valid = auth.kind === 'harness'
+      ? Boolean(candidate && runtime.harnessTokens?.verifyScope(candidate, 'gateway') === auth.grant)
+      : Boolean(runtime.modelGateway?.credentials.verify(candidate)) && (!auth.policy || gatewayPolicyActive(auth.policy))
+    if (!valid) throw new GatewayRouteChangedError()
+    await existing?.()
+  }
 }
 
 /**
@@ -144,12 +204,16 @@ export type ResolvedGatewayModel = {
 export async function resolveGatewayModel(
   runtime: ServerRuntime,
   model: string,
-  grant?: HarnessTokenGrant
+  grant?: HarnessTokenGrant,
+  policy?: GatewayClientPolicy,
+  policyRevision?: number
 ): Promise<ResolvedGatewayModel | null> {
   const registry = runtime.modelConnections
   const assertCurrent = runtime.directModelClient?.gatewayDispatchGuard?.()
   const snapshot = await registry?.snapshot()
   if (!snapshot) return null
+  await registry?.assertActiveConfiguration?.(snapshot.revision)
+  if (policyRevision !== undefined && snapshot.revision !== policyRevision) throw new GatewayRouteChangedError()
   try { assertCurrent?.() } catch { return null }
   const dispatchProof = assertCurrent ? {
     assertCurrent,
@@ -157,11 +221,19 @@ export async function resolveGatewayModel(
       try {
         assertCurrent()
         await registry!.assertRevision(snapshot.revision)
+        await registry!.assertActiveConfiguration?.(snapshot.revision)
         assertCurrent()
       } catch { throw new GatewayRouteChangedError() }
     }
   } : {}
   if (grant) {
+    const alias = grant.aliasRoutes?.find((entry) => entry.alias === model)
+    if (alias) {
+      const pool = runtime.modelGateway?.pools().find((entry) => entry.id === alias.routeId && entry.enabled && entry.modelId === alias.alias)
+      const allowedTargets = pool ? gatewayPoolTargets(snapshot.providers, pool).filter((target) =>
+        alias.targets.some((approved) => approved.providerId === target.providerId && approved.modelId === target.modelId)) : []
+      return allowedTargets.length ? { model, gatewayRouting: { allowedTargets, ...dispatchProof } } : null
+    }
     const direct = parseGatewayModelId(model)
     if (!direct) return null
     const requested = { providerId: direct.providerId, modelId: direct.model }
@@ -174,7 +246,7 @@ export async function resolveGatewayModel(
   if (model.startsWith(GATEWAY_MODEL_PREFIX)) return null
   const pool = runtime.modelGateway?.pools().find((entry) => entry.enabled && entry.modelId === model)
   if (pool) {
-    const allowedTargets = gatewayPoolTargets(snapshot.providers, pool)
+    const allowedTargets = clientRouteTargets(policy, pool, gatewayPoolTargets(snapshot.providers, pool))
     return allowedTargets.length ? { model, gatewayRouting: { allowedTargets, ...dispatchProof } } : null
   }
   if (!runtime.modelGateway?.exposeProviderModels()) return null
@@ -182,41 +254,52 @@ export async function resolveGatewayModel(
   if (slash <= 0 || slash === model.length - 1) return null
   const requested = { providerId: model.slice(0, slash), modelId: model.slice(slash + 1) }
   if (!gatewayTargetExportable(snapshot.providers, requested)) return null
-  const allowedTargets = gatewayDirectTargets(snapshot, requested)
+  const allowedTargets = clientDirectTargets(policy, requested, gatewayDirectTargets(snapshot, requested))
   return allowedTargets.length
     ? { model: requested.modelId, providerId: requested.providerId, gatewayRouting: { allowedTargets, ...dispatchProof } }
     : null
 }
 
 /** Discovery applies the same export policy as request admission and failover. */
-export async function listGatewayModels(runtime: ServerRuntime, grant?: HarnessTokenGrant): Promise<{
+export async function listGatewayModels(runtime: ServerRuntime, grant?: HarnessTokenGrant, policy?: GatewayClientPolicy, policyRevision?: number): Promise<{
   id: string; object: 'model'; created: number; owned_by: string
 }[]> {
   const snapshot = await runtime.modelConnections?.snapshot()
   if (!snapshot) return []
-  return gatewayModelsFromSnapshot(runtime, snapshot, grant)
+  await runtime.modelConnections?.assertActiveConfiguration?.(snapshot.revision)
+  if (policyRevision !== undefined && snapshot.revision !== policyRevision) throw new GatewayRouteChangedError()
+  return gatewayModelsFromSnapshot(runtime, snapshot, grant, policy)
 }
 
-function gatewayModelsFromSnapshot(runtime: ServerRuntime, snapshot: ModelConnectionSnapshot, grant?: HarnessTokenGrant): {
+function gatewayModelsFromSnapshot(runtime: ServerRuntime, snapshot: ModelConnectionSnapshot, grant?: HarnessTokenGrant, policy?: GatewayClientPolicy): {
   id: string; object: 'model'; created: number; owned_by: string
 }[] {
   if (grant) {
     const allowed = grant.routes.map((route) => ({ providerId: route.providerId, modelId: route.model }))
-    return grant.routes.filter((route) => gatewayTargetExportable(snapshot.providers, {
+    const aliases = (grant.aliasRoutes ?? []).filter((alias) => {
+      const pool = runtime.modelGateway?.pools().find((entry) => entry.id === alias.routeId && entry.enabled && entry.modelId === alias.alias)
+      return pool && gatewayPoolTargets(snapshot.providers, pool).some((target) => alias.targets.some((approved) =>
+        approved.providerId === target.providerId && approved.modelId === target.modelId))
+    }).map((alias) => ({ id: alias.alias, object: 'model' as const, created: 0, owned_by: `kun-harness:${alias.role}` }))
+      .filter((alias, index, all) => all.findIndex((candidate) => candidate.id === alias.id) === index)
+    return [...aliases, ...grant.routes.filter((route) => gatewayTargetExportable(snapshot.providers, {
       providerId: route.providerId, modelId: route.model
     }) && gatewayDirectTargets(snapshot, { providerId: route.providerId, modelId: route.model }, allowed).length > 0)
-      .map((route) => ({ id: formatGatewayModelId(route.providerId, route.model), object: 'model', created: 0,
-        owned_by: `kun-harness:${route.role}` }))
+      .map((route) => ({ id: formatGatewayModelId(route.providerId, route.model), object: 'model' as const, created: 0,
+        owned_by: `kun-harness:${route.role}` }))]
   }
   const data: { id: string; object: 'model'; created: number; owned_by: string }[] =
-    (runtime.modelGateway?.pools() ?? []).filter((pool) => !pool.modelId.startsWith(GATEWAY_MODEL_PREFIX) && gatewayPoolTargets(snapshot.providers, pool).length > 0)
+    (runtime.modelGateway?.pools() ?? []).filter((pool) => !pool.modelId.startsWith(GATEWAY_MODEL_PREFIX) &&
+      clientRouteTargets(policy, pool, gatewayPoolTargets(snapshot.providers, pool)).length > 0)
       .map((pool) => ({ id: pool.modelId, object: 'model', created: 0, owned_by: 'kun-route-pool' }))
   if (runtime.modelGateway?.exposeProviderModels()) {
     const seen = new Set(data.map((entry) => entry.id))
     for (const provider of snapshot.providers.filter(exposableProvider)) {
       for (const modelId of providerModelIds(provider)) {
         const id = `${provider.id}/${modelId}`
-        if (id.startsWith(GATEWAY_MODEL_PREFIX) || seen.has(id) || !gatewayDirectTargets(snapshot, { providerId: provider.id, modelId }).length) continue
+        const target = { providerId: provider.id, modelId }
+        if (id.startsWith(GATEWAY_MODEL_PREFIX) || seen.has(id) ||
+            !clientDirectTargets(policy, target, gatewayDirectTargets(snapshot, target)).length) continue
         seen.add(id)
         data.push({ id, object: 'model', created: 0, owned_by: provider.id })
       }
@@ -277,7 +360,7 @@ export function makeModelRequest(
   for (const field of ['stop', 'logit_bias', 'logprobs', 'top_logprobs', 'seed', 'frequency_penalty', 'presence_penalty']) {
     if (input[field] != null) throw new Error(`${field} is not supported by the local gateway`)
   }
-  if (input.parallel_tool_calls != null && input.parallel_tool_calls !== true) throw new Error('Serial tool selection is not supported by the local gateway')
+  if (input.parallel_tool_calls != null && typeof input.parallel_tool_calls !== 'boolean') throw new Error('parallel_tool_calls must be a boolean')
   if (input.n != null && input.n !== 1) throw new Error('Only n=1 is supported by the local gateway')
   const choice = asRecord(input.tool_choice)
   const requiredToolName = choice.type === 'function'
@@ -364,6 +447,7 @@ export function makeModelRequest(
     ...(Object.keys(messageAttachments).length ? { messageAttachments } : {}),
     tools: requiredToolName ? tools.filter((tool) => tool.name === requiredToolName) : tools,
     ...(requiredToolName ? { requiredToolName } : {}),
+    ...(typeof input.parallel_tool_calls === 'boolean' ? { parallelToolCalls: input.parallel_tool_calls } : {}),
     ...(format.type === 'json_object' ? { responseFormat: 'json_object' as const } : {}),
     stream: input.stream !== false,
     ...(maxTokens ? { maxTokens } : {}),
@@ -497,8 +581,8 @@ export async function recordHarnessGatewayUsage(
     kind: 'usage',
     threadId: grant.threadId,
     ...(turnId ? { turnId } : {}),
-    model: resolved.model,
-    ...(resolved.providerId ? { providerId: resolved.providerId } : {}),
+    model: usage.actualModelId ?? resolved.model,
+    ...(usage.actualProviderId ?? resolved.providerId ? { providerId: usage.actualProviderId ?? resolved.providerId } : {}),
     source: 'harness-gateway',
     harnessId: grant.harnessId,
     usage: cumulative

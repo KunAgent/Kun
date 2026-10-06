@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "kimi-code",
+  "name": "Kimi Code",
+  "category": "subscription",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "subscription",
+  "baseUrl": "https://api.kimi.com/coding/v1",
+  "endpointFormat": "chat_completions",
+  "models": [
+    "k3",
+    "kimi-for-coding",
+    "kimi-for-coding-highspeed"
+  ],
+  "docsUrl": "https://www.kimi.com/code/docs/en/",
+  "credentialUrl": "https://www.kimi.com/code"
+}

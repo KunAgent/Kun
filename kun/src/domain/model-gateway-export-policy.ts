@@ -8,14 +8,15 @@ export class GatewayRouteChangedError extends Error {
     this.name = 'GatewayRouteChangedError'
   }
 }
-type ProviderExportState = Pick<ModelConnectionProfile, 'kind' | 'authType' | 'configured' | 'credentialStatus'>
+type ProviderExportState = Pick<ModelConnectionProfile, 'kind' | 'authType' | 'configured' | 'credentialStatus' | 'enabled'>
 
 /** One policy for public aliases, direct addressing, and delegated gateway grants. */
 export function gatewayProviderExportBlockReason(provider: ProviderExportState): string | undefined {
+  if (provider.enabled === false) return 'disabled'
   if (provider.kind !== 'http') return 'native_provider'
-  if (provider.authType !== 'api-key') return 'native_authentication'
+  if (provider.authType !== 'api-key' && provider.authType !== 'none') return 'native_authentication'
   if (!provider.configured) return 'not_configured'
-  if (provider.credentialStatus !== 'ready') return 'credential_not_ready'
+  if (provider.authType === 'none' ? provider.credentialStatus !== 'not-required' : provider.credentialStatus !== 'ready') return 'credential_not_ready'
   return undefined
 }
 

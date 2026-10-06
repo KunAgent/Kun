@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "anthropic-api",
+  "name": "Anthropic API",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.anthropic.com",
+  "endpointFormat": "messages",
+  "models": [],
+  "docsUrl": "https://docs.anthropic.com",
+  "credentialUrl": "https://console.anthropic.com/settings/keys"
+}

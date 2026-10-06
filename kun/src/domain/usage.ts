@@ -63,6 +63,7 @@ export function addUsage(into: UsageSnapshot, delta: UsageSnapshot): UsageSnapsh
       ? undefined
       : (into.tokenEconomySavingsCny ?? 0) + (delta.tokenEconomySavingsCny ?? 0)
   return {
+    ...(delta.attemptAccounting ? { attemptAccounting: delta.attemptAccounting } : {}),
     promptTokens,
     completionTokens,
     ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
@@ -113,6 +114,7 @@ export function diffUsage(current: UsageSnapshot, previous: UsageSnapshot): Usag
   const cacheTotal = (cacheHitTokens ?? 0) + (cacheMissTokens ?? 0)
   const costByCurrency = diffCurrencyCosts(current.costByCurrency, previous.costByCurrency)
   return {
+    ...(current.attemptAccounting ? { attemptAccounting: current.attemptAccounting } : {}),
     promptTokens,
     completionTokens,
     ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),

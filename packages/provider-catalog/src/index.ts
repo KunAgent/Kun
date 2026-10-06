@@ -2,6 +2,7 @@ import { PROVIDER_CATALOG } from './presets.js'
 
 export * from './antigravity-model-catalog.js'
 export { PROVIDER_CATALOG } from './presets.js'
+export { validateProviderCatalog } from './validation.js'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 

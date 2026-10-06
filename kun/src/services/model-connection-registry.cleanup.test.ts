@@ -55,7 +55,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -255,7 +255,7 @@ describe('ModelConnectionRegistry', () => {
       })
       expect(retired).toHaveBeenCalledWith('settings:provider:deepseek')
 
-      const stored = await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')
+      const stored = await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')
       expect(stored).not.toContain('credentialStatus')
       expect(stored).not.toContain('credentialErrorCode')
       expect(stored).not.toContain('replacement-secret')
@@ -289,7 +289,7 @@ describe('ModelConnectionRegistry', () => {
         expectedRevision: legacy.revision,
         credential: 'replacement-secret'
       })
-      expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8'))
+      expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8'))
         .toContain('settings:provider:deepseek')
       expect((await value.materialize()).providers.get('deepseek')).toMatchObject({
         apiKey: 'replacement-secret',
@@ -298,7 +298,7 @@ describe('ModelConnectionRegistry', () => {
 
       await value.initialize()
       expect(retired).toEqual(['settings:provider:deepseek'])
-      expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8'))
+      expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8'))
         .not.toContain('settings:provider:deepseek')
       warn.mockRestore()
     })
@@ -341,7 +341,7 @@ describe('ModelConnectionRegistry', () => {
         expect.objectContaining({ id: 'restart-safe', configured: true })
       ])
       expect((await restarted.materialize()).providers.get('restart-safe')?.apiKey).toBe('new-secret')
-      const stored = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
+      const stored = JSON.parse(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')) as {
         tombstones: Record<string, unknown>
       }
       expect(stored.tombstones).toEqual({})

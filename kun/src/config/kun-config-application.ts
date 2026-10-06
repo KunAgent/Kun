@@ -1,7 +1,9 @@
+import { HarnessGatewayBindingSchema } from '../contracts/harness-gateway-binding.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { ProviderAdmissionSchema } from '../contracts/provider-configuration.js'
 import {
   ApprovalReviewModelSelectionSchema
 } from '../contracts/approval-review-config.js'
@@ -177,7 +179,10 @@ export const ServeProviderConfigSchema = z
     /** Preserves the base or token-plan channel of the preset source. */
     presetMode: z.enum(['api', 'token-plan']).optional(),
     /** Secret-free authentication family used for capability gating. */
-    authType: z.enum(['api-key', 'oauth', 'subscription']).optional(),
+    authType: z.enum(['api-key', 'oauth', 'subscription', 'none']).optional(),
+    customEndpointProtocol: z.enum(['chat_completions', 'responses', 'messages']).optional(),
+    accountId: z.string().min(1).max(128).optional(),
+    admission: ProviderAdmissionSchema.optional(),
     baseUrl: z.string().min(1).optional(),
     /**
      * Optional per-protocol base URL overrides for providers that expose
@@ -407,7 +412,8 @@ export const AdeConfigSchema = z
         harnessId: z.string().regex(/^[a-z][a-z0-9-]{1,47}$/),
         model: z.string().min(1).max(512),
         providerId: z.string().min(1).max(128).optional(),
-        credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional()
+        credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+        gatewayBinding: HarnessGatewayBindingSchema.optional()
       }).strict().optional(),
       collaborationEnabled: z.boolean().optional(),
       managerModel: z.object({

@@ -14,6 +14,7 @@ import { PAPER_CACHE_DIR_NAME, PAPER_TEXT_FILE_NAME } from '../../../shared/pape
 import { normalizeWritePaperModeSettings } from '../../../shared/app-settings-paper-mode'
 import type { WritePaperModeSettingsPatchV1 } from '../../../shared/app-settings-types-paper-mode'
 import { oneShotModelRequest } from '../one-shot-model-request'
+import { routesTextThroughRuntime } from '../runtime-model-requests'
 import { isPaperJobCanceled } from './paper-jobs'
 
 /**
@@ -65,7 +66,7 @@ export function resolvePaperTranslateModel(
   // Runtime fallbacks (model, key, base URL) only apply when the translate
   // provider IS the runtime provider. Borrowing them for another provider
   // would post the runtime provider's credential to a foreign endpoint.
-  const sameAsRuntime = provider.id === runtime.providerId.trim()
+  const sameAsRuntime = (routesTextThroughRuntime() ? providerId : provider.id) === runtime.providerId.trim()
   const model = override?.model?.trim()
     || (translate.inheritModel ? '' : translate.model.trim())
     || (sameAsRuntime ? runtime.model.trim() : '')
@@ -73,9 +74,9 @@ export function resolvePaperTranslateModel(
     || ''
   if (!model) return null
   const apiKey = provider.apiKey.trim() || (sameAsRuntime ? runtime.apiKey.trim() : '')
-  if (!apiKey) return null
+  if (!routesTextThroughRuntime() && !apiKey) return null
   return {
-    providerId: provider.id,
+    providerId: routesTextThroughRuntime() ? providerId : provider.id,
     model,
     apiKey,
     baseUrl: provider.baseUrl.trim()
@@ -83,7 +84,7 @@ export function resolvePaperTranslateModel(
       || DEFAULT_DEEPSEEK_BASE_URL,
     endpointFormat: resolveModelFormat(settings, provider.id, model),
     responsesMode: modelProviderModelProfile(provider, model)?.responsesMode,
-    proxyUrl: resolveProviderProxyUrl(settings, provider.id)
+    proxyUrl: routesTextThroughRuntime() ? undefined : resolveProviderProxyUrl(settings, provider.id)
   }
 }
 

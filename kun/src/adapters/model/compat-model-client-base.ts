@@ -63,6 +63,7 @@ import { decodeCompatNonStreamingResponse } from './compat-non-streaming-decoder
 import type { CompatModelClientConfig, ChatMessage, CompatPostResult } from './compat-model-types.js'
 import { isCodexEndpoint, ignoreModelTraceFailure } from './compat-model-support.js'
 import { isDeepSeekHost } from './model-error-probe.js'
+import { GatewayBudgetError } from '../../services/gateway-token-budget.js'
 import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
 
 export class CompatModelClientBase {
@@ -156,6 +157,10 @@ export class CompatModelClientBase {
       apiKey: string
       gatewayRouting?: ModelRequest['gatewayRouting']
       paperReadOnly?: ModelRequest['paperReadOnly']
+      routingBudget?: ModelRequest['routingBudget']
+      beforeProviderDispatch?: ModelRequest['beforeProviderDispatch']
+      beforeWireDispatch?: ModelRequest['beforeWireDispatch']
+      onWireDispatch?: ModelRequest['onWireDispatch']
     }
   ): Promise<CompatPostResult> {
     if (trace.paperReadOnly) {
@@ -163,6 +168,10 @@ export class CompatModelClientBase {
       if (!trace.paperReadOnly.takeAttempt()) return { kind: 'error', code: 'paper_request_budget_exhausted',
         message: 'Paper reading permits one upstream request; explicitly submit again to retry.',
         failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+    }
+    try { if (trace.beforeProviderDispatch) await trace.beforeProviderDispatch() } catch {
+      return { kind: 'error', code: 'provider_configuration_changed', message: 'Provider configuration changed before dispatch; retry with the current configuration.',
+        failure: { category: 'request', reason: 'request', httpStatus: 503, failoverAllowed: false } }
     }
     if (trace.gatewayRouting) {
       try {
@@ -173,10 +182,11 @@ export class CompatModelClientBase {
           message: error instanceof GatewayRouteChangedError ? error.message : 'Gateway provider configuration changed.',
           failure: { category: 'request', reason: 'request', failoverAllowed: false } }
       }
-      if (trace.gatewayRouting.takeAttempt && !trace.gatewayRouting.takeAttempt()) {
-        return { kind: 'error', code: 'route_attempt_budget_exhausted', message: 'Gateway upstream attempt budget exhausted.',
-          failure: { category: 'request', reason: 'request', failoverAllowed: false } }
-      }
+    }
+    const takeAttempt = trace.routingBudget?.takeAttempt ?? trace.gatewayRouting?.takeAttempt
+    if (takeAttempt && !takeAttempt()) {
+      return { kind: 'error', code: 'route_attempt_budget_exhausted', message: 'Model routing attempt budget exhausted.',
+        failure: { category: 'request', reason: 'request', failoverAllowed: false } }
     }
     const bodyText = JSON.stringify(body)
     const traceRound = trace.round
@@ -195,9 +205,26 @@ export class CompatModelClientBase {
     try {
       trace.paperReadOnly?.assertCurrent()
       trace.gatewayRouting?.assertCurrent?.()
+      signal.throwIfAborted()
+      if (trace.beforeWireDispatch) {
+        const model = typeof body.model === 'string' ? body.model : this.config.model
+        const output = body.max_output_tokens ?? body.max_completion_tokens ?? body.max_tokens
+        const maxOutputTokens = typeof output === 'number' && Number.isSafeInteger(output) && output > 0 ? output : undefined
+        // A declared context ceiling bounds text input. Media/provider-owned state has no such contract.
+        const unbounded = /"(?:image_url|input_image|input_audio|file_id|previous_response_id|encrypted_content)"|"type":"(?:image|input_image|input_audio|audio|file|input_file|web_search|computer|code_interpreter)/.test(bodyText)
+        await trace.beforeWireDispatch({ providerId: this.config.providerId ?? 'default', model,
+          protocol: trace.endpointFormat, maxOutputTokens,
+          ...(!unbounded && this.config.inputTokenUpperBound ? { inputUpperBound: this.config.inputTokenUpperBound } : {}),
+          estimatedTokens: Math.ceil(Buffer.byteLength(bodyText) / 3) + (maxOutputTokens ?? 4096) })
+      }
+      if (trace.gatewayRouting?.beforeDispatch) await trace.gatewayRouting.beforeDispatch()
+      trace.paperReadOnly?.assertCurrent()
+      trace.gatewayRouting?.assertCurrent?.()
+      signal.throwIfAborted()
+      trace.onWireDispatch?.()
       const response = await this.fetchImpl(url, {
         method: 'POST',
-        ...(trace.paperReadOnly ? { redirect: 'error' as const } : {}),
+        redirect: 'error',
         headers,
         body: bodyText,
         signal
@@ -209,6 +236,8 @@ export class CompatModelClientBase {
       }
       return { kind: 'response', response }
     } catch (error) {
+      if (error instanceof GatewayBudgetError) return { kind: 'error', code: error.code, message: error.message,
+        failure: { category: 'request', reason: 'request', httpStatus: error.code === 'token_budget_exceeded' ? 429 : error.code === 'token_budget_unbounded' ? 400 : 503, failoverAllowed: false } }
       if (error instanceof GatewayRouteChangedError) {
         return { kind: 'error', code: 'gateway_route_changed', message: error.message,
           failure: { category: 'request', reason: 'request', failoverAllowed: false } }

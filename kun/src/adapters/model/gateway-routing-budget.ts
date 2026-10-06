@@ -26,8 +26,10 @@ export async function* withGatewayRoutingBudget(
   let remainingAttempts = GATEWAY_MAX_ROUTE_ATTEMPTS
   try {
     controller.signal.throwIfAborted()
+    const takeAttempt = () => remainingAttempts-- > 0
     iterator = stream({ ...request, abortSignal: controller.signal, maxRetryAttempts: 0,
-      gatewayRouting: { ...request.gatewayRouting!, takeAttempt: () => remainingAttempts-- > 0 }
+      routingBudget: { takeAttempt },
+      ...(request.gatewayRouting ? { gatewayRouting: { ...request.gatewayRouting, takeAttempt } } : {})
     })[Symbol.asyncIterator]()
     while (true) {
       const next = await nextUntilAbort(iterator, controller.signal)

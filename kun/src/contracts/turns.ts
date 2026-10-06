@@ -1,6 +1,7 @@
 import { RequiredToolGateSchema } from './turn-required-tool-gate.js'
 export { RequiredToolGateSchema, type RequiredToolGate } from './turn-required-tool-gate.js'
 import { PaperTurnContextSchema, validatePaperTurnCombination } from './paper-turn-context.js'
+import { HarnessGatewayBindingSchema, HarnessGatewayAliasGrantSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { SteeringDeliverySchema } from './steering-delivery.js'
 import { TurnItem, UserFileReferenceSchema, UserMessageSource } from './items.js'
@@ -63,6 +64,8 @@ export type TurnClientSurface = z.infer<typeof TurnClientSurfaceSchema>
  * acting turn. It contains identifiers only; credentials remain host-owned.
  */
 export const ActingTurnModelRouteSchema = z.object({
+  unresolvedGatewayAlias: z.literal(true).optional(),
+  requestedGatewayAlias: z.string().min(1).max(512).optional(),
   model: z.string().trim().min(1),
   providerId: z.string().trim().min(1).optional(),
   accountId: z.string().trim().min(1).optional()
@@ -191,6 +194,8 @@ export const TurnSchema = z.object({
   collaborationEnabled: z.boolean().optional(),
   /** Frozen credential mode for the frozen harness; defaults to the harness's first mode. */
   credentialMode: HarnessCredentialModeSchema.optional(),
+  gatewayBinding: HarnessGatewayBindingSchema.optional(),
+  gatewayAliasGrants: z.array(HarnessGatewayAliasGrantSchema).max(2).optional(),
   accountId: z.string().min(1).optional(),
   /** First successfully resolved route; immutable for the remainder of this turn. */
   actingModelRoute: ActingTurnModelRouteSchema.optional(),
@@ -320,6 +325,7 @@ export const StartTurnRequest = z.object({
   harnessId: HarnessIdSchema.optional(),
   /** Explicit credential mode; absent means "the harness's default". */
   credentialMode: HarnessCredentialModeSchema.optional(),
+  gatewayBinding: HarnessGatewayBindingSchema.optional(),
   accountId: z.string().min(1).optional(),
   reasoningEffort: TurnReasoningEffortSchema.optional(),
   serviceTier: TurnServiceTierSchema.optional(),

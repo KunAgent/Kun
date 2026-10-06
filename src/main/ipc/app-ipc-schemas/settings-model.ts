@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { z } from 'zod'
 import { AdeProjectDefaultsMapSchema } from '../../../shared/ade-project-defaults'
 import {
@@ -256,6 +257,7 @@ export const modelProviderPatchSchema = z.object({
     }).strict().nullable().optional()
   }).strict()).max(50).optional(),
   routePools: z.array(z.object({
+    affinity: z.object({ mode: z.enum(['off', 'turn', 'session']), ttlMs: z.number().int().min(60_000).max(86_400_000) }).strict().optional(),
     id: z.string().trim().min(1).max(64).optional(),
     name: z.string().trim().min(1).max(80).optional(),
     modelId: modelIdSchema.optional(),
@@ -326,6 +328,7 @@ const subagentProfilePatchSchema = z
     reasoningEffort: modelReasoningEffortSchema.optional(),
     harnessId: z.string().trim().min(1).max(64).optional(),
     credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+    gatewayBinding: HarnessGatewayBindingSchema.optional(),
     delegationNotes: z.string().max(1_000).optional(),
     builtin: z.boolean().optional()
   })
@@ -595,6 +598,7 @@ export const kunRuntimePatchSchema = z.object({
     enabledProfiles: z.array(z.object({
       harnessId: z.string().trim().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
       credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']),
+      gatewayBinding: HarnessGatewayBindingSchema.optional(),
       providerId: z.string().trim().min(1).max(128).optional()
     }).strict()).max(128).optional(),
     disabledIds: z.array(z.string().trim().min(1).max(128)).max(64).optional(),
@@ -612,6 +616,7 @@ export const kunRuntimePatchSchema = z.object({
     }).strict()).max(32).optional(),
     defaults: z.record(z.string().trim().min(1).max(128), z.object({
       credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+    gatewayBinding: HarnessGatewayBindingSchema.optional(),
       providerId: z.string().trim().min(1).max(128).optional(),
       model: z.string().trim().min(1).max(512).optional(),
       permissionMode: z.string().trim().min(1).max(64).optional(),

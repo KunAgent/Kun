@@ -94,6 +94,7 @@ export function modelListFromSharedConnections(
       profile.credentialStatus === 'unreadable'
     if (
       profile.configured !== true ||
+      profile.enabled === false ||
       credentialUnavailable ||
       typeof profile.id !== 'string' ||
       !profile.id.trim() ||

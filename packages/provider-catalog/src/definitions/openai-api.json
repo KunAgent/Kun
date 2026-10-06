@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "openai-api",
+  "name": "OpenAI API",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.openai.com/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://platform.openai.com/docs",
+  "credentialUrl": "https://platform.openai.com/api-keys"
+}

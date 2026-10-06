@@ -12,6 +12,7 @@ import {
 import type { PromptOptimizationResult } from '../../shared/kun-gui-api'
 import { resolveCodexResponsesRequestAuth } from '../codex-responses-lite'
 import { oneShotModelRequest } from './one-shot-model-request'
+import { routesTextThroughRuntime } from './runtime-model-requests'
 
 function firstProviderModel(provider: ModelProviderProfileV1): string {
   return provider.models.map((item) => item.trim()).find(Boolean) ?? ''
@@ -50,7 +51,7 @@ function effectivePromptOptimizationModel(settings: AppSettingsV1): {
   const profile = modelProviderModelProfile(provider, model)
   const endpointFormat = profile?.endpointFormat ?? provider.endpointFormat
   return {
-    providerId: provider.id,
+    providerId: routesTextThroughRuntime() ? providerId : provider.id,
     model,
     apiKey: provider.apiKey.trim() || runtime.apiKey.trim(),
     baseUrl: provider.baseUrl.trim() || runtime.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL,
@@ -71,13 +72,14 @@ export async function optimizePrompt(
   if (!resolveKunRuntimeSettings(settings).promptOptimization.enabled) {
     return { ok: false, message: 'Prompt optimization is disabled.' }
   }
-  if (!modelSettings.apiKey) {
+  if (!routesTextThroughRuntime() && !modelSettings.apiKey) {
     return { ok: false, message: 'Prompt optimization model is missing an API key.' }
   }
-  if (!resolveCodexResponsesRequestAuth(modelSettings.baseUrl, modelSettings.apiKey).apiKey) {
+  if (!routesTextThroughRuntime() && !resolveCodexResponsesRequestAuth(modelSettings.baseUrl, modelSettings.apiKey).apiKey) {
     return { ok: false, message: 'ChatGPT subscription credentials are invalid. Please sign in again.' }
   }
   const result = await oneShotModelRequest({
+    purpose: 'prompt-optimization',
     baseUrl: modelSettings.baseUrl,
     apiKey: modelSettings.apiKey,
     endpointFormat: modelSettings.endpointFormat,
@@ -86,7 +88,7 @@ export async function optimizePrompt(
     systemPrompt: modelSettings.systemPrompt,
     userText: trimmed,
     timeoutMs: modelSettings.timeoutMs,
-    proxyUrl: resolveProviderProxyUrl(settings, modelSettings.providerId),
+    proxyUrl: routesTextThroughRuntime() ? undefined : resolveProviderProxyUrl(settings, modelSettings.providerId),
     providerId: modelSettings.providerId,
     presetSource: getModelProviderProfile(settings, modelSettings.providerId).presetSource?.presetId
   })

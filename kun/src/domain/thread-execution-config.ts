@@ -54,7 +54,8 @@ export function resolveThreadExecutionConfig(input: {
         model: request.model,
         ...(request.providerId ? { providerId: request.providerId } : {}),
         ...(request.harnessId ? { harnessId: request.harnessId } : {}),
-        ...(request.credentialMode ? { credentialMode: request.credentialMode } : {})
+        ...(request.credentialMode ? { credentialMode: request.credentialMode } : {}),
+        ...(request.gatewayBinding ? { gatewayBinding: structuredClone(request.gatewayBinding) } : {})
       }
   const collaborationEnabled = request.collaboration?.enabled ??
     project?.collaborationEnabled ?? request.workspaceMode === 'ade'

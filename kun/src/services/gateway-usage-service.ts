@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../contracts/model-route-pool.js'
 import { emptyUsageSnapshot, type GatewayUsageMetadata, type UsageSnapshot } from '../contracts/usage.js'
-import { diffUsage } from '../domain/usage.js'
+import { addUsage, diffUsage } from '../domain/usage.js'
 import type { ModelStreamChunk } from '../ports/model-client.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { GatewayClientIdentity } from './gateway-credential-service.js'
@@ -15,6 +15,7 @@ export type GatewayUsageOutcome = GatewayUsageMetadata['status']
 export type GatewayUsageRecorder = {
   attribution: { threadId: string; turnId: string }
   observe(chunk: ModelStreamChunk): void
+  observeAttempt?(attempt: { attemptId: string; providerId: string; modelId: string; usage?: UsageSnapshot }): void
   finish(outcome: GatewayUsageOutcome): Promise<void>
 }
 
@@ -35,6 +36,7 @@ export class GatewayUsageService {
   constructor(private readonly deps: Dependencies) {}
 
   async begin(input: {
+    source?: 'public-gateway' | 'utility'
     client: GatewayClientIdentity
     sessionHeader: string | null
     requestedModelId: string
@@ -42,13 +44,15 @@ export class GatewayUsageService {
   }): Promise<GatewayUsageRecorder> {
     const sessionId = gatewaySessionId(input.client.clientId, input.sessionHeader)
     const threadId = gatewayAuditThreadId(input.client.clientId)
-    await this.ensureAuditThread(threadId, input.client)
+    await this.ensureAuditThread(threadId, input.client, input.source)
     if (!await this.deps.threadService.getMetadata(threadId)) throw new Error('Gateway usage record was removed. Restart the gateway to resume.')
     const turnId = `gateway_request_${randomUUID()}`
     const now = this.deps.now ?? Date.now
     const startedAt = now()
     let firstTokenAt: number | undefined
     let usage: UsageSnapshot | undefined
+    let attemptUsage: UsageSnapshot | undefined
+    const attempts: NonNullable<GatewayUsageMetadata['attempts']> = []
     let actualProviderId = input.resolved.providerId === LOCAL_MODEL_GATEWAY_PROVIDER_ID
       ? undefined : input.resolved.providerId
     let actualModelId = actualProviderId ? input.resolved.model : undefined
@@ -59,6 +63,13 @@ export class GatewayUsageService {
     let finished: Promise<void> | undefined
     return {
       attribution: { threadId, turnId },
+      observeAttempt: (attempt) => {
+        if (finished || attempts.some((entry) => entry.attemptId === attempt.attemptId)) return
+        if (attempt.usage) attemptUsage = addUsage(attemptUsage ?? emptyUsageSnapshot(), attempt.usage)
+        if (attempts.length < 16) attempts.push({ attemptId: attempt.attemptId, providerId: attempt.providerId,
+          modelId: attempt.modelId, usageKnown: Boolean(attempt.usage), ...(attempt.usage ? {
+            promptTokens: attempt.usage.promptTokens, completionTokens: attempt.usage.completionTokens } : {}) })
+      },
       observe: (chunk) => {
         if (finished) return
         if (chunk.route) {
@@ -87,7 +98,7 @@ export class GatewayUsageService {
         if (finished) return finished
         const endedAt = now()
         const delta: UsageSnapshot = {
-          ...(usage ?? emptyUsageSnapshot()),
+          ...(attempts.length ? attemptUsage ?? emptyUsageSnapshot() : usage ?? emptyUsageSnapshot()),
           requestedModelId: input.requestedModelId,
           ...(actualProviderId ? { actualProviderId } : {}),
           ...(actualModelId ? { actualModelId } : {}),
@@ -105,12 +116,13 @@ export class GatewayUsageService {
             latencyMs: Math.max(0, endedAt - startedAt),
             retryCount,
             failoverCount,
-            tokenUsage: usage ? 'upstream' : 'unavailable',
+            tokenUsage: (attempts.length ? attemptUsage : usage && (!usage.attemptAccounting || usage.attemptAccounting.usageKnown)) ? 'upstream' : 'unavailable',
+            ...(attempts.length ? { attempts } : {}),
             costBasis: 'unverified',
             ...(httpStatus ? { httpStatus } : {})
           }
         }
-        finished = this.commit(threadId, turnId, delta)
+        finished = this.commit(threadId, turnId, delta, input.source)
         return finished
       }
     }
@@ -134,13 +146,13 @@ export class GatewayUsageService {
     return { clientId, usage: this.deps.usageService.forThread(threadId), requests }
   }
 
-  private async ensureAuditThread(threadId: string, client: GatewayClientIdentity): Promise<void> {
+  private async ensureAuditThread(threadId: string, client: GatewayClientIdentity, source = 'public-gateway'): Promise<void> {
     const active = this.initializing.get(threadId)
     if (active) return active
     const initialize = (async () => {
       if (await this.deps.threadService.getMetadata(threadId)) return
       await this.deps.threadService.create({
-        title: `Gateway usage: ${client.name}`,
+        title: `${source === 'utility' ? 'Model utility' : 'Gateway usage'}: ${client.name}`,
         workspace: this.deps.workspace,
         model: 'gateway-usage',
         mode: 'agent',
@@ -154,7 +166,7 @@ export class GatewayUsageService {
     }
   }
 
-  private commit(threadId: string, turnId: string, delta: UsageSnapshot): Promise<void> {
+  private commit(threadId: string, turnId: string, delta: UsageSnapshot, source: 'public-gateway' | 'utility' = 'public-gateway'): Promise<void> {
     const previous = this.commits.get(threadId) ?? Promise.resolve()
     const next = previous.catch(() => undefined).then(async () => {
       const cumulative = this.deps.usageService.record(threadId, delta, undefined, turnId)
@@ -163,7 +175,7 @@ export class GatewayUsageService {
           kind: 'usage', threadId, turnId,
           model: delta.actualModelId ?? delta.requestedModelId,
           ...(delta.actualProviderId ? { providerId: delta.actualProviderId } : {}),
-          source: 'public-gateway',
+          source,
           usage: {
             ...cumulative,
             // These describe this request, never the previous cumulative request.

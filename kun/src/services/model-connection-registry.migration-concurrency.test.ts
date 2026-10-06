@@ -55,7 +55,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -165,7 +165,7 @@ describe('ModelConnectionRegistry', () => {
 
         const failed = await value.snapshot()
         expect(failed).toMatchObject({ revision: 0, providers: [] })
-        expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8').catch(() => ''))
+        expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8').catch(() => ''))
           .not.toContain('company-proxy')
 
         const connected = await value.connect({
@@ -186,7 +186,7 @@ describe('ModelConnectionRegistry', () => {
           defaultModel: 'company-model'
         })
         expect(JSON.stringify(connected)).not.toContain('probe-secret')
-        expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')).not.toContain('probe-secret')
+        expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')).not.toContain('probe-secret')
       } finally {
         fetchMock.mockRestore()
       }
@@ -218,7 +218,7 @@ describe('ModelConnectionRegistry', () => {
       expect(snapshot.providers[0]?.modelCapabilities?.['reasoning-model']?.reasoning).toMatchObject({
         supportedEfforts: ['off', 'low', 'high'], defaultEffort: 'high'
       })
-      expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')).not.toContain('modelCapabilities')
+      expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')).not.toContain('modelCapabilities')
     })
 
   it('persists provider-authored secret-free capabilities and keeps them authoritative', async () => {
@@ -263,7 +263,7 @@ describe('ModelConnectionRegistry', () => {
         defaultEffort: 'medium',
         requestProtocol: 'openai-responses'
       })
-      const stored = await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')
+      const stored = await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')
       expect(stored).toContain('"modelCapabilities"')
       expect(stored).not.toContain('secret')
       const materialized = await value.materialize()
@@ -305,7 +305,7 @@ describe('ModelConnectionRegistry', () => {
         probe: false,
         select: true
       })
-      const registryPath = join(dataDir, 'model-connections.v1.json')
+      const registryPath = join(dataDir, 'model-connections.v2.json')
       const historical = JSON.parse(await readFile(registryPath, 'utf8')) as {
         revision: number
         profiles: Record<string, {
@@ -415,7 +415,7 @@ describe('ModelConnectionRegistry', () => {
         configured: true
       })
       expect(JSON.stringify(snapshot)).not.toContain('gemini-access')
-      expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')).not.toContain('gemini-access')
+      expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')).not.toContain('gemini-access')
       const materialized = await value.materialize()
       expect(materialized.selected?.config).toMatchObject({
         kind: 'gemini-code-assist',

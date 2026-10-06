@@ -233,7 +233,7 @@ describe('Anthropic supported semantics and explicit rejections', () => {
     { output_config: 'invalid' }, { output_config: [] }, { thinking: true }, { stream: 'true' },
     { thinking: { type: 'adaptive' } }, { thinking: { type: 'enabled', budget_tokens: 1024 } },
     { stop_sequences: ['END'] }, { top_k: 20 }, { output_config: { effort: 'high' } },
-    { tool_choice: { type: 'any' } }, { tool_choice: { type: 'auto', disable_parallel_tool_use: true } },
+    { tool_choice: { type: 'any' } }, { tool_choice: { type: 'auto', disable_parallel_tool_use: 'invalid' } },
     { tools: [{ type: 'web_search_20250305', name: 'web_search' }] },
     { system: [{ type: 'document', source: {} }] },
     { messages: [{ role: 'user', content: [{ type: 'document', source: {} }] }] },

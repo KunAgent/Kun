@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "fireworks",
+  "name": "Fireworks",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.fireworks.ai/inference/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.fireworks.ai/",
+  "credentialUrl": "https://fireworks.ai/account/api-keys"
+}

@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import { mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -380,7 +381,8 @@ export type ChildRunExecutor = (input: {
   /** Host-pinned harness for the created thread / first turn (ADE worker route). */
   harnessId?: HarnessId
   /** Host-pinned credential mode for this turn (e.g. `kun-gateway`). */
-  credentialMode?: HarnessCredentialMode
+  gatewayBinding?: HarnessGatewayBinding
+    credentialMode?: HarnessCredentialMode
   /** Host-only execution-unit metadata persisted on first thread creation. */
   executionUnit?: ThreadExecutionUnit
   /** Trusted host control emitted as private chronological model context. */

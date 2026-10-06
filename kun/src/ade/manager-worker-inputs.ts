@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from '../contracts/harness-gateway-binding.js'
 import { z } from 'zod'
 
 /** `worker_create` tool input (09 §4.2). */
@@ -19,7 +20,8 @@ export const WorkerCreateInputSchema = z
         harnessId: z.string().min(1).max(64).optional(),
         model: z.string().min(1).max(512).optional(),
         providerId: z.string().min(1).max(128).optional(),
-        credentialMode: z.string().min(1).max(64).optional()
+        credentialMode: z.string().min(1).max(64).optional(),
+        gatewayBinding: HarnessGatewayBindingSchema.optional()
       })
       .strict()
       .optional(),

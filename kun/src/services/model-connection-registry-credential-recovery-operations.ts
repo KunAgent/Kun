@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readProviderHeaders } from './provider-protected-headers.js'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
@@ -428,6 +429,13 @@ async inspectCredentialHealth(this: ModelConnectionRegistry,
     document: RegistryDocument
   ): Promise<ReadonlyMap<string, ProjectedCredentialHealth>> {
     const entries = await Promise.all(Object.values(document.profiles).map(async (profile) => {
+      if (profile.customHeadersRef) {
+        try { await readProviderHeaders(this, profile) }
+        catch { return [profile.id, credentialHealth('unreadable')] as const }
+      }
+      if (profile.configured && isAnonymousHttpProfile(profile)) {
+        return [profile.id, credentialHealth('not-required')] as const
+      }
       if (document.credentialTransactions[profile.id]) {
         return [profile.id, credentialHealth('missing')] as const
       }
@@ -452,7 +460,7 @@ async inspectCredentialHealth(this: ModelConnectionRegistry,
       // Anonymous HTTP providers authenticate by sending no credential at
       // all, so the absence of one is the healthy state, not a missing one.
       if (profile.configured && profile.kind === 'http' && isAnonymousHttpProfile(profile)) {
-        return [profile.id, credentialHealth('ready')] as const
+        return [profile.id, credentialHealth('not-required')] as const
       }
       if (!profile.configured && profile.kind === 'http') {
         return [profile.id, credentialHealth('missing')] as const

@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { HarnessCredentialModeSchema, HarnessStatusSchema } from './harness.js'
 
@@ -20,6 +21,7 @@ export const HarnessTestRequestSchema = z
   .object({
     level: HarnessTestLevelSchema,
     credentialMode: HarnessCredentialModeSchema.optional(),
+  gatewayBinding: HarnessGatewayBindingSchema.optional(),
     providerId: z.string().trim().min(1).optional(),
     model: z.string().trim().min(1).optional(),
     /** Per-request cap for the whole test; defaults to 120s, capped at 5min. */

@@ -1,3 +1,4 @@
+import type { AdeHarnessAliasModelGroup } from '@shared/ade-harnesses'
 import { create } from 'zustand'
 import type {
   AdeHarnessCommand,
@@ -46,7 +47,7 @@ type HarnessStoreState = {
    */
   providerGroups: Record<
     string,
-    { groups: AdeHarnessProviderModelGroup[]; loading: boolean; error?: string }
+    { groups: AdeHarnessProviderModelGroup[]; aliasGroups?: AdeHarnessAliasModelGroup[]; loading: boolean; error?: string }
   >
   sessions: Record<string, HarnessSessionSurface>
 }
@@ -247,7 +248,7 @@ export async function loadHarnessProviderGroups(
   useHarnessStore.setState((state) => ({
     providerGroups: {
       ...state.providerGroups,
-      [harnessId]: { groups: existing?.groups ?? [], loading: true }
+      [harnessId]: { groups: existing?.groups ?? [], aliasGroups: existing?.aliasGroups ?? [], loading: true }
     }
   }))
   try {
@@ -259,7 +260,7 @@ export async function loadHarnessProviderGroups(
     useHarnessStore.setState((state) => ({
       providerGroups: {
         ...state.providerGroups,
-        [harnessId]: { groups: result.groups ?? [], loading: false }
+        [harnessId]: { groups: result.groups ?? [], aliasGroups: result.aliasGroups ?? [], loading: false }
       }
     }))
   } catch (error) {

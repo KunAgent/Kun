@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../contracts/harness-gateway-binding.js'
 /**
  * AcpRuntime support: delegated trace records (same shape as the other
  * delegated runtimes), the ACP failure → finishTurn mapping (03 §9), and the
@@ -173,15 +174,7 @@ export type AcpCredentialEnvInput = DelegatedCredentialEnvInput
  */
 export function resolveAcpCredentialContext(
   resolve: ((input: AcpCredentialEnvInput) => Promise<Record<string, string>>) | undefined,
-  input: {
-    definition: HarnessDefinition
-    credentialMode: HarnessRoute['credentialMode']
-    threadId: string
-    turnId: string
-    providerId?: string
-    model?: string
-    accountId?: string
-  }
+  input: Parameters<typeof resolveDelegatedCredentialContext>[1]
 ): Promise<{ credentialIdentity: string; env: Record<string, string> }> {
   return resolveDelegatedCredentialContext(resolve, input)
 }

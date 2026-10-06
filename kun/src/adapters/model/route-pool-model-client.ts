@@ -1,3 +1,4 @@
+import { accountModelRequest } from './request-attempt-accounting.js'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
 import type {
   ModelFailoverGroup,
@@ -29,6 +30,7 @@ import { RoutePoolHealthStore } from './route-pool-health-store.js'
 import type { RuntimeHealth } from './route-pool-health-store.js'
 import { GatewayRouteChangedError, gatewayTargetMatches } from '../../domain/model-gateway-export-policy.js'
 import { GATEWAY_MAX_ROUTE_ATTEMPTS, withGatewayRoutingBudget } from './gateway-routing-budget.js'
+import { RouteAffinity } from './route-affinity.js'
 
 export { RoutePoolHealthStore } from './route-pool-health-store.js'
 export type {
@@ -48,6 +50,7 @@ export class RoutePoolModelClient implements ModelClient {
   private failoverByProvider = new Map<string, ModelFailoverGroup>()
   private readonly groupState: FailoverGroupRouteState = createFailoverGroupRouteState()
   private quotaLookup?: (providerId: string) => ProviderQuotaEntry | undefined
+  private readonly affinity: RouteAffinity
 
   constructor(
     private readonly direct: ModelClient,
@@ -56,10 +59,12 @@ export class RoutePoolModelClient implements ModelClient {
     readonly health: RoutePoolHealthStore = new RoutePoolHealthStore(),
     private readonly now: () => number = Date.now
   ) {
+    this.affinity = new RouteAffinity(now)
     this.replacePools(pools)
   }
 
   replacePools(pools: readonly ModelRoutePoolConfig[]): void {
+    this.affinity.clear()
     this.configured = pools.map((pool) => structuredClone(pool))
     this.pools = new Map(pools.filter((pool) => pool.enabled).map((pool) => [pool.modelId.toLowerCase(), structuredClone(pool)]))
     this.roundRobin.clear()
@@ -120,7 +125,11 @@ export class RoutePoolModelClient implements ModelClient {
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     request.paperReadOnly?.assertCurrent()
-    return request.gatewayRouting
+    return accountModelRequest(request, (accounted) => this.streamWithBudget(accounted))
+  }
+
+  private streamWithBudget(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    return (request.gatewayRouting || this.poolForRequest(request)) && !request.routingBudget
       ? withGatewayRoutingBudget(request, (bounded) => this.streamRouted(bounded))
       : this.streamRouted(request)
   }
@@ -268,7 +277,7 @@ export class RoutePoolModelClient implements ModelClient {
       }
       return
     }
-    const ordered = group
+    const ordered = this.affinity.prefer(pool, request, group
       ? orderFailoverGroupTargets({
           group,
           request,
@@ -278,10 +287,10 @@ export class RoutePoolModelClient implements ModelClient {
           state: this.groupState,
           now: this.now()
         })
-      : this.orderTargets(pool, eligible)
+      : this.orderTargets(pool, eligible))
     const failures: string[] = []
     let lastRejection: { providerId: string; modelId: string; reason?: string; message?: string } | undefined
-    const attempts = request.gatewayRouting ? ordered.slice(0, GATEWAY_MAX_ROUTE_ATTEMPTS) : ordered
+    const attempts = request.gatewayRouting || request.routingBudget ? ordered.slice(0, GATEWAY_MAX_ROUTE_ATTEMPTS) : ordered
     for (const [index, target] of attempts.entries()) {
       request.abortSignal.throwIfAborted()
       if (index > 0 && lastRejection) {
@@ -311,6 +320,7 @@ export class RoutePoolModelClient implements ModelClient {
       let failed = false
       let usageTokens = 0
       const pending: ModelStreamChunk[] = []
+      let pendingBytes = 0
       try {
         for await (const chunk of this.direct.stream({
           ...request,
@@ -353,11 +363,18 @@ export class RoutePoolModelClient implements ModelClient {
             return
           }
           if (!committed && !isContentChunk(chunk)) {
+            pendingBytes += new TextEncoder().encode(JSON.stringify(chunk)).byteLength
+            if (pending.length >= 128 || pendingBytes > 256_000) {
+              yield { kind: 'error', code: 'route_precommit_limit', message: 'Provider emitted too much metadata before response content.',
+                failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+              return
+            }
             pending.push(chunk)
             continue
           }
           if (!committed) {
             committed = true
+            this.affinity.committed(pool, request, target)
             for (const buffered of pending) yield attributeRouteChunk(buffered, route)
             pending.length = 0
           }
@@ -527,7 +544,7 @@ function attributeRouteChunk(
  * account's consecutive-failure budget.
  */
 function healthCountable(failure: ModelFailureMetadata | undefined): boolean {
-  return failure?.reason !== 'request' && failure?.reason !== 'model'
+  return !failure?.localAdmission && failure?.reason !== 'request' && failure?.reason !== 'model'
 }
 
 function routeFailureAllowed(pool: ModelRoutePoolConfig, failure: ModelFailureMetadata): boolean {

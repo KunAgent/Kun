@@ -315,6 +315,7 @@ export abstract class GraphAttemptScheduler {
         inheritedReasoningEffort: attempt.assignment.reasoningEffort,
         ...(attempt.assignment.harnessId ? { harnessId: attempt.assignment.harnessId } : {}),
         ...(attempt.assignment.credentialMode ? { credentialMode: attempt.assignment.credentialMode } : {}),
+        ...(attempt.assignment.gatewayBinding ? { gatewayBinding: attempt.assignment.gatewayBinding } : {}),
         approvalPolicy: attempt.assignment.approvalPolicy,
         sandboxMode: attempt.assignment.sandboxMode,
         approvalReviewer: attempt.assignment.approvalReviewer,

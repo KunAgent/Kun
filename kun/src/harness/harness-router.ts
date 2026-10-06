@@ -137,10 +137,14 @@ export class HarnessRouter {
     }
     const route: HarnessRoute = {
       harnessId,
-      providerId: turn.actingModelRoute?.providerId ?? turn.providerId ?? thread.providerId ?? undefined,
-      model: turn.actingModelRoute?.model ?? turn.model ?? thread.model ?? this.deps.defaultModel() ?? '',
+      ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {
+        providerId: turn.actingModelRoute?.providerId ?? turn.providerId ?? thread.providerId ?? undefined }),
+      model: (turn.gatewayBinding ? undefined : turn.actingModelRoute?.model) ?? turn.model ?? thread.model ?? this.deps.defaultModel() ?? '',
       credentialMode:
         turn.credentialMode ?? defaultCredentialMode(harnessId, definition)
+    }
+    if (route.gatewayBinding && (harnessId === 'kun' || route.credentialMode !== 'kun-gateway')) {
+      return { ok: false, error: new HarnessAdmissionError('route_unsupported', 'Structured gateway aliases require an external Agent in gateway mode') }
     }
     if (harnessId === 'kun' && legacyHarnessForProvider(route.providerId, kinds) !== 'kun') {
       return { ok: false, error: new HarnessAdmissionError('route_unsupported',

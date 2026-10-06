@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import type { WorkerRecord } from '../contracts/ade.js'
 import type {
   HarnessCredentialMode,
@@ -60,11 +61,13 @@ export async function resolveWorkerRoute(input: {
     model?: string
     providerId?: string
     credentialMode?: string
+    gatewayBinding?: HarnessGatewayBinding
   }
   /**
    * Configured provider pool lookup. Returns `undefined` for an unknown
    * provider id; when the dep itself is absent no pool validation runs.
    */
+  resolveGatewayAliases?: ManagerRuntimeDeps['resolveGatewayAliases']
   providerPool?: (providerId: string) => Promise<WorkerProviderPoolEntry | undefined>
   /**
    * Last successful model-probe result for the harness (spawn-free cache
@@ -83,7 +86,7 @@ export async function resolveWorkerRoute(input: {
     const def = input.catalog.get(requested.harnessId as HarnessId)
     if (!def) return { error: `unknown harness ${requested.harnessId}` }
     const defaults = input.harnessDefaults?.(def.id)
-    const credentialMode = requested.credentialMode?.trim() || defaults?.credentialMode
+    const credentialMode = requested.credentialMode?.trim() || (requested.gatewayBinding ? 'kun-gateway' : defaults?.credentialMode)
     if (credentialMode && !def.credentialModes.includes(credentialMode as HarnessCredentialMode)) {
       return {
         error: `credentialMode ${credentialMode} is not supported by harness ${def.id}`
@@ -92,6 +95,15 @@ export async function resolveWorkerRoute(input: {
     const effectiveMode =
       (credentialMode as HarnessCredentialMode | undefined) ?? def.credentialModes[0]
     const model = requested.model?.trim() || defaults?.model?.trim()
+    const binding = requested.gatewayBinding ?? (!requested.providerId && effectiveMode === 'kun-gateway' ? defaults?.gatewayBinding : undefined)
+    if (binding) {
+      if (effectiveMode !== 'kun-gateway' || requested.providerId || !input.resolveGatewayAliases) return { error: 'Agent aliases require gateway mode and an available alias resolver, without a provider ID' }
+      try {
+        const main = (await input.resolveGatewayAliases(binding)).find((alias) => alias.role === 'main')
+        if (!main || (requested.model && requested.model !== 'default' && requested.model !== main.alias)) return { error: 'The worker model does not match its gateway alias' }
+        return { route: { harnessId: def.id, credentialMode: 'kun-gateway', model: main.alias, gatewayBinding: binding } }
+      } catch (error) { return { error: error instanceof Error ? error.message : 'Agent alias is unavailable' } }
+    }
     if (effectiveMode === 'kun-gateway' || effectiveMode === 'provider') {
       return providerRoute(input, def, effectiveMode, model, defaults)
     }
@@ -162,6 +174,7 @@ export async function resolveManagerWorkerRoute(
     | 'threads' | 'catalog' | 'detector' | 'capabilitiesForRoute' | 'selector'
     | 'providerPool' | 'probedModels' | 'allowUnattendedFullAccess' | 'language'
     | 'harnessDefaults'
+    | 'resolveGatewayAliases'
   >,
   ctx: ManagerToolContext,
   input: WorkerCreateInput,
@@ -178,6 +191,7 @@ export async function resolveManagerWorkerRoute(
     providerPool: deps.providerPool,
     probedModels: deps.probedModels,
     harnessDefaults: deps.harnessDefaults,
+    resolveGatewayAliases: deps.resolveGatewayAliases,
     ...(selector
       ? {
           select: () =>

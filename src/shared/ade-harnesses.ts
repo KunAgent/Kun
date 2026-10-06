@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../kun/src/contracts/harness-gateway-binding.js'
 /**
  * Renderer-facing mirror of the /v1/harnesses surface (docs/ade/01 §7,
  * docs/ade/12 §7.2). The wire shape is owned by kun/src/contracts/harness.ts;
@@ -42,6 +43,7 @@ export type AdeHarnessPermissionMode = {
 }
 
 export type AdeHarnessDefinition = {
+  gateway?: import('../../kun/src/contracts/harness').HarnessGateway
   id: string
   displayName: string
   transport: AdeHarnessTransport
@@ -146,7 +148,9 @@ export type AdeHarnessProviderModelGroup = {
 }
 
 /** `GET /v1/harnesses/:id/models` response (01 §9). */
+export type AdeHarnessAliasModelGroup = { routeId: string; label: string; modelId: string; connectionIds: string[]; modelInfo?: import('../../kun/src/contracts/harness-models').HarnessModelInfo[] }
 export type AdeHarnessModels = {
+  aliasGroups?: AdeHarnessAliasModelGroup[]
   catalogStatus?: import('../../kun/src/contracts/harness-update').HarnessModelCatalogStatus
   harnessId: string
   models: string[]
@@ -162,6 +166,7 @@ export type AdeHarnessModels = {
 
 /** `POST /v1/harnesses/:id/test` request body (p4 §3.5, P4-10). */
 export type AdeHarnessTestRequest = {
+  gatewayBinding?: HarnessGatewayBinding
   level: 'detect' | 'handshake' | 'trial'
   credentialMode?: AdeHarnessCredentialMode
   providerId?: string

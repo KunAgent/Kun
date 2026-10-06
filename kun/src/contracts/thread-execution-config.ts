@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
 
@@ -5,7 +6,8 @@ export const ThreadExecutionRouteSchema = z.object({
   model: z.string().min(1).max(512),
   providerId: z.string().min(1).max(128).optional(),
   harnessId: HarnessIdSchema.optional(),
-  credentialMode: HarnessCredentialModeSchema.optional()
+  credentialMode: HarnessCredentialModeSchema.optional(),
+  gatewayBinding: HarnessGatewayBindingSchema.optional()
 }).strict()
 export type ThreadExecutionRoute = z.infer<typeof ThreadExecutionRouteSchema>
 

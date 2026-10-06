@@ -55,7 +55,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -360,7 +360,7 @@ describe('ModelConnectionRegistry', () => {
         operationToken
       })
       await expect(value.resolveApiKey(sourceId)).resolves.toBeNull()
-      expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8'))
+      expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8'))
         .not.toContain('abandoned-plaintext')
 
       now += 60_000

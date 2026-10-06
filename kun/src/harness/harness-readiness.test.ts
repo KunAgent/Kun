@@ -30,6 +30,22 @@ async function fixture() {
 }
 
 describe('explicit per-profile readiness', () => {
+  it('checks an alias profile without a native login or upstream key in its child environment', async () => {
+    const f = await fixture()
+    const gatewayBinding = { main: { routeId: 'coding', allowedConnectionIds: ['account-a'] } }
+    const aliasRoute = { harnessId: 'opencode', credentialMode: 'kun-gateway' as const, model: 'route/coding', gatewayBinding }
+    const service = new HarnessReadinessService({ options: () => f.options, catalog: f.catalog, detector: f.detector,
+      handshake: f.handshake, resolveGatewayAliases: async () => [{ role: 'main', routeId: 'coding', alias: 'route/coding',
+        targets: [{ providerId: 'account-a', modelId: 'model-a' }] }] })
+    const result = await service.test(f.catalog.get('opencode')!, { level: 'handshake', ...aliasRoute })
+    expect(result.ok).toBe(true)
+    expect(JSON.stringify(f.handshake.mock.calls)).not.toContain('secret-a')
+    expect(JSON.stringify(f.handshake.mock.calls)).not.toContain('secret-b')
+    f.options.harnesses!.enabledProfiles = [{ harnessId: 'opencode', credentialMode: 'kun-gateway', gatewayBinding }]
+    expect(await service.readyProfiles('opencode')).toEqual([expect.objectContaining({ gatewayBinding })])
+    await expect(service.assertReady({ ...aliasRoute, gatewayBinding: { main: { ...gatewayBinding.main,
+      allowedConnectionIds: ['account-a', 'account-b'] } } })).rejects.toThrow('disabled')
+  })
   it('defaults all external profiles off, including installed ones and legacy native profiles', async () => {
     const f = await fixture()
     expect(f.catalog.isDisabled('opencode')).toBe(true)

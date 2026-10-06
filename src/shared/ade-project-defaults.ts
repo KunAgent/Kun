@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from '../../kun/src/contracts/harness-gateway-binding.js'
 import { z } from 'zod'
 
 /** Local project defaults are intentionally a small, non-secret allow-list. */
@@ -5,9 +6,13 @@ export const AdeProjectRouteSchema = z.object({
   harnessId: z.string().trim().regex(/^[a-z][a-z0-9-]{1,47}$/),
   model: z.string().trim().min(1).max(512),
   providerId: z.string().trim().min(1).max(128).optional(),
-  credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional()
+  credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+  gatewayBinding: HarnessGatewayBindingSchema.optional()
 }).strict().superRefine((route, ctx) => {
-  if ((route.credentialMode === 'provider' || route.credentialMode === 'kun-gateway') && !route.providerId) {
+  if (route.gatewayBinding && (route.credentialMode !== 'kun-gateway' || route.harnessId === 'kun' || Boolean(route.providerId))) {
+    ctx.addIssue({ code: 'custom', path: ['gatewayBinding'], message: 'Gateway aliases require an external Agent and cannot also name a provider connection' })
+  }
+  if ((route.credentialMode === 'provider' || route.credentialMode === 'kun-gateway') && !route.providerId && !route.gatewayBinding) {
     ctx.addIssue({ code: 'custom', path: ['providerId'], message: 'provider route requires providerId' })
   }
 })

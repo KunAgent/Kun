@@ -1,3 +1,5 @@
+import { retainFrozenHarnessAliases } from '../../harness/gateway-alias-binding.js'
+import { observeHarnessAliasRoute } from '../../harness/gateway-alias-route-observer.js'
 /**
  * Binds the decoupled {@link AgentSdkRuntime} to kun's real runtime services.
  * This is the only place that touches the SDK package and kun's concrete stores,
@@ -114,19 +116,22 @@ export function createAgentSdkTurnRuntimeDeps(
       // routes (docs/ade/04 §5.5). Provider credentials never enter the env.
       const gatewayMode = turn.credentialMode === 'kun-gateway'
       const rawModel = turn?.model || thread.model
-      const gatewayAddress = gatewayMode ? parseGatewayModelId(rawModel) : null
+      const gatewayAddress = gatewayMode && !turn.gatewayBinding ? parseGatewayModelId(rawModel) : null
       const admittedProviderId = turn.actingModelRoute?.providerId?.trim() || requestedRouteProviderId || 'default'
       if (gatewayAddress && gatewayAddress.providerId !== admittedProviderId) {
         throw new AgentSdkGatewayUnavailableError('the encoded model provider does not match the selected Agent profile')
       }
-      const gatewayProviderId = gatewayMode
+      const gatewayProviderId = gatewayMode && !turn.gatewayBinding
         ? gatewayAddress?.providerId ?? explicitRouteProviderId ??
           await deps.resolveDefaultProviderId?.().catch(() => undefined)
         : undefined
       const gatewayModelId = gatewayAddress?.model ?? rawModel
+      const aliasActingRoute: ActingTurnModelRoute | undefined = turn.gatewayBinding ? turn.actingModelRoute ?? {
+        model: rawModel, unresolvedGatewayAlias: true, requestedGatewayAlias: rawModel
+      } : undefined
       let gatewayEnv: SdkGatewayEnv | undefined
       if (gatewayMode) {
-        if (!gatewayProviderId || !gatewayModelId) {
+        if ((!gatewayProviderId && !turn.gatewayBinding) || !gatewayModelId) {
           throw new AgentSdkGatewayUnavailableError(
             'the turn has no provider/model route to address through the gateway'
           )
@@ -134,8 +139,8 @@ export function createAgentSdkTurnRuntimeDeps(
         // A bare model id only reaches the gateway when the resolved provider
         // actually offers it — otherwise a stale pick like `claude-sonnet-4-6`
         // would be addressed to DeepSeek and fail upstream as a 404.
-        if (!gatewayAddress) {
-          const offered = await deps.listProviderModels?.(gatewayProviderId)
+        if (!gatewayAddress && !turn.gatewayBinding) {
+          const offered = await deps.listProviderModels?.(gatewayProviderId!)
             .catch(() => undefined)
           if (offered && offered.length > 0 && !offered.includes(gatewayModelId)) {
             throw new AgentSdkGatewayUnavailableError(
@@ -146,8 +151,12 @@ export function createAgentSdkTurnRuntimeDeps(
         }
         const harnessId = turn.harnessId ?? 'claude-code'
         await deps.readiness?.validateTurn(threadId, turnId, signal ?? new AbortController().signal, {
-          harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: gatewayProviderId, model: gatewayModelId
+          harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: gatewayProviderId, model: gatewayModelId,
+          ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {})
         })
+        if (turn.gatewayBinding && !deps.resolveGatewayAliases) throw new AgentSdkGatewayUnavailableError('alias resolution is unavailable')
+        const aliases = turn.gatewayBinding ? retainFrozenHarnessAliases(await deps.resolveGatewayAliases!(turn.gatewayBinding), turn.gatewayAliasGrants) : undefined
+        if (aliases) await deps.turns.updateTurnMetadata(threadId, turnId, { gatewayAliasGrants: aliases })
         gatewayEnv = resolveAgentSdkGatewayEnv({
           deps: {
             tokens: deps.harnessTokens,
@@ -158,13 +167,16 @@ export function createAgentSdkTurnRuntimeDeps(
           threadId,
           harnessId,
           providerId: gatewayProviderId,
-          model: gatewayModelId
+          model: gatewayModelId,
+          ...(aliases ? { aliasRoutes: aliases, turnId, onResolvedRoute: observeHarnessAliasRoute(aliasActingRoute!, gatewayModelId, async (route) => {
+            await deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute: route })
+          }) } : {})
         })
       }
       const selectedModel = gatewayMode
         ? gatewayModelId
         : rawModel === 'default' ? undefined : resolveSdkModel(rawModel, deps.defaultModel)
-      const actingModelRoute: ActingTurnModelRoute = turn.actingModelRoute ?? {
+      const actingModelRoute: ActingTurnModelRoute = aliasActingRoute ?? turn.actingModelRoute ?? {
         model: selectedModel ?? 'default',
         ...(gatewayProviderId
           ? { providerId: gatewayProviderId }
@@ -173,7 +185,7 @@ export function createAgentSdkTurnRuntimeDeps(
             : {}),
         ...(requestedAccountId ? { accountId: requestedAccountId } : {})
       }
-      if (!turn.actingModelRoute) {
+      if (!turn.actingModelRoute && !turn.gatewayBinding) {
         await deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute })
       }
       const providerId = actingModelRoute.providerId
@@ -332,7 +344,7 @@ export function createAgentSdkTurnRuntimeDeps(
           route: {
             providerKind: 'agent-sdk',
             providerId: providerId || 'default',
-            credentialIdentity: delegatedCredentialIdentity({
+            credentialIdentity: gatewayEnv?.credentialIdentity ?? delegatedCredentialIdentity({
               providerId: providerId || 'default',
               accountId,
               // Gateway turns bind sessions to the route, not a provider
@@ -439,7 +451,8 @@ export function createAgentSdkTurnRuntimeDeps(
         actingModelRoute,
         harnessRoute: {
           harnessId: 'claude-code', credentialMode: gatewayEnv ? 'kun-gateway' : 'native-login',
-          providerId: gatewayProviderId ?? actingProviderId, model: gatewayEnv?.model ?? model ?? 'default'
+          providerId: turn.gatewayBinding ? undefined : gatewayProviderId ?? actingProviderId, model: gatewayEnv?.model ?? model ?? 'default',
+          ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {})
         },
         planMode,
         allowSdkBuiltins:

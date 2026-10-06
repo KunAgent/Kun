@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import type {
   AttachmentReference,
   ChatBlock,
@@ -298,6 +299,7 @@ export type ChatState = {
   /** Explicit opt-in for the next new Code task, never inferred from its route. */
   composerCollaborationEnabled: boolean
   /** Credential mode for the selected harness route (`native-login` or a provider id). */
+  composerGatewayBinding?: HarnessGatewayBinding
   composerCredentialMode: string
   /**
    * ADE new-session isolation (12 §7.3): 'local' binds the picked workspace
@@ -361,6 +363,7 @@ export type ChatState = {
    * apply to subsequent turns only — the runtime opens a fresh native
    * session with a deterministic handoff summary (docs/ade/08).
    */
+  setComposerGatewayBinding: (binding?: HarnessGatewayBinding) => void
   setComposerHarness: (harnessId: string, credentialMode?: string) => void
   /** ADE-only: pick the isolation used by the next new session (12 §7.3). */
   setComposerIsolation: (
@@ -509,7 +512,7 @@ export type ChatState = {
      * creation instead of inferring a route from the composer model.
      */
     harnessId?: string
-    credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
     /** Explicit provider/model pins for the new thread (p4 §3.6 defaults). */
     providerId?: string
     model?: string

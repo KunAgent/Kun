@@ -1,3 +1,5 @@
+import { configurationAfterLegacyPatch } from './provider-legacy-patch.js'
+import { prepareProviderHeaders, providerHeadersPatch, settleProviderHeaders } from './provider-protected-headers.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -30,13 +32,22 @@ async patch(this: ModelConnectionRegistry, providerId: string, raw: unknown): Pr
     const input = ModelConnectionPatchRequestSchema.parse(raw)
     const { expectedRevision: _expectedRevision, ...changes } = input
     const fallbackHealth = await this['inspectCredentialHealth'](await this['file'].read(emptyDocument))
+    const preparedHeaders = await prepareProviderHeaders(this, input.customHeaders)
+    try {
     const document = await this['file'].update(emptyDocument, (current) => {
       assertRevision(current, input.expectedRevision, this['options'].modelCapabilities, this['credentialHealth'])
       const profile = requireProfile(current, providerId)
+      if (input.authType && input.authType !== profile.authType &&
+          (!['api-key', 'none'].includes(profile.authType) || !['api-key', 'none'].includes(input.authType))) {
+        throw new Error('Subscription authentication is managed by its provider login flow')
+      }
       if (current.credentialTransactions[providerId]) {
         throw new ModelConnectionConflictError(this['project'](current))
       }
       const kind = input.kind ?? profile.kind
+      if ((input.authType ?? profile.authType) === 'none' && kind !== 'http') {
+        throw new Error('Anonymous authentication is supported only for HTTP model providers')
+      }
       const baseUrl = input.baseUrl ?? profile.baseUrl
       if (kind === 'http' && !baseUrl) throw new Error('baseUrl is required for HTTP providers')
       const models = input.models ? uniqueModels(input.models) : profile.models
@@ -57,6 +68,8 @@ async patch(this: ModelConnectionRegistry, providerId: string, raw: unknown): Pr
       const nextProfile = StoredProfileSchema.parse({
         ...profileWithoutSelection,
         ...changes,
+        ...providerHeadersPatch(profile, preparedHeaders),
+        ...(input.authType === 'none' ? { configured: true } : {}),
         models,
         ...(modelCapabilities ? { modelCapabilities } : {}),
         ...(selectedModel ? { selectedModel } : {})
@@ -72,6 +85,7 @@ async patch(this: ModelConnectionRegistry, providerId: string, raw: unknown): Pr
         ...current,
         revision: current.revision + 1,
         profiles,
+        configuration: configurationAfterLegacyPatch(profile, current.configuration, input),
         ...(current.defaultProviderId === providerId
           ? selectedModel
             ? {
@@ -95,6 +109,7 @@ async patch(this: ModelConnectionRegistry, providerId: string, raw: unknown): Pr
     })
     await this['changed'](document)
     return this['projectWithCredentialHealth'](document)
+    } finally { await settleProviderHeaders(this, preparedHeaders) }
   },
 
 /**
@@ -470,7 +485,8 @@ async clearCredential(this: ModelConnectionRegistry,
           )
         : undefined
       return {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        configuration: current.configuration,
         proxyRoutingVersion: 1,
         revision: current.revision + 1,
         profiles,
@@ -531,7 +547,10 @@ async delete(this: ModelConnectionRegistry, providerId: string, expectedRevision
       delete profiles[providerId]
       const fallback = configuredFallback(Object.values(profiles), fallbackHealth)
       return {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        configuration: { ...current.configuration, connections: Object.fromEntries(
+          Object.entries(current.configuration.connections).filter(([id]) => id !== providerId)
+        ) },
         proxyRoutingVersion: 1,
         revision: current.revision + 1,
         profiles,
@@ -545,7 +564,9 @@ async delete(this: ModelConnectionRegistry, providerId: string, expectedRevision
         },
         credentialTransactions,
         credentialRefCleanup: appendCredentialRefs(
-          appendCredentialRefs(current.credentialRefCleanup, this['nowMs'](), credentialRef),
+          appendCredentialRefs(
+            appendCredentialRefs(current.credentialRefCleanup, this['nowMs'](), profile.customHeadersRef),
+            this['nowMs'](), credentialRef),
           this['nowMs'](),
           transaction?.nextCredentialRef,
           transaction?.writerInstanceId,

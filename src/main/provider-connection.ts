@@ -14,7 +14,8 @@ import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
 import { resolveProviderEndpointBaseUrl } from '../shared/model-provider-endpoints'
 import { GROK_SUBSCRIPTION_MODEL_IDS } from '../shared/model-provider-presets'
 import { fetchWithOptionalProxy } from './proxy-fetch'
-import { CODEX_CLI_VERSION, codexRequestHeaders, isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
+import { codexRequestHeaders, isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
+import { codexProviderCatalogUrl, fetchCodexProviderCatalog } from '../../kun/src/adapters/model/codex-provider-catalog.js'
 import { parseCodexModelCatalog } from './codex-model-catalog'
 import {
   ensureFreshGrokCredentials,
@@ -175,10 +176,10 @@ export async function probeModelProvider(
     { baseUrl, endpoints: request.endpoints },
     endpointFormat
   )
-  const url = codexHeaders
-    ? `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLI_VERSION}`
+  let url = codexHeaders
+    ? codexProviderCatalogUrl()
     : upstreamOpenAiModelsUrl(modelsBaseUrl)
-  const headers = {
+  let headers = {
     ...(codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey, request.customHeaders)),
     ...openCodeSessionRuntimeHeaders({
       presetSource: settings?.provider.providers.find((provider) => provider.id === request.providerId)
@@ -191,16 +192,28 @@ export async function probeModelProvider(
   let res: Response
   let text: string
   try {
-    res = await fetcher(url, {
-      method: 'GET',
-      headers,
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
-    }, proxyUrl)
-    const body = await readBoundedResponseText(res, MAX_MODEL_LIST_RESPONSE_BYTES)
-    if (body.truncated) {
-      return { ok: false, message: `Model list response exceeded the ${MAX_MODEL_LIST_RESPONSE_BYTES} byte limit.` }
+    if (codexHeaders) {
+      const catalog = await fetchCodexProviderCatalog({
+        fetcher, proxyUrl, headers, timeoutMs: PROBE_TIMEOUT_MS,
+        onRequest: (request) => { url = request.url; headers = request.headers }
+      })
+      if (catalog.truncated) {
+        return { ok: false, message: `Model list response exceeded the ${MAX_MODEL_LIST_RESPONSE_BYTES} byte limit.` }
+      }
+      res = catalog.response
+      text = catalog.text
+    } else {
+      res = await fetcher(url, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
+      }, proxyUrl)
+      const body = await readBoundedResponseText(res, MAX_MODEL_LIST_RESPONSE_BYTES)
+      if (body.truncated) {
+        return { ok: false, message: `Model list response exceeded the ${MAX_MODEL_LIST_RESPONSE_BYTES} byte limit.` }
+      }
+      text = body.text
     }
-    text = body.text
   } catch (e) {
     const message = providerProbeFailureMessage(e, url)
     logWarn('provider-probe', 'Provider model discovery failed.', {

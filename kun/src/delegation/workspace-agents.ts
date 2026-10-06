@@ -68,6 +68,7 @@ export type WorkspaceAgentCatalogProfile = {
   surfaces?: NonNullable<SubagentProfileConfig['surfaces']>
   harnessId?: SubagentProfileConfig['harnessId']
   credentialMode?: SubagentProfileConfig['credentialMode']
+  gatewayBinding?: SubagentProfileConfig['gatewayBinding']
   delegationNotes?: string
 }
 
@@ -143,6 +144,7 @@ export async function loadWorkspaceAgentCatalogProfiles(
       ...(profile.omitBasePrompt ? { omitBasePrompt: true } : {}),
       ...(profile.harnessId ? { harnessId: profile.harnessId } : {}),
       ...(profile.credentialMode ? { credentialMode: profile.credentialMode } : {}),
+      ...(profile.gatewayBinding ? { gatewayBinding: profile.gatewayBinding } : {}),
       ...(profile.delegationNotes ? { delegationNotes: profile.delegationNotes } : {})
     }
   })
@@ -249,6 +251,8 @@ function parseAgentMarkdown(text: string, defaultId: string): {
   }
   const credentialMode = (fields['credential-mode'] ?? fields.credentialMode)?.trim()
   if (credentialMode) raw.credentialMode = credentialMode
+  const gatewayBinding = fields['gateway-binding'] ?? fields.gatewayBinding
+  if (gatewayBinding && harnessId) { try { raw.gatewayBinding = JSON.parse(gatewayBinding) } catch { raw.gatewayBinding = gatewayBinding } }
   const delegationNotes = (fields['delegation-notes'] ?? fields.delegationNotes)?.trim()
   if (delegationNotes) raw.delegationNotes = delegationNotes
   const parsed = SubagentProfileConfig.safeParse(raw)

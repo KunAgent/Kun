@@ -1,3 +1,4 @@
+import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { nativeAgentNetworkEnv } from '../harness/native-agent-network.js'
 /**
  * Delegated-turn-runtime dep assembly for the main serve scope. Extracted
@@ -122,6 +123,7 @@ export function buildMainDelegatedRuntime(
     // loopback endpoint, roles, and the catalog's gateway env block.
     harnessTokens: services.harnesses.tokens,
     harnessGatewayBaseUrl: () => services.harnesses.gatewayEndpoint.baseUrl,
+    resolveGatewayAliases: async (binding) => freezeHarnessGatewayAliases(await modelConnections.snapshot(), binding),
     roles: () => core.activeOptions.roles,
     harnessCatalog: services.harnesses.catalog,
     graphHarnessSummary,

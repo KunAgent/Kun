@@ -1,3 +1,5 @@
+import { harnessGatewayStream } from './harness-gateway-stream.js'
+import { gatewayAttemptAccounting } from './gateway-attempt-accounting.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import type { ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { readJsonBody } from '../read-json-body.js'
@@ -10,6 +12,10 @@ import { ResponsesToolNamespaces } from './responses-tool-namespaces.js'
 import { OpenAiGatewayOutput } from './openai-gateway-output.js'
 import {
   acquireHarnessGrantLease,
+  acquirePublicGatewayLease,
+  gatewayClientInput,
+  gatewayDispatchAuthorization,
+  gatewayAffinityIdentity,
   asRecord,
   authorizeGateway,
   errorMessage,
@@ -28,15 +34,20 @@ import {
   stringValue
 } from './model-gateway-core.js'
 export async function gatewayModels(runtime: ServerRuntime, request: Request): Promise<JsonResponse> {
-  const verdict = authorizeGateway(runtime, request)
+  const verdict = await authorizeGateway(runtime, request)
   if (!verdict.ok) {
+    if (verdict.reason === 'unavailable') return openAiError('Gateway policy is unavailable.', 'gateway_unavailable', 503)
+    if (verdict.reason === 'forbidden') return openAiError('This protocol is not allowed for the gateway key.', 'permission_denied', 403)
     return verdict.reason === 'rate_limited'
       ? openAiError('Gateway rate limit exceeded.', 'rate_limit_exceeded', 429)
       : openAiError('Invalid gateway API key.', 'invalid_api_key', 401)
   }
   const grant = verdict.auth.kind === 'harness' ? verdict.auth.grant : undefined
   if (!runtime.modelGateway?.enabled()) return openAiError('Local model gateway is disabled.', 'gateway_disabled', 404)
-  return jsonResponse({ object: 'list', data: await listGatewayModels(runtime, grant) })
+  try {
+    const publicAuth = verdict.auth.kind === 'public' ? verdict.auth : undefined
+    return jsonResponse({ object: 'list', data: await listGatewayModels(runtime, grant, publicAuth?.policy, publicAuth?.policyRevision) })
+  } catch { return openAiError('Gateway configuration changed; retry discovery.', 'gateway_unavailable', 503) }
 }
 
 export async function gatewayChatCompletions(runtime: ServerRuntime, request: Request): Promise<Response | JsonResponse> {
@@ -105,21 +116,24 @@ export function testRoutePool(runtime: ServerRuntime, poolId: string): JsonRespo
 }
 
 async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 'chat' | 'responses'): Promise<Response | JsonResponse> {
-  const verdict = authorizeGateway(runtime, request)
+  const verdict = await authorizeGateway(runtime, request)
   if (!verdict.ok) {
+    if (verdict.reason === 'unavailable') return openAiError('Gateway policy is unavailable.', 'gateway_unavailable', 503)
+    if (verdict.reason === 'forbidden') return openAiError('This protocol is not allowed for the gateway key.', 'permission_denied', 403)
     return verdict.reason === 'rate_limited'
       ? openAiError('Gateway rate limit exceeded.', 'rate_limit_exceeded', 429)
       : openAiError('Invalid gateway API key.', 'invalid_api_key', 401)
   }
   const grant = verdict.auth.kind === 'harness' ? verdict.auth.grant : undefined
+  const publicAuth = verdict.auth.kind === 'public' ? verdict.auth : undefined
   if (!runtime.modelGateway?.enabled() || !runtime.modelClient) return openAiError('Local model gateway is disabled.', 'gateway_disabled', 404)
   const lease = grant
     ? acquireHarnessGrantLease(grant, request.signal)
-    : guardFor(runtime)?.acquire(request.signal) ?? null
+    : acquirePublicGatewayLease(runtime, request, verdict.auth)
   if (!lease) return openAiError('Too many concurrent gateway requests.', 'concurrency_limit', 429)
   let body: Awaited<ReturnType<typeof readJsonBody>>
   try {
-    body = await readJsonBody(request, grant?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
+    body = await readJsonBody(request, grant?.maxBodyBytes ?? publicAuth?.policy?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
   } catch (error) {
     lease.release()
     return openAiError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 'timeout' : 'invalid_request_error', lease.timedOut() ? 504 : 400)
@@ -132,7 +146,7 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
   const model = stringValue(input.model)
   let resolved: Awaited<ReturnType<typeof resolveGatewayModel>>
   try {
-    resolved = model ? await resolveGatewayModel(runtime, model, grant) : null
+    resolved = model ? await resolveGatewayModel(runtime, model, grant, publicAuth?.policy, publicAuth?.policyRevision) : null
   } catch {
     lease.release()
     return openAiError('Gateway model registry is unavailable.', 'gateway_unavailable', 503)
@@ -151,22 +165,26 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
   let namespaces: ResponsesToolNamespaces | undefined
   try {
     namespaces = shape === 'responses' ? new ResponsesToolNamespaces(input) : undefined
-    const normalized = shape === 'chat' ? input : responsesToChatInput(input, namespaces)
+    const normalized = gatewayClientInput(shape === 'chat' ? input : responsesToChatInput(input, namespaces), verdict.auth)
     modelRequest = makeModelRequest({ ...normalized, model: resolved.model }, lease.signal, resolved.providerId,
       grant ? { threadId: grant.threadId, turnId: turnId ?? `gateway_${grant.grantId}` } : undefined)
     recorder = await beginGatewayUsage(runtime, verdict.auth, request, model, resolved)
     if (recorder) modelRequest = makeModelRequest({ ...normalized, model: resolved.model }, lease.signal, resolved.providerId, recorder.attribution)
-    modelRequest.gatewayRouting = resolved.gatewayRouting
+    modelRequest.gatewayRouting = { ...resolved.gatewayRouting,
+      callerId: grant ? `harness:${grant.grantId}` : `client:${publicAuth?.client?.clientId ?? 'legacy'}`,
+      affinity: gatewayAffinityIdentity(request, verdict.auth, turnId),
+      beforeDispatch: gatewayDispatchAuthorization(runtime, request, verdict.auth, resolved.gatewayRouting.beforeDispatch) }
   } catch (error) {
     lease.release()
     return openAiError(errorMessage(error), error instanceof GatewayUsageError && error.status === 503 ? 'gateway_usage_unavailable' : 'invalid_request_error', error instanceof GatewayUsageError ? error.status : 400)
   }
+  modelRequest.attemptObserver = gatewayAttemptAccounting(runtime, verdict.auth, recorder, modelRequest.turnId)
   const attribute = grant
     ? (usage?: UsageSnapshot) => recordHarnessGatewayUsage(runtime, grant, resolved, usage, turnId)
     : undefined
   const stream = input.stream === true
   try {
-    const chunks = wrapGatewayUsage(runtime.modelClient.stream(modelRequest), recorder, {
+    const chunks = wrapGatewayUsage(harnessGatewayStream(runtime.modelClient.stream(modelRequest), grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
     return stream

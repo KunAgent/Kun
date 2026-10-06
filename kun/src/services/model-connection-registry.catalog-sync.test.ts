@@ -55,7 +55,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -204,7 +204,7 @@ describe('ModelConnectionRegistry', () => {
         probe: false,
         select: false
       })
-      const registryPath = join(dataDir, 'model-connections.v1.json')
+      const registryPath = join(dataDir, 'model-connections.v2.json')
       const before = JSON.parse(await readFile(registryPath, 'utf8')) as {
         profiles: Record<string, { credentialRef?: string }>
       }

@@ -1,4 +1,5 @@
 import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { getKunThreadDetail } from './kun-runtime-thread-detail'
 import type {
   AgentProvider,
@@ -455,6 +456,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
           ? { projectDefaultsRevision: input.projectDefaultsRevision } : {}),
         ...(input.harnessId?.trim() ? { harnessId: input.harnessId.trim() } : {}),
         ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
+        ...(input.gatewayBinding ? { gatewayBinding: input.gatewayBinding } : {}),
         ...(input.taskWorkspaceId?.trim() ? { taskWorkspaceId: input.taskWorkspaceId.trim() } : {}),
         model: requestedModel || (harnessNativeLogin ? 'default' : runtime.model),
         mode: normalizeThreadMode(input.mode),
@@ -499,7 +501,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       /** ADE harness override for this turn; absent inherits the thread. */
       harnessId?: string
       /** Harness credential path; absent = the harness's default. */
-      credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+      gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
       reasoningEffort?: string
       serviceTier?: 'priority'
       subagentResume?: { childId: string; expectedResumeCount: number }
@@ -575,6 +577,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       ...(selectedAccountId ? { accountId: selectedAccountId } : {}),
       ...(options?.harnessId?.trim() ? { harnessId: options.harnessId.trim() } : {}),
       ...(options?.credentialMode ? { credentialMode: options.credentialMode } : {}),
+      ...(options?.gatewayBinding ? { gatewayBinding: options.gatewayBinding } : {}),
       approvalPolicy: options?.approvalPolicy ?? runtime.approvalPolicy,
       sandboxMode: options?.sandboxMode ?? runtime.sandboxMode,
       approvalReviewer: options?.approvalReviewer ?? runtime.approvalReviewer

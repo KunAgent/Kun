@@ -1,3 +1,4 @@
+import { harnessGatewayBindingKey, type HarnessGatewayBinding, type HarnessGatewayAliasGrant } from '../contracts/harness-gateway-binding.js'
 /**
  * Credential identity + child-env resolution for delegated turns (P3-10),
  * generalized from `resolveAcpCredentialContext` so every session transport
@@ -31,6 +32,11 @@ export type DelegatedCredentialEnvInput = {
   /** The definition's gateway block — absent for harnesses without one. */
   gateway?: HarnessGateway
   accountId?: string
+  gatewayBinding?: HarnessGatewayBinding
+  frozenGatewayAliases?: readonly HarnessGatewayAliasGrant[]
+  onResolvedAliases?: (aliases: HarnessGatewayAliasGrant[]) => Promise<void>
+  onGatewayRoute?: (route: import('../ports/model-client.js').ModelRouteTargetMetadata) => Promise<void>
+  onResolvedIdentity?: (identity: string, wireModel: string) => void
 }
 
 export type DelegatedCredentialResolver = (
@@ -47,6 +53,10 @@ export async function resolveDelegatedCredentialContext(
     providerId?: string
     model?: string
     accountId?: string
+    gatewayBinding?: HarnessGatewayBinding
+    frozenGatewayAliases?: readonly HarnessGatewayAliasGrant[]
+    onResolvedAliases?: (aliases: HarnessGatewayAliasGrant[]) => Promise<void>
+    onGatewayRoute?: (route: import('../ports/model-client.js').ModelRouteTargetMetadata) => Promise<void>
   }
 ): Promise<{
   credentialIdentity: string
@@ -63,15 +73,17 @@ export async function resolveDelegatedCredentialContext(
     credentialMode === 'kun-gateway'
       ? parseGatewayModelId(input.model ?? '')
       : undefined
-  const credentialIdentity = delegatedCredentialIdentity({
+  let credentialIdentity = delegatedCredentialIdentity({
     providerId:
       credentialMode === 'kun-gateway'
-        ? `${credentialMode}:${definition.id}:` +
+        ? input.gatewayBinding ? `${credentialMode}:${definition.id}:alias:${harnessGatewayBindingKey(input.gatewayBinding)}`
+        : `${credentialMode}:${definition.id}:` +
           `${input.providerId ?? gatewayRoute?.providerId ?? ''}:` +
           `${gatewayRoute?.model ?? input.model ?? ''}`
         : `${credentialMode}:${definition.id}`,
     accountId: input.accountId
   })
+  if (input.gatewayBinding && credentialMode !== 'kun-gateway') throw new Error('Alias bindings require gateway credential mode')
   if (credentialMode === 'native-login') {
     return { credentialIdentity, env: nativeHarnessCredentialEnv(definition, { ...process.env, ...definition.launch?.env }) }
   }
@@ -80,6 +92,7 @@ export async function resolveDelegatedCredentialContext(
       `credential mode '${credentialMode}' needs a serve-hosted credential resolver`
     )
   }
+  let aliasWireModel: string | undefined
   const env = await resolve({
     harnessId: definition.id,
     credentialMode,
@@ -89,14 +102,19 @@ export async function resolveDelegatedCredentialContext(
     providerId: input.providerId,
     model: input.model,
     gateway: definition.gateway,
-    accountId: input.accountId
+    accountId: input.accountId,
+    ...(input.gatewayBinding ? { gatewayBinding: input.gatewayBinding, frozenGatewayAliases: input.frozenGatewayAliases,
+      onResolvedAliases: input.onResolvedAliases, onGatewayRoute: input.onGatewayRoute, onResolvedIdentity: (identity: string, model: string) => {
+      credentialIdentity = identity; aliasWireModel = model
+    } } : {})
   })
-  const wireModel =
+  const wireModel = aliasWireModel ?? (
     credentialMode === 'kun-gateway' &&
     input.providerId &&
     input.model &&
     !gatewayRoute
       ? formatGatewayModelId(input.providerId, input.model)
-      : undefined
+      : undefined)
+  if (input.gatewayBinding && !aliasWireModel) throw new Error('The Agent credential resolver does not support alias bindings')
   return { credentialIdentity, env, ...(wireModel ? { wireModel } : {}) }
 }

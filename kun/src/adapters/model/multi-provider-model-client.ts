@@ -1,11 +1,16 @@
+import { accountModelRequest } from './request-attempt-accounting.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
+import { ProviderRequestScheduler, ProviderAdmissionError } from '../../services/provider-request-scheduler.js'
+import type { ProviderAdmission } from '../../contracts/provider-configuration.js'
 
 export type ModelClientRouterInput = {
   default: ModelClient
   providers?: Map<string, ModelClient>
   /** Trusted HTTP/API-key clients, pinned by object identity at construction. */
   gatewayClients?: Map<string, ModelClient>
+  admission?: Map<string, { accountId: string; limits: ProviderAdmission }>
+  defaultProviderId?: string
 }
 
 /**
@@ -25,10 +30,15 @@ export class MultiProviderModelClient implements ModelClient {
   readonly provider = 'compat-multi'
   model: string
 
+  private dispatchAuthority?: () => Promise<void>
+  setDispatchAuthority(check: () => Promise<void>): void { this.dispatchAuthority = check }
+
   private default_: ModelClient
   private providers: Map<string, ModelClient>
   private gatewayClients: Map<string, ModelClient>
   private gatewayGeneration = {}
+  private admission: NonNullable<ModelClientRouterInput['admission']>
+  private defaultProviderId: string
   private readonly turnPins = new Map<string, {
     client: ModelClient
     /** Pin identity: the provider id, or a routing selection (`kind:id`). */
@@ -36,13 +46,16 @@ export class MultiProviderModelClient implements ModelClient {
     label: string
     routed: boolean
     touchedAt: number
+    admitted?: boolean
   }>()
 
-  constructor(input: ModelClientRouterInput) {
+  constructor(input: ModelClientRouterInput, private readonly scheduler = new ProviderRequestScheduler()) {
     this.default_ = input.default
     this.providers = canonicalProviders(input.providers)
     this.gatewayClients = canonicalProviders(input.gatewayClients)
     this.model = input.default.model
+    this.admission = input.admission ?? new Map()
+    this.defaultProviderId = input.defaultProviderId ?? 'default'
   }
 
   replace(input: ModelClientRouterInput): void {
@@ -51,6 +64,8 @@ export class MultiProviderModelClient implements ModelClient {
     this.providers = canonicalProviders(input.providers)
     this.gatewayClients = canonicalProviders(input.gatewayClients)
     this.model = input.default.model
+    this.admission = input.admission ?? new Map()
+    this.defaultProviderId = input.defaultProviderId ?? 'default'
   }
 
   register(providerId: string, client: ModelClient): () => void {
@@ -105,6 +120,19 @@ export class MultiProviderModelClient implements ModelClient {
     }
   }
 
+  /** Exact review clients retain account scheduling and cannot silently adopt a replacement credential client. */
+  capture(providerId?: string): ModelClient {
+    const client = this.resolve(providerId)
+    const sourceId = !providerId || providerId === 'default' ? this.defaultProviderId : providerId.toLowerCase()
+    const assertCurrent = () => { if (this.resolve(providerId) !== client) throw new GatewayRouteChangedError() }
+    return { provider: client.provider, model: client.model, stream: (request) => {
+      assertCurrent()
+      return accountModelRequest(request, (accounted) => this.streamAdmitted(client, { ...accounted, beforeProviderDispatch: async () => {
+        assertCurrent(); if (this.dispatchAuthority) await this.dispatchAuthority(); await request.beforeProviderDispatch?.()
+      } }, this.admission.get(sourceId)))
+    } }
+  }
+
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     request.paperReadOnly?.assertCurrent()
     request.gatewayRouting?.assertCurrent?.()
@@ -143,10 +171,36 @@ export class MultiProviderModelClient implements ModelClient {
       pinKey,
       label,
       routed: Boolean(selection),
-      touchedAt: Date.now()
+      touchedAt: Date.now(),
+      admitted: pinned?.client === client && pinned.admitted === true
     })
+    const pin = this.turnPins.get(request.turnId)!
     this.pruneTurnPins()
-    return client.stream(request)
+    const admitted = { ...request, beforeProviderDispatch: async () => {
+      const current = providerId === 'default' && !request.gatewayRouting ? this.default_ : this.providers.get(providerId)
+      if (!pin.admitted && current !== client) throw new GatewayRouteChangedError()
+      if (this.dispatchAuthority) await this.dispatchAuthority()
+      await request.beforeProviderDispatch?.()
+      pin.admitted = true
+    } }
+    const admission = this.admission.get(providerId === 'default' ? this.defaultProviderId : providerId)
+    return this.streamAdmitted(client, admitted, admission)
+  }
+
+  private async *streamAdmitted(client: ModelClient, request: ModelRequest,
+    admission?: { accountId: string; limits: ProviderAdmission }): AsyncIterable<ModelStreamChunk> {
+    let release: (() => void) | undefined
+    try {
+      if (admission) release = await this.scheduler.acquire(admission.accountId, request.gatewayRouting?.callerId ?? 'kun',
+        admission.limits, request.abortSignal)
+      request.abortSignal.throwIfAborted()
+      if (this.dispatchAuthority) await this.dispatchAuthority()
+      yield* client.stream(request)
+    } catch (error) {
+      if (!(error instanceof ProviderAdmissionError)) throw error
+      yield { kind: 'error', code: error.code, message: error.message,
+        failure: { category: 'rate_limit', reason: 'rate', httpStatus: 429, localAdmission: true, failoverAllowed: true } }
+    } finally { release?.() }
   }
 
   /**

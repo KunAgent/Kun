@@ -1,5 +1,5 @@
 export type SubscriptionBillingInput = {
-  authType?: 'api-key' | 'oauth' | 'subscription'
+  authType?: 'api-key' | 'oauth' | 'subscription' | 'none'
   presetSource?: string
   providerId?: string
   baseUrl?: string

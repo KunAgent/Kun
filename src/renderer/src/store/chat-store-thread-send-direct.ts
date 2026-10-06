@@ -1,3 +1,4 @@
+import { rememberSubmittedComposerRoute } from './chat-store-submitted-route'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
 import { describeRuntimeError, formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
@@ -10,7 +11,6 @@ import {
   activeClawChannel,
   readThreadComposerSelection,
   rememberCodeWorkspaceRoots,
-  rememberThreadComposerSelection,
   rememberTurnModel
 } from './chat-store-helpers'
 import { reconcileOptimisticUserBlock } from './chat-store-runtime-helpers'
@@ -107,6 +107,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     composerAccountId,
     composerHarnessId,
     composerCredentialMode,
+    composerGatewayBinding,
     reasoningEffort,
     serviceTier,
     guiDesignCanvas, guiExcalidrawCanvas,
@@ -205,15 +206,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         }
         activeThreadId = threadId
         if (composerModel && !queuedModelWouldOverwriteUserSelection(queued, threadId, composerModel)) {
-          rememberThreadComposerSelection(
-            threadId,
-            composerModel,
-            composerProviderId,
-            'user',
-            composerHarnessId
-              ? { harnessId: composerHarnessId, credentialMode: composerCredentialMode }
-              : undefined
-          )
+          rememberSubmittedComposerRoute(threadId, input)
         }
         set((s) => ({
           activeThreadId: threadId,
@@ -283,15 +276,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         composerModel &&
         !queuedModelWouldOverwriteUserSelection(queued, activeThreadId, composerModel)
       ) {
-        rememberThreadComposerSelection(
-          activeThreadId,
-          composerModel,
-          composerProviderId,
-          'user',
-          composerHarnessId
-            ? { harnessId: composerHarnessId, credentialMode: composerCredentialMode }
-            : undefined
-        )
+        rememberSubmittedComposerRoute(activeThreadId, input)
       }
       await ensureRuntimeProviderForSend({
         providerId: channel ? undefined : composerProviderId,
@@ -353,6 +338,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ...(composerCredentialMode
           ? { credentialMode: composerCredentialMode as 'native-login' | 'provider' | 'kun-gateway' }
           : {}),
+        ...(composerGatewayBinding ? { gatewayBinding: composerGatewayBinding } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(!channel && serviceTier ? { serviceTier } : {}),
         ...((queued?.subagentResume ?? overrides?.subagentResume) ? { subagentResume: queued?.subagentResume ?? overrides?.subagentResume } : {}),

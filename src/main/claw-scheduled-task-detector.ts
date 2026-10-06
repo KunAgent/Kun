@@ -21,6 +21,7 @@ import { resolveModelEndpointUrl } from '../../kun/src/contracts/model-endpoint-
 import { openCodeSessionRuntimeHeaders } from '../shared/opencode-session'
 import { resolveProviderEndpointBaseUrl } from '../shared/model-provider-endpoints'
 import { fetchWithOptionalProxy } from './proxy-fetch'
+import { routesTextThroughRuntime, requestRuntimeModelText } from './services/runtime-model-requests'
 import {
   codexResponsesLiteInput,
   resolveCodexResponsesRequestAuth,
@@ -331,6 +332,13 @@ export async function detectClawScheduledTaskRequest(
     ? getModelProviderSettings(settings).providers.find((item) => item.id === requestedProviderId)
     : runtimeProvider
   if (!provider) return null
+  if (routesTextThroughRuntime()) {
+    const result = await requestRuntimeModelText({ purpose: 'schedule-detection', providerId: provider.id,
+      model: detectionModel(modelHint), messages: [{ role: 'system', content: buildDetectionPrompt(now) },
+        { role: 'user', content: sourceText }], jsonMode: true, temperature: 0,
+      maxOutputTokens: 1200, timeoutMs: DETECTOR_TIMEOUT_MS })
+    return result.ok ? normalizeDetectedRequest(parseDetectionPayload(result.text), sourceText, now) : null
+  }
   const usesRuntimeRoute = provider.id === runtimeProvider.id
   const apiKey = usesRuntimeRoute ? runtime.apiKey.trim() : provider.apiKey.trim()
   if (!apiKey) return null

@@ -31,6 +31,7 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
   const allGroups = useChatStore((s) => s.composerModelGroups)
   const kunGroups = allGroups.filter(isKunModelProviderGroup)
   const externalGroups = useHarnessStore((s) => s.providerGroups[harnessId]?.groups)
+  const aliasGroups = useHarnessStore((s) => s.providerGroups[harnessId]?.aliasGroups)
   const row = rows.find((row) => row.definition.id === harnessId)
   const definition = row?.definition
   const fingerprint = harnessModelFingerprint(row)
@@ -43,7 +44,9 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
   const groups = harnessId === 'kun' ? kunGroups : (externalGroups ?? [])
     .filter((group) => profiles.some((profile) => profile.credentialMode === credentialMode && profile.providerId === group.providerId))
     .map((group) => ({ providerId: group.providerId, label: group.label, modelIds: group.models }))
-  const modelIds = credentialMode === 'native-login'
+  const aliasProfiles = profiles.filter((profile) => profile.credentialMode === 'kun-gateway' && profile.gatewayBinding)
+  const currentAlias = aliasGroups?.find((alias) => alias.routeId === route.gatewayBinding?.main.routeId)
+  const modelIds = route.gatewayBinding ? currentAlias ? [currentAlias.modelId] : [route.model] : credentialMode === 'native-login'
     ? models ?? definition?.staticModels ?? []
     : groups.find((group) => group.providerId === providerId)?.modelIds ?? []
   useEffect(() => { void loadHarnesses(true) }, [])
@@ -74,7 +77,7 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
   const changeRoute = (patch: Partial<NonNullable<AdeProjectDefaults['route']>>): void => {
     const next = { ...route, harnessId, ...patch }
     if (harnessId !== 'kun' && (!row || !harnessProfileReady(row, {
-      harnessId, credentialMode: next.credentialMode ?? credentialMode, providerId: next.providerId
+      harnessId, credentialMode: next.credentialMode ?? credentialMode, providerId: next.providerId, gatewayBinding: next.gatewayBinding
     }))) return
     onChange('route', next)
   }
@@ -90,7 +93,7 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
           const mode = profile?.credentialMode ?? 'provider'
           onChange('route', { harnessId: next.definition.id,
             model: mode === 'native-login' ? useHarnessStore.getState().models[next.definition.id]?.models[0] ?? next.definition.staticModels[0] ?? '' : '',
-            credentialMode: mode, ...(profile?.providerId ? { providerId: profile.providerId } : {}) })
+            credentialMode: mode, ...(profile?.gatewayBinding ? { gatewayBinding: profile.gatewayBinding } : profile?.providerId ? { providerId: profile.providerId } : {}) })
         }}>
           {!rows.some((row) => row.definition.id === harnessId && harnessRowAvailable(row)) ? <option disabled value={harnessId}>{harnessId}</option> : null}
           {rows.filter((entry) => harnessRowRunsTurns(entry) && harnessRowAvailable(entry)).map((row) =>
@@ -102,7 +105,8 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
         const profile = profiles.find((entry) => entry.credentialMode === mode && (entry.providerId ?? '') === providerId)
           ?? profiles.find((entry) => entry.credentialMode === mode)
         if (harnessId !== 'kun' && !profile) return
-        changeRoute({ credentialMode: mode, providerId: profile?.providerId ?? (harnessId === 'kun' ? providerId || undefined : undefined), model: '' })
+        changeRoute({ credentialMode: mode, gatewayBinding: profile?.gatewayBinding, providerId: profile?.providerId ?? (harnessId === 'kun' ? providerId || undefined : undefined),
+          model: profile?.gatewayBinding ? aliasGroups?.find((alias) => alias.routeId === profile.gatewayBinding!.main.routeId)?.modelId ?? '' : '' })
       }}>
         {!modes.some((mode) => mode === credentialMode) ? <option disabled value={credentialMode}>{t(`adeCredential.${credentialMode === 'native-login' ? 'nativeLogin' : credentialMode === 'kun-gateway' ? 'kunGateway' : 'provider'}`)}</option> : null}
         {modes.map((mode) => <option key={mode} value={mode}>{t(`adeCredential.${mode === 'native-login' ? 'nativeLogin' : mode === 'kun-gateway' ? 'kunGateway' : 'provider'}`)}</option>)}
@@ -113,8 +117,16 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
         {nativeProfiles.map((profile) => <option key={profile.providerId ?? ''} value={profile.providerId ?? ''}>{profile.providerId
           ? allGroups.find((group) => group.providerId === profile.providerId)?.label ?? profile.providerId : t('agentEnablement.systemAccount')}</option>)}
       </select> : null}
-      {credentialMode !== 'native-login' ? <select aria-label={t('taskSettings.provider')} className={fieldClass} value={providerId}
-        onChange={(event) => changeRoute({ providerId: event.target.value || undefined, model: '' })}>
+      {credentialMode !== 'native-login' ? <select aria-label={t('taskSettings.provider')} className={fieldClass} value={route.gatewayBinding ? `@alias:${JSON.stringify(route.gatewayBinding)}` : providerId}
+        onChange={(event) => {
+          const profile = aliasProfiles.find((entry) => event.target.value === `@alias:${JSON.stringify(entry.gatewayBinding)}`)
+          const alias = aliasGroups?.find((entry) => entry.routeId === profile?.gatewayBinding?.main.routeId)
+          changeRoute(profile?.gatewayBinding ? { providerId: undefined, gatewayBinding: profile.gatewayBinding, model: alias?.modelId ?? '' }
+            : { providerId: event.target.value || undefined, gatewayBinding: undefined, model: '' })
+        }}>
+        {credentialMode === 'kun-gateway' ? aliasProfiles.map((profile) => <option key={JSON.stringify(profile.gatewayBinding)} value={`@alias:${JSON.stringify(profile.gatewayBinding)}`}>
+          {t('agentEnablement.alias')} · {aliasGroups?.find((alias) => alias.routeId === profile.gatewayBinding!.main.routeId)?.label ?? profile.gatewayBinding!.main.routeId}
+        </option>) : null}
         <option value="">{t('taskSettings.selectProvider')}</option>
         {providerId && !groups.some((group) => group.providerId === providerId) ? <option disabled value={providerId}>{providerId}</option> : null}
         {groups.map((group) => <option key={group.providerId} value={group.providerId}>{group.label}</option>)}

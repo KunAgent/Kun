@@ -111,6 +111,7 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.credentialMode
       ? { credentialMode: message.credentialMode as 'native-login' | 'provider' | 'kun-gateway' }
       : {}),
+    ...(message.gatewayBinding ? { gatewayBinding: message.gatewayBinding } : {}),
     ...(message.planBuild ? { planBuild: true } : {}),
     ...(message.reasoningEffort ? { reasoningEffort: message.reasoningEffort } : {}),
     ...(!input.claw && message.serviceTier ? { serviceTier: message.serviceTier } : {}),

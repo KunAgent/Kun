@@ -20,6 +20,7 @@ import { useTaskWorkspaceStore } from '../../store/task-workspace-store'
 import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
 import {
   credentialGroupFromKey,
+  aliasCredentialGroupKey,
   defaultCredentialModeForRow,
   effectiveHarnessId,
   harnessSwitchNeedsConfirmation,
@@ -75,6 +76,8 @@ export function useAdeComposerControls(input: {
   // A background refresh should not make a populated menu look like a cold start.
   const rowsLoading = useHarnessStore((state) => state.rowsLoading && state.rows.length === 0)
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
+  const composerGatewayBinding = useChatStore((state) => state.composerGatewayBinding)
+  const setComposerGatewayBinding = useChatStore((state) => state.setComposerGatewayBinding)
   const composerCredentialMode = useChatStore((state) => state.composerCredentialMode)
   const composerProviderId = useChatStore((state) => state.composerProviderId)
   const composerModel = useChatStore((state) => state.composerModel)
@@ -117,6 +120,11 @@ export function useAdeComposerControls(input: {
   useEffect(() => {
     if (enabled && harnessId !== 'kun') void loadHarnessModels(harnessId)
   }, [enabled, harnessId, rowFingerprint])
+  useEffect(() => {
+    if (!composerGatewayBinding || composerModel || composerCredentialMode !== 'kun-gateway') return
+    const alias = providerGroupCache?.aliasGroups?.find((entry) => entry.routeId === composerGatewayBinding.main.routeId)
+    if (alias) { setComposerModel(alias.modelId, ''); setComposerGatewayBinding(composerGatewayBinding) }
+  }, [composerGatewayBinding, composerModel, composerCredentialMode, providerGroupCache?.aliasGroups, setComposerModel, setComposerGatewayBinding])
   const credentialMode = composerCredentialMode.trim() || defaultCredentialModeForRow(row)
   const harnessLabel = row?.definition.displayName ?? harnessId
   const isNativeHarness = harnessId !== 'kun' &&
@@ -182,10 +190,11 @@ export function useAdeComposerControls(input: {
       models: modelCache?.models ?? [],
       modelInfo: modelCache?.modelInfo,
       providerGroups: providerGroupCache?.groups ?? [],
+      aliasGroups: providerGroupCache?.aliasGroups ?? [],
       labels,
       hasConfiguredProvider
     })
-  }, [enabled, hasConfiguredProvider, isNativeHarness, labels, modelCache?.models, modelCache?.modelInfo, providerGroupCache?.groups, row])
+  }, [enabled, hasConfiguredProvider, isNativeHarness, labels, modelCache?.models, modelCache?.modelInfo, providerGroupCache?.groups, providerGroupCache?.aliasGroups, row])
   const pickList = modelGroups != null ? [...(modelCache?.models ?? [])] : null
 
   /** Sentinel group keys (`ade-cred:*`) route the pick through credentialMode. */
@@ -194,20 +203,21 @@ export function useAdeComposerControls(input: {
     return (modelId: string, providerId?: string): void => {
       const picked = credentialGroupFromKey(providerId)
       if (picked) {
-        if (!row || !harnessProfileReady(row, { harnessId, credentialMode: picked.mode, providerId: picked.providerId })) return
+        if (!row || !harnessProfileReady(row, { harnessId, credentialMode: picked.mode, providerId: picked.providerId, gatewayBinding: picked.gatewayBinding })) return
         setComposerHarness(harnessId, picked.mode)
         // Provider-routed modes carry the picked provider id so the turn
         // resolves `providerId + model` into the grant route; native sign-in
         // pins no provider.
         setComposerModel(
           modelId,
-          picked.providerId ?? (picked.mode === 'native-login' ? '' : composerProviderId)
+          picked.gatewayBinding ? '' : picked.providerId ?? (picked.mode === 'native-login' ? '' : composerProviderId)
         )
+        if (picked.gatewayBinding) setComposerGatewayBinding(picked.gatewayBinding)
         return
       }
       onComposerModelChange?.(modelId, providerId)
     }
-  }, [composerProviderId, enabled, harnessId, isNativeHarness, row, onComposerModelChange, setComposerHarness, setComposerModel])
+  }, [composerProviderId, enabled, harnessId, isNativeHarness, row, onComposerModelChange, setComposerHarness, setComposerModel, setComposerGatewayBinding])
 
   /**
    * External-session continuation (01 §8): a fresh one-to-one thread whose
@@ -242,8 +252,10 @@ export function useAdeComposerControls(input: {
       : undefined
     const readyProfiles = nextRow ? readyHarnessProfiles(nextRow) : []
     if (nextId !== 'kun' && nextCredentialMode && !readyProfiles.some((profile) => profile.credentialMode === nextCredentialMode)) return
-    const selectedProfile = readyProfiles.find((profile) => profile.credentialMode === (nextCredentialMode || defaultCred) &&
-      profile.providerId === defaults?.providerId) ?? readyProfiles[0]
+    const preferredProfiles = readyProfiles.filter((profile) => profile.credentialMode === (nextCredentialMode || defaultCred))
+    const selectedProfile = preferredProfiles.find((profile) => profile.credentialMode === (nextCredentialMode || defaultCred) &&
+      (defaults?.gatewayBinding ? JSON.stringify(profile.gatewayBinding) === JSON.stringify(defaults.gatewayBinding)
+        : profile.providerId === defaults?.providerId && !profile.gatewayBinding)) ?? preferredProfiles[0] ?? readyProfiles[0]
     const cred = selectedProfile?.credentialMode || nextCredentialMode?.trim() || defaultCred || defaultCredentialModeForRow(nextRow)
     const previousState = useChatStore.getState()
     const previous = { providerId: previousState.composerProviderId, model: previousState.composerModel }
@@ -265,6 +277,12 @@ export function useAdeComposerControls(input: {
       ) ? remembered : null
       const selection = selectHarnessProvider(groups, restore ? undefined : defaults, restore ?? previous)
       setComposerModel(selection.model, selection.providerId)
+    } else if (selectedProfile?.gatewayBinding) {
+      const binding = selectedProfile.gatewayBinding
+      const alias = useHarnessStore.getState().providerGroups[nextId]?.aliasGroups?.find((entry) => entry.routeId === binding.main.routeId)
+      setComposerModel(alias?.modelId ?? '', '')
+      setComposerGatewayBinding(binding)
+      if (!alias) void loadHarnessProviderGroups(nextId)
     } else if (cred !== 'native-login') {
       const cache = useHarnessStore.getState().providerGroups[nextId]
       const selection = selectHarnessProvider((cache?.groups ?? []).filter((group) => !nextRow || harnessProfileReady(nextRow, { harnessId: nextId, credentialMode: cred as 'provider' | 'kun-gateway', providerId: group.providerId })),
@@ -301,6 +319,8 @@ export function useAdeComposerControls(input: {
     rowsLoading,
     harnessId,
     credentialMode,
+    gatewayBinding: composerGatewayBinding,
+    aliasGroupKey: composerGatewayBinding ? aliasCredentialGroupKey(composerGatewayBinding) : undefined,
     harnessLabel,
     isNativeHarness,
     rowUnavailableCode: harnessRowUnavailableCode,

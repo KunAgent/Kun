@@ -1,5 +1,15 @@
 # 04 harness × 模型：网关协议桥
 
+> Current implementation: the three protocol gateways and scoped harness tokens
+> already exist. The provider refactor adds independent public-client scopes,
+> shared account scheduling and durable token reservations; see
+> [the implementation contract](../provider-configuration-and-gateway.md).
+> Managed ADE retains direct provider/model grants and now also supports
+> structured main/small alias bindings with explicit account ceilings and
+> frozen per-turn targets. Agent profile readiness and tool grants remain independent.
+> The sections below retain their original design/implementation-phase wording.
+
+
 - 阶段：P1
 - 依赖：01（`credentialMode: 'kun-gateway'`）
 - 被依赖：09、10（worker 选择时可以把便宜模型配给外部 harness）

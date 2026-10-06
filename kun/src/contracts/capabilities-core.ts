@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { KUN_MANAGED_GITHUB_MCP_MARKER } from './builtin-mcp.js'
 import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
@@ -373,6 +374,7 @@ export const SubagentProfileConfig = z
     harnessId: HarnessIdSchema.optional(),
     /** Credential path on the bound harness; omitted uses the harness default. */
     credentialMode: HarnessCredentialModeSchema.optional(),
+    gatewayBinding: HarnessGatewayBindingSchema.optional(),
     /** "Best for / not for" notes for the manager selector; participates in recall. */
     delegationNotes: z.string().min(1).max(1_000).optional(),
     /** Persona/instructions appended to the base system prompt for this role (not a full replace). */

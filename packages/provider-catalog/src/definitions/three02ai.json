@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "three02ai",
+  "name": "302.AI",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.302.ai/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://302.ai/",
+  "credentialUrl": "https://dash.302.ai/apis/list"
+}

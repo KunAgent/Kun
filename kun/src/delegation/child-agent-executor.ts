@@ -376,13 +376,15 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         // Route the child to the profile's provider. ThreadService threads
         // providerId into every ModelRequest, and the executor's model is the
         // MultiProviderModelClient, so this single field is all routing needs.
-        ...(input.providerId ? { providerId: input.providerId } : {}),
+        ...(!input.gatewayBinding && input.providerId ? { providerId: input.providerId } : {}),
         ...(input.accountId ? { accountId: input.accountId } : {}),
         // Persist the resolved profile id so the GUI can label explore/side
         // sessions (e.g. return-bar "viewing explore process").
         ...(input.profile?.trim() ? { agentId: input.profile.trim() } : {}),
         // ADE workers pin the dispatch's harness so resumes reuse the engine.
-        ...(input.harnessId ? { harnessId: input.harnessId } : {})
+        ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+        ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
+        ...(input.gatewayBinding ? { gatewayBinding: input.gatewayBinding } : {})
       }, {
         id: input.childId,
         title,
@@ -441,9 +443,10 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         ...(source?.fileReferences.length ? { fileReferences: source.fileReferences } : {}),
         model,
         clientSurface: input.guiDesignCanvas || input.guiExcalidrawCanvas ? 'gui' : input.clientSurface ?? 'api',
-        ...(input.providerId ? { providerId: input.providerId } : {}),
+        ...(!input.gatewayBinding && input.providerId ? { providerId: input.providerId } : {}),
         ...(input.harnessId ? { harnessId: input.harnessId } : {}),
         ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
+        ...(input.gatewayBinding ? { gatewayBinding: input.gatewayBinding } : {}),
         ...(input.accountId ? { accountId: input.accountId } : {}),
         approvalPolicy,
         ...(sandboxMode ? { sandboxMode } : {}),

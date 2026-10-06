@@ -20,7 +20,7 @@ export function anthropicToChatInput(input: Record<string, unknown>): Record<str
     (choice.type !== 'auto' && choice.type !== 'tool') ||
     (choice.type === 'tool' && !stringValue(choice.name)) ||
     (choice.type === 'auto' && choice.name != null) ||
-    (choice.disable_parallel_tool_use != null && choice.disable_parallel_tool_use !== false))) {
+    (choice.disable_parallel_tool_use != null && typeof choice.disable_parallel_tool_use !== 'boolean'))) {
     throw new Error('Only auto or a named tool_choice is supported by the local gateway')
   }
   const messages: Record<string, unknown>[] = []
@@ -86,6 +86,7 @@ export function anthropicToChatInput(input: Record<string, unknown>): Record<str
   })
   return { model: input.model, messages, tools, stream: input.stream, max_tokens: input.max_tokens,
     temperature: input.temperature, top_p: input.top_p, reasoning_effort: thinking.type === 'disabled' ? 'off' : undefined,
+    ...(typeof choice.disable_parallel_tool_use === 'boolean' ? { parallel_tool_calls: !choice.disable_parallel_tool_use } : {}),
     tool_choice: choice.type === 'tool' ? { type: 'function', function: { name: choice.name } } : undefined }
 }
 

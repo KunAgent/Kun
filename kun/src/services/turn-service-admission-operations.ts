@@ -248,7 +248,7 @@ async startTurn(this: TurnService, input: {
           // fields that merely inherit the thread. Without this copy a model
           // picker change could mutate `thread.model` between tool steps and
           // silently move an already-running turn onto a different protocol.
-          const turnModel = firstNonBlank(
+          let turnModel = firstNonBlank(
             input.request.model,
             thread.model,
             this['deps'].defaultModel,
@@ -270,6 +270,17 @@ async startTurn(this: TurnService, input: {
               ? firstNonBlank(thread.accountId)
               : undefined
           )
+          const gatewayBinding = input.request.gatewayBinding ?? (!input.request.providerId?.trim() && turnCredentialMode === 'kun-gateway' && turnHarnessId === thread.executionConfig?.route.harnessId
+              ? thread.executionConfig.route.gatewayBinding : undefined)
+          if (gatewayBinding && !this['deps'].gatewayAliasProfilesEnabled?.()) throw new Error('Gateway alias profiles require the Agent router')
+          if (gatewayBinding) {
+            if (input.request.providerId?.trim() && input.request.providerId !== 'default') throw new Error('Choose a provider connection or a gateway alias, not both')
+            if (turnCredentialMode !== 'kun-gateway' || turnHarnessId === 'kun') throw new Error('Alias bindings require an external Agent in gateway mode')
+            const alias = this['deps'].resolveGatewayAliasModel?.(gatewayBinding)
+            if (!alias) throw new Error('The selected Agent gateway alias is unavailable')
+            if (input.request.model && input.request.model !== 'default' && input.request.model !== alias) throw new Error('The model does not match the selected gateway alias')
+            turnModel = alias
+          }
           const turn = createTurnRecord({
             id: turnId,
             threadId: input.threadId,
@@ -285,6 +296,7 @@ async startTurn(this: TurnService, input: {
             harnessId: turnHarnessId,
             collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
             credentialMode: turnCredentialMode,
+            gatewayBinding,
             accountId: turnAccountId,
             reasoningEffort: input.request.reasoningEffort,
             serviceTier: input.request.serviceTier,

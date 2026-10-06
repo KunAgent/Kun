@@ -1,3 +1,4 @@
+import { upgradeProviderRegistry } from '../../kun/src/services/provider-registry-migration.js'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,7 +21,7 @@ describe('persisted Kimi preset mode compatibility', () => {
           useProxy: false, configured: false, models: ['kimi-test']
         } }
       }))
-      const document = RegistryDocumentSchema.parse(JSON.parse(await readFile(path, 'utf8')))
+      const document = RegistryDocumentSchema.parse(upgradeProviderRegistry(JSON.parse(await readFile(path, 'utf8'))))
       const settings = normalizeAppSettings({ provider: { providers: [{
         id: 'kimi-code', name: 'Kimi Code', apiKey: '', models: ['kimi-test'],
         presetSource: { presetId: 'kimi-code', mode: presetMode }

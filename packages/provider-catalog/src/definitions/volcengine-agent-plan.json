@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "volcengine-agent-plan",
+  "name": "Volcano Ark Agent Plan",
+  "category": "subscription",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "subscription",
+  "baseUrl": "https://ark.cn-beijing.volces.com/api/plan/v3",
+  "endpointFormat": "chat_completions",
+  "models": [
+    "doubao-seed-2.1-turbo",
+    "doubao-seed-evolving",
+    "doubao-seed-2.0-lite",
+    "doubao-seed-2.0-mini"
+  ],
+  "docsUrl": "https://www.volcengine.com/docs/82379/2366394",
+  "credentialUrl": "https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&OpenModelVisible=false&advancedActiveKey=agentPlan"
+}

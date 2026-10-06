@@ -36,13 +36,14 @@ export type SharedModelConnection = {
   presetSource?: string
   presetMode?: 'api' | 'token-plan'
   kind: 'http' | 'agent-sdk' | 'antigravity-cli' | 'cursor-sdk' | 'gemini-code-assist' | 'gemini-cli-api'
-  authType: 'api-key' | 'oauth' | 'subscription'
+  authType: 'api-key' | 'oauth' | 'subscription' | 'none'
   baseUrl?: string
   endpointFormat: ModelEndpointFormat
   endpoints?: ModelProviderEndpointsV1
   useProxy: boolean
   configured: boolean
-  credentialStatus?: 'ready' | 'missing' | 'unreadable'
+  enabled?: boolean
+  credentialStatus?: 'ready' | 'missing' | 'unreadable' | 'not-required'
   credentialErrorCode?: 'credential_missing' | 'credential_unreadable'
   models: string[]
   modelCapabilities?: Record<string, Omit<ModelProviderModelProfileV1, 'aliases'> & { id: string }>
@@ -127,7 +128,7 @@ export function SharedDefaultModelPicker({
   const [placement, setPlacement] = useState<'down' | 'up'>('down')
   const [activeProviderId, setActiveProviderId] = useState('')
   const [query, setQuery] = useState('')
-  const providers = useMemo(() => snapshot?.providers ?? [], [snapshot?.providers])
+  const providers = useMemo(() => snapshot?.providers.filter((provider) => provider.enabled !== false) ?? [], [snapshot?.providers])
   const defaultProvider = providers.find((connection) =>
     connection.id === snapshot?.defaultProviderId
   )

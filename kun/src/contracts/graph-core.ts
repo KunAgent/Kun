@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { ModelReasoningEffort, SubagentToolPolicy } from './capabilities.js'
 import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
@@ -196,6 +197,7 @@ export const GraphAssignmentReferenceV1Schema = z.discriminatedUnion('kind', [
     providerId: z.string().trim().min(1).max(128).optional(),
     harnessId: HarnessIdSchema.optional(),
     credentialMode: HarnessCredentialModeSchema.optional(),
+    gatewayBinding: HarnessGatewayBindingSchema.optional(),
     reasoningEffort: ModelReasoningEffort.optional(),
     toolPolicy: SubagentToolPolicy.default('readOnly'),
     allowedTools: z.array(Identifier).max(256).optional(),
@@ -223,6 +225,7 @@ const GraphAssignmentSnapshotV1CompatibilitySchema = z.object({
   accountId: z.string().trim().min(1).max(256).optional(),
   harnessId: HarnessIdSchema.optional(),
   credentialMode: HarnessCredentialModeSchema.optional(),
+    gatewayBinding: HarnessGatewayBindingSchema.optional(),
   allowedModelProviderIds: z.array(Identifier).min(1).max(128),
   allowedModels: z.array(z.string().trim().min(1).max(256)).min(1).max(256),
   allowedProviderIds: z.array(GraphToolProviderIdSchema).max(128),

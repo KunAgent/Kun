@@ -1,3 +1,4 @@
+import { gatewayPoolTargets } from '../../domain/model-gateway-export-policy.js'
 import { nativeAgentNetworkStatus } from '../../harness/native-agent-network.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
@@ -220,7 +221,11 @@ export async function listHarnessModels(
         })) } : {})
       }))
       .filter((group) => group.models.length > 0)
-    return reply({ harnessId: definition.id, credentialMode, models: [], groups }, 'provider')
+    const aliasGroups = credentialMode === 'kun-gateway' ? (snapshot?.routePools ?? []).filter((pool) => pool.enabled).flatMap((pool) => {
+      const targets = gatewayPoolTargets(snapshot?.providers ?? [], pool)
+      return targets.length ? [{ routeId: pool.id, label: pool.name, modelId: pool.modelId, connectionIds: [...new Set(targets.map((target) => target.providerId))] }] : []
+    }) : []
+    return reply({ harnessId: definition.id, credentialMode, models: [], groups, aliasGroups }, 'provider')
   }
 
   if (definition.modelSource === 'probe' && harnesses.catalog.isDisabled(definition.id)) {

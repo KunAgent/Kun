@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../kun/src/contracts/harness-gateway-binding.js'
 export type AdeExecutionConfigOrigin = 'global' | 'project' | 'task'
 
 export type AdeExecutionConfigSnapshot = {
@@ -5,6 +6,7 @@ export type AdeExecutionConfigSnapshot = {
   revision: string
   projectKey?: string
   route: {
+    gatewayBinding?: HarnessGatewayBinding
     model: string
     providerId?: string
     harnessId?: string

@@ -3,7 +3,7 @@ import type { ModelConnectionConnectRequest } from '../contracts/model-connectio
 type StoredSeedIdentity = {
   id: string
   kind: string
-  authType: 'api-key' | 'oauth' | 'subscription'
+  authType: 'api-key' | 'oauth' | 'subscription' | 'none'
   presetSource?: string
   presetMode?: 'api' | 'token-plan'
 }

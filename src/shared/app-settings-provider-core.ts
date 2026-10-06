@@ -286,6 +286,10 @@ export function normalizeModelRoutePools(
       // the request's provider id, so only duplicate route aliases are invalid.
       enabled: raw.enabled !== false,
       strategy,
+      ...(raw.affinity && ['off', 'turn', 'session'].includes(raw.affinity.mode) ? {
+        affinity: { mode: raw.affinity.mode,
+          ttlMs: Math.min(86_400_000, Math.max(60_000, boundedNonNegativeInteger(raw.affinity.ttlMs, 1_800_000, 86_400_000))) }
+      } : {}),
       targets,
       failurePolicy: {
         failoverHttpStatusCodes: failureCodes,

@@ -27,10 +27,11 @@ export type ThreadComposerState = {
   /** ADE harness for the next turn; '' = inherit/provider inference (12 §7.2). */
   composerHarnessId: string
   composerCredentialMode: string
+  composerGatewayBinding?: ChatState['composerGatewayBinding']
 }
 
 type ThreadLike = Pick<NormalizedThread, 'id' | 'model'> &
-  Partial<Pick<NormalizedThread, 'mode' | 'providerId' | 'harnessId'>>
+  Partial<Pick<NormalizedThread, 'mode' | 'providerId' | 'harnessId' | 'executionConfig'>>
 
 export type ThreadComposerSelectionOptions = {
   hasUserMessages?: boolean
@@ -58,6 +59,8 @@ function threadComposerModelSelection(
   const pickList = state.composerPickList
   const modelGroups = state.composerModelGroups
   const stored = readThreadComposerSelection(thread.id)
+  if (stored?.gatewayBinding && stored.credentialMode === 'kun-gateway') return { model: stored.model, providerId: '' }
+  if (!stored && thread.executionConfig?.route.gatewayBinding) return { model: thread.executionConfig.route.model, providerId: '' }
   const storedModel = stored?.model.trim() ?? ''
   const runtimeModel = options.runtimeModel?.trim() || thread.model.trim()
   const runtimeDefaultModel = options.runtimeDefaultModel?.trim() ?? ''
@@ -144,8 +147,9 @@ export function resolveThreadComposerState(
       model,
       providerId
     ),
-    composerHarnessId: stored?.harnessId ?? thread?.harnessId ?? '',
-    composerCredentialMode: stored?.credentialMode ?? ''
+    composerHarnessId: stored?.harnessId ?? thread?.executionConfig?.route.harnessId ?? thread?.harnessId ?? '',
+    composerCredentialMode: stored?.credentialMode ?? thread?.executionConfig?.route.credentialMode ?? '',
+    composerGatewayBinding: stored ? stored.gatewayBinding : thread?.executionConfig?.route.gatewayBinding
   }
 }
 

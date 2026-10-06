@@ -45,6 +45,8 @@ export type KunServeRuntimeOptions = {
   apiKey: string
   /** Selected model-connection identity, including anonymous providers. */
   activeProviderId?: string
+  /** Registry ownership prevents stale root credentials or anonymous URLs from becoming a fallback. */
+  modelConnectionSelectionRequired?: boolean
   credentialSourceId?: string
   geminiAuth?: GeminiCodeAssistCredential
   baseUrl: string

@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { KUN_TOOL_PERMISSION_MODES } from './policy.js'
 import { HarnessCapabilitiesSchema } from './harness-capabilities.js'
@@ -234,7 +235,8 @@ export const HarnessRouteSchema = z
     harnessId: HarnessIdSchema,
     providerId: z.string().min(1).max(128).optional(),
     model: z.string().min(1).max(512),
-    credentialMode: HarnessCredentialModeSchema
+    credentialMode: HarnessCredentialModeSchema,
+    gatewayBinding: HarnessGatewayBindingSchema.optional()
   })
   .strict()
 export type HarnessRoute = z.infer<typeof HarnessRouteSchema>

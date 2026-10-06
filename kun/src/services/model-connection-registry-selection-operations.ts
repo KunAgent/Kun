@@ -25,7 +25,8 @@ import type { ExtensionCredentialStore } from './extension-credential-store.js'
 import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
 import { type ModelConnectionRegistry, StoredProfileSchema, DeletedProfileTombstoneSchema, CredentialTransactionPreviousSchema, CredentialTransactionSchema, CredentialRefCleanupEntrySchema, RegistryDocumentSchema, type RegistryDocument, type StoredProfile, type CredentialTransaction, type PreparedCredentialSecret, type ModelConnectionSeed, type AuthenticatedModelConnectionInput, MODEL_CONNECTION_CREDENTIAL_SOURCE_PREFIX, isModelConnectionCredentialSourceId, modelConnectionCredentialSourceId, providerIdFromCredentialSource, ModelConnectionConflictError, type MaterializedModelConnections, type ProjectedCredentialHealth, credentialHealth, readLatestIfChanged, parseCredentialOperationToken, previousCredentialState, boundedCredentialHighWater, appendCredentialRefs, requireCredentialTransaction, credentialReferenceIsLive, processIsAlive, emptyDocument, configuredFallback, reconcileSeedProfile, sameStoredProfile, project, isProfileUsable, mergeProjectedCapability, assertRevision, requireProfile, capabilitiesForModels, sameCapabilities, allocateId, normalizeProviderId, preparedCredentialSecretTimerKey, uniqueModels, sameModels, probeModels, modelsUrl } from './model-connection-registry-core.js'
 import { resolveRegistryProfileProxyUrl } from './model-connection-registry-proxy.js'
-import { readModelCatalog, writeModelCatalog } from './model-catalog-store.js'
+import { probeConnectionCatalog, connectionCatalog } from './provider-catalog-operations.js'
+import { effectiveProviderConfiguration } from './provider-effective-configuration.js'
 
 export const modelConnectionRegistrySelectionOperations = {
 async select(this: ModelConnectionRegistry, raw: unknown): Promise<ModelConnectionSnapshot> {
@@ -37,7 +38,7 @@ async select(this: ModelConnectionRegistry, raw: unknown): Promise<ModelConnecti
       if (current.credentialTransactions[profile.id]) {
         throw new Error('provider credential replacement is pending')
       }
-      if (!isProfileUsable(profile, selectionHealth.get(profile.id))) {
+      if (!effectiveProviderConfiguration(profile, current.configuration).enabled || !isProfileUsable(profile, selectionHealth.get(profile.id))) {
         throw new Error('provider is not connected')
       }
       if (input.accountId && input.accountId !== profile.accountId) {
@@ -81,7 +82,7 @@ async synchronizeDefaultSelection(this: ModelConnectionRegistry, raw: {
       if (current.credentialTransactions[profile.id]) {
         throw new Error('provider credential replacement is pending')
       }
-      if (!isProfileUsable(profile, selectionHealth.get(profile.id))) {
+      if (!effectiveProviderConfiguration(profile, current.configuration).enabled || !isProfileUsable(profile, selectionHealth.get(profile.id))) {
         throw new Error('provider is not connected')
       }
       if (input.accountId && input.accountId !== profile.accountId) {
@@ -133,49 +134,12 @@ async updateGlobals(this: ModelConnectionRegistry, raw: unknown): Promise<ModelC
     return this['projectWithCredentialHealth'](document)
   },
 
-async probe(this: ModelConnectionRegistry, providerId: string): Promise<{ ok: true; models: string[] }> {
-    const document = await this['readDocumentForCredentialConsumer'](providerId)
-    if (document.credentialTransactions[providerId]) {
-      throw new Error('provider credential replacement is pending')
-    }
-    const profile = requireProfile(document, providerId)
-    const credential = profile.credentialRef
-      ? await this['options'].credentials.get(profile.credentialRef)
-      : null
-    const credentialSourceId = profile.credentialRef
-      ? modelConnectionCredentialSourceId(profile.id)
-      : profile.credentialSourceId
-    const resolved = credentialSourceId && this['options'].resolveCredentialSource
-      ? await this['options'].resolveCredentialSource(credentialSourceId)
-      : materializeLegacyProviderCredential(credential?.apiKey ?? '')
-    const models = await probeModels({
-      kind: profile.kind,
-      baseUrl: profile.baseUrl,
-      endpointFormat: profile.endpointFormat,
-      ...(profile.endpoints ? { endpoints: profile.endpoints } : {}),
-      apiKey: resolved.apiKey,
-      headers: {
-        ...(profile.customHeaders ?? {}),
-        ...(profile.headers ?? {}),
-        ...(resolved.headers ?? {})
-      },
-      fallbackModels: profile.models,
-      proxyUrl: resolveRegistryProfileProxyUrl(document, profile)
-    })
-    // Persist the discovered catalog so GUI/TUI can render availability
-    // without re-probing. Best-effort: a cache write failure must not fail
-    // the probe.
-    void writeModelCatalog(this['options'].dataDir, profile.id, {
-      fetchedAt: new Date().toISOString(),
-      ...(profile.baseUrl ? { baseUrl: profile.baseUrl } : {}),
-      endpointFormat: profile.endpointFormat,
-      models
-    }).catch(() => {})
-    return { ok: true, models }
+async probe(this: ModelConnectionRegistry, providerId: string, signal?: AbortSignal): Promise<{ ok: true; models: string[] }> {
+    return probeConnectionCatalog(this, providerId, signal)
   },
 
 async catalog(this: ModelConnectionRegistry, providerId: string) {
-    return readModelCatalog(this['options'].dataDir, providerId)
+    return connectionCatalog(this, providerId)
   },
 
 /**

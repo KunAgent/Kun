@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "zhipu-api",
+  "name": "Zhipu Open Platform",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.bigmodel.cn/",
+  "credentialUrl": "https://bigmodel.cn/usercenter/proj-mgmt/apikeys"
+}

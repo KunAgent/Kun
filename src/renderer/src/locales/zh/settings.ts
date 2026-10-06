@@ -1,4 +1,5 @@
 import gatewayConnection from './settings/gateway-connection.json'
+import providerConfiguration from './settings/provider-configuration.json'
 import googleWorkspace from './settings/google-workspace.json'
 import navigationProviders from './settings/navigation-providers.json'
 import providerManagement from './settings/provider-management.json'
@@ -11,6 +12,7 @@ import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 
 const settings = {
+  ...providerConfiguration,
   ...gatewayConnection,
   ...googleWorkspace,
   ...navigationProviders,

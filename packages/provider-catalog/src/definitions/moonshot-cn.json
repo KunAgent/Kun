@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "moonshot-cn",
+  "name": "Moonshot CN",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.moonshot.cn/v1",
+  "endpointFormat": "chat_completions",
+  "models": [
+    "kimi-k2.7-code",
+    "kimi-k2.6",
+    "kimi-k2.5",
+    "moonshot-v1-128k",
+    "moonshot-v1-32k",
+    "moonshot-v1-8k"
+  ],
+  "docsUrl": "https://platform.moonshot.cn/docs",
+  "credentialUrl": "https://platform.moonshot.cn/console/api-keys"
+}

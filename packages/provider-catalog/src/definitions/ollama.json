@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "ollama",
+  "name": "Ollama Cloud",
+  "category": "subscription",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "subscription",
+  "baseUrl": "https://ollama.com/v1",
+  "endpointFormat": "chat_completions",
+  "models": [
+    "deepseek-v4-flash",
+    "deepseek-v4-pro",
+    "gemma4:31b",
+    "glm-5.1",
+    "glm-5.2",
+    "gpt-oss:120b",
+    "gpt-oss:20b",
+    "kimi-k2.5",
+    "kimi-k2.6",
+    "kimi-k2.7-code",
+    "minimax-m2.5",
+    "minimax-m2.7",
+    "minimax-m3",
+    "mistral-large-3:675b",
+    "nemotron-3-nano:30b",
+    "nemotron-3-super",
+    "nemotron-3-ultra",
+    "qwen3.5:397b"
+  ],
+  "docsUrl": "https://docs.ollama.com/cloud",
+  "credentialUrl": "https://ollama.com/settings/keys"
+}

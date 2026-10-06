@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { ProviderConfigurationStateSchema } from '../contracts/provider-configuration.js'
+import { PROVIDER_REGISTRY_FILE, upgradeProviderRegistry } from './provider-registry-migration.js'
+import { effectiveProviderConfiguration } from './provider-effective-configuration.js'
+import { providerConfigurationOperations, type ConfigurationPreview } from './provider-configuration-operations.js'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
 import type { ServeProviderConfig } from '../config/kun-config.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
@@ -58,7 +62,8 @@ export const StoredProfileSchema = ModelConnectionSnapshotSchema.shape.providers
   credentialSourceId: z.string().min(1).max(256).optional(),
   legacyCredentialSourceToRetire: z.string().min(1).max(256).optional(),
   headers: z.record(z.string(), z.string()).optional(),
-  customHeaders: z.record(z.string(), z.string()).optional()
+  customHeaders: z.record(z.string(), z.string()).optional(),
+  customHeadersRef: z.string().min(1).max(256).optional()
 })
 export const DeletedProfileTombstoneSchema = z.object({
   deletedRevision: z.number().int().nonnegative(),
@@ -95,7 +100,8 @@ export const CredentialRefCleanupEntrySchema = z.object({
   writerPid: z.number().int().positive().optional()
 }).strict()
 export const RegistryDocumentSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
+  configuration: ProviderConfigurationStateSchema.default(() => ProviderConfigurationStateSchema.parse({})),
   proxyRoutingVersion: z.literal(1),
   revision: z.number().int().nonnegative(),
   profiles: z.record(z.string(), StoredProfileSchema),
@@ -166,6 +172,7 @@ export class ModelConnectionConflictError extends Error {
 }
 
 export type MaterializedModelConnections = {
+  registryRevision?: number
   selected?: { profile: StoredProfile; config: ServeProviderConfig; model: string }
   providers: Map<string, ServeProviderConfig>
   proxy: RegistryDocument['proxy']
@@ -175,6 +182,13 @@ export type MaterializedModelConnections = {
 }
 
 export class ModelConnectionRegistry {
+  async assertActiveConfiguration(revision?: number): Promise<void> {
+    const document = await this.file.read(emptyDocument)
+    if (this.lastAppliedRevision !== document.revision || (revision !== undefined && revision !== document.revision)) {
+      throw new Error('Provider configuration is not active; retry after settings finish applying')
+    }
+  }
+
   declare private connectInternal: (raw: unknown, credentialSourceId?: string, trustedExternalAuth?: boolean) => Promise<ModelConnectionSnapshot>
   declare private materializeDocument: (document: RegistryDocument, recoveryProviderId?: string) => Promise<MaterializedModelConnections>
   declare private probeInput: (input: ModelConnectionConnectRequest) => Promise<string[]>
@@ -203,6 +217,7 @@ export class ModelConnectionRegistry {
   declare private inspectCredentialHealth: (document: RegistryDocument) => Promise<ReadonlyMap<string, ProjectedCredentialHealth>>
 
   private readonly file: AtomicJsonFile<RegistryDocument>
+  private readonly configurationPreviews = new Map<string, ConfigurationPreview>()
   private listeners = new Set<(snapshot: ModelConnectionSnapshot) => void>()
   private changeOperation: Promise<void> = Promise.resolve()
   private lastAppliedRevision = -1
@@ -236,11 +251,11 @@ export class ModelConnectionRegistry {
       headers?: Record<string, string>
     }>
   }) {
-    const registryPath = join(options.dataDir, 'model-connections.v1.json')
+    const registryPath = join(options.dataDir, PROVIDER_REGISTRY_FILE)
     assertManagerAtomicJsonPath(registryPath)
     this.file = new AtomicJsonFile(
       registryPath,
-      (value) => RegistryDocumentSchema.parse(upgradeRegistryProxyRouting(value)),
+      (value) => RegistryDocumentSchema.parse(upgradeProviderRegistry(upgradeRegistryProxyRouting(value))),
       false
     )
   }
@@ -254,7 +269,8 @@ installServiceOperations(
   modelConnectionRegistryCredentialMutationOperations,
   modelConnectionRegistrySelectionOperations,
   modelConnectionRegistryMaterializationOperations,
-  modelConnectionRegistryCredentialRecoveryOperations
+  modelConnectionRegistryCredentialRecoveryOperations,
+  providerConfigurationOperations
 )
 
 
@@ -349,7 +365,7 @@ export function requireCredentialTransaction(
 }
 
 export function credentialReferenceIsLive(document: RegistryDocument, reference: string): boolean {
-  return Object.values(document.profiles).some((profile) => profile.credentialRef === reference) ||
+  return Object.values(document.profiles).some((profile) => profile.credentialRef === reference || profile.customHeadersRef === reference) ||
     Object.values(document.credentialTransactions)
       .some((transaction) => transaction.nextCredentialRef === reference)
 }
@@ -365,7 +381,8 @@ export function processIsAlive(pid: number): boolean {
 
 export function emptyDocument(): RegistryDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    configuration: ProviderConfigurationStateSchema.parse({}),
     proxyRoutingVersion: 1,
     revision: 0,
     profiles: {},
@@ -404,23 +421,12 @@ export function reconcileSeedProfile(
     ? capabilitiesForModels(request.modelCapabilities, models)
     : existing.modelCapabilities
 
-  const anonymousCredentiallessSeed = request.kind === 'http' &&
+  const anonymousCredentiallessSeed = existing.authType === 'none' && request.kind === 'http' &&
     isAnonymousHttpProfile(request) &&
     !request.credential?.trim()
-  const profileBase = anonymousCredentiallessSeed
-    ? (() => {
-        const {
-          credentialRef: _credentialRef,
-          credentialSourceId: _credentialSourceId,
-          legacyCredentialSourceToRetire: _legacyCredentialSourceToRetire,
-          ...withoutCredential
-        } = existing
-        return withoutCredential
-      })()
-    : existing
 
   return StoredProfileSchema.parse({
-    ...profileBase,
+    ...existing,
     // Credential ownership is imported only when a profile is first created.
     // Re-applying GUI/settings seeds must never replace a Registry-owned
     // credentialRef, resurrect a cleared credential, or switch an existing
@@ -475,7 +481,9 @@ export function project(
   credentialHealthByProvider: ReadonlyMap<string, ProjectedCredentialHealth> = new Map()
 ): ModelConnectionSnapshot {
   const providers = Object.values(document.profiles)
-    .map((storedProfile) => {
+    .map((rawProfile) => {
+      const resolved = effectiveProviderConfiguration(rawProfile, document.configuration)
+      const storedProfile = resolved.profile
       const {
         incarnationId: _incarnationId,
         credentialMutationHighWater: _credentialMutationHighWater,
@@ -484,7 +492,8 @@ export function project(
         legacyCredentialSourceToRetire: _legacyCredentialSourceToRetire,
         headers: _headers,
         customHeaders: customHeaders,
-        customHeaderNames: _customHeaderNames,
+        customHeadersRef: _customHeadersRef,
+        customHeaderNames,
         ...profile
       } = storedProfile
       const credentialHealth = credentialHealthByProvider.get(profile.id)
@@ -498,16 +507,17 @@ export function project(
       return {
         ...profile,
         configured: isProfileUsable(storedProfile, credentialHealth),
+        ...(!resolved.enabled ? { enabled: false } : {}),
         ...credentialHealth,
         ...(Object.keys(modelCapabilities).length > 0 ? { modelCapabilities } : {}),
-        ...(customHeaders && Object.keys(customHeaders).length > 0
-          ? { customHeaderNames: Object.keys(customHeaders) }
+        ...((customHeaderNames?.length || (customHeaders && Object.keys(customHeaders).length > 0))
+          ? { customHeaderNames: customHeaderNames ?? Object.keys(customHeaders ?? {}) }
           : {})
       }
     })
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
   const selected = document.defaultProviderId
-    ? providers.find((profile) => profile.id === document.defaultProviderId && profile.configured)
+    ? providers.find((profile) => profile.id === document.defaultProviderId && profile.configured && profile.enabled !== false)
     : undefined
   return ModelConnectionSnapshotSchema.parse({
     schemaVersion: 1,

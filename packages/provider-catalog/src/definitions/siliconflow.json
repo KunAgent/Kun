@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "siliconflow",
+  "name": "SiliconFlow",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.siliconflow.cn/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.siliconflow.cn/",
+  "credentialUrl": "https://cloud.siliconflow.cn/account/ak"
+}

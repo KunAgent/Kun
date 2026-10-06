@@ -1,4 +1,5 @@
 import { PaperTurnContextSchema } from '@shared/paper/paper-turn-context'
+import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { browserStorage, type BrowserStorageLike } from '../lib/browser-storage'
 import { queueAdmissionPending } from './queue-admission-fence'
 import type { ChatBlock } from '../agent/types'
@@ -112,6 +113,7 @@ function normalizeQueuedMessage(value: unknown): QueuedUserMessage | null {
   if (!id || !text) return null
   const paper = source.paperContext === undefined ? undefined : PaperTurnContextSchema.safeParse(source.paperContext)
   if (paper && !paper.success) return null
+  if (source.gatewayBinding !== undefined && !HarnessGatewayBindingSchema.safeParse(source.gatewayBinding).success) return null
   const hasWriteContext = source.writeContext !== undefined
   const writeContext = normalizeWriteContext(source.writeContext)
   if (hasWriteContext && !writeContext) return null

@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { AgentProvider } from '../agent/types'
 import type { CodeProjectRouteSnapshot } from './chat-store-ade-send-snapshot'
@@ -50,6 +51,7 @@ export type PreparedThreadSend = {
   composerCollaborationExplicit?: boolean
   codeProjectRoute?: CodeProjectRouteSnapshot
   composerHarnessId: string
+  composerGatewayBinding?: HarnessGatewayBinding
   composerCredentialMode: string
   reasoningEffort: string | undefined
   serviceTier: QueuedUserMessage['serviceTier']

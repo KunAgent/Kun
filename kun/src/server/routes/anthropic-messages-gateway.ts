@@ -1,3 +1,5 @@
+import { harnessGatewayStream } from './harness-gateway-stream.js'
+import { gatewayAttemptAccounting } from './gateway-attempt-accounting.js'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import type { UsageSnapshot } from '../../contracts/usage.js'
@@ -13,6 +15,10 @@ import { anthropicToChatInput } from './anthropic-gateway-input.js'
 import {
   type GatewayAuth,
   acquireHarnessGrantLease,
+  acquirePublicGatewayLease,
+  gatewayClientInput,
+  gatewayDispatchAuthorization,
+  gatewayAffinityIdentity,
   asRecord,
   authorizeGateway,
   errorMessage,
@@ -57,12 +63,14 @@ function anthropicError(message: string, status: number): JsonResponse {
  * Harness `kgw_` grants are checked before public credentials; a failed
  * grant verify falls through to nothing — it is never a public credential.
  */
-function authorizeAnthropicGateway(
+async function authorizeAnthropicGateway(
   runtime: ServerRuntime,
   request: Request
-): { grant?: HarnessTokenGrant; auth: GatewayAuth } | JsonResponse {
-  const verdict = authorizeGateway(runtime, request)
+): Promise<{ grant?: HarnessTokenGrant; auth: GatewayAuth } | JsonResponse> {
+  const verdict = await authorizeGateway(runtime, request)
   if (!verdict.ok) {
+    if (verdict.reason === 'unavailable') return anthropicError('Gateway policy is unavailable.', 503)
+    if (verdict.reason === 'forbidden') return anthropicError('This protocol is not allowed for the gateway key.', 403)
     return verdict.reason === 'rate_limited'
       ? anthropicError('Gateway rate limit exceeded.', 429)
       : anthropicError('Invalid gateway API key.', 401)
@@ -71,8 +79,8 @@ function authorizeAnthropicGateway(
 }
 
 /** Per-grant concurrency/body limits replace the public guard's when a `kgw_` grant authorized the request. */
-function acquireGatewayLease(runtime: ServerRuntime, request: Request, grant: HarnessTokenGrant | undefined): GatewayLease | null {
-  return grant ? acquireHarnessGrantLease(grant, request.signal) : guardFor(runtime)?.acquire(request.signal) ?? null
+function acquireGatewayLease(runtime: ServerRuntime, request: Request, grant: HarnessTokenGrant | undefined, auth: GatewayAuth): GatewayLease | null {
+  return grant ? acquireHarnessGrantLease(grant, request.signal) : acquirePublicGatewayLease(runtime, request, auth)
 }
 
 function anthropicStopReason(
@@ -85,15 +93,16 @@ function anthropicStopReason(
 }
 
 export async function gatewayMessages(runtime: ServerRuntime, request: Request): Promise<Response | JsonResponse> {
-  const gate = authorizeAnthropicGateway(runtime, request)
+  const gate = await authorizeAnthropicGateway(runtime, request)
   if ('status' in gate) return gate
   const grant = gate.grant
+  const publicAuth = gate.auth.kind === 'public' ? gate.auth : undefined
   if (!runtime.modelGateway?.enabled() || !runtime.modelClient) return anthropicError('Local model gateway is disabled.', 404)
-  const lease = acquireGatewayLease(runtime, request, grant)
+  const lease = acquireGatewayLease(runtime, request, grant, gate.auth)
   if (!lease) return anthropicError('Too many concurrent gateway requests.', 429)
   let body: Awaited<ReturnType<typeof readJsonBody>>
   try {
-    body = await readJsonBody(request, grant?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
+    body = await readJsonBody(request, grant?.maxBodyBytes ?? publicAuth?.policy?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
   } catch (error) {
     lease.release()
     return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : 400)
@@ -112,7 +121,7 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
   const model = stringValue(input.model)
   let resolved: Awaited<ReturnType<typeof resolveGatewayModel>>
   try {
-    resolved = model ? await resolveGatewayModel(runtime, model, grant) : null
+    resolved = model ? await resolveGatewayModel(runtime, model, grant, publicAuth?.policy, publicAuth?.policyRevision) : null
   } catch {
     lease.release()
     return anthropicError('Gateway model registry is unavailable.', 503)
@@ -130,9 +139,12 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
   }
   let modelRequest: ModelRequest
   try {
-    modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId,
+    modelRequest = makeModelRequest(gatewayClientInput({ ...input, model: resolved.model }, gate.auth), lease.signal, resolved.providerId,
       grant ? { threadId: grant.threadId, turnId: turnId ?? `gateway_${grant.grantId}` } : undefined)
-    modelRequest.gatewayRouting = resolved.gatewayRouting
+    modelRequest.gatewayRouting = { ...resolved.gatewayRouting,
+      callerId: grant ? `harness:${grant.grantId}` : `client:${publicAuth?.client?.clientId ?? 'legacy'}`,
+      affinity: gatewayAffinityIdentity(request, gate.auth, turnId),
+      beforeDispatch: gatewayDispatchAuthorization(runtime, request, gate.auth, resolved.gatewayRouting.beforeDispatch) }
     if (modelRequest.reasoningEffort === 'off') {
       for (const target of resolved.gatewayRouting.allowedTargets) {
         const reasoning = runtime.modelGateway?.modelCapabilities?.(target.modelId, target.providerId).reasoning
@@ -158,19 +170,23 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
   try {
     recorder = await beginGatewayUsage(runtime, gate.auth, request, model, resolved)
     if (recorder) {
-      modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId, recorder.attribution)
-      modelRequest.gatewayRouting = resolved.gatewayRouting
+      modelRequest = makeModelRequest(gatewayClientInput({ ...input, model: resolved.model }, gate.auth), lease.signal, resolved.providerId, recorder.attribution)
+      modelRequest.gatewayRouting = { ...resolved.gatewayRouting,
+        callerId: grant ? `harness:${grant.grantId}` : `client:${publicAuth?.client?.clientId ?? 'legacy'}`,
+        affinity: gatewayAffinityIdentity(request, gate.auth, turnId),
+        beforeDispatch: gatewayDispatchAuthorization(runtime, request, gate.auth, resolved.gatewayRouting.beforeDispatch) }
     }
   } catch (error) {
     lease.release()
     return anthropicError(errorMessage(error), error instanceof GatewayUsageError ? error.status : 400)
   }
+  modelRequest.attemptObserver = gatewayAttemptAccounting(runtime, gate.auth, recorder, modelRequest.turnId)
   const attribute = grant
     ? (usage?: UsageSnapshot) => recordHarnessGatewayUsage(runtime, grant, resolved, usage, turnId)
     : undefined
   const stream = input.stream === true
   try {
-    const chunks = wrapGatewayUsage(runtime.modelClient.stream(modelRequest), recorder, {
+    const chunks = wrapGatewayUsage(harnessGatewayStream(runtime.modelClient.stream(modelRequest), grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
     return stream
@@ -190,23 +206,24 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
  * response as approximate rather than provider-authoritative.
  */
 export async function gatewayCountTokens(runtime: ServerRuntime, request: Request): Promise<JsonResponse> {
-  const gate = authorizeAnthropicGateway(runtime, request)
+  const gate = await authorizeAnthropicGateway(runtime, request)
   if ('status' in gate) return gate
   const grant = gate.grant
+  const publicAuth = gate.auth.kind === 'public' ? gate.auth : undefined
   if (!runtime.modelGateway?.enabled()) return anthropicError('Local model gateway is disabled.', 404)
-  const lease = acquireGatewayLease(runtime, request, grant)
+  const lease = acquireGatewayLease(runtime, request, grant, gate.auth)
   if (!lease) return anthropicError('Too many concurrent gateway requests.', 429)
   try {
     let body: Awaited<ReturnType<typeof readJsonBody>>
     try {
-      body = await readJsonBody(request, grant?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
+      body = await readJsonBody(request, grant?.maxBodyBytes ?? publicAuth?.policy?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
     } catch (error) {
       return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : 400)
     }
     if (!body.ok) return anthropicError(JSON.parse(body.response.body).message, body.response.status)
     const input = anthropicToChatInput(asRecord(body.value))
     const model = stringValue(input.model)
-    const resolved = model ? await resolveGatewayModel(runtime, model, grant) : null
+    const resolved = model ? await resolveGatewayModel(runtime, model, grant, publicAuth?.policy, publicAuth?.policyRevision) : null
     if (!resolved) return anthropicError(`The model '${model || '(missing)'}' does not exist.`, 404)
     const modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId)
     return {

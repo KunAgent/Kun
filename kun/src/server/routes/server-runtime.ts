@@ -364,12 +364,14 @@ export type ServerRuntime = {
   officialProviderCli?: OfficialProviderCliService
   providerQuotaService?: Pick<ProviderQuotaService, 'list'>
   modelGateway?: {
+    requiresAdminToken?(): boolean
     enabled(): boolean
     exposeProviderModels(): boolean
     pools(): ModelRoutePoolConfig[]
     configuredPools(): ModelRoutePoolConfig[]
     health: RoutePoolHealthStore
     tests: RoutePoolTestService
+    budget?: import('../../services/gateway-token-budget.js').GatewayTokenBudget
     credentials: GatewayCredentialService
     usage?: GatewayUsageService
     /**

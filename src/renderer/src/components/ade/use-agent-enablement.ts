@@ -63,7 +63,7 @@ export function useAgentEnablement(input: {
     if (active.current) return
     const test = getProvider().testHarness
     if (!test) { setError('agentEnablement.unavailable'); return }
-    if (profile.credentialMode !== 'native-login' && !profile.providerId) {
+    if (profile.credentialMode !== 'native-login' && !profile.providerId && !profile.gatewayBinding) {
       setError('agentEnablement.chooseProvider'); return
     }
     const controller = new AbortController()
@@ -96,6 +96,7 @@ export function useAgentEnablement(input: {
       const checked = await stage('checking', AGENT_ENABLEMENT_TIMEOUT_MS, () => test(row.definition.id, {
         level: 'handshake', credentialMode: profile.credentialMode,
         ...(profile.providerId ? { providerId: profile.providerId } : {}),
+        ...(profile.gatewayBinding ? { gatewayBinding: profile.gatewayBinding } : {}),
         ...(settings.defaults[row.definition.id]?.model ? { model: settings.defaults[row.definition.id]!.model } : {}),
         timeoutMs: AGENT_ENABLEMENT_TIMEOUT_MS - 5_000
       }, { signal: controller.signal }))

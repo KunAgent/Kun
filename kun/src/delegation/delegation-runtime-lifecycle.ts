@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import { chmod, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -140,6 +141,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     /** Host-pinned harness for the resumed turn (ADE worker dispatch route). */
     harnessId?: HarnessId
     /** Host-pinned credential mode for the resumed turn (e.g. `kun-gateway`). */
+    gatewayBinding?: HarnessGatewayBinding
     credentialMode?: HarnessCredentialMode
     /**
      * Run the resumed turn detached from the caller's signal (independent
@@ -181,6 +183,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     security?: ChildSecuritySnapshot
     executionBlockedTools?: string[]
     harnessId?: HarnessId
+    gatewayBinding?: HarnessGatewayBinding
     credentialMode?: HarnessCredentialMode
     detach?: boolean
     signal: AbortSignal
@@ -355,6 +358,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       clientRequestId: input.clientRequestId,
       harnessId: input.harnessId,
       credentialMode: input.credentialMode,
+      gatewayBinding: input.gatewayBinding,
       controlPrompt,
       pptWorkflowScope: input.pptWorkflowScope,
       resumeChild: true,

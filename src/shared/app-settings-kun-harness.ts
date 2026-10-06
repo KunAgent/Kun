@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from '../../kun/src/contracts/harness-gateway-binding.js'
 import type {
   KunAdeSettingsV1,
   KunHarnessCustomEntryV1,
@@ -176,6 +177,10 @@ function normalizeHarnessDefaults(
     }
     const providerId = nonEmpty(rawEntry.providerId, 128)
     if (providerId) entry.providerId = providerId
+    if (rawEntry.gatewayBinding !== undefined && entry.credentialMode === 'kun-gateway') {
+      const binding = HarnessGatewayBindingSchema.safeParse(rawEntry.gatewayBinding)
+      if (binding.success) { entry.gatewayBinding = binding.data; delete entry.providerId }
+    }
     const model = nonEmpty(rawEntry.model, 512)
     if (model) entry.model = model
     const permissionMode = nonEmpty(rawEntry.permissionMode, 64)

@@ -1,3 +1,4 @@
+import { AgentAliasSettings } from './AgentAliasSettings'
 import { useEffect, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, Network, UserRound } from 'lucide-react'
@@ -37,13 +38,14 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
     patch({ defaults: { ...settings.defaults, [id]: { ...defaults, ...value } } })
   }
   const selectedGroup = groups?.groups.find((entry) => entry.providerId === gate.profile.providerId)
-  const modelOptions = native ? models?.models ?? row.definition.staticModels : selectedGroup?.models ?? []
+  const selectedAlias = groups?.aliasGroups?.find((entry) => entry.routeId === gate.profile.gatewayBinding?.main.routeId)
+  const modelOptions = native ? models?.models ?? row.definition.staticModels : selectedAlias ? [selectedAlias.modelId] : selectedGroup?.models ?? []
   return <section className="mt-3 space-y-3 rounded-xl border border-ds-border-muted p-3"
     data-agent-enablement={id} data-agent-enablement-state={gate.checking ? 'checking' : gate.error ? 'failed' : ready ? 'ready' : gate.enabled ? 'needs-check' : 'disabled'}>
     <p className="text-[12px] text-ds-muted">{t('agentEnablement.explanation')}</p>
     <SettingRow title={t('agentEnablement.profile')} control={<AgentSettingsSelect
       marker="data-agent-profile-mode" label={t('agentEnablement.profile')} value={gate.profile.credentialMode}
-      onChange={(value) => change({ credentialMode: value as AdeHarnessCredentialMode, providerId: undefined, model: undefined })}
+      onChange={(value) => change({ credentialMode: value as AdeHarnessCredentialMode, providerId: undefined, gatewayBinding: undefined, model: undefined })}
       options={row.definition.credentialModes.map((mode) => ({ value: mode,
         label: t(`adeCredential.${mode === 'native-login' ? 'nativeLogin' : mode === 'kun-gateway' ? 'kunGateway' : 'provider'}`),
         icon: mode === 'native-login' ? <UserRound size={15} /> : mode === 'kun-gateway' ? <Network size={15} /> : <KeyRound size={15} /> }))} />} />
@@ -53,10 +55,17 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
       options={[{ value: '', label: t('agentEnablement.systemAccount'), icon: <UserRound size={15} /> },
         ...nativeAccounts.map((account) => ({ value: account.providerId, label: account.label, icon: <UserRound size={15} /> }))]} />} /> : null}
     {!native ? <SettingRow title={t('agentEnablement.provider')} control={<AgentSettingsSelect
-      marker="data-agent-profile-provider" label={t('agentEnablement.provider')} value={gate.profile.providerId ?? ''}
-      onChange={(value) => change({ providerId: value || undefined, model: undefined })}
+      marker="data-agent-profile-provider" label={t('agentEnablement.provider')} value={gate.profile.gatewayBinding ? `@alias:${gate.profile.gatewayBinding.main.routeId}` : gate.profile.providerId ?? ''}
+      onChange={(value) => {
+        const alias = groups?.aliasGroups?.find((entry) => value === `@alias:${entry.routeId}`)
+        change(alias ? { providerId: undefined, model: alias.modelId, gatewayBinding: { main: { routeId: alias.routeId, allowedConnectionIds: alias.connectionIds } } }
+          : { providerId: value || undefined, gatewayBinding: undefined, model: undefined })
+      }}
       options={[{ value: '', label: t('agentEnablement.chooseProvider') },
+        ...(gate.profile.credentialMode === 'kun-gateway' ? groups?.aliasGroups ?? [] : []).map((alias) => ({ value: `@alias:${alias.routeId}`, label: `${t('agentEnablement.alias')} · ${alias.label}`, icon: <Network size={15} /> })),
         ...(groups?.groups ?? []).map((group) => ({ value: group.providerId, label: group.label, icon: <KeyRound size={15} /> }))]} />} /> : null}
+    {gate.profile.gatewayBinding ? <AgentAliasSettings binding={gate.profile.gatewayBinding} aliases={groups?.aliasGroups ?? []}
+      supportsSmall={Boolean(row.definition.gateway?.env.smallModel)} change={(gatewayBinding) => change({ gatewayBinding })} /> : null}
     <SettingRow title={t('agentEnablement.model')} description={t('agentEnablement.modelHint')}
       control={<AgentSettingsModelPicker key={`${id}:${gate.profile.credentialMode}:${gate.profile.providerId ?? ''}`}
         harnessId={id} native={native} value={defaults.model ?? ''} modelIds={modelOptions}

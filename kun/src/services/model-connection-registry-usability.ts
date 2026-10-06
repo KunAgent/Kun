@@ -1,9 +1,9 @@
 import type { ProjectedCredentialHealth, StoredProfile } from './model-connection-registry-core.js'
 
-type ProviderIdentity = { id?: string; presetSource?: string }
+type ProviderIdentity = { id?: string; presetSource?: string; kind?: string; authType?: string }
 
-export function isAnonymousHttpProfile(_profile: ProviderIdentity): boolean {
-  return false
+export function isAnonymousHttpProfile(profile: ProviderIdentity): boolean {
+  return profile.authType === 'none' && (!profile.kind || profile.kind === 'http')
 }
 
 export function isRetiredOpenCodeFreeConnection(profile: ProviderIdentity): boolean {
@@ -13,10 +13,11 @@ export function isRetiredOpenCodeFreeConnection(profile: ProviderIdentity): bool
 }
 
 export function isProfileUsable(
-  profile: Pick<StoredProfile, 'id' | 'presetSource' | 'configured' | 'kind' | 'credentialRef' | 'credentialSourceId'>,
+  profile: Pick<StoredProfile, 'id' | 'presetSource' | 'configured' | 'kind' | 'authType' | 'credentialRef' | 'credentialSourceId'>,
   health?: ProjectedCredentialHealth
 ): boolean {
   if (!profile.configured || isRetiredOpenCodeFreeConnection(profile)) return false
+  if (isAnonymousHttpProfile(profile)) return true
   const requiresCredential = (profile.kind === 'http' && !isAnonymousHttpProfile(profile)) ||
     profile.kind === 'gemini-code-assist' ||
     Boolean(profile.credentialRef || profile.credentialSourceId)

@@ -1,5 +1,11 @@
 # Model Providers, Accounts, and Authentication
 
+See [the provider configuration and gateway contract](../provider-configuration-and-gateway.md)
+for the built-in descriptor schema and v2 account Registry. Extension executable
+adapters keep their existing permission boundary; registering an extension
+provider does not automatically grant public gateway export or an Agent login.
+
+
 > Extension API: v1
 > 中文：[模型 Provider、账号与认证](./providers-and-accounts.md)
 > Related: [Permissions and secrets](./security-and-resources.en.md) · [Versioning and migration](./versioning-and-migrations.en.md)

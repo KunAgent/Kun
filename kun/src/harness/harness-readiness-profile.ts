@@ -1,3 +1,4 @@
+import { harnessGatewayBindingKey } from '../contracts/harness-gateway-binding.js'
 import { createHash } from 'node:crypto'
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -12,18 +13,21 @@ import { nativeAgentNetworkStatus } from './native-agent-network.js'
 import { openCode2CredentialEvidence } from './opencode2-credentials.js'
 
 export type ReadinessOptions = Partial<Pick<KunServeRuntimeOptions,
-  'providers' | 'harnesses' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId' | 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'>>
+  'providers' | 'routePools' | 'harnesses' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId' | 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'>>
 
-export function harnessProfile(route: Pick<HarnessRoute, 'harnessId' | 'credentialMode' | 'providerId'>): HarnessEnabledProfile {
+export function harnessProfile(route: Pick<HarnessRoute, 'harnessId' | 'credentialMode' | 'providerId' | 'gatewayBinding'>): HarnessEnabledProfile {
+  if (route.gatewayBinding) return { harnessId: route.harnessId, credentialMode: route.credentialMode, gatewayBinding: route.gatewayBinding }
   return { harnessId: route.harnessId, credentialMode: route.credentialMode,
     ...(route.credentialMode !== 'native-login' ? { providerId: route.providerId?.trim() || 'default' } :
       route.providerId?.trim() && route.providerId.trim() !== 'default' ? { providerId: route.providerId.trim() } : {}) }
 }
-export function harnessProfileKey(route: Pick<HarnessRoute, 'harnessId' | 'credentialMode' | 'providerId'>): string {
+export function harnessProfileKey(route: Pick<HarnessRoute, 'harnessId' | 'credentialMode' | 'providerId' | 'gatewayBinding'>): string {
   const profile = harnessProfile(route)
+  if (profile.gatewayBinding) return JSON.stringify([profile.harnessId, profile.credentialMode, 'alias', harnessGatewayBindingKey(profile.gatewayBinding)])
   return JSON.stringify([profile.harnessId, profile.credentialMode, profile.providerId ?? ''])
 }
 export function readinessProvider(options: ReadinessOptions, route: HarnessRoute): ServeProviderConfig | undefined {
+  if (route.gatewayBinding) return undefined
   const id = route.providerId?.trim() || 'default'
   if (options.providers?.[id]) return options.providers[id]
   if (id !== 'default') return undefined
@@ -143,6 +147,11 @@ export function readinessFingerprint(input: {
     dsh: definition.id === 'deepseek-harness' ? deepSeekHarnessProfileFingerprint({ ...process.env, ...definition.launch?.env, ...input.secretEnv }) : undefined,
     opencode2: definition.id === 'opencode2' ? openCode2CredentialEvidence({ ...process.env, ...definition.launch?.env, ...input.secretEnv }).fingerprint : undefined,
     provider: readinessProvider(options, route), secretEnv: input.secretEnv,
-    env: nativeProfileEnv(definition), files: nativeProfileFiles(definition, input.secretEnv).map((path) => [path, fileFingerprint(path)])
+    ...(route.gatewayBinding ? { aliasRouting: {
+      pools: options.routePools?.filter((pool) => pool.id === route.gatewayBinding!.main.routeId || pool.id === route.gatewayBinding!.small?.routeId),
+      providers: Object.fromEntries([...new Set([...route.gatewayBinding.main.allowedConnectionIds, ...(route.gatewayBinding.small?.allowedConnectionIds ?? [])])]
+        .map((id) => [id, options.providers?.[id]]))
+    } } : {}),
+    env: route.gatewayBinding ? {} : nativeProfileEnv(definition), files: route.gatewayBinding ? [] : nativeProfileFiles(definition, input.secretEnv).map((path) => [path, fileFingerprint(path)])
   })).digest('hex')
 }

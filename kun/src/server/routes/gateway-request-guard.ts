@@ -17,6 +17,7 @@ export class GatewayRequestGuard {
   private tokens: number
   private lastRefill: number
   private active = 0
+  private readonly leases = new Set<GatewayLease>()
 
   constructor(
     private readonly credentials: Pick<GatewayCredentialService, 'verify'>,
@@ -71,8 +72,9 @@ export class GatewayRequestGuard {
       clearTimeout(timer)
       parentSignal.removeEventListener('abort', onParentAbort)
       this.active -= 1
+      this.leases.delete(lease)
     }
-    return {
+    const lease: GatewayLease = {
       signal: controller.signal,
       timedOut: () => timeoutReached,
       release,
@@ -81,6 +83,14 @@ export class GatewayRequestGuard {
         release()
       }
     }
+    this.leases.add(lease)
+    return lease
+  }
+
+  cancelAll(): number {
+    const leases = [...this.leases]
+    for (const lease of leases) lease.cancel()
+    return leases.length
   }
 
   activeCount(): number {

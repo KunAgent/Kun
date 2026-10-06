@@ -115,8 +115,10 @@ export type TurnServiceDeps = {
    * to the native loop.
    */
   providerKinds?: () => import('../harness/resolve-turn-harness.js').ProviderKindsView
+  gatewayAliasProfilesEnabled?: () => boolean
+  resolveGatewayAliasModel?: (binding: import('../contracts/harness-gateway-binding.js').HarnessGatewayBinding) => string | undefined
   /** Optional harness catalog used to pick the default credential mode. */
-  harnessCatalog?: { get(id: string): import('../contracts/harness.js').HarnessDefinition | undefined; isProfileEnabled?(route: Pick<import('../contracts/harness.js').HarnessRoute, 'harnessId' | 'credentialMode' | 'providerId'>): boolean }
+  harnessCatalog?: { get(id: string): import('../contracts/harness.js').HarnessDefinition | undefined; isProfileEnabled?(route: Pick<import('../contracts/harness.js').HarnessRoute, 'harnessId' | 'credentialMode' | 'providerId' | 'gatewayBinding'>): boolean }
   /** Resolve durable Graph ownership without coupling TurnService to the Graph store. */
   resolveGraphLeadRun?: (input: {
     threadId: string

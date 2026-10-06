@@ -1,4 +1,5 @@
 import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import type {
   AttachmentReference,
   UserFileReference
@@ -43,6 +44,7 @@ export type QueuedUserMessage = {
   accountId?: string
   /** ADE harness + credential path frozen at enqueue time (12 §7.2). */
   harnessId?: string
+  gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
   modelLabel?: string
   reasoningEffort?: string
@@ -143,6 +145,7 @@ export type SendMessageOverrides = {
   accountId?: string
   /** ADE harness + credential path for this turn (12 §7.2). */
   harnessId?: string
+  gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
   modelLabel?: string
   reasoningEffort?: string
@@ -213,6 +216,7 @@ export type ExternalPlanBuildRequest = {
   /** Source checkout the task worktree branches from. */
   workspaceRoot: string
   harnessId: string
+  gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
   model?: string
   providerId?: string

@@ -1,646 +1,92 @@
 import type { ProviderCatalogPreset } from './index.js'
-import {
-  ALIYUN_MODELS,
-  CHATGPT_SUBSCRIPTION_MODELS,
-  CURSOR_SUBSCRIPTION_MODELS,
-  GEMINI_CLI_SUBSCRIPTION_MODELS,
-  GEMINI_SUBSCRIPTION_MODELS,
-  GROK_SUBSCRIPTION_MODELS,
-  MINIMAX_MODELS,
-  MOONSHOT_MODELS,
-  OLLAMA_CLOUD_MODELS,
-  TENCENT_MODELS,
-  VOLCENGINE_AGENT_PLAN_CHAT_MODELS,
-  VOLCENGINE_CHAT_MODELS
-} from './model-lists.js'
+import { validateProviderCatalog } from './validation.js'
+import preset0 from './definitions/litellm.json' with { type: 'json' }
+import preset1 from './definitions/longcat.json' with { type: 'json' }
+import preset2 from './definitions/claude-subscription.json' with { type: 'json' }
+import preset3 from './definitions/gemini-subscription.json' with { type: 'json' }
+import preset4 from './definitions/gemini-cli-subscription.json' with { type: 'json' }
+import preset5 from './definitions/cursor-subscription.json' with { type: 'json' }
+import preset6 from './definitions/ollama.json' with { type: 'json' }
+import preset7 from './definitions/zhipu-coding-plan.json' with { type: 'json' }
+import preset8 from './definitions/zai-coding-plan.json' with { type: 'json' }
+import preset9 from './definitions/kimi-code.json' with { type: 'json' }
+import preset10 from './definitions/volcengine.json' with { type: 'json' }
+import preset11 from './definitions/volcengine-agent-plan.json' with { type: 'json' }
+import preset12 from './definitions/volcengine-coding-plan.json' with { type: 'json' }
+import preset13 from './definitions/opencode-go.json' with { type: 'json' }
+import preset14 from './definitions/zenmux.json' with { type: 'json' }
+import preset15 from './definitions/moonshot-cn.json' with { type: 'json' }
+import preset16 from './definitions/moonshot-global.json' with { type: 'json' }
+import preset17 from './definitions/xiaomi.json' with { type: 'json' }
+import preset18 from './definitions/minimax.json' with { type: 'json' }
+import preset19 from './definitions/aliyun.json' with { type: 'json' }
+import preset20 from './definitions/tencentcloud.json' with { type: 'json' }
+import preset21 from './definitions/codex.json' with { type: 'json' }
+import preset22 from './definitions/grok-subscription.json' with { type: 'json' }
+import preset23 from './definitions/opper.json' with { type: 'json' }
+import preset24 from './definitions/vercel-ai-gateway.json' with { type: 'json' }
+import preset25 from './definitions/stepfun.json' with { type: 'json' }
+import preset26 from './definitions/openai-api.json' with { type: 'json' }
+import preset27 from './definitions/anthropic-api.json' with { type: 'json' }
+import preset28 from './definitions/gemini-api.json' with { type: 'json' }
+import preset29 from './definitions/xai-api.json' with { type: 'json' }
+import preset30 from './definitions/mistral-api.json' with { type: 'json' }
+import preset31 from './definitions/groq-api.json' with { type: 'json' }
+import preset32 from './definitions/zhipu-api.json' with { type: 'json' }
+import preset33 from './definitions/zai-api.json' with { type: 'json' }
+import preset34 from './definitions/openrouter.json' with { type: 'json' }
+import preset35 from './definitions/siliconflow.json' with { type: 'json' }
+import preset36 from './definitions/aihubmix.json' with { type: 'json' }
+import preset37 from './definitions/three02ai.json' with { type: 'json' }
+import preset38 from './definitions/together.json' with { type: 'json' }
+import preset39 from './definitions/fireworks.json' with { type: 'json' }
+import preset40 from './definitions/ollama-local.json' with { type: 'json' }
+import preset41 from './definitions/lmstudio.json' with { type: 'json' }
+import preset42 from './definitions/local-openai.json' with { type: 'json' }
 
-/**
- * The connection-level source of truth shared by GUI Settings, Kun runtime,
- * and the terminal client. Capability/media metadata remains layered by the
- * consumers, but these fields must never be independently re-declared.
- */
-export const PROVIDER_CATALOG = [
-  {
-    id: 'litellm',
-    name: 'LiteLLM',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'http://localhost:4000',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.litellm.ai/docs/',
-    credentialUrl: 'https://docs.litellm.ai/docs/proxy/quick_start'
-  },
-  {
-    id: 'longcat',
-    name: 'LongCat',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.longcat.chat/openai',
-    endpointFormat: 'chat_completions',
-    models: ['LongCat-2.0-Preview'],
-    docsUrl: 'https://longcat.chat/platform/docs/zh/',
-    credentialUrl: 'https://longcat.chat/platform/'
-  },
-  {
-    id: 'claude-subscription',
-    name: 'Claude (Pro/Max 订阅)',
-    category: 'subscription',
-    kind: 'agent-sdk',
-    authFlow: 'claude-subscription',
-    authType: 'subscription',
-    baseUrl: 'https://api.anthropic.com',
-    endpointFormat: 'messages',
-    models: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-    docsUrl: 'https://code.claude.com/docs/en/authentication',
-    credentialUrl: 'https://claude.ai'
-  },
-  {
-    id: 'gemini-subscription',
-    name: 'Google Antigravity 订阅',
-    category: 'subscription',
-    kind: 'antigravity-cli',
-    authFlow: 'gemini-subscription',
-    authType: 'subscription',
-    baseUrl: '',
-    endpointFormat: 'custom_endpoint',
-    models: GEMINI_SUBSCRIPTION_MODELS,
-    docsUrl: 'https://github.com/google-antigravity/antigravity-cli',
-    credentialUrl: 'https://antigravity.google'
-  },
-  {
-    id: 'gemini-cli-subscription',
-    name: 'Gemini CLI 订阅（API）',
-    category: 'subscription',
-    kind: 'gemini-cli-api',
-    authFlow: 'gemini-cli-subscription',
-    authType: 'subscription',
-    baseUrl: '',
-    endpointFormat: 'custom_endpoint',
-    models: GEMINI_CLI_SUBSCRIPTION_MODELS,
-    docsUrl: 'https://github.com/google-gemini/gemini-cli',
-    credentialUrl: 'https://github.com/google-gemini/gemini-cli#authentication-options'
-  },
-  {
-    id: 'cursor-subscription',
-    name: 'Cursor 订阅',
-    category: 'subscription',
-    kind: 'cursor-sdk',
-    authFlow: 'cursor-api-key',
-    authType: 'subscription',
-    baseUrl: '',
-    endpointFormat: 'custom_endpoint',
-    models: CURSOR_SUBSCRIPTION_MODELS,
-    docsUrl: 'https://cursor.com/docs/api/sdk/typescript',
-    credentialUrl: 'https://cursor.com/dashboard/api?section=user-keys#user-api-keys'
-  },
-  {
-    id: 'ollama',
-    name: 'Ollama Cloud',
-    category: 'subscription',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'subscription',
-    baseUrl: 'https://ollama.com/v1',
-    endpointFormat: 'chat_completions',
-    models: OLLAMA_CLOUD_MODELS,
-    docsUrl: 'https://docs.ollama.com/cloud',
-    credentialUrl: 'https://ollama.com/settings/keys'
-  },
-  {
-    id: 'zhipu-coding-plan',
-    name: 'Zhipu Coding Plan',
-    category: 'subscription',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'subscription',
-    baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
-    endpointFormat: 'custom_endpoint',
-    models: ['glm-5.3', 'glm-5.3-flash', 'glm-5.2', 'glm-5.1', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
-    docsUrl: 'https://docs.bigmodel.cn/cn/coding-plan/overview',
-    credentialUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys'
-  },
-  {
-    id: 'zai-coding-plan',
-    name: 'Z.ai Coding Plan',
-    category: 'subscription',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'subscription',
-    baseUrl: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
-    endpointFormat: 'custom_endpoint',
-    models: ['glm-5.3', 'glm-5.2', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
-    docsUrl: 'https://docs.z.ai/devpack/tool/others',
-    credentialUrl: 'https://z.ai/subscribe'
-  },
-  {
-    id: 'kimi-code',
-    name: 'Kimi Code',
-    category: 'subscription',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'subscription',
-    baseUrl: 'https://api.kimi.com/coding/v1',
-    endpointFormat: 'chat_completions',
-    models: ['k3', 'kimi-for-coding', 'kimi-for-coding-highspeed'],
-    docsUrl: 'https://www.kimi.com/code/docs/en/',
-    credentialUrl: 'https://www.kimi.com/code'
-  },
-  {
-    id: 'volcengine',
-    name: 'Volcano Ark API',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    endpointFormat: 'chat_completions',
-    models: VOLCENGINE_CHAT_MODELS,
-    docsUrl: 'https://www.volcengine.com/docs/82379/1330310',
-    credentialUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey'
-  },
-  {
-    id: 'volcengine-agent-plan',
-    name: 'Volcano Ark Agent Plan',
-    category: 'subscription',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'subscription',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
-    endpointFormat: 'chat_completions',
-    models: VOLCENGINE_AGENT_PLAN_CHAT_MODELS,
-    docsUrl: 'https://www.volcengine.com/docs/82379/2366394',
-    credentialUrl:
-      'https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&OpenModelVisible=false&advancedActiveKey=agentPlan'
-  },
-  {
-    id: 'volcengine-coding-plan',
-    name: 'Volcano Ark Coding Plan',
-    category: 'subscription',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'subscription',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
-    endpointFormat: 'chat_completions',
-    models: ['doubao-seed-1-6-250615', 'doubao-seed-1-6-flash-250828'],
-    docsUrl: 'https://www.volcengine.com/docs/82379/1928262',
-    credentialUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey'
-  },
-  {
-    id: 'opencode-go',
-    name: 'OpenCode Go',
-    category: 'subscription',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'subscription',
-    baseUrl: 'https://opencode.ai/zen/go/v1',
-    endpointFormat: 'chat_completions',
-    models: [
-      'grok-4.5',
-      'glm-5.2', 'glm-5.1', 'glm-5',
-      'kimi-k2.7', 'kimi-k2.7-code', 'kimi-k2.6',
-      'deepseek-v4-pro', 'deepseek-v4-flash',
-      'mimo-v2.5', 'mimo-v2.5-pro', 'mimo-v2-pro', 'mimo-v2-omni',
-      'minimax-m3', 'minimax-m2.7', 'minimax-m2.5',
-      'qwen3.7-max', 'qwen3.7-plus', 'qwen3.6-plus', 'qwen3.5-plus'
-    ],
-    docsUrl: 'https://opencode.ai/docs/go/',
-    credentialUrl: 'https://opencode.ai/auth'
-  },
-  {
-    id: 'zenmux',
-    name: 'ZenMux API',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://zenmux.ai/api/v1',
-    endpointFormat: 'chat_completions',
-    // ZenMux rotates a large aggregate catalog; Settings imports the live /models list.
-    models: [],
-    docsUrl: 'https://zenmux.ai/docs/guide/quickstart',
-    credentialUrl: 'https://zenmux.ai/platform/pay-as-you-go',
-    tokenPlan: {
-      displayName: 'ZenMux Builder Plan (Coding Plan)',
-      baseUrl: 'https://zenmux.ai/api/v1',
-      endpointFormat: 'chat_completions',
-      models: [],
-      credentialUrl: 'https://zenmux.ai/platform/subscription'
-    }
-  },
-  {
-    id: 'moonshot-cn',
-    name: 'Moonshot CN',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.moonshot.cn/v1',
-    endpointFormat: 'chat_completions',
-    models: MOONSHOT_MODELS,
-    docsUrl: 'https://platform.moonshot.cn/docs',
-    credentialUrl: 'https://platform.moonshot.cn/console/api-keys'
-  },
-  {
-    id: 'moonshot-global',
-    name: 'Moonshot Global',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.moonshot.ai/v1',
-    endpointFormat: 'chat_completions',
-    models: MOONSHOT_MODELS,
-    docsUrl: 'https://platform.moonshot.ai/docs',
-    credentialUrl: 'https://platform.moonshot.ai/console/api-keys'
-  },
-  {
-    id: 'xiaomi',
-    name: 'Xiaomi',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.xiaomimimo.com/v1',
-    endpointFormat: 'chat_completions',
-    models: ['mimo-v2.5-pro', 'mimo-v2.5', 'mimo-v2-pro', 'mimo-v2-omni'],
-    docsUrl: 'https://platform.xiaomimimo.com/#/docs',
-    credentialUrl: 'https://platform.xiaomimimo.com/#/console/api-keys',
-    tokenPlan: {
-      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
-      regions: [
-        { id: 'cn', baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1' },
-        { id: 'sgp', baseUrl: 'https://token-plan-sgp.xiaomimimo.com/v1' },
-        { id: 'ams', baseUrl: 'https://token-plan-ams.xiaomimimo.com/v1' }
-      ],
-      endpointFormat: 'chat_completions',
-      models: ['mimo-v2.5-pro', 'mimo-v2.5', 'mimo-v2-pro', 'mimo-v2-omni'],
-      credentialUrl: 'https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access'
-    }
-  },
-  {
-    id: 'minimax',
-    name: 'MiniMax',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.minimaxi.com/anthropic',
-    endpointFormat: 'messages',
-    models: MINIMAX_MODELS,
-    docsUrl: 'https://platform.minimax.io/docs/api-reference/text-anthropic-api',
-    credentialUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
-    tokenPlan: {
-      baseUrl: 'https://api.minimaxi.com/anthropic',
-      regions: [
-        { id: 'cn', baseUrl: 'https://api.minimaxi.com/anthropic' },
-        { id: 'global', baseUrl: 'https://api.minimax.io/anthropic' }
-      ],
-      endpointFormat: 'messages',
-      models: MINIMAX_MODELS,
-      credentialUrl: 'https://platform.minimaxi.com/docs/token-plan/quickstart'
-    }
-  },
-  {
-    id: 'aliyun',
-    name: 'Aliyun',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    endpointFormat: 'chat_completions',
-    models: ALIYUN_MODELS,
-    docsUrl: 'https://help.aliyun.com/zh/model-studio/',
-    credentialUrl: 'https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key',
-    tokenPlan: {
-      baseUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
-      regions: [
-        { id: 'cn', baseUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' },
-        { id: 'sgp', baseUrl: 'https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1' }
-      ],
-      endpointFormat: 'chat_completions',
-      models: ALIYUN_MODELS,
-      credentialUrl: 'https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key'
-    }
-  },
-  {
-    id: 'tencentcloud',
-    name: 'Tencent Cloud',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
-    endpointFormat: 'chat_completions',
-    models: TENCENT_MODELS,
-    docsUrl: 'https://cloud.tencent.com/document/product/1729/111006',
-    credentialUrl: 'https://console.cloud.tencent.com/hunyuan/start',
-    tokenPlan: {
-      baseUrl: 'https://api.lkeap.cloud.tencent.com/plan/v3',
-      endpointFormat: 'chat_completions',
-      models: TENCENT_MODELS,
-      credentialUrl: 'https://console.cloud.tencent.com/tokenhub/tokenplan'
-    }
-  },
-  {
-    id: 'codex',
-    name: 'ChatGPT 订阅',
-    category: 'subscription',
-    kind: 'http',
-    authFlow: 'chatgpt-oauth',
-    authType: 'oauth',
-    baseUrl: 'https://chatgpt.com/backend-api/codex/responses',
-    endpointFormat: 'custom_endpoint',
-    models: CHATGPT_SUBSCRIPTION_MODELS,
-    docsUrl: 'https://openai.com/index/codex/',
-    credentialUrl: 'https://chatgpt.com'
-  },
-  {
-    id: 'grok-subscription',
-    name: 'Grok 订阅',
-    category: 'subscription',
-    kind: 'http',
-    authFlow: 'grok-oauth',
-    authType: 'oauth',
-    baseUrl: 'https://cli-chat-proxy.grok.com/v1',
-    endpointFormat: 'responses',
-    models: GROK_SUBSCRIPTION_MODELS,
-    docsUrl: 'https://docs.x.ai/',
-    credentialUrl: 'https://accounts.x.ai'
-  },
-  {
-    id: 'opper',
-    name: 'Opper',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.opper.ai/v3/compat',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.opper.ai',
-    credentialUrl: 'https://platform.opper.ai'
-  },
-  {
-    id: 'vercel-ai-gateway',
-    name: 'Vercel AI Gateway',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://ai-gateway.vercel.sh/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions',
-    credentialUrl: 'https://vercel.com/ai-gateway'
-  },
-  {
-    id: 'stepfun',
-    name: 'StepFun',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.stepfun.com/v1',
-    endpointFormat: 'chat_completions',
-    models: ['step-3.7-flash', 'step-3.5-flash'],
-    docsUrl: 'https://platform.stepfun.com/docs',
-    credentialUrl: 'https://platform.stepfun.com/interface-key',
-    tokenPlan: {
-      displayName: 'Step Plan',
-      baseUrl: 'https://api.stepfun.com/step_plan/v1',
-      endpointFormat: 'chat_completions',
-      models: ['step-5-preview', 'step-3.7-flash', 'step-3.5-flash', 'step-3.5-flash-2603'],
-      credentialUrl: 'https://platform.stepfun.com/interface-key'
-    }
-  },
-  {
-    id: 'openai-api',
-    name: 'OpenAI API',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.openai.com/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://platform.openai.com/docs',
-    credentialUrl: 'https://platform.openai.com/api-keys'
-  },
-  {
-    id: 'anthropic-api',
-    name: 'Anthropic API',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.anthropic.com',
-    endpointFormat: 'messages',
-    models: [],
-    docsUrl: 'https://docs.anthropic.com',
-    credentialUrl: 'https://console.anthropic.com/settings/keys'
-  },
-  {
-    id: 'gemini-api',
-    name: 'Google Gemini API',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://ai.google.dev/gemini-api/docs/openai',
-    credentialUrl: 'https://aistudio.google.com/app/apikey'
-  },
-  {
-    id: 'xai-api',
-    name: 'xAI API',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.x.ai/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.x.ai/',
-    credentialUrl: 'https://console.x.ai/'
-  },
-  {
-    id: 'mistral-api',
-    name: 'Mistral API',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.mistral.ai/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.mistral.ai/',
-    credentialUrl: 'https://console.mistral.ai/api-keys'
-  },
-  {
-    id: 'groq-api',
-    name: 'Groq API',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://console.groq.com/docs',
-    credentialUrl: 'https://console.groq.com/keys'
-  },
-  {
-    id: 'zhipu-api',
-    name: 'Zhipu Open Platform',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.bigmodel.cn/',
-    credentialUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys'
-  },
-  {
-    id: 'zai-api',
-    name: 'Z.ai API',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.z.ai/api/paas/v4',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.z.ai/',
-    credentialUrl: 'https://z.ai/manage-apikey/apikey-list'
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://openrouter.ai/docs',
-    credentialUrl: 'https://openrouter.ai/settings/keys'
-  },
-  {
-    id: 'siliconflow',
-    name: 'SiliconFlow',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.siliconflow.cn/',
-    credentialUrl: 'https://cloud.siliconflow.cn/account/ak'
-  },
-  {
-    id: 'aihubmix',
-    name: 'AiHubMix',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://aihubmix.com/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.aihubmix.com/',
-    credentialUrl: 'https://aihubmix.com/token'
-  },
-  {
-    id: 'three02ai',
-    name: '302.AI',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.302.ai/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://302.ai/',
-    credentialUrl: 'https://dash.302.ai/apis/list'
-  },
-  {
-    id: 'together',
-    name: 'Together',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.together.xyz/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.together.ai/',
-    credentialUrl: 'https://api.together.ai/settings/api-keys'
-  },
-  {
-    id: 'fireworks',
-    name: 'Fireworks',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    baseUrl: 'https://api.fireworks.ai/inference/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.fireworks.ai/',
-    credentialUrl: 'https://fireworks.ai/account/api-keys'
-  },
-  {
-    id: 'ollama-local',
-    name: 'Ollama (Local)',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    credentialRequirement: 'optional',
-    baseUrl: 'http://localhost:11434/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.ollama.com/openai',
-    credentialUrl: 'https://docs.ollama.com/'
-  },
-  {
-    id: 'lmstudio',
-    name: 'LM Studio',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    credentialRequirement: 'optional',
-    baseUrl: 'http://localhost:1234/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://lmstudio.ai/docs',
-    credentialUrl: 'https://lmstudio.ai/docs'
-  },
-  {
-    id: 'local-openai',
-    name: 'Local OpenAI-Compatible',
-    category: 'api',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    credentialRequirement: 'optional',
-    baseUrl: 'http://localhost:8000/v1',
-    endpointFormat: 'chat_completions',
-    models: [],
-    docsUrl: 'https://docs.vllm.ai/',
-    credentialUrl: 'https://docs.vllm.ai/'
-  }
-] as const satisfies readonly ProviderCatalogPreset[]
+/** Declarative, validated defaults; existing connections retain their captured configuration. */
+export const PROVIDER_CATALOG: readonly ProviderCatalogPreset[] = validateProviderCatalog([
+  preset0,
+  preset1,
+  preset2,
+  preset3,
+  preset4,
+  preset5,
+  preset6,
+  preset7,
+  preset8,
+  preset9,
+  preset10,
+  preset11,
+  preset12,
+  preset13,
+  preset14,
+  preset15,
+  preset16,
+  preset17,
+  preset18,
+  preset19,
+  preset20,
+  preset21,
+  preset22,
+  preset23,
+  preset24,
+  preset25,
+  preset26,
+  preset27,
+  preset28,
+  preset29,
+  preset30,
+  preset31,
+  preset32,
+  preset33,
+  preset34,
+  preset35,
+  preset36,
+  preset37,
+  preset38,
+  preset39,
+  preset40,
+  preset41,
+  preset42
+])

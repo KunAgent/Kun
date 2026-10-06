@@ -220,6 +220,7 @@ export interface AgentSdkRuntimeFactoryDeps {
     'issue'
   >
   harnessGatewayBaseUrl?: () => string | undefined
+  resolveGatewayAliases?: (binding: import('../../contracts/harness-gateway-binding.js').HarnessGatewayBinding) => Promise<import('../../contracts/harness-gateway-binding.js').HarnessGatewayAliasGrant[]>
   roles?: () => import('../../config/kun-config.js').RolesConfig | undefined
   harnessCatalog?: Pick<
     import('../../harness/harness-catalog.js').HarnessCatalog,

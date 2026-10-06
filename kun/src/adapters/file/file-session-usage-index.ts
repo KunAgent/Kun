@@ -50,7 +50,7 @@ const UsageIndexRowSchema = z.discriminatedUnion('type', [
     turnId: z.string().optional(),
     model: z.string().optional(),
     providerId: z.string().optional(),
-    source: z.enum(['native', 'harness-gateway', 'harness-reported', 'public-gateway']).optional(),
+    source: z.enum(['native', 'harness-gateway', 'harness-reported', 'public-gateway', 'utility']).optional(),
     harnessId: z.string().optional(),
     usage: UsageSnapshotSchema,
     cumulative: UsageSnapshotSchema

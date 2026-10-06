@@ -1,3 +1,5 @@
+import type { ModelRouteTargetMetadata } from '../ports/model-client.js'
+import type { HarnessGatewayAliasGrant } from '../contracts/harness-gateway-binding.js'
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { HarnessId } from '../contracts/harness.js'
 
@@ -35,6 +37,8 @@ export type HarnessTokenGrant = {
   harnessId: HarnessId
   scopes: readonly HarnessTokenScope[]
   /** Route-pool models this grant may address through the gateway. */
+  onResolvedRoute?: (route: ModelRouteTargetMetadata) => Promise<void>
+  aliasRoutes?: readonly HarnessGatewayAliasGrant[]
   routes: readonly HarnessTokenRoute[]
   maxConcurrent: number
   maxBodyBytes: number
@@ -50,6 +54,8 @@ export type HarnessTokenIssueInput = {
   /** Stable identity of the harness credential/env the token is bound to. */
   credentialIdentity: string
   scopes: readonly HarnessTokenScope[]
+  onResolvedRoute?: (route: ModelRouteTargetMetadata) => Promise<void>
+  aliasRoutes?: readonly HarnessGatewayAliasGrant[]
   routes?: readonly HarnessTokenRoute[]
   maxConcurrent?: number
   maxBodyBytes?: number
@@ -71,9 +77,10 @@ export class HarnessTokenService {
   /** Issue (or re-issue) the deterministic token for this identity + scope set. */
   issue(input: HarnessTokenIssueInput): string {
     const scopes = normalizeScopes(input.scopes)
+    const routeIdentity = scopes.includes('gateway') ? JSON.stringify([input.routes ?? [], input.aliasRoutes ?? []]) : ''
     const grantId = hmacHex(
       this.secret,
-      `${input.harnessId}\u0000${input.credentialIdentity}\u0000${input.threadId}\u0000${scopes.join(',')}`
+      `${input.harnessId}\u0000${input.credentialIdentity}\u0000${input.threadId}\u0000${scopes.join(',')}\u0000${routeIdentity}`
     ).slice(0, 32)
     const grant: HarnessTokenGrant = {
       grantId,
@@ -81,7 +88,9 @@ export class HarnessTokenService {
       ...(input.turnId ? { turnId: input.turnId } : {}),
       harnessId: input.harnessId,
       scopes,
-      routes: input.routes ?? [],
+      routes: structuredClone(input.routes ?? []),
+      ...(input.onResolvedRoute ? { onResolvedRoute: input.onResolvedRoute } : {}),
+      ...(input.aliasRoutes?.length ? { aliasRoutes: structuredClone(input.aliasRoutes) } : {}),
       maxConcurrent: input.maxConcurrent ?? DEFAULT_HARNESS_TOKEN_MAX_CONCURRENT,
       maxBodyBytes: input.maxBodyBytes ?? DEFAULT_HARNESS_TOKEN_MAX_BODY_BYTES,
       expiresAt: input.expiresAt ?? Number.MAX_SAFE_INTEGER

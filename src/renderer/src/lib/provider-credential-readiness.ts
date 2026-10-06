@@ -11,7 +11,7 @@
 export type SharedConnectionCredentialState = {
   id: string
   configured: boolean
-  credentialStatus?: 'ready' | 'missing' | 'unreadable'
+  credentialStatus?: 'ready' | 'missing' | 'unreadable' | 'not-required'
 }
 
 export function sharedModelConnectionHasUsableCredential(
@@ -68,6 +68,7 @@ function parseCredentialStates(body: string): SharedConnectionCredentialState[] 
       id: item.id,
       configured: item.configured,
       ...(credentialStatus === 'ready' ||
+      credentialStatus === 'not-required' ||
       credentialStatus === 'missing' ||
       credentialStatus === 'unreadable'
         ? { credentialStatus }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { probeModelProvider } from './provider-connection'
+import { CODEX_PROVIDER_VERSION_URL } from '../../kun/src/adapters/model/codex-provider-catalog.js'
 
 vi.mock('electron', () => ({ session: { defaultSession: { resolveProxy: async () => 'DIRECT' } } }))
 const request = {
@@ -11,10 +12,14 @@ const request = {
 }
 
 describe('Codex discovery', () => {
-  it('uses the verified catalog version in both URL and headers to discover GPT-6.1', async () => {
+  it('automatically discovers the provider version without any installed Agent', async () => {
     const fetcher = vi.fn(async (url: string | URL, init?: RequestInit) => {
-      expect(new URL(url).searchParams.get('client_version')).toBe('0.160.0')
-      expect(new Headers(init?.headers).get('User-Agent')).toContain('codex_cli_rs/0.160.0')
+      if (url === CODEX_PROVIDER_VERSION_URL) {
+        expect(new Headers(init?.headers).has('authorization')).toBe(false)
+        return Response.json({ name: '@openai/codex', version: '0.161.0' })
+      }
+      expect(new URL(url).searchParams.get('client_version')).toBe('0.161.0')
+      expect(new Headers(init?.headers).get('User-Agent')).toContain('codex_cli_rs/0.161.0')
       return new Response(JSON.stringify({ models: [
         { slug: 'gpt-6.1-sol', visibility: 'list', input_modalities: ['text', 'image'],
           context_window: 272000, use_responses_lite: true }
@@ -24,7 +29,7 @@ describe('Codex discovery', () => {
       ok: true, modelIds: ['gpt-6.1-sol'],
       modelProfiles: { 'gpt-6.1-sol': { responsesMode: 'lite', contextWindowTokens: 272000 } }
     })
-    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(fetcher).toHaveBeenCalledTimes(2)
   })
   it('passes through only listed gpt-6-sol and gpt-6-luna from the official catalog', async () => {
     const result = await probeModelProvider(request, undefined, async () => new Response(JSON.stringify({
@@ -44,7 +49,7 @@ describe('Codex discovery', () => {
   it('handles full response endpoints and malformed model responses', async () => {
     const fetcher = vi.fn(async (_url: string | URL, _init?: RequestInit) => new Response('{}'))
     expect(await probeModelProvider(request, undefined, fetcher)).toMatchObject({ ok: false })
-    expect(fetcher.mock.calls[0][0]).toMatch(/\/codex\/models\?client_version=/)
+    expect(fetcher.mock.calls[1][0]).toMatch(/\/codex\/models\?client_version=/)
   })
   it('reports transport failures and rejects expired credentials before fetching', async () => {
     const fetcher = vi.fn(async () => { throw new Error('offline') })

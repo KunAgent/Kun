@@ -367,7 +367,7 @@ export async function sendThreadMessage(
       const threadSnap = activeThreadId
         ? state.threads.find((thread) => thread.id === activeThreadId)
         : undefined
-      const { composerModel, composerProviderId, composerAccountId, composerHarnessId, composerCredentialMode } = selectedRoute
+      const { composerModel, composerProviderId, composerAccountId, composerHarnessId, composerCredentialMode, composerGatewayBinding } = selectedRoute
       const userModelChip =
         queued?.modelLabel ?? overrides?.modelLabel ?? optimisticUserModelLabel(composerModel, threadSnap?.model)
       const displayText = queued?.displayText ?? overrides?.displayText?.trim()
@@ -410,6 +410,7 @@ export async function sendThreadMessage(
           composerAccountId,
           composerHarnessId,
           composerCredentialMode,
+          composerGatewayBinding,
           userModelChip,
           displayText,
           reasoningEffort,
@@ -449,6 +450,7 @@ export async function sendThreadMessage(
           ...(composerAccountId ? { accountId: composerAccountId } : {}),
           ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
           ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
+          ...(composerGatewayBinding ? { gatewayBinding: structuredClone(composerGatewayBinding) } : {}),
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
           ...(reasoningEffort ? { reasoningEffort } : {}),
           ...(serviceTier ? { serviceTier } : {}),
@@ -532,7 +534,7 @@ export async function sendThreadMessage(
       get().blocks.every((block) => block.kind !== 'user') &&
       shouldAutoTitleThread(activeThread)
     const threadSnap = get().threads.find((thread) => thread.id === activeThreadId)
-    const { composerModel, composerProviderId, composerAccountId, composerHarnessId, composerCredentialMode } = selectedRoute
+    const { composerModel, composerProviderId, composerAccountId, composerHarnessId, composerCredentialMode, composerGatewayBinding } = selectedRoute
     const reasoningEffort = queued?.reasoningEffort ?? overrides?.reasoningEffort?.trim()
     const serviceTier =
       (queued?.serviceTier ?? overrides?.serviceTier) === 'priority'
@@ -568,6 +570,7 @@ export async function sendThreadMessage(
       ...(composerAccountId ? { accountId: composerAccountId } : {}),
       ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
       ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
+          ...(composerGatewayBinding ? { gatewayBinding: structuredClone(composerGatewayBinding) } : {}),
       ...(userModelChip ? { modelLabel: userModelChip } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(serviceTier ? { serviceTier } : {}),
@@ -636,6 +639,7 @@ export async function sendThreadMessage(
       composerAccountId,
       composerHarnessId,
       composerCredentialMode,
+      composerGatewayBinding,
       reasoningEffort,
       serviceTier,
       guiDesignCanvas,

@@ -167,6 +167,7 @@ export class CompatRequestCodecs {
         }
       }))
     }
+    if (input.request.parallelToolCalls !== undefined && input.tools.length) body.parallel_tool_calls = input.request.parallelToolCalls
     if (requiredToolChoice) body.tool_choice = {
       type: 'function',
       function: { name: requiredToolChoice }
@@ -260,9 +261,10 @@ export class CompatRequestCodecs {
     // when the resolved model advertises no explicit reasoning control.
     if (input.isCodex) body.include = ['reasoning.encrypted_content']
     if (!input.isCodexLite && responseTools.length) body.tools = responseTools
-    if (!input.isCodexLite && input.isCodex && input.codexNativeImageGeneration) {
+    if (!input.request.gatewayRouting && !input.isCodexLite && input.isCodex && input.codexNativeImageGeneration) {
       body.tools = [...((body.tools ?? []) as Record<string, unknown>[]), { type: 'image_generation' }]
     }
+    if (!input.isCodexLite && input.request.parallelToolCalls !== undefined && input.tools.length) body.parallel_tool_calls = input.request.parallelToolCalls
     if (requiredToolChoice && !input.isCodexLite) {
       body.tool_choice = { type: 'function', name: requiredToolChoice }
       // The server must not emit additional calls beside a hard-gated one.
@@ -309,6 +311,9 @@ export class CompatRequestCodecs {
       }))
     }
     if (requiredToolChoice) body.tool_choice = { type: 'tool', name: requiredToolChoice }
+    if (input.request.parallelToolCalls === false && input.tools.length) body.tool_choice = {
+      ...(requiredToolChoice ? { type: 'tool', name: requiredToolChoice } : { type: 'auto' }), disable_parallel_tool_use: true
+    }
     return body
   }
 }

@@ -99,7 +99,7 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
     <button type="button" className={settingsButtonClass()} aria-expanded={showPreview} onClick={() => setShowPreview((value) => !value)}>{t('gatewayConnection.standalone')}</button>
     {showPreview ? <div className="grid min-w-0 grid-cols-1 gap-3" data-gateway-standalone>
       <p className="text-[11px] leading-5 text-ds-muted">{t('gatewayConnection.manualHint')}</p>
-      <GatewayClientCredentials clientName={client.label} active={active} />
+      <GatewayClientCredentials clientName={client.label} active={active} modelId={pool?.modelId} />
       {preview ? <>
         <GatewayLaunchProfile key={`${clientId}:${preview.modelId}:${preview.baseUrl}`} setup={preview} />
         <ol className="list-inside list-decimal space-y-1 text-[11px] leading-5 text-ds-muted">

@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { beginQueueAdmission } from './queue-admission-fence'
 import { confirmQueueAdmission } from './queue-admission-recovery'
 import type { AgentProvider } from '../agent/types'
@@ -39,6 +40,7 @@ export type RuntimeQueueSendInput = {
   composerProviderId: string
   composerAccountId: string | undefined
   composerHarnessId: string
+  composerGatewayBinding?: HarnessGatewayBinding
   composerCredentialMode: string
   userModelChip: string | undefined
   displayText: string | undefined
@@ -72,7 +74,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
   const {
     provider: p, activeThreadId, trimmedText, clientRequestId, mode, orchestration,
     requestedAgentSurface, writeContext, composerModel, composerProviderId,
-    composerAccountId, composerHarnessId, composerCredentialMode,
+    composerAccountId, composerHarnessId, composerCredentialMode, composerGatewayBinding,
     userModelChip, displayText, reasoningEffort, serviceTier,
     subagentResume, messageSource, persona, designProfile, designDocumentTarget,
     designImagePlacementTarget, attachmentIds, attachments, fileReferences, composerContexts,
@@ -129,6 +131,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(composerCredentialMode
         ? { credentialMode: composerCredentialMode as 'native-login' | 'provider' | 'kun-gateway' }
         : {}),
+      ...(composerGatewayBinding ? { gatewayBinding: composerGatewayBinding } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(!channel && serviceTier ? { serviceTier } : {}),
       ...(subagentResume ? { subagentResume } : {}),
@@ -178,6 +181,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(composerAccountId ? { accountId: composerAccountId } : {}),
       ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
       ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
+      ...(composerGatewayBinding ? { gatewayBinding: structuredClone(composerGatewayBinding) } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(serviceTier ? { serviceTier } : {}),
       ...(subagentResume ? { subagentResume } : {}),

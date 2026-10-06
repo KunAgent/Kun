@@ -413,6 +413,7 @@ async updateTurnMetadata(this: TurnService,
       | 'extensionToolInvocations'
       | 'workspaceCheckpointId'
       | 'actingModelRoute'
+      | 'gatewayAliasGrants'
       | 'graphPlanningLifecycle'
     >, 'requiredToolGate'>
       & { requiredToolGate?: Turn['requiredToolGate'] | null }
@@ -459,6 +460,8 @@ async updateTurnMetadata(this: TurnService,
               ...(patch.workspaceCheckpointId
                 ? { workspaceCheckpointId: patch.workspaceCheckpointId }
                 : {}),
+              ...(!turn.gatewayAliasGrants && patch.gatewayAliasGrants
+                ? { gatewayAliasGrants: structuredClone(patch.gatewayAliasGrants) } : {}),
               // The first resolved model/provider/account tuple owns the turn.
               // Later steps and settings changes cannot replace it.
               ...(!turn.actingModelRoute && patch.actingModelRoute

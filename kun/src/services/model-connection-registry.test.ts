@@ -55,7 +55,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -187,7 +187,7 @@ describe('ModelConnectionRegistry', () => {
     expect(retired.providers.map((provider) => provider.id)).toEqual(['deepseek'])
     expect(retired.defaultProviderId).toBe('deepseek')
     expect(retired.defaultModel).toBe('deepseek-chat')
-    const stored = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
+    const stored = JSON.parse(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')) as {
       profiles: Record<string, unknown>
       tombstones: Record<string, unknown>
     }
@@ -383,7 +383,7 @@ describe('ModelConnectionRegistry', () => {
           authorization: 'Bearer access-token',
           'ChatGPT-Account-Id': 'account-1',
           originator: 'codex_cli_rs'
-        }) })
+        }) }), ''
       )
     })
 
@@ -410,7 +410,7 @@ describe('ModelConnectionRegistry', () => {
 
       await expect(value.probe('anthropic')).resolves.toEqual({
         ok: true,
-        models: ['claude-sonnet-4-5', 'claude-fallback']
+        models: ['claude-sonnet-4-5']
       })
       expect(fetchMock).toHaveBeenCalledWith('https://api.anthropic.com/v1/models', expect.objectContaining({
         headers: expect.objectContaining({
@@ -490,7 +490,7 @@ describe('ModelConnectionRegistry', () => {
       }])
 
       expect(JSON.stringify(reconciled)).not.toContain(sourceId)
-      const stored = await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')
+      const stored = await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')
       expect(stored).not.toContain(sourceId)
       const materialized = await value.materialize()
       expect(materialized.providers.get('codex')).toMatchObject({
@@ -533,7 +533,7 @@ describe('ModelConnectionRegistry', () => {
       }])
 
       expect(reconciled.providers[0]).toMatchObject({ configured: false })
-      const stored = await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')
+      const stored = await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')
       expect(stored).not.toContain('settings:provider:deepseek')
       expect((await value.materialize()).providers.has('deepseek')).toBe(false)
       await expect(value.credentialStateForInternalConsumer('deepseek')).resolves.toEqual({
@@ -572,7 +572,7 @@ describe('ModelConnectionRegistry', () => {
       probe: false,
       select: true
     })
-    const before = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
+    const before = JSON.parse(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')) as {
       profiles: Record<string, { credentialRef?: string }>
     }
     const credentialRef = before.profiles['opencode-go-2']?.credentialRef
@@ -604,7 +604,7 @@ describe('ModelConnectionRegistry', () => {
         }
       }
     })
-    const after = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
+    const after = JSON.parse(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')) as {
       profiles: Record<string, { credentialRef?: string }>
     }
     expect(after.profiles['opencode-go-2']?.credentialRef).toBe(credentialRef)
@@ -651,7 +651,7 @@ describe('ModelConnectionRegistry', () => {
         authoritative: true,
         apiKey: 'final-secret'
       })
-      const stored = await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')
+      const stored = await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')
       expect(stored).not.toContain('settings:provider:deepseek')
       expect(stored).not.toContain('replacement-secret')
       expect(stored).not.toContain('final-secret')

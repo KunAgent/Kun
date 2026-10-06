@@ -32,6 +32,7 @@ export function createNewSendThread(
     ...(input.composerAccountId ? { accountId: input.composerAccountId } : {}),
     ...(input.composerHarnessId ? { harnessId: input.composerHarnessId } : {}),
     ...(input.composerCredentialMode ? { credentialMode: input.composerCredentialMode } : {}),
+    ...(input.composerGatewayBinding ? { gatewayBinding: input.composerGatewayBinding } : {}),
     ...(adeSend ? { workspaceMode: 'code' as const } : {}),
     ...(input.composerCollaborationEnabled || input.composerCollaborationExplicit
       ? { collaboration: { enabled: input.composerCollaborationEnabled === true } } : {}),

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "zai-coding-plan",
+  "name": "Z.ai Coding Plan",
+  "category": "subscription",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "subscription",
+  "baseUrl": "https://api.z.ai/api/coding/paas/v4/chat/completions",
+  "endpointFormat": "custom_endpoint",
+  "models": [
+    "glm-5.3",
+    "glm-5.2",
+    "glm-5.1",
+    "glm-5",
+    "glm-5-turbo",
+    "glm-4.7",
+    "glm-4.5-air"
+  ],
+  "docsUrl": "https://docs.z.ai/devpack/tool/others",
+  "credentialUrl": "https://z.ai/subscribe"
+}

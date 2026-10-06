@@ -23,7 +23,7 @@ export type SessionUsageRecord = {
   providerId?: string
   relation?: ThreadRelation
   /** Origin of the record (docs/ade/04 §6); absent means native loop usage. */
-  source?: 'native' | 'harness-gateway' | 'harness-reported' | 'public-gateway'
+  source?: 'native' | 'harness-gateway' | 'harness-reported' | 'public-gateway' | 'utility'
   harnessId?: string
   completedAt: string
   usage: UsageSnapshot

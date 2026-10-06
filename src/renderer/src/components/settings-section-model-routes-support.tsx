@@ -315,6 +315,7 @@ export function runtimePoolMatches(selected: ModelRoutePoolV1 | undefined, runti
     modelId: pool.modelId,
     enabled: pool.enabled,
     strategy: pool.strategy,
+    affinity: pool.affinity,
     targets: pool.targets.map((target) => ({
       id: target.id,
       providerId: target.providerId,

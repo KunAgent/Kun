@@ -7,6 +7,7 @@ export function GatewayClientUsage({ usage, clientName }: { usage: Usage; client
   return <section className="grid min-w-0 grid-cols-1 gap-2 rounded-lg bg-ds-main p-3 text-[11px] text-ds-muted" data-gateway-client-usage>
     <h5 className="min-w-0 break-words font-semibold text-ds-ink">{t('gatewayConnection.usageTitle', { name: clientName })}</h5>
     <p>{t('gatewayConnection.usageTotals', { requests: usage.totalRequests, tokens: usage.totalTokens })}</p>
+    {usage.budget ? <p>{t('providerConfiguration.budgetUsage', { ...usage.budget, limit: usage.budget.limit ?? '—' })}</p> : null}
     <p>{t('gatewayConnection.usageCostHint')}</p>
     <p>{t('gatewayConnection.usageSessionHint')}</p>
     <div className="max-h-64 min-w-0 max-w-full space-y-2 overflow-y-auto">

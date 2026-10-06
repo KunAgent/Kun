@@ -1,5 +1,8 @@
 # Model Provider Presets
 
+See [provider configuration and gateway](provider-configuration-and-gateway.md)
+for the current Registry, account discovery, transactions and execution contract.
+
 ## Context
 
 DeepChat handles model suppliers in two layers:
@@ -29,11 +32,32 @@ The Settings > Providers panel should let users:
 - keep provider fields editable after creation,
 - configure optional image-generation capabilities on a provider.
 
-Preset providers remain opt-in because this project does not have a separate
-enabled/disabled provider flag. Adding every known provider by default would
-make all of their models appear in the composer before credentials are set.
+Preset providers remain opt-in. Each account can be paused independently, and
+group defaults can disable its new requests without deleting credentials or
+model selections. Adding every known provider by default would expose choices
+before the user has configured their accounts.
+
+The 43 packaged descriptors live under
+`packages/provider-catalog/src/definitions/`. Add ordinary compatible vendors
+there and validate them through the catalog package. Runtime adapters stay in
+Kun; a JSON descriptor cannot add executable authentication or protocol code.
 
 ## Built-in Providers
+
+ChatGPT subscription:
+
+- Model discovery uses the provider's own OAuth credential and HTTP catalog.
+  It does not require, launch, install, or read credentials from a Codex Agent.
+- Before discovery, public `@openai/codex` release metadata supplies the catalog
+  compatibility version. Successful version checks are cached in memory for
+  24 hours per transport/proxy; failed checks retry after five minutes and keep
+  the last working version or the bundled minimum. URL and User-Agent use the
+  same version. No provider credentials are sent to the package registry.
+- A rejected version or malformed catalog retries the last working version.
+  Authentication errors, rate limits, server errors, and valid empty account
+  catalogs remain authoritative. Catalog enrichment cannot add unavailable models.
+- Agent executable updates and native Agent model discovery remain separate
+  harness operations; updating a provider catalog never updates an Agent.
 
 Opper:
 

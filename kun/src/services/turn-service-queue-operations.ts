@@ -144,7 +144,7 @@ export const turnServiceQueueOperations = {
         ...(thread.workspace ? { workspace: thread.workspace } : {})
       })
     }
-    const turnModel = firstNonBlank(
+    let turnModel = firstNonBlank(
       input.request.model,
       thread.model,
       this['deps'].defaultModel,
@@ -163,7 +163,18 @@ export const turnServiceQueueOperations = {
         ? firstNonBlank(thread.accountId)
         : undefined
     )
-    const turn = createTurnRecord({
+    const gatewayBinding = input.request.gatewayBinding ?? (!input.request.providerId?.trim() && turnCredentialMode === 'kun-gateway' && turnHarnessId === thread.executionConfig?.route.harnessId
+              ? thread.executionConfig.route.gatewayBinding : undefined)
+          if (gatewayBinding && !this['deps'].gatewayAliasProfilesEnabled?.()) throw new Error('Gateway alias profiles require the Agent router')
+          if (gatewayBinding) {
+            if (input.request.providerId?.trim() && input.request.providerId !== 'default') throw new Error('Choose a provider connection or a gateway alias, not both')
+            if (turnCredentialMode !== 'kun-gateway' || turnHarnessId === 'kun') throw new Error('Alias bindings require an external Agent in gateway mode')
+            const alias = this['deps'].resolveGatewayAliasModel?.(gatewayBinding)
+            if (!alias) throw new Error('The selected Agent gateway alias is unavailable')
+            if (input.request.model && input.request.model !== 'default' && input.request.model !== alias) throw new Error('The model does not match the selected gateway alias')
+            turnModel = alias
+          }
+          const turn = createTurnRecord({
       id: turnId,
       threadId: input.threadId,
       clientRequestId: input.request.clientRequestId,
@@ -178,6 +189,7 @@ export const turnServiceQueueOperations = {
       harnessId: turnHarnessId,
       collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
       credentialMode: turnCredentialMode,
+            gatewayBinding,
       accountId: turnAccountId,
       reasoningEffort: input.request.reasoningEffort,
       serviceTier: input.request.serviceTier,

@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto'
+import type { HarnessGatewayAliasGrant } from '../../contracts/harness-gateway-binding.js'
+import type { ModelRouteTargetMetadata } from '../../ports/model-client.js'
 /**
  * `kun-gateway` credential mode (docs/ade/04 §5.5): the Claude SDK harness
  * reaches the loopback `kun serve` model gateway instead of a provider. This
@@ -28,8 +31,11 @@ export function resolveAgentSdkGatewayEnv(input: {
   deps: AgentSdkGatewayDeps
   threadId: string
   harnessId: HarnessId
-  providerId: string
+  providerId?: string
   model: string
+  turnId?: string
+  aliasRoutes?: HarnessGatewayAliasGrant[]
+  onResolvedRoute?: (route: ModelRouteTargetMetadata) => Promise<void>
 }): SdkGatewayEnv {
   const gateway = input.deps.gateway?.()
   if (!gateway) {
@@ -42,18 +48,31 @@ export function resolveAgentSdkGatewayEnv(input: {
   if (!input.deps.tokens) {
     throw new AgentSdkGatewayUnavailableError('the harness token service is not wired')
   }
+  if (input.aliasRoutes) {
+    const main = input.aliasRoutes.find((route) => route.role === 'main')
+    const small = input.aliasRoutes.find((route) => route.role === 'small')
+    if (!main || (input.model !== 'default' && input.model !== main.alias)) throw new AgentSdkGatewayUnavailableError('the Agent model does not match its gateway alias')
+    if (small && !gateway.env.smallModel) throw new AgentSdkGatewayUnavailableError('this Agent has no small-model setting')
+    const credentialIdentity = `kun-gateway-alias:${createHash('sha256').update(JSON.stringify(input.aliasRoutes)).digest('hex')}`
+    const token = input.deps.tokens.issue({ threadId: input.threadId, turnId: input.turnId, harnessId: input.harnessId,
+      credentialIdentity, scopes: ['gateway'], aliasRoutes: input.aliasRoutes, onResolvedRoute: input.onResolvedRoute })
+    return { baseUrl, token, credentialIdentity, model: main.alias, smallModel: small?.alias ?? main.alias,
+      env: gateway.env, stripEnv: gateway.stripEnv }
+  }
+  const providerId = input.providerId?.trim()
+  if (!providerId) throw new AgentSdkGatewayUnavailableError('the turn has no provider or alias binding')
   const roles = input.deps.roles?.()
   // A role preference is not consent to another Agent credential profile.
   // Keep helper requests inside the provider admitted for this turn. A small
   // model from another provider cannot safely be addressed to this provider.
-  const smallProviderId = input.providerId
-  const configuredSmallProviderId = roles?.smallModelProviderId?.trim() || input.providerId
-  const smallModel = configuredSmallProviderId === input.providerId
+  const smallProviderId = providerId
+  const configuredSmallProviderId = roles?.smallModelProviderId?.trim() || providerId
+  const smallModel = configuredSmallProviderId === providerId
     ? roles?.smallModel?.trim() || input.model : input.model
   const routes: HarnessTokenRoute[] = [
-    { providerId: input.providerId, model: input.model, role: 'main' }
+    { providerId: providerId, model: input.model, role: 'main' }
   ]
-  if (smallProviderId !== input.providerId || smallModel !== input.model) {
+  if (smallProviderId !== providerId || smallModel !== input.model) {
     routes.push({ providerId: smallProviderId, model: smallModel, role: 'small' })
   }
   // The grant id is deterministic on (harness, credentialIdentity, thread,
@@ -69,7 +88,7 @@ export function resolveAgentSdkGatewayEnv(input: {
   return {
     baseUrl,
     token,
-    model: formatGatewayModelId(input.providerId, input.model),
+    model: formatGatewayModelId(providerId, input.model),
     smallModel: formatGatewayModelId(smallProviderId, smallModel),
     env: gateway.env,
     stripEnv: gateway.stripEnv

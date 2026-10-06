@@ -1,3 +1,4 @@
+import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { QueuedTurnDispatcher } from './queued-turn-dispatcher.js'
 import { createExecutionTaskTurnSettledHook } from './execution-task-turn-settlement.js'
 import {
@@ -290,6 +291,7 @@ export async function createRuntimeAgentComposition(
     listQuota: () => model.providerQuotaService.list(),
     notices: workerNoticeCoordinator,
     providerPool: providerPool.poolEntry,
+    resolveGatewayAliases: async (binding) => freezeHarnessGatewayAliases(await model.modelConnections.snapshot(), binding),
     probedModels: (definition) => services.harnesses.probedModels(definition),
     threads: threadStore,
     turns: turnService,

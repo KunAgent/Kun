@@ -15,9 +15,12 @@ export async function readinessProbeEnvironment(definition: HarnessDefinition, r
   const token = 'kun-readiness-no-model-access'
   try {
     const env = ['acp', 'codex-app-server', 'pi-rpc'].includes(definition.transport)
-      ? await createAcpCredentialEnv({ tokens: { issue: () => token }, endpoint: () => 'http://127.0.0.1:1', configDir: () => dir })({
+      ? await createAcpCredentialEnv({ tokens: { issue: () => token }, endpoint: () => 'http://127.0.0.1:1', configDir: () => dir,
+        resolveAliases: async (binding) => [{ routeId: binding.main.routeId, alias: route.model, role: 'main', targets: [] }]
+       })({
         harnessId: definition.id, credentialMode: 'kun-gateway', threadId: 'readiness', turnId: 'readiness',
-        credentialIdentity: 'readiness', providerId: route.providerId || 'default', model: route.model, gateway
+        credentialIdentity: 'readiness', providerId: route.gatewayBinding ? undefined : route.providerId || 'default',
+        gatewayBinding: route.gatewayBinding, model: route.model, gateway
       })
       : { [gateway.env.token]: token, [gateway.env.baseUrl]: 'http://127.0.0.1:1',
         ...(gateway.env.model ? { [gateway.env.model]: route.model } : {}) }

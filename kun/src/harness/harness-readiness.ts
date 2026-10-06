@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../contracts/harness-gateway-binding.js'
 import type { HarnessDefinition, HarnessRoute, HarnessStatus } from '../contracts/harness.js'
 import type { HarnessReadiness, HarnessTestHandshake, HarnessTestRequest, HarnessTestResponse } from '../contracts/harness-test.js'
 import type { HarnessEnabledProfile } from '../config/kun-config-harnesses.js'
@@ -34,6 +35,7 @@ export type HarnessReadinessDeps = {
   revision?: () => number
   catalog: HarnessCatalog
   detector: Pick<HarnessDetector, 'status'>
+  resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>
   resolveSecretEnv?: HarnessSecretRefResolver
   resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null>
   sdkHandshake?: (definition: HarnessDefinition, env: Record<string, string>, signal: AbortSignal) => Promise<Handshake>
@@ -52,13 +54,15 @@ export class HarnessReadinessService {
   private readonly preparing = new Map<string, string>()
   constructor(private readonly deps: HarnessReadinessDeps) {}
 
-  route(definition: HarnessDefinition, input: Pick<HarnessTestRequest, 'credentialMode' | 'providerId' | 'model'>): HarnessRoute {
+  route(definition: HarnessDefinition, input: Pick<HarnessTestRequest, 'credentialMode' | 'providerId' | 'model' | 'gatewayBinding'>): HarnessRoute {
     const defaults = this.deps.options().harnesses?.defaults?.[definition.id]
     const credentialMode = input.credentialMode ?? defaults?.credentialMode ?? definition.credentialModes[0]!
-    const providerId = input.providerId ?? (input.credentialMode === 'native-login' ? undefined : defaults?.providerId)
+    const gatewayBinding = input.gatewayBinding ?? (credentialMode === 'kun-gateway' ? defaults?.gatewayBinding : undefined)
+    const providerId = gatewayBinding ? undefined : input.providerId ?? (input.credentialMode === 'native-login' ? undefined : defaults?.providerId)
+    const aliasModel = gatewayBinding ? this.deps.options().routePools?.find((pool) => pool.id === gatewayBinding.main.routeId)?.modelId : undefined
     return { harnessId: definition.id, credentialMode,
-      ...(providerId ? { providerId } : credentialMode !== 'native-login' ? { providerId: 'default' } : {}),
-      model: input.model ?? defaults?.model ?? (credentialMode === 'native-login' ? 'default' : this.deps.options().model ?? '') }
+      ...(gatewayBinding ? { gatewayBinding } : providerId ? { providerId } : credentialMode !== 'native-login' ? { providerId: 'default' } : {}),
+      model: (gatewayBinding && input.model === 'default' ? undefined : input.model) ?? aliasModel ?? defaults?.model ?? (credentialMode === 'native-login' ? 'default' : this.deps.options().model ?? '') }
   }
 
   async test(definition: HarnessDefinition, input: HarnessTestRequest, signal?: AbortSignal): Promise<HarnessTestResponse> {
@@ -304,7 +308,17 @@ export class HarnessReadinessService {
     let detail: string | undefined
     let hasKey = nativeEvidence?.configured || nativeHasKey(definition, env) || (!definition.builtin && Object.entries(secretEnv).some(([key, value]) =>
       /^(?:OPENAI|ANTHROPIC|DEEPSEEK|GEMINI|GOOGLE|WINDSURF|MISTRAL|GROQ|OPENROUTER|XAI)_API_KEY$/.test(key) && Boolean(value.trim())))
-    if (route.credentialMode !== 'native-login') {
+    if (route.gatewayBinding) {
+      try {
+        if (route.credentialMode !== 'kun-gateway' || !definition.gateway || !this.deps.resolveGatewayAliases) throw new Error('Agent alias routing is unavailable')
+        if (route.gatewayBinding.small && !definition.gateway.env.smallModel) throw new Error('This Agent does not expose a separate small-model setting')
+        const aliases = await this.deps.resolveGatewayAliases(route.gatewayBinding)
+        const main = aliases.find((entry) => entry.role === 'main')
+        if (!main || main.alias !== route.model) throw new Error('Select the model alias associated with this Agent profile')
+        secretEnv.__KUN_READINESS_GATEWAY_ALIASES = JSON.stringify(aliases)
+        configured &&= true; hasKey = true
+      } catch (error) { configured = false; hasKey = false; detail = error instanceof Error ? error.message : 'Agent alias routing is unavailable' }
+    } else if (route.credentialMode !== 'native-login') {
       hasKey = Boolean(apiKey)
       const gateway = route.credentialMode === 'kun-gateway'
       const validProvider = Boolean(provider && (gateway ? exposableProvider({

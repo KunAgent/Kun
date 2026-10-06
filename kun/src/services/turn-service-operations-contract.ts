@@ -238,6 +238,7 @@ export interface TurnServiceOperations {
       | 'extensionToolInvocations'
       | 'workspaceCheckpointId'
       | 'actingModelRoute'
+      | 'gatewayAliasGrants'
       | 'graphPlanningLifecycle'
     >, 'requiredToolGate'>
       & { requiredToolGate?: Turn['requiredToolGate'] | null }

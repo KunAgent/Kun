@@ -1,3 +1,6 @@
+import { retainFrozenHarnessAliases } from '../../harness/gateway-alias-binding.js'
+import { createHash } from 'node:crypto'
+import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../../contracts/harness-gateway-binding.js'
 /**
  * `kun-gateway` credential env for ACP harnesses (docs/ade impl P3-10).
  *
@@ -37,6 +40,7 @@ export type AcpCredentialEnvDeps = {
   endpoint: () => string | undefined
   /** Root for generated per-route harness config, e.g. `<dataDir>/acp-gateway`. */
   configDir: () => string
+  resolveAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>
 }
 
 function slugify(value: string): string {
@@ -80,7 +84,12 @@ export function createAcpCredentialEnv(
     const parsed = input.model?.trim() ? parseGatewayModelId(input.model.trim()) : undefined
     const providerId = input.providerId?.trim() || parsed?.providerId
     const model = parsed?.model ?? input.model?.trim()
-    if (!providerId || !model) {
+    if (input.gatewayBinding && !deps.resolveAliases) throw new Error('Agent alias resolution is unavailable')
+    if (input.gatewayBinding?.small && !gateway.env.smallModel) throw new Error('This Agent does not expose a separate small-model setting')
+    const aliases = input.gatewayBinding ? retainFrozenHarnessAliases(await deps.resolveAliases!(input.gatewayBinding), input.frozenGatewayAliases) : undefined
+    const mainAlias = aliases?.find((route) => route.role === 'main')
+    if (input.gatewayBinding && (!mainAlias || (model && model !== 'default' && model !== mainAlias.alias))) throw new Error('The Agent model does not match its selected gateway alias')
+    if (!mainAlias && (!providerId || !model)) {
       throw new Error(
         `harness '${input.harnessId}' kun-gateway needs a provider/model route`
       )
@@ -88,24 +97,30 @@ export function createAcpCredentialEnv(
     // Same rule as the SDK gateway env: routes are not hashed into the grant
     // id, so the caller must bind the route into credentialIdentity itself —
     // a later turn can never widen a live token's route set.
+    if (aliases) await input.onResolvedAliases?.(aliases)
+    const identity = aliases ? `${input.credentialIdentity}:aliases:${createHash('sha256').update(JSON.stringify(aliases)).digest('hex')}` : input.credentialIdentity
+    const gatewayModelId = mainAlias?.alias ?? formatGatewayModelId(providerId!, model!)
+    if (mainAlias) input.onResolvedIdentity?.(identity, gatewayModelId)
     const token = deps.tokens.issue({
       threadId: input.threadId,
       harnessId: input.harnessId,
-      credentialIdentity: input.credentialIdentity,
+      credentialIdentity: identity,
       scopes: ['gateway'],
-      routes: [{ providerId, model, role: 'main' }]
+      ...(aliases ? { turnId: input.turnId, onResolvedRoute: input.onGatewayRoute } : {}),
+      ...(aliases ? { aliasRoutes: aliases } : { routes: [{ providerId: providerId!, model: model!, role: 'main' as const }] })
     })
     const v1 = `${baseUrl.replace(/\/+$/, '')}/v1`
     const env = {
       [gateway.env.token]: token,
-      [gateway.env.baseUrl]: v1
+      [gateway.env.baseUrl]: v1,
+      ...(mainAlias && gateway.env.model ? { [gateway.env.model]: mainAlias.alias } : {}),
+      ...(mainAlias && gateway.env.smallModel ? { [gateway.env.smallModel]: aliases?.find((route) => route.role === 'small')?.alias ?? mainAlias.alias } : {})
     }
     const dir = join(
       deps.configDir(),
       input.harnessId,
-      `${slugify(input.threadId)}-${slugify(`${providerId}-${model}`)}`
+      `${slugify(input.threadId)}-${aliases ? createHash('sha256').update(identity).digest('hex').slice(0, 24) : slugify(`${providerId}-${model}`)}`
     )
-    const gatewayModelId = formatGatewayModelId(providerId, model)
     switch (`${input.harnessId}:${gateway.protocol}`) {
       case 'opencode:openai-chat':
         return {

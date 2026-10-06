@@ -375,7 +375,7 @@ export class ModelRoundEngine {
               break
             }
             case 'usage': {
-              this.deps.telemetry.recordPromptPressure(
+              if (!intent.usage.attemptAccounting || intent.usage.attemptAccounting.responseUsageKnown) this.deps.telemetry.recordPromptPressure(
                 input.threadId,
                 input.request.model,
                 intent.usage.promptTokens
@@ -386,7 +386,7 @@ export class ModelRoundEngine {
                 input.cacheSignature,
                 input.turnId
               )
-              await this.deps.recordGoalUsage(input.threadId, intent.usage.totalTokens)
+              await this.deps.recordGoalUsage(input.threadId, intent.usage.attemptAccounting?.totals.totalTokens ?? intent.usage.totalTokens)
               await this.deps.events.record({
                 kind: 'usage',
                 threadId: input.threadId,

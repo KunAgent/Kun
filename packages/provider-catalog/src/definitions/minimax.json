@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "minimax",
+  "name": "MiniMax",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.minimaxi.com/anthropic",
+  "endpointFormat": "messages",
+  "models": [
+    "MiniMax-M3",
+    "MiniMax-M2.7",
+    "MiniMax-M2.7-highspeed",
+    "MiniMax-M2.5",
+    "MiniMax-M2.5-highspeed",
+    "MiniMax-M2.1",
+    "MiniMax-M2.1-highspeed",
+    "MiniMax-M2"
+  ],
+  "docsUrl": "https://platform.minimax.io/docs/api-reference/text-anthropic-api",
+  "credentialUrl": "https://platform.minimaxi.com/user-center/basic-information/interface-key",
+  "tokenPlan": {
+    "baseUrl": "https://api.minimaxi.com/anthropic",
+    "regions": [
+      {
+        "id": "cn",
+        "baseUrl": "https://api.minimaxi.com/anthropic"
+      },
+      {
+        "id": "global",
+        "baseUrl": "https://api.minimax.io/anthropic"
+      }
+    ],
+    "endpointFormat": "messages",
+    "models": [
+      "MiniMax-M3",
+      "MiniMax-M2.7",
+      "MiniMax-M2.7-highspeed",
+      "MiniMax-M2.5",
+      "MiniMax-M2.5-highspeed",
+      "MiniMax-M2.1",
+      "MiniMax-M2.1-highspeed",
+      "MiniMax-M2"
+    ],
+    "credentialUrl": "https://platform.minimaxi.com/docs/token-plan/quickstart"
+  }
+}

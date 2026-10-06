@@ -103,13 +103,13 @@ describe('gateway route bounds and disclosure', () => {
     expect(fake.seen.map((entry) => entry.providerId)).toEqual(['a', 'b'])
   })
 
-  it('preserves native routing independently of gateway attempt and export limits', async () => {
+  it('bounds native route attempts without turning them into gateway-exported requests', async () => {
     const ids = ['a', 'b', 'c', 'd', 'e', 'f']
     const fake = direct(async function* () { yield fail() })
     const client = new RoutePoolModelClient(fake.client, [route(ids)], capabilities)
     await drain(client.stream(request([], { gatewayRouting: undefined })))
-    expect(fake.seen).toHaveLength(ids.length)
-    expect(fake.seen.every((entry) => entry.maxRetryAttempts === undefined)).toBe(true)
+    expect(fake.seen).toHaveLength(GATEWAY_MAX_ROUTE_ATTEMPTS)
+    expect(fake.seen.every((entry) => entry.maxRetryAttempts === 0 && entry.gatewayRouting === undefined)).toBe(true)
   })
 
   it('does not start an upstream attempt after cancellation', async () => {

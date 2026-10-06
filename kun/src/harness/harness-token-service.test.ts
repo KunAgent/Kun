@@ -24,15 +24,16 @@ describe('HarnessTokenService', () => {
     expect(reordered).toBe(forward)
   })
 
-  it('preserves grant identity while updating routes and limits on reissue', () => {
+  it('creates a new grant when routes change and never expands an existing live grant', () => {
     const tokens = new HarnessTokenService()
     const first = tokens.issue({ ...baseInput, scopes: ['gateway'], maxConcurrent: 4 })
     const original = tokens.verify(first)
     const second = tokens.issue({ ...baseInput, scopes: ['gateway'], maxConcurrent: 1,
       routes: [{ providerId: 'new', model: 'model', role: 'main' }] })
-    expect(second).toBe(first)
-    expect(tokens.verify(second)).toBe(original)
-    expect(original).toMatchObject({ maxConcurrent: 1, routes: [{ providerId: 'new' }] })
+    expect(second).not.toBe(first)
+    expect(tokens.verify(second)).not.toBe(original)
+    expect(original).toMatchObject({ maxConcurrent: 4, routes: [] })
+    expect(tokens.verify(second)).toMatchObject({ maxConcurrent: 1, routes: [{ providerId: 'new' }] })
   })
 
   it('issues different tokens for different scopes of the same identity', () => {

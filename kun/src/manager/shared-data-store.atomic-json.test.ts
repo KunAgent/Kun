@@ -16,6 +16,20 @@ afterEach(async () => {
 })
 
 describe('manager atomic JSON idempotency', () => {
+  it('rejects legacy Registry writes and deletes after v2 is published', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-manager-registry-version-')); roots.push(root)
+    const store = await ManagerSharedDataStore.create(root)
+    try {
+      const legacy = join(root, 'model-connections.v1.json')
+      await store.writeAtomicJson({ path: legacy, expectedRevision: 0, value: { schemaVersion: 1, revision: 1 } })
+      await store.writeAtomicJson({ path: join(root, 'model-connections.v2.json'), expectedRevision: 0,
+        value: { schemaVersion: 2, revision: 1 } })
+      await expect(store.writeAtomicJson({ path: legacy, expectedRevision: 1,
+        value: { schemaVersion: 1, revision: 2 } })).rejects.toThrow('v2')
+      await expect(store.deleteAtomicJson({ path: legacy, expectedRevision: 1 })).rejects.toThrow('v2')
+      expect((await store.readAtomicJson(legacy)).value).toEqual({ schemaVersion: 1, revision: 1 })
+    } finally { await store.close() }
+  })
   it('collapses concurrent identical writes without churning the revision', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-manager-json-idempotent-'))
     roots.push(root)

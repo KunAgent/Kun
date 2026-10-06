@@ -1,3 +1,4 @@
+import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { buildGoogleWorkspaceToolProvider } from '../google-workspace/google-workspace-tools.js'
 import { GoogleWorkspaceService } from '../google-workspace/service.js'
 import { createReviewContextResolver } from '../services/review-composer-context.js'
@@ -175,6 +176,7 @@ export async function createRuntimeServices(
     // store at spawn/probe time; values never reach config or logs.
     revision: () => core.optionsRevision,
     resolveProviderCredential: model.resolveLegacyRequestCredentials,
+    resolveGatewayAliases: async (binding) => freezeHarnessGatewayAliases(await model.modelConnections.snapshot(), binding),
     resolveSecretEnv: harnessSecretRefResolver(model.extensionCredentials)
   })
   // Per-turn `kun-tools` grants + http/stdio MCP descriptors for ACP sessions
@@ -190,7 +192,8 @@ export async function createRuntimeServices(
   const acpCredentialEnv = createAcpCredentialEnv({
     tokens: harnesses.tokens,
     endpoint: () => harnesses.gatewayEndpoint.baseUrl,
-    configDir: () => join(core.activeOptions.dataDir, 'acp-gateway')
+    configDir: () => join(core.activeOptions.dataDir, 'acp-gateway'),
+    resolveAliases: async (binding) => freezeHarnessGatewayAliases(await model.modelConnections.snapshot(), binding)
   })
   const providerKinds = () =>
     providerKindsForOptions(core.activeOptions, {
@@ -235,7 +238,9 @@ export async function createRuntimeServices(
 	    ids,
 	    nowIso,
 	    providerKinds,
-	    harnessCatalog: harnesses.catalog
+	    gatewayAliasProfilesEnabled: () => core.activeOptions.ade?.harnessRouter !== false,
+            resolveGatewayAliasModel: (binding) => core.activeOptions.routePools?.find((pool) => pool.id === binding.main.routeId && pool.enabled)?.modelId,
+            harnessCatalog: harnesses.catalog
   })
   executionLeases?.setLeaseLostHandler((lease) => {
     turnService.abortTurnExecution(lease.turnId, ownerLeaseExpiredTurnAbortReason(lease))

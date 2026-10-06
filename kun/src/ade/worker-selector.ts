@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import type {
   HarnessCredentialMode,
   HarnessId,
@@ -39,7 +40,9 @@ export type RouteCandidate = {
 }
 
 export type WorkerSelectorDeps = {
-  catalog: Pick<HarnessCatalog, 'list' | 'get' | 'isDisabled'>
+  configuredModel?: (harnessId: string, providerId: string | undefined, mode: HarnessCredentialMode) => string | undefined
+  gatewayAliasModel?: (binding: HarnessGatewayBinding) => string | undefined
+  catalog: Pick<HarnessCatalog, 'list' | 'get' | 'isDisabled'> & Partial<Pick<HarnessCatalog, 'enabledProfiles' | 'isProfileEnabled'>>
   detector: Pick<HarnessDetector, 'status'>
   capabilitiesForRoute(route: HarnessRoute): Promise<HarnessCapabilities>
   /** Routing-visible profiles for the manager workspace (10 §3.1 docs). */
@@ -135,7 +138,7 @@ async function buildCandidates(
 
   const routeFor = (
     defId: HarnessId,
-    profile?: { model?: string; providerId?: string; credentialMode?: HarnessCredentialMode }
+    profile?: { model?: string; providerId?: string; credentialMode?: HarnessCredentialMode; gatewayBinding?: HarnessGatewayBinding }
   ): { route: HarnessRoute; rejectedReason?: string } => {
     const def = byId.get(defId)
     if (!def) {
@@ -144,16 +147,19 @@ async function buildCandidates(
         rejectedReason: `unknown harness ${defId}`
       }
     }
-    const credentialMode = profile?.credentialMode ?? def.credentialModes[0]
+    const credentialMode = profile?.credentialMode ?? (profile?.gatewayBinding ? 'kun-gateway' : def.credentialModes[0])
     if (!credentialMode || !def.credentialModes.includes(credentialMode)) {
       return {
         route: { harnessId: defId, model: '-', credentialMode: credentialMode ?? 'provider' },
         rejectedReason: `credentialMode ${credentialMode ?? '(none)'} is not supported by harness ${def.id}`
       }
     }
+    if (profile?.gatewayBinding && (credentialMode !== 'kun-gateway' || !def.gateway || (profile.gatewayBinding.small && !def.gateway.env.smallModel) || !deps.gatewayAliasModel?.(profile.gatewayBinding))) return {
+      route: { harnessId: def.id, model: '-', credentialMode, gatewayBinding: profile.gatewayBinding }, rejectedReason: 'Agent gateway alias is unavailable'
+    }
     const model =
-      profile?.model?.trim() ||
-      def.staticModels[0] ||
+      (profile?.gatewayBinding ? deps.gatewayAliasModel?.(profile.gatewayBinding) : profile?.model?.trim()) ||
+      deps.configuredModel?.(def.id, profile?.providerId, credentialMode) || def.staticModels[0] ||
       (def.modelSource === 'provider' ? manager.model?.trim() : '') ||
       ''
     if (!model) {
@@ -163,12 +169,13 @@ async function buildCandidates(
       }
     }
     const providerId =
-      credentialMode === 'native-login'
+      credentialMode === 'native-login' || profile?.gatewayBinding
         ? undefined
         : profile?.providerId?.trim() ||
           (def.modelSource === 'provider' ? manager.providerId?.trim() : undefined)
     return {
-      route: { harnessId: def.id, model, ...(providerId ? { providerId } : {}), credentialMode }
+      route: { harnessId: def.id, model, ...(providerId ? { providerId } : {}), credentialMode,
+        ...(profile?.gatewayBinding ? { gatewayBinding: profile.gatewayBinding } : {}) }
     }
   }
 
@@ -188,8 +195,8 @@ async function buildCandidates(
     })
   }
   // Harness-default candidates: one per enabled harness.
-  for (const def of defs) {
-    const { route, rejectedReason } = routeFor(def.id)
+  for (const def of defs) for (const profile of deps.catalog.enabledProfiles?.(def.id)?.length ? deps.catalog.enabledProfiles!(def.id) : [undefined]) {
+    const { route, rejectedReason } = routeFor(def.id, profile)
     raw.push({
       route,
       label: def.displayName,
@@ -201,6 +208,7 @@ async function buildCandidates(
   const all = await Promise.all(
     raw.map(async ({ doc: _doc, ...candidate }) => {
       if (candidate.rejectedReason) return candidate
+      if (deps.catalog.isProfileEnabled && !deps.catalog.isProfileEnabled(candidate.route)) return { ...candidate, rejectedReason: 'Agent profile is not enabled' }
       const def = byId.get(candidate.route.harnessId)!
       const [effective, status] = await Promise.all([
         deps.capabilitiesForRoute(candidate.route),

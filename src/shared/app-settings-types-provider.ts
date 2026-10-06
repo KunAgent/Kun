@@ -561,6 +561,7 @@ export type ModelRouteHealthPolicyV1 = {
 }
 
 export type ModelRoutePoolV1 = {
+  affinity?: { mode: 'off' | 'turn' | 'session'; ttlMs: number }
   id: string
   name: string
   modelId: string

@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../contracts/harness-gateway-binding.js'
 import { HarnessUpdates } from './harness-updates.js'
 import { harnessUpdateCompatible } from './harness-update-compatibility.js'
 import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
@@ -77,8 +78,8 @@ export type HarnessRuntimeComposition = {
  */
 export function createHarnessComposition(
   options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir' | 'nativeAgentNetwork' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId'> &
-    Partial<Pick<KunServeRuntimeOptions, 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'>>,
-  deps: { revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null> } = {}
+    Partial<Pick<KunServeRuntimeOptions, 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'routePools'>>,
+  deps: { resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>; revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null> } = {}
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({
     custom: () => options().harnesses?.custom ?? [],
@@ -137,6 +138,7 @@ export function createHarnessComposition(
           : undefined
   const readiness = new HarnessReadinessService({ options, catalog, detector, revision: deps.revision,
     resolveSecretEnv: deps.resolveSecretEnv, resolveProviderCredential: deps.resolveProviderCredential,
+    resolveGatewayAliases: deps.resolveGatewayAliases,
     sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal) })
   const invalidateModels = (_id: string): void => {
     agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate()

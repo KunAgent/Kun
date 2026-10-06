@@ -1,3 +1,5 @@
+import { observeHarnessAliasRoute } from '../harness/gateway-alias-route-observer.js'
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 /**
  * Protocol-agnostic front half of a delegated turn (docs/ade/impl/p6a §2):
  * load thread/turn/items, locate the user input, gate graph orchestration,
@@ -135,6 +137,10 @@ export type ResolveSessionTurnContextInput = {
 }
 
 export type DelegatedCredentialContextInput = {
+  frozenGatewayAliases?: readonly import('../contracts/harness-gateway-binding.js').HarnessGatewayAliasGrant[]
+  onResolvedAliases?: (aliases: import('../contracts/harness-gateway-binding.js').HarnessGatewayAliasGrant[]) => Promise<void>
+  onGatewayRoute?: (route: import('../ports/model-client.js').ModelRouteTargetMetadata) => Promise<void>
+  gatewayBinding?: HarnessGatewayBinding
   definition: HarnessDefinition
   credentialMode: HarnessCredentialMode
   threadId: string
@@ -248,21 +254,22 @@ export async function resolveSessionTurnContext(
   const credentialMode =
     turn.credentialMode ?? defaultCredentialMode(definition.id, definition)
   const requestedModel =
-    turn.actingModelRoute?.model ?? turn.model ?? thread.model ?? undefined
+    (turn.gatewayBinding ? undefined : turn.actingModelRoute?.model) ?? turn.model ?? thread.model ?? undefined
   // `default` is the native-login sentinel for an Agent chosen before its
   // model catalog loaded. Keep it in the durable route identity, but omit
   // session/set_model and native thread/turn model overrides on the wire.
   const model = modelForHarnessWire(requestedModel, credentialMode)
   const actingModelRoute: ActingTurnModelRoute = turn.actingModelRoute ?? {
     model: model ?? 'default',
-    ...(turn.providerId ?? thread.providerId
+    ...(turn.gatewayBinding ? { unresolvedGatewayAlias: true as const, requestedGatewayAlias: model } : {}),
+    ...(!turn.gatewayBinding && (turn.providerId ?? thread.providerId)
       ? { providerId: turn.providerId ?? thread.providerId }
       : {}),
-    ...(turn.accountId ?? thread.accountId
+    ...(!turn.gatewayBinding && (turn.accountId ?? thread.accountId)
       ? { accountId: turn.accountId ?? thread.accountId }
       : {})
   }
-  if (!turn.actingModelRoute) {
+  if (!turn.actingModelRoute && !turn.gatewayBinding) {
     await deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute })
   }
   const approvalPolicy =
@@ -295,9 +302,17 @@ export async function resolveSessionTurnContext(
       credentialMode,
       threadId,
       turnId,
-      providerId: actingModelRoute.providerId,
-      model: actingModelRoute.model,
-      accountId: actingModelRoute.accountId
+      providerId: turn.gatewayBinding ? undefined : actingModelRoute.providerId,
+      model: turn.gatewayBinding ? model : actingModelRoute.model,
+      accountId: turn.gatewayBinding ? undefined : actingModelRoute.accountId,
+      gatewayBinding: turn.gatewayBinding,
+      frozenGatewayAliases: turn.gatewayAliasGrants,
+      ...(turn.gatewayBinding ? {
+        onResolvedAliases: async (gatewayAliasGrants) => { await deps.turns.updateTurnMetadata(threadId, turnId, { gatewayAliasGrants }) },
+        onGatewayRoute: observeHarnessAliasRoute(actingModelRoute, model ?? '', async (route) => {
+          await deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute: route })
+        })
+      } : {})
     })
   const secretEnv = await resolveHarnessSecretEnv(
     definition,
@@ -308,7 +323,9 @@ export async function resolveSessionTurnContext(
     ? nativeHarnessCredentialEnv(definition, { ...process.env, ...definition.launch?.env, ...secretEnv })
     : resolvedCredentialEnv
   const readinessIdentity = await deps.readiness?.validateTurn(threadId, turnId, input.signal, {
-    harnessId: definition.id, credentialMode, providerId: actingModelRoute.providerId, model: actingModelRoute.model
+    harnessId: definition.id, credentialMode, providerId: turn.gatewayBinding ? undefined : actingModelRoute.providerId,
+    model: turn.gatewayBinding ? model ?? 'default' : actingModelRoute.model,
+    ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {})
   })
   return {
     ok: true,

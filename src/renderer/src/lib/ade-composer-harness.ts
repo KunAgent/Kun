@@ -1,3 +1,5 @@
+import { HarnessGatewayBindingSchema, type HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
+import type { AdeHarnessAliasModelGroup } from '@shared/ade-harnesses'
 import type {
   AdeHarnessCommand,
   AdeHarnessCredentialMode,
@@ -33,6 +35,7 @@ export function harnessModelProfiles(models: readonly HarnessModelInfo[] = [], n
  */
 
 export const ADE_CREDENTIAL_GROUP_PREFIX = 'ade-cred:'
+export function aliasCredentialGroupKey(binding: HarnessGatewayBinding): string { return `ade-alias:${encodeURIComponent(JSON.stringify(binding))}` }
 
 export function credentialGroupKey(mode: AdeHarnessCredentialMode): string {
   return `${ADE_CREDENTIAL_GROUP_PREFIX}${mode}`
@@ -45,8 +48,11 @@ export function credentialGroupKey(mode: AdeHarnessCredentialMode): string {
  */
 export function credentialGroupFromKey(
   groupKey: string | undefined
-): { mode: AdeHarnessCredentialMode; providerId?: string } | null {
+): { mode: AdeHarnessCredentialMode; providerId?: string; gatewayBinding?: HarnessGatewayBinding } | null {
   const raw = groupKey?.trim() ?? ''
+  if (raw.startsWith('ade-alias:')) {
+    try { const binding = HarnessGatewayBindingSchema.parse(JSON.parse(decodeURIComponent(raw.slice(10)))); return { mode: 'kun-gateway', gatewayBinding: binding } } catch { return null }
+  }
   if (!raw.startsWith(ADE_CREDENTIAL_GROUP_PREFIX)) return null
   const rest = raw.slice(ADE_CREDENTIAL_GROUP_PREFIX.length)
   const sep = rest.indexOf(':')
@@ -92,6 +98,7 @@ export function adeHarnessModelGroups(input: {
   models: readonly string[]
   modelInfo?: readonly HarnessModelInfo[]
   providerGroups?: readonly AdeHarnessProviderModelGroup[]
+  aliasGroups?: readonly AdeHarnessAliasModelGroup[]
   labels: AdeCredentialGroupLabels
   hasConfiguredProvider: boolean
 }): ModelProviderModelGroup[] {
@@ -114,6 +121,10 @@ export function adeHarnessModelGroups(input: {
           modelInfo: Object.fromEntries(input.modelInfo.map((entry) => [entry.id, entry])) } : {})
       })
       continue
+    }
+    if (mode === 'kun-gateway') for (const profile of readyHarnessProfiles(row).filter((entry) => entry.credentialMode === mode && entry.gatewayBinding)) {
+      const alias = input.aliasGroups?.find((entry) => entry.routeId === profile.gatewayBinding!.main.routeId)
+      if (alias) groups.push({ providerId: aliasCredentialGroupKey(profile.gatewayBinding!), label: `${labels.kunGateway} · ${alias.label}`, modelIds: [alias.modelId] })
     }
     if (!hasConfiguredProvider) continue
     for (const provider of providerGroups) {
@@ -161,14 +172,15 @@ export function harnessSlashCommandText(command: AdeHarnessCommand): string {
  * An unpinned legacy Code send retains runtime provider-kind inference.
  */
 export function resolveSendHarnessSelection(args: {
-  queued?: { harnessId?: string; credentialMode?: string } | undefined
-  overrides?: { harnessId?: string; credentialMode?: string } | undefined
+  queued?: { harnessId?: string; credentialMode?: string; gatewayBinding?: HarnessGatewayBinding } | undefined
+  overrides?: { harnessId?: string; credentialMode?: string; gatewayBinding?: HarnessGatewayBinding } | undefined
   adeEligible: boolean
   composerHarnessId: string
   composerCredentialMode: string
-}): { harnessId: string; credentialMode: string } {
+  composerGatewayBinding?: HarnessGatewayBinding
+}): { harnessId: string; credentialMode: string; gatewayBinding?: HarnessGatewayBinding } {
   if (args.queued) {
-    return { harnessId: args.queued.harnessId?.trim() ?? '', credentialMode: args.queued.credentialMode?.trim() ?? '' }
+    return { harnessId: args.queued.harnessId?.trim() ?? '', credentialMode: args.queued.credentialMode?.trim() ?? '', ...(args.queued.gatewayBinding ? { gatewayBinding: args.queued.gatewayBinding } : {}) }
   }
   const harnessId = args.overrides?.harnessId?.trim() ||
     (args.adeEligible ? args.composerHarnessId?.trim() ?? '' : '')
@@ -176,5 +188,7 @@ export function resolveSendHarnessSelection(args: {
     ? args.overrides?.credentialMode?.trim() ||
       args.composerCredentialMode?.trim() || ''
     : ''
-  return { harnessId, credentialMode }
+  const gatewayBinding = credentialMode === 'kun-gateway' ? args.overrides?.gatewayBinding ??
+    ((!args.overrides?.harnessId || args.overrides.harnessId === args.composerHarnessId) && args.adeEligible ? args.composerGatewayBinding : undefined) : undefined
+  return { harnessId, credentialMode, ...(gatewayBinding ? { gatewayBinding } : {}) }
 }

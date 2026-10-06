@@ -151,13 +151,15 @@ export function utf8Bytes(value: string): number {
 
 export function normalizeRoute(
   route: ApprovalReviewInput['route']
-): { model: string; providerId?: string; accountId?: string } | null {
+): NonNullable<ApprovalReviewInput['route']> | null {
   const model = route?.model.trim() ?? ''
   if (!model) return null
   const providerId = route?.providerId?.trim()
   const accountId = route?.accountId?.trim()
   return {
     model,
+    ...(route?.unresolvedGatewayAlias ? { unresolvedGatewayAlias: true as const } : {}),
+    ...(route?.requestedGatewayAlias ? { requestedGatewayAlias: route.requestedGatewayAlias } : {}),
     ...(providerId ? { providerId } : {}),
     ...(accountId ? { accountId } : {})
   }

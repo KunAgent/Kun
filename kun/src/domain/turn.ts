@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { PaperTurnContextSchema, type PaperTurnContext } from '../contracts/paper-turn-context.js'
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import type {
   ActingTurnModelRoute,
   GuiDesignArtifactContextJson,
@@ -43,6 +44,7 @@ export function createTurnRecord(input: {
   providerId?: string
   harnessId?: string
   collaborationEnabled?: boolean
+  gatewayBinding?: HarnessGatewayBinding
   credentialMode?: HarnessCredentialMode
   accountId?: string
   actingModelRoute?: ActingTurnModelRoute
@@ -117,6 +119,7 @@ export function createTurnRecord(input: {
     ...(input.collaborationEnabled !== undefined
       ? { collaborationEnabled: input.collaborationEnabled } : {}),
     ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
+    ...(input.gatewayBinding ? { gatewayBinding: structuredClone(input.gatewayBinding) } : {}),
     ...(accountId ? { accountId } : {}),
     ...(input.actingModelRoute ? { actingModelRoute: { ...input.actingModelRoute } } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),

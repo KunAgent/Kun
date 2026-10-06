@@ -3,6 +3,10 @@ import { GatewayRouteChangedError } from '../../domain/model-gateway-export-poli
 
 const GATEWAY_DIAGNOSTICS: Record<string, string> = {
   paper_request_budget_exhausted: 'Paper reading permits one upstream request; explicitly submit again to retry.',
+  provider_configuration_changed: 'Provider configuration is not active. Retry after settings finish applying.' ,
+  token_budget_exceeded: 'Gateway client token budget exhausted.',
+  token_budget_unbounded: 'This request has no declared conservative token bound. Check the account input ceiling and maximum output.',
+  token_budget_unavailable: 'Gateway budget storage is unavailable; pending reservations remain held.',
   gateway_route_changed: 'Gateway provider configuration changed. Retry the request.',
   route_attempt_budget_exhausted: 'Gateway upstream attempt budget exhausted.',
   route_deadline_exceeded: 'Gateway routing deadline exceeded.',

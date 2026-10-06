@@ -166,6 +166,7 @@ export class GraphAssignmentResolver {
       ...(input.reference.kind === 'ephemeral' && input.reference.harnessId
         ? { harnessId: input.reference.harnessId }
         : {}),
+      ...(input.reference.kind === 'ephemeral' && input.reference.gatewayBinding ? { gatewayBinding: input.reference.gatewayBinding } : {}),
       ...(input.reference.kind === 'ephemeral' && input.reference.credentialMode
         ? { credentialMode: input.reference.credentialMode }
         : {}),

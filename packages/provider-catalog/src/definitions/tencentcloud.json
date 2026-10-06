@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "tencentcloud",
+  "name": "Tencent Cloud",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.hunyuan.cloud.tencent.com/v1",
+  "endpointFormat": "chat_completions",
+  "models": [
+    "hunyuan-turbos-latest",
+    "hunyuan-t1-latest",
+    "hunyuan-lite"
+  ],
+  "docsUrl": "https://cloud.tencent.com/document/product/1729/111006",
+  "credentialUrl": "https://console.cloud.tencent.com/hunyuan/start",
+  "tokenPlan": {
+    "baseUrl": "https://api.lkeap.cloud.tencent.com/plan/v3",
+    "endpointFormat": "chat_completions",
+    "models": [
+      "hunyuan-turbos-latest",
+      "hunyuan-t1-latest",
+      "hunyuan-lite"
+    ],
+    "credentialUrl": "https://console.cloud.tencent.com/tokenhub/tokenplan"
+  }
+}

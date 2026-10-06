@@ -43,7 +43,7 @@ function catalog(
 }
 
 describe('provider model import merging', () => {
-  it('deduplicates ids case-insensitively, preserves API casing, and leaves catalog-only rows unchecked', () => {
+  it('deduplicates ids case-insensitively, preserves API casing, and does not advertise unobserved catalog-only models', () => {
     const entries = buildProviderModelImportEntries(
       provider(),
       ['Model-A', 'model-a', 'api-only'],
@@ -62,9 +62,9 @@ describe('provider model import merging', () => {
       ])
     )
 
-    expect(entries.map((entry) => entry.modelId)).toEqual(['Model-A', 'api-only', 'catalog-only'])
+    expect(entries.map((entry) => entry.modelId)).toEqual(['Model-A', 'api-only'])
     expect(entries[0]?.sources).toEqual(['provider-api', 'models-dev'])
-    expect(entries[2]?.sources).toEqual(['models-dev'])
+    expect(entries.some((entry) => entry.modelId === 'catalog-only')).toBe(false)
     const selected = defaultSelectedProviderModelImportKeys(entries)
     expect(selected).toEqual(new Set([
       providerModelImportEntryKey('chat', 'Model-A'),
@@ -73,7 +73,7 @@ describe('provider model import merging', () => {
   })
 
   it('uses catalog modalities for endpoint classification before id fallback', () => {
-    const entries = buildProviderModelImportEntries(provider(), [], catalog([
+    const entries = buildProviderModelImportEntries(provider(), ['visual-maker', 'sound-reader', 'omni-chat', 'voice-maker', 'movie-maker', 'music-2.6'], catalog([
       { id: 'visual-maker', inputModalities: ['text'], outputModalities: ['image'] },
       { id: 'sound-reader', inputModalities: ['audio'], outputModalities: ['text'] },
       { id: 'omni-chat', inputModalities: ['text', 'image', 'audio'], outputModalities: ['text'] },
@@ -230,7 +230,7 @@ describe('provider model import merging', () => {
   })
 
   it('returns metadata only for selected rows', () => {
-    const entries = buildProviderModelImportEntries(provider(), ['model-a'], catalog([
+    const entries = buildProviderModelImportEntries(provider(), ['model-a', 'catalog-only'], catalog([
       { id: 'model-a', inputModalities: ['text'], outputModalities: ['text'] },
       { id: 'catalog-only', inputModalities: ['text'], outputModalities: ['text'] }
     ]))

@@ -2,7 +2,7 @@ import { ManagerMemoryDistillationPendingOwner } from './memory-distillation-pen
 import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { readFile, rm } from 'node:fs/promises'
 import { readHistoryReservationKeys } from '../history/history-reference-reservations.js'
-import { relative, resolve, sep } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
 import { HybridSessionStore } from '../adapters/hybrid/hybrid-session-store.js'
@@ -148,6 +148,7 @@ export abstract class ManagerSharedDataStoreCore {
     const target = this.safeDataPath(input.path)
     const document = this.atomicJsonDocument(target)
     const run = document.queue.catch(() => undefined).then(async () => {
+      await this.assertProviderRegistryWritable(target)
       await this.loadAtomicJson(target, document)
       // Treat an already-satisfied JSON write as success even when the caller
       // read an older Manager revision. Runtime initialization and GUI catalog
@@ -181,6 +182,7 @@ export abstract class ManagerSharedDataStoreCore {
     const target = this.safeDataPath(input.path)
     const document = this.atomicJsonDocument(target)
     const run = document.queue.catch(() => undefined).then(async () => {
+      await this.assertProviderRegistryWritable(target)
       await this.loadAtomicJson(target, document)
       if (document.revision !== input.expectedRevision) {
         throw new RevisionConflictError(document.revision)
@@ -418,6 +420,15 @@ export abstract class ManagerSharedDataStoreCore {
     return store
   }
 
+  private async assertProviderRegistryWritable(target: string): Promise<void> {
+    if (relative(this.dataDir, target).split(sep).join('/') !== 'model-connections.v1.json') return
+    const current = await this.readAtomicJson(join(this.dataDir, 'model-connections.v2.json'))
+    if (current.value && typeof current.value === 'object' &&
+        (current.value as { schemaVersion?: unknown }).schemaVersion === 2) {
+      throw new Error('Provider configuration was upgraded to v2; the v1 recovery file is read-only')
+    }
+  }
+
   protected async loadAtomicJson(
     path: string,
     document: { revision: number; loaded: boolean; value: unknown | null }
@@ -437,6 +448,11 @@ export abstract class ManagerSharedDataStoreCore {
 
 const ATOMIC_REPLACE_PATHS = new Set([
   'model-connections.v1.json',
+  'model-connections.v2.json',
+  'provider-header-migration.v1.json',
+  'model-gateway/gateway-token-budget.v1.json',
+  'model-gateway/api-key.enc.json',
+  'model-gateway/clients.enc.json',
   'credentials/credentials.enc.json',
   'extensions/accounts.json',
   'extensions/provider-bindings.json'

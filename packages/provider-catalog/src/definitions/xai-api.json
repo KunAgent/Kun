@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "xai-api",
+  "name": "xAI API",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.x.ai/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.x.ai/",
+  "credentialUrl": "https://console.x.ai/"
+}

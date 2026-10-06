@@ -21,6 +21,7 @@ import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { subscriptionBillingKind } from '../shared/subscription-billing.js'
 import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
 import { exposableProvider } from '../domain/model-gateway-export-policy.js'
+import { providerCredentialLease } from '../adapters/model/provider-credential-lease.js'
 
 export async function hydrateLegacyCredentialOptions(
   options: KunServeRuntimeOptions,
@@ -85,7 +86,8 @@ export function buildModelClientRouterInput(
     geminiAuth?: GeminiCodeAssistCredential
     refreshable: boolean
   }>
-): { default: ModelClient; providers: Map<string, ModelClient>; gatewayClients: Map<string, ModelClient> } {
+): { default: ModelClient; providers: Map<string, ModelClient>; gatewayClients: Map<string, ModelClient>;
+  defaultProviderId: string; admission: Map<string, { accountId: string; limits: import('../contracts/provider-configuration.js').ProviderAdmission }> } {
   const streamIdleOverride =
     options.runtime?.streamIdleTimeoutMs !== undefined
       ? { streamIdleTimeoutMs: options.runtime.streamIdleTimeoutMs }
@@ -108,7 +110,12 @@ export function buildModelClientRouterInput(
     baseUrl: activeProvider?.baseUrl ?? options.baseUrl
   })
   const defaultClient: ModelClient =
-    process.env.KUN_RUNTIME_PROVIDER_KIND === 'gemini-code-assist'
+    options.modelConnectionSelectionRequired && !options.activeProviderId
+      ? { provider: 'unavailable', model: options.model, async *stream() {
+          yield { kind: 'error' as const, code: 'model_connection_unavailable',
+            message: 'No active model connection. Enable and select a provider in settings.' }
+        } }
+      : process.env.KUN_RUNTIME_PROVIDER_KIND === 'gemini-code-assist'
       ? new GeminiCodeAssistModelClient({
           baseUrl: options.baseUrl,
           auth: options.geminiAuth,
@@ -136,6 +143,8 @@ export function buildModelClientRouterInput(
           apiKey: options.apiKey,
           modelProxyUrl: defaultModelProxyUrl,
           endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+          customEndpointProtocol: activeProvider?.customEndpointProtocol,
+          inputTokenUpperBound: activeProvider?.admission?.inputTokenUpperBound,
           ...(activeProvider?.endpoints ? { endpoints: activeProvider.endpoints } : {}),
           retry: options.retry,
           model: options.model,
@@ -145,8 +154,8 @@ export function buildModelClientRouterInput(
           ...(defaultBillingKind ? { billingKind: defaultBillingKind } : {}),
           ...(options.credentialSourceId && credentialResolver
             ? {
-                resolveCredentials: (rejectedAccessToken?: string) =>
-                  credentialResolver(options.credentialSourceId!, rejectedAccessToken)
+                resolveCredentials: providerCredentialLease((rejectedAccessToken?: string) =>
+                  credentialResolver(options.credentialSourceId!, rejectedAccessToken), { apiKey: options.apiKey, headers: options.headers })
               }
             : {}),
           ...(llmDebug ? { debugSink: llmDebug } : {}),
@@ -154,6 +163,7 @@ export function buildModelClientRouterInput(
         })
   const providerClients = new Map<string, ModelClient>()
   const gatewayClients = new Map<string, ModelClient>()
+  const admission = new Map<string, { accountId: string; limits: import('../contracts/provider-configuration.js').ProviderAdmission }>()
   for (const [providerId, provider] of Object.entries(options.providers ?? {})) {
     const trimmedId = providerId.trim()
     if (!trimmedId) continue
@@ -204,6 +214,8 @@ export function buildModelClientRouterInput(
             ? provider.modelProxyUrl
             : options.modelProxyUrl,
           endpointFormat: provider.endpointFormat ?? options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+          customEndpointProtocol: provider.customEndpointProtocol,
+          inputTokenUpperBound: provider.admission?.inputTokenUpperBound,
           ...(provider.endpoints ? { endpoints: provider.endpoints } : {}),
           retry: provider.retry ?? options.retry,
           model: options.model,
@@ -213,19 +225,22 @@ export function buildModelClientRouterInput(
           ...(providerBillingKind ? { billingKind: providerBillingKind } : {}),
           ...(provider.credentialSourceId && credentialResolver
             ? {
-                resolveCredentials: (rejectedAccessToken?: string) =>
-                  credentialResolver(provider.credentialSourceId!, rejectedAccessToken)
+                resolveCredentials: providerCredentialLease((rejectedAccessToken?: string) =>
+                  credentialResolver(provider.credentialSourceId!, rejectedAccessToken), { apiKey: provider.apiKey, headers: provider.headers })
               }
             : {}),
           ...(llmDebug ? { debugSink: llmDebug } : {}),
           ...streamIdleOverride
         })
     providerClients.set(trimmedId, client)
+    if (provider.admission) admission.set(trimmedId.toLowerCase(), {
+      accountId: provider.accountId ?? trimmedId, limits: provider.admission
+    })
     if (exposableProvider({ kind, authType: provider.authType ?? 'api-key',
-      configured: Boolean(provider.apiKey.trim() || provider.credentialSourceId),
-      credentialStatus: 'ready' })) gatewayClients.set(trimmedId, client)
+      configured: provider.authType === 'none' || Boolean(provider.apiKey.trim() || provider.credentialSourceId),
+      credentialStatus: provider.authType === 'none' ? 'not-required' : 'ready' })) gatewayClients.set(trimmedId, client)
   }
-  return { default: defaultClient, providers: providerClients, gatewayClients }
+  return { default: defaultClient, providers: providerClients, gatewayClients, admission, defaultProviderId: activeProviderId.toLowerCase() }
 }
 
 export function modelContextProfilesByProvider(

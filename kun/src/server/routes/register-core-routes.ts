@@ -1,4 +1,6 @@
 import type { Router } from '../router.js'
+import { registerProviderConfigurationRoutes } from './provider-configuration.js'
+import { registerModelUtilityRoutes } from './model-utility.js'
 import { healthJsonResponse } from './health.js'
 import {
   gatewayCredentialStatus,
@@ -12,7 +14,7 @@ import {
   routePoolStatus,
   testRoutePool
 } from './openai-model-gateway.js'
-import { listGatewayClients, createGatewayClient, revokeGatewayClient, gatewayClientUsage } from './gateway-clients.js'
+import { listGatewayClients, createGatewayClient, revokeGatewayClient, rotateGatewayClient, gatewayClientUsage } from './gateway-clients.js'
 import { gatewayCountTokens, gatewayMessages } from './anthropic-messages-gateway.js'
 import { registerExtensionManagementRoutes } from './extensions.js'
 import { registerExtensionPublicRoutes } from './extension-public.js'
@@ -71,6 +73,8 @@ import { strictRuntimeTokenAuthorized } from './gateway-request-guard.js'
 import { handleKunToolsMcp } from './kun-tools-mcp.js'
 
 export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void {
+  registerProviderConfigurationRoutes(router, runtime)
+  registerModelUtilityRoutes(router, runtime)
   router.add('GET', '/health', () => healthJsonResponse())
   router.add('GET', '/v1/models', (request) => gatewayModels(runtime, request))
   router.add('POST', '/v1/chat/completions', (request) => gatewayChatCompletions(runtime, request))
@@ -92,11 +96,15 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   })
   router.add('DELETE', '/v1/model-gateway/clients/:id', (request, ctx) => {
     if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
-    return revokeGatewayClient(runtime, ctx.params.id)
+    return revokeGatewayClient(runtime, ctx.params.id, request)
   })
   router.add('GET', '/v1/model-gateway/clients/:id/usage', (request, ctx) => {
     if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
     return gatewayClientUsage(runtime, ctx.params.id)
+  })
+  router.add('POST', '/v1/model-gateway/clients/:id/rotate', (request, ctx) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return rotateGatewayClient(runtime, ctx.params.id)
   })
   router.add('GET', '/v1/model-gateway/credential/status', (request) => {
     if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)

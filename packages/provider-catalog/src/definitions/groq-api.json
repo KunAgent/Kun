@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "groq-api",
+  "name": "Groq API",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.groq.com/openai/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://console.groq.com/docs",
+  "credentialUrl": "https://console.groq.com/keys"
+}

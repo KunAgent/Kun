@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "volcengine-coding-plan",
+  "name": "Volcano Ark Coding Plan",
+  "category": "subscription",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "subscription",
+  "baseUrl": "https://ark.cn-beijing.volces.com/api/coding/v3",
+  "endpointFormat": "chat_completions",
+  "models": [
+    "doubao-seed-1-6-250615",
+    "doubao-seed-1-6-flash-250828"
+  ],
+  "docsUrl": "https://www.volcengine.com/docs/82379/1928262",
+  "credentialUrl": "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey"
+}

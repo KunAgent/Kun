@@ -151,7 +151,7 @@ export async function probeModelConnection(
     const client = scoped?.directModelClient ?? scoped?.modelClient
     return inferenceProbe(registry, client, providerId, probeModel, request)
   }
-  return mutate(registry, () => registry.probe(providerId))
+  return mutate(registry, () => registry.probe(providerId, request?.signal))
 }
 
 const INFERENCE_PROBE_TIMEOUT_MS = 30_000

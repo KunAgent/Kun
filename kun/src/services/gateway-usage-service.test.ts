@@ -192,7 +192,8 @@ describe('GatewayUsageService', () => {
       const credentials = new GatewayCredentialService(f.dataDir, createAesEncryptor(randomBytes(32)))
       await credentials.initialize()
       await credentials.ensure() // A live shared key must never rescue an invalid client key.
-      const issued = await credentials.createClient('Streaming client')
+      // This fixture exercises migration/revocation of an existing unrestricted client.
+      const issued = await credentials.createClient('Streaming client', 'legacy-unrestricted')
       let release!: () => void
       const resume = new Promise<void>((resolve) => { release = resolve })
       let calls = 0

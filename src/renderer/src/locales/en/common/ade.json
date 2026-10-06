@@ -591,7 +591,14 @@
       "configuration": "Connection configuration is unavailable. Check the selected provider, model, or proxy.",
       "credentials": "No usable login or credential was confirmed. Sign in below, then check again.",
       "protocol": "Agent protocol or model check failed. Review the details, version, and model before retrying."
-    }
+    },
+    "alias": "Gateway route",
+    "aliasScopeHint": "This Agent can use only the approved accounts. Adding an account to a route does not expand this profile. Check and enable again after changing the scope.",
+    "aliasAccounts": "{{count}} accounts approved for the main model",
+    "aliasApproveAccounts": "Approve the route’s current accounts",
+    "smallAlias": "Small-model route",
+    "smallAliasSame": "Use the main-model route",
+    "smallAliasUnsupported": "This Agent has no separate small-model setting; it uses the main route."
   },
   "adeHarnessUnavailable": {
     "readinessRequired": "Readiness check required",

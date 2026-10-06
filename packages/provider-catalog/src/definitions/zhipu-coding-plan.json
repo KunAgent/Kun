@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "zhipu-coding-plan",
+  "name": "Zhipu Coding Plan",
+  "category": "subscription",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "subscription",
+  "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+  "endpointFormat": "custom_endpoint",
+  "models": [
+    "glm-5.3",
+    "glm-5.3-flash",
+    "glm-5.2",
+    "glm-5.1",
+    "glm-5-turbo",
+    "glm-4.7",
+    "glm-4.5-air"
+  ],
+  "docsUrl": "https://docs.bigmodel.cn/cn/coding-plan/overview",
+  "credentialUrl": "https://bigmodel.cn/usercenter/proj-mgmt/apikeys"
+}

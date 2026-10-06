@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../kun/src/contracts/harness-gateway-binding.js'
 import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
@@ -77,6 +78,7 @@ export type KunSubagentProfileV1 = {
   harnessId?: string
   /** Credential path on the bound harness; empty/absent = harness default. */
   credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  gatewayBinding?: HarnessGatewayBinding
   /** "Best for / not for" notes read by the manager worker selector. */
   delegationNotes?: string
 }
@@ -383,6 +385,7 @@ export type KunHarnessCustomEntryV1 = {
  * `defaults[id].permissionMode`.
  */
 export type KunHarnessDefaultsEntryV1 = {
+  gatewayBinding?: HarnessGatewayBinding
   credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
   /** Provider connection id; meaningful for `provider`/`kun-gateway` only. */
   providerId?: string
@@ -412,6 +415,7 @@ export type KunTerminalAgentEntryV1 = {
 }
 
 export type KunHarnessEnabledProfileV1 = {
+  gatewayBinding?: HarnessGatewayBinding
   harnessId: string
   credentialMode: 'native-login' | 'provider' | 'kun-gateway'
   providerId?: string

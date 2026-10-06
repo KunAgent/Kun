@@ -68,6 +68,7 @@ export function normalizeClaudeOAuthToken(raw: string | undefined): string | und
  * gateway against the grant's routes.
  */
 export type SdkGatewayEnv = {
+  credentialIdentity?: string
   baseUrl: string
   token: string
   model: string

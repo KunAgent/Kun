@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "mistral-api",
+  "name": "Mistral API",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.mistral.ai/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.mistral.ai/",
+  "credentialUrl": "https://console.mistral.ai/api-keys"
+}

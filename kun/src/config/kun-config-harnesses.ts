@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from '../contracts/harness-gateway-binding.js'
 import { z } from 'zod'
 import {
   HarnessCredentialModeSchema,
@@ -36,6 +37,7 @@ export type HarnessCustomEntry = z.infer<typeof HarnessCustomEntrySchema>
 export const HarnessDefaultsEntrySchema = z
   .object({
     credentialMode: HarnessCredentialModeSchema.optional(),
+    gatewayBinding: HarnessGatewayBindingSchema.optional(),
     /** Provider connection id; meaningful for `provider`/`kun-gateway`. */
     providerId: z.string().min(1).max(128).optional(),
     model: z.string().min(1).max(512).optional(),
@@ -65,6 +67,7 @@ export type HarnessTerminalAgent = z.infer<typeof HarnessTerminalAgentSchema>
 export const HarnessEnabledProfileSchema = z.object({
   harnessId: HarnessIdSchema,
   credentialMode: HarnessCredentialModeSchema,
+  gatewayBinding: HarnessGatewayBindingSchema.optional(),
   providerId: z.string().trim().min(1).max(128).optional()
 }).strict()
 export type HarnessEnabledProfile = z.infer<typeof HarnessEnabledProfileSchema>

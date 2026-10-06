@@ -1,3 +1,4 @@
+import { readyHarnessProfiles } from '@shared/harness-enablement'
 import { useEffect, useState, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -5,7 +6,7 @@ import { Bot, Check, Plug, Search, Sparkles, Wrench, X } from 'lucide-react'
 import type { KunSubagentProfileV1 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { ModelSelect, ReasoningEffortPicker } from './SubagentProfileControls'
-import { harnessRowAvailable, harnessRowRunsTurns, loadHarnesses, useHarnessStore } from '../../store/harness-store'
+import { harnessRowAvailable, harnessRowRunsTurns, loadHarnesses, loadHarnessProviderGroups, useHarnessStore } from '../../store/harness-store'
 import {
   BUILTIN_TOOL_NAMES,
   loadCapabilityCatalog,
@@ -36,6 +37,10 @@ export function ProfileDialog({
   const [catalog, setCatalog] = useState<CapabilityCatalog | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
   const harnessRows = useHarnessStore((state) => state.rows)
+  const aliasModels = useHarnessStore((state) => d.harnessId ? state.providerGroups[d.harnessId]?.aliasGroups : undefined)
+  const selectedHarness = harnessRows.find((row) => row.definition.id === d.harnessId)
+  const aliasProfiles = selectedHarness ? readyHarnessProfiles(selectedHarness).filter((profile) => profile.gatewayBinding) : []
+  useEffect(() => { if (d.harnessId) void loadHarnessProviderGroups(d.harnessId) }, [d.harnessId])
 
   useEffect(() => {
     // P4-02: opening the dialog force-refreshes; waitMs lets an in-flight
@@ -137,12 +142,12 @@ export function ProfileDialog({
             </select>
           </Field>
           <Field label={t('agentsView.fModel', 'Model')}>
-            <ModelSelectFull
+            {d.gatewayBinding ? <code>{d.model}</code> : <ModelSelectFull
               value={d.model ?? ''}
               providerId={d.providerId ?? ''}
               groups={groups}
               onChange={(m, pid) => setD((p) => ({ ...p, model: m || undefined, providerId: pid || undefined }))}
-            />
+            />}
           </Field>
           <Field label={t('adeSettings.profileHarness', 'Agent (harness)')}>
             <select
@@ -152,6 +157,7 @@ export function ProfileDialog({
                 setD((p) => ({
                   ...p,
                   harnessId,
+                  gatewayBinding: undefined,
                   credentialMode: harnessId ? p.credentialMode : undefined
                 }))
               }}
@@ -174,7 +180,7 @@ export function ProfileDialog({
                 <select
                   value={d.credentialMode ?? ''}
                   onChange={(e) =>
-                    set('credentialMode', (e.target.value || undefined) as KunSubagentProfileV1['credentialMode'])
+                    setD((profile) => ({ ...profile, credentialMode: (e.target.value || undefined) as KunSubagentProfileV1['credentialMode'], gatewayBinding: undefined }))
                   }
                   className="w-full rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] px-3 py-1.5 text-sm"
                 >
@@ -186,6 +192,20 @@ export function ProfileDialog({
               </Field>
             ) : null
           })()}
+          {d.harnessId && aliasProfiles.length ? <Field label={t('agentEnablement.alias')}>
+            <select className="w-full rounded-md border border-ds-border bg-ds-card px-3 py-1.5 text-sm"
+              value={d.gatewayBinding ? JSON.stringify(d.gatewayBinding) : ''} onChange={(event) => {
+                const selected = aliasProfiles.find((profile) => JSON.stringify(profile.gatewayBinding) === event.target.value)
+                const alias = aliasModels?.find((entry) => entry.routeId === selected?.gatewayBinding?.main.routeId)
+                setD((profile) => ({ ...profile, gatewayBinding: selected?.gatewayBinding,
+                  ...(selected ? { credentialMode: 'kun-gateway', providerId: undefined, model: alias?.modelId } : {}) }))
+              }}>
+              <option value="">{t('agentEnablement.chooseProvider')}</option>
+              {aliasProfiles.map((profile) => <option key={JSON.stringify(profile.gatewayBinding)} value={JSON.stringify(profile.gatewayBinding)}>
+                {aliasModels?.find((entry) => entry.routeId === profile.gatewayBinding!.main.routeId)?.label ?? profile.gatewayBinding!.main.routeId}
+              </option>)}
+            </select>
+          </Field> : null}
           {d.harnessId ? (
             <Field label={t('adeSettings.profileDelegationNotes', 'Best for')}>
               <textarea

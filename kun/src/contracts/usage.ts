@@ -1,3 +1,4 @@
+import { ModelAttemptAccountingSchema } from './model-attempt-accounting.js'
 import { z } from 'zod'
 
 /**
@@ -19,6 +20,9 @@ export const GatewayUsageMetadataSchema = z.object({
   retryCount: z.number().int().nonnegative(),
   failoverCount: z.number().int().nonnegative(),
   tokenUsage: z.enum(['upstream', 'unavailable']),
+  attempts: z.array(z.object({ attemptId: z.string(), providerId: z.string(), modelId: z.string(),
+    promptTokens: z.number().int().nonnegative().optional(), completionTokens: z.number().int().nonnegative().optional(),
+    usageKnown: z.boolean() }).strict()).max(16).optional(),
   /** Costs are not a reconciled provider bill, even when upstream supplies them. */
   costBasis: z.literal('unverified'),
   httpStatus: z.number().int().min(400).max(599).optional()
@@ -26,6 +30,7 @@ export const GatewayUsageMetadataSchema = z.object({
 export type GatewayUsageMetadata = z.infer<typeof GatewayUsageMetadataSchema>
 
 export const UsageSnapshotSchema = z.object({
+  attemptAccounting: ModelAttemptAccountingSchema.optional(),
   gateway: GatewayUsageMetadataSchema.optional(),
   promptTokens: z.number().int().nonnegative(),
   completionTokens: z.number().int().nonnegative(),
@@ -281,7 +286,7 @@ export const TurnUsageCountersSchema = z.object({
 }).strict()
 export type TurnUsageCounters = z.infer<typeof TurnUsageCountersSchema>
 
-export const UsageEventSourceSchema = z.enum(['native', 'harness-gateway', 'harness-reported', 'public-gateway'])
+export const UsageEventSourceSchema = z.enum(['native', 'harness-gateway', 'harness-reported', 'public-gateway', 'utility'])
 export type UsageEventSource = z.infer<typeof UsageEventSourceSchema>
 
 export const TurnUsageBucketSchema = TurnUsageCountersSchema.extend({

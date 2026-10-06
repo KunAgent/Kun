@@ -1,3 +1,4 @@
+import { HARNESS_GATEWAY_BINDING_JSON_SCHEMA } from '../../contracts/harness-gateway-binding.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
@@ -122,7 +123,8 @@ export function createManagerToolProvider(
                 harnessId: { type: 'string', maxLength: 64 },
                 model: { type: 'string', maxLength: 512 },
                 providerId: { type: 'string', maxLength: 128 },
-                credentialMode: { type: 'string', maxLength: 64 }
+                credentialMode: { type: 'string', maxLength: 64 },
+                gatewayBinding: HARNESS_GATEWAY_BINDING_JSON_SCHEMA
               },
               additionalProperties: false
             },
@@ -183,7 +185,8 @@ export function createManagerToolProvider(
                       harnessId: { type: 'string', maxLength: 64 },
                       model: { type: 'string', maxLength: 512 },
                       providerId: { type: 'string', maxLength: 128 },
-                      credentialMode: { type: 'string', maxLength: 64 }
+                      credentialMode: { type: 'string', maxLength: 64 },
+                gatewayBinding: HARNESS_GATEWAY_BINDING_JSON_SCHEMA
                     },
                     additionalProperties: false
                   },

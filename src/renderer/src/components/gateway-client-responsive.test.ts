@@ -25,7 +25,7 @@ describe('gateway client details responsive bounds', () => {
     const input = root.findByType('input')
     expect(input.props.value).toBe(name)
     expect(classes(input)).toContain('min-w-0')
-    expect(root.findAllByType('button').map(text)).toEqual(['Create key and copy', 'Read usage', 'Revoke'])
+    expect(root.findAllByType('button').map(text)).toEqual(['Create key and copy', 'Read usage', 'Rotate and copy key', 'Revoke', 'Revoke and cancel requests'])
     expect(bridge).toHaveBeenCalledTimes(1)
     expect(bridge).toHaveBeenCalledWith({ action: 'list' })
     await act(async () => { renderer.unmount() })

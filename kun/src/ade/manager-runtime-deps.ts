@@ -98,6 +98,7 @@ export type ManagerRuntimeDeps = {
     'approvedChecks' | 'artifacts' | 'spawn' | 'env'
   >
   /** Provider pool for provider/gateway route validation (P3-06). */
+  resolveGatewayAliases?: (binding: import('../contracts/harness-gateway-binding.js').HarnessGatewayBinding) => Promise<import('../contracts/harness-gateway-binding.js').HarnessGatewayAliasGrant[]>
   providerPool?: (providerId: string) => Promise<WorkerProviderPoolEntry | undefined>
   /** Last cached model-probe list per harness; absent → static list. */
   probedModels?: (definition: HarnessDefinition) => string[] | undefined

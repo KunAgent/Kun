@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "cursor-subscription",
+  "name": "Cursor 订阅",
+  "category": "subscription",
+  "kind": "cursor-sdk",
+  "authFlow": "cursor-api-key",
+  "authType": "subscription",
+  "baseUrl": "",
+  "endpointFormat": "custom_endpoint",
+  "models": [
+    "auto"
+  ],
+  "docsUrl": "https://cursor.com/docs/api/sdk/typescript",
+  "credentialUrl": "https://cursor.com/dashboard/api?section=user-keys#user-api-keys"
+}

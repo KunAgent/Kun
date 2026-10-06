@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "openrouter",
+  "name": "OpenRouter",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://openrouter.ai/api/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://openrouter.ai/docs",
+  "credentialUrl": "https://openrouter.ai/settings/keys"
+}

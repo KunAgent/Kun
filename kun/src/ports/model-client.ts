@@ -76,6 +76,11 @@ export type ModelStreamChunk = (
 export type ModelRequest = {
   /** Host-only paper transport fence: single physical attempt and exact provider generation. */
   paperReadOnly?: { assertCurrent: () => void; takeAttempt: () => boolean }
+  requestId?: string
+  parallelToolCalls?: boolean
+  onWireDispatch?: () => void
+  attemptObserver?: import('./model-attempt.js').ModelAttemptObserver
+  beforeWireDispatch?: (input: import('./model-attempt.js').ModelAttemptInput) => Promise<void>
   threadId: string
   turnId: string
   /** Internal correlation carried through every concrete Provider attempt. */
@@ -119,6 +124,9 @@ export type ModelRequest = {
    * JSON. Native harness/model requests omit this field.
    */
   gatewayRouting?: {
+    /** Server-derived caller identity; never accepted from request JSON. */
+    callerId?: string
+    affinity?: { turn?: string; session?: string }
     allowedTargets: ReadonlyArray<{ providerId: string; modelId: string }>
     /** Captured router generation; checked synchronously at every dispatch. */
     assertCurrent?: () => void
@@ -184,6 +192,12 @@ export type ModelRequest = {
    * (used by probes that must fail fast without touching shared health).
    */
   maxRetryAttempts?: number
+  /** Runtime-owned physical request budget, independent of gateway permissions. */
+  routingBudget?: { takeAttempt(): boolean }
+  /** Runtime configuration fence checked after credential resolution, before HTTP dispatch. */
+  beforeProviderDispatch?: () => void | Promise<void>
+  /** Internal text completion mode, admitted only by an explicitly compatible provider. */
+  fim?: { prompt: string; suffix: string }
   /** Optional sampling controls for classifier-style calls. */
   temperature?: number
   topP?: number

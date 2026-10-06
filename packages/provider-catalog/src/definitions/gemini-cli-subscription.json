@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "gemini-cli-subscription",
+  "name": "Gemini CLI 订阅（API）",
+  "category": "subscription",
+  "kind": "gemini-cli-api",
+  "authFlow": "gemini-cli-subscription",
+  "authType": "subscription",
+  "baseUrl": "",
+  "endpointFormat": "custom_endpoint",
+  "models": [
+    "gemini-3.7-pro-preview",
+    "gemini-3.7-flash-preview",
+    "gemini-3.1-pro-preview",
+    "gemini-3-flash-preview",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash"
+  ],
+  "docsUrl": "https://github.com/google-gemini/gemini-cli",
+  "credentialUrl": "https://github.com/google-gemini/gemini-cli#authentication-options"
+}

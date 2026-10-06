@@ -62,10 +62,11 @@ export function buildProviderModelImportEntries(
     })
   }
 
+  const configuredIds = new Set(providerModelListEntries(provider).map((entry) => modelKey(entry.modelId)))
   if (catalogResult.status === 'ok' && catalogResult.matchMode === 'catalog') {
     for (const catalog of catalogModels) {
       const key = modelKey(catalog.id)
-      if (!key || rows.has(key)) continue
+      if (!key || rows.has(key) || !configuredIds.has(key)) continue
       rows.set(key, {
         modelId: catalog.id.trim(),
         sources: ['models-dev'],

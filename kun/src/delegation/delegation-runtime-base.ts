@@ -494,6 +494,7 @@ export abstract class DelegationRuntimeBase {
           ...(args.clientRequestId ? { clientRequestId: args.clientRequestId } : {}),
           ...(args.harnessId ? { harnessId: args.harnessId } : {}),
           ...(args.credentialMode ? { credentialMode: args.credentialMode } : {}),
+          ...(args.gatewayBinding ? { gatewayBinding: args.gatewayBinding } : {}),
           ...(args.executionUnit ? { executionUnit: args.executionUnit } : {}),
           ...(args.controlPrompt ? { controlPrompt: args.controlPrompt } : {}),
           ...(args.pptWorkflowScope ? { pptWorkflowScope: args.pptWorkflowScope } : {}),

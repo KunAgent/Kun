@@ -1,3 +1,5 @@
+import { GatewayTokenBudget } from '../services/gateway-token-budget.js'
+import { ProviderRequestScheduler } from '../services/provider-request-scheduler.js'
 import {
   mkdir,
   join,
@@ -240,9 +242,10 @@ export async function createRuntimeModelComposition(
     llmDebug,
     resolveLegacyRequestCredentials
   )
-  const directModelClient = new MultiProviderModelClient(initialModelClients)
+  const accountScheduler = new ProviderRequestScheduler()
+  const directModelClient = new MultiProviderModelClient(initialModelClients, accountScheduler)
   const approvalReviewModelClient = new MultiProviderModelClient(
-    buildApprovalReviewClients(core.activeOptions, initialModelClients)
+    buildApprovalReviewClients(core.activeOptions, initialModelClients), accountScheduler
   )
   const approvalReviewService = new ApprovalReviewService({
     // Automatic review must not route through a model pool because pool
@@ -251,7 +254,10 @@ export async function createRuntimeModelComposition(
     modelContext: createApprovalReviewModelContextResolver({
       selection: () => core.activeOptions.approvalReview,
       clients: approvalReviewModelClient,
-      routePoolProviderIds: core.activeOptions.routePools?.map((pool) => pool.id)
+      routePoolProviderIds: core.activeOptions.routePools?.map((pool) => pool.id),
+      inheritedRouteAllowed: (route) => !route.requestedGatewayAlias || Boolean(core.activeOptions.routePools?.some((pool) =>
+        pool.enabled && pool.modelId === route.requestedGatewayAlias && pool.targets.some((target) =>
+          target.enabled && target.providerId === route.providerId && target.modelId === route.model)))
     }),
     events,
     usage: usageService,
@@ -330,6 +336,7 @@ export async function createRuntimeModelComposition(
       const nextOptions: KunServeRuntimeOptions = {
         ...core.activeOptions,
         activeProviderId: selected?.profile.id,
+        modelConnectionSelectionRequired: true,
         ...(selected
           ? {
               model: selected.model,
@@ -346,6 +353,7 @@ export async function createRuntimeModelComposition(
               // credential from the live router. Keep only a harmless model
               // identifier for diagnostics until a new default is selected.
               apiKey: '',
+              credentialSourceId: undefined,
               headers: undefined,
               geminiAuth: undefined
             }),
@@ -373,6 +381,8 @@ export async function createRuntimeModelComposition(
       refreshModelConnectionDelegatedDeps()
     }
   })
+  directModelClient.setDispatchAuthority(() => modelConnections.assertActiveConfiguration())
+  approvalReviewModelClient.setDispatchAuthority(() => modelConnections.assertActiveConfiguration())
   await modelConnections.initialize(modelConnectionSeedsForOptions(core.activeOptions), {
     proxy: { enabled: Boolean(core.activeOptions.modelProxyUrl), url: core.activeOptions.modelProxyUrl ?? '' },
     routePools: core.activeOptions.routePools ?? [],
@@ -672,6 +682,7 @@ export async function createRuntimeModelComposition(
     stopExtensionModelListener,
     gatewayCredentials,
     gatewayUsage,
+    gatewayBudget: new GatewayTokenBudget(gatewayCredentials.directory),
     hasMcpOAuth,
     oauthEncryptor,
     get refreshModelConnectionDelegatedDeps() {

@@ -55,7 +55,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -189,7 +189,7 @@ describe('ModelConnectionRegistry', () => {
       })
       expect(JSON.stringify(second)).not.toContain('rotated-oauth-secret')
       expect((await value.resolveApiKey(sourceId))?.apiKey).toBe('rotated-oauth-secret')
-      const registryDocument = await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')
+      const registryDocument = await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')
       expect(registryDocument).not.toContain('first-oauth-secret')
       expect(registryDocument).not.toContain('rotated-oauth-secret')
     })
@@ -338,7 +338,7 @@ describe('ModelConnectionRegistry', () => {
 
       expect(second.providers.map((provider) => provider.id)).toEqual(['kimi-code', 'kimi-code-2'])
       expect(JSON.stringify(second)).not.toContain('sk-secret')
-      expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')).not.toContain('sk-secret')
+      expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')).not.toContain('sk-secret')
       expect(await readFile(join(dataDir, 'credentials', 'credentials.enc.json'), 'utf8')).not.toContain('sk-secret')
     })
 

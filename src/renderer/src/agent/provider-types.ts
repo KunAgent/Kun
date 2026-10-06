@@ -1,4 +1,5 @@
 import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import type {
   CoreAttachmentContentResponseJson,
   CoreAttachmentMetadataJson,
@@ -404,7 +405,7 @@ export interface AgentProvider {
     briefDigest: string
     recordedBriefDigest: string
   }>
-  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; workspaceMode?: 'code' | 'ade'; collaboration?: { enabled: boolean }; routeIntent?: 'explicit' | 'inherit'; workspaceIsolation?: 'local' | 'worktree'; projectDefaultsRevision?: string; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[]; harnessId?: string; credentialMode?: string; taskWorkspaceId?: string }): Promise<NormalizedThread>
+  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; workspaceMode?: 'code' | 'ade'; collaboration?: { enabled: boolean }; routeIntent?: 'explicit' | 'inherit'; workspaceIsolation?: 'local' | 'worktree'; projectDefaultsRevision?: string; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[]; harnessId?: string; gatewayBinding?: HarnessGatewayBinding; credentialMode?: string; taskWorkspaceId?: string }): Promise<NormalizedThread>
   getThreadDetail(threadId: string, options?: {
     before?: string
     turnId?: string
@@ -432,7 +433,7 @@ export interface AgentProvider {
       /** ADE harness override for this turn; absent inherits the thread (01 §4). */
       harnessId?: string
       /** Harness credential path; absent = the harness's default. */
-      credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+      gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
       reasoningEffort?: string
       serviceTier?: 'priority'
       subagentResume?: { childId: string; expectedResumeCount: number }

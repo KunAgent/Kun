@@ -1,4 +1,5 @@
 import { settingsButtonClass } from './settings-button'
+import { ProviderConfigurationPanel } from './provider-configuration-panel'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
   isLocalModelProxyPort,
@@ -414,6 +415,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
           />
         </SettingsTabPanel>
       </section>
+      <ProviderConfigurationPanel t={t} activeProviderId={activeProvider?.id} />
       <details
         className="group rounded-2xl border border-ds-border bg-ds-card/95 shadow-sm"
         open={globalNetworkOpen === true}

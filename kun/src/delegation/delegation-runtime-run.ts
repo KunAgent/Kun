@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 import { chmod, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -170,6 +171,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     /** Frozen harness for the child thread and first turn (ADE worker route). */
     harnessId?: HarnessId
     /** Frozen credential mode for the first turn; later resumes use the thread pin. */
+    gatewayBinding?: HarnessGatewayBinding
     credentialMode?: HarnessCredentialMode
     /**
      * Host-only execution-unit metadata persisted on the created child thread
@@ -449,6 +451,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
         clientRequestId: input.clientRequestId,
         harnessId: input.harnessId,
         credentialMode: input.credentialMode,
+      gatewayBinding: input.gatewayBinding,
         executionUnit: input.executionUnit,
         controlPrompt,
         pptWorkflowScope: input.pptWorkflowScope,
@@ -526,6 +529,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       clientRequestId: input.clientRequestId,
       harnessId: input.harnessId,
       credentialMode: input.credentialMode,
+      gatewayBinding: input.gatewayBinding,
       executionUnit: input.executionUnit,
       controlPrompt,
       pptWorkflowScope: input.pptWorkflowScope,

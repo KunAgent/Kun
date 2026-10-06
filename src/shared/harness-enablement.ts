@@ -1,8 +1,10 @@
+import { HarnessGatewayBindingSchema, harnessGatewayBindingKey } from '../../kun/src/contracts/harness-gateway-binding.js'
 import type { AdeHarnessRow } from './ade-harnesses'
 import type { KunHarnessEnabledProfileV1, KunHarnessSettingsV1 } from './app-settings-types-kun-runtime'
 
 /** Mirrored by the runtime; neither presence on disk nor a legacy setting is opt-in. */
 export function harnessProfileKey(profile: KunHarnessEnabledProfileV1): string {
+  if (profile.gatewayBinding) return JSON.stringify([profile.harnessId, profile.credentialMode, 'alias', harnessGatewayBindingKey(profile.gatewayBinding)])
   return JSON.stringify([profile.harnessId, profile.credentialMode,
     profile.credentialMode === 'native-login' && (!profile.providerId?.trim() || profile.providerId.trim() === 'default')
       ? '' : profile.providerId?.trim() || 'default'])
@@ -13,14 +15,17 @@ export function normalizeEnabledProfiles(value: unknown): KunHarnessEnabledProfi
   const profiles = new Map<string, KunHarnessEnabledProfileV1>()
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') continue
-    const { harnessId, credentialMode, providerId } = entry as Record<string, unknown>
+    const { harnessId, credentialMode, providerId, gatewayBinding } = entry as Record<string, unknown>
     if (typeof harnessId !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(harnessId) ||
       harnessId === 'kun' || harnessId === 'gemini-cli' ||
       !['native-login', 'provider', 'kun-gateway'].includes(String(credentialMode))) continue
     if (providerId !== undefined && (typeof providerId !== 'string' || !providerId.trim() || providerId.length > 128)) continue
+    const binding = gatewayBinding === undefined ? undefined : HarnessGatewayBindingSchema.safeParse(gatewayBinding)
+    if (binding && (!binding.success || credentialMode !== 'kun-gateway' || (providerId && providerId !== 'default'))) continue
     const profile: KunHarnessEnabledProfileV1 = { harnessId,
+      ...(binding?.success ? { gatewayBinding: binding.data } : {}),
       credentialMode: credentialMode as KunHarnessEnabledProfileV1['credentialMode'],
-      ...(typeof providerId === 'string' ? { providerId: providerId.trim() } : {}) }
+      ...(!binding && typeof providerId === 'string' ? { providerId: providerId.trim() } : {}) }
     profiles.set(harnessProfileKey(profile), profile)
     if (profiles.size >= 128) break
   }
@@ -32,7 +37,8 @@ export function selectedHarnessProfile(row: AdeHarnessRow, settings: KunHarnessS
   const credentialMode = defaults?.credentialMode && row.definition.credentialModes.includes(defaults.credentialMode)
     ? defaults.credentialMode : row.definition.credentialModes[0] ?? 'native-login'
   return { harnessId: row.definition.id, credentialMode,
-    ...(defaults?.providerId ? { providerId: defaults.providerId } : {}) }
+    ...(defaults?.gatewayBinding && credentialMode === 'kun-gateway' ? { gatewayBinding: defaults.gatewayBinding }
+      : defaults?.providerId ? { providerId: defaults.providerId } : {}) }
 }
 
 export function harnessProfileEnabled(settings: Pick<KunHarnessSettingsV1, 'enabledProfiles' | 'disabledIds'>,

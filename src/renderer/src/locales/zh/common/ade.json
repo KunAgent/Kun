@@ -630,6 +630,13 @@
       "configuration": "连接配置不可用。请检查所选供应商、模型或代理设置。",
       "credentials": "未确认可用的登录或凭据。请使用下方“登录”完成认证后重新检查。",
       "protocol": "Agent 协议或所选模型检查失败。请查看详情，确认版本和模型后重试。"
-    }
+    },
+    "alias": "网关路由",
+    "aliasScopeHint": "Agent 只会使用这里批准的账号。路由新增账号时不会自动扩大权限；修改后需重新检查并启用。",
+    "aliasAccounts": "主模型已批准 {{count}} 个账号连接",
+    "aliasApproveAccounts": "批准此路由当前的账号",
+    "smallAlias": "小模型路由",
+    "smallAliasSame": "与主模型使用同一路由",
+    "smallAliasUnsupported": "这个 Agent 没有独立的小模型配置，使用主模型路由。"
   }
 }

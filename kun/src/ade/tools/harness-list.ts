@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../contracts/harness-gateway-binding.js'
 import type { HarnessCredentialMode, HarnessDefinition } from '../../contracts/harness.js'
 import type { HarnessCapabilities } from '../../contracts/harness-capabilities.js'
 import type { HarnessCatalog } from '../../harness/harness-catalog.js'
@@ -10,6 +11,7 @@ import { harnessProfileKey } from '../../harness/harness-readiness-profile.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 
 export type HarnessListModel = {
+  gatewayBinding?: HarnessGatewayBinding
   model: string
   providerId?: string
   credentialMode: HarnessCredentialMode
@@ -55,6 +57,7 @@ export type HarnessListOutput = {
 }
 
 export type HarnessListDeps = {
+  gatewayAliasModel?: (binding: HarnessGatewayBinding) => string | undefined
   catalog: HarnessCatalog
   readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'readyProfiles' | 'warmProfiles'>
   detector: Pick<HarnessDetector, 'status'>
@@ -116,6 +119,11 @@ export async function listHarnessesForManager(
         models.push(...cap(group.models.map((model) => ({ model, providerId: group.providerId, credentialMode: 'native-login' as const }))))
       }
     }
+    models.push(...cap((deps.catalog.enabledProfiles?.(def.id) ?? []).flatMap((profile) => {
+      if (profile.credentialMode !== 'kun-gateway' || !profile.gatewayBinding) return []
+      const model = deps.gatewayAliasModel?.(profile.gatewayBinding)
+      return model ? [{ model, credentialMode: 'kun-gateway' as const, gatewayBinding: profile.gatewayBinding }] : []
+    })))
     for (const mode of def.credentialModes) {
       if (mode === 'kun-gateway') {
         for (const group of providers.filter((entry) => entry.gatewayExportable === true)) {

@@ -89,6 +89,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
   | 'setComposerOrchestration'
   | 'setComposerModel'
   | 'setComposerHarness'
+  | 'setComposerGatewayBinding'
   | 'setComposerIsolation'
   | 'requestAdeThreadWorkspace'
   | 'setComposerReasoningEffort'
@@ -187,6 +188,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         persistComposerProviderId(nextProviderId)
       }
       set({
+        ...(state.composerGatewayBinding ? { composerGatewayBinding: undefined } : {}),
         composerModel: modelId,
         composerProviderId: nextProviderId,
         ...(!activeThreadId && source === 'user'
@@ -215,6 +217,14 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       }
     },
 
+    setComposerGatewayBinding: (binding) => {
+      const state = get()
+      if (state.activeThreadId) rememberThreadComposerSelection(state.activeThreadId, state.composerModel,
+        binding ? '' : state.composerProviderId, 'user', { harnessId: state.composerHarnessId,
+          credentialMode: state.composerCredentialMode, ...(binding ? { gatewayBinding: binding } : {}) })
+      set({ composerGatewayBinding: binding ? structuredClone(binding) : undefined, ...(binding ? { composerProviderId: '' } : {}) })
+    },
+
     setComposerHarness: (harnessId, credentialMode) => {
       const nextHarnessId = harnessId.trim()
       const nextCredentialMode = credentialMode?.trim() ?? ''
@@ -229,6 +239,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       }
       set({
         ...(externalAgent ? { composerMode: 'agent' as const, composerOrchestration: 'direct' as const } : {}),
+        ...(get().composerGatewayBinding ? { composerGatewayBinding: undefined } : {}),
         composerHarnessId: nextHarnessId,
         composerCredentialMode: nextCredentialMode,
         ...(!activeThreadId

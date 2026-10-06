@@ -1,3 +1,5 @@
+import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS } from '@shared/app-settings-provider-core'
 import type { NormalizedThread } from '../agent/types'
 import { DEFAULT_COMPOSER_MODEL_IDS } from '@shared/default-composer-models'
@@ -81,6 +83,7 @@ export type ThreadComposerSelection = {
   /** ADE harness pinned for this thread's next turns (12 §7.2). */
   harnessId?: string
   /** Credential path selected with the harness (native-login / kun-gateway …). */
+  gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
   source?: 'user' | 'default'
 }
@@ -288,11 +291,11 @@ export function rememberThreadComposerSelection(
   model: string,
   providerId = '',
   source: NonNullable<ThreadComposerSelection['source']> = 'user',
-  harness?: { harnessId?: string; credentialMode?: string }
+  harness?: { harnessId?: string; credentialMode?: string; gatewayBinding?: HarnessGatewayBinding }
 ): void {
   const thread = threadId.trim()
   const nextModel = model.trim()
-  if (!thread || !nextModel) return
+  if (!thread || (!nextModel && !harness?.gatewayBinding)) return
   const map = loadThreadComposerSelectionMap()
   delete map[thread]
   map[thread] = {
@@ -300,6 +303,7 @@ export function rememberThreadComposerSelection(
     providerId: providerId.trim(),
     ...(harness?.harnessId?.trim() ? { harnessId: harness.harnessId.trim() } : {}),
     ...(harness?.credentialMode?.trim() ? { credentialMode: harness.credentialMode.trim() } : {}),
+    ...(harness?.gatewayBinding ? { gatewayBinding: structuredClone(harness.gatewayBinding) } : {}),
     source
   }
   saveThreadComposerSelectionMap(map)
@@ -319,7 +323,8 @@ export function rememberThreadComposerHarness(
   map[thread] = {
     ...existing,
     harnessId: harnessId.trim(),
-    credentialMode: credentialMode?.trim() ?? ''
+    credentialMode: credentialMode?.trim() ?? '',
+    gatewayBinding: undefined
   }
   saveThreadComposerSelectionMap(map)
 }
@@ -341,7 +346,9 @@ export function normalizeThreadComposerSelectionMap(raw: unknown): Record<string
     // Harness-only entries are legal for ADE threads whose model rides the
     // harness's own catalog rather than the provider pick list.
     if (!model && !harnessId) continue
+    const binding = HarnessGatewayBindingSchema.safeParse(value.gatewayBinding)
     entries.push([key, {
+      ...(credentialMode === 'kun-gateway' && binding.success ? { gatewayBinding: binding.data } : {}),
       model,
       providerId,
       ...(harnessId ? { harnessId } : {}),

@@ -12,7 +12,7 @@ export type AdeDraftSendSnapshot = {
   startFrom?: TaskWorkspaceStartFrom
   composer: Pick<ChatState,
     'composerModel' | 'composerProviderId' | 'composerModelGroups' |
-    'composerHarnessId' | 'composerCredentialMode' | 'composerExecutionSettings'>
+    'composerHarnessId' | 'composerCredentialMode' | 'composerGatewayBinding' | 'composerExecutionSettings'>
 }
 
 export type CodeProjectRouteSnapshot = {
@@ -43,6 +43,7 @@ export function captureCodeDraftComposer(state: ChatState): AdeDraftSendSnapshot
     composerModelGroups: state.composerModelGroups,
     composerHarnessId: state.composerHarnessId,
     composerCredentialMode: state.composerCredentialMode,
+      ...(state.composerGatewayBinding ? { composerGatewayBinding: structuredClone(state.composerGatewayBinding) } : {}),
     composerExecutionSettings: state.composerExecutionSettings
   }
 }
@@ -64,6 +65,7 @@ export function captureAdeDraftSendSnapshot(state: ChatState): AdeDraftSendSnaps
       composerModelGroups: state.composerModelGroups,
       composerHarnessId: state.composerHarnessId,
       composerCredentialMode: state.composerCredentialMode,
+      ...(state.composerGatewayBinding ? { composerGatewayBinding: structuredClone(state.composerGatewayBinding) } : {}),
       composerExecutionSettings: state.composerExecutionSettings
     }
   }
