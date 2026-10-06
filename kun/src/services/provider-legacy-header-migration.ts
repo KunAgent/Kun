@@ -14,19 +14,22 @@ export async function protectLegacyRegistryHeaders(dataDir: string, document: Re
   credentials: Pick<ExtensionCredentialStore, 'set'>): Promise<RegistryDocument> {
   const next = structuredClone(document)
   const journal = new AtomicJsonFile(join(dataDir, 'provider-header-migration.v1.json'), (value) => Journal.parse(value), false)
-  for (const profile of Object.values(next.profiles)) {
-    if (profile.customHeaders === undefined) continue
-    const headers = CustomHeadersSchema.parse(profile.customHeaders)
-    delete profile.customHeaders
+  for (const profile of Object.values(next.profiles)) for (const field of ['headers', 'customHeaders'] as const) {
+    if (profile[field] === undefined) continue
+    const headers = CustomHeadersSchema.parse(profile[field])
+    delete profile[field]
     const names = Object.keys(headers)
     if (!names.length) continue
     const value = JSON.stringify(headers)
-    const digest = createHash('sha256').update(`${profile.id}\0${value}`).digest('hex')
+    const digest = createHash('sha256').update(`${profile.id}\0${field}\0${value}`).digest('hex')
     const prepared = await journal.update(empty, (state) => ({ ...state,
       headers: { ...state.headers, [digest]: state.headers[digest] ?? `cred_headers-${randomUUID()}` } }))
     const reference = prepared.headers[digest]!
     await credentials.set(reference, { apiKey: value })
-    profile.customHeadersRef = reference; profile.customHeaderNames = names
+    const previousReference = field === 'headers' ? profile.headersRef : profile.customHeadersRef
+    if (previousReference && previousReference !== reference) next.credentialRefCleanup[previousReference] = { reference: previousReference, enqueuedAt: Date.now() }
+    if (field === 'headers') { profile.headersRef = reference; profile.generatedHeaderNames = names }
+    else { profile.customHeadersRef = reference; profile.customHeaderNames = names }
   }
   return next
 }
@@ -39,7 +42,7 @@ export async function retireLegacyHeaderJournal(dataDir: string, file: AtomicJso
   const references = Object.values(prepared.headers)
   if (!references.length) return
   await file.update(fallback, (document) => {
-    const live = new Set(Object.values(document.profiles).map((profile) => profile.customHeadersRef))
+    const live = new Set(Object.values(document.profiles).flatMap((profile) => [profile.customHeadersRef, profile.headersRef]))
     for (const reference of references) if (!live.has(reference)) {
       document.credentialRefCleanup[reference] = { reference, enqueuedAt: Date.now() }
     }

@@ -162,6 +162,18 @@ Moonshot Global:
 - role: international Moonshot open-platform provider added from Settings >
   Providers only
 
+The defaults are declarative JSON descriptors in
+`packages/provider-catalog/src/definitions`. A connection keeps its frozen
+template revision and explicit overrides. Applying a newer template is a
+reviewed operation; a catalog package update does not rewrite existing accounts.
+The same preset can create several named accounts with independent identities.
+Authentication/protected-header hosts and purposes are explicit configuration,
+not inferred from a provider's display name.
+
+Model availability comes from the authenticated account catalog or explicit
+manual configuration. `models.dev` adds field-level source/time evidence only
+to those known IDs. Unknown context, tools or prices are not route guarantees.
+
 The defaults are not locked. Users can edit base URLs, protocols, and model IDs
 if provider endpoints change, and they can add custom compatible providers at
 any time.

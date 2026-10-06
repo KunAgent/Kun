@@ -1,3 +1,4 @@
+import { metadataEvidence } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import type {
   ModelProviderModelProfileV1,
   ModelProviderProfileV1
@@ -202,12 +203,20 @@ export function enrichProviderModelProfiles(
       existing.maxOutputTokens !== catalog.maxOutputTokens
     const addPricing = catalog?.pricing !== undefined &&
       JSON.stringify(existing.pricing) !== JSON.stringify(catalog.pricing)
+    const newFacts = Object.fromEntries((['parallelTools', 'streaming', 'structuredOutput'] as const).flatMap((field) =>
+      existing[field] === undefined && typeof catalog?.[field] === 'boolean' ? [[field, catalog[field]]] : []))
+    const addFacts = Object.keys(newFacts).length > 0
     const mergedAliases = normalizeAliases([...(existing.aliases ?? []), ...aliases])
     const addAliases = mergedAliases.length !== (existing.aliases?.length ?? 0)
-    if (!addContext && !addOutput && !addPricing && !addAliases) continue
+    if (!addContext && !addOutput && !addPricing && !addAliases && !addFacts) continue
     if (next === provider.modelProfiles) next = { ...provider.modelProfiles }
     next[existingKey] = {
-      ...existing,
+      ...existing, ...newFacts,
+      evidence: { ...existing.evidence ?? metadataEvidence({ ...existing }, 'user'),
+        ...(addContext && catalog ? { contextWindowTokens: modelProfileFromCatalog(catalog).evidence!.contextWindowTokens } : {}),
+        ...(addOutput && catalog ? { maxOutputTokens: modelProfileFromCatalog(catalog).evidence!.maxOutputTokens } : {}),
+        ...(addPricing && catalog ? { pricing: modelProfileFromCatalog(catalog).evidence!.pricing } : {}),
+        ...Object.fromEntries(Object.keys(newFacts).map((field) => [field, modelProfileFromCatalog(catalog!).evidence![field as 'parallelTools' | 'streaming' | 'structuredOutput']])) },
       ...(mergedAliases.length ? { aliases: mergedAliases } : {}),
       ...(addContext
         ? { contextWindowTokens: catalog?.contextWindowTokens }
@@ -293,6 +302,13 @@ export function modelProfileFromCatalog(
     inputModalities: supportsImageInput ? ['text', 'image'] : ['text'],
     outputModalities: supportsImageOutput ? ['text', 'image'] : ['text'],
     supportsToolCalling: catalog.toolCalling ?? true,
+    ...(typeof catalog.parallelTools === 'boolean' ? { parallelTools: catalog.parallelTools } : {}),
+    ...(typeof catalog.streaming === 'boolean' ? { streaming: catalog.streaming } : {}),
+    ...(typeof catalog.structuredOutput === 'boolean' ? { structuredOutput: catalog.structuredOutput } : {}),
+    evidence: metadataEvidence({ ...catalog, supportsToolCalling: catalog.toolCalling,
+      inputModalities: catalog.inputModalities.length ? catalog.inputModalities : undefined,
+      outputModalities: catalog.outputModalities.length ? catalog.outputModalities : undefined,
+      messageParts: catalog.inputModalities.length ? ['text'] : undefined }, 'catalog', catalog.observedAt ?? new Date().toISOString()),
     messageParts: supportsImageInput ? ['text', 'image_url'] : ['text'],
     ...(catalog.reasoning === true ? { reasoning: catalogReasoningProfile() } : {}),
     ...(catalog.pricing ? { pricing: { ...catalog.pricing } } : {})

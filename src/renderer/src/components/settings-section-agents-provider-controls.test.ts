@@ -502,10 +502,18 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       }
       const ctx = { ...baseCtx(), provider, update }
       const renderer = await mountProviders(ctx)
-      let details = renderer.root.findByType('details')
+      const proxyDetails = () => {
+        let current = renderer.root.findByProps({ placeholder: 'e.g. 10808' })
+        while (current.type !== 'details') {
+          expect(current.parent).not.toBeNull()
+          current = current.parent!
+        }
+        return current
+      }
+      let details = proxyDetails()
 
       await act(async () => details.props.onToggle({ currentTarget: { open: true } }))
-      expect(renderer.root.findByType('details').props.open).toBe(true)
+      expect(proxyDetails().props.open).toBe(true)
 
       const proxyInput = renderer.root.findByProps({ placeholder: 'e.g. 10808' })
       await act(async () => proxyInput.props.onChange({ target: { value: '10808' } }))
@@ -523,7 +531,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
           ctx: { ...ctx, provider: { ...provider, proxy: { enabled: true, url: 'http://127.0.0.1:65536' } } }
         }))
       })
-      details = renderer.root.findByType('details')
+      details = proxyDetails()
       expect(details.props.open).toBe(true)
       expect(renderer.root.findByProps({ placeholder: 'e.g. 10808' }).props.value)
         .toBe('65536')

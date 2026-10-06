@@ -134,6 +134,14 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return testRoutePool(runtime, ctx.params.id)
   })
+  router.add('POST', '/v1/model-routes/:id/retry', (request, ctx) => {
+    if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()
+    const gateway = runtime.modelGateway
+    const pool = gateway?.configuredPools().find((candidate) => candidate.id === ctx.params.id)
+    if (!pool || !gateway) return ERRORS.validation('Unknown route')
+    for (const target of pool.targets) gateway.health.retry(pool, target)
+    return jsonResponse({ routeId: pool.id, dispatches: 0, recovery: 'half-open' })
+  })
   if (runtime.extensionPlatform) {
     // Static public extension paths must precede `/v1/extensions/:id` because
     // the minimal Router uses first-match ordering.

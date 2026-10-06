@@ -384,7 +384,7 @@ describe('ModelsDevCatalogService', () => {
       baseUrl: 'https://api.deepseek.com'
     }, proxySettings())
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: 'ok',
       providerKey: 'deepseek',
       providerName: 'DeepSeek',
@@ -404,6 +404,7 @@ describe('ModelsDevCatalogService', () => {
         maxOutputTokens: 16_000
       }]
     })
+    if (result.status === 'ok') expect(Number.isFinite(Date.parse(result.models[0].observedAt ?? ''))).toBe(true)
     expect(fetcher).toHaveBeenCalledWith(
       'https://models.dev/api.json',
       expect.objectContaining({

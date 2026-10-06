@@ -51,6 +51,7 @@ export async function requestJson(
   try {
     response = await context.fetcher(url, {
       method: input.method ?? 'GET',
+      redirect: 'error',
       headers: input.headers,
       ...(input.body === undefined ? {} : { body: input.body }),
       signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS)
@@ -106,6 +107,7 @@ export async function requestResponse(
   try {
     response = await context.fetcher(url, {
       method: input.method ?? 'GET',
+      redirect: 'error',
       headers: input.headers,
       ...(input.body === undefined ? {} : { body: input.body }),
       signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS)

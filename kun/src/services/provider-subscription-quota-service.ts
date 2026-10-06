@@ -1,3 +1,4 @@
+import type { ProviderAuthProfile } from '../contracts/provider-configuration.js'
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -53,6 +54,8 @@ export const codexQuotaCredentialCache = new Map<string, StoredCodexOAuthCredent
 export const grokQuotaCredentialCache = new Map<string, StoredGrokOAuthCredentials>()
 
 export type ProviderQuotaProbeProfile = {
+  authProfile?: ProviderAuthProfile
+  configured?: boolean
   id: string
   name: string
   presetId?: string

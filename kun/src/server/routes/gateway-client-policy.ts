@@ -37,6 +37,7 @@ export function clientGuardFor(runtime: ServerRuntime, clientId: string, policy:
 export function combinedGatewayLease(global: GatewayLease | null, scoped: GatewayLease | null): GatewayLease | null {
   if (!global || !scoped) { global?.release(); scoped?.release(); return null }
   return { signal: AbortSignal.any([global.signal, scoped.signal]),
+    deadlineAt: Math.min(global.deadlineAt ?? Infinity, scoped.deadlineAt ?? Infinity),
     timedOut: () => global.timedOut() || scoped.timedOut(),
     release: () => { global.release(); scoped.release() },
     cancel: () => { global.cancel(); scoped.cancel() } }

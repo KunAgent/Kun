@@ -84,7 +84,8 @@ export async function gatewayClientUsage(runtime: ServerRuntime, clientId: strin
   }
   try {
     const policy = (await runtime.modelConnections?.gatewayClientPolicy(clientId))?.policy?.tokenBudget
-    return privateResponse({ ...await gateway.usage.summary(clientId), budget: await gateway.budget?.summary(clientId, policy) })
+    const clientPolicy = await runtime.modelConnections?.gatewayClientPolicy(clientId)
+    return privateResponse({ ...await gateway.usage.summary(clientId), budget: await gateway.budget?.summary(clientId, policy, clientPolicy?.policy?.costAlert) })
   } catch {
     return ERRORS.unavailable('Gateway usage storage is unavailable.')
   }

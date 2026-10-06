@@ -1,3 +1,4 @@
+import { prepareExplicitProviderRemoval } from './provider-removal-test-helpers.js'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -310,7 +311,8 @@ describe('ModelConnectionRegistry', () => {
         select: true
       }
       const connected = await value.initialize([seed])
-      const deleted = await value.delete('legacy-delete', connected.revision)
+      const deletionReady = await prepareExplicitProviderRemoval(value, 'legacy-delete', connected.revision)
+      const deleted = await value.delete('legacy-delete', deletionReady.revision)
       expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8'))
         .toContain('settings:provider:legacy-delete')
 

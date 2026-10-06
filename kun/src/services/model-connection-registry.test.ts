@@ -237,7 +237,7 @@ describe('ModelConnectionRegistry', () => {
       },
       {
         label: 'a versioned chat completions endpoint',
-        baseUrl: 'https://catalog.example.test/v2/chat/completions?deployment=blue#fragment',
+        baseUrl: 'https://catalog.example.test/v2/chat/completions?deployment=blue',
         endpointFormat: 'chat_completions' as const,
         expectedUrl: 'https://catalog.example.test/v2/models'
       },

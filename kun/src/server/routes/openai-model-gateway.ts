@@ -178,6 +178,8 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
     lease.release()
     return openAiError(errorMessage(error), error instanceof GatewayUsageError && error.status === 503 ? 'gateway_usage_unavailable' : 'invalid_request_error', error instanceof GatewayUsageError ? error.status : 400)
   }
+  modelRequest.requestId = modelRequest.turnId
+  modelRequest.deadlineAt = lease.deadlineAt ?? Date.now() + 120_000
   modelRequest.attemptObserver = gatewayAttemptAccounting(runtime, verdict.auth, recorder, modelRequest.turnId)
   const attribute = grant
     ? (usage?: UsageSnapshot) => recordHarnessGatewayUsage(runtime, grant, resolved, usage, turnId)

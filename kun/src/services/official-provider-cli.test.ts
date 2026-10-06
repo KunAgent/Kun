@@ -65,7 +65,11 @@ describe('official provider CLI authentication', () => {
       dataDir: rejectedDataDir,
       legacyBinaryPaths: [link]
     })
-    await expect(rejected.status()).resolves.toMatchObject({ installed: false })
+    const rejectedStatus = await rejected.status()
+    // A separately installed CLI may still be discovered. Rejecting this
+    // legacy source must neither install its bytes nor select its unsafe path.
+    expect(rejectedStatus.path).not.toBe(link)
+    expect(rejectedStatus.path).not.toBe(antigravityCliBinaryPath(rejectedDataDir))
     await expect(readFile(antigravityCliBinaryPath(rejectedDataDir))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 

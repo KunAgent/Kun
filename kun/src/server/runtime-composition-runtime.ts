@@ -326,6 +326,7 @@ export function createServerRuntimeComposition(
       exposeProviderModels: () => config.activeOptions.localModelGateway?.exposeProviderModels === true,
 	      pools: () => modelClient.routePools(),
 	      configuredPools: () => modelClient.configuredPools(),
+          previewOrder: (pool, targets) => modelClient.previewOrder(pool, targets),
 	      health: routeHealth,
 	      tests: routePoolTests,
 	      credentials: gatewayCredentials,

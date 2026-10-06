@@ -353,7 +353,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         baseUrl: target.baseUrl,
         forceRefresh: true
       })
-      expect(instanceText(renderer.root.findByProps({ role: 'dialog' }))).toContain('models.dev only')
+      const importDialogText = instanceText(renderer.root.findByProps({ role: 'dialog' }))
+      expect(importDialogText).toContain('API + models.dev')
+      expect(importDialogText).toContain('model-a')
+      expect(importDialogText).toContain('model-b')
+      expect(importDialogText).not.toContain('catalog-only')
       expect(findButton(renderer, 'Import 2').props.disabled).toBe(false)
 
       await act(async () => findButton(renderer, 'Import 2').props.onClick())
@@ -363,6 +367,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       expect(updatedTarget?.models).toEqual(['model-a', 'model-b'])
       expect(updatedTarget?.models).not.toContain('catalog-only')
       expect(updatedTarget?.speech).toBeUndefined()
+      expect(updatedTarget?.modelProfiles['model-a'].evidence?.supportsToolCalling).toMatchObject({ source: 'catalog', status: 'declared' })
+      expect(updatedTarget?.modelProfiles['model-a'].evidence?.pricing?.status).toBe('unknown')
       expect(updatedTarget?.modelProfiles['model-a']).toEqual(expect.objectContaining({
         contextWindowTokens: 128_000,
         maxOutputTokens: 16_000,
@@ -564,7 +570,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       )).toBe(false)
     })
 
-    it('keeps catalog-only candidates unchecked when the provider model request fails', async () => {
+    it('omits undiscovered catalog candidates when provider verification fails', async () => {
       probeModelProvider.mockResolvedValueOnce({ ok: false, message: '401 unauthorized' })
       const settings = defaultModelProviderSettings()
       const target = {
@@ -593,7 +599,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
 
       const dialogText = instanceText(renderer.root.findByProps({ role: 'dialog' }))
       expect(dialogText).toContain('Provider verification failed: 401 unauthorized')
-      expect(dialogText).toContain('models.dev only')
+      expect(dialogText).toContain('No models available')
+      expect(dialogText).not.toContain('catalog-only')
+      expect(dialogText).not.toContain('model-a')
       expect(findButton(renderer, 'Import 0').props.disabled).toBe(true)
     })
   })

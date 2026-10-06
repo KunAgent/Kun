@@ -119,6 +119,10 @@ function modelCapabilitiesForProviderConfig(
       inputModalities: [...profile.inputModalities],
       outputModalities: [...profile.outputModalities],
       supportsToolCalling: profile.supportsToolCalling,
+      ...(typeof profile.parallelTools === 'boolean' ? { parallelTools: profile.parallelTools } : {}),
+      ...(typeof profile.streaming === 'boolean' ? { streaming: profile.streaming } : {}),
+      ...(typeof profile.structuredOutput === 'boolean' ? { structuredOutput: profile.structuredOutput } : {}),
+      ...(profile.evidence ? { evidence: profile.evidence } : {}),
       messageParts: [...profile.messageParts],
       ...(profile.reasoning
         ? {
@@ -388,6 +392,10 @@ function modelConfigProfilesFromProviderProfiles(
       inputModalities: profile.inputModalities,
       outputModalities: profile.outputModalities,
       supportsToolCalling: profile.supportsToolCalling,
+      ...(typeof profile.parallelTools === 'boolean' ? { parallelTools: profile.parallelTools } : {}),
+      ...(typeof profile.streaming === 'boolean' ? { streaming: profile.streaming } : {}),
+      ...(typeof profile.structuredOutput === 'boolean' ? { structuredOutput: profile.structuredOutput } : {}),
+      ...(profile.evidence ? { evidence: profile.evidence } : {}),
       messageParts: profile.messageParts,
       ...(profile.reasoning ? { reasoning: profile.reasoning } : {}),
       ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),

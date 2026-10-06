@@ -1,3 +1,4 @@
+import { prepareExplicitProviderRemoval } from './provider-removal-test-helpers.js'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -320,7 +321,8 @@ describe('ModelConnectionRegistry', () => {
         select: true
       }
       const connected = await value.connect(request)
-      const deleted = await value.delete('restart-safe', connected.revision)
+      const deletionReady = await prepareExplicitProviderRemoval(value, 'restart-safe', connected.revision)
+      const deleted = await value.delete('restart-safe', deletionReady.revision)
 
       const staleSeed = await value.initialize([{ ...request, expectedRevision: deleted.revision }])
       expect(staleSeed.providers).toEqual([])

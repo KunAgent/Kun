@@ -1,3 +1,5 @@
+import { metadataEvidence } from '../contracts/model-metadata-evidence.js'
+import type { ModelMetadataEvidence } from '../contracts/model-metadata-evidence.js'
 import type {
   ModelCapabilityMetadata,
   ModelCatalogPricing,
@@ -28,6 +30,8 @@ export type ModelContextProfile = ModelContextThresholds & {
   inputModalities: readonly ModelInputModality[]
   outputModalities: readonly ModelInputModality[]
   supportsToolCalling: boolean
+  parallelTools?: boolean; streaming?: boolean; structuredOutput?: boolean
+  evidence?: ModelMetadataEvidence
   messageParts: readonly ModelMessagePartSupport[]
   reasoning?: ModelReasoningCapabilityMetadata
   pricing?: ModelCatalogPricing
@@ -52,6 +56,8 @@ export type ModelContextProfileConfig = {
   inputModalities?: readonly ModelInputModality[]
   outputModalities?: readonly ModelInputModality[]
   supportsToolCalling?: boolean
+  parallelTools?: boolean; streaming?: boolean; structuredOutput?: boolean
+  evidence?: ModelMetadataEvidence
   messageParts?: readonly ModelMessagePartSupport[]
   reasoning?: ModelReasoningCapabilityMetadata
   pricing?: ModelCatalogPricing
@@ -240,6 +246,10 @@ export function modelCapabilitiesForModel(
     inputModalities: [...(profile?.inputModalities ?? DEFAULT_MODEL_INPUT_MODALITIES)],
     outputModalities: [...(profile?.outputModalities ?? DEFAULT_MODEL_OUTPUT_MODALITIES)],
     supportsToolCalling: profile?.supportsToolCalling ?? true,
+    ...(typeof profile?.parallelTools === 'boolean' ? { parallelTools: profile.parallelTools } : {}),
+    ...(typeof profile?.streaming === 'boolean' ? { streaming: profile.streaming } : {}),
+    ...(typeof profile?.structuredOutput === 'boolean' ? { structuredOutput: profile.structuredOutput } : {}),
+    evidence: profile?.evidence ?? metadataEvidence(profile ? { ...profile } : {}, 'adapter'),
     contextWindowTokens: profile?.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS,
     ...(profile?.maxOutputTokens ? { maxOutputTokens: profile.maxOutputTokens } : {}),
     messageParts: [...(profile?.messageParts ?? DEFAULT_MODEL_MESSAGE_PARTS)],
@@ -269,6 +279,8 @@ export function modelCapabilitiesForProviderModel(
   const serviceTiers = providerServiceTiers(input)
   return {
     ...builtIn,
+    evidence: { ...builtIn.evidence ?? metadataEvidence({}, 'adapter'), ...(reasoning ? { reasoning: { source: 'adapter', status: 'declared' } } : {}),
+      ...(serviceTiers ? { serviceTiers: { source: 'adapter', status: 'declared' } } : {}) },
     ...(reasoning ? { reasoning: copyReasoningCapability(reasoning) } : {}),
     ...(serviceTiers ? { serviceTiers } : {})
   }
@@ -590,6 +602,9 @@ function mergeModelContextProfile(
     inputModalities: uniqueModelCapabilityValues(input.inputModalities ?? current?.inputModalities ?? DEFAULT_MODEL_INPUT_MODALITIES),
     outputModalities: uniqueModelCapabilityValues(input.outputModalities ?? current?.outputModalities ?? DEFAULT_MODEL_OUTPUT_MODALITIES),
     supportsToolCalling: input.supportsToolCalling ?? current?.supportsToolCalling ?? true,
+    parallelTools: input.parallelTools ?? current?.parallelTools, streaming: input.streaming ?? current?.streaming,
+    structuredOutput: input.structuredOutput ?? current?.structuredOutput,
+    evidence: input.evidence ?? current?.evidence ?? metadataEvidence({ ...input }, 'user'),
     messageParts: uniqueModelCapabilityValues(input.messageParts ?? current?.messageParts ?? DEFAULT_MODEL_MESSAGE_PARTS),
     ...(reasoning
       ? { reasoning: copyReasoningCapability(reasoning) }

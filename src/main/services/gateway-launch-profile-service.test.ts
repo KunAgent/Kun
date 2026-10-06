@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, symlinkSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, symlinkSync, existsSync, rmSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -66,7 +66,7 @@ describe('isolated launch profiles', () => {
     const outside = mkdtempSync(join(tmpdir(), 'kun-gateway-outside-')); roots.push(outside)
     symlinkSync(outside, join(root, '.kun-gateway'), 'dir')
     expect(() => service.preview(root, selection)).toThrow('link')
-    rmSync(join(root, '.kun-gateway'))
+    unlinkSync(join(root, '.kun-gateway'))
     const first = service.preview(root, selection); service.apply(first.planId)
     symlinkSync(join(root, 'missing'), `${first.path}.kun-backup`)
     expect(() => service.preview(root, selection)).toThrow('without links')

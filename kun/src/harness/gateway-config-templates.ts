@@ -25,8 +25,8 @@ export function opencodeConfig(
 
 /**
  * Generated PI_CODING_AGENT_DIR/models.json (P6-11): a single `kun` provider
- * on the openai-completions surface. `apiKey` is pi's `$NAME` env
- * interpolation — the grant token only ever lives in the child env.
+ * on the openai-completions surface. Pi resolves a bare environment variable
+ * name before treating a value as a literal. The grant stays in the child env.
  */
 export function piModelsConfig(
   baseUrl: string,
@@ -39,7 +39,7 @@ export function piModelsConfig(
         kun: {
           baseUrl,
           api: 'openai-completions',
-          apiKey: `\${${tokenEnv}}`,
+          apiKey: tokenEnv,
           models: [{ id: gatewayModelId, name: gatewayModelId }]
         }
       }
@@ -58,7 +58,6 @@ export function codexConfig(
   return [
     'model_provider = "kun"',
     `model = ${JSON.stringify(gatewayModelId)}`,
-    'preferred_auth_method = "apikey"',
     '',
     '[model_providers.kun]',
     'name = "Kun"',

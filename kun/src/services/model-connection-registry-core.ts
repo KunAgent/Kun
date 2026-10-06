@@ -1,9 +1,12 @@
+import { assertProviderConfigurationUrls } from '../contracts/provider-safe-url.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { ProviderConfigurationStateSchema } from '../contracts/provider-configuration.js'
 import { PROVIDER_REGISTRY_FILE, upgradeProviderRegistry } from './provider-registry-migration.js'
 import { effectiveProviderConfiguration } from './provider-effective-configuration.js'
+import { providerConfigurationSecretOperations } from './provider-configuration-secret-operations.js'
+import type { ProviderSecretBinding } from './provider-configuration-backup.js'
 import { providerConfigurationOperations, type ConfigurationPreview } from './provider-configuration-operations.js'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
 import type { ServeProviderConfig } from '../config/kun-config.js'
@@ -62,6 +65,7 @@ export const StoredProfileSchema = ModelConnectionSnapshotSchema.shape.providers
   credentialSourceId: z.string().min(1).max(256).optional(),
   legacyCredentialSourceToRetire: z.string().min(1).max(256).optional(),
   headers: z.record(z.string(), z.string()).optional(),
+  headersRef: z.string().min(1).max(256).optional(),
   customHeaders: z.record(z.string(), z.string()).optional(),
   customHeadersRef: z.string().min(1).max(256).optional()
 })
@@ -217,6 +221,7 @@ export class ModelConnectionRegistry {
   declare private inspectCredentialHealth: (document: RegistryDocument) => Promise<ReadonlyMap<string, ProjectedCredentialHealth>>
 
   private readonly file: AtomicJsonFile<RegistryDocument>
+  private readonly configurationImportSecrets = new Map<string, ProviderSecretBinding[]>()
   private readonly configurationPreviews = new Map<string, ConfigurationPreview>()
   private listeners = new Set<(snapshot: ModelConnectionSnapshot) => void>()
   private changeOperation: Promise<void> = Promise.resolve()
@@ -246,6 +251,8 @@ export class ModelConnectionRegistry {
     afterCredentialCommitRecord?: (providerId: string) => Promise<void>
     afterCredentialCommitWrite?: (providerId: string) => Promise<void>
     afterCredentialConnectWrite?: (providerId: string) => Promise<void>
+    historyReferenceSources?: () => Promise<Record<string, unknown>> | Record<string, unknown>
+    referenceSources?: () => Promise<Record<string, unknown>> | Record<string, unknown>
     resolveCredentialSource?: (sourceId: string) => Promise<{
       apiKey: string
       headers?: Record<string, string>
@@ -255,7 +262,11 @@ export class ModelConnectionRegistry {
     assertManagerAtomicJsonPath(registryPath)
     this.file = new AtomicJsonFile(
       registryPath,
-      (value) => RegistryDocumentSchema.parse(upgradeProviderRegistry(upgradeRegistryProxyRouting(value))),
+      (value) => {
+        const upgraded = upgradeProviderRegistry(upgradeRegistryProxyRouting(value))
+        assertProviderConfigurationUrls(upgraded)
+        return RegistryDocumentSchema.parse(upgraded)
+      },
       false
     )
   }
@@ -270,7 +281,8 @@ installServiceOperations(
   modelConnectionRegistrySelectionOperations,
   modelConnectionRegistryMaterializationOperations,
   modelConnectionRegistryCredentialRecoveryOperations,
-  providerConfigurationOperations
+  providerConfigurationOperations,
+  providerConfigurationSecretOperations
 )
 
 
@@ -365,7 +377,7 @@ export function requireCredentialTransaction(
 }
 
 export function credentialReferenceIsLive(document: RegistryDocument, reference: string): boolean {
-  return Object.values(document.profiles).some((profile) => profile.credentialRef === reference || profile.customHeadersRef === reference) ||
+  return Object.values(document.profiles).some((profile) => profile.credentialRef === reference || profile.customHeadersRef === reference || profile.headersRef === reference) ||
     Object.values(document.credentialTransactions)
       .some((transaction) => transaction.nextCredentialRef === reference)
 }
@@ -464,6 +476,7 @@ export function sameStoredProfile(left: StoredProfile, right: StoredProfile): bo
     left.configured === right.configured &&
     left.incarnationId === right.incarnationId &&
     left.selectedModel === right.selectedModel &&
+    left.headersRef === right.headersRef &&
     left.credentialRef === right.credentialRef &&
     left.credentialSourceId === right.credentialSourceId &&
     left.legacyCredentialSourceToRetire === right.legacyCredentialSourceToRetire &&
@@ -491,6 +504,7 @@ export function project(
         credentialSourceId: _credentialSourceId,
         legacyCredentialSourceToRetire: _legacyCredentialSourceToRetire,
         headers: _headers,
+        headersRef: _headersRef,
         customHeaders: customHeaders,
         customHeadersRef: _customHeadersRef,
         customHeaderNames,

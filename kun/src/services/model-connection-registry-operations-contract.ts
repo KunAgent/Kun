@@ -28,14 +28,20 @@ import type { StoredProfileSchema, DeletedProfileTombstoneSchema, CredentialTran
 export interface ModelConnectionRegistryOperations {
   gatewayClientPolicy(clientId: string): Promise<{ revision: number; policy?: import('../contracts/gateway-client-policy.js').GatewayClientPolicy }>;
   configurationSnapshot(): Promise<{
-    schemaVersion: 2; revision: number; activeRevision: number;
+    schemaVersion: 2; revision: number; activeRevision: number; defaultProviderId?: string; defaultAccountId?: string; defaultModel?: string;
     configuration: Omit<import('../contracts/provider-configuration.js').ProviderConfigurationState, 'commits'>;
     connections: ModelConnectionProfile[]; routePools: RegistryDocument['routePools'];
     failover: RegistryDocument['failover']; localModelGateway: RegistryDocument['localModelGateway'];
     fieldSources: Record<string, Record<string, 'connection' | 'group' | 'template'>>;
   }>;
   previewConfiguration(raw: unknown): Promise<import('./provider-configuration-operations.js').ConfigurationPreview>;
-  commitConfiguration(raw: unknown): Promise<{ committedRevision: number; applied: boolean;
+  previewProviderRecovery(): Promise<ReturnType<typeof import('./provider-registry-recovery.js').previewProviderRegistryDowngrade>>;
+  exportProviderRecovery(expectedRevision: number): Promise<ReturnType<typeof import('./provider-registry-recovery.js').exportProviderRegistryDowngrade>>;
+  previewProviderImport(raw: unknown): Promise<import('./provider-configuration-operations.js').ConfigurationPreview & { remaps: Record<string, Record<string, string>>; secretSlots: Array<{ id: string; connectionId: string; kind: 'credential' | 'headers'; names?: string[]; bound: boolean }> }>;
+  exportProviderBackup(password: unknown): Promise<{ backup: import('./provider-configuration-backup.js').ProviderEncryptedBackup; missingSlots: string[] }>;
+  previewProviderBackup(raw: unknown): ReturnType<ModelConnectionRegistryOperations['previewProviderImport']>;
+  commitProviderImport(raw: unknown): ReturnType<ModelConnectionRegistryOperations['commitConfiguration']>;
+  commitConfiguration(raw: unknown, bindings?: import('./provider-configuration-secret-operations.js').PreparedImportBinding[]): Promise<{ committedRevision: number; applied: boolean;
     snapshot: Awaited<ReturnType<ModelConnectionRegistryOperations['configurationSnapshot']>> }>;
   initialize(
     seed?: readonly ModelConnectionSeed[] ,

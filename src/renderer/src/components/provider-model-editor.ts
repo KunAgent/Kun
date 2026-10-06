@@ -1,3 +1,4 @@
+import { MODEL_METADATA_FIELDS, metadataEvidence } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import {
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
   DEFAULT_MUSIC_GENERATION_PROTOCOL,
@@ -64,6 +65,9 @@ export type ProviderModelForm = {
   pricing: ProviderModelFormPricing | null
   visionInput: boolean
   supportsToolCalling: boolean
+  parallelTools: boolean | null
+  structuredOutput: boolean | null
+  streaming: boolean | null
   reasoningEnabled: boolean
   reasoningEfforts: ModelReasoningEffort[]
   reasoningDefaultEffort: ModelReasoningEffort
@@ -132,6 +136,7 @@ export function newProviderModelForm(
     pricing: null,
     visionInput: false,
     supportsToolCalling: true,
+    parallelTools: null, structuredOutput: null, streaming: null,
     reasoningEnabled: false,
     reasoningEfforts: [...PROVIDER_MODEL_REASONING_EFFORT_CHOICES],
     reasoningDefaultEffort: 'medium',
@@ -169,6 +174,7 @@ export function providerModelFormForExisting(
       : null,
     visionInput: profile.inputModalities.includes('image'),
     supportsToolCalling: profile.supportsToolCalling,
+    parallelTools: profile.parallelTools ?? null, structuredOutput: profile.structuredOutput ?? null, streaming: profile.streaming ?? null,
     reasoningEnabled: Boolean(profile.reasoning),
     reasoningEfforts: profile.reasoning
       ? sortReasoningEfforts(profile.reasoning.supportedEfforts)
@@ -523,7 +529,7 @@ function chatProfileFromForm(
   // lives under originalModelId.
   const previous = chatModelProfile(provider, form.originalModelId || form.modelId)
   const pricing = pricingFromForm(form.pricing)
-  return {
+  const profile: ModelProviderModelProfileV1 = {
     ...(aliases.length > 0 ? { aliases } : {}),
     ...(form.contextWindowTokens && form.contextWindowTokens > 0
       ? { contextWindowTokens: form.contextWindowTokens }
@@ -539,10 +545,24 @@ function chatProfileFromForm(
       ? { reasoning: reasoningCapabilityFromForm(form) }
       : {}),
     ...(pricing ? { pricing } : {}),
+    ...(typeof form.parallelTools === 'boolean' ? { parallelTools: form.parallelTools } : {}),
+    ...(typeof form.streaming === 'boolean' ? { streaming: form.streaming } : {}),
+    ...(typeof form.structuredOutput === 'boolean' ? { structuredOutput: form.structuredOutput } : {}),
     ...(previous?.serviceTiers?.length ? { serviceTiers: [...previous.serviceTiers] } : {}),
     ...(form.endpointFormat ? { endpointFormat: form.endpointFormat } : {}),
     ...(form.responsesMode ? { responsesMode: form.responsesMode } : {})
   }
+  const evidence = previous?.evidence ?? metadataEvidence({ ...previous }, 'user')
+  const now = new Date().toISOString()
+  const nextEvidence = metadataEvidence({ ...profile }, 'user', now)
+  profile.evidence = { ...evidence }
+  for (const field of MODEL_METADATA_FIELDS) {
+    if (JSON.stringify(previous?.[field as keyof ModelProviderModelProfileV1]) !== JSON.stringify(profile[field as keyof ModelProviderModelProfileV1])) {
+      profile.evidence[field] = nextEvidence[field]
+    }
+  }
+  return profile
+
 }
 
 function reasoningCapabilityFromForm(form: ProviderModelForm): ModelProviderReasoningCapabilityV1 {

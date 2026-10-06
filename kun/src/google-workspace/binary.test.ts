@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, symlink, realpath } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +7,7 @@ import { googleWorkspaceBundleRoot, resolveGoogleWorkspaceBinary } from './binar
 const roots: string[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
 async function fixture(packaged = false) {
-  const root = await mkdtemp(join(tmpdir(), 'gws-binary-test-')); roots.push(root)
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'gws-binary-test-'))); roots.push(root)
   const content = 'verified fake binary'
   const sha256 = createHash('sha256').update(content).digest('hex')
   const asset = { name: 'gws-test-asset', size: Buffer.byteLength(content), sha256 }

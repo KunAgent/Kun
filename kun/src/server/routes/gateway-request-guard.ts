@@ -7,6 +7,7 @@ const DEFAULT_REFILL_PER_SECOND = 1
 const DEFAULT_CONCURRENCY = 2
 
 export type GatewayLease = {
+  deadlineAt?: number
   signal: AbortSignal
   timedOut(): boolean
   release(): void
@@ -75,6 +76,7 @@ export class GatewayRequestGuard {
       this.leases.delete(lease)
     }
     const lease: GatewayLease = {
+      deadlineAt: this.now() + (this.options.timeoutMs ?? GATEWAY_REQUEST_TIMEOUT_MS),
       signal: controller.signal,
       timedOut: () => timeoutReached,
       release,

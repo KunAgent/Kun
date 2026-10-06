@@ -134,8 +134,10 @@ export function startMainApp(): Promise<void> {
   }
   // Only packaged builds claim the scheme: a dev instance must not steal
   // kun:// links from the installed app. `KUN_DEV_REGISTER_PROTOCOL=1`
-  // opts a dev build back in, pointing the OS at the dev entry script.
-  if (app.isPackaged || process.env.KUN_DEV_REGISTER_PROTOCOL === '1') {
+  // opts a dev build back in, pointing the OS at the dev entry script. Isolated
+  // packaged smoke must not replace the user's global protocol association.
+  if (process.env.KUN_PACKAGED_EXTENSION_DESKTOP_SMOKE !== '1' &&
+      (app.isPackaged || process.env.KUN_DEV_REGISTER_PROTOCOL === '1')) {
     if (!app.isPackaged && process.defaultApp && process.argv[1]) {
       app.setAsDefaultProtocolClient('kun', process.execPath, [resolve(process.argv[1])])
     } else {

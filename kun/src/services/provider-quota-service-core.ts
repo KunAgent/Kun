@@ -1,3 +1,4 @@
+import { scopedQuotaFetch, providerQuotaIdentity } from './provider-quota-security.js'
 import {
   ProviderQuotaListResponseSchema,
   type ProviderLocalCostSummary,
@@ -142,13 +143,16 @@ export class ProviderQuotaService {
     profile: ProviderQuotaProbeProfile,
     forceRefresh: boolean
   ): Promise<ProviderQuotaEntry> {
-    const key = profile.id.trim().toLowerCase()
+    const prefix = `${profile.id.trim().toLowerCase()}:`
+    const key = `${prefix}${providerQuotaIdentity(profile)}`
+    for (const previous of this.cache.keys()) if (previous.startsWith(prefix) && previous !== key) this.cache.delete(previous)
+    while (this.cache.size > 1_024) this.cache.delete(this.cache.keys().next().value!)
     const cached = this.cache.get(key)
     if (!forceRefresh && cached && this.now() - cached.fetchedAt < QUOTA_CACHE_TTL_MS) {
       return Promise.resolve(cached.entry)
     }
     const pending = this.inflight.get(key)
-    if (pending && !forceRefresh) return pending
+    if (pending) return pending
     const request = this.refreshProfile(profile, profile.proxyUrl ?? '')
       .then((entry) => {
         const previous = this.cache.get(key)
@@ -172,6 +176,8 @@ export class ProviderQuotaService {
       providerName: provider.name,
       ...(provider.presetId ? { presetId: provider.presetId } : {})
     }
+    if (provider.configured === false) return { ...baseEntry, status: 'missing_credentials', metrics: [],
+      message: 'The provider connection has no usable protected credential.' }
     const probe = classifyProviderQuotaProbe(provider)
     if (!probe) {
       return {
@@ -180,6 +186,9 @@ export class ProviderQuotaService {
         metrics: [],
         message: 'This provider does not expose a supported quota API in this version.'
       }
+    }
+    if (provider.authProfile && !provider.authProfile.scope.purposes.includes('quota')) return {
+      ...baseEntry, status: 'unsupported', metrics: [], message: 'This connection does not authorize quota requests.'
     }
     const apiKey = provider.apiKey.trim()
     if (!isSubscriptionQuotaProbe(probe.kind) && !apiKey) {
@@ -196,7 +205,7 @@ export class ProviderQuotaService {
       const result = await runProbe(
         probe.kind,
         provider,
-        { fetcher: this.fetcher, proxyUrl, apiKey },
+        { fetcher: scopedQuotaFetch(this.fetcher, provider, probe.kind), proxyUrl, apiKey },
         this.subscriptionRuntime
       )
       return {
@@ -236,6 +245,7 @@ export function classifyProviderQuotaProbe(
   provider: ProviderQuotaProbeProfile
 ): ProviderQuotaProbe | null {
   const stableId = provider.presetId || provider.id
+  const hostname = exactHostname(provider.baseUrl)
   if (stableId === 'claude-subscription' && provider.kind === 'agent-sdk') {
     return {
       kind: 'claude-subscription',
@@ -243,14 +253,14 @@ export function classifyProviderQuotaProbe(
       dashboardUrl: 'https://claude.ai/settings/usage'
     }
   }
-  if (stableId === 'codex' && provider.kind === 'http') {
+  if (stableId === 'codex' && provider.kind === 'http' && hostname === 'chatgpt.com') {
     return {
       kind: 'codex-subscription',
       source: 'ChatGPT Codex usage API',
       dashboardUrl: 'https://chatgpt.com/codex/settings/usage'
     }
   }
-  if (stableId === 'grok-subscription' && provider.kind === 'http') {
+  if (stableId === 'grok-subscription' && provider.kind === 'http' && hostname === 'cli-chat-proxy.grok.com') {
     return {
       kind: 'grok-subscription',
       source: 'Grok web billing API',
@@ -278,7 +288,6 @@ export function classifyProviderQuotaProbe(
       dashboardUrl: 'https://aistudio.google.com/usage'
     }
   }
-  const hostname = exactHostname(provider.baseUrl)
   if (
     stableId === 'opencode-go' &&
     provider.kind === 'http' &&

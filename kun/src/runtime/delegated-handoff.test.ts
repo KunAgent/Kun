@@ -390,7 +390,7 @@ describe('AntigravityCliRuntime handoff', () => {
       ...(opts.deterministicHandoff !== undefined
         ? { deterministicHandoff: opts.deterministicHandoff }
         : {}),
-      spawnFn: successfulSpawn('done\n', (args) => {
+      spawnFn: successfulSpawn(JSON.stringify({ conversation_id: 'handoff-conversation', status: 'SUCCESS', response: 'done' }), (args) => {
         spawnedArgs = args
       })
     })

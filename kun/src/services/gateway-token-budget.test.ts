@@ -43,6 +43,24 @@ describe('durable gateway token admission', () => {
     await f.reserve('c', 20, { timeZone: 'UTC' })
     expect((await f.service.summary('client')).windows.find((window) => window.active)?.timeZone).toBe('UTC')
   })
+  it('persists reference cost alerts separately from measured tokens and reconciles unknown cost once', async () => {
+    const f = await setup(), alert = { usd: 1, period: 'day' as const, timeZone: 'Asia/Shanghai' }
+    await f.reserve('a'); await f.service.settle('a', undefined)
+    expect((await f.service.summary('client', policy, alert)).windows[0]).toMatchObject({ measured: 0, reserved: 60,
+      costAlert: { usd: 0, unknownAttempts: 1, exceeded: false } })
+    await f.service.settle('a', 10, 1.5); await f.service.settle('a', 10, 1.5)
+    const restarted = new GatewayTokenBudget(f.dir, f.time)
+    expect((await restarted.summary('client', policy, alert)).windows[0]).toMatchObject({ measured: 10, reserved: 0,
+      costAlert: { basis: 'reference-estimate', usd: 1.5, unknownAttempts: 0, exceeded: true } })
+  })
+  it('shows an unsettled crash attempt as unknown cost after restart', async () => {
+    const f = await setup(); await f.reserve('crash')
+    const restarted = new GatewayTokenBudget(f.dir, f.time)
+    expect((await restarted.summary('client', policy, { usd: 1, period: 'day', timeZone: 'Asia/Shanghai' })).windows[0])
+      .toMatchObject({ reserved: 60, measured: 0, costAlert: { usd: 0, unknownAttempts: 1 } })
+    await restarted.settle('crash', 0, 0)
+    expect((await restarted.summary('client', policy, { usd: 1, period: 'day', timeZone: 'Asia/Shanghai' })).windows[0].costAlert?.unknownAttempts).toBe(0)
+  })
   it('calculates daily DST, Monday weekly and monthly boundaries in the configured IANA zone', () => {
     expect(new Date(budgetWindowEnd(Date.parse('2026-03-08T07:30:00Z'), { period: 'day', timeZone: 'America/New_York' })).toISOString()).toBe('2026-03-09T04:00:00.000Z')
     expect(new Date(budgetWindowEnd(Date.parse('2026-10-06T06:00:00Z'), { period: 'week', timeZone: 'Asia/Shanghai' })).toISOString()).toBe('2026-10-11T16:00:00.000Z')

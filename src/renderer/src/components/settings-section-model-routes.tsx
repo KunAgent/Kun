@@ -1,3 +1,4 @@
+import { RouteGovernanceFields } from './route-governance-fields'
 import { ProviderRoutePreview } from './provider-route-preview'
 import { GatewayConnectionCenter } from './gateway-connection-center'
 import { settingsButtonClass } from './settings-button'
@@ -204,6 +205,7 @@ export function ModelRoutesSettings({
       modelId,
       enabled: false,
       strategy: 'priority',
+      capabilityMode: 'guaranteed',
       affinity: { mode: 'turn', ttlMs: 1_800_000 },
       targets: provider ? [{ id: `${id}-target-1`, providerId: provider.id, modelId: provider.models[0], enabled: true, weight: 1 }] : [],
       failurePolicy: { ...DEFAULT_MODEL_ROUTE_FAILURE_POLICY, failoverHttpStatusCodes: [...DEFAULT_MODEL_ROUTE_FAILURE_POLICY.failoverHttpStatusCodes] },
@@ -539,14 +541,7 @@ export function ModelRoutesSettings({
           <div className="grid gap-3 md:grid-cols-2">
             <div><Field label={t('modelRoutes.publicModelId')}><input aria-label={t('modelRoutes.publicModelId')} value={modelIdDraft.draft} onChange={(event) => modelIdDraft.onChange(event.target.value)} onFocus={modelIdDraft.onFocus} onBlur={modelIdDraft.onBlur} onKeyDown={modelIdDraft.onKeyDown} className={inputClass} spellCheck={false} /></Field>{modelIdDraft.error ? <p className="mt-1 text-[11px] text-red-600">{modelIdDraft.error}</p> : null}</div>
             <Field label={t('modelRoutes.loadStrategy')}><select value={selected.strategy} onChange={(event) => updatePool({ strategy: event.target.value as ModelRouteStrategy })} className={inputClass}>{strategies.map((strategy) => <option key={strategy.id} value={strategy.id}>{strategy.label}</option>)}</select></Field>
-            <Field label={t('providerConfiguration.affinity')}><select value={selected.affinity?.mode ?? 'off'} className={inputClass}
-              onChange={(event) => updatePool({ affinity: { mode: event.target.value as 'off' | 'turn' | 'session', ttlMs: selected.affinity?.ttlMs ?? 1_800_000 } })}>
-              {(['off', 'turn', 'session'] as const).map((mode) => <option key={mode} value={mode}>{t(`providerConfiguration.affinity${mode}`)}</option>)}
-            </select></Field>
-            {selected.affinity?.mode && selected.affinity.mode !== 'off' ? <Field label={t('providerConfiguration.affinityMinutes')}>
-              <input type="number" min={1} max={1440} value={Math.floor(selected.affinity.ttlMs / 60_000)} className={inputClass}
-                onChange={(event) => updatePool({ affinity: { mode: selected.affinity!.mode, ttlMs: Math.max(60_000, Math.min(86_400_000, Number(event.target.value) * 60_000)) } })} />
-            </Field> : null}
+            <RouteGovernanceFields pool={selected} update={updatePool} inputClass={inputClass} translation={t} />
           </div>
 
           <ModelRouteTargets settings={settings} pool={selected} metrics={status?.metrics} onUpdate={updatePool} t={t} />
@@ -625,7 +620,7 @@ export function ModelRoutesSettings({
               </div>
             ) : null}
 
-            <ProviderRoutePreview routeId={selected.id} disabled={!runtimeReady} />
+            <ProviderRoutePreview key={JSON.stringify(selected)} pool={selected} routeId={selected.id} disabled={!runtimeReady} translation={t} />
             {latestTest ? (
               <div className="grid gap-3 rounded-xl border border-ds-border bg-ds-card p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">

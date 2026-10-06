@@ -75,7 +75,11 @@ describe('legacy model connection transport', () => {
       }
     })
 
-    const removed = await transport.deleteModel('openai', connected.revision)
+    await expect(transport.deleteModel('openai', connected.revision)).rejects.toThrow('still has references')
+    const explicitDefault = await transport.connectModel({ expectedRevision: connected.revision, id: 'cleanup-default', name: 'Explicit replacement',
+      kind: 'http', authType: 'api-key', baseUrl: 'https://replacement.example/v1', endpointFormat: 'chat_completions',
+      credential: 'sk-cleanup-fixture', models: ['fixture-model'], selectedModel: 'fixture-model', probe: false, select: true })
+    const removed = await transport.deleteModel('openai', explicitDefault.revision)
     expect(removed.providers.some((provider) => provider.id === 'openai')).toBe(false)
     expect(JSON.parse(await readFile(fixture.settingsPath, 'utf8')).provider.providers)
       .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: 'openai' })]))

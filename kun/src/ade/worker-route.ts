@@ -140,7 +140,7 @@ export async function resolveWorkerRoute(input: {
       route: selected.route,
       ...(selected.profileId ? { profileId: selected.profileId } : {}),
       selection: {
-        reason: selected.reason,
+        reason: selected.reason.slice(0, 2_000),
         score: selected.score,
         alternatives: selected.alternatives.map((candidate) => ({
           route: candidate.route,

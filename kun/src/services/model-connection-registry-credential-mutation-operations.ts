@@ -525,75 +525,8 @@ async clearCredential(this: ModelConnectionRegistry,
   },
 
 async delete(this: ModelConnectionRegistry, providerId: string, expectedRevision: number): Promise<ModelConnectionSnapshot> {
-    const fallbackHealth = await this['inspectCredentialHealth'](await this['file'].read(emptyDocument))
-    let credentialRef: string | undefined
-    let legacyCredentialSourceToRetire: string | undefined
-    let cancelledTransactionToken: string | undefined
-    const document = await this['file'].update(emptyDocument, (current) => {
-      assertRevision(current, expectedRevision, this['options'].modelCapabilities, this['credentialHealth'])
-      const profile = requireProfile(current, providerId)
-      credentialRef = profile.credentialRef
-      legacyCredentialSourceToRetire = this['options'].retireLegacyCredentialSource
-        ? profile.legacyCredentialSourceToRetire ?? profile.credentialSourceId
-        : undefined
-      const transaction = current.credentialTransactions[providerId]
-      if (transaction?.phase === 'recovering') {
-        throw new ModelConnectionConflictError(this['project'](current))
-      }
-      cancelledTransactionToken = transaction?.operationToken
-      const credentialTransactions = { ...current.credentialTransactions }
-      delete credentialTransactions[providerId]
-      const profiles = { ...current.profiles }
-      delete profiles[providerId]
-      const fallback = configuredFallback(Object.values(profiles), fallbackHealth)
-      return {
-        schemaVersion: 2,
-        configuration: { ...current.configuration, connections: Object.fromEntries(
-          Object.entries(current.configuration.connections).filter(([id]) => id !== providerId)
-        ) },
-        proxyRoutingVersion: 1,
-        revision: current.revision + 1,
-        profiles,
-        tombstones: {
-          ...current.tombstones,
-          [providerId]: {
-            deletedRevision: current.revision + 1,
-            credentialMutationHighWater: profile.credentialMutationHighWater,
-            ...(legacyCredentialSourceToRetire ? { legacyCredentialSourceToRetire } : {})
-          }
-        },
-        credentialTransactions,
-        credentialRefCleanup: appendCredentialRefs(
-          appendCredentialRefs(
-            appendCredentialRefs(current.credentialRefCleanup, this['nowMs'](), profile.customHeadersRef),
-            this['nowMs'](), credentialRef),
-          this['nowMs'](),
-          transaction?.nextCredentialRef,
-          transaction?.writerInstanceId,
-          transaction?.writerPid
-        ),
-        proxy: current.proxy,
-        routePools: current.routePools,
-        failover: current.failover,
-        localModelGateway: current.localModelGateway,
-        ...(current.defaultProviderId === providerId
-          ? fallback ? {
-              defaultProviderId: fallback.profile.id,
-              defaultAccountId: fallback.profile.accountId,
-              defaultModel: fallback.model
-            } : {}
-          : {
-              defaultProviderId: current.defaultProviderId,
-              defaultAccountId: current.defaultAccountId,
-              defaultModel: current.defaultModel
-            })
-      }
-    })
-    this['clearPreparedCredentialSecret'](providerId, cancelledTransactionToken)
-    this['cancelCredentialRecoveryTimer'](providerId)
-    await this['changed'](document)
-    await this['drainCredentialRefCleanup']()
-    await this['retireDeletedLegacyCredentialSource'](providerId)
-    return this['projectWithCredentialHealth'](await this['file'].read(emptyDocument))
+    const preview = await this.previewConfiguration({ expectedRevision, operations: [{ kind: 'remove-connection', connectionId: providerId }] })
+    await this.commitConfiguration({ expectedRevision, previewId: preview.previewId, idempotencyKey: `delete:${preview.previewId}` })
+    return this.snapshot()
   },
 }

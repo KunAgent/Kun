@@ -1,3 +1,4 @@
+import { ProviderSafeUrlSchema } from './provider-safe-url.js'
 import { z } from 'zod'
 import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
 import { CustomHeadersSchema } from './custom-headers.js'
@@ -36,6 +37,10 @@ export const ModelConnectionEndpointsSchema = z.object({
   messages: z.string().url().max(2_048).optional()
 }).strict()
 
+const ModelConnectionSafeEndpointsSchema = z.object({
+  chat_completions: ProviderSafeUrlSchema.optional(), responses: ProviderSafeUrlSchema.optional(), messages: ProviderSafeUrlSchema.optional()
+}).strict()
+
 export const ModelConnectionProfileSchema = z.object({
   id: z.string().min(1).max(128),
   accountId: z.string().min(1).max(128),
@@ -63,6 +68,7 @@ export const ModelConnectionProfileSchema = z.object({
   modelCapabilities: z.record(z.string(), ModelCapabilityMetadata).optional(),
   selectedModel: z.string().min(1).max(512).optional(),
   /** Non-sensitive custom header names (values are never projected). */
+  generatedHeaderNames: z.array(z.string().min(1).max(128)).max(64).optional(),
   customHeaderNames: z.array(z.string().min(1).max(128)).max(64).optional()
 }).strict()
 
@@ -103,9 +109,9 @@ export const ModelConnectionConnectRequestSchema = z.object({
     'gemini-code-assist'
   ]).default('http'),
   authType: z.enum(['api-key', 'oauth', 'subscription', 'none']).default('api-key'),
-  baseUrl: z.string().url().optional(),
+  baseUrl: ProviderSafeUrlSchema.optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).default('chat_completions'),
-  endpoints: ModelConnectionEndpointsSchema.optional(),
+  endpoints: ModelConnectionSafeEndpointsSchema.optional(),
   useProxy: z.boolean().default(false),
   credential: z.string().max(64 * 1024).optional(),
   models: z.array(z.string().min(1).max(512)).max(500).default([]),
@@ -165,9 +171,9 @@ export const ModelConnectionPatchRequestSchema = z.object({
     'gemini-code-assist'
   ]).optional(),
   authType: z.enum(['api-key', 'oauth', 'subscription', 'none']).optional(),
-  baseUrl: z.string().url().optional(),
+  baseUrl: ProviderSafeUrlSchema.optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).optional(),
-  endpoints: ModelConnectionEndpointsSchema.optional(),
+  endpoints: ModelConnectionSafeEndpointsSchema.optional(),
   useProxy: z.boolean().optional(),
   models: z.array(z.string().min(1).max(512)).max(500).optional(),
   modelCapabilities: z.record(z.string(), ModelCapabilityMetadata).optional(),

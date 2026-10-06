@@ -27,6 +27,8 @@ export const ModelRoutePoolConfigSchema = z.object({
   modelId: z.string().min(1).max(512),
   enabled: z.boolean().default(true),
   strategy: ModelRouteStrategySchema.default('priority'),
+  /** Missing on legacy routes: preserve their request-filter behavior. */
+  capabilityMode: z.enum(['guaranteed', 'request-filter']).optional(),
   affinity: z.object({
     mode: z.enum(['off', 'turn', 'session']),
     ttlMs: z.number().int().min(60_000).max(86_400_000).default(30 * 60_000)

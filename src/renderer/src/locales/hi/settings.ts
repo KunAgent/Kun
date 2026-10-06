@@ -1,3 +1,4 @@
+import providerConfiguration from '../en/settings/provider-configuration.json'
 // Gateway connection guidance uses the shared English fallback.
 import gatewayConnection from '../en/settings/gateway-connection.json'
 import googleWorkspace from './settings/google-workspace.json'
@@ -13,6 +14,7 @@ import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 
 const settings = {
+  ...providerConfiguration,
   ...gatewayConnection,
   ...googleWorkspace,
   ...navigationProviders,

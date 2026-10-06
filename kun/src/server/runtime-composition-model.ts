@@ -1,3 +1,7 @@
+import { scopedProviderOAuthFetch } from '../services/provider-request-security.js'
+import { createProviderQuotaRoutingLookup } from '../services/provider-quota-routing-cache.js'
+import { refreshRuntimeProviderIdentitySets } from './runtime-provider-identity-sets.js'
+import { providerProductReferenceSources } from '../services/provider-reference-sources.js'
 import { GatewayTokenBudget } from '../services/gateway-token-budget.js'
 import { ProviderRequestScheduler } from '../services/provider-request-scheduler.js'
 import {
@@ -36,7 +40,6 @@ import {
   OfficialProviderAuthService,
 OfficialProviderCliService,
   type GeminiCodeAssistCredential,
-  type ProviderQuotaEntry
 } from './runtime-factory-dependencies.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import type { createRuntimeCore } from './runtime-composition-core.js'
@@ -69,20 +72,8 @@ export async function createRuntimeModelComposition(
   const agentSdkProviderIds = agentSdkProviderIdsForOptions(core.activeOptions)
   const antigravityProviderIds = antigravityProviderIdsForOptions(core.activeOptions)
   const cursorSdkProviderIds = cursorSdkProviderIdsForOptions(core.activeOptions)
-  const refreshDelegatedProviderIds = (): void => {
-    agentSdkProviderIds.clear()
-    for (const providerId of agentSdkProviderIdsForOptions(core.activeOptions)) {
-      agentSdkProviderIds.add(providerId)
-    }
-    antigravityProviderIds.clear()
-    for (const providerId of antigravityProviderIdsForOptions(core.activeOptions)) {
-      antigravityProviderIds.add(providerId)
-    }
-    cursorSdkProviderIds.clear()
-    for (const providerId of cursorSdkProviderIdsForOptions(core.activeOptions)) {
-      cursorSdkProviderIds.add(providerId)
-    }
-  }
+  const refreshDelegatedProviderIds = (): void => refreshRuntimeProviderIdentitySets(core.activeOptions,
+    { agentSdk: agentSdkProviderIds, antigravity: antigravityProviderIds, cursorSdk: cursorSdkProviderIds })
   let refreshModelConnectionDelegatedDeps = (): void => undefined
   const extensionProviderAccounts = new ExtensionProviderAccountStore({
     dataDir: core.activeOptions.dataDir,
@@ -146,7 +137,8 @@ export async function createRuntimeModelComposition(
     const provider = [...materialized.providers.values()].find(
       (candidate) => candidate.credentialSourceId === sourceId
     )
-    return createProxyFetch(provider?.modelProxyUrl ?? '') ?? fetch
+    if (!provider && isModelConnectionCredentialSourceId(sourceId)) throw new Error(safeCredentialUnavailableMessage)
+    return scopedProviderOAuthFetch(createProxyFetch(provider?.modelProxyUrl ?? '') ?? fetch, provider?.authProfile)
   }
   const grokCredentialRefresher = new GrokOAuthCredentialRefresher(
     requestCredentialStore,
@@ -314,10 +306,13 @@ export async function createRuntimeModelComposition(
     modelClient.replacePools(core.activeOptions.routePools ?? [])
     modelClient.replaceFailoverGroups(core.activeOptions.providerFailover ?? [])
   }
+  let quotaSourceGeneration = 0
   modelConnections = new ModelConnectionRegistry({
     dataDir: core.activeOptions.dataDir,
     credentials: extensionCredentials,
     modelCapabilities: registryModelCapabilities,
+    historyReferenceSources: async () => ({ threads: await core.threadStore.list({ limit: 20_000, includeArchived: true, includeSide: true }) }),
+    referenceSources: async () => ({ ...await providerProductReferenceSources(core.activeOptions.serviceManager), roles: core.activeOptions.roles, harnesses: core.activeOptions.harnesses, graph: core.activeOptions.graph, lab: core.activeOptions.lab, ade: core.activeOptions.ade }),
     retireLegacyCredentialSource: async (sourceId) => {
       await legacyCredentialMigration.forgetSources([sourceId])
     },
@@ -331,6 +326,7 @@ export async function createRuntimeModelComposition(
     },
     resolveCredentialSource: resolveLegacyRequestCredentials,
     onChanged: (connections) => {
+      quotaSourceGeneration++
       const selected = connections.selected
       const providers = Object.fromEntries(connections.providers.entries())
       const nextOptions: KunServeRuntimeOptions = {
@@ -434,7 +430,7 @@ export async function createRuntimeModelComposition(
         let headers = (config?.kind ?? 'http') === 'http'
           ? config?.headers
           : undefined
-        if (config?.credentialSourceId) {
+        if (config?.credentialSourceId && (!config.authProfile || config.authProfile.scope.purposes.includes('quota'))) {
           try {
             const resolved = await resolveLegacyRequestCredentials(config.credentialSourceId)
             apiKey = resolved.apiKey
@@ -448,8 +444,10 @@ export async function createRuntimeModelComposition(
           name: profile.name,
           ...(profile.presetSource ? { presetId: profile.presetSource } : {}),
           kind: profile.kind,
+          configured: Boolean(config),
           ...(profile.baseUrl ? { baseUrl: profile.baseUrl } : {}),
           apiKey,
+          ...(config?.authProfile ? { authProfile: config.authProfile } : {}),
           proxyUrl: config?.modelProxyUrl ?? '',
           ...(headers ? { headers } : {}),
           ...(config?.credentialSourceId
@@ -543,74 +541,10 @@ export async function createRuntimeModelComposition(
    * only while failover groups exist (their members are the providers that
    * benefit from exhaustion-aware selection).
    */
-  const quotaSnapshot = new Map<string, ProviderQuotaEntry>()
-  const quotaSnapshotAt = new Map<string, number>()
-  const QUOTA_REFRESH_MS = 5 * 60_000
-  const QUOTA_REFRESH_MAX_DELAY_MS = 30 * 60_000
-  const failoverQuotaProviderIds = (): string[] => {
-    const ids = new Set<string>()
-    for (const group of core.activeOptions.providerFailover ?? []) {
-      for (const member of group.members) ids.add(member.providerId.trim().toLowerCase())
-      for (const target of group.fallbackTargets) ids.add(target.providerId.trim().toLowerCase())
-    }
-    return [...ids]
-  }
-  let quotaRefreshFailures = 0
-  let quotaRefreshInflight: Promise<void> | null = null
-  const scheduleQuotaRefresh = (): void => {
-    const delay = Math.min(QUOTA_REFRESH_MS * 2 ** quotaRefreshFailures, QUOTA_REFRESH_MAX_DELAY_MS)
-    const timer = setTimeout(() => void refreshQuotaSnapshot(), delay)
-    timer.unref?.()
-  }
-  /**
-   * Only failover group members (and their fallback providers) are probed —
-   * every other provider's quota call would be wasted work. The service-side
-   * TTL cache also dedupes this with the GUI's own refresh path.
-   */
-  const refreshQuotaSnapshot = (): Promise<void> => {
-    quotaRefreshInflight ??= (async () => {
-      const providerIds = failoverQuotaProviderIds()
-      if (providerIds.length === 0) return
-      try {
-        const response = await providerQuotaService.list({
-          providerIds,
-          includeLocalCosts: false
-        })
-        quotaSnapshot.clear()
-        quotaSnapshotAt.clear()
-        const fetched = Date.now()
-        for (const entry of response.entries) {
-          const key = entry.providerId.trim().toLowerCase()
-          quotaSnapshot.set(key, entry)
-          quotaSnapshotAt.set(key, fetched)
-        }
-        quotaRefreshFailures = 0
-      } catch {
-        // A failed refresh keeps the previous snapshot; stale quota data is
-        // safer than a routing stall. The timer backs off exponentially.
-        quotaRefreshFailures += 1
-      }
-    })().finally(() => {
-      quotaRefreshInflight = null
-    })
-    return quotaRefreshInflight
-  }
-  modelClient.setQuotaLookup((providerId) => {
-    const key = providerId.trim().toLowerCase()
-    const entry = quotaSnapshot.get(key)
-    const fetched = quotaSnapshotAt.get(key) ?? 0
-    if (
-      (core.activeOptions.providerFailover ?? []).length > 0
-      && Date.now() - fetched > QUOTA_REFRESH_MS
-    ) {
-      // Stale or missing entry for an active group member: refresh in the
-      // background without blocking this routing decision.
-      void refreshQuotaSnapshot()
-    }
-    return entry
-  })
-  scheduleQuotaRefresh()
-  void refreshQuotaSnapshot()
+  const quotaRouting = createProviderQuotaRoutingLookup({ service: providerQuotaService,
+    generation: () => quotaSourceGeneration, providerIds: () => [...new Set((core.activeOptions.providerFailover ?? [])
+      .flatMap((group) => [...group.members.map((member) => member.providerId), ...group.fallbackTargets.map((target) => target.providerId)]))] })
+  modelClient.setQuotaLookup((providerId) => quotaRouting.get(providerId))
   const claudeConnections = new ClaudeConnectionService({ dataDir: core.activeOptions.dataDir })
   const modelConnectionOAuth = new ModelConnectionOAuthService({
     registry: modelConnections,
@@ -623,7 +557,8 @@ export async function createRuntimeModelComposition(
     dataDir: core.activeOptions.dataDir,
     registry: modelConnections
   })
-  const stopExtensionModelListener = extensionModelProviders.onDidChange(replaceRoutedModelClients)
+  const stopExtensionModelChanges = extensionModelProviders.onDidChange(replaceRoutedModelClients)
+  const stopExtensionModelListener = () => { quotaRouting.stop(); stopExtensionModelChanges() }
   const hasMcpOAuth = Object.values(core.activeOptions.capabilities?.mcp?.servers ?? {}).some((server) =>
     server.oauth?.enabled !== false && Boolean(server.oauth) && server.transport !== 'stdio'
   )

@@ -1,3 +1,4 @@
+import { ModelMetadataEvidenceSchema } from '../contracts/model-metadata-evidence.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -112,6 +113,8 @@ export const ModelContextProfileConfigSchema = z
     inputModalities: z.array(ModelInputModality).optional(),
     outputModalities: z.array(ModelInputModality).optional(),
     supportsToolCalling: z.boolean().optional(),
+    parallelTools: z.boolean().optional(), streaming: z.boolean().optional(), structuredOutput: z.boolean().optional(),
+    evidence: ModelMetadataEvidenceSchema,
     messageParts: z.array(ModelMessagePartSupport).optional(),
     reasoning: ModelReasoningCapabilityMetadata.optional(),
     pricing: ModelCatalogPricing.optional(),

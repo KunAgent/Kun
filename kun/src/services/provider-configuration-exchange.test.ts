@@ -29,6 +29,16 @@ describe('provider exchange closure', () => {
     expect(JSON.stringify(exported)).not.toContain('credentialRef')
     expect(JSON.stringify(exported)).not.toContain('account-one')
   })
+  it('exports only a chosen dependency closure and rejects credential URLs and future adapters', () => {
+    const current = snapshot()
+    expect(exportProviderConfiguration(current, { connectionIds: ['one'], routeIds: [] }).operations.find((operation) => operation.kind === 'set-routes')).toEqual({ kind: 'set-routes', routes: [] })
+    current.connections[0].baseUrl = 'https://user:secret@one.test/v1'
+    expect(() => exportProviderConfiguration(current)).toThrow('embeds credentials')
+    current.connections[0].baseUrl = 'https://one.test/v1?api_key=secret'
+    expect(() => exportProviderConfiguration(current)).toThrow('embeds credentials')
+    const exported = exportProviderConfiguration(snapshot())
+    expect(() => prepareProviderImport({ ...exported, expectedRevision: 7, adapterRevisions: { http: 999 } }, snapshot())).toThrow('newer Kun')
+  })
   it('rejects dangling references, local secret references and permission changes in exchange files', () => {
     const current = snapshot(), exported = exportProviderConfiguration(current)
     expect(() => prepareProviderImport({ ...exported, expectedRevision: 7,

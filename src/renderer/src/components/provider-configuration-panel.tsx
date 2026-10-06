@@ -1,11 +1,14 @@
+import { ProviderRemovalActions } from './provider-removal-actions'
+import { ProviderAccountsWorkspace } from './provider-accounts-workspace'
+import { ProviderConfigurationExchange } from './provider-configuration-exchange'
 import { ProviderTemplateActions } from './provider-template-actions'
 import { ProviderCatalogObservation } from './provider-catalog-observation'
 import { ProviderAdvancedFields } from './provider-advanced-fields'
 import { useEffect, useState } from 'react'
 import type { ProviderConfigurationOperation, ProviderConfigurationPreview,
   ProviderConfigurationSnapshot, ProviderConnectionConfiguration } from '@shared/provider-configuration'
-import { commitProviderConfiguration, exportProviderConfiguration, loadProviderConfiguration,
-  previewProviderConfiguration, previewProviderConfigurationImport } from '../lib/provider-configuration-client'
+import { commitProviderConfiguration, loadProviderConfiguration,
+  previewProviderConfiguration } from '../lib/provider-configuration-client'
 import { textInputClass, providerSelectControlClass } from './settings-section-providers-controls'
 import { settingsButtonClass } from './settings-button'
 
@@ -18,7 +21,6 @@ export function ProviderConfigurationPanel({ t, activeProviderId }: { t: T; acti
   const [draft, setDraft] = useState<ProviderConnectionConfiguration>({ enabled: true, inherit: [], manualModels: [] })
   const [anonymous, setAnonymous] = useState(false)
   const [groupName, setGroupName] = useState(''), [groupBase, setGroupBase] = useState('')
-  const [importText, setImportText] = useState('')
   const [preview, setPreview] = useState<ProviderConfigurationPreview>()
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('')
   const connection = snapshot?.connections.find((item) => item.id === selected)
@@ -59,6 +61,8 @@ export function ProviderConfigurationPanel({ t, activeProviderId }: { t: T; acti
       <p className="text-ds-muted">{t('providerConfiguration.description')}</p>
       {snapshot ? <>
         <p className="text-[12px] text-ds-muted">{t('providerConfiguration.revision', { saved: snapshot.revision, active: snapshot.activeRevision })}</p>
+        <ProviderAccountsWorkspace snapshot={snapshot} selected={selected} select={setSelected} disabled={busy} t={t}
+          review={(operations) => void run(() => review(operations))} />
         <input className={textInputClass} value={search} aria-label={t('providerConfiguration.searchConnections')} placeholder={t('providerConfiguration.searchConnections')}
           onChange={(event) => setSearch(event.target.value)} />
         <label className="block space-y-1"><span>{t('providerConfiguration.connection')}</span>
@@ -112,8 +116,10 @@ export function ProviderConfigurationPanel({ t, activeProviderId }: { t: T; acti
               onChange={(event) => { if (draft.discovery?.mode === 'custom') edit({ discovery: { ...draft.discovery, modelsUrl: event.target.value } }) }} />
           </label> : null}
           <ProviderCatalogObservation key={selected} connectionId={selected} />
+          <ProviderRemovalActions key={selected} snapshot={snapshot} connectionId={selected} disabled={busy} t={t}
+            review={(operations) => void run(() => review(operations))} />
           <ProviderTemplateActions snapshot={snapshot} connectionId={selected} disabled={busy} review={(operations) => void run(() => review(operations))} />
-          <ProviderAdvancedFields draft={draft} edit={edit} baseUrl={connection.baseUrl} sources={snapshot.fieldSources[selected]} disabled={busy} />
+          <ProviderAdvancedFields kind={connection.kind} draft={draft} edit={edit} baseUrl={connection.baseUrl} sources={snapshot.fieldSources[selected]} disabled={busy} />
           <div><button className={settingsButtonClass()} disabled={busy} onClick={() => void run(() => review([
             { kind: 'configure-connection', connectionId: selected, configuration: draft },
             ...(draft.manualModels.some((model) => !connection.models.includes(model)) ? [{ kind: 'patch-connection' as const, connectionId: selected,
@@ -134,24 +140,15 @@ export function ProviderConfigurationPanel({ t, activeProviderId }: { t: T; acti
               defaults: groupBase.trim() ? { baseUrl: groupBase.trim() } : {} } }
           ]))}>{t('providerConfiguration.createGroup')}</button>
         </div>
-        <div className="space-y-2">
-          <label className="block space-y-1"><span>{t('providerConfiguration.document')}</span>
-            <textarea className={`${textInputClass} min-h-36 font-mono text-[12px]`} value={importText} disabled={busy}
-              onChange={(event) => { setImportText(event.target.value); setPreview(undefined) }} />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button className={settingsButtonClass()} disabled={busy} onClick={() => void run(async () => {
-              setImportText(JSON.stringify(await exportProviderConfiguration(), null, 2)); setPreview(undefined)
-            })}>{t('providerConfiguration.export')}</button>
-            <button className={settingsButtonClass()} disabled={busy || !importText.trim()} onClick={() => void run(async () => {
-              setPreview(await previewProviderConfigurationImport(snapshot.revision, JSON.parse(importText)))
-            })}>{t('providerConfiguration.import')}</button>
-            <button className={settingsButtonClass()} disabled={busy} onClick={() => void run(reload)}>{t('providerConfiguration.refresh')}</button>
-          </div>
-        </div>
+        <ProviderConfigurationExchange snapshot={snapshot} onApplied={setSnapshot} t={t} />
       </> : null}
       {preview ? <div className="space-y-2 rounded-lg border border-ds-border-muted p-3">
         <p>{t('providerConfiguration.impact', { count: preview.affectedConnections.length })}</p>
+        {preview.references?.length ? <ul className="max-h-40 list-disc overflow-auto pl-4 text-[12px]">
+          {preview.references.map((reference, index) => <li className="break-all" key={`${reference.path}:${index}`}>
+            {reference.connectionId} · {reference.kind} · {reference.path}
+          </li>)}
+        </ul> : null}
         {preview.remaps ? <pre className="max-h-32 overflow-auto text-[11px]">{JSON.stringify(preview.remaps, null, 2)}</pre> : null}
         {preview.secretSlots?.length ? <p>{t('providerConfiguration.secretSlots', { count: preview.secretSlots.length })}</p> : null}
         <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-[11px]">{JSON.stringify(preview.operations, null, 2)}</pre>

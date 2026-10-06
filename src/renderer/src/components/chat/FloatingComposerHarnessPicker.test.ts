@@ -104,7 +104,7 @@ describe('FloatingComposerHarnessPicker', () => {
       { ...row('disabled', 'Disabled'), enabled: false },
       { ...row('unchecked', 'Unchecked'), readyProfiles: [] },
       { ...row('expired', 'Expired'), readyProfiles: [{ harnessId: 'expired', credentialMode: 'native-login', expiresAt: '2000-01-01T00:00:00Z' }] },
-      row('gemini-cli', 'Gemini CLI')] })
+      { ...row('gemini-cli', 'Gemini CLI'), definition: { ...row('gemini-cli', 'Gemini CLI').definition, availability: 'retired' } }] })
     await openMenu()
     expect([...menu()!.querySelectorAll<HTMLElement>('[data-harness-id]')].map((element) => element.dataset.harnessId)).toEqual(['kun'])
   })

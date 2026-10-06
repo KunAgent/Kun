@@ -1,3 +1,4 @@
+import { GatewayBudgetError } from '../../services/gateway-token-budget.js'
 import { describe, expect, it, vi } from 'vitest'
 import { observeModelAttempts } from './model-attempt-observer.js'
 import { CompatModelClient } from './compat-model-client.js'
@@ -21,6 +22,19 @@ describe('physical attempt accounting', () => {
     }))
     expect(finished).toEqual([9, undefined])
   })
+  it.each([['token_budget_exceeded', 429], ['token_budget_unbounded', 400], ['token_budget_unavailable', 503]] as const)(
+    'reports %s as a local terminal failure with HTTP %s', async (code, status) => {
+      let dispatched = false
+      const request = { ...input(), attemptObserver: { begin: async () => { throw new GatewayBudgetError(code, 'Local budget cannot admit this attempt.') } } }
+      const chunks = await drain(observeModelAttempts(request, async function* (observed) {
+        await observed.beforeWireDispatch!({ providerId: 'one', model: 'model', protocol: 'responses', estimatedTokens: 10 })
+        dispatched = true
+        yield { kind: 'completed', stopReason: 'stop' }
+      }))
+      expect(dispatched).toBe(false)
+      expect(chunks).toEqual([expect.objectContaining({ code, message: 'Local budget cannot admit this attempt.',
+        failure: expect.objectContaining({ httpStatus: status, localAdmission: true, reason: 'request', failoverAllowed: false }) })])
+    })
   it('executes official DeepSeek FIM through the same dispatch and usage hooks', async () => {
     let body: Record<string, unknown> = {}, url = ''
     const finished = vi.fn(async () => undefined), begin = vi.fn(async () => ({ finish: finished }))

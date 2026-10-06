@@ -1,3 +1,4 @@
+import { recordProviderInferenceEvidence } from '../../services/provider-catalog-operations.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { ModelUtilityRequestSchema } from '../../contracts/model-utility.js'
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-pool.js'
@@ -42,6 +43,8 @@ export function registerModelUtilityRoutes(router: Router, runtime: ServerRuntim
         ...(input.jsonMode ? { response_format: { type: 'json_object' } } : {}), stream: false },
       signal, input.providerId, recorder?.attribution ?? { threadId: `utility_${input.purpose}`, turnId: randomUUID() })
       modelRequest.beforeProviderDispatch = () => runtime.modelConnections!.assertActiveConfiguration(snapshot.revision)
+      modelRequest.requestId = modelRequest.turnId
+      modelRequest.deadlineAt = Date.now() + input.timeoutMs
       if (input.fim && connection?.baseUrl && new URL(connection.baseUrl).hostname === 'api.deepseek.com' &&
           connection.endpointFormat === 'chat_completions') modelRequest.fim = input.fim
       let text = '', completed = false
@@ -67,6 +70,7 @@ export function registerModelUtilityRoutes(router: Router, runtime: ServerRuntim
       }
       if (!completed) throw new Error('The provider response ended before completion')
       await recorder?.finish('completed')
+      if (input.purpose === 'provider-test' && connection) await recordProviderInferenceEvidence(runtime.modelConnections, connection.id, input.model, snapshot.revision).catch(() => undefined)
       return jsonResponse({ ok: true, text })
     } catch {
       await recorder?.finish(signal.aborted ? 'cancelled' : 'failed').catch(() => undefined)

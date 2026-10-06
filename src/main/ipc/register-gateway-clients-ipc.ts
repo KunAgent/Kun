@@ -72,6 +72,9 @@ function usageMetadata(value: Record<string, unknown>, clientId: string): Gatewa
   const active = Array.isArray(windows) ? windows.map(record).find((window) => window.active === true) : undefined
   return { clientId, ...(active ? { budget: { measured: number(active.measured) ?? 0,
       reserved: number(active.reserved) ?? 0, limit: number(active.limit), endsAt: number(active.endsAt) ?? 0 } } : {}), totalRequests: number(total.turns) ?? 0, totalTokens: number(total.totalTokens) ?? 0,
+    ...(active?.costAlert ? { costEstimate: { usd: number(record(active.costAlert).usd) ?? 0,
+      limitUsd: number(record(active.costAlert).limitUsd) ?? 0,
+      unknownAttempts: number(record(active.costAlert).unknownAttempts) ?? 0, exceeded: record(active.costAlert).exceeded === true } } : {}),
     requests: (Array.isArray(value.requests) ? value.requests : []).slice(-100).map((item) => {
       const entry = record(item); const usage = record(entry.usage); const gateway = record(usage.gateway)
       return { timestamp: string(entry.timestamp) ?? '', requestedModelId: string(usage.requestedModelId),

@@ -160,6 +160,17 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                       onChange={(value) => updateForm({ supportsToolCalling: value })}
                     />
                   </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(['parallelTools', 'structuredOutput', 'streaming'] as const).map((field) => <label key={field} className={fieldLabelClass}>
+                      {t(`providerConfiguration.metadata${field}`)}
+                      <select className={selectControlClass} value={editor.form[field] === null ? 'unknown' : String(editor.form[field])}
+                        onChange={(event) => updateForm({ [field]: event.target.value === 'unknown' ? null : event.target.value === 'true' })}>
+                        <option value="unknown">{t('providerConfiguration.evidenceunknown')}</option>
+                        <option value="true">{t('providerConfiguration.metadataSupported')}</option>
+                        <option value="false">{t('providerConfiguration.metadataUnsupported')}</option>
+                      </select>
+                    </label>)}
+                  </div>
                   <ToggleField
                     label={t('providerModelReasoningLabel')}
                     description={t('providerModelReasoningDesc')}

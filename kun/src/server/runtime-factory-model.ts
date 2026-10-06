@@ -151,6 +151,7 @@ export function buildModelClientRouterInput(
           modelCapabilities: defaultModelCapabilities,
           headers: options.headers,
           customHeaders: activeProvider?.customHeaders,
+          authProfile: activeProvider?.authProfile, headerProfile: activeProvider?.headerProfile,
           ...(defaultBillingKind ? { billingKind: defaultBillingKind } : {}),
           ...(options.credentialSourceId && credentialResolver
             ? {
@@ -222,6 +223,7 @@ export function buildModelClientRouterInput(
           modelCapabilities: scopedModelCapabilities,
           headers: provider.headers,
           customHeaders: provider.customHeaders,
+          authProfile: provider.authProfile, headerProfile: provider.headerProfile,
           ...(providerBillingKind ? { billingKind: providerBillingKind } : {}),
           ...(provider.credentialSourceId && credentialResolver
             ? {

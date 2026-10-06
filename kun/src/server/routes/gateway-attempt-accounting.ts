@@ -8,9 +8,11 @@ import type { ServerRuntime } from './server-runtime.js'
 export function gatewayAttemptAccounting(runtime: ServerRuntime, auth: GatewayAuth,
   recorder: GatewayUsageRecorder | undefined, requestId: string): ModelAttemptObserver | undefined {
   if (auth.kind !== 'public') return undefined
-  const policy = auth.policy?.tokenBudget
+  const policy = auth.policy?.tokenBudget ?? (auth.policy?.costAlert ? {
+    ...auth.policy.costAlert, mode: 'soft' as const, tokens: Number.MAX_SAFE_INTEGER
+  } : undefined)
   return { async begin(input) {
-    const attemptId = randomUUID()
+    const attemptId = input.attemptId ?? randomUUID()
     const budget = runtime.modelGateway?.budget
     if (policy) {
       if (!budget) throw new GatewayBudgetError('token_budget_unavailable', 'Gateway budget storage is unavailable.')
@@ -29,7 +31,8 @@ export function gatewayAttemptAccounting(runtime: ServerRuntime, auth: GatewayAu
       finished = true
       if (dispatched) recorder?.observeAttempt?.({ attemptId, providerId: input.providerId, modelId: input.model, usage })
       if (policy && budget) {
-        try { await budget.settle(attemptId, !dispatched ? 0 : usage ? usage.promptTokens + usage.completionTokens : undefined) }
+        try { await budget.settle(attemptId, !dispatched ? 0 : usage ? usage.promptTokens + usage.completionTokens : undefined,
+          !dispatched ? 0 : usage?.costUsd) }
         catch { throw new GatewayBudgetError('token_budget_unavailable', 'Gateway usage settlement is pending; its reservation remains held.') }
       }
     } }

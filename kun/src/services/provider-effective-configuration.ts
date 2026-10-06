@@ -1,6 +1,7 @@
+import { assertProviderNativeScopeSupport } from './provider-native-scope-support.js'
 import type { ProviderConfigurationState, ProviderDefaults } from '../contracts/provider-configuration.js'
 
-type Profile = { id: string; name: string; baseUrl?: string; endpointFormat: string;
+type Profile = { kind?: string; id: string; name: string; baseUrl?: string; endpointFormat: string;
   endpoints?: { chat_completions?: string; responses?: string; messages?: string }; useProxy: boolean }
 
 /** Resolve only explicitly inherited fields; legacy values stay explicit overrides. */
@@ -19,7 +20,7 @@ export function effectiveProviderConfiguration<T extends Profile>(profile: T, st
       sources[field] = group?.defaults[field] !== undefined ? 'group' : 'template'
     }
   }
-  const setting = <K extends 'proxy' | 'discovery' | 'admission'>(key: K) => {
+  const setting = <K extends 'proxy' | 'discovery' | 'admission' | 'authProfile' | 'headerProfile'>(key: K) => {
     const explicit = !configuration?.inherit.includes(key) && configuration?.[key] !== undefined
     sources[key] = explicit ? 'connection' : group?.defaults[key] !== undefined ? 'group' : 'template'
     return explicit ? configuration![key] : defaults[key]
@@ -34,8 +35,11 @@ export function effectiveProviderConfiguration<T extends Profile>(profile: T, st
     sources.baseUrl = 'connection'
     sources.endpointFormat = 'connection'
   }
+  const authProfile = setting('authProfile'), headerProfile = setting('headerProfile')
+  assertProviderNativeScopeSupport(profile.kind, authProfile, headerProfile)
   return { profile: effective, configuration, sources,
     enabled: configuration?.enabled !== false && group?.enabled !== false,
+    authProfile, headerProfile,
     discovery: setting('discovery') ?? { mode: 'auto' as const }, admission: setting('admission'), proxy,
     ...(binding?.urlMode === 'full' ? { fullEndpointProtocol: binding.protocol } : {}) }
 }

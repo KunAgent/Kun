@@ -1,3 +1,4 @@
+import { prepareExplicitProviderRemoval } from './provider-removal-test-helpers.js'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -321,7 +322,8 @@ describe('ModelConnectionRegistry', () => {
       expect(firstProcess.preparedCredentialSecrets.get('deepseek')).toMatchObject({
         operationToken: firstToken
       })
-      await b.delete('deepseek', secondFence.revision)
+      const deletionReady = await prepareExplicitProviderRemoval(b, 'deepseek', secondFence.revision, true)
+      await b.delete('deepseek', deletionReady.revision)
 
       await vi.advanceTimersByTimeAsync(70_000)
       expect(firstProcess.preparedCredentialSecrets.has('deepseek')).toBe(false)

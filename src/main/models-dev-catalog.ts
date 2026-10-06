@@ -60,6 +60,7 @@ type CatalogCache = {
   fetchedAt: number
 }
 type LoadedCatalog = {
+  fetchedAt: number
   catalog: CatalogRoot
   source: ModelsDevCatalogSource
   stale: boolean
@@ -316,7 +317,7 @@ export class ModelsDevCatalogService {
           matchMode: 'enrichment-only',
           stale: loaded.stale,
           source: loaded.source,
-          models: resolveCursorModelsDevCatalog(loaded.catalog, request.modelHints ?? [])
+          models: resolveCursorModelsDevCatalog(loaded.catalog, request.modelHints ?? []).map((model) => ({ ...model, observedAt: new Date(loaded.fetchedAt).toISOString() }))
         }
       }
       // Profile-declared catalog sources take precedence over host matching:
@@ -340,7 +341,7 @@ export class ModelsDevCatalogService {
           matchMode: 'enrichment-only',
           stale: loaded.stale,
           source: loaded.source,
-          models: familyModels
+          models: familyModels.map((model) => ({ ...model, observedAt: new Date(loaded.fetchedAt).toISOString() }))
         }
       }
       const provider = sanitizeProvider(loaded.catalog[match.providerKey])
@@ -358,7 +359,7 @@ export class ModelsDevCatalogService {
         matchMode: match.matchMode,
         stale: loaded.stale,
         source: loaded.source,
-        models: provider.models
+        models: provider.models.map((model) => ({ ...model, observedAt: new Date(loaded.fetchedAt).toISOString() }))
       }
     } catch (error) {
       return {
@@ -378,7 +379,7 @@ export class ModelsDevCatalogService {
     await this.loadDiskCache()
     const cached = this.cache
     if (!forceRefresh && cached && this.now() - cached.fetchedAt < MODELS_DEV_CACHE_TTL_MS) {
-      return { catalog: cached.catalog, source: cached.source, stale: false }
+      return { catalog: cached.catalog, source: cached.source, fetchedAt: cached.fetchedAt, stale: false }
     }
     // A stale but present cache answers immediately; the refresh continues in
     // the background so callers never block on a slow network. Only an empty
@@ -388,7 +389,7 @@ export class ModelsDevCatalogService {
         this.inFlight = null
       })
       void this.inFlight.catch(() => undefined)
-      return { catalog: cached.catalog, source: cached.source, stale: true }
+      return { catalog: cached.catalog, source: cached.source, fetchedAt: cached.fetchedAt, stale: true }
     }
     if (this.inFlight) return this.inFlight
 
@@ -416,7 +417,7 @@ export class ModelsDevCatalogService {
         lastError = error
       }
     }
-    if (cached) return { catalog: cached.catalog, source: cached.source, stale: true }
+    if (cached) return { catalog: cached.catalog, source: cached.source, fetchedAt: cached.fetchedAt, stale: true }
     throw new Error(
       `models.dev and the kun-agent.com fallback both failed: ${modelsDevFailureMessage(lastError)}`
     )
@@ -450,7 +451,7 @@ export class ModelsDevCatalogService {
       this.cache = { ...cached, fetchedAt: this.now() }
       this.persistDiskCache()
       await response.body?.cancel().catch(() => undefined)
-      return { catalog: cached.catalog, source, stale: false }
+      return { catalog: cached.catalog, source, fetchedAt: this.cache.fetchedAt, stale: false }
     }
 
     const body = await readBoundedResponseText(response, MODELS_DEV_MAX_RESPONSE_BYTES)
@@ -477,7 +478,7 @@ export class ModelsDevCatalogService {
         : {})
     }
     this.persistDiskCache()
-    return { catalog, source, stale: false }
+    return { catalog, source, fetchedAt: this.cache.fetchedAt, stale: false }
   }
 }
 

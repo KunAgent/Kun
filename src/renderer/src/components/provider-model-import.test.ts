@@ -303,7 +303,7 @@ describe('models.dev profile enrichment', () => {
       }],
       { 'Vision-Model': ['vision-latest'] }
     )
-    expect(next['vision-model']).toEqual({
+    expect(next['vision-model']).toMatchObject({
       aliases: ['vision-latest'],
       contextWindowTokens: 256_000,
       maxOutputTokens: 32_000,
@@ -317,6 +317,8 @@ describe('models.dev profile enrichment', () => {
         requestProtocol: 'none'
       }
     })
+    expect(next['vision-model'].evidence?.pricing?.status).toBe('unknown')
+    expect(next['vision-model'].evidence?.supportsToolCalling).toMatchObject({ source: 'catalog', status: 'declared' })
     expect(next['vision-model']).not.toHaveProperty('description')
   })
 
@@ -345,13 +347,28 @@ describe('models.dev profile enrichment', () => {
       maxOutputTokens: 128_000,
       toolCalling: true
     }])
-    expect(next['Model-A']).toEqual({
+    expect(next['Model-A']).toMatchObject({
       ...explicitProfile,
       contextWindowTokens: 1_000_000,
       maxOutputTokens: 128_000
     })
   })
 
+  it('retains unknown tool capability when public metadata omits it', () => {
+    const next = enrichProviderModelProfiles(provider({ modelProfiles: {} }), ['unlisted'], [{ id: 'unlisted', inputModalities: ['text'], outputModalities: ['text'] }])
+    expect(next.unlisted.evidence?.supportsToolCalling).toEqual({ source: 'catalog', status: 'unknown' })
+    expect(next.unlisted.evidence?.contextWindowTokens?.status).toBe('unknown')
+  })
+
+  it('imports only explicitly reported parallel, streaming, and structured facts with their observation time', () => {
+    const observedAt = '2026-09-01T00:00:00.000Z'
+    const next = enrichProviderModelProfiles(provider({ modelProfiles: {} }), ['declared'], [{ id: 'declared',
+      inputModalities: ['text'], outputModalities: ['text'], parallelTools: false, structuredOutput: true, observedAt }])
+    expect(next.declared).toMatchObject({ parallelTools: false, structuredOutput: true })
+    expect(next.declared.streaming).toBeUndefined()
+    expect(next.declared.evidence?.parallelTools).toEqual({ source: 'catalog', status: 'declared', observedAt })
+    expect(next.declared.evidence?.streaming?.status).toBe('unknown')
+  })
   it('returns the original profile map when catalog limits are unchanged', () => {
     const profile: ModelProviderModelProfileV1 = {
       contextWindowTokens: 128_000,

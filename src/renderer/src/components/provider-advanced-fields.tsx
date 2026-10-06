@@ -1,10 +1,11 @@
+import { ProviderRequestSecurityFields } from './provider-request-security-fields'
 import { useTranslation } from 'react-i18next'
 import type { ProviderConnectionConfiguration } from '@shared/provider-configuration'
 import { textInputClass, providerSelectControlClass } from './settings-section-providers-controls'
 
-export function ProviderAdvancedFields({ draft, edit, baseUrl, sources, disabled }: {
+export function ProviderAdvancedFields({ draft, edit, baseUrl, sources, disabled, kind }: {
   draft: ProviderConnectionConfiguration; edit(value: Partial<ProviderConnectionConfiguration>): void;
-  baseUrl?: string; sources?: Record<string, string>; disabled: boolean
+  baseUrl?: string; kind?: string; sources?: Record<string, string>; disabled: boolean
 }) {
   const { t } = useTranslation('settings')
   const binding = draft.endpointBinding, discovery = draft.discovery
@@ -48,6 +49,7 @@ export function ProviderAdvancedFields({ draft, edit, baseUrl, sources, disabled
           credentialHosts: event.target.value.split(',').map((host) => host.trim()) } })}
           onBlur={() => edit({ discovery: { ...discovery, credentialHosts: discovery.credentialHosts.filter(Boolean) } })} /></label>
     </div> : null}
+    <ProviderRequestSecurityFields draft={draft} edit={edit} baseUrl={baseUrl} native={kind !== undefined && kind !== 'http'} />
     <label className="block">{t('providerConfiguration.manualModels')}<textarea className={`${textInputClass} min-h-20 font-mono`}
       value={draft.manualModels.join('\n')} onChange={(event) => edit({ manualModels: event.target.value.split('\n') })}
       onBlur={() => edit({ manualModels: draft.manualModels.map((id) => id.trim()).filter(Boolean) })} /></label>

@@ -87,6 +87,9 @@ describe('Code harness discovery and validation', () => {
     const h = harnessFixture()
     h.disabled.push('claude-code')
     h.statuses.get('opencode')!.installed = 'no'
+    const definitions = h.catalog.list()
+    vi.spyOn(h.catalog, 'list').mockReturnValue(definitions.map((definition) => definition.id === 'gemini-cli'
+      ? { ...definition, availability: 'retired' as const } : definition))
     const { agents } = await h.service.list()
     expect(agents.find((agent) => agent.harnessId === 'codex')).toMatchObject({ available: true,
       models: expect.arrayContaining([h.native]), executionModes: ['direct'], orchestration: ['direct'] })

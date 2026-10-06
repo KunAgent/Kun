@@ -371,6 +371,7 @@ export type ServerRuntime = {
     exposeProviderModels(): boolean
     pools(): ModelRoutePoolConfig[]
     configuredPools(): ModelRoutePoolConfig[]
+    previewOrder?(pool: ModelRoutePoolConfig, targets: import('../../contracts/model-route-pool.js').ModelRouteTargetConfig[]): import('../../contracts/model-route-pool.js').ModelRouteTargetConfig[]
     health: RoutePoolHealthStore
     tests: RoutePoolTestService
     budget?: import('../../services/gateway-token-budget.js').GatewayTokenBudget

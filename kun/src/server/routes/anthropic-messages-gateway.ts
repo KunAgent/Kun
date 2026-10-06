@@ -180,6 +180,8 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
     lease.release()
     return anthropicError(errorMessage(error), error instanceof GatewayUsageError ? error.status : 400)
   }
+  modelRequest.requestId = modelRequest.turnId
+  modelRequest.deadlineAt = lease.deadlineAt ?? Date.now() + 120_000
   modelRequest.attemptObserver = gatewayAttemptAccounting(runtime, gate.auth, recorder, modelRequest.turnId)
   const attribute = grant
     ? (usage?: UsageSnapshot) => recordHarnessGatewayUsage(runtime, grant, resolved, usage, turnId)

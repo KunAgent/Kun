@@ -1,3 +1,4 @@
+import { managerRuntimeFixtureNow as NOW, turnRecord, childRunRecord, workspaceRecord } from './manager-runtime-fixtures.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,8 +29,6 @@ let notices: FileWorkerNoticeStore
 let childRuns: FileDelegationStore
 let threads: InMemoryThreadStore
 
-const NOW = '2026-09-26T00:00:00.000Z'
-
 beforeEach(async () => {
   dataDir = await mkdtemp(join(tmpdir(), 'kun-ade-manager-'))
   teams = new FileTeamStore(dataDir, () => NOW)
@@ -53,62 +52,6 @@ function managerThread(): ThreadRecord {
     model: 'model-x',
     providerId: 'prov-1'
   })
-}
-
-function turnRecord(overrides: Partial<Turn> = {}): Turn {
-  return {
-    id: 'turn_w1',
-    threadId: 'wrk_1',
-    status: 'running',
-    orchestration: 'direct',
-    prompt: 'p',
-    steering: [],
-    createdAt: NOW,
-    items: [],
-    attachmentIds: [],
-    activeSkillIds: [],
-    injectedMemoryIds: [],
-    injectedMemorySummaries: [],
-    injectedDirectiveIds: [],
-    injectedDirectiveSummaries: [],
-    injectedInstructionSources: [],
-    ...overrides
-  }
-}
-
-function childRunRecord(overrides: Partial<ChildRunRecord> = {}): ChildRunRecord {
-  return {
-    id: 'wrk_1',
-    parentThreadId: 'thr_mgr',
-    parentTurnId: 'turn_mgr_1',
-    prompt: 'assignment',
-    approvalReviewer: 'user',
-    status: 'running',
-    returnFormat: 'summary',
-    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    createdAt: NOW,
-    updatedAt: NOW,
-    ...overrides
-  }
-}
-
-function workspaceRecord(state: TaskWorkspaceRecord['state']): TaskWorkspaceRecord {
-  return {
-    workspaceId: 'tws_1',
-    ownerThreadId: 'thr_mgr',
-    unitId: 'wrk_1',
-    label: 'fix login',
-    isolation: 'worktree',
-    sourceRoot: '/repo',
-    repositoryRoot: '/repo',
-    path: '/repo/.worktrees/fix-login',
-    startFrom: { kind: 'default-branch' },
-    state,
-    setup: { status: 'skipped', steps: [] },
-    changedFiles: [],
-    createdAt: NOW,
-    updatedAt: NOW
-  } as TaskWorkspaceRecord
 }
 
 function readyStatus(harnessId: string): HarnessStatus {
@@ -307,7 +250,10 @@ describe('ManagerRuntime.createWorker', () => {
       label: 'fixer', role: 'reviewer', task: 'repair login redirect'
     }, TOOL_CONTEXT)
     expect(result.ok).toBe(true)
-    const worker = (await teams.get('thr_mgr'))!.workers[0]!
+    expect(result.selection?.reason.length).toBeLessThanOrEqual(2_000)
+    const team = await teams.get('thr_mgr')
+    expect(team).not.toBeNull()
+    const worker = team!.workers[0]!
     expect(worker.route).toMatchObject({
       harnessId: 'claude-code',
       credentialMode: 'native-login',

@@ -18,7 +18,8 @@ export const commitProviderConfiguration = (preview: ProviderConfigurationPrevie
   call<{ applied: boolean; committedRevision: number; snapshot: ProviderConfigurationSnapshot }>('/transactions/commit', 'POST', {
     expectedRevision: preview.expectedRevision, previewId: preview.previewId, idempotencyKey: preview.previewId
   })
-export const exportProviderConfiguration = () => call<unknown>('/export', 'POST', {})
+export const exportProviderConfiguration = (selection?: { connectionIds?: string[]; routeIds?: string[] }) =>
+  call<unknown>('/export', 'POST', selection ?? {})
 export const previewProviderConfigurationImport = (revision: number, value: unknown) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected a provider configuration object')
   return call<ProviderConfigurationPreview>('/import/preview', 'POST', { ...value, expectedRevision: revision })

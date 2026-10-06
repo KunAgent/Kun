@@ -156,6 +156,8 @@ describe('askManager', () => {
     const pending = service.askManager(WORKER, { question: 'which env?' }, new AbortController().signal)
     await vi.waitFor(async () => {
       expect(await questions.get(MANAGER, 'q_1')).toMatchObject({ state: 'open' })
+      // Question persistence precedes notice enqueue; wait for both published records.
+      expect(await notices.pending(MANAGER)).toHaveLength(1)
     })
     const pendingNotices = await notices.pending(MANAGER)
     expect(pendingNotices).toHaveLength(1)

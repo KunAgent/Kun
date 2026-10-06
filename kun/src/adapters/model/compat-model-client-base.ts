@@ -1,3 +1,5 @@
+import { modelInputHasNoTextBound } from './model-input-bound.js'
+import { protectInferenceHeaders, ProviderSecretScopeError } from '../../services/provider-request-security.js'
 import { randomUUID } from 'node:crypto'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
@@ -188,6 +190,12 @@ export class CompatModelClientBase {
       return { kind: 'error', code: 'route_attempt_budget_exhausted', message: 'Model routing attempt budget exhausted.',
         failure: { category: 'request', reason: 'request', failoverAllowed: false } }
     }
+    try { headers = protectInferenceHeaders({ headers, apiKey: trace.apiKey, protocol: trace.endpointFormat,
+      authProfile: this.config.authProfile, headerProfile: this.config.headerProfile, userHeaderNames: Object.keys(this.config.customHeaders ?? {}), requestUrl: url,
+      fallbackUrls: [this.config.baseUrl, ...Object.values(this.config.endpoints ?? {})] }) } catch (error) {
+      return { kind: 'error', code: 'provider_secret_scope_denied', message: error instanceof ProviderSecretScopeError ? error.message : 'Provider authentication profile is invalid',
+        failure: { category: 'request', reason: 'request', httpStatus: 403, failoverAllowed: false } }
+    }
     const bodyText = JSON.stringify(body)
     const traceRound = trace.round
     const traceSink = this.config.debugSink
@@ -211,7 +219,7 @@ export class CompatModelClientBase {
         const output = body.max_output_tokens ?? body.max_completion_tokens ?? body.max_tokens
         const maxOutputTokens = typeof output === 'number' && Number.isSafeInteger(output) && output > 0 ? output : undefined
         // A declared context ceiling bounds text input. Media/provider-owned state has no such contract.
-        const unbounded = /"(?:image_url|input_image|input_audio|file_id|previous_response_id|encrypted_content)"|"type":"(?:image|input_image|input_audio|audio|file|input_file|web_search|computer|code_interpreter)/.test(bodyText)
+        const unbounded = modelInputHasNoTextBound(body)
         await trace.beforeWireDispatch({ providerId: this.config.providerId ?? 'default', model,
           protocol: trace.endpointFormat, maxOutputTokens,
           ...(!unbounded && this.config.inputTokenUpperBound ? { inputUpperBound: this.config.inputTokenUpperBound } : {}),

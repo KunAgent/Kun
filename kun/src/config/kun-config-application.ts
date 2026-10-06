@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { ProviderAdmissionSchema } from '../contracts/provider-configuration.js'
+import { ProviderAdmissionSchema, ProviderAuthProfileSchema, ProviderHeaderProfileSchema } from '../contracts/provider-configuration.js'
 import {
   ApprovalReviewModelSelectionSchema
 } from '../contracts/approval-review-config.js'
@@ -183,6 +183,7 @@ export const ServeProviderConfigSchema = z
     customEndpointProtocol: z.enum(['chat_completions', 'responses', 'messages']).optional(),
     accountId: z.string().min(1).max(128).optional(),
     admission: ProviderAdmissionSchema.optional(),
+    authProfile: ProviderAuthProfileSchema.optional(), headerProfile: ProviderHeaderProfileSchema.optional(),
     baseUrl: z.string().min(1).optional(),
     /**
      * Optional per-protocol base URL overrides for providers that expose

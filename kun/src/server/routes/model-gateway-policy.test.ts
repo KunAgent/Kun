@@ -101,3 +101,19 @@ describe('model gateway export policy', () => {
     expect(await resolveGatewayModel(value, 'alias')).toBeNull()
   })
 })
+
+
+describe('legacy direct model identity', () => {
+  it('resolves slash-containing stable connection IDs from declared pairs', async () => {
+    const value = runtime([]), connection = provider('legacy/relay', { models: ['vendor/model'] })
+    value.modelConnections!.snapshot = async () => ({ providers: [connection], failover: [] } as unknown as ModelConnectionSnapshot)
+    expect((await listGatewayModels(value)).map((entry) => entry.id)).toEqual(['legacy/relay/vendor/model'])
+    expect(await resolveGatewayModel(value, 'legacy/relay/vendor/model')).toMatchObject({ providerId: 'legacy/relay', model: 'vendor/model' })
+  })
+  it('rejects ambiguous direct addresses in discovery and inference instead of rebinding an account', async () => {
+    const value = runtime([]), connections = [provider('legacy/relay'), provider('legacy', { models: ['relay/model'] })]
+    value.modelConnections!.snapshot = async () => ({ providers: connections, failover: [] } as unknown as ModelConnectionSnapshot)
+    expect(await listGatewayModels(value)).toEqual([])
+    expect(await resolveGatewayModel(value, 'legacy/relay/model')).toBeNull()
+  })
+})

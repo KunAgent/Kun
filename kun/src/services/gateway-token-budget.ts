@@ -5,9 +5,11 @@ import type { GatewayClientPolicy } from '../contracts/gateway-client-policy.js'
 
 export type TokenBudgetPolicy = NonNullable<GatewayClientPolicy['tokenBudget']>
 const Window = z.object({ id: z.string(), clientId: z.string(), period: z.enum(['day', 'week', 'month']),
-  timeZone: z.string(), endsAt: z.number(), measured: z.number().nonnegative(), reserved: z.number().nonnegative() })
+  timeZone: z.string(), endsAt: z.number(), measured: z.number().nonnegative(), reserved: z.number().nonnegative(),
+  estimatedCostUsd: z.number().nonnegative().default(0), unknownCostAttempts: z.number().int().nonnegative().default(0) })
 const Entry = z.object({ windowId: z.string(), requestId: z.string(), reserved: z.number().nonnegative(),
-  status: z.enum(['dispatched', 'pending', 'settled']), measured: z.number().nonnegative().optional(), at: z.number() })
+  status: z.enum(['dispatched', 'pending', 'settled']), measured: z.number().nonnegative().optional(), at: z.number(),
+  costStatus: z.enum(['unknown', 'known']).optional() })
 const State = z.object({ schemaVersion: z.literal(1), windows: z.record(z.string(), Window),
   attempts: z.record(z.string(), Entry) })
 type State = z.infer<typeof State>
@@ -25,7 +27,16 @@ export class GatewayTokenBudget {
   constructor(dataDir: string, private readonly now = Date.now) {
     const path = join(dataDir, 'gateway-token-budget.v1.json')
     assertManagerAtomicJsonPath(path)
-    this.file = new AtomicJsonFile(path, (value) => State.parse(value), false)
+    this.file = new AtomicJsonFile(path, (value) => {
+      const state = State.parse(value)
+      // Older ledgers tracked tokens only. Their absent prices are unknown, never zero.
+      for (const entry of Object.values(state.attempts)) if (!entry.costStatus) {
+        entry.costStatus = 'unknown'
+        const window = state.windows[entry.windowId]
+        if (window) window.unknownCostAttempts += 1
+      }
+      return state
+    }, false)
   }
 
   async reserve(input: { clientId: string; requestId: string; attemptId: string; policy: TokenBudgetPolicy;
@@ -48,26 +59,37 @@ export class GatewayTokenBudget {
       if (!window) {
         const id = `${input.clientId}:${this.now()}:${input.attemptId}`
         window = { id, clientId: input.clientId, period: input.policy.period, timeZone: input.policy.timeZone,
-          endsAt: budgetWindowEnd(this.now(), input.policy), measured: 0, reserved: 0 }
+          endsAt: budgetWindowEnd(this.now(), input.policy), measured: 0, reserved: 0, estimatedCostUsd: 0, unknownCostAttempts: 0 }
         state.windows[id] = window
       }
       if (input.policy.mode === 'hard' && window.measured + window.reserved + amount > input.policy.tokens) {
         throw new GatewayBudgetError('token_budget_exceeded', 'The gateway client token budget cannot admit another upstream attempt.')
       }
       window.reserved += amount
+      window.unknownCostAttempts += 1
       state.attempts[input.attemptId] = { windowId: window.id, requestId: input.requestId,
-        reserved: amount, status: 'dispatched', at: this.now() }
+        reserved: amount, status: 'dispatched', costStatus: 'unknown', at: this.now() }
       return state
     })
   }
 
-  async settle(attemptId: string, measured?: number): Promise<void> {
+  async settle(attemptId: string, measured?: number, estimatedCostUsd?: number): Promise<void> {
     if (measured !== undefined && (!Number.isSafeInteger(measured) || measured < 0)) throw new Error('Invalid measured usage')
+    if (estimatedCostUsd !== undefined && (!Number.isFinite(estimatedCostUsd) || estimatedCostUsd < 0)) throw new Error('Invalid cost estimate')
     await this.file.update(empty, (state) => {
       const entry = state.attempts[attemptId]
       if (!entry || entry.status === 'settled') return state
-      if (measured === undefined) { entry.status = 'pending'; return state }
       const window = state.windows[entry.windowId]
+      if (entry.costStatus !== 'known') {
+        if (estimatedCostUsd !== undefined) {
+          window.estimatedCostUsd += estimatedCostUsd
+          if (entry.costStatus === 'unknown') window.unknownCostAttempts = Math.max(0, window.unknownCostAttempts - 1)
+          entry.costStatus = 'known'
+        } else if (!entry.costStatus) {
+          window.unknownCostAttempts += 1; entry.costStatus = 'unknown'
+        }
+      }
+      if (measured === undefined) { entry.status = 'pending'; return state }
       window.reserved -= entry.reserved
       window.measured += measured
       entry.measured = measured; entry.status = 'settled'
@@ -75,12 +97,16 @@ export class GatewayTokenBudget {
     })
   }
 
-  async summary(clientId: string, policy?: TokenBudgetPolicy) {
+  async summary(clientId: string, policy?: TokenBudgetPolicy, costAlert?: GatewayClientPolicy['costAlert']) {
     const state = await this.file.read(empty)
     const windows = Object.values(state.windows).filter((window) => window.clientId === clientId)
     return { windows: windows.map((window) => ({ ...window,
       active: window.endsAt > this.now(), ...(policy ? { limit: policy.tokens,
-        exceeded: window.measured + window.reserved > policy.tokens } : {}) })),
+        exceeded: window.measured + window.reserved > policy.tokens } : {}),
+        ...(costAlert ? { costAlert: { basis: 'reference-estimate', usd: window.estimatedCostUsd,
+          unknownAttempts: window.unknownCostAttempts, limitUsd: costAlert.usd,
+          exceeded: window.estimatedCostUsd >= costAlert.usd,
+          period: window.period, timeZone: window.timeZone } } : {}) })),
     pendingAttempts: Object.entries(state.attempts).filter(([, entry]) => entry.status !== 'settled' &&
       windows.some((window) => window.id === entry.windowId)).map(([attemptId, entry]) => ({ attemptId, ...entry })) }
   }

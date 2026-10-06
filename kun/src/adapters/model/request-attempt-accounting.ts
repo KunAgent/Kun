@@ -15,7 +15,7 @@ export function accountModelRequest(request: ModelRequest,
     let accounted = false
     const observed: ModelRequest = { ...request, requestId, attemptObserver: { async begin(input) {
       if (attempts.length >= 16) throw new Error('Model request attempt ledger limit exceeded')
-      const attempt: ModelAttemptAccounting['attempts'][number] = { attemptId: randomUUID(),
+      const attempt: ModelAttemptAccounting['attempts'][number] = { attemptId: input.attemptId ?? randomUUID(),
         providerId: input.providerId, modelId: input.model, dispatched: false, usageKnown: false }
       attempts.push(attempt)
       return { async finish(usage, dispatched = true) {

@@ -32,8 +32,18 @@ const agent = {
 
 let root: Root
 let host: HTMLDivElement
-beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); host = document.createElement('div'); document.body.append(host); root = createRoot(host) })
-afterEach(() => { act(() => root.unmount()); host.remove() })
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  const entries = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => entries.get(key) ?? null,
+    setItem: (key: string, value: string) => entries.set(key, value),
+    removeItem: (key: string) => entries.delete(key),
+    clear: () => entries.clear()
+  })
+  host = document.createElement('div'); document.body.append(host); root = createRoot(host)
+})
+afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals() })
 
 describe('RoomSidebarRow', () => {
   it('shows attention, author, pin, running dot and a truthful unread dot', () => {

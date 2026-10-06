@@ -1,3 +1,4 @@
+import { ProviderConfigurationDeleteGuard } from './provider-configuration-delete-guard'
 import { registerGatewayLaunchProfileIpc } from './register-gateway-launch-profile-ipc'
 import { registerGatewayClientsIpc } from './register-gateway-clients-ipc'
 import { showCoordinatedMessageBox } from '../native-message-box'
@@ -315,14 +316,15 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     return withoutRendererPlaintextCredentials(await withRegistryCredentials(persisted, undefined, { refreshOAuth: false }))
   })
 
+  const providerDeleteGuard = new ProviderConfigurationDeleteGuard()
   ipcMain.handle('runtime:request', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
     const request = parseIpcPayload('runtime:request', runtimeRequestPayloadSchema, payload)
     if (!request.requestId) {
-      return runtimeRequest(request.path, request.method, request.body, undefined, {
+      return providerDeleteGuard.run(request, () => store.load(), () => runtimeRequest(request.path, request.method, request.body, undefined, {
         priority: request.priority
-      })
+      }))
     }
     observeRuntimeRequestOwner(event.sender)
     const key = runtimeRequestKey(event.sender.id, request.requestId)
@@ -330,10 +332,10 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     const controller = new AbortController()
     runtimeRequestControllers.set(key, { ownerId: event.sender.id, controller })
     try {
-      return await runtimeRequest(request.path, request.method, request.body, undefined, {
+      return await providerDeleteGuard.run(request, () => store.load(), () => runtimeRequest(request.path, request.method, request.body, undefined, {
         signal: controller.signal,
         priority: request.priority
-      })
+      }))
     } finally {
       if (runtimeRequestControllers.get(key)?.controller === controller) {
         runtimeRequestControllers.delete(key)

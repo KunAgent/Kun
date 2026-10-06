@@ -442,6 +442,7 @@ export type ModelsDevCatalogPricing = {
 }
 
 export type ModelsDevCatalogModel = {
+  observedAt?: string
   id: string
   providerKey?: string
   name?: string
@@ -450,6 +451,7 @@ export type ModelsDevCatalogModel = {
   outputModalities: ModelsDevCatalogModality[]
   reasoning?: boolean
   toolCalling?: boolean
+  parallelTools?: boolean; streaming?: boolean; structuredOutput?: boolean
   /** True only when models.dev reports both input and output cost as zero. */
   free?: boolean
   pricing?: ModelsDevCatalogPricing

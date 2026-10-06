@@ -501,6 +501,7 @@ export async function refreshAntigravityAccessToken(
 ): Promise<string> {
   const response = await context.fetcher('https://oauth2.googleapis.com/token', {
     method: 'POST',
+    redirect: 'error',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: client.clientId,

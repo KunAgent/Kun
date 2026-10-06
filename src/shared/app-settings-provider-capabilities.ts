@@ -1,3 +1,4 @@
+import { ModelMetadataEvidenceSchema } from '../../kun/src/contracts/model-metadata-evidence.js'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
@@ -144,6 +145,10 @@ export function normalizeModelProviderModelProfile(
     inputModalities,
     outputModalities: normalizeModelInputModalities(input?.outputModalities),
     supportsToolCalling: input?.supportsToolCalling !== false,
+    ...(typeof input?.parallelTools === 'boolean' ? { parallelTools: input.parallelTools } : {}),
+    ...(typeof input?.streaming === 'boolean' ? { streaming: input.streaming } : {}),
+    ...(typeof input?.structuredOutput === 'boolean' ? { structuredOutput: input.structuredOutput } : {}),
+    ...(ModelMetadataEvidenceSchema.safeParse(input?.evidence).success && input?.evidence ? { evidence: input.evidence } : {}),
     messageParts: normalizeModelMessageParts(input?.messageParts, defaultMessageParts),
     ...(reasoning ? { reasoning } : {}),
     ...(pricing ? { pricing } : {}),

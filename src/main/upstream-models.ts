@@ -1,3 +1,6 @@
+import { ModelMetadataEvidenceSchema, metadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
+import { ModelCatalogPricing } from '../../kun/src/contracts/capabilities.js'
+import { capabilityFieldKnown } from '../../kun/src/contracts/model-metadata-evidence'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -122,10 +125,17 @@ export function modelListFromSharedConnections(
           item === 'text' || item === 'image_url' || item === 'input_image'
         )
       const reasoning = sharedReasoningProfile(capability.reasoning)
+      const evidence = ModelMetadataEvidenceSchema.safeParse(capability.evidence)
+      const pricing = ModelCatalogPricing.safeParse(capability.pricing)
       return [[model, {
         inputModalities: inputModalities.length ? inputModalities : ['text'],
         outputModalities: outputModalities.length ? outputModalities : ['text'],
         supportsToolCalling: capability.supportsToolCalling !== false,
+        evidence: evidence.success && evidence.data ? evidence.data : metadataEvidence(capability, 'user'),
+        ...(pricing.success ? { pricing: pricing.data } : {}),
+        ...(typeof capability.parallelTools === 'boolean' ? { parallelTools: capability.parallelTools } : {}),
+        ...(typeof capability.streaming === 'boolean' ? { streaming: capability.streaming } : {}),
+        ...(typeof capability.structuredOutput === 'boolean' ? { structuredOutput: capability.structuredOutput } : {}),
         messageParts: messageParts.length ? messageParts : ['text'],
         ...(positiveInteger(capability.contextWindowTokens)
           ? { contextWindowTokens: positiveInteger(capability.contextWindowTokens) }
@@ -185,6 +195,7 @@ export function modelListFromSharedConnections(
         inputModalities: ['text'],
         outputModalities: ['text'],
         supportsToolCalling: true,
+        evidence: metadataEvidence({}, 'adapter'),
         messageParts: ['text']
       } satisfies ModelProviderModelProfileV1]
     })
@@ -286,6 +297,7 @@ async function readConfiguredModelGroups(settings: AppSettingsV1): Promise<Model
         inputModalities: ['text'],
         outputModalities: ['text'],
         supportsToolCalling: true,
+        evidence: metadataEvidence({}, 'adapter'),
         messageParts: ['text']
       } satisfies ModelProviderModelProfileV1] : []
     })
@@ -304,20 +316,24 @@ async function readConfiguredModelGroups(settings: AppSettingsV1): Promise<Model
   return mergeModelGroups(groups)
 }
 
-function aggregateRouteModelProfile(
-  profiles: readonly ModelProviderModelProfileV1[]
-): ModelProviderModelProfileV1 {
-  const inputModalities = [...new Set(profiles.flatMap((profile) => profile.inputModalities))]
-  const outputModalities = [...new Set(profiles.flatMap((profile) => profile.outputModalities))]
-  const messageParts = [...new Set(profiles.flatMap((profile) => profile.messageParts))]
-  return {
-    inputModalities,
-    outputModalities,
-    messageParts,
-    supportsToolCalling: profiles.some((profile) => profile.supportsToolCalling),
-    contextWindowTokens: Math.max(...profiles.map((profile) => profile.contextWindowTokens ?? 0)) || undefined,
-    maxOutputTokens: Math.max(...profiles.map((profile) => profile.maxOutputTokens ?? 0)) || undefined
+function aggregateRouteModelProfile(profiles: readonly ModelProviderModelProfileV1[]): ModelProviderModelProfileV1 {
+  const allKnown = (field: Parameters<typeof capabilityFieldKnown>[1]) => profiles.length > 0 &&
+    profiles.every((profile) => capabilityFieldKnown(profile, field))
+  const intersection = <T,>(items: readonly T[][]): T[] => items[0]?.filter((item) => items.every((list) => list.includes(item))) ?? []
+  const minimum = (field: 'contextWindowTokens' | 'maxOutputTokens') => allKnown(field) && profiles.every((profile) => profile[field])
+    ? Math.min(...profiles.map((profile) => profile[field]!)) : undefined
+  const result: ModelProviderModelProfileV1 = {
+    inputModalities: allKnown('inputModalities') ? intersection(profiles.map((profile) => profile.inputModalities)) : ['text'],
+    outputModalities: allKnown('outputModalities') ? intersection(profiles.map((profile) => profile.outputModalities)) : ['text'],
+    messageParts: allKnown('messageParts') ? intersection(profiles.map((profile) => profile.messageParts)) : ['text'],
+    supportsToolCalling: allKnown('supportsToolCalling') && profiles.every((profile) => profile.supportsToolCalling),
+    contextWindowTokens: minimum('contextWindowTokens'), maxOutputTokens: minimum('maxOutputTokens')
   }
+  result.evidence = metadataEvidence({}, 'adapter')
+  for (const field of ['inputModalities', 'outputModalities', 'messageParts', 'supportsToolCalling', 'contextWindowTokens', 'maxOutputTokens'] as const) {
+    result.evidence[field] = { source: 'adapter', status: allKnown(field) && result[field] !== undefined ? 'declared' : 'unknown' }
+  }
+  return result
 }
 
 function mergeModelGroups(groups: readonly ModelProviderModelGroup[]): ModelProviderModelGroup[] {

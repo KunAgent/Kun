@@ -56,7 +56,7 @@ describe('ModelConnectionRegistry provider proxy routing', () => {
   }) => {
     const { dataDir, value } = await registry()
     const path = join(dataDir, 'model-connections.v2.json')
-    await writeFile(path, JSON.stringify({
+    await writeFile(join(dataDir, 'model-connections.v1.json'), JSON.stringify({
       schemaVersion: 1,
       revision: 4,
       profiles: {

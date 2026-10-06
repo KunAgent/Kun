@@ -1,3 +1,4 @@
+import { ModelMetadataEvidenceSchema } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { z } from 'zod'
 import { AdeProjectDefaultsMapSchema } from '../../../shared/ade-project-defaults'
@@ -159,6 +160,8 @@ const modelProfilePatchShape = {
   inputModalities: z.array(modelProviderInputModalitySchema).max(8).optional(),
   outputModalities: z.array(modelProviderInputModalitySchema).max(8).optional(),
   supportsToolCalling: z.boolean().optional(),
+  parallelTools: z.boolean().optional(), streaming: z.boolean().optional(), structuredOutput: z.boolean().optional(),
+  evidence: ModelMetadataEvidenceSchema,
   messageParts: z.array(modelProviderMessagePartSchema).max(8).optional(),
   reasoning: z.object({
     supportedEfforts: z.array(modelReasoningEffortSchema).min(1).max(8),
@@ -257,6 +260,7 @@ export const modelProviderPatchSchema = z.object({
     }).strict().nullable().optional()
   }).strict()).max(50).optional(),
   routePools: z.array(z.object({
+    capabilityMode: z.enum(['guaranteed', 'request-filter']).optional(),
     affinity: z.object({ mode: z.enum(['off', 'turn', 'session']), ttlMs: z.number().int().min(60_000).max(86_400_000) }).strict().optional(),
     id: z.string().trim().min(1).max(64).optional(),
     name: z.string().trim().min(1).max(80).optional(),

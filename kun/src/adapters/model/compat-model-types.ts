@@ -1,3 +1,4 @@
+import type { ProviderAuthProfile, ProviderHeaderProfile } from '../../contracts/provider-configuration.js'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import type { ModelRequestRetryConfig } from '../../config/kun-config.js'
@@ -14,6 +15,8 @@ export type CompatModelClientConfig = {
   presetSource?: string
   baseUrl: string
   apiKey: string
+  authProfile?: ProviderAuthProfile
+  headerProfile?: ProviderHeaderProfile
   model: string
   /** Compatible request/response protocol to use for custom providers. */
   endpointFormat?: ModelEndpointFormat

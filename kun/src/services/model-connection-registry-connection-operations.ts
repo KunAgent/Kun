@@ -1,4 +1,4 @@
-import { protectLegacyRegistryHeaders, retireLegacyHeaderJournal } from './provider-legacy-header-migration.js'
+import { protectLegacyRegistryHeaders } from './provider-legacy-header-migration.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -43,12 +43,9 @@ async initialize(this: ModelConnectionRegistry,
     await migrateProviderRegistry({ dataDir: this['options'].dataDir, file: this['file'], empty: emptyDocument,
       validate: (value) => RegistryDocumentSchema.parse(upgradeProviderRegistry(upgradeRegistryProxyRouting(value))),
       prepareLegacy: (value) => protectLegacyRegistryHeaders(this['options'].dataDir, value, this['options'].credentials) })
-    await retireLegacyHeaderJournal(this['options'].dataDir, this['file'], emptyDocument)
-    // AtomicJsonFile upgrades legacy documents while reading. Writing the
-    // canonical value here persists the routing marker and concrete booleans
-    // before any seed reconciliation or live materialization occurs.
-    let current = await this['file'].update(emptyDocument, (document) => document)
+    // Protect legacy values in existing v2 before any canonical routing-marker write.
     await migrateProviderHeaders(this)
+    let current = await this['file'].update(emptyDocument, (document) => document)
     current = await this['file'].read(emptyDocument)
     if (repairRegistryModelCapabilityLimits(current)) {
       current = await this['file'].update(emptyDocument, (document) => {
@@ -152,7 +149,14 @@ async initialize(this: ModelConnectionRegistry,
     for (const providerId of retiredIds) {
       current = await this['file'].read(emptyDocument)
       if (!current.profiles[providerId]) continue
-      await this.delete(providerId, current.revision)
+      const selection = liveSeeds.find((entry) => entry.select === true && entry.id && current.profiles[entry.id]?.configured && current.profiles[entry.id]?.models.includes(entry.selectedModel ?? entry.models[0] ?? ''))
+      const operations: import('../contracts/provider-configuration.js').ProviderConfigurationOperation[] = [
+        ...(current.defaultProviderId === providerId ? [{ kind: 'set-default-selection' as const,
+          ...(selection?.id ? { selection: { connectionId: selection.id, modelId: selection.selectedModel ?? selection.models[0]! } } : {}) }] : []),
+        { kind: 'remove-connection', connectionId: providerId }
+      ]
+      const preview = await this.previewConfiguration({ expectedRevision: current.revision, operations })
+      await this.commitConfiguration({ expectedRevision: current.revision, previewId: preview.previewId, idempotencyKey: `retire:${preview.previewId}` })
     }
     current = await this['file'].read(emptyDocument)
     if (repairRegistryModelCapabilityLimits(current)) {
@@ -331,7 +335,7 @@ async connectAuthenticated(this: ModelConnectionRegistry,
         credentialRef,
         credentialSourceId: credentialRef ? undefined : existing?.credentialSourceId,
         ...(legacyCredentialSourceToRetire ? { legacyCredentialSourceToRetire } : {}),
-        headers: existing?.headers,
+        headers: existing?.headers, headersRef: existing?.headersRef, generatedHeaderNames: existing?.generatedHeaderNames,
         customHeaders: existing?.customHeaders,
         customHeadersRef: existing?.customHeadersRef, customHeaderNames: existing?.customHeaderNames,
         ...providerHeadersPatch(existing, preparedHeaders)

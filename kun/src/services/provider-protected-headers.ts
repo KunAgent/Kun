@@ -1,3 +1,5 @@
+import { withManagerDataMutex } from '../manager/data-mutex.js'
+import { protectLegacyRegistryHeaders, retireLegacyHeaderJournal } from './provider-legacy-header-migration.js'
 import { randomUUID } from 'node:crypto'
 import { CustomHeadersSchema } from '../contracts/custom-headers.js'
 import { type ModelConnectionRegistry, type StoredProfile, emptyDocument,
@@ -54,17 +56,35 @@ export async function readProviderHeaders(registry: ModelConnectionRegistry, pro
 }
 
 export async function migrateProviderHeaders(registry: ModelConnectionRegistry): Promise<void> {
-  const document = await registry['file'].read(emptyDocument)
-  for (const profile of Object.values(document.profiles)) {
-    if (profile.customHeaders === undefined) continue
-    const prepared = await prepareProviderHeaders(registry, profile.customHeaders)
-    try {
+  await withManagerDataMutex(`provider-header-migration:${registry['options'].dataDir}`, async () => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const document = await registry['file'].read(emptyDocument)
+      if (!Object.values(document.profiles).some((profile) => profile.headers !== undefined || profile.customHeaders !== undefined)) {
+        await retireLegacyHeaderJournal(registry['options'].dataDir, registry['file'], emptyDocument)
+        return
+      }
+      // A separate secret-free journal protects existing v2 too; no prepared-ref write republishes raw headers.
+      const protectedDocument = await protectLegacyRegistryHeaders(registry['options'].dataDir, document, registry['options'].credentials)
+      let applied = false
       await registry['file'].update(emptyDocument, (current) => {
-        const latest = current.profiles[profile.id]
-        if (!latest || JSON.stringify(latest.customHeaders) !== JSON.stringify(profile.customHeaders)) return current
-        return { ...current, revision: current.revision + 1,
-          profiles: { ...current.profiles, [profile.id]: { ...latest, ...providerHeadersPatch(latest, prepared) } } }
+        if (current.revision !== document.revision || JSON.stringify(current.profiles) !== JSON.stringify(document.profiles)) return current
+        applied = true
+        return { ...current, profiles: protectedDocument.profiles, credentialRefCleanup: { ...current.credentialRefCleanup,
+          ...Object.fromEntries(Object.entries(protectedDocument.credentialRefCleanup).filter(([reference]) => !document.credentialRefCleanup[reference])) }, revision: current.revision + 1 }
       })
-    } finally { await settleProviderHeaders(registry, prepared) }
-  }
+      if (applied) {
+        await retireLegacyHeaderJournal(registry['options'].dataDir, registry['file'], emptyDocument)
+        return
+      }
+    }
+    throw new Error('Provider headers changed during protected migration; retry after configuration edits finish')
+  })
+}
+
+export async function readProviderGeneratedHeaders(registry: ModelConnectionRegistry, profile: StoredProfile): Promise<Record<string, string>> {
+  if (!profile.headersRef) return { ...(profile.headers ?? {}) }
+  const stored = await registry['options'].credentials.get(profile.headersRef)
+  if (!stored?.apiKey) throw new Error('Provider adapter headers are unavailable; reauthenticate this account')
+  try { return CustomHeadersSchema.parse(JSON.parse(stored.apiKey)) }
+  catch { throw new Error('Provider adapter headers are unreadable; reauthenticate this account') }
 }

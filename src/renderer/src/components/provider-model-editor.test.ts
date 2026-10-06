@@ -76,9 +76,11 @@ describe('provider-model-editor', () => {
       visionInput: true,
       supportsToolCalling: false
     }))
+    expect(next.modelProfiles['new-model'].evidence?.contextWindowTokens).toMatchObject({ source: 'user', status: 'declared' })
+    expect(next.modelProfiles['new-model'].evidence?.pricing?.status).toBe('unknown')
     expect(next.models).toContain('New-Model')
     const profile = next.modelProfiles['new-model']
-    expect(profile).toEqual({
+    expect(profile).toMatchObject({
       contextWindowTokens: 256_000,
       maxOutputTokens: 16_000,
       inputModalities: ['text', 'image'],
@@ -487,6 +489,15 @@ describe('provider-model-editor', () => {
     )).toContainEqual({ code: 'noReasoningEfforts' })
   })
 
+  it('records explicit parallel, structured, and streaming declarations while preserving unknown fields', () => {
+    const target = provider(), form = chatForm(target, { modelId: 'declared', parallelTools: false, structuredOutput: true, streaming: null })
+    const declared = applyProviderModelForm(target, form).modelProfiles.declared
+    expect(declared).toMatchObject({ parallelTools: false, structuredOutput: true })
+    expect(declared.streaming).toBeUndefined()
+    expect(declared.evidence?.parallelTools).toMatchObject({ source: 'user', status: 'declared' })
+    expect(declared.evidence?.structuredOutput).toMatchObject({ source: 'user', status: 'declared' })
+    expect(declared.evidence?.streaming?.status).toBe('unknown')
+  })
   it('warns when a chat model id matches non-text patterns', () => {
     const target = provider()
     expect(chatModelIdLooksNonText(chatForm(target, { modelId: 'flux-image-pro' }))).toBe(true)

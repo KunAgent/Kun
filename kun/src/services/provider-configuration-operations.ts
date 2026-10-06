@@ -3,19 +3,36 @@ import { createHash, randomUUID } from 'node:crypto'
 import { ProviderConfigurationPreviewRequestSchema, ProviderConfigurationCommitRequestSchema,
   type ProviderConfigurationOperation } from '../contracts/provider-configuration.js'
 import { type ModelConnectionRegistry, type RegistryDocument, StoredProfileSchema,
-  emptyDocument, assertRevision } from './model-connection-registry-core.js'
+  emptyDocument, assertRevision, appendCredentialRefs } from './model-connection-registry-core.js'
+import { registryProviderReferences, scanProviderReferences, type ProviderConfigurationReference } from './provider-configuration-references.js'
+import type { PreparedImportBinding } from './provider-configuration-secret-operations.js'
 import { effectiveProviderConfiguration } from './provider-effective-configuration.js'
 
 export type ConfigurationPreview = {
   previewId: string; expectedRevision: number; expiresAt: string; digest: string
   operations: ProviderConfigurationOperation[]; affectedConnections: string[]
+  references?: ProviderConfigurationReference[]
+  secretSlots?: Array<{ id: string; connectionId: string; kind: 'credential' | 'headers'; names?: string[]; headerClass?: 'custom' | 'adapter'; bound: boolean }>
 }
 
-function applyOperations(document: RegistryDocument, operations: ProviderConfigurationOperation[]): RegistryDocument {
+export function applyOperations(document: RegistryDocument, operations: ProviderConfigurationOperation[]): RegistryDocument {
   const next = structuredClone(document)
   const state = next.configuration
+  const deleted: string[] = []
   for (const operation of operations) {
     switch (operation.kind) {
+      case 'remove-connection': {
+        const profile = next.profiles[operation.connectionId]
+        if (!profile) throw new Error('Connection does not exist')
+        if (next.credentialTransactions[profile.id]) throw new Error('Connection credential replacement is pending')
+        deleted.push(profile.id)
+        next.tombstones[profile.id] = { deletedRevision: document.revision + 1,
+          credentialMutationHighWater: profile.credentialMutationHighWater,
+          ...(profile.credentialSourceId ? { legacyCredentialSourceToRetire: profile.credentialSourceId } : {}) }
+        for (const reference of [profile.credentialRef, profile.customHeadersRef, profile.headersRef]) next.credentialRefCleanup = appendCredentialRefs(next.credentialRefCleanup, Date.now(), reference)
+        delete next.profiles[profile.id]; delete state.connections[profile.id]
+        break
+      }
       case 'clear-connection-fields': {
         const profile = next.profiles[operation.connectionId]
         if (!profile) throw new Error('Connection does not exist')
@@ -44,7 +61,9 @@ function applyOperations(document: RegistryDocument, operations: ProviderConfigu
         if (operation.configuration.endpointBinding && next.profiles[operation.connectionId]!.kind !== 'http') {
           throw new Error('Explicit HTTP endpoint bindings require an HTTP model provider')
         }
-        state.connections[operation.connectionId] = operation.configuration
+        const origin = state.connections[operation.connectionId]?.migrationOrigin
+        if (operation.configuration.migrationOrigin && JSON.stringify(operation.configuration.migrationOrigin) !== JSON.stringify(origin)) throw new Error('Migration origin is read-only')
+        state.connections[operation.connectionId] = { ...operation.configuration, ...(origin ? { migrationOrigin: origin } : {}) }
         break
       }
       case 'add-connection': {
@@ -73,9 +92,19 @@ function applyOperations(document: RegistryDocument, operations: ProviderConfigu
           ...(operation.patch.authType === 'none' && current.kind === 'http' ? { configured: true } : {}) })
         break
       }
+      case 'set-default-selection': {
+        if (!operation.selection) { delete next.defaultProviderId; delete next.defaultAccountId; delete next.defaultModel; break }
+        const selected = next.profiles[operation.selection.connectionId]
+        if (!selected || !selected.models.includes(operation.selection.modelId)) throw new Error('Default selection must reference a configured model')
+        next.defaultProviderId = selected.id; next.defaultAccountId = selected.accountId; next.defaultModel = operation.selection.modelId
+        break
+      }
+      case 'set-failover': next.failover = operation.groups; break
       case 'set-routes': next.routePools = operation.routes; break
     }
   }
+  const remainingReferences = registryProviderReferences(next, deleted)
+  if (remainingReferences.length) throw new Error(`Deleted connection still has references: ${remainingReferences.map((entry) => entry.path).join(', ')}`)
   if (Object.keys(next.profiles).length > 500 || Object.keys(state.groups).length > 500 || Object.keys(state.templates).length > 500) {
     throw new Error('Provider configuration exceeds the 500-entry limit')
   }
@@ -87,6 +116,14 @@ function applyOperations(document: RegistryDocument, operations: ProviderConfigu
     const profile = next.profiles[operation.connection.id]!
     if (profile.kind === 'http' && !effectiveProviderConfiguration(profile, state).profile.baseUrl) {
       throw new Error('New HTTP connections require an explicit or inherited endpoint URL')
+    }
+  }
+  for (const profile of Object.values(next.profiles)) {
+    const effective = effectiveProviderConfiguration(profile, state)
+    const auth = effective.authProfile
+    const headerNames = new Set((profile.customHeaderNames ?? []).map((name) => name.toLowerCase()))
+    if (auth && [...headerNames].some((name) => ['authorization', 'proxy-authorization', 'x-api-key', 'api-key', 'x-goog-api-key', auth.headerName?.toLowerCase()].includes(name))) {
+      throw new Error('Protected headers cannot override the authentication profile')
     }
   }
   const aliases = new Set<string>()
@@ -112,6 +149,7 @@ export const providerConfigurationOperations = {
     const snapshot = await this['projectWithCredentialHealth'](document)
     const { commits: _commits, ...configuration } = document.configuration
     return { schemaVersion: 2 as const, revision: document.revision, activeRevision: this['lastAppliedRevision'],
+      defaultProviderId: document.defaultProviderId, defaultAccountId: document.defaultAccountId, defaultModel: document.defaultModel,
       configuration, connections: snapshot.providers, routePools: document.routePools,
       connectionOverrides: Object.fromEntries(Object.values(document.profiles).map((profile) => [profile.id,
         { baseUrl: profile.baseUrl, endpointFormat: profile.endpointFormat, endpoints: profile.endpoints, useProxy: profile.useProxy }])) ,
@@ -124,31 +162,46 @@ export const providerConfigurationOperations = {
     const input = ProviderConfigurationPreviewRequestSchema.parse(raw)
     const document = await this['file'].read(emptyDocument)
     assertRevision(document, input.expectedRevision)
+    const deletionIds = input.operations.filter((operation) => operation.kind === 'remove-connection').map((operation) => operation.connectionId)
     const next = applyOperations(document, input.operations)
     const affectedConnections = Object.keys(next.profiles).filter((id) =>
       JSON.stringify(effectiveProviderConfiguration(document.profiles[id] ?? next.profiles[id]!, document.configuration)) !==
-      JSON.stringify(effectiveProviderConfiguration(next.profiles[id]!, next.configuration)) || !document.profiles[id])
+      JSON.stringify(effectiveProviderConfiguration(next.profiles[id]!, next.configuration)) || !document.profiles[id]).concat(deletionIds)
+    const changedIds = [...new Set([...affectedConnections, ...input.operations.flatMap((operation) => 'connectionId' in operation ? [operation.connectionId] : [])])]
+    const external = await this['options'].referenceSources?.() ?? {}
+    const histories = await this['options'].historyReferenceSources?.() ?? {}
+    const references = [...Object.entries(histories).flatMap(([kind, value]) => scanProviderReferences(value, new Set(changedIds), kind, false)), ...registryProviderReferences(document, changedIds), ...Object.entries(external).flatMap(([kind, value]) => scanProviderReferences(value, new Set(changedIds), kind))]
+    const blocked = references.filter((entry) => entry.blocking && deletionIds.includes(entry.connectionId) && !['default', 'routes', 'failover', 'gatewayClients'].includes(entry.kind))
+    if (blocked.length) throw new Error(`Connection is referenced outside this transaction: ${blocked.map((entry) => entry.path).join(', ')}`)
+
     const preview: ConfigurationPreview = { previewId: randomUUID(), expectedRevision: document.revision,
       expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
       digest: createHash('sha256').update(JSON.stringify(input)).digest('hex'),
-      operations: input.operations, affectedConnections }
+      operations: input.operations, affectedConnections, references }
     const previews = this['configurationPreviews']
-    for (const [id, value] of previews) if (Date.parse(value.expiresAt) <= Date.now()) previews.delete(id)
-    if (previews.size >= 128) previews.delete(previews.keys().next().value!)
+    for (const [id, value] of previews) if (Date.parse(value.expiresAt) <= Date.now()) { previews.delete(id); this['configurationImportSecrets'].delete(id) }
+    if (previews.size >= 128) { const oldest = previews.keys().next().value!; previews.delete(oldest); this['configurationImportSecrets'].delete(oldest) }
     const bytes = new TextEncoder().encode(JSON.stringify(preview)).byteLength
     if (bytes > 8 * 1024 * 1024) throw new Error('Configuration preview exceeds its size limit')
     let total = [...previews.values()].reduce((sum, value) => sum + new TextEncoder().encode(JSON.stringify(value)).byteLength, bytes)
     while (previews.size && total > 16 * 1024 * 1024) {
       const oldest = previews.keys().next().value!
       total -= new TextEncoder().encode(JSON.stringify(previews.get(oldest))).byteLength
-      previews.delete(oldest)
+      previews.delete(oldest); this['configurationImportSecrets'].delete(oldest)
     }
     previews.set(preview.previewId, preview)
     return structuredClone(preview)
   },
 
-  async commitConfiguration(this: ModelConnectionRegistry, raw: unknown) {
+  async commitConfiguration(this: ModelConnectionRegistry, raw: unknown, bindings: PreparedImportBinding[] = []) {
     const input = ProviderConfigurationCommitRequestSchema.parse(raw)
+    const previewForReferences = this['configurationPreviews'].get(input.previewId)
+    const deletionIds = previewForReferences?.operations.filter((operation) => operation.kind === 'remove-connection').map((operation) => operation.connectionId) ?? []
+    if (deletionIds.length) {
+      const external = await this['options'].referenceSources?.() ?? {}
+      const references = Object.entries(external).flatMap(([kind, value]) => scanProviderReferences(value, new Set(deletionIds), kind))
+      if (references.some((entry) => entry.blocking)) throw new Error('Connection references changed; review and remove the external bindings first')
+    }
     let committedRevision = 0
     const document = await this['file'].update(emptyDocument, (current) => {
       const receipt = current.configuration.commits[input.idempotencyKey]
@@ -162,6 +215,14 @@ export const providerConfigurationOperations = {
       if (preview.expectedRevision !== input.expectedRevision) throw new Error('Configuration preview revision mismatch')
       assertRevision(current, input.expectedRevision)
       const next = applyOperations(current, preview.operations)
+      for (const binding of bindings) {
+        const profile = next.profiles[binding.connectionId]
+        if (!profile || !preview.operations.some((operation) => operation.kind === 'add-connection' && operation.connection.id === profile.id)) throw new Error('Import credential cannot bind an existing account')
+        if (binding.kind === 'credential') { profile.credentialRef = binding.reference; profile.configured = true; if (binding.accountId) profile.accountId = binding.accountId }
+        else if (binding.headerClass === 'adapter') { profile.headersRef = binding.reference; profile.generatedHeaderNames = binding.names }
+        else { profile.customHeadersRef = binding.reference; profile.customHeaderNames = binding.names }
+      }
+      if (bindings.length) applyOperations(next, [])
       next.revision = current.revision + 1
       const receipts = Object.entries(next.configuration.commits).slice(-255)
       next.configuration.commits = Object.fromEntries(receipts)
@@ -173,6 +234,9 @@ export const providerConfigurationOperations = {
     let applied = true
     try { await this['changed'](document) } catch { applied = false }
     this['configurationPreviews'].delete(input.previewId)
+    this['configurationImportSecrets'].delete(input.previewId)
+    await this['drainCredentialRefCleanup']()
+    for (const id of deletionIds) await this['retireDeletedLegacyCredentialSource'](id)
     return { committedRevision, applied, snapshot: await this.configurationSnapshot() }
   }
 }

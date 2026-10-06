@@ -166,13 +166,20 @@ provider access terms.
 
 ## Offline client validation
 
-The conformance workflow pins Codex CLI 0.160.0 and Claude Code 2.1.220 from the
-locked Claude Agent SDK 0.3.220. Reports include the checked-out commit, dirty
+The conformance workflow pins Codex CLI 0.160.0, Claude Code 2.1.220 from the
+locked Claude Agent SDK 0.3.220, OpenCode 1.1.47 and Pi 0.73.1. Reports include the checked-out commit, dirty
 state, exact client versions and bounded request-shape summaries. Unexpected
 versions fail by default; a local developer may explicitly allow and report a
 version mismatch. CI does not use that override.
 
 These tests call the real gateway with a deterministic fake upstream and
 isolated client homes. They do not sign into accounts or consume model quota.
-The client smoke covers a text completion; namespace/tool history, parallel
-calls and streaming events also have dedicated protocol regression fixtures.
+The client smoke verifies text streams, a real read-only tool followed by a
+second model call, and client cancellation reaching the upstream AbortSignal.
+Claude main/small aliases are exercised separately. OpenCode explicitly reuses
+main for its small model; Codex and Pi do not expose an independent small-model
+protocol in this integration. All generated files come from production templates.
+Pi's `apiKey` references a bare environment variable name, rather than shell
+interpolation. Namespace/tool history, parallel calls and streaming events also
+have dedicated protocol regression fixtures. See the
+[release validation record](provider-gateway-release-validation.md).

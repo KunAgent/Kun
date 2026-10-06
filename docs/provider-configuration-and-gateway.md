@@ -43,8 +43,11 @@ authenticated gateway client. Subscription/OAuth and whole-agent adapters keep
 their existing export restrictions.
 
 Extra request header values live in the protected Credential Store. Ordinary
-snapshots show only header names. Inference and discovery reject redirects so
-custom authentication headers cannot follow an unexpected destination.
+snapshots show only header names. Authentication and protected-header profiles
+declare exact destination hosts and purposes independently of the wire format.
+Inference, discovery, OAuth and quota cannot borrow one another's permission;
+public metadata never receives account secrets. Inference and discovery reject
+redirects so headers cannot follow an unexpected destination.
 
 ## Discover models
 
@@ -70,9 +73,12 @@ Agent. Successful version checks last 24 hours; failure retries after five
 minutes while retaining the last working or bundled minimum version. Actual
 account availability still comes from the authenticated provider catalog.
 
-Directory success, readable credentials and successful inference are distinct.
-The catalog observation panel shows identity/staleness and selected/manual
-models without sending a paid inference request.
+Readable credentials, HTTP reachability, catalog success, protocol validation
+and successful inference are separate evidence stages bound to current account
+identity. Manual models do not become network evidence. Capability and price
+fields retain source, observation time and known/unknown state; default context
+or tool assumptions are excluded from guarantees. The catalog panel shows these
+facts without sending a paid inference request.
 
 ## Configuration transactions and exchange
 
@@ -89,6 +95,10 @@ The admin API provides:
 | Commit a reviewed revision | `POST /v1/provider-config/transactions/commit` |
 | Secret-free exchange document | `POST /v1/provider-config/export` |
 | Additive import preview | `POST /v1/provider-config/import/preview` |
+| Commit reviewed slot bindings | `POST /v1/provider-config/import/commit` |
+| Explicit encrypted backup | `POST /v1/provider-config/backup` |
+| Reviewed backup restore | `POST /v1/provider-config/backup/preview` |
+| Downgrade compatibility preview/export | `POST /v1/provider-config/recovery/preview`, `/recovery/export` |
 | Route eligibility without inference | `POST /v1/provider-config/routes/preview` |
 
 These routes require the Runtime admin token. Gateway keys cannot manage
@@ -100,9 +110,15 @@ separately; an activation failure is not reported as an unsaved transaction.
 Imports remap conflicting account/group/template/route IDs and aliases, rewrite
 dependent references, and reject incomplete reference closures. Existing
 objects and client permissions are not overwritten by an import. Secret slots
-remain unbound drafts: fill credentials and extra headers through the existing
-protected account editor after applying the preview. An exported configuration
-is not a credential backup or an encrypted whole-application backup.
+can bind protected credential/header inputs before the reviewed atomic import;
+unbound slots remain drafts. Slots cannot point at arbitrary local credentials.
+An ordinary exported configuration is not a credential backup.
+
+An explicit portable backup uses a separate password-derived key and
+authenticated encryption. Ordinary exports, previews and snapshots contain no
+secret values. Restore decrypts into reviewed import slots, remaps identities
+and rechecks the expected revision before publication. Wrong passwords,
+tampering and unsupported versions fail before publication.
 
 ## Shared execution and routing
 
@@ -125,10 +141,13 @@ of four physical upstream attempts and the gateway's 120-second default
 deadline. Queues and retries consume that deadline. After semantic text,
 reasoning or tool output starts, automatic target switching stops.
 
-Route preview reports eligibility, excluded targets and conservative shared
-capabilities without dispatch. Actual routing rechecks configuration, model
-capabilities, client permissions and health. Real inference tests remain a
-separate action.
+Route preview reports next strategy order without advancing its cursor,
+eligibility, excluded targets and conservative shared capabilities without
+dispatch. Guaranteed mode publishes known capability/context minima; filter
+mode admits only candidates capable of the particular request. Unknown facts
+never become guarantees or trigger silent capability downgrade. Actual routing
+rechecks configuration, client permissions and health. Manual recovery allows
+one bounded half-open probe. Real inference tests remain a separate action.
 
 ## Client keys and token budgets
 
@@ -153,6 +172,8 @@ dispatch. Periods use the configured IANA time zone; period/time-zone edits
 apply after the open window ends, while limit changes apply immediately.
 Measured tokens, reserved tokens and catalog cost estimates remain separate.
 No hard monetary-budget guarantee is offered.
+Optional cost alerts compare separately identified estimates with a configured
+USD/CNY threshold; they are advisory and never fabricate measured token usage.
 
 The ledger includes physical attempt identity and known usage from abandoned
 fallback targets, rather than counting only the final target. Response token
@@ -172,7 +193,16 @@ protection retryable. The existing v1 recovery file may still contain its old
 header values; migration does not create another plaintext copy of them.
 After v2 publication, Manager rejects writes/deletes to the legacy Registry.
 Do not delete v2 or copy v1 over it to downgrade: new accounts and permissions
-would be lost. A reviewed downgrade/export workflow remains a rollout task.
+would be lost. A reviewed downgrade projection uses current v2 identities, not
+the stale recovery file. Every current field must be expressible in v1; groups,
+inheritance, disabled accounts and new policies otherwise block downgrade.
+Future canonical schema versions fail closed.
+
+Deletion previews list Registry defaults/routes/client scopes and external
+ADE/role/plan references. Registry references require explicit handling in the
+same transaction; external references block deletion until their owner removes
+them. Commit rechecks references created after preview. Pausing preserves
+identity and references while stopping new admission.
 
 Standalone local applications, Codex, Claude Code, OpenCode and Pi can consume
 public aliases through the Connection Center's existing isolated configuration
@@ -182,8 +212,8 @@ resumed turns retain their original model/account target ceiling. Native login,
 direct provider selection and gateway aliases remain distinct modes. Model-only
 grants never imply Kun-tool permissions. Agent installation and native-account management stay separate.
 
-LAN/public listeners, Gemini-native ingress, media export, nested routing,
-encrypted portable backups, complete external-reference deletion and full
-field-level capability provenance are not part of the completed local surface.
-The listener remains loopback-only. Consult the proposal task list for the
-remaining release and UI acceptance work.
+LAN/public listeners, Gemini-native ingress, media export, nested routing and
+extension export remain separately proposed P5 work. External reference owners
+are not silently rewritten by a provider transaction. The listener remains
+loopback-only. See [release validation](provider-gateway-release-validation.md)
+for fixed-client, scale, boundary and packaged acceptance evidence.

@@ -1,3 +1,4 @@
+import { readProviderGeneratedHeaders } from './provider-protected-headers.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -89,6 +90,7 @@ async materializeDocument(this: ModelConnectionRegistry,
       const materialHeaders = profile.authType === 'none' || usesRequestTimeCredential ? undefined : material.headers
       const modelProxyUrl = resolved.proxy?.mode === 'proxy'
         ? resolved.proxy.url : resolveRegistryProfileProxyUrl(document, profile)
+      const generatedHeaders = await readProviderGeneratedHeaders(this, profile)
       const config: ServeProviderConfig =
         profile.kind === 'agent-sdk' ||
         profile.kind === 'antigravity-cli' ||
@@ -127,6 +129,8 @@ async materializeDocument(this: ModelConnectionRegistry,
           : {
               kind: 'http',
               accountId: profile.accountId,
+              ...(resolved.authProfile ? { authProfile: resolved.authProfile } : {}),
+              ...(resolved.headerProfile ? { headerProfile: resolved.headerProfile } : {}),
               ...(resolved.admission ? { admission: resolved.admission } : {}),
               ...(resolved.fullEndpointProtocol ? { customEndpointProtocol: resolved.fullEndpointProtocol } : {}),
               apiKey,
@@ -142,13 +146,15 @@ async materializeDocument(this: ModelConnectionRegistry,
               models: [...profile.models],
               ...(profile.modelCapabilities ? { modelCapabilities: profile.modelCapabilities } : {}),
               ...(profile.selectedModel ? { selectedModel: profile.selectedModel } : {}),
-              ...(materialHeaders || profile.headers
-                ? { headers: { ...(profile.headers ?? {}), ...(materialHeaders ?? {}) } }
+              ...(materialHeaders || Object.keys(generatedHeaders).length
+                ? { headers: { ...generatedHeaders, ...(materialHeaders ?? {}) } }
                 : {}),
               ...(Object.keys(customHeaders).length > 0
                 ? { customHeaders }
                 : {})
             }
+      if (resolved.authProfile) config.authProfile = resolved.authProfile
+      if (resolved.headerProfile) config.headerProfile = resolved.headerProfile
       providers.set(profile.id, config)
       if (profileUsable && profile.id === document.defaultProviderId && document.defaultModel) {
         selected = { profile, config, model: document.defaultModel }
@@ -173,7 +179,7 @@ async probeInput(this: ModelConnectionRegistry, input: ModelConnectionConnectReq
       endpointFormat: input.endpointFormat,
       ...(input.endpoints ? { endpoints: input.endpoints } : {}),
       apiKey: input.credential?.trim() ?? '',
-      headers: input.customHeaders,
+      customHeaders: input.customHeaders,
       fallbackModels: input.models,
       proxyUrl: resolveRegistryProfileProxyUrl(
         { proxy: (await this['file'].read(emptyDocument)).proxy },

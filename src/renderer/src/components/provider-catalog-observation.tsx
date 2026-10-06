@@ -1,9 +1,10 @@
+import type { ProviderVerificationEvidence } from '../../../../kun/src/contracts/provider-verification-evidence.js'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { settingsButtonClass } from './settings-button'
 import { textInputClass } from './settings-section-providers-controls'
 
-type Catalog = { fetchedAt: string; source?: string; stale?: boolean; identityChanged?: boolean;
+type Catalog = { evidence?: ProviderVerificationEvidence; fetchedAt: string; source?: string; stale?: boolean; identityChanged?: boolean;
   models: string[]; selectedModels?: string[]; manualModels?: string[]; unavailableModels?: string[] }
 export function ProviderCatalogObservation({ connectionId }: { connectionId: string }) {
   const { t } = useTranslation('settings')
@@ -29,6 +30,11 @@ export function ProviderCatalogObservation({ connectionId }: { connectionId: str
       : catalog.stale ? 'providerConfiguration.catalogStale' : 'providerConfiguration.catalogObserved', {
       time: new Date(catalog.fetchedAt).toLocaleString(), source: catalog.source ?? 'unknown' })}</p>
       : <p className="text-ds-muted">{t('providerConfiguration.catalogUnknown')}</p>}
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ds-muted">
+      {(['credential', 'connectivity', 'catalog', 'protocol', 'inference'] as const).map((stage) => <span key={stage}>
+        {t(`providerConfiguration.evidence${stage}`)}: {t(`providerConfiguration.evidence${catalog?.evidence?.[stage]?.status ?? 'unknown'}`)}
+      </span>)}
+    </div>
     <button className={settingsButtonClass()} disabled={busy} onClick={() => void (async () => {
       setBusy(true); setError('')
       try {
@@ -38,6 +44,18 @@ export function ProviderCatalogObservation({ connectionId }: { connectionId: str
       } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); setCatalog(await fetchCatalog().catch(() => null)) }
       finally { setBusy(false) }
     })()}>{t('providerConfiguration.refreshCatalog')}</button>
+    <p className="text-[12px] text-ds-muted">{t('providerConfiguration.inferenceTestHint')}</p>
+    <button className={settingsButtonClass()} disabled={busy || !catalog?.selectedModels?.length} onClick={() => void (async () => {
+      setBusy(true); setError('')
+      try {
+        const response = await window.kunGui.runtimeRequest('/v1/model-requests', 'POST', JSON.stringify({ purpose: 'provider-test',
+          providerId: connectionId, model: catalog!.selectedModels![0], messages: [{ role: 'user', content: 'Reply with OK.' }], maxOutputTokens: 8, timeoutMs: 30000 }))
+        const result = JSON.parse(response.body)
+        if (!response.ok || result.ok !== true) throw new Error(result.message ?? t('providerConfiguration.catalogFailed'))
+        setCatalog(await fetchCatalog())
+      } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
+      finally { setBusy(false) }
+    })()}>{t('providerConfiguration.inferenceTest')}</button>
     <input aria-label={t('providerConfiguration.searchModels')} placeholder={t('providerConfiguration.searchModels')} className={textInputClass}
       value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} />
     <div className="max-h-48 overflow-auto text-[12px]">

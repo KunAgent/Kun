@@ -1,3 +1,4 @@
+import { ProviderModelEvidenceSummary } from './provider-model-evidence-summary'
 import { settingsButtonClass } from './settings-button'
 import {
   type ModelProviderProfileV1
@@ -357,6 +358,7 @@ export function ProviderModelsManager({
                           <ModelBadge tone="faint">{t('providerModelDefaultProfileBadge')}</ModelBadge>
                         ) : null}
                       </span>
+                      {kind === 'chat' && profile ? <ProviderModelEvidenceSummary profile={profile} /> : null}
                     </span>
                     <span className="flex shrink-0 items-center gap-1 pt-0.5">
                       <button

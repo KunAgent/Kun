@@ -1,3 +1,5 @@
+import { routeCapabilityGuarantees } from '../../adapters/model/route-capability-contract.js'
+import { publicGatewayTarget } from '../../domain/model-gateway-export-policy.js'
 import { randomUUID } from 'node:crypto'
 import { ResponsesToolNamespaces } from './responses-tool-namespaces.js'
 import type { TurnItem } from '../../contracts/items.js'
@@ -250,9 +252,8 @@ export async function resolveGatewayModel(
     return allowedTargets.length ? { model, gatewayRouting: { allowedTargets, ...dispatchProof } } : null
   }
   if (!runtime.modelGateway?.exposeProviderModels()) return null
-  const slash = model.indexOf('/')
-  if (slash <= 0 || slash === model.length - 1) return null
-  const requested = { providerId: model.slice(0, slash), modelId: model.slice(slash + 1) }
+  const requested = publicGatewayTarget(snapshot.providers, model)
+  if (!requested) return null
   if (!gatewayTargetExportable(snapshot.providers, requested)) return null
   const allowedTargets = clientDirectTargets(policy, requested, gatewayDirectTargets(snapshot, requested))
   return allowedTargets.length
@@ -261,14 +262,20 @@ export async function resolveGatewayModel(
 }
 
 /** Discovery applies the same export policy as request admission and failover. */
-export async function listGatewayModels(runtime: ServerRuntime, grant?: HarnessTokenGrant, policy?: GatewayClientPolicy, policyRevision?: number): Promise<{
-  id: string; object: 'model'; created: number; owned_by: string
-}[]> {
+export async function listGatewayModels(runtime: ServerRuntime, grant?: HarnessTokenGrant, policy?: GatewayClientPolicy, policyRevision?: number) {
   const snapshot = await runtime.modelConnections?.snapshot()
   if (!snapshot) return []
   await runtime.modelConnections?.assertActiveConfiguration?.(snapshot.revision)
   if (policyRevision !== undefined && snapshot.revision !== policyRevision) throw new GatewayRouteChangedError()
-  return gatewayModelsFromSnapshot(runtime, snapshot, grant, policy)
+  return gatewayModelsFromSnapshot(runtime, snapshot, grant, policy).map((entry) => {
+    const pool = runtime.modelGateway?.pools().find((candidate) => candidate.modelId === entry.id)
+    if (!pool) return entry
+    const allowed = clientRouteTargets(policy, pool, gatewayPoolTargets(snapshot.providers, pool))
+      .filter((target) => !grant || grant.aliasRoutes?.some((alias) => alias.alias === entry.id &&
+        alias.targets.some((approved) => approved.providerId === target.providerId && approved.modelId === target.modelId)))
+    return { ...entry, x_kun: { capabilityMode: pool.capabilityMode ?? 'request-filter',
+      guarantees: routeCapabilityGuarantees(allowed.map((target) => runtime.modelGateway?.modelCapabilities?.(target.modelId, target.providerId))) } }
+  })
 }
 
 function gatewayModelsFromSnapshot(runtime: ServerRuntime, snapshot: ModelConnectionSnapshot, grant?: HarnessTokenGrant, policy?: GatewayClientPolicy): {
@@ -299,6 +306,7 @@ function gatewayModelsFromSnapshot(runtime: ServerRuntime, snapshot: ModelConnec
         const id = `${provider.id}/${modelId}`
         const target = { providerId: provider.id, modelId }
         if (id.startsWith(GATEWAY_MODEL_PREFIX) || seen.has(id) ||
+            publicGatewayTarget(snapshot.providers, id)?.providerId !== provider.id ||
             !clientDirectTargets(policy, target, gatewayDirectTargets(snapshot, target)).length) continue
         seen.add(id)
         data.push({ id, object: 'model', created: 0, owned_by: provider.id })

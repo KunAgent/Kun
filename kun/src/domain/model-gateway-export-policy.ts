@@ -2,6 +2,17 @@ import type { ModelConnectionProfile, ModelConnectionSnapshot } from '../contrac
 import type { ModelRoutePoolConfig } from '../contracts/model-route-pool.js'
 
 export type GatewayRouteTarget = { providerId: string; modelId: string }
+
+/** Legacy connection/model IDs may both contain slashes. Match declared pairs, never guess a split. */
+export function publicGatewayTarget(providers: readonly ModelConnectionProfile[], address: string): GatewayRouteTarget | undefined {
+  const matches = providers.flatMap((provider) => {
+    const prefix = `${provider.id}/`
+    const modelId = address.startsWith(prefix) ? address.slice(prefix.length) : ''
+    return modelId && (provider.selectedModel === modelId || provider.models.includes(modelId))
+      ? [{ providerId: provider.id, modelId }] : []
+  })
+  return matches.length === 1 ? matches[0] : undefined
+}
 export class GatewayRouteChangedError extends Error {
   constructor() {
     super('Gateway provider configuration changed; retry with the current model configuration.')

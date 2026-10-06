@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
+import { CLIENT_VERSIONS, officialVersion, scenarioArgs, configureExtraClients, fixtureTool,
+  succeededOutput } from './lib/gateway-client-smoke-profiles.mjs'
 
 // Official clients, real gateway handlers, deterministic in-process upstream.
 // Never loads a user's profile, account credential, provider, or repository.
@@ -16,20 +18,21 @@ import { build } from 'esbuild'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const marker = 'KUN_GATEWAY_OFFLINE_OK'
 const fixtureToken = 'kun_local_offline_fixture_only'
-export const EXPECTED_CLIENT_VERSIONS = Object.freeze({ codex: '0.160.0', claude: '2.1.220' })
+export const EXPECTED_CLIENT_VERSIONS = CLIENT_VERSIONS
 
 export function parseOptions(argv) {
   const options = { client: 'all', timeout: 45_000 }
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]?.replace(/^--/, '')
     const value = argv[index + 1]
-    if (!['client', 'codex', 'claude', 'timeout', 'allow-version-mismatch'].includes(key) || !value) {
-      throw new Error('Expected --client, --codex, --claude, --timeout or --allow-version-mismatch with a value')
+    if (!['client', 'codex', 'claude', 'opencode', 'pi', 'scenario', 'resources', 'timeout', 'allow-version-mismatch'].includes(key) || !value) {
+      throw new Error('Expected a client binary, --client, --scenario, --resources, --timeout or --allow-version-mismatch with a value')
     }
     if (key === 'allow-version-mismatch') assert(['true', 'false'].includes(value), 'Version mismatch override must be true or false')
     options[key] = key === 'timeout' ? Number(value) : key === 'allow-version-mismatch' ? value === 'true' : value
   }
-  assert(['all', 'codex', 'claude'].includes(options.client), 'Unknown client')
+  assert(['all', 'codex', 'claude', 'opencode', 'pi'].includes(options.client), 'Unknown client')
+  assert(['all', 'text', 'tools', 'cancel'].includes(options.scenario ?? 'all'), 'Unknown scenario')
   assert(Number.isFinite(options.timeout) && options.timeout >= 1000, 'Invalid timeout')
   return options
 }
@@ -97,27 +100,35 @@ async function findBinary(client, options) {
   const explicit = options[client]
   const candidates = explicit ? [resolve(explicit)] : client === 'codex'
     ? ['/opt/codex/bin/codex', ...String(process.env.PATH ?? '').split(process.platform === 'win32' ? ';' : ':').filter(Boolean).map((path) => join(path, process.platform === 'win32' ? 'codex.exe' : 'codex'))]
-    : [join(root, 'kun/node_modules/@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, process.platform === 'win32' ? 'claude.exe' : 'claude')]
+    : client === 'claude' ? [join(root, 'kun/node_modules/@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, process.platform === 'win32' ? 'claude.exe' : 'claude')]
+    : String(process.env.PATH ?? '').split(process.platform === 'win32' ? ';' : ':').filter(Boolean).map((path) => join(path, client))
   for (const candidate of candidates) {
     try { await access(candidate); return candidate } catch { /* Try the next installed executable. */ }
   }
   throw new Error(`${client} is not installed; provide --${client} /absolute/binary (this smoke never installs clients)`)
 }
 
-async function capture(binary, args, env, cwd, timeout) {
+async function capture(binary, args, env, cwd, timeout, cancelWhen) {
   return new Promise((resolveCapture, reject) => {
-    const child = spawn(binary, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
-    let stdout = '', stderr = '', timedOut = false
+    const child = spawn(binary, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+      detached: process.platform !== 'win32' })
+    const kill = (signal) => {
+      try { if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, signal); else child.kill(signal) } catch { /* Fixture already exited. */ }
+    }
+    let stdout = '', stderr = '', timedOut = false, cancelled = false
     const append = (previous, chunk) => (previous + chunk.toString()).slice(-256_000)
     child.stdout.on('data', (chunk) => { stdout = append(stdout, chunk) })
     child.stderr.on('data', (chunk) => { stderr = append(stderr, chunk) })
-    const timer = setTimeout(() => { timedOut = true; child.kill('SIGTERM') }, timeout)
+    const timer = setTimeout(() => { timedOut = true; kill('SIGTERM') }, timeout)
     let killTimer
-    child.on('spawn', () => { killTimer = setTimeout(() => child.kill('SIGKILL'), timeout + 2_000) })
-    child.once('error', (error) => { clearTimeout(timer); clearTimeout(killTimer); reject(error) })
+    const cancelTimer = cancelWhen ? setInterval(() => {
+      if (!cancelled && cancelWhen()) { cancelled = true; kill('SIGINT') }
+    }, 50) : undefined
+    child.on('spawn', () => { killTimer = setTimeout(() => kill('SIGKILL'), timeout + 2_000) })
+    child.once('error', (error) => { clearTimeout(timer); clearTimeout(killTimer); clearInterval(cancelTimer); reject(error) })
     child.once('close', (code, signal) => {
-      clearTimeout(timer); clearTimeout(killTimer)
-      resolveCapture({ code, signal, timedOut, stdout, stderr })
+      clearTimeout(timer); clearTimeout(killTimer); clearInterval(cancelTimer)
+      resolveCapture({ code, signal, timedOut, cancelled, stdout, stderr })
     })
   })
 }
@@ -135,39 +146,70 @@ async function closeServer(server) {
   await new Promise((resolveClose) => server.close(resolveClose))
 }
 
-async function loadGateway(temp) {
+async function loadGateway(temp, resources) {
   // Bundle current TypeScript sources so this cannot accidentally test stale dist.
   const imports = [
     ['Router', 'server/router.ts'],
     ['startNodeHttpServer', 'server/node-http-server.ts'],
     ['gatewayChatCompletions, gatewayResponses, gatewayModels', 'server/routes/openai-model-gateway.ts'],
-    ['gatewayMessages, gatewayCountTokens', 'server/routes/anthropic-messages-gateway.ts']
-  ].map(([names, path]) => `export { ${names} } from ${JSON.stringify(join(root, 'kun/src', path))}`).join('\n')
+    ['gatewayMessages, gatewayCountTokens', 'server/routes/anthropic-messages-gateway.ts'],
+    ['codexConfig, opencodeConfig, piModelsConfig', 'harness/gateway-config-templates.ts'],
+    ['RoutePoolModelClient', 'adapters/model/route-pool-model-client.ts']
+  ].map(([names, path]) => `export { ${names} } from ${JSON.stringify(resources
+    ? join(resolve(resources), 'app.asar.unpacked/kun/dist', path.replace(/\.ts$/, '.js')) : join(root, 'kun/src', path))}`).join('\n')
   const output = join(temp, 'gateway-bundle.mjs')
   await build({ stdin: { contents: imports, resolveDir: root, loader: 'ts' }, bundle: true,
     platform: 'node', target: 'node22', format: 'esm', outfile: output, logLevel: 'silent' })
   return import(pathToFileURL(output).href)
 }
 
-function fakeRuntime(calls) {
+function fakeRuntime(calls, client, workspace, scenario, gateway) {
   const pool = { id: 'offline', modelId: 'local-model', name: 'Offline fixture', enabled: true,
-    targets: [{ id: 'offline-target', providerId: 'offline', modelId: 'offline', enabled: true }] }
-  return {
+    strategy: 'priority', failurePolicy: { failoverHttpStatusCodes: [429, 503], failoverOnNetworkError: true,
+      failoverOnTimeout: true, failoverOnAuthError: false },
+    healthPolicy: { failureThreshold: 3, cooldownMs: 1000, halfOpenMaxAttempts: 1 },
+    targets: [{ id: 'offline-target', providerId: 'offline', modelId: 'offline', enabled: true, weight: 1 }] }
+  const caps = () => ({ id: 'offline', inputModalities: ['text', 'image'], outputModalities: ['text'],
+    messageParts: ['text'], supportsToolCalling: true, parallelTools: true, structuredOutput: true,
+    reasoning: { supportedEfforts: ['off', 'auto', 'low', 'medium', 'high', 'max', 'xhigh'] },
+    contextWindowTokens: 1048576, maxOutputTokens: 128000 })
+  const runtime = {
     runtimeToken: 'offline_control_only', insecure: false,
     modelGateway: {
       enabled: () => true, exposeProviderModels: () => false,
-      pools: () => [pool], configuredPools: () => [pool],
+      pools: () => [pool, { ...pool, id: 'small', modelId: 'local-small' }], configuredPools: () => [pool, { ...pool, id: 'small', modelId: 'local-small' }],
       credentials: { verify: (value) => value === fixtureToken },
-      modelCapabilities: () => ({ inputModalities: ['text', 'image'] })
+      modelCapabilities: caps
     },
-    modelConnections: { snapshot: async () => ({ providers: [{ id: 'offline', kind: 'http',
-      authType: 'api-key', configured: true, credentialStatus: 'ready', models: ['offline'] }], failover: [] }) },
+    modelConnections: { snapshot: async () => ({ providers: ['offline', 'offline-next'].map((id) => ({ id, kind: 'http',
+      authType: 'api-key', configured: true, credentialStatus: 'ready', models: ['offline'] })), failover: [] }) },
     modelClient: {
       provider: 'offline', model: 'offline',
       async *stream(request) {
-        calls.push({ model: request.model, providerId: request.providerId,
+        const call = { model: request.model, providerId: request.providerId,
           threadId: request.threadId, turnId: request.turnId, toolCount: request.tools.length,
-          historyKinds: request.history.map((item) => item.kind) })
+          historyKinds: request.history.map((item) => item.kind), aborted: false,
+          toolResults: request.history.filter((item) => item.kind === 'tool_result').map((item) => ({
+            name: item.toolName, isError: item.isError,
+            fixtureRead: JSON.stringify(item.output).includes('Offline fixture read successfully'),
+            ...(!JSON.stringify(item.output).includes('Offline fixture read successfully')
+              ? { fixtureError: JSON.stringify(item.output).slice(0, 1000) } : {}) })) }
+        calls.push(call)
+        if (scenario === 'cancel') {
+          await new Promise((accept) => {
+            const abort = () => { call.aborted = true; accept() }
+            request.abortSignal.addEventListener('abort', abort, { once: true })
+            if (request.abortSignal.aborted) abort()
+          })
+          return
+        }
+        if (scenario === 'tools' && request.tools.length && !request.history.some((item) => item.kind === 'tool_result')) {
+          const tool = fixtureTool(request, workspace)
+          call.fixtureTool = tool.name
+          yield { kind: 'tool_call_complete', callId: 'offline-read-fixture', toolName: tool.name, arguments: tool.args }
+          yield { kind: 'completed', stopReason: 'tool_calls' }
+          return
+        }
         yield { kind: 'assistant_text_delta', text: marker }
         yield { kind: 'usage', usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15,
           cachedTokens: 0, cacheHitTokens: 0, cacheMissTokens: 10, cacheHitRate: 0, turns: 1 } }
@@ -175,12 +217,21 @@ function fakeRuntime(calls) {
       }
     }
   }
+  const routed = new gateway.RoutePoolModelClient(runtime.modelClient,
+    [pool, { ...pool, id: 'small', modelId: 'local-small' }], caps)
+  runtime.modelClient = routed
+  runtime.modelGateway.pools = () => routed.routePools()
+  runtime.modelGateway.configuredPools = () => routed.configuredPools()
+  runtime.replaceFixtureTarget = () => routed.replacePools([
+    { ...pool, targets: [{ ...pool.targets[0], providerId: 'offline-next' }] },
+    { ...pool, id: 'small', modelId: 'local-small', targets: [{ ...pool.targets[0], providerId: 'offline-next' }] }
+  ])
+  return runtime
 }
 
 export function clientVersionEvidence(client, version, allowMismatch = false) {
   const expectedVersion = EXPECTED_CLIENT_VERSIONS[client]
-  const match = client === 'codex' ? /^codex-cli (\d+\.\d+\.\d+)$/.exec(version) : /^(\d+\.\d+\.\d+) \(Claude Code\)$/.exec(version)
-  const versionMatched = match?.[1] === expectedVersion
+  const versionMatched = officialVersion(client, version) === expectedVersion
   return { expectedVersion, versionMatched, allowedVersionMismatch: allowMismatch && !versionMatched }
 }
 
@@ -208,15 +259,15 @@ function requestSummary(body) {
     inputTypes: [...new Set((Array.isArray(body.input) ? body.input : []).map((item) => item.type ?? item.role))] }
 }
 
-async function runClient(client, options, temp, gateway, denyProxy, blocked) {
+async function runClient(client, options, temp, gateway, denyProxy, blocked, scenario, role = 'main') {
   const binary = await findBinary(client, options)
-  const home = join(temp, client)
+  const home = join(temp, `${client}-${scenario}-${role}`)
   const workspace = join(home, 'workspace')
   for (const path of ['config', 'cache', 'data', 'codex', 'claude', 'tmp', 'runtime', 'workspace']) {
     await mkdir(join(home, path), { recursive: true, mode: 0o700 })
   }
   const calls = [], requests = []
-  const runtime = fakeRuntime(calls)
+  const runtime = fakeRuntime(calls, client, workspace, scenario, gateway)
   const router = new gateway.Router()
   for (const [method, path, handler] of [
     ['GET', '/v1/models', gateway.gatewayModels],
@@ -238,30 +289,42 @@ async function runClient(client, options, temp, gateway, denyProxy, blocked) {
   const server = await gateway.startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
   const endpoint = `http://127.0.0.1:${server.port}`
   const env = isolatedClientEnv(home, endpoint, denyProxy)
-  const config = [
-    'model_provider = "kun"', 'model = "local-model"', 'check_for_update_on_startup = false',
-    '[model_providers.kun]', 'name = "Offline Kun fixture"',
-    `base_url = ${JSON.stringify(`${endpoint}/v1`)}`, 'env_key = "KUN_GATEWAY_SMOKE_TOKEN"',
-    'wire_api = "responses"', 'request_max_retries = 0', 'stream_max_retries = 0', ''
-  ].join('\n')
+  await configureExtraClients(client, home, endpoint, env, gateway)
+  await writeFile(join(workspace, 'fixture.txt'), 'Offline fixture read successfully.\n', { mode: 0o600 })
+  const config = gateway.codexConfig(`${endpoint}/v1`, 'local-model', 'KUN_GATEWAY_SMOKE_TOKEN')
   await writeFile(join(home, 'codex', 'config.toml'), config, { mode: 0o600 })
   const beforeBlocked = blocked.length
   try {
-    const version = await capture(binary, ['--version'], env, workspace, 10_000)
-    const versionEvidence = clientVersionEvidence(client, version.stdout.trim(), options['allow-version-mismatch'] === true)
+    const version = await capture(binary, ['--version'], env, workspace, Math.min(options.timeout, 30_000))
+    const versionText = version.stdout.trim() || version.stderr.trim()
+    const versionEvidence = clientVersionEvidence(client, versionText, options['allow-version-mismatch'] === true)
     if (version.code !== 0 || version.timedOut || (!versionEvidence.versionMatched && !versionEvidence.allowedVersionMismatch)) {
-      return { client, version: version.stdout.trim(), ...versionEvidence, passed: false,
+      return { client, scenario, role, version: versionText, ...versionEvidence, passed: false,
         error: `Expected official ${client} ${versionEvidence.expectedVersion}; refusing an unpinned compatibility result`,
-        exitCode: version.code, timedOut: version.timedOut, requests, upstreamCalls: calls, blockedExternalAttempts: blocked.slice(beforeBlocked) }
+        exitCode: version.code, timedOut: version.timedOut, versionOutput: version, requests, upstreamCalls: calls, blockedExternalAttempts: blocked.slice(beforeBlocked) }
     }
-    const result = await capture(binary, clientArgs(client, workspace), env, workspace, options.timeout)
-    const parsed = result.stdout.trim().split('\n').flatMap((line) => { try { return [JSON.parse(line)] } catch { return [] } })
-    const success = client === 'codex'
-      ? parsed.some((item) => item.type === 'item.completed' && item.item?.type === 'agent_message' && item.item.text === marker) && parsed.some((item) => item.type === 'turn.completed')
-      : parsed.some((item) => item.type === 'result' && !item.is_error && item.result === marker)
+    const result = await capture(binary, scenarioArgs(client, workspace, scenario, role), env, workspace, options.timeout,
+      scenario === 'cancel' ? () => calls.length > 0 : undefined)
+    if (scenario === 'cancel') {
+      const deadline = Date.now() + 2000
+      while (calls.some((call) => !call.aborted) && Date.now() < deadline) await new Promise((accept) => setTimeout(accept, 20))
+    }
+    let routeChange
+    if (scenario === 'text' && succeededOutput(client, result.stdout)) {
+      runtime.replaceFixtureTarget()
+      const repeated = await capture(binary, scenarioArgs(client, workspace, scenario, role), env, workspace, options.timeout)
+      routeChange = { sameConfiguration: true, previous: 'offline', next: 'offline-next',
+        passed: repeated.code === 0 && succeededOutput(client, repeated.stdout) &&
+          calls.some((call) => call.providerId === 'offline') && calls.some((call) => call.providerId === 'offline-next') }
+    }
+    const success = scenario === 'cancel' ? result.cancelled && calls.some((call) => call.aborted)
+      : succeededOutput(client, result.stdout) && (scenario !== 'tools' || calls.some((call) =>
+        call.toolResults.some((item) => !item.isError && item.fixtureRead))) && (scenario !== 'text' || routeChange?.passed)
     return {
-      client, version: version.stdout.trim(), ...versionEvidence, passed: result.code === 0 && !result.timedOut && success && calls.length > 0,
+      client, scenario, role, version: versionText, ...versionEvidence,
+      passed: (scenario === 'cancel' || result.code === 0) && !result.timedOut && success && calls.length > 0,
       exitCode: result.code, timedOut: result.timedOut, requests, upstreamCalls: calls,
+      ...(routeChange ? { routeChange } : {}),
       blockedExternalAttempts: blocked.slice(beforeBlocked),
       ...(!success || result.code !== 0 ? { stdout: result.stdout.slice(-8000), stderr: result.stderr.slice(-8000) } : {})
     }
@@ -279,15 +342,21 @@ export async function main(argv = process.argv.slice(2)) {
     response.writeHead(502).end('Offline gateway test: external traffic disabled')
   })
   proxy.on('connect', (request, socket) => {
+    socket.on('error', () => undefined)
     blocked.push({ method: 'CONNECT', target: request.url })
     socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n')
   })
   try {
     const denyProxy = await listen(proxy)
-    const gateway = await loadGateway(temp)
+    const gateway = await loadGateway(temp, options.resources)
     const results = []
-    for (const client of options.client === 'all' ? ['codex', 'claude'] : [options.client]) {
-      results.push(await runClient(client, options, temp, gateway, denyProxy, blocked))
+    for (const client of options.client === 'all' ? Object.keys(CLIENT_VERSIONS) : [options.client]) {
+      for (const scenario of (options.scenario ?? 'all') === 'all' ? ['text', 'tools', 'cancel'] : [options.scenario]) {
+        results.push(await runClient(client, options, temp, gateway, denyProxy, blocked, scenario))
+      }
+      if (client === 'claude' && (options.scenario ?? 'all') === 'all') {
+        results.push(await runClient(client, options, temp, gateway, denyProxy, blocked, 'text', 'small'))
+      }
     }
     console.log(JSON.stringify({ ...sourceEvidence(), expectedClientVersions: EXPECTED_CLIENT_VERSIONS, passed: results.every((item) => item.passed), results }, null, 2))
     return results.every((item) => item.passed) ? 0 : 1

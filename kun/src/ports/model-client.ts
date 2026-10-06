@@ -77,6 +77,8 @@ export type ModelRequest = {
   /** Host-only paper transport fence: single physical attempt and exact provider generation. */
   paperReadOnly?: { assertCurrent: () => void; takeAttempt: () => boolean }
   requestId?: string
+  /** Absolute deadline retained through queueing, retries and target changes. */
+  deadlineAt?: number
   parallelToolCalls?: boolean
   onWireDispatch?: () => void
   attemptObserver?: import('./model-attempt.js').ModelAttemptObserver
@@ -193,7 +195,7 @@ export type ModelRequest = {
    */
   maxRetryAttempts?: number
   /** Runtime-owned physical request budget, independent of gateway permissions. */
-  routingBudget?: { takeAttempt(): boolean }
+  routingBudget?: { requestId?: string; deadlineAt?: number; takeAttempt(): boolean }
   /** Runtime configuration fence checked after credential resolution, before HTTP dispatch. */
   beforeProviderDispatch?: () => void | Promise<void>
   /** Internal text completion mode, admitted only by an explicitly compatible provider. */

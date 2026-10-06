@@ -25,6 +25,11 @@ export const KUN_PROVIDER_CONFIG_PREVIEW_TEMPLATE = '/v1/provider-config/transac
 export const KUN_PROVIDER_CONFIG_COMMIT_TEMPLATE = '/v1/provider-config/transactions/commit'
 export const KUN_PROVIDER_CONFIG_EXPORT_TEMPLATE = '/v1/provider-config/export'
 export const KUN_PROVIDER_CONFIG_IMPORT_TEMPLATE = '/v1/provider-config/import/preview'
+export const KUN_PROVIDER_IMPORT_COMMIT_TEMPLATE = '/v1/provider-config/import/commit'
+export const KUN_PROVIDER_BACKUP_TEMPLATE = '/v1/provider-config/backup'
+export const KUN_PROVIDER_BACKUP_PREVIEW_TEMPLATE = '/v1/provider-config/backup/preview'
+export const KUN_PROVIDER_RECOVERY_PREVIEW_TEMPLATE = '/v1/provider-config/recovery/preview'
+export const KUN_PROVIDER_RECOVERY_EXPORT_TEMPLATE = '/v1/provider-config/recovery/export'
 export const KUN_PROVIDER_ROUTE_PREVIEW_TEMPLATE = '/v1/provider-config/routes/preview'
 export const KUN_MODEL_CONNECTIONS_TEMPLATE = '/v1/model-connections'
 export const KUN_MODEL_CONNECTION_EVENTS_TEMPLATE = '/v1/model-connections/events'
@@ -55,6 +60,7 @@ export const KUN_GATEWAY_CREDENTIAL_ROTATE_TEMPLATE = '/v1/model-gateway/credent
 export const KUN_GATEWAY_CREDENTIAL_REVOKE_TEMPLATE = '/v1/model-gateway/credential'
 export const KUN_GATEWAY_CREDENTIAL_REVEAL_TEMPLATE = '/v1/model-gateway/credential/reveal'
 export const KUN_MODEL_ROUTE_TEST_TEMPLATE = '/v1/model-routes/{id}/test'
+export const KUN_MODEL_ROUTE_RETRY_TEMPLATE = '/v1/model-routes/{id}/retry'
 export function kunModelRouteTestPath(poolId: string): string {
   return `/v1/model-routes/${encodeURIComponent(poolId)}/test`
 }

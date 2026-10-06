@@ -1,3 +1,4 @@
+import { prepareExplicitProviderRemoval } from './provider-removal-test-helpers.js'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -184,7 +185,8 @@ describe('ModelConnectionRegistry', () => {
       })
       await fenceAtInstall
 
-      const deleted = await value.delete('deepseek', connected.revision)
+      const deletionReady = await prepareExplicitProviderRemoval(value, 'deepseek', connected.revision)
+      const deleted = await value.delete('deepseek', deletionReady.revision)
       const readded = await value.connect({
         expectedRevision: deleted.revision,
         id: 'deepseek',

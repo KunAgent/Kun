@@ -23,7 +23,7 @@ export async function runProbe(
   subscriptionRuntime: Partial<SubscriptionQuotaRuntime>
 ): Promise<{ metrics: ProviderQuotaMetric[]; summary?: string; source?: string }> {
   if (isSubscriptionQuotaProbe(kind)) {
-    return runSubscriptionQuotaProbe(kind, provider, context, subscriptionRuntime)
+    return runSubscriptionQuotaProbe(kind, provider, { fetcher: context.fetcher, proxyUrl: context.proxyUrl }, subscriptionRuntime)
   }
   if (kind === 'deepseek') {
     return { metrics: parseDeepSeekQuota(await requestJson(
@@ -110,6 +110,7 @@ export async function requestJson(url: string, context: ProbeContext): Promise<u
   try {
     response = await context.fetcher(url, {
       method: 'GET',
+      redirect: 'error',
       headers: {
         Accept: 'application/json',
         Authorization: `Bearer ${context.apiKey}`

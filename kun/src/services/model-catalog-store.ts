@@ -1,9 +1,11 @@
+import { ProviderVerificationEvidenceSchema, type ProviderVerificationEvidence } from '../contracts/provider-verification-evidence.js'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { AtomicJsonFile } from '../extensions/atomic-json.js'
 
 /** Derived, account-bound metadata. Selection remains in the connection Registry. */
 export type ModelCatalogEntry = {
+  evidence?: ProviderVerificationEvidence
   fetchedAt: string
   baseUrl?: string
   endpointFormat?: string
@@ -34,6 +36,7 @@ function parseEntry(value: unknown): ModelCatalogEntry {
       row.models.some((id) => typeof id !== 'string' || !id.trim() || id.length > 512)) {
     throw new Error('Invalid model catalog')
   }
+  if (row.evidence) ProviderVerificationEvidenceSchema.parse(row.evidence)
   return row
 }
 

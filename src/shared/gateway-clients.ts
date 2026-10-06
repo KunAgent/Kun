@@ -19,6 +19,7 @@ export type GatewayClientUsage = {
   totalRequests: number
   totalTokens: number
   budget?: { measured: number; reserved: number; limit?: number; endsAt: number }
+  costEstimate?: { usd: number; limitUsd: number; unknownAttempts: number; exceeded: boolean }
   requests: Array<{
     timestamp: string
     requestedModelId?: string

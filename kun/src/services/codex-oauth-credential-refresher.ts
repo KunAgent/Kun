@@ -169,6 +169,7 @@ export async function refreshStoredCodexOAuthCredentials(
   try {
     response = await fetchImpl(CODEX_OAUTH_TOKEN_ENDPOINT, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'refresh_token',

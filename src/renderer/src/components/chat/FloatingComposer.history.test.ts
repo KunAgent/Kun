@@ -226,14 +226,27 @@ describe('FloatingComposer input history and footer hints', () => {
     const previousLanguage = i18n.language
     await i18n.changeLanguage('en')
     try {
-      const offline = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
+      const blocked = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
         input: 'draft prompt',
-        runtimeReady: false
+        runtimeReady: true,
+        disabled: true,
+        disabledReason: 'Approval required before submitting'
       })))
-      expect(offline).toContain('ds-composer-footer-hint')
+      expect(blocked).toContain('ds-composer-footer-hint')
+      expect(blocked).toContain('Approval required before submitting')
     } finally {
       await i18n.changeLanguage(previousLanguage)
     }
+  })
+
+  it('retains a draft without showing the ready toolbar or footer while Runtime starts', () => {
+    const html = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
+      input: 'draft prompt', runtimeReady: false
+    })))
+    expect(html).toContain('draft prompt')
+    expect(html).not.toContain('ds-composer-footer-hint')
+    expect(html).toContain('data-composer-waiting-for-kun="true"')
+    expect(html).not.toContain('aria-label="Send"')
   })
 
   it('hard-disables editing and submission for external destructive operations', () => {

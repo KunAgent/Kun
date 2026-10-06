@@ -1,4 +1,5 @@
 import type { ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
+import { randomUUID } from 'node:crypto'
 
 export const GATEWAY_MAX_ROUTE_ATTEMPTS = 4
 export const GATEWAY_REQUEST_TIMEOUT_MS = 120_000
@@ -13,6 +14,8 @@ export async function* withGatewayRoutingBudget(
   stream: (request: ModelRequest) => AsyncIterable<ModelStreamChunk>
 ): AsyncIterable<ModelStreamChunk> {
   const controller = new AbortController()
+  const requestId = request.requestId ?? randomUUID()
+  const deadlineAt = Math.min(request.deadlineAt ?? Infinity, Date.now() + GATEWAY_REQUEST_TIMEOUT_MS)
   let timedOut = false
   const abort = () => controller.abort(request.abortSignal.reason)
   request.abortSignal.addEventListener('abort', abort, { once: true })
@@ -20,15 +23,16 @@ export async function* withGatewayRoutingBudget(
   const timer = setTimeout(() => {
     timedOut = true
     controller.abort(new Error('gateway routing deadline exceeded'))
-  }, GATEWAY_REQUEST_TIMEOUT_MS)
+  }, Math.max(0, deadlineAt - Date.now()))
   timer.unref?.()
   let iterator: AsyncIterator<ModelStreamChunk> | undefined
   let remainingAttempts = GATEWAY_MAX_ROUTE_ATTEMPTS
   try {
+    if (deadlineAt <= Date.now()) { timedOut = true; controller.abort(new Error('gateway routing deadline exceeded')) }
     controller.signal.throwIfAborted()
     const takeAttempt = () => remainingAttempts-- > 0
-    iterator = stream({ ...request, abortSignal: controller.signal, maxRetryAttempts: 0,
-      routingBudget: { takeAttempt },
+    iterator = stream({ ...request, requestId, deadlineAt, abortSignal: controller.signal, maxRetryAttempts: 0,
+      routingBudget: { requestId, deadlineAt, takeAttempt },
       ...(request.gatewayRouting ? { gatewayRouting: { ...request.gatewayRouting, takeAttempt } } : {})
     })[Symbol.asyncIterator]()
     while (true) {

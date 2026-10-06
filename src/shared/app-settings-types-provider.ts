@@ -1,3 +1,4 @@
+import type { ModelMetadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
 import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
@@ -380,6 +381,10 @@ export type ModelProviderModelProfileV1 = {
   inputModalities: ModelProviderInputModality[]
   outputModalities: ModelProviderInputModality[]
   supportsToolCalling: boolean
+  parallelTools?: boolean
+  streaming?: boolean
+  structuredOutput?: boolean
+  evidence?: ModelMetadataEvidence
   messageParts: ModelProviderMessagePartSupport[]
   reasoning?: ModelProviderReasoningCapabilityV1
   /** Reference catalog pricing (USD per million tokens) for cost estimates. */
@@ -561,6 +566,7 @@ export type ModelRouteHealthPolicyV1 = {
 }
 
 export type ModelRoutePoolV1 = {
+  capabilityMode?: 'guaranteed' | 'request-filter'
   affinity?: { mode: 'off' | 'turn' | 'session'; ttlMs: number }
   id: string
   name: string

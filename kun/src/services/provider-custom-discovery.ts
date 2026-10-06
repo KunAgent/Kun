@@ -1,3 +1,4 @@
+import { ProviderDiscoveryResponseError } from './provider-discovery-error.js'
 import type { ProviderDiscovery } from '../contracts/provider-configuration.js'
 import { readLimitedResponseText } from '../adapters/model/compat-model-support.js'
 
@@ -33,25 +34,25 @@ export async function discoverCustomModels(input: {
     const url = new URL(endpoint)
     if (cursor && discovery.cursorParameter) url.searchParams.set(discovery.cursorParameter, cursor)
     const response = await input.fetcher(url, { method: 'GET', headers: input.headers, signal, redirect: 'error' })
-    if (!response.ok) throw new Error(`Model discovery failed with HTTP ${response.status}`)
+    if (!response.ok) throw new ProviderDiscoveryResponseError(`Model discovery failed with HTTP ${response.status}`, response.status)
     const body = await readLimitedResponseText(response, remainingBytes)
-    if (body.exceeded) throw new Error('Model discovery response exceeds its size limit')
+    if (body.exceeded) throw new ProviderDiscoveryResponseError('Model discovery response exceeds its size limit')
     remainingBytes -= new TextEncoder().encode(body.text).byteLength
     const value: unknown = JSON.parse(body.text)
     const rows = atPointer(value, discovery.itemsPointer)
-    if (!Array.isArray(rows)) throw new Error('The configured model-list pointer is not an array')
+    if (!Array.isArray(rows)) throw new ProviderDiscoveryResponseError('The configured model-list pointer is not an array')
     for (const row of rows) {
       const id = atPointer(row, discovery.idPointer)
-      if (typeof id !== 'string' || !id.trim() || id.length > 512) throw new Error('Model discovery returned an invalid model identifier')
+      if (typeof id !== 'string' || !id.trim() || id.length > 512) throw new ProviderDiscoveryResponseError('Model discovery returned an invalid model identifier')
       models.add(id.trim())
-      if (models.size > 2_000) throw new Error('Model discovery exceeded its model limit')
+      if (models.size > 2_000) throw new ProviderDiscoveryResponseError('Model discovery exceeded its model limit')
     }
     const next = discovery.nextCursorPointer ? atPointer(value, discovery.nextCursorPointer) : undefined
     if (next === undefined || next === null || next === '') return [...models]
     if (typeof next !== 'string' || next.length > 2_048 || !discovery.cursorParameter || cursors.has(next)) {
-      throw new Error('Model discovery returned an invalid or repeated pagination cursor')
+      throw new ProviderDiscoveryResponseError('Model discovery returned an invalid or repeated pagination cursor')
     }
     cursors.add(next); cursor = next
   }
-  throw new Error('Model discovery exceeded its pagination limit')
+  throw new ProviderDiscoveryResponseError('Model discovery exceeded its pagination limit')
 }

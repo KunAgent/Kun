@@ -1,3 +1,4 @@
+import { ModelMetadataEvidenceSchema } from './model-metadata-evidence.js'
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { KUN_MANAGED_GITHUB_MCP_MARKER } from './builtin-mcp.js'
@@ -76,6 +77,8 @@ export const ModelCapabilityMetadata = z
     inputModalities: z.array(ModelInputModality).min(1),
     outputModalities: z.array(ModelInputModality).min(1),
     supportsToolCalling: z.boolean(),
+    parallelTools: z.boolean().optional(), streaming: z.boolean().optional(), structuredOutput: z.boolean().optional(),
+    evidence: ModelMetadataEvidenceSchema,
     contextWindowTokens: z.number().int().positive().optional(),
     // Maximum tokens the model may emit per response. When set it caps the
     // request's output budget (max_tokens / max_output_tokens). Absent means

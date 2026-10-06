@@ -7,7 +7,7 @@ import { ERRORS } from './runtime-error.js'
 import { jsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import { ModelConnectionConflictError } from '../../services/model-connection-registry.js'
-import { exportProviderConfiguration, prepareProviderImport } from '../../services/provider-configuration-exchange.js'
+import { exportProviderConfiguration } from '../../services/provider-configuration-exchange.js'
 
 export function registerProviderConfigurationRoutes(router: Router, runtime: ServerRuntime): void {
   router.add('GET', '/v1/provider-config', async (request) => {
@@ -27,22 +27,25 @@ export function registerProviderConfigurationRoutes(router: Router, runtime: Ser
       !search || `${connection.name} ${connection.id}`.toLowerCase().includes(search))
     return jsonResponse({ ...snapshot, supportedSchemaVersions: [2], compatibilitySnapshotVersion: 1, connections: connections.slice(offset, offset + limit), totalConnections: connections.length })
   })
-  for (const action of ['transactions/preview', 'transactions/commit', 'export', 'import/preview', 'routes/preview'] as const) {
+  for (const action of ['transactions/preview', 'transactions/commit', 'export', 'import/preview', 'routes/preview', 'import/commit', 'backup', 'backup/preview', 'recovery/preview', 'recovery/export'] as const) {
     router.add('POST', `/v1/provider-config/${action}`, async (request) => {
       if (!strictRuntimeTokenAuthorized(request, runtime.runtimeToken)) return ERRORS.unauthorized()
       const registry = runtime.modelConnections
       if (!registry) return ERRORS.validation('Provider configuration is unavailable')
-      const body = await readJsonBody(request, 8 * 1024 * 1024)
+      const body = await readJsonBody(request, (action === 'backup/preview' ? 12 : 8) * 1024 * 1024)
       if (!body.ok) return body.response
       try {
         if (action === 'routes/preview') return jsonResponse(await previewProviderRoute(runtime, body.value))
+        if (action === 'import/commit') return jsonResponse(await registry.commitProviderImport(body.value))
+        if (action === 'backup/preview') return jsonResponse(await registry.previewProviderBackup(body.value))
+        if (action === 'backup') { const input = z.object({ password: z.string().min(12).max(1_024) }).strict().parse(body.value); return jsonResponse(await registry.exportProviderBackup(input.password)) }
+        if (action === 'recovery/preview') return jsonResponse(await registry.previewProviderRecovery())
+        if (action === 'recovery/export') { const input = z.object({ expectedRevision: z.number().int().nonnegative() }).strict().parse(body.value); return jsonResponse(await registry.exportProviderRecovery(input.expectedRevision)) }
         if (action === 'transactions/preview') return jsonResponse(await registry.previewConfiguration(body.value))
         if (action === 'transactions/commit') return jsonResponse(await registry.commitConfiguration(body.value))
         const snapshot = await registry.configurationSnapshot()
-        if (action === 'export') return jsonResponse(exportProviderConfiguration(snapshot))
-        const imported = prepareProviderImport(body.value, snapshot)
-        return jsonResponse({ ...await registry.previewConfiguration({ expectedRevision: imported.expectedRevision,
-          operations: imported.operations }), remaps: imported.remaps, secretSlots: imported.secretSlots })
+        if (action === 'export') { const selection = z.object({ connectionIds: z.array(z.string()).max(500).optional(), routeIds: z.array(z.string()).max(100).optional() }).strict().parse(body.value); return jsonResponse(exportProviderConfiguration(snapshot, selection)) }
+        return jsonResponse(await registry.previewProviderImport(body.value))
       } catch (error) {
         if (error instanceof ModelConnectionConflictError) return jsonResponse({ message: error.message,
           revision: error.snapshot.revision }, 409)
