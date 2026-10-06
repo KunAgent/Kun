@@ -462,6 +462,8 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_APPROVALS_PATH, ['GET']),
   // Read-only middleware counters; contain no secrets.
   compileEndpoint('/v1/model-gateway/middleware', ['GET']),
+  // Exportable extension providers with account labels; no credentials.
+  compileEndpoint('/v1/model-gateway/extension-exports', ['GET']),
   compileEndpoint(KUN_THREADS_TEMPLATE, ['GET', 'POST']),
   compileEndpoint(KUN_THREAD_STATES_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_STATE_TEMPLATE, ['GET']),

@@ -195,6 +195,14 @@ export class ExtensionModelProviderRegistry {
       ]))
   }
 
+  /** Providers whose extension declared `gatewayExport`, with their declared models. */
+  gatewayExportable(): { providerId: string; extensionId: string; displayName: string; models: { id: string; displayName?: string }[] }[] {
+    return [...this.registrations.values()].filter((registration) => !registration.disposed && registration.declaration.gatewayExport === true)
+      .map((registration) => ({ providerId: registration.providerId, extensionId: registration.principal.extensionId,
+        displayName: registration.declaration.displayName,
+        models: registration.declaration.models.map((model) => ({ id: model.id, displayName: model.displayName })) }))
+  }
+
   isAvailable(providerId: string): boolean {
     const registration = this.registrations.get(providerId)
     return Boolean(registration && !registration.disposed)

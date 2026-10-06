@@ -279,7 +279,9 @@ export const modelProviderPatchSchema = z.object({
     enabled: z.boolean().optional(),
     name: z.string().trim().min(1).max(80).optional(),
     exposeProviderModels: z.boolean().optional(),
-    middleware: z.array(GatewayMiddlewareSchema).max(32).optional()
+    middleware: z.array(GatewayMiddlewareSchema).max(32).optional(),
+    extensionExports: z.array(z.object({ providerId: z.string().trim().min(1).max(160), accountId: z.string().trim().min(1).max(160) }).strict()).max(50).optional(),
+    experimentalSubscriptionExports: z.array(z.string().trim().min(1).max(128)).max(10).optional()
   }).strict().optional()
 }).strict()
 

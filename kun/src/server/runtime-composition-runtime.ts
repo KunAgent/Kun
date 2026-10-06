@@ -335,6 +335,8 @@ export function createServerRuntimeComposition(
           budget: gatewayBudget,
 	      usage: gatewayUsage,
 	      modelCapabilities: core.modelCapabilities,
+	      extensionExports: () => config.activeOptions.localModelGateway?.extensionExports ?? [],
+	      experimentalSubscriptionExports: () => config.activeOptions.localModelGateway?.experimentalSubscriptionExports ?? [],
 	      middleware: new GatewayMiddlewareHost(join(config.activeOptions.dataDir, 'gateway-middleware'),
 	        () => config.activeOptions.localModelGateway?.middleware ?? [])
 	    },

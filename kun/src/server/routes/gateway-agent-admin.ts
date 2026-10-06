@@ -74,3 +74,21 @@ export function gatewayAdminMiddleware(runtime: ServerRuntime): JsonResponse {
   if (!host) return privateResponse({ middleware: [] })
   return privateResponse({ middleware: host.stats() })
 }
+
+/** Extension providers that declared gateway export, with their accounts and the current selection. */
+export async function gatewayAdminExtensionExports(runtime: ServerRuntime): Promise<JsonResponse> {
+  const platform = runtime.extensionPlatform
+  const selected = runtime.modelGateway?.extensionExports?.() ?? []
+  if (!platform) return privateResponse({ providers: [] })
+  try {
+    const providers = await Promise.all(platform.modelProviders.gatewayExportable().map(async (provider) => ({
+      ...provider,
+      accounts: (await platform.providerAccounts.listProviderAccounts(provider.providerId))
+        .map((account) => ({ id: account.id, label: account.label, status: account.status })),
+      selectedAccountId: selected.find((entry) => entry.providerId === provider.providerId)?.accountId
+    })))
+    return privateResponse({ providers })
+  } catch {
+    return privateResponse({ code: 'capability_unavailable', message: 'Extension providers are unavailable.' }, 503)
+  }
+}

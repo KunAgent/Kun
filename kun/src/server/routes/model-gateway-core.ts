@@ -3,6 +3,8 @@ import { publicGatewayTarget } from '../../domain/model-gateway-export-policy.js
 import { randomUUID } from 'node:crypto'
 import { ResponsesToolNamespaces } from './responses-tool-namespaces.js'
 import { describeGatewayModel } from './gateway-models-catalog.js'
+import { gatewaySnapshot } from './gateway-subscription-export.js'
+import { extensionGatewayModels, resolveExtensionGatewayModel } from './gateway-extension-exports.js'
 import type { TurnItem } from '../../contracts/items.js'
 import type { ModelConnectionSnapshot } from '../../contracts/model-connections.js'
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-pool.js'
@@ -202,6 +204,8 @@ export function parseArguments(value: unknown): Record<string, unknown> { try { 
 export type ResolvedGatewayModel = {
   model: string
   providerId?: string
+  /** Account an exported extension provider's requests use. */
+  accountId?: string
   gatewayRouting: NonNullable<ModelRequest['gatewayRouting']>
 }
 
@@ -220,7 +224,7 @@ export async function resolveGatewayModel(
   model = runtime.modelGateway?.middleware?.rewriteModel(model) ?? model
   const registry = runtime.modelConnections
   const assertCurrent = runtime.directModelClient?.gatewayDispatchGuard?.()
-  const snapshot = await registry?.snapshot()
+  const snapshot = registry ? await gatewaySnapshot(runtime) : undefined
   if (!snapshot) return null
   await registry?.assertActiveConfiguration?.(snapshot.revision)
   if (policyRevision !== undefined && snapshot.revision !== policyRevision) throw new GatewayRouteChangedError()
@@ -261,7 +265,7 @@ export async function resolveGatewayModel(
   }
   if (!runtime.modelGateway?.exposeProviderModels()) return null
   const requested = publicGatewayTarget(snapshot.providers, model)
-  if (!requested) return null
+  if (!requested) return resolveExtensionGatewayModel(runtime, model, policy)
   if (!gatewayTargetExportable(snapshot.providers, requested)) return null
   const allowedTargets = clientDirectTargets(policy, requested, gatewayDirectTargets(snapshot, requested))
   return allowedTargets.length
@@ -271,7 +275,7 @@ export async function resolveGatewayModel(
 
 /** Discovery applies the same export policy as request admission and failover. */
 export async function listGatewayModels(runtime: ServerRuntime, grant?: HarnessTokenGrant, policy?: GatewayClientPolicy, policyRevision?: number) {
-  const snapshot = await runtime.modelConnections?.snapshot()
+  const snapshot = await gatewaySnapshot(runtime)
   if (!snapshot) return []
   await runtime.modelConnections?.assertActiveConfiguration?.(snapshot.revision)
   if (policyRevision !== undefined && snapshot.revision !== policyRevision) throw new GatewayRouteChangedError()
@@ -328,13 +332,14 @@ function gatewayModelsFromSnapshot(runtime: ServerRuntime, snapshot: ModelConnec
         data.push({ id, object: 'model', created: 0, owned_by: provider.id })
       }
     }
+    data.push(...extensionGatewayModels(runtime, policy, seen))
   }
   return data
 }
 
 /** Runtime-admin status distinguishes configured native routes from exported API aliases. */
 export async function gatewayExportStatus(runtime: ServerRuntime) {
-  const snapshot = await runtime.modelConnections?.snapshot()
+  const snapshot = await gatewaySnapshot(runtime)
   const exportableModelIds = snapshot ? gatewayModelsFromSnapshot(runtime, snapshot).map((entry) => entry.id) : []
   const gatewayExportPools = (runtime.modelGateway?.configuredPools() ?? []).map((pool) => {
     const targets = pool.targets.map((target) => {

@@ -624,6 +624,10 @@ export type LocalModelGatewaySettingsV1 = {
   exposeProviderModels: boolean
   /** Ordered request/reply transforms for external gateway traffic. */
   middleware?: import('../../kun/src/contracts/gateway-middleware.js').GatewayMiddlewareConfig[]
+  /** Extension providers exported to the gateway, each with the account its requests use. */
+  extensionExports?: { providerId: string; accountId: string }[]
+  /** Experimental: ChatGPT subscription connections shared through the gateway (off unless listed). */
+  experimentalSubscriptionExports?: string[]
 }
 
 export type ModelProviderSettingsV1 = {

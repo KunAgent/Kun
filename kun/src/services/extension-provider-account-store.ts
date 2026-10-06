@@ -201,6 +201,14 @@ export class ExtensionProviderAccountStore {
       .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id))
   }
 
+  /** Admin view (no credential references) used to pick the account a gateway export uses. */
+  async listProviderAccounts(providerId: string): Promise<ExtensionAccountProjection[]> {
+    return Object.values((await this.accounts.read(emptyAccounts)).accounts)
+      .filter((account) => account.providerId === providerId)
+      .map(projectExtensionAccount)
+      .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id))
+  }
+
   async updateAccount(accountId: string, patch: Partial<Pick<
     ExtensionAccountRecord,
     'label' | 'status' | 'metadata' | 'expiresAt' | 'credentialRef'

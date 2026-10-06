@@ -15,7 +15,8 @@ export function gatewayCallerId(auth: GatewayAuth): string {
  * the session's live route trace follows the stream.
  */
 export function gatewayUpstream(runtime: ServerRuntime, request: Request, auth: GatewayAuth,
-  modelRequest: ModelRequest, asked: string): AsyncIterable<ModelStreamChunk> {
+  modelRequest: ModelRequest, asked: string, accountId?: string): AsyncIterable<ModelStreamChunk> {
+  if (accountId) modelRequest.accountId = accountId
   const owner = runtime.modelGateway ?? runtime
   const callerId = gatewayCallerId(auth)
   const continuations = gatewayContinuationStore(owner)

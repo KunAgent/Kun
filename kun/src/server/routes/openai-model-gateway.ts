@@ -192,7 +192,7 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
     : undefined
   const stream = input.stream === true
   try {
-    const chunks = wrapGatewayUsage(harnessGatewayStream(gatewayUpstream(runtime, request, verdict.auth, modelRequest, model), grant), recorder, {
+    const chunks = wrapGatewayUsage(harnessGatewayStream(gatewayUpstream(runtime, request, verdict.auth, modelRequest, model, resolved.accountId), grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
     return stream

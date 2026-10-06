@@ -1,0 +1,15 @@
+{
+  "gatewayExtensions": {
+    "title": "확장 공급자",
+    "description": "허용을 선언한 확장은 외부 에이전트에 모델을 제공할 수 있습니다. 각 공급자의 게이트웨이 요청에 쓸 계정을 고르기 전에는 공개되지 않습니다.",
+    "needsExposure": "위의 \"공급자 모델 노출\"을 켜야 표시됩니다.",
+    "models": "모델 {{count}}개",
+    "accountFor": "{{provider}} 계정",
+    "notExported": "공개 안 함",
+    "noAccounts": "먼저 확장에서 이 공급자에 로그인하세요.",
+    "boundaries": "클라이언트 키는 각 모델 권한이 따로 필요하며 확장 설치나 업데이트로 부여되지 않습니다.",
+    "subscriptionTitle": "실험적: ChatGPT 구독 공유",
+    "subscriptionRisk": "구독은 개인 권한이지 API가 아닙니다. 다른 에이전트에서 사용하면 약관 위반이나 계정 위험이 생길 수 있습니다. 여기서 켜기 전에는 꺼져 있으며 클라이언트 키도 별도 권한이 필요합니다.",
+    "subscriptionToggle": "{{provider}}을(를) 게이트웨이로 공유"
+  }
+}

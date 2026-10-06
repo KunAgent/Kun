@@ -1,0 +1,15 @@
+{
+  "gatewayExtensions": {
+    "title": "扩展供应商",
+    "description": "声明允许导出的扩展可以把模型提供给外部 agent。请为每个供应商选择网关请求使用的账号；未选择前不会导出。",
+    "needsExposure": "请先开启上方的“对外暴露供应商模型”，导出的扩展模型才会出现。",
+    "models": "{{count}} 个模型",
+    "accountFor": "{{provider}} 使用的账号",
+    "notExported": "不导出",
+    "noAccounts": "请先在该扩展中登录此供应商。",
+    "boundaries": "网关客户端密钥仍需单独获得每个导出模型的权限；安装或更新扩展不会自动授予。",
+    "subscriptionTitle": "实验性：共享 ChatGPT 订阅",
+    "subscriptionRisk": "订阅是个人权益而非 API。让其他 agent 使用它可能违反厂商条款并带来账号风险。默认关闭，只有在此开启才会导出，且客户端密钥仍需单独获得其模型权限。",
+    "subscriptionToggle": "通过网关共享 {{provider}}"
+  }
+}

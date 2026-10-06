@@ -384,6 +384,10 @@ export type ServerRuntime = {
      * Optional for test scaffolds.
      */
     modelCapabilities?(model: string, providerId?: string): ModelCapabilityMetadata
+    /** User-selected extension provider exports (provider + account). */
+    extensionExports?(): { providerId: string; accountId: string }[]
+    /** Experimental opt-in subscription connections exported through the gateway. */
+    experimentalSubscriptionExports?(): string[]
     /** Request/reply transforms for external gateway traffic. Optional for test scaffolds. */
     middleware?: import('./gateway-middleware.js').GatewayMiddlewareHost
   }

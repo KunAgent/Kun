@@ -1,5 +1,5 @@
 import { normalizeRouteEffort } from './app-settings-route-rules'
-import { normalizeGatewayMiddleware, projectExecutableModelRoutePools, routePoolExtras } from './app-settings-route-projection'
+import { normalizeExtensionExports, normalizeGatewayMiddleware, projectExecutableModelRoutePools, routePoolExtras } from './app-settings-route-projection'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
@@ -207,7 +207,12 @@ export function normalizeModelProviderSettings(
         ? input.localGateway.name.trim().slice(0, 80)
         : defaults.localGateway.name,
       exposeProviderModels: input?.localGateway?.exposeProviderModels === true,
-      ...normalizeGatewayMiddleware(input?.localGateway?.middleware)
+      ...normalizeGatewayMiddleware(input?.localGateway?.middleware),
+      ...normalizeExtensionExports(input?.localGateway?.extensionExports),
+      ...(Array.isArray(input?.localGateway?.experimentalSubscriptionExports) && input.localGateway.experimentalSubscriptionExports.length
+        ? { experimentalSubscriptionExports: [...new Set(input.localGateway.experimentalSubscriptionExports
+          .filter((id): id is string => typeof id === 'string' && id.trim().length > 0 && id.length <= 128).map((id) => id.trim()))].slice(0, 10) }
+        : {})
     }
   }
 }

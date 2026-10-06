@@ -144,7 +144,7 @@ export async function geminiGenerate(runtime: ServerRuntime, request: Request, c
     modelRequest.deadlineAt = lease.deadlineAt ?? Date.now() + 120_000
     modelRequest.attemptObserver = gatewayAttemptAccounting(runtime, auth, recorder, modelRequest.turnId)
     const attribute = grant ? (usage?: UsageSnapshot) => recordHarnessGatewayUsage(runtime, grant, resolved!, usage, turnId) : undefined
-    const chunks = wrapGatewayUsage(harnessGatewayStream(gatewayUpstream(runtime, request, auth, modelRequest, parsed.model), grant), recorder, {
+    const chunks = wrapGatewayUsage(harnessGatewayStream(gatewayUpstream(runtime, request, auth, modelRequest, parsed.model, resolved.accountId), grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
     release = false

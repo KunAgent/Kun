@@ -11,6 +11,7 @@ import { settingsButtonClass } from './settings-button'
 import { GatewayClientCredentials } from './gateway-client-credentials'
 import { GatewayAgentsPanel } from './gateway-agents-panel'
 import { GatewayMiddlewarePanel } from './gateway-middleware-panel'
+import { GatewayExtensionExportsPanel, GatewaySubscriptionExportPanel } from './gateway-extension-exports-panel'
 import { GatewayClientSelect } from './gateway-client-select'
 import type { RoutePoolTestRecord, RouteStatus } from './settings-section-model-routes'
 
@@ -63,6 +64,8 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
   return <div className="mt-4 grid min-w-0 gap-4">
   <GatewayAgentsPanel active={active} translation={t} />
   {onChange ? <GatewayMiddlewarePanel settings={settings} onChange={onChange} active={active} t={t} /> : null}
+  {onChange ? <GatewayExtensionExportsPanel settings={settings} onChange={onChange} active={active} t={t} /> : null}
+  {onChange ? <GatewaySubscriptionExportPanel settings={settings} onChange={onChange} t={t} /> : null}
   <section className="grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-connection-center>
     <div>
       <h3 className="text-[14px] font-semibold text-ds-ink">{t('gatewayConnection.title')}</h3>

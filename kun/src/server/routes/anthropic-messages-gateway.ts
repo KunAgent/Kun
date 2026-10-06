@@ -190,7 +190,7 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
     : undefined
   const stream = input.stream === true
   try {
-    const upstream = gatewayUpstream(runtime, request, gate.auth, modelRequest, model)
+    const upstream = gatewayUpstream(runtime, request, gate.auth, modelRequest, model, resolved.accountId)
     const chunks = wrapGatewayUsage(harnessGatewayStream(upstream, grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })

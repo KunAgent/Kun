@@ -79,3 +79,18 @@ export function normalizeGatewayMiddleware(input: unknown): { middleware?: Gatew
   })
   return middleware.length ? { middleware } : {}
 }
+
+/** One account per exported extension provider; ids stay opaque. */
+export function normalizeExtensionExports(input: unknown): { extensionExports?: { providerId: string; accountId: string }[] } {
+  if (!Array.isArray(input)) return {}
+  const seen = new Set<string>()
+  const exports = input.slice(0, 50).flatMap((entry) => {
+    const raw = (entry ?? {}) as { providerId?: unknown; accountId?: unknown }
+    const providerId = typeof raw.providerId === 'string' ? raw.providerId.trim() : ''
+    const accountId = typeof raw.accountId === 'string' ? raw.accountId.trim() : ''
+    if (!providerId || !accountId || providerId.length > 160 || accountId.length > 160 || seen.has(providerId)) return []
+    seen.add(providerId)
+    return [{ providerId, accountId }]
+  })
+  return exports.length ? { extensionExports: exports } : {}
+}
