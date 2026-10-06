@@ -649,5 +649,10 @@
   "mcpFormNamePlaceholder": "내 도구",
   "kunResetDefaultModel": "긴급 기본 모델 복구",
   "kunResetDefaultModelDesc": "기본 모델 비호환으로 로컬 에이전트를 쓸 수 없을 때, 다른 설정은 유지한 채 {{model}}(으)로 되돌립니다.",
-  "kunResetDefaultModelAction": "{{model}}(으)로 복구"
+  "kunResetDefaultModelAction": "{{model}}(으)로 복구",
+  "providerModelWireIdLabel": "업스트림 모델 이름",
+  "providerModelWireIdHint": "공급자가 같은 id를 쓰면 비워 두세요. *는 모델 id를 뜻합니다(예: vendor/*). 업스트림 요청만 바뀌고 라우팅·사용량·가격은 이 id를 유지합니다.",
+  "providerModelDefaultsAdd": "모든 모델 기본값 설정",
+  "providerModelDefaultsEdit": "모든 모델 기본값 편집",
+  "providerModelDefaultsHint": "개별 설정이 없는 모델이 사용할 컨텍스트, 출력 한도, 가격, 업스트림 이름입니다."
 }

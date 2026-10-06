@@ -109,8 +109,11 @@ function modelCapabilitiesForProviderConfig(
   provider: Pick<ModelProviderProfileV1, 'models' | 'modelProfiles'>
 ): Record<string, unknown> {
   return Object.fromEntries(provider.models.flatMap((model) => {
-    const profile = provider.modelProfiles[model] ??
-      provider.modelProfiles[model.trim().toLowerCase()]
+    // A provider-wide `*` profile is materialized for models without their own.
+    const own = provider.modelProfiles[model] ?? provider.modelProfiles[model.trim().toLowerCase()]
+    const wildcard = provider.modelProfiles['*']
+    // Field-level fallback: a model's own facts win, the `*` profile fills the rest.
+    const profile = own && wildcard ? { ...wildcard, ...own } : own ?? wildcard
     if (!profile) return []
     return [[model, {
       id: model,
@@ -136,7 +139,8 @@ function modelCapabilitiesForProviderConfig(
       ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
       ...(profile.serviceTiers ? { serviceTiers: [...profile.serviceTiers] } : {}),
       ...(profile.endpointFormat ? { endpointFormat: profile.endpointFormat } : {}),
-      ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {})
+      ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {}),
+      ...(profile.wireModelId ? { wireModelId: profile.wireModelId } : {})
     }]]
   }))
 }
@@ -384,7 +388,7 @@ function modelConfigProfilesFromProviderProfiles(
   const out: Record<string, unknown> = {}
   for (const [modelId, profile] of Object.entries(profiles)) {
     const trimmed = modelId.trim()
-    if (!trimmed) continue
+    if (!trimmed || trimmed === '*') continue
     out[trimmed] = {
       ...(profile.aliases?.length ? { aliases: profile.aliases } : {}),
       ...(profile.contextWindowTokens ? { contextWindowTokens: profile.contextWindowTokens } : {}),
@@ -401,7 +405,8 @@ function modelConfigProfilesFromProviderProfiles(
       ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
       ...(profile.serviceTiers ? { serviceTiers: profile.serviceTiers } : {}),
       ...(profile.endpointFormat ? { endpointFormat: profile.endpointFormat } : {}),
-      ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {})
+      ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {}),
+      ...(profile.wireModelId ? { wireModelId: profile.wireModelId } : {})
     }
   }
   return out

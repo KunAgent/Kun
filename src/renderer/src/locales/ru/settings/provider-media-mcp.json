@@ -649,5 +649,10 @@
   "mcpFormNamePlaceholder": "мой инструмент",
   "kunResetDefaultModel": "Аварийный сброс модели",
   "kunResetDefaultModelDesc": "Если локальный агент недоступен из‑за несовместимой модели по умолчанию, сбросьте её на {{model}} без удаления остальных настроек.",
-  "kunResetDefaultModelAction": "Сбросить на {{model}}"
+  "kunResetDefaultModelAction": "Сбросить на {{model}}",
+  "providerModelWireIdLabel": "Имя модели у поставщика",
+  "providerModelWireIdHint": "Оставьте пустым, если поставщик знает модель под тем же id. * означает id модели, например vendor/*. Меняется только запрос к поставщику; маршрутизация, учёт и цены используют этот id.",
+  "providerModelDefaultsAdd": "Задать значения по умолчанию для всех моделей",
+  "providerModelDefaultsEdit": "Изменить значения по умолчанию для всех моделей",
+  "providerModelDefaultsHint": "Окно, лимит вывода, цены и имя у поставщика для моделей без собственных настроек."
 }

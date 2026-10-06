@@ -398,6 +398,11 @@ export type ModelProviderModelProfileV1 = {
    * request shape; this is preset metadata rather than a user-facing toggle.
    */
   responsesMode?: 'lite'
+  /**
+   * Name the upstream is asked for when a relay serves this model under its
+   * own id; `*` stands for the model id. Only the outbound request changes.
+   */
+  wireModelId?: string
 }
 
 export type ModelProviderImageCapabilityV1 = {

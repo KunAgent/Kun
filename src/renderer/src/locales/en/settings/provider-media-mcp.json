@@ -649,5 +649,10 @@
   "mcpFormNamePlaceholder": "my-tool",
   "kunResetDefaultModel": "Emergency model reset",
   "kunResetDefaultModelDesc": "If the local agent cannot start or chat because the current default model is incompatible, reset it to {{model}} without deleting other settings.",
-  "kunResetDefaultModelAction": "Reset to {{model}}"
+  "kunResetDefaultModelAction": "Reset to {{model}}",
+  "providerModelWireIdLabel": "Upstream model name",
+  "providerModelWireIdHint": "Leave empty when the vendor knows the model by the same id. Use * for the model id, e.g. vendor/*. Only the request sent upstream changes; routing, usage and prices keep this id.",
+  "providerModelDefaultsAdd": "Set defaults for all models",
+  "providerModelDefaultsEdit": "Edit defaults for all models",
+  "providerModelDefaultsHint": "Window, output limit, prices and upstream name used by every model of this provider that does not set its own."
 }

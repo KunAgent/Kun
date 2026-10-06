@@ -426,6 +426,14 @@ export function ProviderModelsManager({
         <Plus className="h-3.5 w-3.5" strokeWidth={1.9} />
         {t('providerModelAdd')}
       </button>
+      <button
+        type="button"
+        title={t('providerModelDefaultsHint')}
+        onClick={(event) => openEditor(editorStateForExisting(provider, 'chat', '*'), event.currentTarget)}
+        className={settingsButtonClass({ variant: 'ghost', className: 'w-fit' })}
+      >
+        {t(provider.modelProfiles['*'] ? 'providerModelDefaultsEdit' : 'providerModelDefaultsAdd')}
+      </button>
       <ProviderModelEditorDialog view={{
         editor, closeEditor, dialogRef, dialogTitleId, handleDialogKeyDown, t, updateForm,
         selectControlClass, setEditor, parsedContextTokens, parsedMaxOutputTokens,

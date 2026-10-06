@@ -134,6 +134,7 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                   value={editor.form.modelId}
                   placeholder={t('providerModelIdPlaceholder')}
                   spellCheck={false}
+                  readOnly={editor.form.originalModelId === "*"}
                   onChange={(e) => updateForm({ modelId: e.target.value })}
                 />
                 <span className="text-[12px] font-normal leading-5 text-ds-faint">{t('providerModelIdHint')}</span>
@@ -366,6 +367,20 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                         </select>
                         <span className="text-[12px] font-normal leading-5 text-ds-faint">
                           {t('providerModelEndpointFormatHint')}
+                        </span>
+                      </label>
+
+                      <label className={fieldLabelClass}>
+                        {t('providerModelWireIdLabel')}
+                        <input
+                          className={selectControlClass}
+                          value={editor.form.wireModelId}
+                          placeholder={editor.form.modelId || 'vendor/*'}
+                          spellCheck={false}
+                          onChange={(e) => updateForm({ wireModelId: e.target.value })}
+                        />
+                        <span className="text-[12px] font-normal leading-5 text-ds-faint">
+                          {t('providerModelWireIdHint')}
                         </span>
                       </label>
 

@@ -649,5 +649,10 @@
   "mcpFormNamePlaceholder": "मेरा उपकरण",
   "kunResetDefaultModel": "आपातकालीन मॉडल रीसेट",
   "kunResetDefaultModelDesc": "अगर असंगत डिफ़ॉल्ट मॉडल से लोकल एजेंट काम न करे, तो अन्य सेटिंग हटाए बिना {{model}} पर रीसेट करें।",
-  "kunResetDefaultModelAction": "{{model}} पर रीसेट"
+  "kunResetDefaultModelAction": "{{model}} पर रीसेट",
+  "providerModelWireIdLabel": "अपस्ट्रीम मॉडल नाम",
+  "providerModelWireIdHint": "यदि विक्रेता उसी id से मॉडल जानता है तो खाली छोड़ें। * मॉडल id दर्शाता है, जैसे vendor/*। केवल अपस्ट्रीम अनुरोध बदलता है; रूटिंग, उपयोग और मूल्य यही id रखते हैं।",
+  "providerModelDefaultsAdd": "सभी मॉडल के डिफ़ॉल्ट सेट करें",
+  "providerModelDefaultsEdit": "सभी मॉडल के डिफ़ॉल्ट संपादित करें",
+  "providerModelDefaultsHint": "जिन मॉडल की अपनी सेटिंग नहीं है, वे यह विंडो, आउटपुट सीमा, मूल्य और अपस्ट्रीम नाम उपयोग करेंगे।"
 }

@@ -361,9 +361,11 @@ export class CompatModelClientBase {
     const isCodex = isCodexEndpoint(this.config.baseUrl)
     const isCodexLite = isCodex && this.capabilitiesForModel(model).responsesMode === 'lite'
     const codecs = createCompatRequestCodecs()
+    const wireModel = this.capabilitiesForModel(model).wireModelId
     return codecs.build({
       request,
       model,
+      ...(wireModel && wireModel !== model ? { wireModel } : {}),
       messages,
       tools,
       stream,

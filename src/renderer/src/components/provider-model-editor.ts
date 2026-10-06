@@ -27,6 +27,8 @@ import {
   isVideoGenerationModelId
 } from '@shared/app-settings-provider-core'
 
+import { PROVIDER_WIDE_MODEL_KEY } from '@shared/app-settings-provider-capabilities'
+
 export type ProviderModelKind = 'chat' | 'image' | 'speech' | 'tts' | 'music' | 'video'
 
 export const PROVIDER_MODEL_KINDS: ProviderModelKind[] = ['chat', 'image', 'speech', 'tts', 'music', 'video']
@@ -76,6 +78,8 @@ export type ProviderModelForm = {
   endpointFormat: ModelEndpointFormat | null
   /** Internal preset transport metadata; intentionally not exposed in the form UI. */
   responsesMode: 'lite' | null
+  /** Upstream model name when a relay serves this model under its own id; empty = same as modelId. */
+  wireModelId: string
   aliases: string[]
 }
 
@@ -143,6 +147,7 @@ export function newProviderModelForm(
     reasoningProtocol: defaultReasoningProtocolForProvider(provider),
     endpointFormat: null,
     responsesMode: null,
+    wireModelId: '',
     aliases: []
   }
 }
@@ -183,6 +188,7 @@ export function providerModelFormForExisting(
     reasoningProtocol: profile.reasoning?.requestProtocol ?? base.reasoningProtocol,
     endpointFormat: profile.endpointFormat ?? null,
     responsesMode: profile.responsesMode ?? null,
+    wireModelId: profile.wireModelId ?? '',
     aliases: [...(profile.aliases ?? [])]
   }
 }
@@ -374,6 +380,10 @@ export function applyProviderModelForm(
       video: { ...video, models: appendModelId(video.models, modelId) }
     }
   }
+  if (modelId === PROVIDER_WIDE_MODEL_KEY) {
+    // Provider-wide defaults live in the profiles only; `*` is never a selectable model.
+    return { ...provider, modelProfiles: { ...provider.modelProfiles, [PROVIDER_WIDE_MODEL_KEY]: chatProfileFromForm(provider, form) } }
+  }
   return {
     ...withoutOriginal,
     models: appendModelId(withoutOriginal.models, modelId),
@@ -550,7 +560,8 @@ function chatProfileFromForm(
     ...(typeof form.structuredOutput === 'boolean' ? { structuredOutput: form.structuredOutput } : {}),
     ...(previous?.serviceTiers?.length ? { serviceTiers: [...previous.serviceTiers] } : {}),
     ...(form.endpointFormat ? { endpointFormat: form.endpointFormat } : {}),
-    ...(form.responsesMode ? { responsesMode: form.responsesMode } : {})
+    ...(form.responsesMode ? { responsesMode: form.responsesMode } : {}),
+    ...(form.wireModelId.trim() && form.wireModelId.trim() !== form.modelId.trim() ? { wireModelId: form.wireModelId.trim() } : {})
   }
   const evidence = previous?.evidence ?? metadataEvidence({ ...previous }, 'user')
   const now = new Date().toISOString()

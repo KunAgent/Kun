@@ -97,6 +97,9 @@ export function presetModelProfilesForProvider(
   return profiles ?? null
 }
 
+/** Model-profile key for provider-wide defaults (window, output cap, prices, upstream naming). */
+export const PROVIDER_WIDE_MODEL_KEY = '*'
+
 export function normalizeModelProviderModelProfiles(
   input: Record<string, ModelProviderModelProfilePatchV1 | null> | undefined,
   models: readonly string[]
@@ -107,7 +110,8 @@ export function normalizeModelProviderModelProfiles(
   for (const [rawModelId, rawProfile] of Object.entries(input)) {
     const modelId = normalizeModelKey(rawModelId)
     if (!modelId || rawProfile === null) continue
-    if (knownModelKeys.size > 0 && !knownModelKeys.has(modelId)) {
+    // `*` holds provider-wide facts for models without a profile of their own.
+    if (knownModelKeys.size > 0 && !knownModelKeys.has(modelId) && modelId !== PROVIDER_WIDE_MODEL_KEY) {
       const aliases = normalizeProviderModels(rawProfile.aliases)
       if (!aliases.some((alias) => knownModelKeys.has(normalizeModelKey(alias)))) continue
     }
@@ -136,6 +140,8 @@ export function normalizeModelProviderModelProfile(
   const serviceTiers = normalizeModelServiceTiers(input?.serviceTiers)
   const endpointFormat = normalizeOptionalModelEndpointFormat(input?.endpointFormat)
   const responsesMode = input?.responsesMode === 'lite' ? 'lite' : undefined
+  const wireModelId = typeof input?.wireModelId === 'string' && input.wireModelId.trim()
+    ? input.wireModelId.trim().slice(0, 512) : undefined
   return {
     ...(normalizeProviderModels(input?.aliases).length
       ? { aliases: normalizeProviderModels(input?.aliases) }
@@ -154,7 +160,8 @@ export function normalizeModelProviderModelProfile(
     ...(pricing ? { pricing } : {}),
     ...(serviceTiers ? { serviceTiers } : {}),
     ...(endpointFormat ? { endpointFormat } : {}),
-    ...(responsesMode ? { responsesMode } : {})
+    ...(responsesMode ? { responsesMode } : {}),
+    ...(wireModelId ? { wireModelId } : {})
   }
 }
 

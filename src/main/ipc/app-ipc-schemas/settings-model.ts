@@ -177,7 +177,8 @@ const modelProfilePatchShape = {
   // An empty array is an explicit "no supported tier" declaration, not unknown.
   serviceTiers: z.array(modelServiceTierSchema).max(MODEL_SERVICE_TIERS.length).optional(),
   endpointFormat: modelEndpointFormatSchema.optional(),
-  responsesMode: z.literal('lite').optional()
+  responsesMode: z.literal('lite').optional(),
+  wireModelId: z.string().trim().min(1).max(512).optional()
 } satisfies Record<keyof ModelProviderModelProfilePatchV1, z.ZodTypeAny>
 const modelProfilePatchSchema = z.object(modelProfilePatchShape).strict()
 

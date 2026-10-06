@@ -100,7 +100,11 @@ export const ModelCapabilityMetadata = z
     endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).optional(),
     // Codex-only Responses Lite transport. Omitted uses the standard
     // Responses request shape.
-    responsesMode: z.literal('lite').optional()
+    responsesMode: z.literal('lite').optional(),
+    // Name the upstream is asked for, when a relay serves the model under an
+    // id of its own. `*` stands for Kun's model id. Catalog, routing, usage
+    // and pricing keep Kun's id; only the outbound model field changes.
+    wireModelId: z.string().min(1).max(512).optional()
   })
   .strict()
 export type ModelCapabilityMetadata = z.infer<typeof ModelCapabilityMetadata>

@@ -127,7 +127,8 @@ export const ModelContextProfileConfigSchema = z
     endpointFormat: z
       .preprocess(normalizeModelEndpointFormat, z.enum(MODEL_ENDPOINT_FORMATS))
       .optional(),
-    responsesMode: z.literal('lite').optional()
+    responsesMode: z.literal('lite').optional(),
+    wireModelId: z.string().min(1).max(512).optional()
   })
   .strict()
   .superRefine((profile, ctx) => {

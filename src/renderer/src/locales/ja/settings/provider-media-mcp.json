@@ -649,5 +649,10 @@
   "mcpFormNamePlaceholder": "私のツール",
   "kunResetDefaultModel": "緊急モデルリセット",
   "kunResetDefaultModelDesc": "既定モデルの非互換でローカルエージェントが使えない場合、他の設定を消さずに {{model}} へ戻します。",
-  "kunResetDefaultModelAction": "{{model}} に戻す"
+  "kunResetDefaultModelAction": "{{model}} に戻す",
+  "providerModelWireIdLabel": "上流のモデル名",
+  "providerModelWireIdHint": "ベンダーが同じ ID を使う場合は空欄にします。* はモデル ID を表します（例: vendor/*）。上流へのリクエストだけが変わり、ルーティング・使用量・価格はこの ID のままです。",
+  "providerModelDefaultsAdd": "全モデルの既定値を設定",
+  "providerModelDefaultsEdit": "全モデルの既定値を編集",
+  "providerModelDefaultsHint": "個別に設定していないモデルが使うコンテキスト、出力上限、価格、上流名です。"
 }

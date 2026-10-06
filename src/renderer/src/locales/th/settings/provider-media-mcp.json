@@ -649,5 +649,10 @@
   "mcpFormNamePlaceholder": "เครื่องมือของฉัน",
   "kunResetDefaultModel": "รีเซ็ตโมเดลฉุกเฉิน",
   "kunResetDefaultModelDesc": "หากเอเจนต์ภายในใช้งานไม่ได้เพราะโมเดลเริ่มต้นเข้ากันไม่ได้ ให้รีเซ็ตเป็น {{model}} โดยไม่ลบการตั้งค่าอื่น",
-  "kunResetDefaultModelAction": "รีเซ็ตเป็น {{model}}"
+  "kunResetDefaultModelAction": "รีเซ็ตเป็น {{model}}",
+  "providerModelWireIdLabel": "ชื่อโมเดลฝั่งต้นทาง",
+  "providerModelWireIdHint": "เว้นว่างไว้หากผู้ให้บริการใช้ id เดียวกัน ใช้ * แทน id ของโมเดล เช่น vendor/* จะเปลี่ยนเฉพาะคำขอที่ส่งไปต้นทาง ส่วนการกำหนดเส้นทาง การใช้งาน และราคายังใช้ id นี้",
+  "providerModelDefaultsAdd": "ตั้งค่าเริ่มต้นสำหรับทุกโมเดล",
+  "providerModelDefaultsEdit": "แก้ไขค่าเริ่มต้นสำหรับทุกโมเดล",
+  "providerModelDefaultsHint": "บริบท ขีดจำกัดเอาต์พุต ราคา และชื่อต้นทางที่ใช้กับโมเดลที่ไม่ได้ตั้งค่าเอง"
 }

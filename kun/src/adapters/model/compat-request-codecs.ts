@@ -45,6 +45,8 @@ type ReasoningCapability = ModelCapabilityMetadata['reasoning']
 export type CompatRequestCodecInput = {
   request: ModelRequest
   model: string
+  /** Name sent upstream in the body's model field; heuristics keep using `model`. */
+  wireModel?: string
   messages: CompatChatMessage[]
   tools: ModelToolSpec[]
   stream: boolean
@@ -125,7 +127,7 @@ export class CompatRequestCodecs {
 
   private chatCompletions(input: CompatRequestCodecInput): Record<string, unknown> {
     const body: Record<string, unknown> = {
-      model: input.model,
+      model: input.wireModel ?? input.model,
       stream: input.stream,
       messages: this.deps.splitOpenAiMessages(input.messages),
       ...((input.request.gatewayRouting || input.request.paperReadOnly) ? { store: false } : {})
@@ -216,7 +218,7 @@ export class CompatRequestCodecs {
     const requiredToolChoice = namedToolChoice(input)
     const useThreadPromptCacheKey = input.isCodex || isGpt56FamilyModel(input.model)
     const body: Record<string, unknown> = {
-      model: input.model,
+      model: input.wireModel ?? input.model,
       stream: input.stream,
       input: input.isCodexLite ? [...litePrefix, ...responseInput] : responseInput,
       ...((input.request.gatewayRouting || input.request.paperReadOnly) ? { store: false } : {}),
@@ -286,7 +288,7 @@ export class CompatRequestCodecs {
       : undefined
     const thinkingEnabled = resolvedEffort !== undefined && resolvedEffort !== 'off'
     const body: Record<string, unknown> = {
-      model: input.model,
+      model: input.wireModel ?? input.model,
       stream: input.stream,
       max_tokens: input.maxTokens ?? (
         thinkingEnabled ? DEFAULT_MESSAGES_REASONING_MAX_TOKENS : DEFAULT_MESSAGES_MAX_TOKENS

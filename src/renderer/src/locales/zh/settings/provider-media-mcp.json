@@ -649,5 +649,10 @@
   "mcpFormNamePlaceholder": "my-tool",
   "kunResetDefaultModel": "紧急恢复默认模型",
   "kunResetDefaultModelDesc": "当默认模型不兼容导致本地智能体无法启动或对话时，可一键恢复为 {{model}}，无需删除其他配置。",
-  "kunResetDefaultModelAction": "恢复为 {{model}}"
+  "kunResetDefaultModelAction": "恢复为 {{model}}",
+  "providerModelWireIdLabel": "上游模型名",
+  "providerModelWireIdHint": "若厂商使用相同的 id 则留空。可用 * 代表模型 id，例如 vendor/*。只影响发往上游的请求，路由、用量和价格仍使用本 id。",
+  "providerModelDefaultsAdd": "设置所有模型的默认值",
+  "providerModelDefaultsEdit": "编辑所有模型的默认值",
+  "providerModelDefaultsHint": "该供应商下未单独设置的模型，将使用这里的上下文窗口、输出上限、价格和上游模型名。"
 }

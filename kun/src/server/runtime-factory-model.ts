@@ -268,8 +268,12 @@ export function providerScopedModelCapabilities(
   ) => ReturnType<typeof modelCapabilitiesForModel>
 ): (model: string) => ReturnType<typeof modelCapabilitiesForModel> {
   return (model) => {
+    // A `*` profile states provider-wide facts (window, output cap, prices,
+    // upstream naming) for models without a profile of their own.
+    const wildcard = provider?.modelCapabilities?.['*']
     const explicit = provider?.modelCapabilities?.[model] ??
-      provider?.modelCapabilities?.[model.trim().toLowerCase()]
+      provider?.modelCapabilities?.[model.trim().toLowerCase()] ??
+      (wildcard ? { ...wildcard, id: model } : undefined)
     const providerFallback = modelCapabilitiesForProviderModel({
       providerId,
       presetSource: provider?.presetSource ?? providerId,
