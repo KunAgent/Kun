@@ -47,10 +47,18 @@ export function userAgentProduct(userAgent: string | null): string | undefined {
   return normalizedAgent(token)
 }
 
+/**
+ * Bearer, `x-api-key` (Anthropic) and `x-goog-api-key` (Gemini) carry the key;
+ * Gemini clients may also send `?key=` on `/v1beta` paths only.
+ */
 export function rawGatewayCredential(request: Request): string | null {
   const header = request.headers.get('authorization')
   const match = /^Bearer ([^\s]+)$/.exec(header ?? '')
-  const candidate = match?.[1] ?? request.headers.get('x-api-key')
+  let candidate = match?.[1] ?? request.headers.get('x-api-key') ?? request.headers.get('x-goog-api-key')
+  if (!candidate) {
+    const url = new URL(request.url)
+    if (url.pathname.startsWith('/v1beta/')) candidate = url.searchParams.get('key')
+  }
   return candidate && candidate.trim() ? candidate : null
 }
 

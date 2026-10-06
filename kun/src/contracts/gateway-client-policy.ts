@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const GatewayProtocolSchema = z.enum(['chat_completions', 'responses', 'messages'])
+export const GatewayProtocolSchema = z.enum(['chat_completions', 'responses', 'messages', 'gemini'])
 const ids = z.array(z.string().min(1).max(512)).max(2_000)
 export const GatewayClientPolicySchema = z.object({
   mode: z.enum(['scoped', 'legacy-unrestricted']).default('scoped'),
@@ -8,8 +8,8 @@ export const GatewayClientPolicySchema = z.object({
   allowedRouteIds: ids.default([]),
   allowedModelIds: ids.default([]),
   allowedConnectionIds: ids.default([]),
-  allowedProtocols: z.array(GatewayProtocolSchema).min(1).max(3)
-    .default(['chat_completions', 'responses', 'messages']),
+  allowedProtocols: z.array(GatewayProtocolSchema).min(1).max(4)
+    .default(['chat_completions', 'responses', 'messages', 'gemini']),
   expiresAt: z.string().datetime().optional(),
   maxConcurrent: z.number().int().min(1).max(128).default(2),
   requestsPerMinute: z.number().int().min(1).max(60_000).default(60),

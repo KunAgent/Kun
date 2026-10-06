@@ -55,7 +55,7 @@ export function GatewayClientPolicyEditor({ client }: { client: GatewayClientCre
             .flatMap((route) => route.targets.filter((target) => target.enabled).map((target) => target.providerId)))]
         })}>{t('providerConfiguration.approveRouteConnections')}</button>
         <div className="flex flex-wrap gap-3">
-          {(['chat_completions', 'responses', 'messages'] as const).map((protocol) => <label key={protocol} className="flex items-center gap-1">
+          {(['chat_completions', 'responses', 'messages', 'gemini'] as const).map((protocol) => <label key={protocol} className="flex items-center gap-1">
             <input type="checkbox" checked={policy.allowedProtocols.includes(protocol)} disabled={busy}
               onChange={(event) => edit({ allowedProtocols: event.target.checked ? [...policy.allowedProtocols, protocol]
                 : policy.allowedProtocols.filter((value) => value !== protocol) })} />{protocol}

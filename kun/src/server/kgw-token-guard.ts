@@ -5,7 +5,7 @@ import {
   type HarnessTokenService
 } from '../harness/harness-token-service.js'
 import { jsonResponse, type JsonResponse } from './response.js'
-import { splitAttributedKey } from './routes/gateway-caller-agent.js'
+import { rawGatewayCredential, splitAttributedKey } from './routes/gateway-caller-agent.js'
 
 /**
  * Path prefixes each harness-token scope may reach (docs/ade/05 §4). A grant
@@ -13,7 +13,7 @@ import { splitAttributedKey } from './routes/gateway-caller-agent.js'
  * else — including every other `/v1/*` route — is rejected before dispatch.
  */
 const SCOPE_PATH_PREFIXES: Record<HarnessTokenScope, readonly string[]> = {
-  gateway: ['/v1/messages', '/v1/chat/completions', '/v1/responses', '/v1/models', '/v1/kun/route'],
+  gateway: ['/v1/messages', '/v1/chat/completions', '/v1/responses', '/v1/models', '/v1/kun/route', '/v1beta/models'],
   'kun-tools': ['/mcp/kun'],
   'worker-callback': ['/v1/worker-callbacks/'],
   'hook-ingest': ['/v1/activity/hooks']
@@ -50,9 +50,9 @@ export function makeKgwTokenGuard(
 ): KgwRequestGuard | undefined {
   if (!tokens) return undefined
   return (request) => {
-    const bearer = /^Bearer ([^\s]+)$/.exec(request.headers.get('authorization') ?? '')?.[1]
-    // An attribution prefix (`kun-<app>.`) must not hide a harness token from this fence.
-    const candidate = splitAttributedKey(bearer ?? request.headers.get('x-api-key') ?? null).secret ?? undefined
+    // Every header a gateway route accepts, minus an attribution prefix, so no
+    // spelling can hide a harness token from this fence.
+    const candidate = splitAttributedKey(rawGatewayCredential(request)).secret ?? undefined
     if (!candidate?.startsWith(HARNESS_TOKEN_PREFIX)) return null
     const grant = tokens.verify(candidate)
     if (!grant) return unauthorized()

@@ -72,6 +72,7 @@ import { gatewayJsonResponse } from './gateway-json-response.js'
 import { strictRuntimeTokenAuthorized } from './gateway-request-guard.js'
 import { handleKunToolsMcp } from './kun-tools-mcp.js'
 import { gatewayHello, gatewayRouteTrace } from './gateway-discovery-routes.js'
+import { geminiGenerate, geminiModels } from './gemini-gateway.js'
 
 export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void {
   registerProviderConfigurationRoutes(router, runtime)
@@ -79,6 +80,8 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('GET', '/health', () => healthJsonResponse())
   router.add('GET', '/v1/models', (request) => gatewayModels(runtime, request))
   router.add('GET', '/api/hello', (request) => gatewayHello(runtime, request))
+  router.add('GET', '/v1beta/models', (request) => geminiModels(runtime, request))
+  router.add('POST', '/v1beta/models/*call', (request, ctx) => geminiGenerate(runtime, request, ctx.params.call))
   router.add('GET', '/v1/kun/route', (request) => gatewayRouteTrace(runtime, request))
   router.add('POST', '/v1/chat/completions', (request) => gatewayChatCompletions(runtime, request))
   router.add('POST', '/v1/responses', (request) => gatewayResponses(runtime, request))

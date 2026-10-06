@@ -58,8 +58,9 @@ export function clientDirectTargets(policy: GatewayClientPolicy | undefined,
     policy.allowedModelIds.includes(`${target.providerId}/${target.modelId}`))
 }
 
-export function gatewayRequestProtocol(request: Request): 'chat_completions' | 'responses' | 'messages' | undefined {
+export function gatewayRequestProtocol(request: Request): 'chat_completions' | 'responses' | 'messages' | 'gemini' | undefined {
   const path = new URL(request.url).pathname
+  if (path.startsWith('/v1beta/')) return 'gemini'
   return path.endsWith('/chat/completions') ? 'chat_completions'
     : path.endsWith('/responses') ? 'responses'
       : path.includes('/messages') ? 'messages' : undefined

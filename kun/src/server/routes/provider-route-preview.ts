@@ -8,7 +8,7 @@ import { GATEWAY_MAX_ROUTE_ATTEMPTS, GATEWAY_REQUEST_TIMEOUT_MS } from '../../ad
 import type { ServerRuntime } from './server-runtime.js'
 
 const Input = z.object({ routeId: z.string().min(1).max(128), clientId: z.string().max(128).optional(),
-  protocol: z.enum(['chat_completions', 'responses', 'messages']).default('chat_completions'),
+  protocol: z.enum(['chat_completions', 'responses', 'messages', 'gemini']).default('chat_completions'),
   tools: z.boolean().default(false), vision: z.boolean().default(false),
   maxOutputTokens: z.number().int().positive().optional(), draft: ModelRoutePoolConfigSchema.optional() }).strict()
 
