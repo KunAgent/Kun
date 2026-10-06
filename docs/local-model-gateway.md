@@ -40,14 +40,45 @@ does not make native sessions portable.
 
 The gateway supports:
 
-- `GET /v1/models`
+- `GET /v1/models` (add `?format=text` for one id per line)
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
 - `POST /v1/messages`
 - `POST /v1/messages/count_tokens` (estimate, not provider billing)
+- `POST /v1beta/models/{model}:generateContent`, `:streamGenerateContent`,
+  `:countTokens` and `GET /v1beta/models` (Google Gemini)
+- `GET /v1/kun/route?session=<id>[&after=<seq>&wait=<s>]` (route trace)
+- `GET /api/hello` (unauthenticated identity probe)
 
-All public routes require a gateway key, including `/models`. Use an
-`Authorization: Bearer ...` header; Anthropic clients may use `x-api-key`.
+All public routes except `/api/hello` require a gateway key. Use an
+`Authorization: Bearer ...` header; Anthropic clients may use `x-api-key` and
+Gemini clients `x-goog-api-key` (or `?key=` on `/v1beta` paths only).
+
+### What agents learn from the gateway
+
+Each `/v1/models` entry carries `display_name`, `reasoning`,
+`supported_reasoning_levels`, `default_reasoning_level`, `context_window`,
+`max_output_tokens`, `modalities` and `native_endpoints` when the registry
+knows them. Unknown facts are omitted, never guessed. A routed alias publishes
+only what every member guarantees: the intersection of reasoning levels and
+modalities and the smallest window and output limit; it lists no native
+endpoints because any member may need translation.
+
+The production runtime writes `~/.kun/gateway.json` with its base URLs and the
+`/api/hello` address. The file contains no credential, and a client confirms
+the endpoint with `/api/hello` before use, so a stale file is harmless.
+
+A client may prefix its key with `kun-<app>.` (for example
+`kun-claude-code.kun_local_…`). The prefix only names the app for usage
+attribution; the remainder is the credential that is verified. Without it,
+an `x-kun-agent` header or the first User-Agent product names the agent.
+
+Send a session id (`x-kun-gateway-session-id`, Codex's `session_id` or Claude
+Code's `x-claude-code-session-id`) and `GET /v1/kun/route?session=<id>` reports
+the asked model, the rule that decided the turn, every member tried with its
+failure reason, and the served model, before the first token. `after` and
+`wait` long-poll for the next change. Sessions are hashed with the caller's
+identity, so a client can read only its own.
 The listener remains loopback-only. Never publish the runtime admin token as a
 client key, put credentials in URLs, or expose this listener through a tunnel
 without a separately reviewed deployment/authentication design.
@@ -63,11 +94,30 @@ outside edits and pre-existing unowned files block replacement. The previous
 generated configuration is backed up. Restore returns to that version, or
 removes a first-time generated profile. Kun does not launch the client.
 
-Claude Code uses a session-only environment. Its compatibility profile disables
-thinking and automatic effort (`MAX_THINKING_TOKENS=0` and
-`CLAUDE_CODE_EFFORT_LEVEL=unset`); signed/adaptive reasoning is unsupported.
-Managed Claude gateway turns similarly require reasoning off. Native Claude
-account behavior is unchanged.
+Claude Code uses a session-only environment and keeps its thinking settings.
+The Anthropic ingress accepts `thinking` (enabled, adaptive or disabled) and
+`output_config.effort`, maps them to the route's reasoning effort, and streams
+reasoning back as `thinking` blocks with a gateway-issued signature. Replayed
+thinking text returns to the model as reasoning history; client-held signatures
+are never forwarded. Provider continuation state (Anthropic signed thinking
+blocks, Gemini thought signatures, Responses reasoning items) is kept
+server-side for six hours, scoped to the caller, and restored onto the
+replayed tool call with the same id. Native Claude account behavior is
+unchanged.
+
+### Agents page and `kun agents`
+
+Settings → Local API → Agents lists Claude Code, Codex, OpenCode, Pi, Gemini
+CLI, Crush and Droid when installed. Connect writes only the keys Kun owns in
+the agent's own config (comments, order and formatting elsewhere stay as
+they were), issues the agent its own attributed gateway key, and keeps a
+`.kun-backup` copy beside each file while connected. Switching models widens
+that key to the new model. Disconnect restores the file byte for byte when
+nobody edited it since Kun's last write, key by key otherwise, revokes the
+key and removes the backup. Profiles save every connected agent's model and
+reasoning under a name and switch them together; "Sync model lists" rewrites
+agents that keep their own list. The same operations are available as
+`kun agents connect|disconnect|sync|save|use`.
 
 The file guards detect ordinary conflicts and existing links, but are not a
 sandbox against a malicious same-user process racing directory replacement.
@@ -83,8 +133,29 @@ The same policy applies to direct provider IDs, aliases, fallback targets and
 managed harness grants: configured HTTP API-key providers with ready
 credentials, or explicitly anonymous HTTP providers with `not-required`
 credentials, and declared models can be exported. Native SDK, subscription and
-OAuth connections are not exportable. A scoped harness grant narrows the
-eligible route set; it cannot expand it.
+OAuth connections are not exportable, with two explicit exceptions: an
+extension provider whose extension declared `gatewayExport` and for which the
+user picked the account to use, and a ChatGPT subscription connection the user
+turned on under the experimental sharing switch after reading its risk
+notice. Neither widens an existing client's policy. A scoped harness grant
+narrows the eligible route set; it cannot expand it.
+
+Route pools can also carry turn rules (agent, prompt size, images, requested
+effort, local hours, message text or a classifier intent) that put one member
+first for the turn and hold that decision until the user's next turn; a
+per-member pinned reasoning effort; a manual pick strategy; demotion of a
+member whose known window the request fills to 95%; and members that name
+another alias, flattened at load with cycle and depth (3) checks. Account
+groups gain a `pace` strategy. Conversation affinity is persisted in
+`model-routing/affinity.json`, so a restart keeps prompt-cache locality.
+
+Gateway middleware (model mapping, a system prompt scoped by agent or model,
+`<think>` tag handling, and user scripts exporting `onModel`, `onSystemPrompt`
+or `onText`) runs in order on every protocol. Admission checks the model a
+mapping serves. Scripts load only from the runtime's `gateway-middleware`
+folder, run in a `node:vm` context without string code generation, are
+limited to 250 ms per call (50 ms per text delta), and fail open; `node:vm` is
+not a security boundary, so scripts are trusted user code like hooks.
 
 An alias may contain old or currently unavailable targets in durable settings.
 Those targets remain visible for repair, but are not authorized upstreams.

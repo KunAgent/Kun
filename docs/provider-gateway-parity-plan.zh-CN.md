@@ -1,7 +1,7 @@
 # Kun 多供应商接入与本地网关：对齐 magpie 的打磨方案
 
-日期：2026-10-06。参考实现：`../magpie`（Go，MIT）。本文是设计与分期方案，
-不是已完成工作的记录。所有"Kun 现状"均核对自 `develop` 当前代码。
+日期：2026-10-06。参考实现：`../magpie`（Go，MIT）。本文最初是设计与分期方案；
+D1/D2/D3 均按建议拍板，实现状态见文末"实施记录"。
 
 ## 0. 一句话结论
 
@@ -421,3 +421,18 @@ WS4 编辑库 + 首批 4 个接管模式                                https �
 | `magpie://import` | `kun://import`（已有） |
 | Library（instructions/MCP/skills 下发） | 暂不覆盖；Kun 的 skills/MCP 配置是自己的体系 |
 | Remote magpie | P3 LAN/remote kun |
+
+## 7. 实施记录（2026-10-06）
+
+D1、D2、D3 按第 2 节的建议执行。已实现：
+
+- WS1：catalog schema v2（regions、分协议端点、header 提示、noList、端点提示、余额/计划额度来源），新增 14 个预设，Azure 使用 `api-key` 头，所有预设请求 URL 快照测试。
+- WS2：`wireModelId` 上游改名（`*` 代表模型 id）与 `*` 供应商级默认档案（按字段回退）。
+- WS3：`/v1/models` 元数据与 `?format=text`、`/api/hello`、`~/.kun/gateway.json`、`kun-<app>.` 归因前缀与按 agent 计量、`/v1/kun/route` 长轮询轨迹、Anthropic thinking 透传与按 tool-call id 还原签名、Gemini 原生入口。
+- WS4：字节保留的 JSONC/TOML/dotenv 编辑器，Claude Code、Codex、OpenCode、Pi、Gemini CLI、Crush、Droid 七个适配器，Agents 面板、方案（profiles）与目录同步。
+- WS5：轮次规则与意图分类、成员固定推理强度、手动选择、95% 窗口降级、嵌套路由、亲和落盘、账号组 `pace` 策略。
+- WS6：SiliconFlow、StepFun、AiHubMix、new-api 余额，客户端密钥成本硬限额，额度重置提醒。
+- WS7：网关中间件（模型映射、系统提示词、think 标签、脚本），扩展 provider 导出，ChatGPT 订阅的实验性导出开关。
+- WS8：`kun gateway|agents|quota` 命令。
+
+未实现：OpenCode 认证插件兼容壳。它需要在 Kun 内托管 npm 插件、复刻 OpenCode 的插件运行时与 AI SDK fetch 约定，工作量与 ToS 风险都超出本轮；D1 的结论是默认不导出订阅，扩展 provider 导出已提供受控的第三方模型来源。LAN/远程共享、embeddings/rerank、媒体导出仍属 P5 提案。

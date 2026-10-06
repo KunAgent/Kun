@@ -212,8 +212,10 @@ resumed turns retain their original model/account target ceiling. Native login,
 direct provider selection and gateway aliases remain distinct modes. Model-only
 grants never imply Kun-tool permissions. Agent installation and native-account management stay separate.
 
-LAN/public listeners, Gemini-native ingress, media export, nested routing and
-extension export remain separately proposed P5 work. External reference owners
+Gemini-native ingress, nested routing (flattened, depth 3, cycle-checked)
+and opt-in extension provider export are implemented; see the
+[local gateway](local-model-gateway.md). LAN/public listeners, embeddings and
+rerank, and media export remain separately proposed P5 work. External reference owners
 are not silently rewritten by a provider transaction. The listener remains
 loopback-only. See [release validation](provider-gateway-release-validation.md)
 for fixed-client, scale, boundary and packaged acceptance evidence.
