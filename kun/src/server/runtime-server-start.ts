@@ -212,6 +212,9 @@ export async function startKunServe(
     close: async () => {
       memoryMonitor?.stop()
       await settleCleanupSteps([
+        // Withdraw the discovery file first: a closing runtime must not be advertised, and the
+        // runtime's own shutdown may run past the forced-exit deadline.
+        async () => { if (discoveryTimer) clearInterval(discoveryTimer); await gatewayDiscovery.stop() },
         async () => { await runtime.shutdown?.() },
         () => server.close(),
         async () => {
@@ -226,7 +229,6 @@ export async function startKunServe(
             registeredWithManager = false
           }
         },
-        async () => { if (discoveryTimer) clearInterval(discoveryTimer); await gatewayDiscovery.stop() },
         async () => {
           await removeRuntimeDiscovery(
             options.discoveryDir ?? options.dataDir,
