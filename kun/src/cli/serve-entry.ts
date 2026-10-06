@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { runGatewayCliCommand } from './gateway-cli.js'
 import process from 'node:process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -437,6 +438,9 @@ export async function main(argv: readonly string[]): Promise<number> {
       env: process.env,
       cwd: () => process.cwd()
     })
+  }
+  if (argv[0] === 'gateway' || argv[0] === 'agents' || argv[0] === 'quota') {
+    return runGatewayCliCommand(argv[0], argv.slice(1), { stdout: process.stdout, stderr: process.stderr, env: process.env })
   }
   if (argv[0] === 'worker') {
     return runWorkerCallbackCommand(argv.slice(1), {

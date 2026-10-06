@@ -50,6 +50,9 @@ Commands:
   mcp-bridge --token-env <V> Forward stdio JSON-RPC to a Kun server's /mcp/kun
   worker <subcommand>        Worker callbacks (progress/ask/result/context/hook)
   extension <command>        Create, validate, pack, install, and manage extensions
+  gateway <command>          Local model gateway: status, models, client keys, middleware
+  agents <command>           Point coding agents (Claude Code, Codex, ...) at the gateway
+  quota [wait <provider>]    Balances and allowance windows; wait for one to renew
 
 Common options:
   --config <path>            JSON config file
