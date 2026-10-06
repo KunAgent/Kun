@@ -5,6 +5,13 @@ on:
     paths:
       - '.github/workflows/paper-evidence-smoke.yml'
       - 'scripts/*paper-evidence*'
+      - 'scripts/*math-rendering*'
+      - 'src/renderer/src/components/chat/StreamdownAssistant.tsx'
+      - 'src/renderer/src/components/paper/PaperTitleText.tsx'
+      - 'src/renderer/src/write/tiptap/**'
+      - 'src/renderer/src/styles/write-editor/**'
+      - 'src/shared/markdown/**'
+      - 'src/main/services/write-export*'
       - 'src/shared/paper/**'
       - 'src/main/services/paper/**'
       - 'src/main/ipc/*paper*'
@@ -38,6 +45,7 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=4096
       KUN_PAPER_EVIDENCE: dist/paper-evidence-smoke
+      KUN_MATH_EVIDENCE: dist/math-rendering-smoke
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,6 +69,17 @@ jobs:
         run: npm run ensure:electron
       - name: Exercise actual evidence, matrix and purpose-dialog components
         run: node scripts/smoke-paper-evidence.mjs
+      - name: Exercise production math consumers in native Electron
+        if: ${{ !cancelled() }}
+        run: node scripts/smoke-math-rendering.mjs
+      - name: Upload native math screenshots and exact assertion report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: math-rendering-${{ matrix.os }}
+          path: dist/math-rendering-smoke
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload native screenshots and exact assertion report
         if: always()
         uses: actions/upload-artifact@v4

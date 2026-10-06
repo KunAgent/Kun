@@ -11,12 +11,29 @@
  *   code).
  */
 import { Extension, InputRule } from '@tiptap/core'
-import { TextSelection } from '@tiptap/pm/state'
+import { Plugin, TextSelection } from '@tiptap/pm/state'
 import type { Editor } from '@tiptap/core'
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { bodyZoom, toLayoutPx } from '../../lib/body-zoom'
 
 type MathKind = 'block' | 'inline'
+
+/** Keep ProseMirror's mouseup selection/focus from scrolling an atom away
+ * before its native click can open the math editor. Scrollbars remain native. */
+export function preserveMathPointerTarget(
+  event: MouseEvent,
+  editorRoot: HTMLElement,
+  editable: boolean
+): boolean {
+  if (!editable || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey) return false
+  const target = event.target
+  if (!(target instanceof Element)) return false
+  const glyph = target.closest('.katex-html, .katex-error')
+  const atom = glyph?.closest('[data-type="inline-math"], [data-type="block-math"]')
+  if (!atom || !editorRoot.contains(atom)) return false
+  event.preventDefault()
+  return true
+}
 
 function renderKatexPreview(preview: HTMLElement, latex: string, displayMode: boolean): void {
   void import('katex').then((katex) => {
@@ -78,9 +95,10 @@ export function openMathEditor(editor: Editor, node: PmNode, pos: number, kind: 
     overlay.remove()
   }
   const save = (): void => {
+    if (closed) return
     const latex = textarea.value
-    const commands = editor.commands as unknown as Record<string, ((p: number, attrs: { latex: string }) => void) | undefined>
-    commands[kind === 'block' ? 'updateBlockMath' : 'updateInlineMath']?.(pos, { latex })
+    if (kind === 'block') editor.commands.updateBlockMath({ pos, latex })
+    else editor.commands.updateInlineMath({ pos, latex })
     close()
   }
 
@@ -123,6 +141,16 @@ const INLINE_MATH_INPUT_RE = /(^|[^\\$])\$([^\s](?:[^$\\]|\\[\s\S])*?[^\s])\$$/
 
 export const WriteMathInput = Extension.create({
   name: 'writeMathInput',
+
+  addProseMirrorPlugins() {
+    return [new Plugin({
+      props: {
+        handleDOMEvents: {
+          mousedown: (view, event) => preserveMathPointerTarget(event, view.dom, this.editor.isEditable)
+        }
+      }
+    })]
+  },
 
   onCreate() {
     mathEditorRef = this.editor

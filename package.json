@@ -127,7 +127,7 @@
     "html-to-docx": "npm:@turbodocx/html-to-docx@1.22.2",
     "ipaddr.js": "^2.4.0",
     "jszip": "3.10.1",
-    "katex": "^0.16.46",
+    "katex": "0.18.2",
     "mdast-util-find-and-replace": "^3.0.2",
     "mdast-util-frontmatter": "2.0.1",
     "mdast-util-gfm": "3.1.0",
@@ -257,9 +257,11 @@
     "hono": "4.13.7",
     "ip-address": "10.7.2",
     "js-yaml": "4.3.2",
+    "katex": "$katex",
     "node-gyp": {
       "undici": "8.10.2"
     },
+    "proxy-addr": "2.0.8",
     "qs": "6.16.0"
   },
   "author": "Kun Contributors",
