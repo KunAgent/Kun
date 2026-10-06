@@ -109,6 +109,7 @@ const api = {
   setRoomPermissions: (request) => ipcRenderer.invoke('room:permissions:set', request),
   gatewayLaunchProfile: (request) => ipcRenderer.invoke('gateway:launch-profile', request),
   gatewayClients: (request) => ipcRenderer.invoke('gateway:clients', request),
+  agentWiring: (request) => ipcRenderer.invoke('agent-wiring', request),
   gatewayCredential: (action) => ipcRenderer.invoke('gateway:credential', action),
   getRuntimeSettingsSyncStatus: () =>
     ipcRenderer.invoke('runtime:settings-sync-status:get'),

@@ -1,6 +1,7 @@
 import providerConfiguration from '../en/settings/provider-configuration.json'
 // Gateway connection guidance uses the shared English fallback.
 import gatewayConnection from '../en/settings/gateway-connection.json'
+import gatewayAgents from './settings/gateway-agents.json'
 import googleWorkspace from './settings/google-workspace.json'
 import navigationProviders from './settings/navigation-providers.json'
 import modelRoutes from './settings/model-routes.json'
@@ -16,6 +17,7 @@ import ade from './settings/ade.json'
 const settings = {
   ...providerConfiguration,
   ...gatewayConnection,
+  ...gatewayAgents,
   ...googleWorkspace,
   ...navigationProviders,
   ...modelRoutes,

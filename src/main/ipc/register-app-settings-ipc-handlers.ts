@@ -1,6 +1,7 @@
 import { ProviderConfigurationDeleteGuard } from './provider-configuration-delete-guard'
 import { registerGatewayLaunchProfileIpc } from './register-gateway-launch-profile-ipc'
 import { registerGatewayClientsIpc } from './register-gateway-clients-ipc'
+import { registerAgentWiringIpc } from './register-agent-wiring-ipc'
 import { showCoordinatedMessageBox } from '../native-message-box'
 import { roomProtectedControls } from './room-protected-controls'
 import { protectedApprovalControls } from './protected-approval-controls'
@@ -89,6 +90,7 @@ import {
 export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   registerGatewayClientsIpc(options)
   registerGatewayLaunchProfileIpc(options)
+  registerAgentWiringIpc(options)
   const {
     store,
     getMainWindow,

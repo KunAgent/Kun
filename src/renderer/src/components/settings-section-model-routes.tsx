@@ -465,6 +465,7 @@ export function ModelRoutesSettings({
               <ApiCompatibilityPill>POST /chat/completions</ApiCompatibilityPill>
               <ApiCompatibilityPill>POST /responses</ApiCompatibilityPill>
               <ApiCompatibilityPill>POST /messages</ApiCompatibilityPill>
+              <ApiCompatibilityPill>POST /v1beta/models/*</ApiCompatibilityPill>
             </div>
           </div>
           <div className="flex items-end gap-2 lg:flex-col lg:items-stretch lg:justify-center">

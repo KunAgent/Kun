@@ -72,6 +72,7 @@ import { gatewayJsonResponse } from './gateway-json-response.js'
 import { strictRuntimeTokenAuthorized } from './gateway-request-guard.js'
 import { handleKunToolsMcp } from './kun-tools-mcp.js'
 import { gatewayHello, gatewayRouteTrace } from './gateway-discovery-routes.js'
+import { allowGatewayClientModel, gatewayAdminCatalog } from './gateway-agent-admin.js'
 import { geminiGenerate, geminiModels } from './gemini-gateway.js'
 
 export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void {
@@ -103,6 +104,14 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('DELETE', '/v1/model-gateway/clients/:id', (request, ctx) => {
     if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
     return revokeGatewayClient(runtime, ctx.params.id, request)
+  })
+  router.add('GET', '/v1/model-gateway/catalog', (request) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return gatewayAdminCatalog(runtime)
+  })
+  router.add('POST', '/v1/model-gateway/clients/:id/allow', (request, ctx) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return allowGatewayClientModel(runtime, ctx.params.id, request)
   })
   router.add('GET', '/v1/model-gateway/clients/:id/usage', (request, ctx) => {
     if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)

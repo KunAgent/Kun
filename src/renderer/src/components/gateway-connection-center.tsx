@@ -9,6 +9,7 @@ import { loadHarnesses, useHarnessStore } from '../store/harness-store'
 import { useChatStore } from '../store/chat-store'
 import { settingsButtonClass } from './settings-button'
 import { GatewayClientCredentials } from './gateway-client-credentials'
+import { GatewayAgentsPanel } from './gateway-agents-panel'
 import { GatewayClientSelect } from './gateway-client-select'
 import type { RoutePoolTestRecord, RouteStatus } from './settings-section-model-routes'
 
@@ -56,7 +57,9 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
     useHarnessStore.setState({ settingsHarnessId: clientId })
     useChatStore.getState().openSettings('agentsHarnesses')
   }
-  return <section className="mt-4 grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-connection-center>
+  return <div className="mt-4 grid min-w-0 gap-4">
+  <GatewayAgentsPanel active={active} translation={t} />
+  <section className="grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-connection-center>
     <div>
       <h3 className="text-[14px] font-semibold text-ds-ink">{t('gatewayConnection.title')}</h3>
       <p className="mt-1 text-[12px] leading-5 text-ds-muted">{t('gatewayConnection.description')}</p>
@@ -125,4 +128,5 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
     </div> : null}
     <p className="text-[11px] leading-5 text-ds-faint">{t('gatewayConnection.boundaries')}</p>
   </section>
+  </div>
 }
