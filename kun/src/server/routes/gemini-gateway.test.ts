@@ -108,6 +108,31 @@ describe('Gemini gateway endpoints', () => {
     const denied = await geminiGenerate(runtime(model), call('alpha/a1:generateContent', hello, { 'x-goog-api-key': 'wrong' }), 'alpha/a1:generateContent')
     expect(JSON.parse((denied as { body: string }).body)).toMatchObject({ error: { code: 401, status: 'UNAUTHENTICATED' } })
   })
+  it('carries inline images as message attachments and pairs parallel function calls by order', async () => {
+    const model = new ScriptedModel([{ kind: 'completed', stopReason: 'stop' }])
+    const body = { systemInstruction: { parts: [] }, contents: [
+      { role: 'user', parts: [{ text: 'what is this' }, { inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgo=' } }] },
+      { role: 'model', parts: [{ functionCall: { name: 'read', args: { p: 1 } } }, { functionCall: { name: 'read', args: { p: 2 } } }] },
+      { role: 'user', parts: [{ functionResponse: { name: 'read', response: { r: 1 } } }, { functionResponse: { name: 'read', response: { r: 2 } } }] }] }
+    const response = await geminiGenerate(runtime(model), call('alpha/a1:generateContent', body), 'alpha/a1:generateContent')
+    expect((response as { status: number }).status).toBe(200)
+    // An empty system instruction adds no system prompt.
+    expect(model.last?.systemPrompt ?? '').toBe('')
+    expect(model.last?.attachments).toEqual([expect.objectContaining({ mimeType: 'image/png', dataBase64: 'iVBORw0KGgo=' })])
+    const history = model.last?.history ?? []
+    const calls = history.filter((item) => item.kind === 'tool_call') as { callId: string; arguments: unknown }[]
+    const results = history.filter((item) => item.kind === 'tool_result') as { callId: string; output: unknown }[]
+    expect(calls.map((item) => item.arguments)).toEqual([{ p: 1 }, { p: 2 }])
+    expect(results.map((item) => [item.callId, item.output])).toEqual([[calls[0]!.callId, '{"r":1}'], [calls[1]!.callId, '{"r":2}']])
+  })
+  it('refuses inline data outside user content and non-image data', () => {
+    const image = { inlineData: { mimeType: 'image/png', data: 'AAAA' } }
+    expect(() => geminiToChatInput('m', { contents: [{ role: 'model', parts: [image] }] }, false)).toThrow('only in user content')
+    expect(() => geminiToChatInput('m', { contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'application/pdf', data: 'AAAA' } }] }] }, false))
+      .toThrow('base64 image')
+    expect(() => geminiToChatInput('m', { contents: [{ role: 'user', parts: [{ functionResponse: { name: 'read', response: {} } }] }] }, false))
+      .toThrow('preceding functionCall')
+  })
   it('counts tokens and lists models in Gemini shape', async () => {
     const rt = runtime(new ScriptedModel([]))
     const counted = await geminiGenerate(rt, call('alpha/a1:countTokens', hello), 'alpha/a1:countTokens')

@@ -84,6 +84,26 @@ describe('script middleware', () => {
     expect(stats.find((entry) => entry.id === 'slow.js')?.failures).toBe(1)
     expect(stats.find((entry) => entry.id === 'broken.js')?.loadError).toBeTruthy()
   }, 10_000)
+  it('stacks entries in order: two maps chain, think-tags runs before a script onText', async () => {
+    const middleware = host([
+      { id: 'map-1', enabled: true, type: 'model-map', mapping: { fast: 'mid' } },
+      script('route.js', `export function onModel(model) { return model === 'mid' ? 'deep' : undefined }`),
+      { id: 'map-2', enabled: true, type: 'model-map', mapping: { deep: 'deep-2' } },
+      { id: 'think', enabled: true, type: 'think-tags', mode: 'strip' },
+      script('upper.js', `export function onText(text) { return text.toUpperCase() }`)
+    ])
+    expect(middleware.rewriteModel('fast')).toBe('deep-2')
+    const out = await drain(middleware.wrapStream(chunks({ kind: 'assistant_text_delta', text: '<think>secret</think>ok' },
+      { kind: 'completed', stopReason: 'stop' }), { model: 'm' }))
+    expect(out).toEqual([{ kind: 'assistant_text_delta', text: 'OK' }, { kind: 'completed', stopReason: 'stop' }])
+  })
+  it('gives each call a fresh copy of options so a script cannot leak state through them', () => {
+    const entry = script('mutate.js', `export function onModel(model, ctx) { ctx.options.count = (ctx.options.count || 0) + 1; return model + ctx.options.count }`)
+    const middleware = host([entry])
+    expect(middleware.rewriteModel('m')).toBe('m1')
+    expect(middleware.rewriteModel('m')).toBe('m1')
+    expect(entry).toMatchObject({ options: { suffix: '!' } })
+  })
   it('cannot generate code from strings inside a script', () => {
     const middleware = host([script('eval.js', `export function onModel() { return eval('"x"') }`)])
     expect(middleware.rewriteModel('a')).toBe('a')
