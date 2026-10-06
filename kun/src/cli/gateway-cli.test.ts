@@ -64,6 +64,29 @@ describe('kun gateway', () => {
     expect(await runGatewayCliCommand('gateway', ['routes'], harness.value)).toBe(0)
     expect(harness.out()).toMatch(/10:11:12\s+codex\s+coding\s+beta\/b1\s+rule:tests\s+2\s+completed/)
   })
+  it('lists providers and models, tests one, and previews a route', async () => {
+    const harness = io({
+      'GET /v1/model-connections': { providers: [{ id: 'deepseek', name: 'DeepSeek', kind: 'http', credentialStatus: 'ready', models: ['deepseek-chat'],
+        selectedModel: 'deepseek-chat', modelCapabilities: { 'deepseek-chat': { contextWindowTokens: 128000, maxOutputTokens: 8000,
+          pricing: { inputUsdPerMillion: 0.27, outputUsdPerMillion: 1.1 } } } }] },
+      'POST /v1/model-connections/deepseek/probe': { ok: true, model: 'deepseek-chat', latencyMs: 420 },
+      'GET /v1/model-routes': { pools: [{ id: 'pool-1', modelId: 'coding' }] },
+      'POST /v1/provider-config/routes/preview': { alias: 'coding', strategy: 'priority', affinity: 'session', maxAttempts: 3,
+        orderedTargetIds: ['t2'], targets: [{ targetId: 't1', providerId: 'alpha', modelId: 'a1', eligible: false, reason: 'health_cooldown' },
+          { targetId: 't2', providerId: 'beta', modelId: 'b1', eligible: true, reason: 'eligible' }] }
+    })
+    expect(await runGatewayCliCommand('provider', ['list'], harness.value)).toBe(0)
+    expect(harness.out()).toMatch(/deepseek\s+DeepSeek\s+http\s+1\s+ready/)
+    expect(await runGatewayCliCommand('provider', ['models', 'deepseek'], harness.value)).toBe(0)
+    expect(harness.out()).toMatch(/deepseek-chat \*\s+128K\s+8K\s+\$0\.27\/\$1\.1 per M/)
+    expect(await runGatewayCliCommand('provider', ['test', 'deepseek'], harness.value)).toBe(0)
+    expect(harness.out()).toContain('ok  deepseek-chat  420 ms')
+    expect(await runGatewayCliCommand('gateway', ['route', 'coding'], harness.value)).toBe(0)
+    expect(harness.out()).toContain('coding  strategy priority, affinity session, up to 3 attempts')
+    expect(harness.out()).toMatch(/1\s+beta\/b1\s+will try/)
+    expect(harness.out()).toMatch(/-\s+alpha\/a1\s+skipped: health_cooldown/)
+    expect(await runGatewayCliCommand('provider', ['models', 'ghost'], harness.value)).toBe(2)
+  })
   it('reports a missing runtime clearly', async () => {
     const harness = io({}, { runtimeRequest: undefined, env: { KUN_DATA_DIR: join(home, 'none'), KUN_RUNTIME_DISCOVERY_DIR: join(home, 'none') } })
     expect(await runGatewayCliCommand('gateway', ['status'], harness.value)).toBe(1)

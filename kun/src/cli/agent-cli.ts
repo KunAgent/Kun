@@ -53,6 +53,7 @@ Commands:
   gateway <command>          Local model gateway: status, models, client keys, middleware
   agents <command>           Point coding agents (Claude Code, Codex, ...) at the gateway
   quota [wait <provider>]    Balances and allowance windows; wait for one to renew
+  provider list|models|test  Connected providers, their models, and a one-request check
 
 Common options:
   --config <path>            JSON config file

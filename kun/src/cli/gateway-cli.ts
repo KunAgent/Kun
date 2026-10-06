@@ -1,4 +1,5 @@
 import { AgentWiringBridge, type RuntimeRequest } from '../agent-wiring/bridge.js'
+import { providerCommand, routePreviewCommand } from './provider-cli.js'
 import type { AgentWiringAction, AgentWiringResult } from '../agent-wiring/protocol.js'
 import { readRuntimeDiscovery } from '../server/runtime-discovery.js'
 import type { RuntimeFlavor } from '../contracts/runtime-flavor.js'
@@ -28,6 +29,7 @@ export const GATEWAY_CLI_USAGE = `Gateway and agents:
   kun gateway keys limit <client-id> [--json]   Window usage, remaining allowance and reset time
   kun gateway keys revoke <client-id>
   kun gateway keys rotate <client-id>    Rotate a key (printed once)
+  kun gateway route <alias>              Which members a routed model would try now, in order, and why others are skipped
   kun gateway routes [--json]            Recent requests: model asked, served, why and fallbacks
   kun gateway middleware                 Middleware counters
   kun agents                             Agents on this computer and their models
@@ -36,6 +38,9 @@ export const GATEWAY_CLI_USAGE = `Gateway and agents:
   kun agents sync                        Rewrite model lists in agents that keep a copy
   kun agents profiles                    Saved profiles
   kun agents save <name> | use <name> | forget <name>
+  kun provider list                      Connected providers, their models and credential state
+  kun provider models <provider-id>      Models with windows, output limits and prices
+  kun provider test <provider-id> [--model <id>]   Send one tiny request to that provider (uses a few tokens)
   kun quota [--refresh] [--json]         Balances and allowance windows
   kun quota wait <provider> [--timeout <minutes>]   Wait until an allowance is available again
 `
@@ -70,7 +75,7 @@ export async function discoveredRuntimeRequest(env: Record<string, string | unde
   }
 }
 
-async function json(request: RuntimeRequest, path: string, method = 'GET', body?: unknown): Promise<Record<string, unknown>> {
+export async function json(request: RuntimeRequest, path: string, method = 'GET', body?: unknown): Promise<Record<string, unknown>> {
   const response = await request(path, method, body === undefined ? undefined : JSON.stringify(body))
   let parsed: Record<string, unknown> = {}
   try { parsed = JSON.parse(response.body) as Record<string, unknown> } catch { /* keep empty */ }
@@ -78,7 +83,7 @@ async function json(request: RuntimeRequest, path: string, method = 'GET', body?
   return parsed
 }
 
-function table(rows: string[][]): string {
+export function table(rows: string[][]): string {
   const widths = rows[0]!.map((_, column) => Math.max(...rows.map((row) => (row[column] ?? '').length)))
   return rows.map((row) => row.map((cell, column) => column === row.length - 1 ? cell : cell.padEnd(widths[column]!)).join('  ')).join('\n') + '\n'
 }
@@ -256,10 +261,12 @@ async function quotaCommand(argv: readonly string[], io: GatewayCliIo, request: 
   return 0
 }
 
-export async function runGatewayCliCommand(group: 'gateway' | 'agents' | 'quota', argv: readonly string[], io: GatewayCliIo): Promise<number> {
+export async function runGatewayCliCommand(group: 'gateway' | 'agents' | 'quota' | 'provider', argv: readonly string[], io: GatewayCliIo): Promise<number> {
   if (argv.includes('--help') || argv.includes('-h')) { io.stdout.write(GATEWAY_CLI_USAGE); return 0 }
   try {
     const request = io.runtimeRequest ?? await discoveredRuntimeRequest(io.env)
+    if (group === 'provider') return await providerCommand(argv, io, request)
+    if (group === 'gateway' && argv[0] === 'route') return await routePreviewCommand(argv.slice(1), io, request)
     if (group === 'gateway') return await gatewayCommand(argv, io, request)
     if (group === 'agents') return await agentsCommand(argv, io, request)
     return await quotaCommand(argv, io, request)
