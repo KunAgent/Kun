@@ -102,6 +102,22 @@ describe('prefetchCatalogPricing', () => {
     })
   })
 
+  it('never replaces a price the user set, and marks catalog prices as catalog', async () => {
+    fetchMock.mockResolvedValue(catalogOk({ input: 1, output: 4 }))
+    const initial = settingsWithKimi()
+    const kimi = initial.provider.providers.find((p) => p.id === 'kimi-code')!
+    kimi.modelProfiles.k3 = { ...kimi.modelProfiles.k3!, pricing: { inputUsdPerMillion: 9, outputUsdPerMillion: 9 },
+      evidence: { pricing: { source: 'user', status: 'declared' } } }
+    const store = storeWith(initial)
+    await prefetchCatalogPricing(store)
+    const after = store.current.provider.providers.find((p) => p.id === 'kimi-code')!
+    expect(after.modelProfiles.k3?.pricing).toEqual({ inputUsdPerMillion: 9, outputUsdPerMillion: 9 })
+    const untouched = settingsWithKimi()
+    const fresh = storeWith(untouched)
+    await prefetchCatalogPricing(fresh)
+    expect(fresh.current.provider.providers.find((p) => p.id === 'kimi-code')!.modelProfiles.k3?.evidence?.pricing).toMatchObject({ source: 'catalog' })
+  })
+
   it('keeps static preset pricing when the catalog has no pricing for the provider', async () => {
     fetchMock.mockResolvedValue(catalogOk())
     const store = storeWith(settingsWithKimi())

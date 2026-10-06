@@ -113,8 +113,12 @@ function applyCatalogPricing(
     )
     if (!profileKey) continue
     const profile = modelProfiles[profileKey]!
+    // Precedence: a price the user set or the provider declared beats the catalog's reference price.
+    const source = profile.evidence?.pricing?.source
+    if (profile.pricing && source && source !== 'catalog') continue
     if (JSON.stringify(profile.pricing) === JSON.stringify(pricing)) continue
-    modelProfiles[profileKey] = { ...profile, pricing: { ...pricing } }
+    modelProfiles[profileKey] = { ...profile, pricing: { ...pricing },
+      evidence: { ...profile.evidence, pricing: { source: 'catalog', status: 'declared', observedAt: new Date().toISOString() } } }
     changed = true
   }
   if (!changed) return settings
