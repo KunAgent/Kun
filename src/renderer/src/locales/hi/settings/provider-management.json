@@ -112,5 +112,7 @@
   "modelProviderProtocols": "समर्थित प्रोटोकॉल",
   "modelProviderOwnEndpoint": "आपके संसाधन का एंडपॉइंट",
   "modelProviderNoListNote": "यह विक्रेता मॉडल सूची प्रकाशित नहीं करता; {{count}} दस्तावेज़ित मॉडल जोड़े जाएंगे।",
-  "modelProviderHeaderHints": "इस विक्रेता के वैकल्पिक हेडर: {{headers}}। सहेजने के बाद कस्टम अनुरोध हेडर में जोड़ें।"
+  "modelProviderHeaderHints": "इस विक्रेता के वैकल्पिक हेडर: {{headers}}। सहेजने के बाद कस्टम अनुरोध हेडर में जोड़ें।",
+  "modelProviderFailoverStrategy_pace": "गति",
+  "modelProviderFailoverStrategyPaceHint": "रीसेट तक प्रति घंटे सबसे अधिक बचे कोटा वाले खाते का उपयोग करता है, ताकि रीसेट पर कम नष्ट हो।"
 }

@@ -127,7 +127,7 @@ export function ProviderReliabilityPanel({
                       type="button"
                       aria-pressed={selected}
                       disabled={oauthDisabled}
-                      title={oauthDisabled ? t('modelProviderFailoverOauthStrategyHint') : undefined}
+                      title={oauthDisabled ? t('modelProviderFailoverOauthStrategyHint') : strategy === 'pace' ? t('modelProviderFailoverStrategyPaceHint') : undefined}
                       onClick={() => saveGroup({ ...group, strategy })}
                       className={`rounded-md px-3 py-1.5 text-[12px] font-medium leading-none transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
                         selected

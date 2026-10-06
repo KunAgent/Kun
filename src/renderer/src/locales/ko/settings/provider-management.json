@@ -112,5 +112,7 @@
   "modelProviderProtocols": "지원 프로토콜",
   "modelProviderOwnEndpoint": "리소스 엔드포인트",
   "modelProviderNoListNote": "이 공급자는 모델 목록을 제공하지 않습니다. 문서에 있는 {{count}}개 모델을 추가합니다.",
-  "modelProviderHeaderHints": "이 공급자가 문서화한 선택 헤더: {{headers}}. 저장 후 사용자 지정 요청 헤더에서 추가하세요."
+  "modelProviderHeaderHints": "이 공급자가 문서화한 선택 헤더: {{headers}}. 저장 후 사용자 지정 요청 헤더에서 추가하세요.",
+  "modelProviderFailoverStrategy_pace": "페이스",
+  "modelProviderFailoverStrategyPaceHint": "재설정까지 시간당 남은 한도가 가장 많은 계정을 사용해 재설정 때 버려지는 양을 줄입니다."
 }

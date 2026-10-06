@@ -449,7 +449,7 @@ export type ModelProviderEndpointsV1 = {
   messages?: string
 }
 
-export const PROVIDER_ACCOUNT_STRATEGIES = ['smart', 'order', 'rotate', 'least-used'] as const
+export const PROVIDER_ACCOUNT_STRATEGIES = ['smart', 'order', 'rotate', 'least-used', 'pace'] as const
 
 export type ProviderAccountStrategy = (typeof PROVIDER_ACCOUNT_STRATEGIES)[number]
 

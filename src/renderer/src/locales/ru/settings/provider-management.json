@@ -112,5 +112,7 @@
   "modelProviderProtocols": "Поддерживаемые протоколы",
   "modelProviderOwnEndpoint": "Адрес вашего ресурса",
   "modelProviderNoListNote": "Поставщик не публикует список моделей; будут добавлены {{count}} документированных моделей.",
-  "modelProviderHeaderHints": "Необязательные заголовки поставщика: {{headers}}. Добавьте их в разделе «Пользовательские заголовки» после сохранения."
+  "modelProviderHeaderHints": "Необязательные заголовки поставщика: {{headers}}. Добавьте их в разделе «Пользовательские заголовки» после сохранения.",
+  "modelProviderFailoverStrategy_pace": "Темп",
+  "modelProviderFailoverStrategyPaceHint": "Использует аккаунт с наибольшим остатком лимита на час до сброса, чтобы меньше терялось при сбросе."
 }

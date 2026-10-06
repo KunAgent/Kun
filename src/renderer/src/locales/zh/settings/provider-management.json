@@ -112,5 +112,7 @@
   "modelProviderProtocols": "支持的协议",
   "modelProviderOwnEndpoint": "你的资源端点",
   "modelProviderNoListNote": "该厂商不提供模型列表接口，将添加文档中的 {{count}} 个模型。",
-  "modelProviderHeaderHints": "该厂商文档中的可选请求头：{{headers}}。保存后可在“自定义请求头”中添加。"
+  "modelProviderHeaderHints": "该厂商文档中的可选请求头：{{headers}}。保存后可在“自定义请求头”中添加。",
+  "modelProviderFailoverStrategy_pace": "按节奏",
+  "modelProviderFailoverStrategyPaceHint": "优先使用距离额度重置前、每小时剩余额度最多的账号，减少重置时浪费的额度。"
 }

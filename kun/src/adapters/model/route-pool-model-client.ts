@@ -228,6 +228,19 @@ export class RoutePoolModelClient implements ModelClient {
     return used
   }
 
+  /** Percent of the longest live window still unused, per hour until it resets. */
+  private quotaPace(providerId: string): number | undefined {
+    const entry = this.quotaLookup?.(providerId)
+    if (!entry || entry.status !== 'available') return undefined
+    const now = this.now()
+    const windows = entry.metrics.filter((metric) => metric.usedPercent !== undefined && metric.resetsAt && Date.parse(metric.resetsAt) > now)
+      .sort((a, b) => Date.parse(b.resetsAt!) - Date.parse(a.resetsAt!))
+    const longest = windows[0]
+    if (!longest) return undefined
+    const hours = Math.max(1 / 60, (Date.parse(longest.resetsAt!) - now) / 3_600_000)
+    return Math.max(0, 100 - longest.usedPercent!) / hours
+  }
+
   /**
    * Two-level member health: a member target is unavailable when either the
    * account circuit (`member:<pid>`) or the model circuit
@@ -312,6 +325,7 @@ export class RoutePoolModelClient implements ModelClient {
           members: eligible.filter((target) => target.id.startsWith('member:')),
           fallbacks: eligible.filter((target) => !target.id.startsWith('member:')),
           usedPercent: (providerId) => this.quotaUsedPercent(providerId),
+          pace: (providerId) => this.quotaPace(providerId),
           state: this.groupState,
           now: this.now()
         })
@@ -597,7 +611,8 @@ const FAILOVER_GROUP_STRATEGY: Record<ModelFailoverStrategy, ModelRoutePoolConfi
   smart: 'adaptive',
   order: 'priority',
   rotate: 'round-robin',
-  'least-used': 'least-used'
+  'least-used': 'least-used',
+  pace: 'priority'
 }
 
 function synthesizedGroupPool(

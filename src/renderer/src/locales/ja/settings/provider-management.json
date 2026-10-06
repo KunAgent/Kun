@@ -112,5 +112,7 @@
   "modelProviderProtocols": "対応プロトコル",
   "modelProviderOwnEndpoint": "リソースのエンドポイント",
   "modelProviderNoListNote": "このベンダーはモデル一覧を公開していません。文書化された {{count}} 個のモデルを追加します。",
-  "modelProviderHeaderHints": "このベンダーが文書化している任意ヘッダー: {{headers}}。保存後に「カスタムリクエストヘッダー」で追加できます。"
+  "modelProviderHeaderHints": "このベンダーが文書化している任意ヘッダー: {{headers}}。保存後に「カスタムリクエストヘッダー」で追加できます。",
+  "modelProviderFailoverStrategy_pace": "ペース",
+  "modelProviderFailoverStrategyPaceHint": "リセットまでの 1 時間あたりの残り枠が最も多いアカウントを使い、リセット時の無駄を減らします。"
 }

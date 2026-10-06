@@ -125,12 +125,15 @@ export type LocalModelGatewayConfig = z.infer<typeof LocalModelGatewayConfigSche
  * - `order`: strict member priority; later accounts only run on failover.
  * - `rotate`: round-robin across enabled members.
  * - `least-used`: member with the fewest served requests this session.
+ * - `pace`: member with the most allowance left per hour until its window
+ *   resets, so less of each window is lost at reset.
  */
 export const ModelFailoverStrategySchema = z.enum([
   'smart',
   'order',
   'rotate',
-  'least-used'
+  'least-used',
+  'pace'
 ])
 export type ModelFailoverStrategy = z.infer<typeof ModelFailoverStrategySchema>
 

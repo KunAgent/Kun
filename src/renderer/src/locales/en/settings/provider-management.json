@@ -112,5 +112,7 @@
   "modelProviderProtocols": "Supported protocols",
   "modelProviderOwnEndpoint": "Your resource endpoint",
   "modelProviderNoListNote": "This vendor publishes no model list; {{count}} documented models are added.",
-  "modelProviderHeaderHints": "Optional headers this vendor documents: {{headers}}. Add them under Custom request headers after saving."
+  "modelProviderHeaderHints": "Optional headers this vendor documents: {{headers}}. Add them under Custom request headers after saving.",
+  "modelProviderFailoverStrategy_pace": "Pace",
+  "modelProviderFailoverStrategyPaceHint": "Uses the account with the most allowance left per hour until its window resets, so less is lost at each reset."
 }

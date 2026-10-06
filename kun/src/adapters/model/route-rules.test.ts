@@ -153,3 +153,17 @@ describe('affinity persistence', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
+
+describe('pace account strategy', () => {
+  it('prefers the account with the most allowance left per hour until reset', async () => {
+    const { orderFailoverGroupTargets, createFailoverGroupRouteState } = await import('./route-pool-failover-groups.js')
+    const member = (providerId: string) => ({ id: `member:${providerId}`, providerId, modelId: 'm', enabled: true, weight: 1 })
+    const pace: Record<string, number | undefined> = { a: 5, b: 40, c: undefined }
+    const ordered = orderFailoverGroupTargets({
+      group: { providerId: 'a', strategy: 'pace', fallbackTargets: [], members: [] },
+      request: { threadId: 't', model: 'm' }, members: [member('c'), member('a'), member('b')], fallbacks: [],
+      usedPercent: () => undefined, pace: (providerId) => pace[providerId], state: createFailoverGroupRouteState(), now: 0
+    })
+    expect(ordered.map((target) => target.providerId)).toEqual(['b', 'a', 'c'])
+  })
+})

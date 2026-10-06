@@ -112,5 +112,7 @@
   "modelProviderProtocols": "โปรโตคอลที่รองรับ",
   "modelProviderOwnEndpoint": "ปลายทางของทรัพยากรของคุณ",
   "modelProviderNoListNote": "ผู้ให้บริการนี้ไม่มีรายการโมเดล จะเพิ่มโมเดลที่ระบุในเอกสาร {{count}} รายการ",
-  "modelProviderHeaderHints": "ส่วนหัวเสริมที่ผู้ให้บริการระบุ: {{headers}} เพิ่มได้ในส่วนหัวคำขอที่กำหนดเองหลังบันทึก"
+  "modelProviderHeaderHints": "ส่วนหัวเสริมที่ผู้ให้บริการระบุ: {{headers}} เพิ่มได้ในส่วนหัวคำขอที่กำหนดเองหลังบันทึก",
+  "modelProviderFailoverStrategy_pace": "ตามจังหวะ",
+  "modelProviderFailoverStrategyPaceHint": "ใช้บัญชีที่มีโควตาคงเหลือต่อชั่วโมงก่อนรีเซ็ตมากที่สุด เพื่อลดโควตาที่เสียไปตอนรีเซ็ต"
 }
