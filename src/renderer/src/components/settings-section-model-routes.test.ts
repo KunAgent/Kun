@@ -73,12 +73,14 @@ describe('ModelRoutesSettings', () => {
 
   it('pauses Runtime polling while its persistent parent panel is hidden', async () => {
     vi.useFakeTimers()
-    const runtimeRequest = vi.fn(async () => ({
+    const runtimeRequest = vi.fn(async (_path: string) => ({
       ok: true,
       status: 200,
       body: '{"localGateway":{"enabled":true},"pools":[],"metrics":{},"events":[]}'
     }))
-    vi.stubGlobal('window', { kunGui: { runtimeRequest } })
+    vi.stubGlobal('window', { kunGui: { runtimeRequest, agentWiring: vi.fn(async () => ({ ok: true, agents: [] })) } })
+    // Gateway side panels load once on activation; only the route status endpoint polls.
+    const statusCalls = (): number => runtimeRequest.mock.calls.filter(([path]) => path === '/v1/model-routes').length
 
     let renderer!: ReactTestRenderer
     await act(async () => {
@@ -98,7 +100,7 @@ describe('ModelRoutesSettings', () => {
       }))
       await Promise.resolve()
     })
-    expect(runtimeRequest).toHaveBeenCalledOnce()
+    expect(statusCalls()).toBe(1)
 
     await act(async () => {
       renderer.update(createElement(ModelRoutesSettings, {
@@ -111,7 +113,7 @@ describe('ModelRoutesSettings', () => {
       vi.advanceTimersByTime(1_100)
       await Promise.resolve()
     })
-    expect(runtimeRequest).toHaveBeenCalledOnce()
+    expect(statusCalls()).toBe(1)
 
     await act(async () => renderer.unmount())
   })
