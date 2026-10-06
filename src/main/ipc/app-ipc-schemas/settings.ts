@@ -91,7 +91,8 @@ const checkpointCleanupPatchSchema = z.object({
 const notificationsPatchSchema = z.object({
   turnComplete: z.boolean().optional(),
   mainAgentTurnComplete: z.boolean().optional(),
-  subagentTurnComplete: z.boolean().optional()
+  subagentTurnComplete: z.boolean().optional(),
+  quotaReminders: z.boolean().optional()
 }).strict()
 
 const darkUiColorsPatchSchema = z.object({

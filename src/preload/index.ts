@@ -505,6 +505,12 @@ const api = {
     return () => ipcRenderer.removeListener('browser-use:state', wrapped)
   },
   showTurnCompleteNotification: (payload) => ipcRenderer.invoke('notification:turn-complete', payload),
+  showQuotaReminderNotification: (payload) => ipcRenderer.invoke('notification:quota-reminder', payload),
+  onQuotaReminderClicked: (callback) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('notification:quota-reminder:clicked', listener)
+    return () => ipcRenderer.removeListener('notification:quota-reminder:clicked', listener)
+  },
   setAppBadgeCount: (count) => ipcRenderer.invoke('app:badge-count', count),
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getGuiUpdateState: () => ipcRenderer.invoke('gui:update-state'),

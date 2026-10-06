@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
+import { useQuotaReminderNotifications } from './hooks/useQuotaReminderNotifications'
 import { appWindowTitleForFlavor } from '@shared/app-environment'
 import { resolveDesktopTitleBarMode, usesCustomDesktopTitleBar } from '@shared/desktop-title-bar'
 import { installSidebarActivityLifecycle } from './sidebar-activity-lifecycle'
@@ -102,6 +103,7 @@ export default function AppShell(): React.ReactElement {
   useRemoteReconnectRecovery()
   const route = useChatStore((s) => s.route)
   const surface = useRemoteSurface()
+  useQuotaReminderNotifications(surface === 'desktop')
   // Only the desktop knows the user's real workspaces; a phone must never overwrite them.
   useWorkbenchDirectorySync(surface === 'desktop')
   const { enabled: adeEnabled } = useAdeEnabled()

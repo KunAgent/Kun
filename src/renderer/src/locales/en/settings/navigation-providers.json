@@ -300,6 +300,8 @@
   "mainAgentTurnCompleteNotificationDesc": "Show a system notification when a main or forked conversation completes.",
   "subagentTurnCompleteNotification": "Subagent completions",
   "subagentTurnCompleteNotificationDesc": "Show a system notification when a subagent session completes.",
+  "quotaReminderNotification": "Allowance reminders",
+  "quotaReminderNotificationDesc": "Notify when a provider's plan allowance is about to renew with a large share unused.",
   "desktopBehavior": "Desktop behavior",
   "desktopKeepAwake": "Keep computer awake",
   "desktopKeepAwakeDesc": "Prevent the computer from sleeping while Kun is running so background agents and scheduled tasks can continue. The display may still turn off or lock.",

@@ -491,5 +491,6 @@
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
   "trajectoryDetailError": "Error",
-  "providerQuotaResetReminder": "{{label}}의 {{percent}}%가 남아 있으며 약 {{hours}}시간 후 재설정됩니다."
+  "providerQuotaResetReminder": "{{label}}의 {{percent}}%가 남아 있으며 약 {{hours}}시간 후 재설정됩니다.",
+  "providerQuotaReminderTitle": "{{provider}}: 곧 사용량이 초기화됩니다"
 }

@@ -491,5 +491,6 @@
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
   "trajectoryDetailError": "Error",
-  "providerQuotaResetReminder": "{{percent}}% лимита «{{label}}» не использовано, сброс примерно через {{hours}} ч."
+  "providerQuotaResetReminder": "{{percent}}% лимита «{{label}}» не использовано, сброс примерно через {{hours}} ч.",
+  "providerQuotaReminderTitle": "{{provider}}: лимит скоро обновится"
 }

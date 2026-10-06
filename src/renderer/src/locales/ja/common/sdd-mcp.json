@@ -491,5 +491,6 @@
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
   "trajectoryDetailError": "Error",
-  "providerQuotaResetReminder": "{{label}} の {{percent}}% が未使用で、約 {{hours}} 時間後にリセットされます。"
+  "providerQuotaResetReminder": "{{label}} の {{percent}}% が未使用で、約 {{hours}} 時間後にリセットされます。",
+  "providerQuotaReminderTitle": "{{provider}}: 利用枠がまもなくリセット"
 }

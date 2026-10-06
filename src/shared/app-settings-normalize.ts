@@ -148,7 +148,8 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     notifications: {
       turnComplete: maybeSettings.notifications?.turnComplete !== false,
       mainAgentTurnComplete: maybeSettings.notifications?.mainAgentTurnComplete !== false,
-      subagentTurnComplete: maybeSettings.notifications?.subagentTurnComplete === true
+      subagentTurnComplete: maybeSettings.notifications?.subagentTurnComplete === true,
+      ...(maybeSettings.notifications?.quotaReminders === false ? { quotaReminders: false as const } : {})
     },
     appBehavior: normalizeAppBehaviorSettings(maybeSettings.appBehavior),
     keyboardShortcuts: normalizeKeyboardShortcuts(maybeSettings.keyboardShortcuts),

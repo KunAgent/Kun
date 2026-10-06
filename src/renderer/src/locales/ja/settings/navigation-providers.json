@@ -300,6 +300,8 @@
   "mainAgentTurnCompleteNotificationDesc": "メイン会話または分岐会話が完了したときに、システム通知を表示します。",
   "subagentTurnCompleteNotification": "サブエージェントの完了通知",
   "subagentTurnCompleteNotificationDesc": "サブエージェントのセッションが完了したときに、システム通知を表示します。",
+  "quotaReminderNotification": "利用枠のリマインダー",
+  "quotaReminderNotificationDesc": "プロバイダーのプラン利用枠が多く残ったままリセットされそうなときに通知します。",
   "desktopBehavior": "デスクトップの動作",
   "desktopKeepAwake": "コンピューターをスリープさせない",
   "desktopKeepAwakeDesc": "Kun の実行中はコンピューターのスリープを防ぎ、バックグラウンドエージェントとスケジュールされたタスクを継続します。ディスプレイのオフや画面ロックは可能です。",

@@ -300,6 +300,8 @@
   "mainAgentTurnCompleteNotificationDesc": "แสดงการแจ้งเตือนระบบเมื่อการสนทนาหลักหรือการสนทนาที่แตกแขนงเสร็จสิ้น",
   "subagentTurnCompleteNotification": "การแจ้งเตือนเอเจนต์ย่อยเสร็จสิ้น",
   "subagentTurnCompleteNotificationDesc": "แสดงการแจ้งเตือนระบบเมื่อเซสชันของเอเจนต์ย่อยเสร็จสิ้น",
+  "quotaReminderNotification": "การเตือนโควตา",
+  "quotaReminderNotificationDesc": "แจ้งเตือนเมื่อโควตาแผนของผู้ให้บริการใกล้รีเซ็ตแต่ยังเหลือใช้มาก",
   "desktopBehavior": "ลักษณะการทำงานของเดสก์ท็อป",
   "desktopKeepAwake": "ป้องกันคอมพิวเตอร์เข้าสู่โหมดสลีป",
   "desktopKeepAwakeDesc": "ป้องกันคอมพิวเตอร์เข้าสู่โหมดสลีปขณะที่ Kun ทำงาน เพื่อให้เอเจนต์เบื้องหลังและงานตามกำหนดเวลาทำงานต่อไปได้ โดยยังคงปิดจอหรือล็อกหน้าจอได้",

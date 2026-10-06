@@ -473,6 +473,8 @@ export type NotificationConfigV1 = {
   mainAgentTurnComplete?: boolean
   /** Subagent side-session completion notifications. Missing legacy values normalize to disabled. */
   subagentTurnComplete?: boolean
+  /** Remind before a provider allowance window renews with much of it unused. Normalized settings keep only `false`. */
+  quotaReminders?: boolean
 }
 
 export const WINDOW_CLOSE_ACTIONS = ['quit'] as const

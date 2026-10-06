@@ -499,5 +499,6 @@
   "trajectoryDetailOutputTokens": "输出 Token",
   "trajectoryDetailReasoningTokens": "推理 Token",
   "trajectoryDetailError": "错误",
-  "providerQuotaResetReminder": "{{label}} 还有 {{percent}}% 未用，约 {{hours}} 小时后重置。"
+  "providerQuotaResetReminder": "{{label}} 还有 {{percent}}% 未用，约 {{hours}} 小时后重置。",
+  "providerQuotaReminderTitle": "{{provider}}：额度即将重置"
 }

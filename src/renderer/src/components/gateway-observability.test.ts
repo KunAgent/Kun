@@ -28,7 +28,8 @@ describe('recent routes', () => {
       ? await new Promise<ReturnType<typeof ok>>(() => undefined) : ok({ seq: 4, traces: [trace('r1', 4, {
         tries: [{ providerId: 'alpha', modelId: 'a1', fail: 'rate' }, { providerId: 'beta', modelId: 'b1', decision: 'failover' }], decision: 'failover', rule: undefined,
         agent: 'codex', durationMs: 840 })] }))
-    ;(globalThis as { window?: unknown }).window = { kunGui: { runtimeRequest, cancelRuntimeRequest: vi.fn() } }
+    const cancelRuntimeRequest = vi.fn()
+    ;(globalThis as { window?: unknown }).window = { kunGui: { runtimeRequest, cancelRuntimeRequest } }
     let renderer!: ReactTestRenderer
     await act(async () => { renderer = create(createElement(GatewayRouteTracePanel, { active: true, t })) })
     const body = text(renderer.root)
@@ -42,7 +43,7 @@ describe('recent routes', () => {
     expect(text(renderer.root)).toContain('a1 failed: rate')
     const pause = renderer.root.find((node) => node.type === 'button' && text(node).includes('Pause'))
     await act(async () => pause.props.onClick())
-    expect((globalThis as { window: { kunGui: { cancelRuntimeRequest: ReturnType<typeof vi.fn> } } }).window.kunGui.cancelRuntimeRequest).toHaveBeenCalled()
+    expect(cancelRuntimeRequest).toHaveBeenCalled()
     renderer.unmount()
   })
   it('does not poll while the page is hidden', async () => {

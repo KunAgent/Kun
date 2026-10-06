@@ -1,3 +1,4 @@
+import { registerQuotaReminderIpc } from './quota-reminder-notification'
 import {
   app,
   ipcMain,
@@ -402,6 +403,7 @@ export function registerMainIpc(services: MainServices): void {
       nativeDialogs: nativeDialogCoordinator,
       workspacePreviewProtocols
     })
+    registerQuotaReminderIpc()
     registerAdeCollaborationSettingsIpc({
       getMainWindow: () => mainState.mainWindow,
       service: createAdeCollaborationSettingsService({

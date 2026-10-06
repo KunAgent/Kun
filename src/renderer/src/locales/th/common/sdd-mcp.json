@@ -491,5 +491,6 @@
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
   "trajectoryDetailError": "Error",
-  "providerQuotaResetReminder": "{{label}} ยังเหลือ {{percent}}% และจะรีเซ็ตในอีกประมาณ {{hours}} ชม."
+  "providerQuotaResetReminder": "{{label}} ยังเหลือ {{percent}}% และจะรีเซ็ตในอีกประมาณ {{hours}} ชม.",
+  "providerQuotaReminderTitle": "{{provider}}: โควตาจะรีเซ็ตเร็ว ๆ นี้"
 }

@@ -180,7 +180,8 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     notifications: {
       turnComplete: raw.notifications?.turnComplete !== false,
       mainAgentTurnComplete: raw.notifications?.mainAgentTurnComplete !== false,
-      subagentTurnComplete: raw.notifications?.subagentTurnComplete === true
+      subagentTurnComplete: raw.notifications?.subagentTurnComplete === true,
+      ...(raw.notifications?.quotaReminders === false ? { quotaReminders: false as const } : {})
     },
     appBehavior: normalizeAppBehaviorSettings(raw.appBehavior),
     keyboardShortcuts: normalizeKeyboardShortcuts(raw.keyboardShortcuts),

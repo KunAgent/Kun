@@ -300,6 +300,8 @@
   "mainAgentTurnCompleteNotificationDesc": "मुख्य या शाखाबद्ध बातचीत पूरी होने पर सिस्टम सूचना दिखाएँ।",
   "subagentTurnCompleteNotification": "उप-एजेंट पूर्णता सूचनाएँ",
   "subagentTurnCompleteNotificationDesc": "उप-एजेंट सत्र पूरा होने पर सिस्टम सूचना दिखाएँ।",
+  "quotaReminderNotification": "सीमा अनुस्मारक",
+  "quotaReminderNotificationDesc": "जब प्रदाता की योजना सीमा का बड़ा हिस्सा बचा हो और वह जल्द रीसेट होने वाली हो, तब सूचना दें।",
   "desktopBehavior": "डेस्कटॉप व्यवहार",
   "desktopKeepAwake": "कंप्यूटर को सक्रिय रखें",
   "desktopKeepAwakeDesc": "Kun के चलने के दौरान कंप्यूटर को स्लीप होने से रोकें, ताकि बैकग्राउंड एजेंट और निर्धारित कार्य चलते रहें। डिस्प्ले बंद या स्क्रीन लॉक की जा सकती है।",

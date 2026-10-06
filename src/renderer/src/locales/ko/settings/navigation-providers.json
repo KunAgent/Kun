@@ -300,6 +300,8 @@
   "mainAgentTurnCompleteNotificationDesc": "기본 대화 또는 분기 대화가 완료되면 시스템 알림을 표시합니다.",
   "subagentTurnCompleteNotification": "하위 에이전트 완료 알림",
   "subagentTurnCompleteNotificationDesc": "하위 에이전트 세션이 완료되면 시스템 알림을 표시합니다.",
+  "quotaReminderNotification": "사용량 알림",
+  "quotaReminderNotificationDesc": "제공자 요금제 사용량이 많이 남은 채 곧 초기화될 때 알립니다.",
   "desktopBehavior": "데스크탑 동작",
   "desktopKeepAwake": "컴퓨터 절전 모드 방지",
   "desktopKeepAwakeDesc": "Kun이 실행되는 동안 컴퓨터가 절전 모드로 전환되지 않아 백그라운드 에이전트와 예약 작업이 계속 실행됩니다. 디스플레이 끄기와 화면 잠금은 가능합니다.",

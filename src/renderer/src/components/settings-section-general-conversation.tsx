@@ -115,6 +115,17 @@ export function GeneralConversationSettingsPanel({ view }: { view: Record<string
                 ))
               : null}
           </div>
+          <SettingRow
+            title={t('quotaReminderNotification')}
+            description={t('quotaReminderNotificationDesc')}
+            control={
+              <Toggle
+                checked={form.notifications.quotaReminders !== false}
+                ariaLabel={t('quotaReminderNotification')}
+                onChange={(v) => update({ notifications: { quotaReminders: v } })}
+              />
+            }
+          />
         </SettingsCard>
         <SettingsCard title={t('onboardingPreview')}>
           <SettingRow

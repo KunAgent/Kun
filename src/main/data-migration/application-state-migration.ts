@@ -53,7 +53,8 @@ export function applyPortableSettingsMigration(
         : {}),
       ...(typeof notifications.subagentTurnComplete === 'boolean'
         ? { subagentTurnComplete: notifications.subagentTurnComplete as boolean }
-        : {})
+        : {}),
+      ...(notifications.quotaReminders === false ? { quotaReminders: false as const } : {})
     },
     appBehavior: {
       ...current.appBehavior,

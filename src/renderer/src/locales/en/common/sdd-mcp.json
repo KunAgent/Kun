@@ -499,5 +499,6 @@
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
   "trajectoryDetailError": "Error",
-  "providerQuotaResetReminder": "{{percent}}% of {{label}} is unused and renews in about {{hours}}h."
+  "providerQuotaResetReminder": "{{percent}}% of {{label}} is unused and renews in about {{hours}}h.",
+  "providerQuotaReminderTitle": "{{provider}}: allowance renews soon"
 }
