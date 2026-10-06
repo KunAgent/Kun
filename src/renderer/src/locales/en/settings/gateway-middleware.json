@@ -1,0 +1,40 @@
+{
+  "gatewayMiddleware": {
+    "title": "Gateway middleware",
+    "description": "Transforms applied in order to every external agent's requests and replies, whatever protocol it speaks. A middleware that fails or runs too long leaves the request unchanged.",
+    "type": "Middleware type",
+    "add": "Add",
+    "refresh": "Refresh counters",
+    "empty": "No middleware: requests and replies pass unchanged.",
+    "stats": "{{calls}} calls · {{micros}} µs avg · {{failures}} failed",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "enabled": "Enabled",
+    "remove": "Remove",
+    "mapping": "Model mapping (one per line)",
+    "mappingHint": "asked = served. The client keeps seeing the name it asked for; the key must be allowed to use the served model.",
+    "promptText": "System prompt text",
+    "position": "Position",
+    "positions": {
+      "append": "Append",
+      "prepend": "Prepend",
+      "replace": "Replace"
+    },
+    "agents": "Only for agents",
+    "agentsPlaceholder": "All agents, or e.g. codex, claude-code",
+    "thinkMode": "Think tags",
+    "thinkReasoning": "Move <think> text into reasoning",
+    "thinkStrip": "Remove <think> text from replies",
+    "scriptFile": "Script file",
+    "scriptHint": "A .js file in the runtime's gateway-middleware folder exporting onModel, onSystemPrompt or onText. Each call is limited to 250 ms (50 ms per text delta).",
+    "loadError": "Could not load: {{error}}",
+    "lastError": "Last failure (request passed unchanged): {{error}}",
+    "boundaries": "Middleware runs inside the Kun runtime on this computer. Scripts are your own code and are not sandboxed; only add scripts you trust.",
+    "types": {
+      "model-map": "Model mapping",
+      "system-prompt": "System prompt",
+      "think-tags": "Think tags",
+      "script": "Script"
+    }
+  }
+}

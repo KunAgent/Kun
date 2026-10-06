@@ -1,0 +1,40 @@
+{
+  "gatewayMiddleware": {
+    "title": "ゲートウェイミドルウェア",
+    "description": "すべての外部エージェントのリクエストと応答に順に適用されます。プロトコルは問いません。失敗や時間切れの場合はそのまま通します。",
+    "type": "種類",
+    "add": "追加",
+    "refresh": "カウンターを更新",
+    "empty": "ミドルウェアなし：そのまま通過します。",
+    "stats": "{{calls}} 回 · 平均 {{micros}} µs · 失敗 {{failures}}",
+    "moveUp": "上へ",
+    "moveDown": "下へ",
+    "enabled": "有効",
+    "remove": "削除",
+    "mapping": "モデル対応（1 行に 1 件）",
+    "mappingHint": "要求名 = 実際のモデル。クライアントには要求名のまま見えます。キーは実際のモデルを使える必要があります。",
+    "promptText": "システムプロンプト",
+    "position": "位置",
+    "positions": {
+      "append": "末尾に追加",
+      "prepend": "先頭に追加",
+      "replace": "置き換え"
+    },
+    "agents": "対象エージェント",
+    "agentsPlaceholder": "全エージェント、または codex, claude-code など",
+    "thinkMode": "思考タグ",
+    "thinkReasoning": "<think> を推論に移す",
+    "thinkStrip": "<think> を応答から削除",
+    "scriptFile": "スクリプトファイル",
+    "scriptHint": "ランタイムの gateway-middleware フォルダーにある .js ファイルで、onModel・onSystemPrompt・onText を export します。1 回 250 ms（テキストごとに 50 ms）まで。",
+    "loadError": "読み込み失敗: {{error}}",
+    "lastError": "直近の失敗（変更なしで通過）: {{error}}",
+    "boundaries": "ミドルウェアはこのコンピューターの Kun ランタイム内で動きます。スクリプトはサンドボックス化されないため、信頼できるものだけを追加してください。",
+    "types": {
+      "model-map": "モデル対応",
+      "system-prompt": "システムプロンプト",
+      "think-tags": "思考タグ",
+      "script": "スクリプト"
+    }
+  }
+}

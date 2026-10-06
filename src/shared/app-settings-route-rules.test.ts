@@ -27,3 +27,16 @@ describe('route rule normalization', () => {
     expect(projectExecutableModelRoutePools({ providers: [], routePools: [outer!] })[0]!.enabled).toBe(false)
   })
 })
+
+describe('gateway middleware settings', () => {
+  it('keeps valid middleware, drops malformed and duplicate entries', async () => {
+    const { normalizeModelProviderSettings } = await import('./app-settings-provider')
+    const settings = normalizeModelProviderSettings({ localGateway: { enabled: true, middleware: [
+      { id: 'map', enabled: true, type: 'model-map', mapping: { fast: 'p/m' } },
+      { id: 'map', enabled: true, type: 'think-tags', mode: 'strip' },
+      { id: 'bad', enabled: true, type: 'script', file: '/etc/passwd' },
+      { id: 'tags', enabled: false, type: 'think-tags', mode: 'strip' }
+    ] } } as never)
+    expect(settings.localGateway.middleware?.map((entry) => entry.id)).toEqual(['map', 'tags'])
+  })
+})

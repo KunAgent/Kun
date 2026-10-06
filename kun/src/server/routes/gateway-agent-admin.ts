@@ -67,3 +67,10 @@ export async function allowGatewayClientModel(runtime: ServerRuntime, clientId: 
     return privateResponse({ code: 'capability_unavailable', message: 'The client policy could not be updated. Retry.' }, 503)
   }
 }
+
+/** Middleware counters (calls, average time, failures, load errors) for the gateway settings page. */
+export function gatewayAdminMiddleware(runtime: ServerRuntime): JsonResponse {
+  const host = runtime.modelGateway?.middleware
+  if (!host) return privateResponse({ middleware: [] })
+  return privateResponse({ middleware: host.stats() })
+}

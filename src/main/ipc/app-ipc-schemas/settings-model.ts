@@ -1,6 +1,8 @@
 import { ModelMetadataEvidenceSchema } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { z } from 'zod'
+import { GatewayMiddlewareSchema } from '../../../../kun/src/contracts/gateway-middleware.js'
+import { routePoolPatchesSchema } from './settings-route-pools'
 import { AdeProjectDefaultsMapSchema } from '../../../shared/ade-project-defaults'
 import {
   APP_LOCALES,
@@ -260,44 +262,14 @@ export const modelProviderPatchSchema = z.object({
       models: z.array(modelIdSchema).max(500).optional()
     }).strict().nullable().optional()
   }).strict()).max(50).optional(),
-  routePools: z.array(z.object({
-    capabilityMode: z.enum(['guaranteed', 'request-filter']).optional(),
-    affinity: z.object({ mode: z.enum(['off', 'turn', 'session']), ttlMs: z.number().int().min(60_000).max(86_400_000) }).strict().optional(),
-    id: z.string().trim().min(1).max(64).optional(),
-    name: z.string().trim().min(1).max(80).optional(),
-    modelId: modelIdSchema.optional(),
-    enabled: z.boolean().optional(),
-    strategy: z.enum(['priority', 'round-robin', 'weighted-round-robin', 'least-latency', 'least-used', 'adaptive']).optional(),
-    targets: z.array(z.object({
-      id: z.string().trim().min(1).max(64),
-      providerId: z.string().trim().min(1).max(64),
-      modelId: modelIdSchema,
-      enabled: z.boolean(),
-      weight: z.number().int().min(1).max(100)
-    }).strict()).max(50).optional(),
-    failurePolicy: z.object({
-      failoverHttpStatusCodes: z.array(z.number().int().min(400).max(599)).max(64),
-      failoverOnNetworkError: z.boolean(),
-      failoverOnTimeout: z.boolean(),
-      failoverOnAuthError: z.boolean()
-    }).strict().optional(),
-    healthPolicy: z.object({
-      failureThreshold: z.number().int().min(1).max(20),
-      cooldownMs: z.number().int().min(1000).max(3_600_000),
-      halfOpenMaxAttempts: z.number().int().min(1).max(10),
-      creditCooldownMs: z.number().int().min(1000).max(86_400_000).optional(),
-      quotaCooldownMs: z.number().int().min(1000).max(86_400_000).optional(),
-      authCooldownMs: z.number().int().min(1000).max(86_400_000).optional(),
-      maxCooldownMs: z.number().int().min(1000).max(86_400_000).optional()
-    }).strict().optional()
-  }).strict()).max(100).optional(),
+  routePools: routePoolPatchesSchema,
   failover: z.array(z.object({
     providerId: z.string().trim().min(1).max(64).optional(),
     accounts: z.array(z.object({
       providerId: z.string().trim().min(1).max(64),
       enabled: z.boolean()
     }).strict()).max(20).optional(),
-    strategy: z.enum(['smart', 'order', 'rotate', 'least-used']).optional(),
+    strategy: z.enum(['smart', 'order', 'rotate', 'least-used', 'pace']).optional(),
     fallbackTargets: z.array(z.object({
       providerId: z.string().trim().min(1).max(64),
       modelId: modelIdSchema
@@ -306,7 +278,8 @@ export const modelProviderPatchSchema = z.object({
   localGateway: z.object({
     enabled: z.boolean().optional(),
     name: z.string().trim().min(1).max(80).optional(),
-    exposeProviderModels: z.boolean().optional()
+    exposeProviderModels: z.boolean().optional(),
+    middleware: z.array(GatewayMiddlewareSchema).max(32).optional()
   }).strict().optional()
 }).strict()
 

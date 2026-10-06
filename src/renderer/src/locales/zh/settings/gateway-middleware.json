@@ -1,0 +1,40 @@
+{
+  "gatewayMiddleware": {
+    "title": "网关中间件",
+    "description": "按顺序作用于所有外部 agent 的请求与回复，不区分协议。中间件出错或超时时，请求保持原样。",
+    "type": "中间件类型",
+    "add": "添加",
+    "refresh": "刷新统计",
+    "empty": "暂无中间件：请求与回复原样通过。",
+    "stats": "{{calls}} 次调用 · 平均 {{micros}} µs · {{failures}} 次失败",
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "enabled": "启用",
+    "remove": "删除",
+    "mapping": "模型映射（每行一条）",
+    "mappingHint": "请求名 = 实际服务模型。客户端看到的仍是它请求的名称；密钥必须有权使用实际服务的模型。",
+    "promptText": "系统提示词内容",
+    "position": "位置",
+    "positions": {
+      "append": "追加到末尾",
+      "prepend": "插入到开头",
+      "replace": "替换"
+    },
+    "agents": "仅对这些 agent",
+    "agentsPlaceholder": "所有 agent，或如 codex, claude-code",
+    "thinkMode": "思考标签",
+    "thinkReasoning": "把 <think> 内容转为推理",
+    "thinkStrip": "从回复中删除 <think> 内容",
+    "scriptFile": "脚本文件",
+    "scriptHint": "运行时 gateway-middleware 目录下的 .js 文件，导出 onModel、onSystemPrompt 或 onText。每次调用限时 250 ms（每段文本 50 ms）。",
+    "loadError": "加载失败：{{error}}",
+    "lastError": "最近一次失败（请求已原样通过）：{{error}}",
+    "boundaries": "中间件运行在本机的 Kun 运行时内。脚本是你自己的代码且不受沙箱隔离，请只添加你信任的脚本。",
+    "types": {
+      "model-map": "模型映射",
+      "system-prompt": "系统提示词",
+      "think-tags": "思考标签",
+      "script": "脚本"
+    }
+  }
+}

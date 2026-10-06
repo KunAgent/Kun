@@ -3,6 +3,7 @@ import providerConfiguration from '../en/settings/provider-configuration.json'
 import gatewayConnection from '../en/settings/gateway-connection.json'
 import gatewayAgents from './settings/gateway-agents.json'
 import routeRules from './settings/route-rules.json'
+import gatewayMiddleware from './settings/gateway-middleware.json'
 import googleWorkspace from './settings/google-workspace.json'
 import navigationProviders from './settings/navigation-providers.json'
 import modelRoutes from './settings/model-routes.json'
@@ -20,6 +21,7 @@ const settings = {
   ...gatewayConnection,
   ...gatewayAgents,
   ...routeRules,
+  ...gatewayMiddleware,
   ...googleWorkspace,
   ...navigationProviders,
   ...modelRoutes,

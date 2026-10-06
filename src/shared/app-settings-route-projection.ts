@@ -8,6 +8,7 @@ import {
 } from './app-settings-types'
 import { normalizeModelProviderId } from './app-settings-provider-capabilities'
 import { normalizeRouteClassifier, normalizeRouteRules } from './app-settings-route-rules'
+import { GatewayMiddlewareSchema, type GatewayMiddlewareConfig } from '../../kun/src/contracts/gateway-middleware.js'
 
 /** Route pool fields beyond targets and policies: manual pick, rules, classifier and overflow behavior. */
 export function routePoolExtras(raw: Partial<ModelRoutePoolV1>, targetIds: ReadonlySet<string>): Partial<ModelRoutePoolV1> {
@@ -65,3 +66,16 @@ export function projectExecutableModelRoutePools(
   })
 }
 
+
+/** Keeps valid middleware entries (unique ids, at most 32) and drops malformed ones. */
+export function normalizeGatewayMiddleware(input: unknown): { middleware?: GatewayMiddlewareConfig[] } {
+  if (!Array.isArray(input)) return {}
+  const seen = new Set<string>()
+  const middleware = input.slice(0, 32).flatMap((entry) => {
+    const parsed = GatewayMiddlewareSchema.safeParse(entry)
+    if (!parsed.success || seen.has(parsed.data.id)) return []
+    seen.add(parsed.data.id)
+    return [parsed.data]
+  })
+  return middleware.length ? { middleware } : {}
+}

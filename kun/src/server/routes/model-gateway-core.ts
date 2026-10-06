@@ -216,6 +216,8 @@ export async function resolveGatewayModel(
   policy?: GatewayClientPolicy,
   policyRevision?: number
 ): Promise<ResolvedGatewayModel | null> {
+  // Middleware may serve an asked name by another model; admission below checks the served one.
+  model = runtime.modelGateway?.middleware?.rewriteModel(model) ?? model
   const registry = runtime.modelConnections
   const assertCurrent = runtime.directModelClient?.gatewayDispatchGuard?.()
   const snapshot = await registry?.snapshot()

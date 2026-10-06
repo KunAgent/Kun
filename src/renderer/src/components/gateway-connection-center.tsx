@@ -10,10 +10,11 @@ import { useChatStore } from '../store/chat-store'
 import { settingsButtonClass } from './settings-button'
 import { GatewayClientCredentials } from './gateway-client-credentials'
 import { GatewayAgentsPanel } from './gateway-agents-panel'
+import { GatewayMiddlewarePanel } from './gateway-middleware-panel'
 import { GatewayClientSelect } from './gateway-client-select'
 import type { RoutePoolTestRecord, RouteStatus } from './settings-section-model-routes'
 
-export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, active, tests, translation, exportableModelIds, gatewayExportPools, onEditRoute }: {
+export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, active, tests, translation, exportableModelIds, gatewayExportPools, onEditRoute, onChange }: {
   settings: ModelProviderSettingsV1
   pools: ModelRoutePoolV1[]
   baseUrl: string
@@ -24,6 +25,8 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
   tests: RoutePoolTestRecord[]
   translation?: TFunction
   onEditRoute: (poolId: string) => void
+  /** Saves gateway settings (middleware); omitted in read-only previews. */
+  onChange?: (next: ModelProviderSettingsV1) => void
 }): ReactElement {
   const { t: localT } = useTranslation('settings')
   const t = translation ?? localT
@@ -59,6 +62,7 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
   }
   return <div className="mt-4 grid min-w-0 gap-4">
   <GatewayAgentsPanel active={active} translation={t} />
+  {onChange ? <GatewayMiddlewarePanel settings={settings} onChange={onChange} active={active} t={t} /> : null}
   <section className="grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-connection-center>
     <div>
       <h3 className="text-[14px] font-semibold text-ds-ink">{t('gatewayConnection.title')}</h3>

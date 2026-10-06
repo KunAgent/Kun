@@ -24,7 +24,12 @@ export function gatewayUpstream(runtime: ServerRuntime, request: Request, auth: 
   try { session = gatewayAffinityIdentity(request, auth).session } catch { session = undefined }
   const agent = gatewayCallerAgent(request)
   if (agent && modelRequest.gatewayRouting) modelRequest.gatewayRouting.agent = agent
+  const middleware = runtime.modelGateway?.middleware
+  const middlewareContext = { model: asked, ...(agent ? { agent } : {}) }
+  middleware?.transformRequest(modelRequest, middlewareContext)
   const trace = gatewayRouteTraceStore(owner).begin(session, { requestId: modelRequest.turnId, asked,
     ...(agent ? { agent } : {}), ...(modelRequest.reasoningEffort ? { effort: modelRequest.reasoningEffort } : {}) })
-  return traceGatewayStream(captureGatewayContinuations(runtime.modelClient!.stream(modelRequest), continuations, callerId), trace)
+  const upstream = runtime.modelClient!.stream(modelRequest)
+  return traceGatewayStream(captureGatewayContinuations(middleware ? middleware.wrapStream(upstream, middlewareContext) : upstream,
+    continuations, callerId), trace)
 }

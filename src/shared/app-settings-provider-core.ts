@@ -1,5 +1,5 @@
 import { normalizeRouteEffort } from './app-settings-route-rules'
-import { projectExecutableModelRoutePools, routePoolExtras } from './app-settings-route-projection'
+import { normalizeGatewayMiddleware, projectExecutableModelRoutePools, routePoolExtras } from './app-settings-route-projection'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
@@ -206,7 +206,8 @@ export function normalizeModelProviderSettings(
       name: typeof input?.localGateway?.name === 'string' && input.localGateway.name.trim()
         ? input.localGateway.name.trim().slice(0, 80)
         : defaults.localGateway.name,
-      exposeProviderModels: input?.localGateway?.exposeProviderModels === true
+      exposeProviderModels: input?.localGateway?.exposeProviderModels === true,
+      ...normalizeGatewayMiddleware(input?.localGateway?.middleware)
     }
   }
 }

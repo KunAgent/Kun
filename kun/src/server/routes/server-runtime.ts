@@ -384,6 +384,8 @@ export type ServerRuntime = {
      * Optional for test scaffolds.
      */
     modelCapabilities?(model: string, providerId?: string): ModelCapabilityMetadata
+    /** Request/reply transforms for external gateway traffic. Optional for test scaffolds. */
+    middleware?: import('./gateway-middleware.js').GatewayMiddlewareHost
   }
   defaultModel?: string
   /**

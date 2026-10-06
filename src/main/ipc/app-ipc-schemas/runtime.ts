@@ -460,6 +460,8 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   ...['ack', 'dismiss', 'pin'].map((action) =>
     compileEndpoint(`${KUN_ACTIVITY_PATH}/{unitId}/${action}`, ['POST'])),
   compileEndpoint(KUN_APPROVALS_PATH, ['GET']),
+  // Read-only middleware counters; contain no secrets.
+  compileEndpoint('/v1/model-gateway/middleware', ['GET']),
   compileEndpoint(KUN_THREADS_TEMPLATE, ['GET', 'POST']),
   compileEndpoint(KUN_THREAD_STATES_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_STATE_TEMPLATE, ['GET']),

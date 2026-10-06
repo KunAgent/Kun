@@ -491,7 +491,7 @@ export function ModelRoutesSettings({
         </section>
         <GatewayConnectionCenter translation={t} settings={settings} pools={executablePools} baseUrl={gatewayBaseUrl}
           gatewayExportPools={status?.gatewayExportPools ?? []} exportableModelIds={status?.exportableModelIds ?? []} synced={configurationSynced && persistenceReady} active={active && activeSettingsTab === 'gateway'} tests={status?.tests ?? []}
-          onEditRoute={(id) => { setSelectedId(id); setActiveSettingsTab('models') }} />
+          onEditRoute={(id) => { setSelectedId(id); setActiveSettingsTab('models') }} onChange={onChange} />
       </SettingsTabPanel>
       <aside className={`${activeSettingsTab === 'gateway' ? 'hidden' : 'grid'} min-w-0 content-start gap-3 border-b border-ds-border-muted pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4`}>
         <div className="flex items-start justify-between gap-2">

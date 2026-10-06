@@ -1,4 +1,6 @@
+import { join } from 'node:path'
 import { RoomNotificationObserver } from '../rooms/room-notification-observer.js'
+import { GatewayMiddlewareHost } from './routes/gateway-middleware.js'
 import { bindAgentCommitmentService } from '../agents/agent-commitment-tools.js'
 import { bindAgentArtifactLibrary } from '../agents/agent-artifact-library.js'
 import {
@@ -332,7 +334,9 @@ export function createServerRuntimeComposition(
 	      credentials: gatewayCredentials,
           budget: gatewayBudget,
 	      usage: gatewayUsage,
-	      modelCapabilities: core.modelCapabilities
+	      modelCapabilities: core.modelCapabilities,
+	      middleware: new GatewayMiddlewareHost(join(config.activeOptions.dataDir, 'gateway-middleware'),
+	        () => config.activeOptions.localModelGateway?.middleware ?? [])
 	    },
 	    modelConnections,
 	    modelConnectionOAuth,

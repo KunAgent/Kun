@@ -156,7 +156,8 @@ export function providerFailoverConfigForRuntime(settings: AppSettingsV1) {
 
 export function localModelGatewayConfigForRuntime(settings: AppSettingsV1) {
   const localGateway = getModelProviderSettings(settings).localGateway
-  return { enabled: localGateway.enabled, exposeProviderModels: localGateway.exposeProviderModels }
+  return { enabled: localGateway.enabled, exposeProviderModels: localGateway.exposeProviderModels,
+    ...(localGateway.middleware?.length ? { middleware: localGateway.middleware } : {}) }
 }
 
 export function tokenEconomyConfigForRuntime(

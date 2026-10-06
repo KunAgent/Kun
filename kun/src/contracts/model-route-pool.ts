@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { GatewayMiddlewareSchema } from './gateway-middleware.js'
 
 export const LOCAL_MODEL_GATEWAY_PROVIDER_ID = 'route-gateway:local'
 
@@ -115,7 +116,9 @@ export const LocalModelGatewayConfigSchema = z.object({
    * local gateway. Off by default; subscription, OAuth, and non-HTTP providers
    * are never exposed regardless of this flag.
    */
-  exposeProviderModels: z.boolean().default(false)
+  exposeProviderModels: z.boolean().default(false),
+  /** Ordered request/reply transforms applied to external gateway traffic. */
+  middleware: z.array(GatewayMiddlewareSchema).max(32).optional()
 }).strict()
 export type LocalModelGatewayConfig = z.infer<typeof LocalModelGatewayConfigSchema>
 

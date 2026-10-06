@@ -622,6 +622,8 @@ export type LocalModelGatewaySettingsV1 = {
    * local gateway. Subscription/OAuth and non-HTTP providers are never exposed.
    */
   exposeProviderModels: boolean
+  /** Ordered request/reply transforms for external gateway traffic. */
+  middleware?: import('../../kun/src/contracts/gateway-middleware.js').GatewayMiddlewareConfig[]
 }
 
 export type ModelProviderSettingsV1 = {
