@@ -247,10 +247,50 @@ smoke 命令可在干净机器按文档一次跑通；打包 app 的检查项全
 
 - 继续不做 OpenCode 认证插件兼容壳、LAN/远程共享、embeddings/rerank、
   媒体导出，理由同前置文档第 5 节。
-- 意图分类器不加"用模型分类"选项：当前关键词分类够用，模型分类会给每个
-  turn 加一次前置调用，影响延迟与成本。
+- 意图分类器已经是模型分类（池的 classifier 指定 provider/model，每个 turn
+  缓存一次结果），复查时误写为关键词匹配；不再新增分类方式。
 - YAML 编辑器只做标量键，不做通用重写；遇到锚点、多文档、流式写法直接拒绝
   接管并提示用户手改。
 - 系统通知走现有偏好与回执机制，不新建通道。
 - 700 行门槛：`gateway-route-trace.ts` 加 `recent` 后接近上限，`decision`
   类型放到 `contracts/gateway-route-trace.ts`（新）。
+
+## 5. 实施记录（2026-10-06）
+
+分支 `codex/provider-gateway-followup`，按本计划全部实施：
+
+- F1：`scripts/smoke-agent-wiring-clients.mjs` 用真实客户端走"接管原生配置
+  -> 网关 -> 断开还原"。本机已安装的 Claude Code 2.1.291、Codex 0.145.0、
+  OpenCode 1.1.47、Gemini CLI 0.52.0、Droid 0.234.0、Kimi Code 0.29.0
+  全部通过（文本、真实读工具往返、按 agent 的路由规则、中间件、路由轨迹、
+  字节级还原、保留用户改动；Claude Code 还验证了 thinking 签名回路）。
+  Goose、Aider、Pi、Crush、Continue 本机未安装，只有单元测试。结果记录在
+  `docs/provider-gateway-release-validation.md`。
+- 真实联调发现并修复了 5 个网关兼容问题：Claude Code 的
+  `context_management`（clear_thinking keep all）与 messages 内的 system
+  消息、Codex 回放的 reasoning 条目、Gemini CLI 的 `topK`、Kimi Code 把
+  上下文窗口当 `max_completion_tokens`（网关流量的 max tokens 改为上限，
+  按成员能力收紧）。
+- F2：路由规则面板测试、每个适配器一个测试文件、Gemini 图片与并行
+  function call、中间件叠加与 options 隔离。
+- F3：`GET /v1/kun/limit` 与管理端每个 key 的限额条、`kun gateway keys
+  limit`；发现文件 0600、随设置热切换、网关页开关；中间件目录、打开目录、
+  示例脚本；额度重置系统通知（偏好可关，每个窗口只提醒一次）。
+- F4：路由元数据带决策来源，最近 100 条轨迹长轮询与"最近路由"面板，
+  `kun gateway routes`。
+- F5：连接前 diff 预览（GUI 确认 / `--dry-run`），新增 Goose、Continue、
+  Aider、Kimi Code 适配器，YAML 编辑器保留注释，TOML 支持带点的表名与数组。
+- F6：自定义余额 URL（同主机 HTTPS，片段为 JSON pointer）；价格优先级
+  修正为 用户/供应商声明 > 目录（models.dev），预设静态价格仍是离线兜底、
+  会被目录刷新；按 agent 会话归因用量与轨迹；`kun provider
+  list|models|test`、`kun gateway route <alias>`。
+
+与计划的偏差：
+
+- Zed 未接入：它把 API key 存在系统钥匙串，而 Kun 只把 key 写进 agent
+  自己的配置文件。
+- 429 响应没有加 `x-kun-limit-reset` 头：预算拒绝以流内错误返回，改为在
+  错误信息里指向 `/v1/kun/limit`。
+- Gemini CLI 只在用户信任过的文件夹读取 `~/.gemini/.env`；未信任文件夹
+  会报缺少 key 而不会把 key 发往 Google。Agents 页对 Gemini CLI 显示这条
+  说明。
