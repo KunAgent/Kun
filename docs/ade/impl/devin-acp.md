@@ -47,9 +47,13 @@ that protocol directly. No user or workspace hook files are modified.
 - A nonempty `authMethods` list does not block session creation or model
   discovery. A real authentication error shows a CLI login instruction.
 - Before every new or resumed Devin session receives a prompt, its requested
-  permission mode must be advertised and selected. CLI 3000.11.3 advertises
-  `ask`, `accept-edits` and `bypass`, without `normal`. Legacy `normal`/`auto`
-  may fall back to the narrower read-only `ask`; `ask` never widens to Normal.
+  permission mode must be advertised and selected. CLI 3000.11.3 (2026-10-06)
+  advertises `accept-edits`, `smart`, `ask`, `plan` and `bypass`, without
+  `normal`. Kun's reviewer-approved scope ("approve for me") maps to `smart`
+  and falls back to legacy `normal`/`auto`, then read-only `ask`, on older
+  CLIs. Kun's ask-for-approval scope has no per-edit-approval Devin mode, so
+  it negotiates legacy `normal` and narrows to read-only `ask`; `ask` never
+  widens to Normal.
   A conflicting config response or unsupported mode fails before prompting.
   Without a native override, Kun maps the captured composer permission to a
   supported mode. A saved Bypass preference cannot exceed the host ceiling.
@@ -61,6 +65,28 @@ that protocol directly. No user or workspace hook files are modified.
   so worker admission requires the existing isolated-workspace path.
 - Native resume depends on `loadSession` from the installed agent; the existing
   portable handoff remains the fallback when native history is unavailable.
+
+## Catalog, readiness and usage behavior
+
+- `session/new` can fail transiently inside Devin (observed: `-32603 Failed to
+  load team settings: fetch timed out after 10000ms`). The model probe retries
+  such agent/timeout failures once, returns the categorical reason in
+  `catalogStatus.error`, keeps serving the last good catalog after a failed
+  refresh, and logs the failure. Login rejections are not retried.
+- Probes, readiness handshakes and turns apply the same native network fill
+  (system proxy) as Codex and Claude; a Dock-launched app has no shell proxy.
+- Readiness proofs are re-validated in the last 90 s of their five-minute life
+  while still served; a failed background warm-up retries with backoff (15 s
+  doubling to 5 min). Turn admission reuses an unexpired proof from the same
+  configuration revision with an unchanged identity instead of re-spawning
+  Devin for every message.
+- `usage_update` (`used`/`size`) is context occupancy and only feeds the
+  context gauge. Token usage comes from the `session/prompt` result and is
+  folded into the thread-cumulative ledger (`harness-usage-ledger.ts`), tagged
+  `source: 'harness-reported'` and `harnessId`. Devin's reported input appears
+  to cover the final request rather than every tool step, so treat it as a
+  lower bound; it has no local price and the footer says it is billed by the
+  Agent.
 
 ## Validation
 

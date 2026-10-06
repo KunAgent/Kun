@@ -238,4 +238,15 @@ describe('FloatingComposerFooterView', () => {
     expect(css).toContain('.ds-composer-usage-money-estimate')
     expect(css).toMatch(/@container \(max-width: 460px\)[\s\S]*?\.ds-composer-usage-turns/s)
   })
+  it('labels price-less external Agent usage as billed by the Agent instead of an error', () => {
+    const usage = usageSummary({ costUsd: null, totalTokens: 48_000, turns: 2 })
+    const external = renderFooter({ threadUsage: usage, timingThreadUsage: usage,
+      adeComposerEnabled: true, adeComposer: { harnessId: 'devin' } })
+    expect(external).toContain('data-session-usage-agent-billed="true"')
+    expect(external).toContain('agentUpdate.usageBilledByAgent')
+    expect(external).not.toContain('Price unavailable')
+    const native = renderFooter({ threadUsage: usage, timingThreadUsage: usage,
+      adeComposerEnabled: true, adeComposer: { harnessId: 'kun' } })
+    expect(native).toContain('Price unavailable')
+  })
 })

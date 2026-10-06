@@ -66,3 +66,17 @@ export function nativeAgentNetworkEnv(
     http_proxy: policy.proxyUrl, https_proxy: policy.proxyUrl,
     NO_PROXY: bypass.NO_PROXY!, no_proxy: bypass.no_proxy! }
 }
+
+/**
+ * Launch env plus the native network fill (system proxy) for spawned agent
+ * CLIs. Deliberate process/launch proxy variables always win; a Dock-launched
+ * app otherwise has no shell proxy variables at all.
+ */
+export function nativeAgentLaunchEnv(
+  definition: HarnessDefinition,
+  explicit: Record<string, string> = {},
+  base: Record<string, string | undefined> = process.env
+): Record<string, string> {
+  const launch = definition.launch?.env ?? {}
+  return { ...nativeAgentNetworkEnv(definition, base, { ...explicit, ...launch }), ...launch }
+}

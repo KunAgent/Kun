@@ -88,7 +88,9 @@ export function HandoffEntry({ block }: { block: HandoffBlock }): ReactElement {
 
   const label = block.handoffMode === 'delta'
     ? t('adeHandoffDelta', { agent: block.toHarnessName })
-    : t('adeHandoff', {
+    : block.reason === 'rebase'
+      ? t('adeHandoffRestart', { agent: block.toHarnessName, turns: block.recentTurns })
+      : t('adeHandoff', {
         agent: block.toHarnessName,
         turns: block.recentTurns,
         files: block.files

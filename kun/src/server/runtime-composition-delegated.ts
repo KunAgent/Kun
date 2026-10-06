@@ -271,6 +271,9 @@ export function buildMainDelegatedRuntime(
       taskWorkspaces: input.taskWorkspaces,
       debugSink: llmDebug,
       nowIso
-    })
+    }),
+    // External-agent usage is folded into the same cumulative ledger as
+    // native turns so the usage index and composer footer stay correct.
+    usage: core.usageService
   }
 }

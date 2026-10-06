@@ -293,7 +293,8 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
           currentTurnId: turnId,
           ownerThreadId: threadId,
           workspacePath: ctx.workspace,
-          taskWorkspaces: this.deps.taskWorkspaces
+          taskWorkspaces: this.deps.taskWorkspaces,
+          harnessName: definition.displayName
         })
       : undefined
     await recordHandoffInjected(

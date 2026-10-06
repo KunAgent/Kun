@@ -10,4 +10,10 @@ export type HarnessModelInfo = {
   category?: 'model' | 'fusion'
 }
 
-export type HarnessModelCatalog = { models: string[]; modelInfo: HarnessModelInfo[] }
+/** Why a live native catalog lookup returned no models (never contains secrets). */
+export type HarnessModelCatalogError = {
+  code: 'auth_required' | 'timeout' | 'spawn_failed' | 'protocol_error' | 'agent_error' | 'unavailable'
+  message?: string
+}
+
+export type HarnessModelCatalog = { models: string[]; modelInfo: HarnessModelInfo[]; error?: HarnessModelCatalogError }

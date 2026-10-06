@@ -47,8 +47,23 @@
       "cache": "上次获取的模型目录",
       "fallback": "参考模型列表，实时获取未成功",
       "provider": "来自模型来源",
-      "static": "内置模型目录"
+      "static": "内置模型目录",
+      "failed": "实时获取失败",
+      "stale": "显示上次获取的列表，最近一次刷新失败"
     },
+    "catalogError": {
+      "auth_required": "需要登录",
+      "timeout": "Agent 响应超时",
+      "spawn_failed": "Agent 无法启动",
+      "protocol_error": "Agent 返回了无法识别的结果",
+      "agent_error": "Agent 服务返回错误",
+      "unavailable": "Agent 暂不可用"
+    },
+    "retrying": "正在自动重试…",
+    "composerFailedHint": "未能获取此 Agent 的模型列表（{{reason}}）。Kun 会自动重试；也可以先用 Agent 默认模型发送。",
+    "composerNotReadyHint": "正在检查此 Agent，检查通过后会在这里显示可选模型。",
+    "usageBilledByAgent": "由 Agent 计费",
+    "usageBilledByAgentTitle": "Token 数由 Agent 自行上报。它通过自己的账号或订阅计费，因此 Kun 不显示本地价格。",
     "settingsChanged": "更新期间 Agent 路径已被修改，请重新检查。",
     "rollback": "恢复旧版本",
     "modelMissing": "当前模型列表已不包含所选模型，请选择可用模型后再发送。"

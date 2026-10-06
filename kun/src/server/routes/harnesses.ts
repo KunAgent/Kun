@@ -1,4 +1,5 @@
 import { gatewayPoolTargets } from '../../domain/model-gateway-export-policy.js'
+import type { HarnessModelCatalogError } from '../../contracts/harness-models.js'
 import { nativeAgentNetworkStatus } from '../../harness/native-agent-network.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
@@ -184,16 +185,26 @@ export async function listHarnessModels(
   const url = new URL(request.url)
   if (url.searchParams.get('refresh') === '1') harnesses.invalidateModels?.(definition.id)
   const cachedModels = harnesses.probedModels?.(definition)
+  const selectedModelParam = url.searchParams.get('selected_model')?.trim() || undefined
   const reply = (body: Record<string, unknown>, source: 'native' | 'cache' | 'fallback' | 'provider' | 'static') => {
     const detected = harnesses.detector?.cachedStatus?.(definition.id)
-    const probe = definition.transport === 'agent-sdk' ? harnesses.agentSdkModels
-      : definition.transport === 'codex-app-server' ? harnesses.codexModels : harnesses.acpModels
-    return jsonResponse({ ...body, catalogStatus: { source,
-      fetchedAt: probe?.fetchedAt?.(definition) ?? new Date().toISOString(),
+    const { error, ...rest } = body as Record<string, unknown> & { error?: HarnessModelCatalogError }
+    // fetchedAt is the probe's own timestamp; a response time would claim a
+    // fresh lookup that never happened.
+    const fetchedAt = definition.transport === 'acp'
+      ? harnesses.acpModels?.fetchedAt?.(definition, selectedModelParam)
+      : definition.transport === 'agent-sdk' ? harnesses.agentSdkModels?.fetchedAt?.(definition)
+        : definition.transport === 'codex-app-server' ? harnesses.codexModels?.fetchedAt?.(definition) : undefined
+    return jsonResponse({ ...rest, catalogStatus: { source,
+      fetchedAt: fetchedAt ?? new Date().toISOString(),
       ...(detected?.version ? { version: detected.version } : {}),
       ...(detected?.resolvedCommand ? { command: detected.resolvedCommand } : {}),
-      ...(source === 'fallback' ? { message: 'model_catalog_unavailable' } : {}) } })
+      ...(source === 'fallback' ? { message: 'model_catalog_unavailable' } : {}),
+      ...(error ? { error } : {}) } })
   }
+  // A live failure that still carries the last good catalog is served as cache.
+  const catalogSource = (catalog: { models: string[]; error?: unknown }): 'native' | 'cache' | 'fallback' =>
+    catalog.models.length === 0 ? 'fallback' : catalog.error || cachedModels ? 'cache' : 'native'
   const credentialMode = url.searchParams.get('credential_mode') ?? undefined
   if (credentialMode && !definition.credentialModes.some((mode) => mode === credentialMode)) {
     return ERRORS.validation(`credentialMode ${credentialMode} is not supported by ${definition.id}`)
@@ -230,7 +241,8 @@ export async function listHarnessModels(
 
   if (definition.modelSource === 'probe' && harnesses.catalog.isDisabled(definition.id)) {
     return reply({ harnessId: definition.id, models: harnesses.probedModels?.(definition) ?? definition.staticModels,
-      reason: 'check_required', message: 'Run Check & enable before loading native models' }, 'fallback')
+      reason: 'check_required', message: 'Run Check & enable before loading native models',
+      error: { code: 'unavailable', message: 'Run Check & enable before loading native models' } }, 'fallback')
   }
 
   const providerModels = (kind: string | undefined): string[] => {
@@ -258,14 +270,13 @@ export async function listHarnessModels(
         return reply({ harnessId: definition.id, models }, models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
       }
       if (definition.transport === 'acp' && harnesses.acpModels?.probeCatalog) {
-        const selectedModel = url.searchParams.get('selected_model')?.trim() || undefined
-        if (selectedModel && selectedModel.length > 1024) return ERRORS.validation('invalid model id')
-        const catalog = await harnesses.acpModels.probeCatalog(definition, selectedModel)
-        return reply({ harnessId: definition.id, ...catalog }, catalog.models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
+        if (selectedModelParam && selectedModelParam.length > 1024) return ERRORS.validation('invalid model id')
+        const catalog = await harnesses.acpModels.probeCatalog(definition, selectedModelParam)
+        return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
       }
       if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {
         const catalog = await harnesses.codexModels.probeCatalog(definition)
-        return reply({ harnessId: definition.id, ...catalog }, catalog.models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
+        return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
       }
       const probed =
         definition.transport === 'acp'
@@ -280,7 +291,8 @@ export async function listHarnessModels(
       }
       // A probe that fails (missing binary, auth gate, timeout) falls back to
       // the harness's static list rather than failing the models request.
-      return reply({ harnessId: definition.id, models: definition.staticModels }, 'fallback')
+      return reply({ harnessId: definition.id, models: definition.staticModels,
+        error: { code: 'unavailable' } }, 'fallback')
     }
   }
 }

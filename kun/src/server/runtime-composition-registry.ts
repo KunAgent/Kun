@@ -77,6 +77,7 @@ export function createRuntimeRegistry(
   const kunToolsMcp = services.kunToolsMcp
   const createChildDelegatedRuntime: ChildDelegatedRuntimeFactory = (child) => {
     const childRuntimes = buildHarnessRuntimes({
+    usage: usageService,
     // Always present: pinned harness routes (ADE workers, graph attempts)
     // reach this runtime without a configured agent-sdk provider — claude-code
     // serves native-login/kun-gateway routes on its own subscription or grant.

@@ -92,6 +92,29 @@ describe('Model picker after Agent selection moves to the mode control', () => {
     expect(onConfigureProviders).not.toHaveBeenCalled()
   })
 
+  it('explains a failed Agent catalog lookup with its reason instead of the default-model hint', async () => {
+    await act(async () => root.render(createElement(FloatingComposerModelPicker, {
+      compact: false, mode: 'select', controlVariant: 'split', composerModel: 'default', composerPickList: [],
+      composerModelGroups: [], canChangeModel: true, onComposerModelChange: vi.fn(),
+      emptyModelState: 'agent-failed', emptyModelReason: 'agent_error'
+    })))
+    const trigger = host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!
+    expect(trigger.textContent).toContain('Models unavailable')
+    await act(async () => trigger.click())
+    expect(document.body.textContent).toContain("the Agent's service returned an error")
+    expect(document.body.textContent).toContain('retries automatically')
+    expect(document.body.textContent).not.toContain('Model choices will appear here')
+  })
+
+  it('says the Agent is still being checked when no readiness proof exists', async () => {
+    await act(async () => root.render(createElement(FloatingComposerModelPicker, {
+      compact: false, mode: 'select', controlVariant: 'split', composerModel: 'default', composerPickList: [],
+      composerModelGroups: [], canChangeModel: true, onComposerModelChange: vi.fn(), emptyModelState: 'agent-not-ready'
+    })))
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click())
+    expect(document.body.textContent).toContain('This Agent is being checked')
+  })
+
   it('retains the provider/model trigger and provider selection without an Agent section', async () => {
     const onComposerModelChange = vi.fn()
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {

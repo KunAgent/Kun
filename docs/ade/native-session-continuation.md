@@ -45,3 +45,23 @@ instruction updates, persisted IDs, permission renewal and thread isolation.
 native accounts and checks ID equality, memory and file reads. Add
 `--restart-after 1` for disk-backed restoration; live-only ACP agents cannot
 promise ID continuity across a process restart.
+
+## History identity (2026-10-06)
+
+Consecutive turns with the same Agent must keep one native session. Two
+real-thread failures forced a `history_changed` rebase and a full brief to the
+same Devin session:
+
+- A message queued while the previous turn streamed is persisted before that
+  turn's reply, so raw item order interleaves turns. Commit and prepare now use
+  turn-ordered history (`historyThroughDelegatedTurn` /
+  `priorItemsForDelegatedTurn`): a committed history is an exact prefix of
+  every later turn's prior history, and queued later turns are never history.
+- An aborted turn settles after commit (a pending question becomes
+  `cancelled`, tool rows finalize). The history digest now covers
+  conversational identity only (item id, turn, kind, user text, goal key), so
+  status and payload finalization no longer look like edited history. Edited
+  user text, removed or forked items and interleaved turns still rebase.
+
+A genuine same-Agent rebase is labeled as a restored session, not a hand-off
+to another Agent, and uses the Agent's display name.

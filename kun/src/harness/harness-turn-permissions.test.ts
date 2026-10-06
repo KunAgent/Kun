@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HarnessCatalog } from './harness-catalog.js'
 import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
+import { kunToolPermissionModeSettings } from '../contracts/policy.js'
 
 const catalog = new HarnessCatalog()
 const full = { approvalPolicy: 'auto' as const, sandboxMode: 'danger-full-access' as const,
@@ -28,6 +29,13 @@ describe('native permission mapping', () => {
     expect(harnessTurnPermissionMode(def, { ...full, requested: 'normal', sandboxMode: 'read-only' })).toBe('ask')
     expect(harnessTurnPermissionMode(def, { ...full, requested: 'auto', unattended: true })).toBe('ask')
     expect(harnessTurnPermissionMode(def, { ...full, requested: 'ask' })).toBe('ask')
+  })
+  it('maps the reviewer-approved host scope to Devin Smart and never above it', () => {
+    const def = catalog.get('devin')!
+    const approveForMe = { ...full, ...kunToolPermissionModeSettings('approve-for-me') }
+    expect(harnessTurnPermissionMode(def, approveForMe)).toBe('smart')
+    expect(harnessTurnPermissionMode(def, { ...approveForMe, requested: 'bypass' })).not.toBe('bypass')
+    expect(harnessTurnPermissionMode(def, { ...full, ...kunToolPermissionModeSettings('ask-for-approval') })).toBe('normal')
   })
   it('never falls back to a wider first entry from a custom Agent', () => {
     const definition = catalog.get('devin')!

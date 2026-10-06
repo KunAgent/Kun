@@ -6,6 +6,7 @@
   "adeGroupArchived": "संग्रहीत",
   "adeEmpty": "अभी कोई एजेंट बातचीत नहीं",
   "adeHandoff": "संदर्भ {{agent}} को सौंपा (आखिरी {{turns}} दौर, {{files}} फ़ाइलें)",
+  "adeHandoffRestart": "पिछला {{agent}} सत्र जारी नहीं रह सका; नए सत्र में संदर्भ बहाल किया गया (आखिरी {{turns}} दौर)",
   "adeHandoffDelta": "डेल्टा ब्रीफ़ के साथ {{agent}} जारी",
   "adeHandoffShow": "ब्रीफ़ दिखाएँ",
   "adeHandoffHide": "ब्रीफ़ छिपाएँ",

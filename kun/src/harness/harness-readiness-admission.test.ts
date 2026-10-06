@@ -11,7 +11,7 @@ import type { ReadinessOptions } from './harness-readiness-profile.js'
 const route = { harnessId: 'opencode', credentialMode: 'kun-gateway' as const, providerId: 'account-a', model: 'model-a' }
 const dirs: string[] = []
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }) })
-async function fixture() {
+async function fixture(nowMs?: () => number) {
   const dir = await mkdtemp(join(tmpdir(), 'kun-readiness-test-')); dirs.push(dir)
   const command = join(dir, 'opencode'); await writeFile(command, '#!/bin/sh\nexit 0\n')
   const options: ReadinessOptions = { model: 'model-a', providers: {
@@ -23,7 +23,7 @@ async function fixture() {
   const detector = { status: vi.fn(async (): Promise<HarnessStatus> => ({ harnessId: 'opencode', installed: 'yes' as const, login: 'unknown' as const,
     ready: 'yes' as const, resolvedCommand: command, checkedAt: '2026-10-03T00:00:00.000Z' })) }
   const handshake = vi.fn<NonNullable<HarnessReadinessDeps['handshake']>>(async () => ({ ok: true, supported: true, protocol: 'acp' }))
-  const service = new HarnessReadinessService({ options: () => options, catalog, detector, handshake, revision: () => revision })
+  const service = new HarnessReadinessService({ options: () => options, catalog, detector, handshake, revision: () => revision, ...(nowMs ? { nowMs } : {}) })
   const test = () => service.test(catalog.get('opencode')!, { level: 'handshake', ...route })
   const enable = () => { options.harnesses!.enabledProfiles = [{ harnessId: route.harnessId, credentialMode: route.credentialMode, providerId: route.providerId }]; revision++ }
   return { options, catalog, detector, handshake, service, test, enable, command, revise: () => revision++ }
@@ -48,11 +48,36 @@ describe('parallel readiness admission', () => {
     await expect(f.service.validateTurn('thread-a', 'turn', signal)).resolves.toMatch(/^[a-f0-9]{64}$/)
     await expect(f.service.validateTurn('thread-b', 'turn', signal)).resolves.toMatch(/^[a-f0-9]{64}$/)
   })
-  it('keeps an admitted turn valid while another unchanged admission is checking', async () => {
+  it('reuses an unexpired unchanged proof for later admissions without a new handshake', async () => {
     const f = await fixture(); f.enable()
     const signal = new AbortController().signal
     const signature = f.service.configurationSignature(route)
     await f.service.prepareTurn('thread-a', 'turn', route, signature, signal)
+    expect(f.handshake).toHaveBeenCalledTimes(1)
+    await f.service.prepareTurn('thread-b', 'turn', route, signature, signal)
+    await f.service.prepareTurn('thread-c', 'turn', route, signature, signal)
+    expect(f.handshake).toHaveBeenCalledTimes(1)
+    await expect(f.service.validateTurn('thread-c', 'turn', signal)).resolves.toMatch(/^[a-f0-9]{64}$/)
+  })
+  it('re-checks instead of reusing a proof after a configuration revision or an identity change', async () => {
+    const f = await fixture(); f.enable()
+    const signal = new AbortController().signal
+    await f.service.assertReady(route, signal)
+    f.revise()
+    await f.service.assertReady(route, signal)
+    expect(f.handshake).toHaveBeenCalledTimes(2)
+    f.options.providers!['account-a'].apiKey = 'rotated'
+    await f.service.assertReady(route, signal)
+    expect(f.handshake).toHaveBeenCalledTimes(3)
+  })
+  it('keeps an admitted turn valid while another unchanged admission is checking', async () => {
+    let clock = 1_000_000
+    const f = await fixture(() => clock); f.enable()
+    const signal = new AbortController().signal
+    const signature = f.service.configurationSignature(route)
+    await f.service.prepareTurn('thread-a', 'turn', route, signature, signal)
+    // Nearly expired: the next admission re-validates instead of reusing.
+    clock += 5 * 60_000 - 5_000
     let finish!: () => void
     f.handshake.mockImplementationOnce(() => new Promise((resolve) => {
       finish = () => resolve({ ok: true, supported: true, protocol: 'acp' })
@@ -95,9 +120,11 @@ describe('parallel readiness admission', () => {
     expect(await f.service.readyProfiles('opencode')).toHaveLength(1)
   })
   it('revokes prior proofs on a failed fresh admission and fences older pending success', async () => {
-    const f = await fixture(); f.enable()
+    let clock = 1_000_000
+    const f = await fixture(() => clock); f.enable()
     const signal = new AbortController().signal
     await f.service.prepareTurn('thread', 'turn', route, f.service.configurationSignature(route), signal)
+    clock += 5 * 60_000 - 5_000
     let finish!: () => void
     f.handshake.mockImplementationOnce(() => new Promise((resolve) => {
       finish = () => resolve({ ok: true, supported: true, protocol: 'acp' })

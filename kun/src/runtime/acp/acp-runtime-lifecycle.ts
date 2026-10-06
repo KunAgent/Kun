@@ -17,6 +17,7 @@ import type { TurnService } from '../../services/turn-service.js'
 import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import type { TurnHandoff } from '../../handoff/turn-handoff.js'
 import { buildHarnessEnv } from '../../harness/harness-env.js'
+import { nativeAgentLaunchEnv as acpLaunchEnv } from '../../harness/native-agent-network.js'
 import { resolvePathThroughSymlinks } from '../../adapters/tool/workspace-path.js'
 import type { DelegatedSessionPreparation } from '../delegated-session-binding.js'
 import { AcpConnection } from './acp-connection.js'
@@ -91,7 +92,7 @@ export async function acquireAcpConnection(
       signal: input.signal, validateLaunch: input.validateLaunch,
       command,
       args: input.definition.launch?.args ?? [],
-      env: input.definition.launch?.env ?? {},
+      env: acpLaunchEnv(input.definition, { ...secretEnv, ...input.credentialEnv }),
       secretEnv,
       credentialEnv: input.credentialEnv,
       stripEnv: acpStripEnv(deps, input.definition, input.credentialEnv),
@@ -160,7 +161,7 @@ export function acpChildEnv(
   return buildHarnessEnv({
     base: process.env,
     strip: acpStripEnv(deps, definition, credentialEnv),
-    add: { ...(definition.launch?.env ?? {}), ...secretEnv, ...credentialEnv }
+    add: { ...acpLaunchEnv(definition, { ...secretEnv, ...credentialEnv }), ...secretEnv, ...credentialEnv }
   }) as NodeJS.ProcessEnv
 }
 

@@ -26,6 +26,26 @@ export type HarnessSessionSurface = {
   updatedAt: string
 }
 
+/**
+ * One Agent's native model catalog. `error` marks a failed live lookup (the
+ * runtime's categorical reason when known); `failures` counts consecutive
+ * failed lookups so the composer can back off its automatic retries.
+ */
+export type HarnessModelCacheEntry = {
+  models: string[]
+  modelInfo?: AdeHarnessModels['modelInfo']
+  detailsModel?: string
+  catalogStatus?: AdeHarnessModels['catalogStatus']
+  loadedAt?: number
+  loading: boolean
+  error?: string
+  errorCode?: string
+  failures?: number
+}
+
+/** Automatic retry delays after a failed native catalog lookup. */
+export const HARNESS_MODEL_RETRY_DELAYS_MS = [5_000, 15_000, 45_000] as const
+
 type HarnessStoreState = {
   /** One-shot deep link from an Agent repair action into its settings detail. */
   settingsHarnessId?: string
@@ -38,7 +58,7 @@ type HarnessStoreState = {
   rowsLoadedAt?: number
   rowsLoading: boolean
   rowsError?: string
-  models: Record<string, { models: string[]; modelInfo?: AdeHarnessModels['modelInfo']; detailsModel?: string; catalogStatus?: AdeHarnessModels['catalogStatus']; loadedAt?: number; loading: boolean; error?: string }>
+  models: Record<string, HarnessModelCacheEntry>
   /**
    * Provider-grouped models for `provider`/`kun-gateway` credential modes
    * (12 §7.2): the exposable providers each harness turn could address. The
@@ -195,10 +215,38 @@ export function invalidateHarnessModels(id: string): void {
   })
 }
 
+const NATIVE_CATALOG_SEED_KEY = 'kun.native-model-catalog.v1'
+type NativeCatalogSeed = { models: string[]; modelInfo?: AdeHarnessModels['modelInfo']; version?: string; savedAt: string }
+
+function readCatalogSeed(harnessId: string): NativeCatalogSeed | undefined {
+  try {
+    const parsed = JSON.parse(globalThis.localStorage?.getItem(NATIVE_CATALOG_SEED_KEY) ?? '{}') as Record<string, NativeCatalogSeed>
+    const seed = parsed[harnessId]
+    return seed && Array.isArray(seed.models) && seed.models.length > 0 ? seed : undefined
+  } catch { return undefined }
+}
+
+function writeCatalogSeed(harnessId: string, seed: NativeCatalogSeed): void {
+  try {
+    const parsed = JSON.parse(globalThis.localStorage?.getItem(NATIVE_CATALOG_SEED_KEY) ?? '{}') as Record<string, NativeCatalogSeed>
+    globalThis.localStorage?.setItem(NATIVE_CATALOG_SEED_KEY, JSON.stringify({ ...parsed, [harnessId]: seed }))
+  } catch { /* storage is a convenience; the live catalog stays authoritative */ }
+}
+
 export async function loadHarnessModels(harnessId: string, force = false, selectedModel?: string): Promise<void> {
   const provider = getProvider()
   if (!provider.listHarnessModels) return
-  const existing = useHarnessStore.getState().models[harnessId]
+  let existing = useHarnessStore.getState().models[harnessId]
+  // Seed a cold start with the last live catalog (same Agent version when
+  // known) so the menu is usable while a slow Agent answers the live read.
+  if (!existing && !selectedModel) {
+    const seed = readCatalogSeed(harnessId)
+    const version = useHarnessStore.getState().rows.find((row) => row.definition.id === harnessId)?.status.version
+    if (seed && (!version || !seed.version || seed.version === version)) {
+      existing = { models: seed.models, ...(seed.modelInfo ? { modelInfo: seed.modelInfo } : {}), loading: false,
+        catalogStatus: { source: 'cache', fetchedAt: seed.savedAt, ...(seed.version ? { version: seed.version } : {}) } }
+    }
+  }
   if (existing?.loading || (existing && !existing.error && !force &&
     (!selectedModel || existing.detailsModel === selectedModel) && Date.now() - (existing.loadedAt ?? 0) < 60_000)) return
   const generation = generationFor(harnessId)
@@ -210,13 +258,25 @@ export async function loadHarnessModels(harnessId: string, force = false, select
       : selectedModel ? await provider.listHarnessModels(harnessId, undefined, selectedModel) : await provider.listHarnessModels(harnessId)
     if (selectedModel && !result.models.length) throw new Error('Native model details are temporarily unavailable')
     if (generation !== generationFor(harnessId)) return
+    // A response with no models and a live-lookup error is a failure, not an
+    // empty catalog: keep any models already shown and let the caller retry.
+    const lookupError = result.catalogStatus?.error
+    const failed = result.models.length === 0 && (lookupError !== undefined || result.catalogStatus?.source === 'fallback')
+    const models = failed && existing?.models.length ? existing.models : result.models
+    if (!failed && !selectedModel && result.models.length > 0 && result.catalogStatus?.source !== 'provider' &&
+      result.catalogStatus?.source !== 'static') {
+      writeCatalogSeed(harnessId, { models: result.models, ...(result.modelInfo ? { modelInfo: result.modelInfo } : {}),
+        ...(result.catalogStatus?.version ? { version: result.catalogStatus.version } : {}), savedAt: result.catalogStatus?.fetchedAt ?? new Date().toISOString() })
+    }
     useHarnessStore.setState((state) => ({
-      models: { ...state.models, [harnessId]: { models: result.models, modelInfo: result.modelInfo?.map((entry) => {
+      models: { ...state.models, [harnessId]: { models, modelInfo: failed && existing?.models.length ? existing.modelInfo : result.modelInfo?.map((entry) => {
         const previous = existing?.modelInfo?.find((old) => old.id === entry.id)
         return { ...(entry.reasoningEfforts === undefined && previous?.reasoningEfforts !== undefined
           ? { reasoningEfforts: previous.reasoningEfforts, defaultReasoningEffort: previous.defaultReasoningEffort } : {}), ...entry }
       }), detailsModel: selectedModel, catalogStatus: result.catalogStatus,
-        loadedAt: Date.now(), loading: false } }
+        loadedAt: Date.now(), loading: false,
+        ...(failed ? { error: lookupError?.message ?? lookupError?.code ?? 'model_catalog_unavailable',
+          ...(lookupError?.code ? { errorCode: lookupError.code } : {}), failures: (existing?.failures ?? 0) + 1 } : {}) } }
     }))
   } catch (error) {
     if (generation !== generationFor(harnessId)) return
@@ -226,8 +286,11 @@ export async function loadHarnessModels(harnessId: string, force = false, select
         [harnessId]: {
           models: existing?.models ?? [],
           modelInfo: existing?.modelInfo,
+          ...(existing?.catalogStatus ? { catalogStatus: existing.catalogStatus } : {}),
           detailsModel: selectedModel,
           loading: false,
+          // A failed per-model detail lookup is not a catalog failure.
+          ...(selectedModel && existing?.models.length ? { failures: existing.failures } : { failures: (existing?.failures ?? 0) + 1 }),
           error: error instanceof Error ? error.message : String(error)
         }
       }
@@ -406,6 +469,17 @@ export function applyHarnessEnablementSettings(settings: import('@shared/app-set
 }
 
 /** Expiring proofs disappear even while a composer menu is left open. */
+/**
+ * The runtime re-validates a proof in the last 90 s of its life while still
+ * serving it. Poll once inside that window so the refreshed expiry arrives
+ * before the old one lapses; if the window already passed, poll at expiry.
+ */
+export const READINESS_REFRESH_AHEAD_MS = 75_000
+export function nextReadinessPoll(expirations: readonly number[], now: number): number {
+  return Math.min(...expirations.map((expiration) =>
+    expiration - READINESS_REFRESH_AHEAD_MS > now ? expiration - READINESS_REFRESH_AHEAD_MS : expiration + 1))
+}
+
 function scheduleReadinessExpiry(rows: AdeHarnessRow[]): void {
   if (expiryTimer) clearTimeout(expiryTimer)
   expiryTimer = null
@@ -419,7 +493,7 @@ function scheduleReadinessExpiry(rows: AdeHarnessRow[]): void {
     scheduleReadinessExpiry(useHarnessStore.getState().rows)
     // Expired proofs must be revalidated even when the catalog's short UI cache is fresh.
     void loadHarnesses(true)
-  }, Math.max(1, Math.min(...expirations) - Date.now() + 1))
+  }, Math.max(1, nextReadinessPoll(expirations, Date.now()) - Date.now()))
   // Catalog caches must not keep a non-browser test process alive.
   if (typeof expiryTimer === 'object' && 'unref' in expiryTimer) expiryTimer.unref()
 }

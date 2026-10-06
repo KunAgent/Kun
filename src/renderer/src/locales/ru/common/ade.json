@@ -6,6 +6,7 @@
   "adeGroupArchived": "Архив",
   "adeEmpty": "Пока нет разговоров с агентами",
   "adeHandoff": "Контекст передан {{agent}} (последние {{turns}} ходов, {{files}} файлов)",
+  "adeHandoffRestart": "Предыдущую сессию {{agent}} нельзя продолжить; контекст восстановлен в новой сессии (последние {{turns}} ходов)",
   "adeHandoffDelta": "{{agent}} продолжен с дельта-брифом",
   "adeHandoffShow": "Показать бриф",
   "adeHandoffHide": "Скрыть бриф",

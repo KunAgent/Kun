@@ -267,17 +267,18 @@ describe('AcpEventMapper', () => {
     ])
   })
 
-  test('usage_update emits context_snapshot plus usage facts', () => {
+  test('usage_update only drives the context gauge; occupancy is never counted as consumption', () => {
     const { mapper, applyAll } = makeMapper()
     const drafts = applyAll([
-      { sessionUpdate: 'usage_update', used: 12_000, size: 200_000, cost: { amount: 0.02, currency: 'USD' } }
+      { sessionUpdate: 'usage_update', used: 12_000, size: 200_000, cost: { amount: 0.02, currency: 'USD' } },
+      { sessionUpdate: 'usage_update', used: 12_000, size: 200_000 }
     ])
-    expect(kinds(drafts)).toEqual(['context_snapshot', 'usage'])
+    expect(kinds(drafts)).toEqual(['context_snapshot', 'context_snapshot'])
     const snapshot = drafts[0] as unknown as { contextWindowTokens: number; estimatedInputTokens: number }
     expect(snapshot.contextWindowTokens).toBe(200_000)
     expect(snapshot.estimatedInputTokens).toBe(12_000)
     expect(mapper.observedFacts.sawUsageTelemetry).toBe(true)
-    expect(mapper.observedFacts.sawUsageTokens).toBe(true)
+    expect(mapper.observedFacts.sawUsageTokens).toBe(false)
   })
 
   test('available_commands_update / current_mode_update / config_option_update emit session_state', () => {
@@ -330,8 +331,12 @@ describe('AcpEventMapper', () => {
       promptTokens: 1_000,
       completionTokens: 100,
       totalTokens: 1_100,
-      cachedTokens: 400
+      cachedTokens: 400,
+      cacheHitTokens: 400,
+      cacheMissTokens: 600,
+      cacheHitRate: 0.4
     })
+    expect(drafts[0]).toMatchObject({ source: 'harness-reported' })
     expect(mapper.observedFacts.sawUsageTokens).toBe(true)
   })
 

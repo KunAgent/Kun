@@ -6,6 +6,7 @@
   "adeGroupArchived": "アーカイブ済み",
   "adeEmpty": "エージェント会話はまだありません",
   "adeHandoff": "{{agent}} にコンテキストを引き継ぎました（直近 {{turns}} ターン、{{files}} ファイル）",
+  "adeHandoffRestart": "以前の {{agent}} セッションを継続できなかったため、新しいセッションでコンテキストを復元しました（直近 {{turns}} ターン）",
   "adeHandoffDelta": "差分ブリーフで {{agent}} を再開",
   "adeHandoffShow": "ブリーフを表示",
   "adeHandoffHide": "ブリーフを隠す",

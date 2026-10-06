@@ -105,6 +105,10 @@ export function FloatingComposerFooterView({
     timingThreadUsage
   } = context
   if (compact) return null
+  // External Agents report their own token counts and bill through their own
+  // account or subscription; an absent local price is expected, not an error.
+  const agentBilled = context.adeComposerEnabled === true && Boolean(context.adeComposer) &&
+    context.adeComposer.harnessId !== 'kun'
   const latestCacheHitRate = threadUsage ? primaryCacheHitRate(threadUsage) : null
   const usageLocale = i18n.resolvedLanguage ?? i18n.language
   const moneyItems = threadUsage ? summarizeThreadMoney({
@@ -185,6 +189,14 @@ export function FloatingComposerFooterView({
                 ) : null}
                 {moneyItems.length > 0 ? (
                   <ComposerUsageMoneyMetric items={moneyItems} t={t} />
+                ) : threadUsage.totalTokens > 0 && agentBilled ? (
+                  <span
+                    className="ds-composer-usage-metric ds-composer-usage-money shrink-0"
+                    data-session-usage-agent-billed="true"
+                    title={t('agentUpdate.usageBilledByAgentTitle')}
+                  >
+                    {t('agentUpdate.usageBilledByAgent')}
+                  </span>
                 ) : threadUsage.totalTokens > 0 ? (
                   <span
                     className="ds-composer-usage-metric ds-composer-usage-money shrink-0"

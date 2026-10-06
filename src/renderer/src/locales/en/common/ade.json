@@ -36,6 +36,7 @@
   "adeGroupArchived": "Archived",
   "adeEmpty": "No agent conversations yet",
   "adeHandoff": "Handed context off to {{agent}} (last {{turns}} turns, {{files}} files)",
+  "adeHandoffRestart": "The previous {{agent}} session could not continue; restored context in a new session (last {{turns}} turns)",
   "adeHandoffDelta": "Resumed {{agent}} with a delta brief",
   "adeHandoffShow": "Show brief",
   "adeHandoffHide": "Hide brief",

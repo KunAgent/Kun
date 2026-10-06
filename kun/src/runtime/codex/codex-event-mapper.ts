@@ -44,6 +44,8 @@ export class CodexEventMapper {
   private readonly textOffsets = new Map<string, number>()
   private readonly reasoningOffsets = new Map<string, number>()
   private latestTurnDiff = ''
+  /** Thread total at the last counted report; a repeat carries no new usage. */
+  private lastCountedTotalTokens?: number
   private readonly toolItemIds = new Map<string, string>()
 
   constructor(private readonly ctx: CodexMapperContext) {}
@@ -377,7 +379,12 @@ export class CodexEventMapper {
     const completion = Math.max(0, Math.trunc(last.outputTokens ?? 0))
     const total = Math.max(0, Math.trunc(last.totalTokens ?? 0))
     if (prompt + completion + total <= 0) return []
-    const drafts: RuntimeEventDraft[] = [
+    // `last` is one model call and is summed by the harness usage ledger; a
+    // re-sent notification for the same call must not be counted twice.
+    const threadTotal = usage?.total?.totalTokens
+    const repeated = typeof threadTotal === 'number' && threadTotal === this.lastCountedTotalTokens
+    if (typeof threadTotal === 'number') this.lastCountedTotalTokens = threadTotal
+    const drafts: RuntimeEventDraft[] = repeated ? [] : [
       {
         kind: 'usage',
         threadId: this.ctx.threadId,

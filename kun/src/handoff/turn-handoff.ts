@@ -72,6 +72,8 @@ export type BuildTurnHandoffInput = {
   /** Task-workspace record merged into extracted work state when present. */
   taskWorkspace?: { changedFiles: readonly string[]; branch?: string }
   budgets?: Partial<HandoffBudgets>
+  /** Display name of the receiving Agent (e.g. "Devin"); defaults to the transport label. */
+  harnessName?: string
 }
 
 export function delegatedProviderKindLabel(kind: DelegatedProviderKind | 'kun'): string {
@@ -101,14 +103,15 @@ function handoffReason(preparation: DelegatedSessionPreparation): HandoffReason 
 }
 
 function handoffSource(
-  preparation: DelegatedSessionPreparation
+  preparation: DelegatedSessionPreparation,
+  harnessName?: string
 ): { harnessName: string; model?: string } {
   const from =
     preparation.rebasedFrom ?? preparation.parkedDelta?.fromRoute ?? undefined
   // Without a displaced route the previous surface was the native Kun loop.
-  return from
-    ? { harnessName: delegatedProviderKindLabel(from.providerKind), model: from.model }
-    : { harnessName: 'Kun' }
+  if (!from) return { harnessName: 'Kun' }
+  const sameAgent = from.providerKind === preparation.route.providerKind && from.providerId === preparation.route.providerId
+  return { harnessName: sameAgent && harnessName ? harnessName : delegatedProviderKindLabel(from.providerKind), model: from.model }
 }
 
 /**
@@ -126,9 +129,9 @@ export function buildTurnHandoff(input: BuildTurnHandoffInput): TurnHandoff | nu
     reason,
     mode: plan.mode,
     ...(plan.mode === 'delta' ? { sinceTurnId: plan.sinceTurnId } : {}),
-    from: handoffSource(input.preparation),
+    from: handoffSource(input.preparation, input.harnessName),
     to: {
-      harnessName: delegatedProviderKindLabel(input.preparation.route.providerKind),
+      harnessName: input.harnessName ?? delegatedProviderKindLabel(input.preparation.route.providerKind),
       ...(input.preparation.route.model
         ? { model: input.preparation.route.model }
         : {})
@@ -155,9 +158,9 @@ export function buildTurnHandoff(input: BuildTurnHandoffInput): TurnHandoff | nu
       reason,
       mode: plan.mode,
       ...(plan.mode === 'delta' ? { sinceTurnId: plan.sinceTurnId } : {}),
-      from: handoffSource(input.preparation),
+      from: handoffSource(input.preparation, input.harnessName),
       to: {
-        harnessName: delegatedProviderKindLabel(input.preparation.route.providerKind),
+        harnessName: input.harnessName ?? delegatedProviderKindLabel(input.preparation.route.providerKind),
         ...(input.preparation.route.model
           ? { model: input.preparation.route.model }
           : {})
@@ -189,6 +192,7 @@ export function resolveTurnHandoff(input: {
   ownerThreadId: string
   workspacePath: string | undefined
   taskWorkspaces?: TaskWorkspaceLister
+  harnessName?: string
 }): TurnHandoff | undefined {
   if (!input.enabled || !input.preparation) return undefined
   const taskWorkspace = input.taskWorkspaces
@@ -201,7 +205,8 @@ export function resolveTurnHandoff(input: {
     preparation: input.preparation,
     ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
     ...(taskWorkspace?.branch ? { workspaceBranch: taskWorkspace.branch } : {}),
-    ...(taskWorkspace ? { taskWorkspace } : {})
+    ...(taskWorkspace ? { taskWorkspace } : {}),
+    ...(input.harnessName ? { harnessName: input.harnessName } : {})
   }) ?? undefined
 }
 

@@ -24,8 +24,12 @@ export function harnessTurnPermissionMode(definition: HarnessDefinition, input: 
   // Older Devin ACP versions call their approval-gated mode normal/auto.
   // Negotiate that mode only when the host allows writes with approval; newer
   // versions may narrow it to ask. An explicit read-only ask never widens.
-  if (definition.id === 'devin' && !readOnly &&
-    ((!requested && ceiling < 2) || requested === 'normal' || requested === 'auto')) return 'normal'
+  if (definition.id === 'devin' && !readOnly) {
+    // Reviewer-approved host scope maps to Devin's Smart mode; older CLIs
+    // without it fall back to the legacy approval mode, then read-only Ask.
+    if (!requested && ceiling === 1) return 'smart'
+    if ((!requested && ceiling < 1) || requested === 'normal' || requested === 'auto') return 'normal'
+  }
   if (requested) {
     const resolved = resolvePermissionMode(definition, requested, input.unattended, input.allowUnattendedFullAccess)
     return allowed.find((mode) => mode.id === resolved)?.id ?? allowed[0]!.id

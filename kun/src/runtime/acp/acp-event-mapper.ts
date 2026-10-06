@@ -407,9 +407,11 @@ export class AcpEventMapper {
     update: Extract<SessionUpdate, { sessionUpdate: 'usage_update' }>
   ): RuntimeEventDraft[] {
     const drafts: RuntimeEventDraft[] = []
+    // `used`/`size` describe context-window occupancy, not consumption, and
+    // `cost` is a running session total: neither is a per-turn usage report.
+    // Token accounting comes only from the prompt result (applyPromptResult).
     const size = Math.max(0, Math.trunc(update.size ?? 0))
     const used = Math.max(0, Math.trunc(update.used ?? 0))
-    const cost = update.cost?.amount
     if (size > 0) {
       this.facts.sawUsageTelemetry = true
       drafts.push({
@@ -427,23 +429,6 @@ export class AcpEventMapper {
         activeSkillIds: [],
         contextManagement: 'sdk-managed',
         nativeHistory: 'known'
-      })
-    }
-    if (used > 0 || typeof cost === 'number') {
-      this.facts.sawUsageTokens ||= used > 0
-      drafts.push({
-        kind: 'usage',
-        threadId: this.ctx.threadId,
-        turnId: this.ctx.turnId,
-        model: this.ctx.model,
-        usage: {
-          promptTokens: used,
-          completionTokens: 0,
-          totalTokens: used,
-          cacheHitRate: null,
-          turns: 0,
-          ...(typeof cost === 'number' ? { costUsd: cost } : {})
-        }
       })
     }
     return drafts
@@ -467,19 +452,23 @@ export class AcpEventMapper {
     )
     if (prompt + completion + total <= 0) return []
     this.facts.sawUsageTokens = true
+    // ACP inputTokens includes cache reads (total = input + output), so the
+    // miss side is the remainder; never report more hits than input.
+    const cachedRead = usage.cachedReadTokens ? Math.min(prompt, Math.trunc(usage.cachedReadTokens)) : 0
     const snapshot: UsageSnapshot = {
       promptTokens: prompt,
       completionTokens: completion,
       totalTokens: total,
-      cacheHitRate: null,
+      cacheHitRate: cachedRead > 0 && prompt > 0 ? cachedRead / prompt : null,
       turns: 0,
       ...(usage.thoughtTokens
         ? { reasoningTokens: Math.trunc(usage.thoughtTokens) }
         : {}),
-      ...(usage.cachedReadTokens
+      ...(cachedRead > 0
         ? {
-            cachedTokens: Math.trunc(usage.cachedReadTokens),
-            cacheHitTokens: Math.trunc(usage.cachedReadTokens)
+            cachedTokens: cachedRead,
+            cacheHitTokens: cachedRead,
+            cacheMissTokens: Math.max(0, prompt - cachedRead)
           }
         : {}),
       ...(usage.cachedWriteTokens
@@ -491,6 +480,8 @@ export class AcpEventMapper {
       threadId: this.ctx.threadId,
       turnId: this.ctx.turnId,
       model: this.ctx.model,
+      source: 'harness-reported',
+      ...(this.ctx.harnessId ? { harnessId: this.ctx.harnessId } : {}),
       usage: snapshot
     }]
   }

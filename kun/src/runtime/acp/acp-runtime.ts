@@ -302,7 +302,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           currentTurnId: turnId,
           ownerThreadId: threadId,
           workspacePath: workspace,
-          taskWorkspaces: this.deps.taskWorkspaces
+          taskWorkspaces: this.deps.taskWorkspaces,
+          harnessName: definition.displayName
         })
       : undefined
     await recordHandoffInjected(

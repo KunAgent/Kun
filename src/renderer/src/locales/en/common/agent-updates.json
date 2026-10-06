@@ -48,8 +48,23 @@
       "cache": "Cached Agent catalog",
       "fallback": "Reference catalog; live lookup failed",
       "provider": "Provider catalog",
-      "static": "Built-in catalog"
+      "static": "Built-in catalog",
+      "failed": "Live lookup failed",
+      "stale": "Showing the last loaded list; the latest refresh failed"
     },
+    "catalogError": {
+      "auth_required": "sign-in required",
+      "timeout": "the Agent timed out",
+      "spawn_failed": "the Agent could not start",
+      "protocol_error": "unexpected Agent response",
+      "agent_error": "the Agent's service returned an error",
+      "unavailable": "the Agent is unavailable"
+    },
+    "retrying": "Retrying automatically…",
+    "composerFailedHint": "This Agent's model list could not be loaded ({{reason}}). Kun retries automatically; you can still send with the Agent's default model.",
+    "composerNotReadyHint": "This Agent is being checked. Its models appear here once the check passes.",
+    "usageBilledByAgent": "Billed by Agent",
+    "usageBilledByAgentTitle": "Token counts are reported by the Agent. It bills through its own account or subscription, so Kun shows no local price.",
     "settingsChanged": "Agent selection changed while updating; check again.",
     "rollback": "Restore previous version"
   }

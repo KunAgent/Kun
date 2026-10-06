@@ -8,6 +8,8 @@ import {
   resetHarnessPolling,
   applyHarnessEnablementSettings,
   HARNESS_CATALOG_TTL_MS,
+  nextReadinessPoll,
+  READINESS_REFRESH_AHEAD_MS,
   useHarnessStore
 } from './harness-store'
 
@@ -299,5 +301,59 @@ describe('harnessRowRunsTurns (P4-13)', () => {
     const kunRow = row('kun')
     kunRow.definition.transport = 'native-loop'
     expect(harnessRowRunsTurns(kunRow)).toBe(true)
+  })
+})
+
+describe('native catalog failures', () => {
+  beforeEach(() => { resetStore(); provider.listHarnessModels.mockReset() })
+
+  it('records a failed live lookup as an error and keeps models already shown', async () => {
+    provider.listHarnessModels.mockResolvedValueOnce({ harnessId: 'devin', models: ['swe-2'], catalogStatus: { source: 'native', fetchedAt: 'x' } })
+    await loadHarnessModels('devin')
+    provider.listHarnessModels.mockResolvedValueOnce({ harnessId: 'devin', models: [],
+      catalogStatus: { source: 'fallback', fetchedAt: 'y', error: { code: 'agent_error', message: 'team settings timed out' } } })
+    await loadHarnessModels('devin', true)
+    expect(useHarnessStore.getState().models.devin).toMatchObject({
+      models: ['swe-2'], error: 'team settings timed out', errorCode: 'agent_error', failures: 1, loading: false
+    })
+  })
+
+  it('counts consecutive empty failures so the composer can back off', async () => {
+    const failed = { harnessId: 'devin', models: [], catalogStatus: { source: 'fallback', fetchedAt: 'y', error: { code: 'timeout' } } }
+    provider.listHarnessModels.mockResolvedValue(failed)
+    await loadHarnessModels('devin')
+    await loadHarnessModels('devin')
+    expect(useHarnessStore.getState().models.devin).toMatchObject({ models: [], errorCode: 'timeout', failures: 2 })
+    provider.listHarnessModels.mockResolvedValue({ harnessId: 'devin', models: ['ok'], catalogStatus: { source: 'native', fetchedAt: 'z' } })
+    await loadHarnessModels('devin')
+    expect(useHarnessStore.getState().models.devin?.error).toBeUndefined()
+    expect(useHarnessStore.getState().models.devin?.failures).toBeUndefined()
+  })
+})
+
+describe('cold-start catalog seed', () => {
+  const store = new Map<string, string>()
+  beforeEach(() => {
+    resetStore(); provider.listHarnessModels.mockReset(); store.clear()
+    vi.stubGlobal('localStorage', { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => { store.set(key, value) } })
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('shows the last live catalog while a cold-start lookup fails, then stays honest about the failure', async () => {
+    provider.listHarnessModels.mockResolvedValueOnce({ harnessId: 'devin', models: ['swe-2'], catalogStatus: { source: 'native', fetchedAt: 'x', version: '3000.11.3' } })
+    await loadHarnessModels('devin')
+    resetStore()
+    provider.listHarnessModels.mockResolvedValueOnce({ harnessId: 'devin', models: [],
+      catalogStatus: { source: 'fallback', fetchedAt: 'y', error: { code: 'timeout' } } })
+    await loadHarnessModels('devin')
+    expect(useHarnessStore.getState().models.devin).toMatchObject({ models: ['swe-2'], errorCode: 'timeout' })
+  })
+})
+
+describe('readiness refresh-ahead polling', () => {
+  it('polls inside the runtime refresh window, then at expiry once it has passed', () => {
+    const now = 1_000_000
+    expect(nextReadinessPoll([now + 300_000], now)).toBe(now + 300_000 - READINESS_REFRESH_AHEAD_MS)
+    expect(nextReadinessPoll([now + 30_000], now)).toBe(now + 30_001)
   })
 })

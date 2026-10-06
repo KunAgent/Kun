@@ -556,6 +556,9 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     credentialModes: ['native-login'],
     permissionModes: [
       { id: 'ask', label: 'Ask (read-only)', kunPermissionMode: 'ask-for-approval' },
+      // CLI 3000.11+: auto-approves actions the model judges safe, i.e. the
+      // native counterpart of Kun's reviewer-approved mode.
+      { id: 'smart', label: 'Smart (auto-approve safe actions)', kunPermissionMode: 'approve-for-me' },
       { id: 'accept-edits', label: 'Accept edits', kunPermissionMode: 'full-access' },
       { id: 'bypass', label: 'Full access', kunPermissionMode: 'full-access' }
     ],

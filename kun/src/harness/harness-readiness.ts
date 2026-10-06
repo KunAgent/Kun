@@ -23,12 +23,18 @@ import { antigravityCredentialEvidence } from './antigravity-credentials.js'
 import { probeFxNativeCredentials } from './fx-native-credential-probe.js'
 
 const PROOF_TTL_MS = 5 * 60_000
+/** Background re-validation starts this long before a proof expires. */
+export const PROOF_REFRESH_AHEAD_MS = 90_000
+/** Turn admission reuses a proof only when it still has this much life left. */
+const PROOF_REUSE_MIN_REMAINING_MS = 15_000
+const WARM_RETRY_BASE_MS = 15_000
+const WARM_RETRY_MAX_MS = 5 * 60_000
 const DEFAULT_TIMEOUT_MS = 30_000
 export type ReadyHarnessProfile = HarnessEnabledProfile & { expiresAt: string }
 type Handshake = Omit<HarnessTestHandshake, 'durationMs'>
 type Snapshot = { definition: HarnessDefinition; route: HarnessRoute; secretEnv: Record<string, string>;
   env: Record<string, string>; identity: string; configured: boolean; hasKey: boolean; detail?: string }
-type Proof = { route: HarnessRoute; identity: string; command?: string; expires: number; result: HarnessTestResponse }
+type Proof = { route: HarnessRoute; identity: string; command?: string; expires: number; revision?: number; result: HarnessTestResponse }
 const proofKey = (route: HarnessRoute): string => JSON.stringify([harnessProfileKey(route), route.model])
 
 export type HarnessReadinessDeps = {
@@ -49,6 +55,8 @@ export class HarnessReadinessService {
   private readonly proofs = new Map<string, Proof>()
   private readonly warming = new Map<string, Promise<unknown>>()
   private readonly warmed = new Map<string, string>()
+  /** Background warm failures: retried with backoff instead of never again. */
+  private readonly warmFailures = new Map<string, { attempts: number; retryAt: number }>()
   private readonly launches = new Map<string, { route: HarnessRoute; identity: string; signature: string }>()
   private readonly generations = new Map<string, number>()
   private readonly maintenance = new Set<string>()
@@ -79,7 +87,8 @@ export class HarnessReadinessService {
     }
   }
 
-  private async check(definition: HarnessDefinition, route: HarnessRoute, input: HarnessTestRequest, signal?: AbortSignal): Promise<HarnessTestResponse> {
+  private async check(definition: HarnessDefinition, route: HarnessRoute, input: HarnessTestRequest, signal?: AbortSignal,
+    options: { keepProofOnFailure?: boolean } = {}): Promise<HarnessTestResponse> {
     const started = this.now()
     const key = harnessProfileKey(route)
     const generation = this.generations.get(key) ?? 0
@@ -154,16 +163,19 @@ export class HarnessReadinessService {
       ...(handshake ? { handshake } : {}), readiness }
     // A failed fresh check revokes older evidence, including pending checks.
     // Cancelling one caller alone must not revoke a different live admission.
-    if (!usable && !bounded.aborted && (this.generations.get(key) ?? 0) === generation) this.invalidateProfile(key)
+    // A background refresh keeps the unexpired proof it was refreshing: a
+    // transient agent/backend hiccup must not blank a working profile early.
+    if (!usable && !bounded.aborted && !options.keepProofOnFailure && (this.generations.get(key) ?? 0) === generation) this.invalidateProfile(key)
     if (usable && snapshot && (this.generations.get(key) ?? 0) === generation && !bounded.aborted) {
       const existing = this.proofs.get(proofKey(route))
       // A fresh admission must not replace a matching proof that another turn
       // is validating. Different models retain independent launch evidence.
       if (existing?.identity === snapshot.identity) {
         existing.expires = this.now() + PROOF_TTL_MS
+        existing.revision = revision
         existing.result = result
       } else {
-        this.proofs.set(proofKey(route), { route, identity: snapshot.identity, command: status.resolvedCommand, expires: this.now() + PROOF_TTL_MS, result })
+        this.proofs.set(proofKey(route), { route, identity: snapshot.identity, command: status.resolvedCommand, expires: this.now() + PROOF_TTL_MS, revision, result })
       }
     }
     return result
@@ -172,20 +184,43 @@ export class HarnessReadinessService {
   warmProfiles(id: string): void {
     const definition = this.deps.catalog.get(id)
     if (!definition || id === 'kun' || this.maintenance.has(id)) return
+    const now = this.now()
     for (const profile of this.deps.catalog.enabledProfiles(id)) {
       // Native account readiness is independent of a saved model that a client
       // upgrade may retire. The exact requested model is checked at turn admission.
       const route = this.route(definition, { ...profile, ...(profile.credentialMode === 'native-login' ? { model: 'default' } : {}) })
       const key = harnessProfileKey(route)
       const signature = this.configurationSignature(route)
+      const expired = this.proofs.get(proofKey(route))
+      if (expired && expired.expires <= now) { this.proofs.delete(proofKey(route)); this.warmed.delete(key) }
+      if (this.warming.has(key)) continue
       const proof = this.proofs.get(proofKey(route))
-      if (proof && proof.expires <= this.now()) { this.proofs.delete(proofKey(route)); this.warmed.delete(key) }
-      if (this.proofs.has(proofKey(route)) || this.warming.has(key) || this.warmed.get(key) === signature) continue
+      // Refresh ahead of expiry so the profile never drops out of the picker
+      // while a slow agent (10-20 s handshakes) re-validates.
+      const refreshing = Boolean(proof && proof.expires - now <= PROOF_REFRESH_AHEAD_MS)
+      if (proof && !refreshing) continue
+      if (refreshing && (this.warmFailures.get(key)?.retryAt ?? 0) > now) continue
+      if (!proof && this.warmed.get(key) === signature) {
+        // Same configuration already warmed but no proof survived (a failed
+        // check or a revoked proof): retry with backoff instead of never.
+        const failure = this.warmFailures.get(key) ?? this.recordWarmFailure(key, 0)
+        if (failure.retryAt > now) continue
+      }
       this.warmed.set(key, signature)
-      const pending = this.check(definition, route, { level: 'handshake', ...route })
-        .catch(() => undefined).finally(() => this.warming.delete(key))
+      const pending = this.check(definition, route, { level: 'handshake', ...route }, undefined, { keepProofOnFailure: refreshing })
+        .then((result) => {
+          if (result.ok) this.warmFailures.delete(key)
+          else this.recordWarmFailure(key, (this.warmFailures.get(key)?.attempts ?? 0) + 1)
+        }, () => { this.recordWarmFailure(key, (this.warmFailures.get(key)?.attempts ?? 0) + 1) })
+        .finally(() => this.warming.delete(key))
       this.warming.set(key, pending)
     }
+  }
+  private recordWarmFailure(key: string, attempts: number): { attempts: number; retryAt: number } {
+    const delay = Math.min(WARM_RETRY_MAX_MS, WARM_RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1))
+    const entry = { attempts, retryAt: this.now() + delay }
+    this.warmFailures.set(key, entry)
+    return entry
   }
   checking(id: string): boolean {
     return [...this.warming.keys()].some((key) => JSON.parse(key)[0] === id)
@@ -239,7 +274,7 @@ export class HarnessReadinessService {
   }
   invalidateHarness(id: string): void {
     for (const [key, proof] of this.proofs) if (proof.route.harnessId === id) this.invalidateProfile(harnessProfileKey(proof.route))
-    for (const key of this.warmed.keys()) if (JSON.parse(key)[0] === id) this.warmed.delete(key)
+    for (const key of this.warmed.keys()) if (JSON.parse(key)[0] === id) { this.warmed.delete(key); this.warmFailures.delete(key) }
   }
   async validateTurn(threadId: string, turnId: string, signal: AbortSignal, actualRoute?: HarnessRoute): Promise<string> {
     const launch = this.launches.get(`${threadId}:${turnId}`)
@@ -266,6 +301,12 @@ export class HarnessReadinessService {
     if (!definition || definition.availability === 'retired' || !this.deps.catalog.isProfileEnabled(route)) {
       throw new Error(`Agent profile is disabled: ${route.harnessId}. Test and enable this profile in Agent settings.`)
     }
+    // An unexpired proof from the same configuration revision whose identity
+    // (binary, credentials, profile files, network) is unchanged admits the
+    // turn without re-spawning the agent: a full handshake per message added
+    // 5-20 s and a second failure point for slow native agents.
+    const reused = await this.reusableProof(route, signal)
+    if (reused) return reused
     // Explicit settings tests supersede old checks; turn admissions only
     // observe that fence and cannot invalidate another unchanged turn.
     const result = await this.check(definition, route, { level: 'handshake', ...route }, signal)
@@ -275,6 +316,25 @@ export class HarnessReadinessService {
     }
     const proof = this.proofs.get(proofKey(route))
     if (!proof) throw new Error('Readiness check was superseded; retry')
+    return proof.identity
+  }
+
+  private async reusableProof(route: HarnessRoute, signal?: AbortSignal): Promise<string | undefined> {
+    const proof = this.proofs.get(proofKey(route))
+    if (!proof || proof.expires - this.now() < PROOF_REUSE_MIN_REMAINING_MS) return undefined
+    const revision = this.deps.revision?.()
+    if (proof.revision !== revision || !this.deps.catalog.isProfileEnabled(route)) return undefined
+    const bounded = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(10_000)])
+    try {
+      const current = await raceProbeAbort(this.snapshot(route, proof.command), bounded)
+      if (current.identity !== proof.identity) return undefined
+    } catch {
+      signal?.throwIfAborted()
+      return undefined
+    }
+    signal?.throwIfAborted()
+    if (this.proofs.get(proofKey(route)) !== proof || revision !== this.deps.revision?.() ||
+      !this.deps.catalog.isProfileEnabled(route)) return undefined
     return proof.identity
   }
 

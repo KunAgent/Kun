@@ -36,6 +36,7 @@
   "adeGroupArchived": "已归档",
   "adeEmpty": "暂无 agent 会话",
   "adeHandoff": "已把上下文交接给 {{agent}}（最近 {{turns}} 轮、{{files}} 个文件）",
+  "adeHandoffRestart": "原 {{agent}} 会话无法继续，已在新会话中恢复上下文（最近 {{turns}} 轮）",
   "adeHandoffDelta": "已用增量简报继续 {{agent}}",
   "adeHandoffShow": "查看简报",
   "adeHandoffHide": "收起简报",

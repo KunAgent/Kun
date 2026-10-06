@@ -85,7 +85,8 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
           className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-medium text-white">{t(gate.enabled ? 'agentEnablement.disable' : 'agentEnablement.enable')}</button>}
       <span role="status" aria-live="polite" className="text-[12px] text-ds-muted">{t(gate.checking ? `agentEnablement.phases.${gate.phase}` : ready ? terminal ? 'agentIntegrations.terminalReady' : 'agentEnablement.ready' : gate.enabled ? 'agentEnablement.needsCheck' : 'agentEnablement.disabled')}</span>
     </div>
-    {gate.enabled && !gate.checking ? <button type="button" data-agent-recheck onClick={() => { gate.disable(); void gate.enable() }}
+    {/* Re-check in place: a failed re-check reports the error but never disables a working profile. */}
+    {gate.enabled && !gate.checking ? <button type="button" data-agent-recheck onClick={() => { void gate.enable() }}
       className="min-h-6 text-[12px] text-ds-muted underline">{t('agentEnablement.recheck')}</button> : null}
     {gate.error ? <p role="alert" className="break-words text-[12px] text-ds-status-danger">{gate.error.startsWith('agentEnablement.') ? t(gate.error) : gate.error}</p> : null}
     {gate.errorDetail ? <details className="break-words text-[11px] text-ds-muted">

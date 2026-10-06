@@ -321,6 +321,9 @@ export class DelegatedSessionCoordinator {
       throw new Error('delegated session generation was superseded')
     }
     const now = this.nowIso()
+    // Only history through this turn: a message the user queued while the
+    // turn ran belongs to the next turn and must not desynchronize it.
+    const committed = historyThroughDelegatedTurn(input.committedItems, input.lastCommittedTurnId)
     const nativeSessionId = validNativeSessionId(input.nativeSessionId)
     const continuationMode =
       input.preparation.route.continuationMode === 'native' && nativeSessionId
@@ -334,10 +337,10 @@ export class DelegatedSessionCoordinator {
       continuationMode,
       ...(nativeSessionId ? { nativeSessionId } : {}),
       synchronizedInstructionDigest: input.preparation.instructionDigest,
-      synchronizedHistoryDigest: delegatedHistoryDigest(input.committedItems),
+      synchronizedHistoryDigest: delegatedHistoryDigest(committed),
       // The prefix check counts the post-filter item stream the runtimes feed
       // into prepare(); runtime_context_source items never reach that stream.
-      priorItemCount: input.committedItems.filter(
+      priorItemCount: committed.filter(
         (item) => item.kind !== 'runtime_context_source'
       ).length,
       lastCommittedTurnId: input.lastCommittedTurnId,
@@ -476,12 +479,39 @@ export function delegatedCredentialIdentity(input: {
   return `scrypt-v1:${credentialIdentityDigest(parts.join('\n'))}`
 }
 
+/**
+ * Items grouped by turn in turn-creation order (a turn's first item marks its
+ * creation). A queued user message is persisted while the previous turn is
+ * still streaming, so raw item order interleaves turns; grouping keeps a
+ * committed history an exact prefix of every later turn's prior history.
+ */
+function turnOrderedItems(items: readonly TurnItem[]): { ordered: TurnItem[]; rank: Map<string, number> } {
+  const rank = new Map<string, number>()
+  for (const item of items) if (!rank.has(item.turnId)) rank.set(item.turnId, rank.size)
+  const ordered = items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => rank.get(a.item.turnId)! - rank.get(b.item.turnId)! || a.index - b.index)
+    .map((entry) => entry.item)
+  return { ordered, rank }
+}
+
+/** History a delegated session has seen once `turnId` finished: that turn and every earlier one. */
+export function historyThroughDelegatedTurn(items: readonly TurnItem[], turnId: string): TurnItem[] {
+  const { ordered, rank } = turnOrderedItems(items)
+  const last = rank.get(turnId)
+  return last === undefined ? ordered : ordered.filter((item) => rank.get(item.turnId)! <= last)
+}
+
 export function priorItemsForDelegatedTurn(
   items: readonly TurnItem[],
   currentTurnId: string
 ): TurnItem[] {
-  const prior = items.filter((item) =>
-    item.turnId !== currentTurnId && item.kind !== 'runtime_context_source'
+  const { ordered, rank } = turnOrderedItems(items)
+  const current = rank.get(currentTurnId)
+  // Later turns (messages queued behind this one) are not history yet.
+  const prior = ordered.filter((item) =>
+    item.turnId !== currentTurnId && item.kind !== 'runtime_context_source' &&
+    (current === undefined || rank.get(item.turnId)! < current)
   )
   const priorGoalKeys = new Set(
     prior
@@ -496,7 +526,7 @@ export function priorItemsForDelegatedTurn(
   // sent separately by each delegated runtime.
   return [
     ...prior,
-    ...items.filter((item) =>
+    ...ordered.filter((item) =>
       item.turnId === currentTurnId &&
       item.kind === 'goal_context' &&
       !priorGoalKeys.has(item.goalKey ?? item.id)
@@ -598,13 +628,22 @@ function rebaseReason(
   return 'native_state_unavailable'
 }
 
+/**
+ * Conversational identity only: which items exist, in which turn, and what
+ * the user said. Status, timing and tool payload fields are rewritten after a
+ * turn commits (an abort cancels a pending question, tool rows finalize), and
+ * hashing them made every such follow-up discard the native session and
+ * re-send a full handoff to the same Agent.
+ */
 function digestItem(item: TurnItem): unknown {
-  const {
-    createdAt: _createdAt,
-    finishedAt: _finishedAt,
-    ...semantic
-  } = item
-  return semantic
+  const record = item as TurnItem & { text?: unknown; goalKey?: unknown }
+  return {
+    id: item.id,
+    turnId: item.turnId,
+    kind: item.kind,
+    ...(item.kind === 'user_message' && typeof record.text === 'string' ? { text: record.text } : {}),
+    ...(item.kind === 'goal_context' && typeof record.goalKey === 'string' ? { goalKey: record.goalKey } : {})
+  }
 }
 
 function credentialIdentityDigest(value: string): string {

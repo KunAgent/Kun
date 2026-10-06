@@ -6,6 +6,7 @@
   "adeGroupArchived": "보관됨",
   "adeEmpty": "에이전트 대화가 아직 없습니다",
   "adeHandoff": "{{agent}}(으)로 컨텍스트를 넘겼습니다 (최근 {{turns}}턴, {{files}}개 파일)",
+  "adeHandoffRestart": "이전 {{agent}} 세션을 이어갈 수 없어 새 세션에서 컨텍스트를 복원했습니다 (최근 {{turns}}턴)",
   "adeHandoffDelta": "델타 브리프로 {{agent}} 재개",
   "adeHandoffShow": "브리프 보기",
   "adeHandoffHide": "브리프 숨기기",

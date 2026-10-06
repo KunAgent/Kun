@@ -144,8 +144,14 @@ export function createHarnessComposition(
     resolveSecretEnv: deps.resolveSecretEnv, resolveProviderCredential: deps.resolveProviderCredential,
     resolveGatewayAliases: deps.resolveGatewayAliases,
     sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal) })
-  const invalidateModels = (_id: string): void => {
-    agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate()
+  // Refreshing one Agent must not discard another Agent's catalog.
+  const invalidateModels = (id: string): void => {
+    const transport = catalog.get(id)?.transport
+    if (!transport) { agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate(); return }
+    if (transport === 'acp') acpModels.invalidate(id)
+    else if (transport === 'agent-sdk') agentSdkModels.invalidate()
+    else if (transport === 'codex-app-server') codexModels.invalidate()
+    else if (transport === 'pi-rpc') piModels.invalidate()
   }
   const updates = new HarnessUpdates({
     definition: (id) => catalog.get(id), detect: (id) => detector.status(id, { force: true }),

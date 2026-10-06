@@ -61,7 +61,15 @@ type Props = {
   composerProviderId?: string
   composerPickList: string[]
   composerModelGroups?: ModelProviderModelGroup[]
-  emptyModelState?: 'loading' | 'agent-default' | 'unavailable'
+  /**
+   * Why the menu has no models. Native Agents distinguish a failed live
+   * lookup (`agent-failed`, with `emptyModelReason`) and a profile that is
+   * still being checked (`agent-not-ready`) from a working Agent that simply
+   * uses its own default model.
+   */
+  emptyModelState?: 'loading' | 'agent-default' | 'unavailable' | 'agent-failed' | 'agent-not-ready'
+  /** Categorical failure code for `agent-failed` (agentUpdate.catalogError.*). */
+  emptyModelReason?: string
   canChangeModel: boolean
   /** Transport capability limit, independent of upstream model metadata. */
   allowedReasoningEfforts?: readonly ComposerReasoningEffort[]
@@ -84,6 +92,7 @@ export function FloatingComposerModelPicker({
   composerPickList,
   composerModelGroups = [],
   emptyModelState,
+  emptyModelReason,
   canChangeModel,
   allowedReasoningEfforts,
   controlVariant = 'combined',
@@ -140,8 +149,12 @@ export function FloatingComposerModelPicker({
   ) : null
   const currentModelProfile = modelProfileForSelection(providerMenuGroups, currentModel, selectedProviderId)
   const emptyModelMessage = emptyModelState && providerMenuGroups.length === 0
-    ? t(emptyModelState === 'loading' ? 'composerModelsLoading'
-      : emptyModelState === 'unavailable' ? 'composerModelsUnavailableHint' : 'composerAgentDefaultModelHint') : undefined
+    ? emptyModelState === 'agent-failed'
+      ? t('agentUpdate.composerFailedHint', { reason: t(`agentUpdate.catalogError.${emptyModelReason ?? 'unavailable'}`, {
+        defaultValue: t('agentUpdate.catalogError.unavailable') }) })
+      : t(emptyModelState === 'loading' ? 'composerModelsLoading'
+        : emptyModelState === 'agent-not-ready' ? 'agentUpdate.composerNotReadyHint'
+          : emptyModelState === 'unavailable' ? 'composerModelsUnavailableHint' : 'composerAgentDefaultModelHint') : undefined
   const needsProviderSetup = !emptyModelMessage && shouldShowProviderSetupPrompt(providerMenuGroups)
   const nativeModel = selectedProviderGroup?.nativeHarnessId === 'devin' ? selectedProviderGroup.modelInfo?.[currentModel] : undefined
   const reasoningOptions = reasoningOptionsForModel(currentModelProfile).filter((option) =>
@@ -176,6 +189,7 @@ export function FloatingComposerModelPicker({
   const modelLabel = emptyModelMessage
     ? emptyModelState === 'loading' ? t('composerModelsLoading')
       : emptyModelState === 'unavailable' ? t('composerModelsUnavailable')
+      : emptyModelState === 'agent-failed' && (!currentModel || currentModel === 'default') ? t('composerModelsUnavailable')
       : currentModel && currentModel !== 'default' ? fullModelLabel(currentModel, t('autoLabel')) : t('composerAgentDefaultModel')
     : needsProviderSetup
     ? t('composerNoProvidersShort')

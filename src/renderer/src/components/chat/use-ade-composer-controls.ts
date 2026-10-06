@@ -11,6 +11,7 @@ import {
   harnessRowAvailable,
   harnessRowUnavailableCode,
   harnessModelFingerprint,
+  HARNESS_MODEL_RETRY_DELAYS_MS,
   loadHarnessModels,
   loadHarnessProviderGroups,
   loadHarnesses,
@@ -120,6 +121,18 @@ export function useAdeComposerControls(input: {
   useEffect(() => {
     if (enabled && harnessId !== 'kun') void loadHarnessModels(harnessId)
   }, [enabled, harnessId, rowFingerprint])
+  // A failed native catalog lookup (for example a transient backend timeout
+  // inside the Agent) retries on its own with backoff instead of waiting for
+  // the user to find the refresh button.
+  const modelFailures = modelCache?.models.length ? 0 : modelCache?.failures ?? 0
+  const modelCatalogFailed = Boolean(modelCache?.error) && !modelCache?.loading && !modelCache?.models.length
+  useEffect(() => {
+    if (!enabled || harnessId === 'kun' || !modelCatalogFailed || modelCache?.errorCode === 'auth_required') return
+    const delay = HARNESS_MODEL_RETRY_DELAYS_MS[modelFailures - 1]
+    if (delay === undefined) return
+    const timer = setTimeout(() => { void loadHarnessModels(harnessId, true) }, delay)
+    return () => clearTimeout(timer)
+  }, [enabled, harnessId, modelCatalogFailed, modelFailures, modelCache?.errorCode])
   useEffect(() => {
     if (!composerGatewayBinding || composerModel || composerCredentialMode !== 'kun-gateway') return
     const alias = providerGroupCache?.aliasGroups?.find((entry) => entry.routeId === composerGatewayBinding.main.routeId)
@@ -331,6 +344,12 @@ export function useAdeComposerControls(input: {
     pickList,
     modelGroups,
     modelsLoading: modelCache?.loading === true,
+    /** Native catalog failure reason (code or message) when no models are known. */
+    modelsError: modelCatalogFailed ? modelCache?.errorCode ?? 'unavailable' : undefined,
+    modelsRetrying: modelCatalogFailed && modelCache?.errorCode !== 'auth_required' &&
+      HARNESS_MODEL_RETRY_DELAYS_MS[modelFailures - 1] !== undefined,
+    /** The selected native-login profile has no current readiness proof. */
+    nativeProfileReady: row ? readyHarnessProfiles(row).some((profile) => profile.credentialMode === 'native-login') : false,
     onModelChange,
     harnessCommands,
     needsSwitchConfirm,

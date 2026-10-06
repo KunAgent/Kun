@@ -24,6 +24,7 @@ import {
 } from './harness-secret-env.js'
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
 import { raceProbeAbort } from './probe-abort.js'
+import { nativeAgentLaunchEnv } from './native-agent-network.js'
 import { applyDevinSessionPermission } from '../runtime/acp/devin-session-permissions.js'
 import { applyAcpSessionPermission } from '../runtime/acp/acp-session-permissions.js'
 import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
@@ -69,7 +70,8 @@ export async function probeAcpHandshake(
       command,
       args: definition.launch?.args ?? [],
       // Initialize reports protocol health, never authenticated account state.
-      env: definition.launch?.env ?? {},
+      // Same network fill as the real turn, so readiness and turns agree.
+      env: nativeAgentLaunchEnv(definition, { ...secretEnv, ...deps.env }),
       secretEnv,
       credentialEnv: deps.env,
       cwd: tmpdir(),

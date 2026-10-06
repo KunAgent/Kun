@@ -6,6 +6,7 @@
   "adeGroupArchived": "จัดเก็บแล้ว",
   "adeEmpty": "ยังไม่มีการสนทนากับเอเจนต์",
   "adeHandoff": "ส่งต่อบริบทให้ {{agent}} ({{turns}} ตอนล่าสุด, {{files}} ไฟล์)",
+  "adeHandoffRestart": "เซสชัน {{agent}} เดิมไปต่อไม่ได้ จึงกู้คืนบริบทในเซสชันใหม่ ({{turns}} ตอนล่าสุด)",
   "adeHandoffDelta": "ทำ {{agent}} ต่อด้วยบรีฟส่วนเพิ่ม",
   "adeHandoffShow": "ดูบรีฟ",
   "adeHandoffHide": "ซ่อนบรีฟ",

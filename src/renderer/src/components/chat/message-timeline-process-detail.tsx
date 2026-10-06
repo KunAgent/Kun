@@ -541,9 +541,12 @@ export function describeProcessBlock(
     return block.auto === true ? t('compactionAutoCompleted') : t('compactionManualCompleted')
   }
   if (block.kind === 'handoff') {
+    // A same-Agent rebase is a session restart, not a hand-off to someone else.
     return block.handoffMode === 'delta'
       ? t('adeHandoffDelta', { agent: block.toHarnessName })
-      : t('adeHandoff', {
+      : block.reason === 'rebase'
+        ? t('adeHandoffRestart', { agent: block.toHarnessName, turns: block.recentTurns })
+        : t('adeHandoff', {
           agent: block.toHarnessName,
           turns: block.recentTurns,
           files: block.files

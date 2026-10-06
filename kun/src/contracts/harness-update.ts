@@ -51,4 +51,6 @@ export type HarnessModelCatalogStatus = {
   version?: string
   command?: string
   message?: string
+  /** Present with `fallback`: categorical reason the live lookup failed. */
+  error?: import('./harness-models.js').HarnessModelCatalogError
 }

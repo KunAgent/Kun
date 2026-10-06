@@ -26,4 +26,13 @@ describe('Devin 3000.11.3 session modes', () => {
     await applyDevinSessionPermission(conn, session, 'normal')
     expect(request).toHaveBeenCalledWith('session/set_mode', { sessionId: 'legacy', modeId: 'normal' })
   })
+  it('selects Smart when advertised and falls back to the legacy approval mode, then Ask', async () => {
+    const request = vi.fn(async (_method: string, params: { value?: string }) => ({ configOptions: [{ id: 'mode', category: 'mode', type: 'select', currentValue: params.value, options: [] }] }))
+    const conn = { rpc: { request } } as never
+    await applyDevinSessionPermission(conn, modern(), 'smart')
+    expect(request).toHaveBeenLastCalledWith('session/set_config_option', { sessionId: 'fixture', configId: 'mode', value: 'smart' })
+    const older = { sessionId: 'legacy', modes: { currentModeId: 'bypass', availableModes: [{ id: 'normal', name: 'Normal' }, { id: 'bypass', name: 'Bypass' }] } }
+    await applyDevinSessionPermission(conn, older, 'smart')
+    expect(request).toHaveBeenLastCalledWith('session/set_mode', { sessionId: 'legacy', modeId: 'normal' })
+  })
 })

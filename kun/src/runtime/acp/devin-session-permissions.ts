@@ -24,7 +24,8 @@ export async function applyDevinSessionPermission(
 ): Promise<void> {
   const candidates = ['normal', 'auto'].includes(requestedMode)
     ? [requestedMode, ...['normal', 'auto', 'ask'].filter((mode) => mode !== requestedMode)]
-    : requestedMode === 'bypass' ? ['bypass', 'dangerous'] : [requestedMode]
+    : requestedMode === 'smart' ? ['smart', 'normal', 'auto', 'ask']
+      : requestedMode === 'bypass' ? ['bypass', 'dangerous'] : [requestedMode]
   const option = session.configOptions?.find((entry) => entry.category === 'mode')
   if (option?.type === 'select') {
     const values = acpConfigOptionValues(option)

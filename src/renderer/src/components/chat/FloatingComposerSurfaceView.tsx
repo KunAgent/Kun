@@ -506,9 +506,10 @@ export function FloatingComposerSurfaceView({
                       composerPickList={modelPickList}
                       composerModelGroups={modelGroups}
                       emptyModelState={externalAgent && adeComposer?.credentialMode === 'native-login'
-                        ? adeComposer.modelsLoading ? 'loading' : 'agent-default'
+                        ? nativeAgentEmptyModelState(adeComposer)
                         : kunComposer && modelCatalogStatus !== 'ready'
                           ? modelCatalogStatus === 'error' ? 'unavailable' : 'loading' : undefined}
+                      emptyModelReason={externalAgent ? adeComposer?.modelsError : undefined}
                       allowedReasoningEfforts={adeComposer?.harnessId === 'claude-code' && adeComposer.credentialMode === 'kun-gateway' ? ['off'] : undefined}
                       composerReasoningEffort={composerReasoningEffort}
                       composerFastMode={composerFastMode}
@@ -615,4 +616,14 @@ export function FloatingComposerSurfaceView({
         ) : null}
     </>
   )
+}
+
+/** Empty model menu state for a native-login Agent, most actionable first. */
+export function nativeAgentEmptyModelState(composer: {
+  modelsLoading: boolean; modelsError?: string; nativeProfileReady?: boolean
+}): 'loading' | 'agent-default' | 'agent-failed' | 'agent-not-ready' {
+  if (composer.modelsLoading) return 'loading'
+  if (composer.modelsError) return 'agent-failed'
+  if (composer.nativeProfileReady === false) return 'agent-not-ready'
+  return 'agent-default'
 }
