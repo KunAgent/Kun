@@ -86,6 +86,7 @@ const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
   'moonshot-global': 'kimi',
   ollama: 'ollama',
   'opencode-go': 'opencodego',
+  'opencode-zen': 'opencodego',
   stepfun: 'stepfun',
   volcengine: 'doubao',
   'volcengine-agent-plan': 'doubao',

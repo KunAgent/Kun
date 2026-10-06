@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "zai-coding-plan",
   "name": "Z.ai Coding Plan",
   "category": "subscription",
@@ -18,5 +18,6 @@
     "glm-4.5-air"
   ],
   "docsUrl": "https://docs.z.ai/devpack/tool/others",
-  "credentialUrl": "https://z.ai/subscribe"
+  "credentialUrl": "https://z.ai/subscribe",
+  "planQuota": "zai"
 }

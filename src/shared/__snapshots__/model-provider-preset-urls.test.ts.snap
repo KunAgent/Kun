@@ -1,0 +1,312 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`preset request URLs > builds stable URLs for every preset, region and plan 1`] = `
+{
+  "aihubmix": {
+    "chat_completions": "https://aihubmix.com/v1/chat/completions",
+    "messages": "https://aihubmix.com/v1/messages",
+  },
+  "aliyun": {
+    "chat_completions": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+  },
+  "aliyun:token-plan": {
+    "chat_completions": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+  },
+  "aliyun:token-plan@cn": {
+    "chat_completions": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+  },
+  "aliyun:token-plan@sgp": {
+    "chat_completions": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+  },
+  "amazon-bedrock": {
+    "chat_completions": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions",
+    "messages": "https://bedrock-runtime.us-east-1.amazonaws.com/anthropic/v1/messages",
+    "responses": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/responses",
+  },
+  "amazon-bedrock@ap-northeast-1": {
+    "chat_completions": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/openai/v1/chat/completions",
+    "messages": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/anthropic/v1/messages",
+    "responses": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/openai/v1/responses",
+  },
+  "amazon-bedrock@ap-southeast-1": {
+    "chat_completions": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/openai/v1/chat/completions",
+    "messages": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/anthropic/v1/messages",
+    "responses": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/openai/v1/responses",
+  },
+  "amazon-bedrock@eu-central-1": {
+    "chat_completions": "https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1/chat/completions",
+    "messages": "https://bedrock-runtime.eu-central-1.amazonaws.com/anthropic/v1/messages",
+    "responses": "https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1/responses",
+  },
+  "amazon-bedrock@eu-west-1": {
+    "chat_completions": "https://bedrock-runtime.eu-west-1.amazonaws.com/openai/v1/chat/completions",
+    "messages": "https://bedrock-runtime.eu-west-1.amazonaws.com/anthropic/v1/messages",
+    "responses": "https://bedrock-runtime.eu-west-1.amazonaws.com/openai/v1/responses",
+  },
+  "amazon-bedrock@us-east-1": {
+    "chat_completions": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions",
+    "messages": "https://bedrock-runtime.us-east-1.amazonaws.com/anthropic/v1/messages",
+    "responses": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/responses",
+  },
+  "amazon-bedrock@us-east-2": {
+    "chat_completions": "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1/chat/completions",
+    "messages": "https://bedrock-runtime.us-east-2.amazonaws.com/anthropic/v1/messages",
+    "responses": "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1/responses",
+  },
+  "amazon-bedrock@us-west-2": {
+    "chat_completions": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/chat/completions",
+    "messages": "https://bedrock-runtime.us-west-2.amazonaws.com/anthropic/v1/messages",
+    "responses": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/responses",
+  },
+  "anthropic-api": {
+    "messages": "https://api.anthropic.com/v1/messages",
+  },
+  "azure-openai": {
+    "chat_completions": "https://your-resource.openai.azure.com/openai/v1/chat/completions",
+    "responses": "https://your-resource.openai.azure.com/openai/v1/responses",
+  },
+  "baidu-qianfan": {
+    "chat_completions": "https://qianfan.baidubce.com/v2/chat/completions",
+    "messages": "https://qianfan.baidubce.com/anthropic/v1/messages",
+    "responses": "https://qianfan.baidubce.com/v2/responses",
+  },
+  "baidu-qianfan:token-plan": {
+    "chat_completions": "https://qianfan.baidubce.com/v2/tokenplan/personal/chat/completions",
+    "messages": "https://qianfan.baidubce.com/anthropic/tokenplan/personal/v1/messages",
+    "responses": "https://qianfan.baidubce.com/v2/tokenplan/personal/responses",
+  },
+  "baidu-qianfan:token-plan@personal": {
+    "chat_completions": "https://qianfan.baidubce.com/v2/tokenplan/personal/chat/completions",
+    "messages": "https://qianfan.baidubce.com/anthropic/tokenplan/personal/v1/messages",
+    "responses": "https://qianfan.baidubce.com/v2/tokenplan/personal/responses",
+  },
+  "baidu-qianfan:token-plan@team": {
+    "chat_completions": "https://qianfan.baidubce.com/v2/tokenplan/team/chat/completions",
+    "messages": "https://qianfan.baidubce.com/anthropic/tokenplan/team/v1/messages",
+    "responses": "https://qianfan.baidubce.com/v2/tokenplan/team/responses",
+  },
+  "cherryin": {
+    "chat_completions": "https://open.cherryin.ai/v1/chat/completions",
+    "messages": "https://open.cherryin.ai/v1/messages",
+    "responses": "https://open.cherryin.ai/v1/responses",
+  },
+  "claude-subscription": {
+    "messages": "https://api.anthropic.com/v1/messages",
+  },
+  "codex": {
+    "custom_endpoint": "https://chatgpt.com/backend-api/codex/responses",
+  },
+  "commandcode": {
+    "chat_completions": "https://api.commandcode.ai/provider/v1/chat/completions",
+    "messages": "https://api.commandcode.ai/provider/v1/messages",
+    "responses": "https://api.commandcode.ai/provider/v1/responses",
+  },
+  "fireworks": {
+    "chat_completions": "https://api.fireworks.ai/inference/v1/chat/completions",
+  },
+  "gemini-api": {
+    "chat_completions": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+  },
+  "grok-subscription": {
+    "responses": "https://cli-chat-proxy.grok.com/v1/responses",
+  },
+  "groq-api": {
+    "chat_completions": "https://api.groq.com/openai/v1/chat/completions",
+    "responses": "https://api.groq.com/openai/v1/responses",
+  },
+  "huaweicloud-maas": {
+    "chat_completions": "https://api.modelarts-maas.com/openai/v1/chat/completions",
+    "messages": "https://api.modelarts-maas.com/anthropic/v1/messages",
+  },
+  "huaweicloud-maas:token-plan": {
+    "chat_completions": "https://api.modelarts-maas.com/plan/v2/chat/completions",
+    "messages": "https://api.modelarts-maas.com/plan/anthropic/v1/messages",
+  },
+  "kilo-gateway": {
+    "chat_completions": "https://api.kilo.ai/api/openrouter/v1/chat/completions",
+  },
+  "kimi-code": {
+    "chat_completions": "https://api.kimi.com/coding/v1/chat/completions",
+  },
+  "litellm": {
+    "chat_completions": "http://localhost:4000/v1/chat/completions",
+  },
+  "lmstudio": {
+    "chat_completions": "http://localhost:1234/v1/chat/completions",
+  },
+  "local-openai": {
+    "chat_completions": "http://localhost:8000/v1/chat/completions",
+  },
+  "longcat": {
+    "chat_completions": "https://api.longcat.chat/openai/v1/chat/completions",
+  },
+  "minimax": {
+    "messages": "https://api.minimaxi.com/anthropic/v1/messages",
+  },
+  "minimax:token-plan": {
+    "messages": "https://api.minimaxi.com/anthropic/v1/messages",
+  },
+  "minimax:token-plan@cn": {
+    "messages": "https://api.minimaxi.com/anthropic/v1/messages",
+  },
+  "minimax:token-plan@global": {
+    "messages": "https://api.minimax.io/anthropic/v1/messages",
+  },
+  "mistral-api": {
+    "chat_completions": "https://api.mistral.ai/v1/chat/completions",
+  },
+  "modelscope": {
+    "chat_completions": "https://api-inference.modelscope.cn/v1/chat/completions",
+    "responses": "https://api-inference.modelscope.cn/v1/responses",
+  },
+  "moonshot-cn": {
+    "chat_completions": "https://api.moonshot.cn/v1/chat/completions",
+    "messages": "https://api.moonshot.cn/anthropic/v1/messages",
+  },
+  "moonshot-global": {
+    "chat_completions": "https://api.moonshot.ai/v1/chat/completions",
+    "messages": "https://api.moonshot.ai/anthropic/v1/messages",
+  },
+  "nvidia-nim": {
+    "chat_completions": "https://integrate.api.nvidia.com/v1/chat/completions",
+  },
+  "ollama": {
+    "chat_completions": "https://ollama.com/v1/chat/completions",
+  },
+  "ollama-local": {
+    "chat_completions": "http://localhost:11434/v1/chat/completions",
+  },
+  "omlx": {
+    "chat_completions": "http://localhost:8000/v1/chat/completions",
+  },
+  "openai-api": {
+    "chat_completions": "https://api.openai.com/v1/chat/completions",
+    "responses": "https://api.openai.com/v1/responses",
+  },
+  "opencode-go": {
+    "chat_completions": "https://opencode.ai/zen/go/v1/chat/completions",
+  },
+  "opencode-zen": {
+    "chat_completions": "https://opencode.ai/zen/v1/chat/completions",
+    "messages": "https://opencode.ai/zen/v1/messages",
+    "responses": "https://opencode.ai/zen/v1/responses",
+  },
+  "openrouter": {
+    "chat_completions": "https://openrouter.ai/api/v1/chat/completions",
+    "messages": "https://openrouter.ai/api/v1/messages",
+    "responses": "https://openrouter.ai/api/v1/responses",
+  },
+  "opper": {
+    "chat_completions": "https://api.opper.ai/v3/compat/chat/completions",
+  },
+  "pipellm": {
+    "chat_completions": "https://api.pipellm.ai/openai/v1/chat/completions",
+    "messages": "https://api.pipellm.ai/v1/messages",
+    "responses": "https://api.pipellm.ai/v1/responses",
+  },
+  "siliconflow": {
+    "chat_completions": "https://api.siliconflow.cn/v1/chat/completions",
+  },
+  "stepfun": {
+    "chat_completions": "https://api.stepfun.com/v1/chat/completions",
+    "messages": "https://api.stepfun.com/v1/messages",
+  },
+  "stepfun:token-plan": {
+    "chat_completions": "https://api.stepfun.com/step_plan/v1/chat/completions",
+    "messages": "https://api.stepfun.com/step_plan/v1/messages",
+  },
+  "tencent-tokenhub": {
+    "chat_completions": "https://tokenhub.tencentmaas.com/v1/chat/completions",
+    "messages": "https://tokenhub.tencentmaas.com/v1/messages",
+    "responses": "https://tokenhub.tencentmaas.com/v1/responses",
+  },
+  "tencent-tokenhub@cn": {
+    "chat_completions": "https://tokenhub.tencentmaas.com/v1/chat/completions",
+    "messages": "https://tokenhub.tencentmaas.com/v1/messages",
+    "responses": "https://tokenhub.tencentmaas.com/v1/responses",
+  },
+  "tencent-tokenhub@intl": {
+    "chat_completions": "https://tokenhub-intl.tencentmaas.com/v1/chat/completions",
+    "messages": "https://tokenhub-intl.tencentmaas.com/v1/messages",
+    "responses": "https://tokenhub-intl.tencentmaas.com/v1/responses",
+  },
+  "tencentcloud": {
+    "chat_completions": "https://api.hunyuan.cloud.tencent.com/v1/chat/completions",
+  },
+  "tencentcloud:token-plan": {
+    "chat_completions": "https://api.lkeap.cloud.tencent.com/plan/v3/chat/completions",
+  },
+  "three02ai": {
+    "chat_completions": "https://api.302.ai/v1/chat/completions",
+  },
+  "together": {
+    "chat_completions": "https://api.together.xyz/v1/chat/completions",
+  },
+  "vercel-ai-gateway": {
+    "chat_completions": "https://ai-gateway.vercel.sh/v1/chat/completions",
+  },
+  "volcengine": {
+    "chat_completions": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+  },
+  "volcengine-agent-plan": {
+    "chat_completions": "https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions",
+  },
+  "volcengine-coding-plan": {
+    "chat_completions": "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions",
+  },
+  "xai-api": {
+    "chat_completions": "https://api.x.ai/v1/chat/completions",
+    "messages": "https://api.x.ai/v1/messages",
+    "responses": "https://api.x.ai/v1/responses",
+  },
+  "xiaomi": {
+    "chat_completions": "https://api.xiaomimimo.com/v1/chat/completions",
+  },
+  "xiaomi:token-plan": {
+    "chat_completions": "https://token-plan-cn.xiaomimimo.com/v1/chat/completions",
+  },
+  "xiaomi:token-plan@ams": {
+    "chat_completions": "https://token-plan-ams.xiaomimimo.com/v1/chat/completions",
+  },
+  "xiaomi:token-plan@cn": {
+    "chat_completions": "https://token-plan-cn.xiaomimimo.com/v1/chat/completions",
+  },
+  "xiaomi:token-plan@sgp": {
+    "chat_completions": "https://token-plan-sgp.xiaomimimo.com/v1/chat/completions",
+  },
+  "yylx": {
+    "chat_completions": "https://app.yylx.io/v1/chat/completions",
+    "messages": "https://app.yylx.io/v1/messages",
+  },
+  "yylx@auto": {
+    "chat_completions": "https://app.yylx.io/v1/chat/completions",
+    "messages": "https://app.yylx.io/v1/messages",
+  },
+  "yylx@cn": {
+    "chat_completions": "https://cn.yylx.io/v1/chat/completions",
+    "messages": "https://cn.yylx.io/v1/messages",
+  },
+  "yylx@global": {
+    "chat_completions": "https://global.yylx.io/v1/chat/completions",
+    "messages": "https://global.yylx.io/v1/messages",
+  },
+  "zai-api": {
+    "chat_completions": "https://api.z.ai/api/paas/v4/chat/completions",
+  },
+  "zai-coding-plan": {
+    "custom_endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions",
+  },
+  "zenmux": {
+    "chat_completions": "https://zenmux.ai/api/v1/chat/completions",
+  },
+  "zenmux:token-plan": {
+    "chat_completions": "https://zenmux.ai/api/v1/chat/completions",
+  },
+  "zhipu-api": {
+    "chat_completions": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+  },
+  "zhipu-coding-plan": {
+    "custom_endpoint": "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+  },
+}
+`;

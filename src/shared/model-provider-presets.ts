@@ -25,6 +25,8 @@ export {
   type ModelProviderPresetId,
   type ModelProviderSubscriptionRegion,
   type ModelProviderTokenPlanPreset,
+  type ModelProviderBalanceSource,
+  type ModelProviderPlanQuotaSource,
   type ModelProviderTokenPlanRegion
 } from './model-provider-preset-types'
 export { MODEL_PROVIDER_PRESETS } from './model-provider-preset-catalog'
@@ -35,7 +37,9 @@ export {
   modelProviderPresetAccountProfile,
   modelProviderPresetProfile,
   modelProviderTokenPlanProfile,
+  presetRegionEndpoints,
   resolveModelProviderPresetSource,
+  withPresetRegion,
   tokenPlanProviderId,
   type ResolvedModelProviderPresetSource
 } from './model-provider-preset-operations'

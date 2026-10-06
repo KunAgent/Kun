@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "moonshot-cn",
   "name": "Moonshot CN",
   "category": "api",
@@ -17,5 +17,11 @@
     "moonshot-v1-8k"
   ],
   "docsUrl": "https://platform.moonshot.cn/docs",
-  "credentialUrl": "https://platform.moonshot.cn/console/api-keys"
+  "credentialUrl": "https://platform.moonshot.cn/console/api-keys",
+  "origin": "vendor",
+  "balance": "moonshot",
+  "endpoints": {
+    "chat_completions": "https://api.moonshot.cn/v1",
+    "messages": "https://api.moonshot.cn/anthropic"
+  }
 }

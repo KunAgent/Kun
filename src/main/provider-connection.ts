@@ -15,6 +15,7 @@ import { resolveProviderEndpointBaseUrl } from '../shared/model-provider-endpoin
 import { GROK_SUBSCRIPTION_MODEL_IDS } from '../shared/model-provider-presets'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 import { codexRequestHeaders, isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
+import { defaultKeyHeader } from '../../kun/src/contracts/azure-openai.js'
 import { codexProviderCatalogUrl, fetchCodexProviderCatalog } from '../../kun/src/adapters/model/codex-provider-catalog.js'
 import { parseCodexModelCatalog } from './codex-model-catalog'
 import {
@@ -68,7 +69,8 @@ export async function fetchProviderProbe(
 export function providerProbeHeaders(
   endpointFormat: ModelEndpointFormat,
   apiKey: string,
-  customHeaders?: Record<string, string>
+  customHeaders?: Record<string, string>,
+  requestUrl?: string
 ): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   const key = apiKey.trim()
@@ -76,7 +78,7 @@ export function providerProbeHeaders(
     headers['anthropic-version'] = ANTHROPIC_VERSION
     if (key) headers['x-api-key'] = key
   } else if (key) {
-    headers.Authorization = `Bearer ${key}`
+    Object.assign(headers, defaultKeyHeader(requestUrl, key))
   }
   // Same layering as Kun's buildCompatRequestHeaders: user-configured custom
   // headers sit above protocol defaults (a relay may require its own auth
@@ -180,7 +182,7 @@ export async function probeModelProvider(
     ? codexProviderCatalogUrl()
     : upstreamOpenAiModelsUrl(modelsBaseUrl)
   let headers = {
-    ...(codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey, request.customHeaders)),
+    ...(codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey, request.customHeaders, url)),
     ...openCodeSessionRuntimeHeaders({
       presetSource: settings?.provider.providers.find((provider) => provider.id === request.providerId)
         ?.presetSource?.presetId,

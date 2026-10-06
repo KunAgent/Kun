@@ -108,5 +108,9 @@
   "modelProviderRefKind_failover": "フェイルオーバー",
   "modelProviderDeleteInUseOther": "{{surface}} で使用中です。",
   "modelProviderDetectCostHint": "検出はフォーマットごとに最小リクエストを 1 回送信し、少量のトークンを消費する場合があります。",
-  "modelProviderFailoverOauthStrategyHint": "サブスクリプション（OAuth）アカウントはローテーションと最少使用をサポートしないため、自動的にスマート戦略で実行されます。"
+  "modelProviderFailoverOauthStrategyHint": "サブスクリプション（OAuth）アカウントはローテーションと最少使用をサポートしないため、自動的にスマート戦略で実行されます。",
+  "modelProviderProtocols": "対応プロトコル",
+  "modelProviderOwnEndpoint": "リソースのエンドポイント",
+  "modelProviderNoListNote": "このベンダーはモデル一覧を公開していません。文書化された {{count}} 個のモデルを追加します。",
+  "modelProviderHeaderHints": "このベンダーが文書化している任意ヘッダー: {{headers}}。保存後に「カスタムリクエストヘッダー」で追加できます。"
 }

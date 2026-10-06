@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "baidu-qianfan",
+  "name": "Baidu Qianfan",
+  "origin": "vendor",
+  "baseUrl": "https://qianfan.baidubce.com/v2",
+  "endpoints": {
+    "chat_completions": "https://qianfan.baidubce.com/v2",
+    "responses": "https://qianfan.baidubce.com/v2",
+    "messages": "https://qianfan.baidubce.com/anthropic"
+  },
+  "docsUrl": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+  "credentialUrl": "https://console.bce.baidu.com/qianfan/ais/console/apiKey",
+  "tokenPlan": {
+    "displayName": "Qianfan Token Plan",
+    "baseUrl": "https://qianfan.baidubce.com/v2/tokenplan/personal",
+    "regions": [
+      {
+        "id": "personal",
+        "name": "Personal",
+        "baseUrl": "https://qianfan.baidubce.com/v2/tokenplan/personal",
+        "endpoints": {
+          "chat_completions": "https://qianfan.baidubce.com/v2/tokenplan/personal",
+          "responses": "https://qianfan.baidubce.com/v2/tokenplan/personal",
+          "messages": "https://qianfan.baidubce.com/anthropic/tokenplan/personal"
+        }
+      },
+      {
+        "id": "team",
+        "name": "Enterprise",
+        "baseUrl": "https://qianfan.baidubce.com/v2/tokenplan/team",
+        "endpoints": {
+          "chat_completions": "https://qianfan.baidubce.com/v2/tokenplan/team",
+          "responses": "https://qianfan.baidubce.com/v2/tokenplan/team",
+          "messages": "https://qianfan.baidubce.com/anthropic/tokenplan/team"
+        }
+      }
+    ],
+    "endpoints": {
+      "chat_completions": "https://qianfan.baidubce.com/v2/tokenplan/personal",
+      "responses": "https://qianfan.baidubce.com/v2/tokenplan/personal",
+      "messages": "https://qianfan.baidubce.com/anthropic/tokenplan/personal"
+    },
+    "endpointFormat": "chat_completions",
+    "models": [
+      "qianfan-code-latest",
+      "deepseek-v4.1-flash",
+      "deepseek-v4-pro",
+      "deepseek-v4-flash",
+      "deepseek-v3.2",
+      "glm-5.3",
+      "glm-5.3-flash",
+      "glm-5.2",
+      "glm-5.1",
+      "glm-5"
+    ],
+    "credentialUrl": "https://console.bce.baidu.com/qianfan/resource/token-plan"
+  }
+}

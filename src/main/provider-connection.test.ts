@@ -470,3 +470,12 @@ describe('probeModelProvider', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe('Azure OpenAI probe headers', () => {
+  it('sends the key as api-key on Azure resource hosts and Bearer elsewhere', () => {
+    expect(providerProbeHeaders('responses', 'k', undefined, 'https://acme.openai.azure.com/openai/v1/models'))
+      .toEqual({ Accept: 'application/json', 'api-key': 'k' })
+    expect(providerProbeHeaders('responses', 'k', undefined, 'https://api.openai.com/v1/models'))
+      .toEqual({ Accept: 'application/json', Authorization: 'Bearer k' })
+  })
+})

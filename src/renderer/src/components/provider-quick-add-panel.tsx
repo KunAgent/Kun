@@ -1,13 +1,35 @@
 import type { ModelProviderPresetMode, ModelProviderProfileV1 } from '@shared/app-settings'
 import type { ModelProviderPreset } from '@shared/model-provider-presets'
 import {
-  modelProviderPresetAccountProfile
+  modelProviderPresetAccountProfile,
+  modelProviderTokenPlanProfile,
+  withPresetRegion
 } from '@shared/model-provider-presets'
 import { ChevronDown, ExternalLink, KeyRound, Loader2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { ProviderIcon } from './provider-icon'
 import { Toggle } from './settings-controls'
 import { textInputClass } from './settings-section-providers-controls'
+
+function validOwnEndpoint(value: string, example: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed || trimmed === example) return false
+  try {
+    const url = new URL(trimmed)
+    return url.protocol === 'https:' && !url.hostname.startsWith('your-resource.') && !url.username && !url.password
+  } catch {
+    return false
+  }
+}
+
+const PROTOCOL_LABELS = { chat_completions: 'Chat Completions', responses: 'Responses', messages: 'Anthropic Messages' } as const
+
+function protocolLabels(endpoints: Partial<Record<keyof typeof PROTOCOL_LABELS, string>> | undefined): string[] {
+  if (!endpoints) return []
+  return (Object.keys(PROTOCOL_LABELS) as (keyof typeof PROTOCOL_LABELS)[])
+    .filter((key) => endpoints[key])
+    .map((key) => PROTOCOL_LABELS[key])
+}
 
 function hostOf(url: string): string {
   try {
@@ -39,8 +61,10 @@ export function ProviderQuickAddPanel({
   onClose: () => void
   onSubmit: (profile: ModelProviderProfileV1) => Promise<void>
 }): ReactElement {
+  const regions = mode === 'token-plan' ? preset.tokenPlan?.regions : preset.regions
+  const defaultBaseUrl = mode === 'token-plan' ? preset.tokenPlan?.baseUrl ?? preset.baseUrl : preset.baseUrl
   const [apiKey, setApiKey] = useState('')
-  const [regionId, setRegionId] = useState(preset.regions?.[0]?.id ?? '')
+  const [regionId, setRegionId] = useState(regions?.[0]?.id ?? '')
   const [baseUrl, setBaseUrl] = useState('')
   const [useProxy, setUseProxy] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -51,21 +75,36 @@ export function ProviderQuickAddPanel({
     keyRef.current?.focus()
   }, [])
 
-  const region = preset.regions?.find((entry) => entry.id === regionId)
+  const region = regions?.find((entry) => entry.id === regionId)
   const keyOptional = preset.keyOptional === true
   const keyMissing = !keyOptional && !apiKey.trim()
+  // A preset reached at the user's own resource (Azure) ships only an example
+  // URL; saving it unchanged would send the key to a host that does not exist.
+  const needsEndpoint = Boolean(preset.endpointHint) && mode === 'api'
+  const endpointMissing = needsEndpoint && !validOwnEndpoint(baseUrl, preset.baseUrl)
+  const resolvedBaseUrl = baseUrl.trim() || region?.baseUrl || defaultBaseUrl
+  const protocols = protocolLabels(mode === 'token-plan'
+    ? (regions?.find((entry) => entry.baseUrl === resolvedBaseUrl)?.endpoints ?? preset.tokenPlan?.endpoints)
+    : (regions?.find((entry) => entry.baseUrl === resolvedBaseUrl)?.endpoints ?? (resolvedBaseUrl === preset.baseUrl ? preset.endpoints : undefined)))
 
   const submit = async (): Promise<void> => {
-    if (busy || keyMissing) return
+    if (busy || keyMissing || endpointMissing) return
     setBusy(true)
     setError('')
     try {
-      const profile = modelProviderPresetAccountProfile(preset, mode, providers)
-      if (!profile) throw new Error('preset produced no profile')
+      const account = modelProviderPresetAccountProfile(preset, mode, providers)
+      if (!account) throw new Error('preset produced no profile')
+      // Region choice decides both the base URL and the per-protocol endpoints;
+      // a custom base URL never inherits another host's endpoints.
+      const regional = mode === 'token-plan'
+        ? modelProviderTokenPlanProfile(preset, '', resolvedBaseUrl)
+        : withPresetRegion(preset, account, resolvedBaseUrl)
+      const { endpoints: _unused, ...withoutEndpoints } = account
       await onSubmit({
-        ...profile,
+        ...withoutEndpoints,
         apiKey: apiKey.trim(),
-        baseUrl: baseUrl.trim() || region?.baseUrl || profile.baseUrl,
+        baseUrl: resolvedBaseUrl,
+        ...(regional?.endpoints ? { endpoints: regional.endpoints } : {}),
         useProxy,
         ...(preset.catalogSources?.length ? { catalogSources: [...preset.catalogSources] } : {})
       })
@@ -100,8 +139,17 @@ export function ProviderQuickAddPanel({
                 {preset.name}
               </h2>
               <p className="mt-0.5 truncate text-[12px] text-ds-faint">
-                {preset.note ?? hostOf(region?.baseUrl ?? preset.baseUrl)}
+                {preset.note ?? hostOf(resolvedBaseUrl)}
               </p>
+              {protocols.length ? (
+                <div className="mt-1.5 flex flex-wrap gap-1" aria-label={t('modelProviderProtocols')}>
+                  {protocols.map((label) => (
+                    <span key={label} className="rounded-full border border-ds-border-muted bg-ds-main/40 px-1.5 py-px text-[10.5px] font-medium text-ds-faint">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
           <button data-settings-action="ghost" data-settings-size="icon"
@@ -151,21 +199,41 @@ export function ProviderQuickAddPanel({
               placeholder={keyOptional ? t('modelProviderKeyOptionalHint') : 'sk-…'}
             />
           </label>
-          {preset.regions && preset.regions.length > 1 ? (
+          {needsEndpoint ? (
             <label className="grid gap-1.5 text-[12.5px] font-medium text-ds-muted">
-              {t('modelProviderRegion')}
+              {t('modelProviderOwnEndpoint')}
+              <input
+                value={baseUrl}
+                onChange={(event) => {
+                  setBaseUrl(event.target.value)
+                  if (error) setError('')
+                }}
+                placeholder={preset.baseUrl}
+                spellCheck={false}
+                aria-invalid={Boolean(baseUrl.trim()) && endpointMissing}
+                className={textInputClass}
+              />
+              <span className="text-[11.5px] font-normal leading-4 text-ds-faint">{preset.endpointHint}</span>
+            </label>
+          ) : null}
+          {regions && regions.length > 1 ? (
+            <label className="grid gap-1.5 text-[12.5px] font-medium text-ds-muted">
+              {preset.regionLabel && mode === 'api' ? preset.regionLabel : t('modelProviderRegion')}
               <select
                 value={regionId}
                 onChange={(event) => setRegionId(event.target.value)}
                 className={textInputClass}
               >
-                {preset.regions.map((entry) => (
+                {regions.map((entry) => (
                   <option key={entry.id} value={entry.id}>
-                    {entry.id} · {hostOf(entry.baseUrl)}
+                    {entry.name ?? entry.id} · {hostOf(entry.baseUrl)}
                   </option>
                 ))}
               </select>
             </label>
+          ) : null}
+          {preset.noList && mode === 'api' ? (
+            <p className="text-[11.5px] leading-4 text-ds-faint">{t('modelProviderNoListNote', { count: preset.models.length })}</p>
           ) : null}
           <button data-settings-action="ghost" data-settings-size="compact"
             type="button"
@@ -178,16 +246,23 @@ export function ProviderQuickAddPanel({
           </button>
           {moreOpen ? (
             <div className="grid gap-3 rounded-xl border border-ds-border-muted bg-ds-main/30 px-3.5 py-3">
-              <label className="grid gap-1.5 text-[12.5px] font-medium text-ds-muted">
-                {t('modelProviderBaseUrl')}
-                <input
-                  value={baseUrl}
-                  onChange={(event) => setBaseUrl(event.target.value)}
-                  placeholder={region?.baseUrl ?? preset.baseUrl}
-                  spellCheck={false}
-                  className={textInputClass}
-                />
-              </label>
+              {needsEndpoint ? null : (
+                <label className="grid gap-1.5 text-[12.5px] font-medium text-ds-muted">
+                  {t('modelProviderBaseUrl')}
+                  <input
+                    value={baseUrl}
+                    onChange={(event) => setBaseUrl(event.target.value)}
+                    placeholder={region?.baseUrl ?? defaultBaseUrl}
+                    spellCheck={false}
+                    className={textInputClass}
+                  />
+                </label>
+              )}
+              {preset.headerHints?.length ? (
+                <p className="text-[11.5px] leading-4 text-ds-faint">
+                  {t('modelProviderHeaderHints', { headers: preset.headerHints.join(', ') })}
+                </p>
+              ) : null}
               <label className="flex items-center justify-between gap-3 text-[12.5px] font-medium text-ds-ink">
                 <span>{t('modelProviderUseAppProxy')}</span>
                 <Toggle
@@ -224,7 +299,7 @@ export function ProviderQuickAddPanel({
           </button>
           <button aria-busy={busy} data-settings-action="primary" data-settings-size="default"
             type="button"
-            disabled={busy || keyMissing}
+            disabled={busy || keyMissing || endpointMissing}
             onClick={() => void submit()}
             className="inline-flex h-9 items-center gap-2 rounded-full bg-accent px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
           >

@@ -108,5 +108,9 @@
   "modelProviderRefKind_failover": "Резерв",
   "modelProviderDeleteInUseOther": "Используется в {{surface}}.",
   "modelProviderDetectCostHint": "Определение отправляет по одному минимальному запросу на каждый формат и может потреблять несколько токенов.",
-  "modelProviderFailoverOauthStrategyHint": "Подписочные (OAuth) аккаунты не поддерживают режимы «по кругу» и «наименее используемый»; они автоматически работают по умной стратегии."
+  "modelProviderFailoverOauthStrategyHint": "Подписочные (OAuth) аккаунты не поддерживают режимы «по кругу» и «наименее используемый»; они автоматически работают по умной стратегии.",
+  "modelProviderProtocols": "Поддерживаемые протоколы",
+  "modelProviderOwnEndpoint": "Адрес вашего ресурса",
+  "modelProviderNoListNote": "Поставщик не публикует список моделей; будут добавлены {{count}} документированных моделей.",
+  "modelProviderHeaderHints": "Необязательные заголовки поставщика: {{headers}}. Добавьте их в разделе «Пользовательские заголовки» после сохранения."
 }

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "anthropic-api",
   "name": "Anthropic API",
   "category": "api",
@@ -10,5 +10,9 @@
   "endpointFormat": "messages",
   "models": [],
   "docsUrl": "https://docs.anthropic.com",
-  "credentialUrl": "https://console.anthropic.com/settings/keys"
+  "credentialUrl": "https://console.anthropic.com/settings/keys",
+  "origin": "vendor",
+  "headerHints": [
+    "anthropic-workspace-id"
+  ]
 }

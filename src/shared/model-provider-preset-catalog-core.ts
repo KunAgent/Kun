@@ -213,6 +213,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'zhipu-coding-plan',
+    planQuota: 'zhipu',
     name: 'Zhipu Coding Plan',
     category: 'subscription',
     subscriptionRegion: 'china',
@@ -234,6 +235,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'zai-coding-plan',
+    planQuota: 'zai',
     name: 'Z.ai Coding Plan',
     category: 'subscription',
     subscriptionRegion: 'china',
@@ -254,6 +256,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'kimi-code',
+    planQuota: 'kimi-code',
     name: 'Kimi Code',
     category: 'subscription',
     subscriptionRegion: 'china',
@@ -435,6 +438,8 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'moonshot-cn',
+    balance: 'moonshot',
+    endpoints: { chat_completions: 'https://api.moonshot.cn/v1', messages: 'https://api.moonshot.cn/anthropic' },
     name: 'Moonshot CN',
     tileGroup: 'moonshot',
     baseUrl: 'https://api.moonshot.cn/v1',
@@ -453,6 +458,8 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'moonshot-global',
+    balance: 'moonshot',
+    endpoints: { chat_completions: 'https://api.moonshot.ai/v1', messages: 'https://api.moonshot.ai/anthropic' },
     name: 'Moonshot Global',
     tileGroup: 'moonshot',
     baseUrl: 'https://api.moonshot.ai/v1',

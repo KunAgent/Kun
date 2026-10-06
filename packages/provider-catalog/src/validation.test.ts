@@ -17,8 +17,21 @@ describe('declarative provider definitions', () => {
   it('rejects duplicate identities, executable hooks, credentials and unsupported protocols', () => {
     expect(() => validateProviderCatalog([descriptor, descriptor])).toThrow('duplicate')
     for (const patch of [{ apiKey: 'secret' }, { execute: 'command' }, { endpointFormat: 'unknown' },
-      { baseUrl: 'https://name:secret@example.test' }, { models: ['same', 'same'] }, { schemaVersion: 2 }]) {
+      { baseUrl: 'https://name:secret@example.test' }, { models: ['same', 'same'] }, { schemaVersion: 3 }, { regions: [] }, { endpoints: {} }]) {
       expect(() => validateProviderCatalog([{ ...descriptor, ...patch }])).toThrow()
     }
+  })
+  it('accepts schema v2 picker, endpoint and observation metadata only under v2', () => {
+    const v2 = { ...descriptor, schemaVersion: 2, origin: 'relay', balance: 'new-api', headerHints: ['x-workspace'],
+      endpoints: { chat_completions: 'https://example.test/v1', messages: 'https://example.test' },
+      regions: [{ id: 'cn', name: 'China', baseUrl: 'https://example.test/v1' }, { id: 'eu', baseUrl: 'https://eu.example.test/v1' }] }
+    expect(validateProviderCatalog([v2])[0]).toMatchObject({ origin: 'relay', balance: 'new-api' })
+    expect(() => validateProviderCatalog([{ ...v2, schemaVersion: 1 }])).toThrow('Unknown provider field')
+    expect(() => validateProviderCatalog([{ ...v2, headerHints: ['Authorization'] }])).toThrow('credential')
+    expect(() => validateProviderCatalog([{ ...v2, regions: [{ id: 'eu', baseUrl: 'https://eu.example.test/v1' }] }]))
+      .toThrow('first')
+    expect(() => validateProviderCatalog([{ ...v2, endpoints: { chat_completions: 'https://example.test/v1?key=1' } }])).toThrow()
+    expect(() => validateProviderCatalog([{ ...v2, noList: true }])).toThrow('declare its models')
+    expect(() => validateProviderCatalog([{ ...v2, balance: 'scrape' }])).toThrow('balance')
   })
 })

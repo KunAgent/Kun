@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "huaweicloud-maas",
+  "name": "Huawei Cloud MaaS",
+  "origin": "vendor",
+  "baseUrl": "https://api.modelarts-maas.com/openai/v1",
+  "endpoints": {
+    "chat_completions": "https://api.modelarts-maas.com/openai/v1",
+    "messages": "https://api.modelarts-maas.com/anthropic"
+  },
+  "docsUrl": "https://support.huaweicloud.com/usermanual-maas/maas_01_0001.html",
+  "credentialUrl": "https://console.huaweicloud.com/modelarts/?#/model-studio/authmanage",
+  "tokenPlan": {
+    "baseUrl": "https://api.modelarts-maas.com/plan/v2",
+    "endpoints": {
+      "chat_completions": "https://api.modelarts-maas.com/plan/v2",
+      "messages": "https://api.modelarts-maas.com/plan/anthropic"
+    },
+    "endpointFormat": "chat_completions",
+    "models": [
+      "glm-5.3",
+      "glm-5.1",
+      "kimi-k2.6",
+      "deepseek-v4.1-flash",
+      "deepseek-v4-flash"
+    ],
+    "credentialUrl": "https://console.huaweicloud.com/modelarts/?#/model-studio/authmanage"
+  }
+}

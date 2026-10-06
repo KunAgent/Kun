@@ -9,10 +9,10 @@ import {
 describe('provider catalog', () => {
   it('publishes every GUI base preset and Token Plan as stable entries', () => {
     const entries = providerCatalogEntries()
-    expect(PROVIDER_CATALOG).toHaveLength(43)
-    expect(entries).toHaveLength(49)
-    expect(entries.filter((entry) => entry.category === 'subscription')).toHaveLength(19)
-    expect(entries.filter((entry) => entry.category === 'api')).toHaveLength(30)
+    expect(PROVIDER_CATALOG).toHaveLength(57)
+    expect(entries).toHaveLength(65)
+    expect(entries.filter((entry) => entry.category === 'subscription')).toHaveLength(21)
+    expect(entries.filter((entry) => entry.category === 'api')).toHaveLength(44)
     expect(entries.filter((entry) => entry.category === 'free')).toEqual([])
     expect(entries.find((entry) => entry.profileId === 'zenmux'))
       .toMatchObject({ credentialRequirement: 'required' })

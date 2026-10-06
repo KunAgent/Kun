@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "moonshot-global",
   "name": "Moonshot Global",
   "category": "api",
@@ -17,5 +17,11 @@
     "moonshot-v1-8k"
   ],
   "docsUrl": "https://platform.moonshot.ai/docs",
-  "credentialUrl": "https://platform.moonshot.ai/console/api-keys"
+  "credentialUrl": "https://platform.moonshot.ai/console/api-keys",
+  "origin": "vendor",
+  "balance": "moonshot",
+  "endpoints": {
+    "chat_completions": "https://api.moonshot.ai/v1",
+    "messages": "https://api.moonshot.ai/anthropic"
+  }
 }

@@ -108,5 +108,9 @@
   "modelProviderRefKind_failover": "故障转移",
   "modelProviderDeleteInUseOther": "正在被 {{surface}} 使用。",
   "modelProviderDetectCostHint": "检测会对每个格式发一次最小请求，可能消耗极少量 token。",
-  "modelProviderFailoverOauthStrategyHint": "订阅（OAuth）账户不支持轮询与最少使用，会自动按智能策略执行。"
+  "modelProviderFailoverOauthStrategyHint": "订阅（OAuth）账户不支持轮询与最少使用，会自动按智能策略执行。",
+  "modelProviderProtocols": "支持的协议",
+  "modelProviderOwnEndpoint": "你的资源端点",
+  "modelProviderNoListNote": "该厂商不提供模型列表接口，将添加文档中的 {{count}} 个模型。",
+  "modelProviderHeaderHints": "该厂商文档中的可选请求头：{{headers}}。保存后可在“自定义请求头”中添加。"
 }

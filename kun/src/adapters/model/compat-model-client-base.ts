@@ -300,7 +300,8 @@ export class CompatModelClientBase {
       runtimeHeaders,
       stream,
       endpointFormat,
-      responsesLite
+      responsesLite,
+      requestUrl: this.baseUrlForFormat(endpointFormat)
     })
   }
 

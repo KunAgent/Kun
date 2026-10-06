@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "zhipu-coding-plan",
   "name": "Zhipu Coding Plan",
   "category": "subscription",
@@ -18,5 +18,6 @@
     "glm-4.5-air"
   ],
   "docsUrl": "https://docs.bigmodel.cn/cn/coding-plan/overview",
-  "credentialUrl": "https://bigmodel.cn/usercenter/proj-mgmt/apikeys"
+  "credentialUrl": "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
+  "planQuota": "zhipu"
 }

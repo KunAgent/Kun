@@ -5,6 +5,7 @@ import type {
   ModelProviderImageCapabilityV1,
   ModelProviderMusicCapabilityV1,
   ModelProviderModelProfileV1,
+  ModelProviderEndpointsV1,
   ModelProviderPresetMode,
   ModelProviderProfileV1,
   ModelProviderReasoningCapabilityV1,
@@ -27,6 +28,7 @@ import {
   MINIMAX_M3_REASONING,
   ModelProviderPreset,
   ModelProviderTokenPlanPreset,
+  ModelProviderTokenPlanRegion,
   TOKEN_PLAN_PROVIDER_ID_SUFFIX,
   XIAOMI_REASONING
 } from './model-provider-preset-types'
@@ -69,6 +71,7 @@ export function modelProviderPresetProfile(
     apiKey: apiKey.trim(),
     baseUrl: preset.baseUrl,
     endpointFormat: preset.endpointFormat,
+    ...(preset.endpoints ? { endpoints: { ...preset.endpoints } } : {}),
     useProxy: false,
     // Subscription and API transports share the same bounded default. An
     // explicit provider setting can still reduce or disable retries.
@@ -86,6 +89,33 @@ export function modelProviderPresetProfile(
   }
 }
 
+/**
+ * Per-protocol endpoints for a chosen base URL: the matching region's
+ * endpoints, else the preset default when the base URL is the default one.
+ * A custom base URL never inherits another host's protocol endpoints.
+ */
+export function presetRegionEndpoints(
+  regions: readonly ModelProviderTokenPlanRegion[] | undefined,
+  baseUrl: string,
+  fallback?: ModelProviderEndpointsV1
+): ModelProviderEndpointsV1 | undefined {
+  const region = regions?.find((entry) => entry.baseUrl === baseUrl.trim())
+  const endpoints = region?.endpoints ?? fallback
+  return endpoints && Object.keys(endpoints).length ? { ...endpoints } : undefined
+}
+
+/** Applies a region (or a custom base URL) to an API-mode preset profile. */
+export function withPresetRegion(
+  preset: ModelProviderPreset,
+  profile: ModelProviderProfileV1,
+  baseUrl: string
+): ModelProviderProfileV1 {
+  const resolved = baseUrl.trim() || preset.baseUrl
+  const endpoints = presetRegionEndpoints(preset.regions, resolved, resolved === preset.baseUrl ? preset.endpoints : undefined)
+  const { endpoints: _previous, ...rest } = profile
+  return { ...rest, baseUrl: resolved, ...(endpoints ? { endpoints } : {}) }
+}
+
 export function tokenPlanProviderId(presetId: string): string {
   return `${presetId}${TOKEN_PLAN_PROVIDER_ID_SUFFIX}`
 }
@@ -98,6 +128,8 @@ export function modelProviderTokenPlanProfile(
   const tokenPlan = preset.tokenPlan
   if (!tokenPlan) return null
   const resolvedBaseUrl = baseUrl.trim() || tokenPlan.baseUrl
+  const planEndpoints = presetRegionEndpoints(tokenPlan.regions, resolvedBaseUrl,
+    resolvedBaseUrl === tokenPlan.baseUrl ? tokenPlan.endpoints : undefined)
   return {
     id: tokenPlanProviderId(preset.id),
     name: tokenPlan.displayName?.trim() || `${preset.name} Token Plan`,
@@ -105,6 +137,7 @@ export function modelProviderTokenPlanProfile(
     apiKey: apiKey.trim(),
     baseUrl: resolvedBaseUrl,
     endpointFormat: tokenPlan.endpointFormat,
+    ...(planEndpoints ? { endpoints: planEndpoints } : {}),
     useProxy: false,
     retry: defaultPresetRetrySettings(preset),
     models: [...tokenPlan.models],

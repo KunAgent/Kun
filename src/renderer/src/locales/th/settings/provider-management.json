@@ -108,5 +108,9 @@
   "modelProviderRefKind_failover": "Failover",
   "modelProviderDeleteInUseOther": "กำลังถูกใช้โดย {{surface}}",
   "modelProviderDetectCostHint": "การตรวจจับจะส่งคำขอขั้นต่ำหนึ่งครั้งต่อรูปแบบและอาจใช้โทเค็นจำนวนเล็กน้อย",
-  "modelProviderFailoverOauthStrategyHint": "บัญชีสมาชิก (OAuth) ไม่รองรับโหมดหมุนเวียนหรือใช้น้อยที่สุด ระบบจะใช้กลยุทธ์อัจฉริยะโดยอัตโนมัติ"
+  "modelProviderFailoverOauthStrategyHint": "บัญชีสมาชิก (OAuth) ไม่รองรับโหมดหมุนเวียนหรือใช้น้อยที่สุด ระบบจะใช้กลยุทธ์อัจฉริยะโดยอัตโนมัติ",
+  "modelProviderProtocols": "โปรโตคอลที่รองรับ",
+  "modelProviderOwnEndpoint": "ปลายทางของทรัพยากรของคุณ",
+  "modelProviderNoListNote": "ผู้ให้บริการนี้ไม่มีรายการโมเดล จะเพิ่มโมเดลที่ระบุในเอกสาร {{count}} รายการ",
+  "modelProviderHeaderHints": "ส่วนหัวเสริมที่ผู้ให้บริการระบุ: {{headers}} เพิ่มได้ในส่วนหัวคำขอที่กำหนดเองหลังบันทึก"
 }

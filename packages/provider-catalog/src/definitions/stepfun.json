@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "stepfun",
   "name": "StepFun",
   "category": "api",
@@ -24,6 +24,16 @@
       "step-3.5-flash",
       "step-3.5-flash-2603"
     ],
-    "credentialUrl": "https://platform.stepfun.com/interface-key"
+    "credentialUrl": "https://platform.stepfun.com/interface-key",
+    "endpoints": {
+      "chat_completions": "https://api.stepfun.com/step_plan/v1",
+      "messages": "https://api.stepfun.com/step_plan"
+    }
+  },
+  "origin": "vendor",
+  "balance": "stepfun",
+  "endpoints": {
+    "chat_completions": "https://api.stepfun.com/v1",
+    "messages": "https://api.stepfun.com"
   }
 }

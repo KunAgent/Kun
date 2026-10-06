@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "xai-api",
   "name": "xAI API",
   "category": "api",
@@ -10,5 +10,11 @@
   "endpointFormat": "chat_completions",
   "models": [],
   "docsUrl": "https://docs.x.ai/",
-  "credentialUrl": "https://console.x.ai/"
+  "credentialUrl": "https://console.x.ai/",
+  "origin": "vendor",
+  "endpoints": {
+    "chat_completions": "https://api.x.ai/v1",
+    "responses": "https://api.x.ai/v1",
+    "messages": "https://api.x.ai"
+  }
 }

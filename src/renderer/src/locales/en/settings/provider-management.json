@@ -108,5 +108,9 @@
   "modelProviderRefKind_failover": "Failover",
   "modelProviderDeleteInUseOther": "In use by {{surface}}.",
   "modelProviderDetectCostHint": "Detection sends one minimal request per format and may consume a few tokens.",
-  "modelProviderFailoverOauthStrategyHint": "Subscription (OAuth) accounts do not support rotate or least-used; they automatically run with the smart strategy."
+  "modelProviderFailoverOauthStrategyHint": "Subscription (OAuth) accounts do not support rotate or least-used; they automatically run with the smart strategy.",
+  "modelProviderProtocols": "Supported protocols",
+  "modelProviderOwnEndpoint": "Your resource endpoint",
+  "modelProviderNoListNote": "This vendor publishes no model list; {{count}} documented models are added.",
+  "modelProviderHeaderHints": "Optional headers this vendor documents: {{headers}}. Add them under Custom request headers after saving."
 }

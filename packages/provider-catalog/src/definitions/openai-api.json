@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "openai-api",
   "name": "OpenAI API",
   "category": "api",
@@ -10,5 +10,10 @@
   "endpointFormat": "chat_completions",
   "models": [],
   "docsUrl": "https://platform.openai.com/docs",
-  "credentialUrl": "https://platform.openai.com/api-keys"
+  "credentialUrl": "https://platform.openai.com/api-keys",
+  "origin": "vendor",
+  "endpoints": {
+    "chat_completions": "https://api.openai.com/v1",
+    "responses": "https://api.openai.com/v1"
+  }
 }

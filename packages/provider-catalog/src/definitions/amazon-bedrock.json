@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "messages",
+  "models": [
+    "global.anthropic.claude-opus-5-5",
+    "global.anthropic.claude-sonnet-5-5",
+    "global.anthropic.claude-sonnet-5",
+    "global.anthropic.claude-opus-5",
+    "global.anthropic.claude-fable-5-1",
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+  ],
+  "id": "amazon-bedrock",
+  "name": "Amazon Bedrock",
+  "origin": "vendor",
+  "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+  "regions": [
+    {
+      "id": "us-east-1",
+      "name": "us-east-1",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+      "endpoints": {
+        "chat_completions": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+        "responses": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+        "messages": "https://bedrock-runtime.us-east-1.amazonaws.com/anthropic"
+      }
+    },
+    {
+      "id": "us-east-2",
+      "name": "us-east-2",
+      "baseUrl": "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1",
+      "endpoints": {
+        "chat_completions": "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1",
+        "responses": "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1",
+        "messages": "https://bedrock-runtime.us-east-2.amazonaws.com/anthropic"
+      }
+    },
+    {
+      "id": "us-west-2",
+      "name": "us-west-2",
+      "baseUrl": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1",
+      "endpoints": {
+        "chat_completions": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1",
+        "responses": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1",
+        "messages": "https://bedrock-runtime.us-west-2.amazonaws.com/anthropic"
+      }
+    },
+    {
+      "id": "eu-central-1",
+      "name": "eu-central-1",
+      "baseUrl": "https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1",
+      "endpoints": {
+        "chat_completions": "https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1",
+        "responses": "https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1",
+        "messages": "https://bedrock-runtime.eu-central-1.amazonaws.com/anthropic"
+      }
+    },
+    {
+      "id": "eu-west-1",
+      "name": "eu-west-1",
+      "baseUrl": "https://bedrock-runtime.eu-west-1.amazonaws.com/openai/v1",
+      "endpoints": {
+        "chat_completions": "https://bedrock-runtime.eu-west-1.amazonaws.com/openai/v1",
+        "responses": "https://bedrock-runtime.eu-west-1.amazonaws.com/openai/v1",
+        "messages": "https://bedrock-runtime.eu-west-1.amazonaws.com/anthropic"
+      }
+    },
+    {
+      "id": "ap-northeast-1",
+      "name": "ap-northeast-1",
+      "baseUrl": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/openai/v1",
+      "endpoints": {
+        "chat_completions": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/openai/v1",
+        "responses": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/openai/v1",
+        "messages": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/anthropic"
+      }
+    },
+    {
+      "id": "ap-southeast-1",
+      "name": "ap-southeast-1",
+      "baseUrl": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/openai/v1",
+      "endpoints": {
+        "chat_completions": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/openai/v1",
+        "responses": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/openai/v1",
+        "messages": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/anthropic"
+      }
+    }
+  ],
+  "regionLabel": "AWS region",
+  "endpoints": {
+    "chat_completions": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+    "responses": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+    "messages": "https://bedrock-runtime.us-east-1.amazonaws.com/anthropic"
+  },
+  "noList": true,
+  "docsUrl": "https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html",
+  "credentialUrl": "https://console.aws.amazon.com/bedrock/home#/api-keys"
+}

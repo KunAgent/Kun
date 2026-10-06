@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "openrouter",
   "name": "OpenRouter",
   "category": "api",
@@ -10,5 +10,12 @@
   "endpointFormat": "chat_completions",
   "models": [],
   "docsUrl": "https://openrouter.ai/docs",
-  "credentialUrl": "https://openrouter.ai/settings/keys"
+  "credentialUrl": "https://openrouter.ai/settings/keys",
+  "origin": "relay",
+  "balance": "openrouter",
+  "endpoints": {
+    "chat_completions": "https://openrouter.ai/api/v1",
+    "responses": "https://openrouter.ai/api/v1",
+    "messages": "https://openrouter.ai/api"
+  }
 }

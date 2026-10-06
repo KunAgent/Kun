@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "yylx",
+  "name": "YYLX",
+  "origin": "relay",
+  "baseUrl": "https://app.yylx.io/v1",
+  "regions": [
+    {
+      "id": "auto",
+      "name": "Auto",
+      "baseUrl": "https://app.yylx.io/v1",
+      "endpoints": {
+        "chat_completions": "https://app.yylx.io/v1",
+        "messages": "https://app.yylx.io"
+      }
+    },
+    {
+      "id": "global",
+      "name": "Global",
+      "baseUrl": "https://global.yylx.io/v1",
+      "endpoints": {
+        "chat_completions": "https://global.yylx.io/v1",
+        "messages": "https://global.yylx.io"
+      }
+    },
+    {
+      "id": "cn",
+      "name": "China Mainland",
+      "baseUrl": "https://cn.yylx.io/v1",
+      "endpoints": {
+        "chat_completions": "https://cn.yylx.io/v1",
+        "messages": "https://cn.yylx.io"
+      }
+    }
+  ],
+  "endpoints": {
+    "chat_completions": "https://app.yylx.io/v1",
+    "messages": "https://app.yylx.io"
+  },
+  "docsUrl": "https://yylx.io",
+  "credentialUrl": "https://app.yylx.io/keys"
+}

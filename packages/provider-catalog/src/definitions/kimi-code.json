@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "kimi-code",
   "name": "Kimi Code",
   "category": "subscription",
@@ -14,5 +14,6 @@
     "kimi-for-coding-highspeed"
   ],
   "docsUrl": "https://www.kimi.com/code/docs/en/",
-  "credentialUrl": "https://www.kimi.com/code"
+  "credentialUrl": "https://www.kimi.com/code",
+  "planQuota": "kimi-code"
 }

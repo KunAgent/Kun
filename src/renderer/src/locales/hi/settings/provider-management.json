@@ -108,5 +108,9 @@
   "modelProviderRefKind_failover": "फ़ेलओवर",
   "modelProviderDeleteInUseOther": "{{surface}} द्वारा उपयोग में।",
   "modelProviderDetectCostHint": "पहचान प्रत्येक प्रारूप के लिए एक न्यूनतम अनुरोध भेजती है और कुछ टोकन खर्च कर सकती है।",
-  "modelProviderFailoverOauthStrategyHint": "सदस्यता (OAuth) खाते रोटेट या सबसे कम उपयोग का समर्थन नहीं करते; वे स्वचालित रूप से स्मार्ट रणनीति से चलते हैं।"
+  "modelProviderFailoverOauthStrategyHint": "सदस्यता (OAuth) खाते रोटेट या सबसे कम उपयोग का समर्थन नहीं करते; वे स्वचालित रूप से स्मार्ट रणनीति से चलते हैं।",
+  "modelProviderProtocols": "समर्थित प्रोटोकॉल",
+  "modelProviderOwnEndpoint": "आपके संसाधन का एंडपॉइंट",
+  "modelProviderNoListNote": "यह विक्रेता मॉडल सूची प्रकाशित नहीं करता; {{count}} दस्तावेज़ित मॉडल जोड़े जाएंगे।",
+  "modelProviderHeaderHints": "इस विक्रेता के वैकल्पिक हेडर: {{headers}}। सहेजने के बाद कस्टम अनुरोध हेडर में जोड़ें।"
 }

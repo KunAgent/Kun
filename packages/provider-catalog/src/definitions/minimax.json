@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "minimax",
   "name": "MiniMax",
   "category": "api",
@@ -43,6 +43,8 @@
       "MiniMax-M2.1-highspeed",
       "MiniMax-M2"
     ],
-    "credentialUrl": "https://platform.minimaxi.com/docs/token-plan/quickstart"
-  }
+    "credentialUrl": "https://platform.minimaxi.com/docs/token-plan/quickstart",
+    "planQuota": "minimax"
+  },
+  "origin": "vendor"
 }

@@ -1,3 +1,4 @@
+import { isAzureOpenAiUrl } from '../contracts/azure-openai.js'
 import type { ProviderAuthProfile, ProviderHeaderProfile, ProviderRequestPurpose } from '../contracts/provider-configuration.js'
 
 const authNames = new Set(['authorization', 'proxy-authorization', 'x-api-key', 'api-key', 'x-goog-api-key'])
@@ -24,7 +25,7 @@ export function providerAuthenticationHeaders(input: {
   if (input.authProfile?.mode === 'header') return { [input.authProfile.headerName!]: `${input.authProfile.prefix}${input.apiKey}` }
   return input.protocol === 'messages'
     ? { 'x-api-key': input.apiKey, 'anthropic-version': '2023-06-01' }
-    : { authorization: `Bearer ${input.apiKey}` }
+    : isAzureOpenAiUrl(input.requestUrl) ? { 'api-key': input.apiKey } : { authorization: `Bearer ${input.apiKey}` }
 }
 
 /** Values stay encrypted in the credential store. A header profile only scopes their use. */

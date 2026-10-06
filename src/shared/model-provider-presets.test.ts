@@ -31,7 +31,22 @@ describe('shared model provider preset catalog', () => {
       })
       expect(gui?.category ?? 'api').toBe(source.category)
       expect(gui?.kind ?? 'http').toBe(source.kind)
+      expect(gui?.endpoints).toEqual(source.endpoints)
+      expect(gui?.regions?.map(({ id, name, baseUrl, endpoints }) => ({ id, name, baseUrl, endpoints })))
+        .toEqual(source.regions?.map(({ id, name, baseUrl, endpoints }) => ({ id, name, baseUrl, endpoints })) ?? gui?.regions?.map(({ id, name, baseUrl, endpoints }) => ({ id, name, baseUrl, endpoints })))
+      expect(gui?.headerHints).toEqual(source.headerHints)
+      expect(gui?.noList).toEqual(source.noList)
+      expect(gui?.balance).toEqual(source.balance)
+      expect(gui?.planQuota).toEqual(source.planQuota)
+      if (source.origin) expect(gui?.origin ?? 'vendor').toBe(source.origin)
+      if (source.credentialRequirement === 'optional') expect(gui?.keyOptional).toBe(true)
       if (source.tokenPlan) {
+        expect(gui?.tokenPlan?.endpoints).toEqual(source.tokenPlan.endpoints)
+        expect(gui?.tokenPlan?.planQuota).toEqual(source.tokenPlan.planQuota)
+        if (source.tokenPlan.regions) {
+          expect(gui?.tokenPlan?.regions?.map(({ id, baseUrl }) => ({ id, baseUrl })))
+            .toEqual(source.tokenPlan.regions.map(({ id, baseUrl }) => ({ id, baseUrl })))
+        }
         expect(gui?.tokenPlan).toMatchObject({
           baseUrl: source.tokenPlan.baseUrl,
           endpointFormat: source.tokenPlan.endpointFormat,

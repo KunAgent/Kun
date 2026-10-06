@@ -5,6 +5,7 @@ import type {
   ModelProviderImageCapabilityV1,
   ModelProviderMusicCapabilityV1,
   ModelProviderModelProfileV1,
+  ModelProviderEndpointsV1,
   ModelProviderPresetMode,
   ModelProviderProfileV1,
   ModelProviderReasoningCapabilityV1,
@@ -65,6 +66,20 @@ export type ModelProviderPresetId =
   | 'ollama-local'
   | 'lmstudio'
   | 'local-openai'
+  | 'baidu-qianfan'
+  | 'huaweicloud-maas'
+  | 'tencent-tokenhub'
+  | 'amazon-bedrock'
+  | 'azure-openai'
+  | 'nvidia-nim'
+  | 'modelscope'
+  | 'opencode-zen'
+  | 'kilo-gateway'
+  | 'commandcode'
+  | 'pipellm'
+  | 'cherryin'
+  | 'yylx'
+  | 'omlx'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
@@ -167,8 +182,19 @@ export const CHATGPT_SUBSCRIPTION_MODEL_IDS = [
 
 export type ModelProviderTokenPlanRegion = {
   id: string
+  /** Display name; the picker falls back to the id. */
+  name?: string
   baseUrl: string
+  /** Per-protocol base URLs served by this region or plan tier. */
+  endpoints?: ModelProviderEndpointsV1
 }
+
+/** Where a key's balance is read; see kun provider-balance readers. */
+export type ModelProviderBalanceSource = 'deepseek' | 'moonshot' | 'openrouter' | 'siliconflow' |
+  'stepfun' | 'aihubmix' | 'new-api'
+
+/** Where a plan key's allowance windows are read. */
+export type ModelProviderPlanQuotaSource = 'zhipu' | 'zai' | 'kimi-code' | 'minimax'
 
 export type ModelProviderSubscriptionRegion = 'china' | 'united-states'
 
@@ -216,6 +242,9 @@ export type ModelProviderTokenPlanPreset = {
   }
   /** Expected key prefix, e.g. "tp-". Hint only, never enforced. */
   keyPrefix?: string
+  /** Per-protocol base URLs of the default plan endpoint. */
+  endpoints?: ModelProviderEndpointsV1
+  planQuota?: ModelProviderPlanQuotaSource
   apiKeyUrl: string
 }
 
@@ -296,6 +325,18 @@ export type ModelProviderPreset = {
     models: string[]
   }
   tokenPlan?: ModelProviderTokenPlanPreset
+  /** Label for the region picker (e.g. "AWS region", "Plan"). */
+  regionLabel?: string
+  /** Per-protocol base URLs of the default region (relay gateways, multi-format vendors). */
+  endpoints?: ModelProviderEndpointsV1
+  /** Documented optional request headers offered by the editor; values remain user-owned. */
+  headerHints?: string[]
+  /** The vendor serves no model list; `models` is authoritative and discovery is skipped. */
+  noList?: boolean
+  /** The endpoint is the user's own resource; `baseUrl` is only an example and must be replaced. */
+  endpointHint?: string
+  balance?: ModelProviderBalanceSource
+  planQuota?: ModelProviderPlanQuotaSource
   docsUrl: string
   apiKeyUrl: string
 }

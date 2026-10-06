@@ -43,6 +43,20 @@ import preset39 from './definitions/fireworks.json' with { type: 'json' }
 import preset40 from './definitions/ollama-local.json' with { type: 'json' }
 import preset41 from './definitions/lmstudio.json' with { type: 'json' }
 import preset42 from './definitions/local-openai.json' with { type: 'json' }
+import preset43 from './definitions/baidu-qianfan.json' with { type: 'json' }
+import preset44 from './definitions/huaweicloud-maas.json' with { type: 'json' }
+import preset45 from './definitions/tencent-tokenhub.json' with { type: 'json' }
+import preset46 from './definitions/amazon-bedrock.json' with { type: 'json' }
+import preset47 from './definitions/azure-openai.json' with { type: 'json' }
+import preset48 from './definitions/nvidia-nim.json' with { type: 'json' }
+import preset49 from './definitions/modelscope.json' with { type: 'json' }
+import preset50 from './definitions/opencode-zen.json' with { type: 'json' }
+import preset51 from './definitions/kilo-gateway.json' with { type: 'json' }
+import preset52 from './definitions/commandcode.json' with { type: 'json' }
+import preset53 from './definitions/pipellm.json' with { type: 'json' }
+import preset54 from './definitions/cherryin.json' with { type: 'json' }
+import preset55 from './definitions/yylx.json' with { type: 'json' }
+import preset56 from './definitions/omlx.json' with { type: 'json' }
 
 /** Declarative, validated defaults; existing connections retain their captured configuration. */
 export const PROVIDER_CATALOG: readonly ProviderCatalogPreset[] = validateProviderCatalog([
@@ -88,5 +102,19 @@ export const PROVIDER_CATALOG: readonly ProviderCatalogPreset[] = validateProvid
   preset39,
   preset40,
   preset41,
-  preset42
+  preset42,
+  preset43,
+  preset44,
+  preset45,
+  preset46,
+  preset47,
+  preset48,
+  preset49,
+  preset50,
+  preset51,
+  preset52,
+  preset53,
+  preset54,
+  preset55,
+  preset56
 ])

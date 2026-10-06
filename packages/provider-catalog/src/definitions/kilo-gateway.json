@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "kilo-gateway",
+  "name": "Kilo Gateway",
+  "origin": "relay",
+  "credentialRequirement": "optional",
+  "baseUrl": "https://api.kilo.ai/api/openrouter",
+  "docsUrl": "https://kilo.ai/docs/gateway",
+  "credentialUrl": "https://app.kilo.ai"
+}

@@ -108,5 +108,9 @@
   "modelProviderRefKind_failover": "장애 조치",
   "modelProviderDeleteInUseOther": "{{surface}}에서 사용 중입니다.",
   "modelProviderDetectCostHint": "감지는 형식당 최소 요청을 한 번 전송하며 소량의 토큰을 소비할 수 있습니다.",
-  "modelProviderFailoverOauthStrategyHint": "구독(OAuth) 계정은 순환 및 최소 사용을 지원하지 않으며 자동으로 스마트 전략으로 실행됩니다."
+  "modelProviderFailoverOauthStrategyHint": "구독(OAuth) 계정은 순환 및 최소 사용을 지원하지 않으며 자동으로 스마트 전략으로 실행됩니다.",
+  "modelProviderProtocols": "지원 프로토콜",
+  "modelProviderOwnEndpoint": "리소스 엔드포인트",
+  "modelProviderNoListNote": "이 공급자는 모델 목록을 제공하지 않습니다. 문서에 있는 {{count}}개 모델을 추가합니다.",
+  "modelProviderHeaderHints": "이 공급자가 문서화한 선택 헤더: {{headers}}. 저장 후 사용자 지정 요청 헤더에서 추가하세요."
 }
