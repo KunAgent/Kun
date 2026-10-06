@@ -75,6 +75,11 @@ function isKunGatewayUrl(baseUrl: string): boolean {
   }
 }
 
+/** Keys Kun issues to agents (`kun_local_…`, optionally behind a `kun-<app>.` attribution prefix). */
+function isKunGatewayKey(apiKey: string): boolean {
+  return /^(?:kun-[a-z0-9][a-z0-9_-]{0,31}\.)?kun_local_/.test(apiKey.trim())
+}
+
 function presetIdForBaseUrl(baseUrl: string): string | undefined {
   const normalized = normalizeCatalogBaseUrl(baseUrl)
   if (!normalized) return undefined
@@ -132,7 +137,7 @@ function toDraft(
     ...(presetIdForBaseUrl(entry.baseUrl)
       ? { presetId: presetIdForBaseUrl(entry.baseUrl) }
       : {}),
-    ...(isKunGatewayUrl(entry.baseUrl)
+    ...(isKunGatewayUrl(entry.baseUrl) || isKunGatewayKey(entry.apiKey)
       ? { skipped: 'Points at the Kun local gateway — skipped to avoid a routing loop.' }
       : {})
   }

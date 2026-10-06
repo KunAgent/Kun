@@ -326,3 +326,22 @@ describe('provider external import', () => {
     expect(gemini?.skipped).toContain('not supported')
   })
 })
+
+describe('entries Kun wrote for its own gateway', () => {
+  it('are skipped even on a non-default port, by their Kun-issued key', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { scanExternalProviders } = await import('./provider-external-import')
+    const home = mkdtempSync(join(tmpdir(), 'kun-import-loop-'))
+    try {
+      mkdirSync(join(home, '.claude'), { recursive: true })
+      writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({ env: {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:28899', ANTHROPIC_AUTH_TOKEN: 'kun-claude-code.kun_local_abc' } }))
+      const { defaultModelProviderSettings } = await import('../shared/app-settings')
+      const drafts = scanExternalProviders({ provider: defaultModelProviderSettings() } as never, { homeDir: home })
+      expect(drafts.length).toBeGreaterThan(0)
+      expect(drafts.filter((draft) => !draft.skipped)).toEqual([])
+    } finally { rmSync(home, { recursive: true, force: true }) }
+  })
+})
