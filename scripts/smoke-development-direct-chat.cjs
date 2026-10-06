@@ -105,7 +105,8 @@ async function main() {
     const baselineSha = (await git(['rev-parse', 'HEAD'])).stdout.trim()
 
     modelFixture = await startDirectModel({ real: process.argv.includes('--real-model') })
-    const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, profile), locale: 'en', theme: 'light', initialSetupCompleted: true }
+    const theme = argumentValue('--theme') === 'dark' ? 'dark' : 'light'
+    const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, profile), locale: 'en', theme, initialSetupCompleted: true }
     settings.agents.kun.baseUrl = modelFixture.baseUrl
     settings.agents.kun.apiKey = 'rooms-desktop-offline-fixture'
     settings.agents.kun.model = modelFixture.snapshot().model
