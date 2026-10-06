@@ -32,7 +32,9 @@ describe('physical attempt accounting', () => {
         yield { kind: 'completed', stopReason: 'stop' }
       }))
       expect(dispatched).toBe(false)
-      expect(chunks).toEqual([expect.objectContaining({ code, message: 'Local budget cannot admit this attempt.',
+      // Limit refusals point the caller at its own limit window.
+      const message = `Local budget cannot admit this attempt.${status === 429 ? ' See GET /v1/kun/limit for when it resets.' : ''}`
+      expect(chunks).toEqual([expect.objectContaining({ code, message,
         failure: expect.objectContaining({ httpStatus: status, localAdmission: true, reason: 'request', failoverAllowed: false }) })])
     })
   it('executes official DeepSeek FIM through the same dispatch and usage hooks', async () => {

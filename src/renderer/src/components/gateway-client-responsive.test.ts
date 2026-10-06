@@ -26,8 +26,8 @@ describe('gateway client details responsive bounds', () => {
     expect(input.props.value).toBe(name)
     expect(classes(input)).toContain('min-w-0')
     expect(root.findAllByType('button').map(text)).toEqual(['Create key and copy', 'Read usage', 'Rotate and copy key', 'Revoke', 'Revoke and cancel requests'])
-    expect(bridge).toHaveBeenCalledTimes(1)
-    expect(bridge).toHaveBeenCalledWith({ action: 'list' })
+    // One list, then each active key reads its own limit window.
+    expect(bridge.mock.calls.map((call) => (call as unknown[])[0])).toEqual([{ action: 'list' }, { action: 'limit', clientId }])
     await act(async () => { renderer.unmount() })
   })
 
