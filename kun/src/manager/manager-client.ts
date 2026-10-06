@@ -1,5 +1,6 @@
 import { ServiceManagerUnavailableError } from './manager-resolution-error.js'
 import { ServiceManagerHttpError } from './usage-errors.js'
+import { restoreManagerMemoryError } from './manager-memory-errors.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -643,6 +644,8 @@ export async function requestManagerJson(
   try {
     return await requestManagerJsonWithRetry(manager, path, options)
   } catch (error) {
+    const memoryError = restoreManagerMemoryError(error)
+    if (memoryError) throw memoryError
     if (error instanceof ServiceManagerHttpError && error.status === 409) {
       let body: unknown
       try { body = JSON.parse(error.detail) } catch { body = null }

@@ -26,7 +26,7 @@ describe('memory tool provider', () => {
     const tool = memoryTool(store, 'memory_create')
     expect(tool.shouldAdvertise?.({ ...context(), memoryPolicy: { enabled: true } })).toBe(true)
     expect(tool.shouldAdvertise?.({ ...context(), memoryPolicy: { enabled: false } })).toBe(false)
-    expect(tool.shouldAdvertise?.(context())).toBe(false)
+    expect(tool.shouldAdvertise?.({ ...context(), memoryPolicy: undefined })).toBe(false)
   })
 
   it('creates an approved memory with validated V2 fields', async () => {
@@ -159,9 +159,65 @@ describe('memory tool provider', () => {
     await expect(store.list({ all: true })).resolves.toEqual([])
   })
 
+  it('rejects model-authored host receipts and consolidation even when tool schema validation is bypassed', async () => {
+    const store = await createStore('mem_tool_evidence')
+    await store.createWithId('mem_existing', { content: 'Original memory', scope: 'workspace', workspace: '/workspace-a' })
+    for (const forged of [
+      { receiptId: 'invented-receipt' }, { outcome: 'succeeded' },
+      { repositorySha: 'a'.repeat(40) }, { artifactIds: ['invented-artifact'] }
+    ]) {
+      for (const name of ['memory_create', 'memory_update']) {
+        const result = await memoryTool(store, name).execute({
+          id: 'mem_existing', content: 'Unverified test passed',
+          sources: [{ kind: 'tool', trust: 'observed', ...forged }]
+        }, context())
+        expect(result.isError).toBe(true)
+      }
+    }
+    for (const name of ['memory_create', 'memory_update']) {
+      const result = await memoryTool(store, name).execute({ id: 'mem_existing', content: 'Invented conclusion',
+        consolidation: { evidenceStatus: 'verified', sourceMemoryIds: [], sourceSessionIds: [], reason: 'invented' }
+      }, context())
+      expect(result.isError).toBe(true)
+    }
+    expect((await store.list({ all: true })).map((record) => record.content)).toEqual(['Original memory'])
+  })
+
+  it('uses compare-and-swap for tool updates and deletion', async () => {
+    const store = await createStore('mem_tool_cas')
+    const original = await store.createWithId('mem_cas', {
+      content: 'First revision', scope: 'workspace', workspace: '/workspace-a'
+    })
+    await memoryTool(store, 'memory_update').execute({ id: original.id, content: 'Second revision',
+      expectedRevision: original.revision }, context())
+    await expect(memoryTool(store, 'memory_update').execute({ id: original.id, content: 'Stale edit',
+      expectedRevision: original.revision }, context())).rejects.toThrow('memory changed')
+    await expect(memoryTool(store, 'memory_delete').execute({ id: original.id,
+      expectedRevision: original.revision }, context())).rejects.toThrow('memory changed')
+    expect((await store.getById(original.id)).deletedAt).toBeUndefined()
+    const result = await memoryTool(store, 'memory_delete').execute({ id: original.id }, context())
+    expect(result.output).toMatchObject({ memory: { id: original.id, deletedAt: expect.any(String) } })
+  })
+
+  it('requires the observed revision for supersession and rejects a racing replacement', async () => {
+    const store = await createStore('mem_superseding_tool')
+    const original = await store.createWithId('mem_superseded_original', {
+      content: 'Original decision', scope: 'workspace', workspace: '/workspace-a'
+    })
+    const create = memoryTool(store, 'memory_create')
+    expect((await create.execute({ content: 'No revision', supersedes: original.id }, context())).isError).toBe(true)
+    expect((await store.list({ all: true })).length).toBe(1)
+    const results = await Promise.allSettled(['First replacement', 'Racing replacement'].map((content) =>
+      create.execute({ content, supersedes: original.id, supersedesExpectedRevision: original.revision }, context())))
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+    const active = (await store.list({ all: true })).filter((record) => !record.supersededAt && !record.deletedAt)
+    expect(active.map((record) => record.content)).toEqual(['First replacement'])
+  })
+
   it('advertises read-only memory_search and memory_list without approval', async () => {
     const store = await createStore('mem_tool_read')
-    for (const name of ['memory_search', 'memory_list']) {
+    for (const name of ['memory_search', 'memory_list', 'memory_read', 'memory_topics']) {
       const tool = memoryTool(store, name)
       expect(tool).toBeDefined()
       expect(tool.policy).toBe('auto')
@@ -304,6 +360,7 @@ function context(): ToolHostContext {
     threadId: 'thread-1',
     turnId: 'turn-1',
     workspace: '/workspace-a',
+    memoryPolicy: { enabled: true },
     approvalPolicy: 'auto',
     abortSignal: new AbortController().signal,
     awaitApproval: async () => 'allow'

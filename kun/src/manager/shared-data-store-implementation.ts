@@ -1,3 +1,4 @@
+import { executeMemoryLifecycleOperation } from './memory-lifecycle-owner.js'
 import { AgentMemoryAccessSchema } from '../memory/agent-memory-scope.js'
 import { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
 import { MemoryDistillationConflictError } from '../memory/memory-distillation-apply.js'
@@ -210,6 +211,15 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     const store = this.memoryStore(body.config)
     const run = this.memoryQueue.catch(() => undefined).then(async () => {
       switch (operation) {
+        case 'erasureReceipt':
+        case 'history':
+        case 'isForgotten': return executeMemoryLifecycleOperation(store, operation, body.value)
+        case 'lifecycle': {
+          const result = await executeMemoryLifecycleOperation(store, operation, body.value)
+          await this.memoryDistillationPending.scrubForgotten()
+          await this.memoryFeedback.scrubForgotten()
+          return result
+        }
         case 'commitDistillation': {
           const candidate = PendingMemoryCandidate.parse(body.value)
           if (!store.commitDistillation) throw new Error('atomic memory distillation is unavailable')
@@ -223,7 +233,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           }
         }
         case 'getById': {
-          const request = z.object({ id: z.string().min(1), access: z.object({ workspace: z.string().optional(), project: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional() }).strict().parse(body.value)
+          const request = z.object({ id: z.string().min(1), access: z.object({ mutationOrigin: z.literal('inference').optional(), workspace: z.string().optional(), project: z.string().optional(), projectIdentity: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional() }).strict().parse(body.value)
           if (!store.getById) throw new Error('scoped memory lookup unavailable')
           return store.getById(request.id, request.access)
         }
@@ -237,14 +247,14 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           const request = z.object({
             id: z.string().min(1),
             patch: MemoryUpdateRequest,
-            access: z.object({ workspace: z.string().optional(), project: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional()
+            access: z.object({ mutationOrigin: z.literal('inference').optional(), workspace: z.string().optional(), project: z.string().optional(), projectIdentity: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.update(request.id, request.patch, request.access)
         }
         case 'delete': {
           const request = z.object({
             id: z.string().min(1),
-            access: z.object({ workspace: z.string().optional(), project: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional()
+            access: z.object({ mutationOrigin: z.literal('inference').optional(), workspace: z.string().optional(), project: z.string().optional(), projectIdentity: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.delete(request.id, request.access)
         }
@@ -256,7 +266,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         case 'list': {
           const filter = z.object({
             workspace: z.string().optional(),
-            project: z.string().optional(),
+            project: z.string().optional(), projectIdentity: z.string().optional(),
             includeDeleted: z.boolean().optional(),
             all: z.boolean().optional(), agent: AgentMemoryAccessSchema.optional(),
             authority: z.enum(['reference', 'directive']).optional(),
@@ -269,7 +279,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         case 'listDirectives': {
           const access = z.object({
             workspace: z.string().optional(),
-            project: z.string().optional(),
+            project: z.string().optional(), projectIdentity: z.string().optional(),
             agent: AgentMemoryAccessSchema.optional()
           }).strict().parse(body.value ?? {})
           if (!store.listDirectives) throw new Error('memory directive listing is unavailable')
@@ -279,7 +289,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           const request = z.object({
             query: z.string(),
             workspace: z.string().optional(),
-            project: z.string().optional(),
+            project: z.string().optional(), projectIdentity: z.string().optional(),
             limit: z.number().int().positive(),
             promptCharacterBudget: z.number().int().nonnegative().optional(), agent: AgentMemoryAccessSchema.optional(),
             purpose: z.enum(['injection', 'tool']).optional(),

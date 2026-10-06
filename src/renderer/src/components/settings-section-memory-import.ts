@@ -67,7 +67,12 @@ export function prepareMemoryImport(
           ...(record.validFrom ? { validFrom: record.validFrom } : {}),
           ...(record.validTo ? { validTo: record.validTo } : {}),
           ...(record.expiresAt ? { expiresAt: record.expiresAt } : {}),
-          sources: record.sources,
+          // Archive receipts are informational, never fresh observed execution evidence.
+          sources: record.sources.map((source) => ({
+            id: source.id, kind: 'imported' as const, trust: 'imported' as const,
+            ...(source.locator ? { locator: source.locator } : {}),
+            ...(source.excerpt ? { excerpt: source.excerpt } : {})
+          })),
           ...(record.disabled ? { disabled: true } : {})
         }
       }))

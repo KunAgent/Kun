@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { getProvider } from '../../agent/registry'
 import { memoryPreview } from '../../lib/memory-preview'
+import type { CoreMemoryRecordJson } from '../../agent/kun-contract'
 
+const InjectedMemoryRecordContext = createContext<Map<string, CoreMemoryRecordJson>>(new Map())
 const InjectedMemoryLookupContext = createContext<Map<string, string>>(new Map())
 
 export function InjectedMemoryLookupProvider({
@@ -13,16 +15,17 @@ export function InjectedMemoryLookupProvider({
   enabled?: boolean
   children: ReactNode
 }): ReactElement {
+  const [records, setRecords] = useState<Map<string, CoreMemoryRecordJson>>(() => new Map())
   const [lookup, setLookup] = useState<Map<string, string>>(() => new Map())
 
   useEffect(() => {
     if (!enabled) {
-      setLookup(new Map())
+      setRecords(new Map()); setLookup(new Map())
       return
     }
     const provider = getProvider()
     if (typeof provider.listMemories !== 'function') {
-      setLookup(new Map())
+      setRecords(new Map()); setLookup(new Map())
       return
     }
     let cancelled = false
@@ -30,10 +33,11 @@ export function InjectedMemoryLookupProvider({
       .listMemories({ workspace: workspaceRoot, includeDeleted: true })
       .then((records) => {
         if (cancelled) return
+        setRecords(new Map(records.map((record) => [record.id, record])))
         setLookup(new Map(records.map((record) => [record.id, memoryPreview(record.content)])))
       })
       .catch(() => {
-        if (!cancelled) setLookup(new Map())
+        if (!cancelled) { setRecords(new Map()); setLookup(new Map()) }
       })
     return () => {
       cancelled = true
@@ -41,10 +45,14 @@ export function InjectedMemoryLookupProvider({
   }, [enabled, workspaceRoot])
 
   return (
-    <InjectedMemoryLookupContext.Provider value={lookup}>
-      {children}
-    </InjectedMemoryLookupContext.Provider>
+    <InjectedMemoryRecordContext.Provider value={records}>
+      <InjectedMemoryLookupContext.Provider value={lookup}>{children}</InjectedMemoryLookupContext.Provider>
+    </InjectedMemoryRecordContext.Provider>
   )
+}
+
+export function useInjectedMemoryRecords(): Map<string, CoreMemoryRecordJson> {
+  return useContext(InjectedMemoryRecordContext)
 }
 
 export function useInjectedMemoryLookup(): Map<string, string> {

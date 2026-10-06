@@ -21,29 +21,68 @@ async function finish(service: AgentMemoryService, row: RoomStoredDocument<EditJ
     events: [{ roomId: row.roomId!, kind: 'agent.memory.updated', payload: { agentId: job.participantAgentId, id: job.memoryId } }] })
   return receipt.result
 }
+async function finishErasure(service: AgentMemoryService, row: RoomStoredDocument<EditJob>, affectedIds: string[]) {
+  const job = row.value
+  const result = { erased: true, memoryId: job.memoryId, affectedIds }
+  await service.scrubForgotten()
+  if (service.agents.store.scrubMemoryData) {
+    for (let start = 0; start < affectedIds.length; start += 1000) {
+      await service.agents.store.scrubMemoryData({ memoryIds: affectedIds.slice(start, start + 1000), preserveOperationId: job.id })
+    }
+  }
+  const receipt = await service.agents.store.commit({ requestId: job.id, fingerprint: job.fingerprint,
+    checks: [{ kind: 'agent_memory_job', id: job.id, expectedRevision: row.revision }],
+    puts: [{ kind: 'agent_memory_job', id: job.id, taskId: job.memoryId, roomId: row.roomId,
+      value: { ...job, status: 'completed' } }], result,
+    events: [{ roomId: row.roomId!, kind: 'agent.memory.erased', payload: { agentId: job.participantAgentId, id: job.memoryId } }] })
+  return receipt.result
+}
 async function apply(service: AgentMemoryService, row: RoomStoredDocument<EditJob>) {
   const job = row.value, input = job.input
-  const current = await service.find(job.participantAgentId, job.memoryId)
+  let current: MemoryRecord
+  try { current = await service.find(job.participantAgentId, job.memoryId) }
+  catch (error) {
+    const erasedIds = input.erase ? await service.store().erasureReceipt?.(job.id) : undefined
+    if (erasedIds?.length) return finishErasure(service, row, erasedIds)
+    throw error
+  }
   if (current.agentContext?.lastOperationId === job.id) return finish(service, row, current)
   if (canonicalMemoryHash(current) !== input.expectedFingerprint) throw new RoomStoreConflictError('memory changed; reload before editing')
   const owner = current.agentContext!
   const access = { agent: { agentId: job.participantAgentId, manage: true,
     operationId: job.id, expectedFingerprint: input.expectedFingerprint } }
+  if (input.erase || input.rollbackRevision !== undefined) {
+    const store = service.store()
+    if (!store.lifecycle) throw new RoomStoreConflictError('memory lifecycle is unavailable')
+    const result = await store.lifecycle(current.id, {
+      action: input.erase ? 'erase' : 'rollback', expectedRevision: current.revision,
+      targetRevision: input.rollbackRevision, confirmation: input.eraseConfirmation
+    }, access)
+    if (input.erase) return finishErasure(service, row, result.affectedIds)
+    return finish(service, row, result.memory!)
+  }
   const memory = input.forget ? await service.store().delete(current.id, access) :
     await service.store().update(current.id, MemoryUpdateRequest.parse({
-      content: input.content, disabled: input.disabled,
+      expectedRevision: current.revision, content: input.content, disabled: input.disabled,
       agentContext: { ...owner, lastOperationId: job.id,
         locked: input.locked ?? (input.content ? true : owner.locked),
         shared: input.shared ?? owner.shared, sharedConversationIds: input.sharedConversationIds ?? owner.sharedConversationIds,
         sharedProjectRoots: input.sharedProjectRoots ?? owner.sharedProjectRoots }
     }), access)
+  if (input.forget) await service.scrubForgotten()
   return finish(service, row, memory)
 }
 export async function recoverAgentMemoryEdits(service: AgentMemoryService, memoryId?: string) {
   const rows = await service.agents.store.list<EditJob>('agent_memory_job', {
     taskId: memoryId, phase: 'edit', status: 'prepared', order: 'asc', limit: 50 })
   for (const row of rows) {
-    try { await apply(service, row) } catch (error) {
+    try {
+      const parsed = AgentMemoryEdit.safeParse(row.value.input)
+      if (!parsed.success || parsed.data.erase && parsed.data.eraseConfirmation?.memoryId !== row.value.memoryId) {
+        throw new RoomStoreConflictError('invalid prepared memory edit; submit a new confirmed request')
+      }
+      await apply(service, row)
+    } catch (error) {
       if (!(error instanceof RoomStoreConflictError)) throw error
       await service.agents.store.commit({ requestId: 'conflict:' + row.id,
         checks: [{ kind: 'agent_memory_job', id: row.id, expectedRevision: row.revision }],
@@ -54,6 +93,9 @@ export async function recoverAgentMemoryEdits(service: AgentMemoryService, memor
 }
 export async function editAgentMemory(service: AgentMemoryService, agentId: string, id: string, raw: unknown) {
   const input = AgentMemoryEdit.parse(raw)
+  if (input.erase && input.eraseConfirmation?.memoryId !== id) {
+    throw new RoomStoreConflictError('confirm the exact memory before irreversible erasure')
+  }
   await service.agents.get(agentId)
   await recoverAgentMemoryEdits(service, id)
   const key = agentStableId('agent-memory-edit', agentId, id, input.clientRequestId)
@@ -63,7 +105,20 @@ export async function editAgentMemory(service: AgentMemoryService, agentId: stri
     if (replay.fingerprint !== hash) throw new RoomStoreConflictError('memory edit identity changed')
     return replay.result
   }
-  const current = await service.find(agentId, id)
+  let current: MemoryRecord
+  try { current = await service.find(agentId, id) }
+  catch (error) {
+    if (input.erase && input.eraseConfirmation?.memoryId === id && input.eraseConfirmation.irreversible) {
+      const completed = await service.agents.store.list<EditJob>('agent_memory_job', {
+        taskId: id, phase: 'edit', status: 'completed', limit: 50 })
+      const prior = completed.find((row) => row.value.participantAgentId === agentId &&
+        row.value.input?.erase && row.value.input.expectedFingerprint === input.expectedFingerprint)
+      const receipt = prior ? await service.agents.store.getRequest(prior.id) : null
+      if (receipt?.result && typeof receipt.result === 'object' &&
+        (receipt.result as { erased?: boolean }).erased === true) return receipt.result
+    }
+    throw error
+  }
   if (canonicalMemoryHash(current) !== input.expectedFingerprint) throw new RoomStoreConflictError('memory changed; reload before editing')
   if (input.shared && current.type !== 'preference') throw new RoomStoreConflictError('only a preference can be universal')
   if (input.content && containsCredentialLikeData({ content: input.content, type: current.type,

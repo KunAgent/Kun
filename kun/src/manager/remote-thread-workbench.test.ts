@@ -20,7 +20,7 @@ async function fixture() {
     startedAt: '2026-09-30T00:00:00.000Z', state: new ServiceManagerState(), sharedData: shared })
   const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
   const connection: ServiceManagerConnection = { discovery: {
-    version: 1, protocolVersion: 5, instanceId: 'test-manager', pid: process.pid,
+    version: 1, protocolVersion: 6, instanceId: 'test-manager', pid: process.pid,
     startedAt: '2026-09-30T00:00:00.000Z', host: '127.0.0.1', port: server.port,
     baseUrl: `http://127.0.0.1:${server.port}`, managerToken: 'test-manager-token', serviceVersion: '0.1.0',
     dataDir: join(root, 'data'), settingsPath: join(root, 'settings.json')

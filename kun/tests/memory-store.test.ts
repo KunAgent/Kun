@@ -167,13 +167,13 @@ describe('Memory store and recall', () => {
       new Request(`http://localhost/v1/memory/${body.memory.id}?workspace=/tmp/ws`, {
         method: 'PATCH',
         headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
-        body: JSON.stringify({ disabled: true })
+        body: JSON.stringify({ disabled: true, expectedRevision: 1 })
       })
     )
     expect(disabled.status).toBe(200)
     const deleted = await dispatchRequest(
       h.router,
-      new Request(`http://localhost/v1/memory/${body.memory.id}?workspace=/tmp/ws`, {
+      new Request(`http://localhost/v1/memory/${body.memory.id}?workspace=/tmp/ws&expected_revision=2`, {
         method: 'DELETE',
         headers: { authorization: 'Bearer tok-1' }
       })
@@ -364,10 +364,10 @@ describe('Memory store and recall', () => {
     })).toEqual([])
     await expect(store.update(memory.id, { content: 'leaked' }, {
       workspace: '/tmp/project-beta'
-    })).rejects.toThrow(`memory not found: ${memory.id}`)
+    })).rejects.toThrow('memory not found')
     await expect(store.delete(memory.id, {
       workspace: '/tmp/project-beta'
-    })).rejects.toThrow(`memory not found: ${memory.id}`)
+    })).rejects.toThrow('memory not found')
     await expect(store.update(memory.id, { content: 'Project Alpha uses npm' }, {
       workspace: '/tmp/project-alpha'
     })).resolves.toMatchObject({ content: 'Project Alpha uses npm' })

@@ -135,3 +135,36 @@
 .agent-handoff-create .agent-profile-form { padding: .75rem 0; }
 .agent-profile-workbench { display: grid; gap: 10px; padding: 12px 0; }
 .agent-profile-workbench select, .agent-profile-workbench input[type='number'] { max-width: 240px; }
+
+/* Memory is a readable evidence notebook; editing and destructive actions stay secondary. */
+.memory-section-tabs { display: flex; gap: .4rem; margin: .8rem 0; border-bottom: 1px solid var(--ds-border); }
+.memory-section-tabs button { padding: .5rem .7rem; font-size: .78rem; border-bottom: 2px solid transparent; }
+.memory-section-tabs button[aria-current='page'] { border-color: var(--ds-accent); color: var(--ds-accent); }
+.memory-record-heading { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: .5rem; font-size: .7rem; color: var(--ds-text-muted); }
+.memory-evidence summary, .memory-history summary, .memory-danger summary { cursor: pointer; color: var(--ds-text-muted); }
+.memory-evidence-source, .memory-evidence-summary { border-left: 2px solid var(--ds-border); margin: .6rem 0; padding: .25rem .7rem; overflow-wrap: anywhere; }
+.memory-evidence-source small { color: var(--ds-text-muted); }
+.memory-history-version { margin: .6rem 0; padding: .6rem; border: 1px solid var(--ds-border); border-radius: .5rem; }
+.memory-history-version > button { text-align: left; font-size: .75rem; }
+.memory-diff { padding: .6rem; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--ds-surface-card); }
+.memory-diff span { display: block; }
+.memory-diff-added { background: rgba(34, 139, 70, .12); }
+.memory-diff-removed { background: rgba(195, 57, 57, .12); text-decoration: line-through; }
+.memory-confirmation { margin: .8rem 0; padding: .8rem; border: 1px solid var(--ds-border); border-radius: .6rem; background: var(--ds-surface-card); }
+.memory-confirmation p { margin: .5rem 0; }
+.memory-confirmation input { display: block; width: 100%; padding: .45rem; border: 1px solid var(--ds-border); background: var(--ds-bg-main); margin-top: .4rem; }
+.agent-memory-actions button:disabled, .memory-confirmation button:disabled { opacity: .45; cursor: default; }
+.memory-used-dialog { position: fixed; inset: 8vh max(1rem, calc((100vw - 680px) / 2)); z-index: 9999; overflow: auto; padding: 1.2rem; border: 1px solid var(--ds-border); border-radius: .9rem; background: var(--ds-bg-main); color: var(--ds-text); box-shadow: 0 12px 60px #0005; font-size: .8rem; }
+.memory-used-dialog > header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-bottom: 1rem; }
+.memory-used-dialog > header h2 { font-weight: 600; font-size: 1rem; }
+.memory-used-dialog article { padding: .8rem 0; border-top: 1px solid var(--ds-border); }
+.memory-used-dialog textarea { width: 100%; padding: .6rem; background: var(--ds-surface-card); border: 1px solid var(--ds-border); border-radius: .5rem; }
+.project-knowledge-panel { font-size: .8rem; }
+.project-knowledge-panel > summary { cursor: pointer; font-weight: 600; }
+.project-knowledge-panel > label { display: grid; gap: .4rem; margin: .6rem 0; }
+.project-knowledge-panel input:not([type='checkbox']), .project-knowledge-panel textarea { width: 100%; padding: .5rem; background: var(--ds-surface-card); color: var(--ds-text); border: 1px solid var(--ds-border); border-radius: .4rem; }
+.project-knowledge-panel fieldset { margin: .7rem 0; }
+.project-knowledge-panel fieldset label { align-items: flex-start; margin: .5rem 0; }
+
+.memory-used-backdrop { position: fixed; inset: 0; z-index: 9998; background: #10181033; }
+.memory-project-identity { display: block; color: var(--ds-text-muted); overflow-wrap: anywhere; }

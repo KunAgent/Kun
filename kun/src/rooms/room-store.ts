@@ -1,3 +1,4 @@
+import type { RoomMemoryErasure } from './room-memory-erasure.js'
 import type { RoomSidebarQuery, RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
 import type { Room } from '../contracts/rooms.js'
@@ -141,6 +142,7 @@ export type RoomStoreRequest = z.infer<typeof RoomStoreRequestSchema>
 
 /** Canonical room storage. Each commit and its replay cursor become durable together. */
 export interface RoomStore {
+  scrubMemoryData?(input: RoomMemoryErasure): Promise<{ scrubbed: number }>
   get<T = unknown>(kind: RoomDocumentKind, id: string): Promise<RoomStoredDocument<T> | null>
   list<T = unknown>(kind: RoomDocumentKind, options?: RoomStoreListOptions): Promise<RoomStoredDocument<T>[]>
   listRooms(options?: RoomListOptions): Promise<RoomListPage>

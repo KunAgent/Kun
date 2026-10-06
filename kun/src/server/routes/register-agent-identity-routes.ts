@@ -1,3 +1,4 @@
+import { canonicalMemoryHash } from '../../memory/memory-record-normalizer.js'
 import { agentOnboardingState, updateAgentOnboarding } from '../../agents/agent-onboarding.js'
 import { listAgentMemoryCandidates, decideAgentMemoryCandidate } from '../../agents/agent-memory-candidates.js'
 import { agentDirectoryPage } from '../../agents/agent-directory-query.js'
@@ -106,6 +107,19 @@ export function registerAgentIdentityRoutes(add: Add): void {
   add('POST', '/v1/agents/:agentId/memories', async (rooms, request, { params }) => {
     const id = ParticipantAgentId.parse(params.agentId), input = await body(request)
     return rooms.exclusive(() => rooms.agentMemory.create(id, input))
+  })
+  add('GET', '/v1/agents/:agentId/memories/:memoryId', async (rooms, _request, { params }) => {
+    const agentId = ParticipantAgentId.parse(params.agentId), memoryId = ParticipantAgentId.parse(params.memoryId)
+    await rooms.agents.get(agentId)
+    const memory = await rooms.agentMemory.find(agentId, memoryId)
+    return { memory: { ...memory, history: [] }, fingerprint: canonicalMemoryHash(memory) }
+  })
+  add('GET', '/v1/agents/:agentId/memories/:memoryId/history', async (rooms, _request, { params }) => {
+    const id = ParticipantAgentId.parse(params.agentId), memoryId = ParticipantAgentId.parse(params.memoryId)
+    await rooms.agents.get(id)
+    const store = rooms.agentMemory.store()
+    if (!store.history) throw new Error('memory history unavailable')
+    return store.history(memoryId, { agent: { agentId: id, manage: true } })
   })
   add('PATCH', '/v1/agents/:agentId/memories/:memoryId', async (rooms, request, { params }) => {
     const id = ParticipantAgentId.parse(params.agentId), memoryId = ParticipantAgentId.parse(params.memoryId), input = await body(request)

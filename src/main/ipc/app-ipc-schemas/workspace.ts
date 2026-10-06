@@ -513,7 +513,8 @@ export const conversationExportPayloadSchema = z
 export const memoryMarkdownExportPayloadSchema = z
   .object({
     markdown: z.string().max(MAX_BODY_BYTES),
-    defaultFileName: optionalTrimmedString(200)
+    defaultFileName: optionalTrimmedString(200),
+    projectKnowledge: z.object({ project: trimmedString(MAX_PATH_LENGTH), approvedIds: z.array(trimmedString(256)).min(1).max(100) }).strict().optional()
   })
   .strict()
 

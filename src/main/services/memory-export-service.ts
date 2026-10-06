@@ -6,6 +6,7 @@ import type {
   MemoryMarkdownExportSavePayload,
   MemoryMarkdownExportSaveResult
 } from '../../shared/memory-import-export'
+import { validateProjectKnowledgeExport } from '../../shared/project-memory-interoperability'
 import { defaultMemoryExportFileName } from '../../shared/memory-import-export'
 
 export async function exportMemoryMarkdown(
@@ -13,6 +14,7 @@ export async function exportMemoryMarkdown(
   options?: { parentWindow?: BrowserWindow | null }
 ): Promise<MemoryMarkdownExportSaveResult> {
   try {
+    if (payload.projectKnowledge) validateProjectKnowledgeExport(payload.markdown, payload.projectKnowledge)
     const dialogResult = options?.parentWindow
       ? await dialog.showSaveDialog(options.parentWindow, saveDialogOptions(payload.defaultFileName))
       : await dialog.showSaveDialog(saveDialogOptions(payload.defaultFileName))

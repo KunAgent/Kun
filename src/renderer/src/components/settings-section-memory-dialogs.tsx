@@ -1,3 +1,5 @@
+import { MemoryEvidence } from './memory/MemoryEvidence'
+import { MemoryRecordLifecycle } from './memory/MemoryRecordLifecycle'
 import { settingsButtonClass } from './settings-button'
 import {
   MEMORY_IMPORT_PROFILE_PROMPT
@@ -213,7 +215,8 @@ export function MemoryRecordDialog({
   onConfirm,
   onDraftChange,
   onSave,
-  feedbackEnabled = false
+  feedbackEnabled = false,
+  onLifecycleChanged
 }: {
   dialog: MemoryDialogState
   draft: MemoryDraft
@@ -226,6 +229,7 @@ export function MemoryRecordDialog({
   onDraftChange: (draft: MemoryDraft | ((prev: MemoryDraft) => MemoryDraft)) => void
   onSave: () => void
   feedbackEnabled?: boolean
+  onLifecycleChanged?: () => void
 }): ReactElement {
   const editing = dialog.mode === 'create' || dialog.mode === 'edit' || dialog.mode === 'correct'
   const memory = dialog.mode === 'create' ? null : dialog.memory
@@ -401,19 +405,7 @@ export function MemoryRecordDialog({
                 <div>{t('memoryConfidence')}: <span className="font-mono text-ds-ink">{(memory.confidence ?? 1).toFixed(2)}</span></div>
                 <div>{t('memoryImportance')}: <span className="font-mono text-ds-ink">{(memory.importance ?? 0.5).toFixed(2)}</span></div>
               </div>
-              {memory.sources?.length ? (
-                <div className="rounded-lg border border-ds-border-muted bg-ds-main/30 px-3 py-2">
-                  <div className="mb-1.5 text-[11px] font-semibold text-ds-ink">{t('memorySources')}</div>
-                  <div className="space-y-1 text-[11px] text-ds-faint">
-                    {memory.sources.map((source) => (
-                      <div key={source.id} className="break-all">
-                        <span className="text-ds-ink">{source.kind}/{source.trust}</span>
-                        {source.locator ? ` · ${source.locator}` : ''}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
+              {onLifecycleChanged ? <MemoryRecordLifecycle key={memory.id + ':' + memory.revision} record={memory} onChanged={onLifecycleChanged} /> : <MemoryEvidence sources={memory.sources} consolidation={memory.consolidation} />}
             </div>
           ) : null}
         </div>

@@ -37,6 +37,7 @@ export type MemoryRetrieveRequest = {
   query: string
   workspace?: string
   project?: string
+  projectIdentity?: string
   limit: number
   promptCharacterBudget?: number
   policy?: MemoryCapabilityConfig

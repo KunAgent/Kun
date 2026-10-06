@@ -1,3 +1,4 @@
+import { eraseRoomMemoryProjections, type RoomMemoryErasure } from './room-memory-erasure.js'
 import { roomAttentionPredicateSql, roomCurrentAttentionRequestSql, roomIntegrationHasTaskSql } from './room-activity-predicates.js'
 import { queryRoomSidebar } from './room-sidebar-sqlite.js'
 import type { RoomSidebarQuery } from '../contracts/room-sidebar.js'
@@ -378,6 +379,12 @@ export class SqliteRoomStore implements RoomStore {
         .run(parsed.requestId, fingerprint, JSON.stringify(result), JSON.stringify(events))
       return { duplicate: false, result, events }
     })
+  }
+
+  async scrubMemoryData(input: RoomMemoryErasure, assertFence?: () => void): Promise<{ scrubbed: number }> {
+    const db = await this.database()
+    assertFence?.()
+    return eraseRoomMemoryProjections(db, input)
   }
 
   async close(): Promise<void> {

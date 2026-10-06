@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, Lock, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { RoomMemoryReceipt } from './RoomMemoryReceipt'
 import { RoomMessageBody } from './RoomMessageBody'
 import { buildRoomRunConversation, buildRoomRunTranscript } from './room-run-conversation'
 import { loadRunItemContent, truncatedContentField } from './room-run-content'
@@ -203,6 +204,8 @@ export function RoomRunInspector({
                 {detail.availability.reason ? ` · ${detail.availability.reason}` : ''}
               </p>
             ) : null}
+
+            <RoomMemoryReceipt context={detail.context} agentId={run.participantAgentId} />
 
             {run.input && !hasUserBubble ? (
               <div className="rooms-run-user-bubble">

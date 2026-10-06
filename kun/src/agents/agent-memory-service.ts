@@ -1,3 +1,6 @@
+import { buildMemoryTopicIndex } from '../memory/memory-topic-index.js'
+import { resolveMemoryProjectAccess } from '../memory/memory-project-identity.js'
+import { scrubForgottenAgentMemory } from './agent-memory-forgetting.js'
 import { formatMemoryReferenceBlock } from '../memory/memory-context-format.js'
 import { editAgentMemory, recoverAgentMemoryEdits } from './agent-memory-edit.js'
 import { createHash } from 'node:crypto'
@@ -23,10 +26,22 @@ export const AgentMemoryEdit = z.object({
   clientRequestId: Id, expectedFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   content: z.string().trim().min(1).max(4000).optional(),
   disabled: z.boolean().optional(), forget: z.boolean().optional(),
+  rollbackRevision: z.number().int().positive().optional(), erase: z.boolean().optional(),
+  eraseConfirmation: z.object({ memoryId: Id, irreversible: z.literal(true) }).strict().optional(),
   locked: z.boolean().optional(), shared: z.boolean().optional(),
   sharedConversationIds: z.array(Id).max(100).optional(),
   sharedProjectRoots: z.array(z.string().min(1).max(4096)).max(100).optional()
-}).strict()
+}).strict().superRefine((input, context) => {
+  if (input.erase && !input.eraseConfirmation) context.addIssue({ code: 'custom', path: ['eraseConfirmation'],
+    message: 'permanent memory erasure requires explicit confirmation' })
+  if (input.eraseConfirmation && !input.erase) context.addIssue({ code: 'custom', path: ['erase'],
+    message: 'erasure confirmation requires an erase action' })
+  const actions = [input.erase, input.forget, input.rollbackRevision !== undefined].filter(Boolean).length
+  if (actions > 1) context.addIssue({ code: 'custom', path: ['erase'], message: 'memory lifecycle actions cannot be combined' })
+  if (actions && [input.content, input.disabled, input.locked, input.shared, input.sharedConversationIds, input.sharedProjectRoots]
+    .some((value) => value !== undefined)) context.addIssue({ code: 'custom', path: ['content'],
+      message: 'memory lifecycle actions cannot be combined with edits or sharing' })
+})
 export const AgentMemoryPage = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(30), cursor: z.string().max(2048).optional(),
   includeDeleted: z.boolean().default(false)
@@ -57,7 +72,7 @@ export class AgentMemoryService {
       limit: input.limit + 1, before })
     const selected = records.slice(0, input.limit)
     const last = selected.at(-1)
-    return { memories: selected.map((memory) => ({ memory, fingerprint: canonicalMemoryHash(memory) })),
+    return { topics: buildMemoryTopicIndex(selected, { agent: { agentId, manage: true } }), memories: selected.map((memory) => ({ memory: { ...memory, history: [] }, fingerprint: canonicalMemoryHash(memory) })),
       ...(records.length > input.limit && last ? { nextCursor: Buffer.from(JSON.stringify({
         agentId, id: last.id, updatedAt: last.updatedAt })).toString('base64url') } : {}),
       available: await this.available() }
@@ -115,6 +130,7 @@ export class AgentMemoryService {
   async edit(agentId: string, id: string, raw: unknown) {
     return editAgentMemory(this, agentId, id, raw)
   }
+  async scrubForgotten() { return scrubForgottenAgentMemory(this) }
   async recoverEdits() { return recoverAgentMemoryEdits(this) }
 
   async context(agentId: string, conversationId: string, query: string, project?: string, handoffId?: string, byteBudget = 4000, taskId?: string) {
@@ -124,6 +140,7 @@ export class AgentMemoryService {
     const records = await this.store().retrieve({ agent: access, project, query: query.slice(0, 4096),
       limit: 8, promptCharacterBudget: 4000 })
     while (records.length && Buffer.byteLength(formatMemoryReferenceBlock(records, Date.now())) > byteBudget) records.pop()
-    return { records, text: formatMemoryReferenceBlock(records, Date.now()) }
+    return { records, text: formatMemoryReferenceBlock(records, Date.now()),
+      topics: buildMemoryTopicIndex(records, await resolveMemoryProjectAccess({ agent: access, project })) }
   }
 }

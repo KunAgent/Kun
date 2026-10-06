@@ -39,7 +39,7 @@ async function manager() {
   const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
   resources.push({ root, data, server })
   const connection: ServiceManagerConnection = { discovery: {
-    version: 1, protocolVersion: 5, instanceId: 'room-test-manager', pid: process.pid,
+    version: 1, protocolVersion: 6, instanceId: 'room-test-manager', pid: process.pid,
     startedAt: new Date().toISOString(), host: '127.0.0.1', port: server.port,
     baseUrl: `http://127.0.0.1:${server.port}`, managerToken: 'room-manager-token',
     serviceVersion: 'test', dataDir: join(root, 'data'), settingsPath: join(root, 'settings.json')

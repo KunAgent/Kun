@@ -26,7 +26,7 @@ function managerConnection(): ServiceManagerConnection {
   return {
     discovery: {
       version: 1,
-      protocolVersion: 5,
+      protocolVersion: 6,
       instanceId: 'manager-read-compatibility',
       pid: process.pid,
       startedAt: '2026-08-14T00:00:00.000Z',
