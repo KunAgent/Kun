@@ -31,6 +31,12 @@ import { upgradeRegistryProxyRouting } from './model-connection-registry-proxy.j
 import { migrateProviderHeaders, prepareProviderHeaders, providerHeadersPatch, readProviderHeaders, settleProviderHeaders } from './provider-protected-headers.js'
 
 export const modelConnectionRegistryConnectionOperations = {
+async migrateLegacyRegistry(this: ModelConnectionRegistry): Promise<void> {
+    await migrateProviderRegistry({ dataDir: this['options'].dataDir, file: this['file'], empty: emptyDocument,
+      validate: (value) => RegistryDocumentSchema.parse(upgradeProviderRegistry(upgradeRegistryProxyRouting(value))),
+      prepareLegacy: (value) => protectLegacyRegistryHeaders(this['options'].dataDir, value, this['options'].credentials) })
+  },
+
 async initialize(this: ModelConnectionRegistry,
     seed: readonly ModelConnectionSeed[] = [],
     globals?: {
@@ -40,9 +46,7 @@ async initialize(this: ModelConnectionRegistry,
       localModelGateway?: RegistryDocument['localModelGateway']
     }
   ): Promise<ModelConnectionSnapshot> {
-    await migrateProviderRegistry({ dataDir: this['options'].dataDir, file: this['file'], empty: emptyDocument,
-      validate: (value) => RegistryDocumentSchema.parse(upgradeProviderRegistry(upgradeRegistryProxyRouting(value))),
-      prepareLegacy: (value) => protectLegacyRegistryHeaders(this['options'].dataDir, value, this['options'].credentials) })
+    await this['migrateLegacyRegistry']()
     // Protect legacy values in existing v2 before any canonical routing-marker write.
     await migrateProviderHeaders(this)
     let current = await this['file'].update(emptyDocument, (document) => document)

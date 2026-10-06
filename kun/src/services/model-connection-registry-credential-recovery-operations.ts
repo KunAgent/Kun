@@ -98,6 +98,9 @@ scheduleCredentialRecovery(this: ModelConnectionRegistry,
   },
 
 async readDocumentForCredentialConsumer(this: ModelConnectionRegistry, providerId: string): Promise<RegistryDocument> {
+    // Main can request credentials before Runtime initialize(). Recovery must
+    // not publish an empty v2 document and hide the v1 credentials/selection.
+    await this['migrateLegacyRegistry']()
     await this['recoverExpiredCredentialTransaction'](providerId).catch(() => undefined)
     return this['file'].read(emptyDocument)
   },

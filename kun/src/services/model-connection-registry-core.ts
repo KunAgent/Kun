@@ -194,6 +194,7 @@ export class ModelConnectionRegistry {
   }
 
   declare private connectInternal: (raw: unknown, credentialSourceId?: string, trustedExternalAuth?: boolean) => Promise<ModelConnectionSnapshot>
+  declare private migrateLegacyRegistry: () => Promise<void>
   declare private materializeDocument: (document: RegistryDocument, recoveryProviderId?: string) => Promise<MaterializedModelConnections>
   declare private probeInput: (input: ModelConnectionConnectRequest) => Promise<string[]>
   declare private apply: (document: RegistryDocument) => Promise<void>
