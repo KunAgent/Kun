@@ -490,5 +490,6 @@
   "trajectoryDetailInputTokens": "Input tokens",
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
-  "trajectoryDetailError": "Error"
+  "trajectoryDetailError": "Error",
+  "providerQuotaResetReminder": "{{label}} ยังเหลือ {{percent}}% และจะรีเซ็ตในอีกประมาณ {{hours}} ชม."
 }

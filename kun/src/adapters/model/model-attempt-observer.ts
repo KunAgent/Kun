@@ -27,7 +27,7 @@ export async function* observeModelAttempts(request: ModelRequest,
   } catch (error) {
     if (!(error instanceof GatewayBudgetError)) throw error
     yield { kind: 'error', code: error.code, message: error.message,
-      failure: { category: 'request', reason: 'request', localAdmission: true, httpStatus: error.code === 'token_budget_exceeded' ? 429
+      failure: { category: 'request', reason: 'request', localAdmission: true, httpStatus: error.code === 'token_budget_exceeded' || error.code === 'cost_limit_exceeded' ? 429
         : error.code === 'token_budget_unbounded' ? 400 : 503, failoverAllowed: false } }
   } finally { await finish() }
 }

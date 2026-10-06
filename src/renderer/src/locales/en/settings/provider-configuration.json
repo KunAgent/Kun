@@ -185,7 +185,8 @@
     "metadatastreaming": "Streaming",
     "metadataSupported": "Supported (user declaration)",
     "metadataUnsupported": "Unsupported (user declaration)",
-    "nativeScopeHint": "This connection manages inference and login through its native adapter. Only quota permissions can be configured here."
+    "nativeScopeHint": "This connection manages inference and login through its native adapter. Only quota permissions can be configured here.",
+    "costLimitEnforce": "Refuse requests once the estimate reaches this amount"
   },
   "providerExchange": {
     "title": "Configuration exchange and protected recovery",

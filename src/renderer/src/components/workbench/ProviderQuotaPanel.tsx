@@ -11,6 +11,7 @@ import {
 import { useCallback, useEffect, useId, useState, type ReactElement } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
+import { quotaResetReminders } from '@shared/provider-quota-reminders'
 import type {
   ProviderQuotaEntry,
   ProviderQuotaListResult,
@@ -396,6 +397,12 @@ function ProviderQuotaCard({
               variant="workbench"
             />
           ) : null}
+
+          {entry.status === 'available' ? quotaResetReminders(entry.metrics, Date.now()).map((reminder) => (
+            <p key={reminder.metricId} className="provider-quota-detail-message text-amber-700 dark:text-amber-300" data-quota-reset-reminder={reminder.metricId}>
+              {t('providerQuotaResetReminder', { label: reminder.label, percent: reminder.unusedPercent, hours: reminder.hoursLeft })}
+            </p>
+          )) : null}
 
           {entry.status === 'available' ? (
             entry.metrics.length > 0 ? (

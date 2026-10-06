@@ -16,7 +16,7 @@ type State = z.infer<typeof State>
 const empty = (): State => ({ schemaVersion: 1, windows: {}, attempts: {} })
 
 export class GatewayBudgetError extends Error {
-  constructor(readonly code: 'token_budget_exceeded' | 'token_budget_unbounded' | 'token_budget_unavailable', message: string) {
+  constructor(readonly code: 'token_budget_exceeded' | 'token_budget_unbounded' | 'token_budget_unavailable' | 'cost_limit_exceeded', message: string) {
     super(message)
   }
 }
@@ -40,7 +40,7 @@ export class GatewayTokenBudget {
   }
 
   async reserve(input: { clientId: string; requestId: string; attemptId: string; policy: TokenBudgetPolicy;
-    upperBound?: number; estimate: number }): Promise<void> {
+    upperBound?: number; estimate: number; costLimitUsd?: number }): Promise<void> {
     if (input.policy.mode === 'hard' && (!input.upperBound || !Number.isSafeInteger(input.upperBound))) {
       throw new GatewayBudgetError('token_budget_unbounded', 'This request has no declared conservative input bound. Configure the account input ceiling and an explicit output limit, or select a soft budget.')
     }
@@ -61,6 +61,10 @@ export class GatewayTokenBudget {
         window = { id, clientId: input.clientId, period: input.policy.period, timeZone: input.policy.timeZone,
           endsAt: budgetWindowEnd(this.now(), input.policy), measured: 0, reserved: 0, estimatedCostUsd: 0, unknownCostAttempts: 0 }
         state.windows[id] = window
+      }
+      // A cost limit is a reference estimate: unknown-price attempts add nothing, so it can only be reached, never pre-reserved.
+      if (input.costLimitUsd !== undefined && window.estimatedCostUsd >= input.costLimitUsd) {
+        throw new GatewayBudgetError('cost_limit_exceeded', 'The gateway client reached its estimated cost limit for this period.')
       }
       if (input.policy.mode === 'hard' && window.measured + window.reserved + amount > input.policy.tokens) {
         throw new GatewayBudgetError('token_budget_exceeded', 'The gateway client token budget cannot admit another upstream attempt.')

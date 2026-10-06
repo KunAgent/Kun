@@ -47,6 +47,12 @@ export type ProviderQuotaProbeKind =
   | 'minimax-cn'
   | 'kimi-code'
   | 'openai'
+  | 'siliconflow-cn'
+  | 'siliconflow-global'
+  | 'stepfun-cn'
+  | 'stepfun-global'
+  | 'aihubmix'
+  | 'new-api'
   | SubscriptionQuotaProbeKind
 
 export type ProviderQuotaProbe = {
@@ -350,6 +356,27 @@ export function classifyProviderQuotaProbe(
       source: 'OpenRouter credits API',
       dashboardUrl: 'https://openrouter.ai/settings/credits'
     }
+  }
+  if (hostname === 'api.siliconflow.cn' || hostname === 'api.siliconflow.com') {
+    return {
+      kind: hostname === 'api.siliconflow.cn' ? 'siliconflow-cn' : 'siliconflow-global',
+      source: 'SiliconFlow account API',
+      dashboardUrl: hostname === 'api.siliconflow.cn' ? 'https://cloud.siliconflow.cn/expensebill' : 'https://cloud.siliconflow.com/expensebill'
+    }
+  }
+  if (hostname === 'api.stepfun.com' || hostname === 'api.stepfun.ai') {
+    return {
+      kind: hostname === 'api.stepfun.com' ? 'stepfun-cn' : 'stepfun-global',
+      source: 'StepFun account API',
+      dashboardUrl: hostname === 'api.stepfun.com' ? 'https://platform.stepfun.com/account-overview' : 'https://platform.stepfun.ai/account-overview'
+    }
+  }
+  if (hostname === 'aihubmix.com') {
+    return { kind: 'aihubmix', source: 'AiHubMix key balance API', dashboardUrl: 'https://console.aihubmix.com/token' }
+  }
+  // new-api relays answer a key's own balance at /api/usage/token on their own host.
+  if (stableId === 'cherryin' && hostname === 'open.cherryin.ai') {
+    return { kind: 'new-api', source: 'Relay key usage API', dashboardUrl: 'https://open.cherryin.ai/console/token' }
   }
   if (hostname === 'api.openai.com') {
     return {

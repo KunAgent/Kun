@@ -14,6 +14,7 @@ import {
   type SubscriptionQuotaRuntime
 } from './provider-subscription-quota.js'
 import { MAX_RESPONSE_BYTES, type ProbeContext, type ProviderQuotaProbeKind, ProviderQuotaRequestError, QUOTA_TIMEOUT_MS } from './provider-quota-service-core.js'
+import { parseAiHubMixBalance, parseNewApiKeyBalance, parseSiliconFlowBalance, parseStepFunBalance } from './provider-quota-balance-parsers.js'
 import { parseDeepSeekQuota, parseKimiCodeQuota, parseMiniMaxQuota, parseMoonshotQuota, parseOpenAiQuota, parseOpenRouterQuota, parseZaiQuota } from './provider-quota-service-provider-parsers.js'
 
 export async function runProbe(
@@ -62,6 +63,22 @@ export async function runProbe(
       'https://api.openai.com/v1/dashboard/billing/credit_grants',
       context
     )) }
+  }
+  if (kind === 'siliconflow-cn' || kind === 'siliconflow-global') {
+    return { metrics: parseSiliconFlowBalance(await requestJson(kind === 'siliconflow-cn'
+      ? 'https://api.siliconflow.cn/v1/user/info' : 'https://api.siliconflow.com/v1/user/info', context),
+    kind === 'siliconflow-cn' ? 'CNY' : 'USD') }
+  }
+  if (kind === 'stepfun-cn' || kind === 'stepfun-global') {
+    return { metrics: parseStepFunBalance(await requestJson(kind === 'stepfun-cn'
+      ? 'https://api.stepfun.com/v1/accounts' : 'https://api.stepfun.ai/v1/accounts', context),
+    kind === 'stepfun-cn' ? 'CNY' : 'USD') }
+  }
+  if (kind === 'aihubmix') {
+    return { metrics: parseAiHubMixBalance(await requestJson('https://aihubmix.com/dashboard/billing/remain', context)) }
+  }
+  if (kind === 'new-api') {
+    return { metrics: parseNewApiKeyBalance(await requestJson(`${new URL(provider.baseUrl ?? '').origin}/api/usage/token`, context)) }
   }
   if (kind === 'kimi-code') {
     return {

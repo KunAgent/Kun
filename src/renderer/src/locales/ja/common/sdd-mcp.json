@@ -490,5 +490,6 @@
   "trajectoryDetailInputTokens": "Input tokens",
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
-  "trajectoryDetailError": "Error"
+  "trajectoryDetailError": "Error",
+  "providerQuotaResetReminder": "{{label}} の {{percent}}% が未使用で、約 {{hours}} 時間後にリセットされます。"
 }

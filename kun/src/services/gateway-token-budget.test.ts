@@ -66,4 +66,13 @@ describe('durable gateway token admission', () => {
     expect(new Date(budgetWindowEnd(Date.parse('2026-10-06T06:00:00Z'), { period: 'week', timeZone: 'Asia/Shanghai' })).toISOString()).toBe('2026-10-11T16:00:00.000Z')
     expect(new Date(budgetWindowEnd(Date.parse('2026-10-06T06:00:00Z'), { period: 'month', timeZone: 'UTC' })).toISOString()).toBe('2026-11-01T00:00:00.000Z')
   })
+  it('refuses new attempts once the enforced reference cost limit is reached', async () => {
+    const f = await setup()
+    const soft = { mode: 'soft' as const, tokens: Number.MAX_SAFE_INTEGER }
+    await f.service.reserve({ clientId: 'client', requestId: 'r1', attemptId: 'a', policy: { ...policy, ...soft }, estimate: 10, costLimitUsd: 1 })
+    await f.service.settle('a', 10, 1.25)
+    await expect(f.service.reserve({ clientId: 'client', requestId: 'r2', attemptId: 'b', policy: { ...policy, ...soft }, estimate: 10, costLimitUsd: 1 }))
+      .rejects.toMatchObject({ code: 'cost_limit_exceeded' })
+    await expect(f.service.reserve({ clientId: 'client', requestId: 'r2', attemptId: 'c', policy: { ...policy, ...soft }, estimate: 10 })).resolves.toBeUndefined()
+  })
 })

@@ -19,7 +19,8 @@ export function gatewayAttemptAccounting(runtime: ServerRuntime, auth: GatewayAu
       try {
         await budget.reserve({ clientId: auth.client?.clientId ?? 'legacy', requestId, attemptId, policy,
           upperBound: input.inputUpperBound && input.maxOutputTokens ? input.inputUpperBound + input.maxOutputTokens : undefined,
-          estimate: input.estimatedTokens })
+          estimate: input.estimatedTokens,
+          ...(auth.policy?.costAlert?.enforce ? { costLimitUsd: auth.policy.costAlert.usd } : {}) })
       } catch (error) {
         if (error instanceof GatewayBudgetError) throw error
         throw new GatewayBudgetError('token_budget_unavailable', 'Gateway budget storage is unavailable.')

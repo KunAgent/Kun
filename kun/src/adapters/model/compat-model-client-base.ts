@@ -245,7 +245,7 @@ export class CompatModelClientBase {
       return { kind: 'response', response }
     } catch (error) {
       if (error instanceof GatewayBudgetError) return { kind: 'error', code: error.code, message: error.message,
-        failure: { category: 'request', reason: 'request', httpStatus: error.code === 'token_budget_exceeded' ? 429 : error.code === 'token_budget_unbounded' ? 400 : 503, failoverAllowed: false } }
+        failure: { category: 'request', reason: 'request', httpStatus: error.code === 'token_budget_exceeded' || error.code === 'cost_limit_exceeded' ? 429 : error.code === 'token_budget_unbounded' ? 400 : 503, failoverAllowed: false } }
       if (error instanceof GatewayRouteChangedError) {
         return { kind: 'error', code: 'gateway_route_changed', message: error.message,
           failure: { category: 'request', reason: 'request', failoverAllowed: false } }

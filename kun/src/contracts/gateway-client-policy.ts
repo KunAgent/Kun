@@ -19,6 +19,8 @@ export const GatewayClientPolicySchema = z.object({
   requestTimeoutMs: z.number().int().min(1_000).max(600_000).default(120_000),
   /** Reference cost estimate alert only; never a currency spending guarantee. */
   costAlert: z.object({ usd: z.number().finite().positive(), period: z.enum(['day', 'week', 'month']),
+    /** Refuse new upstream attempts once the window's reference estimate reaches `usd`. */
+    enforce: z.boolean().optional(),
     timeZone: z.string().min(1).max(128).refine((value) => {
       try { new Intl.DateTimeFormat('en', { timeZone: value }); return true } catch { return false }
     }, 'Unknown cost alert time zone') }).strict().optional(),

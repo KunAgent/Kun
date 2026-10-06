@@ -185,7 +185,8 @@
     "metadatastreaming": "流式输出",
     "metadataSupported": "支持（用户声明）",
     "metadataUnsupported": "不支持（用户声明）",
-    "nativeScopeHint": "此连接的推理与登录由原生服务管理，这里只配置额度请求的权限。"
+    "nativeScopeHint": "此连接的推理与登录由原生服务管理，这里只配置额度请求的权限。",
+    "costLimitEnforce": "估算费用达到该金额后拒绝请求"
   },
   "providerExchange": {
     "title": "配置交换与受保护恢复",

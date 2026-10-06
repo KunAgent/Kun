@@ -490,5 +490,6 @@
   "trajectoryDetailInputTokens": "Input tokens",
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
-  "trajectoryDetailError": "Error"
+  "trajectoryDetailError": "Error",
+  "providerQuotaResetReminder": "{{label}} का {{percent}}% बचा है और लगभग {{hours}} घंटे में रीसेट होगा।"
 }

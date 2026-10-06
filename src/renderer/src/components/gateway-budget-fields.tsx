@@ -39,6 +39,8 @@ export function GatewayBudgetFields({ policy, edit, disabled }: { policy: Gatewa
       <p className="text-ds-muted">{t('providerConfiguration.costAlertHint')}</p>
       <label>{t('providerConfiguration.costAlertUsd')}<input type="number" min={0.01} step={0.01} className={textInputClass}
         value={policy.costAlert.usd} onChange={(event) => edit({ costAlert: { ...policy.costAlert!, usd: Number(event.target.value) } })} /></label>
+      <label className="flex items-center gap-2"><input type="checkbox" checked={policy.costAlert.enforce === true}
+        onChange={(event) => edit({ costAlert: { ...policy.costAlert!, enforce: event.target.checked || undefined } })} />{t('providerConfiguration.costLimitEnforce')}</label>
       {!budget ? <div className="grid gap-2 sm:grid-cols-2">
         <label>{t('providerConfiguration.budgetPeriod')}<select className={providerSelectControlClass} value={policy.costAlert.period}
           onChange={(event) => edit({ costAlert: { ...policy.costAlert!, period: event.target.value as 'day' | 'week' | 'month' } })}>

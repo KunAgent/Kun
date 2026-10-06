@@ -498,5 +498,6 @@
   "trajectoryDetailInputTokens": "输入 Token",
   "trajectoryDetailOutputTokens": "输出 Token",
   "trajectoryDetailReasoningTokens": "推理 Token",
-  "trajectoryDetailError": "错误"
+  "trajectoryDetailError": "错误",
+  "providerQuotaResetReminder": "{{label}} 还有 {{percent}}% 未用，约 {{hours}} 小时后重置。"
 }
