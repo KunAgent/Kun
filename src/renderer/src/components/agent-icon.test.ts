@@ -36,4 +36,19 @@ describe('AgentIcon', () => {
     expect(html).not.toContain('π')
     expect(html).not.toContain('font-serif')
   })
+
+  it.each(['kimi', 'mimocode', 'minimax-code', 'copilot', 'goose', 'hermes', 'cline', 'qoder', 'commandcode', 'cursor-cli', 'claude-desktop', 'zed'])(
+    'uses brand vector artwork for built-in harness %s', (harnessId) => {
+      expect(agentIconAssetUrl(harnessId)).toBeTruthy()
+      const html = renderToStaticMarkup(createElement(AgentIcon, { harnessId }))
+      expect(html).toContain('mask-image:')
+      expect(html).toContain(`data-agent-icon="${harnessId}"`)
+    })
+
+  it('renders a monogram for built-in harnesses without published artwork', () => {
+    const html = renderToStaticMarkup(createElement(AgentIcon, { harnessId: 'morph', size: 20 }))
+    expect(html).toContain('data-agent-icon="morph"')
+    expect(html).toContain('>MM</text>')
+    expect(html).not.toContain('data-agent-icon="unknown"')
+  })
 })
