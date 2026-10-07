@@ -10,6 +10,8 @@ import openCodeLightUrl from '../assets/agent-icons/opencode-logo-light-square.s
 import openCodeDarkUrl from '../assets/agent-icons/opencode-logo-dark-square.svg?url'
 import deepseekUrl from '../assets/provider-icons/deepseek.svg?url'
 import devinUrl from '../assets/agent-icons/devin.svg?url'
+import factoryDroidUrl from '../assets/agent-icons/factory-droid.svg?url'
+import fxUrl from '../assets/agent-icons/fx.svg?url'
 import piUrl from '../assets/agent-icons/pi.svg?url'
 import clineUrl from '../assets/agent-icons/cline.svg?url'
 import commandCodeUrl from '../assets/agent-icons/commandcode.svg?url'
@@ -34,6 +36,8 @@ const AGENT_ASSETS: Readonly<Record<string, string>> = {
   'gemini-cli': geminiUrl,
   codex: codexUrl,
   devin: devinUrl,
+  droid: factoryDroidUrl,
+  fx: fxUrl,
   pi: piUrl,
   'deepseek-harness': deepseekUrl,
   'claude-desktop': claudeUrl,
@@ -61,9 +65,7 @@ const AGENT_ASSETS: Readonly<Record<string, string>> = {
  * remain neutral because their names are user-controlled.
  */
 const AGENT_MONOGRAMS: Readonly<Record<string, string>> = {
-  fx: 'fx',
   omp: 'OMP',
-  droid: 'D',
   aside: 'A',
   omo: 'OmO',
   crush: 'C',

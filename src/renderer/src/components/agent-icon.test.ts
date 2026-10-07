@@ -20,6 +20,14 @@ describe('AgentIcon', () => {
     expect(html).not.toContain('data-agent-icon="unknown"')
   })
 
+  it.each(['droid', 'fx'])('uses the %s brand mark instead of a monogram', (harnessId) => {
+    expect(agentIconAssetUrl(harnessId)).toBeTruthy()
+    const html = renderToStaticMarkup(createElement(AgentIcon, { harnessId, size: 20 }))
+    expect(html).toContain(`data-agent-icon="${harnessId}"`)
+    expect(html).toContain('mask-image:')
+    expect(html).not.toContain('<text')
+  })
+
   it.each(['opencode', 'opencode2'])('uses OpenCode brand artwork for %s while retaining its identity', (harnessId) => {
     const html = renderToStaticMarkup(createElement(AgentIcon, { harnessId, size: 20 }))
     expect(html).toContain(`data-agent-icon="${harnessId}"`)
