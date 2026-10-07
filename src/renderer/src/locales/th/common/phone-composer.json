@@ -321,6 +321,8 @@
   "composerBrowseWorkspaceFiles": "เรียกดูพื้นที่ทำงาน",
   "composerBrowseDesignDocs": "เลือกการออกแบบ",
   "composerVoiceStart": "การป้อนข้อมูลด้วยเสียง",
+  "composerVoiceSetup": "ตั้งค่าการป้อนด้วยเสียง",
+  "composerVoiceSetupHint": "ยังไม่ได้ตั้งค่าการป้อนด้วยเสียง เปิดการตั้งค่าเพื่อเลือกบริการแปลงเสียงเป็นข้อความ",
   "composerVoiceStop": "หยุดการบันทึก",
   "composerVoiceSend": "หยุดแล้วส่ง.",
   "composerVoiceTranscribing": "กำลังถอดเสียง...",

@@ -14,11 +14,9 @@ function credentialKey(executor: Executor): string {
 export function RoomCodingAgentChip({ agent }: { agent: AgentIdentity }): ReactElement {
   const { t } = useTranslation('common')
   const executor = agent.executor!
-  return <div className="direct-composer-model-picker direct-coding-agent-chip" data-engine={executor.harnessId}
-    title={t('directCodingAgentChipHelp')}>
-    <span><AgentIcon harnessId={executor.harnessId} size={14} /><strong>{executor.model}</strong>
-      <small>{t(credentialKey(executor))}</small></span>
-    <small>{t('directCodingAgentChipHelp')}</small>
+  return <div className="direct-coding-agent-chip" data-engine={executor.harnessId} title={t('directCodingAgentChipHelp')}>
+    <AgentIcon harnessId={executor.harnessId} size={14} /><strong>{executor.model}</strong>
+    <small>{t(credentialKey(executor))}</small>
   </div>
 }
 

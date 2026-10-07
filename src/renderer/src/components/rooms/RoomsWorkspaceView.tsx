@@ -393,9 +393,11 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
               <RoomComposer
                 compactControls
+                onVoiceSetup={() => useChatStore.getState().openSettings('speechToText')}
                 modelUpdating={modelUpdating}
                 modelControl={privateChat ? agentModels.data?.agent?.executor ? <RoomCodingAgentChip agent={agentModels.data.agent} />
                   : <RoomDirectModelPicker key={room.id} room={room} agentRevision={agentModels.data?.agent.revision} onBusyChange={setModelUpdating}
+                  onModels={() => drawer.open({ kind: 'models' })}
                   onSaved={async () => { agentModels.refresh(); await state.refresh() }} /> : undefined}
               key={room.id + '-composer'}
               room={room}

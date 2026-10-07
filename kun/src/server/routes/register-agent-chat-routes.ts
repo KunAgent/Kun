@@ -4,6 +4,7 @@ import type { RouteContext } from '../router.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { readJsonBody } from '../read-json-body.js'
 import { AgentModelRef } from '../../contracts/agent-identities.js'
+import { TurnReasoningEffortSchema } from '../../contracts/turn-reasoning.js'
 import { chatEntryState, quickCreateAgent, CHAT_ENTRY_ID, QuickAgentRequest } from '../../agents/agent-chat-entry.js'
 import { startAgentSetupTurn } from '../../agents/agent-setup.js'
 import { agentModelOptions, agentFastModel, assertAgentModel, assertExplicitAgentModel } from '../../agents/agent-models.js'
@@ -91,7 +92,9 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
   })
   add('PUT', '/v1/rooms/:roomId/direct/model', async (rooms, request, { params }) => {
     const input = z.object({ clientRequestId: Id, expectedRevision: z.number().int().nonnegative(),
-      modelRef: AgentModelRef }).strict().parse(await body(request))
+      modelRef: AgentModelRef.optional(), reasoningEffort: TurnReasoningEffortSchema.nullable().optional() }).strict()
+      .refine((value) => value.modelRef !== undefined || value.reasoningEffort !== undefined, 'Choose a model or reasoning effort')
+      .parse(await body(request))
     return rooms.exclusive(async () => ({ room: await updateDirectModel(rooms, params.roomId, input) }))
   })
   add('GET', '/v1/rooms/:roomId/direct', (rooms, _request, { params }) => directActivity(rooms, params.roomId))

@@ -321,6 +321,8 @@
   "composerBrowseWorkspaceFiles": "कार्यक्षेत्र ब्राउज़ करें",
   "composerBrowseDesignDocs": "डिज़ाइन चुनें",
   "composerVoiceStart": "ध्वनि इनपुट",
+  "composerVoiceSetup": "वॉइस इनपुट सेट करें",
+  "composerVoiceSetupHint": "वॉइस इनपुट अभी सेट नहीं है। स्पीच-टू-टेक्स्ट सेवा चुनने के लिए सेटिंग्स खोलें।",
   "composerVoiceStop": "रिकॉर्डिंग बंद करो",
   "composerVoiceSend": "रुको और भेजो",
   "composerVoiceTranscribing": "प्रतिलेखन...",

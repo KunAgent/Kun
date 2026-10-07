@@ -19,8 +19,10 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   assert.equal(fixture.snapshot().mainCalls, 0, 'Initialization must not call a model')
   assert.equal(await page.locator('.rooms-init-banner').count(), 0)
   assert.equal(await page.locator('.agent-collaboration-strip').count(), 0)
-  assert.equal(await page.locator('.rooms-composer select').count(), 1, 'Private composer has one explicit model selector')
-  const composerModel = page.locator('.rooms-composer').getByRole('combobox', { name: 'Model for this conversation', exact: true })
+  assert.equal(await page.locator('.rooms-composer select').count(), 0, 'Private composer has no native select')
+  assert.equal(await page.locator('.rooms-composer [data-room-model-picker] [data-composer-model-trigger]').count(), 1,
+    'Private composer has one model · effort pill, like the Code composer')
+  const composerModel = page.locator('.rooms-composer [data-room-model-picker] [data-composer-model-trigger]')
   await poll(() => composerModel.isEnabled(), 10000, 'private composer model metadata loaded')
   await capture('01-empty-kun')
   // Code conversations keep composer tools in the "+" menu, like the Code task composer.
@@ -171,6 +173,11 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     const switched = await settle(conversation.id, previous.id)
     const switchedRun = await request(page, `/v1/rooms/${conversation.id}/runs/${switched.runId}`)
     assert.equal(switchedRun.run.model, other.model)
+    // Setup interviews never steer, and the offline fixture never finishes one,
+    // so end the interview before exercising busy-message steering.
+    await page.getByRole('button', { name: 'Skip interview', exact: true }).first().click()
+    await poll(async () => (await request(page, '/v1/agents')).agents.find((agent) => agent.id === newAgent.id)?.setup?.status === 'skipped',
+      10000, 'setup interview skipped')
     await send('HOLD_RESPONSE 请等待。')
     await poll(() => fixture.holding() && page.getByRole('button', { name: 'Stop response', exact: true }).isVisible(), 15000, 'active response')
     // A message sent while the reply is running steers into the live turn

@@ -1,5 +1,5 @@
 import { AgentModelCatalogFooter } from '../ade/AgentModelCatalogFooter'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertCircle, ChevronDown, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -71,6 +71,8 @@ type Props = {
   onComposerReasoningEffortChange?: (effort: ComposerReasoningEffort) => void
   onComposerFastModeChange?: (enabled: boolean) => void
   onConfigureProviders?: () => void
+  /** Extra panel footer for Kun routes; external Agents show their catalog footer instead. */
+  renderFooter?: (close: () => void) => ReactNode
 }
 
 /**
@@ -97,7 +99,8 @@ export function FloatingComposerModelPicker({
   onComposerModelChange,
   onComposerReasoningEffortChange,
   onComposerFastModeChange,
-  onConfigureProviders
+  onConfigureProviders,
+  renderFooter
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const pickerRef = useRef<HTMLDivElement | null>(null)
@@ -269,7 +272,7 @@ export function FloatingComposerModelPicker({
         onClose={() => setOpen(false)}
         footer={agentHarnessId && agentHarnessId !== 'kun'
           ? <AgentModelCatalogFooter harnessId={agentHarnessId} selectedModel={composerModel} />
-          : undefined}
+          : renderFooter?.(() => { triggerRef.current?.focus(); setOpen(false) })}
       />
     )
     if (typeof document === 'undefined') return panel

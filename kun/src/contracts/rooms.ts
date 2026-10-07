@@ -5,6 +5,7 @@ import { SubagentProfileConfig } from './capabilities-core.js'
 import { RoomAvatarReferenceSchema, RoomContentReferenceSchema } from './room-content.js'
 import { AgentWorkbenchPolicySchema } from './workbench-policy.js'
 import { AgentExecutorSchema } from './agent-executor.js'
+import { TurnReasoningEffortSchema } from './turn-reasoning.js'
 
 export const RoomIdSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/)
 const Revision = z.number().int().nonnegative()
@@ -74,6 +75,8 @@ export const RoomSchema = z.object({
   participantAgentIds: z.array(ParticipantAgentId).max(100).optional(),
   privateExecutionPolicy: RoomExecutionPolicySchema.optional(),
   privateModelRef: AgentModelRef.optional(),
+  /** Reasoning effort for this private conversation's next turns; absent uses the model default. */
+  privateReasoningEffort: TurnReasoningEffortSchema.optional(),
   privateWorkspace: z.string().max(4096).optional(),
   privateEpoch: z.number().int().nonnegative().optional(),
   schemaVersion: z.literal(1),

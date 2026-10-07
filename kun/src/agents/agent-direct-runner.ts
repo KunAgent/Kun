@@ -195,6 +195,8 @@ export class AgentDirectRunner {
         const admitted = await this.deps.turns.enqueueTurn({ threadId: thread.id, request: { prompt, clientRequestId: identity,
           ...request.privateModel, attachmentIds: request.message.attachmentIds, clientSurface: request.clientSurface ?? 'gui', agentSurface: 'code',
           ...(member.executor ? { harnessId: member.executor.harnessId, credentialMode: member.executor.credentialMode } : {}),
+          // The conversation's effort is frozen with the request like its model.
+          ...(request.roomSnapshot.privateReasoningEffort ? { reasoningEffort: request.roomSnapshot.privateReasoningEffort } : {}),
           displayText: request.message.body.slice(0, 8000),
           mode: thread.mode, sandboxMode: thread.sandboxMode,
           ...(request.privateContinuation?.route ?? {}), ...(request.privateContinuation?.policy ?? {}), enqueueIfBusy: true } })

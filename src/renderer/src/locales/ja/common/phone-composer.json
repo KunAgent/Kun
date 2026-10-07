@@ -321,6 +321,8 @@
   "composerBrowseWorkspaceFiles": "ワークスペースを参照する",
   "composerBrowseDesignDocs": "デザインを選ぶ",
   "composerVoiceStart": "音声入力",
+  "composerVoiceSetup": "音声入力を設定",
+  "composerVoiceSetupHint": "音声入力はまだ設定されていません。設定を開いて音声認識サービスを選んでください。",
   "composerVoiceStop": "録音を停止する",
   "composerVoiceSend": "停止して送信",
   "composerVoiceTranscribing": "文字起こし中…",

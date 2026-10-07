@@ -353,6 +353,8 @@
   "composerBrowseWorkspaceFiles": "浏览工作区",
   "composerBrowseDesignDocs": "选择绘画",
   "composerVoiceStart": "语音输入",
+  "composerVoiceSetup": "设置语音输入",
+  "composerVoiceSetupHint": "还没有设置语音输入，打开设置选择语音转文字服务。",
   "composerVoiceStop": "停止录音",
   "composerVoiceSend": "停止并发送",
   "composerVoiceTranscribing": "正在转写…",

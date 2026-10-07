@@ -355,6 +355,8 @@
   "composerBrowseWorkspaceFiles": "Browse workspace",
   "composerBrowseDesignDocs": "Choose drawings",
   "composerVoiceStart": "Voice input",
+  "composerVoiceSetup": "Set up voice input",
+  "composerVoiceSetupHint": "Voice input is not set up yet. Open settings to choose a speech-to-text service.",
   "composerVoiceStop": "Stop recording",
   "composerVoiceSend": "Stop and send",
   "composerVoiceTranscribing": "Transcribing…",

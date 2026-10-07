@@ -164,3 +164,24 @@ it('role-default changes leave the explicit conversation override and accepted r
   expect((await agentModelOptions(f.rooms.deps, latest, room.id)).main).toEqual(first)
   expect(await f.store.list('request', { roomId: room.id })).toEqual(before)
 })
+
+it('keeps a conversation reasoning effort with the model and freezes it into retried requests', async () => {
+  const f = await fixture(), created = await f.create()
+  const old = (await f.store.list<RoomRequestState>('request', { roomId: created.roomId }))[0]
+  await f.store.commit({ requestId: 'mark-failed-effort', checks: [{ kind: 'request', id: old.id, expectedRevision: old.revision }],
+    puts: [{ kind: 'request', id: old.id, roomId: created.roomId, value: { ...old.value, status: 'failed' } }] })
+  const room = await f.rooms.service.get(created.roomId)
+  const effort = await updateDirectModel(f.rooms, room.id, { clientRequestId: 'effort', expectedRevision: room.revision, reasoningEffort: 'high' })
+  expect(effort.privateReasoningEffort).toBe('high')
+  expect(effort.privateModelRef).toEqual(room.privateModelRef)
+  const both = await updateDirectModel(f.rooms, room.id, { clientRequestId: 'model-and-effort', expectedRevision: effort.revision,
+    modelRef: second, reasoningEffort: 'low' })
+  expect(both).toMatchObject({ privateModelRef: second, privateReasoningEffort: 'low' })
+  const modelOnly = await updateDirectModel(f.rooms, room.id, { clientRequestId: 'model-only', expectedRevision: both.revision, modelRef: first })
+  expect(modelOnly.privateReasoningEffort).toBe('low')
+  await controlDirectRequest(f.rooms, room.id, old.id, { action: 'retry', clientRequestId: 'retry-effort', expectedRevision: old.revision + 1 })
+  const retried = (await f.store.list<RoomRequestState>('request', { roomId: room.id })).find((row) => row.id !== old.id)!
+  expect(retried.value.roomSnapshot.privateReasoningEffort).toBe('low')
+  const cleared = await updateDirectModel(f.rooms, room.id, { clientRequestId: 'clear', expectedRevision: modelOnly.revision, reasoningEffort: null })
+  expect(cleared).not.toHaveProperty('privateReasoningEffort')
+})

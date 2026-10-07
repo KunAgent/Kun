@@ -321,6 +321,8 @@
   "composerBrowseWorkspaceFiles": "Просмотр рабочего пространства",
   "composerBrowseDesignDocs": "Выберите дизайн",
   "composerVoiceStart": "Голосовой ввод",
+  "composerVoiceSetup": "Настроить голосовой ввод",
+  "composerVoiceSetupHint": "Голосовой ввод ещё не настроен. Откройте настройки и выберите сервис распознавания речи.",
   "composerVoiceStop": "Остановить запись",
   "composerVoiceSend": "Остановить и отправить",
   "composerVoiceTranscribing": "Расшифровка…",

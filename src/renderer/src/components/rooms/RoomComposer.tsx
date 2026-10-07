@@ -76,12 +76,15 @@ function RoomComposerEditor({
   draftId,
   replyTarget,
   topicChoices = [],
-  onSend, onStop, onConnectProject, onClearReply, responding, autoFocus = true, quickTools = false, modelControl, modelUpdating = false, compactControls = true
+  onSend, onStop, onConnectProject, onClearReply, responding, autoFocus = true, quickTools = false, modelControl, modelUpdating = false, compactControls = true,
+  onVoiceSetup
 }: {
   onStop?: () => void
   onClearReply?: () => void
   modelControl?: ReactNode
   modelUpdating?: boolean
+  /** Opens speech-to-text settings when voice input is not set up; without it the mic stays hidden. */
+  onVoiceSetup?: () => void
   compactControls?: boolean
   /** Show emoji / mention / attach / poll directly in the toolbar (desktop IM layout). */
   quickTools?: boolean
@@ -448,7 +451,7 @@ function RoomComposerEditor({
           privateControls={compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
             ? <RoomPermissionPicker roomId={room.id} compact /> : undefined}
           modelControl={modelControl}
-          voiceControl={<RoomVoiceButton voice={voice} disabled={disabled} />}
+          voiceControl={<RoomVoiceButton voice={voice} disabled={disabled} onSetup={onVoiceSetup} />}
           references={<RoomContentReferencePicker showLabel room={room} tasks={tasks} references={draft.references}
             onChange={(references) => patch({ references })} disabled={disabled} />} quickTools={quickTools} />
         <p className="rooms-composer-shortcuts">{t('roomsComposerShortcuts', { defaultValue: 'Enter to send · Shift+Enter for a new line' })}</p>

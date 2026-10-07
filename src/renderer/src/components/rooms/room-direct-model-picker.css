@@ -1,10 +1,23 @@
-.direct-composer-model-picker { min-width: 0; max-width: 320px; display: grid; gap: 3px; }
-.direct-composer-model-picker select { width: 100%; min-width: 0; padding: 5px 8px; border: 1px solid var(--ds-border); border-radius: 8px; color: var(--ds-text); background: var(--ds-bg-main); font-size: 12px; text-overflow: ellipsis; }
-.direct-composer-model-picker select:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
-.direct-composer-model-picker small { color: var(--ds-text-muted); font-size: 10px; line-height: 1.3; }
-.direct-composer-model-picker [role="alert"] { display: grid; font-size: 11px; color: var(--ds-danger, #bd4545); overflow-wrap: anywhere; }
-.direct-composer-model-picker [role="alert"] button { text-align: start; text-decoration: underline; }
-@media (max-width: 600px) { .direct-composer-model-picker { max-width: min(220px, 45vw); } }
-.direct-coding-agent-chip > span { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 5px 8px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-bg-main); font-size: 12px; }
-.direct-coding-agent-chip strong { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.direct-coding-agent-chip > span small { flex: none; font-size: 11px; color: var(--ds-text-muted); }
+/* The private chat uses Code's "model · effort" pill; only the wrapper, footer and error live here. */
+.direct-composer-model-picker { position: relative; display: flex; align-items: center; min-width: 0; max-width: 260px; }
+.direct-composer-model-picker .ds-composer-model-picker { height: 32px; }
+.direct-composer-model-error { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 2; display: flex; align-items: center; gap: 6px;
+  max-width: min(280px, 70vw); padding: 5px 6px 5px 10px; border: 1px solid color-mix(in srgb, var(--ds-danger, #bd4545) 35%, var(--ds-border));
+  border-radius: 9px; color: var(--ds-danger, #bd4545); background: var(--ds-surface-card); box-shadow: 0 6px 18px -10px #0005; font-size: 11.5px; }
+.direct-composer-model-error > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.direct-composer-model-error > button { display: grid; flex: none; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: inherit; }
+.direct-composer-model-error > button:hover:not(:disabled) { background: var(--ds-surface-hover); }
+.direct-model-panel-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px 8px 14px; }
+.direct-model-panel-footer > p { min-width: 0; margin: 0; color: var(--ds-text-faint); font-size: 11.5px; line-height: 1.4; }
+.direct-model-panel-footer > button { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 7px;
+  color: var(--ds-text-muted); font-size: 12px; font-weight: 500; }
+.direct-model-panel-footer > button:hover { color: var(--ds-text); background: var(--ds-surface-hover); }
+.direct-model-panel-footer > button:focus-visible, .direct-composer-model-error > button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+@media (max-width: 600px) { .direct-composer-model-picker { max-width: min(200px, 45vw); } }
+
+/* A coding Agent's fixed engine model reads like the same pill, without a menu. */
+.direct-coding-agent-chip { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 260px; height: 30px; padding: 0 10px;
+  border-radius: 9px; color: var(--ds-text-muted); font-size: 12.5px; cursor: default; }
+.direct-coding-agent-chip strong { min-width: 0; overflow: hidden; color: var(--ds-text); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.direct-coding-agent-chip small { flex: none; color: var(--ds-text-faint); font-size: 11.5px; }
+.direct-coding-agent-chip small::before { content: '·'; margin-right: 6px; }

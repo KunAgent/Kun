@@ -57,21 +57,36 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   await request(page, '/v1/agents/' + created.id + '/setup', 'POST', { clientRequestId: 'model-smoke-skip', action: 'skip' })
   const current = (await request(page, '/v1/agents/' + created.id + '/conversation', 'POST', {})).room
   await waitCodeConversation(page, poll, current.id, created.name)
-  const picker = conversation.getByLabel('Model for this conversation', { exact: true })
+  // The private composer shares Code's "model · effort" pill; the note lives in its panel, not under it.
+  const picker = conversation.locator('[data-room-model-picker] [data-composer-model-trigger]')
   await picker.waitFor()
-  await poll(async () => await picker.isEnabled() && await picker.inputValue() === key, 10000, 'composer model metadata loaded')
-  assert.equal(await picker.inputValue(), key)
+  await poll(async () => await picker.isEnabled() && (await picker.getAttribute('aria-label'))?.includes(selected.model), 10000,
+    'composer model metadata loaded')
+  assert.equal(await conversation.locator('[data-room-model-picker] small, [data-room-model-picker] select').count(), 0,
+    'No native select or caption grows the composer row')
   await capture('agent-models-composer-light')
   const alternative = eligible.find((item) => JSON.stringify([item.providerId, item.accountId, item.model]) !== key)
   assert(alternative)
   const binding = { providerId: alternative.providerId, accountId: alternative.accountId, model: alternative.model }
-  await picker.selectOption(JSON.stringify([binding.providerId, binding.accountId, binding.model]))
+  const sharedProvider = new Set(eligible.filter((item) => item.providerId === binding.providerId).map((item) => item.accountId ?? '')).size > 1
+  const groupKey = sharedProvider ? binding.providerId + '::' + (binding.accountId ?? '') : binding.providerId
+  await picker.click()
+  const panel = page.locator('[data-composer-model-panel]')
+  await panel.waitFor()
+  await capture('agent-models-composer-panel')
+  const group = panel.locator('[data-model-provider="' + groupKey + '"]')
+  const header = group.locator('button[aria-expanded="false"]')
+  if (await header.count()) await header.click()
+  // Capability badges are part of each item's accessible name; the title is the exact model id.
+  await group.locator('[role="menuitemradio"][title="' + binding.model + '"]').click()
+  await panel.waitFor({ state: 'hidden' })
   await poll(async () => {
     const saved = (await request(page, '/v1/rooms/' + current.id)).room.privateModelRef
     return saved?.providerId === binding.providerId && saved?.accountId === binding.accountId && saved?.model === binding.model
   }, 10000, 'exact composer provider/account/model saved')
   assert.deepEqual((await request(page, '/v1/agents/' + created.id)).agent.modelRef, created.modelRef)
-  assertions.push('Composer exposes exact model and conversation-only selection preserves role defaults')
+  await poll(async () => (await picker.getAttribute('aria-label'))?.includes(binding.model), 10000, 'pill shows the saved model')
+  assertions.push('Composer pill exposes the exact model and a conversation-only selection preserves role defaults')
   await resize(720, 800)
   await page.evaluate(async () => { const { applyTheme } = await import('/src/lib/apply-theme.ts'); applyTheme('dark') })
   await capture('agent-models-composer-dark-narrow')

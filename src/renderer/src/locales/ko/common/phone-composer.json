@@ -321,6 +321,8 @@
   "composerBrowseWorkspaceFiles": "작업공간 찾아보기",
   "composerBrowseDesignDocs": "디자인을 선택하세요",
   "composerVoiceStart": "음성 입력",
+  "composerVoiceSetup": "음성 입력 설정",
+  "composerVoiceSetupHint": "음성 입력이 아직 설정되지 않았습니다. 설정을 열어 음성 인식 서비스를 선택하세요.",
   "composerVoiceStop": "녹음 중지",
   "composerVoiceSend": "중지하고 보내세요.",
   "composerVoiceTranscribing": "스크립트 작성 중…",

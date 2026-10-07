@@ -79,7 +79,7 @@
   "directCreationCancel": "Cancel",
   "directCreationContinue": "Continue",
   "directConversationModel": "Model for this conversation",
-  "directConversationModelHelp": "Applies to your next message in this chat",
+  "directConversationModelHelp": "Applies to this chat from your next message",
   "directRoleDefaultModel": "Role default model",
   "directRoleDefaultsHelp": "Manage role defaults for all Agents. Existing conversation overrides and active requests stay unchanged.",
   "directModelsSaveImmediately": "Model changes save immediately. Profile changes use the profile Save button.",
@@ -107,5 +107,6 @@
   "directCodingAgentViaProvider": "API connection",
   "directCodingAgentBilledByEngine": "Billed by the Agent",
   "directCodingAgentChipHelp": "This Agent runs its own engine. To use another model, choose it again from New chat.",
-  "directCodingAgentRole": "Coding Agent"
+  "directCodingAgentRole": "Coding Agent",
+  "directModelAgentDefaults": "Agent defaults"
 }
