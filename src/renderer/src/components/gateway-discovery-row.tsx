@@ -4,12 +4,9 @@ import { Copy, Radar } from 'lucide-react'
 import type { ModelProviderSettingsV1 } from '@shared/app-settings'
 import { settingsButtonClass } from './settings-button'
 import { Toggle } from './settings-controls'
+import { homeRelativePath } from '../lib/home-relative-path'
 
 type DiscoveryStatus = { allowed: boolean; advertised: boolean; path?: string; owner?: 'self' | 'other' | 'none'; other?: { baseUrl?: string; pid?: number } }
-
-function shortPath(path: string): string {
-  return path.replace(/^\/(?:Users|home)\/[^/]+/, '~').replace(/^[A-Z]:\\Users\\[^\\]+/i, '~')
-}
 
 /** The discovery file other agents read to find the gateway, with its on/off setting. */
 export function GatewayDiscoveryRow({ settings, onChange, active, t }: {
@@ -50,7 +47,7 @@ export function GatewayDiscoveryRow({ settings, onChange, active, t }: {
       <p className="text-[11.5px] leading-5 text-ds-muted">
         {!wanted ? t('gatewayDiscovery.off')
           : status?.owner === 'other' ? t('gatewayDiscovery.other', { address: status.other?.baseUrl ?? '?' })
-            : t('gatewayDiscovery.on', { path: path ? shortPath(path) : '~/.kun/gateway.json' })}
+            : t('gatewayDiscovery.on', { path: path ? homeRelativePath(path) : '~/.kun/gateway.json' })}
       </p>
     </div>
     {path && wanted ? <button type="button" className={settingsButtonClass({ size: 'compact' })} onClick={() => void copy()}>

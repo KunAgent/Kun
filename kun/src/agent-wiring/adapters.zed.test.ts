@@ -12,7 +12,7 @@ describe('Zed adapter', () => {
   it('adds Kun as an OpenAI-compatible provider and the default model, without the key', () => {
     const file = h.write('.config/zed/settings.json', ORIGINAL)
     const status = h.service.connect('zed', wiringTarget('coding'))
-    expect(status).toMatchObject({ connected: true, drifted: false, model: 'coding', keyDelivery: 'clipboard', notice: 'manual-key', pickInAgent: true })
+    expect(status).toMatchObject({ connected: true, drifted: false, model: 'coding', keyDelivery: 'clipboard', notice: 'manual-key', pickInAgent: false })
     const text = h.read(file)
     expect(text).toContain('// my theme')
     expect(getJsoncValue(text, ['language_models', 'openai_compatible', 'Kun'])).toEqual({ api_url: `${ORIGIN}/v1`, available_models: [

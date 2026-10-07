@@ -34,7 +34,7 @@ export function ProviderBalanceEndpointField({ provider, onChange, t }: {
   }
   const unitValid = !unit.trim() || BALANCE_UNIT_PATTERN.test(unit.trim())
   const headerValid = !header.trim() || validBalanceKeyHeader(header.trim())
-  return <div className="grid gap-2" data-provider-balance-endpoint>
+  return <div className="grid gap-3" data-provider-balance-endpoint>
     <label className="grid gap-1.5 text-[12.5px] font-medium text-ds-muted">
       {t('modelProviderBalanceUrl')}
       <input
@@ -58,10 +58,11 @@ export function ProviderBalanceEndpointField({ provider, onChange, t }: {
       />
       <span className="grid gap-0.5">
         <span className="font-medium">{t('modelProviderBalanceOtherHost', { host: otherHost })}</span>
-        <span className={hintClass}>{t('modelProviderBalanceOtherHostHint', { host: otherHost, base: baseHost ?? '' })}</span>
+        <span className={hintClass}>{t(confirmed ? 'modelProviderBalanceOtherHostConfirmed' : 'modelProviderBalanceOtherHostHint', { host: otherHost, base: baseHost ?? '' })}</span>
       </span>
     </label> : null}
-    {url ? <div className="grid gap-3 sm:grid-cols-2">
+    {/* Unit and header belong to a saved endpoint; an unconfirmed host saves nothing yet. */}
+    {provider.balanceUrl && url?.toString() === provider.balanceUrl ? <div className="grid gap-3 sm:grid-cols-2">
       <label className="grid gap-1.5 text-[12.5px] font-medium text-ds-muted">
         {t('modelProviderBalanceUnit')}
         <input className={textInputClass} value={unit} placeholder="USD" spellCheck={false} aria-invalid={!unitValid}

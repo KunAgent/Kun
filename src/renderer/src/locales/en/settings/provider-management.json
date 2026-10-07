@@ -81,6 +81,7 @@
   "modelProviderBalanceUrlInvalid": "Use an HTTPS URL without a user name or password; the provider's key is sent there.",
   "modelProviderBalanceOtherHost": "Send this provider's API key to {{host}} for balance checks",
   "modelProviderBalanceOtherHostHint": "{{host}} is not the base URL's host ({{base}}). Confirm only if it belongs to the same provider. Nothing is saved until you do.",
+  "modelProviderBalanceOtherHostConfirmed": "{{host}} is not the base URL's host ({{base}}). Uncheck to stop sending the key there.",
   "modelProviderBalanceUnit": "Unit",
   "modelProviderBalanceUnitHint": "Shown when the response names no currency.",
   "modelProviderBalanceUnitInvalid": "Up to 16 letters, digits or a currency sign.",

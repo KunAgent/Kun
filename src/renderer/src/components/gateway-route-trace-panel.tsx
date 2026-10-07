@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next'
 import { Activity, Pause, Play, RefreshCw } from 'lucide-react'
 import type { GatewayRouteTrace } from '../../../../kun/src/contracts/gateway-route-trace.js'
 import { settingsButtonClass } from './settings-button'
+import i18n from '../i18n'
 
 const PATH = '/v1/model-gateway/route-traces'
 const WAIT_SECONDS = 15
@@ -10,7 +11,7 @@ const SHOWN = 30
 
 function clock(value: string): string {
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 /** Merges changed traces into the list by request id, newest first. */

@@ -81,6 +81,7 @@
   "modelProviderBalanceUrlInvalid": "बिना उपयोगकर्ता नाम या पासवर्ड वाला HTTPS URL इस्तेमाल करें; प्रदाता की कुंजी वहीं भेजी जाती है।",
   "modelProviderBalanceOtherHost": "बैलेंस जाँच के लिए इस प्रदाता की API कुंजी {{host}} को भेजें",
   "modelProviderBalanceOtherHostHint": "{{host}} बेस URL का होस्ट ({{base}}) नहीं है। केवल तभी पुष्टि करें जब यह उसी प्रदाता का हो। पुष्टि तक कुछ सहेजा नहीं जाता।",
+  "modelProviderBalanceOtherHostConfirmed": "{{host}} बेस URL का होस्ट ({{base}}) नहीं है। वहाँ कुंजी भेजना बंद करने के लिए अनचेक करें।",
   "modelProviderBalanceUnit": "इकाई",
   "modelProviderBalanceUnitHint": "जब जवाब में कोई मुद्रा न हो तब दिखाई जाती है।",
   "modelProviderBalanceUnitInvalid": "अधिकतम 16 अक्षर, अंक या मुद्रा चिह्न।",

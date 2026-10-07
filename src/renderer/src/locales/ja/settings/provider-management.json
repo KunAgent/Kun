@@ -81,6 +81,7 @@
   "modelProviderBalanceUrlInvalid": "ユーザー名やパスワードを含まない HTTPS URL を使ってください。プロバイダーのキーはここに送られます。",
   "modelProviderBalanceOtherHost": "残高確認のため、このプロバイダーの API キーを {{host}} に送る",
   "modelProviderBalanceOtherHostHint": "{{host}} はベース URL のホスト（{{base}}）ではありません。同じプロバイダーのものである場合のみ確認してください。確認するまで保存されません。",
+  "modelProviderBalanceOtherHostConfirmed": "{{host}} はベース URL のホスト（{{base}}）ではありません。チェックを外すとキーを送らなくなります。",
   "modelProviderBalanceUnit": "単位",
   "modelProviderBalanceUnitHint": "レスポンスに通貨がない場合に表示します。",
   "modelProviderBalanceUnitInvalid": "16 文字以内の文字、数字、通貨記号。",

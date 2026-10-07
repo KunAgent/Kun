@@ -19,6 +19,7 @@ import { emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
 import { sharedCapabilitiesFromProvider } from './settings-section-providers-shared-payloads'
 import { createAgentEnablementSmokeRuntime } from './ade/agent-enablement-smoke-runtime'
 import { mergeSettings } from './settings-utils'
+import { createGatewaySmokeFixtures } from './SettingsUiSmokeGatewayFixtures'
 
 export type SettingsSmokeCall = { name: string; args: unknown[] }
 
@@ -175,12 +176,23 @@ export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
       localModelGateway: provider.localGateway
     }
   }
+  const gateway = createGatewaySmokeFixtures()
   const runtimeRequest: KunGuiApi['runtimeRequest'] = stub('runtimeRequest', async (path, method = 'GET', body, options) => {
     const url = new URL(path, 'http://smoke.invalid')
     await gate(`runtimeRequest:${url.pathname}`)
     const harnessResponse = await harnessRuntime.request(path, method, body)
     if (harnessResponse) return harnessResponse
     if (method !== 'GET') return response({ code: 'offline_fixture', message: OFFLINE }, 501)
+    // Recent routes long-poll like the runtime does, so the panel never spins.
+    if (url.pathname === '/v1/model-gateway/route-traces' && url.searchParams.has('wait')) {
+      await new Promise<void>((resolve) => {
+        const finish = (): void => { clearTimeout(timer); if (options?.requestId) runtimeCancellations.delete(options.requestId); resolve() }
+        const timer = setTimeout(finish, 15_000)
+        if (options?.requestId) runtimeCancellations.set(options.requestId, finish)
+      })
+    }
+    const gatewayFixture = gateway.runtime(url)
+    if (gatewayFixture !== undefined) return response(gatewayFixture)
     if (url.pathname === '/v1/model-connections/events') {
       // Respect long-poll semantics so the provider watcher cannot spin the UI.
       await new Promise<void>((resolve) => {
@@ -360,6 +372,8 @@ export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
       emit('onRuntimeSettingsSyncStatus', syncStatus())
       return { ok: true as const, generation: revision, ...clone(next) }
     }),
+    agentWiring: stub('agentWiring', (action: Parameters<KunGuiApi['agentWiring']>[0]) => gateway.agentWiring(action)),
+    gatewayClients: stub('gatewayClients', (action: Parameters<KunGuiApi['gatewayClients']>[0]) => gateway.gatewayClients(action)),
     gatewayCredential: stub('gatewayCredential', (action) => ({ ok: action === 'status', status: action === 'status' ? 200 : 501, credential: { configured: false } })),
     revealModelProviderCredential: stub('revealModelProviderCredential', (providerId: string) => ({ providerId, credential: '' })),
     onProviderImportLink: subscribe('onProviderImportLink'),

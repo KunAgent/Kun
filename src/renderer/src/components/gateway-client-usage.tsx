@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GatewayClientUsage as Usage } from '@shared/gateway-clients'
+import i18n from '../i18n'
 
 /** Requests and tokens per agent session, busiest first. */
 export function usageBySession(requests: Usage['requests']): { sessionId: string; requests: number; tokens: number; last: string }[] {
@@ -30,13 +31,13 @@ export function GatewayClientUsage({ usage, clientName }: { usage: Usage; client
       <p className="font-semibold text-ds-ink">{t('gatewayConnection.sessionsTitle', { count: sessions.length })}</p>
       {sessions.slice(0, 5).map((session) => <p key={session.sessionId} className="flex min-w-0 gap-2">
         <span className="shrink-0 font-mono text-ds-faint" title={session.sessionId}>{session.sessionId.slice(0, 10)}</span>
-        <span>{t('gatewayConnection.sessionRow', { requests: session.requests, tokens: session.tokens.toLocaleString() })}</span>
-        <span className="text-ds-faint">{session.last ? new Date(session.last).toLocaleString() : ''}</span>
+        <span>{t('gatewayConnection.sessionRow', { requests: session.requests, tokens: session.tokens.toLocaleString(i18n.language) })}</span>
+        <span className="text-ds-faint">{session.last ? new Date(session.last).toLocaleString(i18n.language) : ''}</span>
       </p>)}
     </div> : null}
     <div className="max-h-64 min-w-0 max-w-full space-y-2 overflow-y-auto">
       {[...usage.requests].reverse().slice(0, 10).map((request, index) => <div key={`${request.timestamp}:${index}`} className="min-w-0 rounded-lg border border-ds-border p-2">
-        <p>{request.timestamp ? new Date(request.timestamp).toLocaleString() : '—'} · {request.status ?? '—'} · {request.latencyMs ?? '—'} ms</p>
+        <p>{request.timestamp ? new Date(request.timestamp).toLocaleString(i18n.language) : '—'} · {request.status ?? '—'} · {request.latencyMs ?? '—'} ms</p>
         <p className="break-all font-mono">{request.requestedModelId ?? '—'} → {request.actualProviderId ?? '—'} / {request.actualModelId ?? '—'}</p>
         <p>{request.tokenUsage === 'upstream' ? t('gatewayConnection.usageTokens', { input: request.promptTokens ?? '—', output: request.completionTokens ?? '—', cached: request.cacheHitTokens ?? '—' }) : t('gatewayConnection.usageUnavailable')}</p>
         <p>{t('gatewayConnection.usageRetries', { retries: request.retryCount ?? 0, failovers: request.failoverCount ?? 0 })}</p>

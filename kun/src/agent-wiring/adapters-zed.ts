@@ -26,7 +26,6 @@ export const zed: AgentAdapter = {
   efforts: [],
   restartRequired: false,
   keepsModelList: true,
-  pickInAgent: true,
   keyDelivery: 'clipboard',
   notice: 'manual-key',
   edits(ctx, target) {

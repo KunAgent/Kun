@@ -81,6 +81,7 @@
   "modelProviderBalanceUrlInvalid": "Используйте HTTPS-адрес без имени пользователя и пароля: ключ провайдера отправляется туда.",
   "modelProviderBalanceOtherHost": "Отправлять API-ключ этого провайдера на {{host}} для проверки баланса",
   "modelProviderBalanceOtherHostHint": "{{host}} — не хост базового URL ({{base}}). Подтверждайте, только если он принадлежит тому же провайдеру. До подтверждения ничего не сохраняется.",
+  "modelProviderBalanceOtherHostConfirmed": "{{host}} — не хост базового URL ({{base}}). Снимите отметку, чтобы больше не отправлять туда ключ.",
   "modelProviderBalanceUnit": "Единица",
   "modelProviderBalanceUnitHint": "Показывается, если в ответе нет валюты.",
   "modelProviderBalanceUnitInvalid": "До 16 букв, цифр или знак валюты.",

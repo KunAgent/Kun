@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import type { TFunction } from 'i18next'
 import type { GatewayClientLimit } from '@shared/gateway-clients'
+import i18n from '../i18n'
 
 function Bar({ used, total, tone }: { used: number; total: number; tone: 'ok' | 'warn' | 'full' }): ReactElement {
   const share = total > 0 ? Math.min(1, used / total) : 0
@@ -16,8 +17,8 @@ function time(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   const sameDay = date.toDateString() === new Date().toDateString()
-  return sameDay ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return sameDay ? date.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleString(i18n.language, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 /** One key's window usage, remaining allowance and reset time, read from the runtime. */
@@ -39,7 +40,7 @@ export function GatewayClientLimitBar({ clientId, active, t }: { clientId: strin
     {limit.limited ? <span className="rounded-full bg-red-50 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-500/10 dark:text-red-200">{t('gatewayLimits.limited')}</span> : null}
     {tokens ? <span className="flex min-w-0 items-center gap-1.5">
       <Bar used={tokens.used} total={tokens.tokens} tone={tone(tokens.used, tokens.tokens)} />
-      {t('gatewayLimits.tokens', { used: tokens.used.toLocaleString(), total: tokens.tokens.toLocaleString(), period: period(tokens.period) })}
+      {t('gatewayLimits.tokens', { used: tokens.used.toLocaleString(i18n.language), total: tokens.tokens.toLocaleString(i18n.language), period: period(tokens.period) })}
       <span className="text-ds-faint">· {t('gatewayLimits.resets', { time: time(tokens.resetsAt) })}</span>
     </span> : null}
     {cost ? <span className="flex min-w-0 items-center gap-1.5">

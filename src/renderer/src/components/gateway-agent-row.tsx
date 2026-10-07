@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, FileCode2, KeyRound, Link2, L
 import type { AgentWiringStatus, GatewayModelInfo } from '@shared/agent-wiring'
 import { AgentIcon } from './agent-icon'
 import { settingsButtonClass } from './settings-button'
+import { homeRelativePath } from '../lib/home-relative-path'
 
 const PROTOCOL_LABELS: Record<AgentWiringStatus['protocol'], string> = {
   anthropic: 'Anthropic Messages', responses: 'OpenAI Responses', chat: 'Chat Completions', gemini: 'Gemini API'
@@ -23,12 +24,8 @@ const TRANSLATED_ERRORS = new Set(['config_unreadable', 'config_unsupported', 's
 /** A wiring failure in the user's language when its code is known; the runtime's own text otherwise. */
 export function agentWiringErrorText(t: TFunction, failure: { error: string; code?: string; file?: string; agent?: string }): string {
   return failure.code && TRANSLATED_ERRORS.has(failure.code)
-    ? t(`gatewayAgents.errors.${failure.code}`, { file: failure.file ? shortPath(failure.file) : '', agent: failure.agent ?? '' })
+    ? t(`gatewayAgents.errors.${failure.code}`, { file: failure.file ? homeRelativePath(failure.file) : '', agent: failure.agent ?? '' })
     : failure.error
-}
-
-function shortPath(path: string): string {
-  return path.replace(/^\/(?:Users|home)\/[^/]+/, '~').replace(/^[A-Z]:\\Users\\[^\\]+/i, '~')
 }
 
 export type AgentConnectRequest = { model: string; smallModel?: string; effort?: string }
@@ -81,7 +78,7 @@ export function GatewayAgentRow({ agent, models, busy, disabled, onConnect, onDi
         </div>
         <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-ds-faint" title={agent.configFiles.join('\n')}>
           <FileCode2 className="h-3 w-3 shrink-0" />
-          <span className="truncate font-mono">{agent.configFiles.map(shortPath).join(' · ')}</span>
+          <span className="truncate font-mono">{agent.configFiles.map(homeRelativePath).join(' · ')}</span>
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">

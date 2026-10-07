@@ -5,6 +5,7 @@ import type { ModelProviderSettingsV1 } from '@shared/app-settings'
 import type { GatewayMiddlewareConfig, GatewayMiddlewareStats } from '../../../../kun/src/contracts/gateway-middleware.js'
 import { settingsButtonClass } from './settings-button'
 import { Toggle } from './settings-controls'
+import { homeRelativePath } from '../lib/home-relative-path'
 
 type MiddlewareType = GatewayMiddlewareConfig['type']
 
@@ -136,7 +137,7 @@ export function GatewayMiddlewarePanel({ settings, onChange, active, t }: {
     </div>
     {folder ? <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg bg-ds-main px-3 py-2 text-[11.5px]" data-gateway-middleware-folder>
       <span className="text-ds-muted">{t('gatewayMiddleware.folder')}</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-ds-ink" title={folder.directory}>{folder.directory}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-ds-ink" title={folder.directory}>{homeRelativePath(folder.directory)}</span>
       <span className="text-ds-faint">{folder.files.length ? folder.files.join(', ') : t('gatewayMiddleware.noScripts')}</span>
       <button type="button" className={settingsButtonClass({ size: 'compact' })} onClick={() => void openFolder()}>
         <FolderOpen className="h-3.5 w-3.5" />{t('gatewayMiddleware.openFolder')}</button>

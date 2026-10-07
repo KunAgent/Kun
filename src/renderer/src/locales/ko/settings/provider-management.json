@@ -81,6 +81,7 @@
   "modelProviderBalanceUrlInvalid": "사용자 이름이나 비밀번호가 없는 HTTPS URL을 사용하세요. 공급자 키가 이 주소로 전송됩니다.",
   "modelProviderBalanceOtherHost": "잔액 확인을 위해 이 공급자의 API 키를 {{host}}(으)로 보내기",
   "modelProviderBalanceOtherHostHint": "{{host}}은(는) 기본 URL의 호스트({{base}})가 아닙니다. 같은 공급자의 것일 때만 확인하세요. 확인하기 전에는 저장되지 않습니다.",
+  "modelProviderBalanceOtherHostConfirmed": "{{host}}은(는) 기본 URL의 호스트({{base}})가 아닙니다. 체크를 해제하면 더 이상 키를 보내지 않습니다.",
   "modelProviderBalanceUnit": "단위",
   "modelProviderBalanceUnitHint": "응답에 통화가 없을 때 표시됩니다.",
   "modelProviderBalanceUnitInvalid": "최대 16자의 문자, 숫자 또는 통화 기호.",

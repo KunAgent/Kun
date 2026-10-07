@@ -81,6 +81,7 @@
   "modelProviderBalanceUrlInvalid": "ใช้ URL แบบ HTTPS ที่ไม่มีชื่อผู้ใช้หรือรหัสผ่าน คีย์ของผู้ให้บริการจะถูกส่งไปที่นั่น",
   "modelProviderBalanceOtherHost": "ส่ง API key ของผู้ให้บริการนี้ไปที่ {{host}} เพื่อตรวจยอดคงเหลือ",
   "modelProviderBalanceOtherHostHint": "{{host}} ไม่ใช่โฮสต์ของ base URL ({{base}}) ยืนยันเฉพาะเมื่อเป็นของผู้ให้บริการเดียวกัน จะไม่บันทึกจนกว่าจะยืนยัน",
+  "modelProviderBalanceOtherHostConfirmed": "{{host}} ไม่ใช่โฮสต์ของ base URL ({{base}}) ยกเลิกการเลือกเพื่อหยุดส่งคีย์ไปที่นั่น",
   "modelProviderBalanceUnit": "หน่วย",
   "modelProviderBalanceUnitHint": "แสดงเมื่อคำตอบไม่ระบุสกุลเงิน",
   "modelProviderBalanceUnitInvalid": "ตัวอักษร ตัวเลข หรือสัญลักษณ์สกุลเงิน ไม่เกิน 16 ตัว",
