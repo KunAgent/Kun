@@ -1,3 +1,4 @@
+import { providerModule } from './providers/registry.js'
 import { KUN_TOOL_PERMISSION_MODES, kunToolPermissionModeFromSettings, type ApprovalPolicy,
   type ApprovalReviewer, type SandboxMode } from '../contracts/policy.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
@@ -21,15 +22,9 @@ export function harnessTurnPermissionMode(definition: HarnessDefinition, input: 
   // forbid writes while default still allows them after an external approval.
   if (readOnly) return allowed[0]!.id
   const requested = input.requested?.trim()
-  // Older Devin ACP versions call their approval-gated mode normal/auto.
-  // Negotiate that mode only when the host allows writes with approval; newer
-  // versions may narrow it to ask. An explicit read-only ask never widens.
-  if (definition.id === 'devin' && !readOnly) {
-    // Reviewer-approved host scope maps to Devin's Smart mode; older CLIs
-    // without it fall back to the legacy approval mode, then read-only Ask.
-    if (!requested && ceiling === 1) return 'smart'
-    if ((!requested && ceiling < 1) || requested === 'normal' || requested === 'auto') return 'normal'
-  }
+  // An engine may map the writable scope onto its own native modes first.
+  const native = providerModule(definition.id)?.permissionMode?.({ requested, ceiling })
+  if (native) return native
   if (requested) {
     const resolved = resolvePermissionMode(definition, requested, input.unattended, input.allowUnattendedFullAccess)
     return allowed.find((mode) => mode.id === resolved)?.id ?? allowed[0]!.id

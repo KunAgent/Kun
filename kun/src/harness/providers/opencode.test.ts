@@ -3,16 +3,16 @@ import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { HarnessCatalog } from './harness-catalog.js'
-import { codeMakerDefinition } from './codemaker-harness.js'
-import { nativeCredentialFiles, nativeHasKey } from './harness-readiness-profile.js'
-import { nativeHarnessCredentialEnv } from './harness-secret-env.js'
-import { probeAcpHandshake } from './acp-handshake-probe.js'
-import { startHarnessProcess, type HarnessProcess } from '../session/harness-process.js'
-import { CONVERSATION_HARNESS_IDS } from '../contracts/agent-executor.js'
+import { HarnessCatalog } from '../harness-catalog.js'
+import { codeMakerDefinition } from './opencode.js'
+import { nativeCredentialFiles, nativeHasKey } from '../harness-readiness-profile.js'
+import { nativeHarnessCredentialEnv } from '../harness-secret-env.js'
+import { probeAcpHandshake } from '../acp-handshake-probe.js'
+import { startHarnessProcess, type HarnessProcess } from '../../session/harness-process.js'
+import { CONVERSATION_HARNESS_IDS } from '../../contracts/agent-executor.js'
 
-vi.mock('../session/harness-process.js', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../session/harness-process.js')>(), startHarnessProcess: vi.fn()
+vi.mock('../../session/harness-process.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../session/harness-process.js')>(), startHarnessProcess: vi.fn()
 }))
 const catalog = new HarnessCatalog({ custom: () => [] })
 const dirs: string[] = []

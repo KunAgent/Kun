@@ -5,9 +5,8 @@ import { harnessIntegrationInfo, resolveHarnessIntegrationTarget } from './harne
 import type { HarnessIntegrationInfo, HarnessIntegrationOpenRequest, HarnessIntegrationTarget } from '../contracts/harness-integration.js'
 import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
 import { HarnessReadinessService } from './harness-readiness.js'
-import { dirname, join } from 'node:path'
-import { createRequire } from 'node:module'
 import type { HarnessDefinition } from '../contracts/harness.js'
+import { PROVIDER_MODULES, providerModule } from './providers/registry.js'
 import type { ServeProviderConfig } from '../config/kun-config-application.js'
 import type { KunServeRuntimeOptions } from '../server/runtime-factory-types.js'
 import { HarnessCatalog } from './harness-catalog.js'
@@ -20,23 +19,10 @@ import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
 import type { HarnessSecretRefResolver } from './harness-secret-env.js'
 
-const runtimeRequire = createRequire(import.meta.url)
-
-function bundledClaudeCode(): { version?: string; command?: string } | undefined {
-  try {
-    const pkgPath = join(dirname(runtimeRequire.resolve('@anthropic-ai/claude-agent-sdk')), 'package.json')
-    const version = (runtimeRequire(pkgPath) as { version?: string }).version
-    let command: string | undefined
-    try { command = runtimeRequire.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/${process.platform === 'win32' ? 'claude.exe' : 'claude'}`) } catch { /* SDK resolves its own platform package for model/account control requests. */ }
-    return { version, command }
-  } catch {
-    return undefined
-  }
-}
-
-function bundledRuntime(def: HarnessDefinition): { version?: string; command?: string } | undefined {
-  if (def.id === 'claude-code') return bundledClaudeCode()
-  return undefined
+/** Executable override from the engine's environment variable (e.g. a dev build). */
+function binaryEnvOverride(id: string): string | undefined {
+  const key = providerModule(id)?.binaryEnv
+  return key ? process.env[key] : undefined
 }
 
 export type HarnessRuntimeComposition = {
@@ -98,15 +84,17 @@ export function createHarnessComposition(
     definitions: () => catalog.list(),
     overrides: () => {
       const binaryPaths = {
-        ...(process.env.KUN_CLAUDE_BINARY ? { 'claude-code': process.env.KUN_CLAUDE_BINARY } : {}),
-        ...(process.env.KUN_ANTIGRAVITY_BINARY ? { antigravity: process.env.KUN_ANTIGRAVITY_BINARY } : {}),
+        ...Object.fromEntries(PROVIDER_MODULES.flatMap((module) => {
+          const path = binaryEnvOverride(module.definition.id)
+          return path ? [[module.definition.id, path]] : []
+        })),
         ...options().harnesses?.binaryPaths
       }
       return Object.fromEntries(
         Object.entries(binaryPaths).map(([id, binaryPath]) => [id, { binaryPath }])
       )
     },
-    bundled: bundledRuntime,
+    bundled: (def) => providerModule(def.id)?.bundled?.(),
     spawnCaptured,
     // Discovery is metadata-only. Explicit Check & enable owns protocol startup,
     // so merely opening Agent settings cannot bootstrap a disabled agent.
@@ -124,7 +112,7 @@ export function createHarnessComposition(
   })
   const agentSdkModels = new AgentSdkModelProbe({
     binaryPath: (id) =>
-      options().harnesses?.binaryPaths?.[id] ?? process.env.KUN_CLAUDE_BINARY
+      options().harnesses?.binaryPaths?.[id] ?? binaryEnvOverride(id)
   })
   const codexModels = new CodexModelProbe({
     binaryPath: (id) => options().harnesses?.binaryPaths?.[id],

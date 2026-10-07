@@ -2,6 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { NativeAgentNetworkPolicy, NativeAgentNetworkSnapshot } from '../contracts/native-agent-network.js'
 import { withLoopbackProxyBypass } from '../runtime/agent-sdk/sdk-process-environment.js'
+import { providerModule } from './providers/registry.js'
 
 // Public catalog definitions never serialize proxy addresses or credentials.
 const contextKey = Symbol('native-agent-network-context')
@@ -19,13 +20,12 @@ export function bindNativeAgentNetwork(
   definition: HarnessDefinition,
   snapshot: NativeAgentNetworkSnapshot | undefined
 ): HarnessDefinition {
-  const policy = definition.id === 'codex' && definition.transport === 'codex-app-server'
-    ? snapshot?.codex
-    : definition.id === 'claude-code' && definition.transport === 'agent-sdk'
-      ? snapshot?.['claude-code']
-      : definition.id === 'antigravity' && definition.transport === 'antigravity-cli'
-        ? snapshot?.antigravity
-        : definition.transport === 'acp' || definition.transport === 'terminal' ? snapshot?.harnesses?.[definition.id] : undefined
+  // An engine with its own snapshot entry uses it on its native transport;
+  // ACP and terminal Agents share the per-harness map.
+  const native = providerModule(definition.id)?.nativeNetwork
+  const policy = native && definition.transport === native.transport
+    ? snapshot?.[native.snapshotKey]
+    : definition.transport === 'acp' || definition.transport === 'terminal' ? snapshot?.harnesses?.[definition.id] : undefined
   if (!policy) return definition
   // An opaque symbol survives internal object spreads; JSON and public schemas omit it.
   const context = {}

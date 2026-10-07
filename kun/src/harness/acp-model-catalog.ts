@@ -1,3 +1,4 @@
+import { providerModule } from './providers/registry.js'
 import type { HarnessModelCatalog, HarnessModelInfo } from '../contracts/harness-models.js'
 import type { AcpConfigOption } from '../runtime/acp/acp-schema.js'
 import { acpConfigOptionValues } from '../runtime/acp/acp-schema.js'
@@ -37,6 +38,8 @@ export function acpModelCatalog(input: {
   harnessId: string; configOptions?: AcpConfigOption[] | null; models?: unknown; defaultModel?: string
 }): HarnessModelCatalog {
   const rows = new Map<string, HarnessModelInfo>()
+  const acp = providerModule(input.harnessId)?.acp
+  const modelCategory = acp?.modelCategory
   let selected: string | undefined
   for (const option of input.configOptions ?? []) {
     if (option.category !== 'model' || option.type !== 'select') continue
@@ -52,7 +55,7 @@ export function acpModelCatalog(input: {
         rows.set(entry.value, { id: entry.value,
           ...(typeof entry.name === 'string' ? { displayName: entry.name } : {}),
           ...(typeof entry.description === 'string' ? { description: entry.description } : {}),
-          ...(input.harnessId === 'devin' ? { category: entry.value.startsWith('fusion-') ? 'fusion' : 'model' } : {}),
+          ...(modelCategory ? { category: modelCategory(entry.value) } : {}),
           ...(typeof images === 'boolean' ? { inputModalities: images ? ['text', 'image'] : ['text'] } : {}) })
       }
     }
@@ -81,8 +84,7 @@ export function acpModelCatalog(input: {
     if (thought?.type === 'select') {
       current.reasoningEfforts = acpConfigOptionValues(thought)
       current.defaultReasoningEffort = thought.currentValue
-    } else if (input.harnessId === 'devin') {
-      // Devin's picker treats a known-empty list as "details loaded, no levels".
+    } else if (acp?.emptyEffortsWithoutThoughtLevel) {
       current.reasoningEfforts = []
     }
   }

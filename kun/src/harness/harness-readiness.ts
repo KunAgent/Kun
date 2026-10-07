@@ -8,7 +8,7 @@ import { nativeHarnessCredentialEnv, resolveHarnessSecretEnv, type HarnessSecret
 import { probeAcpHandshake } from './acp-handshake-probe.js'
 import { probeCodexHandshake } from './codex-handshake-probe.js'
 import { probePiHandshake } from './pi-handshake-probe.js'
-import { legacyProviderKindFor } from './harness-provider-kind.js'
+import { providerModule } from './providers/registry.js'
 import { parseGatewayModelId } from './gateway-model-id.js'
 import { exposableProvider } from '../domain/model-gateway-export-policy.js'
 import { nativeAgentNetworkEnv, nativeAgentNetworkStatus } from './native-agent-network.js'
@@ -19,8 +19,6 @@ import { readinessProbeEnvironment } from './harness-readiness-env.js'
 import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { spawnCaptured } from './harness-detector.js'
 import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
-import { antigravityCredentialEvidence } from './antigravity-credentials.js'
-import { probeFxNativeCredentials } from './fx-native-credential-probe.js'
 
 const PROOF_TTL_MS = 5 * 60_000
 /** Background re-validation starts this long before a proof expires. */
@@ -119,11 +117,12 @@ export class HarnessReadinessService {
       const terminalLaunch = definition.transport === 'terminal'
       const installation = status.installed === 'yes' && status.versionSupported !== false &&
         (!terminalLaunch || Boolean(status.resolvedCommand?.trim()))
-      if (definition.id === 'fx' && route.credentialMode === 'native-login' && installation &&
+      const commandEvidence = providerModule(definition.id)?.credentials?.commandEvidence
+      if (commandEvidence && route.credentialMode === 'native-login' && installation &&
         snapshot.configured && !snapshot.hasKey && input.level !== 'detect') {
         // Keychain-only native login is configured evidence, never verified
         // authentication. Status does not start a session or send a prompt.
-        const evidence = await raceProbeAbort(probeFxNativeCredentials(status.resolvedCommand,
+        const evidence = await raceProbeAbort(commandEvidence(status.resolvedCommand,
           { env: snapshot.env, signal: bounded }), bounded)
         snapshot.hasKey = evidence.configured === true
       }
@@ -136,7 +135,7 @@ export class HarnessReadinessService {
       const requiresLogin = route.credentialMode === 'native-login' && handshake?.authRequired === true
       const nativeEvidence = !terminalLaunch && !requiresLogin && route.credentialMode === 'native-login' && (handshake?.authentication === 'verified' ||
         ((!route.providerId || route.providerId === 'default') &&
-          !(definition.id === 'claude-code' && snapshot.env.CLAUDE_CODE_OAUTH_TOKEN) && status.login === 'signed-in'))
+          !(providerModule(definition.id)?.loginStatusIgnoredWhen ?? []).some((key) => snapshot!.env[key]) && status.login === 'signed-in'))
       // An Agent with its own free models needs no sign-in unless its session
       // answers auth_required; that is still not verified authentication.
       // Protocol failures are reported by the protocol check, not as credentials.
@@ -376,12 +375,14 @@ export class HarnessReadinessService {
     if (!definition) throw new Error('Unknown harness')
     const options = this.deps.options()
     const secretEnv = await resolveHarnessSecretEnv(definition, this.deps.resolveSecretEnv)
-    const nativeEvidence = definition.id === 'antigravity' && route.credentialMode === 'native-login'
-      ? await antigravityCredentialEvidence({ ...process.env, ...definition.launch?.env, ...secretEnv }) : undefined
+    const module = providerModule(definition.id)
+    const snapshotEvidence = route.credentialMode === 'native-login' ? module?.credentials?.snapshotEvidence : undefined
+    const nativeEvidence = snapshotEvidence
+      ? await snapshotEvidence({ ...process.env, ...definition.launch?.env, ...secretEnv }) : undefined
     if (nativeEvidence) secretEnv.__KUN_READINESS_NATIVE_AUTH = nativeEvidence.fingerprint
     const candidate = readinessProvider(options, route)
     const provider = route.credentialMode === 'native-login' && (!route.providerId || route.providerId === 'default') &&
-      candidate?.kind !== legacyProviderKindFor(definition.id) ? undefined : candidate
+      candidate?.kind !== module?.nativeAccount?.kind ? undefined : candidate
     let apiKey = provider?.apiKey?.trim() ?? ''
     if (provider?.credentialSourceId) {
       apiKey = (await this.deps.resolveProviderCredential?.(provider.credentialSourceId))?.apiKey?.trim() ?? ''
@@ -392,8 +393,8 @@ export class HarnessReadinessService {
       ...nativeHarnessCredentialEnv(definition, { ...process.env, ...definition.launch?.env, ...secretEnv }) }
     delete env.__KUN_READINESS_PROVIDER
     delete env.__KUN_READINESS_NATIVE_AUTH
-    if (definition.id === 'claude-code' && route.credentialMode === 'native-login') {
-      delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ANTHROPIC_BASE_URL
+    if (route.credentialMode === 'native-login') {
+      for (const key of module?.nativeLoginStripEnv ?? []) delete env[key]
     }
     let configured = definition.availability !== 'retired' && definition.credentialModes.includes(route.credentialMode)
     let detail: string | undefined
@@ -419,7 +420,7 @@ export class HarnessReadinessService {
         kind: provider.kind ?? 'http', authType: provider.authType ?? 'api-key',
         configured: Boolean(apiKey), credentialStatus: apiKey ? 'ready' : 'missing'
       }) :
-        !legacyProviderKindFor(definition.id) || provider.kind === legacyProviderKindFor(definition.id)))
+        !module?.nativeAccount || provider.kind === module.nativeAccount.kind))
       configured &&= validProvider && Boolean(route.model) && (!gateway || Boolean(definition.gateway))
       const modelPool = [...(provider?.models ?? []), ...(provider?.selectedModel ? [provider.selectedModel] : [])]
       // "Agent default model" defers to the provider profile's own default.
@@ -428,17 +429,13 @@ export class HarnessReadinessService {
       if (!validProvider) detail = 'Select a supported provider profile'
       // Protocol initialization must not consume the provider key or issue a gateway grant.
       // Its model route and credential are checked locally, independently of login.
-    } else if (provider && route.providerId && definition.id === 'claude-code' && provider.kind === 'agent-sdk') {
-      if (apiKey) env.CLAUDE_CODE_OAUTH_TOKEN = apiKey
-    } else if (provider && route.providerId && definition.id === 'cursor') {
-      hasKey ||= Boolean(apiKey && provider.kind === 'cursor-sdk')
-      if (apiKey && provider.kind === 'cursor-sdk') env.CURSOR_API_KEY = apiKey
-    } else if (provider && route.providerId && definition.id === 'antigravity') {
-      hasKey ||= Boolean(apiKey && provider.kind === 'antigravity-cli')
-      if (apiKey && provider.kind === 'antigravity-cli') env.GEMINI_API_KEY = apiKey
+    } else if (provider && route.providerId && module?.nativeAccount && provider.kind === module.nativeAccount.kind) {
+      // A native account profile carries the engine's own credential.
+      if (apiKey) env[module.nativeAccount.credentialEnv] = apiKey
+      if (module.nativeAccount.countsAsEvidence) hasKey ||= Boolean(apiKey)
     }
     if (route.credentialMode === 'native-login' && route.providerId && route.providerId !== 'default' &&
-      (!legacyProviderKindFor(definition.id) || !provider || provider.kind !== legacyProviderKindFor(definition.id))) { configured = false; detail = 'Native login cannot use an unrelated provider profile; choose the system account for native login or switch the connection to a provider profile' }
+      (!module?.nativeAccount || !provider || provider.kind !== module.nativeAccount.kind)) { configured = false; detail = 'Native login cannot use an unrelated provider profile; choose the system account for native login or switch the connection to a provider profile' }
     if (nativeAgentNetworkStatus(definition).networkSource === 'explicit-required') {
       configured = false; detail = 'Configure an explicit proxy for this Agent'
     }

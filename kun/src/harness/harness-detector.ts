@@ -3,7 +3,6 @@ import { stripVTControlCharacters } from 'node:util'
 import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { HarnessDefinition, HarnessId, HarnessStatus } from '../contracts/harness.js'
 import { harnessStatusReasonCode } from '../contracts/harness.js'
@@ -14,7 +13,7 @@ import {
 } from '../process/owned-process.js'
 import type { HarnessLoginState } from './harness-login-probes.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
-import { resolveCodexExecutable } from './codex-executable.js'
+import { providerModule } from './providers/registry.js'
 import { harnessExecutableEnv } from './harness-executable-env.js'
 import { prepareDeepSeekHarnessLaunch } from './deepseek-harness-launch.js'
 import { buildHarnessEnv } from './harness-env.js'
@@ -245,13 +244,10 @@ export class HarnessDetector {
 
   private identity(id: HarnessId): string {
     const def = this.deps.definitions().find((candidate) => candidate.id === id)
+    // A changed sign-in or engine config invalidates the cached status.
     const home = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
-    const claude = process.env.CLAUDE_CONFIG_DIR ?? join(home, '.claude')
-    const codex = process.env.CODEX_HOME ?? join(home, '.codex')
-    const configPaths = [join(claude, '.credentials.json'), join(claude, 'settings.json'),
-      join(codex, 'auth.json'), join(codex, 'config.toml'),
-      join(home, '.config', 'opencode', 'opencode.json'), join(home, '.local', 'share', 'opencode', 'auth.json'),
-      join(home, '.config', 'codemaker', 'opencode.json'), join(home, '.local', 'share', 'codemaker', 'auth.json')]
+    const credentials = providerModule(id)?.credentials
+    const configPaths = [...credentials?.files?.(process.env, home) ?? [], ...credentials?.profileFiles?.(process.env, home) ?? []]
     return createHash('sha256').update(JSON.stringify({
       definition: def,
       network: def ? nativeAgentNetworkStatus(def).networkFingerprint : undefined,
@@ -409,8 +405,10 @@ export class HarnessDetector {
       return resolved
     }
     if (!def.detect) return undefined
-    if (!override && !this.deps.resolveExecutable && def.transport === 'codex-app-server' && def.detect.command === 'codex') {
-      return resolve(await raceProbeAbort(resolveCodexExecutable(), signal))
+    // An engine-specific resolver applies only to its own (non-overridden) transport.
+    const engine = providerModule(def.id)
+    if (!override && !this.deps.resolveExecutable && engine?.resolveExecutable && def.transport === engine.definition.transport) {
+      return resolve(await raceProbeAbort(engine.resolveExecutable(), signal))
     }
     const candidates = [def.detect.command, ...(def.detect.aliases ?? [])]
     let first: string | undefined

@@ -32,7 +32,7 @@ import {
 } from '../../harness/gateway-model-id.js'
 import type { HarnessTokenService } from '../../harness/harness-token-service.js'
 import type { AcpCredentialEnvInput } from './acp-runtime-support.js'
-import { codexConfig, opencodeConfig, piModelsConfig } from '../../harness/gateway-config-templates.js'
+import { providerModule } from '../../harness/providers/registry.js'
 
 export type AcpCredentialEnvDeps = {
   tokens: Pick<HarnessTokenService, 'issue'>
@@ -121,33 +121,15 @@ export function createAcpCredentialEnv(
       input.harnessId,
       `${slugify(input.threadId)}-${aliases ? createHash('sha256').update(identity).digest('hex').slice(0, 24) : slugify(`${providerId}-${model}`)}`
     )
-    switch (`${input.harnessId}:${gateway.protocol}`) {
-      case 'opencode:openai-chat':
-      // CodeMaker keeps OpenCode's OPENCODE_CONFIG override and config format.
-      case 'codemaker:openai-chat':
-        return {
-          ...env,
-          OPENCODE_CONFIG: writeConfigFile(
-            join(dir, 'opencode.json'),
-            opencodeConfig(v1, gatewayModelId, gateway.env.token)
-          )
-        }
-      case 'codex:openai-responses':
-        writeConfigFile(
-          join(dir, 'config.toml'),
-          codexConfig(v1, gatewayModelId, gateway.env.token)
-        )
-        return { ...env, CODEX_HOME: dir }
-      case 'pi:openai-chat':
-        writeConfigFile(
-          join(dir, 'models.json'),
-          piModelsConfig(v1, gatewayModelId, gateway.env.token)
-        )
-        return { ...env, PI_CODING_AGENT_DIR: dir }
-      default:
-        throw new Error(
-          `harness '${input.harnessId}' gateway protocol '${gateway.protocol}' has no config mapping`
-        )
+    // Each engine writes its own config format; the grant stays env-only.
+    const configured = providerModule(input.harnessId)?.gatewayConfig?.({
+      protocol: gateway.protocol, dir, baseUrl: v1, model: gatewayModelId, tokenEnv: gateway.env.token, writeConfigFile
+    })
+    if (!configured) {
+      throw new Error(
+        `harness '${input.harnessId}' gateway protocol '${gateway.protocol}' has no config mapping`
+      )
     }
+    return { ...env, ...configured }
   }
 }

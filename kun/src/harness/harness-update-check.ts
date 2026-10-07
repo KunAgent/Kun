@@ -1,11 +1,11 @@
 import semver from 'semver'
 import type { NativeAgentNetworkPolicy } from '../contracts/native-agent-network.js'
 import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
-import { HARNESS_UPDATE_RECIPES } from './harness-update-recipes.js'
+import { harnessUpdateRecipe } from './harness-update-recipes.js'
 
 /** Metadata only: no CLI updater is ever invoked by a background check. */
 export async function latestHarnessVersion(id: string, source: string, policy?: NativeAgentNetworkPolicy): Promise<string | undefined> {
-  const recipe = HARNESS_UPDATE_RECIPES[id]
+  const recipe = harnessUpdateRecipe(id)
   if (!recipe) return undefined
   const cask = source === 'homebrew' || !recipe.packageName ? recipe.cask : undefined
   const url = cask ? `https://formulae.brew.sh/api/cask/${cask}.json`

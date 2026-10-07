@@ -25,7 +25,7 @@ import {
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
 import { raceProbeAbort } from './probe-abort.js'
 import { nativeAgentLaunchEnv } from './native-agent-network.js'
-import { applyDevinSessionPermission } from '../runtime/acp/devin-session-permissions.js'
+import { providerModule } from './providers/registry.js'
 import { acpPermissionModeUnoffered, applyAcpSessionPermission } from '../runtime/acp/acp-session-permissions.js'
 import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
 import { isAcpAuthenticationRequired } from '../runtime/acp/acp-authentication.js'
@@ -42,16 +42,6 @@ export type AcpHandshakeProbeDeps = {
   session?: { model?: string; permissionMode?: string }
   /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
   resolveSecretEnv?: HarnessSecretRefResolver
-}
-
-/**
- * OpenCode 1 refuses a shared opencode.db that OpenCode2 created first (it has
- * session_v2 but no session table). Only the user may move that file.
- */
-function knownStartupFailure(message: string): string | undefined {
-  return /has no session table/i.test(message)
-    ? 'OpenCode cannot open its database: opencode.db in its data directory (usually ~/.local/share/opencode) was created by OpenCode2 without the session table OpenCode needs. Back it up, move it out of that directory together with its -wal and -shm files, then check again; OpenCode recreates it and OpenCode2 can use the new file.'
-    : undefined
 }
 
 function errorMessage(error: unknown): string {
@@ -96,7 +86,7 @@ export async function probeAcpHandshake(
       ok: false,
       supported: true,
       protocol: 'acp',
-      detail: knownStartupFailure(errorMessage(error)) ?? `spawn failed: ${errorMessage(error)}`
+      detail: providerModule(definition.id)?.explainFailure?.(errorMessage(error), false)?.detail ?? `spawn failed: ${errorMessage(error)}`
     }
   }
   const conn = AcpConnection.start({ process, identity: 'handshake-probe' })
@@ -120,7 +110,8 @@ export async function probeAcpHandshake(
         await raceProbeAbort(applyAcpSessionModel(conn, { ...session, models: parseAcpLegacyModels(session.models) }, deps.session.model), signal)
         const agentsOnly = definition.nativeAgents === 'session-modes' && Boolean(deps.session.permissionMode) &&
           acpPermissionModeUnoffered(session, deps.session.permissionMode!, definition.acpPermission)
-        if (definition.id === 'devin') await raceProbeAbort(applyDevinSessionPermission(conn, session, deps.session.permissionMode), signal)
+        const applyPermission = providerModule(definition.id)?.acp?.applyPermission
+        if (applyPermission) await raceProbeAbort(applyPermission(conn, session, deps.session.permissionMode), signal)
         // The session still works through an explicitly picked native Agent;
         // Auto turns keep failing closed in applyAcpSessionPermission.
         else if (agentsOnly) detail = 'The Agent replaced its permission modes with its own Agents; pick one in the composer'
@@ -169,23 +160,19 @@ export async function probeAcpHandshake(
     const stderr = process.sanitizedStderrTail()
     if (stderr) parts.push(`stderr: ${stderr}`)
     const detail = parts.join(' — ').slice(0, 400)
-    // Gemini CLI 0.52 reports Google's retirement of the individual Code
-    // Assist tier with the auth-required code; signing in cannot fix that.
-    const retired = isAcpAuthenticationRequired(error) && /no longer supported/i.test(errorMessage(error))
-    const authRequired = isAcpAuthenticationRequired(error) && !retired
-    const startupFailure = knownStartupFailure(detail)
+    // An engine may know what a startup or auth error really means.
+    const explained = providerModule(definition.id)?.explainFailure?.(detail, isAcpAuthenticationRequired(error))
+    const authRequired = explained ? explained.authRequired : isAcpAuthenticationRequired(error)
     return {
       ok: false,
       supported: true,
       protocol: 'acp',
       ...(authRequired ? { authRequired: true, authentication: 'missing' as const } : {}),
       detail:
-        retired
-          ? `The Agent's service no longer supports this client; signing in will not help: ${errorMessage(error).slice(0, 240)}`
+        explained
+          ? explained.detail
           : authRequired
           ? 'The Agent requires login. Sign in with its native CLI, then check and enable this profile again.'
-          : startupFailure
-          ? startupFailure
           : error instanceof AcpError && error.code === 'request_timeout'
           ? `probe timed out after ${timeoutMs}ms`
           : detail

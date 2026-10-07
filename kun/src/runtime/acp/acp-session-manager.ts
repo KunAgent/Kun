@@ -30,7 +30,7 @@ import {
   type McpServer,
   type SessionUpdate
 } from './acp-schema.js'
-import { applyDevinSessionPermission } from './devin-session-permissions.js'
+import { providerModule } from '../../harness/providers/registry.js'
 import { applyAcpSessionPermission } from './acp-session-permissions.js'
 import { applyAcpSessionAgent } from './acp-session-agent.js'
 import { isAcpAuthenticationRequired } from './acp-authentication.js'
@@ -281,8 +281,8 @@ export class AcpSessionManager {
     await applyAcpSessionModel(conn, session, acpLegacyVariantModel(session, ctx.model, ctx.reasoningEffort))
     if (ctx.nativeAgentId) {
       await applyAcpSessionAgent(conn, session, ctx.nativeAgentId)
-    } else if (ctx.harnessId === 'devin') {
-      await applyDevinSessionPermission(conn, session, ctx.permissionModeId)
+    } else if (providerModule(ctx.harnessId)?.acp?.applyPermission) {
+      await providerModule(ctx.harnessId)!.acp!.applyPermission!(conn, session, ctx.permissionModeId)
     } else {
       await applyAcpSessionPermission(conn, session, ctx.permissionModeId, ctx.acpPermission)
     }

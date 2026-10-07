@@ -1,3 +1,4 @@
+import { providerModule } from '../../harness/providers/registry.js'
 import type { HarnessGatewayBinding } from '../../contracts/harness-gateway-binding.js'
 /**
  * AcpRuntime support: delegated trace records (same shape as the other
@@ -80,6 +81,14 @@ export function acpLegacyCapabilities(): DelegatedRuntimeCapabilities {
  * JSON-RPC errors are `agent_error`. User-facing text is bounded and never
  * carries environment or credential material.
  */
+/** Name the engine's own sign-in command when it is a plain CLI invocation. */
+function loginGuidance(harnessId: string | undefined): string | undefined {
+  const definition = providerModule(harnessId)?.definition
+  const login = definition?.setup?.login
+  if (!definition || !login?.args.length) return undefined
+  return `${definition.displayName} requires login. Run ${[login.command, ...login.args].join(' ')} in a terminal, then retry.`
+}
+
 export function mapAcpFailure(
   error: unknown,
   startup: boolean,
@@ -89,9 +98,7 @@ export function mapAcpFailure(
     if (isAcpAuthenticationRequired(error)) {
       return {
         code: 'harness_not_ready',
-        message: harnessId === 'devin'
-          ? 'Devin CLI requires login. Run devin auth login in a terminal, then retry.'
-          : 'The agent requires login. Open Agent settings, sign in with its CLI, and retry.'
+        message: loginGuidance(harnessId) ?? 'The agent requires login. Open Agent settings, sign in with its CLI, and retry.'
       }
     }
     switch (error.code) {

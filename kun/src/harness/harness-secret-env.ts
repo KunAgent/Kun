@@ -6,9 +6,9 @@
  * settings — this module only ever returns them into an in-memory env map.
  */
 import type { HarnessDefinition } from '../contracts/harness.js'
-import { resolveDeepSeekHarnessNativeKey } from './deepseek-harness-profile.js'
 import type { ExtensionCredentialStore } from '../services/extension-credential-store.js'
 import { NATIVE_AGENT_CREDENTIAL_ENV_KEYS, nativeAgentCredentialEnv } from './native-agent-credentials.js'
+import { providerModule } from './providers/registry.js'
 
 /** Resolves an opaque credential-store reference to its secret value. */
 export type HarnessSecretRefResolver = (
@@ -70,17 +70,8 @@ export async function resolveHarnessSecretEnv(
 }
 
 /** Engine-specific ambient credentials allowed only for an explicitly chosen native profile. */
-export const NATIVE_HARNESS_CREDENTIAL_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
-  ...NATIVE_AGENT_CREDENTIAL_ENV_KEYS,
-  'deepseek-harness': ['DEEPSEEK_API_KEY'],
-  // Official ACP command reference documents WINDSURF_API_KEY, not DEVIN_API_KEY.
-  devin: ['WINDSURF_API_KEY'],
-  // These engines already support their own documented native key modes.
-  codex: ['OPENAI_API_KEY'], cursor: ['CURSOR_API_KEY'],
-  'claude-code': ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'],
-  antigravity: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS'],
-  // ACP authenticate is a no-op in CodeMaker; these are its documented native credentials.
-  codemaker: ['CODEMAKER_AUTH_TOKEN', 'CODEMAKER_AUTH_KEY', 'CODEMAKER_AUTH_USER', 'CODEMAKER_API_KEY']
+export function nativeHarnessCredentialEnvKeys(id: string): readonly string[] {
+  return [...(NATIVE_AGENT_CREDENTIAL_ENV_KEYS[id] ?? []), ...(providerModule(id)?.credentials?.envKeys ?? [])]
 }
 
 /** Never call for kun-gateway: host provider keys must not bypass the gateway. */
@@ -88,12 +79,9 @@ export function nativeHarnessCredentialEnv(
   definition: Pick<HarnessDefinition, 'id'>,
   base: Record<string, string | undefined> = process.env
 ): Record<string, string> {
-  if (definition.id === 'deepseek-harness') {
-    const value = resolveDeepSeekHarnessNativeKey(base)
-    return value === undefined ? {} : { DEEPSEEK_API_KEY: value }
-  }
-  const allowed = new Set(NATIVE_HARNESS_CREDENTIAL_ENV_KEYS[definition.id] ?? [])
+  const allowed = new Set(nativeHarnessCredentialEnvKeys(definition.id))
   const selected = { ...nativeAgentCredentialEnv(definition.id, base),
+    ...providerModule(definition.id)?.credentials?.env?.(base),
     ...Object.fromEntries(Object.entries(base).flatMap(([key, value]) =>
       allowed.has(key.toUpperCase()) && value?.trim() ? [[key.toUpperCase(), value]] : [])) }
   // A provider's environment reference cannot turn private host control into a native API key.

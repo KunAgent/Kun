@@ -7,7 +7,7 @@ import type { HarnessUpdateJob, HarnessUpdateState } from '../contracts/harness-
 import type { NativeAgentNetworkPolicy } from '../contracts/native-agent-network.js'
 import { describeHarnessInstallation, localHarnessCandidate } from './harness-installation.js'
 import { latestHarnessVersion } from './harness-update-check.js'
-import { HARNESS_UPDATE_RECIPES } from './harness-update-recipes.js'
+import { harnessUpdateRecipe } from './harness-update-recipes.js'
 import { resolveExecutable } from '../process/owned-process.js'
 import { harnessExecutableEnv } from './harness-executable-env.js'
 import { harnessExecutableIdentity } from './harness-executable-identity.js'
@@ -63,7 +63,7 @@ export class HarnessUpdates {
     const id = definition.id
     const status = (!force ? this.deps.currentStatus?.(id) : undefined) ?? await this.deps.detect(id)
     const current = await (this.deps.describe ?? describeHarnessInstallation)(id, status, this.deps.home)
-    const recipe = definition.builtin ? HARNESS_UPDATE_RECIPES[id] : undefined
+    const recipe = definition.builtin ? harnessUpdateRecipe(id) : undefined
     const candidate = recipe ? await (this.deps.candidate ?? localHarnessCandidate)(id, current) : undefined
     const value: HarnessUpdateState = { harnessId: id, current, candidate,
       channel: recipe?.tag ?? 'latest', docsUrl: definition.setup?.docsUrl, status: 'unchecked',
@@ -160,7 +160,7 @@ export class HarnessUpdates {
         await new Promise((resolve) => setTimeout(resolve, 250))
       }
       bounded.throwIfAborted()
-      const recipe = HARNESS_UPDATE_RECIPES[id]!
+      const recipe = harnessUpdateRecipe(id)!
       let path: string
       if (job.action === 'use-local' || job.action === 'rollback') {
         const candidate = state.candidate!
