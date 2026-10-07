@@ -225,14 +225,14 @@ export type InterruptionNoteTurnItem = z.infer<typeof InterruptionNoteTurnItem>
 
 export const AssistantTextTurnItem = TurnItemBase.extend({
   kind: z.literal('assistant_text'),
-  renderMode: z.literal('plain-text').optional(),
+  renderMode: z.enum(['plain-text', 'safe-markdown']).optional(),
   text: z.string()
 })
 export type AssistantTextTurnItem = z.infer<typeof AssistantTextTurnItem>
 
 export const AssistantReasoningTurnItem = TurnItemBase.extend({
   kind: z.literal('assistant_reasoning'),
-  renderMode: z.literal('plain-text').optional(),
+  renderMode: z.enum(['plain-text', 'safe-markdown']).optional(),
   text: z.string()
 })
 export type AssistantReasoningTurnItem = z.infer<typeof AssistantReasoningTurnItem>

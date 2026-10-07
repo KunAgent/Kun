@@ -113,8 +113,9 @@ Implemented in this slice:
 - A native HTTP model route with one durable request budget and one physical
   HTTP attempt. No agent tools, delegation, downloads, memory/history expansion,
   hooks, title calls, SDK harnesses or automatic model routing in these turns.
-  Literal-text rendering prevents model-supplied images/HTML from making
-  additional requests. Interrupted answers remain in the existing thread.
+  Passive Markdown rendering keeps model-supplied images, links and HTML inert
+  without losing document structure. Interrupted answers remain in the existing
+  thread, and their rendering policy survives streaming and reopening.
 - No model-generated writes to existing notes or matrices. Local manual edits
   have save/undo; copied evidence/matrix Markdown can be used in existing notes.
   Existing general editing remains a separate explicit workflow.
@@ -135,7 +136,9 @@ Still Stage 1, not claimed complete or silently moved to Stage 2:
   visible but old figure indexes do not have a verified PDF-version binding.
 - Automatic claim-to-evidence extraction and reviewable AI edits/diffs in
   existing notes/drafts. Current evidence starts from user-selected highlights
-  or image annotations, and generated answers remain unverified plain text.
+  or image annotations, and generated answers remain unverified prose.
+  Paper answers support passive Markdown tables, lists, code and local math;
+  raw HTML, resource loading and interactive links/file actions stay disabled.
   Source inspection is provided by evidence cards; generated prose does not
   automatically become a clickable, source-verified claim.
 - Project-scope context and project-level budgets depend on Stage 2's project

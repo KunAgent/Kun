@@ -1,4 +1,5 @@
 import type { ChatBlock } from '../agent/types'
+import { assistantExportMarkdown } from './conversation-export-markdown'
 
 export type ConversationExportLabels = {
   exportedAt: string
@@ -267,7 +268,10 @@ export function buildConversationExportDocument(options: {
     const { block, turnKey } = entry
     if (!completedTurnKeys.has(turnKey)) continue
     if (block.kind !== 'user' && block.kind !== 'assistant') continue
-    const text = block.kind === 'user' ? visibleUserText(block) : block.text.trim()
+    if (block.kind === 'assistant' && !block.text.trim()) continue
+    const text = block.kind === 'user'
+      ? visibleUserText(block)
+      : assistantExportMarkdown(block.text, block.renderMode).trim()
     if (!text) continue
 
     const role = block.kind === 'user' ? options.labels.user : options.labels.assistant

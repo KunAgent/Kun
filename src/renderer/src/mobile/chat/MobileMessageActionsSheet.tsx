@@ -69,7 +69,7 @@ export function MobileMessageActionsSheet(): React.JSX.Element {
             <>
               <li><AssistantSpeakButton blockId={block.id} text={block.text} /></li>
               <li><AssistantSpeakTrackButton text={block.text} createdAt={block.createdAt} /></li>
-              <li><AssistantExportButton text={block.text} createdAt={block.createdAt} /></li>
+              <li><AssistantExportButton text={block.text} createdAt={block.createdAt} renderMode={block.renderMode} /></li>
             </>
           ) : null}
         </ul>

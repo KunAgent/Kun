@@ -84,8 +84,33 @@ describe('frozen paper runtime policy', () => {
     expect(h.execute).not.toHaveBeenCalled()
     expect(h.schedule).not.toHaveBeenCalled()
     const output = (await h.sessionStore.loadItems('paper')).filter((item) => item.kind === 'assistant_text')
-    expect(output).toEqual([expect.objectContaining({ renderMode: 'plain-text', text: 'Evidence answer [p1, page 3]' })])
+    expect(output).toEqual([expect.objectContaining({ renderMode: 'safe-markdown', text: 'Evidence answer [p1, page 3]' })])
     expect((await h.turns.getTurn('paper', started.turnId))?.paperModelRequests).toBe(1)
+  })
+
+  it('carries the passive policy from the first reasoning/text fragment through replay', async () => {
+    const h = await harness(async function* () {
+      yield { kind: 'assistant_reasoning_delta', text: '**Checking** ![private](https://untrusted.test/reason)' }
+      yield { kind: 'assistant_text_delta', text: '# Summary\n\n![private](' }
+      yield { kind: 'assistant_text_delta', text: 'https://untrusted.test/source)' }
+      yield { kind: 'completed', stopReason: 'stop' }
+    })
+    const started = await h.turns.startTurn({ threadId: 'paper', request: request() })
+    await expect(h.loop.runTurn('paper', started.turnId)).resolves.toBe('completed')
+    const events = await h.sessionStore.loadEventsSince('paper', 0)
+    const replies = events.flatMap(event => {
+      if (!('item' in event) || !event.item) return []
+      const item = event.item
+      return item.kind === 'assistant_text' || item.kind === 'assistant_reasoning'
+        ? [{ kind: event.kind, item }] : []
+    })
+    expect(replies.length).toBeGreaterThan(2)
+    for (const event of replies) {
+      expect(event.kind).toBe('item_created')
+      expect(event.item).toHaveProperty('renderMode', 'safe-markdown')
+    }
+    expect(replies.some(event => event.item?.kind === 'assistant_reasoning')).toBe(true)
+    expect(replies.at(-1)?.item?.text).toContain('https://untrusted.test/source)')
   })
 
   it('blocks local-only before any model/provider dispatch', async () => {
@@ -192,8 +217,8 @@ describe('frozen paper runtime policy', () => {
       expect((await h.turns.getTurn('paper', later.turnId))?.status).toBe('queued')
       const outputs = (await h.sessionStore.loadItems('paper')).filter((item) => item.kind === 'assistant_text')
       expect(outputs).toEqual(expect.arrayContaining([
-        expect.objectContaining({ turnId: first.turnId, renderMode: 'plain-text', text: 'Retained stopped evidence' }),
-        expect.objectContaining({ turnId: queued.turnId, renderMode: 'plain-text', text: 'Answer from the resumed frozen context' })
+        expect.objectContaining({ turnId: first.turnId, renderMode: 'safe-markdown', text: 'Retained stopped evidence' }),
+        expect.objectContaining({ turnId: queued.turnId, renderMode: 'safe-markdown', text: 'Answer from the resumed frozen context' })
       ]))
       expect(JSON.stringify(outputs)).not.toContain('LATE_OLD_RESPONSE')
       expect(h.execute).not.toHaveBeenCalled()

@@ -157,6 +157,7 @@ export const trajectoryDetailSchema = z.object({
   section: trajectoryDetailSectionSchema,
   state: trajectoryDetailStateSchema,
   content: z.unknown().optional(),
+  renderMode: z.enum(['plain-text', 'safe-markdown']).optional(),
   truncated: z.boolean(),
   warning: z.string().optional()
 })

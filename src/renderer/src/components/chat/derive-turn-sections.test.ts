@@ -28,6 +28,18 @@ function processingSections(input: {
 }
 
 describe('deriveTurnSections', () => {
+  it.each(['plain-text', 'safe-markdown'] as const)('retains %s when splitting inline reasoning', (renderMode) => {
+    const block: ChatBlock = { kind: 'assistant', id: 'paper', renderMode,
+      text: '<think>![private](https://untrusted.test/reason)</think>\n\n# Answer' }
+    for (const result of [sections([block]), processingSections({ blocks: [block] })]) {
+      expect([...result.processBlocks, ...result.assistantContentBlocks])
+        .toEqual(expect.arrayContaining([
+          expect.objectContaining({ kind: 'reasoning', renderMode }),
+          expect.objectContaining({ kind: 'assistant', renderMode })
+        ]))
+    }
+  })
+
   it('surfaces show_diagram metadata in its dedicated timeline section', () => {
     const result = sections([{
       kind: 'tool',

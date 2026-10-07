@@ -263,7 +263,7 @@ export type CoreTurnJson = {
 }
 
 export type CoreTurnItemJson = {
-  renderMode?: 'plain-text'
+  renderMode?: 'plain-text' | 'safe-markdown'
   sourceHistoryOrder?: { referenceId: string; turnIndex: number; itemIndex: number }
   sourceAttachments?: Array<{ index: number; name: string; mimeType?: string }>
   id: string

@@ -418,7 +418,7 @@ export function ProcessEntryDetail({
     const streamReason = block.id === 'live-reasoning' && processing
     return (
       <div className="ds-markdown text-[13.5px] leading-6 text-ds-muted">
-        <AssistantMarkdown plainText={block.renderMode === 'plain-text'} text={detail.text} streaming={streamReason} hideHtmlComments />
+        <AssistantMarkdown plainText={block.renderMode === 'plain-text'} safeMarkdown={block.renderMode === 'safe-markdown'} text={detail.text} streaming={streamReason} hideHtmlComments />
       </div>
     )
   }
@@ -427,7 +427,7 @@ export function ProcessEntryDetail({
       <div className="ds-markdown text-[13.5px] leading-6 text-ds-ink">
         <AssistantMarkdown
           text={detail.text}
-          plainText={block.renderMode === 'plain-text'}
+          plainText={block.renderMode === 'plain-text'} safeMarkdown={block.renderMode === 'safe-markdown'}
           streaming={processing && block.kind === 'assistant' && block.id === 'live-assistant'}
         />
       </div>

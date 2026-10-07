@@ -1,0 +1,58 @@
+/* Bounded paper answers use real Markdown without interactive resources. */
+.ds-passive-markdown {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.ds-passive-markdown > :first-child {
+  margin-top: 0;
+}
+
+.ds-passive-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.ds-passive-markdown :is(h4, h5, h6) {
+  margin: 0.6rem 0 0.42rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.ds-passive-markdown .contains-task-list {
+  list-style: none;
+}
+
+.ds-passive-markdown .task-list-item input {
+  margin-inline-end: 0.35rem;
+}
+
+.ds-passive-markdown-table {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.55rem 0 0.7rem;
+  border: 1px solid var(--ds-border);
+  border-radius: 8px;
+}
+
+.ds-passive-markdown-table:focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 2px;
+}
+
+.ds-passive-markdown-table > table {
+  margin: 0;
+  border: 0;
+}
+
+.ds-passive-markdown-table :is(th, td) {
+  min-width: 7rem;
+  padding: 0.5rem 0.65rem;
+}
+
+/* Fenced source should scroll as code, not wrap like inline code in a list. */
+.ds-passive-markdown pre code {
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}

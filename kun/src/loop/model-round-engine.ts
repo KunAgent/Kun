@@ -49,7 +49,7 @@ export type ModelRoundEngineInput = {
   turnId: string
   signal: AbortSignal
   request: ModelRequest
-  plainTextOutput?: boolean
+  outputRenderMode?: 'plain-text' | 'safe-markdown'
   maxToolCallsPerStep: number
   toolCallOverflowBehavior?: 'fail' | 'truncate'
   streamToolMetadata: ReadonlyMap<string, ModelStreamToolMetadata>
@@ -148,7 +148,7 @@ export class ModelRoundEngine {
             turnId: input.turnId,
             threadId: input.threadId,
             text: nextReasoning,
-            ...(input.plainTextOutput ? { renderMode: 'plain-text' as const } : {}),
+            ...(input.outputRenderMode ? { renderMode: input.outputRenderMode } : {}),
             status: 'completed',
             createdAt: reasoningCreatedAt
           })
@@ -167,7 +167,7 @@ export class ModelRoundEngine {
             turnId: input.turnId,
             threadId: input.threadId,
             text: nextText,
-            ...(input.plainTextOutput ? { renderMode: 'plain-text' as const } : {}),
+            ...(input.outputRenderMode ? { renderMode: input.outputRenderMode } : {}),
             status: 'completed',
             createdAt: textCreatedAt
           })
@@ -190,7 +190,7 @@ export class ModelRoundEngine {
             turnId: input.turnId,
             threadId: input.threadId,
             text: emittedText,
-            ...(input.plainTextOutput ? { renderMode: 'plain-text' as const } : {}),
+            ...(input.outputRenderMode ? { renderMode: input.outputRenderMode } : {}),
             status: 'running',
             createdAt: textCreatedAt
           }),
@@ -212,7 +212,7 @@ export class ModelRoundEngine {
           turnId: input.turnId,
           threadId: input.threadId,
           text: emittedReasoningText,
-          ...(input.plainTextOutput ? { renderMode: 'plain-text' as const } : {}),
+          ...(input.outputRenderMode ? { renderMode: input.outputRenderMode } : {}),
           status: 'running',
           createdAt: reasoningCreatedAt
         }),

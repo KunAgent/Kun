@@ -1,0 +1,118 @@
+name: Native Work assistant Markdown smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/work-assistant-markdown-smoke.yml'
+      - 'scripts/smoke-work-assistant-markdown.mjs'
+      - 'scripts/work-assistant-markdown-fonts.mjs'
+      - 'scripts/work-assistant-markdown-fonts.test.mjs'
+      - 'scripts/fixtures/work-assistant-markdown*'
+      - 'src/renderer/src/components/chat/**'
+      - 'src/renderer/src/components/write/WriteAssistantPanel.tsx'
+      - 'src/renderer/src/components/trajectory/**'
+      - 'src/renderer/src/lib/conversation-export*'
+      - 'src/shared/markdown/render-html*'
+      - 'src/main/services/write-export*'
+      - 'src/renderer/src/mobile/chat/MobileMessageActionsSheet.tsx'
+      - 'kun/src/services/trajectory-query-message-detail.ts'
+      - 'kun/src/contracts/trajectory.ts'
+      - 'src/renderer/src/agent/kun-*'
+      - 'src/renderer/src/agent/types.ts'
+      - 'src/renderer/src/styles/markdown-code*'
+      - 'src/renderer/src/styles/markdown-code/**'
+      - 'src/renderer/src/styles/write-editor/**'
+      - 'kun/src/loop/paper-model-step.ts'
+      - 'kun/src/contracts/items.ts'
+      - 'kun/src/domain/item.ts'
+      - 'kun/src/server/routes/thread-projection.ts'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: work-assistant-markdown-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-markdown:
+    name: Electron Work assistant Markdown
+    # Hosted macOS supports sandboxed Electron without disabling Linux user namespaces.
+    # The smoke checks actual PingFang/Hiragino/Noto glyph use via Chromium CDP.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+      KUN_WORK_MARKDOWN_EVIDENCE: dist/work-assistant-markdown
+      KUN_REQUIRE_CJK_FONTS: '1'
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - name: Install dependencies and native Electron
+        run: |
+          npm ci
+          npm run ensure:electron
+      - name: Verify native CJK font identity and glyph counting
+        run: node --test scripts/work-assistant-markdown-fonts.test.mjs
+      - name: Verify passive rendering and reopen policy
+        run: >-
+          npx vitest run
+          src/renderer/src/components/chat/PassiveAssistantMarkdown.test.ts
+          src/renderer/src/agent/kun-runtime-thread-live-projection.test.ts
+          src/renderer/src/components/chat/AssistantExportButton.test.ts
+          src/renderer/src/components/trajectory/TrajectoryInspectorRenderPolicy.test.ts
+          src/renderer/src/lib/conversation-export-markdown.test.ts
+          src/shared/markdown/render-html-highlight.test.ts
+          src/main/services/write-export-assistant-policy.test.ts
+      - name: Exercise full production Work panel in native Electron
+        run: |
+          mkdir -p dist/work-assistant-markdown
+          set -o pipefail
+          node scripts/smoke-work-assistant-markdown.mjs 2>&1 | tee dist/work-assistant-markdown/launch.log
+      - name: Require passing exact-SHA native report and before/after screenshots
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict'
+          import { readFileSync, existsSync } from 'node:fs'
+          const directory = 'dist/work-assistant-markdown'
+          const report = JSON.parse(readFileSync(`${directory}/report.json`, 'utf8'))
+          assert.equal(report.status, 'passed')
+          assert.equal(report.engine, 'native-electron')
+          assert.ok(report.nativeVersions?.electron && report.nativeVersions?.chrome)
+          assert.equal(report.commitSha, process.env.EXPECTED_SHA)
+          assert.deepEqual(report.dirtyTrackedFiles, [])
+          assert.deepEqual(report.failures, [])
+          assert.deepEqual(report.errors, [])
+          assert.deepEqual(report.externalRequests, [])
+          assert.ok(report.checks.length >= 15)
+          for (const theme of ['light', 'dark']) {
+            for (const width of [680, 360]) {
+              for (const stage of ['before-literal-markdown', 'after-paper-markdown', 'after-paper-math-code']) {
+                const file = `electron-${theme}-${width}-${stage}.png`
+                assert.ok(report.screenshots.includes(file) && existsSync(`${directory}/${file}`), file)
+              }
+            }
+          }
+          for (const name of ['ordinary-work-shared-streamdown', 'ordinary-code-shared-streamdown',
+            'streaming-partial-paper', 'streaming-final-paper', 'completed-reopen-paper', 'hostile-inert-680', 'hostile-inert-360']) {
+            assert.ok(existsSync(`${directory}/electron-${name}.png`), name)
+          }
+          assert.ok(report.metrics.every(metric => metric.cjk?.glyphs >= metric.cjk?.count && metric.cjk?.count > 0))
+          NODE
+      - name: Upload exact-SHA native report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-work-assistant-markdown-${{ env.EXPECTED_SHA }}
+          path: dist/work-assistant-markdown
+          if-no-files-found: error
+          retention-days: 14
