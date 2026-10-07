@@ -172,3 +172,9 @@
   border-radius: var(--kun-mobile-radius, 12px);
 }
 .kun-mobile-load-more { margin: 16px 0; width: 100%; }
+
+/* Code home: tasks and Agent conversations share one tab. */
+.kun-mobile-code-segments { display: flex; gap: 2px; margin: 2px 16px 10px; padding: 2px; border-radius: 10px; background: var(--ds-surface-subtle); }
+.kun-mobile-code-segments button { display: inline-flex; flex: 1; min-height: 36px; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; color: var(--ds-text-muted); font-size: 14px; font-weight: 500; }
+.kun-mobile-code-segments button[aria-selected='true'] { color: var(--ds-text); background: var(--ds-surface-card); font-weight: 600; box-shadow: 0 1px 2px rgba(20, 30, 50, 0.12); }
+.kun-mobile-code-segment-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; color: #fff; background: var(--ds-accent); font-size: 11px; font-weight: 700; line-height: 18px; }

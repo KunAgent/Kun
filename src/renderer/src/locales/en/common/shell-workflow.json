@@ -664,5 +664,11 @@
   "designCanvasConversationRunning": "Conversation is running",
   "designCanvasConversationPanelLabel": "Design conversation: {{title}}",
   "miniWindowRestore": "Restore window",
-  "miniWindowDragHint": "Drag this bar to move"
+  "miniWindowDragHint": "Drag this bar to move",
+  "sidebarKunStatusReady": "Ready",
+  "sidebarKunStatusStarting": "Starting…",
+  "sidebarKunStatusOffline": "Not connected",
+  "sidebarKunStatusOpen": "Open Kun settings",
+  "mobileCodeSegmentTasks": "Tasks",
+  "mobileCodeSegmentChats": "Conversations"
 }

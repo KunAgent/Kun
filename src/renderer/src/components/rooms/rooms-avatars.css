@@ -119,3 +119,35 @@
   font-weight: 600;
   line-height: 1;
 }
+.ds-sidebar-kun-face {
+  --rooms-avatar-size: 1.875rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 50%;
+}
+.ds-sidebar-kun-dot { background: var(--ds-status-dot-muted, var(--ds-text-faint)); }
+.ds-sidebar-kun-status[data-runtime-connection='ready'] .ds-sidebar-kun-dot { background: var(--ds-status-dot-success, #1f9d55); }
+.ds-sidebar-kun-status[data-runtime-connection='offline'] .ds-sidebar-kun-dot { background: var(--ds-status-dot-danger, #d14343); }
+.ds-sidebar-kun-status[data-runtime-connection='checking'] .ds-sidebar-kun-dot { animation: ds-sidebar-kun-pulse 1.4s ease-in-out infinite; }
+@keyframes ds-sidebar-kun-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .ds-sidebar-kun-status .ds-sidebar-kun-dot { animation: none; } }
+/* Compact avatars: a circle cropped to the face, with a thin identity ring. */
+.rooms-avatar[data-compact] {
+  overflow: hidden;
+  border: 0;
+  border-radius: 50%;
+}
+.rooms-avatar[data-compact] span.rooms-avatar-art,
+.ds-sidebar-kun-face span.rooms-avatar-art {
+  transform: scale(1.25);
+  transform-origin: 50% 34%;
+}
+.rooms-avatar[data-compact] .rooms-avatar-letter { display: none; }
+.rooms-avatar[data-compact]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--rooms-avatar-tone) 45%, transparent);
+  pointer-events: none;
+}

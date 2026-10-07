@@ -653,5 +653,11 @@
   "workflowCallableShort": "AI呼び出し可能",
   "workflowCallableHint": "コードモード エージェントが run_workflow 経由で直接実行できるようにします。",
   "miniWindowRestore": "ウィンドウを復元",
-  "miniWindowDragHint": "このバーをドラッグしてウィンドウを移動"
+  "miniWindowDragHint": "このバーをドラッグしてウィンドウを移動",
+  "sidebarKunStatusReady": "準備完了",
+  "sidebarKunStatusStarting": "起動中…",
+  "sidebarKunStatusOffline": "未接続",
+  "sidebarKunStatusOpen": "Kun の設定を開く",
+  "mobileCodeSegmentTasks": "タスク",
+  "mobileCodeSegmentChats": "会話"
 }

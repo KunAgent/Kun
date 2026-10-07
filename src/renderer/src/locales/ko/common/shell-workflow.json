@@ -653,5 +653,11 @@
   "workflowCallableShort": "AI 호출 가능",
   "workflowCallableHint": "코드 모드 에이전트가 run_workflow를 통해 직접 실행하도록 합니다.",
   "miniWindowRestore": "창 복원",
-  "miniWindowDragHint": "이 표시줄을 드래그하여 창 이동"
+  "miniWindowDragHint": "이 표시줄을 드래그하여 창 이동",
+  "sidebarKunStatusReady": "준비됨",
+  "sidebarKunStatusStarting": "시작 중…",
+  "sidebarKunStatusOffline": "연결되지 않음",
+  "sidebarKunStatusOpen": "Kun 설정 열기",
+  "mobileCodeSegmentTasks": "작업",
+  "mobileCodeSegmentChats": "대화"
 }

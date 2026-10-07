@@ -56,3 +56,11 @@ it('does not cycle between a broken upload and a broken user fallback image', ()
   expect(renderer.root.findAllByType('img')).toHaveLength(0)
   expect(renderer.root.findAllByProps({ className: 'rooms-avatar-art' })).toHaveLength(1)
 })
+it('crops list-sized avatars to the face and keeps large portraits whole', () => {
+  act(() => { renderer = create(createElement(Fragment, null,
+    createElement(RoomAvatar, { id: 'agent', label: 'List', size: 34, avatar: { kind: 'builtin', id: 'detective' } }),
+    createElement(RoomAvatar, { id: 'agent', label: 'Profile', size: 96, avatar: { kind: 'builtin', id: 'detective' } }))) })
+  const [list, profile] = renderer.root.findAll((node) => node.type === 'span' && node.props.className === 'rooms-avatar')
+  expect(list!.props['data-compact']).toBe(true)
+  expect(profile!.props['data-compact']).toBeUndefined()
+})

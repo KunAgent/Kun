@@ -653,5 +653,11 @@
   "workflowCallableShort": "एआई-कॉल करने योग्य",
   "workflowCallableHint": "कोड-मोड एजेंट को इसे सीधे run_workflow के माध्यम से चलाने दें।",
   "miniWindowRestore": "विंडो पुनर्स्थापित करें",
-  "miniWindowDragHint": "विंडो खिसकाने के लिए इस पट्टी को खींचें"
+  "miniWindowDragHint": "विंडो खिसकाने के लिए इस पट्टी को खींचें",
+  "sidebarKunStatusReady": "तैयार",
+  "sidebarKunStatusStarting": "शुरू हो रहा है…",
+  "sidebarKunStatusOffline": "कनेक्ट नहीं",
+  "sidebarKunStatusOpen": "Kun सेटिंग्स खोलें",
+  "mobileCodeSegmentTasks": "कार्य",
+  "mobileCodeSegmentChats": "बातचीत"
 }

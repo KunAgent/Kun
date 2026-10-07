@@ -9,6 +9,7 @@ import { useRoomAttentionCount } from '../components/rooms/useRoomEvents'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { MobileModeNav } from './MobileModeNav'
 import { MobileCodeHome } from './screens/MobileCodeHome'
+import { MobileCodeSegments, type MobileCodeSegment } from './screens/MobileCodeSegments'
 import { MobileRoomsRoot } from './rooms/MobileRoomsRoot'
 import { MobileDocumentsHome } from './work/MobileDocumentsHome'
 import { useMobileNavigation, type MobileNavigationGuard } from './navigation/use-mobile-navigation'
@@ -168,6 +169,10 @@ export function MobileAppShell(): ReactElement {
     navigate({ mode: 'work', kind: 'home' })
   }
 
+  // Agent conversations live under Code, as on desktop: one tab, two segments.
+  const codeSegments = (active: MobileCodeSegment) => <MobileCodeSegments active={active} chatsBadge={roomAttention}
+    onSelect={(segment) => navigate(segment === 'chats' ? { mode: 'rooms', kind: 'home' } : { mode: 'code', kind: 'home' })} />
+
   const selectMode = async (mode: MobileMode): Promise<void> => {
     const request = ++navigationRequestRef.current
     if (page.mode === 'work' && mode !== 'work' && !await canLeaveWork()) return
@@ -247,7 +252,7 @@ export function MobileAppShell(): ReactElement {
   } else if (page.kind !== 'home') {
     content = <MobileUnavailable title={page.kind} onBack={() => navigate({ mode: page.mode, kind: 'home' })} />
   } else if (page.mode === 'rooms') {
-    content = <MobileRoomsRoot navigate={navigate} />
+    content = <MobileRoomsRoot navigate={navigate} segments={codeSegments('chats')} />
   } else if (page.mode === 'agents') {
     content = <MobileAgentsHome
       onOpenThread={(threadId) => {
@@ -263,15 +268,15 @@ export function MobileAppShell(): ReactElement {
       onBusyChange={setPaperBusy} />
   } else {
     content = <MobileCodeHome onOpen={(threadId) => navigate({ mode: 'code', kind: 'conversation', threadId })}
-      onOpenSettings={() => openSettingsPage(page)} />
+      onOpenSettings={() => openSettingsPage(page)} segments={codeSegments('tasks')} />
   }
 
   return <div className="kun-mobile-app" data-mobile-mode={page.mode}>
     {notice ? <div className="kun-mobile-notice" role="alert">{notice}</div> : null}
     <div className="kun-mobile-app-content"><Suspense fallback={<MobileLoadingState className="kun-mobile-page-loading" label={t('loading')} />}>{content}</Suspense></div>
-    {page.kind === 'home' ? <MobileModeNav active={page.mode}
-      attention={{ rooms: roomAttention, agents: agentsAttention }}
-      modes={adeEnabled ? ['code', 'rooms', 'work', 'agents'] : ['code', 'rooms', 'work']}
+    {page.kind === 'home' ? <MobileModeNav active={page.mode === 'rooms' ? 'code' : page.mode}
+      attention={{ code: roomAttention, agents: agentsAttention }}
+      modes={adeEnabled ? ['code', 'work', 'agents'] : ['code', 'work']}
       labels={{ code: 'Code', rooms: t('roomsLabel'), work: t('workspaceModeWorkLabel'), agents: t('missionControl') }}
       onSelect={(mode) => void selectMode(mode)} /> : null}
   </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomSidebarEntry } from '@shared/rooms-api'
 import { useRoomSidebar } from '../../components/rooms/useRoomSidebar'
@@ -11,7 +11,7 @@ import { MobileSheet } from '../sheets/MobileSheet'
 import { MobileRoomsHome, type MobileRoomsFilter } from './MobileRoomsHome'
 import './mobile-avatar-editor.css'
 
-export function MobileRoomsRoot({ navigate }: { navigate: (page: MobilePage) => void }) {
+export function MobileRoomsRoot({ navigate, segments }: { navigate: (page: MobilePage) => void; segments?: ReactNode }) {
   const { t } = useTranslation('common')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<MobileRoomsFilter>('all')
@@ -27,7 +27,7 @@ export function MobileRoomsRoot({ navigate }: { navigate: (page: MobilePage) => 
     void action().catch((cause: unknown) => setActionError(cause instanceof Error ? cause.message : String(cause)))
   }
   return <>
-    <MobileRoomsHome rooms={rooms.entries} agents={agents.agents} view={view} deletedOnly={deletedOnly}
+    <MobileRoomsHome segments={segments} rooms={rooms.entries} agents={agents.agents} view={view} deletedOnly={deletedOnly}
       onView={(next) => { setView(next); setDeletedOnly(false); setSearch('') }}
       onDeletedOnly={(next) => { setView('chats'); setDeletedOnly(next); setFilter('all'); setSearch('') }}
       onOpenAgent={(id) => run(async () => {

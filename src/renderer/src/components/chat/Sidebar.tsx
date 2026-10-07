@@ -40,6 +40,7 @@ import {
   SidebarIconButton
 } from '../sidebar/SidebarPrimitives'
 import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
+import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from '../sidebar/SidebarKunFooter'
 
 type Props = {
   threads: NormalizedThread[]
@@ -184,16 +185,23 @@ export function Sidebar({
     ]
   )
 
+  const sceneFooter = useSidebarSceneFooter()
   return (
     <>
     <SidebarFrame
       title={t('appName')}
       footer={
         <div className="space-y-1">
-          <SidebarFocusModeControl
-            enabled={focusModeEnabled}
-            onChange={onFocusModeChange}
-          />
+          {sceneFooter ? (
+            <SidebarFocusModeControl
+              enabled={focusModeEnabled}
+              onChange={onFocusModeChange}
+            />
+          ) : !focusModeEnabled ? (
+            <div className="border-b border-[var(--ds-sidebar-divider)] pb-1">
+              <SidebarKunStatus onOpen={() => onOpenSettings('agents')} />
+            </div>
+          ) : null}
           <div className="flex items-center gap-1">
             <div className="min-w-0 flex-1">
               <SidebarCommandRow
@@ -203,6 +211,9 @@ export function Sidebar({
                 variant="footer"
               />
             </div>
+            {!sceneFooter ? (
+              <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} />
+            ) : null}
             <SidebarIconButton
               title={t('claw')}
               ariaLabel={t('claw')}

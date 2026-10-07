@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Archive, ArchiveRestore, MessageSquarePlus, Pin, PinOff, Plus, Search, Settings, Trash2, UserRound, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentIdentity, RoomSidebarEntry } from '@shared/rooms-api'
@@ -11,6 +11,8 @@ import { MobileLoadingDots, MobileLoadingState } from '../lib/MobileLoading'
 
 export type MobileRoomsFilter = 'all' | 'unread' | 'attention'
 export type MobileRoomsHomeProps = {
+  /** Tasks / conversations switch shown under the header. */
+  segments?: ReactNode
   rooms: readonly RoomSidebarEntry[]
   agents: readonly AgentIdentity[]
   view: 'chats' | 'agents'
@@ -82,19 +84,19 @@ export function MobileRoomsHome(props: MobileRoomsHomeProps) {
         </div>
       </> : null}
     </header>
-    <div className="kun-mobile-room-sections" role="group" aria-label={t('roomsConversations')}>
-      <button type="button" aria-pressed={view === 'chats'} onClick={() => props.onView('chats')}>{t('roomsConversations')}</button>
-      <button type="button" aria-pressed={view === 'agents'} onClick={() => props.onView('agents')}>{t('agentsDirectory')}</button>
-    </div>
+    {props.segments}
     <label className="kun-mobile-rooms-search"><Search size={16} aria-hidden />
       <input type="search" value={search} onChange={(event) => onSearch(event.target.value)}
         placeholder={t('roomsUnifiedSearch')} aria-label={t('roomsUnifiedSearch')} />
     </label>
-    {view === 'chats' ? <div className="kun-mobile-room-filters" role="group" aria-label={t('roomsLabel')}>
+    {/* One row of tabs: conversation filters, then the Agent directory. */}
+    <div className="kun-mobile-room-filters" role="group" aria-label={t('roomsLabel')}>
       {(['all', 'unread', 'attention'] as const).map((value) => <button key={value} type="button"
-        aria-pressed={!deletedOnly && filter === value} onClick={() => { props.onDeletedOnly(false); onFilter(value) }}>{t(FILTER_LABELS[value])}</button>)}
-      <button type="button" aria-pressed={deletedOnly} onClick={() => props.onDeletedOnly(true)}>{t('roomsRecentlyDeleted')}</button>
-    </div> : null}
+        aria-pressed={view === 'chats' && !deletedOnly && filter === value}
+        onClick={() => { props.onDeletedOnly(false); onFilter(value) }}>{t(FILTER_LABELS[value])}</button>)}
+      <button type="button" aria-pressed={view === 'chats' && deletedOnly} onClick={() => props.onDeletedOnly(true)}>{t('roomsRecentlyDeleted')}</button>
+      <button type="button" aria-pressed={view === 'agents'} data-room-filter="agents" onClick={() => props.onView('agents')}>{t('agentsDirectory')}</button>
+    </div>
     <div className="kun-mobile-room-list" aria-busy={loading}>
       {error ? <div role="alert"><p>{error}</p>
         <button type="button" disabled={loading} onClick={onRetry}>{t('roomsRefresh')}</button></div> : null}

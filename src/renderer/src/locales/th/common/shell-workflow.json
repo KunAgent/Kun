@@ -653,5 +653,11 @@
   "workflowCallableShort": "สามารถเรียก AI ได้",
   "workflowCallableHint": "ปล่อยให้เอเจนต์โหมดโค้ดรันโดยตรงผ่าน run_workflow",
   "miniWindowRestore": "คืนขนาดหน้าต่าง",
-  "miniWindowDragHint": "ลากแถบนี้เพื่อย้ายหน้าต่าง"
+  "miniWindowDragHint": "ลากแถบนี้เพื่อย้ายหน้าต่าง",
+  "sidebarKunStatusReady": "พร้อมใช้งาน",
+  "sidebarKunStatusStarting": "กำลังเริ่ม…",
+  "sidebarKunStatusOffline": "ไม่ได้เชื่อมต่อ",
+  "sidebarKunStatusOpen": "เปิดการตั้งค่า Kun",
+  "mobileCodeSegmentTasks": "งาน",
+  "mobileCodeSegmentChats": "บทสนทนา"
 }

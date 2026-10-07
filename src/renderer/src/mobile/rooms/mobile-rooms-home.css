@@ -17,9 +17,6 @@
 
 .kun-mobile-rooms-search { display: flex; align-items: center; gap: 6px; margin: 4px 12px 8px; padding-inline: 12px; border-radius: 10px; color: var(--ds-text-muted); background: var(--ds-surface-subtle); }
 .kun-mobile-rooms-search input { width: 100%; min-width: 0; min-height: 40px; border: 0; outline: none; color: var(--ds-text); background: transparent; font-size: 16px; }
-.kun-mobile-room-sections { display: flex; gap: 6px; padding: 4px 12px 10px; }
-.kun-mobile-room-sections button { flex: 1; min-height: 44px; border-radius: 10px; color: var(--ds-text-muted); background: var(--ds-surface-subtle); }
-.kun-mobile-room-sections button[aria-pressed='true'] { color: var(--ds-accent); background: var(--ds-accent-soft); font-weight: 600; }
 .kun-mobile-agent-contacts button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 16px; text-align: left; }
 .kun-mobile-agent-contacts span { display: grid; min-width: 0; }
 .kun-mobile-agent-contacts strong, .kun-mobile-agent-contacts small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -91,7 +91,7 @@ describe('mobile Bot list', () => {
     expect(host.querySelector('.sheet')?.textContent).not.toContain('agentsArchive')
   })
 
-  it('switches to Agent contacts and opens the chosen Agent', () => {
+  it('switches to Agent contacts from the filter tabs and opens the chosen Agent', () => {
     const input = props()
     act(() => root.render(createElement(MobileRoomsHome, input)))
     act(() => byText('agentsDirectory').click())
@@ -100,8 +100,11 @@ describe('mobile Bot list', () => {
     expect(rows()).toHaveLength(0)
     act(() => host.querySelector<HTMLButtonElement>('.kun-mobile-agent-contacts button')!.click())
     expect(input.onOpenAgent).toHaveBeenCalledWith('kun')
-    act(() => byText('roomsConversations').click())
-    expect(input.onView).toHaveBeenCalledWith('chats')
+    // The Agent directory is the last filter tab; any conversation filter returns to chats.
+    expect(host.querySelector('[data-room-filter="agents"]')?.getAttribute('aria-pressed')).toBe('true')
+    act(() => byText('roomsFilter_all').click())
+    expect(input.onDeletedOnly).toHaveBeenCalledWith(false)
+    expect(input.onFilter).toHaveBeenCalledWith('all')
   })
 
   it('confirms deletion and offers restore in Recently deleted', () => {

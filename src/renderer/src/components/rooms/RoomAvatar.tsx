@@ -12,7 +12,8 @@ const tones = [
   'var(--ds-success)',
   'var(--ds-skill)',
   'var(--ds-text-muted)',
-  'var(--ds-danger)'
+  // Teal rather than the danger red: identity colour must not read as an error.
+  '#1a9e9a'
 ]
 
 function identityTone(id: string): string {
@@ -63,6 +64,8 @@ export function RoomAvatar({
   const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(() => new Set())
   const builtinId = reference?.kind === 'builtin' ? reference.id : undefined
   const selected = ROOM_AVATARS.find((item) => item.id === builtinId)
+  // List, header and group sizes crop the portrait to the face (rooms-avatars.css).
+  const compact = size <= 48
   const style = {
     '--rooms-avatar-size': `${size / 16}rem`,
     '--rooms-avatar-tone': identityTone(identity)
@@ -85,6 +88,7 @@ export function RoomAvatar({
     <button
       type="button"
       className="rooms-avatar rooms-avatar-button"
+      data-compact={compact || undefined}
       style={style}
       title={label}
       aria-label={label}
@@ -95,6 +99,7 @@ export function RoomAvatar({
   ) : (
     <span
       className="rooms-avatar"
+      data-compact={compact || undefined}
       style={style}
       title={label}
       role="img"
