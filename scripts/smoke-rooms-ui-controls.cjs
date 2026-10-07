@@ -7,7 +7,6 @@ const { join, resolve } = require('node:path')
 const NAME = 'Architecture review and implementation planning'
 const EMPTY_NAME = 'New team conversation'
 const ATTACHMENT_NAME = 'Architecture decisions and acceptance notes.txt'
-const INPUT_NAME = 'Discuss a question or describe the work to do\u2026'
 const SEARCH_NAME = 'Search messages (2+ characters)'
 
 /** Only the disposable Manager owns this database; do not open SQLite in the smoke process. */
@@ -92,8 +91,9 @@ async function assertViewport(page, label) {
   return { label, ...metrics }
 }
 
-async function keyboardPopover(page, label, expectedControl) {
-  const trigger = page.getByRole('button', { name: label, exact: true })
+async function keyboardPopover(scope, label, expectedControl) {
+  const page = scope.page?.() ?? scope
+  const trigger = scope.getByRole('button', { name: label, exact: true })
   await trigger.focus()
   assert.equal(await trigger.getAttribute('title'), label, 'Icon control must retain its tooltip')
   await trigger.press('Enter')
@@ -107,8 +107,10 @@ async function keyboardPopover(page, label, expectedControl) {
   assert(await trigger.evaluate((node) => node === document.activeElement), label + ': focus did not return to trigger')
 }
 
-async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, profile, workspaceRoot, resize }) {
-  const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, profile, workspaceRoot, resize, openConversation }) {
+  const drawer = page.getByRole('region', { name: 'Room details', exact: true })
+  const header = page.locator('.rooms-header')
+  const composer = page.locator('[data-rooms-workspace] > section > .rooms-composer')
   if (await drawer.count()) await drawer.getByRole('button', { name: 'Close', exact: true }).click()
   await resize(1360, 900)
   const setScale = async (scale) => page.evaluate(async (value) => {
@@ -139,15 +141,18 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   })
   await poll(() => fixture.snapshot().uiCoordinationRequests > 0, 30000, 'held offline UI discussion')
   const seeded = await seedMessages({ page, request, home, profile, room })
-  await page.getByRole('button', { name: new RegExp(NAME) }).click()
-  await page.getByRole('heading', { name: NAME, exact: true }).waitFor()
+  await openConversation(room.id)
+  await page.getByRole('heading', { name: new RegExp('^' + NAME) }).waitFor()
   await page.locator('#room-message-' + seeded.finalMessageId).waitFor()
   const list = (await request(page, '/v1/rooms')).rooms.find((value) => value.id === room.id)
-  assert.equal(list.latestMessage.id, seeded.finalMessageId)
+  // Kun may append the seeded request's system outcome summary after the seeded history.
+  const latest = (await request(page, '/v1/rooms/' + room.id + '/messages')).messages.find((message) => message.id === list.latestMessage.id)
+  assert(list.latestMessage.id === seeded.finalMessageId || latest?.authorKind === 'system' && latest.id.startsWith('summary-'),
+    'The room list projects the latest committed message: ' + list.latestMessage.id)
   assert(list.runningCount > 0 && list.attentionCount > 0, 'Expected real running state and inert awaiting-review display fixture')
   await poll(async () => {
     const current = (await request(page, '/v1/rooms/sidebar?search=' + encodeURIComponent(NAME))).entries.find((entry) => entry.roomId === room.id)
-    const text = await page.getByRole('button', { name: NAME, exact: true }).locator('.rooms-im-sidebar-preview').innerText()
+    const text = await page.locator(`.sidebar-agent-chats [data-sidebar-entry="room:${room.id}"] .sidebar-agent-chat-preview`).innerText()
     return current?.latestMessage?.preview && text.includes(current.latestMessage.preview)
   }, 15000, 'SSE updates the rendered list to the latest committed message, including live task progress')
   const metrics = []
@@ -157,20 +162,21 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   }, theme)
   const settle = () => page.waitForTimeout(250)
 
-  await keyboardPopover(page, 'More actions', { role: 'button', name: 'Room settings' })
-  await keyboardPopover(page, 'Chat management', { role: 'button', name: 'Agents' })
-  await keyboardPopover(page, 'Add context', { role: 'combobox', name: 'Reference task' })
+  await keyboardPopover(header, 'More actions', { role: 'button', name: 'Room settings' })
+  await keyboardPopover(page.locator('.sidebar-agent-chats'), 'Conversations · More actions', { role: 'button', name: 'Agent directory' })
+  await keyboardPopover(composer, 'Add context', { role: 'combobox', name: 'Reference task' })
   const searchButton = page.getByRole('button', { name: SEARCH_NAME, exact: true })
   await searchButton.click()
   const search = page.getByRole('textbox', { name: SEARCH_NAME, exact: true })
   await search.fill('bounded queue')
-  await poll(() => page.locator('.rooms-message-row').count().then((value) => value === 1), 10000, 'search filters actual stored messages')
+  // Search lists matching stored messages beside the timeline.
+  await poll(() => page.locator('.rooms-timeline-results .rooms-search-result').count().then((value) => value === 1), 10000, 'search finds actual stored messages')
   await capture('ui-search-results')
   await search.press('Escape')
   await search.waitFor({ state: 'detached' })
   assert(await searchButton.evaluate((node) => node === document.activeElement), 'Search close must return focus')
 
-  const input = page.locator('[data-rooms-workspace] > section > .rooms-composer').getByRole('textbox', { name: INPUT_NAME, exact: true })
+  const input = composer.locator('.rooms-rich-input')
   await input.fill('A short draft')
   const shortHeight = (await input.boundingBox()).height
   assert(shortHeight >= 39.5 && shortHeight <= 80, 'Short composer has an unexpected height: ' + shortHeight)
@@ -180,21 +186,23 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   assert(tallHeight > shortHeight && tallHeight <= 201, 'Composer must grow but stop at 200px')
   await capture('ui-input-max-height')
   await input.fill('Review the proposal with ')
-  await page.getByRole('button', { name: 'Mention member', exact: true }).click()
+  await composer.locator('.rooms-composer-quick-tools').getByRole('button', { name: 'Mention member', exact: true }).click()
   await page.getByRole('listbox').waitFor()
   await input.press('ArrowDown')
   await input.press('Enter')
   await page.locator('.rooms-composer-chip').first().waitFor()
-  await page.getByRole('button', { name: 'Add context', exact: true }).click()
+  await composer.getByRole('button', { name: 'Add context', exact: true }).click()
   await page.getByRole('combobox', { name: 'Default repository', exact: true }).selectOption('repo')
   await page.getByRole('button', { name: 'Remove Architecture workspace', exact: true }).waitFor()
   const finalMessage = page.locator('#room-message-' + seeded.finalMessageId)
   await finalMessage.hover()
+  // Reply quotes the message in the main composer; threads open from More actions.
   await finalMessage.getByRole('button', { name: 'Reply', exact: true }).click()
-  await drawer.getByRole('region', { name: 'Reply thread', exact: true }).locator('.rooms-composer-reply').waitFor()
+  const reply = composer.locator('.rooms-composer-reply')
+  await reply.waitFor()
   await capture('ui-input-context-and-reply')
-  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
-  await drawer.waitFor({ state: 'detached' })
+  await reply.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await reply.waitFor({ state: 'detached' })
   const mainChips = page.locator('[data-rooms-workspace] > section > .rooms-composer .rooms-composer-chip')
   while (await mainChips.count()) await mainChips.first().click()
   await input.fill('')
@@ -259,14 +267,14 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
     const label = `desktop-1360x900-scale-${scale}`
     metrics.push(await assertViewport(page, label))
     await capture('ui-' + label)
-    await keyboardPopover(page, 'More actions', { role: 'button', name: 'Room settings' })
+    await keyboardPopover(header, 'More actions', { role: 'button', name: 'Room settings' })
   }
   await setScale(1)
-  await page.getByRole('button', { name: new RegExp(EMPTY_NAME) }).click()
-  await page.getByRole('heading', { name: EMPTY_NAME, exact: true }).waitFor()
+  await openConversation(empty.id)
+  await page.getByRole('heading', { name: new RegExp('^' + EMPTY_NAME) }).waitFor()
   await capture('ui-empty-conversation')
-  await page.getByRole('button', { name: new RegExp(NAME) }).click()
-  await page.getByRole('heading', { name: NAME, exact: true }).waitFor()
+  await openConversation(room.id)
+  await page.getByRole('heading', { name: new RegExp('^' + NAME) }).waitFor()
   // Electron enforces a native 960px minimum. This is explicitly renderer emulation evidence.
   const emulation = await page.context().newCDPSession(page)
   await emulation.send('Emulation.setDeviceMetricsOverride', {
@@ -275,8 +283,10 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   await settle()
   metrics.push(await assertViewport(page, 'renderer-emulated-720x780-light'))
   await capture('ui-renderer-emulated-720x780-light')
-  await page.getByRole('button', { name: 'Rooms', exact: true }).click()
-  await page.getByRole('button', { name: 'New conversation', exact: true }).waitFor()
+  // The conversation header reveals the Code sidebar that lists conversations.
+  const newConversation = page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New conversation', exact: true })
+  if (!await newConversation.isVisible()) await header.getByRole('button', { name: 'Toggle sidebar', exact: true }).click()
+  await newConversation.waitFor()
   await capture('ui-renderer-emulated-720x780-list')
   await emulation.send('Emulation.clearDeviceMetricsOverride')
   await emulation.detach()

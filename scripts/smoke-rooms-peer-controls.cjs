@@ -1,6 +1,7 @@
 'use strict'
 const assert = require('node:assert/strict')
 const { viewRunningRoomRun, exerciseFinishedRoomRuns } = require('./smoke-rooms-run-inspector.cjs')
+const { roomWorkbenchSnapshot } = require('./smoke-agent-chat-workbench.cjs')
 const NAME = 'Peer discussion desktop smoke'
 const PROMPT = 'ROOM_PEER_SMOKE_FIRST: discuss a safe queue design without using external tools or creating tasks.'
 const CONTINUATION = 'ROOM_PEER_SMOKE_CONTINUE: continue this same discussion with a short new conclusion.'
@@ -36,28 +37,51 @@ function roomPeerModelFixture() {
   }
 }
 
-async function exercisePeerRoom({ page, request, poll, capture, fixture, resize }) {
-  const existing = page.getByRole('dialog', { name: 'Room details', exact: true })
+async function exercisePeerRoom({ page, request, poll, capture, fixture, resize, openConversation }) {
+  const existing = page.getByRole('region', { name: 'Room details', exact: true })
   if (await existing.count()) await existing.getByRole('button', { name: 'Close', exact: true }).click()
   await resize(1360, 900)
-  await page.locator('.rooms-im-sidebar').getByRole('button', { name: 'New conversation', exact: true }).click()
-  await page.getByRole('dialog', { name: 'New conversation', exact: true }).getByRole('button', { name: 'New room', exact: true }).click()
-  const settings = page.getByRole('dialog', { name: 'New room', exact: true })
-  assert.equal(await settings.getByLabel('Collaboration', { exact: true }).inputValue(), 'peer')
-  await settings.getByLabel('Room name', { exact: true }).fill(NAME)
-  await settings.getByRole('button', { name: 'Create room', exact: true }).click()
-  await page.getByRole('heading', { name: NAME, exact: true }).waitFor()
-  const room = (await request(page, '/v1/rooms?search=' + encodeURIComponent(NAME))).rooms.find((value) => value.name === NAME)
-  assert(room && room.collaborationMode === 'peer')
+  // The Code picker starts a group with the default team; groups start in peer collaboration.
+  const personal = (await request(page, '/v1/agents/chat-entry')).agentId
+  const team = (await request(page, '/v1/agents?limit=100')).agents.filter((agent) =>
+    agent.id.startsWith('agent-default-') && agent.id !== personal && !agent.archivedAt)
+  assert.equal(team.length, 5, 'The default team supplies five persistent Agents')
+  const previous = (await roomWorkbenchSnapshot(page)).conversationRoomId
+  await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New conversation', exact: true }).click()
+  const picker = page.locator('.direct-new-chat')
+  await picker.getByRole('button', { name: 'Group chat', exact: true }).click()
+  for (const agent of team) await picker.locator('.direct-agent-choices > button').filter({ has: page.locator('strong', { hasText: new RegExp('^' + agent.name + '$') }) }).click()
+  await picker.getByRole('button', { name: 'Start group (5 Agents)', exact: true }).click()
+  await picker.waitFor({ state: 'hidden' })
+  let roomId
+  await poll(async () => { roomId = (await roomWorkbenchSnapshot(page)).conversationRoomId; return Boolean(roomId && roomId !== previous) }, 15000, 'new group opens in Code')
+  await page.locator(`[data-room-surface="agent-chat"][data-room-id="${roomId}"]`).waitFor()
+  const header = page.locator('.rooms-header')
+  assert.equal(await header.getByLabel('Collaboration', { exact: true }).inputValue(), 'peer')
+  await header.getByRole('button', { name: 'Rename', exact: true }).click()
+  await header.getByRole('textbox', { name: 'Rename', exact: true }).fill(NAME)
+  await header.getByRole('textbox', { name: 'Rename', exact: true }).press('Enter')
+  await page.getByRole('heading', { name: new RegExp('^' + NAME) }).waitFor()
+  const room = (await request(page, '/v1/rooms/' + roomId)).room
+  assert(room.name === NAME && room.collaborationMode === 'peer')
   assert.equal(room.repositories.length, 0)
   assert.equal(room.members.length, 5)
   assert.equal(new Set(room.members.map((member) => member.participantAgentId)).size, 5)
   const base = '/v1/rooms/' + room.id
   const topics = async () => (await request(page, base + '/topics')).topics
+  const composer = page.locator('[data-rooms-workspace] > section > .rooms-composer')
   const send = async (body) => {
-    await page.getByLabel('Automatic intent', { exact: true }).selectOption('discussion')
-    await page.getByRole('textbox', { name: 'Discuss a question or describe the work to do…' }).fill(body)
-    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    await composer.getByLabel('Message intent', { exact: true }).selectOption('discussion')
+    await composer.locator('.rooms-rich-input').fill(body)
+    await composer.getByRole('button', { name: 'Send', exact: true }).click()
+  }
+  // The topic selection lives in the composer's Add context menu.
+  const composerTopic = async () => {
+    await composer.getByRole('button', { name: 'Add context', exact: true }).click()
+    const topic = page.getByRole('combobox', { name: 'Topic', exact: true })
+    const value = await topic.count() ? await topic.inputValue() : ''
+    await page.keyboard.press('Escape')
+    return value
   }
   await send(PROMPT)
   let firstTopic
@@ -67,7 +91,7 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
   }, 30000, 'persisted peer response activation')
   const rootRequestId = firstTopic.rootRequestId
   await page.getByRole('button', { name: 'Room details', exact: true }).click()
-  const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+  const drawer = page.getByRole('region', { name: 'Room details', exact: true })
   await drawer.locator('summary').filter({ hasText: 'Members and response budgets' }).click()
   await drawer.getByText(/^Responding(?: ·|$)/).waitFor()
   await drawer.getByText('31 / 32', { exact: true }).waitFor()
@@ -79,10 +103,11 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
   const bounds = await drawer.boundingBox()
   const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
   assert(bounds.x >= 0 && bounds.x + bounds.width <= viewport.width + 1, 'Peer drawer overflowed narrow viewport')
+  // Code docks the details beside the conversation; the sidebar's mode trigger stays usable.
   assert(await page.locator('[data-workspace-mode-trigger]').first().evaluate((trigger) => {
     const bounds = trigger.getBoundingClientRect()
-    return Boolean(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)?.closest('[role="dialog"][aria-label="Room details"]'))
-  }), 'Peer drawer did not cover the underlying window controls')
+    return trigger.contains(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2))
+  }), 'Peer details cover the Code mode trigger')
   await drawer.getByRole('button', { name: 'Stop discussion', exact: true }).click()
   await poll(async () => ['stopping', 'stopped'].includes((await topics()).find((value) => value.rootRequestId === rootRequestId)?.status),
     15000, 'peer discussion stop intent')
@@ -94,7 +119,7 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
   await drawer.getByText('Discussion stopped', { exact: true }).waitFor()
   await capture('peer-stopped')
   await drawer.getByRole('button', { name: 'Continue topic', exact: true }).click()
-  await poll(() => page.getByLabel('Topic', { exact: true }).inputValue().then((value) => value === rootRequestId), 5000, 'composer continues exact peer topic')
+  await poll(async () => await composerTopic() === rootRequestId, 5000, 'composer continues exact peer topic')
   await send(CONTINUATION)
   await poll(async () => {
     const topic = (await topics()).find((value) => value.rootRequestId === rootRequestId)
@@ -105,7 +130,7 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
   assert.equal(continued.rootRequestId, rootRequestId)
   const continuedReply = firstMessages.find((message) => message.authorKind === 'member' && message.status === 'final' && message.sourceRequestId === continued.sourceRequestId)
   assert.equal(continuedReply?.body, CONTINUED_BODY, 'Runtime must publish the exact accepted send_room_message body, not the later assistant completion text')
-  assert.equal(await page.getByLabel('Topic', { exact: true }).inputValue(), '')
+  assert.equal(await composerTopic(), '')
   await resize(1360, 900)
   await page.getByRole('button', { name: 'Room details', exact: true }).click()
   await drawer.getByText('Waiting for new updates', { exact: true }).waitFor()
@@ -131,10 +156,7 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
   await poll(async () => (await topics()).every((topic) => topic.status === 'stopped'), 30000, 'all smoke peer discussions stopped')
   const runInspector = await exerciseFinishedRoomRuns({ page, request, roomId: room.id,
     messages: finalMessages, poll, capture, fixture, resize })
-  await page.evaluate(async () => {
-    const { useChatStore } = await import('/src/store/chat-store.ts')
-    useChatStore.getState().setRoute('rooms')
-  })
+  await openConversation(room.id)
   return { roomId: room.id, rootRequestId, newRootRequestId: newMessage.rootRequestId, viewport,
     liveRun, runInspector,
     defaultMode: 'peer', latePublicationSuppressed: true, continuedSameTopic: true, newTopicIndependent: true,

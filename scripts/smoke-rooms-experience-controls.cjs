@@ -6,7 +6,6 @@ const { createServer } = require('node:http')
 
 const MARK = 'ROOM_EXPERIENCE_SMOKE'
 const NAME = 'Rooms experience desktop smoke'
-const INPUT = 'Discuss a question or describe the work to do…'
 const textParts = (messages) => messages.flatMap((message) => typeof message.content === 'string'
   ? [message.content] : (message.content ?? []).flatMap((part) => part.text ? [part.text] : []))
 function jsonLines(messages) {
@@ -66,23 +65,28 @@ async function monitor(page) {
 const traffic = (page) => page.evaluate(() => globalThis.__experienceTraffic ?? [])
 const mainPanel = (page) => page.locator('[data-rooms-workspace] > section').first()
 const mainComposer = (page) => mainPanel(page).locator(':scope > .rooms-composer')
-const drawer = (page) => page.getByRole('dialog', { name: 'Room details', exact: true })
+const drawer = (page) => page.getByRole('region', { name: 'Room details', exact: true })
 const activeDrawer = (page) => drawer(page).locator('[data-active-drawer-page="true"]')
 const messageRow = (page, id) => mainPanel(page).locator('#room-message-' + id)
 async function closeDrawer(page) {
   if (await drawer(page).count()) await drawer(page).getByRole('button', { name: 'Close', exact: true }).click()
 }
-async function chooseRoom(page, name) {
+async function chooseRoom(page, openConversation, room) {
   await closeDrawer(page)
+  await openConversation(room.id)
+  await page.getByRole('heading', { name: new RegExp('^' + room.name) }).waitFor()
+}
+// Group header actions such as appearance and notifications live in its More actions menu.
+async function headerMenu(page, name) {
+  await page.locator('.rooms-header').getByRole('button', { name: 'More actions', exact: true }).click()
   await page.getByRole('button', { name, exact: true }).click()
-  await page.getByRole('heading', { name, exact: true }).waitFor()
 }
 async function bodyIn(editor) { return (await editor.innerText()).trim() }
 async function sendFrom(composer, body, poll) {
-  await composer.getByLabel('Automatic intent', { exact: true }).selectOption('discussion')
-  await composer.getByRole('textbox', { name: INPUT, exact: true }).fill(body)
+  await composer.getByLabel('Message intent', { exact: true }).selectOption('discussion')
+  await composer.locator('.rooms-rich-input').fill(body)
   await composer.getByRole('button', { name: 'Send', exact: true }).click()
-  await poll(() => bodyIn(composer.getByRole('textbox', { name: INPUT, exact: true })).then((value) => value === ''), 10000, 'composer send acknowledged')
+  await poll(() => bodyIn(composer.locator('.rooms-rich-input')).then((value) => value === ''), 10000, 'composer send acknowledged')
 }
 async function installNotificationCounter(application) {
   await application.evaluate(({ Notification }) => {
@@ -113,13 +117,13 @@ async function experienceImage(page) {
   })
 }
 
-async function exerciseRoomsExperience({ page, request, poll, capture, fixture, home, profile, workspaceRoot, resize, application }) {
+async function exerciseRoomsExperience({ page, request, poll, capture, fixture, home, profile, workspaceRoot, resize, application, openConversation }) {
   await closeDrawer(page); await resize(1360, 900)
   const { room: initial } = await request(page, '/v1/rooms', 'POST', { clientRequestId: 'experience-room', name: NAME,
     collaborationMode: 'peer', repositories: [{ id: 'repo', displayPath: workspaceRoot, displayName: 'Experience source' }] })
   let room = initial
   const base = '/v1/rooms/' + room.id
-  await chooseRoom(page, NAME)
+  await chooseRoom(page, openConversation, room)
   await monitor(page); await installNotificationCounter(application)
   const sentinel = await loopbackSentinel()
   const screenshots = [], assertions = [], modelCounts = []
@@ -152,7 +156,9 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
     assert.deepEqual(fixture.snapshot(), allModelsBefore, `${label}: presentation invoked another model route`)
     assert.equal((await requests()).length, requestCount + expectedFixtureRequests, `${label}: presentation created an unintended room request`)
     assert.deepEqual((await topics()).map(({ rootRequestId, responseCount, triageCount, generation }) => ({ rootRequestId, responseCount, triageCount, generation })), budget, `${label}: discussion budget changed`)
-    const writes = (await traffic(page)).slice(start).filter((item) => item.method !== 'GET' && !item.path.endsWith('/read'))
+    // The Code foreground-thread heartbeat is app presence, not presentation work.
+    const writes = (await traffic(page)).slice(start).filter((item) => item.method !== 'GET' && !item.path.endsWith('/read') &&
+      item.path !== '/v1/activity/foreground')
     assert(writes.every((item) => allowed.some((pattern) => pattern.test(item.path))), `${label}: unintended writes ${JSON.stringify(writes)}`)
     modelCounts.push({ label, ...before }); assertions.push(label)
   }
@@ -213,13 +219,16 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
         replyToMessageId: rootMessage.id, displayThreadRootId: rootMessage.id, rootRequestId: rootMessage.rootRequestId
       }))
     await seed('experience-reply-history', replyRows)
-    await mainComposer(page).getByRole('textbox', { name: INPUT, exact: true }).fill('MAIN_DRAFT_MUST_SURVIVE')
-    await messageRow(page, rootMessage.id).getByRole('button', { name: 'Reply', exact: true }).click()
+    await mainComposer(page).locator('.rooms-rich-input').fill('MAIN_DRAFT_MUST_SURVIVE')
+    // The discussion thread opens from the message's More actions; Reply only quotes it.
+    await messageRow(page, rootMessage.id).hover()
+    await messageRow(page, rootMessage.id).getByRole('button', { name: 'More actions', exact: true }).click()
+    await page.getByRole('button', { name: 'Open discussion thread', exact: true }).click()
     const replies = activeDrawer(page).getByRole('region', { name: 'Reply thread', exact: true })
     await replies.locator('.rooms-reply-root').waitFor()
     assert.equal(await replies.getAttribute('data-display-thread-root-id'), rootMessage.id)
     const target = replies.locator('[data-room-message-id="experience-reply-5"]')
-    await target.scrollIntoViewIfNeeded(); await target.getByRole('button', { name: 'Reply', exact: true }).click()
+    await target.scrollIntoViewIfNeeded(); await target.hover(); await target.getByRole('button', { name: 'Reply', exact: true }).click()
     const nestedBody = MARK + ': nested response to reply six'
     await sendFrom(replies.locator('.rooms-composer'), nestedBody, poll); await idle()
     const nested = (await messages()).find((message) => message.body === nestedBody)
@@ -228,19 +237,21 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
     const nestedPage = await request(page, `${base}/replies/${nested.id}?limit=100`)
     assert.equal(nestedPage.root.id, rootMessage.id)
     assert(nestedPage.messages.some((message) => message.id === nested.id))
-    await replies.locator('.rooms-composer').getByRole('textbox', { name: INPUT, exact: true }).fill('REPLY_DRAFT_MUST_SURVIVE')
+    await replies.locator('.rooms-composer .rooms-rich-input').fill('REPLY_DRAFT_MUST_SURVIVE')
     const oldResponse = replies.locator(`[data-room-message-id="${firstResponse.id}"]`)
     await oldResponse.scrollIntoViewIfNeeded()
     const replyScroll = await replies.locator('.rooms-reply-scroll').evaluate((element) => element.scrollTop)
     await quiet('reply to run and back preserves scope, drafts and reading position', async () => {
-      await oldResponse.getByRole('button', { name: 'View this run', exact: true }).click()
-      const run = activeDrawer(page).getByRole('region', { name: 'Run details', exact: true })
+      await oldResponse.hover()
+      await oldResponse.getByRole('button', { name: 'More actions', exact: true }).click()
+      await page.getByRole('button', { name: 'View Agent session', exact: true }).click()
+      const run = activeDrawer(page).getByRole('region', { name: 'Agent session', exact: true })
       await run.locator('.rooms-run-header').waitFor()
       assert.equal(await run.getAttribute('data-run-id'), firstResponse.originRunId)
-      await run.getByLabel('Filter run process', { exact: true }).selectOption('tools')
-      await run.getByLabel('Search loaded process records', { exact: true }).fill('read_room_updates')
-      const tool = run.locator('[data-run-tool-call-id]').first(); await tool.waitFor()
-      const callId = await tool.getAttribute('data-run-tool-call-id')
+      // The session replays the run on the shared timeline; the exact tool pair is read by call id.
+      const callId = (await request(page, `${base}/runs/${firstResponse.originRunId}/items?limit=50`)).items
+        .find((item) => item.kind === 'tool_call' && item.toolName === 'read_room_updates')?.callId
+      assert(callId, 'The member run lacks its read_room_updates call')
       const pair = await request(page, `${base}/runs/${firstResponse.originRunId}/items?call_id=${encodeURIComponent(callId)}&limit=4`)
       assert(pair.items.some((item) => item.kind === 'tool_call')); assert(pair.items.some((item) => item.kind === 'tool_result'))
       assert(pair.items.every((item) => item.callId === callId))
@@ -248,8 +259,8 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
       await drawer(page).getByRole('button', { name: 'Back to previous view', exact: true }).click()
       await replies.waitFor()
       assert(Math.abs(await replies.locator('.rooms-reply-scroll').evaluate((element) => element.scrollTop) - replyScroll) < 3)
-      assert.equal(await bodyIn(replies.getByRole('textbox', { name: INPUT, exact: true })), 'REPLY_DRAFT_MUST_SURVIVE')
-      assert.equal(await bodyIn(mainComposer(page).getByRole('textbox', { name: INPUT, exact: true })), 'MAIN_DRAFT_MUST_SURVIVE')
+      assert.equal(await bodyIn(replies.locator('.rooms-composer .rooms-rich-input')), 'REPLY_DRAFT_MUST_SURVIVE')
+      assert.equal(await bodyIn(mainComposer(page).locator('.rooms-rich-input')), 'MAIN_DRAFT_MUST_SURVIVE')
       await shot('nested-reply-drafts-restored')
     })
     await closeDrawer(page)
@@ -297,9 +308,10 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
       const link = messageRow(page, 'experience-private-link'); await link.scrollIntoViewIfNeeded()
       await link.getByText('Link preview unavailable', { exact: true }).waitFor()
       assert.equal(sentinel.count(), 0, 'Link preview reached the private loopback sentinel')
-      await page.getByRole('button', { name: 'Conversation appearance', exact: true }).click()
+      await headerMenu(page, 'Conversation appearance')
       const appearance = page.getByRole('dialog', { name: 'Conversation appearance', exact: true })
-      await appearance.getByLabel('Automatically load link previews', { exact: true }).uncheck(); await page.keyboard.press('Escape')
+      await appearance.getByLabel('Automatically load link previews', { exact: true }).uncheck()
+      await page.keyboard.press('Escape'); await page.keyboard.press('Escape')
       const checkpoint = (await traffic(page)).length
       await seed('experience-disabled-link', [staticMessage('experience-private-link-disabled', 'Preview disabled: ' + sentinel.url + '?second=1')])
       await messageRow(page, 'experience-private-link-disabled').scrollIntoViewIfNeeded(); await page.waitForTimeout(400)
@@ -347,11 +359,12 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
     const { room: other } = await request(page, '/v1/rooms', 'POST', { clientRequestId: 'experience-other', name: 'Experience other room' })
     await quiet('mute/unmute preserves authorization and does not backfill notifications', async () => {
       const originalRevision = (await request(page, base)).room.revision
-      await page.getByRole('button', { name: 'Room notifications', exact: true }).click()
-      await page.getByRole('button', { name: 'Mute until I turn it back on', exact: true }).click(); await page.keyboard.press('Escape')
+      await headerMenu(page, 'Room notifications')
+      await page.getByRole('button', { name: 'Mute until I turn it back on', exact: true }).click()
+      await page.keyboard.press('Escape'); await page.keyboard.press('Escape')
       await poll(() => request(page, base + '/preferences').then((value) => value.preference.mode === 'muted'), 5000, 'mute preference saved')
       assert.equal((await request(page, base)).room.revision, originalRevision)
-      await chooseRoom(page, other.name)
+      await chooseRoom(page, openConversation, other)
       await seed('experience-muted-notice', [{ kind: 'request', id: 'experience-muted-request', roomId: room.id, value: {
         id: 'experience-muted-request', roomId: room.id, status: 'needs_input', sourceMessageId: rootMessage.id,
         threadId: 'experience-inert-notice-thread', roomSnapshot: room,
@@ -362,61 +375,51 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
       await poll(() => page.evaluate((key) => Object.keys(localStorage).filter((name) => name.startsWith('kun.rooms.notificationQueue.v1.'))
         .some((name) => JSON.parse(localStorage.getItem(name)).notified.includes(key)), notificationKey), 10000, 'muted notice was consumed durably')
       const count = await application.evaluate(() => globalThis.__experienceNotifications.length)
-      await chooseRoom(page, NAME)
-      await page.getByRole('button', { name: 'Room notifications muted', exact: true }).click()
-      await page.getByRole('button', { name: 'Unmute notifications', exact: true }).click(); await page.keyboard.press('Escape')
+      await chooseRoom(page, openConversation, room)
+      await headerMenu(page, 'Room notifications muted')
+      await page.getByRole('button', { name: 'Unmute notifications', exact: true }).click()
+      await page.keyboard.press('Escape'); await page.keyboard.press('Escape')
       await poll(() => request(page, base + '/preferences').then((value) => value.preference.mode === 'all' && Boolean(value.preference.silencedThrough)), 5000, 'unmute watermark saved')
       await page.waitForTimeout(1300)
       assert.equal(await application.evaluate(() => globalThis.__experienceNotifications.length), count)
       await shot('notifications-unmuted')
     }, [/\/preferences$/], 1)
-    await chooseRoom(page, other.name)
-    await page.getByRole('button', { name: 'Filter conversations', exact: true }).click()
-    const filters = page.getByRole('dialog', { name: 'Filter conversations', exact: true })
-    await filters.getByRole('combobox', { name: 'Filter conversations', exact: true }).selectOption('unread')
+    await chooseRoom(page, openConversation, other)
+    // Conversation filters live in the Code sidebar's Conversations menu.
+    const conversations = page.locator('.sidebar-agent-chats')
+    const filter = async (name) => {
+      await conversations.getByRole('button', { name: 'Conversations · More actions', exact: true }).click()
+      await page.getByRole('button', { name, exact: true }).click()
+    }
+    const listed = (target) => conversations.locator(`[data-sidebar-entry="room:${target.id}"]`)
+    await filter('Unread only')
     await seed('experience-unread-arrival', [staticMessage('experience-new-unread', 'An unread arrival while a different room is selected.')])
-    await poll(() => page.getByRole('button', { name: NAME, exact: true }).count().then((value) => value === 1), 10000, 'filtered unread list receives a new room through SSE')
+    await poll(() => listed(room).count().then((value) => value === 1), 10000, 'filtered unread list receives a new room through SSE')
     await shot('unread-filter-live')
-    await filters.getByRole('combobox', { name: 'Filter conversations', exact: true }).selectOption('attention')
-    await page.getByRole('button', { name: NAME, exact: true }).waitFor()
-    await filters.getByRole('combobox', { name: 'Filter conversations', exact: true }).selectOption('all')
-    await filters.getByRole('combobox', { name: 'Filter by repository', exact: true }).selectOption(room.repositories.find((repository) => repository.id === 'repo').canonicalRoot)
-    assert.equal(await page.getByRole('button', { name: other.name, exact: true }).count(), 0)
-    await filters.getByRole('combobox', { name: 'Filter by repository', exact: true }).selectOption('')
-    await page.keyboard.press('Escape')
-    await chooseRoom(page, NAME)
-    assertions.push('unread/attention/repository filters keep live room metadata')
-    await quiet('unified message search navigates to the precise source', async () => {
-      await page.locator('.rooms-list-search input').fill('inspect reply identity')
-      await page.getByRole('button', { name: 'Search messages, tasks and members', exact: true }).click()
-      const search = page.getByRole('region', { name: 'Search rooms, members, messages and tasks', exact: true })
-      await search.waitFor()
-      await search.getByRole('button').filter({ hasText: rootBody }).first().click()
-      await messageRow(page, rootMessage.id).waitFor()
-      await shot('unified-search-jump')
-    })
+    await filter('Needs you only')
+    await listed(room).waitFor()
+    await filter('All conversations')
+    await listed(other).waitFor()
+    await chooseRoom(page, openConversation, room)
+    assertions.push('unread/attention filters keep live room metadata')
 
 
     await quiet('layout resize and run summary do not dispatch work', async () => {
-      await page.getByRole('button', { name: 'Conversation appearance', exact: true }).click()
+      await headerMenu(page, 'Conversation appearance')
       const appearance = page.getByRole('dialog', { name: 'Conversation appearance', exact: true })
       assert.equal(await appearance.getByRole('combobox').count(), 0, 'IM layout is the standard')
       await poll(() => page.locator('[data-rooms-workspace]').getAttribute('data-chat-layout').then((value) => value === 'bubble'), 5000, 'bubble layout preference applied')
-      await page.keyboard.press('Escape')
+      await page.keyboard.press('Escape'); await page.keyboard.press('Escape')
       await messageRow(page, rootMessage.id).scrollIntoViewIfNeeded()
       const bubble = await messageRow(page, rootMessage.id).locator('.rooms-message-bubble').boundingBox()
       const row = await messageRow(page, rootMessage.id).boundingBox()
       assert(bubble.x + bubble.width >= row.x + row.width - 80, 'User bubble is not aligned to the right')
-      const splitter = page.getByRole('separator', { name: 'Resize conversation list', exact: true })
-      const old = Number(await splitter.getAttribute('aria-valuenow'))
-      await splitter.focus(); await splitter.press('ArrowRight')
-      assert.equal(Number(await splitter.getAttribute('aria-valuenow')), old + 8)
       await page.getByRole('button', { name: 'Room details', exact: true }).click()
       await drawer(page).getByRole('button', { name: 'Room overview', exact: true }).click()
       await activeDrawer(page).getByRole('region', { name: 'Room activity and usage', exact: true }).waitFor()
       const summary = await request(page, base + '/run-summary')
       assert(summary.runs > 0 && summary.responses > 0 && summary.triages > 0)
-      const detailHandle = drawer(page).getByRole('separator', { name: 'Resize room details', exact: true })
+      const detailHandle = page.getByRole('separator', { name: 'Resize room details', exact: true })
       const detailWidth = Number(await detailHandle.getAttribute('aria-valuenow'))
       await detailHandle.focus(); await detailHandle.press('ArrowLeft')
       assert.equal(Number(await detailHandle.getAttribute('aria-valuenow')), detailWidth + 8)

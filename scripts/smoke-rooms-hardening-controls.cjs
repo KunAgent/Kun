@@ -3,7 +3,8 @@ const assert = require('node:assert/strict')
 const NAME = 'Rooms hardening checks'
 const QUESTION = 'ROOM_HARDENING_REQUEST: ask for a choice, then answer without changing files.'
 const ANSWER = 'CONFIRMED_HARDENING_ANSWER: use the conservative compatibility option.'
-async function exerciseRoomHardening({ page, request, switchMode, poll, capture, fixture }) {
+async function exerciseRoomHardening({ page, request, switchMode, openConversation, poll, capture, fixture }) {
+  const composer = page.locator('[data-rooms-workspace] > section > .rooms-composer')
   const { room } = await request(page, '/v1/rooms', 'POST', { clientRequestId: 'hardening-room',
     name: NAME, collaborationMode: 'directed' })
   const seed = await request(page, '/v1/rooms/' + room.id + '/messages', 'POST', {
@@ -14,8 +15,8 @@ async function exerciseRoomHardening({ page, request, switchMode, poll, capture,
     30000, 'read-only agreement source discussion')
   const { rule } = await request(page, '/v1/rooms/' + room.id + '/rules', 'POST', {
     clientRequestId: 'pin-long-rule', messageId: seed.message.id })
-  await page.getByRole('button', { name: new RegExp(NAME) }).click()
-  await page.getByRole('heading', { name: NAME, exact: true }).waitFor()
+  await openConversation(room.id)
+  await page.getByRole('heading', { name: new RegExp('^' + NAME) }).waitFor()
   await page.evaluate(async ({ roomId }) => {
     const { rendererRuntimeClient: client } = await import('/src/agent/runtime-client.ts')
     const original = client.runtimeRequest.bind(client)
@@ -33,9 +34,9 @@ async function exerciseRoomHardening({ page, request, switchMode, poll, capture,
       return original(path, method, ...rest)
     }
   }, { roomId: room.id })
-  await page.getByLabel('Automatic intent', { exact: true }).selectOption('discussion')
-  await page.getByRole('textbox', { name: 'Discuss a question or describe the work to do…' }).fill(QUESTION)
-  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await composer.getByLabel('Message intent', { exact: true }).selectOption('discussion')
+  await composer.locator('.rooms-rich-input').fill(QUESTION)
+  await composer.getByRole('button', { name: 'Send', exact: true }).click()
   await switchMode(page, 'write')
   let original
   await poll(async () => {
@@ -51,10 +52,10 @@ async function exerciseRoomHardening({ page, request, switchMode, poll, capture,
   assert.equal(snapshot.context.agreements.count, 1)
   assert(fixture.snapshot().compressionRequests > 0)
   const compressionCalls = fixture.snapshot().compressionRequests
-  await switchMode(page, 'rooms')
-  await page.getByRole('heading', { name: NAME, exact: true }).waitFor()
+  await openConversation(room.id)
+  await page.getByRole('heading', { name: new RegExp('^' + NAME) }).waitFor()
   await page.getByRole('button', { name: 'Room details', exact: true }).click()
-  const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+  const drawer = page.getByRole('region', { name: 'Room details', exact: true })
   await drawer.getByRole('button', { name: 'Room overview', exact: true }).click()
   const overview = page.getByRole('region', { name: 'Room overview', exact: true })
   await overview.getByRole('button', { name: /^Requests/ }).click()
@@ -66,7 +67,7 @@ async function exerciseRoomHardening({ page, request, switchMode, poll, capture,
   await poll(async () => (await card.innerText()).includes('ROOM_HARDENING_RULE'), 10000, 'original agreement text hydration')
   await capture('hardening-compressed-agreements')
   await card.getByRole('button', { name: 'Add information and continue', exact: true }).click()
-  await card.getByRole('textbox', { name: 'Discuss a question or describe the work to do…' }).fill(ANSWER)
+  await card.locator('.rooms-rich-input').fill(ANSWER)
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await poll(async () => (await request(page, '/v1/rooms/' + room.id + '/requests/' + original.id)).request.status === 'completed',
     30000, 'continued original request')
@@ -78,8 +79,8 @@ async function exerciseRoomHardening({ page, request, switchMode, poll, capture,
   assert.equal(fixture.snapshot().compressionRequests, compressionCalls)
   await card.getByText('Completed', { exact: true }).first().waitFor({ timeout: 5000 })
   await capture('hardening-request-continued')
-  await page.getByRole('textbox', { name: 'Discuss a question or describe the work to do…' }).fill('ROOM_HARDENING_STOP: discuss until explicitly stopped.')
-  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await composer.locator('.rooms-rich-input').fill('ROOM_HARDENING_STOP: discuss until explicitly stopped.')
+  await composer.getByRole('button', { name: 'Send', exact: true }).click()
   await poll(() => fixture.snapshot().stoppingRequests > 0, 30000, 'live coordination before stop')
   const stoppedCard = overview.locator('article').filter({ hasText: 'ROOM_HARDENING_STOP' })
   await stoppedCard.getByRole('button', { name: 'Stop this coordination', exact: true }).click()
