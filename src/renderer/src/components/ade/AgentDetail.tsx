@@ -196,8 +196,9 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, on
         items={tabs} value={tab} onChange={setTab} />
       <SettingsTabPanel baseId={`agent-${id}`} tabId="connection" active={tab === 'connection'}>
         <AgentConnectionTab row={row} settings={settings} entry={entry} profile={gate.profile} dirty={gate.dirty} checking={gate.checking} busy={busy}
-          readiness={readiness} error={shownError} errorDetail={shownDetail} onChange={change} onDiscard={discard}
-          onRecheck={() => void gate.enable()} onSetPermissionMode={onSetPermissionMode} onTrial={trial} reportText={reportText}
+          readiness={readiness} error={shownError} errorDetail={shownDetail} platform={platform} onChange={change} onDiscard={discard}
+          onRecheck={() => void gate.enable()} onSetPermissionMode={onSetPermissionMode} onSetupCommand={onSetupCommand}
+          onTrial={gate.dirty ? undefined : trial} reportText={reportText}
           issue={issue} t={t} tSettings={tSettings} />
       </SettingsTabPanel>
       <SettingsTabPanel baseId={`agent-${id}`} tabId="models" active={tab === 'models'}>

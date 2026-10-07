@@ -6,7 +6,8 @@ import {
   userAgentEntry,
   userAgentOverride,
   withAgentCommandPath,
-  withAgentLaunchPatch
+  withAgentLaunchPatch,
+  withoutUserAgent
 } from './harness-provider-settings'
 
 describe('harness provider settings edits', () => {
@@ -55,5 +56,17 @@ describe('harness provider settings edits', () => {
     expect(userAgentEntry({ tty: { extends: 'terminal', command: 'tty' } }, 'tty')).toBeUndefined()
     expect(isUserAgent({ tty: { extends: 'terminal', command: 'tty' }, codex: { command: 'x' } }, 'tty')).toBe(true)
     expect(isUserAgent({ codex: { command: 'x' } }, 'codex')).toBe(false)
+  })
+})
+
+describe('withoutUserAgent', () => {
+  it('removes every reference to the Agent and returns its stored secrets', () => {
+    const settings = { enabledProfiles: [{ harnessId: 'mine', credentialMode: 'native-login' as const }, { harnessId: 'codex', credentialMode: 'native-login' as const }],
+      disabledIds: ['mine'], providers: { mine: { extends: 'acp', command: '/bin/mine', secretEnv: [{ name: 'TOKEN', secretRef: 'ref-1' }] }, codex: { command: '/c' } },
+      defaults: { mine: { model: 'x' }, codex: { model: 'y' } }, defaultHarnessId: 'mine', agentOrder: ['mine', 'codex'] }
+    const { settings: next, secretRefs } = withoutUserAgent(settings, 'mine')
+    expect(next).toEqual({ enabledProfiles: [{ harnessId: 'codex', credentialMode: 'native-login' }], disabledIds: [],
+      providers: { codex: { command: '/c' } }, defaults: { codex: { model: 'y' } }, defaultHarnessId: 'kun', agentOrder: ['codex'] })
+    expect(secretRefs).toEqual(['ref-1'])
   })
 })

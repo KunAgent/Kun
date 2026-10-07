@@ -7,6 +7,7 @@ import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { settingsButtonClass } from '../settings-button'
 import { AgentCommandPathField } from './AgentCommandPathField'
 import { AgentConnectionFields } from './AgentConnectionFields'
+import { AgentLoginRow } from './AgentLoginRow'
 import { AgentInstallControl } from './AgentInstallControl'
 import { AgentUpdateControl } from './AgentUpdateControl'
 import { setupInstallCommand } from './agent-center-actions'
@@ -66,7 +67,9 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
   const installable = definition.builtin && Boolean(definition.setup?.install?.length || definition.setup?.adapter)
   const docsUrl = definition.setup?.docsUrl
   const terminalInstall = definition.builtin ? setupInstallCommand(definition.setup, platform) : null
-  const locked = !installed && presentation.state !== 'versionLow'
+  const detecting = presentation.state === 'detecting'
+  const versionLow = presentation.state === 'versionLow'
+  const locked = !installed && !versionLow
   const name = definition.displayName
   const bundled = usesProviderOnlySdk(row)
   const pathField = <div className="mt-3 max-w-xl">
@@ -81,21 +84,22 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
       <p className="mt-1 text-[12px] text-ds-muted">{t('agentCenter.setup.subtitle', { name })}</p>
     </div>
     <ol className="divide-y divide-ds-border-muted">
-      <Step index={1} done={installed} active={!installed} title={t('agentCenter.setup.install')}
-        description={installed && bundled ? t('agentCenter.setup.bundled', { name })
-          : installed
-          ? t(status.version ? 'agentCenter.setup.installedVersion' : 'agentCenter.setup.installed', { name, version: status.version ?? '', path: status.resolvedCommand ?? '' })
-          : presentation.state === 'versionLow' ? t('agentCenter.state.versionLow.status')
-            : t(installable ? 'agentCenter.setup.missingInstall' : 'agentCenter.setup.missing')}>
-        {presentation.state === 'versionLow' ? <div className="mt-3"><AgentUpdateControl row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} t={t} /></div> : null}
-        {!installed && installable ? <AgentInstallControl harnessId={definition.id} action={presentation.state === 'adapterMissing' ? 'adapter' : 'install'}
+      <Step index={1} done={installed && !versionLow} active={!installed || versionLow} title={t('agentCenter.setup.install')}
+        description={detecting ? t('agentCenter.state.detecting.status')
+          : versionLow ? t('agentCenter.state.versionLow.status')
+            : installed && bundled ? t('agentCenter.setup.bundled', { name })
+              : installed
+                ? t(status.version ? 'agentCenter.setup.installedVersion' : 'agentCenter.setup.installed', { name, version: status.version ?? '', path: status.resolvedCommand ?? '' })
+                : t(installable ? 'agentCenter.setup.missingInstall' : 'agentCenter.setup.missing')}>
+        {versionLow ? <div className="mt-3"><AgentUpdateControl row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} t={t} /></div> : null}
+        {!installed && !detecting && installable ? <AgentInstallControl harnessId={definition.id} action={presentation.state === 'adapterMissing' ? 'adapter' : 'install'}
           needed={status.installed !== 'yes' || status.versionSupported === false || presentation.state === 'adapterMissing'} t={t} /> : null}
         <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-          {!installed && docsUrl ? <button type="button" onClick={() => void window.kunGui.openExternal(docsUrl).catch(() => undefined)}
+          {!installed && !detecting && docsUrl ? <button type="button" onClick={() => void window.kunGui.openExternal(docsUrl).catch(() => undefined)}
             className="inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:underline">
             {t('agentCenter.setup.docs')}<ExternalLink aria-hidden size={11} />
           </button> : null}
-          {!installed && terminalInstall && onSetupCommand ? <button type="button" data-agent-setup-terminal
+          {!installed && !detecting && terminalInstall && onSetupCommand ? <button type="button" data-agent-setup-terminal
             onClick={() => onSetupCommand(definition.id, terminalInstall.command, name)}
             className="text-[12px] font-medium text-accent hover:underline">{t('agentCenter.setup.terminalInstall')}</button> : null}
           {definition.extension || bundled ? null : <button type="button" aria-expanded={pathOpen} onClick={() => setPathOpen((open) => !open)}
@@ -109,6 +113,8 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
         description={t('agentCenter.setup.connectionDesc', { name })}>
         <div className="-mx-3 mt-2" data-agent-enablement-fields={definition.id}>
           <AgentConnectionFields row={row} value={entry} profile={profile} modelsEnabled={modelsEnabled} onChange={onConnectionChange} />
+          {profile.credentialMode === 'native-login' && installed
+            ? <AgentLoginRow row={row} platform={platform} onSetupCommand={onSetupCommand} t={t} /> : null}
         </div>
       </Step>
       <Step index={3} done={false} active={installed} title={t('agentCenter.setup.check')} description={t(definition.transport === 'terminal' ? 'agentIntegrations.terminalExplanation' : 'agentCenter.setup.checkDesc')}>

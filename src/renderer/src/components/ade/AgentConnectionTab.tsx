@@ -6,13 +6,14 @@ import { SettingRow, SettingsCard } from '../settings-controls'
 import { AgentConnectionFields } from './AgentConnectionFields'
 import { AgentDiagnosticsCard } from './AgentDiagnosticsCard'
 import { AgentDraftBar } from './AgentDraftBar'
+import { AgentLoginRow } from './AgentLoginRow'
 import { AgentSettingsSelect } from './AgentSettingsSelect'
 import type { AgentSetupIssue } from './agent-setup-help'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
 /** Tab 1: how the Agent reaches its models, plus what the last check found. */
-export function AgentConnectionTab({ row, settings, entry, profile, dirty, checking, busy, readiness, error, errorDetail, onChange, onDiscard, onRecheck, onSetPermissionMode, onTrial, reportText, issue, t, tSettings }: {
+export function AgentConnectionTab({ row, settings, entry, profile, dirty, checking, busy, readiness, error, errorDetail, platform, onChange, onDiscard, onRecheck, onSetPermissionMode, onSetupCommand, onTrial, reportText, issue, t, tSettings }: {
   row: AdeHarnessRow
   settings: KunHarnessSettingsV1
   entry: KunHarnessDefaultsEntryV1
@@ -23,10 +24,12 @@ export function AgentConnectionTab({ row, settings, entry, profile, dirty, check
   readiness?: AdeHarnessReadiness
   error: string
   errorDetail: string
+  platform: string
   onChange: (patch: Partial<KunHarnessDefaultsEntryV1>) => void
   onDiscard: () => void
   onRecheck: () => void
   onSetPermissionMode: (modeId: string) => void
+  onSetupCommand?: (harnessId: string, command: string, title: string) => void
   onTrial?: () => Promise<AdeHarnessTestResult>
   reportText: () => string
   issue: (failure: string) => AgentSetupIssue
@@ -37,6 +40,7 @@ export function AgentConnectionTab({ row, settings, entry, profile, dirty, check
   return <div className="space-y-4" data-agent-enablement-fields={definition.id}>
     <SettingsCard title={t('agentCenter.connection.title')} description={t('agentCenter.connection.desc', { name: definition.displayName })}>
       <AgentConnectionFields row={row} value={entry} profile={profile} modelsEnabled onChange={onChange} />
+      {profile.credentialMode === 'native-login' ? <AgentLoginRow row={row} platform={platform} onSetupCommand={onSetupCommand} t={t} /> : null}
       {definition.permissionModes.length ? permissionFollowsKunLevel(definition.transport)
         ? <SettingRow title={tSettings('adeSettings.harnessPermissionMode')}
           description={tSettings('adeSettings.harnessPermissionModeFollowsKun', { agent: definition.displayName })}

@@ -195,6 +195,20 @@ describe('unsaved connection edits', () => {
     expect(saved.defaults.pi).toEqual({ credentialMode: 'native-login' }); expect(committed).toBe(0)
   })
 
+  it('writes the original defaults back when the page goes away mid-check', async () => {
+    const pending = deferred<AdeHarnessTestResult>(); mocks.test.mockReturnValue(pending.promise)
+    mount(); enableSaved(); draftInput = draft
+    act(() => tree!.update(createElement(Host)))
+    let checking!: Promise<void>
+    await act(async () => { checking = gate.enable() })
+    expect(saved.defaults.pi).toMatchObject({ credentialMode: 'kun-gateway' })
+    act(() => tree!.unmount()); tree = undefined
+    // The host is gone, so read what was written rather than its last state.
+    expect(writes.at(-1)).toEqual({ defaults: { pi: { credentialMode: 'native-login' } } })
+    await act(async () => { pending.resolve(gatewayResult()); await checking })
+    expect(writes.at(-1)).toEqual({ defaults: { pi: { credentialMode: 'native-login' } } }); expect(committed).toBe(0)
+  })
+
   it('does not let an old cancelled run revert the draft a newer run saved', async () => {
     const first = deferred<AdeHarnessTestResult>(); const second = deferred<AdeHarnessTestResult>()
     mocks.test.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)

@@ -27,11 +27,11 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 const entries = [entry('a', 'connected'), entry('b', 'connected'), entry('c', 'connected', 'signedOut'),
   entry('d', 'available'), ...Array.from({ length: 6 }, (_, index) => entry(`n${index}`, 'notInstalled'))]
 
-function Page({ onMove = vi.fn(), initialExpanded = false }: { onMove?: (id: string, index: number) => void; initialExpanded?: boolean }) {
+function Page({ onMove = vi.fn(), initialExpanded = false, search = '' }: { onMove?: (id: string, index: number) => void; initialExpanded?: boolean; search?: string }) {
   const [selectedId, setSelectedId] = useState('a')
   const [expanded, setExpanded] = useState(initialExpanded)
   return createElement(AgentCenterRail, { groups: groupAgentCatalog(entries, [], { search: '', expanded, selectedId }),
-    selectedId, defaultId: 'a', search: '', expanded, onSearch: vi.fn(), onToggleExpanded: () => setExpanded((value) => !value),
+    selectedId, defaultId: 'a', search, expanded, onSearch: vi.fn(), onToggleExpanded: () => setExpanded((value) => !value),
     onSelect: setSelectedId, onMove, t })
 }
 
@@ -81,4 +81,19 @@ it('reorders connected Agents with Alt+Arrow and announces the new position', as
   expect(onMove).not.toHaveBeenCalled()
   expect(d.getAttribute('draggable')).not.toBe('true')
   expect(b.getAttribute('draggable')).toBe('true')
+})
+
+it('does not reorder while a search hides some connected Agents', async () => {
+  const onMove = vi.fn()
+  await act(async () => root.render(createElement(Page, { onMove, search: 'x' })))
+  const b = container.querySelector<HTMLButtonElement>('[data-agent-list-id="b"]')!
+  expect(b.getAttribute('draggable')).not.toBe('true')
+  await act(async () => b.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true })))
+  expect(onMove).not.toHaveBeenCalled()
+})
+
+it('keeps the fold button outside the listbox so the list holds only options', async () => {
+  await act(async () => root.render(createElement(Page)))
+  expect(container.querySelector('[role="listbox"] [data-agent-group-toggle]')).toBeNull()
+  expect(container.querySelector('[data-agent-group-toggle]')).not.toBeNull()
 })

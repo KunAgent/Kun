@@ -15,13 +15,14 @@ import { AgentCatalogSkeleton } from './AgentCenterParts'
 import { AgentCenterRail } from './AgentCenterRail'
 import { AgentSettingsSelect } from './AgentSettingsSelect'
 import { groupAgentCatalog, reorderAgents, type AgentListEntry } from './agent-center-catalog'
-import { agentPresentationFor } from './agent-center-presentation'
+import { agentLineText, agentPresentationFor } from './agent-center-presentation'
+import { AgentIcon } from '../agent-icon'
 import { useAgentActivityStore } from './agent-center-activity-store'
 import { useAgentInstallWatch } from './use-agent-install-watch'
 import { exportCustomEntry } from './agent-center-custom-form'
 import { AgentAddDialog } from './AgentAddDialog'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
-import { isUserAgent, userAgentEntry, withAgentCommandPath, withAgentLaunchPatch } from '@shared/harness-provider-settings'
+import { isUserAgent, userAgentEntry, withAgentCommandPath, withAgentLaunchPatch, withoutUserAgent } from '@shared/harness-provider-settings'
 
 export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1 {
   return kun.harnesses ?? {
@@ -127,6 +128,8 @@ export function AgentCenter({
   }), [rows, settings, platform, models, activity.checking, activity.changed, activity.install])
   const groups = groupAgentCatalog(entries, settings.agentOrder, { search, expanded, selectedId: selectedId ?? undefined })
   const visibleEntries = groups.flatMap((group) => group.entries)
+  // The narrow-window picker has no search or fold, so it lists every Agent in list order.
+  const compactEntries = groupAgentCatalog(entries, settings.agentOrder, { search: '', expanded: true }).flatMap((group) => group.entries)
   const selectedRow = (visibleEntries.find((entry) => entry.row.definition.id === selectedId)
     ?? visibleEntries.find((entry) => entry.row.definition.id === settings.defaultHarnessId)
     ?? visibleEntries[0])?.row
@@ -192,11 +195,21 @@ export function AgentCenter({
           <div className="px-5 py-10 text-center text-[13px] text-ds-faint">{t('agentIntegrations.emptyCatalog')}</div>
         ) : (
           <div className="grid min-w-0 lg:grid-cols-[300px_minmax(0,1fr)]">
+            {/* Narrow windows trade the list for one picker above the detail. */}
+            <div className="border-b border-ds-border-muted px-4 py-3 lg:hidden" data-agent-compact-picker>
+              <AgentSettingsSelect label={t('agentCenter.title')} value={selectedRow?.definition.id ?? ''}
+                onChange={setSelectedId}
+                options={compactEntries.map(({ row, presentation }) => ({ value: row.definition.id,
+                  label: `${row.definition.displayName} · ${agentLineText(t, presentation.listLine)}`,
+                  icon: <AgentIcon harnessId={row.definition.id} size={15} /> }))} />
+            </div>
+            <div className="hidden min-h-0 min-w-0 lg:flex lg:flex-col">
             <AgentCenterRail groups={groups} selectedId={selectedRow?.definition.id} defaultId={settings.defaultHarnessId}
               search={search} expanded={expanded} onSearch={setSearch} onToggleExpanded={() => setExpanded((value) => !value)}
               onSelect={setSelectedId}
               onMove={(id, index) => patchHarness({ agentOrder: reorderAgents(settings.agentOrder, connectedIds, id, index) })}
               onFindExtensions={() => useChatStore.getState().openSettings('extensions')} t={t} />
+            </div>
             <div className="min-w-0 p-5">
               {selectedRow && !addOpen ? (() => {
                 const row = selectedRow
@@ -217,8 +230,12 @@ export function AgentCenter({
                     // User Agents (derived, generic ACP or terminal) can be removed;
                     // only ACP ones export as a portable definition.
                     onRemoveUser={isUserAgent(settings.providers, id) ? () => {
-                      const { [id]: _removed, ...providers } = settings.providers
-                      patchHarness({ providers })
+                      // Drop every reference to the Agent and release the credentials it kept.
+                      const removal = withoutUserAgent(settings, id)
+                      patchHarness(removal.settings)
+                      for (const secretRef of removal.secretRefs) {
+                        void getProvider().deleteHarnessSecret?.(secretRef).catch(() => undefined)
+                      }
                     } : undefined}
                     onExportUser={(() => {
                       const entry = userAgentEntry(settings.providers, id)

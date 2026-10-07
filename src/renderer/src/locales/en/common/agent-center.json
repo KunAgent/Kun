@@ -128,7 +128,8 @@
       "envDesc": "Passed to the Agent when Kun starts it. Sensitive values go to the system credential store; this file only keeps a reference.",
       "previewTitle": "Command Kun will run",
       "previewDesc": "This is how Kun starts {{name}} after you save. Sensitive values are never shown.",
-      "copy": "Copy"
+      "copy": "Copy",
+      "noOverrides": "{{name}} runs inside Kun through its SDK, so extra arguments and environment variables are not passed to it. Set its network and command path here; configure the rest in {{name}} itself."
     },
     "menu": {
       "redetect": "Re-detect",
@@ -242,6 +243,10 @@
       "preview": "Will run",
       "testFirst": "Test before adding: it checks that the command starts and completes the handshake. It sends no prompt.",
       "failureHint": "If the test fails you can still add it and troubleshoot from its page."
+    },
+    "login": {
+      "title": "Sign-in",
+      "desc": "{{name}} uses its own account. If it is not signed in yet, or you want another account, sign in once in a terminal; Kun detects it again when the terminal closes."
     }
   }
 }

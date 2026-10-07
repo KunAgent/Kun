@@ -76,6 +76,8 @@ export function useAgentEnablement(input: {
     generation.current += 1
     active.current?.abort()
     active.current = null
+    // Leaving the page (or picking another Agent) mid-check must not keep an unchecked edit.
+    revertDraft()
   }, [])
 
   const disable = (): void => {

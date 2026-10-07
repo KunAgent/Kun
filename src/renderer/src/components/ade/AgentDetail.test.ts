@@ -124,12 +124,42 @@ describe('AgentDetail', () => {
 
   it('shows the launch command with sensitive variables masked', () => {
     const settings = { ...enabled(), providers: { 'claude-code': { env: { HOME_DIR: '/work' }, secretEnv: [{ name: 'TOKEN', secretRef: 'ref-1' }] } } }
-    const { tree } = mount(withHarnessReadiness(agentRow()), settings)
+    const launched = withHarnessReadiness(agentRow())
+    launched.definition.launch = { command: 'claude', args: ['--acp'] }
+    const { tree } = mount(launched, settings)
     act(() => tree.root.findAllByProps({ role: 'tab' })[2]!.props.onClick())
     const preview = text(tree.root.findByProps({ 'data-agent-launch-preview': true }))
     expect(preview).toContain('HOME_DIR=/work')
     expect(preview).toContain('TOKEN=•••••')
     expect(preview).not.toContain('ref-1')
+    act(() => tree.unmount())
+  })
+
+  it('does not offer arguments or environment for an Agent that runs through an SDK', () => {
+    const { tree } = mount(withHarnessReadiness(agentRow()), enabled())
+    act(() => tree.root.findAllByProps({ role: 'tab' })[2]!.props.onClick())
+    expect(tree.root.findAllByProps({ 'data-agent-env-table': true })).toHaveLength(0)
+    expect(tree.root.findAllByProps({ 'data-agent-extra-args': true })).toHaveLength(0)
+    expect(tree.root.findAllByProps({ 'data-agent-launch-sdk': true })).toHaveLength(1)
+    act(() => tree.unmount())
+  })
+
+  it('offers sign-in in a terminal during setup and on the Connection tab, not only after a failed check', () => {
+    const onSetupCommand = vi.fn()
+    const fresh = mount(agentRow(), defaultKunHarnessSettings(), { onSetupCommand })
+    act(() => fresh.tree.root.findByProps({ 'data-agent-setup-login': true }).props.onClick())
+    expect(onSetupCommand).toHaveBeenCalledWith('claude-code', 'claude-code login', 'claude-code display')
+    act(() => fresh.tree.unmount())
+    const connected = mount(withHarnessReadiness(agentRow()), enabled(), { onSetupCommand })
+    expect(connected.tree.root.findAllByProps({ 'data-agent-setup-login': true })).toHaveLength(1)
+    act(() => connected.tree.unmount())
+  })
+
+  it('does not run a trial against the saved connection while an edit is pending', () => {
+    const { tree } = mount(withHarnessReadiness(agentRow()), enabled(), { onTest: vi.fn() })
+    expect(tree.root.findAllByProps({ 'data-agent-trial-start': true })).toHaveLength(1)
+    act(() => tree.root.findByProps({ 'data-agent-profile-mode-option': 'provider' }).props.onClick())
+    expect(tree.root.findAllByProps({ 'data-agent-trial-start': true })).toHaveLength(0)
     act(() => tree.unmount())
   })
 })

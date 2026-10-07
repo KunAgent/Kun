@@ -46,6 +46,17 @@ describe('agentPresentation', () => {
     expect(p).toMatchObject({ state: 'detecting', tone: 'running', switch: 'locked', next: null })
   })
 
+  it('keeps an Agent that is on in its tabs with the switch on while it is re-detected', () => {
+    const unproven = { ...row({ status: { detecting: true, installed: 'unknown' } }), readyProfiles: [], enabled: true }
+    expect(agentPresentation(unproven, ctx({ enabled: true }))).toMatchObject({ state: 'detecting', switch: 'on', mode: 'manage', group: 'connected' })
+  })
+
+  it('lets a current readiness proof outrank a background re-detection', () => {
+    const proven = { ...row(), status: { ...row().status, detecting: true, installed: 'unknown' as const } }
+    expect(proven.readyProfiles?.length).toBe(1)
+    expect(agentPresentation(proven, ctx({ enabled: true }))).toMatchObject({ state: 'ready', switch: 'on', mode: 'manage' })
+  })
+
   it('offers a one-click install for a missing command and groups it as not installed', () => {
     const p = agentPresentation(row({ status: { installed: 'no', reasonCode: 'not_installed' } }), ctx())
     expect(p).toMatchObject({ state: 'notInstalled', group: 'notInstalled', switch: 'locked', mode: 'setup',

@@ -32,6 +32,9 @@ export function AgentCenterRail({ groups, selectedId, defaultId, search, expande
   const [announcement, setAnnouncement] = useState('')
   const connected = groups.find((group) => group.id === 'connected')?.entries ?? []
   const connectedIds = connected.map((entry) => entry.row.definition.id)
+  // A filtered list hides some connected Agents, so a move could not say where they go.
+  const reorderable = connectedIds.length > 1 && !search.trim()
+  const folded = groups.find((group) => group.id === 'notInstalled')
 
   const move = (id: string, targetIndex: number): void => {
     const total = connectedIds.length
@@ -44,7 +47,7 @@ export function AgentCenterRail({ groups, selectedId, defaultId, search, expande
   const navigate = (event: KeyboardEvent<HTMLButtonElement>, entry: AgentListEntry): void => {
     const id = entry.row.definition.id
     const connectedIndex = connectedIds.indexOf(id)
-    if (event.altKey && connectedIndex !== -1 && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+    if (event.altKey && reorderable && connectedIndex !== -1 && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
       event.preventDefault()
       move(id, connectedIndex + (event.key === 'ArrowDown' ? 1 : -1))
       return
@@ -70,7 +73,9 @@ export function AgentCenterRail({ groups, selectedId, defaultId, search, expande
     if (!dragging) return
     event.preventDefault()
     const rect = event.currentTarget.getBoundingClientRect()
-    setTarget({ id, before: event.clientY < rect.top + rect.height / 2 })
+    const before = event.clientY < rect.top + rect.height / 2
+    // dragover fires continuously; only a new drop position needs a render.
+    setTarget((current) => current?.id === id && current.before === before ? current : { id, before })
   }
   const drop = (event: DragEvent<HTMLButtonElement>): void => {
     event.preventDefault()
@@ -102,14 +107,14 @@ export function AgentCenterRail({ groups, selectedId, defaultId, search, expande
         const label = t(`agentCenter.group.${group.id}`)
         return <div key={group.id} role="group" aria-label={label} data-agent-group={group.id} className="flex flex-col gap-0.5">
           <div className="flex items-center justify-between px-2 pb-1 pt-3 text-[11.5px] font-semibold text-ds-faint"
-            title={group.id === 'connected' && connectedIds.length > 1 ? t('agentCenter.rail.reorderHint') : undefined}>
+            title={group.id === 'connected' && reorderable ? t('agentCenter.rail.reorderHint') : undefined}>
             <span>{label}</span><span className="font-medium">{group.total}</span>
           </div>
           {group.entries.map((entry) => {
             const { row, presentation } = entry
             const id = row.definition.id
             const selected = selectedId === id
-            const draggable = group.id === 'connected' && connectedIds.length > 1
+            const draggable = group.id === 'connected' && reorderable
             const dropBefore = target && target.id === id && dragging !== id ? target.before : undefined
             return <div key={id} className="relative">
               {dropBefore === true ? <span aria-hidden className="absolute -top-px left-2 right-2 h-0.5 rounded bg-accent" /> : null}
@@ -140,15 +145,16 @@ export function AgentCenterRail({ groups, selectedId, defaultId, search, expande
               {dropBefore === false ? <span aria-hidden className="absolute -bottom-px left-2 right-2 h-0.5 rounded bg-accent" /> : null}
             </div>
           })}
-          {group.hidden > 0 || (group.id === 'notInstalled' && expanded) ? <button type="button" data-agent-group-toggle onClick={onToggleExpanded}
-            aria-expanded={expanded}
-            className="mx-1 mt-0.5 flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-[12px] font-medium text-accent hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/40">
-            <ChevronDown aria-hidden className={`h-3.5 w-3.5 transition ${expanded ? 'rotate-180' : ''}`} />
-            {expanded ? t('agentCenter.rail.showLess') : t('agentCenter.rail.showMore', { count: group.hidden })}
-          </button> : null}
         </div>
       })}
     </div>
+    {/* Outside the listbox: only options may sit inside it. It belongs to the last group. */}
+    {folded && (folded.hidden > 0 || expanded) ? <button type="button" data-agent-group-toggle onClick={onToggleExpanded}
+      aria-expanded={expanded}
+      className="mx-3 mb-2 flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-[12px] font-medium text-accent hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/40">
+      <ChevronDown aria-hidden className={`h-3.5 w-3.5 transition ${expanded ? 'rotate-180' : ''}`} />
+      {expanded ? t('agentCenter.rail.showLess') : t('agentCenter.rail.showMore', { count: folded.hidden })}
+    </button> : null}
     <span role="status" aria-live="polite" className="sr-only">{announcement}</span>
     {onFindExtensions ? <div className="flex items-center justify-between gap-2 border-t border-ds-border-muted px-4 py-2.5 text-[12px] text-ds-faint">
       <span className="min-w-0">{t('agentCenter.rail.footer')}</span>

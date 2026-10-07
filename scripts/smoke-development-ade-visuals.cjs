@@ -52,7 +52,7 @@ async function runUnifiedCodeVisuals({ page, capture, poll, runtimeRequest, resi
   await harnessPanel.locator('[data-agent-list-id="devin"]').click()
   const devinCard = harnessPanel.locator('[data-agent-card="devin"]')
   await devinCard.locator('[data-agent-icon="devin"]').waitFor()
-  await devinCard.getByRole('button', { name: /^(Log in|Sign in|登录)$/u }).waitFor()
+  await devinCard.getByRole('button', { name: /^(Sign in in terminal|在终端登录)$/u }).waitFor()
   await capture('visual-devin-settings-960')
   await page.locator('[data-settings-category="collaboration"]').click()
   const collaboration = page.locator('#agents-settings-panel-collaboration')

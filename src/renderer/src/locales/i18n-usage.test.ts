@@ -37,6 +37,7 @@ const STRICT_RESOURCE_FILES = new Set([
   'src/renderer/src/components/ade/AgentDraftBar.tsx',
   'src/renderer/src/components/ade/AgentEnvTable.tsx',
   'src/renderer/src/components/ade/AgentLaunchTab.tsx',
+  'src/renderer/src/components/ade/AgentLoginRow.tsx',
   'src/renderer/src/components/ade/AgentModelsTab.tsx',
   'src/renderer/src/components/ade/AgentSetupSteps.tsx',
   'src/renderer/src/components/ade/AgentVersionTab.tsx',

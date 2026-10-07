@@ -1,5 +1,5 @@
 import { GENERIC_ACP_BASE, TERMINAL_BASE } from '../../kun/src/config/kun-config-harness-providers.js'
-import type { KunHarnessCustomEntryV1, KunHarnessProviderOverrideV1 } from './app-settings-types-kun-runtime'
+import type { KunHarnessCustomEntryV1, KunHarnessProviderOverrideV1, KunHarnessSettingsV1 } from './app-settings-types-kun-runtime'
 
 /**
  * Edits on `agents.kun.harnesses.providers` (docs/ade/17 §4.3) shared by the
@@ -92,5 +92,27 @@ export function userAgentOverride(entry: KunHarnessCustomEntryV1): KunHarnessPro
     ...(entry.args.length ? { args: { mode: 'replace' as const, values: [...entry.args] } } : {}),
     ...(Object.keys(entry.env).length ? { env: { ...entry.env } } : {}),
     ...(entry.secretEnv?.length ? { secretEnv: entry.secretEnv.map((row) => ({ ...row })) } : {})
+  }
+}
+
+/**
+ * Everything that names a removed user Agent: its definition, defaults,
+ * enabled connections, list position and the default-Agent choice. Returns
+ * the credential-store references it held so the caller can release them.
+ */
+export function withoutUserAgent(settings: KunHarnessSettingsV1, id: string): { settings: KunHarnessSettingsV1; secretRefs: string[] } {
+  const { [id]: removed, ...providers } = settings.providers
+  const { [id]: _defaults, ...defaults } = settings.defaults
+  return {
+    settings: {
+      ...settings,
+      providers,
+      defaults,
+      enabledProfiles: (settings.enabledProfiles ?? []).filter((profile) => profile.harnessId !== id),
+      disabledIds: settings.disabledIds.filter((entry) => entry !== id),
+      agentOrder: settings.agentOrder.filter((entry) => entry !== id),
+      defaultHarnessId: settings.defaultHarnessId === id ? 'kun' : settings.defaultHarnessId
+    },
+    secretRefs: (removed?.secretEnv ?? []).map((entry) => entry.secretRef)
   }
 }

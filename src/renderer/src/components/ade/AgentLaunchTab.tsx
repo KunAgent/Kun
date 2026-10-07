@@ -33,8 +33,12 @@ export function AgentLaunchTab({ row, settings, probing, onProbe, onSetBinaryPat
   const [copied, setCopied] = useState(false)
   useEffect(() => setArgs(storedArgs), [storedArgs])
   const command = status.resolvedCommand ?? override?.command ?? definition.launch?.command
-  const preview = launchPreview({ command, args: definition.launch?.args ?? [], env: override?.env ?? {},
-    secretNames: (override?.secretEnv ?? []).map((entry) => entry.name) })
+  // Arguments and environment reach only Agents Kun spawns from a launch spec;
+  // SDK-hosted ones (Claude Code, Cursor, Antigravity) would silently ignore them.
+  const launchable = Boolean(definition.launch)
+  const preview = launchPreview({ command, args: definition.launch?.args ?? [], env: launchable ? override?.env ?? {} : {},
+    secretNames: launchable ? (override?.secretEnv ?? []).map((entry) => entry.name) : [] })
+
   const copy = (): void => {
     void navigator.clipboard?.writeText(preview).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2_000) }).catch(() => undefined)
   }
@@ -57,12 +61,13 @@ export function AgentLaunchTab({ row, settings, probing, onProbe, onSetBinaryPat
         ? t('agentCenter.launch.detected', { path: status.resolvedCommand }) : tSettings('adeSettings.harnessCommandPathDesc')}
       control={<AgentCommandPathField value={agentCommandPath(settings.providers, definition.id) ?? ''}
         placeholder={status.resolvedCommand ?? definition.id} onCommit={onSetBinaryPath} t={t} label={tSettings('adeSettings.harnessCommandPath')} />} />
-      {definition.builtin && onSetLaunchPatch ? <SettingRow wideControl title={tSettings('adeSettings.harnessExtraArgs')} description={tSettings('adeSettings.harnessExtraArgsDesc')}
+      {definition.builtin && onSetLaunchPatch && launchable ? <SettingRow wideControl title={tSettings('adeSettings.harnessExtraArgs')} description={tSettings('adeSettings.harnessExtraArgsDesc')}
         control={<input data-agent-extra-args className={inputClass} value={args} spellCheck={false}
           onChange={(event) => setArgs(event.target.value)} onBlur={commitArgs}
           onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitArgs() } }} />} /> : null}
-      {onSetLaunchPatch ? <SettingRow wideControl title={tSettings('adeSettings.harnessLaunchEnv')} description={t('agentCenter.launch.envDesc')}
+      {onSetLaunchPatch && launchable ? <SettingRow wideControl title={tSettings('adeSettings.harnessLaunchEnv')} description={t('agentCenter.launch.envDesc')}
         control={<AgentEnvTable env={override?.env ?? {}} secretEnv={override?.secretEnv ?? []} onChange={onSetLaunchPatch} t={t} tSettings={tSettings} />} /> : null}
+      {!launchable ? <p className="px-3 py-3 text-[12px] leading-[1.5] text-ds-muted" data-agent-launch-sdk>{t('agentCenter.launch.noOverrides', { name: definition.displayName })}</p> : null}
       {status.networkSource ? <SettingRow title={t('adeAgentNetwork.title')}
         description={t(status.networkSource === 'explicit-required' ? 'adeAgentNetwork.explicitHint' : 'adeAgentNetwork.hint')}
         control={<div className="flex flex-wrap items-center justify-end gap-2 text-[12px]">

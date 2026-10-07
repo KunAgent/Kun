@@ -130,6 +130,10 @@ export function agentPresentation(row: AdeHarnessRow, ctx: AgentPresentationCont
     state = 'installing'; next = { kind: 'cancelInstall' }
   } else if (ctx.checking) {
     state = 'checking'; next = { kind: 'cancelCheck' }
+  } else if (ctx.enabled && code === null) {
+    // A current readiness proof outranks a background re-detection.
+    state = ctx.changed ? 'needsRecheck' : 'ready'
+    if (state === 'needsRecheck') next = { kind: 'recheck' }
   } else if (status.detecting === true || code === 'detecting') {
     state = 'detecting'
   } else if (!installed && ctx.install?.status === 'failed') {
@@ -144,9 +148,6 @@ export function agentPresentation(row: AdeHarnessRow, ctx: AgentPresentationCont
     state = 'versionLow'; next = { kind: 'update' }
   } else if (!ctx.enabled) {
     state = 'available'; next = { kind: 'enable' }
-  } else if (code === null) {
-    state = ctx.changed ? 'needsRecheck' : 'ready'
-    if (state === 'needsRecheck') next = { kind: 'recheck' }
   } else if (code === 'signed_out' || code === 'credentials_missing' || code === 'authentication_unverified') {
     state = 'signedOut'
     next = usesProviderOnlySdk(row) ? { kind: 'configureProvider' }
@@ -159,9 +160,10 @@ export function agentPresentation(row: AdeHarnessRow, ctx: AgentPresentationCont
   }
 
   const group: AgentGroup = ctx.enabled ? 'connected' : installed && state !== 'installing' ? 'available' : 'notInstalled'
-  const mode = ctx.enabled && MANAGE_STATES.has(state) ? 'manage' : 'setup'
+  // Re-detecting an Agent that is already on must not swap its tabs for the setup steps or flip its switch.
+  const mode = ctx.enabled && (MANAGE_STATES.has(state) || state === 'detecting') ? 'manage' : 'setup'
   const sw: AgentSwitchState = state === 'checking' ? 'busy'
-    : ctx.enabled && state !== 'detecting' ? 'on'
+    : ctx.enabled ? 'on'
       : state === 'available' || state === 'versionLow' || state === 'adapterMissing' ? 'off'
         : 'locked'
   const modeKey = MODE_KEY[ctx.credentialMode ?? 'native-login']
