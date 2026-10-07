@@ -182,6 +182,13 @@
   background: color-mix(in srgb, white 9%, transparent);
 }
 
+/* Dark cards sit close to the track color, so lift the selected segment with
+   a translucent white layer and a hairline instead of the card token. */
+[data-theme='dark'] .ds-settings-tablist:not(.ds-settings-subtabs) .ds-settings-tab-indicator {
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.4);
+}
+
 .ds-settings-tablist[data-indicator='animated'] .ds-settings-tab-indicator {
   transition:
     transform var(--st-slow) var(--st-ease),
@@ -189,11 +196,14 @@
     height var(--st-slow) var(--st-ease);
 }
 
-/* Once measured, one shared highlight replaces the per-tab background. */
-.ds-settings-tablist[data-indicator] > .ds-settings-tab[aria-selected='true'],
-.ds-settings-surface .ds-settings-tablist[data-indicator] > .ds-settings-tab[aria-selected='true'] {
+/* Once measured, one shared highlight replaces the per-tab background. Outside the
+   settings surface the tab's own ring is its focus indicator, so keep box-shadow there. */
+.ds-settings-tablist[data-indicator] > .ds-settings-tab[aria-selected='true'] {
   border-color: transparent;
   background-color: transparent;
+}
+
+.ds-settings-surface .ds-settings-tablist[data-indicator] > .ds-settings-tab[aria-selected='true'] {
   box-shadow: none;
 }
 
@@ -408,26 +418,4 @@
 
 .ds-settings-scroller::-webkit-scrollbar-thumb:hover {
   background: var(--ds-scrollbar-thumb-hover) padding-box;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ds-settings-surface :is(
-    .ds-settings-tab-panel,
-    .ds-settings-inline-notice,
-    :is(.ds-settings-card--collapsible, .ds-settings-disclosure)[open] > :not(summary)
-  ) {
-    animation: none;
-  }
-
-  .ds-settings-surface :is(
-    .ds-settings-tab-indicator,
-    .ds-settings-tab,
-    .ds-settings-tab-icon,
-    .ds-settings-chevron > svg,
-    .ds-settings-page details > summary:not([class])::before,
-    .ds-settings-toggle > .ds-settings-toggle-thumb,
-    .ds-settings-secret-toggle > svg
-  ) {
-    transition: none;
-  }
 }

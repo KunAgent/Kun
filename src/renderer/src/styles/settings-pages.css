@@ -46,6 +46,10 @@
     -webkit-appearance: auto;
     appearance: auto;
   }
+
+  .ds-settings-page--extensions input[type='checkbox']::before {
+    content: none;
+  }
 }
 
 /* ---------- Keyboard shortcuts ---------- */
@@ -193,17 +197,4 @@
 @container (max-width: 580px) {
   .ds-shortcut-row { flex-wrap: wrap; }
   .ds-settings-surface .ds-shortcut-binding { inline-size: auto; flex: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ds-shortcut-recording-dot {
-    animation: none;
-  }
-
-  .ds-settings-page--extensions input[type='checkbox'],
-  .ds-settings-page--extensions input[type='checkbox']::before,
-  .ds-settings-surface .ds-shortcut-binding,
-  .ds-shortcut-search {
-    transition: none;
-  }
 }

@@ -51,17 +51,19 @@ export function SettingsSaveStatusPill({
   title?: string
   t: (key: string) => string
 }): ReactElement {
+  const label = t(STATUS_LABEL_KEYS[tone])
   return (
     <span
       role="status"
       aria-live="polite"
-      title={title}
+      // Long translations can truncate in the pill; the tooltip always carries the full text.
+      title={title ?? label}
       data-tone={tone}
       className="ds-settings-status shrink-0"
     >
       <span key={tone} className="ds-settings-status-content">
         <StatusGlyph tone={tone} />
-        <span className="truncate">{t(STATUS_LABEL_KEYS[tone])}</span>
+        <span className="truncate">{label}</span>
       </span>
     </span>
   )

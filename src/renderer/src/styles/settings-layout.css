@@ -200,7 +200,7 @@
   opacity: 0.5;
 }
 
-.ds-settings-surface button:not([role='switch']):not(.ds-settings-button):not([data-settings-action]) {
+.ds-settings-surface button:not([role='switch']):not(.ds-settings-button):not([data-settings-action]):not(.ds-shortcut-binding) {
   min-block-size: 2rem;
   min-inline-size: 2rem;
 }

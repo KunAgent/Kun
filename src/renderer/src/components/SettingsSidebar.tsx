@@ -63,7 +63,9 @@ export function SettingsSidebar({
   const firstMatch = filteredGroups[0]?.items[0]
 
   const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
-    if (event.key === 'Enter' && firstMatch) {
+    // Enter/Esc/arrows also confirm or cancel IME candidates (pinyin, kana, hangul).
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return
+    if (event.key === 'Enter' && searching && firstMatch) {
       event.preventDefault()
       setCategory(firstMatch.category)
     } else if (event.key === 'ArrowDown') {
@@ -141,7 +143,9 @@ export function SettingsSidebar({
                 searchRef.current?.focus()
               }}
             >
-              <X aria-hidden="true" className="h-3 w-3" strokeWidth={2.4} />
+              <span aria-hidden="true" className="ds-settings-search-clear-glyph">
+                <X className="h-2.5 w-2.5" strokeWidth={2.8} />
+              </span>
             </button>
           ) : null}
         </div>

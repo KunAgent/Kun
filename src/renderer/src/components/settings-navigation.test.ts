@@ -74,15 +74,48 @@ describe('settings sidebar search', () => {
       .flatMap((button) => button.props['data-settings-category'] ? [button.props['data-settings-category']] : [])
     expect(routes).toEqual(['shortcuts'])
 
-    const enter = { key: 'Enter', preventDefault: vi.fn(), stopPropagation: vi.fn() }
+    const enter = { key: 'Enter', nativeEvent: { isComposing: false }, preventDefault: vi.fn(), stopPropagation: vi.fn() }
     act(() => input.props.onKeyDown(enter))
     expect(setCategory).toHaveBeenCalledWith('shortcuts')
     expect(enter.preventDefault).toHaveBeenCalledOnce()
 
-    const escape = { key: 'Escape', preventDefault: vi.fn(), stopPropagation: vi.fn() }
+    const escape = { key: 'Escape', nativeEvent: { isComposing: false }, preventDefault: vi.fn(), stopPropagation: vi.fn() }
     act(() => renderer.root.findByProps({ 'aria-controls': 'settings-navigation' }).props.onKeyDown(escape))
     expect(escape.preventDefault).toHaveBeenCalledOnce()
     expect(renderer.root.findByProps({ 'aria-controls': 'settings-navigation' }).props.value).toBe('')
+  })
+
+  it('ignores IME composition keys and an empty Enter', () => {
+    const setCategory = vi.fn()
+    let renderer!: ReactTestRenderer
+    act(() => {
+      renderer = create(createElement(SettingsSidebar, {
+        category: 'general', setCategory, goBack: vi.fn(), platform: 'darwin', t
+      }))
+    })
+    const search = (): ReturnType<typeof renderer.root.findByProps> =>
+      renderer.root.findByProps({ 'aria-controls': 'settings-navigation' })
+    const key = (name: string, isComposing = false) => ({
+      key: name, keyCode: isComposing ? 229 : 13, nativeEvent: { isComposing },
+      preventDefault: vi.fn(), stopPropagation: vi.fn()
+    })
+
+    const emptyEnter = key('Enter')
+    act(() => search().props.onKeyDown(emptyEnter))
+    expect(setCategory).not.toHaveBeenCalled()
+    expect(emptyEnter.preventDefault).not.toHaveBeenCalled()
+
+    act(() => search().props.onChange({ target: { value: 'shortcut' } }))
+    const composingEnter = key('Enter', true)
+    act(() => search().props.onKeyDown(composingEnter))
+    const composingEscape = key('Escape', true)
+    act(() => search().props.onKeyDown(composingEscape))
+    expect(setCategory).not.toHaveBeenCalled()
+    expect(composingEscape.preventDefault).not.toHaveBeenCalled()
+    expect(search().props.value).toBe('shortcut')
+
+    act(() => search().props.onKeyDown(key('Enter')))
+    expect(setCategory).toHaveBeenCalledWith('shortcuts')
   })
 
   it('shows an empty state instead of a blank list', () => {
