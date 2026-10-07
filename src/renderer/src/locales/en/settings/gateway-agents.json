@@ -32,6 +32,9 @@
     "pickInAgent": "Pick a model marked [Kun] inside {{agent}} with /model.",
     "connected": "{{agent}} now uses Kun.",
     "connectedRestart": "{{agent}} now uses Kun. Start a new session to pick up the change.",
+    "keyCopied": "{{agent}} is set up. Its key is on the clipboard: open {{agent}}'s agent settings, find the Kun provider and paste it. Kun does not keep a copy.",
+    "copyKey": "Copy a new key",
+    "copyKeyHint": "Issues a new key for {{agent}}, copies it and stops the old one",
     "disconnected": "{{agent}} is back on its own settings, and its Kun key was revoked.",
     "synced": "Updated the model list in {{count}} agent(s).",
     "syncedNone": "No connected agent keeps its own model list.",
@@ -65,7 +68,8 @@
       "max": "Max"
     },
     "notices": {
-      "trusted-folders": "{{agent}} reads Kun's settings only in folders you have trusted in it. In an untrusted folder it stops with a missing API key error instead of using Kun."
+      "trusted-folders": "{{agent}} reads Kun's settings only in folders you have trusted in it. In an untrusted folder it stops with a missing API key error instead of using Kun.",
+      "manual-key": "{{agent}} keeps API keys in the system keychain, so you paste Kun's key once in {{agent}}'s agent settings (provider Kun), or set KUN_API_KEY. Kun copies it for you when you connect."
     },
     "errors": {
       "config_unreadable": "{{agent}}'s config {{file}} could not be read. Fix the file, or connect after removing it.",

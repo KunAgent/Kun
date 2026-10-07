@@ -4,6 +4,7 @@ import { displayName, safeJson, safeYaml, v1, xdgConfig } from './adapter-helper
 import { getTomlTable, getTomlTopLevel, listTomlTables, tomlTableName } from './edit/toml.js'
 import { readFileText } from './engine.js'
 import type { AgentAdapter, GatewayModelInfo, WiringContext, WiringEdit } from './types.js'
+import { zed } from './adapters-zed.js'
 
 /**
  * Second batch of agents: Goose, Continue, Aider and Kimi Code. Formats follow
@@ -197,4 +198,4 @@ const kimi: AgentAdapter = {
   }
 }
 
-export const EXTRA_AGENT_ADAPTERS: readonly AgentAdapter[] = [goose, continueDev, aider, kimi]
+export const EXTRA_AGENT_ADAPTERS: readonly AgentAdapter[] = [goose, continueDev, aider, kimi, zed]

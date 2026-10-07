@@ -12,7 +12,13 @@ export type RuntimeRequest = (path: string, method?: string, body?: string) => P
  * key goes straight from the runtime into the agent's config.
  */
 export class AgentWiringBridge {
-  constructor(private readonly runtimeRequest: RuntimeRequest, private readonly service = new AgentWiringService()) {}
+  /**
+   * `deliverKey` hands a key to the user for agents that keep it outside their
+   * config (Zed's keychain): the desktop app copies it to the clipboard, the
+   * CLI prints it. It is never part of a result sent to the renderer.
+   */
+  constructor(private readonly runtimeRequest: RuntimeRequest, private readonly service = new AgentWiringService(),
+    private readonly options: { deliverKey?: (key: string, agentName: string) => void } = {}) {}
 
   private async json(path: string, method = 'GET', body?: unknown): Promise<Record<string, unknown>> {
     const response = await this.runtimeRequest(path, method, body === undefined ? undefined : JSON.stringify(body))
@@ -74,14 +80,41 @@ export class AgentWiringBridge {
     return { agentId, files, restartRequired: agentAdapter(agentId)?.restartRequired === true }
   }
 
-  private async connect(agentId: string, model: string, origin: string, catalog: GatewayModelInfo[], smallModel?: string, effort?: string): Promise<void> {
+  /** Connects; returns true when a new key was handed to the user to paste into the agent. */
+  private async connect(agentId: string, model: string, origin: string, catalog: GatewayModelInfo[], smallModel?: string, effort?: string): Promise<boolean> {
     this.served(catalog, model, smallModel)
     const adapter = agentAdapter(agentId)
     // Agents that keep their own list may switch to any listed model, so their key may use every model.
     const allowed = adapter?.keepsModelList ? [model, ...catalog.map((entry) => entry.id).filter((id) => id !== model)]
       : [...new Set([model, ...(smallModel ? [smallModel] : [])])]
+    const record = this.service.connectedRecord(agentId)
+    if (adapter?.keyDelivery === 'clipboard') {
+      if (!this.options.deliverKey) throw new AgentWiringError(`${adapter.name} needs its key pasted by hand, which this client cannot hand over`, 'invalid_target')
+      // The user already pasted this agent's key; switching models keeps it.
+      if (record?.clientId) {
+        await this.json(`/v1/model-gateway/clients/${encodeURIComponent(record.clientId)}/allow`, 'POST', { modelIds: allowed })
+        this.service.connect(agentId, { origin, key: '', model, ...(effort ? { effort } : {}), models: catalog }, record.clientId)
+        return false
+      }
+    }
     const { key, clientId } = await this.agentKey(agentId, origin, allowed)
-    this.service.connect(agentId, { origin, key, model, ...(smallModel ? { smallModel } : {}), ...(effort ? { effort } : {}), models: catalog }, clientId)
+    this.service.connect(agentId, { origin, key: adapter?.keyDelivery === 'clipboard' ? '' : key, model,
+      ...(smallModel ? { smallModel } : {}), ...(effort ? { effort } : {}), models: catalog }, clientId)
+    if (adapter?.keyDelivery !== 'clipboard') return false
+    this.options.deliverKey!(key, adapter.name)
+    return true
+  }
+
+  /** Replaces a clipboard agent's key (Kun never keeps it) and hands the new one over. */
+  private async copyKey(agentId: string): Promise<void> {
+    const adapter = agentAdapter(agentId)
+    const record = this.service.connectedRecord(agentId)
+    if (!adapter || adapter.keyDelivery !== 'clipboard') throw new AgentWiringError(`${adapter?.name ?? agentId} reads its key from its own config`, 'invalid_target')
+    if (!record?.clientId) throw new AgentWiringError(`${adapter.name} is not connected to Kun`, 'not_connected')
+    if (!this.options.deliverKey) throw new AgentWiringError(`${adapter.name} needs its key pasted by hand, which this client cannot hand over`, 'invalid_target')
+    const rotated = await this.json(`/v1/model-gateway/clients/${encodeURIComponent(record.clientId)}/rotate`, 'POST')
+    if (typeof rotated.key !== 'string') throw new AgentWiringError('The runtime returned no client key', 'invalid_target')
+    this.options.deliverKey(`kun-${agentId}.${rotated.key}`, adapter.name)
   }
 
   async handle(action: AgentWiringAction): Promise<AgentWiringResult> {
@@ -112,20 +145,25 @@ export class AgentWiringBridge {
         return { ok: true, preview, ...await this.overview() }
       }
       if (action.action === 'connect') {
-        await this.connect(action.agentId, action.model, origin, catalog, action.smallModel, action.effort)
+        const copied = await this.connect(action.agentId, action.model, origin, catalog, action.smallModel, action.effort)
         const restart = agentAdapter(action.agentId)?.restartRequired
-        return { ok: true, ...(restart ? { notice: 'restart' } : {}), ...await this.overview() }
+        return { ok: true, ...(copied ? { notice: 'key-copied' } : restart ? { notice: 'restart' } : {}), ...await this.overview() }
+      }
+      if (action.action === 'copy-key') {
+        await this.copyKey(action.agentId)
+        return { ok: true, notice: 'key-copied', ...await this.overview() }
       }
       const profile = this.service.profile(action.name)
       const applied: string[] = []
       const failed: { agentId: string; error: string }[] = []
+      let copied = false
       for (const [agentId, selection] of Object.entries(profile)) {
         try {
-          await this.connect(agentId, selection.model, origin, catalog, selection.smallModel, selection.effort)
+          copied = await this.connect(agentId, selection.model, origin, catalog, selection.smallModel, selection.effort) || copied
           applied.push(agentId)
         } catch (error) { failed.push({ agentId, error: error instanceof Error ? error.message : String(error) }) }
       }
-      return { ok: true, applied, failed, ...await this.overview() }
+      return { ok: true, applied, failed, ...(copied ? { notice: 'key-copied' } : {}), ...await this.overview() }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error),
         ...(error instanceof AgentWiringError ? { code: error.code, ...(error.file ? { file: error.file } : {}) } : {}) }

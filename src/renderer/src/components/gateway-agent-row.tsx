@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import type { TFunction } from 'i18next'
-import { AlertTriangle, CheckCircle2, ChevronDown, FileCode2, Link2, Loader2, Unlink } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, FileCode2, KeyRound, Link2, Loader2, Unlink } from 'lucide-react'
 import type { AgentWiringStatus, GatewayModelInfo } from '@shared/agent-wiring'
 import { AgentIcon } from './agent-icon'
 import { settingsButtonClass } from './settings-button'
@@ -33,7 +33,7 @@ function shortPath(path: string): string {
 
 export type AgentConnectRequest = { model: string; smallModel?: string; effort?: string }
 
-export function GatewayAgentRow({ agent, models, busy, disabled, onConnect, onDisconnect, t }: {
+export function GatewayAgentRow({ agent, models, busy, disabled, onConnect, onDisconnect, onCopyKey, t }: {
   t: TFunction
   agent: AgentWiringStatus
   models: GatewayModelInfo[]
@@ -41,6 +41,8 @@ export function GatewayAgentRow({ agent, models, busy, disabled, onConnect, onDi
   disabled: boolean
   onConnect: (request: AgentConnectRequest) => void
   onDisconnect: () => void
+  /** For agents that keep their key in a keychain: issue a new one and copy it. */
+  onCopyKey?: () => void
 }): ReactElement {
   const initialModel = agent.model && models.some((model) => model.id === agent.model) ? agent.model : models[0]?.id ?? ''
   const [model, setModel] = useState(initialModel)
@@ -83,6 +85,10 @@ export function GatewayAgentRow({ agent, models, busy, disabled, onConnect, onDi
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
+        {agent.connected && agent.keyDelivery === 'clipboard' && onCopyKey ? <button type="button" className={settingsButtonClass()} disabled={busy}
+          onClick={onCopyKey} title={t('gatewayAgents.copyKeyHint', { agent: agent.name })}>
+          <KeyRound className="h-3.5 w-3.5" />{t('gatewayAgents.copyKey')}
+        </button> : null}
         {agent.connected ? <button type="button" className={settingsButtonClass()} disabled={busy} onClick={onDisconnect}>
           <Unlink className="h-3.5 w-3.5" />{t('gatewayAgents.disconnect')}
         </button> : null}

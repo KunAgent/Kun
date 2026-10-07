@@ -53,7 +53,7 @@ export type WiringTarget = {
 }
 
 /** `trusted-folders`: Gemini CLI loads ~/.gemini/.env only in folders the user trusted. */
-export type AgentWiringNotice = 'trusted-folders'
+export type AgentWiringNotice = 'trusted-folders' | 'manual-key'
 
 export type AgentProtocol = 'anthropic' | 'responses' | 'chat' | 'gemini'
 
@@ -80,6 +80,11 @@ export interface AgentAdapter {
   pickInAgent?: boolean
   /** A condition the agent itself puts on reading Kun's settings, shown while connected. */
   notice?: AgentWiringNotice
+  /**
+   * `clipboard`: the agent keeps its key outside its config files (a system
+   * keychain), so Kun copies the key once for the user to paste instead.
+   */
+  keyDelivery?: 'clipboard'
   /** Files the agent reads only as strict JSON; it ignores them whole when they have comments. */
   strictJsonFiles?(ctx: WiringContext): string[]
   /** For shared arrays: whether an entry is Kun's own (removed on disconnect). */
@@ -136,6 +141,7 @@ export type AgentWiringStatus = {
   keepsModelList: boolean
   pickInAgent: boolean
   notice?: AgentWiringNotice
+  keyDelivery?: 'clipboard'
   error?: string
   /** Stable reason for `error`, for a translated explanation. */
   errorCode?: import('./errors.js').AgentWiringErrorCode

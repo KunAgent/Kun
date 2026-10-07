@@ -49,6 +49,11 @@ export function GatewayAgentsPanel({ active, translation }: { active: boolean; t
       if (action.action === 'connect') setPending(null)
       if (failed?.length) {
         setNotice({ tone: 'warn', text: t('gatewayAgents.profilePartial', { failed: failed.map((entry) => `${entry.agentId}: ${entry.error}`).join('; ') }) })
+      } else if (hint === 'key-copied') {
+        // Connecting a keychain agent, a new key for it, or a profile that connected one.
+        const name = 'agentId' in action ? next.agents.find((agent) => agent.id === action.agentId)?.name ?? action.agentId
+          : next.agents.find((agent) => agent.connected && agent.keyDelivery === 'clipboard')?.name ?? ''
+        setNotice({ tone: 'ok', text: t('gatewayAgents.keyCopied', { agent: name }) })
       } else if (action.action === 'connect') {
         const name = next.agents.find((agent) => agent.id === action.agentId)?.name ?? action.agentId
         setNotice({ tone: 'ok', text: t(hint === 'restart' ? 'gatewayAgents.connectedRestart' : 'gatewayAgents.connected', { agent: name }) })
@@ -117,7 +122,8 @@ export function GatewayAgentsPanel({ active, translation }: { active: boolean; t
       {visible.map((agent) => <Fragment key={agent.id}>
         <GatewayAgentRow agent={agent} models={overview?.models ?? []}
           t={t} busy={busyAgent === agent.id} disabled={disabled || (busyAgent !== null && busyAgent !== agent.id) || (pending !== null && pending.preview.agentId !== agent.id)}
-          onConnect={(request) => connect(agent.id, request)} onDisconnect={() => { setPending(null); void run({ action: 'disconnect', agentId: agent.id }, agent.id) }} />
+          onConnect={(request) => connect(agent.id, request)} onDisconnect={() => { setPending(null); void run({ action: 'disconnect', agentId: agent.id }, agent.id) }}
+          onCopyKey={() => void run({ action: 'copy-key', agentId: agent.id }, agent.id)} />
         {pending?.preview.agentId === agent.id ? <li className="min-w-0"><GatewayAgentPreview preview={pending.preview} agentName={agent.name}
           busy={busyAgent === agent.id} t={t} onConfirm={confirm} onCancel={() => setPending(null)} /></li> : null}
       </Fragment>)}

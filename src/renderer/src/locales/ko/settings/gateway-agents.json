@@ -32,6 +32,9 @@
     "pickInAgent": "{{agent}}에서 /model로 [Kun] 표시 모델을 고르세요.",
     "connected": "{{agent}}이(가) 이제 Kun을 사용합니다.",
     "connectedRestart": "{{agent}}이(가) 이제 Kun을 사용합니다. 새 세션부터 적용됩니다.",
+    "keyCopied": "{{agent}} 설정이 끝났습니다. 키가 클립보드에 복사되었습니다. {{agent}}의 에이전트 설정에서 Kun 공급자를 찾아 붙여 넣으세요. Kun은 사본을 보관하지 않습니다.",
+    "copyKey": "새 키 복사",
+    "copyKeyHint": "{{agent}}용 새 키를 발급해 복사하고 이전 키는 사용 중지합니다",
     "disconnected": "{{agent}}이(가) 원래 설정으로 돌아갔고 Kun 키가 폐기되었습니다.",
     "synced": "에이전트 {{count}}개의 모델 목록을 업데이트했습니다.",
     "syncedNone": "자체 모델 목록을 가진 연결된 에이전트가 없습니다.",
@@ -65,7 +68,8 @@
       "max": "최대"
     },
     "notices": {
-      "trusted-folders": "{{agent}}는 신뢰한 폴더에서만 Kun 설정을 읽습니다. 신뢰하지 않은 폴더에서는 Kun을 쓰지 않고 API 키가 없다는 오류로 멈춥니다."
+      "trusted-folders": "{{agent}}는 신뢰한 폴더에서만 Kun 설정을 읽습니다. 신뢰하지 않은 폴더에서는 Kun을 쓰지 않고 API 키가 없다는 오류로 멈춥니다.",
+      "manual-key": "{{agent}}은(는) API 키를 시스템 키체인에 보관하므로 {{agent}}의 에이전트 설정(공급자 Kun)에 Kun 키를 한 번 붙여 넣거나 KUN_API_KEY를 설정하세요. 연결할 때 Kun이 키를 복사해 둡니다."
     },
     "errors": {
       "config_unreadable": "{{agent}}의 설정 {{file}}을(를) 읽을 수 없습니다. 파일을 고치거나 삭제한 뒤 연결하세요.",

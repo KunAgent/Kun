@@ -103,6 +103,7 @@ export class AgentWiringService {
       restartRequired: adapter.restartRequired, keepsModelList: adapter.keepsModelList,
       pickInAgent: adapter.pickInAgent === true,
       ...(adapter.notice ? { notice: adapter.notice } : {}),
+      ...(adapter.keyDelivery ? { keyDelivery: adapter.keyDelivery } : {}),
       ...failure
     }
   }
@@ -125,7 +126,7 @@ export class AgentWiringService {
   }
 
   private validTarget(adapter: AgentAdapter, target: WiringTarget): void {
-    if (!target.model.trim() || !target.key || !/^https?:\/\//.test(target.origin)) {
+    if (!target.model.trim() || (!target.key && adapter.keyDelivery !== 'clipboard') || !/^https?:\/\//.test(target.origin)) {
       throw new AgentWiringError('Choose a model and make sure the gateway is running', 'invalid_target')
     }
     if (target.effort && adapter.efforts.length && !adapter.efforts.includes(target.effort) && target.effort !== 'auto') {

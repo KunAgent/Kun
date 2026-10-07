@@ -34,6 +34,7 @@ export const GATEWAY_CLI_USAGE = `Gateway and agents:
   kun gateway middleware                 Middleware counters
   kun agents                             Agents on this computer and their models
   kun agents connect <agent> <model> [--effort <level>] [--small <model>] [--dry-run]
+  kun agents key <agent>                 New key for an agent that keeps it in a keychain (Zed), printed once
   kun agents disconnect <agent>
   kun agents sync                        Rewrite model lists in agents that keep a copy
   kun agents profiles                    Saved profiles
@@ -177,7 +178,10 @@ function printAgents(result: Extract<AgentWiringResult, { ok: true }>, io: Gatew
 
 async function agentsCommand(argv: readonly string[], io: GatewayCliIo, request: RuntimeRequest): Promise<number> {
   const [sub = 'list', first, second] = positional(argv)
-  const bridge = new AgentWiringBridge(request)
+  // Zed keeps its key in the system keychain: the CLI prints it once for the user to paste.
+  const bridge = new AgentWiringBridge(request, undefined, { deliverKey: (key, agent) => {
+    io.stdout.write(`Paste this key into ${agent}'s agent settings (provider Kun), or export KUN_API_KEY=<key>:\n${key}\n`)
+  } })
   let action: AgentWiringAction | undefined
   if (sub === 'list') action = { action: 'list' }
   else if (sub === 'connect' && first && second) {
@@ -186,6 +190,7 @@ async function agentsCommand(argv: readonly string[], io: GatewayCliIo, request:
     action = { action: argv.includes('--dry-run') ? 'preview' : 'connect', agentId: first, model: second,
       ...(effort ? { effort } : {}), ...(small ? { smallModel: small } : {}) }
   } else if (sub === 'disconnect' && first) action = { action: 'disconnect', agentId: first }
+  else if (sub === 'key' && first) action = { action: 'copy-key', agentId: first }
   else if (sub === 'sync') action = { action: 'sync' }
   else if (sub === 'profiles') action = { action: 'list' }
   else if (sub === 'save' && first) action = { action: 'save-profile', name: first }

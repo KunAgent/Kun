@@ -46,6 +46,16 @@ describe('agent rows', () => {
       agent: { ...base, error: 'raw', errorCode: 'config_unsupported', errorFile: '/Users/me/.config/goose/config.yaml' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))
     expect(zh).toContain('~/.config/goose/config.yaml 使用了 Kun 不会自动改写的写法')
   })
+  it('tells Zed users to paste the key and offers a new one once connected', () => {
+    const zed = { ...base, id: 'zed', name: 'Zed', notice: 'manual-key' as const, keyDelivery: 'clipboard' as const, configFiles: ['/Users/me/.config/zed/settings.json'] }
+    const idle = renderToStaticMarkup(createElement(GatewayAgentRow, { t: i18n.getFixedT('en', 'settings'), agent: zed, models, busy: false, disabled: false,
+      onConnect: vi.fn(), onDisconnect: vi.fn(), onCopyKey: vi.fn() }))
+    expect(idle).toContain('Zed keeps API keys in the system keychain')
+    expect(idle).not.toContain('Copy a new key')
+    const connected = renderToStaticMarkup(createElement(GatewayAgentRow, { t: i18n.getFixedT('en', 'settings'), agent: { ...zed, connected: true, model: 'coding' },
+      models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn(), onCopyKey: vi.fn() }))
+    expect(connected).toContain('Copy a new key')
+  })
   it('flags drift and offers reconnect plus disconnect', () => {
     const html = renderToStaticMarkup(createElement(GatewayAgentRow, { t: i18n.getFixedT('en', 'settings'),
       agent: { ...base, connected: true, drifted: true, model: 'coding' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))

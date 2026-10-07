@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import { ipcMain } from 'electron'
+import { clipboard, ipcMain } from 'electron'
 import { openPathWithShell } from '../services/workspace-editors'
 import type { AgentWiringAction, AgentWiringResult } from '../../shared/agent-wiring'
 import { parseAgentWiringAction } from '../services/agent-wiring-actions'
@@ -10,7 +10,9 @@ import { assertTrustedWorkbenchSender } from './app-ipc-handler-utils'
 
 /** Desktop-only bridge: agent gateway keys go from the runtime into agent configs, never to the renderer. */
 export function registerAgentWiringIpc(options: Pick<RegisterAppIpcHandlersOptions, 'getMainWindow' | 'assertRendererRuntimeReady' | 'runtimeRequest'>): void {
-  const bridge = new AgentWiringBridge((path, method, body) => options.runtimeRequest(path, method, body))
+  // Keys for agents that keep them in a keychain (Zed) go to the clipboard here, never to the renderer.
+  const bridge = new AgentWiringBridge((path, method, body) => options.runtimeRequest(path, method, body), undefined,
+    { deliverKey: (key) => clipboard.writeText(key) })
   ipcMain.handle('agent-wiring', async (event, input: unknown): Promise<AgentWiringResult> => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     options.assertRendererRuntimeReady()

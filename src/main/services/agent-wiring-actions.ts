@@ -12,8 +12,9 @@ export function parseAgentWiringAction(input: unknown): AgentWiringAction {
     case 'sync':
       return { action: request.action }
     case 'disconnect':
+    case 'copy-key':
       if (typeof request.agentId !== 'string' || !AGENT_ID.test(request.agentId)) throw new Error('Invalid agent')
-      return { action: 'disconnect', agentId: request.agentId }
+      return { action: request.action, agentId: request.agentId }
     case 'connect':
     case 'preview': {
       if (typeof request.agentId !== 'string' || !AGENT_ID.test(request.agentId) || !MODEL_ID(request.model)) throw new Error('Invalid agent connection')

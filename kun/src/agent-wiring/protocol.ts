@@ -6,6 +6,8 @@ export type AgentWiringAction =
   | { action: 'connect'; agentId: string; model: string; smallModel?: string; effort?: string }
   | { action: 'preview'; agentId: string; model: string; smallModel?: string; effort?: string }
   | { action: 'disconnect'; agentId: string }
+  /** A fresh key for an agent that keeps it outside its config, handed over by the client. */
+  | { action: 'copy-key'; agentId: string }
   | { action: 'sync' }
   | { action: 'save-profile'; name: string }
   | { action: 'apply-profile'; name: string }
