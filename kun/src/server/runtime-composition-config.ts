@@ -24,8 +24,6 @@ import {
   protocolSupportsImageEdit,
   buildComputerUseToolProviders,
   buildBrowserUseToolProviders,
-  buildOfficeCliToolProviders,
-  createConfiguredOfficeCliRunner,
   buildMusicGenToolProviders,
   buildSpeechGenToolProviders,
   buildVideoGenToolProviders,
@@ -64,6 +62,7 @@ import {
   tokenEconomyConfigForOptions
 } from './runtime-factory-config.js'
 import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
+import { isNativeNetworkOnlyApply, OfficeCliRunnerReuse, reusableMcpProviders } from './runtime-config-apply-reuse.js'
 import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentAttachmentStore, createPersistentMemoryStore, createReadyPersistentMemoryFeedback } from './runtime-factory-storage.js'
 import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
@@ -241,6 +240,8 @@ export function createRuntimeConfigController(
 	    }
 	  })
 	  const startedAt = activeOptions.startedAt ?? nowIso()
+  const officeCliReuse = new OfficeCliRunnerReuse()
+  officeCliReuse.seed(process.env.KUN_OFFICECLI_BINARY, join(activeOptions.dataDir, 'officecli-profile'), services.officeCli)
 	  const rebuildCapabilities = (): typeof capabilities => buildCapabilities(capabilitySnapshot())
 	  let applyConfigQueue: Promise<RuntimeConfigApplyResponse> = Promise.resolve({ ok: true })
 	  const applyConfig = (request: RuntimeConfigApplyRequest): Promise<RuntimeConfigApplyResponse> => {
@@ -253,6 +254,11 @@ export function createRuntimeConfigController(
 	  const applyConfigOnce = async (
 	    request: RuntimeConfigApplyRequest
 	  ): Promise<RuntimeConfigApplyResponse> => {
+	    if (isNativeNetworkOnlyApply(request)) {
+	      activeOptions = { ...activeOptions, nativeAgentNetwork: request.nativeAgentNetwork }
+	      core.activeOptions = activeOptions
+	      return { ok: true }
+	    }
 	    if (
 	      request.serve?.observability !== undefined &&
 	      !isDeepStrictEqual(request.serve.observability, activeOptions.observability ?? {})
@@ -297,7 +303,7 @@ export function createRuntimeConfigController(
 	      ? extensionCredentialKeyProvider.encryptor
 	      : undefined
 	    const [nextMcpProviders, nextSkillRuntime] = await Promise.all([
-	      buildMcpToolProviders(nextOptions.capabilities?.mcp, {
+	      reusableMcpProviders(mcpProviders, activeOptions, nextOptions) ?? buildMcpToolProviders(nextOptions.capabilities?.mcp, {
 	        oauthStorageDir: join(activeOptions.dataDir, 'mcp-oauth'),
 	        ...(nextOAuthEncryptor ? { oauthEncryptor: nextOAuthEncryptor } : {})
 	      }),
@@ -339,15 +345,8 @@ export function createRuntimeConfigController(
 	      ...buildBuiltinHooks({ quality: nextOptions.quality ?? DEFAULT_QUALITY_CONFIG }),
 	      ...resolveConfiguredHooks(nextOptions.hooks)
 	    ]
-	    const nextOfficeCliRunner = createConfiguredOfficeCliRunner({
-	      binaryPath: process.env.KUN_OFFICECLI_BINARY,
-	      profileDir: join(nextOptions.dataDir, 'officecli-profile')
-	    })
-	    const nextOfficeCliProviders = buildOfficeCliToolProviders({
-	      binaryPath: process.env.KUN_OFFICECLI_BINARY,
-	      profileDir: join(nextOptions.dataDir, 'officecli-profile'),
-	      ...(nextOfficeCliRunner ? { runner: nextOfficeCliRunner } : {})
-	    })
+	    const { runner: nextOfficeCliRunner, providers: nextOfficeCliProviders } =
+	      officeCliReuse.resolve(process.env.KUN_OFFICECLI_BINARY, join(nextOptions.dataDir, 'officecli-profile'))
 	    const nextSubagentConfig = nextOptions.capabilities?.subagents
 	      ? mergeBuiltinSubagentProfiles(nextOptions.capabilities.subagents)
 	      : undefined
@@ -659,7 +658,7 @@ export function createRuntimeConfigController(
 	    }).catch((error) => {
 	      console.warn('[kun] MCP background reconnect failed after config apply:', error)
 	    })
-	    void previousMcpProviders.close().catch(() => undefined)
+	    if (previousMcpProviders !== mcpProviders) void previousMcpProviders.close().catch(() => undefined)
 	    return {
 	      ok: true,
 	      ...(Object.keys(rejectedSections).length ? { rejectedSections } : {})
@@ -679,7 +678,7 @@ export function createRuntimeConfigController(
 	      }
 	    } finally {
 	      stagedBrowserUseBinding.rollback()
-	      if (!stagedGenerationCommitted) {
+	      if (!stagedGenerationCommitted && nextMcpProviders !== mcpProviders) {
 	        await nextMcpProviders.close().catch(() => undefined)
 	      }
 	    }

@@ -630,6 +630,7 @@ export async function createRuntimeServices(
     memoryDistillation,
     designCanvasProvider,
     officeCliProviders,
+    officeCli: { runner: officeCliRunner, providers: officeCliProviders },
     childToolHost,
     adeStores,
     attribution,
