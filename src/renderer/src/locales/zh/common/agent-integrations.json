@@ -1,8 +1,9 @@
 {
   "agentIntegrations": {
-    "catalogDescription": "管理对话 Agent、交互式终端 Agent 和应用集成。",
-    "search": "搜索 Agent 和应用",
+    "catalogDescription": "管理可以在 Kun 中对话的 Agent：安装、登录与连接配置。",
+    "search": "搜索 Agent",
     "clearSearch": "清除搜索",
+    "advanced": "高级设置",
     "filterLabel": "集成类型",
     "filters": { "all": "全部", "chat": "对话", "terminal": "终端", "application": "应用" },
     "loadingCatalog": "正在检测 Agent 和应用…",

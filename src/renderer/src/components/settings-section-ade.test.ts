@@ -255,8 +255,7 @@ describe('AgentsHarnessesSettingsPanel', () => {
     const renderer = renderPanel(vi.fn())
     expect(renderer.root.findAllByProps({ 'data-agent-detail-settings': true })).toHaveLength(1)
     expect(renderer.root.findAllByProps({ 'data-agent-advanced-settings': true })).toHaveLength(0)
-    const advanced = renderer.root.findAllByType('button' as never)
-      .find((button) => button.props['aria-label'] === 'adeAgentAction.specifyPath')!
+    const advanced = renderer.root.findByProps({ 'data-agent-advanced-toggle': true })
     act(() => advanced.props.onClick())
     expect(renderer.root.findAllByProps({ 'data-agent-advanced-settings': true })).toHaveLength(1)
     act(() => renderer.unmount())

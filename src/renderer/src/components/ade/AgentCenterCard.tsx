@@ -1,5 +1,5 @@
 import { AgentUpdateControl } from './AgentUpdateControl'
-import { useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
 import type { AdeHarnessRow, AdeHarnessTestResult } from '@shared/ade-harnesses'
 import type { KunHarnessSettingsV1 } from '@shared/app-settings'
@@ -7,17 +7,15 @@ import {
   harnessUnavailableLabelKey,
   harnessUnavailableNextStepKey
 } from '../../store/harness-store'
-import { AgentIcon } from '../agent-icon'
 import { useChatStore } from '../../store/chat-store'
 import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { SettingRow } from '../settings-controls'
-import { harnessProfileEnabled, selectedHarnessProfile, terminalHarnessProfileReady } from '@shared/harness-enablement'
+import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-enablement'
 import { AgentEnablementPanel } from './AgentEnablementPanel'
 import { AgentSettingsSelect } from './AgentSettingsSelect'
 import { permissionFollowsKunLevel } from '../../lib/harness-native-permission'
 import { AgentInstallControl } from './AgentInstallControl'
-import { AgentCenterApplicationCard } from './AgentCenterApplicationCard'
-import { AgentCenterTerminalControl } from './AgentCenterTerminalControl'
+import { AgentBadge, AgentDetailHeader, agentStatusTone } from './AgentCenterParts'
 import {
   agentCardModel,
   type AgentCardAction,
@@ -32,7 +30,6 @@ const TRANSPORT_LABEL_KEY: Record<string, string> = {
   acp: 'adeAgentTransport.acp',
   'codex-app-server': 'adeAgentTransport.codexAppServer',
   'pi-rpc': 'adeAgentTransport.piRpc',
-  terminal: 'adeAgentTransport.terminal'
 }
 
 type T = (key: string, options?: Record<string, unknown>) => string
@@ -116,19 +113,20 @@ export function AgentCenterCard({
   const enabled = isKun || harnessProfileEnabled(settings, selectedHarnessProfile(row, settings))
   const custom = !definition.builtin
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const advancedRef = useRef<HTMLDivElement>(null)
+  // The "set command path" action sits above the fold; reveal the section it opens.
+  useEffect(() => {
+    if (advancedOpen) advancedRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+  }, [advancedOpen])
   const [reasonOpen, setReasonOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [testing, setTesting] = useState<false | 'handshake' | 'trial'>(false)
   const [testResult, setTestResult] = useState<AdeHarnessTestResult | null>(null)
 
-  if (definition.transport === 'application') return <AgentCenterApplicationCard row={row} settings={settings} probing={probing}
-    onProbe={onProbe} onSetBinaryPath={onSetBinaryPath} beforeSave={beforeEnableCheck} t={t} />
-
   const model = agentCardModel(row, {
     enabled,
     platform,
-    isDefault: settings.defaultHarnessId === definition.id,
-    ...(definition.transport === 'terminal' ? { ready: terminalHarnessProfileReady(row, selectedHarnessProfile(row, settings)) } : {})
+    isDefault: settings.defaultHarnessId === definition.id
   })
   const busy = probing || testing !== false || model.state === 'detecting'
 
@@ -186,7 +184,7 @@ export function AgentCenterCard({
         onSetDefault()
         break
       case 'specifyPath':
-        setAdvancedOpen((open) => !open)
+        toggleAdvanced()
         break
       case 'reason':
         setReasonOpen((open) => !open)
@@ -231,72 +229,34 @@ export function AgentCenterCard({
   const setupNote = model.primary.kind === 'command' && model.primary.note
     ? model.primary.note
     : undefined
+  const statusText = providerOnly && (model.reasonCode === 'signed_out' || model.reasonCode === null)
+    ? t('adeAgentAction.providerConnection') : statusLine(model, status, t, tSettings)
+  const showsCommand = Boolean(status.resolvedCommand && !providerOnly)
+  const hasDetailSettings = showsCommand || definition.permissionModes.length > 0
+  const toggleAdvanced = (): void => setAdvancedOpen((open) => !open)
 
   return (
-    <div className="border-b border-ds-border-muted px-1 py-3 last:border-b-0" data-agent-card={definition.id}>
-      <div className="flex items-start gap-3">
-        <AgentIcon harnessId={definition.id} size={20} className="mt-0.5 text-ds-muted" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-[13px] font-semibold text-ds-ink">
-            <span className="truncate">{definition.displayName}</span>
-            {definition.availability === 'preview' ? <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-700">{t('agentEnablement.preview')}</span> : null}
-            {status.version ? (
-              <span className="shrink-0 rounded-md bg-ds-main/70 px-1.5 py-0.5 font-mono text-[11px] text-ds-muted">
-                {status.version}
-              </span>
-            ) : null}
-            <span className="shrink-0 rounded-md border border-ds-border-muted px-1.5 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-ds-faint">
-              {t(TRANSPORT_LABEL_KEY[definition.transport] ?? 'adeAgentTransport.acp')}
-            </span>
-          </div>
-          <div className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-ds-faint">
-            {model.state === 'detecting' ? (
-              <RefreshCw className="h-3 w-3 shrink-0 animate-spin" strokeWidth={1.8} />
-            ) : null}
-            <span className="truncate">{providerOnly && (model.reasonCode === 'signed_out' || model.reasonCode === null)
-              ? t('adeAgentAction.providerConnection') : statusLine(model, status, t, tSettings)}</span>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            {definition.credentialModes.map((mode) => (
-              <span
-                key={mode}
-                className="rounded-md bg-ds-main/60 px-1.5 py-0.5 text-[10.5px] text-ds-muted"
-              >
-                {t(`adeCredential.${mode === 'native-login' ? 'nativeLogin' : mode === 'kun-gateway' ? 'kunGateway' : 'provider'}`)}
-              </span>
-            ))}
-            {settings.defaultHarnessId === definition.id ? (
-              <span className="rounded-md bg-accent-tint/15 px-1.5 py-0.5 text-[10.5px] font-medium text-accent">
-                {t('adeAgentAction.isDefault')}
-              </span>
-            ) : null}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {!providerOnly ? <button data-settings-action="ghost" data-settings-size="icon"
-            type="button"
-            aria-label={t('adeAgentAction.specifyPath')}
-            aria-expanded={advancedOpen}
-            onClick={() => setAdvancedOpen((open) => !open)}
-            className="rounded-md p-1 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-          >
-            <ChevronDown
-              className={`h-4 w-4 transition ${advancedOpen ? 'rotate-180' : ''}`}
-              strokeWidth={1.8}
-            />
-          </button> : null}
-        </div>
-      </div>
+    <div className="space-y-4" data-agent-card={definition.id}>
+      <AgentDetailHeader
+        harnessId={definition.id}
+        name={definition.displayName}
+        tone={agentStatusTone(model.state)}
+        status={statusText}
+        badges={<>
+          {!isKun ? <AgentBadge>{t(TRANSPORT_LABEL_KEY[definition.transport] ?? 'adeAgentTransport.acp')}</AgentBadge> : null}
+          {status.version ? <AgentBadge mono>{status.version}</AgentBadge> : null}
+          {definition.availability === 'preview' ? <AgentBadge tone="warning">{t('agentEnablement.preview')}</AgentBadge> : null}
+          {settings.defaultHarnessId === definition.id ? <AgentBadge tone="accent">{t('adeAgentAction.isDefault')}</AgentBadge> : null}
+        </>}
+        meta={definition.credentialModes.length ? definition.credentialModes.map((mode) => (
+          <AgentBadge key={mode}>
+            {t(`adeCredential.${mode === 'native-login' ? 'nativeLogin' : mode === 'kun-gateway' ? 'kunGateway' : 'provider'}`)}
+          </AgentBadge>
+        )) : undefined}
+      />
 
-      {!isKun && definition.transport !== 'terminal' ? <AgentUpdateControl row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} t={t} /> : null}
-      {!isKun ? <AgentEnablementPanel row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} /> : null}
-      {definition.transport === 'terminal' ? <AgentCenterTerminalControl row={row} settings={settings} t={t} /> : null}
-      {definition.builtin && (definition.setup?.install?.length || definition.setup?.adapter) ? (
-        <AgentInstallControl harnessId={definition.id} action={model.reasonCode === 'adapter_missing' ? 'adapter' : 'install'}
-          needed={status.installed !== 'yes' || status.versionSupported === false} t={t} />
-      ) : null}
       {model.state !== 'detecting' && (model.primary.kind !== 'none' || model.secondary.length > 0) ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-agent-actions>
           {actionButton(model.primary, true)}
           {model.secondary.map((action) => actionButton(action, false))}
           {copied ? (
@@ -313,83 +273,103 @@ export function AgentCenterCard({
         />
       ) : null}
       {setupNote ? (
-        <div className="mt-1 text-[11px] text-ds-faint">{setupNote}</div>
+        <div className="text-[11px] text-ds-faint">{setupNote}</div>
       ) : null}
       {model.primary.kind === 'command' && !onSetupCommand ? (
-        <code className="mt-1 block truncate rounded-md bg-ds-main/60 px-2 py-1 font-mono text-[11px] text-ds-muted">
+        <code className="block truncate rounded-md bg-ds-subtle px-2 py-1 font-mono text-[11px] text-ds-muted">
           {model.primary.command}
         </code>
       ) : null}
-
       {status.message && reasonOpen ? (
-        <div className="mt-2 rounded-lg bg-ds-main/50 px-2.5 py-1.5 text-[11px] text-ds-muted">
+        <div className="rounded-lg bg-ds-subtle px-3 py-2 text-[11px] text-ds-muted">
           <span className="font-medium">{t('adeHarnessViewReason')}: </span>
           {status.message}
         </div>
       ) : null}
 
-      <div className="mt-3 space-y-3" data-agent-detail-settings>
-        {status.resolvedCommand && !providerOnly ? (
-          <div className="min-w-0 rounded-lg border border-ds-border-muted bg-ds-main/40 px-3 py-2 text-[11px] text-ds-muted" data-agent-connection-summary>
+      {definition.builtin && (definition.setup?.install?.length || definition.setup?.adapter) ? (
+        <AgentInstallControl harnessId={definition.id} action={model.reasonCode === 'adapter_missing' ? 'adapter' : 'install'}
+          needed={status.installed !== 'yes' || status.versionSupported === false} t={t} />
+      ) : null}
+      {!isKun ? <AgentEnablementPanel row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} /> : null}
+      {!isKun ? <AgentUpdateControl row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} t={t} /> : null}
+
+      <div className="space-y-3" data-agent-detail-settings hidden={!hasDetailSettings}>
+        {showsCommand ? (
+          <div className="min-w-0 rounded-lg bg-ds-subtle px-3 py-2 text-[11px] text-ds-muted" data-agent-connection-summary>
             <span className="font-medium">{tSettings('adeSettings.harnessCommandPath')}: </span>
             <span className="break-all font-mono">{status.resolvedCommand}</span>
           </div>
         ) : null}
-        {definition.permissionModes.length && permissionFollowsKunLevel(definition.transport) ? (
-          <SettingRow
-            title={tSettings('adeSettings.harnessPermissionMode')}
-            description={tSettings('adeSettings.harnessPermissionModeFollowsKun', { agent: definition.displayName })}
-            control={<span className="text-xs text-ds-muted">{tSettings('adeSettings.harnessPermissionModeDefault')}</span>}
-          />
-        ) : definition.permissionModes.length ? (
-          <SettingRow
-            title={tSettings('adeSettings.harnessPermissionMode')}
-            description={tSettings('adeSettings.harnessPermissionModeDesc')}
-            control={
-              <AgentSettingsSelect label={tSettings('adeSettings.harnessPermissionMode')}
-                value={settings.defaults[definition.id]?.permissionMode ?? ''}
-                onChange={onSetPermissionMode}
-                options={[{ value: '', label: tSettings('adeSettings.harnessPermissionModeDefault') },
-                  ...definition.permissionModes.map((mode) => ({ value: mode.id, label: mode.label }))]} />
-            }
-          />
+        {definition.permissionModes.length ? (
+          <div className="rounded-xl border border-ds-border-muted px-1">
+            {permissionFollowsKunLevel(definition.transport) ? (
+              <SettingRow
+                title={tSettings('adeSettings.harnessPermissionMode')}
+                description={tSettings('adeSettings.harnessPermissionModeFollowsKun', { agent: definition.displayName })}
+                control={<span className="text-xs text-ds-muted">{tSettings('adeSettings.harnessPermissionModeDefault')}</span>}
+              />
+            ) : (
+              <SettingRow
+                title={tSettings('adeSettings.harnessPermissionMode')}
+                description={tSettings('adeSettings.harnessPermissionModeDesc')}
+                control={
+                  <AgentSettingsSelect label={tSettings('adeSettings.harnessPermissionMode')}
+                    value={settings.defaults[definition.id]?.permissionMode ?? ''}
+                    onChange={onSetPermissionMode}
+                    options={[{ value: '', label: tSettings('adeSettings.harnessPermissionModeDefault') },
+                      ...definition.permissionModes.map((mode) => ({ value: mode.id, label: mode.label }))]} />
+                }
+              />
+            )}
+          </div>
         ) : null}
       </div>
 
-      {advancedOpen && !providerOnly ? (
-        <div className="mt-2 space-y-3" data-agent-advanced-settings>
-          {status.networkSource ? <SettingRow
-            title={t('adeAgentNetwork.title')}
-            description={t(status.networkSource === 'explicit-required'
-              ? 'adeAgentNetwork.explicitHint' : 'adeAgentNetwork.hint')}
-            control={<div className="flex flex-wrap items-center justify-end gap-2 text-[12px]">
-              <span data-agent-network-source={status.networkSource} className="text-ds-muted">
-                {t(`adeAgentNetwork.${status.networkSource}`)}
-              </span>
-              <button aria-busy={probing} data-settings-action="secondary" data-settings-size="default" type="button" disabled={busy} onClick={onProbe}
-                className="rounded-md border border-ds-border-muted px-2 py-1 text-ds-ink hover:bg-ds-hover disabled:opacity-50">
-                {t('adeAgentAction.retry')}
-              </button>
-            </div>}
-          /> : null}
-          <SettingRow
-            title={tSettings('adeSettings.harnessCommandPath')}
-            description={status.resolvedCommand || tSettings('adeSettings.harnessCommandPathDesc')}
-            control={
-              <input
-                className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 font-mono text-[12px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
-                value={settings.binaryPaths[definition.id] ?? ''}
-                placeholder={status.resolvedCommand ?? definition.id}
-                spellCheck={false}
-                onChange={(event) => onSetBinaryPath(event.target.value)}
+      {!providerOnly ? (
+        <div ref={advancedRef} className="overflow-hidden rounded-xl border border-ds-border-muted">
+          <button type="button" data-agent-advanced-toggle aria-expanded={advancedOpen} onClick={toggleAdvanced}
+            className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-tint/40">
+            <span>{t('agentIntegrations.advanced')}</span>
+            <ChevronDown aria-hidden className={`h-4 w-4 shrink-0 transition ${advancedOpen ? 'rotate-180' : ''}`} strokeWidth={1.8} />
+          </button>
+          {advancedOpen ? (
+            <div className="border-t border-ds-border-muted px-1" data-agent-advanced-settings>
+              {status.networkSource ? <SettingRow
+                title={t('adeAgentNetwork.title')}
+                description={t(status.networkSource === 'explicit-required'
+                  ? 'adeAgentNetwork.explicitHint' : 'adeAgentNetwork.hint')}
+                control={<div className="flex flex-wrap items-center justify-end gap-2 text-[12px]">
+                  <span data-agent-network-source={status.networkSource} className="text-ds-muted">
+                    {t(`adeAgentNetwork.${status.networkSource}`)}
+                  </span>
+                  <button aria-busy={probing} data-settings-action="secondary" data-settings-size="default" type="button" disabled={busy} onClick={onProbe}
+                    className="rounded-md border border-ds-border-muted px-2 py-1 text-ds-ink hover:bg-ds-hover disabled:opacity-50">
+                    {t('adeAgentAction.retry')}
+                  </button>
+                </div>}
+              /> : null}
+              <SettingRow
+                wideControl
+                title={tSettings('adeSettings.harnessCommandPath')}
+                description={tSettings('adeSettings.harnessCommandPathDesc')}
+                control={
+                  <input
+                    className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 font-mono text-[12px] text-ds-ink shadow-sm focus:border-accent focus:outline-none"
+                    value={settings.binaryPaths[definition.id] ?? ''}
+                    placeholder={status.resolvedCommand ?? definition.id}
+                    spellCheck={false}
+                    onChange={(event) => onSetBinaryPath(event.target.value)}
+                  />
+                }
               />
-            }
-          />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       {custom ? (
-        <div className="mt-2 flex items-center gap-1">
+        <div className="flex items-center gap-1">
           {onExportCustom ? (
             <button data-settings-action="secondary" data-settings-size="default"
               type="button"
@@ -453,7 +433,7 @@ function HarnessTestBlock({
   const trial = result.trial
   return (
     <div
-      className="mt-2 space-y-1 rounded-lg bg-ds-main/50 px-2.5 py-2 text-[11px] text-ds-muted"
+      className="space-y-1 rounded-lg bg-ds-subtle px-3 py-2 text-[11px] text-ds-muted"
       data-test-result={result.harnessId}
     >
       <TestLevelRow

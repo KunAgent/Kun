@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { defaultKunHarnessSettings } from '@shared/app-settings-kun-harness'
 vi.mock('../agent-icon', () => ({ AgentIcon: () => null }))
-import { AgentCatalogControls, AgentCatalogRail } from './AgentCenterCatalog'
+import { AgentCatalogRail, AgentCatalogSearch } from './AgentCenterCatalog'
 
 const rows: AdeHarnessRow[] = Array.from({ length: 43 }, (_, index) => ({
   definition: { id: `agent-${index}`, displayName: `Agent ${index}`, transport: index % 3 === 0 ? 'application' : index % 3 === 1 ? 'terminal' : 'acp',
@@ -41,15 +41,11 @@ it('keeps a large catalog in a scrollable rail and supports arrow and end/home k
   expect(document.activeElement?.getAttribute('data-agent-list-id')).toBe('agent-0')
   expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
 })
-it('exposes labeled search and ordinary keyboard accessible filter buttons', async () => {
-  const filter = vi.fn(), search = vi.fn()
-  await act(async () => root.render(createElement(AgentCatalogControls, {
-    filter: 'application', search: 'editor', onFilter: filter, onSearch: search, t
-  })))
+it('exposes a labeled search with a clear button and no type filters', async () => {
+  const search = vi.fn()
+  await act(async () => root.render(createElement(AgentCatalogSearch, { search: 'editor', onSearch: search, t })))
   expect(container.querySelector<HTMLInputElement>('input')?.getAttribute('aria-label')).toBe('agentIntegrations.search')
-  expect(container.querySelector('[data-agent-catalog-filter="application"]')?.getAttribute('aria-pressed')).toBe('true')
-  await act(async () => container.querySelector<HTMLButtonElement>('[data-agent-catalog-filter="terminal"]')!.click())
-  expect(filter).toHaveBeenCalledWith('terminal')
+  expect(container.querySelector('[data-agent-catalog-filter]')).toBeNull()
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="agentIntegrations.clearSearch"]')!.click())
   expect(search).toHaveBeenCalledWith('')
 })

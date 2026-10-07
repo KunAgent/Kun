@@ -8,14 +8,14 @@ import { getProvider } from '../../agent/registry'
 import { harnessRowUnavailableCode, loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { AgentIcon } from '../agent-icon'
 import { setupInstallCommand, setupLoginCommand } from './agent-center-actions'
+import { agentIntegrationKind } from './agent-center-catalog'
 import { AgentCenterCustomForm } from './agent-center-custom-form'
-import { AgentCenterTerminalForm } from './agent-center-terminal-form'
 import { AgentInstallControl } from './AgentInstallControl'
 
 const STATE_KEY = 'kun-agent-add-wizard-v1'
 const CHECK_TTL_MS = 10 * 60 * 1_000
 
-type AddKind = 'builtin' | 'custom' | 'terminal'
+type AddKind = 'builtin' | 'custom'
 type Step = 'choose' | 'connect' | 'finish'
 type Check = {
   id: string
@@ -35,7 +35,7 @@ function readState(): WizardState {
   try {
     const parsed = JSON.parse(window.sessionStorage.getItem(STATE_KEY) ?? '{}') as Partial<WizardState>
     if (!['choose', 'connect', 'finish'].includes(parsed.step ?? '') ||
-      !['builtin', 'custom', 'terminal'].includes(parsed.kind ?? '')) return initialState
+      !['builtin', 'custom'].includes(parsed.kind ?? '')) return initialState
     return {
       step: parsed.step!,
       kind: parsed.kind!,
@@ -208,17 +208,9 @@ export function AgentCenterAddWizard({
     })
     void loadHarnesses(true)
   }
-  const completeTerminal = (id: string): void => {
-    update({
-      step: 'finish', kind: 'terminal', selectedId: id,
-      check: { id, fingerprint: fingerprint(undefined, undefined), level: 'saved', ok: false, checkedAt: Date.now() }
-    })
-    void loadHarnesses(true)
-  }
 
   const actionClass = 'rounded-lg border border-ds-border px-3 py-1.5 text-[12px] font-medium text-ds-muted hover:bg-ds-hover hover:text-ds-ink disabled:opacity-45'
-  const kindLabel = state.kind === 'custom' ? t('agentAdd.customAcp')
-    : state.kind === 'terminal' ? t('agentAdd.terminal') : row?.definition.displayName ?? ''
+  const kindLabel = state.kind === 'custom' ? t('agentAdd.customAcp') : row?.definition.displayName ?? ''
   const content = (
     <div role="dialog" aria-modal="true" aria-label={t('agentAdd.title')} data-agent-add-wizard className={`${settingsSurface ? 'ds-settings-surface ' : ''}fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-3 md:p-6`}>
       <div className="flex max-h-[min(90vh,760px)] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-ds-border bg-ds-card shadow-2xl">
@@ -239,7 +231,7 @@ export function AgentCenterAddWizard({
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {state.step === 'choose' ? (
             <div className="space-y-2" data-agent-add-choose>
-              {rows.filter((candidate) => candidate.definition.builtin && candidate.definition.id !== 'kun' && candidate.definition.id !== 'gemini-cli' && candidate.definition.availability !== 'retired').map((candidate) => {
+              {rows.filter((candidate) => candidate.definition.builtin && candidate.definition.id !== 'kun' && candidate.definition.id !== 'gemini-cli' && candidate.definition.availability !== 'retired' && agentIntegrationKind(candidate) === 'chat').map((candidate) => {
                 return (
                   <button key={candidate.definition.id} type="button" onClick={() => choose('builtin', candidate.definition.id)} data-agent-add-select={candidate.definition.id} className="flex w-full items-center gap-3 rounded-xl border border-ds-border px-3 py-2 text-left text-ds-ink hover:bg-ds-hover">
                     <AgentIcon harnessId={candidate.definition.id} size={20} />
@@ -250,7 +242,6 @@ export function AgentCenterAddWizard({
               })}
               <div className="grid grid-cols-2 gap-2 border-t border-ds-border-muted pt-3">
                 <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => choose('custom')} className={actionClass} data-agent-add-custom>{t('agentAdd.customAcp')}</button>
-                <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => choose('terminal')} className={actionClass} data-agent-add-terminal>{t('agentAdd.terminal')}</button>
                 <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => choose('custom')} className={actionClass} data-agent-add-import>{t('agentAdd.import')}</button>
               </div>
             </div>
@@ -260,8 +251,6 @@ export function AgentCenterAddWizard({
               <h3 className="text-[13px] font-semibold text-ds-ink">{kindLabel}</h3>
               {state.kind === 'custom' ? (
                 <AgentCenterCustomForm settings={settings} updateKun={updateKun} t={tSettings} onSaved={completeCustom} />
-              ) : state.kind === 'terminal' ? (
-                <AgentCenterTerminalForm settings={settings} updateKun={updateKun} onSaved={completeTerminal} t={t} />
               ) : row ? (
                 <>
                   <p className="text-[12px] text-ds-muted">{row.definition.credentialModes[0] === 'native-login'
@@ -289,8 +278,7 @@ export function AgentCenterAddWizard({
           {state.step === 'finish' ? (
             <div className="space-y-3" data-agent-add-finish>
               <div className="flex items-center gap-2"><AgentIcon harnessId={state.selectedId} size={24} /><h3 className="text-[14px] font-semibold text-ds-ink">{kindLabel || state.selectedId}</h3></div>
-              <p className="text-[12px] text-ds-muted" data-agent-add-check-state={state.kind === 'terminal' ? 'terminal' : checkFresh && state.check?.ok ? 'passed' : state.check?.ok ? 'stale' : 'unverified'}>{state.kind === 'terminal' ? t('agentAdd.terminalOnly')
-                : checkFresh && state.check?.ok ? t(state.check.level === 'trial' ? 'agentAdd.trialPassed' : 'agentAdd.checkPassed')
+              <p className="text-[12px] text-ds-muted" data-agent-add-check-state={checkFresh && state.check?.ok ? 'passed' : state.check?.ok ? 'stale' : 'unverified'}>{checkFresh && state.check?.ok ? t(state.check.level === 'trial' ? 'agentAdd.trialPassed' : 'agentAdd.checkPassed')
                   : state.check?.ok ? t('agentAdd.checkStale') : t('agentAdd.savedUnready')}</p>
               {state.check?.durationMs !== undefined ? <p className="text-[11px] text-ds-faint">{state.check.durationMs} ms</p> : null}
               {state.check?.detail ? <p role="alert" className="break-words text-[12px] text-ds-status-danger">{state.check.detail}</p> : null}

@@ -63,8 +63,8 @@ async function runUnifiedCodeFlow({
   const claudeCard = harnessPanel.locator('[data-agent-card="claude-code"]')
   await claudeCard.waitFor()
   await capture('3-agent-connection-settings')
-  await claudeCard.locator('button[aria-expanded]').first().click()
-  await claudeCard.locator('input').first().fill(claudeStubUpdated)
+  await claudeCard.locator('[data-agent-advanced-toggle]').click()
+  await claudeCard.locator('[data-agent-advanced-settings] input').first().fill(claudeStubUpdated)
   await poll(async () => {
     const probe = await runtimeRequest(page, '/v1/harnesses/claude-code/probe', 'POST')
     return probe.status?.resolvedCommand === claudeStubUpdated

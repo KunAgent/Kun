@@ -102,19 +102,21 @@ describe('AgentCenterAddWizard', () => {
     act(() => root.unmount())
   })
 
-  it('saves a terminal agent as terminal-only without claiming a handshake', async () => {
-    const { root, updateKun } = render()
-    await act(async () => root.root.findByProps({ 'data-agent-add-terminal': true }).props.onClick())
-    await act(async () => {
-      root.root.findByProps({ 'data-terminal-name': true }).props.onChange({ target: { value: 'My Shell' } })
-      root.root.findByProps({ 'data-terminal-command': true }).props.onChange({ target: { value: '/bin/my-shell' } })
+  it('offers only chat Agents and no terminal-only entry', () => {
+    const terminal: AdeHarnessRow = { ...codex, definition: { ...codex.definition, id: 'aider', displayName: 'Aider', transport: 'terminal' },
+      status: { ...codex.status, harnessId: 'aider' } }
+    const application: AdeHarnessRow = { ...codex, definition: { ...codex.definition, id: 'editor', displayName: 'Editor', transport: 'application' },
+      status: { ...codex.status, harnessId: 'editor' } }
+    let root!: ReactTestRenderer
+    act(() => {
+      root = create(createElement(AgentCenterAddWizard, {
+        rows: [codex, terminal, application], settings, updateKun: vi.fn(), onClose: vi.fn(), onSelectAgent: vi.fn()
+      }))
     })
-    await act(async () => root.root.findByProps({ 'data-terminal-save': true }).props.onClick())
-    expect(updateKun).toHaveBeenCalledWith({ harnesses: expect.objectContaining({
-      terminalAgents: [expect.objectContaining({ id: 'terminal-my-shell', command: '/bin/my-shell' })]
-    }) })
-    expect(provider.testHarness).not.toHaveBeenCalled()
-    expect(root.root.findAllByProps({ 'data-agent-add-finish': true })).toHaveLength(1)
+    expect(root.root.findAll((node) => typeof node.props['data-agent-add-select'] === 'string' && node.type === 'button')
+      .map((node) => node.props['data-agent-add-select'])).toEqual(['codex'])
+    expect(root.root.findAllByProps({ 'data-agent-add-terminal': true })).toHaveLength(0)
+    act(() => root.unmount())
   })
 
   it('routes the import entry into the existing ACP import form', async () => {

@@ -1,0 +1,349 @@
+/* Shared desktop loading state (components/KunLoader.tsx): Kun riding waves. */
+
+.kun-loader {
+  --kun-loader-crest: 1.5s;
+  /* Mascot water blues (same family as the work logo), fixed because Kun's art is. */
+  --kun-loader-water: rgb(133, 193, 241);
+  --kun-loader-deep: rgb(94, 156, 220);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  opacity: 0;
+  animation: kun-loader-in 0.32s ease-out 0.12s forwards;
+}
+
+.kun-loader__scene {
+  position: relative;
+  width: 160px;
+  height: 92px;
+}
+
+/* Soft sky glow behind Kun. */
+.kun-loader__scene::before {
+  content: '';
+  position: absolute;
+  inset: 8px 22px 4px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--kun-loader-water) 20%, transparent), transparent);
+}
+
+/* Each sea layer fades out at both ends so the waves read as a small island of water. */
+.kun-loader__sea {
+  position: absolute;
+  inset-inline: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+}
+
+.kun-loader__sea--back {
+  bottom: 8px;
+  height: 22px;
+}
+
+.kun-loader__sea--front {
+  bottom: 0;
+  height: 20px;
+}
+
+.kun-loader__wave {
+  display: block;
+  width: 200%;
+  height: 100%;
+}
+
+/* One crest passes under Kun per bob, so the bird rides the swell. */
+.kun-loader__sea--front .kun-loader__wave {
+  fill: color-mix(in srgb, var(--kun-loader-water) 72%, var(--ds-bg-main));
+  animation: kun-loader-wave calc(var(--kun-loader-crest) * 2) linear infinite;
+}
+
+.kun-loader__sea--back .kun-loader__wave {
+  fill: color-mix(in srgb, var(--kun-loader-water) 32%, var(--ds-bg-main));
+  animation: kun-loader-wave 4.6s linear -1.3s infinite;
+}
+
+.kun-loader__rider {
+  position: absolute;
+  bottom: 10px;
+  left: calc(50% - 34px);
+  width: 76px;
+  transform-origin: 44% 100%;
+  animation: kun-loader-hop 6s ease-in-out infinite;
+}
+
+.kun-loader__bird {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: pointer;
+  -webkit-user-drag: none;
+  transform-origin: 44% 90%;
+  animation: kun-loader-bob var(--kun-loader-crest) ease-in-out infinite;
+}
+
+.kun-loader__bird[data-flip] {
+  transform-origin: 44% 55%;
+  animation: kun-loader-flip 0.9s cubic-bezier(0.3, 0.6, 0.3, 1);
+}
+
+/* Two droplets thrown up when Kun lands from a hop (same 6s clock as the hop). */
+.kun-loader__splash {
+  position: absolute;
+  bottom: 14px;
+  left: calc(50% - 3px);
+}
+
+.kun-loader__splash > i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--kun-loader-deep) 80%, var(--ds-bg-main));
+  opacity: 0;
+  animation: kun-loader-splash-left 6s ease-out infinite;
+}
+
+.kun-loader__splash > i:nth-child(2) {
+  animation-name: kun-loader-splash-right;
+}
+
+.kun-loader__bubble {
+  position: absolute;
+  bottom: 14px;
+  left: 20%;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid color-mix(in srgb, var(--kun-loader-deep) 55%, transparent);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.9) 0 18%, transparent 24%),
+    color-mix(in srgb, var(--kun-loader-water) 14%, transparent);
+  opacity: 0;
+  animation: kun-loader-bubble 2.6s ease-in infinite;
+}
+
+.kun-loader__bubble:nth-child(2) {
+  left: 76%;
+  width: 5px;
+  height: 5px;
+  animation-delay: 0.9s;
+}
+
+.kun-loader__bubble:nth-child(3) {
+  left: 84%;
+  animation-delay: 1.8s;
+}
+
+.kun-loader__label {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--ds-text-faint);
+}
+
+.kun-loader__dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 3px;
+}
+
+.kun-loader__dots > i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ds-accent);
+  animation: kun-loader-dot 1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.kun-loader__dots > i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.kun-loader__dots > i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes kun-loader-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kun-loader-wave {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes kun-loader-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+
+  50% {
+    transform: translateY(-4px) rotate(4deg);
+  }
+}
+
+@keyframes kun-loader-hop {
+  0%,
+  72%,
+  100% {
+    transform: none;
+  }
+
+  76% {
+    transform: translateY(2px) scale(1.08, 0.9);
+  }
+
+  84% {
+    transform: translateY(-20px) scale(0.95, 1.06) rotate(-6deg);
+  }
+
+  90% {
+    transform: translateY(1px) scale(1.1, 0.88);
+  }
+
+  94% {
+    transform: translateY(-2px) scale(0.97, 1.03);
+  }
+}
+
+@keyframes kun-loader-flip {
+  0% {
+    transform: none;
+  }
+
+  35% {
+    transform: translateY(-26px) rotate(-200deg);
+  }
+
+  70% {
+    transform: translateY(-8px) rotate(-360deg);
+  }
+
+  85% {
+    transform: translateY(1px) rotate(-360deg) scale(1.06, 0.92);
+  }
+
+  100% {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes kun-loader-splash-left {
+  0%,
+  89% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  96% {
+    opacity: 0.9;
+    transform: translate(-40px, -16px) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50px, -2px) scale(0.6);
+  }
+}
+
+@keyframes kun-loader-splash-right {
+  0%,
+  89% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  96% {
+    opacity: 0.9;
+    transform: translate(40px, -14px) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(50px, -1px) scale(0.6);
+  }
+}
+
+@keyframes kun-loader-bubble {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+
+  15% {
+    opacity: 0.9;
+  }
+
+  45% {
+    transform: translate(2px, -16px) scale(0.8);
+  }
+
+  80% {
+    opacity: 0.8;
+    transform: translate(-2px, -32px) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(0, -38px) scale(1.5);
+  }
+}
+
+@keyframes kun-loader-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-loader {
+    animation: none;
+    opacity: 1;
+  }
+
+  .kun-loader__wave,
+  .kun-loader__rider,
+  .kun-loader__bird,
+  .kun-loader__bird[data-flip],
+  .kun-loader__dots > i {
+    animation: none;
+  }
+
+  .kun-loader__bubble,
+  .kun-loader__splash {
+    display: none;
+  }
+
+  .kun-loader__dots > i {
+    opacity: 0.6;
+  }
+}

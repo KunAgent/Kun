@@ -25,6 +25,7 @@ import {
 } from './store/activity-notifications'
 import { syncAppBadgeCount } from './store/app-badge'
 import { useAdeEnabled } from './components/ade/use-ade-enabled'
+import { KunLoader } from './components/KunLoader'
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
@@ -84,18 +85,7 @@ export async function prepareInitialMobileApp(): Promise<void> {
 }
 
 function RouteFallback(): React.ReactElement {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex h-full min-h-0 items-center justify-center bg-ds-main text-ds-muted"
-    >
-      <div className="flex items-center gap-2 rounded-full border border-ds-border-muted bg-ds-card px-4 py-2 text-[13px] shadow-sm">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden />
-        <span>{i18n.t('loading')}</span>
-      </div>
-    </div>
-  )
+  return <KunLoader fill label={i18n.t('loading')} />
 }
 
 export default function AppShell(): React.ReactElement {

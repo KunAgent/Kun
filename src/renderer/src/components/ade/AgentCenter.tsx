@@ -1,15 +1,16 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Loader2, Plus } from 'lucide-react'
 import type {
   KunHarnessSettingsV1,
   KunRuntimeSettingsV1
 } from '@shared/app-settings'
 import { getProvider } from '../../agent/registry'
 import { applyHarnessEnablementSettings, loadHarnesses, useHarnessStore } from '../../store/harness-store'
-import { SettingsCard } from '../settings-controls'
 import { AgentCenterCard } from './AgentCenterCard'
-import { AgentCatalogControls, AgentCatalogRail } from './AgentCenterCatalog'
-import { filterAgentCatalog, orderedAgentCatalog, type AgentCatalogFilter } from './agent-center-catalog'
+import { AgentCatalogSkeleton } from './AgentCenterParts'
+import { AgentCatalogSearch, AgentCatalogRail } from './AgentCenterCatalog'
+import { filterAgentCatalog, orderedAgentCatalog } from './agent-center-catalog'
 import { exportCustomEntry } from './agent-center-custom-form'
 import { AgentCenterAddWizard } from './agent-center-add-wizard'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
@@ -59,7 +60,6 @@ export function AgentCenter({
   const [probingId, setProbingId] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
-  const [catalogFilter, setCatalogFilter] = useState<AgentCatalogFilter>('all')
   const [search, setSearch] = useState('')
   const [probeError, setProbeError] = useState('')
 
@@ -76,7 +76,6 @@ export function AgentCenter({
   useEffect(() => {
     if (!settingsHarnessId) return
     setSelectedId(settingsHarnessId)
-    setCatalogFilter('all')
     setSearch('')
     useHarnessStore.setState({ settingsHarnessId: undefined })
   }, [settingsHarnessId])
@@ -110,7 +109,7 @@ export function AgentCenter({
   }
 
   const ordered = orderedAgentCatalog(rows, settings.agentOrder)
-  const visibleRows = filterAgentCatalog(ordered, catalogFilter, search)
+  const visibleRows = filterAgentCatalog(ordered, search)
   const selectedRow = visibleRows.find((row) => row.definition.id === selectedId)
     ?? visibleRows.find((row) => row.definition.id === settings.defaultHarnessId)
     ?? visibleRows.find((row) => row.definition.id === 'kun')
@@ -119,30 +118,50 @@ export function AgentCenter({
 
   return (
     <div data-agent-center>
-      <SettingsCard title={t('adeAgentCenter.title')}>
-        <div className="flex items-start justify-between gap-3 pb-2">
-          <div className="text-[12px] text-ds-faint">{t('agentIntegrations.catalogDescription')}</div>
-          <button data-settings-action="primary" data-settings-size="default" type="button" onClick={() => setAddOpen(true)} className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90" data-agent-add-open>
+      <section className="ds-settings-card overflow-clip rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card">
+        <header className="flex flex-wrap items-start justify-between gap-3 px-5 pb-4 pt-[18px]">
+          <div className="min-w-0">
+            <h2 className="ds-settings-card-title flex items-center gap-2">
+              {t('adeAgentCenter.title')}
+              {/* Background re-detection keeps the current rows on screen; only a
+                  fixed-size spinner signals it so the layout never jumps. */}
+              {rowsLoading && rows.length > 0 ? (
+                <span role="status" aria-live="polite" title={t('agentIntegrations.loadingCatalog')} data-agent-catalog-refreshing
+                  className="inline-flex shrink-0 text-ds-faint">
+                  <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />
+                  <span className="sr-only">{t('agentIntegrations.loadingCatalog')}</span>
+                </span>
+              ) : null}
+            </h2>
+            <p className="ds-settings-card-description mt-1">{t('agentIntegrations.catalogDescription')}</p>
+          </div>
+          <button data-settings-action="primary" data-settings-size="default" type="button" onClick={() => setAddOpen(true)}
+            className="shrink-0" data-agent-add-open>
+            <Plus aria-hidden className="h-4 w-4" strokeWidth={2} />
             {t('agentAdd.title')}
           </button>
-        </div>
-        <AgentCatalogControls filter={catalogFilter} search={search} onFilter={setCatalogFilter} onSearch={setSearch} t={t} />
-        {rowsLoading ? <p role="status" aria-live="polite" className="mb-3 text-[12px] text-ds-faint">{t('agentIntegrations.loadingCatalog')}</p> : null}
+        </header>
+        <AgentCatalogSearch search={search} onSearch={setSearch} t={t} />
         {rowsError || probeError ? (
-          <div role="alert" className="mb-3 rounded-lg border border-red-200/80 bg-red-50/80 px-3 py-2 text-[12px] text-red-700 dark:border-red-800/40 dark:bg-red-500/10 dark:text-red-300">
+          <div role="alert" className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 dark:border-red-800/40 dark:bg-red-500/10 dark:text-red-300">
             <p>{t('agentIntegrations.catalogError')}</p>
             <p className="mt-1 break-words text-[11px]">{rowsError || probeError}</p>
             <button type="button" onClick={() => { setProbeError(''); void loadHarnesses(true) }} disabled={rowsLoading}
               className="mt-1 rounded px-1 py-1 underline focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">{t('adeAgentAction.retry')}</button>
           </div>
         ) : null}
-        {visibleRows.length === 0 && !rowsLoading ? (
-          <div className="px-1 py-3 text-[13px] text-ds-faint">{t(ordered.length ? 'agentIntegrations.noMatches' : 'agentIntegrations.emptyCatalog')}</div>
+        {rowsLoading && rows.length === 0 ? (
+          <AgentCatalogSkeleton label={t('agentIntegrations.loadingCatalog')} />
+        ) : visibleRows.length === 0 && !rowsLoading ? (
+          <div className="px-5 py-10 text-center text-[13px] text-ds-faint">{t(ordered.length ? 'agentIntegrations.noMatches' : 'agentIntegrations.emptyCatalog')}</div>
         ) : (
-          <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(11rem,13rem)_minmax(0,1fr)]">
-            <AgentCatalogRail rows={visibleRows} selectedId={selectedRow?.definition.id} settings={settings} platform={platform}
-              onSelect={setSelectedId} t={t} tSettings={tSettings} />
-            <div className="min-w-0">
+          <div className="grid min-w-0 md:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)]">
+            {/* The tinted column spans the full detail height; the list itself stays pinned while the detail scrolls. */}
+            <div className="min-w-0 border-b border-ds-border-muted bg-ds-subtle md:border-b-0 md:border-r">
+              <AgentCatalogRail rows={visibleRows} selectedId={selectedRow?.definition.id} settings={settings} platform={platform}
+                onSelect={setSelectedId} t={t} tSettings={tSettings} />
+            </div>
+            <div className="min-w-0 p-5">
               {selectedRow && !addOpen ? [selectedRow].map((row) => {
             const id = row.definition.id
             return (
@@ -194,7 +213,7 @@ export function AgentCenter({
             </div>
           </div>
         )}
-      </SettingsCard>
+      </section>
       {addOpen ? (
         <AgentCenterAddWizard
           settingsSurface={settingsSurface}

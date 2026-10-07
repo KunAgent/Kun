@@ -17,12 +17,13 @@ describe('Agent Center catalog', () => {
     expect(entries.map((entry) => entry.definition.id)).toEqual(['z-agent', 'gemini-cli', 'a-agent', 'old'])
   })
 
-  it('filters by genuine interaction type and searches names or ids case-insensitively', () => {
+  it('lists only chat Agents and searches names or ids case-insensitively', () => {
     const entries = [row('kun', 'native-loop'), row('aider', 'terminal'), row('editor', 'application'), row('gemini-cli')]
     expect(entries.map(agentIntegrationKind)).toEqual(['chat', 'terminal', 'application', 'chat'])
-    expect(filterAgentCatalog(entries, 'chat', '').map((entry) => entry.definition.id)).toEqual(['kun', 'gemini-cli'])
-    expect(filterAgentCatalog(entries, 'application', ' EDIT ').map((entry) => entry.definition.id)).toEqual(['editor'])
-    expect(filterAgentCatalog(entries, 'terminal', 'KUN')).toEqual([])
-    expect(filterAgentCatalog(entries, 'all', 'GEMINI').map((entry) => entry.definition.id)).toEqual(['gemini-cli'])
+    const chat = orderedAgentCatalog(entries, [])
+    expect(chat.map((entry) => entry.definition.id)).toEqual(['gemini-cli', 'kun'])
+    expect(filterAgentCatalog(chat, ' EDIT ')).toEqual([])
+    expect(filterAgentCatalog(chat, 'GEMINI').map((entry) => entry.definition.id)).toEqual(['gemini-cli'])
+    expect(filterAgentCatalog(chat, '').map((entry) => entry.definition.id)).toEqual(['gemini-cli', 'kun'])
   })
 })

@@ -1,8 +1,9 @@
 {
   "agentIntegrations": {
-    "catalogDescription": "Manage chat agents, interactive terminal agents, and application integrations.",
-    "search": "Search agents and applications",
+    "catalogDescription": "Manage the Agents you can chat with in Kun: install, sign in, and connect.",
+    "search": "Search Agents",
     "clearSearch": "Clear search",
+    "advanced": "Advanced settings",
     "filterLabel": "Integration type",
     "filters": { "all": "All", "chat": "Chat", "terminal": "Terminal", "application": "Applications" },
     "loadingCatalog": "Checking agents and applications…",

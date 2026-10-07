@@ -29,6 +29,7 @@ import type {
 import { useActiveExtensionWorkspaceRoot } from '../extensions/active-extension-workspace'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useExtensionSettingsService } from '../extensions/ExtensionSettingsServiceContext'
+import { KunLoader } from './KunLoader'
 import {
   isExtensionContributionSnapshotReady,
   useExtensionContributionLoadState,
@@ -384,13 +385,7 @@ export function SettingsView(): ReactElement {
     )
   }
 
-  if (!form) {
-    return (
-      <div className="flex h-full items-center justify-center bg-ds-main text-ds-faint">
-        {t('loading')}
-      </div>
-    )
-  }
+  if (!form) return <KunLoader fill label={t('loading')} />
 
   const kun = getKunRuntimeSettings(form)
   const provider = getModelProviderSettings(form)

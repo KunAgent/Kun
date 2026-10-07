@@ -55,14 +55,11 @@ afterEach(async () => {
 })
 
 describe('AgentCenterAddWizard recovery', () => {
-  it('restores the selected step and terminal draft after leaving settings', async () => {
+  it('drops a stale terminal draft from an older session back to the first step', async () => {
+    window.sessionStorage.setItem('kun-agent-add-wizard-v1', JSON.stringify({ step: 'connect', kind: 'terminal', selectedId: '' }))
     await act(async () => root.render(wizard()))
-    await act(async () => document.querySelector<HTMLButtonElement>('[data-agent-add-terminal]')!.click())
-    const name = document.querySelector<HTMLInputElement>('[data-terminal-name]')!
-    await changeInput(name, 'My Terminal')
-    await remount()
-    expect(document.querySelector('[data-agent-add-connect]')).toBeTruthy()
-    expect(document.querySelector<HTMLInputElement>('[data-terminal-name]')?.value).toBe('My Terminal')
+    expect(document.querySelector('[data-agent-add-choose]')).toBeTruthy()
+    expect(document.querySelector('[data-agent-add-connect]')).toBeNull()
   })
 
   it('restores custom command inputs without persisting the secret value field', async () => {
