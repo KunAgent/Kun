@@ -6,7 +6,6 @@ import { projectFailoverGroupsForRuntime } from '@shared/app-settings-provider-f
 import type { AdeCollaborationSettingsSnapshot } from '@shared/ade-collaboration-settings'
 import { mutateAdeProjectDefaults, type AdeProjectDefaultsSnapshot } from '@shared/ade-project-defaults'
 import type { KunGuiApi, KunProjectConfigFileResult, RuntimeRequestResult } from '@shared/kun-gui-api'
-import type { GoogleWorkspaceStatus } from '@shared/google-workspace'
 import type { DataMigrationEstimate, DataMigrationOperationStatus } from '@shared/data-migration'
 import type { StorageRelocationStatus } from '@shared/storage-relocation'
 import type { UninstallStatus } from '@shared/uninstall'
@@ -256,11 +255,6 @@ export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
     paths: [{ kind: 'kunData', path: `${HOME}\\.kun`, exists: true },
       { kind: 'userData', path: `${HOME}\\.deepseekgui`, exists: true }]
   }
-  const google: GoogleWorkspaceStatus = {
-    experimental: true, binary: { available: true, version: '0.22.5 (fixture)' },
-    auth: { state: 'disconnected', scopes: [] },
-    services: { gmail: { state: 'unknown' }, calendar: { state: 'unknown' }, drive: { state: 'unknown' } }
-  }
   const sanotts: LocalSanottsRuntimeStatus = {
     runtimeId: 'sanotts-runtime', label: 'sanoTTS runtime', source: 'ampixa/sanoTTS',
     license: 'GPL-3.0 (G2P) / MIT (neural runtime)', sizeBytes: LOCAL_SANOTTS_RUNTIME_SIZE_BYTES,
@@ -405,14 +399,6 @@ export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
     downloadLocalSanottsRuntime: blocked('downloadLocalSanottsRuntime'),
     cancelLocalSanottsRuntime: blocked('cancelLocalSanottsRuntime'), deleteLocalSanottsRuntime: blocked('deleteLocalSanottsRuntime'),
     downloadLocalSanottsVoice: blocked('downloadLocalSanottsVoice'),
-    googleWorkspace: {
-      status: stub('googleWorkspace.status', () => clone(google)),
-      login: blocked('googleWorkspace.login'), setup: blocked('googleWorkspace.setup'),
-      test: stub('googleWorkspace.test', () => clone(google)),
-      logout: stub('googleWorkspace.logout', () => clone(google)),
-      cancel: stub('googleWorkspace.cancel', () => clone(google)),
-      openAuthorization: stub('googleWorkspace.openAuthorization', () => ({ opened: false }))
-    },
     dataMigration: {
       getStatus: stub('dataMigration.getStatus', () => clone(migrationStatus)),
       estimateExport: stub('dataMigration.estimateExport', () => clone(estimate)),

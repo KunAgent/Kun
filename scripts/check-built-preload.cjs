@@ -15,15 +15,6 @@ const PRELOAD_BRIDGES = {
   'runtime-data-recovery.cjs': 'kunRuntimeDataRecovery',
   'tray-quota.cjs': 'kunTrayQuota'
 }
-const GOOGLE_CHANNELS = {
-  status: 'google-workspace:status',
-  login: 'google-workspace:login',
-  setup: 'google-workspace:setup',
-  logout: 'google-workspace:logout',
-  test: 'google-workspace:test',
-  cancel: 'google-workspace:cancel',
-  openAuthorization: 'google-workspace:open-authorization'
-}
 
 // Model Electron's sandboxed preload loader, not Node's unrestricted require.
 // https://www.electronjs.org/docs/latest/tutorial/sandbox#preload-scripts
@@ -105,16 +96,7 @@ async function assertWorkbenchBridge(loaded) {
   const dispose = api.onProviderMutationFlushRequest(() => {})
   assert.equal(typeof dispose, 'function', 'Provider mutation subscription must be disposable')
   dispose()
-  assert(api.googleWorkspace, 'Missing Google Workspace bridge')
-  assert.deepEqual(Object.keys(api.googleWorkspace).sort(), Object.keys(GOOGLE_CHANNELS).sort())
-  for (const [method, channel] of Object.entries(GOOGLE_CHANNELS)) {
-    // A compromised renderer cannot turn the no-argument bridge into an
-    // arbitrary URL/command/credential transport. No real IPC is performed.
-    const before = loaded.calls.length
-    const result = await api.googleWorkspace[method]('https://untrusted.invalid', { command: 'ignored' })
-    assert.deepEqual(loaded.calls.slice(before), [[channel]])
-    assert.deepEqual(result, { channel })
-  }
+  assert(!Object.hasOwn(api, 'googleWorkspace'), 'Retired Google Workspace bridge must not be exposed')
 }
 
 async function checkBuiltPreloads(directory) {
@@ -137,7 +119,7 @@ async function checkBuiltPreloads(directory) {
 
 if (require.main === module) {
   checkBuiltPreloads(resolve(process.argv[2] || join(__dirname, '..', 'out', 'preload'))).then(
-    (count) => console.log(`Built sandboxed preload check OK: ${count} entries, 3 platform contexts, Google IPC round-trips.`),
+    (count) => console.log(`Built sandboxed preload check OK: ${count} entries, 3 platform contexts.`),
     (error) => {
       console.error(`[built-preload] ${error.stack || error}`)
       process.exitCode = 1

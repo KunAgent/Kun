@@ -137,7 +137,6 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
 const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
   general: 'general',
   providers: 'providers',
-  integrations: 'integrations',
   extensions: 'extensions',
   write: 'write',
   design: 'design',
@@ -169,7 +168,6 @@ const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
 const SETTINGS_SECTION_DESCRIPTION_KEYS: Partial<Record<SettingsRouteSection, string>> = {
   general: 'subtitle',
   providers: 'providersDesc',
-  integrations: 'integrationsDesc',
   extensions: 'extensionsDesc',
   write: 'writeDesc',
   design: 'designDesc',

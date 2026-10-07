@@ -24,12 +24,13 @@ async function settled(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 30))
 }
 
-it('renders all 23 real SettingsView destinations and every discovered nested tab offline', async () => {
+it('renders all real SettingsView destinations and every discovered nested tab offline', async () => {
   await import('./SettingsUiSmokeFixture')
   await waitUntil(() => !!document.querySelector('[data-settings-category-view="general"]'))
   const categories = [...document.querySelectorAll<HTMLButtonElement>('[data-settings-category]')]
     .map(element => element.dataset.settingsCategory!)
-  expect(new Set(categories).size).toBe(23)
+  expect(new Set(categories).size).toBe(22)
+  expect(categories).not.toContain('integrations')
   const panels: string[] = []
   const discovered = new Set<string>()
   for (const category of categories) {

@@ -322,13 +322,13 @@ describe('chat-store-side-actions', () => {
     const { actions, state, provider } = buildHarness()
     const sideId = await actions.spawnSideConversation()
     const sink = provider.subscribeMock.mock.calls.at(-1)?.[2] as ThreadEventSink
-    const action = { toolName: 'google_workspace_call', arguments: {
+    const action = { toolName: 'send_message', arguments: {
       body: { bcc: ['hidden@example.com'], text: 'Full approved body' }
     } }
     const summary = 'Full approved body including hidden@example.com'
-    sink.onApproval({ approvalId: 'google-side', toolName: 'google_workspace_call', summary, action })
+    sink.onApproval({ approvalId: 'message-side', toolName: 'send_message', summary, action })
     expect(state.sideConversations[sideId!].blocks).toContainEqual(expect.objectContaining({
-      kind: 'approval', approvalId: 'google-side', summary, action
+      kind: 'approval', approvalId: 'message-side', summary, action
     }))
   })
 

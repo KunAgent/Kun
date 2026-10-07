@@ -132,7 +132,7 @@ Starting with 0.3.8, standalone TUI archives are no longer distributed; use the 
 - **Choose a model independently of your work.** Kun supports OpenAI / Anthropic-compatible services and self-hosted models, with presets for DeepSeek, Ollama, Kimi, GLM, Qwen, and other ecosystems. Subscriptions, model availability, regions, and quotas follow each Provider's current rules.
 - **Permissions define what can happen.** Tool and directory permissions, approvals, and extension permissions constrain actions. Memory, reminders, team discussion, and navigation do not expand authority; new personal private chats default to asking for approval.
 - **Background work needs a running computer.** By default, closing the desktop main window quits the app and stops its managed work. Reminders and background tasks require Kun to run and the computer to stay awake; online tasks also need a network connection. An optional independent host must be explicitly started with `kun host start` and cannot own the same profile alongside the default GUI. See [runtime ownership and lifecycle](docs/rooms-persistent-host.md).
-- **Check connected-app readiness.** MCP, Skills, Hooks, Loops, scheduled tasks, and extensions can add capabilities. Google Workspace is currently **Experimental / Developer Preview** and needs user-managed Google Cloud and OAuth setup. Gmail / Calendar writes require per-action approval; Drive is read-only. See [integration scope and setup](docs/google-workspace-cli.md).
+- **Check connected-app readiness.** MCP, Skills, Hooks, Loops, scheduled tasks, and extensions can add capabilities.
 
 ## Interface preview
 

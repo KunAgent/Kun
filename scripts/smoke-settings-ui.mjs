@@ -113,8 +113,9 @@ app.on('window-all-closed', () => app.quit())
   const categories = await page.locator('[data-settings-category]').evaluateAll(elements =>
     elements.map(element => element.getAttribute('data-settings-category')))
   report.categories = categories
-  assert.equal(new Set(categories).size, nativePlatform === 'win32' ? 23 : 22,
+  assert.equal(new Set(categories).size, nativePlatform === 'win32' ? 22 : 21,
     'Every destination, including fixture extension settings and Windows-only storage, must be present')
+  assert(!categories.includes('integrations'), 'Retired integrations must not appear in settings navigation')
   const sizes = [{ name: 'wide', width: 1440, height: 1000 }, { name: 'small', width: 900, height: 720 }]
   const configurations = []
   for (const theme of ['light', 'dark']) for (const size of sizes) for (const zoom of [1.25, 1.5, 2]) {

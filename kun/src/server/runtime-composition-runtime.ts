@@ -209,7 +209,6 @@ export function createServerRuntimeComposition(
     activityFacts,
     activityHibernation: agent.activityHibernation,
     taskWorkspaces,
-    googleWorkspace: services.googleWorkspace,
     attribution: services.attribution,
     changeRequests: services.changeRequests,
     eventStreamRegistry,
@@ -406,7 +405,6 @@ export function createServerRuntimeComposition(
           heapTotalBytes: memory.heapTotal,
           externalBytes: memory.external
         },
-        integrations: { googleWorkspace: { experimental: true, version: '0.22.5', driveReadOnly: true, authControl: 'settings' } },
         capabilities: rebuildCapabilities(),
 	        extensions: {
 	          enabled: true,
@@ -545,7 +543,6 @@ export function createServerRuntimeComposition(
         async () => { await services.memoryDistillation.shutdown() },
         () => services.harnesses.updates.dispose(),
         () => services.harnesses.acpModels.dispose(),
-        () => services.googleWorkspace.shutdown(),
         () => backgroundShellRuntime.shutdown(),
         () => extensionJobs.handleRuntimeShutdown(),
         () => { extensionMediaJobs.dispose() },

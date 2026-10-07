@@ -166,6 +166,7 @@ describe('collectPaletteSources', () => {
       .filter((section): section is SettingsRouteSection => Boolean(section))
     expect(sections).toContain('general')
     expect(sections).toContain('providers')
+    expect(sections).not.toContain('integrations')
     expect(sections).toContain('shortcuts')
     expect(sections).toContain('dataMigration')
     for (const entry of entries.filter((candidate) => candidate.source === 'settings')) {

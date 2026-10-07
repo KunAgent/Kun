@@ -12,7 +12,6 @@ const {
   pollUntil,
   processState
 } = require('./smoke-packaged-extension-desktop-process.cjs')
-const { version: googleWorkspaceVersion } = require('../resources/google-workspace/manifest.json')
 
 // These probes run in the actual packaged workbench's renderer, not a mocked
 // source preload. Keep them self-contained so CDP and the unit tests execute
@@ -26,11 +25,8 @@ function preloadBridgeProbe() {
   if (typeof bridge.onProviderMutationFlushRequest !== 'function') {
     throw new Error('Packaged preload is missing onProviderMutationFlushRequest')
   }
-  const methods = ['status', 'login', 'setup', 'logout', 'test', 'cancel', 'openAuthorization']
-  for (const method of methods) {
-    if (typeof bridge.googleWorkspace?.[method] !== 'function') {
-      throw new Error(`Packaged preload is missing googleWorkspace.${method}`)
-    }
+  if (Object.prototype.hasOwnProperty.call(bridge, 'googleWorkspace')) {
+    throw new Error('Packaged preload still exposes the retired Google Workspace bridge')
   }
   // Subscribe and immediately remove our inert listener; never emit a mutation
   // request or leave another acknowledgement handler installed in the app.
@@ -39,39 +35,7 @@ function preloadBridgeProbe() {
     throw new Error('Packaged provider mutation subscription did not return an unsubscribe function')
   }
   unsubscribe()
-  return { bridge: 'kunGui', providerMutationSubscription: true, googleWorkspaceMethods: methods }
-}
-
-async function googleWorkspaceStatusProbe(expectedVersion) {
-  const bridge = window.kunGui
-  if (typeof bridge?.startup?.getState !== 'function') {
-    throw new Error('Packaged preload is missing startup.getState')
-  }
-  const startup = await bridge.startup.getState()
-  if (startup?.phase === 'recovery_required') {
-    throw new Error('Packaged desktop requires recovery before the Google Workspace status round-trip')
-  }
-  if (startup?.phase !== 'ready') return null
-  if (typeof bridge.googleWorkspace?.status !== 'function') {
-    throw new Error('Packaged preload is missing googleWorkspace.status')
-  }
-  // Only call this in the freshly created, isolated smoke profile, after the
-  // Runtime is running. Status runs local --version/auth status; it must never
-  // log in, open a browser, test APIs, or use an existing user's Google account.
-  const status = await bridge.googleWorkspace.status()
-  if (status?.experimental !== true || status.binary?.available !== true ||
-      status.binary.version !== expectedVersion) {
-    throw new Error('Packaged Google Workspace status did not report the available pinned binary')
-  }
-  if (!['disconnected', 'setup_required'].includes(status.auth?.state) ||
-      !Array.isArray(status.auth.scopes) || status.auth.scopes.length !== 0) {
-    throw new Error('Packaged Google Workspace status was not disconnected in the fresh smoke profile')
-  }
-  if (status.operation !== undefined ||
-      ['gmail', 'calendar', 'drive'].some((service) => status.services?.[service]?.state !== 'unknown')) {
-    throw new Error('Packaged Google Workspace status unexpectedly reported account activity')
-  }
-  return { authState: status.auth.state, binaryVersion: status.binary.version }
+  return { bridge: 'kunGui', providerMutationSubscription: true }
 }
 
 async function inspectPackagedWorkbench(input, expression, description, commandTimeoutMs = 15_000) {
@@ -118,19 +82,7 @@ async function assertPackagedPreloadBridge(input) {
   process.stdout.write(`Packaged preload bridge OK: ${JSON.stringify(result)}\n`)
 }
 
-async function assertPackagedGoogleWorkspaceStatus(input) {
-  const result = await inspectPackagedWorkbench(
-    input,
-    `(${googleWorkspaceStatusProbe.toString()})(${JSON.stringify(googleWorkspaceVersion)})`,
-    'checking the packaged Google Workspace status round-trip',
-    45_000
-  )
-  process.stdout.write(`Packaged Google Workspace status OK: ${JSON.stringify(result)}\n`)
-}
-
 module.exports = {
-  assertPackagedGoogleWorkspaceStatus,
   assertPackagedPreloadBridge,
-  googleWorkspaceStatusProbe,
   preloadBridgeProbe
 }

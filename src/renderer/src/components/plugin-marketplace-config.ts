@@ -331,22 +331,6 @@ export function buildMcpConfig(
   }
 }
 
-export const GOOGLE_WORKSPACE_MCP_SERVERS = {
-  google_gmail: 'https://gmailmcp.googleapis.com/mcp/v1',
-  google_drive: 'https://drivemcp.googleapis.com/mcp/v1',
-  google_calendar: 'https://calendarmcp.googleapis.com/mcp/v1',
-  google_people: 'https://people.googleapis.com/mcp/v1',
-  google_chat: 'https://chatmcp.googleapis.com/mcp/v1'
-} as const
-
-export function googleWorkspaceMcpServerIds(): string[] {
-  return Object.keys(GOOGLE_WORKSPACE_MCP_SERVERS)
-}
-
-export function googleWorkspaceMcpServers(): Record<string, string> {
-  return { ...GOOGLE_WORKSPACE_MCP_SERVERS }
-}
-
 export function buildRemoteMcpConfig(servers: Record<string, string>): JsonRecord {
   return {
     servers: Object.fromEntries(

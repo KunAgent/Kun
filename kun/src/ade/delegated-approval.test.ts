@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { InMemoryApprovalGate } from '../adapters/in-memory-approval-gate.js'
 import { makeDelegatedAwaitApproval } from './delegated-approval.js'
-import { createApprovalRequest } from '../domain/approval.js'
-import { buildGoogleWorkspaceApprovalAction } from '../google-workspace/approval.js'
+import { createApprovalActionEnvelope, createApprovalRequest } from '../domain/approval.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
-import type { ToolHostContext } from '../ports/tool-host.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { ActingTurnModelRoute } from '../contracts/turns.js'
 
@@ -20,10 +18,12 @@ describe('Delegated mandatory human approval', () => {
       approvalPolicy: 'on-request', sandboxMode: 'workspace-write', approvalReviewer: 'user',
       actingModelRoute: {} as ActingTurnModelRoute, intent: 'Review the action', signal: new AbortController().signal
     })
-    const action = buildGoogleWorkspaceApprovalAction({ toolName: 'google_workspace_call', callId: 'call', arguments: {
-      method: 'gmail.users.messages.send', body: { to: ['a@example.com'], subject: 'Subject', text: 'Body' }
-    } }, { workspace: '/tmp' } as ToolHostContext)
-    const request = createApprovalRequest({ id: 'appr', threadId: 'thread', turnId: 'turn', toolName: 'google_workspace_call', summary: 'Review action', action })
+    const action = createApprovalActionEnvelope({
+      toolName: 'send_message', arguments: { to: ['a@example.com'], text: 'Body' },
+      workspace: '/tmp', reason: 'Confirm the message', requiresUserDecision: true,
+      effects: { network: true, externalWrite: true, processExecution: false, guiAutomation: false }
+    })
+    const request = createApprovalRequest({ id: 'appr', threadId: 'thread', turnId: 'turn', toolName: 'send_message', summary: 'Review action', action })
     await expect(awaitApproval(request)).resolves.toEqual({ decision: 'allow', reviewer: 'user' })
     expect(gate.request).toHaveBeenCalledWith(request)
     expect(get).not.toHaveBeenCalled()
@@ -31,10 +31,12 @@ describe('Delegated mandatory human approval', () => {
 
   it('keeps full-access agent-review turns in the human gate and identifies the actual human decision', async () => {
     const gate = new InMemoryApprovalGate()
-    const action = buildGoogleWorkspaceApprovalAction({ toolName: 'google_workspace_call', callId: 'call', arguments: {
-      method: 'gmail.users.messages.send', body: { to: ['a@example.com'], subject: 'Subject', text: 'Body' }
-    } }, { workspace: '/tmp' } as ToolHostContext)
-    const request = createApprovalRequest({ id: 'appr', threadId: 'thread', turnId: 'turn', toolName: 'google_workspace_call', summary: 'Complete summary', action })
+    const action = createApprovalActionEnvelope({
+      toolName: 'send_message', arguments: { to: ['a@example.com'], text: 'Body' },
+      workspace: '/tmp', reason: 'Confirm the message', requiresUserDecision: true,
+      effects: { network: true, externalWrite: true, processExecution: false, guiAutomation: false }
+    })
+    const request = createApprovalRequest({ id: 'appr', threadId: 'thread', turnId: 'turn', toolName: 'send_message', summary: 'Complete summary', action })
     const review = vi.fn()
     const events = { record: vi.fn(async () => undefined) } as unknown as RuntimeEventRecorder
     const awaitApproval = makeDelegatedAwaitApproval({ approvalGate: gate, approvalReview: { review }, events }, {

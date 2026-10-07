@@ -20,8 +20,6 @@ export {
   buildMcpConfig,
   buildRemoteMcpConfig,
   customMcpConfigFragment,
-  googleWorkspaceMcpServerIds,
-  googleWorkspaceMcpServers,
   isAllowedDocsUrl,
   isHttpsUrl,
   mcpConfigHasServer,

@@ -31,6 +31,7 @@ it('loads the bundled workbench bridge with sandbox-supported imports only', asy
   const api = expose.mock.calls.find(([name]) => name === 'kunGui')?.[1]
   expect(api).toBeDefined()
   expect(api.onProviderMutationFlushRequest).toBeTypeOf('function')
-  await api.googleWorkspace.status()
-  expect(invoke).toHaveBeenLastCalledWith('google-workspace:status')
+  expect(api).not.toHaveProperty('googleWorkspace')
+  await api.getSettings()
+  expect(invoke).toHaveBeenLastCalledWith('settings:get')
 })

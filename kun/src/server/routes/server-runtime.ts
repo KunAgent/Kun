@@ -362,7 +362,6 @@ export type ServerRuntime = {
   modelConnections?: ModelConnectionRegistry
   modelConnectionOAuth?: ModelConnectionOAuthService
   officialProviderAuth?: OfficialProviderAuthService
-  googleWorkspace?: import('../../google-workspace/service.js').GoogleWorkspaceService
   officialProviderCli?: OfficialProviderCliService
   providerQuotaService?: Pick<ProviderQuotaService, 'list'>
   modelGateway?: {

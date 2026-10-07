@@ -62,7 +62,6 @@ The native/rendered evidence checklist follows separately.
 | --- | --- | --- |
 | General | Appearance/font and width steppers, conversation/onboarding, workspace and conversation directories, legacy import/checkpoints, desktop command/behavior/logs, dark color resets | Source reviewed |
 | Providers | Provider list and state-driven row actions, connection/model capability panes, add sheet, quick add, model editor/import, external import, import-link confirmation, endpoint detection, icon picker, reliability, routes/gateway, Claude/Codex/Gemini/Grok connection actions | Source reviewed |
-| Integrations | Google Workspace connect/setup/test/disconnect/refresh/cancel, operation status, documentation action | Source reviewed |
 | Extensions | Conditional `ExtensionDeclarativeSettingsPane`, Retry, dynamic contribution tabs, `DeclarativeSettingsSections` input/select/checkbox/textarea fields | Source reviewed |
 | Work | Workspace, typography, suggestions, selection actions, agent presets, paper/search settings, debug log dialog | Source reviewed |
 | Design | Code integration, canvas defaults, workspace; shared rows, selects, and toggles rather than local action buttons | Source reviewed |

@@ -85,7 +85,8 @@ describe('compact settings navigation', () => {
     const routes = renderer.root.findAllByType('button').flatMap((button) =>
       button.props['data-settings-category'] ? [button.props['data-settings-category']] : [])
     expect(select.findAllByType('option').map((option) => option.props.value)).toEqual(routes)
-    expect(routes).toHaveLength(23)
+    expect(routes).toHaveLength(22)
+    expect(routes).not.toContain('integrations')
     act(() => select.props.onChange({ target: { value: 'memory' } }))
     expect(setCategory).toHaveBeenCalledWith('memory')
   })

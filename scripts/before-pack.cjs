@@ -52,10 +52,6 @@ async function beforePack(context) {
       stdio: 'inherit'
     }
   )
-
-  execFileSync(process.execPath, [
-    join(__dirname, 'prepare-google-workspace.cjs'), '--platform', platform, '--arch', arch
-  ], { cwd: join(__dirname, '..'), stdio: 'inherit' })
 }
 
 exports._internals = {

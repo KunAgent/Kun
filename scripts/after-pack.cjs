@@ -16,11 +16,6 @@ const {
 } = require('node:fs')
 const { dirname, join } = require('node:path')
 const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
-const {
-  validateBundledGoogleWorkspace,
-  signWindowsGoogleWorkspace,
-  attestPackagedGoogleWorkspace
-} = require('./after-pack-google-workspace.cjs')
 const { trimPackedNodePtyPayload } = require('./after-pack-node-pty.cjs')
 const {
   LINUX_SANDBOX_LAUNCHER_FLAG,
@@ -582,11 +577,6 @@ function maybeAdhocSignMacApp(context) {
     ['--force', '--deep', '--sign', '-', '--timestamp=none', appBundle],
     { stdio: 'inherit' }
   )
-  attestPackagedGoogleWorkspace(
-    join(packedResourcesDir(context), 'google-workspace'), 'darwin', normalizeArch(context.arch)
-  )
-  // selected.json changed after nested signatures; re-seal only the outer app.
-  execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', appBundle], { stdio: 'inherit' })
 }
 
 // node-pty execs a bundled `spawn-helper` binary to fork the child shell.
@@ -635,8 +625,6 @@ async function afterPack(context) {
   validateBundledExtensionResources(context)
   validateBundledOfficeCli(context)
   await maybeSignBundledOfficeCli(context)
-  validateBundledGoogleWorkspace(context)
-  await signWindowsGoogleWorkspace(context)
   prunePackedWhisperResources(context)
   ensureNodePtyHelpersExecutable(context)
   installCliLaunchers(context)
@@ -667,7 +655,6 @@ exports._internals = {
   validateBundledKunRuntime,
   validateBundledExtensionResources,
   validateBundledOfficeCli,
-  validateBundledGoogleWorkspace,
   maybeSignBundledOfficeCli,
   normalizeArch,
   normalizePlatform,

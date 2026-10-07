@@ -132,7 +132,7 @@ kun --no-start
 - **模型选择与你的工作分开。** Kun 支持 OpenAI / Anthropic 兼容服务及自托管模型，预设覆盖 DeepSeek、Ollama、Kimi、GLM、Qwen 等生态。订阅、模型、地区和额度以 Provider 当前规则为准。
 - **权限决定可以做什么。** 工具和目录权限、审批与扩展权限共同限制操作。记忆、提醒、团队讨论和切换界面都不会扩大权限；新个人私聊默认先请求批准。
 - **后台工作需要运行中的电脑。** 默认关闭桌面主窗口会退出应用并停止其管理的工作。提醒与后台任务需要 Kun 运行、电脑保持唤醒，联网任务还需要网络。可选的独立常驻模式需显式使用 `kun host start` 启动，且同一配置不能与默认 GUI 同时拥有运行时，详见 [运行方式与生命周期](docs/rooms-persistent-host.md)。
-- **应用接入按实际状态使用。** MCP、Skills、Hooks、Loops、定时任务与扩展可以补充能力。Google Workspace 当前为 **Experimental / Developer Preview**，需要自行完成 Google Cloud 与 OAuth 配置；Gmail / Calendar 写入逐次审批，Drive 只读，详见 [集成范围与配置](docs/google-workspace-cli.md)。
+- **应用接入按实际状态使用。** MCP、Skills、Hooks、Loops、定时任务与扩展可以补充能力。
 
 ## 界面预览
 

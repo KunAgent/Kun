@@ -12,9 +12,6 @@ import { SettingsPageHeader, SettingsSaveStatusPill, settingsSaveStatusTone } fr
 import { lazySection } from './settings-lazy-section'
 import type { SettingsCategory } from './settings-navigation'
 
-const IntegrationsSettingsSection = lazySection(() =>
-  import('./settings-section-integrations').then((module) => ({ default: module.IntegrationsSettingsSection }))
-)
 const ProvidersSettingsSection = lazySection(() =>
   import('./settings-section-providers').then((module) => ({ default: module.ProvidersSettingsSection }))
 )
@@ -80,7 +77,6 @@ const WriteDebugLogModal = lazy(() =>
 )
 
 const SECTION_PRELOADERS: Partial<Record<SettingsCategory, () => void>> = {
-  integrations: IntegrationsSettingsSection.preload,
   providers: ProvidersSettingsSection.preload,
   write: WriteSettingsSection.preload,
   design: DesignSettingsSection.preload,
@@ -140,7 +136,7 @@ function SettingsSectionFallback(): ReactElement {
 
 export function SettingsViewLayout({ view }: { view: Record<string, any> }): ReactElement {
   const { t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, activeAgentsPanel, saveStatus, saveError, saveIssue, writeDebugModalOpen, setWriteDebugModalOpen, writeCompletionDebugEntries, writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId, writeDebugLoading, writeDebugError, extensionSettingsService, extensionSettingsContributions, extensionSettingsAvailable, settingsScrollerRef, markAgentsSectionReady, categoryTitle, categoryDescription, loadWriteDebugEntries, portError, flushPendingSave, goBack, clearWriteDebugEntries, settingsSectionContext } = view
-  const autoApplyCategory = category !== 'integrations' && category !== 'extensions' &&
+  const autoApplyCategory = category !== 'extensions' &&
     category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall'
   const explicitSavePanel = category === 'agents' &&
     (activeAgentsPanel === 'collaboration' || activeAgentsPanel === 'project')
@@ -222,7 +218,6 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
               />
             ) : null}
             <Suspense fallback={<SettingsSectionFallback />}>
-              {category === 'integrations' ? <IntegrationsSettingsSection /> : null}
               {category === 'providers' ? <ProvidersSettingsSection ctx={settingsSectionContext} /> : null}
               {category === 'write' ? <WriteSettingsSection ctx={settingsSectionContext} /> : null}
               {category === 'design' ? <DesignSettingsSection ctx={settingsSectionContext} /> : null}
