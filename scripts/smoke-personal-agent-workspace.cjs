@@ -35,7 +35,7 @@ async function startWorkspaceBrowserPage() {
     close: () => { server.closeAllConnections(); return new Promise((resolve) => server.close(resolve)) } }
 }
 
-async function exercisePersonalAgentWorkspace({ page, request, poll, capture, recordDiagnostic, fixture, application, resize, openPrivate, switchRooms, workspaceRoot }) {
+async function exercisePersonalAgentWorkspace({ page, request, poll, capture, recordDiagnostic, fixture, application, resize, openPrivate, workspaceRoot }) {
   assert.equal(fixture.snapshot().real, false, 'The workspace smoke must never use account credentials')
   const website = await startWorkspaceBrowserPage()
   const assertions = [], approvals = [], nativeBrowserEvidence = []
@@ -44,6 +44,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
   const editor = () => page.locator('.rooms-composer .rooms-rich-input')
   const wrapper = () => page.locator('[data-room-agent-browser]:visible')
   const rail = () => page.locator('.rooms-workbench-rail')
+  const sidebarRow = (roomId) => page.locator('.sidebar-agent-chats [data-sidebar-entry="room:' + roomId + '"] .sidebar-agent-chat-row')
   const activity = (id) => request(page, `/v1/rooms/${id}/direct`)
   const collapseWorkspacePanel = async (threadId) => {
     const panel = page.locator('[data-room-workbench-panel]:visible')
@@ -272,17 +273,17 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assertions.push('Selecting the historical artifact run is read-only until explicitly returning to the current execution')
     assertions.push('Real browser_use passes protected Kun tool consent and exact-origin consent, then loads only the local fixture in a sandboxed native view')
 
-    await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New agent conversation', exact: true }).click()
+    await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New conversation', exact: true }).click()
     await page.getByRole('button', { name: 'Define in chat', exact: true }).click()
     const createdModelRef = await confirmAgentCreationModel({ page, request })
     let other
     await poll(async () => {
       other = (await request(page, '/v1/agents')).agents.find((value) => value.id !== entry.agentId)
-      const selected = (await roomWorkbenchSnapshot(page)).privateRoomId
+      const selected = (await roomWorkbenchSnapshot(page)).conversationRoomId
       return Boolean(other && selected && selected !== entry.roomId)
     }, 15000, 'select another private Agent while the old browser is active')
     assert.deepEqual(other.modelRef, createdModelRef)
-    const otherRoomId = (await roomWorkbenchSnapshot(page)).privateRoomId
+    const otherRoomId = (await roomWorkbenchSnapshot(page)).conversationRoomId
     assert(otherRoomId)
     await openBrowser()
     await poll(async () => await wrapper().getAttribute('data-state') === 'idle', 15000, 'second Agent has no live browser')
@@ -386,16 +387,18 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await capture('workspace-19-restored-artifact-preview')
     assertions.push('Real Runtime restart reconciles the same interrupted request; reload preserves draft/artifact with no browser session or automatic model replay')
 
-    await switchRooms()
-    await page.locator('.rooms-im-sidebar').getByRole('button', { name: firstAgent.name, exact: true }).click()
+    // Leave for the Code project task, then reopen the conversation from the Code sidebar.
+    await page.getByRole('button', { name: /^Code sidebar comparison/ }).first().click()
+    await poll(async () => (await roomWorkbenchSnapshot(page)).route === 'chat', 15000, 'Code project task selected')
+    await sidebarRow(entry.roomId).click()
     await waitForPrivateRoomSurface(page, entry.roomId)
-    assert.equal((await roomWorkbenchSnapshot(page)).roomsRoomId, entry.roomId)
+    assert.equal((await roomWorkbenchSnapshot(page)).conversationRoomId, entry.roomId)
     await openBrowser()
     assert.equal(await wrapper().getAttribute('data-room-id'), entry.roomId)
     assert.equal(await wrapper().locator('[data-browser-use-variant]').count(), 0)
     assert.equal(await editor().innerText(), draft)
-    await capture('workspace-20-rooms-private-workspace')
-    assertions.push('Rooms and Code expose the same private workspace without reviving a historical browser')
+    await capture('workspace-20-code-private-workspace')
+    assertions.push('Reopening the conversation from the Code sidebar exposes the same private workspace without reviving a historical browser')
     sidebar.assertSharedChrome()
     assertions.push('Stopped and restarted recovery actions remain inside their conversation without horizontal overflow at wide and narrow sizes')
     assertions.push('Actual Code and private Agent screenshots share tab-header and rail dimensions; native pointer drags and narrow-window geometry keep private controls unclipped')
@@ -422,30 +425,35 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
 // Electron native dialogs are not renderer pages. Stub only this disposable
 // application's exact restart question, once; all tool/browser consent is clicked
 // through its real existing UI. Never intercept a broad class of approvals.
-async function assertNativeRestartConsent(application) {
-  const read = () => application.evaluate(() => globalThis.__workspaceSmokeRestartDialog.calls)
-  let calls
-  try { calls = await read() }
+// Restart can transiently invalidate the inspector's evaluation context on
+// macOS. Retry only this read or cleanup, once, while the same Electron owner
+// is alive. Never repeat the restart or the native confirmation action.
+async function evaluateAfterRestart(application, operation) {
+  try { return await application.evaluate(operation) }
   catch (error) {
     const owner = application.process()
-    // Restart can transiently invalidate the inspector's evaluation context on
-    // macOS. Retry only this read, once, while the same Electron owner is alive.
-    // Never repeat the restart or the native confirmation action.
     if (!String(error).includes('Execution context was destroyed') ||
       !owner || owner.exitCode !== null || owner.signalCode !== null) throw error
-    calls = await read()
+    return application.evaluate(operation)
   }
+}
+async function assertNativeRestartConsent(application) {
+  const calls = await evaluateAfterRestart(application, () => globalThis.__workspaceSmokeRestartDialog.calls)
   assert.equal(calls, 1, 'Native Runtime restart must be confirmed exactly once')
 }
 async function restartOwnedRuntime(page, application) {
   await application.evaluate(({ dialog }) => {
     const state = { original: dialog.showMessageBox, calls: 0 }
     globalThis.__workspaceSmokeRestartDialog = state
+    // The main process words this question in the OS locale, not the renderer language.
+    const questions = [
+      ['Restart desktop Runtime', 'Stop and restart the Runtime owned by this desktop app?', ['Restart desktop Runtime', 'Cancel']],
+      ['重启桌面 Runtime', '停止并重新启动当前桌面应用拥有的 Runtime？', ['重启桌面 Runtime', '取消']]
+    ]
     dialog.showMessageBox = async (...args) => {
       const options = args.at(-1)
-      if (state.calls === 0 && options?.title === 'Restart desktop Runtime' &&
-        options.message === 'Stop and restart the Runtime owned by this desktop app?' &&
-        JSON.stringify(options.buttons) === JSON.stringify(['Restart desktop Runtime', 'Cancel'])) {
+      if (state.calls === 0 && questions.some(([title, message, buttons]) => options?.title === title &&
+        options.message === message && JSON.stringify(options.buttons) === JSON.stringify(buttons))) {
         state.calls++
         dialog.showMessageBox = state.original
         return { response: 0, checkboxChecked: false }
@@ -458,17 +466,17 @@ async function restartOwnedRuntime(page, application) {
     assert.equal(result.accepted, true, JSON.stringify(result))
     await assertNativeRestartConsent(application)
   } finally {
-    await application.evaluate(({ dialog }) => {
+    await evaluateAfterRestart(application, ({ dialog }) => {
       const state = globalThis.__workspaceSmokeRestartDialog
       if (state) dialog.showMessageBox = state.original
       delete globalThis.__workspaceSmokeRestartDialog
     })
   }
 }
-// Selection storage updates before Rooms has loaded and rendered its recipient.
+// Selection updates before the Code conversation has loaded and rendered its recipient.
 // Clicking the rail during that gap can be lost when the new room resets tabs.
 async function waitForPrivateRoomSurface(page, roomId) {
-  const surface = page.locator('[data-room-surface="rooms"][data-private-chat="true"][data-room-id=' + JSON.stringify(roomId) + ']')
+  const surface = page.locator('[data-room-surface="agent-chat"][data-private-chat="true"][data-room-id=' + JSON.stringify(roomId) + ']')
   const ready = { state: 'visible', timeout: 15000 }
   await surface.waitFor(ready)
   await surface.locator('.rooms-composer .rooms-rich-input').waitFor(ready)

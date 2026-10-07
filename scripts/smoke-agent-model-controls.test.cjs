@@ -18,11 +18,13 @@ test('Agent model smoke uses the proven private launcher and rejects real model 
 
 test('Agent model scenario waits for exact private identity and captures the loaded directory before configuring', () => {
   const scenario = source('smoke-agent-model-controls.cjs')
-  assert(scenario.indexOf('await openPrivate()') < scenario.indexOf('await switchRooms()'))
+  const opened = scenario.indexOf('await waitCodeConversation(page, poll, entry.roomId, initialAgent.name)')
+  assert(scenario.indexOf('await openPrivate()') < opened)
   assert.match(scenario, /entry\.initialized && entry\.agentId && entry\.roomId/)
-  assert.match(scenario, /state\.route === 'rooms' && state\.roomsRoomId === roomId/)
-  assert.match(scenario, /await waitForRoomsPrivate\(entry\.roomId, initialAgent\.name\)/)
-  assert(scenario.indexOf('await waitForRoomsPrivate(current.id, created.name)') < scenario.indexOf('await picker.selectOption'))
+  assert.match(source('smoke-agent-chat-workbench.cjs'), /state\.route === 'agent-chat' && state\.conversationRoomId === roomId/)
+  assert(opened < scenario.indexOf("await entryRow.getAttribute('aria-current') === 'page'"))
+  assert(scenario.indexOf('await waitCodeConversation(page, poll, current.id, created.name)') < scenario.indexOf('await picker.selectOption'))
+  assert.doesNotMatch(scenario, /switchRooms|rooms-im-sidebar|data-room-surface="rooms"/)
   const loaded = scenario.indexOf('await overviewRow.getByText(roleLabel, { exact: true }).waitFor()')
   const captured = scenario.indexOf("await capture('agent-models-manager-overview')")
   assert(loaded > 0 && captured > loaded && scenario.indexOf('await configure.click()') > captured)

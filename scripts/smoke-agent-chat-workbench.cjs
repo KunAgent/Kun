@@ -59,6 +59,24 @@ async function waitCodeConversation(page, poll, roomId, privateName) {
   await surface.locator('.rooms-composer .rooms-rich-input').waitFor()
 }
 
+// Private chats and groups are opened from the Code sidebar's Conversations
+// section. Rows beyond the collapsed four are reached through View all.
+async function openCodeConversation({ page, poll, switchCode, roomId, privateName }) {
+  const before = await roomWorkbenchSnapshot(page)
+  if (before.route !== 'chat' && before.route !== 'agent-chat') await switchCode()
+  const conversations = page.locator('.sidebar-agent-chats')
+  await conversations.waitFor()
+  const row = conversations.locator(`[data-sidebar-entry="room:${roomId}"] .sidebar-agent-chat-row`)
+  await poll(async () => {
+    if (await row.count()) return true
+    const viewAll = conversations.locator('.sidebar-agent-chats-more[aria-expanded="false"]')
+    if (await viewAll.count()) await viewAll.click()
+    return false
+  }, 15000, 'Code sidebar lists conversation ' + roomId)
+  await row.click()
+  await waitCodeConversation(page, poll, roomId, privateName)
+}
+
 async function seedPrivateHistory({ page, request, poll, roomId }) {
   const editor = page.locator('.rooms-composer .rooms-rich-input')
   await editor.fill('Shared private conversation history fixture.')
@@ -245,4 +263,5 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
     privateWorkspace: direct.workspace.path, projectWorkspace: workspaceRoot, assertions }
 }
 
-module.exports = { exerciseAgentChatWorkbench, openAgentPrivateChat, roomWorkbenchSnapshot, previewRoomWorkspaceFile, collapseRoomPanel }
+module.exports = { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation, waitCodeConversation,
+  roomWorkbenchSnapshot, previewRoomWorkspaceFile, collapseRoomPanel }

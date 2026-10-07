@@ -1,33 +1,23 @@
 'use strict'
 const assert = require('node:assert/strict')
-const { roomWorkbenchSnapshot } = require('./smoke-agent-chat-workbench.cjs')
+const { roomWorkbenchSnapshot, waitCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
 
 /** Real Electron controls and runtime, using the existing isolated offline model fixture. */
-async function exerciseAgentModelControls({ page, request, poll, capture, resize, fixture, openPrivate, switchRooms, recordDiagnostic }) {
+async function exerciseAgentModelControls({ page, request, poll, capture, resize, fixture, openPrivate, recordDiagnostic }) {
   assert.equal(fixture.snapshot().real, false, 'Agent model controls must use the disposable offline fixture')
   const assertions = []
   await openPrivate()
   const entry = await request(page, '/v1/agents/chat-entry')
   assert(entry.initialized && entry.agentId && entry.roomId, 'Normal private entry initializes an Agent and conversation')
-  assert.equal((await roomWorkbenchSnapshot(page)).privateRoomId, entry.roomId)
   const initialAgent = (await request(page, '/v1/agents/' + entry.agentId)).agent
-  await switchRooms()
-  const rooms = page.locator('[data-room-surface="rooms"]')
-  const sidebar = rooms.locator('.rooms-im-sidebar')
-  await rooms.waitFor()
-  await sidebar.waitFor()
-  await sidebar.getByRole('button', { name: initialAgent.name, exact: true }).click()
-  const waitForRoomsPrivate = async (roomId, name) => {
-    await poll(async () => {
-      const state = await roomWorkbenchSnapshot(page)
-      return state.route === 'rooms' && state.roomsRoomId === roomId
-    }, 15000, 'exact private conversation selected in Rooms: ' + roomId)
-    await poll(async () => (await rooms.locator('.direct-chat-title strong').innerText().catch(() => '')) === name,
-      15000, 'exact private recipient rendered in Rooms: ' + name)
-    await rooms.locator('.rooms-composer .rooms-rich-input').waitFor()
-  }
-  await waitForRoomsPrivate(entry.roomId, initialAgent.name)
-  assertions.push('Normal private bootstrap and Rooms navigation select the same exact conversation')
+  const conversation = page.locator('[data-room-surface="agent-chat"]')
+  const sidebar = page.locator('.sidebar-agent-chats')
+  await waitCodeConversation(page, poll, entry.roomId, initialAgent.name)
+  assert.equal((await roomWorkbenchSnapshot(page)).conversationRoomId, entry.roomId)
+  const entryRow = sidebar.locator('[data-sidebar-entry="room:' + entry.roomId + '"] .sidebar-agent-chat-row')
+  await poll(async () => await entryRow.getAttribute('aria-current') === 'page', 15000,
+    'Code sidebar marks the exact private conversation current')
+  assertions.push('Normal private bootstrap and the Code sidebar select the same exact conversation')
   const connections = await request(page, '/v1/model-connections')
   const offline = connections.providers.find((provider) => provider.configured && provider.kind === 'http')
   assert(offline && ['127.0.0.1', 'localhost'].includes(new URL(offline.baseUrl).hostname), 'Only the disposable loopback model fixture may be patched')
@@ -66,8 +56,8 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   assert.deepEqual(created.modelRef, JSON.parse(JSON.stringify({ providerId: selected.providerId, accountId: selected.accountId, model: selected.model })))
   await request(page, '/v1/agents/' + created.id + '/setup', 'POST', { clientRequestId: 'model-smoke-skip', action: 'skip' })
   const current = (await request(page, '/v1/agents/' + created.id + '/conversation', 'POST', {})).room
-  await waitForRoomsPrivate(current.id, created.name)
-  const picker = rooms.getByLabel('Model for this conversation', { exact: true })
+  await waitCodeConversation(page, poll, current.id, created.name)
+  const picker = conversation.getByLabel('Model for this conversation', { exact: true })
   await picker.waitFor()
   await poll(async () => await picker.isEnabled() && await picker.inputValue() === key, 10000, 'composer model metadata loaded')
   assert.equal(await picker.inputValue(), key)
@@ -93,7 +83,7 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   await resize(1360, 900)
   await page.evaluate(async () => { const { applyTheme } = await import('/src/lib/apply-theme.ts'); applyTheme('light') })
 
-  await sidebar.getByRole('button', { name: 'Manage all Agents', exact: true }).click()
+  await conversation.locator('.direct-header').getByRole('button', { name: 'Manage all Agents', exact: true }).click()
   const activePage = page.locator('[data-active-drawer-page="true"]')
   const directory = activePage.locator('.agent-directory')
   await directory.waitFor()

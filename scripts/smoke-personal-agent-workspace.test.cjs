@@ -182,9 +182,9 @@ test('native WebContentsView geometry must track its renderer host and remain in
 })
 
 const { waitForPrivateRoomSurface } = require('./smoke-personal-agent-workspace.cjs')
-test('Rooms readiness waits for the rendered private recipient and its scoped controls before opening the sidebar', async () => {
+test('Code conversation readiness waits for the rendered private recipient and its scoped controls before opening the sidebar', async () => {
   const events = []
-  const root = '[data-room-surface="rooms"][data-private-chat="true"][data-room-id="room-current"]'
+  const root = '[data-room-surface="agent-chat"][data-private-chat="true"][data-room-id="room-current"]'
   const makeLocator = (selector) => ({
     waitFor: async (options) => events.push({ selector, options }),
     locator: (child) => makeLocator(selector + ' ' + child)
@@ -196,16 +196,17 @@ test('Rooms readiness waits for the rendered private recipient and its scoped co
     selector, options: { state: 'visible', timeout: 15000 }
   })))
   const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
-  const switchRoute = smoke.indexOf('    await switchRooms()')
-  const ready = smoke.indexOf('await waitForPrivateRoomSurface(page, entry.roomId)', switchRoute)
+  const reopen = smoke.indexOf('    await sidebarRow(entry.roomId).click()')
+  const ready = smoke.indexOf('await waitForPrivateRoomSurface(page, entry.roomId)', reopen)
   const open = smoke.indexOf('await openBrowser()', ready)
-  assert(switchRoute >= 0 && ready > switchRoute && open > ready)
-  assert.doesNotMatch(smoke.slice(switchRoute, ready), /roomsRoomId === entry\.roomId/)
+  assert(reopen >= 0 && ready > reopen && open > ready)
+  assert.doesNotMatch(smoke.slice(reopen, ready), /conversationRoomId === entry\.roomId/)
+  assert.doesNotMatch(smoke, /switchRooms|rooms-im-sidebar|data-room-surface="rooms"/)
   const renderer = readFileSync(join(__dirname, '../src/renderer/src/components/rooms/RoomsWorkspaceView.tsx'), 'utf8')
   assert.match(renderer, /data-room-id=\{room\?\.id\}/)
 })
 
-test('Rooms readiness surfaces the bounded wait failure without clicking or retrying another recipient', async () => {
+test('Code conversation readiness surfaces the bounded wait failure without clicking or retrying another recipient', async () => {
   let lookups = 0
   const page = { locator: () => {
     lookups++

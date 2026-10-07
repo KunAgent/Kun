@@ -11,7 +11,7 @@ const { exerciseDirectChat } = require('./smoke-direct-controls.cjs')
 const { exerciseAgentModelControls } = require('./smoke-agent-model-controls.cjs')
 const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
 const { exerciseRoomApprovals } = require('./smoke-room-approvals.cjs')
-const { exerciseAgentChatWorkbench, openAgentPrivateChat } = require('./smoke-agent-chat-workbench.cjs')
+const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -156,9 +156,10 @@ async function main() {
     page.setDefaultTimeout(30_000)
     page.on('pageerror', (error) => pageErrors.push(error.message))
     page.on('console', (message) => { if (message.type() === 'error' && message.text().includes('same key')) pageErrors.push(message.text()) })
-    await page.waitForLoadState('domcontentloaded')
+    // A cold isolated Vite cache can take longer than the per-action timeout on a busy host.
+    await page.waitForLoadState('domcontentloaded', { timeout: timeoutMs })
     await resize(electronApplication, 1360, 900)
-    await page.locator('[data-workspace-mode-trigger]').first().waitFor()
+    await page.locator('[data-workspace-mode-trigger]').first().waitFor({ timeout: timeoutMs })
     const exercise = process.argv.includes('--agent-models-only') ? exerciseAgentModelControls
       : process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
@@ -168,9 +169,11 @@ async function main() {
         : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
     const exercised = exercise({ page, request: runtimeRequest, poll, capture, recordDiagnostic, fixture: modelFixture,
       application: electronApplication, workspaceRoot, real: process.argv.includes('--real-model'),
-      resize: (width, height) => resize(electronApplication, width, height), switchRooms: () => switchMode(page, 'rooms'),
+      resize: (width, height) => resize(electronApplication, width, height),
       switchCode: () => switchMode(page, 'chat'),
       openPrivate: (name) => openAgentPrivateChat({ page, name, switchCode: () => switchMode(page, 'chat') }),
+      openConversation: (roomId, privateName) => openCodeConversation({ page, poll, roomId, privateName,
+        switchCode: () => switchMode(page, 'chat') }),
       approve: (ref) => installNativeConsentFixture(electronApplication, ref) })
     const direct = await (process.argv.includes('--agent-models-only')
       ? withTimeout(exercised, 180_000, 'exercising the offline Agent model controls')

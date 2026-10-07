@@ -132,7 +132,7 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   assert((await models.innerText()).includes('Effective'))
   await models.getByRole('button', { name: 'Close', exact: true }).click()
   if (!real) {
-    await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New agent conversation', exact: true }).click()
+    await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New conversation', exact: true }).click()
     await capture('07-new-chat-picker')
     await page.getByRole('button', { name: 'Define in chat', exact: true }).click()
     const createdModelRef = await confirmAgentCreationModel({ page, request })
