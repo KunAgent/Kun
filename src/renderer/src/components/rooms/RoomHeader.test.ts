@@ -120,3 +120,29 @@ describe('RoomHeader inline rename', () => {
     expect(renderer.root.findByType('input').props.value).toBe('Project Alpha')
   })
 })
+
+describe('RoomHeader conversation management', () => {
+  let renderer: ReactTestRenderer
+  beforeEach(async () => { await i18n.changeLanguage('en') })
+  afterEach(() => { if (renderer) act(() => renderer.unmount()) })
+
+  it('opens group info first and keeps group deletion last in the menu', async () => {
+    const onInfo = vi.fn(), onRemove = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomHeader, { ...baseProps(), onInfo, onRemove })) })
+    const actions = renderer.root.findAllByType('button').map((button) => button.props['data-conversation-action']).filter(Boolean)
+    expect(actions).toEqual(['info', 'group'])
+    const remove = renderer.root.findByProps({ 'data-conversation-action': 'group' })
+    expect(remove.props.className).toBe('is-danger')
+    await act(async () => { renderer.root.findByProps({ 'data-conversation-action': 'info' }).props.onClick() })
+    await act(async () => { remove.props.onClick() })
+    expect(onInfo).toHaveBeenCalledOnce()
+    expect(onRemove).toHaveBeenCalledOnce()
+  })
+
+  it('offers neither the board nor removal for an Agent pair transcript', async () => {
+    await act(async () => { renderer = create(createElement(RoomHeader, { ...baseProps(),
+      room: { ...room, conversationKind: 'agent_agent' } as Room, onInfo: vi.fn(), onRemove: vi.fn() })) })
+    expect(renderer.root.findAllByProps({ 'data-conversation-action': 'info' })).toHaveLength(0)
+    expect(renderer.root.findAllByProps({ 'data-conversation-action': 'group' })).toHaveLength(0)
+  })
+})

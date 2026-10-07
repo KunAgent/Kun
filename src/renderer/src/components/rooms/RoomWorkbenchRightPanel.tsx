@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
-import { FileEdit, Folders, Globe2, Users } from 'lucide-react'
+import { FileEdit, Folders, Globe2, IdCard, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference, RoomMessage } from '@shared/rooms-api'
 import type { ChatBlock } from '../../agent/types'
@@ -12,7 +12,7 @@ import type { WorkbenchFileTreeSidePanelView } from '../workbench/useWorkbenchFi
 import { WorkbenchRightSidebar } from '../workbench/WorkbenchRightSidebar'
 import { WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
 import { useRoomWorkbenchLayout } from './useRoomWorkbenchLayout'
-import { ROOM_COLLABORATION_TAB, type RoomWorkbenchPanel } from './useRoomWorkbenchPanel'
+import { CONVERSATION_INFO_TAB, ROOM_COLLABORATION_TAB, type RoomWorkbenchPanel } from './useRoomWorkbenchPanel'
 import { useRoomRun } from './useRoomRun'
 import { presentRoomRunItems } from './room-run-presentation'
 import { RoomAgentBrowser } from './RoomAgentBrowser'
@@ -36,6 +36,8 @@ export type RoomWorkbenchRightPanelProps = {
   messages: RoomMessage[]
   collaboration: ReactNode
   collaborationTitle?: string
+  info?: ReactNode
+  infoTitle?: string
   contentPreview?: ReactNode
   contentPreviewTitle?: string
   panel: RoomWorkbenchPanel
@@ -47,7 +49,7 @@ export type RoomWorkbenchRightPanelProps = {
 /** Both room surfaces use the Code file, browser and changes components. */
 export function RoomWorkbenchRightPanel({
   room, directWorkspace, directActivity, directError, selectedRunId, onRefreshDirect, onCurrentBrowser, onOpenContent, runId, messages, collaboration, panel,
-  onCollaborationOpen, onCollaborationClose, onAddReference, collaborationTitle, contentPreview, contentPreviewTitle
+  onCollaborationOpen, onCollaborationClose, onAddReference, collaborationTitle, contentPreview, contentPreviewTitle, info, infoTitle
 }: RoomWorkbenchRightPanelProps) {
   const { t } = useTranslation('common')
   const [privateFiles, setPrivateFiles] = useState<{ roomId?: string; workspace: boolean }>({ workspace: false })
@@ -74,6 +76,7 @@ export function RoomWorkbenchRightPanel({
     panel.closeTab(id)
   }
   const tools = [
+    ...(room && info ? [{ id: CONVERSATION_INFO_TAB, label: infoTitle ?? t('conversationInfoTab'), icon: IdCard }] : []),
     { id: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
     { id: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowserTool'), icon: Globe2 },
     { id: BUILTIN_RIGHT_PANEL_IDS.files, label: t('rightPanelFiles'), icon: Folders },
@@ -85,6 +88,7 @@ export function RoomWorkbenchRightPanel({
   const titles = {
     [ROOM_COLLABORATION_TAB]: collaborationTitle ?? t(room?.conversationKind === 'user_agent' ? 'roomsAgentSession' : 'roomsWorkbenchCollaboration'),
     [BUILTIN_RIGHT_PANEL_IDS.browser]: t('rightPanelBrowserTool'),
+    ...(infoTitle ? { [CONVERSATION_INFO_TAB]: infoTitle } : {}),
     ...(fileTitle ? { [BUILTIN_RIGHT_PANEL_IDS.file]: fileTitle } : {})
   }
   return <>
@@ -114,7 +118,7 @@ export function RoomWorkbenchRightPanel({
             className="absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden"
             style={!active ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}>
             <Suspense fallback={<div className="grid h-full place-content-center text-xs text-ds-muted">{t('roomsLoading')}</div>}>
-              {id === ROOM_COLLABORATION_TAB ? collaboration ?? <div className="grid h-full place-content-center p-5 text-center text-xs text-ds-muted">
+              {id === CONVERSATION_INFO_TAB ? info ?? null : id === ROOM_COLLABORATION_TAB ? collaboration ?? <div className="grid h-full place-content-center p-5 text-center text-xs text-ds-muted">
                 <button className="rooms-workbench-empty-action" onClick={onCollaborationOpen}>{titles[ROOM_COLLABORATION_TAB]}</button>
               </div> : id === BUILTIN_RIGHT_PANEL_IDS.files ? <>
                 {room?.conversationKind === 'user_agent' ? <div className="rooms-private-file-tabs" role="group" aria-label={t('directFiles')}>
@@ -152,7 +156,8 @@ export function RoomWorkbenchRightPanel({
     </WorkbenchRightSidebar> : null}
     <WorkbenchSideRailSurface role="navigation" aria-label={t('rightPanelTabs')} className="rooms-workbench-rail">
       {tools.map(({ id, label, icon: Icon }) => <button key={id} type="button"
-        className={sideRailButtonClass(tabs.expanded && tabs.activeId === id)} data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : undefined} aria-label={label} data-tooltip={label}
+        className={sideRailButtonClass(tabs.expanded && tabs.activeId === id)} aria-label={label} data-tooltip={label}
+        data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : id === CONVERSATION_INFO_TAB ? 'info' : undefined}
         aria-pressed={tabs.expanded && tabs.activeId === id}
         onClick={() => tabs.expanded && tabs.activeId === id ? panel.collapse() : open(id)}>
         <Icon className="h-4 w-4" strokeWidth={1.75} />

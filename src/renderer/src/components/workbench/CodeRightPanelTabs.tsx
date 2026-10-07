@@ -16,6 +16,7 @@ import {
   Globe2,
   GitBranch,
   GitCompare,
+  IdCard,
   MessageCircleMore,
   PanelRightClose,
   Plus,
@@ -127,6 +128,7 @@ export function CodeRightPanelTabs({
       label: t('rightPanelWorkers', { defaultValue: 'Workers' }),
       icon: Users
     },
+    { id: BUILTIN_RIGHT_PANEL_IDS.conversationInfo, label: t('conversationInfoTab'), icon: IdCard },
   ], [t])
 
   const builtinById = useMemo(

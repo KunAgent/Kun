@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   navigation: { roomId: 'dm-alpha' as string | null, pending: false, error: '' },
   page: { entries: [] as RoomSidebarEntry[], busy: false, error: '', nextCursor: undefined as string | undefined },
   request: vi.fn(), refresh: vi.fn(), more: vi.fn(), query: vi.fn(), openRoom: vi.fn(), openAgent: vi.fn(),
-  pin: vi.fn(), archive: vi.fn(), deleted: vi.fn(), setRoute: vi.fn(), setNavigation: vi.fn(),
+  pin: vi.fn(), archive: vi.fn(), remove: vi.fn(), restore: vi.fn(), setRoute: vi.fn(), setNavigation: vi.fn(),
   openDialog: vi.fn(), publish: vi.fn()
 }))
 vi.mock('react-i18next', () => ({
@@ -30,13 +30,22 @@ vi.mock('../rooms/agent-chat-navigation', () => ({
   }),
   openAgentConversationRoom: mocks.openRoom,
   openAgentConversation: mocks.openAgent,
+  // Mirrors the store helper: only the removed selection is cleared.
+  leaveAgentConversation: (roomId: string) => {
+    if (mocks.navigation.roomId !== roomId) return
+    localStorage.removeItem('kun.agentChats.selected')
+    mocks.setNavigation({ roomId: null, error: '', pending: false })
+    if (mocks.route === 'agent-chat') mocks.setRoute('chat')
+  },
   AGENT_CHAT_SELECTED_KEY: 'kun.agentChats.selected'
 }))
 vi.mock('../rooms/agent-chat-picker', () => ({ openAgentChatDialog: mocks.openDialog }))
 vi.mock('../rooms/room-activity-counts', () => ({ publishRoomActivityCounts: mocks.publish }))
-vi.mock('../rooms/room-sidebar-actions', () => ({
-  toggleRoomSidebarEntryArchived: mocks.archive,
-  setRoomSidebarEntryDeleted: mocks.deleted
+vi.mock('../rooms/room-sidebar-actions', () => ({ toggleRoomSidebarEntryArchived: mocks.archive }))
+vi.mock('../rooms/agent-chat-removal', async (importActual) => ({
+  ...await importActual<typeof import('../rooms/agent-chat-removal')>(),
+  removeConversation: mocks.remove,
+  restoreConversation: mocks.restore
 }))
 vi.mock('../rooms/rooms-client', () => ({ roomsRequest: mocks.request, roomRequestId: () => 'initialize-request' }))
 vi.mock('../rooms/useRoomSidebar', () => ({
@@ -102,7 +111,8 @@ beforeEach(() => {
   for (const mock of [mocks.refresh, mocks.more, mocks.query, mocks.openRoom, mocks.pin, mocks.openDialog, mocks.publish]) mock.mockReset()
   mocks.openAgent.mockReset().mockResolvedValue(undefined)
   mocks.archive.mockReset().mockResolvedValue(undefined)
-  mocks.deleted.mockReset().mockResolvedValue(undefined)
+  mocks.remove.mockReset().mockResolvedValue(undefined)
+  mocks.restore.mockReset().mockResolvedValue(undefined)
   mocks.setRoute.mockReset().mockImplementation((route: string) => { mocks.route = route })
   mocks.setNavigation.mockReset().mockImplementation((state: Partial<typeof mocks.navigation>) => { Object.assign(mocks.navigation, state) })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
@@ -195,7 +205,7 @@ describe('Code conversations sidebar', () => {
   it('preserves pin and unpin actions in a sibling menu without nested buttons', async () => {
     await render()
     openMenu('alpha')
-    await menuAction('roomsPinConversation')
+    await menuAction('conversationPin')
     expect(mocks.pin).toHaveBeenCalledWith(mocks.page.entries[0])
     mocks.page.entries[0].pinned = true
     await render()
@@ -211,7 +221,7 @@ describe('Code conversations sidebar', () => {
     localStorage.setItem('kun.agentChats.selected', 'dm-alpha')
     await render()
     openMenu('alpha')
-    await menuAction('roomsArchiveConversation')
+    await menuAction('conversationArchive')
     expect(mocks.archive).toHaveBeenCalledWith(mocks.page.entries[0])
     expect(mocks.setRoute).toHaveBeenCalledWith('chat')
     expect(mocks.navigation.roomId).toBeNull()
@@ -232,14 +242,14 @@ describe('Code conversations sidebar', () => {
     mocks.route = 'agent-chat'
     await render()
     openMenu('alpha')
-    await menuAction('roomsDeleteConversation')
-    expect(mocks.deleted).not.toHaveBeenCalled()
-    const confirm = host.querySelector<HTMLButtonElement>('[data-modal-title="roomsDeleteConversation"] .rooms-delete-confirm-actions button:last-child')!
+    await menuAction('conversationDeleteChat')
+    expect(mocks.remove).not.toHaveBeenCalled()
+    const confirm = host.querySelector<HTMLButtonElement>('[data-modal-title="conversationRemoveChatTitle"] [data-removal-confirm="conversation"]')!
     await act(async () => confirm.click())
-    expect(mocks.deleted).toHaveBeenCalledWith(expect.objectContaining({ roomId: 'dm-alpha' }), true)
+    expect(mocks.remove).toHaveBeenCalledWith(expect.objectContaining({ roomId: 'dm-alpha', agentId: 'alpha' }), 'conversation')
     expect(mocks.navigation.roomId).toBeNull()
     expect(mocks.setRoute).toHaveBeenCalledWith('chat')
-    expect(host.querySelector('[data-modal-title="roomsDeleteConversation"]')).toBeNull()
+    expect(host.querySelector('[data-modal-title="conversationRemoveChatTitle"]')).toBeNull()
     mocks.page.entries = [entry('alpha', { deleted: true })]
     openMenu('sidebarConversations')
     await menuAction('roomsRecentlyDeleted')
@@ -247,17 +257,54 @@ describe('Code conversations sidebar', () => {
     expect(button('alpha').disabled).toBe(true)
     openMenu('alpha')
     await menuAction('roomsRestoreConversation')
-    expect(mocks.deleted).toHaveBeenLastCalledWith(expect.objectContaining({ roomId: 'dm-alpha' }), false)
+    expect(mocks.restore).toHaveBeenLastCalledWith(expect.objectContaining({ roomId: 'dm-alpha' }))
+  })
+
+  it('deletes an Agent with its private chat and restores both together', async () => {
+    mocks.route = 'agent-chat'
+    await render()
+    openMenu('alpha')
+    const labels = [...document.querySelectorAll<HTMLButtonElement>('[data-conversation-menu="user_agent"] button')]
+      .map((item) => [item.dataset.conversationAction, item.classList.contains('is-danger')])
+    expect(labels).toEqual([['info', false], ['pin', false], ['archive', false], ['conversation', true], ['agent', true]])
+    await menuAction('conversationDeleteAgent')
+    const dialog = host.querySelector('[data-modal-title="conversationRemoveAgentTitle"]')!
+    expect(dialog.textContent).toContain('conversationRemoveAgentPointChat')
+    await act(async () => dialog.querySelector<HTMLButtonElement>('[data-removal-confirm="agent"]')!.click())
+    expect(mocks.remove).toHaveBeenCalledWith(expect.objectContaining({ roomId: 'dm-alpha', agentId: 'alpha' }), 'agent')
+    expect(mocks.navigation.roomId).toBeNull()
+    expect(button('alpha')).toBeNull()
+    mocks.page.entries = [entry('alpha', { deleted: true, agentArchived: true })]
+    openMenu('sidebarConversations')
+    await menuAction('roomsRecentlyDeleted')
+    openMenu('alpha')
+    await menuAction('conversationRestoreAgentAndChat')
+    expect(mocks.restore).toHaveBeenCalledWith(expect.objectContaining({ roomId: 'dm-alpha', agentId: 'alpha', agentArchived: true }))
+  })
+
+  it('deletes groups as groups and opens the info board from the row menu', async () => {
+    mocks.page.entries = [group('team', { name: 'Team' })]
+    await render()
+    openMenu('Team')
+    expect([...document.querySelectorAll<HTMLButtonElement>('[data-conversation-menu="group"] button')]
+      .map((item) => item.dataset.conversationAction)).toEqual(['info', 'pin', 'archive', 'group'])
+    await menuAction('conversationViewGroupInfo')
+    expect(mocks.openRoom).toHaveBeenCalledWith('room-team', { info: true })
+    openMenu('Team')
+    await menuAction('conversationDeleteGroup')
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-modal-title="conversationRemoveGroupTitle"] [data-removal-confirm="group"]')!.click())
+    expect(mocks.remove).toHaveBeenCalledWith(expect.objectContaining({ roomId: 'room-team', kind: 'group' }), 'group')
   })
 
   it('retains the conversation and confirmation when deletion is rejected for active work', async () => {
     mocks.route = 'agent-chat'
-    mocks.deleted.mockRejectedValueOnce(new Error('stop or reconcile active work'))
+    mocks.remove.mockRejectedValueOnce(new Error('stop or reconcile active work'))
     await render()
     openMenu('alpha')
-    await menuAction('roomsDeleteConversation')
-    await act(async () => host.querySelector<HTMLButtonElement>('.rooms-delete-confirm-actions button:last-child')!.click())
-    expect(host.querySelector('[data-modal-title="roomsDeleteConversation"] [role="alert"]')?.textContent).toBe('roomsDeleteActiveWork')
+    await menuAction('conversationDeleteChat')
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-removal-confirm="conversation"]')!.click())
+    expect(host.querySelector('[data-modal-title="conversationRemoveChatTitle"] [role="alert"]')?.textContent).toBe('roomsDeleteActiveWork')
+    expect(host.querySelector('.sidebar-agent-chats-error')).toBeNull()
     expect(mocks.navigation.roomId).toBe('dm-alpha')
     expect(mocks.setRoute).not.toHaveBeenCalled()
   })
@@ -268,7 +315,7 @@ describe('Code conversations sidebar', () => {
     mocks.archive.mockImplementationOnce(() => new Promise<void>((resolve) => { complete = resolve }))
     await render()
     openMenu('alpha')
-    await menuAction('roomsArchiveConversation')
+    await menuAction('conversationArchive')
     mocks.navigation.roomId = 'dm-beta'
     await act(async () => complete())
     expect(mocks.navigation.roomId).toBe('dm-beta')

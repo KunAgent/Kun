@@ -18,11 +18,14 @@ vi.mock('../../store/chat-store', () => ({ useChatStore: {
 } }))
 vi.mock('../../lib/browser-storage', () => ({
   readBrowserStorageItem: (key: string) => harness.storage.get(key) ?? null,
-  writeBrowserStorageItem: (key: string, value: string) => harness.storage.set(key, value)
+  writeBrowserStorageItem: (key: string, value: string) => harness.storage.set(key, value),
+  removeBrowserStorageItem: (key: string) => harness.storage.delete(key)
 }))
 vi.mock('./agent-client', () => ({ agentPath: (id: string) => '/v1/agents/' + id }))
 vi.mock('./rooms-client', () => ({ roomsRequest: harness.request }))
-import { AGENT_CHAT_SELECTED_KEY, openAgentConversation, openAgentConversationRoom, useAgentChatNavigationStore } from './agent-chat-navigation'
+import {
+  AGENT_CHAT_SELECTED_KEY, leaveAgentConversation, openAgentConversation, openAgentConversationRoom, useAgentChatNavigationStore
+} from './agent-chat-navigation'
 
 describe('Agent private conversation navigation', () => {
   beforeEach(() => {
@@ -62,6 +65,28 @@ describe('Agent private conversation navigation', () => {
   it('retains source-message and historical-run targets across a route remount', () => {
     openAgentConversationRoom('dm', { runId: 'run', messageId: 'message' })
     expect(useAgentChatNavigationStore.getState().target).toEqual({ roomId: 'dm', runId: 'run', messageId: 'message' })
+  })
+  it('opens a conversation with its info board requested', () => {
+    openAgentConversationRoom('dm', { info: true })
+    expect(useAgentChatNavigationStore.getState().target).toEqual({ roomId: 'dm', info: true })
+    expect(harness.route).toBe('agent-chat')
+  })
+  it('leaves only the removed conversation and returns Code to its task surface', async () => {
+    openAgentConversationRoom('dm', { info: true })
+    leaveAgentConversation('other')
+    expect(useAgentChatNavigationStore.getState().roomId).toBe('dm')
+    expect(harness.route).toBe('agent-chat')
+    let resolve!: (value: unknown) => void
+    harness.request.mockReturnValue(new Promise((done) => { resolve = done }))
+    const pending = openAgentConversation('late')
+    openAgentConversationRoom('dm')
+    leaveAgentConversation('dm')
+    expect(useAgentChatNavigationStore.getState()).toMatchObject({ roomId: null, target: null, pending: false })
+    expect(harness.storage.has(AGENT_CHAT_SELECTED_KEY)).toBe(false)
+    expect(harness.route).toBe('chat')
+    resolve({ room: { id: 'late', conversationKind: 'user_agent' } })
+    await pending
+    expect(useAgentChatNavigationStore.getState().roomId).toBeNull()
   })
   it('rejects a group response and keeps the lookup failure visible', async () => {
     harness.request.mockResolvedValue({ room: { id: 'group', conversationKind: 'group' } })

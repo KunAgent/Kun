@@ -58,12 +58,28 @@ it('ignores streaming drafts and profile edits for recency while keeping unread 
   expect(unread.entries[0].latestMessage?.preview).toBe('Hello')
   await store.commit({ requestId: 'read', checks: [{ kind: 'read_state', id: direct.id, expectedRevision: null }], puts: [{ kind: 'read_state', id: direct.id, value: { seq: row!.seq } }] })
   expect((await store.sidebarPage({ unreadOnly: true })).entries).toEqual([])
+  expect((await store.sidebarPage({})).entries[0].agentArchived).toBeUndefined()
   await agents.update(a.id, { clientRequestId: 'archive-agent', expectedRevision: a.revision, archived: true })
-  expect((await store.sidebarPage({})).entries[0].roomId).toBe(direct.id)
+  expect((await store.sidebarPage({})).entries[0]).toMatchObject({ roomId: direct.id, agentArchived: true })
   expect((await store.sidebarPage({ archivedOnly: true })).entries).toEqual([])
   await service.update(direct.id, { clientRequestId: 'archive-chat', expectedRevision: direct.revision, archived: true })
   expect((await store.sidebarPage({ archivedOnly: true })).entries[0].agentId).toBe(a.id)
   expect((await store.sidebarPage({})).entries).toHaveLength(0)
+})
+it('lists a deleted Agent with its private chat under recently deleted until both are restored', async () => {
+  const { store, agents, service, a } = await fixture()
+  const direct = (await openAgentConversation(agents, service, a.id)).room
+  await service.update(direct.id, { clientRequestId: 'delete-chat', expectedRevision: direct.revision, deleted: true })
+  await agents.update(a.id, { clientRequestId: 'delete-agent', expectedRevision: a.revision, archived: true })
+  expect((await store.sidebarPage({})).entries).toEqual([])
+  expect((await store.sidebarPage({ deletedOnly: true })).entries).toMatchObject([
+    { roomId: direct.id, agentId: a.id, deleted: true, agentArchived: true }])
+  await agents.update(a.id, { clientRequestId: 'restore-agent', expectedRevision: a.revision + 1, archived: false })
+  const deleted = (await store.get('room', direct.id))!
+  await service.update(direct.id, { clientRequestId: 'restore-chat', expectedRevision: deleted.revision, deleted: false })
+  const restored = (await store.sidebarPage({})).entries
+  expect(restored).toMatchObject([{ roomId: direct.id, deleted: false }])
+  expect(restored[0].agentArchived).toBeUndefined()
 })
 it('keeps a paged conversation list stable when a new Agent chat opens', async () => {
   const { store, agents, service, a } = await fixture()

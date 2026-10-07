@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Room } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
-import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
+import { readBrowserStorageItem, removeBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
 import { agentPath } from './agent-client'
 import { roomsRequest } from './rooms-client'
 
@@ -11,8 +11,10 @@ type AgentChatNavigation = {
   roomId: string | null
   error: string
   pending: boolean
-  target: { roomId: string; runId?: string; messageId?: string } | null
+  target: AgentChatTarget | null
 }
+/** What to reveal once a conversation opens: a run, a message, or the conversation info board. */
+type AgentChatTarget = { roomId: string; runId?: string; messageId?: string; info?: boolean }
 
 export const useAgentChatNavigationStore = create<AgentChatNavigation>(() => ({
   roomId: readBrowserStorageItem(AGENT_CHAT_SELECTED_KEY) || null,
@@ -23,12 +25,21 @@ export const useAgentChatNavigationStore = create<AgentChatNavigation>(() => ({
 
 let navigationSerial = 0
 
-export function openAgentConversationRoom(roomId: string, target?: { runId?: string; messageId?: string }): void {
+export function openAgentConversationRoom(roomId: string, target?: Omit<AgentChatTarget, 'roomId'>): void {
   if (!roomId) return
   navigationSerial++
   writeBrowserStorageItem(AGENT_CHAT_SELECTED_KEY, roomId)
   useAgentChatNavigationStore.setState({ roomId, error: '', pending: false, target: target ? { roomId, ...target } : null })
   useChatStore.getState().setRoute('agent-chat')
+}
+
+/** A removed or hidden conversation must not stay selected; Code returns to its task surface. */
+export function leaveAgentConversation(roomId: string): void {
+  if (!roomId || useAgentChatNavigationStore.getState().roomId !== roomId) return
+  navigationSerial++
+  removeBrowserStorageItem(AGENT_CHAT_SELECTED_KEY)
+  useAgentChatNavigationStore.setState({ roomId: null, error: '', pending: false, target: null })
+  if (useChatStore.getState().route === 'agent-chat') useChatStore.getState().setRoute('chat')
 }
 
 export async function openAgentConversation(agentId: string): Promise<void> {

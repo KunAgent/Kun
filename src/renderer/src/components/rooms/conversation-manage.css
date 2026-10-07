@@ -1,0 +1,68 @@
+/* Conversation row menus and the recoverable removal confirmation. */
+/* Grid items default to their max-content width; let long labels ellipsize instead. */
+.conversation-menu { grid-template-columns: minmax(0, 1fr); }
+.conversation-menu > button { min-width: 0; gap: 10px; padding: 7px 10px; font-size: 13px; line-height: 20px; }
+.conversation-menu > button > svg { color: var(--ds-text-faint); }
+.conversation-menu > button:hover:not(:disabled) > svg { color: var(--ds-text-muted); }
+.conversation-menu > button > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-menu > hr { margin: 4px 6px; border: 0; border-top: 1px solid var(--ds-border); }
+.rooms-menu-list > button.is-danger,
+.rooms-menu-list > button.is-danger > svg { color: color-mix(in srgb, var(--ds-danger) 88%, var(--ds-text)); }
+.rooms-menu-list > button.is-danger:hover:not(:disabled) { background: var(--ds-danger-soft); color: var(--ds-danger); }
+
+.rooms-init-dialog:has(> .conversation-removal) { width: min(440px, calc(100vw - 32px)); padding: 22px 22px 20px; }
+.rooms-init-dialog:has(> .conversation-removal) > header { align-items: flex-start; margin-bottom: 14px; }
+.rooms-init-dialog:has(> .conversation-removal) h2 { font-size: 16px; line-height: 22px; overflow-wrap: anywhere; }
+.conversation-removal-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 12px;
+  background: var(--ds-surface-subtle);
+  padding: 10px 12px;
+}
+.conversation-removal-identity .rooms-avatar { border-radius: 50%; }
+.conversation-removal-identity .rooms-avatar-letter { display: none; }
+.conversation-removal[data-removal='group'] .conversation-removal-identity .rooms-avatar { border-radius: 10px; }
+.conversation-removal-identity > span { display: flex; min-width: 0; flex-direction: column; }
+.conversation-removal-identity strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-removal-identity small { overflow: hidden; color: var(--ds-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-removal-points { display: grid; gap: 9px; margin: 16px 2px 4px; }
+.conversation-removal-points > li { display: flex; align-items: flex-start; gap: 10px; color: var(--ds-text-muted); font-size: 13px; line-height: 19px; }
+.conversation-removal-points svg { flex: 0 0 auto; margin-top: 2px; color: var(--ds-text-faint); }
+.conversation-removal-error {
+  margin-top: 14px;
+  border-radius: 10px;
+  background: var(--ds-danger-soft);
+  padding: 9px 12px;
+  color: color-mix(in srgb, var(--ds-danger) 88%, var(--ds-text));
+  font-size: 12.5px;
+  line-height: 18px;
+}
+.conversation-removal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.conversation-removal-actions > button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ds-border);
+  border-radius: 9px;
+  background: var(--ds-surface-card);
+  padding: 0 16px;
+  color: var(--ds-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+.conversation-removal-actions > button:hover:not(:disabled) { background: var(--ds-surface-hover); }
+/* The danger tokens are tuned for text and soft fills; white labels need a deeper fill (at least 4.5:1). */
+.conversation-removal-actions > button.is-danger {
+  --removal-danger-fill: color-mix(in srgb, var(--ds-danger) 84%, #000);
+  border-color: transparent;
+  background: var(--removal-danger-fill);
+  color: #fff;
+}
+[data-theme='dark'] .conversation-removal-actions > button.is-danger { --removal-danger-fill: color-mix(in srgb, var(--ds-danger) 68%, #000); }
+.conversation-removal-actions > button.is-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--removal-danger-fill) 88%, #000); }
+.conversation-removal-actions > button:disabled { opacity: 0.55; cursor: not-allowed; }
+.conversation-removal-actions > button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }

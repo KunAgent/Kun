@@ -12,6 +12,7 @@ const { exerciseAgentModelControls } = require('./smoke-agent-model-controls.cjs
 const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
 const { exerciseRoomApprovals } = require('./smoke-room-approvals.cjs')
 const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
+const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -106,7 +107,8 @@ async function main() {
 
     modelFixture = await startDirectModel({ real: process.argv.includes('--real-model') })
     const theme = argumentValue('--theme') === 'dark' ? 'dark' : 'light'
-    const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, profile), locale: 'en', theme, initialSetupCompleted: true }
+    const locale = argumentValue('--locale') === 'zh' ? 'zh' : 'en'
+    const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, profile), locale, theme, initialSetupCompleted: true }
     settings.agents.kun.baseUrl = modelFixture.baseUrl
     settings.agents.kun.apiKey = 'rooms-desktop-offline-fixture'
     settings.agents.kun.model = modelFixture.snapshot().model
@@ -165,6 +167,7 @@ async function main() {
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
       : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
+      : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
       : process.argv.includes('--approvals') ? exerciseRoomApprovals
         : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
     const exercised = exercise({ page, request: runtimeRequest, poll, capture, recordDiagnostic, fixture: modelFixture,

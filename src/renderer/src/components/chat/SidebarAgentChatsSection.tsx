@@ -4,22 +4,30 @@ import { Check, ChevronDown, ChevronRight, LoaderCircle, MessageCirclePlus, More
 import type { RoomSidebarEntry } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
 import { isConversationWorkspacePath } from '../../lib/workspace-path'
-import { removeBrowserStorageItem } from '../../lib/browser-storage'
-import { RoomModal } from '../rooms/RoomModal'
 import { RoomPopover } from '../rooms/RoomPopover'
-import { setRoomSidebarEntryDeleted, toggleRoomSidebarEntryArchived } from '../rooms/room-sidebar-actions'
+import { toggleRoomSidebarEntryArchived } from '../rooms/room-sidebar-actions'
+import {
+  conversationRemovalError,
+  removalTargetFromEntry,
+  removeConversation,
+  restoreConversation,
+  type ConversationRemoval,
+  type ConversationRemovalTarget
+} from '../rooms/agent-chat-removal'
+import { ConversationRemovalDialog } from '../rooms/ConversationRemovalDialog'
 import { useRoomSidebar } from '../rooms/useRoomSidebar'
 import { roomRequestId, roomsRequest } from '../rooms/rooms-client'
 import {
+  leaveAgentConversation,
   openAgentConversation,
   openAgentConversationRoom,
-  useAgentChatNavigationStore,
-  AGENT_CHAT_SELECTED_KEY
+  useAgentChatNavigationStore
 } from '../rooms/agent-chat-navigation'
 import { openAgentChatDialog } from '../rooms/agent-chat-picker'
 import { publishRoomActivityCounts } from '../rooms/room-activity-counts'
 import { SidebarIconButton, SidebarSearchField } from '../sidebar/SidebarPrimitives'
 import { SidebarAgentChatRow } from './SidebarAgentChatRow'
+import { SidebarAgentChatMenu, type SidebarAgentChatAction } from './SidebarAgentChatMenu'
 import { SidebarConversationsSection } from './SidebarConversationsSection'
 import {
   AGENT_CHATS_COLLAPSED_COUNT,
@@ -66,7 +74,7 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
   const [busyEntries, setBusyEntries] = useState<Set<string>>(() => new Set())
   const [hiddenEntries, setHiddenEntries] = useState<Set<string>>(() => new Set())
   const [actionError, setActionError] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState<RoomSidebarEntry | null>(null)
+  const [removal, setRemoval] = useState<{ entry: RoomSidebarEntry; target: ConversationRemovalTarget; kind: ConversationRemoval } | null>(null)
   const [initializationError, setInitializationError] = useState('')
   const [initializationVersion, setInitializationVersion] = useState(0)
   const page = useRoomSidebar(conversationSidebarQuery(listState, filter, search), roomId ?? '', props.runtimeReady)
@@ -123,31 +131,41 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
     setCollapsed(false)
     openAgentChatDialog('picker')
   }
-  const leaveHiddenConversation = (entry: RoomSidebarEntry): void => {
-    if (!entry.roomId || useAgentChatNavigationStore.getState().roomId !== entry.roomId) return
-    removeBrowserStorageItem(AGENT_CHAT_SELECTED_KEY)
-    useAgentChatNavigationStore.setState({ roomId: null, error: '', pending: false })
-    if (useChatStore.getState().route === 'agent-chat') useChatStore.getState().setRoute('chat')
-  }
-  const actOnEntry = async (entry: RoomSidebarEntry, action: 'archive' | 'delete' | 'restore'): Promise<void> => {
+  const actOnEntry = async (entry: RoomSidebarEntry, action: 'archive' | 'restore' | ConversationRemoval): Promise<void> => {
     if (!entry.roomId || busyEntries.has(entry.id)) return
     const scope = listScope.current
     setBusyEntries((current) => new Set([...current, entry.id]))
     setActionError('')
     try {
       if (action === 'archive') await toggleRoomSidebarEntryArchived(entry)
-      else await setRoomSidebarEntryDeleted(entry, action === 'delete')
+      else if (action === 'restore') await restoreConversation(entry)
+      else {
+        const target = removalTargetFromEntry(entry)
+        if (!target) throw new Error('Conversation not found')
+        await removeConversation(target, action)
+      }
       if (scope === listScope.current) setHiddenEntries((current) => new Set([...current, entry.id]))
-      if (action === 'delete' || (action === 'archive' && !entry.archived)) leaveHiddenConversation(entry)
-      setDeleteTarget(null)
+      if (action !== 'restore' && !(action === 'archive' && entry.archived)) leaveAgentConversation(entry.roomId)
+      setRemoval(null)
       page.refresh()
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause)
-      setActionError(message.includes('stop or reconcile active work') ? t('roomsDeleteActiveWork') : message)
+      setActionError(conversationRemovalError(cause, t))
     } finally {
       setBusyEntries((current) => { const next = new Set(current); next.delete(entry.id); return next })
     }
   }
+  const onRowAction = (entry: RoomSidebarEntry, action: SidebarAgentChatAction): void => {
+    setActionError('')
+    if (action === 'info') { if (entry.roomId) openAgentConversationRoom(entry.roomId, { info: true }) }
+    else if (action === 'pin') page.togglePin(entry)
+    else if (action === 'archive' || action === 'restore') void actOnEntry(entry, action)
+    else {
+      const target = removalTargetFromEntry(entry)
+      if (target) setRemoval({ entry, target, kind: action })
+    }
+  }
+  // The removal dialog reports its own failure; the list only shows row action errors.
+  const listActionError = removal ? '' : actionError
   const scopeLabel = listState !== 'active'
     ? t(listState === 'archived' ? 'roomsArchivedConversations' : 'roomsRecentlyDeleted')
     : filter !== 'all' ? tc(FILTER_LABEL_KEYS[filter]) : ''
@@ -186,7 +204,7 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
               <hr />
               <button type="button" onClick={() => { close(); openAgentChatDialog('directory') }}>{tc('agentDirectoryTitle')}</button>
               {(['archived', 'deleted'] as const).map((value) =>
-                <button type="button" key={value} aria-pressed={listState === value}
+                <button type="button" key={value} aria-pressed={listState === value} data-list-state={value}
                   onClick={() => { close(); setFilter('all'); setListState(value); setCollapsed(false) }}>
                   {t(value === 'archived' ? 'roomsArchivedConversations' : 'roomsRecentlyDeleted')}
                 </button>)}
@@ -210,19 +228,9 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
           {entries.map((entry) => <SidebarAgentChatRow key={entry.id} entry={entry}
             selected={Boolean(selectedRoomId && entry.roomId === selectedRoomId)}
             disabled={!props.runtimeReady || pending || entry.archived || entry.deleted || busyEntries.has(entry.id) || (!entry.roomId && !entry.agentId)}
-            onOpen={() => openEntry(entry)} menu={<RoomPopover label={`${entry.name} · ${t('roomsMoreActions')}`}
-              trigger={<MoreHorizontal size={14} />} className="sidebar-agent-chat-menu rooms-icon-button" align="end" width={220}
-              disabled={!props.runtimeReady || pending || busyEntries.has(entry.id)}>
-              {(close) => <div className="rooms-menu-list">{entry.deleted ?
-                <button type="button" onClick={() => { close(); void actOnEntry(entry, 'restore') }}>{t('roomsRestoreConversation')}</button> : <>
-                <button type="button" onClick={() => { close(); setActionError(''); page.togglePin(entry) }}>
-                  {t(entry.pinned ? 'roomsUnpinConversation' : 'roomsPinConversation')}</button>
-                <button type="button" disabled={!entry.roomId} onClick={() => { close(); void actOnEntry(entry, 'archive') }}>
-                  {t(entry.archived ? 'roomsRestoreArchivedConversation' : 'roomsArchiveConversation')}</button>
-                <button type="button" disabled={!entry.roomId} onClick={() => { close(); setActionError(''); setDeleteTarget(entry) }}>
-                  {t('roomsDeleteConversation')}</button>
-              </>}</div>}
-            </RoomPopover>} />)}
+            onOpen={() => openEntry(entry)} menu={<SidebarAgentChatMenu entry={entry}
+              disabled={!props.runtimeReady || pending || busyEntries.has(entry.id)}
+              onAction={(action) => onRowAction(entry, action)} />} />)}
           {!entries.length && !page.error ? <button type="button" className="sidebar-agent-chats-empty"
             onClick={listState === 'active' ? openNewChat : undefined} disabled={listState !== 'active' || !props.runtimeReady || page.busy || pending}>
             <MessageCirclePlus size={20} strokeWidth={1.5} />
@@ -230,8 +238,8 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
           </button> : null}
           {browsingAll && page.nextCursor ? <button type="button" className="sidebar-agent-chats-more"
             disabled={page.busy} onClick={page.more}>{t('roomsLoadMore')}</button> : null}
-          {page.error || error || initializationError || actionError ? <div role="alert" className="sidebar-agent-chats-error">
-            <span>{actionError || error || t('agentChatsUnavailable')}</span>
+          {page.error || error || initializationError || listActionError ? <div role="alert" className="sidebar-agent-chats-error">
+            <span>{listActionError || error || t('agentChatsUnavailable')}</span>
             {page.error || initializationError ? <button type="button" onClick={() => {
               page.refresh()
               if (initializationError) setInitializationVersion((version) => version + 1)
@@ -250,13 +258,9 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
         </button> : null}
       </> : null}
     </section>
-    {deleteTarget ? <RoomModal title={t('roomsDeleteConversation')} busy={busyEntries.has(deleteTarget.id)} onClose={() => setDeleteTarget(null)}>
-      <p className="rooms-delete-confirm-copy">{t('roomsDeleteConversationHint', { name: deleteTarget.name })}</p>
-      {actionError ? <p role="alert" className="rooms-run-error">{actionError}</p> : null}
-      <div className="rooms-delete-confirm-actions">
-        <button type="button" disabled={busyEntries.has(deleteTarget.id)} onClick={() => setDeleteTarget(null)}>{t('roomsCancel')}</button>
-        <button type="button" disabled={busyEntries.has(deleteTarget.id)} onClick={() => void actOnEntry(deleteTarget, 'delete')}>{t('roomsDeleteConversation')}</button>
-      </div>
-    </RoomModal> : null}
+    {removal ? <ConversationRemovalDialog target={removal.target} removal={removal.kind}
+      busy={busyEntries.has(removal.entry.id)} error={actionError}
+      onCancel={() => { setRemoval(null); setActionError('') }}
+      onConfirm={() => void actOnEntry(removal.entry, removal.kind)} /> : null}
   </>
 }

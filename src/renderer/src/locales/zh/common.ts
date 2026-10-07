@@ -43,6 +43,7 @@ import agentHarness from './common/agent-harness.json'
 import agentIntegrations from './common/agent-integrations.json'
 import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
+import conversationManage from './common/conversation-manage.json'
 
 const common = {
   ...agentUpdates,
@@ -95,6 +96,7 @@ const common = {
   ...agentIntegrations,
   ...ade,
   ...workLayout,
+  ...conversationManage,
 }
 
 export default common

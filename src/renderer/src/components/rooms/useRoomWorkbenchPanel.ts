@@ -16,6 +16,8 @@ import {
 } from '../workbench/code-right-tabs-state'
 
 export const ROOM_COLLABORATION_TAB = BUILTIN_RIGHT_PANEL_IDS.subagents
+/** The conversation info board: the Agent profile in a private chat, members in a group. */
+export const CONVERSATION_INFO_TAB = BUILTIN_RIGHT_PANEL_IDS.conversationInfo
 
 type RoomPanelState = {
   roomId: string | null

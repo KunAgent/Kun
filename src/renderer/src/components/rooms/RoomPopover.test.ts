@@ -17,6 +17,15 @@ describe('room popover viewport placement', () => {
     expect(placed.left + placed.width).toBeLessThanOrEqual(588)
     expect(placed.top + Math.min(240, placed.maxHeight)).toBeLessThan(350)
   })
+  it('lets a long action menu grow past the default cap while staying inside the viewport', () => {
+    const anchor = { left: 600, right: 640, top: 20, bottom: 52 }
+    const menu = { anchor, viewportWidth: 1360, viewportHeight: 900, width: 256, height: 470, side: 'bottom' as const, align: 'end' as const }
+    expect(roomPopoverPlacement(menu).maxHeight).toBe(360)
+    const tall = roomPopoverPlacement({ ...menu, maxHeight: 560 })
+    expect(tall.maxHeight).toBe(560)
+    expect(tall.top).toBe(60)
+    expect(roomPopoverPlacement({ ...menu, viewportHeight: 400, maxHeight: 560 }).maxHeight).toBe(328)
+  })
   it('moves keyboard focus after placement and restores it on Escape without stealing focus on resize', async () => {
     const focus = vi.fn(), restore = vi.fn()
     const listeners = new Map<string, () => void>()

@@ -65,6 +65,12 @@ import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import { roomWorkbenchScopeKey } from './room-surface-selection'
 import { useRoomActivityCounts } from './room-activity-counts'
 import { openAgentChatDialog } from './agent-chat-picker'
+import { AgentInfoBoard } from './AgentInfoBoard'
+import { GroupInfoBoard } from './GroupInfoBoard'
+import { removalTargetFromRoom } from './agent-chat-removal'
+import { useConversationInfoBoard } from './useConversationInfoBoard'
+import { useConversationRemoval } from './useConversationRemoval'
+import './conversation-info.css'
 
 const surface = 'agent-chat'
 
@@ -112,6 +118,9 @@ export function RoomsWorkspaceView({
   const room = state.room?.id === state.selectedId ? state.room : null
   const { selectedId } = state
   const taskCounts = useRoomActivityCounts((value) => room ? value.counts[room.id] : undefined)
+  const infoBoard = useConversationInfoBoard(panel, panelScope, Boolean(room && room.conversationKind !== 'agent_agent'))
+  const openInfoBoard = infoBoard.open
+  const removal = useConversationRemoval()
   const selectedRoomRef = useRef(selectedId)
   selectedRoomRef.current = selectedId
   const topicState = useRoomTopics(selectedId)
@@ -181,9 +190,10 @@ export function RoomsWorkspaceView({
     if (navigationTarget && room?.id === navigationTarget.roomId) {
       if (navigationTarget.runId) drawer.open({ kind: 'run', runId: navigationTarget.runId })
       if (navigationTarget.messageId) setJumpMessageId(navigationTarget.messageId)
+      if (navigationTarget.info) openInfoBoard()
       useAgentChatNavigationStore.setState({ target: null })
     }
-  }, [navigationTarget, room?.id, drawer])
+  }, [navigationTarget, room?.id, drawer, openInfoBoard])
   const direct = useDirectChat(room, state.refresh)
   const privateChat = room?.conversationKind === 'user_agent'
   const agentId = privateChat ? room?.members[0]?.participantAgentId : undefined
@@ -287,7 +297,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
           onApps={() => setAppsOpen(true)}
           onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId}
-          onManageAgents={() => drawer.open({ kind: 'directory' })} embedded onToggleLeftSidebar={onToggleLeftSidebar} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
+          onManageAgents={() => drawer.open({ kind: 'directory' })} embedded onToggleLeftSidebar={onToggleLeftSidebar}
+          onInfo={infoBoard.toggle} onRemove={(kind) => removal.request(removalTargetFromRoom(room), kind)} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
           onSidebar={onToggleLeftSidebar}
           onSearch={() => setSearchOpen((value) => !value)}
           onApps={() => setAppsOpen(true)}
@@ -295,6 +306,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           onHandoffs={() => drawer.open({ kind: 'handoffs' })}
           onMembers={() => drawer.section('members')}
           onSettings={() => drawer.open({ kind: 'settings' })}
+          onInfo={room?.conversationKind === 'group' ? infoBoard.open : undefined}
+          onRemove={room?.conversationKind === 'group' ? () => removal.request(removalTargetFromRoom(room), 'group') : undefined}
           onUpdate={(patch) => { if (room) void perform(async () => {
             const result = await roomsClient.update(room, patch)
             state.saved(result.room)
@@ -418,6 +431,17 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
         onRefreshDirect={direct.refresh} onCurrentBrowser={drawer.close} onOpenContent={openContent}
         contentPreviewTitle={panel.contentTarget?.reference.titleSnapshot}
         collaborationTitle={collaborationTitle}
+        infoTitle={t(privateChat ? 'conversationInfoAgentTitle' : 'conversationInfoGroupTitle')}
+        info={!room || room.conversationKind === 'agent_agent' ? undefined : privateChat
+          ? <AgentInfoBoard room={room} agent={agentProfile.data?.agent ?? null} models={agentModels.data ?? null}
+            activity={direct.data ?? null} onEditProfile={() => drawer.open({ kind: 'agent', agentId })}
+            onModels={() => drawer.open({ kind: 'models' })} onNewContext={() => void direct.context('reset')}
+            onWorkspace={() => void direct.context('workspace')}
+            onRemove={(kind) => removal.request(removalTargetFromRoom(room), kind)} />
+          : <GroupInfoBoard room={room} responding={respondingIds} waiting={waitingIds}
+            onSettings={() => drawer.open({ kind: 'settings' })} onMembers={() => drawer.section('members')}
+            onMemberDetails={(memberId) => openMember(memberId)} onMessageAgent={(id) => void openAgent(id).catch(() => undefined)}
+            onRemove={() => removal.request(removalTargetFromRoom(room), 'group')} />}
         contentPreview={room && panel.contentTarget ? (() => {
           const content = panel.contentTarget
           const isCurrent = () => mounted.current && selectedRoomRef.current === room.id && panelScopeRef.current === panelScope &&
@@ -502,6 +526,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             cursor={state.taskCursor} moreBusy={state.moreBusy} loadMore={state.loadMoreTasks} />
         }} /> : null} />
       {appsOpen ? <RoomAppsPanel onClose={() => setAppsOpen(false)} onOpenPlugins={() => { setAppsOpen(false); onOpenPlugins() }} /> : null}
+      {removal.dialog}
     </div>
   )
 }
