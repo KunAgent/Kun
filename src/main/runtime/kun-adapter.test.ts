@@ -118,6 +118,9 @@ describe('runtimeRequestViaHost', () => {
       'GET'
     )).toBe(30_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/threads', 'GET')).toBe(15_000)
+    // The Gateway page's recent routes wait 15 s; the request must outlive that wait.
+    expect(resolveRuntimeRequestTimeoutMs('/v1/model-gateway/route-traces?after=3&wait=15', 'GET')).toBeGreaterThan(15_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/model-gateway/route-traces?after=3', 'GET')).toBe(15_000)
     expect(resolveRuntimeRequestTimeoutMs(
       '/v1/model-connections/events?since_revision=62&wait_ms=25000',
       'GET',

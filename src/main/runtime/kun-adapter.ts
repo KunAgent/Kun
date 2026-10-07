@@ -295,6 +295,11 @@ function isProviderQuotaPath(pathNorm: string): boolean {
 }
 
 function runtimeEventsWaitMs(pathNorm: string): number | null {
+  // Recent gateway routes long-poll with `wait` in seconds rather than `wait_ms`.
+  if (pathNorm.startsWith('/v1/model-gateway/route-traces?')) {
+    const wait = Number(new URLSearchParams(pathNorm.slice(pathNorm.indexOf('?') + 1)).get('wait'))
+    return Number.isFinite(wait) && wait > 0 ? Math.round(wait * 1_000) : null
+  }
   if (
     !pathNorm.startsWith('/v1/model-connections/events?') &&
     !pathNorm.startsWith('/v1/thread-activity/events?') &&
