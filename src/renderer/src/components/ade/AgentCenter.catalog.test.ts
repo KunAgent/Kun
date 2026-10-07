@@ -22,7 +22,7 @@ vi.mock('../../store/harness-store', () => ({
 }))
 vi.mock('../../agent/registry', () => ({ getProvider: () => ({}) }))
 vi.mock('../agent-icon', () => ({ AgentIcon: () => null }))
-vi.mock('./AgentCenterCard', () => ({ AgentCenterCard: ({ row }: { row: { definition: { id: string } } }) =>
+vi.mock('./AgentDetail', () => ({ AgentDetail: ({ row }: { row: { definition: { id: string } } }) =>
   createElement('div', { 'data-agent-card': row.definition.id }) }))
 vi.mock('./agent-center-custom-form', () => ({ exportCustomEntry: vi.fn() }))
 vi.mock('./agent-center-add-wizard', () => ({ AgentCenterAddWizard: () => null }))

@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdeHarnessRow, AdeHarnessTestResult } from '@shared/ade-harnesses'
 import { defaultKunHarnessSettings } from '@shared/app-settings-kun-harness'
-import type { KunHarnessSettingsV1 } from '@shared/app-settings'
+import type { KunHarnessDefaultsEntryV1, KunHarnessSettingsV1 } from '@shared/app-settings'
 import { harnessProfileKey } from '@shared/harness-enablement'
 import { cancelAgentEnablementChecks } from './agent-enablement-cancellation'
 import { AGENT_ENABLEMENT_TIMEOUT_MS, useAgentEnablement } from './use-agent-enablement'
@@ -27,14 +27,17 @@ let gate: ReturnType<typeof useAgentEnablement>
 let saved: KunHarnessSettingsV1
 let edit: (patch: Partial<KunHarnessSettingsV1>) => void
 let writes: Partial<KunHarnessSettingsV1>[]
+let draftInput: Partial<KunHarnessDefaultsEntryV1> | undefined
+let committed = 0
 function Host({ inputRow = row }: { inputRow?: AdeHarnessRow }) {
   const [settings, setSettings] = useState(defaultKunHarnessSettings)
   saved = settings
   edit = (patch) => setSettings((current) => ({ ...current, ...patch }))
-  gate = useAgentEnablement({ row: inputRow, settings, beforeCheck: mocks.flush, patch: (patch) => { writes.push(patch); edit(patch) } })
+  gate = useAgentEnablement({ row: inputRow, settings, beforeCheck: mocks.flush, draft: draftInput,
+    onCommitted: () => { committed += 1 }, patch: (patch) => { writes.push(patch); edit(patch) } })
   return null
 }
-beforeEach(() => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); mocks.test.mockReset(); mocks.load.mockReset(); mocks.wait.mockReset().mockResolvedValue(undefined); mocks.flush.mockReset().mockResolvedValue(true); writes = [] })
+beforeEach(() => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); mocks.test.mockReset(); mocks.load.mockReset(); mocks.wait.mockReset().mockResolvedValue(undefined); mocks.flush.mockReset().mockResolvedValue(true); writes = []; draftInput = undefined; committed = 0 })
 afterEach(() => { act(() => tree?.unmount()); tree = undefined; vi.useRealTimers(); vi.unstubAllGlobals() })
 function mount() { act(() => { tree = create(createElement(Host)) }) }
 
@@ -141,4 +144,76 @@ it('identifies the failed readiness step instead of using successful handshake t
     readiness: { ...result(false).readiness!, checks: [{ id: 'credentials', ok: false, detail: 'Missing account' }] } }); mount()
   await act(async () => { await gate.enable() })
   expect(gate.error).toBe('agentEnablement.failures.credentials'); expect(gate.errorDetail).toBe('Missing account')
+})
+
+describe('unsaved connection edits', () => {
+  const gatewayProfile = { harnessId: 'pi', credentialMode: 'kun-gateway' as const, providerId: 'new' }
+  const draft = { credentialMode: 'kun-gateway' as const, providerId: 'new' }
+  const gatewayResult = (ok = true): AdeHarnessTestResult => ({ ...result(ok),
+    readiness: { ...result(ok).readiness!, profileKey: harnessProfileKey(gatewayProfile) } })
+  const enableSaved = (): void => { act(() => edit({ enabledProfiles: [profile], defaults: { pi: { credentialMode: 'native-login' } } })) }
+
+  it('keeps the saved connection enabled while an edit is pending and reports it as dirty', () => {
+    mount(); enableSaved(); draftInput = draft
+    act(() => tree!.update(createElement(Host)))
+    expect(gate.dirty).toBe(true); expect(gate.savedEnabled).toBe(true); expect(gate.savedProfile).toEqual(profile)
+    expect(gate.profile).toEqual(gatewayProfile)
+    // Pending edits are never written by merely existing.
+    expect(writes).toEqual([])
+  })
+
+  it('checks the edit, then saves and clears it only after the check passes', async () => {
+    mocks.test.mockResolvedValue(gatewayResult()); mount(); enableSaved(); draftInput = draft
+    act(() => tree!.update(createElement(Host)))
+    await act(async () => { await gate.enable() })
+    expect(mocks.test.mock.calls[0][1]).toMatchObject({ credentialMode: 'kun-gateway', providerId: 'new' })
+    expect(saved.defaults.pi).toMatchObject({ credentialMode: 'kun-gateway', providerId: 'new' })
+    expect(saved.enabledProfiles).toContainEqual(gatewayProfile)
+    expect(committed).toBe(1)
+  })
+
+  it('writes the original defaults back when the check fails, and keeps the edit for another try', async () => {
+    mocks.test.mockResolvedValue(gatewayResult(false)); mount(); enableSaved(); draftInput = draft
+    act(() => tree!.update(createElement(Host)))
+    await act(async () => { await gate.enable() })
+    expect(saved.defaults.pi).toEqual({ credentialMode: 'native-login' })
+    expect(saved.enabledProfiles).toEqual([profile])
+    expect(committed).toBe(0); expect(gate.error).toBeTruthy(); expect(gate.dirty).toBe(true)
+    expect(mocks.load).toHaveBeenCalled()
+  })
+
+  it('writes the original defaults back when the check is cancelled after the edit was saved', async () => {
+    const pending = deferred<AdeHarnessTestResult>(); mocks.test.mockReturnValue(pending.promise)
+    mount(); enableSaved(); draftInput = draft
+    act(() => tree!.update(createElement(Host)))
+    let checking!: Promise<void>
+    await act(async () => { checking = gate.enable() })
+    expect(saved.defaults.pi).toMatchObject({ credentialMode: 'kun-gateway' })
+    act(() => gate.cancel())
+    expect(saved.defaults.pi).toEqual({ credentialMode: 'native-login' })
+    await act(async () => { pending.resolve(gatewayResult()); await checking })
+    expect(saved.defaults.pi).toEqual({ credentialMode: 'native-login' }); expect(committed).toBe(0)
+  })
+
+  it('does not let an old cancelled run revert the draft a newer run saved', async () => {
+    const first = deferred<AdeHarnessTestResult>(); const second = deferred<AdeHarnessTestResult>()
+    mocks.test.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    mount(); enableSaved(); draftInput = draft
+    act(() => tree!.update(createElement(Host)))
+    let one!: Promise<void>, two!: Promise<void>
+    await act(async () => { one = gate.enable() })
+    act(() => gate.cancel())
+    await act(async () => { two = gate.enable() })
+    await act(async () => { first.resolve(gatewayResult()); await one })
+    expect(saved.defaults.pi).toMatchObject({ credentialMode: 'kun-gateway' })
+    await act(async () => { second.resolve(gatewayResult()); await two })
+    expect(saved.enabledProfiles).toContainEqual(gatewayProfile); expect(committed).toBe(1)
+  })
+
+  it('turns off the saved connection, not the unsaved one, and discards the edit', () => {
+    mount(); enableSaved(); draftInput = draft
+    act(() => tree!.update(createElement(Host)))
+    act(() => gate.disable())
+    expect(saved.enabledProfiles).toEqual([]); expect(committed).toBe(1)
+  })
 })

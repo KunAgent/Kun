@@ -143,8 +143,7 @@ app.on('window-all-closed', () => app.quit())
 
   await reset()
   await pendingCheck()
-  await panel().locator('[data-agent-profile-mode]').click()
-  await page.locator('[data-agent-setting-option="kun-gateway"]').click()
+  await panel().locator('[data-agent-profile-mode-option="kun-gateway"]').click()
   await page.evaluate(() => window.agentEnablementFixture.resolvePending(true))
   await settled()
   assert.equal((await snapshot()).enabledProfiles.length, 0)
@@ -208,12 +207,16 @@ app.on('window-all-closed', () => app.quit())
     await screenshot(`settings-devin-fusion-${theme}`)
     await menu.locator('input[type="search"]').fill('SWE-2')
     await menu.locator('[data-devin-model="swe-2-high"]').click()
-    await page.waitForFunction(() => window.agentEnablementFixture.snapshot().defaults.devin?.model === 'swe-2-high')
     assert.match(await panel().locator('[data-agent-profile-model]').innerText(), /SWE-2/)
-    await panel().locator('[data-agent-profile-mode]').click()
-    await page.locator('[data-agent-settings-listbox]').waitFor()
-    await screenshot(`settings-connection-menu-${theme}`)
-    await page.keyboard.press('Escape')
+    if (theme === 'light') {
+      // An enabled Agent keeps the saved model until the edit is re-checked.
+      await panel().locator('[data-agent-draft]').waitFor()
+      assert.notEqual((await snapshot()).defaults.devin?.model, 'swe-2-high')
+      await panel().locator('[data-agent-draft-check]').click()
+      await page.waitForFunction(() => window.agentEnablementFixture.snapshot().defaults.devin?.model === 'swe-2-high')
+      await state('ready')
+    }
+    await screenshot(`settings-connection-modes-${theme}`)
   }
   report.assertions.push('Settings reuse the Devin search, brands and Fusion list, save exact native IDs, and keep themed portals inside the viewport')
   await page.evaluate(() => window.agentEnablementFixture.selectAgent('deepseek-harness'))
@@ -260,8 +263,8 @@ app.on('window-all-closed', () => app.quit())
       // Name evidence with the measured viewport and scroll each real control,
       // not the oversized panel, so high-zoom captures show the tested action.
       const label = `layout-${language}-${theme}-requested${width}x1000-viewport${viewport.width}x${viewport.height}-zoom${zoom}`
-      for (const [target, selector] of [['profile', '[data-agent-profile-mode]'], ['enable', '[data-agent-enable]']]) {
-        const control = await measureControl(panel().locator(selector))
+      for (const [target, selector] of [['profile', '[data-agent-profile-mode-option]'], ['enable', '[data-agent-enable]']]) {
+        const control = await measureControl(panel().locator(selector).first())
         await assertTheme(theme)
         await screenshot(`${label}-${target}`, { ...layout, target, selector, control })
       }

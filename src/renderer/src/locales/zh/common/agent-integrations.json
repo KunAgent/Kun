@@ -52,7 +52,8 @@
     "askKunOperation": {
       "install": "安装",
       "adapter": "适配器安装",
-      "update": "更新"
+      "update": "更新",
+      "readiness": "就绪检查"
     },
     "askKunPrompt": {
       "intro": "我在 Kun 里为第三方 Agent「{{agent}}」执行{{operation}}时失败了，请帮我排查并修复。",

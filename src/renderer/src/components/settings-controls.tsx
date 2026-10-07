@@ -132,6 +132,9 @@ export type SettingsTabItem<T extends string> = {
   id: T
   label: string
   icon?: LucideIcon
+  /** A small marker for news inside the tab; `dotLabel` is its spoken name. */
+  dot?: boolean
+  dotLabel?: string
 }
 
 export type SettingsTabsProps<T extends string> = {
@@ -248,6 +251,8 @@ function SettingsTabList<T extends string>({
               />
             ) : null}
             <span className={secondary || contentSized ? '' : 'truncate'}>{item.label}</span>
+            {item.dot ? <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" /> : null}
+            {item.dot && item.dotLabel ? <span className="sr-only">{item.dotLabel}</span> : null}
           </button>
         )
       })}

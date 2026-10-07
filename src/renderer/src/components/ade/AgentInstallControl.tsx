@@ -4,6 +4,7 @@ import type { HarnessInstallAction, HarnessInstallState } from '../../../../../k
 import { harnessInstallRequest } from '../../agent/kun-harness-install-client'
 import { loadHarnesses } from '../../store/harness-store'
 import { AgentSetupHelpButton } from './AgentSetupHelpButton'
+import { setAgentInstall } from './agent-center-activity-store'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
@@ -27,6 +28,7 @@ export function AgentInstallControl({ harnessId, action, needed, t }: {
         if (disposed) return
         setState(value)
         setError('')
+        setAgentInstall(harnessId, value?.job ? { status: value.job.status, action } : undefined)
         keepPolling = value?.job?.status === 'running' || value?.job?.status === 'verifying'
         if (value?.job && !['running', 'verifying'].includes(value.job.status) && completed.current !== value.job.id) {
           completed.current = value.job.id

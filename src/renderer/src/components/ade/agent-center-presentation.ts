@@ -1,4 +1,6 @@
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
+import type { KunHarnessSettingsV1 } from '@shared/app-settings'
+import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-enablement'
 import { harnessRowUnavailableCode } from '../../store/harness-store'
 import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { setupInstallCommand, setupLoginCommand } from './agent-center-actions'
@@ -31,7 +33,10 @@ export type AgentNextAction =
   | { kind: 'login'; command: string; note?: string }
   | { kind: 'configureProvider' }
 
-export type AgentInstallObservation = { status: 'running' | 'verifying' | 'failed' | 'cancelled' | 'completed' }
+export type AgentInstallObservation = {
+  status: 'running' | 'verifying' | 'failed' | 'cancelled' | 'completed'
+  action?: 'install' | 'adapter'
+}
 
 export type AgentPresentationContext = {
   /** The selected profile is explicitly enabled (always true for Kun). */
@@ -167,4 +172,27 @@ export function agentPresentation(row: AdeHarnessRow, ctx: AgentPresentationCont
     install: installKind, changed: ctx.changed, counted: Boolean(ctx.modelCount)
   })
   return { state, group, tone: TONE[state], listLine: text.list, statusLine: text.status, switch: sw, mode, next }
+}
+
+/**
+ * Presentation for one catalog row from settings plus what is in flight. The
+ * list and the detail both call this, so they can never describe an Agent
+ * differently.
+ */
+export function agentPresentationFor(row: AdeHarnessRow, settings: KunHarnessSettingsV1, extras: {
+  platform: string
+  modelCount?: number
+  checking?: boolean
+  changed?: boolean
+  install?: AgentInstallObservation
+}): AgentPresentation {
+  const profile = selectedHarnessProfile(row, settings)
+  const id = row.definition.id
+  return agentPresentation(row, {
+    enabled: id === 'kun' || harnessProfileEnabled(settings, profile),
+    platform: extras.platform, credentialMode: profile.credentialMode, defaultModel: settings.defaults[id]?.model,
+    ...(extras.modelCount ? { modelCount: extras.modelCount } : {}),
+    ...(extras.checking ? { checking: true } : {}), ...(extras.changed ? { changed: true } : {}),
+    ...(extras.install ? { install: extras.install } : {})
+  })
 }

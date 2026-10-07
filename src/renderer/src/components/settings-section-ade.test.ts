@@ -227,7 +227,7 @@ describe('AgentsHarnessesSettingsPanel', () => {
     const text = instanceText(renderer.root)
     expect(text).toContain('claude-code display')
     expect(text).toContain('1.2.3')
-    expect(text).toContain('agentEnablement.disabled')
+    expect(text).toContain('agentCenter.state.available.status')
     expect(renderer.root.findAllByProps({ 'data-agent-card': 'claude-code' })).toHaveLength(1)
     const codexListItem = renderer.root.findByProps({ 'data-agent-list-id': 'codex' })
     act(() => codexListItem.props.onClick())
@@ -250,15 +250,24 @@ describe('AgentsHarnessesSettingsPanel', () => {
     act(() => renderer.unmount())
   })
 
-  it('shows the selected Agent defaults immediately while keeping command override advanced', () => {
+  it('shows the first-time steps for an Agent that is not connected, and the tabs once it is', () => {
     useHarnessStore.setState({ rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code')], rowsLoadedAt: 1_000 })
-    const renderer = renderPanel(vi.fn())
-    expect(renderer.root.findAllByProps({ 'data-agent-detail-settings': true })).toHaveLength(1)
-    expect(renderer.root.findAllByProps({ 'data-agent-advanced-settings': true })).toHaveLength(0)
-    const advanced = renderer.root.findByProps({ 'data-agent-advanced-toggle': true })
-    act(() => advanced.props.onClick())
-    expect(renderer.root.findAllByProps({ 'data-agent-advanced-settings': true })).toHaveLength(1)
-    act(() => renderer.unmount())
+    const fresh = renderPanel(vi.fn())
+    expect(fresh.root.findAllByProps({ 'data-agent-setup': 'claude-code' })).toHaveLength(1)
+    expect(fresh.root.findAllByProps({ role: 'tablist' })).toHaveLength(0)
+    expect(fresh.root.findAllByProps({ 'data-agent-profile-mode-option': 'native-login' })).toHaveLength(1)
+    act(() => fresh.unmount())
+
+    const kun = defaultKunRuntimeSettings()
+    kun.harnesses.enabledProfiles = [{ harnessId: 'claude-code', credentialMode: 'native-login' }]
+    const connected = renderPanel(vi.fn(), kun)
+    expect(connected.root.findAllByProps({ 'data-agent-setup': 'claude-code' })).toHaveLength(0)
+    const tabs = connected.root.findAllByProps({ role: 'tab' })
+    expect(tabs.map((tab) => instanceText(tab))).toEqual(['agentCenter.tabs.connection', 'agentCenter.tabs.models', 'agentCenter.tabs.launch', 'agentCenter.tabs.version'])
+    expect(connected.root.findAllByProps({ 'data-agent-command-path': true })).toHaveLength(0)
+    act(() => tabs[2]!.props.onClick())
+    expect(connected.root.findAllByProps({ 'data-agent-command-path': true })).toHaveLength(1)
+    act(() => connected.unmount())
   })
 
   it('removes only the selected profile when explicitly disabled', () => {

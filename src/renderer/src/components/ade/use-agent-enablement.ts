@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AdeHarnessRow, AdeHarnessTestResult } from '@shared/ade-harnesses'
-import type { KunHarnessSettingsV1 } from '@shared/app-settings'
+import type { KunHarnessDefaultsEntryV1, KunHarnessSettingsV1 } from '@shared/app-settings'
 import { harnessProfileEnabled, harnessProfileKey, selectedHarnessProfile } from '@shared/harness-enablement'
 import { getProvider } from '../../agent/registry'
 import { registerAgentEnablementCancellation } from './agent-enablement-cancellation'
@@ -10,22 +10,42 @@ import { AgentEnablementError, abortableAgentOperation, agentConfigurationKey, a
 
 export const AGENT_ENABLEMENT_TIMEOUT_MS = 60_000
 
-/** A settings mutation is admitted only by the current, finite, explicit check. */
+/**
+ * A settings mutation is admitted only by the current, finite, explicit check.
+ *
+ * `draft` is an unsaved edit of the Agent's defaults (connection mode,
+ * account, model). The check runs against the draft; it is written to
+ * settings only once the check starts, and written back if the check fails
+ * or is cancelled, so a half-finished edit cannot break a working connection.
+ */
 export function useAgentEnablement(input: {
   row: AdeHarnessRow
   settings: KunHarnessSettingsV1
   patch: (patch: Partial<KunHarnessSettingsV1>) => void
   beforeCheck?: () => Promise<boolean>
+  draft?: Partial<KunHarnessDefaultsEntryV1>
+  onCommitted?: () => void
 }) {
-  const { row, settings, patch } = input
+  const { row, patch } = input
+  const id = row.definition.id
+  const saved = input.settings
+  const savedProfile = selectedHarnessProfile(row, saved)
+  const savedEntry = saved.defaults[id]
+  const draftEntry = input.draft && Object.keys(input.draft).length ? { ...savedEntry, ...input.draft } : undefined
+  const dirty = Boolean(draftEntry) && agentConfigurationKey(draftEntry) !== agentConfigurationKey(savedEntry ?? {})
+  const settings = dirty && draftEntry ? { ...saved, defaults: { ...saved.defaults, [id]: draftEntry } } : saved
   const profile = selectedHarnessProfile(row, settings)
   const profileKey = harnessProfileKey(profile)
+  const savedProfileKey = harnessProfileKey(savedProfile)
   const enabled = harnessProfileEnabled(settings, profile)
+  const savedEnabled = harnessProfileEnabled(saved, savedProfile)
   const fingerprint = agentConfigurationKey({ profileKey, definition: row.definition,
     network: row.status.networkFingerprint,
-    launch: settings.providers[row.definition.id], defaults: settings.defaults[row.definition.id] })
-  const current = useRef({ fingerprint, settings, patch })
-  current.current = { fingerprint, settings, patch }
+    launch: settings.providers[id], defaults: settings.defaults[id] })
+  const current = useRef({ fingerprint, settings, saved, patch })
+  current.current = { fingerprint, settings, saved, patch }
+  /** Writes the original defaults back when a committed draft did not pass its check. */
+  const rollback = useRef<(() => void) | null>(null)
   const generation = useRef(0)
   const active = useRef<AbortController | null>(null)
   const [checking, setChecking] = useState(false)
@@ -33,10 +53,18 @@ export function useAgentEnablement(input: {
   const [error, setError] = useState('')
   const [errorDetail, setErrorDetail] = useState('')
   const [phase, setPhase] = useState<'preparing' | 'checking' | 'activating'>('preparing')
+  const revertDraft = (): void => {
+    const restore = rollback.current
+    rollback.current = null
+    if (!restore) return
+    restore()
+    void loadHarnesses(true)
+  }
   const cancel = (): void => {
     generation.current += 1
     active.current?.abort()
     active.current = null
+    revertDraft()
     setChecking(false)
     setResult(null)
     setError('')
@@ -53,8 +81,10 @@ export function useAgentEnablement(input: {
   const disable = (): void => {
     cancel()
     const latest = current.current
-    latest.patch({ enabledProfiles: (latest.settings.enabledProfiles ?? []).filter((entry) =>
-      harnessProfileKey(entry) !== profileKey) })
+    // The switch turns off the connection that is saved, never an unsaved edit.
+    latest.patch({ enabledProfiles: (latest.saved.enabledProfiles ?? []).filter((entry) =>
+      harnessProfileKey(entry) !== savedProfileKey) })
+    input.onCommitted?.()
   }
 
   const enable = async (): Promise<void> => {
@@ -88,6 +118,14 @@ export function useAgentEnablement(input: {
     }
     try {
       await stage('preparing', AGENT_SETTINGS_TIMEOUT_MS, async () => {
+        if (dirty && draftEntry) {
+          const original = saved.defaults[id]
+          current.current.patch({ defaults: { ...saved.defaults, [id]: draftEntry } })
+          rollback.current = () => {
+            const { [id]: _draft, ...others } = current.current.saved.defaults
+            current.current.patch({ defaults: original ? { ...others, [id]: original } : others })
+          }
+        }
         if (input.beforeCheck && !await input.beforeCheck()) throw new AgentEnablementError('agentEnablement.saveFailed')
         assertCurrent()
         await waitForAgentSettings(settings, controller.signal, { harnessId: profile.harnessId })
@@ -106,6 +144,7 @@ export function useAgentEnablement(input: {
         const failure = agentReadinessFailure(checked)
         setError(failure.message)
         setErrorDetail(failure.detail)
+        if (generation.current === epoch) revertDraft()
         return
       }
       const latest = current.current
@@ -121,17 +160,21 @@ export function useAgentEnablement(input: {
           harnessId: profile.harnessId, enabledProfile: profile
         })
         assertCurrent()
+        rollback.current = null
         await loadHarnesses(true)
       })
+      input.onCommitted?.()
     } catch (cause) {
       if (generation.current === epoch && current.current.fingerprint === captured) {
         setError(cause instanceof AgentEnablementError ? cause.message : 'agentEnablement.failed')
         setErrorDetail(cause instanceof AgentEnablementError ? cause.detail : cause instanceof Error ? cause.message : String(cause))
       }
+      // A cancelled run was already reverted by cancel(); a newer run owns the draft now.
+      if (generation.current === epoch) revertDraft()
     } finally {
       if (active.current === controller) active.current = null
       if (generation.current === epoch) setChecking(false)
     }
   }
-  return { profile, enabled, checking, phase, result, error, errorDetail, enable, disable, cancel }
+  return { profile, enabled, savedProfile, savedEnabled, dirty, checking, phase, result, error, errorDetail, enable, disable, cancel }
 }

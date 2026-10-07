@@ -7,16 +7,17 @@ import type {
 } from '@shared/app-settings'
 import { getProvider } from '../../agent/registry'
 import { applyHarnessEnablementSettings, harnessIdsWithChangedLaunchSettings, loadHarnesses, useHarnessStore } from '../../store/harness-store'
-import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-enablement'
 import { useChatStore } from '../../store/chat-store'
 import { SettingsIconTile } from '../settings-icon-tile'
 import { settingsButtonClass } from '../settings-button'
-import { AgentCenterCard } from './AgentCenterCard'
+import { AgentDetail } from './AgentDetail'
 import { AgentCatalogSkeleton } from './AgentCenterParts'
 import { AgentCenterRail } from './AgentCenterRail'
 import { AgentSettingsSelect } from './AgentSettingsSelect'
 import { groupAgentCatalog, reorderAgents, type AgentListEntry } from './agent-center-catalog'
-import { agentPresentation } from './agent-center-presentation'
+import { agentPresentationFor } from './agent-center-presentation'
+import { useAgentActivityStore } from './agent-center-activity-store'
+import { useAgentInstallWatch } from './use-agent-install-watch'
 import { exportCustomEntry } from './agent-center-custom-form'
 import { AgentCenterAddWizard } from './agent-center-add-wizard'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
@@ -68,6 +69,8 @@ export function AgentCenter({
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState(false)
   const models = useHarnessStore((state) => state.models)
+  const activity = useAgentActivityStore()
+  useAgentInstallWatch()
   const [probeError, setProbeError] = useState('')
 
   useEffect(() => {
@@ -118,13 +121,10 @@ export function AgentCenter({
 
   const platform = typeof window === 'undefined' ? 'darwin' : (window.kunGui?.platform ?? 'darwin')
   const entries = useMemo((): AgentListEntry[] => rows.map((row) => {
-    const profile = selectedHarnessProfile(row, settings)
-    return { row, presentation: agentPresentation(row, {
-      enabled: row.definition.id === 'kun' || harnessProfileEnabled(settings, profile), platform,
-      credentialMode: profile.credentialMode, defaultModel: settings.defaults[row.definition.id]?.model,
-      modelCount: models[row.definition.id]?.models.length || undefined
-    }) }
-  }), [rows, settings, platform, models])
+    const id = row.definition.id
+    return { row, presentation: agentPresentationFor(row, settings, { platform, modelCount: models[id]?.models.length,
+      checking: Boolean(activity.checking[id]), changed: Boolean(activity.changed[id]), install: activity.install[id] }) }
+  }), [rows, settings, platform, models, activity.checking, activity.changed, activity.install])
   const groups = groupAgentCatalog(entries, settings.agentOrder, { search, expanded, selectedId: selectedId ?? undefined })
   const visibleEntries = groups.flatMap((group) => group.entries)
   const selectedRow = (visibleEntries.find((entry) => entry.row.definition.id === selectedId)
@@ -198,50 +198,51 @@ export function AgentCenter({
               onMove={(id, index) => patchHarness({ agentOrder: reorderAgents(settings.agentOrder, connectedIds, id, index) })}
               onFindExtensions={() => useChatStore.getState().openSettings('extensions')} t={t} />
             <div className="min-w-0 p-5">
-              {selectedRow && !addOpen ? [selectedRow].map((row) => {
-            const id = row.definition.id
-            return (
-              <AgentCenterCard
-                key={id}
-                row={row}
-                settings={settings}
-                probing={probingId === id}
-                platform={platform}
-                t={t}
-                tSettings={tSettings}
-                onPatchHarness={patchHarness}
-                beforeEnableCheck={beforeEnableCheck}
-                onProbe={() => void probe(id)}
-                onSetDefault={() => patchHarness({ defaultHarnessId: id })}
-                // User Agents (derived, generic ACP or terminal) can be removed;
-                // only ACP ones export as a portable definition.
-                onRemoveCustom={isUserAgent(settings.providers, id) ? () => {
-                  const { [id]: _removed, ...providers } = settings.providers
-                  patchHarness({ providers })
-                } : undefined}
-                onExportCustom={(() => {
-                  const entry = userAgentEntry(settings.providers, id)
-                  return entry ? () => void exportCustomEntry(entry) : undefined
-                })()}
-                onSetBinaryPath={(path) => patchHarness({ providers: withAgentCommandPath(settings.providers, id, path) })}
-                onSetLaunchPatch={(patch) => patchHarness({ providers: withAgentLaunchPatch(settings.providers, id, patch) })}
-                onSetPermissionMode={(modeId) => {
-                  // P4-11: permission defaults live under defaults[id].
-                  const defaults = { ...settings.defaults }
-                  if (modeId) {
-                    defaults[id] = { ...defaults[id], permissionMode: modeId }
-                  } else if (defaults[id]) {
-                    const { permissionMode: _dropped, ...rest } = defaults[id]
-                    if (Object.keys(rest).length) defaults[id] = rest
-                    else delete defaults[id]
-                  }
-                  patchHarness({ defaults })
-                }}
-                onSetupCommand={onSetupCommand}
-                onTest={(level) => test(id, level)}
-              />
-            )
-              }) : visibleEntries.length === 0 ? (
+              {selectedRow && !addOpen ? (() => {
+                const row = selectedRow
+                const id = row.definition.id
+                return (
+                  <AgentDetail
+                    key={id}
+                    row={row}
+                    settings={settings}
+                    probing={probingId === id}
+                    platform={platform}
+                    t={t}
+                    tSettings={tSettings}
+                    baseName={row.definition.derivedFrom ? rows.find((candidate) => candidate.definition.id === row.definition.derivedFrom)?.definition.displayName : undefined}
+                    onPatchHarness={patchHarness}
+                    beforeEnableCheck={beforeEnableCheck}
+                    onProbe={() => void probe(id)}
+                    // User Agents (derived, generic ACP or terminal) can be removed;
+                    // only ACP ones export as a portable definition.
+                    onRemoveUser={isUserAgent(settings.providers, id) ? () => {
+                      const { [id]: _removed, ...providers } = settings.providers
+                      patchHarness({ providers })
+                    } : undefined}
+                    onExportUser={(() => {
+                      const entry = userAgentEntry(settings.providers, id)
+                      return entry ? () => void exportCustomEntry(entry) : undefined
+                    })()}
+                    onSetBinaryPath={(path) => patchHarness({ providers: withAgentCommandPath(settings.providers, id, path) })}
+                    onSetLaunchPatch={(patch) => patchHarness({ providers: withAgentLaunchPatch(settings.providers, id, patch) })}
+                    onSetPermissionMode={(modeId) => {
+                      // P4-11: permission defaults live under defaults[id].
+                      const defaults = { ...settings.defaults }
+                      if (modeId) {
+                        defaults[id] = { ...defaults[id], permissionMode: modeId }
+                      } else if (defaults[id]) {
+                        const { permissionMode: _dropped, ...rest } = defaults[id]
+                        if (Object.keys(rest).length) defaults[id] = rest
+                        else delete defaults[id]
+                      }
+                      patchHarness({ defaults })
+                    }}
+                    onSetupCommand={onSetupCommand}
+                    onTest={(level) => test(id, level)}
+                  />
+                )
+              })() : visibleEntries.length === 0 ? (
                 <p className="py-10 text-center text-[13px] text-ds-faint">{t('agentIntegrations.noMatches')}</p>
               ) : null}
             </div>

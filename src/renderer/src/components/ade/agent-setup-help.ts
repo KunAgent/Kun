@@ -11,7 +11,7 @@ import { appendRoomDraft, resolveBotRoomId } from '../rooms/workbench-bridge-act
  */
 export type AgentSetupIssue = {
   harnessId: string
-  operation: 'install' | 'adapter' | 'update'
+  operation: 'install' | 'adapter' | 'update' | 'readiness'
   command?: string
   error?: string
   output?: string

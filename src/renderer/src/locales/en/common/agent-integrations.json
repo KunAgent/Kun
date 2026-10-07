@@ -52,7 +52,8 @@
     "askKunOperation": {
       "install": "install",
       "adapter": "install the adapter for",
-      "update": "update"
+      "update": "update",
+      "readiness": "check or connect to"
     },
     "askKunPrompt": {
       "intro": "Kun failed to {{operation}} the third-party Agent \"{{agent}}\". Please diagnose and fix it.",
