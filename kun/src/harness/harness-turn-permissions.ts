@@ -38,3 +38,18 @@ export function harnessTurnPermissionMode(definition: HarnessDefinition, input: 
   // instead of always forcing the first (often read-only) harness mode.
   return allowed.at(-1)!.id
 }
+
+/**
+ * Native Agent picked in the composer (OpenCode primary agents). It replaces
+ * the permission-mapped session mode and runs under that Agent's own tool
+ * rules, so a read-only captured policy ignores it and keeps the strictest mode.
+ */
+export function harnessTurnNativeAgent(definition: HarnessDefinition, input: {
+  requested?: string; sandboxMode?: SandboxMode; unattended: boolean; allowUnattendedFullAccess: boolean
+}): string | undefined {
+  if (definition.nativeAgents !== 'session-modes') return undefined
+  const requested = input.requested?.trim()
+  if (!requested) return undefined
+  if (input.sandboxMode === 'read-only' || (input.unattended && !input.allowUnattendedFullAccess)) return undefined
+  return requested
+}

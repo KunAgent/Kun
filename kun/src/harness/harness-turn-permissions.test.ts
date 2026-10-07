@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HarnessCatalog } from './harness-catalog.js'
-import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
+import { harnessTurnNativeAgent, harnessTurnPermissionMode } from './harness-turn-permissions.js'
 import { kunToolPermissionModeSettings } from '../contracts/policy.js'
 
 const catalog = new HarnessCatalog()
@@ -54,5 +54,20 @@ describe('native permission mapping', () => {
     expect(harnessTurnPermissionMode(definition, { ...full, sandboxMode: 'read-only', requested: 'default' })).toBe('plan')
     expect(harnessTurnPermissionMode(definition, { ...full, unattended: true, requested: 'default' })).toBe('plan')
     expect(harnessTurnPermissionMode(definition, { ...full, approvalPolicy: 'on-request', sandboxMode: 'workspace-write' })).toBe('default')
+  })
+})
+
+describe('native Agent selection', () => {
+  const base = { sandboxMode: 'workspace-write' as const, unattended: false, allowUnattendedFullAccess: false }
+  it('forwards a picked Agent only for harnesses that publish native Agents', () => {
+    for (const id of ['opencode', 'opencode2']) expect(harnessTurnNativeAgent(catalog.get(id)!, { ...base, requested: ' docs ' })).toBe('docs')
+    expect(harnessTurnNativeAgent(catalog.get('devin')!, { ...base, requested: 'docs' })).toBeUndefined()
+    expect(harnessTurnNativeAgent(catalog.get('opencode')!, { ...base, requested: '  ' })).toBeUndefined()
+  })
+  it('keeps the strictest mode for read-only and unattended turns', () => {
+    const def = catalog.get('opencode')!
+    expect(harnessTurnNativeAgent(def, { ...base, requested: 'build', sandboxMode: 'read-only' })).toBeUndefined()
+    expect(harnessTurnNativeAgent(def, { ...base, requested: 'build', unattended: true })).toBeUndefined()
+    expect(harnessTurnNativeAgent(def, { ...base, requested: 'build', unattended: true, allowUnattendedFullAccess: true })).toBe('build')
   })
 })

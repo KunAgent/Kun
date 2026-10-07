@@ -9,6 +9,13 @@ import type {
 } from '@shared/ade-harnesses'
 import { harnessProfileKey, readyHarnessProfiles } from '@shared/harness-enablement'
 import { getProvider } from '../agent/registry'
+import type { HarnessNativeAgent } from '../../../../kun/src/contracts/harness-native-agents'
+
+/** A model-detail lookup may omit the Agent list; keep the last known one. */
+function nativeAgentCacheFields(source: { agents?: HarnessNativeAgent[]; defaultAgentId?: string } | undefined) {
+  return source?.agents?.length
+    ? { agents: source.agents, ...(source.defaultAgentId ? { defaultAgentId: source.defaultAgentId } : {}) } : {}
+}
 
 /**
  * Harness catalog + per-thread session surface (docs/ade/12 §7.2).
@@ -23,6 +30,7 @@ export type HarnessSessionSurface = {
   harnessId: string
   commands?: AdeHarnessCommand[]
   currentModeId?: string
+  agents?: HarnessNativeAgent[]
   updatedAt: string
 }
 
@@ -34,6 +42,8 @@ export type HarnessSessionSurface = {
 export type HarnessModelCacheEntry = {
   models: string[]
   modelInfo?: AdeHarnessModels['modelInfo']
+  agents?: HarnessNativeAgent[]
+  defaultAgentId?: string
   detailsModel?: string
   catalogStatus?: AdeHarnessModels['catalogStatus']
   loadedAt?: number
@@ -273,7 +283,8 @@ export async function loadHarnessModels(harnessId: string, force = false, select
         const previous = existing?.modelInfo?.find((old) => old.id === entry.id)
         return { ...(entry.reasoningEfforts === undefined && previous?.reasoningEfforts !== undefined
           ? { reasoningEfforts: previous.reasoningEfforts, defaultReasoningEffort: previous.defaultReasoningEffort } : {}), ...entry }
-      }), detailsModel: selectedModel, catalogStatus: result.catalogStatus,
+      }), ...nativeAgentCacheFields(result.agents?.length ? result : existing),
+        detailsModel: selectedModel, catalogStatus: result.catalogStatus,
         loadedAt: Date.now(), loading: false,
         ...(failed ? { error: lookupError?.message ?? lookupError?.code ?? 'model_catalog_unavailable',
           ...(lookupError?.code ? { errorCode: lookupError.code } : {}), failures: (existing?.failures ?? 0) + 1 } : {}) } }
@@ -359,6 +370,11 @@ export function receiveHarnessSessionState(state: AdeHarnessSessionState): void 
           ? { currentModeId: state.currentModeId }
           : current.sessions[threadId]?.currentModeId !== undefined
             ? { currentModeId: current.sessions[threadId]!.currentModeId }
+            : {}),
+        ...(state.agents !== undefined
+          ? { agents: state.agents }
+          : current.sessions[threadId]?.harnessId === state.harnessId && current.sessions[threadId]?.agents
+            ? { agents: current.sessions[threadId]!.agents }
             : {}),
         updatedAt: new Date().toISOString()
       }

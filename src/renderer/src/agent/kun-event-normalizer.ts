@@ -18,6 +18,11 @@ import type {
 } from './types'
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
 import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
+import { nativeAgentsFromAcpModes } from '../../../../kun/src/contracts/harness-native-agents'
+
+function nativeAgentsField(agents: unknown) {
+  return Array.isArray(agents) ? { agents: nativeAgentsFromAcpModes({ availableModes: agents }) } : {}
+}
 
 export type KunEventNormalizerDeps = {
   userMessage: (item: CoreTurnItemJson) => UserMessageEventPayload
@@ -251,7 +256,8 @@ function normalizeKunRuntimeEventPayload(
           ...(commands !== undefined ? { commands } : {}),
           ...(typeof event.currentModeId === 'string' && event.currentModeId.trim()
             ? { currentModeId: event.currentModeId.trim() }
-            : {})
+            : {}),
+          ...nativeAgentsField((event as { agents?: unknown }).agents)
         }
       }]
     }

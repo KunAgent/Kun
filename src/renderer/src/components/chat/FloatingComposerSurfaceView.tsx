@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { nativePermissionPreview } from '../../lib/harness-native-permission'
+import { selectedNativeAgentPreview, useHarnessNativeAgentStore } from '../../lib/harness-native-agent'
 import type { KunToolPermissionMode } from '@shared/app-settings'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
 import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDialog'
@@ -16,6 +17,7 @@ import { composerAgentPickerSurface } from '../../lib/subagent-profile-surface'
 import { AdeWorkspaceProjectPicker } from './AdeWorkspaceProjectPicker'
 import { AdeWorktreeStartPicker } from './AdeWorktreeStartPicker'
 import { FloatingComposerAgentModePicker } from './FloatingComposerAgentModePicker'
+import { FloatingComposerNativeAgentPicker } from './FloatingComposerNativeAgentPicker'
 
 export function FloatingComposerSurfaceView({
   context
@@ -54,6 +56,9 @@ export function FloatingComposerSurfaceView({
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
   const runtimeOffline = useChatStore((state) => state.runtimeConnection === 'offline')
   const modelCatalogStatus = useChatStore((state) => state.composerModelCatalogStatus)
+  const harnessRows = useHarnessStore((state) => state.rows)
+  // Re-render the permission preview when the native Agent choice changes.
+  useHarnessNativeAgentStore((state) => state.selected)
   const kunComposer = adeComposerEnabled && !side && adeComposer?.harnessId === 'kun'
   const modelGroups: ModelProviderModelGroup[] = kunComposer ? composerModelGroups.filter(isKunModelProviderGroup) : composerModelGroups
   const modelPickList = kunComposer && (composerModelGroups.length || modelCatalogStatus !== 'ready')
@@ -433,8 +438,9 @@ export function FloatingComposerSurfaceView({
                   <FloatingComposerExecutionPicker
                     agentPermission={externalAgent && adeComposer ? {
                       agentName: adeComposer.harnessLabel,
-                      preview: (mode: KunToolPermissionMode) => nativePermissionPreview(adeComposer.harnessId, adeComposer.permissionModes, mode,
-                        adeComposer.requestedPermissionMode, adeComposer.transport)
+                      preview: (mode: KunToolPermissionMode) => selectedNativeAgentPreview(harnessRows.find((row) => row.definition.id === adeComposer.harnessId)) ??
+                        nativePermissionPreview(adeComposer.harnessId, adeComposer.permissionModes, mode,
+                          adeComposer.requestedPermissionMode, adeComposer.transport)
                     } : undefined}
                     value={executionSettings}
                     applying={executionSettingsApplying}
@@ -536,6 +542,10 @@ export function FloatingComposerSurfaceView({
                       surface={composerAgentPickerSurface(route, taskSurface)}
                     />
                   )}
+                  {!hideModelPicker && externalAgent && adeComposer ? (
+                    <FloatingComposerNativeAgentPicker harnessId={adeComposer.harnessId} threadId={activeThreadId}
+                      compact={compact} disabled={!canCompose || busy} />
+                  ) : null}
                   {!side && showVoiceDictation ? (
                     <button
                       type="button"

@@ -4,5 +4,12 @@
   "composerFastModeHint": "Faster Codex responses with increased subscription usage.",
   "composerFastModeUnverified": "Fast support is not confirmed for this model. Refresh the model list in provider settings.",
   "composerFastModeUnsupported": "This model does not offer Fast mode.",
-  "composerFastModeLabel": "Fast"
+  "composerFastModeLabel": "Fast",
+  "nativeAgentPicker": {
+    "title": "Agent",
+    "auto": "Auto",
+    "autoHint": "Follows the composer permission level",
+    "triggerTitle": "{{agent}} Agent: {{name}}",
+    "ownPermissions": "A selected Agent uses its own tool permissions. Read-only tasks still use the strictest mode."
+  }
 }

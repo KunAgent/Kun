@@ -32,6 +32,7 @@ import {
 } from './acp-schema.js'
 import { applyDevinSessionPermission } from './devin-session-permissions.js'
 import { applyAcpSessionPermission } from './acp-session-permissions.js'
+import { applyAcpSessionAgent } from './acp-session-agent.js'
 import { isAcpAuthenticationRequired } from './acp-authentication.js'
 import { AcpModelSelectionError, acpLegacyVariantModel, applyAcpSessionModel, parseAcpLegacyModels, type AcpLegacyModels } from './acp-legacy-models.js'
 
@@ -46,6 +47,8 @@ export type AcpSessionRequest = {
   /** Resolved harness permission-level id (02 §5.3). */
   permissionModeId?: string
   acpPermission?: HarnessDefinition['acpPermission']
+  /** Composer-selected native Agent; replaces the permission-mapped mode. */
+  nativeAgentId?: string
   reasoningEffort?: string
   /** Kun Tools MCP server descriptors; user MCP servers are not forwarded. */
   mcpServers?: McpServer[]
@@ -276,7 +279,9 @@ export class AcpSessionManager {
     ctx: AcpSessionRequest
   ): Promise<void> {
     await applyAcpSessionModel(conn, session, acpLegacyVariantModel(session, ctx.model, ctx.reasoningEffort))
-    if (ctx.harnessId === 'devin') {
+    if (ctx.nativeAgentId) {
+      await applyAcpSessionAgent(conn, session, ctx.nativeAgentId)
+    } else if (ctx.harnessId === 'devin') {
       await applyDevinSessionPermission(conn, session, ctx.permissionModeId)
     } else {
       await applyAcpSessionPermission(conn, session, ctx.permissionModeId, ctx.acpPermission)

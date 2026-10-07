@@ -95,6 +95,13 @@ installations. Third-party settings are not rewritten automatically.
   unsupported selection fails before sending a user prompt.
 - Native resume is negotiated from each client. Where a client cannot restore
   a session, the existing explicit context reconstruction remains the fallback.
+- OpenCode and OpenCode2 publish their primary agents (build, plan and
+  user-defined agents) as ACP session modes. The composer shows an Agent switch
+  next to the model control; Auto keeps the permission-mapped mode, and a picked
+  Agent is sent as the turn's `harnessAgentId` and applied with
+  `session/set_mode` before the prompt. A picked Agent runs under its own tool
+  permissions; read-only and unattended turns still use the strictest mode, and
+  an Agent the session does not offer fails before any prompt is sent.
 
 ## Installation and updates
 

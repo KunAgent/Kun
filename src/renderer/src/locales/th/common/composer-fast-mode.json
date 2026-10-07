@@ -4,5 +4,12 @@
   "composerFastModeHint": "Codex ตอบเร็วขึ้น แต่ใช้โควตาการสมัครสมาชิกมากขึ้น",
   "composerFastModeUnverified": "ยังไม่ยืนยันการรองรับโหมดเร็วสำหรับโมเดลนี้ โปรดรีเฟรชรายการโมเดลในการตั้งค่าผู้ให้บริการ",
   "composerFastModeUnsupported": "โมเดลนี้ไม่รองรับโหมดเร็ว",
-  "composerFastModeLabel": "โหมดเร็ว"
+  "composerFastModeLabel": "โหมดเร็ว",
+  "nativeAgentPicker": {
+    "title": "Agent",
+    "auto": "อัตโนมัติ",
+    "autoHint": "ใช้ระดับสิทธิ์ตามช่องป้อนข้อความ",
+    "triggerTitle": "{{agent}} Agent: {{name}}",
+    "ownPermissions": "Agent ที่เลือกจะใช้สิทธิ์เครื่องมือของตัวเอง งานแบบอ่านอย่างเดียวยังคงใช้โหมดที่เข้มงวดที่สุด"
+  }
 }

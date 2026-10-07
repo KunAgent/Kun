@@ -34,6 +34,7 @@ const { runNativeModelFlow, writeCodexModelStub } = require('./smoke-development
 const { writeInstallerFixture, runAgentInstallFlow } = require('./smoke-development-agent-install.cjs')
 const { writeDevinModelStub, runDevinModelFlow } = require('./smoke-development-devin-models.cjs')
 const { runProtectedApprovalFlow } = require('./smoke-development-protected-approval.cjs')
+const { writeOpenCodeAgentStub, writeOpenCodeCredentialFixture, runOpenCodeAgentFlow } = require('./smoke-development-opencode-agents.cjs')
 const { runUnifiedCodeFlow } = require('./smoke-development-ade-flow.cjs')
 const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
 const { startModelFixture } = require('./smoke-development-ade-model.cjs')
@@ -54,6 +55,7 @@ async function main() {
   const nativeModelOnly = process.argv.includes('--native-model-only')
   const installOnly = process.argv.includes('--install-only')
   const devinModelsOnly = process.argv.includes('--devin-models-only')
+  const openCodeAgentsOnly = process.argv.includes('--opencode-agents-only')
   const protectedApprovalOnly = process.argv.includes('--protected-approval-only')
   const compiledRenderer = process.argv.includes('--compiled-renderer')
   const startedAt = new Date().toISOString()
@@ -151,6 +153,8 @@ async function main() {
     const devinInstallTarget = installOnly ? await writeInstallerFixture(stubDir, devinStub) : undefined
     if (installOnly) isolatedEnvironment.PATH = `${stubDir}${require('node:path').delimiter}${isolatedEnvironment.PATH ?? ''}`
     const codexStub = nativeModelOnly ? await writeCodexModelStub(stubDir) : undefined
+    const openCodeStub = openCodeAgentsOnly ? await writeOpenCodeAgentStub(stubDir) : undefined
+    if (openCodeStub) await writeOpenCodeCredentialFixture(home)
     // Claude Code login detection reads ~/.claude/.credentials.json.
     await mkdir(join(home, '.claude'), { recursive: true })
     await writeFile(join(home, '.claude', '.credentials.json'),
@@ -170,6 +174,7 @@ async function main() {
       ...(settings.agents.kun.harnesses ?? {}),
       binaryPaths: {
         ...(codexStub ? { codex: codexStub } : {}),
+        ...(openCodeStub ? { opencode: openCodeStub.path } : {}),
         'claude-code': claudeStub,
         devin: devinInstallTarget ?? devinStub,
         // Force one repair path regardless of host-global CLI installations.
@@ -194,6 +199,7 @@ async function main() {
       // Local-stub credential evidence only; never a real account or service.
       isolatedEnvironment.WINDSURF_API_KEY = 'devin-models-offline-fixture-no-service-access'
     }
+    if (openCodeAgentsOnly) settings.agents.kun.harnesses.enabledProfiles = [{ harnessId: 'opencode', credentialMode: 'native-login' }]
     if (nativeModelOnly) {
       settings.agents.kun.harnesses.enabledProfiles = [{ harnessId: 'codex', credentialMode: 'native-login' }]
       // Local-stub credential evidence only; the Codex stub never contacts a service.
@@ -263,6 +269,8 @@ async function main() {
       assertions = await runDevinModelFlow({ page, capture, poll, resize: (width, height) => resize(electronApplication, width, height) })
     } else if (installOnly) {
       assertions = await runAgentInstallFlow({ page, capture, poll, runtimeRequest })
+    } else if (openCodeAgentsOnly) {
+      assertions = await runOpenCodeAgentFlow({ page, capture, poll, runtimeRequest, journal: openCodeStub.journal })
     } else if (nativeModelOnly) {
       assertions = await runNativeModelFlow({ page, capture, poll })
     } else if (agentModeOnly) {

@@ -485,6 +485,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       { id: 'build', label: 'Build', kunPermissionMode: 'full-access' }
     ],
     modelSource: 'probe',
+    nativeAgents: 'session-modes',
     staticModels: [],
     historySource: 'opencode',
     capabilities: ACP_DEFAULT_CAPABILITIES,
@@ -534,6 +535,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       { id: 'build', label: 'Build', kunPermissionMode: 'full-access' }
     ],
     modelSource: 'probe',
+    nativeAgents: 'session-modes',
     staticModels: [],
     capabilities: ACP_DEFAULT_CAPABILITIES,
     // V2 has a separate command, credential store and config dialect. Do not

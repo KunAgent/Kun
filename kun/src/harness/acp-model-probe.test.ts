@@ -10,6 +10,7 @@ import type { AcpSpawnFn } from '../runtime/acp/acp-process.js'
 import { AcpError } from '../runtime/acp/acp-schema.js'
 
 const devin = BUILTIN_HARNESSES.find((entry) => entry.id === 'devin')!
+const opencode = BUILTIN_HARNESSES.find((entry) => entry.id === 'opencode')!
 const fixture = fileURLToPath(new URL('../runtime/acp/__fixtures__/fake-acp-agent.mjs', import.meta.url))
 const scenarioPath = fileURLToPath(new URL('../runtime/acp/__fixtures__/scenarios/auth-advertised.json', import.meta.url))
 const dirs: string[] = []
@@ -50,6 +51,20 @@ describe('AcpModelProbe', () => {
     expect(catalog.models).toEqual(['available-model'])
     expect(catalog.error).toBeUndefined()
     expect(f.spawned()).toBe(2)
+  })
+
+  it('lists switchable native Agents only for harnesses that publish them', async () => {
+    const modes = { currentModeId: 'build', availableModes: [{ id: 'build', name: 'build', description: 'Default agent' }, { id: 'plan', name: 'plan' }] }
+    const base = JSON.parse(await readFile(scenarioPath, 'utf8'))
+    const f = await sequence({ newSession: { ...base.newSession, modes } })
+    const probe = new AcpModelProbe({ spawn: f.spawnFixture, retryDelayMs: 0, log: () => undefined })
+    const catalog = await probe.probeCatalog(opencode)
+    expect(catalog.agents).toEqual([{ id: 'build', name: 'build', description: 'Default agent' }, { id: 'plan', name: 'plan' }])
+    expect(catalog.defaultAgentId).toBe('build')
+    const other = new AcpModelProbe({ spawn: f.spawnFixture, retryDelayMs: 0, log: () => undefined })
+    expect((await other.probeCatalog(devin)).agents).toBeUndefined()
+    probe.dispose()
+    other.dispose()
   })
 
   it('reports the categorical agent error instead of an indistinguishable empty list', async () => {

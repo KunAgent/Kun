@@ -4,5 +4,12 @@
   "composerFastModeHint": "Codex के जवाब तेज़ होंगे, लेकिन सदस्यता उपयोग बढ़ेगा।",
   "composerFastModeUnverified": "इस मॉडल के लिए फ़ास्ट समर्थन की पुष्टि नहीं हुई है। प्रदाता सेटिंग में मॉडल सूची रीफ़्रेश करें।",
   "composerFastModeUnsupported": "यह मॉडल फ़ास्ट मोड प्रदान नहीं करता।",
-  "composerFastModeLabel": "तेज़"
+  "composerFastModeLabel": "तेज़",
+  "nativeAgentPicker": {
+    "title": "Agent",
+    "auto": "स्वतः",
+    "autoHint": "कंपोज़र के अनुमति स्तर का पालन करता है",
+    "triggerTitle": "{{agent}} Agent: {{name}}",
+    "ownPermissions": "चुना गया Agent अपनी टूल अनुमतियों का उपयोग करता है। केवल-पढ़ने वाले कार्य अब भी सबसे सख़्त मोड का उपयोग करते हैं।"
+  }
 }

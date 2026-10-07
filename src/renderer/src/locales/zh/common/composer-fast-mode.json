@@ -4,5 +4,12 @@
   "composerFastModeHint": "获得更快的 Codex 响应，但会增加订阅用量。",
   "composerFastModeUnverified": "尚未确认该模型支持快速模式，请在提供商设置中获取并更新模型列表。",
   "composerFastModeUnsupported": "当前模型未提供快速模式。",
-  "composerFastModeLabel": "快速模式"
+  "composerFastModeLabel": "快速模式",
+  "nativeAgentPicker": {
+    "title": "Agent",
+    "auto": "自动",
+    "autoHint": "跟随输入框权限档",
+    "triggerTitle": "{{agent}} Agent：{{name}}",
+    "ownPermissions": "选定的 Agent 使用它自己的工具权限；只读任务仍使用最严格的模式。"
+  }
 }

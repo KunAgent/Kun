@@ -39,6 +39,7 @@ import {
   type AcpSessionHandle
 } from './acp-session-manager.js'
 import { AcpEventMapper } from './acp-event-mapper.js'
+import { nativeAgentsFromAcpModes } from '../../contracts/harness-native-agents.js'
 import { AcpDraftEmitter } from './acp-turn-emitter.js'
 import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
 import type { AcpSpawnFn } from './acp-process.js'
@@ -267,6 +268,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           harnessId: definition.id,
           model,
           permissionModeId,
+          ...(resolved.ctx.nativeAgentId ? { nativeAgentId: resolved.ctx.nativeAgentId } : {}),
           acpPermission: definition.acpPermission,
           reasoningEffort: turn.reasoningEffort,
           sessionMcpServers,
@@ -328,6 +330,12 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       },
       sandbox: definition.capabilities.facts?.sandbox ?? 'native'
     })
+    // Workspace-local Agents only appear in a real session; refresh the picker.
+    const nativeAgents = definition.nativeAgents === 'session-modes' ? nativeAgentsFromAcpModes(session.modes) : []
+    if (nativeAgents.length) {
+      await emitter.emitAll([{ kind: 'harness_session_state', threadId, turnId, harnessId: definition.id, agents: nativeAgents,
+        ...(session.modes?.currentModeId ? { currentModeId: session.modes.currentModeId } : {}) }]).catch(() => undefined)
+    }
 
     const imageCapable =
       conn.initResult?.agentCapabilities?.promptCapabilities?.image === true

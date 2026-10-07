@@ -45,7 +45,7 @@ import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
 import { defaultCredentialMode } from '../harness/resolve-turn-harness.js'
-import { harnessTurnPermissionMode } from '../harness/harness-turn-permissions.js'
+import { harnessTurnNativeAgent, harnessTurnPermissionMode } from '../harness/harness-turn-permissions.js'
 import { isUnattendedTurn } from '../harness/usage-for-turn.js'
 import type { DelegatedSessionCoordinator } from '../runtime/delegated-session-binding.js'
 import { parkDelegatedGraphTurnAfterRecovery } from '../runtime/delegated-graph-turn-policy.js'
@@ -96,6 +96,8 @@ export type SessionTurnContext = {
   credentialMode: ReturnType<typeof defaultCredentialMode>
   accountId: string | undefined
   permissionModeId: string | undefined
+  /** Composer-selected native Agent (definition `nativeAgents`); replaces the permission mode. */
+  nativeAgentId?: string
   approvalPolicy: ApprovalPolicy | undefined
   sandboxMode: SandboxMode | undefined
   approvalReviewer: ApprovalReviewer
@@ -292,6 +294,10 @@ export async function resolveSessionTurnContext(
     approvalPolicy, sandboxMode, approvalReviewer, unattended: isUnattendedTurn(turn),
     allowUnattendedFullAccess: deps.allowUnattendedFullAccess === true
   })
+  const nativeAgentId = harnessTurnNativeAgent(definition, {
+    requested: turn.harnessAgentId, sandboxMode, unattended: isUnattendedTurn(turn),
+    allowUnattendedFullAccess: deps.allowUnattendedFullAccess === true
+  })
 
   const {
     credentialIdentity,
@@ -345,6 +351,7 @@ export async function resolveSessionTurnContext(
       credentialMode,
       accountId: actingModelRoute.accountId,
       permissionModeId,
+      ...(nativeAgentId ? { nativeAgentId } : {}),
       approvalPolicy,
       sandboxMode,
       approvalReviewer,

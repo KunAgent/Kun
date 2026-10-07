@@ -4,5 +4,12 @@
   "composerFastModeHint": "Codex 응답이 빨라지지만 구독 사용량이 늘어납니다.",
   "composerFastModeUnverified": "이 모델의 빠른 모드 지원이 확인되지 않았습니다. 공급자 설정에서 모델 목록을 새로 고쳐 주세요.",
   "composerFastModeUnsupported": "이 모델은 빠른 모드를 제공하지 않습니다.",
-  "composerFastModeLabel": "빠른 모드"
+  "composerFastModeLabel": "빠른 모드",
+  "nativeAgentPicker": {
+    "title": "Agent",
+    "auto": "자동",
+    "autoHint": "입력창 권한 수준을 따릅니다",
+    "triggerTitle": "{{agent}} Agent: {{name}}",
+    "ownPermissions": "선택한 Agent는 자체 도구 권한을 사용합니다. 읽기 전용 작업은 여전히 가장 엄격한 모드를 사용합니다."
+  }
 }

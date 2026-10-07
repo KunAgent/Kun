@@ -54,6 +54,8 @@ export type AdeHarnessDefinition = {
   credentialModes: AdeHarnessCredentialMode[]
   permissionModes: AdeHarnessPermissionMode[]
   modelSource: 'static' | 'probe' | 'provider'
+  /** Switchable native Agents published as ACP session modes (OpenCode). */
+  nativeAgents?: 'session-modes'
   staticModels: string[]
   /** Existing local-history source this harness can continue (01 §8). */
   historySource?: 'claude-code' | 'codex' | 'opencode'
@@ -161,6 +163,9 @@ export type AdeHarnessModels = {
   harnessId: string
   models: string[]
   modelInfo?: import('../../kun/src/contracts/harness-models').HarnessModelInfo[]
+  /** Switchable native Agents (OpenCode primary agents) and the session default. */
+  agents?: import('../../kun/src/contracts/harness-native-agents').HarnessNativeAgent[]
+  defaultAgentId?: string
   /**
    * Present when `credential_mode=provider|kun-gateway` was requested: the
    * gateway-exposable providers (04 §5.5 `exposableProvider`) with the model
@@ -273,4 +278,6 @@ export type AdeHarnessSessionState = {
   harnessId: string
   commands?: AdeHarnessCommand[]
   currentModeId?: string
+  /** Native Agents the live session offers (includes workspace-local ones). */
+  agents?: import('../../kun/src/contracts/harness-native-agents').HarnessNativeAgent[]
 }

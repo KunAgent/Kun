@@ -270,6 +270,31 @@ describe('AcpSessionManager', () => {
     await conn.close()
   })
 
+  test('a selected native Agent replaces the permission-mapped mode', async () => {
+    const { conn, journal } = await startFixture('no-config.json')
+    await conn.initialize()
+    const { manager } = makeManager()
+    await manager.ensureSession(
+      makeCtx({ model: undefined, permissionModeId: 'default', nativeAgentId: 'auto' }),
+      conn
+    )
+    const sets = journal().filter((entry) => entry.frame?.kind === 'configSet')
+    expect(sets.map((entry) => entry.frame?.params)).toEqual([expect.objectContaining({ modeId: 'auto' })])
+    await conn.close()
+  })
+
+  test('an Agent the session does not offer fails before any mode change', async () => {
+    const { conn, journal } = await startFixture('no-config.json')
+    await conn.initialize()
+    const { manager } = makeManager()
+    await expect(manager.ensureSession(
+      makeCtx({ model: undefined, permissionModeId: 'auto', nativeAgentId: 'docs-writer' }),
+      conn
+    )).rejects.toMatchObject({ code: 'policy_denied', message: expect.stringContaining("'docs-writer'") })
+    expect(journal().filter((entry) => entry.frame?.kind === 'configSet')).toHaveLength(0)
+    await conn.close()
+  })
+
   test('a bound native session resumes via session/load without replay reaching the sink', async () => {
     const { conn, journal } = await startFixture('load-replay.json')
     await conn.initialize()

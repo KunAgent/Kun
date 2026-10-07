@@ -1,3 +1,5 @@
+import type { HarnessNativeAgent } from './harness-native-agents.js'
+
 /** Native model facts; absence of a capability means unknown, not unsupported. */
 export type HarnessModelInfo = {
   id: string
@@ -16,4 +18,12 @@ export type HarnessModelCatalogError = {
   message?: string
 }
 
-export type HarnessModelCatalog = { models: string[]; modelInfo: HarnessModelInfo[]; error?: HarnessModelCatalogError }
+export type HarnessModelCatalog = {
+  models: string[]
+  modelInfo: HarnessModelInfo[]
+  /** Switchable native Agents (definition `nativeAgents`); absent when not reported. */
+  agents?: HarnessNativeAgent[]
+  /** The Agent a fresh native session starts with. */
+  defaultAgentId?: string
+  error?: HarnessModelCatalogError
+}

@@ -4,5 +4,12 @@
   "composerFastModeHint": "Ответы Codex быстрее, но расход подписки выше.",
   "composerFastModeUnverified": "Быстрый режим для этой модели не подтверждён. Обновите список моделей в настройках провайдера.",
   "composerFastModeUnsupported": "Эта модель не поддерживает быстрый режим.",
-  "composerFastModeLabel": "Быстро"
+  "composerFastModeLabel": "Быстро",
+  "nativeAgentPicker": {
+    "title": "Agent",
+    "auto": "Авто",
+    "autoHint": "Следует уровню разрешений поля ввода",
+    "triggerTitle": "Agent {{agent}}: {{name}}",
+    "ownPermissions": "Выбранный Agent использует собственные права инструментов. Задачи только для чтения по-прежнему используют самый строгий режим."
+  }
 }

@@ -240,6 +240,12 @@ export const HarnessDefinitionSchema = z
     /** Strictest-to-widest order; [0] is the strictest. Unattended fallback is [0]. */
     permissionModes: z.array(HarnessPermissionModeSchema).min(1),
     modelSource: z.enum(['static', 'probe', 'provider']),
+    /**
+     * The harness exposes user-switchable native Agents (OpenCode primary
+     * agents) as ACP session modes. The composer lists them and a turn's
+     * `harnessAgentId` selects one instead of the permission-mapped mode.
+     */
+    nativeAgents: z.literal('session-modes').optional(),
     staticModels: z.array(z.string().min(1).max(256)).max(64).default([]),
     /** Links to existing history-sources for "continue external session". */
     historySource: z.enum(['claude-code', 'codex', 'opencode']).optional(),

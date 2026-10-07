@@ -41,6 +41,7 @@ import { ModelRequestFailureContextSchema } from './model-request-failure.js'
 import { HarnessIdSchema } from './harness.js'
 import { HarnessCapabilitiesSchema } from './harness-capabilities.js'
 import { TaskWorkspaceEventPayloadSchema } from './task-workspace.js'
+import { HarnessNativeAgentListSchema } from './harness-native-agents.js'
 
 /**
  * Persisted runtime events. Every event has a per-thread `seq` so the
@@ -523,7 +524,8 @@ export const HarnessSessionStateEvent = RuntimeEventBase.extend({
     .max(200)
     .optional(),
   configOptions: z.array(HarnessConfigOptionSchema).max(32).optional(),
-  currentModeId: z.string().max(256).optional()
+  currentModeId: z.string().max(256).optional(),
+  agents: HarnessNativeAgentListSchema.optional()
 })
 export type HarnessSessionStateEvent = z.infer<typeof HarnessSessionStateEvent>
 

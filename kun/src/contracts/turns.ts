@@ -28,6 +28,8 @@ import {
 } from './design-task-profile.js'
 import { WriteTurnContextSchema } from './write-turn-context.js'
 import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
+import { HarnessNativeAgentIdSchema } from './harness-native-agents.js'
+import { ActingTurnModelRouteSchema } from './turn-acting-route.js'
 import { ManagerLeaseSettlementSchema } from './turn-manager-lease.js'
 export * from './turn-manager-lease.js'
 
@@ -59,18 +61,7 @@ export type TurnServiceTier = z.infer<typeof TurnServiceTierSchema>
 export const TurnClientSurfaceSchema = z.enum(['gui', 'tui', 'cli', 'api', 'im', 'extension'])
 export type TurnClientSurface = z.infer<typeof TurnClientSurfaceSchema>
 
-/**
- * Immutable transport route used by model-controlled approval review for one
- * acting turn. It contains identifiers only; credentials remain host-owned.
- */
-export const ActingTurnModelRouteSchema = z.object({
-  unresolvedGatewayAlias: z.literal(true).optional(),
-  requestedGatewayAlias: z.string().min(1).max(512).optional(),
-  model: z.string().trim().min(1),
-  providerId: z.string().trim().min(1).optional(),
-  accountId: z.string().trim().min(1).optional()
-}).strict()
-export type ActingTurnModelRoute = Readonly<z.infer<typeof ActingTurnModelRouteSchema>>
+export { ActingTurnModelRouteSchema, type ActingTurnModelRoute } from './turn-acting-route.js'
 
 /**
  * Plan operation kinds the renderer can advertise on a plan turn.
@@ -194,6 +185,8 @@ export const TurnSchema = z.object({
   collaborationEnabled: z.boolean().optional(),
   /** Frozen credential mode for the frozen harness; defaults to the harness's first mode. */
   credentialMode: HarnessCredentialModeSchema.optional(),
+  /** Native Agent (OpenCode primary agent) frozen for this turn; absent keeps permission mapping. */
+  harnessAgentId: HarnessNativeAgentIdSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional(),
   gatewayAliasGrants: z.array(HarnessGatewayAliasGrantSchema).max(2).optional(),
   accountId: z.string().min(1).optional(),
@@ -325,6 +318,8 @@ export const StartTurnRequest = z.object({
   harnessId: HarnessIdSchema.optional(),
   /** Explicit credential mode; absent means "the harness's default". */
   credentialMode: HarnessCredentialModeSchema.optional(),
+  /** Native Agent for harnesses that declare `nativeAgents`; ignored by others. */
+  harnessAgentId: HarnessNativeAgentIdSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional(),
   accountId: z.string().min(1).optional(),
   reasoningEffort: TurnReasoningEffortSchema.optional(),

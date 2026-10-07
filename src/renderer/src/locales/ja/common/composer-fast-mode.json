@@ -4,5 +4,12 @@
   "composerFastModeHint": "Codex の応答が速くなりますが、サブスクリプション使用量が増えます。",
   "composerFastModeUnverified": "このモデルの高速モード対応は未確認です。プロバイダー設定でモデル一覧を更新してください。",
   "composerFastModeUnsupported": "このモデルは高速モードに対応していません。",
-  "composerFastModeLabel": "高速"
+  "composerFastModeLabel": "高速",
+  "nativeAgentPicker": {
+    "title": "Agent",
+    "auto": "自動",
+    "autoHint": "入力欄の権限レベルに従います",
+    "triggerTitle": "{{agent}} Agent：{{name}}",
+    "ownPermissions": "選択した Agent は独自のツール権限で動作します。読み取り専用タスクでは最も厳しいモードが使われます。"
+  }
 }

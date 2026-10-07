@@ -16,6 +16,7 @@ import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-l
 import { isAcpAuthenticationRequired } from '../runtime/acp/acp-authentication.js'
 import type { HarnessModelCatalog, HarnessModelCatalogError } from '../contracts/harness-models.js'
 import { acpModelCatalog } from './acp-model-catalog.js'
+import { nativeAgentsFromAcpModes } from '../contracts/harness-native-agents.js'
 import { startAcpProcess, type AcpSpawnFn } from '../runtime/acp/acp-process.js'
 import {
   ACP_AGENT_METHODS,
@@ -220,6 +221,12 @@ export class AcpModelProbe {
         const catalog = acpModelCatalog({ harnessId: definition.id, configOptions: session.configOptions,
           models: session.models ? { ...(parsed.data.models as object), currentModelId: session.models.currentModelId } : parsed.data.models,
           defaultModel: initial.modelInfo.find((entry) => entry.isDefault)?.id })
+        const agents = definition.nativeAgents === 'session-modes' ? nativeAgentsFromAcpModes(parsed.data.modes) : []
+        if (agents.length) {
+          catalog.agents = agents
+          const current = parsed.data.modes?.currentModeId?.trim()
+          if (current && agents.some((agent) => agent.id === current)) catalog.defaultAgentId = current
+        }
         lease.release(true)
         return catalog
       } finally { off() }
