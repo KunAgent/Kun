@@ -13,6 +13,7 @@ import { RoomAppConnectionCard } from './RoomAppConnectionCard'
 import { RoomWorkbenchTaskCard } from './RoomWorkbenchTaskCard'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
 import './rooms-reminders.css'
+import './rooms-polish.css'
 import { noteRoomMessageRendered } from './room-im-response-metrics'
 
 const roles = {

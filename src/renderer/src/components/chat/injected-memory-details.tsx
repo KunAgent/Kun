@@ -7,6 +7,7 @@ import { MemoryEvidence } from '../memory/MemoryEvidence'
 import { MemoryHistory } from '../memory/MemoryHistory'
 import { metaInjectedDirectiveIds, metaInjectedDirectiveSummaries, metaInjectedMemorySummaries, useInjectedMemoryRecords } from './injected-memory-lookup'
 import '../rooms/agents.css'
+import '../rooms/rooms-runs.css'
 
 export function InjectedMemoryDetails({ meta, memoryIds, onClose }: {
   meta?: Record<string, unknown>; memoryIds: string[]; onClose: () => void

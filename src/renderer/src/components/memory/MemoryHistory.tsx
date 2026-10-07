@@ -3,6 +3,7 @@ import { diffLines } from 'diff'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CoreMemoryHistoryJson } from '../../agent/kun-contract'
+import '../rooms/rooms-runs.css'
 
 export function MemoryHistory({ history = [], content, busy, onRollback, loadHistory }: {
   history?: CoreMemoryHistoryJson[]; content: string; busy: boolean; onRollback?: (revision: number) => Promise<boolean>

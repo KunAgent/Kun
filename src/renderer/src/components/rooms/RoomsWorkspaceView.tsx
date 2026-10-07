@@ -1,3 +1,5 @@
+// Loaded first, as the retired Rooms sidebar did, so later surfaces still win.
+import './rooms-polish.css'
 import { AgentModelSettings, type AgentModels } from './AgentModelSettings'
 import { useDirectChat, RoomDirectHeader, RoomDirectProgress, RoomDirectFiles, RoomNoticeDismiss } from './RoomDirectChat'
 import './rooms-direct.css'
