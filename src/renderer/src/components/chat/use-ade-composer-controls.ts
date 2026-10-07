@@ -212,7 +212,9 @@ export function useAdeComposerControls(input: {
       hasConfiguredProvider
     })
   }, [enabled, hasConfiguredProvider, isNativeHarness, labels, modelCache?.models, modelCache?.modelInfo, providerGroupCache?.groups, providerGroupCache?.aliasGroups, row])
-  const pickList = modelGroups != null ? [...(modelCache?.models ?? [])] : null
+  // Only models the groups admit: a native catalog whose profile is not ready
+  // (or not yet described) must not leak in as an untyped "other models" list.
+  const pickList = modelGroups != null ? [...new Set(modelGroups.flatMap((group) => group.modelIds))] : null
 
   /** Sentinel group keys (`ade-cred:*`) route the pick through credentialMode. */
   const onModelChange = useMemo(() => {

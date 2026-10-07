@@ -51,6 +51,29 @@ function catalogLoaded(
   return pickList.length > 0 || modelGroups.length > 0
 }
 
+/**
+ * An external Agent's thread restores its own recorded model. That Agent's
+ * catalog owns the choice (see resolveCatalogComposerSelection); validating it
+ * against the Kun registry would swap in an unrelated Kun model.
+ */
+function externalAgentThreadSelection(
+  thread: ThreadLike,
+  stored: ReturnType<typeof readThreadComposerSelection>,
+  runtimeModel: string
+): ThreadComposerModelSelection | null | undefined {
+  const route = thread.executionConfig?.route
+  const harnessId = (stored?.harnessId ?? route?.harnessId ?? thread.harnessId ?? '').trim()
+  if (!harnessId || harnessId === 'kun') return undefined
+  const storedModel = stored?.harnessId === harnessId ? stored.model.trim() : ''
+  const routeModel = route?.harnessId === harnessId ? route.model.trim() : ''
+  const model = storedModel || routeModel || runtimeModel
+  if (!model) return null
+  return {
+    model,
+    providerId: storedModel ? stored?.providerId.trim() ?? '' : routeModel ? route?.providerId?.trim() ?? '' : ''
+  }
+}
+
 function threadComposerModelSelection(
   state: ChatState,
   thread: ThreadLike | null | undefined,
@@ -64,6 +87,8 @@ function threadComposerModelSelection(
   if (!stored && thread.executionConfig?.route.gatewayBinding) return { model: thread.executionConfig.route.model, providerId: '' }
   const storedModel = stored?.model.trim() ?? ''
   const runtimeModel = options.runtimeModel?.trim() || thread.model.trim()
+  const externalSelection = externalAgentThreadSelection(thread, stored, runtimeModel)
+  if (externalSelection !== undefined) return externalSelection
   const runtimeDefaultModel = options.runtimeDefaultModel?.trim() ?? ''
   const runtimeDefaultProviderId = options.runtimeDefaultProviderId?.trim() ?? ''
   const runtimeDefaultSelectable = Boolean(

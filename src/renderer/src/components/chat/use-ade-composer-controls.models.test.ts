@@ -197,6 +197,38 @@ describe('external Agent model discovery', () => {
     }
   })
 
+  it('hides a cached native catalog while its profile readiness is being renewed', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    fixture.chat.composerHarnessId = 'devin'
+    fixture.chat.composerModel = 'swe-2-high'
+    const ready = withHarnessReadiness({ definition: { id: 'devin', displayName: 'Devin', transport: 'acp',
+      credentialModes: ['native-login'], permissionModes: [], modelSource: 'probe', staticModels: [], builtin: true },
+    status: { harnessId: 'devin', installed: 'yes', login: 'signed-in', checkedAt: '' } })
+    fixture.harnesses.rows = [{ ...ready, readyProfiles: [] }]
+    fixture.harnesses.models = { devin: { models: ['adaptive', 'swe-2-high'], loading: false } }
+    let result!: ReturnType<typeof useAdeComposerControls>
+    function Probe() {
+      result = useAdeComposerControls({ enabled: true, activeThreadId: null, workspaceRoot: '/repo',
+        threadHarnessId: 'devin', threadTaskWorkspaceId: undefined, threadHasUserMessages: true,
+        hasConfiguredProvider: true })
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    try {
+      await act(async () => root.render(createElement(Probe)))
+      expect(result.modelGroups).toEqual([])
+      // An empty list shows "checking this Agent" instead of untyped raw IDs.
+      expect(result.pickList).toEqual([])
+      expect(result.nativeProfileReady).toBe(false)
+      fixture.harnesses.rows = [ready]
+      await act(async () => root.render(createElement(Probe)))
+      expect(result.pickList).toEqual(['adaptive', 'swe-2-high'])
+    } finally {
+      await act(async () => root.unmount())
+      ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+    }
+  })
+
   it('restores the last valid Kun source/model within the same draft and forgets it in another thread', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     fixture.chat.composerHarnessId = 'kun'

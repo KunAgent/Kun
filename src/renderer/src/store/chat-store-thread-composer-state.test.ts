@@ -423,6 +423,41 @@ describe('thread composer state restoration', () => {
     expect(restored.composerReasoningEffort).toBe('auto')
   })
 
+  it('restores a native Agent model the Kun catalog does not list', () => {
+    const { state } = buildHarness()
+    rememberThreadComposerSelection('thread-devin', 'swe-2-high', '', 'user', { harnessId: 'devin', credentialMode: 'native-login' })
+    state.threads = [thread('thread-devin', { model: 'swe-2-high', harnessId: 'devin' })]
+    state.composerPickList = ['gpt-5.3-codex-spark']
+    state.composerModelGroups = [{ providerId: 'codex', label: 'Codex', modelIds: ['gpt-5.3-codex-spark'] }]
+
+    const restored = resolveThreadComposerState(state, state.threads[0], { hasUserMessages: true })
+
+    expect(restored.composerHarnessId).toBe('devin')
+    expect(restored.composerCredentialMode).toBe('native-login')
+    expect(restored.composerModel).toBe('swe-2-high')
+    expect(restored.composerProviderId).toBe('')
+  })
+
+  it('falls back to the recorded Agent route when no composer selection was stored', () => {
+    const { state } = buildHarness()
+    state.threads = [thread('thread-devin', {
+      model: 'swe-2-high',
+      harnessId: 'devin',
+      executionConfig: {
+        version: 1, revision: 'r1', route: { model: 'swe-2-high', harnessId: 'devin', credentialMode: 'native-login' },
+        collaborationEnabled: false, limits: { softWorkers: 4, hardWorkers: 8 }, isolation: 'local',
+        origins: { route: 'task', collaborationEnabled: 'global', managerModel: 'global', limits: 'global', budget: 'global', isolation: 'task' },
+        resolvedAt: '2026-10-06T05:55:14.324Z'
+      }
+    })]
+    state.composerPickList = ['gpt-5.3-codex-spark']
+
+    const restored = resolveThreadComposerState(state, state.threads[0], { hasUserMessages: true })
+
+    expect(restored.composerHarnessId).toBe('devin')
+    expect(restored.composerModel).toBe('swe-2-high')
+  })
+
   it('prefers a thread provider identity when no stored composer selection exists', () => {
     const { state } = buildHarness()
     state.threads = [thread('thread-legacy', {
