@@ -91,7 +91,7 @@ export function planWiringEdits(edits: WiringEdit[], record: AgentWiringRecord, 
         if ('ownedArray' in edit) {
           const current = readSlot(text, edit.slot)
           const kept = Array.isArray(current) ? current.filter((item) => !edit.ownedArray.owns(item)) : []
-          text = writeSlot(text, edit.slot, [...kept, ...edit.ownedArray.items])
+          text = writeSlot(text, edit.slot, edit.ownedArray.first ? [...edit.ownedArray.items, ...kept] : [...kept, ...edit.ownedArray.items])
           if (!record.ownedArrays.some((entry) => entry.file === file && JSON.stringify(entry.path) === JSON.stringify(edit.slot.path))) {
             record.ownedArrays.push({ file, path: [...edit.slot.path], ...(edit.slot.format === 'yaml' ? { format: 'yaml' as const } : {}) })
           }

@@ -87,7 +87,8 @@ const continueDev: AgentAdapter = {
         { slot: { file, format: 'yaml', path: ['version'] }, value: '1.0.0' },
         { slot: { file, format: 'yaml', path: ['schema'] }, value: 'v1' })
     }
-    edits.push({ slot: { file, format: 'yaml', path: ['models'] }, ownedArray: {
+    // Kun's entries go first: Continue uses the first chat model until one is picked in it.
+    edits.push({ slot: { file, format: 'yaml', path: ['models'] }, ownedArray: { first: true,
       items: ordered.map((model) => ({ name: `${displayName(model)}${OWNED_SUFFIX}`, provider: 'openai', model: model.id,
         apiBase: v1(target.origin), apiKey: target.key, roles: ['chat', 'edit', 'apply'],
         capabilities: ['tool_use', ...(model.images ? ['image_input'] : [])],

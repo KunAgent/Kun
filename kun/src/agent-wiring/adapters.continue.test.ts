@@ -19,12 +19,13 @@ models:
 `
 
 describe('Continue adapter', () => {
-  it('appends tagged models, chosen one first, and keeps the user list', () => {
+  it('puts tagged models first, chosen one first, and keeps the user list after them', () => {
     const file = h.write('.continue/config.yaml', CONFIG)
     h.service.connect('continue', wiringTarget('glm-4.6'))
     const models = getYamlValue(h.read(file), ['models']) as Record<string, unknown>[]
-    expect(models.map((model) => model.name)).toEqual(['Ollama', `glm-4.6${OWNED_SUFFIX}`, `Daily coding${OWNED_SUFFIX}`])
-    expect(models[2]).toMatchObject({ provider: 'openai', model: 'coding', apiBase: `${ORIGIN}/v1`, apiKey: KEY,
+    // Continue uses the first chat model until one is picked in it, so Kun's chosen model leads.
+    expect(models.map((model) => model.name)).toEqual([`glm-4.6${OWNED_SUFFIX}`, `Daily coding${OWNED_SUFFIX}`, 'Ollama'])
+    expect(models[1]).toMatchObject({ provider: 'openai', model: 'coding', apiBase: `${ORIGIN}/v1`, apiKey: KEY,
       capabilities: ['tool_use', 'image_input'], defaultCompletionOptions: { contextLength: 200_000, maxTokens: 32_000 } })
     expect(h.read(file)).toContain('# my local model')
     expect(h.service.status('continue', ORIGIN)).toMatchObject({ connected: true, drifted: false, model: 'glm-4.6', pickInAgent: true })

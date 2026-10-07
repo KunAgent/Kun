@@ -29,7 +29,7 @@ export type WiringEdit =
    * An array Kun shares with the user (Droid's custom_models): Kun's own
    * entries are replaced and later removed; the user's entries are kept.
    */
-  | { slot: Extract<WiringSlot, { format: 'json' | 'yaml' }>; ownedArray: { items: unknown[]; owns(item: unknown): boolean } }
+  | { slot: Extract<WiringSlot, { format: 'json' | 'yaml' }>; ownedArray: { items: unknown[]; owns(item: unknown): boolean; /** Put Kun's entries before the user's. */ first?: boolean } }
 
 export type GatewayModelInfo = {
   id: string
