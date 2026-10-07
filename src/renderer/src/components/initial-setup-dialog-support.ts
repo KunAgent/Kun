@@ -1,22 +1,18 @@
 import {
-  DEFAULT_MODEL_PROVIDER_ID,
   KUN_TOOL_PERMISSION_MODES,
   type AppSettingsPatch,
   type AppSettingsV1,
   type KunToolPermissionMode,
-  type ModelProviderPreset,
   type ModelProviderProfileV1
 } from '@shared/app-settings'
+import { modelProviderRequiresApiKey } from '@shared/app-settings-provider-core'
 import { UNREADABLE_CREDENTIAL_KEY_ERROR_CODE } from '@shared/kun-gui-api'
 import { Bot, Hand, LockKeyholeOpen, Monitor, Moon, Sun } from 'lucide-react'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import type { RuntimeConnectionStatus } from '../agent/types'
 import type { InitialSetupMode } from '../store/chat-store-types'
-import {
-  INITIAL_SETUP_PROVIDER_PRESETS,
-  type InitialSetupDrafts,
-  type InitialSetupSelection
-} from './initial-setup-save'
+import type { InitialSetupDrafts } from './initial-setup-save'
+import { sharedConnectionConnectFields } from './settings-section-providers-shared-payloads'
 import {
   drainSharedProviderCredentialMutation,
   enqueueSharedModelMutation,
@@ -35,14 +31,13 @@ export const themeOptions: { value: ThemePref; icon: typeof Sun; labelKey: strin
   { value: 'light', icon: Sun, labelKey: 'themeLight' },
   { value: 'dark', icon: Moon, labelKey: 'themeDark' }
 ]
-const DEEPSEEK_USAGE_URL = 'https://platform.deepseek.com/usage'
 
 type PermissionOption = {
   value: KunToolPermissionMode
   labelKey: string
   descriptionKey: string
   Icon: typeof Hand
-  iconClass: string
+  tone: 'ask' | 'auto' | 'full'
 }
 
 export const PERMISSION_OPTIONS: PermissionOption[] = KUN_TOOL_PERMISSION_MODES.map((value) => {
@@ -53,7 +48,7 @@ export const PERMISSION_OPTIONS: PermissionOption[] = KUN_TOOL_PERMISSION_MODES.
         labelKey: 'toolPermissionAskForApproval',
         descriptionKey: 'toolPermissionAskForApprovalDesc',
         Icon: Hand,
-        iconClass: 'border-sky-400/30 bg-sky-500/10 text-sky-700 dark:text-sky-200'
+        tone: 'ask'
       }
     case 'approve-for-me':
       return {
@@ -61,7 +56,7 @@ export const PERMISSION_OPTIONS: PermissionOption[] = KUN_TOOL_PERMISSION_MODES.
         labelKey: 'toolPermissionApproveForMe',
         descriptionKey: 'toolPermissionApproveForMeDesc',
         Icon: Bot,
-        iconClass: 'border-teal-400/30 bg-teal-500/10 text-teal-700 dark:text-teal-200'
+        tone: 'auto'
       }
     case 'full-access':
       return {
@@ -69,55 +64,13 @@ export const PERMISSION_OPTIONS: PermissionOption[] = KUN_TOOL_PERMISSION_MODES.
         labelKey: 'toolPermissionFullAccess',
         descriptionKey: 'toolPermissionFullAccessDesc',
         Icon: LockKeyholeOpen,
-        iconClass: 'border-orange-400/35 bg-orange-500/10 text-orange-700 dark:text-orange-200'
+        tone: 'full'
       }
   }
 })
 
-export type SetupProviderCard = {
-  presetId: string
-  name: string
-  descKey: string
-  capability: 'speech' | 'image' | null
-  preset: ModelProviderPreset | null
-}
-
-export const PROVIDER_CARDS: SetupProviderCard[] = [
-  {
-    presetId: DEFAULT_MODEL_PROVIDER_ID,
-    name: 'DeepSeek',
-    descKey: 'firstRunProviderDeepseekDesc',
-    capability: null,
-    preset: null
-  },
-  ...INITIAL_SETUP_PROVIDER_PRESETS.map((preset) => ({
-    presetId: preset.id,
-    name: preset.name,
-    descKey: preset.id === 'xiaomi' ? 'firstRunProviderXiaomiDesc' : 'firstRunProviderMinimaxDesc',
-    capability: preset.speech ? ('speech' as const) : preset.image ? ('image' as const) : null,
-    preset
-  }))
-]
-
-export function keyHintKey(card: SetupProviderCard, mode: InitialSetupSelection['mode']): string {
-  if (card.presetId === DEFAULT_MODEL_PROVIDER_ID) return 'firstRunBuyApiHint'
-  const suffix = mode === 'token-plan' ? 'TokenPlan' : 'Api'
-  return card.presetId === 'xiaomi' ? `firstRunKeyHintXiaomi${suffix}` : `firstRunKeyHintMinimax${suffix}`
-}
-
-export function keyPageUrl(card: SetupProviderCard, mode: InitialSetupSelection['mode']): string {
-  if (!card.preset) return DEEPSEEK_USAGE_URL
-  if (mode === 'token-plan' && card.preset.tokenPlan) return card.preset.tokenPlan.apiKeyUrl
-  return card.preset.apiKeyUrl
-}
-
-export function keyPlaceholder(card: SetupProviderCard, mode: InitialSetupSelection['mode']): string {
-  if (mode === 'token-plan') {
-    const prefix = card.preset?.tokenPlan?.keyPrefix
-    return prefix ? `${prefix}...` : 'API Key'
-  }
-  return card.presetId === 'minimax' ? 'API Key' : 'sk-...'
-}
+/** First-run onboarding preselects full access; a reopened guide keeps the saved mode. */
+export const FIRST_RUN_PERMISSION_MODE: KunToolPermissionMode = 'full-access'
 
 type InitialSetupModelConnectionsSnapshot = {
   schemaVersion: 1
@@ -156,10 +109,54 @@ function initialSetupModelConnectionRequestError(response: {
     if (code === UNREADABLE_CREDENTIAL_KEY_ERROR_CODE || message.includes(UNREADABLE_CREDENTIAL_KEY_ERROR_CODE)) {
       return new Error(`${UNREADABLE_CREDENTIAL_KEY_ERROR_CODE}: ${message || 'protected credential key is unreadable'}`)
     }
+    if (message.trim()) {
+      return new Error(`Shared model connection request failed (HTTP ${response.status}): ${message.trim().slice(0, 300)}`)
+    }
   } catch {
     // Preserve the existing status-only error for malformed or unrelated response bodies.
   }
   return new Error(`Shared model connection request failed (HTTP ${response.status})`)
+}
+
+/**
+ * Keyless profiles (local servers, CLI/SDK subscriptions) never pass through
+ * the credential drain, so the selected one is connected here before the
+ * selection is written. A profile that needs a key is left to the drain.
+ */
+async function connectKeylessInitialSetupProvider(
+  snapshot: InitialSetupModelConnectionsSnapshot,
+  options: {
+    profiles: readonly ModelProviderProfileV1[]
+    selectedProviderId: string
+    selectedModel: string
+  },
+  request: InitialSetupRuntimeRequest
+): Promise<InitialSetupModelConnectionsSnapshot> {
+  if (snapshot.providers.some((provider) => provider.id === options.selectedProviderId)) return snapshot
+  const profile = options.profiles.find((entry) => entry.id === options.selectedProviderId)
+  if (!profile || modelProviderRequiresApiKey(profile)) return snapshot
+  // A local HTTP server without a key is an anonymous connection; the registry
+  // only treats those as usable when they are registered that way.
+  const anonymous = (profile.kind ?? 'http') === 'http' && !profile.apiKey.trim()
+  let current = snapshot
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await request('/v1/model-connections/connect', 'POST', JSON.stringify({
+      expectedRevision: current.revision,
+      ...sharedConnectionConnectFields(profile),
+      ...(anonymous ? { authType: 'none' } : {}),
+      ...(profile.apiKey.trim() ? { credential: profile.apiKey.trim() } : {}),
+      models: profile.models,
+      ...(options.selectedModel ? { selectedModel: options.selectedModel } : {}),
+      probe: false,
+      select: false
+    }))
+    if (response.ok) return initialSetupModelConnectionResponse(response.body)
+    if (response.status !== 409 || attempt === 1) throw initialSetupModelConnectionRequestError(response)
+    const conflict = JSON.parse(response.body) as { snapshot?: unknown }
+    current = initialSetupModelConnectionsSnapshot(conflict.snapshot)
+    if (current.providers.some((provider) => provider.id === options.selectedProviderId)) return current
+  }
+  return current
 }
 
 export async function commitInitialSetupRegistryCredentials(
@@ -176,7 +173,9 @@ export async function commitInitialSetupRegistryCredentials(
     const credential = draft.apiKey.trim()
     return credential ? [{ providerId, credential }] : []
   })
-  if (replacements.length === 0) return
+  const selectedProfile = options.profiles.find((profile) => profile.id === options.selectedProviderId)
+  const keylessSelection = Boolean(selectedProfile && !modelProviderRequiresApiKey(selectedProfile))
+  if (replacements.length === 0 && !keylessSelection) return
   const staged = replacements.map(({ providerId, credential }) => ({
     providerId,
     profile: options.profiles.find((profile) => profile.id === providerId),
@@ -248,13 +247,7 @@ export async function commitInitialSetupRegistryCredentials(
                 'POST',
                 JSON.stringify({
                   expectedRevision: snapshot.revision,
-                  id: profile.id,
-                  name: profile.name.trim() || profile.id,
-                  kind: profile.kind ?? 'http',
-                  authType: 'api-key',
-                  baseUrl: profile.baseUrl,
-                  endpointFormat: profile.endpointFormat,
-                  ...(profile.endpoints ? { endpoints: profile.endpoints } : {}),
+                  ...sharedConnectionConnectFields(profile),
                   credential,
                   models: profile.models,
                   ...(profile.models[0]
@@ -295,6 +288,7 @@ export async function commitInitialSetupRegistryCredentials(
     const listed = await request('/v1/model-connections', 'GET')
     if (!listed.ok) throw initialSetupModelConnectionRequestError(listed)
     let snapshot = initialSetupModelConnectionResponse(listed.body)
+    snapshot = await connectKeylessInitialSetupProvider(snapshot, options, request)
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const selected = snapshot.providers.find((provider) => provider.id === options.selectedProviderId)
       if (!selected) throw new Error(`Shared model connection ${options.selectedProviderId} is unavailable`)
@@ -324,12 +318,15 @@ export function isUnreadableCredentialKeyError(error: unknown): boolean {
   return message.includes(UNREADABLE_CREDENTIAL_KEY_ERROR_CODE)
 }
 
-export async function completeInitialSetupAfterSave(input: {
+/**
+ * After the settings save: reload the UI and make sure Kun is reachable before
+ * the guide moves on to steps that talk to the runtime. A required first run
+ * blocks on the probe; the preview opened from Settings probes in background.
+ */
+export async function verifyInitialSetupRuntime(input: {
   mode: InitialSetupMode
   reloadUiSettings: () => Promise<void>
   probeRuntime: (mode?: 'user' | 'background') => Promise<void>
-  openCode: () => Promise<void>
-  closeInitialSetup: () => void
   getState: () => InitialSetupCompletionState
   setDialogError: (message: string) => void
   fallbackRuntimeError: string
@@ -337,19 +334,25 @@ export async function completeInitialSetupAfterSave(input: {
   await input.reloadUiSettings()
   if (input.mode === 'preview') {
     void input.probeRuntime('background')
-    input.closeInitialSetup()
     return true
   }
-
   await input.probeRuntime('user')
   const state = input.getState()
   if (state.runtimeConnection !== 'ready') {
     input.setDialogError(state.error?.trim() || input.fallbackRuntimeError)
     return false
   }
-  await input.openCode()
-  input.closeInitialSetup()
   return true
+}
+
+/** Leaves the guide: a required first run lands in Code, the preview just closes. */
+export async function finishInitialSetup(input: {
+  mode: InitialSetupMode
+  openCode: () => Promise<void>
+  closeInitialSetup: () => void
+}): Promise<void> {
+  if (input.mode === 'required') await input.openCode()
+  input.closeInitialSetup()
 }
 
 export async function dismissInitialSetup(input: {

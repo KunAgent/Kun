@@ -1,65 +1,99 @@
 import {
   APP_LOCALE_OPTIONS,
   DEFAULT_MODEL_PROVIDER_ID,
+  getModelProviderPreset,
   kunToolPermissionModeSettings,
   normalizeAppSettings,
   type AppSettingsV1,
   type KunToolPermissionMode
 } from '@shared/app-settings'
-import {
-  ExternalLink,
-  Eye,
-  EyeOff,
-  Image as ImageIcon,
-  MessageCircle,
-  Mic,
-  RotateCcw,
-  ShieldAlert,
-  Sparkles,
-  X
-} from 'lucide-react'
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import type { AppLocale } from '@shared/app-locales'
+import { getKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
+import { parseProviderImportLink } from '@shared/provider-import-link'
+import { ArrowLeft, ArrowRight, Check, LayoutGrid, RotateCcw, ShieldAlert } from 'lucide-react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { runTrustedUserActivation } from '../extensions/protected-user-activation'
 import { applyTheme } from '../lib/apply-theme'
 import { emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
 import { useChatStore } from '../store/chat-store'
+import { useHarnessStore } from '../store/harness-store'
+import '../styles/onboarding/shell.css'
+import '../styles/onboarding/frame.css'
+import '../styles/onboarding/steps.css'
+import '../styles/onboarding/model.css'
+import '../styles/onboarding/agents-ready.css'
 import {
   canCloseInitialSetup,
   commitInitialSetupRegistryCredentials,
-  completeInitialSetupAfterSave,
   dismissInitialSetup,
+  finishInitialSetup,
+  FIRST_RUN_PERMISSION_MODE,
   isUnreadableCredentialKeyError,
-  keyHintKey,
-  keyPageUrl,
-  keyPlaceholder,
   PERMISSION_OPTIONS,
-  PROVIDER_CARDS,
   themeOptions,
+  verifyInitialSetupRuntime,
   type SetupFormPatch,
-  type SetupProviderCard,
   type ThemePref
 } from './initial-setup-dialog-support'
 import {
   buildInitialSetupSettings,
   buildInitialSetupSettingsPatch,
   initialSetupAutoWirePlan,
+  initialSetupDraftFor,
   initialSetupDrafts,
   initialSetupProfileId,
   initialSetupSelection,
+  INITIAL_SETUP_CUSTOM_PRESET_ID,
+  type InitialSetupDraft,
   type InitialSetupDrafts,
   type InitialSetupSelection
 } from './initial-setup-save'
+import {
+  initialSetupPermissionMode,
+  initialSetupPermissionPatch,
+  withStoredExecutionSettings
+} from './initial-setup-permission'
+import { OnboardingAgentsStep } from './onboarding/OnboardingAgentsStep'
+import { OnboardingModelConfigure } from './onboarding/OnboardingModelConfigure'
+import { OnboardingModelPicker, type OnboardingPickerState } from './onboarding/OnboardingModelPicker'
+import { OnboardingPermissionStep } from './onboarding/OnboardingPermissionStep'
+import { OnboardingConfetti, OnboardingReadyStep } from './onboarding/OnboardingReadyStep'
+import { OnboardingShell } from './onboarding/OnboardingShell'
+import { OnboardingWelcomeStep } from './onboarding/OnboardingWelcomeStep'
+import { onboardingAgentLists, onboardingAgentStatus } from './onboarding/onboarding-agents'
+import {
+  onboardingConfigureIssue,
+  onboardingEntryForSelection,
+  onboardingProviderCount,
+  type OnboardingConfigureIssue,
+  type OnboardingProviderEntry
+} from './onboarding/onboarding-provider-catalog'
+import {
+  onboardingDirection,
+  onboardingEnterAdvances,
+  previousOnboardingStep,
+  type OnboardingDirection,
+  type OnboardingModelPhase,
+  type OnboardingStep
+} from './onboarding/onboarding-steps'
+import { onboardingHarnessSettings, useOnboardingHarnessSettings } from './onboarding/use-onboarding-harness-settings'
 
 export {
   canCloseInitialSetup,
   commitInitialSetupRegistryCredentials,
-  completeInitialSetupAfterSave,
   dismissInitialSetup,
-  isUnreadableCredentialKeyError
+  finishInitialSetup,
+  isUnreadableCredentialKeyError,
+  verifyInitialSetupRuntime
 } from './initial-setup-dialog-support'
 
+const LEAVE_MS = 460
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+}
 
 export function InitialSetupDialog(): ReactElement {
   const { t } = useTranslation('settings')
@@ -69,21 +103,33 @@ export function InitialSetupDialog(): ReactElement {
   const reloadUiSettings = useChatStore((s) => s.reloadUiSettings)
   const probeRuntime = useChatStore((s) => s.probeRuntime)
   const openCode = useChatStore((s) => s.openCode)
+  const openSettings = useChatStore((s) => s.openSettings)
+  const harnessRows = useHarnessStore((s) => s.rows)
 
   const [form, setForm] = useState<AppSettingsV1 | null>(null)
   const [drafts, setDrafts] = useState<InitialSetupDrafts | null>(null)
   const [selection, setSelection] = useState<InitialSetupSelection>({
     presetId: DEFAULT_MODEL_PROVIDER_ID,
     mode: 'api',
-    permissionMode: 'full-access',
+    permissionMode: FIRST_RUN_PERMISSION_MODE,
     permissionTouched: false
   })
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [step, setStep] = useState<OnboardingStep>('welcome')
+  const [direction, setDirection] = useState<OnboardingDirection>('forward')
+  const [modelPhase, setModelPhase] = useState<OnboardingModelPhase>('pick')
+  const [picker, setPicker] = useState<OnboardingPickerState>({ tab: 'featured', region: 'all', query: '' })
+  const [issue, setIssue] = useState<OnboardingConfigureIssue | null>(null)
+  const [saving, setSaving] = useState<'saving' | 'starting' | null>(null)
+  const [saved, setSaved] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const [recoveringCredentials, setRecoveringCredentials] = useState(false)
   const [credentialRecoveryRequired, setCredentialRecoveryRequired] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** The permission the user picked but did not confirm in Main's prompt. */
+  const [declinedPermission, setDeclinedPermission] = useState<KunToolPermissionMode | null>(null)
   const formRef = useRef<AppSettingsV1 | null>(null)
+  /** What Main last returned; the form also carries unsaved language and theme edits. */
+  const storedRef = useRef<AppSettingsV1 | null>(null)
   const isPreview = initialSetupMode === 'preview'
   const closeAllowed = canCloseInitialSetup(initialSetupMode)
 
@@ -91,6 +137,11 @@ export function InitialSetupDialog(): ReactElement {
     formRef.current = next
     setForm(next)
   }
+  const rememberStored = (next: AppSettingsV1): void => {
+    storedRef.current = next
+    setCurrentForm(next)
+  }
+  const harness = useOnboardingHarnessSettings({ getForm: () => formRef.current, setForm: rememberStored })
 
   const reportSetupError = (setupError: unknown): void => {
     if (isUnreadableCredentialKeyError(setupError)) {
@@ -107,147 +158,185 @@ export function InitialSetupDialog(): ReactElement {
       .getSettings({ forceRefresh: true })
       .then((s) => {
         if (cancelled) return
-        setCurrentForm(s)
+        rememberStored(s)
         setDrafts(initialSetupDrafts(s))
-        setSelection(initialSetupSelection(s))
+        setSelection(initialSetupSelection(s, initialSetupMode === 'required'
+          ? { defaultPermissionMode: FIRST_RUN_PERMISSION_MODE }
+          : {}))
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e))
       })
     return () => { cancelled = true }
+    // The guide reads settings once per opening.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const updateForm = (patch: SetupFormPatch) => {
+  const updateForm = (patch: SetupFormPatch): void => {
     const current = formRef.current
     if (!current) return
-    const next = normalizeAppSettings({
-      ...current,
-      ...patch
-    } as AppSettingsV1)
-    setCurrentForm(next)
+    setCurrentForm(normalizeAppSettings({ ...current, ...patch } as AppSettingsV1))
   }
 
-  const handleThemeChange = (theme: ThemePref) => {
-    if (!formRef.current) return
-    updateForm({ theme })
-    applyTheme(theme)
-  }
-
-  const handleClose = () => {
-    if (!closeAllowed) return
-    setSaving(true)
+  const goTo = (target: OnboardingStep): void => {
+    setDirection(onboardingDirection(step, target))
+    setStep(target)
     setError(null)
-    void dismissInitialSetup({
-      mode: initialSetupMode,
-      persistCompletion: async () => {
-        const next = await rendererRuntimeClient.setSettings({ initialSetupCompleted: true })
-        emitRendererSettingsChanged(next)
-      },
-      reloadUiSettings,
-      probeRuntime,
-      closeInitialSetup
-    }).catch((e: unknown) => {
-      reportSetupError(e)
-    }).finally(() => {
-      setSaving(false)
-    })
+    setIssue(null)
   }
 
-  const handleOpenKeyPage = (url: string) => {
-    if (typeof window.kunGui?.openExternal !== 'function') return
-    void window.kunGui.openExternal(url).catch(() => undefined)
-  }
+  const custom = selection.presetId === INITIAL_SETUP_CUSTOM_PRESET_ID
+  const entry = onboardingEntryForSelection(selection)
+  const profileId = initialSetupProfileId(selection)
+  const draft = drafts ? initialSetupDraftFor(drafts, profileId) : { apiKey: '', baseUrl: '' }
 
-  const selectedCard = PROVIDER_CARDS.find((card) => card.presetId === selection.presetId) ?? PROVIDER_CARDS[0]
-  const selectedProfileId = initialSetupProfileId(selection)
-  const selectedDraft = drafts?.[selectedProfileId] ?? { apiKey: '', baseUrl: '' }
-
-  const updateSelectedDraft = (patch: Partial<typeof selectedDraft>): void => {
+  const updateDraft = (patch: Partial<InitialSetupDraft>): void => {
+    setIssue(null)
+    setError(null)
     setDrafts((current) => current
-      ? { ...current, [selectedProfileId]: { ...current[selectedProfileId], ...patch } }
+      ? { ...current, [profileId]: { ...initialSetupDraftFor(current, profileId), ...patch } }
       : current)
   }
 
-  const selectCard = (presetId: string): void => {
-    setError(null)
-    setSelection((current) => (current.presetId === presetId ? current : { ...current, presetId, mode: 'api' }))
+  const selectEntry = (next: OnboardingProviderEntry): void => {
+    setIssue(null)
+    setSelection((current) => ({ ...current, presetId: next.presetId, mode: next.mode }))
   }
 
-  const selectMode = (mode: InitialSetupSelection['mode']): void => {
-    setError(null)
-    setSelection((current) => ({ ...current, mode }))
+  const openConfigure = (): void => {
+    setDirection('forward')
+    setModelPhase('configure')
+    setIssue(null)
   }
 
-  const selectPermissionMode = (permissionMode: KunToolPermissionMode): void => {
-    setError(null)
-    setSelection((current) => ({ ...current, permissionMode, permissionTouched: true }))
-    const current = formRef.current
-    if (!current) return
-    updateForm({
-      agents: {
-        ...current.agents,
-        kun: {
-          ...current.agents.kun,
-          ...kunToolPermissionModeSettings(permissionMode)
+  const selectCustom = (): void => {
+    setSelection((current) => ({ ...current, presetId: INITIAL_SETUP_CUSTOM_PRESET_ID, mode: 'api' }))
+    openConfigure()
+  }
+
+  const applyImportLink = (raw: string): string | null => {
+    const parsed = parseProviderImportLink(raw)
+    if (!parsed.ok) return t('onboarding.model.importInvalid', { message: parsed.message })
+    const link = parsed.draft
+    const presetId = link.presetId && (link.presetId === DEFAULT_MODEL_PROVIDER_ID || getModelProviderPreset(link.presetId))
+      ? link.presetId
+      : null
+    const nextSelection = { ...selection, presetId: presetId ?? INITIAL_SETUP_CUSTOM_PRESET_ID, mode: 'api' as const }
+    const nextProfileId = initialSetupProfileId(nextSelection)
+    const baseUrl = link.chatBaseUrl ?? link.anthropicBaseUrl ?? link.responsesBaseUrl
+    setSelection(nextSelection)
+    setDrafts((current) => {
+      if (!current) return current
+      const previous = initialSetupDraftFor(current, nextProfileId)
+      return {
+        ...current,
+        [nextProfileId]: {
+          ...previous,
+          ...(link.key ? { apiKey: link.key } : {}),
+          ...(presetId ? {} : {
+            name: link.name ?? previous.name,
+            baseUrl: baseUrl ?? previous.baseUrl,
+            endpointFormat: link.chatBaseUrl ? 'chat_completions' : link.anthropicBaseUrl ? 'messages' : 'responses'
+          }),
+          ...(link.models.length ? { models: link.models, model: link.models[0] } : {})
         }
       }
-    } as SetupFormPatch)
+    })
+    openConfigure()
+    return null
   }
 
-  const cardFilled = (card: SetupProviderCard): boolean => {
-    if (!drafts) return false
-    if (drafts[card.presetId]?.apiKey.trim()) return true
-    if (!card.preset?.tokenPlan) return false
-    return Boolean(drafts[initialSetupProfileId({ presetId: card.presetId, mode: 'token-plan' })]?.apiKey.trim())
-  }
-
-  const handleSave = async () => {
-    const current = formRef.current
-    if (!current || !drafts) return
-    if (!selectedDraft.apiKey.trim()) {
-      setError(t('firstRunApiKeyValidation', { provider: selectedCard.name }))
+  const finishModelStep = (): void => {
+    const found = onboardingConfigureIssue(custom ? null : entry, profileId, draft)
+    if (found) {
+      setIssue(found)
+      setError(found === 'key'
+        ? t('firstRunApiKeyValidation', { provider: custom ? draft.name || t('onboarding.model.custom') : entry?.name ?? '' })
+        : t(`onboarding.model.issues.${found}`))
       return
     }
-    setSaving(true)
+    goTo('permission')
+  }
+
+  const selectPermissionMode = (event: MouseEvent<HTMLButtonElement>, permissionMode: KunToolPermissionMode): void => {
+    runTrustedUserActivation(event, () => {
+      setError(null)
+      setDeclinedPermission(null)
+      setSelection((current) => ({ ...current, permissionMode, permissionTouched: true }))
+      const current = formRef.current
+      if (!current) return
+      updateForm({
+        agents: { ...current.agents, kun: { ...current.agents.kun, ...kunToolPermissionModeSettings(permissionMode) } }
+      } as SetupFormPatch)
+    })
+  }
+
+  const handleSave = async (): Promise<void> => {
+    const current = formRef.current
+    if (!current || !drafts) return
+    const found = onboardingConfigureIssue(custom ? null : entry, profileId, draft)
+    if (found) {
+      setDirection('backward')
+      setStep('model')
+      setModelPhase('configure')
+      setIssue(found)
+      return
+    }
+    setSaving('saving')
     setError(null)
     try {
-      const intended = buildInitialSetupSettings(current, drafts, selection)
-      const selectedProviderId = initialSetupProfileId(selection)
-      const selectedProvider = intended.provider.providers.find((provider) =>
-        provider.id === selectedProviderId
-      )
-      if (!selectedProvider) throw new Error(`Provider ${selectedProviderId} is unavailable`)
+      const stored = storedRef.current ?? current
+      const base = withStoredExecutionSettings(current, stored)
+      const intended = buildInitialSetupSettings(base, drafts, selection)
+      const selectedProvider = intended.provider.providers.find((provider) => provider.id === profileId)
+      if (!selectedProvider) throw new Error(`Provider ${profileId} is unavailable`)
       await commitInitialSetupRegistryCredentials(drafts, {
         profiles: intended.provider.providers,
-        selectedProviderId,
-        selectedModel: selectedProvider.models[0] ?? intended.agents.kun.model
+        selectedProviderId: profileId,
+        selectedModel: getKunRuntimeSettings(intended).model || selectedProvider.models[0] || ''
       })
-      const next = await rendererRuntimeClient.setSettings(
-        buildInitialSetupSettingsPatch(current, drafts, selection)
+      let next = await rendererRuntimeClient.setSettings(
+        buildInitialSetupSettingsPatch(base, drafts, { presetId: selection.presetId, mode: selection.mode }, stored)
       )
       setCredentialRecoveryRequired(false)
-      setCurrentForm(next)
-      setDrafts(initialSetupDrafts(next))
+      rememberStored(next)
+      const permissionPatch = initialSetupPermissionPatch(next, selection)
+      if (permissionPatch) {
+        next = await rendererRuntimeClient.setSettings(permissionPatch)
+        rememberStored(next)
+      }
+      setDrafts((existing) => ({ ...initialSetupDrafts(next), ...existing }))
       emitRendererSettingsChanged(next)
       await applyI18n(next.locale)
-      await completeInitialSetupAfterSave({
+      const savedPermission = initialSetupPermissionMode(next)
+      if (permissionPatch && savedPermission !== selection.permissionMode) {
+        // The prompt was cancelled: stay here and show the mode Kun kept.
+        setSelection((existing) => ({ ...existing, permissionMode: savedPermission, permissionTouched: false }))
+        setDeclinedPermission(selection.permissionMode)
+        return
+      }
+      setSaving('starting')
+      const ready = await verifyInitialSetupRuntime({
         mode: initialSetupMode,
         reloadUiSettings,
         probeRuntime,
-        openCode,
-        closeInitialSetup,
         getState: useChatStore.getState,
         setDialogError: setError,
         fallbackRuntimeError: t('common:runtimeFetchFailed')
       })
+      if (ready) {
+        setSaved(true)
+        setDirection('forward')
+        setStep('agents')
+      }
     } catch (e) {
       reportSetupError(e)
     } finally {
-      setSaving(false)
+      setSaving(null)
     }
   }
 
-  const handleCredentialReset = async () => {
+  const handleCredentialReset = async (): Promise<void> => {
     setRecoveringCredentials(true)
     setError(null)
     try {
@@ -265,405 +354,315 @@ export function InitialSetupDialog(): ReactElement {
     }
   }
 
+  const leave = (after: () => Promise<void> | void): void => {
+    if (leaving) return
+    setLeaving(true)
+    window.setTimeout(() => { void after() }, prefersReducedMotion() ? 150 : LEAVE_MS)
+  }
+
+  const finish = (): void => {
+    leave(() => finishInitialSetup({ mode: initialSetupMode, openCode, closeInitialSetup }))
+  }
+
+  const openAgentCenter = (): void => {
+    leave(() => {
+      closeInitialSetup()
+      openSettings('agentsHarnesses')
+    })
+  }
+
+  const handleClose = (): void => {
+    if (!closeAllowed) return
+    if (saved) { finish(); return }
+    setSaving('saving')
+    setError(null)
+    void dismissInitialSetup({
+      mode: initialSetupMode,
+      persistCompletion: async () => {
+        const next = await rendererRuntimeClient.setSettings({ initialSetupCompleted: true })
+        emitRendererSettingsChanged(next)
+      },
+      reloadUiSettings,
+      probeRuntime,
+      closeInitialSetup
+    }).catch((e: unknown) => {
+      reportSetupError(e)
+    }).finally(() => {
+      setSaving(null)
+    })
+  }
+
   if (!form || !drafts) {
     return (
       <div className="ds-no-drag fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-md dark:bg-black/70">
         <div className="rounded-xl border border-ds-border bg-ds-card/95 px-5 py-4 text-sm text-ds-muted shadow-panel backdrop-blur-xl">
-          {t('loading')}
+          {error ?? t('loading')}
         </div>
       </div>
     )
   }
 
-  const selectedTheme = form.theme
-  const tokenPlan = selectedCard.preset?.tokenPlan ?? null
-  const showTokenPlanMode = Boolean(tokenPlan)
-  const regions = selection.mode === 'token-plan' ? tokenPlan?.regions ?? [] : []
-  const wire = initialSetupAutoWirePlan(form, drafts)
-  const wireNote = (() => {
-    if (!selectedCard.capability) return null
-    const wiredProfileId = selectedCard.capability === 'speech' ? wire.speechProviderId : wire.imageProviderId
-    if (wiredProfileId && wiredProfileId === selectedProfileId) {
-      return {
-        tone: 'success' as const,
-        text: t(selectedCard.capability === 'speech' ? 'firstRunAutoWireSpeech' : 'firstRunAutoWireImage')
-      }
+  const busy = saving !== null || recoveringCredentials
+  const harnessSettings = onboardingHarnessSettings(form)
+  const agentLists = onboardingAgentLists(harnessRows, harnessSettings)
+  const connectedAgents = agentLists.installed
+    .filter((row) => onboardingAgentStatus(row, harnessSettings) === 'connected')
+    .map((row) => ({ id: row.definition.id, name: row.definition.displayName }))
+  const localeLabel = APP_LOCALE_OPTIONS.find((option) => option.value === form.locale)?.label ?? form.locale
+  const themeLabel = t(themeOptions.find((option) => option.value === form.theme)?.labelKey ?? 'themeSystem')
+  const providerName = custom ? draft.name?.trim() || t('onboarding.model.custom') : entry?.name ?? 'DeepSeek'
+  const permissionLabel = t(PERMISSION_OPTIONS.find((option) => option.value === selection.permissionMode)?.labelKey ?? 'toolPermissionFullAccess')
+  const wirePlan = initialSetupAutoWirePlan(form, { ...drafts, [profileId]: { ...draft, apiKey: draft.apiKey || 'preview' } })
+  const wireNote = wirePlan.speechProviderId === profileId
+    ? t('firstRunAutoWireSpeech')
+    : wirePlan.imageProviderId === profileId ? t('firstRunAutoWireImage') : null
+  const connectKind = custom ? 'custom' : entry?.connect ?? 'key'
+
+  const stepDetails: Record<OnboardingStep, string> = {
+    welcome: step === 'welcome' ? t('onboarding.steps.welcome.detail') : `${localeLabel} · ${themeLabel}`,
+    model: step === 'welcome' || (step === 'model' && modelPhase === 'pick') ? t('onboarding.steps.model.detail') : providerName,
+    permission: step === 'ready' || step === 'agents' ? permissionLabel : t('onboarding.steps.permission.detail'),
+    agents: connectedAgents.length ? t('onboarding.agents.connectedCount', { count: connectedAgents.length }) : t('onboarding.steps.agents.detail'),
+    ready: t('onboarding.steps.ready.detail')
+  }
+
+  const bubble = step === 'welcome' ? t('onboarding.bubble.welcome')
+    : step === 'model' ? t(modelPhase === 'pick' ? 'onboarding.bubble.modelPick' : `onboarding.bubble.model_${connectKind}`)
+      : step === 'permission' ? t(`onboarding.bubble.permission_${PERMISSION_OPTIONS.find((option) => option.value === selection.permissionMode)?.tone ?? 'full'}`)
+        : step === 'agents'
+          ? t(agentLists.installed.length === 0 && !agentLists.detecting ? 'onboarding.bubble.agentsEmpty'
+            : connectedAgents.length >= 2 ? 'onboarding.bubble.agentsMany' : 'onboarding.bubble.agents')
+          : t('onboarding.bubble.ready')
+
+  const back = (): void => {
+    if (step === 'model' && modelPhase === 'configure') {
+      setDirection('backward')
+      setModelPhase('pick')
+      setIssue(null)
+      setError(null)
+      return
     }
-    if (selection.mode === 'token-plan' && selectedDraft.apiKey.trim()) {
-      const planServesCapability = selectedCard.capability === 'speech'
-        ? Boolean(tokenPlan?.speech)
-        : selectedCard.capability === 'image' && Boolean(tokenPlan?.image)
-      if (!planServesCapability) {
-        return {
-          tone: 'warning' as const,
-          text: t(selectedCard.capability === 'speech' ? 'firstRunTokenPlanNoSpeech' : 'firstRunTokenPlanNoImage')
-        }
-      }
-    }
-    return null
-  })()
+    goTo(previousOnboardingStep(step))
+  }
 
-  const choiceButtonClass = (active: boolean): string =>
-    [
-      'flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-200 sm:min-h-11 sm:px-4',
-      active
-        ? 'border-[#1388ff] bg-[#1388ff]/[0.07] text-[#1377df] shadow-[0_0_0_1px_rgba(19,136,255,0.12),0_8px_18px_rgba(19,136,255,0.07)] dark:border-[#3aa0ff] dark:bg-[#3aa0ff]/[0.12] dark:text-[#88c8ff]'
-        : 'border-slate-300/80 bg-white/72 text-slate-600 hover:border-slate-400/80 hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300 dark:hover:border-white/16 dark:hover:bg-white/[0.055]'
-    ].join(' ')
-  const cardButtonClass = (active: boolean): string =>
-    [
-      'flex min-w-0 flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-all duration-200',
-      active
-        ? 'border-[#1388ff] bg-[#1388ff]/[0.07] shadow-[0_0_0_1px_rgba(19,136,255,0.12),0_8px_18px_rgba(19,136,255,0.07)] dark:border-[#3aa0ff] dark:bg-[#3aa0ff]/[0.12]'
-        : 'border-slate-300/80 bg-white/72 hover:border-slate-400/80 hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:hover:border-white/16 dark:hover:bg-white/[0.055]'
-    ].join(' ')
-  const fieldClass =
-    'w-full rounded-xl border border-slate-300/75 bg-white/88 px-4 py-3 text-[15px] text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] outline-none transition focus:border-[#1388ff]/70 focus:ring-2 focus:ring-[#1388ff]/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100 dark:shadow-none dark:focus:border-[#3aa0ff]/70 dark:focus:ring-[#3aa0ff]/15 dark:placeholder:text-slate-500'
-  const labelClass = 'text-sm font-semibold text-slate-700 dark:text-slate-200'
-  return (
-    <div className="ds-no-drag fixed inset-0 z-50 overflow-y-auto bg-[#eef2fb]/45 p-3 backdrop-blur-[18px] dark:bg-black/62 dark:backdrop-blur-[22px] sm:p-6">
-      <div className="flex min-h-full items-center justify-center">
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="initial-setup-title"
-          className="flex h-[calc(100dvh-24px)] max-h-[calc(100dvh-24px)] w-full max-w-[640px] flex-col overflow-hidden rounded-2xl border border-white/75 bg-[rgba(255,255,255,0.94)] text-slate-900 shadow-[0_28px_86px_rgba(88,105,136,0.22)] backdrop-blur-2xl dark:border-white/10 dark:bg-[rgba(18,21,28,0.96)] dark:text-white dark:shadow-[0_28px_92px_rgba(0,0,0,0.55)] sm:h-auto sm:max-h-[calc(100dvh-48px)]"
-        >
-        <div className="shrink-0 border-b border-slate-200/72 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,253,0.9))] px-5 py-4 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(27,31,40,0.98),rgba(19,22,29,0.96))] sm:px-7 sm:py-6">
-          <div className="flex items-start justify-between gap-3">
-            <div className="inline-flex min-w-0 items-center gap-2 rounded-lg border border-[#1388ff]/22 bg-[#1388ff]/[0.06] px-3 py-1.5 text-[12.5px] font-semibold text-[#1377df] dark:border-[#3aa0ff]/22 dark:bg-[#3aa0ff]/[0.12] dark:text-[#88c8ff]">
-              <Sparkles className="h-3.5 w-3.5" strokeWidth={1.9} />
-              <span className="min-w-0 truncate">{t(isPreview ? 'firstRunPreviewBadge' : 'firstRunBadge')}</span>
-            </div>
-            {closeAllowed ? (
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={saving}
-                aria-label={t('firstRunClose')}
-                title={t('firstRunClose')}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-300/80 bg-white/72 text-slate-500 transition hover:border-slate-400 hover:text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400 dark:hover:border-white/18 dark:hover:text-slate-200"
-              >
-                <X className="h-[18px] w-[18px]" strokeWidth={1.8} />
+  const primary = (): void => {
+    if (busy || leaving) return
+    if (step === 'welcome') goTo('model')
+    else if (step === 'model') {
+      if (modelPhase === 'pick') openConfigure()
+      else finishModelStep()
+    } else if (step === 'permission') void handleSave()
+    else if (step === 'agents') goTo('ready')
+    else finish()
+  }
+
+  const onEnter = (event: KeyboardEvent<HTMLElement>): void => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing || !onboardingEnterAdvances(event.target)) return
+    if ((event.target as HTMLInputElement).type === 'search') return
+    event.preventDefault()
+    primary()
+  }
+
+  const backButton = (label = t('onboarding.back')): ReactElement => (
+    <button type="button" className="kun-onb-ghost" onClick={back} disabled={busy} data-onboarding-back>
+      <ArrowLeft size={16} strokeWidth={2} aria-hidden="true" />{label}
+    </button>
+  )
+  const primaryButton = (label: string, options: { large?: boolean; icon?: boolean } = {}): ReactElement => (
+    <button
+      type="button"
+      className={options.large ? 'kun-onb-primary is-large' : 'kun-onb-primary'}
+      onClick={primary}
+      disabled={busy || leaving}
+      data-busy={saving ? 'true' : undefined}
+      data-onboarding-primary
+    >
+      {saving ? <span className="kun-onb-spin" /> : null}
+      {label}
+      {options.icon === false || saving ? null : <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />}
+    </button>
+  )
+
+  const errorBlock = error || credentialRecoveryRequired ? (
+    <div className="kun-onb-callout" data-tone="danger" role="alert">
+      <ShieldAlert size={16} strokeWidth={1.9} aria-hidden="true" />
+      <div className="kun-onb-recovery">
+        {error ? <span>{error}</span> : null}
+        {credentialRecoveryRequired ? (
+          <>
+            <span>{t('firstRunCredentialRecoveryDetail')}</span>
+            <div className="kun-onb-callout-actions">
+              <button type="button" className="kun-onb-btn" disabled={busy} onClick={() => { void handleSave() }}>
+                <RotateCcw size={14} strokeWidth={1.9} aria-hidden="true" />{t('firstRunCredentialRetry')}
               </button>
-            ) : null}
-          </div>
-          <h1 id="initial-setup-title" className="mt-3 text-xl font-semibold leading-tight text-slate-900 dark:text-white sm:mt-4 sm:text-[22px]">
-            {t('firstRunTitle')}
-          </h1>
-          <p className="mt-2.5 text-sm leading-6 text-slate-500 dark:text-slate-400 sm:text-[15px]">
-            {t('firstRunSubtitle')}
-          </p>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 sm:space-y-5 sm:px-7 sm:py-6">
-          <div className="space-y-2.5 sm:space-y-3.5">
-            <label className={labelClass}>
-              {t('theme')}
-            </label>
-            <div className="grid grid-cols-1 gap-2 sm:gap-2.5 sm:grid-cols-3">
-              {themeOptions.map(({ value, icon: Icon, labelKey }) => {
-                const isActive = selectedTheme === value
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => handleThemeChange(value)}
-                    className={choiceButtonClass(isActive)}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="min-w-0 text-center leading-tight">{t(labelKey)}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-2.5 sm:space-y-3.5">
-            <label className={labelClass}>
-              {t('language')}
-            </label>
-            <div className="grid grid-cols-1 gap-2 sm:gap-2.5 min-[440px]:grid-cols-2 sm:grid-cols-3">
-              {APP_LOCALE_OPTIONS.map((option) => {
-                const isActive = form.locale === option.value
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      updateForm({ locale: option.value })
-                      void applyI18n(option.value)
-                    }}
-                    className={choiceButtonClass(isActive)}
-                  >
-                    <span className="min-w-0 text-center leading-tight">{option.label}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-2.5 sm:space-y-3.5">
-            <label className={labelClass}>
-              {t('firstRunProviderLabel')}
-            </label>
-            <div className="grid grid-cols-1 gap-2 sm:gap-2.5 min-[440px]:grid-cols-3">
-              {PROVIDER_CARDS.map((card) => {
-                const isActive = selection.presetId === card.presetId
-                const filled = cardFilled(card)
-                return (
-                  <button
-                    key={card.presetId}
-                    type="button"
-                    onClick={() => selectCard(card.presetId)}
-                    className={cardButtonClass(isActive)}
-                  >
-                    <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                      {card.name}
-                      <span
-                        aria-hidden="true"
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${filled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-white/20'}`}
-                      />
-                    </span>
-                    <span className="text-[12px] leading-tight text-slate-500 dark:text-slate-400">
-                      {t(card.descKey)}
-                    </span>
-                    {card.capability ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                        {card.capability === 'speech'
-                          ? <Mic className="h-3 w-3" strokeWidth={2} />
-                          : <ImageIcon className="h-3 w-3" strokeWidth={2} />}
-                        {t(card.capability === 'speech' ? 'firstRunCapabilitySpeech' : 'firstRunCapabilityImage')}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
-                        <MessageCircle className="h-3 w-3" strokeWidth={2} />
-                        {t('firstRunCapabilityChat')}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {showTokenPlanMode && (
-            <div className="space-y-2.5 sm:space-y-3.5">
-              <label className={labelClass}>
-                {t('firstRunModeLabel')}
-              </label>
-              <div className="grid grid-cols-1 gap-2 sm:gap-2.5 min-[440px]:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => selectMode('api')}
-                  className={choiceButtonClass(selection.mode === 'api')}
-                >
-                  <span className="min-w-0 text-center leading-tight">{t('firstRunModeApi')}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectMode('token-plan')}
-                  className={choiceButtonClass(selection.mode === 'token-plan')}
-                >
-                  <span className="min-w-0 text-center leading-tight">{t('firstRunModeTokenPlan')}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2.5 sm:space-y-3.5">
-            <label className={labelClass}>
-              {t('firstRunPermissionLabel')}
-            </label>
-            <div
-              role="radiogroup"
-              aria-label={t('firstRunPermissionLabel')}
-              className="grid grid-cols-1 gap-2 sm:gap-2.5 min-[520px]:grid-cols-2"
-            >
-              {PERMISSION_OPTIONS.map((option) => {
-                const isActive = selection.permissionMode === option.value
-                const Icon = option.Icon
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={isActive}
-                    onClick={(event) => runTrustedUserActivation(
-                      event,
-                      () => selectPermissionMode(option.value)
-                    )}
-                    className={cardButtonClass(isActive)}
-                  >
-                    <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                      <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${option.iconClass}`}>
-                        <Icon className="h-3.5 w-3.5" strokeWidth={1.9} />
-                      </span>
-                      <span className="min-w-0 truncate">{t(option.labelKey)}</span>
-                    </span>
-                    <span className="text-[12px] leading-5 text-slate-500 dark:text-slate-400">
-                      {t(option.descriptionKey)}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            {selection.permissionMode === 'full-access' ? (
-              <div className="rounded-xl border border-orange-300/60 bg-orange-50/80 px-4 py-3 text-[12.5px] leading-5 text-orange-800 dark:border-orange-800/60 dark:bg-orange-950/30 dark:text-orange-200">
-                {t('firstRunPermissionFullAccessRisk')}
-              </div>
-            ) : null}
-          </div>
-
-          {regions.length > 0 && (
-            <div className="space-y-2.5 sm:space-y-3.5">
-              <label className={labelClass}>
-                {t('firstRunRegionLabel')}
-              </label>
-              <div className="grid grid-cols-1 gap-2 sm:gap-2.5 min-[440px]:grid-cols-3">
-                {regions.map((region) => (
-                  <button
-                    key={region.id}
-                    type="button"
-                    onClick={() => updateSelectedDraft({ baseUrl: region.baseUrl })}
-                    className={choiceButtonClass(selectedDraft.baseUrl.trim() === region.baseUrl)}
-                  >
-                    <span className="min-w-0 text-center leading-tight">
-                      {t(`firstRunRegion_${region.id}`)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2.5 sm:space-y-3.5">
-            <label className={labelClass}>
-              {t('firstRunApiKeyLabel', { provider: selectedCard.name })}
-            </label>
-            <div className="relative">
-              <input
-                type={showApiKey ? 'text' : 'password'}
-                value={selectedDraft.apiKey}
-                onChange={(e) => updateSelectedDraft({ apiKey: e.target.value })}
-                placeholder={keyPlaceholder(selectedCard, selection.mode)}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                className={`${fieldClass} pr-12 font-mono placeholder:font-sans`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey((v) => !v)}
-                className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-300"
-              >
-                {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <button type="button" className="kun-onb-btn is-accent" disabled={busy} onClick={() => { void handleCredentialReset() }}>
+                {recoveringCredentials ? t('firstRunCredentialResetting') : t('firstRunCredentialReset')}
               </button>
             </div>
-            <div className="grid gap-3 rounded-xl border border-slate-200/80 bg-slate-50/75 px-4 py-3 text-[13px] text-slate-500 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400 min-[560px]:grid-cols-[1fr_auto] min-[560px]:items-center">
-              <p className="min-w-0 leading-6">
-                {t(keyHintKey(selectedCard, selection.mode))}
-              </p>
-              <button
-                type="button"
-                onClick={() => handleOpenKeyPage(keyPageUrl(selectedCard, selection.mode))}
-                className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#1388ff]/24 bg-[#1388ff]/[0.06] px-3 py-1.5 text-[12.5px] font-semibold text-[#1377df] transition hover:bg-[#1388ff]/[0.1] dark:border-[#3aa0ff]/22 dark:bg-[#3aa0ff]/[0.12] dark:text-[#88c8ff] dark:hover:bg-[#3aa0ff]/[0.18]"
-              >
-                <span className="min-w-0 text-center leading-tight">{t('firstRunGetKeyAction')}</span>
-                <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.9} />
-              </button>
-            </div>
-            {wireNote && (
-              <div
-                className={
-                  wireNote.tone === 'success'
-                    ? 'rounded-xl border border-emerald-300/60 bg-emerald-50/80 px-4 py-2.5 text-[12.5px] leading-5 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-300'
-                    : 'rounded-xl border border-amber-300/60 bg-amber-50/80 px-4 py-2.5 text-[12.5px] leading-5 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-300'
-                }
-              >
-                {wireNote.text}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2.5 sm:space-y-3.5">
-            <label className={labelClass}>
-              {t('baseUrl')}
-            </label>
-            <input
-              type="text"
-              value={selectedDraft.baseUrl}
-              onChange={(e) => updateSelectedDraft({ baseUrl: e.target.value })}
-              placeholder="https://"
-              className={fieldClass}
-            />
-          </div>
-        </div>
-
-        <div className="shrink-0 space-y-3 border-t border-slate-200/72 bg-white/70 px-5 pb-4 pt-3.5 dark:border-white/10 dark:bg-white/[0.025] sm:space-y-4 sm:px-7 sm:pb-6 sm:pt-4">
-          {(error || credentialRecoveryRequired) && (
-            <div className="space-y-3 rounded-xl border border-red-500/18 bg-red-500/[0.08] px-4 py-3 text-[13px] text-red-700 dark:border-red-500/20 dark:bg-red-500/[0.12] dark:text-red-200">
-              {error ? <p className="leading-5">{error}</p> : null}
-              {credentialRecoveryRequired ? (
-                <div className="space-y-3">
-                  <p className="text-[12px] leading-5 text-red-600/90 dark:text-red-200/80">
-                    {t('firstRunCredentialRecoveryDetail')}
-                  </p>
-                  <div className="grid gap-2 min-[440px]:grid-cols-2">
-                    <button
-                      type="button"
-                      disabled={saving || recoveringCredentials}
-                      onClick={handleSave}
-                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-red-400/35 bg-white/75 px-3 py-2 font-semibold text-red-700 transition hover:bg-white disabled:opacity-50 dark:border-red-400/25 dark:bg-white/[0.05] dark:text-red-100 dark:hover:bg-white/[0.08]"
-                    >
-                      <RotateCcw className="h-4 w-4" strokeWidth={1.9} />
-                      {t('firstRunCredentialRetry')}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={saving || recoveringCredentials}
-                      onClick={handleCredentialReset}
-                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 font-semibold text-white transition hover:bg-red-700 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
-                    >
-                      <ShieldAlert className="h-4 w-4" strokeWidth={1.9} />
-                      {recoveringCredentials
-                        ? t('firstRunCredentialResetting')
-                        : t('firstRunCredentialReset')}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          <div className={closeAllowed ? 'flex flex-col-reverse gap-3 sm:grid sm:grid-cols-[0.85fr_1fr]' : 'grid gap-3'}>
-            {closeAllowed ? (
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={saving}
-                className="min-h-11 rounded-xl border border-slate-300/80 bg-white/75 px-4 py-2 text-[15px] font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-white dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-white/16 dark:hover:bg-white/[0.06]"
-              >
-                {t(isPreview ? 'firstRunClose' : 'firstRunSkip')}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              disabled={saving || recoveringCredentials}
-              onClick={handleSave}
-              className="min-h-11 rounded-xl bg-[linear-gradient(180deg,#2392ff_0%,#0e7df0_100%)] px-4 py-2 text-[15px] font-semibold text-white shadow-[0_14px_30px_rgba(19,136,255,0.22)] transition hover:opacity-95 disabled:opacity-50 dark:bg-[linear-gradient(180deg,#2c9dff_0%,#1584f6_100%)] dark:shadow-[0_14px_30px_rgba(21,132,246,0.2)]"
-            >
-              {saving ? t('firstRunSaving') : t('firstRunSave')}
-            </button>
-          </div>
-
-          <p className="text-center text-[12.5px] leading-6 text-slate-400 dark:text-slate-500">
-            {t(isPreview ? 'firstRunPreviewHint' : 'firstRunChangeLater')}
-          </p>
-        </div>
-        </section>
+          </>
+        ) : null}
       </div>
     </div>
+  ) : null
+
+  let title = ''
+  let subtitle = ''
+  let body: ReactElement | null = null
+  let footer: ReactElement | null = null
+  if (step === 'welcome') {
+    title = t('onboarding.welcome.title')
+    subtitle = t('onboarding.welcome.subtitle')
+    body = (
+      <OnboardingWelcomeStep
+        locale={form.locale}
+        theme={form.theme}
+        onLocale={(locale: AppLocale) => { updateForm({ locale }); void applyI18n(locale) }}
+        onTheme={(theme: ThemePref) => { updateForm({ theme }); applyTheme(theme) }}
+      />
+    )
+    footer = <><span />{primaryButton(t('onboarding.welcome.start'))}</>
+  } else if (step === 'model') {
+    title = t('onboarding.model.title')
+    if (modelPhase === 'pick') {
+      subtitle = t('onboarding.model.pickSubtitle', { count: onboardingProviderCount() })
+      body = (
+        <OnboardingModelPicker
+          state={picker}
+          selectedId={entry?.id ?? ''}
+          customSelected={custom}
+          onState={(patch) => setPicker((current) => ({ ...current, ...patch }))}
+          onSelect={selectEntry}
+          onConfirm={openConfigure}
+          onCustom={selectCustom}
+          onImport={applyImportLink}
+        />
+      )
+      footer = (
+        <>
+          {backButton()}
+          <div className="kun-onb-foot-end">
+            <span className="kun-onb-foot-hint">{t('onboarding.model.selectedHint', { name: providerName })}</span>
+            {primaryButton(t(`onboarding.model.next_${connectKind}`))}
+          </div>
+        </>
+      )
+    } else {
+      subtitle = t('onboarding.model.configureSubtitle')
+      body = (
+        <>
+          <OnboardingModelConfigure
+            entry={custom ? null : entry}
+            profileId={profileId}
+            draft={draft}
+            mode={selection.mode}
+            issue={issue}
+            wireNote={wireNote}
+            onMode={(mode) => { setIssue(null); setSelection((current) => ({ ...current, mode })) }}
+            onDraft={updateDraft}
+            onChange={back}
+          />
+          {errorBlock}
+        </>
+      )
+      footer = (
+        <>
+          {backButton(t('onboarding.model.backToPick'))}
+          <div className="kun-onb-foot-end">
+            <span className="kun-onb-foot-hint">{t('onboarding.model.moreLater')}</span>
+            {primaryButton(t('onboarding.next'))}
+          </div>
+        </>
+      )
+    }
+  } else if (step === 'permission') {
+    title = t('onboarding.permission.title')
+    subtitle = t('onboarding.permission.subtitle')
+    body = (
+      <>
+        <OnboardingPermissionStep mode={selection.permissionMode} declined={declinedPermission} onSelect={selectPermissionMode} />
+        {errorBlock}
+      </>
+    )
+    footer = (
+      <>
+        {backButton()}
+        <div className="kun-onb-foot-end">
+          <span className="kun-onb-foot-hint" aria-live="polite">
+            {t(saving === 'saving' ? 'onboarding.permission.savingHint' : saving === 'starting' ? 'onboarding.permission.startingHint' : 'onboarding.permission.saveHint')}
+          </span>
+          {primaryButton(saving === 'saving' ? t('firstRunSaving') : saving === 'starting' ? t('onboarding.permission.starting') : t('firstRunSave'))}
+        </div>
+      </>
+    )
+  } else if (step === 'agents') {
+    title = t('onboarding.agents.title')
+    subtitle = t('onboarding.agents.subtitle')
+    body = <OnboardingAgentsStep settings={harnessSettings} patch={harness.patch} beforeCheck={harness.beforeCheck} />
+    footer = (
+      <>
+        {backButton()}
+        <div className="kun-onb-foot-end">
+          <span className="kun-onb-foot-hint">{t('onboarding.agents.handshakeHint')}</span>
+          {primaryButton(t(connectedAgents.length || agentLists.installed.length === 0 ? 'onboarding.next' : 'onboarding.agents.skipNext'))}
+        </div>
+      </>
+    )
+  } else {
+    title = t('onboarding.ready.title')
+    subtitle = t('onboarding.ready.subtitle')
+    body = (
+      <OnboardingReadyStep
+        provider={{ presetId: custom ? null : entry?.presetId ?? DEFAULT_MODEL_PROVIDER_ID, name: providerName, model: getKunRuntimeSettings(form).model }}
+        permissionMode={selection.permissionMode}
+        agents={connectedAgents}
+        localeLabel={localeLabel}
+        themeLabel={themeLabel}
+        onEdit={(target) => {
+          if (target === 'model') setModelPhase('configure')
+          goTo(target)
+        }}
+      />
+    )
+    footer = (
+      <>
+        <button type="button" className="kun-onb-ghost" onClick={openAgentCenter} disabled={leaving}>
+          <LayoutGrid size={16} strokeWidth={1.8} aria-hidden="true" />{t('onboarding.ready.openAgentCenter')}
+        </button>
+        {primaryButton(t(isPreview ? 'onboarding.ready.done' : 'onboarding.ready.start'), { large: true })}
+      </>
+    )
+  }
+
+  return (
+    <OnboardingShell
+      step={step}
+      direction={direction}
+      contentKey={`${step}-${modelPhase}`}
+      saved={saved}
+      preview={isPreview}
+      leaving={leaving}
+      stepDetails={stepDetails}
+      bubble={bubble}
+      title={title}
+      subtitle={subtitle}
+      optional={step === 'agents'}
+      skipLabel={t(isPreview ? 'onboarding.close' : saved ? 'onboarding.skipRest' : 'onboarding.skip')}
+      skipDisabled={busy}
+      onSkip={closeAllowed && step !== 'ready' ? handleClose : undefined}
+      onStepSelect={(target) => {
+        if (target === 'model') setModelPhase(saved ? 'configure' : 'pick')
+        goTo(target)
+      }}
+      onEnter={onEnter}
+      footer={footer}
+      overlay={step === 'ready' ? <OnboardingConfetti /> : null}
+    >
+      {step === 'ready' ? (
+        <span className="kun-onb-done-chip" style={{ alignSelf: 'flex-start' }}>
+          <Check size={13} strokeWidth={2.6} aria-hidden="true" />{t('onboarding.ready.saved')}
+        </span>
+      ) : null}
+      {body}
+    </OnboardingShell>
   )
 }

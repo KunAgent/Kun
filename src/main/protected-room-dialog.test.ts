@@ -5,6 +5,7 @@ import { PROTECTED_DIALOG_TIMEOUT_MS, showProtectedRoomDialog } from './protecte
 
 const electronMock = vi.hoisted(() => ({
   createWindow: vi.fn(),
+  naturalHeight: 0,
   getDisplayMatching: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1280, height: 800 } }))
 }))
 vi.mock('electron', () => ({
@@ -24,6 +25,7 @@ class Contents extends EventEmitter {
     webRequest: { onBeforeRequest: vi.fn() }
   }
   setWindowOpenHandler = vi.fn()
+  executeJavaScript = vi.fn(async () => electronMock.naturalHeight)
   isDestroyed = () => this.destroyed
   getURL = () => this.mainFrame.url
 }
@@ -33,6 +35,7 @@ class Window extends EventEmitter {
   webContents = new Contents()
   show = vi.fn()
   setMenu = vi.fn()
+  setBounds = vi.fn()
   getBounds = () => ({ x: 400, y: 200, width: 1000, height: 700 })
   isDestroyed = () => this.destroyed
   destroy = vi.fn(() => { this.destroyed = true; this.emit('closed') })
@@ -69,7 +72,7 @@ function fixture(current?: () => Promise<boolean>, autoLoad = true, variant?: 'n
 }
 async function flush() { for (let count = 0; count < 5; count += 1) await Promise.resolve() }
 
-beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks() })
+beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); electronMock.naturalHeight = 0 })
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
 
 describe('protected consent window boundary', () => {
@@ -77,6 +80,19 @@ describe('protected consent window boundary', () => {
     'uses the appropriate height for %s content', async (variant, height) => {
       const f = fixture(undefined, true, variant)
       expect(f.options).toMatchObject({ width: 560, height })
+      f.decide(false)
+      await expect(f.result).resolves.toBe(false)
+    }
+  )
+
+  it.each([[300, 400, 300], [2000, 160, 640]] as const)(
+    'fits a %ipx document before showing it', async (natural, y, height) => {
+      electronMock.naturalHeight = natural
+      const f = fixture()
+      expect(f.view.show).not.toHaveBeenCalled()
+      await flush()
+      expect(f.view.setBounds).toHaveBeenCalledExactlyOnceWith({ x: 620, y, width: 560, height })
+      expect(f.view.show).toHaveBeenCalledOnce()
       f.decide(false)
       await expect(f.result).resolves.toBe(false)
     }

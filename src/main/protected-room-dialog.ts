@@ -5,6 +5,19 @@ import { protectedRoomDialogHtml, type ProtectedRoomDialogContent } from './prot
 import { markProtectedWindowContents } from './protected-window-contents'
 
 export const PROTECTED_DIALOG_TIMEOUT_MS = 5 * 60_000
+const FITTED_MIN_HEIGHT = 220
+const FITTED_MAX_HEIGHT = 640
+// Main-authored and read-only: lays the dialog out once at its natural height.
+// Short prompts then carry no empty band above the buttons, long ones grow
+// before they scroll. Setting CSSOM properties is not an inline style for CSP.
+const NATURAL_HEIGHT_SCRIPT = `(() => {
+  const main = document.querySelector('main'), scroll = document.querySelector('.content-scroll');
+  if (!main || !scroll) return 0;
+  main.style.height = 'auto'; scroll.style.flex = 'none';
+  const height = Math.ceil(main.getBoundingClientRect().height);
+  main.style.height = ''; scroll.style.flex = '';
+  return height;
+})()`
 
 type FrameIdentity = { processId: number; routingId: number; url: string }
 function frameIdentity(frame: WebFrameMain): FrameIdentity {
@@ -62,6 +75,7 @@ export function showProtectedRoomDialog(
     let confirming = false
     let initialNavigationStarted = false
     let readyToShow = false
+    let fitted = false
     let loadedFrame: FrameIdentity | undefined
     let generation = 0
     const parentIsCurrent = (): boolean => !parent.isDestroyed() && !parent.webContents.isDestroyed() &&
@@ -79,6 +93,18 @@ export function showProtectedRoomDialog(
       parent.webContents.removeListener('did-start-navigation', parentNavigation)
       resolve(confirmed)
       if (!view.isDestroyed()) view.destroy()
+    }
+    const showWhenReady = (): void => {
+      if (!settled && loadedFrame && readyToShow && fitted && parentIsCurrent()) view.show()
+    }
+    const fitToContent = async (): Promise<void> => {
+      if (typeof view.webContents.executeJavaScript !== 'function') return
+      const natural = Number(await view.webContents.executeJavaScript(NATURAL_HEIGHT_SCRIPT))
+      if (settled || view.isDestroyed() || !Number.isFinite(natural) || natural <= 0) return
+      const fittedHeight = Math.round(Math.max(1, Math.min(Math.max(natural, FITTED_MIN_HEIGHT), FITTED_MAX_HEIGHT, area.height - 32)))
+      if (fittedHeight === height) return
+      const fittedY = Math.round(Math.max(area.y, Math.min(bounds.y + (bounds.height - fittedHeight) / 2, area.y + area.height - fittedHeight)))
+      view.setBounds({ x, y: fittedY, width, height: fittedHeight })
     }
     const parentClosed = (): void => finish(false)
     const parentNavigation = (_event: unknown, _url: string, _inPlace: boolean, isMainFrame: boolean): void => {
@@ -116,7 +142,10 @@ export function showProtectedRoomDialog(
       if (settled) return
       if (loadedFrame || !parentIsCurrent() || view.webContents.getURL() !== documentUrl) { finish(false); return }
       loadedFrame = frameIdentity(view.webContents.mainFrame)
-      if (readyToShow) view.show()
+      void fitToContent().catch(() => undefined).finally(() => {
+        fitted = true
+        showWhenReady()
+      })
     })
     view.webContents.on('before-input-event', (_event, input) => {
       if (input.type === 'keyDown' && input.key === 'Escape') finish(false)
@@ -137,7 +166,7 @@ export function showProtectedRoomDialog(
     })
     view.once('ready-to-show', () => {
       readyToShow = true
-      if (!settled && loadedFrame && parentIsCurrent()) view.show()
+      showWhenReady()
     })
     if (!parentIsCurrent()) { finish(false); return }
     void view.loadURL(documentUrl).catch(() => finish(false))

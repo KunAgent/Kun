@@ -31,7 +31,7 @@ function describeSettings(value: KunExecutionSecuritySettings, zh: boolean) {
   }
 }
 
-function describeChanges(before: KunExecutionSecuritySettings, after: KunExecutionSecuritySettings, zh: boolean): string {
+function describeChanges(before: KunExecutionSecuritySettings, after: KunExecutionSecuritySettings, zh: boolean) {
   const previous = describeSettings(before, zh), next = describeSettings(after, zh)
   const fields = [
     ['approvalPolicy', zh ? '审批方式' : 'Approval'], ['sandboxMode', zh ? '访问范围' : 'Access'],
@@ -39,7 +39,11 @@ function describeChanges(before: KunExecutionSecuritySettings, after: KunExecuti
   ] as const
   return fields.filter(([key]) => key === 'approvalReview'
     ? !approvalReviewSelectionEquals(before.approvalReview, after.approvalReview) : before[key] !== after[key])
-    .map(([key, label]) => `${label}${zh ? '：' : ': '}${previous[key]} → ${next[key]}`).join('\n')
+    .map(([key, label]) => ({ label, before: previous[key], after: next[key] }))
+}
+
+function changesText(changes: ReturnType<typeof describeChanges>, zh: boolean): string {
+  return changes.map((change) => `${change.label}${zh ? '：' : ': '}${change.before} → ${change.after}`).join('\n')
 }
 
 export function protectedExecutionSettings(options: RegisterAppIpcHandlersOptions, dialogs: NativeDialogCoordinator) {
@@ -59,6 +63,7 @@ export function protectedExecutionSettings(options: RegisterAppIpcHandlersOption
     const senderCurrent = () => options.getMainWindow() === parent && dialogParentIsAvailable(parent) && trustedWorkbenchSenderIsCurrent(event, parent)
     const stillCurrent = async () => senderCurrent() && executionSettingsEqual((await options.store.load()).agents.kun, change.current) && senderCurrent()
     const zh = current.locale.startsWith('zh')
+    const changes = describeChanges(change.current, change.next, zh)
     const full = change.next.approvalPolicy === 'auto' && change.next.sandboxMode === 'danger-full-access' && change.next.approvalReviewer === 'user'
     const allowed = await dialogs.run(parent.webContents, async () => {
       if (!await stillCurrent()) return false
@@ -71,7 +76,7 @@ export function protectedExecutionSettings(options: RegisterAppIpcHandlersOption
           ? zh ? '完全访问允许 Kun 无需逐次审批地访问本地文件、执行命令和使用联网工具。' : 'Full access lets Kun access local files, run commands and use network tools without individual approvals.'
           : zh ? '请确认之后使用的审批方式和访问范围。' : 'Review the approval rules and access scope for future work.',
         bodyLabel: zh ? '本次变更' : 'Changes',
-        body: describeChanges(change.current, change.next, zh),
+        body: changesText(changes, zh), changes,
         workspaceLabel: zh ? '作用目录' : 'Working directory',
         footnote: zh ? '应用后使用这些权限设置；当前运行保持已接受的权限。' : 'Apply these settings for future work. Current runs keep their accepted permissions.',
         cancelLabel: zh ? '取消' : 'Cancel', confirmLabel: zh ? '应用设置' : 'Apply settings',

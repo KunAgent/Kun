@@ -18,6 +18,8 @@ export type ProtectedRoomDialogContent = {
   detailsLabel?: string
   language?: 'zh' | 'en'
   variant?: 'confirmation' | 'notice'
+  /** Shown as before/after rows in place of the plain body text. */
+  changes?: ReadonlyArray<{ label: string; before: string; after: string }>
 }
 
 const ACTION_ICON_PATHS = {
@@ -53,10 +55,10 @@ export function protectedRoomDialogHtml(content: ProtectedRoomDialogContent, non
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'">
 <style nonce="${nonce}">${protectedRoomDialogStyles}</style></head>
 <body><main role="dialog" aria-modal="true" aria-labelledby="title" aria-describedby="description note" data-protected-confirmation data-kind="${kind}" data-emphasis="${kind === 'permissions' && content.accent ? 'permissions' : 'none'}">
-<header id="dialog-header"><div class="heading-icon">${svg(ACTION_ICON_PATHS[kind])}</div><div class="heading-copy"><div class="brand">Kun</div><h1 id="title"></h1><p id="subtitle" class="subtitle"></p></div></header>
+<header id="dialog-header"><div class="heading-icon">${svg(ACTION_ICON_PATHS[kind])}</div><div class="heading-copy"><div class="brand" id="brand">Kun</div><h1 id="title"></h1><p id="subtitle" class="subtitle"></p></div></header>
 <div class="content-scroll">
   <p id="description" class="description"></p>
-  <section class="action-card" id="action-card" aria-labelledby="body-label"><div class="section-label" id="body-label"></div><pre id="body" tabindex="0" aria-labelledby="body-label"></pre></section>
+  <section class="action-card" id="action-card" aria-labelledby="body-label"><div class="section-label" id="body-label"></div><pre id="body" tabindex="0" aria-labelledby="body-label"></pre><div id="changes" class="changes" role="list" aria-labelledby="body-label" hidden></div></section>
   <section class="workspace" id="workspace" aria-labelledby="workspace-label">${folderIcon}<div><h2 id="workspace-label"></h2><p id="workspace-value"></p></div></section>
   <details id="details"><summary><span id="details-label"></span>${svg('<path d="m9 5 7 7-7 7"/>', 'chevron')}</summary><pre id="details-body" tabindex="0" aria-labelledby="details-label"></pre></details>
 </div>
@@ -76,6 +78,24 @@ export function protectedRoomDialogHtml(content: ProtectedRoomDialogContent, non
   byId('subtitle').hidden = !data.subtitle;
   byId('workspace').hidden = !data.workspace;
   byId('details').hidden = !data.details;
+  // The subtitle already names Kun on app-level prompts; one mark is enough.
+  byId('brand').hidden = /^Kun( |$)/.test(data.subtitle || '');
+  const changes = Array.isArray(data.changes) ? data.changes : [];
+  for (const change of changes) {
+    const row = document.createElement('div');
+    row.className = 'change';
+    row.setAttribute('role', 'listitem');
+    for (const [part, value] of [['label', change.label], ['before', change.before], ['arrow', '→'], ['after', change.after]]) {
+      const cell = document.createElement('span');
+      cell.className = 'change-' + part;
+      if (part === 'arrow') cell.setAttribute('aria-hidden', 'true');
+      cell.textContent = String(value);
+      row.append(cell);
+    }
+    byId('changes').append(row);
+  }
+  byId('changes').hidden = changes.length === 0;
+  byId('body').hidden = changes.length > 0;
   document.querySelector('.scope-note').hidden = !data.footnote;
   byId('cancel').hidden = data.variant === 'notice';
   const syncHeadingOverflow = () => {

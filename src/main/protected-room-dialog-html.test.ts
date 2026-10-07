@@ -128,6 +128,25 @@ describe('protected approval content and appearance', () => {
   })
 })
 
+describe('protected permission changes', () => {
+  it('renders before/after rows as text and drops the repeated brand mark', () => {
+    const changes = [{ label: '访问范围', before: '允许修改工作区', after: '<b>完全访问本机</b>' }]
+    const { html } = mount({ kind: 'permissions', accent: true, subtitle: 'Kun · 应用设置', body: '访问范围：允许修改工作区 → 完全访问本机', changes })
+    const row = document.querySelector('#changes .change')
+    expect(document.querySelector<HTMLElement>('#changes')?.hidden).toBe(false)
+    expect(document.querySelector<HTMLElement>('#body')?.hidden).toBe(true)
+    expect(row?.querySelector('.change-after')?.textContent).toBe('<b>完全访问本机</b>')
+    expect(row?.querySelector('b')).toBeNull()
+    expect(row?.querySelector('.change-arrow')?.getAttribute('aria-hidden')).toBe('true')
+    expect(document.querySelector<HTMLElement>('#brand')?.hidden).toBe(true)
+    expect(html).not.toContain('innerHTML')
+    mount({ subtitle: '整理项目 · bash' })
+    expect(document.querySelector<HTMLElement>('#brand')?.hidden).toBe(false)
+    expect(document.querySelector<HTMLElement>('#changes')?.hidden).toBe(true)
+    expect(document.querySelector<HTMLElement>('#body')?.hidden).toBe(false)
+  })
+})
+
 describe('protected approval decisions and keyboard behavior', () => {
   it('ignores synthetic actions and passes the nonce once after an actual confirmation', () => {
     const { confirm, key } = mount()

@@ -15,6 +15,7 @@ const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation }
 const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
 const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-controls.cjs')
 const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
+const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -112,7 +113,8 @@ async function main() {
     modelFixture = await startDirectModel({ real: process.argv.includes('--real-model') })
     const theme = argumentValue('--theme') === 'dark' ? 'dark' : 'light'
     const locale = argumentValue('--locale') === 'zh' ? 'zh' : 'en'
-    const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, profile), locale, theme, initialSetupCompleted: true }
+    const onboarding = process.argv.includes('--onboarding-only')
+    const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, profile), locale, theme, initialSetupCompleted: !onboarding }
     settings.agents.kun.baseUrl = modelFixture.baseUrl
     settings.agents.kun.apiKey = 'rooms-desktop-offline-fixture'
     settings.agents.kun.model = modelFixture.snapshot().model
@@ -165,8 +167,9 @@ async function main() {
     // A cold isolated Vite cache can take longer than the per-action timeout on a busy host.
     await page.waitForLoadState('domcontentloaded', { timeout: timeoutMs })
     await resize(electronApplication, 1360, 900)
-    await page.locator('[data-workspace-mode-trigger]').first().waitFor({ timeout: timeoutMs })
-    const exercise = process.argv.includes('--agent-models-only') ? exerciseAgentModelControls
+    await page.locator(onboarding ? '[data-onboarding-step]' : '[data-workspace-mode-trigger]').first().waitFor({ timeout: timeoutMs })
+    const exercise = onboarding ? exerciseOnboarding
+      : process.argv.includes('--agent-models-only') ? exerciseAgentModelControls
       : process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
       : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm

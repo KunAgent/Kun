@@ -17,6 +17,7 @@ import migrationSystem from './settings/migration-system.json'
 import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
 import ade from './settings/ade.json'
+import onboarding from './settings/onboarding.json'
 
 const settings = {
   ...providerConfiguration,
@@ -38,6 +39,7 @@ const settings = {
   guiUpdateErrFeedUnavailable: '現在、利用できる更新元がありません。後でもう一度試すか、ダウンロードページを利用してください。',
   ...speak,
   ...ade,
+  ...onboarding
 }
 
 export default settings

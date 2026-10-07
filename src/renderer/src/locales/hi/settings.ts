@@ -17,6 +17,7 @@ import migrationSystem from './settings/migration-system.json'
 import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
 import ade from './settings/ade.json'
+import onboarding from './settings/onboarding.json'
 
 const settings = {
   ...providerConfiguration,
@@ -38,6 +39,7 @@ const settings = {
   guiUpdateErrFeedUnavailable: 'अभी कोई अपडेट स्रोत उपलब्ध नहीं है। बाद में फिर कोशिश करें या डाउनलोड पृष्ठ का उपयोग करें।',
   ...speak,
   ...ade,
+  ...onboarding
 }
 
 export default settings

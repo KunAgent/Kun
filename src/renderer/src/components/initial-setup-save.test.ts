@@ -12,6 +12,7 @@ import {
   buildInitialSetupSettingsPatch,
   INITIAL_SETUP_PROVIDER_PRESETS,
   initialSetupAutoWirePlan,
+  initialSetupDraftFor,
   initialSetupDrafts,
   initialSetupProfileId,
   initialSetupSelection
@@ -77,13 +78,16 @@ describe('initialSetupSelection', () => {
         permissionMode: 'ask-for-approval',
         permissionTouched: false
       })
-    expect(initialSetupSelection(settings({ agents: { kun: { providerId: 'litellm' } } })))
-      .toEqual({
-        presetId: 'deepseek',
-        mode: 'api',
-        permissionMode: 'ask-for-approval',
-        permissionTouched: false
-      })
+  })
+
+  it('preselects any catalog preset and honours a first-run permission default', () => {
+    expect(initialSetupSelection(settings({ agents: { kun: { providerId: 'litellm' } } })).presetId).toBe('litellm')
+    expect(initialSetupSelection(settings({ agents: { kun: { providerId: 'aliyun-token-plan' } } })))
+      .toEqual(expect.objectContaining({ presetId: 'aliyun', mode: 'token-plan' }))
+    expect(initialSetupSelection(settings({ agents: { kun: { providerId: 'custom-provider-onboarding' } } })).presetId)
+      .toBe('custom')
+    expect(initialSetupSelection(settings(), { defaultPermissionMode: 'full-access' }).permissionMode)
+      .toBe('full-access')
   })
 
   it('preselects the saved permission mode', () => {
@@ -132,28 +136,20 @@ describe('initialSetupDrafts', () => {
     expect(initialSetupDrafts(settings()).litellm).toBeUndefined()
   })
 
-  it('keeps coding and Moonshot presets out of onboarding', () => {
-    const excludedIds = [
-      'litellm',
-      'zhipu-coding-plan',
-      'zai-coding-plan',
-      'kimi-code',
-      'moonshot-cn',
-      'moonshot-global'
-    ]
+  it('offers the whole catalog but only seeds drafts that preview auto-wiring', () => {
     const drafts = initialSetupDrafts(settings())
 
-    expect(INITIAL_SETUP_PROVIDER_PRESETS.map((preset) => preset.id)).toEqual(['xiaomi', 'minimax'])
-    for (const id of excludedIds) {
+    expect(INITIAL_SETUP_PROVIDER_PRESETS.map((preset) => preset.id)).toEqual(
+      expect.arrayContaining(['xiaomi', 'minimax', 'kimi-code', 'moonshot-cn', 'ollama-local', 'codex'])
+    )
+    for (const id of ['litellm', 'zhipu-coding-plan', 'kimi-code', 'moonshot-cn']) {
       expect(drafts[id]).toBeUndefined()
-      expect(initialSetupSelection(settings({ agents: { kun: { providerId: id } } })))
-        .toEqual({
-          presetId: 'deepseek',
-          mode: 'api',
-          permissionMode: 'ask-for-approval',
-          permissionTouched: false
-        })
+      expect(initialSetupSelection(settings({ agents: { kun: { providerId: id } } })).presetId).toBe(id)
     }
+    expect(initialSetupDraftFor(drafts, 'moonshot-cn')).toEqual({
+      apiKey: '',
+      baseUrl: INITIAL_SETUP_PROVIDER_PRESETS.find((preset) => preset.id === 'moonshot-cn')!.baseUrl
+    })
   })
 })
 
@@ -382,6 +378,61 @@ describe('buildInitialSetupSettings', () => {
     })
     const zenmux = getModelProviderSettings(next).providers.find((p) => p.id === 'custom-provider-2')
     expect(zenmux?.apiKey).toBe('z-key')
+  })
+})
+
+describe('buildInitialSetupSettings for the full catalog', () => {
+  it('activates a keyless local provider with the discovered models', () => {
+    const current = settings({ provider: { apiKey: 'sk-deepseek-key' } })
+    const drafts = initialSetupDrafts(current)
+    drafts['ollama-local'] = {
+      apiKey: '',
+      baseUrl: 'http://localhost:11434/v1',
+      models: ['qwen3:8b', 'gemma3:12b'],
+      model: 'gemma3:12b'
+    }
+    const next = buildInitialSetupSettings(current, drafts, { presetId: 'ollama-local', mode: 'api' })
+
+    const profile = getModelProviderSettings(next).providers.find((p) => p.id === 'ollama-local')
+    expect([...(profile?.models ?? [])].sort()).toEqual(['gemma3:12b', 'qwen3:8b'])
+    const runtime = getKunRuntimeSettings(next)
+    expect(runtime.providerId).toBe('ollama-local')
+    expect(runtime.model).toBe('gemma3:12b')
+  })
+
+  it('creates the onboarding custom provider from its draft', () => {
+    const current = settings({ provider: { apiKey: 'sk-deepseek-key' } })
+    const drafts = initialSetupDrafts(current)
+    drafts['custom-provider-onboarding'] = {
+      apiKey: 'relay-key',
+      baseUrl: 'https://relay.example.com/v1',
+      name: 'Team relay',
+      endpointFormat: 'messages',
+      models: ['claude-sonnet-relay']
+    }
+    const next = buildInitialSetupSettings(current, drafts, { presetId: 'custom', mode: 'api' })
+
+    const profile = getModelProviderSettings(next).providers.find((p) => p.id === 'custom-provider-onboarding')
+    expect(profile).toEqual(expect.objectContaining({
+      name: 'Team relay',
+      baseUrl: 'https://relay.example.com/v1',
+      endpointFormat: 'messages',
+      models: ['claude-sonnet-relay']
+    }))
+    expect(getKunRuntimeSettings(next).providerId).toBe('custom-provider-onboarding')
+    expect(getKunRuntimeSettings(next).model).toBe('claude-sonnet-relay')
+  })
+
+  it('connects any catalog preset with a key and picks its first model', () => {
+    const current = settings({ provider: { apiKey: 'sk-deepseek-key' } })
+    const drafts = initialSetupDrafts(current)
+    drafts['moonshot-cn'] = { ...initialSetupDraftFor(drafts, 'moonshot-cn'), apiKey: 'sk-moonshot' }
+    const next = buildInitialSetupSettings(current, drafts, { presetId: 'moonshot-cn', mode: 'api' })
+
+    const profile = getModelProviderSettings(next).providers.find((p) => p.id === 'moonshot-cn')
+    expect(profile?.apiKey).toBe('sk-moonshot')
+    expect(getKunRuntimeSettings(next).model).toBe(profile?.models[0])
+    expect(getActiveAgentApiKey(next)).toBe('sk-moonshot')
   })
 })
 
