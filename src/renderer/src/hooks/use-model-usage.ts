@@ -220,7 +220,8 @@ export function useModelUsageState(
     }
     const explicitRefresh = previousRefreshKey.current !== refreshKey
     previousRefreshKey.current = refreshKey
-    const range = defaultDailyUsageRange(new Date(), days)
+    // A one-day range is today's models; the daily views keep their week floor.
+    const range = defaultDailyUsageRange(new Date(), days, 1)
     const path = buildModelUsagePath(range, scope)
     const cached = readUsageSummaryCache<ModelUsageSummary>(path)
     if (cached) {

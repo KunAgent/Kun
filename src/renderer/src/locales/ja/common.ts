@@ -21,6 +21,7 @@ import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
 import workSidebar from './common/work-sidebar.json'
 import workMainline from './common/work-mainline.json'
+import usagePanel from './common/usage-panel.json'
 
 const common = {
   ...agentUpdates,
@@ -45,6 +46,7 @@ const common = {
   ...workLayout,
   ...workSidebar,
   ...workMainline,
+  ...usagePanel,
 }
 
 export default common
