@@ -438,7 +438,7 @@ export class HarnessReadinessService {
       if (apiKey && provider.kind === 'antigravity-cli') env.GEMINI_API_KEY = apiKey
     }
     if (route.credentialMode === 'native-login' && route.providerId && route.providerId !== 'default' &&
-      (!legacyProviderKindFor(definition.id) || !provider || provider.kind !== legacyProviderKindFor(definition.id))) { configured = false; detail = 'Native login cannot use an unrelated provider profile' }
+      (!legacyProviderKindFor(definition.id) || !provider || provider.kind !== legacyProviderKindFor(definition.id))) { configured = false; detail = 'Native login cannot use an unrelated provider profile; choose the system account for native login or switch the connection to a provider profile' }
     if (nativeAgentNetworkStatus(definition).networkSource === 'explicit-required') {
       configured = false; detail = 'Configure an explicit proxy for this Agent'
     }

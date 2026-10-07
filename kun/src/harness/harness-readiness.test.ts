@@ -154,7 +154,7 @@ it('rejects an unrelated configured provider at native readiness even when its p
   const result = await f.service.test(f.catalog.get('codex')!, { level: 'handshake', ...incompatible })
   expect(result.ok).toBe(false)
   expect(result.readiness?.checks.find((check) => check.id === 'configuration')).toMatchObject({
-    ok: false, detail: 'Native login cannot use an unrelated provider profile'
+    ok: false, detail: expect.stringContaining('Native login cannot use an unrelated provider profile')
   })
   await expect(f.service.assertReady(incompatible)).rejects.toThrow('unrelated provider profile')
   expect(await f.service.readyProfiles('codex')).toEqual([])

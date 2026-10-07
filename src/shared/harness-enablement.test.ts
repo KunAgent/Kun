@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AdeHarnessRow } from './ade-harnesses'
 import { defaultKunHarnessSettings, normalizeKunHarnessSettings } from './app-settings-kun-harness'
-import { harnessProfileEnabled, harnessProfileKey, harnessProfileReady, normalizeEnabledProfiles, readyHarnessProfiles } from './harness-enablement'
+import { harnessProfileEnabled, harnessProfileKey, harnessProfileReady, normalizeEnabledProfiles, readyHarnessProfiles, selectedHarnessProfile } from './harness-enablement'
 
 const native = { harnessId: 'claude-code', credentialMode: 'native-login' as const }
 const row = (): AdeHarnessRow => ({
@@ -65,4 +65,21 @@ it('keeps terminal readiness separate from the chat picker and rejects applicati
   current.definition.transport = 'application'
   expect(readyHarnessProfiles(current)).toEqual([])
   expect(terminalHarnessProfileReady(current, native)).toBe(false)
+})
+
+describe('selected profile from saved defaults', () => {
+  const codexRow = (): AdeHarnessRow => ({ ...row(), definition: { ...row().definition, id: 'codex', displayName: 'Codex', transport: 'codex-app-server' } })
+  it('drops a stale providerId from native login unless the engine binds provider accounts', () => {
+    // Codex native login is the ChatGPT account in ~/.codex; a saved providerId
+    // (e.g. the ChatGPT subscription provider, also called "codex") would make
+    // the runtime reject the route as an unrelated provider profile.
+    const settings = normalizeKunHarnessSettings({ defaults: { codex: { credentialMode: 'native-login', providerId: 'codex' },
+      'claude-code': { credentialMode: 'native-login', providerId: 'claude-subscription' } } })
+    expect(selectedHarnessProfile(codexRow(), settings)).toEqual({ harnessId: 'codex', credentialMode: 'native-login' })
+    expect(selectedHarnessProfile(row(), settings)).toEqual({ harnessId: 'claude-code', credentialMode: 'native-login', providerId: 'claude-subscription' })
+  })
+  it('keeps the providerId for provider and gateway connections', () => {
+    const settings = normalizeKunHarnessSettings({ defaults: { codex: { credentialMode: 'kun-gateway', providerId: 'deepseek' } } })
+    expect(selectedHarnessProfile(codexRow(), settings)).toEqual({ harnessId: 'codex', credentialMode: 'kun-gateway', providerId: 'deepseek' })
+  })
 })
