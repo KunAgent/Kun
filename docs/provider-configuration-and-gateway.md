@@ -65,6 +65,10 @@ Their filenames use SHA-256 instead of lossy replacement of punctuation. A
 credential or endpoint change makes old observations historical. Failed refreshes
 preserve historical results and mark them stale. Selected IDs absent from a
 successful catalog remain visible for repair; refreshing does not delete them.
+When the provider's own list drops a model that is still selected, a route
+member or a key allowance, the account panel names it with each place it is
+used and offers one reviewed change that removes it from all of them. Models
+added by hand never count as dropped, and a route is never left empty.
 
 ChatGPT subscription discovery uses its own credential and a separately cached
 compatibility version from public `@openai/codex` package metadata. That request
@@ -79,6 +83,20 @@ identity. Manual models do not become network evidence. Capability and price
 fields retain source, observation time and known/unknown state; default context
 or tool assumptions are excluded from guarantees. The catalog panel shows these
 facts without sending a paid inference request.
+
+### Balance endpoint
+
+A provider without a built-in balance reader can name one: an HTTPS URL whose
+`#/json/pointer` fragment picks the number (common field names are tried
+otherwise), a unit for responses that name no currency, and the header that
+carries the key when it is not `Authorization: Bearer`. The key goes to that
+URL, so it must be on the provider's own host, or on one other host the user
+confirms by name; moving the URL to a different host voids the confirmation.
+
+Plan allowance reminders come from the quota lists Kun already fetches, and on
+their own only when a window is about to renew. Windows shorter than a day
+(5-hour session limits) never produce a reminder; the reminder is shown by the
+desktop app's main process, so it also arrives with the window closed.
 
 ## Configuration transactions and exchange
 

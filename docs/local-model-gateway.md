@@ -48,6 +48,7 @@ The gateway supports:
 - `POST /v1beta/models/{model}:generateContent`, `:streamGenerateContent`,
   `:countTokens` and `GET /v1beta/models` (Google Gemini)
 - `GET /v1/kun/route?session=<id>[&after=<seq>&wait=<s>]` (route trace)
+- `GET /v1/kun/limit` (the calling key's own limits, usage and reset times)
 - `GET /api/hello` (unauthenticated identity probe)
 
 All public routes except `/api/hello` require a gateway key. Use an
@@ -64,17 +65,29 @@ only what every member guarantees: the intersection of reasoning levels and
 modalities and the smallest window and output limit; it lists no native
 endpoints because any member may need translation.
 
-The production runtime writes `~/.kun/gateway.json` with its base URLs and the
-`/api/hello` address. The file contains no credential, and a client confirms
-the endpoint with `/api/hello` before use, so a stale file is harmless.
+The production runtime writes `~/.kun/gateway.json` (mode 0600) with its base
+URLs, process id, instance id and the `/api/hello` address. The file contains
+no credential; `/api/hello` reports the same instance id, so a client can
+confirm the file names the live process. A switch on the Gateway page turns the
+file off. When two Kun instances run, the first keeps the file and the second
+leaves it alone; once the first quits, the second republishes it within a few
+seconds. A file left by a crashed process is replaced, since liveness needs
+both the process and its hello endpoint to answer.
 
 A client may prefix its key with `kun-<app>.` (for example
 `kun-claude-code.kun_local_…`). The prefix only names the app for usage
 attribution; the remainder is the credential that is verified. Without it,
 an `x-kun-agent` header or the first User-Agent product names the agent.
 
-Send a session id (`x-kun-gateway-session-id`, Codex's `session_id` or Claude
-Code's `x-claude-code-session-id`) and `GET /v1/kun/route?session=<id>` reports
+Usage and route traces are grouped by the agent's own session when it sends
+one: `x-kun-gateway-session-id`, Codex's `session-id` header (older builds
+`session_id`) or `client_metadata.session_id`, Claude Code's
+`x-claude-code-session-id` (also inside `metadata.user_id`), Kimi Code's
+`prompt_cache_key: session_<id>`, and OpenCode's `promptCacheKey: ses_<id>`,
+which OpenCode sends because Kun's provider entry sets `setCacheKey`. Droid
+and Gemini CLI send no session id, so their usage groups by key only.
+
+Send a session id and `GET /v1/kun/route?session=<id>` reports
 the asked model, the rule that decided the turn, every member tried with its
 failure reason, and the served model, before the first token. `after` and
 `wait` long-poll for the next change. Sessions are hashed with the caller's
@@ -108,7 +121,9 @@ unchanged.
 ### Agents page and `kun agents`
 
 Settings → Local API → Agents lists Claude Code, Codex, OpenCode, Pi, Gemini
-CLI, Crush and Droid when installed. Connect writes only the keys Kun owns in
+CLI, Crush, Droid, Goose, Continue, Aider, Kimi Code and Zed when installed.
+Connecting first shows the change to each file as a diff with the key masked
+(`kun agents connect … --dry-run` prints the same). Connect writes only the keys Kun owns in
 the agent's own config (comments, order and formatting elsewhere stay as
 they were), issues the agent its own attributed gateway key, and keeps a
 `.kun-backup` copy beside each file while connected. Switching models widens
@@ -118,6 +133,21 @@ key and removes the backup. Profiles save every connected agent's model and
 reasoning under a name and switch them together; "Sync model lists" rewrites
 agents that keep their own list. The same operations are available as
 `kun agents connect|disconnect|sync|save|use`.
+
+A file Kun cannot parse, or one using a shape it will not rewrite (YAML
+anchors, several YAML documents, a non-object root), is reported by name and
+left untouched; the page explains these in the app language. Claude Code
+ignores a `settings.json` with comments or trailing commas, so the page flags
+such a file even before connecting, and Kun refuses to connect until it is
+plain JSON. Gemini CLI reads Kun's settings only in folders the user trusted.
+
+Zed keeps provider keys in the system keychain, which Kun does not write. Kun
+adds itself to Zed's `settings.json` as an OpenAI-compatible provider named
+Kun and sets it as the agent's default model; the key goes to the clipboard
+once (from the main process, never to the page or a file), to be pasted in
+Zed's agent settings, or set as `KUN_API_KEY`. Switching models keeps that
+key. "Copy a new key" or `kun agents key zed` rotates it, since Kun keeps no
+copy.
 
 The file guards detect ordinary conflicts and existing links, but are not a
 sandbox against a malicious same-user process racing directory replacement.
@@ -152,7 +182,8 @@ groups gain a `pace` strategy. Conversation affinity is persisted in
 Gateway middleware (model mapping, a system prompt scoped by agent or model,
 `<think>` tag handling, and user scripts exporting `onModel`, `onSystemPrompt`
 or `onText`) runs in order on every protocol. Admission checks the model a
-mapping serves. Scripts load only from the runtime's `gateway-middleware`
+mapping serves. The Gateway page shows the script folder, opens it, and can
+write a commented `example-middleware.js`. Scripts load only from the runtime's `gateway-middleware`
 folder, run in a `node:vm` context without string code generation, are
 limited to 250 ms per call (50 ms per text delta), and fail open; `node:vm` is
 not a security boundary, so scripts are trusted user code like hooks.
@@ -209,6 +240,22 @@ Optional token budgets use Manager-persisted per-attempt reservations. Hard
 mode requires a declared account input ceiling plus bounded maximum output.
 Sent requests without usage retain a pending reservation across restart.
 
+A key reads its own window, usage, remaining allowance and reset times from
+`GET /v1/kun/limit` (`kun gateway keys limit <client-id>`; the Gateway page
+shows the same per key). Refusals say when to retry: a rate-limited key gets
+`retry-after`, `retry-after-ms` (both honored by the OpenAI and Anthropic
+SDKs) and `x-kun-limit-reset` from its token bucket, a busy concurrency slot
+suggests one second, and a budget or cost refusal names the end of its window
+in the headers and the message. Upstream failures pass on the provider's own
+retry time. A streaming request refused by its budget gets a plain 429 rather
+than a stream that ends in an error: local refusals happen before any upstream
+call, so the gateway waits up to 1.5 s for the first chunk before committing.
+
+The Gateway page's Recent routes list the last 100 requests from every caller
+(asked model, served model, why, each fallback and its failure). Finished
+entries survive a restart; `kun gateway routes` prints them and
+`kun gateway route <alias>` shows which members an alias would try now.
+
 Client/session correlation is an attribution aid, not authorization to an
 existing Kun conversation. External callers cannot use a session header to
 claim another thread's identity. Request metadata must not include raw keys,
@@ -236,6 +283,13 @@ code reuse must retain the source license notices and independently review
 provider access terms.
 
 ## Offline client validation
+
+Two gates use real client binaries. The agent wiring smoke
+(`npm run smoke:agent-wiring`) uses the agents installed on the machine and
+checks the Agents page path: native config takeover, text and tool turns
+through the gateway, routing, middleware, session attribution and exact
+restore. The pinned conformance workflow below checks protocol behavior
+against fixed versions.
 
 The conformance workflow pins Codex CLI 0.160.0, Claude Code 2.1.220 from the
 locked Claude Agent SDK 0.3.220, OpenCode 1.1.47 and Pi 0.73.1. Reports include the checked-out commit, dirty
