@@ -14,7 +14,7 @@ export function RoomUserAvatarEditor({ onClose, variant = 'modal' }: { onClose: 
   const detail = useAgentResource<RoomUserProfileDetail>('/v1/rooms/user-profile')
   const body = detail.data ? <UserAvatarForm initial={detail.data} onClose={onClose} onBusy={setBusy} /> : <p role={detail.error ? 'alert' : undefined}>{detail.error || t('roomsLoading')}</p>
   return variant === 'panel' ? <div className="min-h-0 flex-1 overflow-y-auto p-4">{body}</div>
-    : <RoomModal title={t('roomsMyAvatar')} onClose={onClose} busy={busy}>{body}</RoomModal>
+    : <RoomModal title={t('roomsMyAvatar')} size="wide" onClose={onClose} busy={busy}>{body}</RoomModal>
 }
 function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfileDetail; onClose: () => void; onBusy: (busy: boolean) => void }) {
   const { t } = useTranslation('common')

@@ -1,38 +1,140 @@
-.rooms-avatar-composer { display: grid; gap: 12px; min-width: 0; color: var(--ds-text); }
+/* Avatar dress-up studio: the look on a lit stage, a wardrobe beside it. */
+.rooms-avatar-composer { --studio-gold: #f2b53a; --studio-checker: repeating-conic-gradient(#d9dee6 0 25%, #f4f6f9 0 50%) 0 0 / 16px 16px;
+  container-type: inline-size; display: grid; gap: 14px; min-width: 0; color: var(--ds-text); }
 .rooms-avatar-picker-field > button { min-height: 44px; }
-.rooms-avatar-composer button, .rooms-avatar-composer select, .rooms-avatar-draft-actions button { min-height: 44px; }
-.rooms-avatar-composer button:focus-visible, .rooms-avatar-composer select:focus-visible, .rooms-avatar-composer input:focus-visible,
+.rooms-avatar-composer button:focus-visible, .rooms-avatar-composer input:focus-visible,
 .rooms-avatar-draft-actions button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
 .rooms-avatar-composer button:disabled { opacity: .55; cursor: wait; }
-.rooms-avatar-composer-preview { display: flex; justify-content: center; align-items: center; gap: 24px; }
-.rooms-avatar-composer-preview > button, .rooms-avatar-composer-actions > button, .rooms-avatar-draft-actions > button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px;
-  border: 1px solid var(--ds-border); border-radius: 10px; font-size: 13px; color: var(--ds-text);
-}
-.rooms-avatar-composer-preview img { width: 128px; height: 128px; object-fit: cover; border-radius: 12px; }
-.rooms-avatar-composer-category { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
-.rooms-avatar-composer-category select { min-width: 160px; max-width: 70%; padding: 8px 12px; border: 1px solid var(--ds-border); border-radius: 9px; background: var(--ds-surface-card); color: var(--ds-text); }
-.rooms-avatar-composer-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 8px; max-height: 270px; overflow: auto; padding: 3px; overscroll-behavior: contain; }
-.rooms-avatar-composer-option { display: flex; position: relative; flex-direction: column; align-items: center; justify-content: start; gap: 5px; min-width: 0; padding: 7px 3px; border: 2px solid transparent; border-radius: 12px; background: var(--ds-surface-subtle); }
-.rooms-avatar-composer .rooms-avatar-composer-option { min-height: 108px; height: auto; }
-.rooms-avatar-composer-option > span:last-of-type { font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
-.rooms-avatar-composer-option > svg { position: absolute; top: 4px; right: 4px; padding: 1px; color: var(--ds-control-foreground); background: var(--ds-accent); border-radius: 50%; }
-.rooms-avatar-composer-options button[aria-pressed='true'] { border-color: var(--ds-accent); }
-.rooms-avatar-composer-options button:hover, .rooms-avatar-composer-actions > button:hover { box-shadow: inset 0 0 0 1px var(--ds-border); }
-.rooms-avatar-composer-swatch { display: grid; place-items: center; min-height: 52px !important; border: 2px solid var(--ds-border); border-radius: 10px; color: #111; }
-.rooms-avatar-composer-swatch > svg { padding: 2px; background: #fff; border-radius: 50%; }
-.rooms-avatar-composer-transparent { border: 2px solid var(--ds-border); border-radius: 10px; padding: 7px; font-size: 12px; background-color: var(--ds-surface-subtle); }
-.rooms-avatar-composer-custom-color { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; align-items: center; font-size: 13px; }
-.rooms-avatar-composer-custom-color input { width: 76px; height: 44px; padding: 3px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-surface-card); }
-.rooms-avatar-composer-notice { margin: 0; min-height: 1em; font-size: 12px; color: var(--ds-text-muted); }
+.rooms-avatar-studio { display: grid; gap: 16px; min-width: 0; }
+
+/* Stage */
+.rooms-avatar-stage { --mirror: 176px; position: relative; display: grid; justify-items: center; align-content: start; gap: 12px;
+  min-width: 0; padding: 18px 16px 14px; border: 1px solid var(--ds-border); border-radius: 20px; overflow: hidden;
+  background: radial-gradient(70% 46% at 50% 0%, color-mix(in srgb, var(--ds-accent) 22%, transparent), transparent 72%),
+    linear-gradient(180deg, var(--ds-surface-subtle), var(--ds-surface-card)); }
+.rooms-avatar-stage-spot { position: relative; display: grid; justify-items: center; padding: 6px 14px 0; }
+.rooms-avatar-stage-mirror { position: relative; z-index: 1; display: grid; place-items: center; width: var(--mirror); height: var(--mirror);
+  overflow: hidden; border-radius: 30px; background: var(--ds-surface-card);
+  box-shadow: 0 0 0 6px var(--ds-surface-card), 0 0 0 7px var(--ds-border), 0 22px 40px -22px #0007; }
+.rooms-avatar-stage-mirror[data-transparent] { background: var(--studio-checker); }
+.rooms-avatar-stage-mirror > :is(img, .rooms-avatar, .rooms-avatar-preview, canvas) { width: 100%; height: 100%; }
+.rooms-avatar-stage-mirror > img { object-fit: cover; }
+.rooms-avatar-stage-mirror > .rooms-avatar { border: 0; border-radius: 0; --rooms-avatar-size: var(--mirror); }
+.rooms-avatar-stage-mirror .rooms-avatar-preview > canvas { width: 100%; height: 100%; }
+.rooms-avatar-stage-mirror::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(135deg, #fff5 0%, transparent 34%); }
+.rooms-avatar-stage-loading { width: 100%; height: 100%; background: var(--ds-surface-subtle); }
+.rooms-avatar-stage-floor { width: calc(var(--mirror) * .82); height: 16px; margin-top: 8px; border-radius: 50%;
+  background: radial-gradient(closest-side, #0003, transparent); }
+.rooms-avatar-stage-badge { position: absolute; top: 10px; left: 10px; z-index: 2; padding: 3px 9px; border-radius: 999px;
+  color: #fff; background: color-mix(in srgb, var(--ds-accent) 88%, black); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.rooms-avatar-stage-sparkle { position: absolute; z-index: 2; color: var(--studio-gold); fill: currentColor; opacity: .75;
+  animation: rooms-avatar-twinkle 2.8s ease-in-out infinite; }
+.rooms-avatar-stage-sparkle[data-sparkle='1'] { top: -2px; left: 0; }
+.rooms-avatar-stage-sparkle[data-sparkle='2'] { top: 26px; right: 0; animation-delay: .9s; }
+.rooms-avatar-stage-sparkle[data-sparkle='3'] { bottom: 40px; left: 2px; animation-delay: 1.7s; }
+.rooms-avatar-stage-spot[data-popped][data-pop='0'] .rooms-avatar-stage-mirror { animation: rooms-avatar-pop-a .42s ease-out; }
+.rooms-avatar-stage-spot[data-popped][data-pop='1'] .rooms-avatar-stage-mirror { animation: rooms-avatar-pop-b .42s ease-out; }
+.rooms-avatar-stage-spot[data-popped][data-pop='0'] .rooms-avatar-stage-sparkle { animation: rooms-avatar-burst-a .6s ease-out; }
+.rooms-avatar-stage-spot[data-popped][data-pop='1'] .rooms-avatar-stage-sparkle { animation: rooms-avatar-burst-b .6s ease-out; }
+@keyframes rooms-avatar-twinkle { 50% { opacity: .25; transform: scale(.8) rotate(12deg); } }
+@keyframes rooms-avatar-pop-a { 40% { transform: scale(1.05); } 70% { transform: scale(.985); } }
+@keyframes rooms-avatar-pop-b { 40% { transform: scale(1.05); } 70% { transform: scale(.985); } }
+@keyframes rooms-avatar-burst-a { from { opacity: 0; transform: scale(.3); } 60% { opacity: 1; transform: scale(1.35) rotate(20deg); } }
+@keyframes rooms-avatar-burst-b { from { opacity: 0; transform: scale(.3); } 60% { opacity: 1; transform: scale(1.35) rotate(20deg); } }
+.rooms-avatar-stage-name { display: flex; align-items: center; justify-content: center; gap: 10px; max-width: 100%; }
+.rooms-avatar-stage-name > strong { overflow: hidden; font-size: 15px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-avatar-stage-name > span { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 2px 8px 2px 2px;
+  border: 1px solid var(--ds-border); border-radius: 999px; color: var(--ds-text-muted); background: var(--ds-surface-card); font-size: 11px; }
+.rooms-avatar-stage-slots { display: grid; grid-template-columns: repeat(4, minmax(0, 52px)); justify-content: center; gap: 10px; }
+.rooms-avatar-slot { position: relative; display: grid; justify-items: center; gap: 4px; min-width: 0; }
+.rooms-avatar-slot > small { max-width: 100%; overflow: hidden; color: var(--ds-text-muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-avatar-slot-open { display: grid; place-items: center; width: 50px; height: 50px; border: 1.5px dashed var(--ds-border);
+  border-radius: 14px; color: var(--ds-text-faint); background: var(--ds-surface-card); transition: transform .15s ease, border-color .15s ease; }
+.rooms-avatar-slot[data-filled] .rooms-avatar-slot-open { border-style: solid; border-color: color-mix(in srgb, var(--ds-accent) 45%, var(--ds-border));
+  background: radial-gradient(circle at 50% 35%, var(--ds-surface-card), var(--ds-accent-soft)); }
+.rooms-avatar-slot-open:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--ds-accent); }
+.rooms-avatar-slot-remove { position: absolute; top: -6px; right: -4px; display: grid; place-items: center; width: 18px; height: 18px;
+  border: 1.5px solid var(--ds-surface-card); border-radius: 50%; color: #fff; background: var(--ds-text-muted); }
+.rooms-avatar-slot-remove:hover:not(:disabled) { background: var(--ds-danger, #d14343); }
+.rooms-avatar-stage-random { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 7px 16px;
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 35%, transparent); border-radius: 999px;
+  color: color-mix(in srgb, var(--ds-accent) 82%, var(--ds-text)); background: var(--ds-accent-soft); font-size: 13px; font-weight: 600; }
+.rooms-avatar-stage-random:hover:not(:disabled) > svg { transform: rotate(-24deg) scale(1.1); }
+.rooms-avatar-stage-random > svg { transition: transform .2s ease; }
+.rooms-avatar-composer-notice { margin: 0; padding: 6px 10px; border-radius: 10px; color: var(--ds-text); background: var(--ds-warning-soft);
+  font-size: 12px; line-height: 1.45; text-align: center; }
+.rooms-avatar-composer-notice:empty { display: none; }
+.rooms-avatar-crop-controls { display: grid; gap: 8px; width: 100%; font-size: 12px; }
+.rooms-avatar-crop-controls > label { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 10px; }
+
+/* Wardrobe */
+.rooms-avatar-wardrobe { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 10px; min-width: 0; }
+/* Every category stays visible: tabs wrap to a second row rather than scroll out of sight. */
+.rooms-avatar-wardrobe-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(54px, 1fr)); gap: 4px; padding: 4px;
+  border-radius: 14px; background: var(--ds-surface-subtle); }
+.rooms-avatar-wardrobe-tabs > button { position: relative; display: grid; justify-items: center; gap: 3px; min-width: 0;
+  padding: 7px 6px 6px; border-radius: 10px; color: var(--ds-text-muted); font-size: 11.5px; white-space: nowrap;
+  transition: color .15s ease, background .15s ease; }
+.rooms-avatar-wardrobe-tabs > button:hover { color: var(--ds-text); }
+.rooms-avatar-wardrobe-tabs > button > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.rooms-avatar-wardrobe-tabs > button[aria-selected='true'] { color: var(--ds-accent); background: var(--ds-surface-card); font-weight: 600;
+  box-shadow: 0 1px 3px #0000001f; }
+.rooms-avatar-wardrobe-tabs > button[data-worn]::after { content: ''; position: absolute; top: 6px; right: calc(50% - 15px); width: 6px; height: 6px;
+  border-radius: 50%; background: var(--studio-gold); box-shadow: 0 0 0 1.5px var(--ds-surface-card); }
+.rooms-avatar-wardrobe-hint { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0; padding: 0 2px; font-size: 12px; }
+.rooms-avatar-wardrobe-hint > strong { font-size: 14px; font-weight: 650; }
+.rooms-avatar-wardrobe-hint > span:nth-of-type(1) { padding: 1px 7px; border-radius: 999px; color: var(--ds-text-muted); background: var(--ds-surface-subtle); font-size: 11px; }
+.rooms-avatar-wardrobe-hint > span:last-child { color: var(--ds-text-muted); }
+.rooms-avatar-composer-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); grid-auto-rows: max-content;
+  align-content: start; gap: 10px; max-height: 300px; overflow: auto; padding: 4px 4px 8px; overscroll-behavior: contain; }
+.rooms-avatar-composer-option { position: relative; display: grid; justify-items: center; align-content: start; gap: 6px; min-width: 0;
+  padding: 8px 4px 9px; border: 1.5px solid transparent; border-radius: 16px; background: var(--ds-surface-subtle);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease, background .15s ease; }
+.rooms-avatar-composer-option:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--ds-border); background: var(--ds-surface-card);
+  box-shadow: 0 8px 18px -12px #0006; }
+.rooms-avatar-composer-option[aria-pressed='true'] { border-color: var(--ds-accent); background: var(--ds-accent-soft); }
+.rooms-avatar-option-art { display: grid; place-items: center; width: 64px; height: 64px; overflow: hidden; border-radius: 13px;
+  color: var(--ds-text-faint); background: radial-gradient(circle at 50% 40%, var(--ds-surface-card) 0 45%, transparent 75%); }
+.rooms-avatar-option-art > .rooms-avatar { border-radius: 14px; }
+.rooms-avatar-option-art:has(> [data-mannequin]) { width: 88px; height: 56px; margin: 4px 0; border-radius: 12px; }
+.rooms-avatar-item-art[data-mannequin] { border-radius: inherit; }
+.rooms-avatar-option-name { display: -webkit-box; max-width: 100%; overflow: hidden; font-size: 11.5px; line-height: 1.3; text-align: center;
+  overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.rooms-avatar-option-check { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 18px; height: 18px;
+  border-radius: 50%; color: #fff; background: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-surface-card); }
+.rooms-avatar-item-art { position: relative; display: block; overflow: hidden; }
+.rooms-avatar-item-art > img { position: absolute; max-width: none; pointer-events: none; user-select: none; }
+.rooms-avatar-item-art[data-loading] { border-radius: 10px; background: var(--ds-surface-hover); }
+.rooms-avatar-composer-options[data-category='bg'] { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); }
+.rooms-avatar-composer-swatch { display: grid; place-items: center; width: 48px; height: 48px; justify-self: center; border: 2px solid var(--ds-border);
+  border-radius: 50%; color: #1d2530; transition: transform .15s ease; }
+.rooms-avatar-composer-swatch:hover:not(:disabled) { transform: scale(1.08); }
+.rooms-avatar-composer-swatch[aria-pressed='true'] { box-shadow: 0 0 0 3px var(--ds-surface-card), 0 0 0 5px var(--ds-accent); }
+.rooms-avatar-composer-swatch > svg { padding: 2px; border-radius: 50%; background: #fffd; }
+.rooms-avatar-composer-transparent { grid-column: span 2; min-height: 48px; padding: 6px 12px; border: 2px solid var(--ds-border); border-radius: 999px;
+  color: #1d2530; background: var(--studio-checker); font-size: 12px; font-weight: 600; }
+.rooms-avatar-composer-transparent[aria-pressed='true'] { box-shadow: 0 0 0 3px var(--ds-surface-card), 0 0 0 5px var(--ds-accent); }
+.rooms-avatar-composer-custom-color { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 8px 10px; border-radius: 12px; background: var(--ds-surface-subtle); font-size: 13px; }
+.rooms-avatar-composer-custom-color input { width: 64px; height: 36px; padding: 3px; border: 1px solid var(--ds-border); border-radius: 9px; background: var(--ds-surface-card); }
+
+/* Footer and drafts */
 .rooms-avatar-composer-actions, .rooms-avatar-draft-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.rooms-avatar-composer-actions > button, .rooms-avatar-draft-actions > button { display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 40px; padding: 8px 14px; border: 1px solid var(--ds-border); border-radius: 10px; color: var(--ds-text); font-size: 13px; }
+.rooms-avatar-composer-actions > button:hover:not(:disabled) { background: var(--ds-surface-hover); }
 .rooms-avatar-draft { display: grid; gap: 12px; min-width: 0; }
 .rooms-avatar-draft > small { color: var(--ds-text-muted); }
-.rooms-avatar-draft-actions { padding-top: 8px; }
-.rooms-avatar-draft-actions > .rooms-run-primary { color: var(--ds-control-foreground); background: var(--ds-accent); }
+.rooms-avatar-draft-actions { padding-top: 6px; border-top: 1px solid var(--ds-border); }
+.rooms-avatar-draft-actions > .rooms-run-primary { min-width: 96px; border-color: var(--ds-accent); color: var(--ds-control-foreground); background: var(--ds-accent); }
 .rooms-user-avatar-form .rooms-avatar-editor-actions > button { min-height: 44px; }
-@media (max-width: 480px) {
-  .rooms-avatar-composer-options { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); max-height: 240px; gap: 6px; }
-  .rooms-avatar-composer-preview { gap: 16px; }
-  .rooms-avatar-composer-actions > button { flex: 1; padding-inline: 8px; }
+
+@container (min-width: 640px) {
+  .rooms-avatar-studio { grid-template-columns: 264px minmax(0, 1fr); align-items: stretch; }
+  .rooms-avatar-stage { --mirror: 196px; align-content: center; }
+  .rooms-avatar-composer-options { max-height: 372px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rooms-avatar-composer *, .rooms-avatar-composer *::after { animation: none !important; transition: none !important; }
 }

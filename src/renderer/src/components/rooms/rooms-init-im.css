@@ -50,6 +50,7 @@
 .rooms-im-sidebar .rooms-unified-search { flex: 1; min-height: 0; overflow: auto; }
 .rooms-init-dialog { color: var(--ds-text); background: var(--ds-surface-card); border: 1px solid var(--ds-border); border-radius: 16px; padding: 20px; width: min(540px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; margin: auto; box-shadow: 0 18px 70px #0003; font-size: 13px; }
 .rooms-init-dialog::backdrop { background: #0005; }
+.rooms-init-dialog[data-size='wide'] { width: min(880px, calc(100vw - 32px)); }
 .rooms-init-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .rooms-init-dialog h2 { font-size: 17px; font-weight: 600; }
 .rooms-init-dialog > p { color: var(--ds-text-muted); line-height: 1.6; margin-bottom: 14px; }

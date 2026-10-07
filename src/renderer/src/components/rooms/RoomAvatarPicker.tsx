@@ -82,8 +82,8 @@ export function RoomAvatarPicker({ id, label, avatar, fallback, onChange }: {
   const close = () => { setOpen(false); setBusy(false) }
   return <div className="rooms-avatar-picker-field">
     {avatar ? <RoomAvatar avatar={avatar} id={id} label={label} size={48} /> : fallback ?? <RoomAvatar id={id} label={label} size={48} />}
-    <button type="button" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>{t('roomsAvatarChoose')}</button>
-    {open ? <RoomModal title={t('roomsAvatarChoose')} onClose={close} busy={busy}>
+    <button type="button" aria-label={t('roomsAvatarChoose')} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>{t('roomsAvatarChoose')}</button>
+    {open ? <RoomModal title={t('roomsAvatarStudioTitle', { name: label })} size="wide" onClose={close} busy={busy}>
       <AvatarPickerDraft id={id} label={label} initial={avatar} fallback={fallback} onChange={onChange} onClose={close} onBusy={setBusy} />
     </RoomModal> : null}
   </div>

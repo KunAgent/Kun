@@ -9,7 +9,9 @@ import './rooms-runs.css'
 import './rooms-init-im.css'
 import './rooms-direct.css'
 
-export function RoomModal({ title, onClose, children, busy = false }: { title: string; onClose: () => void; children: ReactNode; busy?: boolean }) {
+export function RoomModal({ title, onClose, children, busy = false, size }: {
+  title: string; onClose: () => void; children: ReactNode; busy?: boolean; size?: 'wide'
+}) {
   const { t } = useTranslation('common')
   const ref = useRef<HTMLDialogElement>(null), close = useRef(onClose); close.current = onClose
   useEffect(() => {
@@ -18,7 +20,7 @@ export function RoomModal({ title, onClose, children, busy = false }: { title: s
     dialog?.showModal()
     return () => { dialog?.close(); if (focused?.isConnected) focused.focus() }
   }, [])
-  return createPortal(<dialog ref={ref} className="rooms-init-dialog" aria-label={title}
+  return createPortal(<dialog ref={ref} className="rooms-init-dialog" data-size={size} aria-label={title}
     onCancel={(event) => {
       event.preventDefault()
       // A disabled control can lose focus during a save. Escape must still

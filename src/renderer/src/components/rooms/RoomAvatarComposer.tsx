@@ -1,12 +1,14 @@
-import { useState, type ReactNode } from 'react'
-import { Shuffle, Upload, RotateCcw, Check } from 'lucide-react'
+import { useId, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Ban, Check, PaintBucket, Palette, RotateCcw, Smile, Sparkles, Upload, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   KUN_AVATAR_CATALOG, KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS,
   canonicalKunAvatarKey, normalizeKunAvatarParts, randomKunAvatarParts, updateKunAvatarPart,
-  type KunAvatarCategory, type KunAvatarParts, type RoomAvatarReference
+  type KunAvatarAccessoryCategory, type KunAvatarCategory, type KunAvatarParts, type RoomAvatarReference
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
+import { RoomAvatarItemArt } from './RoomAvatarItemArt'
+import { AVATAR_SLOTS, RoomAvatarStage } from './RoomAvatarStage'
 import { avatarForIdentity } from './room-avatar-catalog'
 import './room-avatar-composer.css'
 
@@ -16,8 +18,13 @@ const categories = {
   prop: 'roomsAvatarProp', bg: 'roomsAvatarBackground'
 } as const
 type EditorCategory = keyof typeof categories
-const backgroundColors = ['#f7f5ef', '#eef6ff', '#eaf6ef', '#fbf0f3', '#1d2530']
-const accessoryCategories = new Set<EditorCategory>(['headwear', 'glasses', 'outfit', 'prop'])
+const tabs: ReadonlyArray<{ id: EditorCategory; icon: LucideIcon }> = [
+  { id: 'preset', icon: Sparkles }, ...AVATAR_SLOTS.map((slot) => ({ id: slot.id, icon: slot.icon })),
+  { id: 'color', icon: Palette }, { id: 'face', icon: Smile }, { id: 'bg', icon: PaintBucket }
+]
+const backgroundColors = ['#f7f5ef', '#eef6ff', '#eaf6ef', '#fbf0f3', '#fff4d6', '#1d2530']
+const isAccessory = (category: EditorCategory): category is KunAvatarAccessoryCategory =>
+  AVATAR_SLOTS.some((slot) => slot.id === category)
 
 function composed(parts: KunAvatarParts): RoomAvatarReference {
   return { kind: 'composed', version: 1, parts }
@@ -30,6 +37,10 @@ export function editableKunAvatarParts(avatar: RoomAvatarReference | null | unde
   return normalizeKunAvatarParts(KUN_AVATAR_PRESETS.find((preset) => preset.id === presetId)?.parts ?? KUN_AVATAR_DEFAULT_PARTS)
 }
 
+/**
+ * A dress-up studio: the look on stage, a wardrobe beside it. Hovering an item
+ * tries it on; clicking wears it, and clicking a worn item takes it off.
+ */
 export function RoomAvatarComposer({ id, label, avatar, user = false, disabled = false, photo = false,
   preview, previewControls, onChange, onUpload }: {
   id: string; label: string; avatar?: RoomAvatarReference | null; user?: boolean; disabled?: boolean
@@ -37,64 +48,114 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
   onChange: (avatar: RoomAvatarReference | null) => void; onUpload: () => void
 }) {
   const { t, i18n } = useTranslation('common')
+  const base = useId()
   const [category, setCategory] = useState<EditorCategory>('preset')
   const [notice, setNotice] = useState('')
+  const [trying, setTrying] = useState<KunAvatarParts | null>(null)
   const parts = editableKunAvatarParts(avatar, id, user)
   const language = i18n.language.startsWith('zh') ? 'zh' : 'en'
   const active = !photo && avatar?.kind !== 'uploaded'
-  const choose = (next: RoomAvatarReference | null) => { setNotice(''); onChange(next) }
+  const choose = (next: RoomAvatarReference | null) => { setTrying(null); setNotice(''); onChange(next) }
   const edit = (slot: KunAvatarCategory, value: string | undefined) => {
     const result = updateKunAvatarPart(parts, slot, value)
+    setTrying(null)
     onChange(composed(result.parts))
     setNotice(result.removed.length ? t('roomsAvatarConflictsRemoved', {
       parts: result.removed.map((removed) => t(categories[removed])).join(', ')
     }) : '')
   }
-  const choice = (key: string, text: string, next: KunAvatarParts, selected: boolean, onClick: () => void) => (
+  const tryOn = (next: KunAvatarParts | null) => { if (!disabled) setTrying(next) }
+  const card = (key: string, text: string, selected: boolean, art: ReactNode, onClick: () => void, look?: KunAvatarParts) => (
     <button key={key} type="button" className="rooms-avatar-composer-option" disabled={disabled}
-      aria-label={text} aria-pressed={selected} onClick={onClick}>
-      <RoomAvatar avatar={composed(next)} id={`avatar-option-${key}`} label={text} size={64} user />
-      <span>{text}</span>{selected ? <Check size={14} aria-hidden="true" /> : null}
+      aria-label={text} aria-pressed={selected} onClick={onClick}
+      onPointerEnter={look ? () => tryOn(look) : undefined} onPointerLeave={look ? () => tryOn(null) : undefined}>
+      <span className="rooms-avatar-option-art">{art}</span>
+      <span className="rooms-avatar-option-name">{text}</span>
+      {selected ? <span className="rooms-avatar-option-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span> : null}
     </button>
   )
+  const look = (next: KunAvatarParts, size = 60) =>
+    <RoomAvatar avatar={composed(next)} id={`avatar-option-${canonicalKunAvatarKey(next)}`} label="" size={size} user />
+  const selectTab = (next: EditorCategory) => { setCategory(next); setTrying(null) }
+  const moveTab = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+    if (!step) return
+    event.preventDefault()
+    const index = (tabs.findIndex((tab) => tab.id === category) + step + tabs.length) % tabs.length
+    selectTab(tabs[index]!.id)
+    event.currentTarget.querySelector<HTMLElement>(`[data-avatar-tab="${tabs[index]!.id}"]`)?.focus()
+  }
+  const items = () => {
+    if (category === 'preset') {
+      return KUN_AVATAR_PRESETS.map((preset) => card(preset.id, preset.label[language],
+        active && (avatar?.kind === 'builtin' ? avatar.id === preset.id : avatar?.kind === 'composed' &&
+          canonicalKunAvatarKey(parts) === canonicalKunAvatarKey(preset.parts)),
+        look(preset.parts), () => choose(composed({ ...preset.parts })), preset.parts))
+    }
+    if (category === 'color' || category === 'face') {
+      return KUN_AVATAR_CATALOG[category].map((part) => {
+        const next = updateKunAvatarPart(parts, category, part.id).parts
+        return card(part.id, part.label[language], active && parts[category] === part.id,
+          category === 'face' ? look(next, 48) : look(next), () => edit(category, part.id), next)
+      })
+    }
+    if (category === 'bg') {
+      return <>
+        {backgroundColors.map((color) => <button key={color} type="button" disabled={disabled}
+          className="rooms-avatar-composer-swatch" aria-label={t('roomsAvatarBackgroundColor', { color })}
+          aria-pressed={active && parts.bg === color} style={{ background: color }} onClick={() => edit('bg', color)}
+          onPointerEnter={() => tryOn(updateKunAvatarPart(parts, 'bg', color).parts)} onPointerLeave={() => tryOn(null)}>
+          {active && parts.bg === color ? <Check size={16} strokeWidth={3} aria-hidden="true" /> : null}
+        </button>)}
+        <button type="button" disabled={disabled} className="rooms-avatar-composer-transparent"
+          aria-pressed={active && parts.bg === 'transparent'} onClick={() => edit('bg', 'transparent')}>{t('roomsAvatarTransparent')}</button>
+        <label className="rooms-avatar-composer-custom-color">{t('roomsAvatarCustomBackground')}
+          <input type="color" disabled={disabled} value={parts.bg === 'transparent' ? '#f7f5ef' : parts.bg}
+            onChange={(event) => edit('bg', event.target.value)} />
+        </label>
+      </>
+    }
+    const slot = category
+    return <>
+      {card('none', t('roomsAvatarNone'), active && !parts[slot], <Ban size={22} aria-hidden="true" />,
+        () => edit(slot, undefined), updateKunAvatarPart(parts, slot, undefined).parts)}
+      {KUN_AVATAR_CATALOG[slot].map((part) => {
+        const worn = active && parts[slot] === part.id
+        // Clicking what is already worn takes it off, like any wardrobe.
+        const art = slot === 'outfit' ? <RoomAvatarItemArt category={slot} id={part.id} size={88} height={56} mannequin={parts.color} />
+          : <RoomAvatarItemArt category={slot} id={part.id} size={54} />
+        return card(part.id, part.label[language], worn, art,
+          () => edit(slot, worn ? undefined : part.id), updateKunAvatarPart(parts, slot, part.id).parts)
+      })}
+    </>
+  }
+  const panel = `${base}-panel`
+  const count = isAccessory(category) || category === 'color' || category === 'face' ? KUN_AVATAR_CATALOG[category].length
+    : category === 'preset' ? KUN_AVATAR_PRESETS.length : 0
   return <div className="rooms-avatar-composer">
-    <div className="rooms-avatar-composer-preview">
-      {preview ?? <RoomAvatar id={id} user={user} avatar={avatar} label={label} size={128} />}
-      <button type="button" disabled={disabled} onClick={() => choose(composed(randomKunAvatarParts()))}>
-        <Shuffle size={16} aria-hidden="true" />{t('roomsAvatarRandom')}
-      </button>
-    </div>
-    {previewControls}
-    <label className="rooms-avatar-composer-category">{t('roomsAvatarCustomize')}
-      <select aria-label={t('roomsAvatarCustomize')} value={category} disabled={disabled}
-        onChange={(event) => setCategory(event.target.value as EditorCategory)}>
-        {Object.entries(categories).map(([key, translation]) => <option key={key} value={key}>{t(translation)}</option>)}
-      </select>
-    </label>
-    <div className="rooms-avatar-composer-options" role="group" aria-label={t(categories[category])}>
-      {category === 'preset' ? KUN_AVATAR_PRESETS.map((preset) => choice(preset.id, preset.label[language], preset.parts,
-        !!active && (avatar?.kind === 'builtin' ? avatar.id === preset.id : avatar?.kind === 'composed' &&
-          canonicalKunAvatarKey(parts) === canonicalKunAvatarKey(preset.parts)), () => choose(composed({ ...preset.parts }))))
-        : category === 'bg' ? <>
-          {backgroundColors.map((color) => <button key={color} type="button" disabled={disabled}
-            className="rooms-avatar-composer-swatch" aria-label={t('roomsAvatarBackgroundColor', { color })}
-            aria-pressed={!!active && parts.bg === color} style={{ background: color }} onClick={() => edit('bg', color)}>
-            {active && parts.bg === color ? <Check size={18} aria-hidden="true" /> : null}
+    <div className="rooms-avatar-studio">
+      <RoomAvatarStage id={id} label={label} user={user} avatar={avatar} parts={parts} trying={trying} active={active}
+        preview={preview} previewControls={previewControls} notice={notice} disabled={disabled} language={language}
+        onSlot={selectTab} onRemove={(slot) => edit(slot, undefined)} onRandom={() => choose(composed(randomKunAvatarParts()))} />
+      <section className="rooms-avatar-wardrobe" aria-label={t('roomsAvatarWardrobe')}>
+        <div className="rooms-avatar-wardrobe-tabs" role="tablist" aria-label={t('roomsAvatarCustomize')} onKeyDown={moveTab}>
+          {tabs.map((tab) => <button key={tab.id} type="button" role="tab" id={`${base}-tab-${tab.id}`} data-avatar-tab={tab.id}
+            aria-selected={category === tab.id} aria-controls={panel} tabIndex={category === tab.id ? 0 : -1}
+            data-worn={isAccessory(tab.id) && active && parts[tab.id] ? true : undefined} onClick={() => selectTab(tab.id)}>
+            <tab.icon size={18} aria-hidden="true" /><span>{t(categories[tab.id])}</span>
           </button>)}
-          <button type="button" disabled={disabled} className="rooms-avatar-composer-transparent"
-            aria-pressed={!!active && parts.bg === 'transparent'} onClick={() => edit('bg', 'transparent')}>{t('roomsAvatarTransparent')}</button>
-          <label className="rooms-avatar-composer-custom-color">{t('roomsAvatarCustomBackground')}
-            <input type="color" disabled={disabled} value={parts.bg === 'transparent' ? '#f7f5ef' : parts.bg}
-              onChange={(event) => edit('bg', event.target.value)} />
-          </label>
-        </> : <>
-          {accessoryCategories.has(category) ? choice('none', t('roomsAvatarNone'), updateKunAvatarPart(parts, category, undefined).parts,
-            !!active && !parts[category], () => edit(category, undefined)) : null}
-          {KUN_AVATAR_CATALOG[category].map((part) => choice(part.id, part.label[language], updateKunAvatarPart(parts, category, part.id).parts,
-            !!active && parts[category] === part.id, () => edit(category, part.id)))}
-        </>}
+        </div>
+        <p className="rooms-avatar-wardrobe-hint">
+          <strong>{t(categories[category])}</strong>
+          {count ? <span>{t('roomsAvatarItemCount', { count })}</span> : null}
+          <span>{t(category === 'bg' ? 'roomsAvatarBackdropHint' : 'roomsAvatarWardrobeHint')}</span>
+        </p>
+        <div className="rooms-avatar-composer-options" role="tabpanel" id={panel} data-category={category}
+          aria-labelledby={`${base}-tab-${category}`} onPointerLeave={() => tryOn(null)}>
+          {items()}
+        </div>
+      </section>
     </div>
-    <p className="rooms-avatar-composer-notice" role="status" aria-live="polite">{notice}</p>
     <div className="rooms-avatar-composer-actions">
       <button type="button" disabled={disabled} onClick={onUpload}><Upload size={16} aria-hidden="true" />{t('roomsAvatarUpload')}</button>
       <button type="button" disabled={disabled} onClick={() => choose(null)}><RotateCcw size={16} aria-hidden="true" />{t(user ? 'roomsAvatarRestoreKun' : 'roomsAvatarReset')}</button>

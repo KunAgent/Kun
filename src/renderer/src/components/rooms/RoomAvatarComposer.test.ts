@@ -26,7 +26,7 @@ let renderer: ReactTestRenderer
 const button = (label: string) => renderer.root.findAllByType('button').find((node) =>
   node.props['aria-label'] === label || node.children.includes(label))!
 const preview = () => renderer.root.findByType(RoomAvatarComposer).props.avatar as RoomAvatarReference | null | undefined
-const changeCategory = (category: string) => act(() => renderer.root.findByType('select').props.onChange({ target: { value: category } }))
+const changeCategory = (category: string) => act(() => renderer.root.findByProps({ 'data-avatar-tab': category }).props.onClick())
 const click = (label: string) => act(() => button(label).props.onClick())
 async function mount(node: ReactElement) { await act(async () => { renderer = create(node) }) }
 
@@ -210,5 +210,55 @@ describe('avatar photo drafts', () => {
     expect(renderer.root.findAllByType('canvas')).toHaveLength(0)
     expect(preview()?.kind).toBe('composed')
     expect(mocks.request).not.toHaveBeenCalled()
+  })
+})
+
+describe('dress-up studio interactions', () => {
+  const wearing = (initial: Partial<typeof KUN_AVATAR_DEFAULT_PARTS> & Record<string, string>) =>
+    mount(createElement(ComposerHarness, { initial: { kind: 'composed', version: 1, parts: { ...KUN_AVATAR_DEFAULT_PARTS, ...initial } } }))
+  const parts = () => (preview() as { parts: Record<string, string> }).parts
+
+  it('wears an item on click and takes it off on a second click', async () => {
+    await wearing({})
+    changeCategory('headwear')
+    click('Wizard hat')
+    expect(parts().headwear).toBe('wizard-hat')
+    expect(button('Wizard hat').props['aria-pressed']).toBe(true)
+    click('Wizard hat')
+    expect(parts()).not.toHaveProperty('headwear')
+  })
+
+  it('tries an item on while hovered without changing the draft', async () => {
+    await wearing({ outfit: 'red-scarf' })
+    changeCategory('glasses')
+    act(() => button('Round gold glasses').props.onPointerEnter())
+    expect(renderer.root.findAllByProps({ className: 'rooms-avatar-stage-badge' })).toHaveLength(1)
+    expect(parts()).not.toHaveProperty('glasses')
+    act(() => button('Round gold glasses').props.onPointerLeave())
+    expect(renderer.root.findAllByProps({ className: 'rooms-avatar-stage-badge' })).toHaveLength(0)
+  })
+
+  it('shows worn items in slots that open their tab or take the item off', async () => {
+    await wearing({ headwear: 'beret', prop: 'quill' })
+    const slots = renderer.root.findAllByProps({ className: 'rooms-avatar-slot-open' })
+    expect(slots).toHaveLength(4)
+    expect(renderer.root.findAllByProps({ className: 'rooms-avatar-slot-remove' })).toHaveLength(2)
+    act(() => slots[3]!.props.onClick())
+    expect(renderer.root.findByProps({ 'data-avatar-tab': 'prop' }).props['aria-selected']).toBe(true)
+    act(() => renderer.root.findAllByProps({ className: 'rooms-avatar-slot-remove' })[0]!.props.onClick())
+    expect(parts()).not.toHaveProperty('headwear')
+    expect(parts().prop).toBe('quill')
+  })
+
+  it('moves between wardrobe tabs with the arrow keys', async () => {
+    await wearing({})
+    const tablist = renderer.root.findByProps({ role: 'tablist' }), focus = vi.fn()
+    const key = (name: string) => ({ key: name, preventDefault: vi.fn(), currentTarget: { querySelector: () => ({ focus }) } })
+    act(() => tablist.props.onKeyDown(key('ArrowRight')))
+    expect(focus).toHaveBeenCalledOnce()
+    expect(renderer.root.findByProps({ 'data-avatar-tab': 'headwear' }).props['aria-selected']).toBe(true)
+    act(() => tablist.props.onKeyDown(key('ArrowLeft')))
+    act(() => tablist.props.onKeyDown(key('ArrowLeft')))
+    expect(renderer.root.findByProps({ 'data-avatar-tab': 'bg' }).props['aria-selected']).toBe(true)
   })
 })

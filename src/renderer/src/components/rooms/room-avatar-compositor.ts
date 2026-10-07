@@ -72,6 +72,12 @@ async function composeQueued(request: AvatarRenderRequest, isNeeded: () => boole
   }
 }
 
+/** One bundled layer by manifest key; the wardrobe shows accessories on their own. */
+export function composedAvatarLayerUrl(key: string, tier: 128 | 256 | 512): string | undefined {
+  const path = manifest.assets[key]?.webp[String(tier)]
+  return path ? assetUrls[`${assetPrefix}${path}`] : undefined
+}
+
 export async function composeAvatar(request: AvatarRenderRequest): Promise<AvatarCompositionResource> {
   const tier = composedAvatarSourceTier(request)
   const urls = composedAvatarLayers(request.parts).map((key) => {

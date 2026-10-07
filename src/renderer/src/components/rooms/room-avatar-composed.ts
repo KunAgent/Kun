@@ -14,16 +14,17 @@ function subscribePixelRatio(notify: () => void): () => void {
   if (!stopWatchingRatio) {
     let media: MediaQueryList | undefined
     const watch = () => {
-      media?.removeEventListener('change', changed)
+      media?.removeEventListener?.('change', changed)
       media = window.matchMedia?.(`(resolution: ${devicePixelRatio()}dppx)`)
-      media?.addEventListener('change', changed)
+      // Older engines and test doubles expose a MediaQueryList without listeners.
+      media?.addEventListener?.('change', changed)
     }
     const changed = () => { watch(); ratioListeners.forEach((listener) => listener()) }
     watch()
-    window.addEventListener('resize', changed)
+    window.addEventListener?.('resize', changed)
     stopWatchingRatio = () => {
-      media?.removeEventListener('change', changed)
-      window.removeEventListener('resize', changed)
+      media?.removeEventListener?.('change', changed)
+      window.removeEventListener?.('resize', changed)
     }
   }
   return () => {

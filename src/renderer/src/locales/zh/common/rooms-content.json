@@ -25,8 +25,8 @@
   "roomsAvatarUpload": "上传图片",
   "roomsAvatarReset": "使用默认头像",
   "roomsAvatarUploadFailed": "请选择小于 2 MB 的 PNG、JPEG 或 WebP 图片后重试。",
-  "roomsAvatarPresets": "角色预设",
-  "roomsAvatarBodyColor": "身体颜色",
+  "roomsAvatarPresets": "套装",
+  "roomsAvatarBodyColor": "羽色",
   "roomsAvatarExpression": "表情",
   "roomsAvatarHeadwear": "头饰",
   "roomsAvatarGlasses": "眼镜",
@@ -39,5 +39,16 @@
   "roomsAvatarTransparent": "透明",
   "roomsAvatarCustomBackground": "自定义背景",
   "roomsAvatarBackgroundColor": "背景 {{color}}",
-  "roomsAvatarConflictsRemoved": "已移除不兼容的配件：{{parts}}。"
+  "roomsAvatarConflictsRemoved": "已移除不兼容的配件：{{parts}}。",
+  "roomsAvatarStudioTitle": "给 {{name}} 换装",
+  "roomsAvatarWardrobe": "衣橱",
+  "roomsAvatarWardrobeHint": "移到衣物上试穿，点一下穿上，再点一下脱下。",
+  "roomsAvatarBackdropHint": "选一个背景色，或者用透明背景。",
+  "roomsAvatarItemCount": "{{count}} 件",
+  "roomsAvatarTryingOn": "试穿中",
+  "roomsAvatarInChat": "聊天里",
+  "roomsAvatarEquipped": "当前装扮",
+  "roomsAvatarSlotEmpty": "{{slot}}：未穿戴",
+  "roomsAvatarSlotFilled": "{{slot}}：{{item}}",
+  "roomsAvatarTakeOff": "脱下{{item}}"
 }
