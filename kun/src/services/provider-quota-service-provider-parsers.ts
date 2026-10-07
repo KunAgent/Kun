@@ -220,6 +220,8 @@ export function parseKimiCodeQuota(payload: unknown): ProviderQuotaMetric[] {
       ? '5-hour rate limit'
       : `Rate limit ${index + 1}`
     const metric = kimiUsageMetric(`rate-limit-${index}`, label, limit?.detail)
+    const scale = unit.includes('minute') ? 60 : unit.includes('hour') ? 3_600 : unit.includes('day') ? 86_400 : undefined
+    if (metric && scale && duration && Number.isInteger(duration) && duration > 0) metric.windowSeconds = duration * scale
     if (metric) metrics.push(metric)
   })
 

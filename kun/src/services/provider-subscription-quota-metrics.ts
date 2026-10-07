@@ -55,7 +55,8 @@ export function codexWindowMetric(
     label: scopeLabel ? `${scopeLabel} - ${windowLabel}` : windowLabel,
     unit: 'percent',
     usedPercent: clampPercentage(usedPercent),
-    ...(resetsAt ? { resetsAt } : {})
+    ...(resetsAt ? { resetsAt } : {}),
+    ...(seconds !== undefined && Number.isInteger(seconds) && seconds > 0 ? { windowSeconds: seconds } : {})
   }
 }
 
@@ -75,7 +76,8 @@ export function percentageWindowMetric(
   id: string,
   label: string,
   value: unknown,
-  percentKey: string
+  percentKey: string,
+  windowSeconds?: number
 ): ProviderQuotaMetric | null {
   const window = optionalRecord(value)
   const usedPercent = numberValue(window?.[percentKey])
@@ -86,7 +88,8 @@ export function percentageWindowMetric(
     label,
     unit: 'percent',
     usedPercent: clampPercentage(usedPercent),
-    ...(resetsAt ? { resetsAt } : {})
+    ...(resetsAt ? { resetsAt } : {}),
+    ...(windowSeconds ? { windowSeconds } : {})
   }
 }
 

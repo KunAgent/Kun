@@ -59,7 +59,7 @@ export function parseMiniMaxModelMetrics(item: unknown, index: number): Provider
       status: item.current_weekly_status ?? item.weekly_status,
       endTime: item.weekly_end_time
     })
-    if (weekly) metrics.push(weekly)
+    if (weekly) metrics.push({ ...weekly, windowSeconds: 7 * 86_400 })
   }
   return metrics
 }

@@ -1,21 +1,21 @@
-import { app, ipcMain, Notification } from 'electron'
+import { app, Notification } from 'electron'
 import { join } from 'node:path'
 import type { SystemNotificationResult } from '../shared/kun-gui-notification-contracts'
+import type { ProviderQuotaListResult } from '../shared/provider-quota'
 import { notificationIconOptions } from './app-icon'
-import { assertTrustedWorkbenchSender } from './ipc/app-ipc-handler-utils'
 import { appEnvironment, appIcon, mainState } from './main-app-context'
 import { revealMainWindow } from './main-tray'
 import { displayNotification } from './notification-display'
 import { NotificationReceipts } from './notification-receipts'
 import { parseQuotaReminderPayload, quotaRemindersDisabled, type QuotaReminderPayload } from './quota-reminder-payload'
+import { startProviderQuotaReminders } from './services/provider-quota-reminder-service'
 
 /**
- * Provider allowance reminders. The renderer computes them from the quota
- * list and supplies localized text; Main checks the user's preference, shows
- * each window's reminder once (receipts survive restarts) and, on click,
- * brings the window forward with the quota view.
+ * Provider allowance reminders. Main computes them from quota lists (see
+ * provider-quota-reminder-service), checks the user's preference, shows each
+ * window's reminder once (receipts survive restarts) and, on click, brings
+ * the window forward with the provider settings.
  */
-export const QUOTA_REMINDER_CHANNEL = 'notification:quota-reminder'
 export const QUOTA_REMINDER_CLICKED_CHANNEL = 'notification:quota-reminder:clicked'
 
 export type QuotaReminderResult = SystemNotificationResult | { ok: true; shown: false; reason: string }
@@ -41,13 +41,11 @@ export async function showQuotaReminderNotification(payload: QuotaReminderPayloa
   })
 }
 
-export function registerQuotaReminderIpc(): void {
-  ipcMain.handle(QUOTA_REMINDER_CHANNEL, async (event, input: unknown): Promise<QuotaReminderResult> => {
-    assertTrustedWorkbenchSender(event, () => mainState.mainWindow)
-    try {
-      return await showQuotaReminderNotification(parseQuotaReminderPayload(input))
-    } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : String(error) }
-    }
+/** Starts reminders over the runtime's quota list; call once the IPC layer is ready. */
+export function startQuotaReminderNotifications(list: () => Promise<ProviderQuotaListResult>): void {
+  startProviderQuotaReminders({
+    list,
+    show: (payload) => showQuotaReminderNotification(parseQuotaReminderPayload(payload)),
+    settings: () => mainState.store.load()
   })
 }

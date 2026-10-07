@@ -646,9 +646,7 @@ export type KunGuiApi = GoogleWorkspaceSurface & ExtensionIpcApi & RemoteSshApi 
   showTurnCompleteNotification: (
     payload: TurnCompleteNotificationPayload
   ) => Promise<SystemNotificationResult>
-  /** Localized allowance reminder; Main applies the preference and shows each dedupeKey once. */
-  showQuotaReminderNotification: (payload: { title: string; body: string; dedupeKey: string }) =>
-    Promise<SystemNotificationResult | { ok: true; shown: false; reason: string }>
+  /** Main shows allowance reminders itself; a click asks the renderer to open provider settings. */
   onQuotaReminderClicked: (handler: () => void) => () => void
   setAppBadgeCount: (count: number) => Promise<AppBadgeCountResult>
   getAppVersion: () => Promise<string>

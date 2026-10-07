@@ -1,4 +1,5 @@
-import { registerQuotaReminderIpc } from './quota-reminder-notification'
+import { startQuotaReminderNotifications } from './quota-reminder-notification'
+import { requestRuntimeProviderQuotas } from './runtime-provider-quota'
 import {
   app,
   ipcMain,
@@ -403,7 +404,8 @@ export function registerMainIpc(services: MainServices): void {
       nativeDialogs: nativeDialogCoordinator,
       workspacePreviewProtocols
     })
-    registerQuotaReminderIpc()
+    startQuotaReminderNotifications(async () => requestRuntimeProviderQuotas(async (path, method) =>
+      runtimeRequest(await mainState.store.load(), path, { method: method ?? 'GET' })))
     registerAdeCollaborationSettingsIpc({
       getMainWindow: () => mainState.mainWindow,
       service: createAdeCollaborationSettingsService({

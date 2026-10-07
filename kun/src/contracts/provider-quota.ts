@@ -15,7 +15,9 @@ export const ProviderQuotaMetricSchema = z.object({
   limit: z.number().finite().optional(),
   remaining: z.number().finite().optional(),
   usedPercent: z.number().finite().min(0).max(100).optional(),
-  resetsAt: z.string().datetime().optional()
+  resetsAt: z.string().datetime().optional(),
+  /** Length of the renewing window, when the provider states it. */
+  windowSeconds: z.number().int().positive().max(400 * 86_400).optional()
 }).strict()
 
 export const ProviderLocalCostCoverageSchema = z.enum([

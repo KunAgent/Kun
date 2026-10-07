@@ -326,15 +326,16 @@ export async function probeOpenCodeGoLocalQuota(
 export function parseClaudeSubscriptionQuota(payload: unknown): ProviderQuotaMetric[] {
   const root = requireRecord(payload, 'Claude returned an invalid usage response.')
   const metrics: ProviderQuotaMetric[] = []
-  const windows: Array<[string, string, unknown]> = [
-    ['five-hour', '5-hour usage', root.five_hour],
-    ['seven-day', '7-day usage', root.seven_day],
-    ['seven-day-sonnet', '7-day Sonnet usage', root.seven_day_sonnet],
-    ['seven-day-opus', '7-day Opus usage', root.seven_day_opus],
-    ['seven-day-oauth-apps', '7-day OAuth apps usage', root.seven_day_oauth_apps]
+  const hours = 3_600, week = 7 * 24 * hours
+  const windows: Array<[string, string, unknown, number]> = [
+    ['five-hour', '5-hour usage', root.five_hour, 5 * hours],
+    ['seven-day', '7-day usage', root.seven_day, week],
+    ['seven-day-sonnet', '7-day Sonnet usage', root.seven_day_sonnet, week],
+    ['seven-day-opus', '7-day Opus usage', root.seven_day_opus, week],
+    ['seven-day-oauth-apps', '7-day OAuth apps usage', root.seven_day_oauth_apps, week]
   ]
-  for (const [id, label, value] of windows) {
-    const metric = percentageWindowMetric(id, label, value, 'utilization')
+  for (const [id, label, value, seconds] of windows) {
+    const metric = percentageWindowMetric(id, label, value, 'utilization', seconds)
     if (metric) metrics.push(metric)
   }
   const limits = Array.isArray(root.limits) ? root.limits : []

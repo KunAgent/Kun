@@ -67,6 +67,7 @@ import type { ModelProviderProfileV1 } from '../../shared/app-settings'
 import {
   requestRuntimeProviderQuotas
 } from '../runtime-provider-quota'
+import { observeProviderQuotasForReminders } from '../services/provider-quota-reminder-service'
 import {
   fetchModelsDevCatalog
 } from '../models-dev-catalog'
@@ -180,7 +181,10 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
     const request = parseIpcPayload('provider:quota:list', quotaListPayloadSchema, payload)
-    return requestRuntimeProviderQuotas(runtimeRequest, request?.forceRefresh === true)
+    const result = await requestRuntimeProviderQuotas(runtimeRequest, request?.forceRefresh === true)
+    // The same list drives allowance reminders, so they never need a request of their own here.
+    observeProviderQuotasForReminders(result)
+    return result
   })
 
   ipcMain.handle('provider:models-dev-catalog', async (_, payload: unknown) => {
