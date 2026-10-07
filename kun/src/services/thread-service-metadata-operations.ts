@@ -196,9 +196,7 @@ async create(this: ThreadService,
       ? this['projectSourceRoot']?.(request.taskWorkspaceId) ?? request.workspace
       : request.workspace
     const shouldResolve = !options.executionUnit && !options.roomContext &&
-      (request.agentSurface ?? 'code') === 'code' &&
-      (request.workspaceMode === 'ade' || request.collaboration !== undefined ||
-        request.workspaceIsolation !== undefined || wantsProject)
+      (request.agentSurface ?? 'code') === 'code'
     const projectKey = shouldResolve
       ? await canonicalProjectIdentity(sourceRoot).then((identity) => identity.key).catch(() => undefined)
       : undefined
@@ -310,6 +308,8 @@ async update(this: ThreadService, threadId: string, patch: {
     costBudgetUsd?: number | null
     costBudgetWarningSent?: boolean
     relation?: ThreadRelation
+    /** Host-only provenance update; omitted from the public thread-update schema. */
+    workbenchOrigin?: ThreadRecord['workbenchOrigin']
   }): Promise<ThreadRecord> {
     const updated = await this['withThreadMutation'](threadId, async () => {
       const current = await this['threadStore'].get(threadId)
@@ -346,13 +346,6 @@ async update(this: ThreadService, threadId: string, patch: {
         || standardPatch.harnessId !== undefined || standardPatch.collaboration !== undefined) {
         if (current.status === 'running') {
           throw new Error('workspace, knowledge bases, harness, and collaboration cannot be changed while the thread is running')
-        }
-      }
-      if (standardPatch.collaboration?.enabled) {
-        const effectiveHarness = standardPatch.harnessId ?? current.turns.at(-1)?.harnessId ??
-          current.harnessId ?? 'kun'
-        if (current.workspaceMode !== 'ade' && effectiveHarness !== 'kun') {
-          throw new Error('Kun coordination requires an explicit Kun main Agent handoff')
         }
       }
       if (standardPatch.collaboration && current.pendingExecutionConfig) {

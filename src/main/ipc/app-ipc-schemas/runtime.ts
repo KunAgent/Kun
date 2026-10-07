@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { KUN_AGENT_DISPATCH_INTENTS_TEMPLATE, KUN_AGENT_DISPATCH_INTENT_TEMPLATE, KUN_AGENT_DISPATCH_ACTION_TEMPLATE } from '../../../shared/kun-endpoints'
 import { ROOM_ENDPOINTS, ROOM_TASK_ACTIONS } from '../../../shared/rooms-api'
 import {
   KUN_ATTACHMENT_CONTENT_TEMPLATE,
@@ -237,6 +238,9 @@ function compileEndpoint(
 }
 
 const ENDPOINTS: readonly EndpointTemplate[] = [
+  compileEndpoint(KUN_AGENT_DISPATCH_INTENTS_TEMPLATE, ['GET']),
+  compileEndpoint(KUN_AGENT_DISPATCH_INTENT_TEMPLATE, ['GET']),
+  compileEndpoint(KUN_AGENT_DISPATCH_ACTION_TEMPLATE, ['POST']),
   compileEndpoint('/v1/threads/{threadId}/handoff-preview', ['GET']),
   compileEndpoint('/v1/agents/{agentId}/commitments', ['GET', 'POST']),
   compileEndpoint('/v1/agents/{agentId}/commitments/{commitmentId}', ['GET', 'PATCH']),

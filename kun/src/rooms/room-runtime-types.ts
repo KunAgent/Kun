@@ -24,6 +24,10 @@ export type RoomRequestState = {
     kind: import('./room-continuation-dispatch.js').RoomContinuation['kind']
     goalCreatedAt?: string
     inboxId?: string
+    /** Exact accepted parent route and authority; a task return cannot select a new engine. */
+    route?: Pick<import('../contracts/turns.js').Turn, 'model' | 'providerId' | 'accountId' | 'harnessId' |
+      'credentialMode' | 'gatewayBinding' | 'reasoningEffort' | 'serviceTier' | 'harnessAgentId'>
+    policy?: import('../contracts/policy.js').KunToolPermissionSettings
   }
   /** Provenance of the durable reminder that woke this private request. */
   privateReminder?: import('../contracts/room-reminders.js').RoomPrivateReminder

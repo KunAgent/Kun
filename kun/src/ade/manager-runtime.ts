@@ -1,47 +1,30 @@
+import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
+import { ManagerWorkerCreator } from './manager-worker-create.js'
+import { ManagerWorkerDispatch } from './manager-worker-dispatch.js'
 import { workerWorkspaceSecurity } from './worker-security.js'
 import { newManagerWorkRefusal } from './new-work-admission.js'
-import { z } from 'zod'
 import type {
   DispatchRecord,
-  TeamRecord,
   TurnRunOutcome,
   WorkerRecord
 } from '../contracts/ade.js'
-import type { HarnessDefinition, HarnessRoute, HarnessId } from '../contracts/harness.js'
-import type { TaskWorkspaceRecord, StartFrom } from '../contracts/task-workspace.js'
-import type { ThreadRecord } from '../contracts/threads.js'
-import type { Turn } from '../contracts/turns.js'
+import type { HarnessRoute } from '../contracts/harness.js'
+import type { TaskWorkspaceRecord } from '../contracts/task-workspace.js'
 import type { TurnItem, UserTurnItem, AssistantTextTurnItem } from '../contracts/items.js'
 import type { RuntimeEvent } from '../contracts/events.js'
 import type { ActivityRow } from '../contracts/activity.js'
-import { waitForTaskWorkspaceSettlement } from '../workspace-tasks/task-workspace-settlement.js'
 import type { DeliverOutcome } from './dispatch-deliverer.js'
-import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { ManagerControls } from './manager-controls.js'
-import { budgetHardRefusal } from './team-budget.js'
 import { TeamControls } from './team-controls.js'
 import { QualityVerdicts } from './quality-verdict.js'
 import { ReviewRequests } from './review-request.js'
 import { WorkspaceIntegrations } from './workspace-integrate.js'
 import { hasOpenWorkerWork } from './worker-open-work.js'
-import { countRecentWorkerFailures } from './worker-selector.js'
-import {
-  resolveManagerWorkerRoute,
-  type ResolvedWorkerRoute
-} from './worker-route.js'
-import { checkHarnessAdmission, type AdmissionResult } from '../harness/harness-admission.js'
-import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
-import {
-  authorityFromTurn,
-  clampPermission,
-  type PermissionClamp
-} from './permission-clamp.js'
-import { DEFAULT_APPROVAL_POLICY } from '../contracts/policy.js'
-import { requestUserOnlyEscalation } from './escalation-approval.js'
+import type { AdmissionResult } from '../harness/harness-admission.js'
 import { childSecurity } from '../adapters/tool/delegation-tool-context.js'
 import { guiCreateWorker } from './manager-gui-worker.js'
 import { buildManagerToolContext, type ManagerToolContextInput } from './manager-tool-context.js'
-import { reportWorkerCreated, reportWorkerCreateBatch, reportLanguage } from './user-report.js'
+import { reportWorkerCreateBatch, reportLanguage } from './user-report.js'
 import { ManagerWorkerLifecycle } from './manager-worker-lifecycle.js'
 import { refreshWorkerReviewActivity } from './worker-review-activity.js'
 
@@ -60,14 +43,14 @@ export {
 export type { WorkerCreateBatchInput, WorkerCreateInput } from './manager-worker-inputs.js'
 import {
   WorkerCreateBatchInputSchema,
-  WorkerCreateInputSchema,
   WorkerReadInputSchema,
-  WorkerStatusInputSchema,
-  type WorkerCreateInput
+  WorkerStatusInputSchema
 } from './manager-worker-inputs.js'
 
 export type WorkerCreateResult = {
   ok: boolean
+  dispatchIntentId?: string
+  dispatchIntent?: import('../contracts/agent-dispatch-intents.js').AgentDispatchIntentPublic
   workerId?: string
   dispatchId?: string
   /** Bound task workspace (07) — renderer shows it as the workspace badge. */
@@ -93,6 +76,8 @@ type RaceServiceDepsWithIds =
  */
 export class ManagerRuntime {
   private readonly lifecycle: ManagerWorkerLifecycle
+  private readonly workerCreator: ManagerWorkerCreator
+  private readonly workerDispatch: ManagerWorkerDispatch
   /** Control operations (09 §4.1/§9) — worker/dispatch tools + team routes. */
   readonly controls: ManagerControls
   readonly teamControls: TeamControls
@@ -104,6 +89,8 @@ export class ManagerRuntime {
 
   constructor(private readonly deps: ManagerRuntimeDeps) {
     this.controls = new ManagerControls(deps)
+    this.workerCreator = new ManagerWorkerCreator(deps, this.controls)
+    this.workerDispatch = new ManagerWorkerDispatch(deps, this)
     this.teamControls = new TeamControls(deps, this.controls)
     this.verdicts = new QualityVerdicts(deps)
     this.reviews = new ReviewRequests(deps)
@@ -140,33 +127,6 @@ export class ManagerRuntime {
     return reportLanguage(this.deps.language?.())
   }
 
-  private activeWorkers(team: TeamRecord): WorkerRecord[] {
-    return team.workers.filter((worker) => worker.state === 'active')
-  }
-
-  private resolveRoute(
-    ctx: ManagerToolContext,
-    input: WorkerCreateInput,
-    isolated: boolean
-  ): Promise<ResolvedWorkerRoute | { error: string }> {
-    return resolveManagerWorkerRoute(
-      this.deps, ctx, input, isolated,
-      (teamId, harnessId) => this.recentFailures(teamId, harnessId)
-    )
-  }
-
-  /**
-   * Same-team same-harness dispatch failures within the last hour (10 §3.2
-   * `recentFailurePenalty`). Feeds `worker_selector` via `selector` deps.
-   */
-  private async recentFailures(teamId: string, harnessId: HarnessId): Promise<number> {
-    return countRecentWorkerFailures(
-      { teams: this.deps.teams, dispatches: this.deps.dispatches },
-      teamId,
-      harnessId
-    )
-  }
-
   /**
    * The worker's immutable security ceiling (09 §7.1): the manager turn's
    * snapshot, narrowed to the task workspace as the only write root.
@@ -179,264 +139,17 @@ export class ManagerRuntime {
   }
 
   async createWorker(
-    ctx: ManagerToolContext,
-    rawInput: unknown,
-    /** The calling turn's security view (tool context), for the worker ceiling. */
-    toolContext: Parameters<typeof childSecurity>[0]
+    ctx: ManagerToolContext, rawInput: unknown, toolContext: Parameters<typeof childSecurity>[0]
   ): Promise<WorkerCreateResult> {
-    const language = this.reportLanguage()
-    const input = WorkerCreateInputSchema.parse(rawInput)
-    const refused = await this.newWorkRefusal(ctx.threadId, ctx.turnId)
-    if (refused) return refused
-    if (!this.deps.delegation) {
-      return {
-        ok: false,
-        refusal: 'admission',
-        userReport: language === 'zh'
-          ? '未创建 worker：子代理运行时未启用。'
-          : 'Worker not created: the delegation runtime is not enabled.'
-      }
-    }
-    const managerThread = await this.deps.threads.get(ctx.threadId)
-    const execution = managerThread?.pendingExecutionConfig ?? managerThread?.executionConfig
-    const effectiveLimits = execution?.limits ?? this.deps.teamLimits?.()
-    const effectiveBudget = execution ? execution.budget : this.deps.teamBudgetPolicy?.()
-    let team = await this.deps.teams.ensure(
-      ctx.threadId,
-      effectiveLimits,
-      effectiveBudget
-    )
-    if (execution && effectiveLimits) {
-      team = await this.deps.teams.updatePolicy(ctx.threadId, effectiveLimits, effectiveBudget) ?? team
-    }
-    const active = this.activeWorkers(team)
-    if (active.length >= team.limits.hardWorkers) {
-      return {
-        ok: false,
-        refusal: 'worker_limit',
-        userReport: language === 'zh'
-          ? `已达到 worker 数量上限（${team.limits.hardWorkers}），未创建。`
-          : `Worker limit reached (${team.limits.hardWorkers}); nothing was created.`
-      }
-    }
-    const budgetCheck = this.deps.teamBudget?.check(team)
-    const budgetRefusal = budgetHardRefusal(budgetCheck, language)
-    if (budgetRefusal) return budgetRefusal
-    this.controls.notifyBudgetCheck(team, budgetCheck)
-    const reuseId = input.workspace?.reuseTaskWorkspaceId
-    const reused = reuseId ? this.deps.taskWorkspaces?.get(reuseId) : undefined
-    if (reuseId && (!reused || !['ready', 'captured', 'conflict'].includes(reused.state))) {
-      return {
-        ok: false,
-        refusal: 'workspace_unavailable',
-        userReport: language === 'zh'
-          ? `任务工作区 ${reuseId} 不可复用，未创建 worker。`
-          : `Task workspace ${reuseId} is not reusable; worker not created.`
-      }
-    }
-    // P4-11: an explicitly pinned harness's `defaults.isolation` applies
-    // when the caller left isolation unspecified (a selector-picked harness
-    // is not known early enough to feed its own default into selection).
-    const isolation = reused?.isolation ?? input.workspace?.isolation ??
-      (input.agent?.harnessId
-        ? this.deps.harnessDefaults?.(input.agent.harnessId as HarnessId)?.isolation
-        : undefined) ??
-      'worktree'
-    const resolved = await this.resolveRoute(ctx, input, isolation === 'worktree')
-    if ('error' in resolved) {
-      return { ok: false, refusal: 'invalid_agent', userReport: resolved.error }
-    }
-    const { route, profileId, selection } = resolved
-    const definition = this.deps.catalog.get(route.harnessId)
-    if (!definition) {
-      return { ok: false, refusal: 'invalid_agent', userReport: `unknown harness ${route.harnessId}` }
-    }
-    if (isolation === 'worktree' && !this.deps.taskWorkspaces) {
-      // Admission would report `isolated` for a run that would actually write
-      // into the manager's own workspace — refuse instead (09 §7.1).
-      return {
-        ok: false,
-        refusal: 'admission',
-        userReport: language === 'zh'
-          ? '未创建 worker：任务工作区服务不可用，无法提供 worktree 隔离。'
-          : 'Worker not created: task workspaces are unavailable, so worktree isolation cannot be provided.'
-      }
-    }
-    const permission = clampPermission(
-      definition,
-      input.permissionMode ?? this.deps.harnessDefaults?.(route.harnessId)?.permissionMode,
-      ctx.authority
-    )
-    const effective = await this.deps.capabilitiesForRoute(route)
-    const status = await this.deps.detector.status(route.harnessId)
-    const admission = checkHarnessAdmission({
-      usage: 'manager-worker',
-      credentialMode: route.credentialMode,
-      harness: definition,
-      effective,
-      status,
-      workspace: { isolated: isolation === 'worktree' },
-      requestedPermissionMode: permission.effective,
-      unattended: !ctx.authority.interactive,
-      allowUnattendedFullAccess: this.deps.allowUnattendedFullAccess?.() === true
-    })
-    if (!admission.ok) {
-      return {
-        ok: false,
-        refusal: 'admission',
-        admission,
-        route,
-        permissionMode: {
-          ...(permission.requestedMode ? { requested: permission.requestedMode.id } : {}),
-          effective: permission.effective,
-          downgraded: permission.downgraded
-        },
-        userReport: language === 'zh'
-          ? `未创建 worker：${admission.message}`
-          : `Worker not created: ${admission.message}`
-      }
-    }
-    let effectivePermissionMode = permission.effective
-    if (permission.needsUserConfirmation && permission.requestedMode) {
-      const confirmed = await requestUserOnlyEscalation(
-        {
-          threadId: ctx.threadId,
-          turnId: ctx.turnId,
-          nextId: (prefix) => this.deps.ids.next(prefix),
-          awaitApproval: ctx.awaitApproval
-        },
-        {
-          workerLabel: input.label,
-          harnessName: definition.displayName,
-          workspacePath: ctx.workspace,
-          mode: permission.requestedMode
-        }
-      )
-      if (!confirmed) {
-        return {
-          ok: false,
-          refusal: 'escalation_declined',
-          route,
-          userReport: language === 'zh'
-            ? `用户未确认 worker「${input.label}」的权限升级，未创建。`
-            : `Permission escalation for worker "${input.label}" was not confirmed; nothing was created.`
-        }
-      }
-      // User confirmed: the worker runs at the requested mode (09 §7.2).
-      effectivePermissionMode = permission.requestedMode.id
-    }
-    const workerId = this.deps.ids.next('child')
-    if (reused && reused.unitId !== workerId) {
-      // The workspace now belongs to the new worker (11 §4.4 'new-worker').
-      this.deps.taskWorkspaces?.bindUnit(reused.workspaceId, workerId)
-    }
-    let tws = reused ?? (this.deps.taskWorkspaces
-      ? await this.deps.taskWorkspaces.create({
-          ownerThreadId: ctx.threadId,
-          unitId: workerId,
-          label: input.label,
-          sourceRoot: ctx.workspace,
-          isolation,
-          startFrom: (input.workspace?.startFrom ?? { kind: 'default-branch' }) as StartFrom
-        }, ctx.signal)
-      : null)
-    if (tws && !reused) {
-      // `create` returns a provisional record: `path` still names the source
-      // root until the async checkout finishes. The snapshot must name the
-      // real task workspace — it is both the worker's only write root
-      // (09 §7.1) and its thread workspace (delegation-runtime-run).
-      tws = (await waitForTaskWorkspaceSettlement(
-        this.deps.taskWorkspaces!, tws.workspaceId, ctx.signal)) ?? tws
-      if (!['ready', 'captured', 'conflict'].includes(tws.state)) {
-        // The promised isolation could not be materialized — refuse rather
-        // than scope the worker to the manager's own workspace.
-        return {
-          ok: false,
-          refusal: 'workspace_unavailable',
-          userReport: language === 'zh'
-            ? `任务工作区创建失败（${tws.lastError ?? tws.state}），未创建 worker。`
-            : `Task workspace could not be created (${tws.lastError ?? tws.state}); worker not created.`
-        }
-      }
-    }
-    const security = this.workerSecurity(childSecurity(toolContext), tws?.path ?? ctx.workspace)
-    const worker: WorkerRecord = {
-      workerId,
-      label: input.label,
-      ...(input.role ? { role: input.role } : {}),
-      route,
-      ...(profileId ? { profileId } : {}),
-      ...(selection ? { selection } : {}),
-      permissionMode: effectivePermissionMode,
-      lifecycle: input.lifecycle ?? 'persistent',
-      ...(tws ? { taskWorkspaceId: tws.workspaceId } : {}),
-      securitySnapshot: security,
-      control: 'manager',
-      state: 'active',
-      createdAt: this.deps.nowIso()
-    }
-    await this.deps.teams.upsertWorker(team.teamId, worker)
-    this.deps.activity?.register({
-      unitId: workerId,
-      kind: 'worker',
-      threadId: workerId,
-      parentThreadId: ctx.threadId,
-      teamId: team.teamId,
-      harnessId: route.harnessId,
-      title: input.label,
-      workspace: {
-        path: tws?.path ?? ctx.workspace,
-        kind: isolation === 'worktree' ? 'worktree' : isolation === 'directory' ? 'directory' : 'local'
-      },
-      reviewRequired: true,
-      reviewStatus: 'pending'
-    })
-    const dispatch: DispatchRecord = {
-      dispatchId: this.deps.ids.next('dsp'),
-      teamId: team.teamId,
-      workerId,
-      parentTurnId: ctx.turnId,
-      title: input.label,
-      task: input.task,
-      ...(input.context ? { context: input.context } : {}),
-      mode: input.mode ?? 'queue',
-      state: 'pending',
-      verdict: { status: 'pending', checks: [] },
-      createdAt: this.deps.nowIso(),
-      updatedAt: this.deps.nowIso()
-    }
-    await this.deps.dispatches.create(dispatch)
-    const delivered = await this.deps.deliverer.tryDeliver(team.teamId, dispatch.dispatchId)
-    return {
-      ok: true,
-      workerId,
-      dispatchId: dispatch.dispatchId,
-      ...(worker.taskWorkspaceId ? { taskWorkspaceId: worker.taskWorkspaceId } : {}),
-      dispatched: delivered.accepted,
-      ...(delivered.pendingReason ? { deliveryPending: delivered.pendingReason } : {}),
-      route,
-      ...(selection ? { selection: { ...selection, ...(profileId ? { profileId } : {}) } } : {}),
-      permissionMode: {
-        ...(permission.requestedMode ? { requested: permission.requestedMode.id } : {}),
-        effective: effectivePermissionMode,
-        // After a confirmed escalation the worker runs at the requested mode.
-        downgraded: permission.downgraded && effectivePermissionMode === permission.effective
-      },
-      userReport: reportWorkerCreated(
-        {
-          worker,
-          dispatch,
-          pendingReason: delivered.pendingReason,
-          permission: {
-            ...permission,
-            downgraded: permission.downgraded && effectivePermissionMode === permission.effective
-          },
-          harnessLabel: definition.displayName,
-          selectionReason: selection?.reason
-        },
-        language
-      )
-    }
+    return this.workerDispatch.create(ctx, rawInput, toolContext)
+  }
+
+  /** Host-only admission used after the shared dispatch decision is claimed. */
+  createWorkerNow(
+    ctx: ManagerToolContext, rawInput: unknown, toolContext: Parameters<typeof childSecurity>[0],
+    allocation?: { workerId: string; dispatchId: string; intentId: string; selection?: WorkerRecord['selection']; profileId?: string }
+  ): Promise<WorkerCreateResult> {
+    return this.workerCreator.create(ctx, rawInput, toolContext, allocation)
   }
 
   /**
@@ -449,6 +162,9 @@ export class ManagerRuntime {
     rawInput: unknown,
     toolContext: Parameters<typeof childSecurity>[0]
   ): Promise<{
+    dispatchIntentId?: string
+    dispatchIntent?: import('../contracts/agent-dispatch-intents.js').AgentDispatchIntentPublic
+    pending?: number
     requested: number
     created: number
     failed: number
@@ -457,6 +173,9 @@ export class ManagerRuntime {
     items: Array<{ index: number; label: string; result: WorkerCreateResult | 'skipped' }>
     userReport: string
   }> {
+    if (this.deps.agentDispatchService && toolContext.activeToolCallId) {
+      return this.workerDispatch.createBatch(ctx, rawInput, toolContext)
+    }
     const input = WorkerCreateBatchInputSchema.parse(rawInput)
     const items: Array<{ index: number; label: string; result: WorkerCreateResult | 'skipped' }> = []
     let created = 0
@@ -591,6 +310,20 @@ export class ManagerRuntime {
    */
   handleRuntimeEvent(event: RuntimeEvent): void {
     this.lifecycle.handleRuntimeEvent(event)
+    if (event.kind === 'agent_dispatch_intent' && event.dispatchIntent.kind === 'worker' && event.dispatchIntent.state === 'failed') {
+      void this.workerDispatch.reportPrelaunchFailure(event.dispatchIntent.intentId).catch((error) =>
+        console.warn('[kun] dispatch refusal delivery failed:', error))
+    }
+    if (event.kind === 'turn_aborted' && event.turnId) {
+      void runWithoutTurnMutationFence(() => this.workerDispatch.cancelPendingSource(event.threadId, event.turnId!)).catch((error) => {
+        console.warn('[kun] source-turn dispatch cancellation failed:', error)
+      })
+    }
+    if (['turn_completed', 'turn_failed', 'turn_aborted', 'turn_started'].includes(event.kind)) {
+      void runWithoutTurnMutationFence(() => this.workerDispatch.refreshForWorker(event.threadId)).catch((error) => {
+        console.warn('[kun] worker dispatch status refresh failed:', error)
+      })
+    }
   }
 
   /**
@@ -603,6 +336,7 @@ export class ManagerRuntime {
     outcome: TurnRunOutcome
   ): Promise<void> {
     await this.lifecycle.handleWorkerTurnTerminal(workerThreadId, turnId, outcome)
+    await runWithoutTurnMutationFence(() => this.workerDispatch.refreshForWorker(workerThreadId))
   }
 
   /**

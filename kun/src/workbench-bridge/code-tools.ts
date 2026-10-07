@@ -39,6 +39,8 @@ const CreateTaskInput = z.object({
   execution: WorkbenchExecutionSchema.omit({ permission: true, persona: true }).optional(),
   executionMode: z.enum(['direct', 'plan', 'auto', 'goal']).optional(),
   goalTokenBudget: z.number().int().positive().nullable().optional(),
+  /** Use user when the initiating user chose the Agent; auto permits one verified replacement. */
+  agentSelection: z.enum(['user', 'auto']).default('user'),
   schedule: WorkbenchScheduleSchema.optional(),
   isolation: z.enum(['inherit', 'worktree']).default('inherit'),
   report: z.enum(['final', 'silent']).default('final')
@@ -62,7 +64,8 @@ async function ownLink(scope: WorkbenchToolScope, linkId: string) {
 const linkView = (link: WorkbenchLink) => ({
   linkId: link.id, kind: link.kind, status: link.status, title: link.request.title, project: link.request.workspaceRoot,
   threadId: link.threadId, attention: link.attention, userTookOver: link.userTookOver === true,
-  execution: link.request.execution, result: link.result, error: link.error, updatedAt: link.updatedAt
+  execution: link.request.execution, result: link.result, error: link.error, updatedAt: link.updatedAt,
+  dispatchIntentId: link.dispatchIntentId
 })
 
 /** Code-mode tools of a private Agent: read the user's Code sessions and hand work to Code. */
@@ -89,7 +92,7 @@ export function workbenchCodeTools(threads: ThreadStore): LocalTool[] {
     define('list_code_harnesses', z.object({}).strict(), async (scope, _args, _toolCallId, signal) => {
       assertWorkbenchCapability(scope, 'code-read')
       if (!scope.bridge.harnesses) throw new Error('Code Agent discovery is unavailable in this runtime')
-      return { output: { authority: REFERENCE, ...await scope.bridge.harnesses.list(signal),
+      return { output: { authority: REFERENCE, ...await scope.bridge.harnesses.list(signal, scope.capabilityCeiling),
         note: 'Use an available model route as execution.model in create_code_task. Availability grants no permissions.' } }
     }),
     define('list_code_projects', z.object({}).strict(), async (scope) => {
@@ -156,7 +159,7 @@ export function workbenchCodeTools(threads: ThreadStore): LocalTool[] {
       }, true)
       return requestWorkbenchLink(scope, { kind: 'code_task', surface: 'code',
         mode: !known || input.schedule || (request.execution?.mode === 'goal' && !request.execution.goalTokenBudget) ? 'confirm' : mode,
-        request })
+        request, agentSelection: input.agentSelection })
     }, { needsToolCall: true }),
     define('get_code_task', LinkInput, async (scope, args) => {
       assertWorkbenchCapability(scope, 'code-read')

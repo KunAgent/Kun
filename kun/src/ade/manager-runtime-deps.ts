@@ -45,6 +45,17 @@ export type ManagerToolContext = {
 }
 
 export type ManagerRuntimeDeps = {
+  agentDispatchService?: import('../delegation/agent-dispatch-service.js').AgentDispatchService
+  /** Rebuild live host scopes after a persisted start decision, without transient grants. */
+  dispatchToolContext?: (
+    intent: import('../contracts/agent-dispatch-intents.js').AgentDispatchIntent,
+    signal: AbortSignal
+  ) => Promise<import('../ports/tool-host.js').ToolHostContext>
+  reviewDispatch?: (
+    intent: import('../contracts/agent-dispatch-intents.js').AgentDispatchIntent,
+    signal: AbortSignal
+  ) => Promise<import('../contracts/agent-dispatch-intents.js').AgentDispatchReviewDecision>
+
   teams: FileTeamStore
   dispatches: FileDispatchStore
   questions: FileQuestionStore

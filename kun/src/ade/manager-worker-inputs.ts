@@ -42,6 +42,7 @@ export const WorkerCreateInputSchema = z
       })
       .strict()
       .optional(),
+    agentSelection: z.enum(['user', 'auto']).optional(),
     permissionMode: z.string().min(1).max(64).optional(),
     lifecycle: z.enum(['persistent', 'ephemeral']).optional(),
     mode: z.enum(['queue', 'interrupt']).optional()

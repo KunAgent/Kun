@@ -177,14 +177,14 @@ describe('ThreadService workspace mode', () => {
 })
 
 describe('ThreadService harnessId update (01 §8)', () => {
-  it('does not enable collaboration on an external main Agent without handoff', async () => {
+  it('allows collaboration policy on an external main Agent without changing its route', async () => {
     const service = serviceWith()
     const external = await service.create({
       title: 'external', workspace: '/repo', model: 'm', mode: 'agent',
       harnessId: 'claude-code'
     })
-    await expect(service.update(external.id, { collaboration: { enabled: true } }))
-      .rejects.toThrow(/explicit Kun main Agent handoff/)
+    expect(await service.update(external.id, { collaboration: { enabled: true } }))
+      .toMatchObject({ harnessId: 'claude-code', collaboration: { enabled: true } })
   })
   it('rebinds the harness on an idle thread and records the update', async () => {
     const service = serviceWith()

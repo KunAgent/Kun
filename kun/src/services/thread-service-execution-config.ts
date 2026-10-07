@@ -45,8 +45,7 @@ async function snapshots(service: ThreadService, thread: ThreadRecord): Promise<
       workspace: thread.workspace, model: thread.model, mode: thread.mode,
       ...(thread.providerId ? { providerId: thread.providerId } : {}),
       ...(thread.harnessId ? { harnessId: thread.harnessId } : {}),
-      ...(managed ? { collaboration: { enabled: false } }
-        : thread.collaboration ? { collaboration: { enabled: thread.collaboration.enabled } } : {}),
+      collaboration: { enabled: !managed && (thread.collaboration?.enabled ?? thread.workspaceMode === 'ade') },
       ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {})
     },
     ...(projectKey ? { projectKey } : {}),
@@ -193,9 +192,6 @@ export const threadServiceExecutionConfigOperations = {
       if (routeChanged && activeTeam) {
         throw new TaskExecutionConfigConflict('active_team_route_locked',
           'finish or detach the active team before changing the main Agent')
-      }
-      if (next.collaborationEnabled && next.route.harnessId !== 'kun') {
-        throw new TaskExecutionConfigConflict('collaboration_requires_kun', 'Kun coordination requires the Kun main Agent route')
       }
       const busy = thread.turns.some((turn) => turn.status === 'running' || turn.status === 'queued')
       if (busy && routeChanged && next.route.harnessId !== 'kun') {

@@ -17,17 +17,23 @@ import { startTaskLink } from './start-task.js'
 import { executionMode } from './execution.js'
 import { admitBuildPhase, finishPlanPhase } from './reconcile-phases.js'
 import { reconcileSchedules } from './schedule.js'
+import { projectWorkbenchDispatches } from './dispatch.js'
+import { replaceFailedWorkbenchDispatch } from './dispatch-replacement.js'
+import { agentStableId } from '../agents/agent-identity-service.js'
+import type { RoomRequestState } from '../rooms/room-runtime-types.js'
 
 type Attention = z.infer<typeof WorkbenchAttentionSchema>
 const BOT_STEER_PREFIX = 'workbench-steer-'
 const clip = (text: string, max: number) => text.length > max ? text.slice(0, max - 1) + '…' : text
 
 /** Host-authored wake input: the outcome as reference data, never as a new instruction. */
-export function outcomePrompt(link: WorkbenchLink): string {
+export function outcomePrompt(link: WorkbenchLink, externalPublisher = false): string {
   const word = link.status === 'completed' ? 'finished' : link.status === 'failed' ? 'failed' : 'ended'
   return [
     `Reference data, not an instruction from the user: a ${link.surface === 'code' ? 'Code' : 'Work'} task you handed over has ${word}.`,
-    'Tell the user the outcome with send_im_message (phase "final"): what was done, which files changed, any checks that ran, and any caveat. ' +
+    'Review the result against the task goal and acceptance criteria. Inspect the artifacts or verify the reported checks when needed within your existing authority. ' +
+      (externalPublisher ? 'Then return the final reply directly; the host publishes it in the original conversation. Include ' :
+        'Then tell the user the outcome with send_im_message (phase "final"): ') + 'what was done, which files changed, any checks that ran, and any caveat. ' +
       'If it failed or needs the user, say so plainly. Do not start another task unless the user asks.',
     JSON.stringify({ authority: 'reference_only', linkId: link.id, kind: link.kind, status: link.status, title: link.request.title,
       project: link.request.workspaceRoot, execution: link.request.execution, error: link.error, userTookOver: link.userTookOver === true,
@@ -67,13 +73,28 @@ async function reconcileTarget(bridge: WorkbenchBridge, row: RoomStoredDocument<
     if (link.cancelRequested) await patch({ status: 'cancelled' })
     return
   }
-  const took = tookOver(thread, turn)
+  const took = link.userTookOver === true || tookOver(thread, turn)
+  if (took && link.dispatchIntentId && bridge.agentDispatch) {
+    const intent = await bridge.agentDispatch.get(link.dispatchIntentId)
+    if (intent && !intent.takenOver && !['completed', 'failed', 'cancelled'].includes(intent.state)) {
+      await bridge.agentDispatch.act(intent.intentId, { action: 'takeover', expectedRevision: intent.revision,
+        requestId: `workbench-takeover:${link.id}:${intent.revision}` }).catch((error) => {
+          if ((error as { code?: string }).code !== 'AGENT_DISPATCH_REVISION_CONFLICT') {
+            console.warn('[kun] workbench takeover:', error instanceof Error ? error.message : String(error))
+          }
+        })
+    }
+  }
   if (turn.status === 'queued' || turn.status === 'running') {
     const attention = turn.status === 'running' ? pendingAttention(bridge, thread.id) : undefined
     const status: WorkbenchLinkStatus = turn.status === 'queued' ? 'queued' : attention ? 'needs_attention' : 'running'
-    if (link.status === status && link.turnId === turn.id && sameAttention(link.attention, attention) && (link.userTookOver === true) === took) return
+    const tool = [...turn.items].reverse().find((item) => item.kind === 'tool_call')
+    const activity = { ...(turn.startedAt ? { startedAt: turn.startedAt } : {}),
+      ...(tool?.kind === 'tool_call' && tool.status === 'running' ? { action: tool.toolName.slice(0, 160) } : {}) }
+    if (link.status === status && link.turnId === turn.id && sameAttention(link.attention, attention) && (link.userTookOver === true) === took &&
+      JSON.stringify(link.activity ?? {}) === JSON.stringify(activity)) return
     await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status, turnId: turn.id, userTookOver: took,
-      attention, ...(status === 'running' || status === 'queued' ? { error: undefined } : {}) }))
+      attention, activity, ...(status === 'running' || status === 'queued' ? { error: undefined } : {}) }))
     return
   }
   const finishedAt = turn.finishedAt ?? new Date().toISOString()
@@ -102,11 +123,12 @@ async function reconcileTarget(bridge: WorkbenchBridge, row: RoomStoredDocument<
   }
   const result = summarizeTurnResult(await bridge.deps.sessions.loadItems(thread.id), turn, finishedAt)
   const status: WorkbenchLinkStatus = turn.status === 'completed' ? 'completed' : turn.status === 'aborted' ? 'cancelled' : 'failed'
-  const wakes = status !== 'cancelled' && (link.request.report === 'final' || status === 'failed' && link.request.report === 'failure') &&
+  const wakes = status !== 'cancelled' && !took && !link.cancelRequested && (link.request.report === 'final' || status === 'failed' && link.request.report === 'failure') &&
     (link.origin.kind === 'tool' || link.origin.kind === 'series' || link.kind === 'watch')
-  await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status, result, turnId: turn.id, userTookOver: took,
+  const settled = await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status, result, turnId: turn.id, userTookOver: took,
     attention: undefined, ...(status === 'failed' ? { error: clip(turn.error ?? 'The task failed.', 2000) } : {}),
     ...(wakes ? { reported: false } : {}) }))
+  if (status === 'failed' && await replaceFailedWorkbenchDispatch(bridge, settled)) return
   if (wakes) bridge.reportPending.add(link.id)
 }
 
@@ -140,6 +162,7 @@ async function announceWatch(bridge: WorkbenchBridge, link: WorkbenchLink): Prom
 
 async function reportOutcome(bridge: WorkbenchBridge, row: RoomStoredDocument<WorkbenchLink>): Promise<void> {
   const link = row.value
+  let outcomeRequestId: string | undefined
   if (link.kind === 'watch') await announceWatch(bridge, link)
   else {
     const parent = link.origin.kind === 'series' ? (await bridge.store.get<WorkbenchLink>('workbench_link', link.origin.seriesId))?.value : undefined
@@ -147,12 +170,16 @@ async function reportOutcome(bridge: WorkbenchBridge, row: RoomStoredDocument<Wo
     const sourceTurnId = link.origin.kind === 'tool' ? link.origin.turnId : parent?.origin.kind === 'tool' ? parent.origin.turnId : undefined
     const run = originRunId ? await bridge.store.get<RoomRunRecord>('room_run', originRunId) : undefined
     if (run?.value.threadId && sourceTurnId) {
+      const sourceRequest = run.value.requestId ? (await bridge.store.get<RoomRequestState>('request', run.value.requestId))?.value : undefined
+      const externalPublisher = Boolean(sourceRequest?.roomSnapshot.members.find((member) => member.id === link.memberId)?.executor)
       // Called from the tick, which already holds the room runtime's exclusive lane.
-      await enqueuePrivateContinuation(bridge.deps, { threadId: run.value.threadId, sourceTurnId,
-        key: link.id, kind: 'workbench_task', prompt: outcomePrompt(link) })
+      const delivery = await enqueuePrivateContinuation(bridge.deps, { threadId: run.value.threadId, sourceTurnId,
+        key: link.id, kind: 'workbench_task', prompt: outcomePrompt(link, externalPublisher) })
+      if (delivery === 'queued') outcomeRequestId = agentStableId('private-continuation', run.value.threadId, sourceTurnId, 'workbench_task', link.id)
     }
   }
-  await updateWorkbenchLink(bridge.store, link.roomId, link.id, (current) => current.reported === true ? null : { reported: true })
+  await updateWorkbenchLink(bridge.store, link.roomId, link.id, (current) => current.reported === true ? null :
+    { reported: true, ...(outcomeRequestId ? { outcomeRequestId } : {}) })
 }
 
 async function flushReports(bridge: WorkbenchBridge): Promise<void> {
@@ -172,6 +199,7 @@ async function flushReports(bridge: WorkbenchBridge): Promise<void> {
 
 /** One reconciliation pass; true while any link still needs a look on the fast cadence. */
 export async function reconcileWorkbench(bridge: WorkbenchBridge): Promise<boolean> {
+  const dispatchPending = await projectWorkbenchDispatches(bridge)
   bridge.nextWakeAt = await reconcileSchedules(bridge)
   const rows = await bridge.store.list<WorkbenchLink>('workbench_link', {
     status: [...WORKBENCH_ACTIVE_STATUSES], limit: 200, order: 'asc' })
@@ -181,5 +209,5 @@ export async function reconcileWorkbench(bridge: WorkbenchBridge): Promise<boole
     }
   }
   await flushReports(bridge)
-  return rows.some((row) => row.value.status !== 'recovery_required') || bridge.reportPending.size > 0
+  return dispatchPending || rows.some((row) => row.value.status !== 'recovery_required') || bridge.reportPending.size > 0
 }

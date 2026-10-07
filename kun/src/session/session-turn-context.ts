@@ -1,3 +1,4 @@
+import { dispatchGuidanceForTurn } from '../ade/dispatch-guidance.js'
 import { observeHarnessAliasRoute } from '../harness/gateway-alias-route-observer.js'
 import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 /**
@@ -249,6 +250,7 @@ export async function resolveSessionTurnContext(
     deps.systemPrompt?.trim(),
     thread.systemPrompt?.trim(),
     ...historyReferenceInstructions(thread),
+    ...dispatchGuidanceForTurn(thread, turn, definition),
     ...turnDynamicContext.instructions
   ].filter((value, index, all): value is string =>
     Boolean(value) && all.indexOf(value) === index

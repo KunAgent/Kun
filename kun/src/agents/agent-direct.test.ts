@@ -136,6 +136,31 @@ it('rejects stale or cross-thread continuation sources and rechecks authority be
   expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'child-two' })).toBe('ignored')
 })
 
+it('keeps the exact source Agent route and permission when a handed-over task returns', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'dispatch-source', body: 'Create hello.txt' })
+  const source = await f.advance(sent.requestId)
+  const thread = (await f.h.threadStore.get(source.threadId))!
+  const turn = thread.turns.find((entry) => entry.id === source.turnId)!
+  Object.assign(turn, { harnessId: 'codex', credentialMode: 'native-login', approvalPolicy: 'on-request',
+    approvalReviewer: 'agent', sandboxMode: 'workspace-write', reasoningEffort: 'high' })
+  await f.h.threadStore.upsert(thread)
+  expect(await enqueuePrivateContinuation(f.deps, { threadId: source.threadId, sourceTurnId: source.turnId!,
+    kind: 'workbench_task', key: 'finished-code-task', prompt: 'Review the completed Code result and report its checks.' })).toBe('queued')
+  const returned = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))
+    .find((row) => row.value.privateContinuation?.kind === 'workbench_task')!
+  expect(returned.value.privateContinuation).toMatchObject({ route: { harnessId: 'codex', credentialMode: 'native-login', model: turn.model,
+    reasoningEffort: 'high' }, policy: { approvalPolicy: 'on-request', approvalReviewer: 'agent', sandboxMode: 'workspace-write' } })
+  // Simulate different defaults during recovery; admission must still use the
+  // source turn, never re-infer a route from mutable or legacy thread fields.
+  Object.assign(thread, { harnessId: 'kun', model: 'second', approvalReviewer: 'user' })
+  await f.h.threadStore.upsert(thread)
+  const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn')
+  await f.runner.tick(returned)
+  expect(enqueue.mock.calls[0][0].request).toMatchObject({ harnessId: 'codex', credentialMode: 'native-login', model: turn.model,
+    reasoningEffort: 'high', approvalPolicy: 'on-request', approvalReviewer: 'agent', sandboxMode: 'workspace-write' })
+})
+
 it('creates one default Agent and private chat without calling a model', async () => {
   const f = await fixture()
   expect(await quickCreateAgent(f.runtime.agents, { clientRequestId: 'again' }, true)).toEqual(f.created)

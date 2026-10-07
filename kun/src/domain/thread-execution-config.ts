@@ -58,12 +58,7 @@ export function resolveThreadExecutionConfig(input: {
         ...(request.gatewayBinding ? { gatewayBinding: structuredClone(request.gatewayBinding) } : {})
       }
   const collaborationEnabled = request.collaboration?.enabled ??
-    project?.collaborationEnabled ?? request.workspaceMode === 'ade'
-  if (collaborationEnabled && request.workspaceMode !== 'ade' && route.harnessId !== 'kun') {
-    throw new ThreadExecutionConfigConflictError(
-      'collaboration_requires_kun', 'Kun coordination requires the Kun main Agent route'
-    )
-  }
+    project?.collaborationEnabled ?? ((request.agentSurface ?? 'code') === 'code')
   const managerModel = project?.managerModel ?? global?.managerModel
   const limits = project?.limits ?? global?.limits ?? { softWorkers: 4, hardWorkers: 8 }
   const budget = project?.budget ?? global?.budget

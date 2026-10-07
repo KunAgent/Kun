@@ -12,6 +12,23 @@ import { LocalToolHost } from '../../adapters/tool/local-tool-host.js'
 const model = { provider: 'test', model: 'test', async *stream() { yield { kind: 'completed' as const, stopReason: 'stop' as const } } }
 
 describe('room SDK execution boundary', () => {
+  it('blocks SDK-native tools on a constrained Code handoff even with full access and no roomContext', async () => {
+    const h = makeHarness(model)
+    const thread = await h.threads.create({ title: 'Code handoff', workspace: '/tmp', model: 'test', mode: 'agent',
+      approvalPolicy: 'auto', sandboxMode: 'danger-full-access' }, { workbenchOrigin: { kind: 'bot', roomId: 'room',
+      linkId: 'link', agentId: 'agent', agentName: 'Bot', capabilityCeiling: {
+        blockedToolNames: ['write'], blockedProviderIds: ['private'], blockedSkillIds: [] } } })
+    const turn = await h.turns.startTurn({ threadId: thread.id, request: { prompt: 'Work' } })
+    const runtime = createAgentSdkRuntime({ registry: CapabilityRegistry.fromLocalTools([]), toolHost: new LocalToolHost({ tools: [] }),
+      turns: h.turns, threadStore: h.threadStore, sessionStore: h.sessionStore, events: h.events,
+      providerConfigs: {}, agentSdkProviderIds: new Set(), ids: { next: (prefix) => prefix },
+      prefix: { systemPrompt: '' }, defaultApprovalPolicy: 'auto' })
+    const deps = (runtime as unknown as { deps: SdkRuntimeDeps }).deps
+    expect((await h.threadStore.get(thread.id))?.roomContext).toBeUndefined()
+    await expect(deps.decideToolApproval(thread.id, turn.turnId, 'Write', { path: '/tmp/escape.txt' }, new AbortController().signal))
+      .resolves.toMatchObject({ allow: false, message: 'This turn only allows Kun-gated tools.' })
+  })
+
   it.each([true, false])('AgentLoop admits only a room-safe runtime: %s', async (roomToolPolicy) => {
     const runTurn = vi.fn(async () => 'completed' as const)
     const sdkRuntime = { handlesProvider: () => true,

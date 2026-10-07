@@ -11,11 +11,17 @@ import { roomPeerStoreBinding } from '../rooms/room-peer-tools.js'
 import type { RoomStore } from '../rooms/room-store.js'
 import { WorkbenchBridge, workbenchBridgeBinding, type WorkbenchAgentScope } from './bridge.js'
 import {
-  countActiveLinks, countOpenConfirmations, countRunLinks, createWorkbenchLink, workbenchLinkId
+  countActiveLinks, countOpenConfirmations, countRunLinks, createWorkbenchLink, workbenchLinkId, updateWorkbenchLink
 } from './link-store.js'
+import { prepareWorkbenchDispatchRequest, proposeWorkbenchDispatch, usesWorkbenchDispatch } from './dispatch.js'
+import { workbenchDispatchCapabilities } from './dispatch-capabilities.js'
+import type { WorkbenchCapabilityCeiling } from '../contracts/thread-workbench-origin.js'
+import type { RoomRequestState } from '../rooms/room-runtime-types.js'
+import { AGENT_SETUP_KICKOFF } from '../agents/agent-setup-prompt.js'
 
 export const advertiseWorkbenchTool = (context: ToolHostContext) =>
-  context.roomAgent === true && context.roomStepKind === 'conversation'
+  context.roomAgent === true && context.roomStepKind === 'conversation' &&
+  (!context.harnessId || context.harnessId === 'kun' || context.managerToolBridgeAvailable === true)
 
 export const workbenchToolMeta = {
   toolKind: 'tool_call' as const, policy: 'auto' as const, sideEffect: 'read-only' as const,
@@ -38,6 +44,7 @@ export type WorkbenchToolScope = {
   /** The run answers a fresh user message: the only trigger an `auto` policy may act on. */
   fresh: boolean
   toolCallId: string
+  capabilityCeiling: WorkbenchCapabilityCeiling
 }
 
 /**
@@ -54,6 +61,8 @@ export async function workbenchToolScope(threads: ThreadStore, context: ToolHost
   if (!thread || room?.kind !== 'conversation' || !room.participantAgentId) throw new Error('private Agent conversation required')
   const turn = thread.turns.find((item) => item.id === context.turnId)
   if (!turn || turn.status !== 'running' || !turn.clientRequestId) throw new Error('active Agent turn required')
+  const harness = turn.harnessId ?? thread.harnessId
+  if (harness && harness !== 'kun' && context.managerToolBridgeAvailable !== true) throw new Error('This Agent has no active Kun tool bridge for Code dispatch')
   if (options.needsToolCall && !context.activeToolCallId) throw new Error('tool call identity unavailable')
   const runId = roomRunId(room.roomId, turn.clientRequestId)
   const run = await store.get<RoomRunRecord>('room_run', runId)
@@ -66,9 +75,14 @@ export async function workbenchToolScope(threads: ThreadStore, context: ToolHost
   if (!member || !member.enabled || member.removedAt || member.participantAgentId !== room.participantAgentId) {
     throw new Error('the Agent is not active in this room')
   }
+  const request = run.value.requestId ? (await store.get<RoomRequestState>('request', run.value.requestId))?.value : undefined
+  const trustedRequest = request?.threadId === thread.id && request.turnId === turn.id && request.roomId === room.roomId
+  const externalFresh = trustedRequest && !request.privateContinuation && !request.privateReminder && !request.handoffReturnId &&
+    request.message.body !== AGENT_SETUP_KICKOFF && !request.cancellationRequested && !['cancelled', 'stopping'].includes(request.status)
   return { bridge, store, thread, roomId: room.roomId, memberId: room.memberId, memberLabel: member.displayName,
     agent: await bridge.agentScope(room.participantAgentId), runId, turnId: turn.id, requestId: run.value.requestId,
-    fresh: run.value.communicationRequired === true, toolCallId: context.activeToolCallId ?? '' }
+    fresh: harness && harness !== 'kun' ? externalFresh : run.value.communicationRequired === true, toolCallId: context.activeToolCallId ?? '',
+    capabilityCeiling: workbenchDispatchCapabilities(thread, context, request) }
 }
 
 export type WorkbenchCapability = 'code-read' | 'code-write' | 'work-read' | 'work-write'
@@ -91,6 +105,7 @@ export async function requestWorkbenchLink(scope: WorkbenchToolScope, input: {
   surface: WorkbenchLink['surface']
   request: WorkbenchRequest
   mode: 'confirm' | 'auto'
+  agentSelection?: 'user' | 'auto'
 }) {
   const sourceTurn = scope.thread.turns.find((turn) => turn.id === scope.turnId)
   const clientSurface = sourceTurn?.clientSurface === 'im' || sourceTurn?.imContext === true ? 'im' as const : 'gui' as const
@@ -102,7 +117,9 @@ export async function requestWorkbenchLink(scope: WorkbenchToolScope, input: {
       throw new Error('This turn already created the maximum number of tasks. Finish the turn and let the user review them.')
     }
   }
-  const auto = input.mode === 'auto' && scope.fresh && !input.request.schedule &&
+  const dispatch = input.kind === 'code_task' && usesWorkbenchDispatch(input.request) && Boolean(scope.bridge.agentDispatch)
+  if (dispatch) input = { ...input, request: existing?.value.request ?? await prepareWorkbenchDispatchRequest(scope, input.request) }
+  const auto = !dispatch && input.mode === 'auto' && scope.fresh && !input.request.schedule &&
     !(input.request.execution?.mode === 'goal' && !input.request.execution.goalTokenBudget)
   if (!existing) {
     if (auto && await countActiveLinks(scope.store, scope.roomId, scope.agent.agentId) >= scope.agent.policy.maxActiveTasks) {
@@ -115,6 +132,19 @@ export async function requestWorkbenchLink(scope: WorkbenchToolScope, input: {
   const created = await createWorkbenchLink(scope.store, {
     roomId: scope.roomId, participantAgentId: scope.agent.agentId, memberId: scope.memberId, memberLabel: scope.memberLabel,
     kind: input.kind, surface: input.surface, status: auto ? 'queued' : 'awaiting_confirmation', origin, request: input.request })
+  if (dispatch) {
+    try {
+      const intent = await proposeWorkbenchDispatch(scope, created.link, input.agentSelection)
+      return { output: { requested: true, linkId: created.link.id, messageId: created.message.id,
+        dispatchIntentId: intent.intentId, status: intent.state,
+        instruction: 'The task decision is durably saved and its card is visible. The host handles approval or the full-access countdown. ' +
+          'Continue other independent work or finish this turn; the outcome will return to this conversation. Do not treat dispatch as completion.' } }
+    } catch (error) {
+      await updateWorkbenchLink(scope.store, scope.roomId, created.link.id, () => ({ status: 'failed',
+        error: (error instanceof Error ? error.message : String(error)).slice(0, 2000) }))
+      throw error
+    }
+  }
   if (created.link.status === 'queued') scope.bridge.wake()
   return { output: { requested: true, linkId: created.link.id, messageId: created.message.id, status: created.link.status,
     instruction: created.link.status === 'queued'

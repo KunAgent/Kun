@@ -1,5 +1,6 @@
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
+import { hasWorkbenchCapabilityConstraints } from '../contracts/thread-workbench-origin.js'
 
 /**
  * Harness usage scenarios drive the admission matrix (02 §5.1). They describe
@@ -29,7 +30,7 @@ type ExecutionUnitCarrier = { executionUnit?: { kind?: string } }
  * the unattended/IM cases below them.
  */
 export function usageForTurn(
-  thread: Pick<ThreadRecord, 'roomContext'>,
+  thread: Pick<ThreadRecord, 'roomContext' | 'workbenchOrigin'>,
   turn: Pick<
     Turn,
     | 'orchestration'
@@ -42,6 +43,7 @@ export function usageForTurn(
     | 'agentSurface'
   >
 ): HarnessUsage {
+  if (hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling)) return 'room-execution'
   // An explicit plan-build marker wins: the isolated-workspace rule must
   // apply regardless of which host feature scheduled the turn.
   if (turn.planBuild === true) return 'plan-build'

@@ -3,6 +3,8 @@ import { ParticipantAgentId } from './agent-identities.js'
 import { RoomIdSchema } from './rooms.js'
 import { TurnReasoningEffortSchema, TurnServiceTierSchema } from './turns.js'
 import { HarnessIdSchema, HarnessCredentialModeSchema } from './harness.js'
+import { ApprovalPolicySchema, ApprovalReviewerSchema, SandboxModeSchema } from './policy.js'
+import { WorkbenchCapabilityCeilingSchema } from './thread-workbench-origin.js'
 
 const Timestamp = z.string().datetime({ offset: true })
 const ThreadId = z.string().min(1).max(256)
@@ -146,8 +148,18 @@ export const WorkbenchLinkSchema = z.object({
   /** Stable admission key of the first target turn; recovery reconciles against it. */
   clientRequestId: z.string().min(1).max(256).optional(),
   admissionAttempted: z.boolean().optional(),
+  /** Shared dispatch decision. Legacy links without this field remain manual. */
+  dispatchIntentId: z.string().min(1).max(256).optional(),
+  /** Effective inherited authority, never reconstructed from Code defaults. */
+  dispatchAuthority: z.object({ approvalPolicy: ApprovalPolicySchema, sandboxMode: SandboxModeSchema,
+    approvalReviewer: ApprovalReviewerSchema }).strict().optional(),
+  dispatchCapabilities: WorkbenchCapabilityCeilingSchema.optional(),
+  dispatchReplacementCount: z.number().int().min(0).max(1).optional(),
+  dispatchReplacementReason: z.string().max(2000).optional(),
   request: WorkbenchRequestSchema,
   attention: WorkbenchAttentionSchema.optional(),
+  /** Latest safe tool label and execution clock, for the continuous task card. */
+  activity: z.object({ action: z.string().max(160).optional(), startedAt: Timestamp.optional() }).strict().optional(),
   result: WorkbenchResultSchema.optional(),
   /** The user sent their own message in the target thread after the task started. */
   userTookOver: z.boolean().optional(),
@@ -166,6 +178,8 @@ export const WorkbenchLinkSchema = z.object({
   recentRunIds: z.array(RoomIdSchema).max(50).optional(),
   /** The outcome wake was queued (or deliberately skipped) exactly once. */
   reported: z.boolean().optional(),
+  /** Parent continuation whose result review must settle before the dispatch closes. */
+  outcomeRequestId: z.string().min(1).max(256).optional(),
   error: z.string().max(2000).optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,

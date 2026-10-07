@@ -30,7 +30,7 @@ import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
 import { WORKBENCH_TOOL_NAMES, resolveWorkbenchPolicy, workbenchToolNamesForPolicy } from '../contracts/workbench-policy.js'
 import { agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
 import { agentExecutorRouteKey } from '../contracts/agent-executor.js'
-import { EXTERNAL_AGENT_BLOCKED_TOOLS, externalAgentBinding, externalAgentSystemPrompt, externalAgentThreadRoute } from './agent-external.js'
+import { EXTERNAL_AGENT_PRIVATE_BLOCKED_TOOLS, externalAgentBinding, externalAgentSystemPrompt, externalAgentThreadRoute } from './agent-external.js'
 import { publishExternalAgentReply } from './agent-external-publication.js'
 
 export function agentWorkspace(dataDir: string, agentId: string) { return join(dataDir, 'agents', 'workspaces', agentId) }
@@ -95,7 +95,7 @@ export class AgentDirectRunner {
       const fingerprint = JSON.stringify([request.roomId, request.roomSnapshot.privateEpoch ?? 0, canonical,
         main.providerId, main.accountId, request.roomSnapshot.privateExecutionPolicy, member.presetId, member.agentInstructions,
         profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', resolveWorkbenchPolicy(agent?.workbench),
-        ...(external ? [agentExecutorRouteKey(external)] : [])])
+        ...(external ? [agentExecutorRouteKey(external), 'private-code-dispatch-v1'] : [])])
       const threadId = agentStableId('agent-chat', createHash('sha256').update(fingerprint).digest('hex'))
       const reply = request.message.replyToMessageId ? await this.deps.store.get<RoomMessage>('message', request.message.replyToMessageId) : null
       const reminderInput = request.privateReminder ? await this.reminderWakeInput(request) : null
@@ -196,7 +196,8 @@ export class AgentDirectRunner {
           ...request.privateModel, attachmentIds: request.message.attachmentIds, clientSurface: request.clientSurface ?? 'gui', agentSurface: 'code',
           ...(member.executor ? { harnessId: member.executor.harnessId, credentialMode: member.executor.credentialMode } : {}),
           displayText: request.message.body.slice(0, 8000),
-          mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true } })
+          mode: thread.mode, sandboxMode: thread.sandboxMode,
+          ...(request.privateContinuation?.route ?? {}), ...(request.privateContinuation?.policy ?? {}), enqueueIfBusy: true } })
         await updateRoomRun(this.deps.store, run.id, { turnId: admitted.turnId })
         await acknowledgeConversationBridge(this.deps, request, thread, identity)
         const current = (await this.deps.store.get<RoomRequestState>('request', request.id))!
@@ -235,6 +236,8 @@ export class AgentDirectRunner {
   /** An external engine runs in the private workspace under the conversation's own permission policy. */
   private async createExternalThread(request: RoomRequestState, member: RoomMember): Promise<ThreadRecord> {
     const executor = member.executor!
+    const workbench = resolveWorkbenchPolicy(member.workbenchPolicy)
+    const enabled = workbenchToolNamesForPolicy(workbench)
     return this.deps.threads.create({ title: member.displayName, workspace: request.privateWorkspace!,
       ...externalAgentThreadRoute(executor), ...request.privateModel, agentId: member.presetId, mode: 'agent', agentSurface: 'code',
       ...(request.roomSnapshot.privateExecutionPolicy ?? {}),
@@ -243,7 +246,11 @@ export class AgentDirectRunner {
         roleNotes: member.roleNotes, group: false })
     }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
       participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
-      blockedToolNames: [...EXTERNAL_AGENT_BLOCKED_TOOLS], blockedProviderIds: [], blockedSkillIds: [], skillsEnabled: true } })
+      // Kun bridge discovery and execution independently require a real bridge
+      // for an external turn; the host continues to publish its final reply.
+      blockedToolNames: [...new Set([...EXTERNAL_AGENT_PRIVATE_BLOCKED_TOOLS,
+        ...WORKBENCH_TOOL_NAMES.filter((name) => !enabled.includes(name))])],
+      blockedProviderIds: [], blockedSkillIds: [], skillsEnabled: true } })
   }
   private clientId(request: RoomRequestState) {
     return 'private-' + request.id + '-' + (request.stepAttempt ?? 0)

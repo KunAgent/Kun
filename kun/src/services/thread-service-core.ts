@@ -248,6 +248,8 @@ export interface ThreadService {
     costBudgetUsd?: number | null
     costBudgetWarningSent?: boolean
     relation?: ThreadRelation
+    /** Host-only provenance update; omitted from the public thread-update schema. */
+    workbenchOrigin?: ThreadRecord['workbenchOrigin']
   }): Promise<ThreadRecord>;
   getGoal(threadId: string): Promise<ThreadGoal | null>;
   setGoal(threadId: string, request: SetThreadGoalRequest): Promise<ThreadGoal>;

@@ -1,3 +1,7 @@
+export const KUN_AGENT_DISPATCH_INTENTS_TEMPLATE = '/v1/agent-dispatch-intents'
+export const KUN_AGENT_DISPATCH_INTENT_TEMPLATE = '/v1/agent-dispatch-intents/{intentId}'
+export const KUN_AGENT_DISPATCH_ACTION_TEMPLATE = '/v1/agent-dispatch-intents/{intentId}/actions'
+
 /**
  * Kun HTTP endpoint path templates. The renderer and the main
  * process IPC allow-list both derive their paths from this table, so

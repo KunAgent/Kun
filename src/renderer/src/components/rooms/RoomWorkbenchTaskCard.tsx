@@ -10,6 +10,8 @@ import { kunToolPermissionModeFromSettings } from '@shared/app-settings'
 import { WorkbenchTaskAgentIdentity } from './WorkbenchTaskAgent'
 import { workbenchModelComplete } from './workbench-agent-selection'
 import { WorkbenchSeriesRuns } from './WorkbenchSeriesRuns'
+import { AgentDispatchIntentControls } from '../chat/AgentDispatchIntentControls'
+import { agentDispatchClient, publishAgentDispatchIntent } from '../../agent/agent-dispatch-client'
 import './rooms-workbench.css'
 
 const KIND_ICON: Record<WorkbenchLinkKind, typeof Code> = {
@@ -30,7 +32,7 @@ const plainText = (value: string): string => value.replace(/\*\*(.+?)\*\*/g, '$1
 /**
  * A Code/Work hand-off an Agent proposed or started. The card reads the durable
  * link record, so it stays correct across reloads and while the user is in Code.
- * Accepting is the only way anything runs: the buttons call the user-bound routes.
+ * Dispatch decisions and deadlines live in Kun; the card only displays them.
  */
 export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: RoomMessage }) {
   const { t } = useTranslation('common')
@@ -43,6 +45,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const [draft, setDraft] = useState<WorkbenchTaskDraft | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [resultExpanded, setResultExpanded] = useState(false)
+  const [now, setNow] = useState(Date.now)
   const busyRef = useRef(false)
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -67,6 +70,12 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
     return () => { controller.abort(); off() }
   }, [refresh, room.id, linkId])
 
+  useEffect(() => {
+    if (!link?.activity?.startedAt || !['queued', 'running', 'needs_attention'].includes(link.status)) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [link?.activity?.startedAt, link?.status])
+
   const act = useCallback(async (task: () => Promise<WorkbenchLinkEntry | void>) => {
     if (busyRef.current) return
     busyRef.current = true
@@ -89,7 +98,8 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const project = basename(request.workspaceRoot)
   const opens = workbenchOpenTarget(link)
   const longRunning = kind === 'code_task' || kind === 'work_task' || kind === 'schedule_series'
-  const permissionCeiling = room.privateExecutionPolicy ? kunToolPermissionModeFromSettings(room.privateExecutionPolicy) : 'ask-for-approval'
+  const permissionCeiling = link.dispatchAuthority ? kunToolPermissionModeFromSettings(link.dispatchAuthority) :
+    room.privateExecutionPolicy ? kunToolPermissionModeFromSettings(room.privateExecutionPolicy) : 'ask-for-approval'
   const codeTask = kind === 'code_task' || kind === 'schedule_series'
   const invalidDraft = editing && (!draft?.title.trim() || !workbenchModelComplete(draft?.execution.model))
   const showsOptions = longRunning && ['awaiting_confirmation', 'scheduled', 'active', 'paused'].includes(status)
@@ -98,9 +108,23 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const goal = request.goal && kind !== 'work_document' && kind !== 'work_edit' ? plainText(request.goal) : ''
   const collapsible = goal.length > 140 || (request.acceptance?.length ?? 0) > 60 || goal.split('\n').length > 3
   const startEditing = () => {
-    setDraft(initialWorkbenchTaskDraft(request))
-    setEditing(true)
+    void act(async () => {
+      if (link.dispatchIntentId) {
+        const intent = await agentDispatchClient.get(link.dispatchIntentId)
+        if (intent.state !== 'paused') publishAgentDispatchIntent(await agentDispatchClient.act(intent, 'pause'))
+      }
+      setDraft(initialWorkbenchTaskDraft(request))
+      setEditing(true)
+    })
   }
+  const cancelEditing = () => void act(async () => {
+    if (link.dispatchIntentId) {
+      const intent = await agentDispatchClient.get(link.dispatchIntentId)
+      publishAgentDispatchIntent(await agentDispatchClient.act(intent, 'resume'))
+    }
+    setEditing(false)
+    setDraft(null)
+  })
   const confirm = () => act(async () => {
     const chosen = draft ?? initialWorkbenchTaskDraft(request)
     const edits = { title: chosen.title.trim() || request.title, goal: chosen.goal.trim(),
@@ -121,7 +145,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
         {status === 'needs_attention' ? <ShieldAlert size={12} aria-hidden="true" /> : null}
         {status === 'completed' ? <Check size={12} aria-hidden="true" /> : null}
         {status === 'failed' || status === 'recovery_required' ? <AlertCircle size={12} aria-hidden="true" /> : null}
-        {t(`roomsWorkbenchStatus_${status}`)}
+        {link.dispatchIntentId && status === 'awaiting_confirmation' ? null : t(`roomsWorkbenchStatus_${status}`)}
       </span>
     </header>
     {editing && draft ? <div className="rooms-workbench-edit">
@@ -132,7 +156,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
       {request.acceptance ? <div className="rooms-workbench-acceptance"><strong>{t('roomsWorkbenchAcceptance')}</strong>
         <p>{plainText(request.acceptance)}</p></div> : null}
       <WorkbenchTaskOptions draft={draft} onChange={setDraft} editing onEdit={startEditing} code={kind === 'code_task' || kind === 'schedule_series'}
-        permissionCeiling={permissionCeiling} />
+        permissionCeiling={permissionCeiling} allowSchedule={!link.dispatchIntentId} />
     </div> : <>
       <h4>{request.title}</h4>
       {codeTask ? <WorkbenchTaskAgentIdentity model={request.execution?.model} /> : null}
@@ -153,7 +177,8 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
         {kind === 'board_card' && request.board?.category ? <span>{request.board.category}</span> : null}
       </div>
       {showsOptions ? <WorkbenchTaskOptions draft={initialWorkbenchTaskDraft(request)} onChange={setDraft} editing={false} onEdit={startEditing}
-        code={kind === 'code_task' || kind === 'schedule_series'} permissionCeiling={permissionCeiling} project={project} /> : null}
+        code={kind === 'code_task' || kind === 'schedule_series'} permissionCeiling={permissionCeiling} project={project}
+        allowSchedule={!link.dispatchIntentId} /> : null}
       {kind === 'work_document' && request.content ? <pre className="rooms-workbench-preview" aria-label={t('roomsWorkbenchPreview')}>{request.content.slice(0, 1200)}{request.content.length > 1200 ? '…' : ''}</pre> : null}
       {kind === 'board_card' && request.board?.description ? <p className="rooms-workbench-goal">{request.board.description}</p> : null}
       {kind === 'work_edit' ? <div className="rooms-workbench-edits">
@@ -183,12 +208,22 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
     {status === 'plan_ready' && link.planPath ? <p className="rooms-workbench-note">{link.planPath}</p> : null}
     {link.goal ? <p className="rooms-workbench-note">{t('roomsWorkbenchGoalProgress')}: {link.goal.status} · {link.goal.tokensUsed}
       {link.goal.tokenBudget ? ` / ${link.goal.tokenBudget}` : ''} tokens</p> : null}
+    {link.activity?.startedAt && ['queued', 'running', 'needs_attention'].includes(status) ? <p className="rooms-workbench-note" role="status">
+      {link.activity.action ? `${link.activity.action} · ` : ''}{Math.max(0, Math.floor((now - Date.parse(link.activity.startedAt)) / 1000))}s
+    </p> : null}
     {kind === 'schedule_series' && link.recentRunIds?.length ? <WorkbenchSeriesRuns roomId={room.id} ids={link.recentRunIds} /> : null}
     {(status === 'failed') && link.error ? <p className="rooms-workbench-error" role="alert">{link.error}</p> : null}
     {editing && !workbenchModelComplete(draft?.execution.model) ? <p className="rooms-workbench-note" role="status">{t('roomsWorkbenchAgentChooseModel')}</p> : null}
     {error ? <p className="rooms-workbench-error" role="alert">{error}</p> : null}
+    {link.dispatchIntentId && !editing ? <AgentDispatchIntentControls intentId={link.dispatchIntentId}
+      onEdit={startEditing} onChanged={() => refresh()} readOnly={link.userTookOver === true} /> : null}
+    {link.dispatchReplacementReason ? <p className="rooms-workbench-note">{link.dispatchReplacementReason}</p> : null}
     <div className="rooms-workbench-actions">
-      {status === 'awaiting_confirmation' ? <>
+      {link.dispatchIntentId && editing ? <>
+        <button type="button" disabled={busy} onClick={cancelEditing}>{t('roomsWorkbenchCancelEdit')}</button>
+        <button type="button" className="is-primary" disabled={busy || invalidDraft} onClick={() => void confirm()}>{t('roomsWorkbenchSave')}</button>
+      </> : null}
+      {status === 'awaiting_confirmation' && !link.dispatchIntentId ? <>
         <button type="button" className="is-ghost" disabled={busy} onClick={() => void act(() => workbenchClient.dismiss(link))}>{t('roomsWorkbenchDismiss')}</button>
         {editing ? <button type="button" disabled={busy} onClick={() => { setEditing(false); setDraft(null) }}>{t('roomsWorkbenchCancelEdit')}</button> : null}
         <button type="button" className="is-primary" disabled={busy || invalidDraft} onClick={() => void confirm()}>
@@ -206,7 +241,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
         <button type="button" disabled={busy} onClick={() => void act(() => workbenchClient.cancel(link))}>{t(kind === 'schedule_series' ? 'roomsWorkbenchEnd' : 'roomsWorkbenchStop')}</button>
       </> : null}
       {status === 'plan_ready' ? <button type="button" className="is-primary" disabled={busy} onClick={() => void act(() => workbenchClient.build(link))}>{t('roomsWorkbenchBuildPlan')}</button> : null}
-      {(status === 'queued' || status === 'running' || status === 'needs_attention') && kind !== 'watch' && longRunning ? <button type="button" disabled={busy}
+      {(status === 'queued' || status === 'running' || status === 'needs_attention') && kind !== 'watch' && longRunning && !link.dispatchIntentId ? <button type="button" disabled={busy}
         onClick={() => void act(() => workbenchClient.cancel(link))}><CircleStop size={14} />{t('roomsWorkbenchStop')}</button> : null}
       {opens && status !== 'awaiting_confirmation' && status !== 'dismissed' ? <button type="button" className={status === 'needs_attention' ? 'is-primary' : ''}
         onClick={() => void openWorkbenchLinkTarget(link).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))}>

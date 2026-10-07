@@ -80,7 +80,6 @@ function toValue(draft: FormDraft): AdeProjectDefaults | null {
     }
   }
   if (draft.collaborationOverride) value.collaborationEnabled = draft.collaborationEnabled
-  if (value.collaborationEnabled && value.route?.harnessId !== 'kun') return null
   if (draft.managerOverride) value.managerModel = {
     providerId: draft.managerProviderId.trim(), model: draft.managerModel.trim()
   }

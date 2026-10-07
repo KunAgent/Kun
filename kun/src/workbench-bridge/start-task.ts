@@ -8,9 +8,12 @@ import { WorkbenchBridge } from './bridge.js'
 import { workbenchTurnSource } from './turn-source.js'
 import { updateWorkbenchLink } from './link-store.js'
 import { executionMode, planRelativePath, validateExecution } from './execution.js'
+import { effectiveDispatchAuthority } from './dispatch-authority.js'
+import { narrowWorkbenchCapabilities } from './dispatch-capabilities.js'
 
 /** Deterministic identities: a retry after a crash reaches the same thread and the same turn. */
-export const workbenchThreadId = (linkId: string) => agentStableId('workbench-thread', linkId)
+export const workbenchThreadId = (linkId: string, replacementCount = 0) => replacementCount
+  ? agentStableId('workbench-thread', linkId, 'replacement', String(replacementCount)) : agentStableId('workbench-thread', linkId)
 export const workbenchTurnKey = (linkId: string) => 'workbench-' + linkId
 
 const fail = async (bridge: WorkbenchBridge, link: WorkbenchLink, error: string) => {
@@ -28,7 +31,7 @@ export function taskPrompt(link: WorkbenchLink, agentName: string): string {
     request.goal || request.title,
     request.acceptance ? `Acceptance criteria:\n${request.acceptance}` : '',
     request.relativePath ? `Document in focus: ${request.relativePath}` : '',
-    `This task was handed over by the user's assistant${agentName ? ` "${agentName}"` : ''} and accepted by the user. ` +
+    `This task was handed over by the user's assistant${agentName ? ` "${agentName}"` : ''} and authorized under the initiating conversation's permissions. ` +
       'Work on it as you normally would, keep the user informed through your normal replies, and finish with a clear summary of what changed and any caveats.'
   ].filter(Boolean).join('\n\n')
 }
@@ -40,6 +43,17 @@ export function taskPrompt(link: WorkbenchLink, agentName: string): string {
  */
 export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocument<WorkbenchLink>): Promise<void> {
   let link = row.value
+  if (link.dispatchIntentId && bridge.agentDispatch) {
+    const intent = await bridge.agentDispatch.get(link.dispatchIntentId)
+    if (!intent || intent.cancellationRequested || intent.takenOver || intent.state === 'cancelled') {
+      await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'cancelled', cancelRequested: true }))
+      return
+    }
+    if (['pending_confirmation', 'reviewing', 'countdown', 'paused', 'failed'].includes(intent.state)) return
+    const source = await bridge.deps.threadStore.getMetadata?.(intent.source.threadId) ?? await bridge.deps.threadStore.get(intent.source.threadId)
+    const sourceTurn = source?.turns.find((turn) => turn.id === intent.source.turnId)
+    if (!sourceTurn || sourceTurn.status === 'aborted') return void await fail(bridge, link, 'The initiating request was stopped before the task started.')
+  }
   const root = link.request.workspaceRoot
   if (!root) return void await fail(bridge, link, 'The task has no project directory.')
   let scope
@@ -59,8 +73,25 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
   const directory = await bridge.resolveDirectory(root)
   if (!directory) return void await fail(bridge, link, 'The project directory is no longer available.')
   if (!WorkbenchBridge.withinAgentLimits(scope, directory)) return void await fail(bridge, link, 'The project is outside this Agent’s allowed directories.')
+  if (link.dispatchAuthority) {
+    try {
+      const authority = await effectiveDispatchAuthority(bridge, link.roomId, link.memberId, link.dispatchAuthority)
+      if (JSON.stringify(authority) !== JSON.stringify(link.dispatchAuthority)) {
+        await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ dispatchAuthority: authority }))
+        link = { ...link, dispatchAuthority: authority }
+      }
+    } catch (error) { return void await fail(bridge, link, error instanceof Error ? error.message : String(error)) }
+  }
+  if (link.dispatchIntentId) {
+    const capabilities = await narrowWorkbenchCapabilities(bridge, link.roomId, link.memberId, link.dispatchCapabilities)
+    if (JSON.stringify(capabilities) !== JSON.stringify(link.dispatchCapabilities)) {
+      await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ dispatchCapabilities: capabilities }))
+      link = { ...link, dispatchCapabilities: capabilities }
+    }
+  }
   try {
     const request = await validateExecution(bridge, link.roomId, link.request, code)
+    if (code) bridge.harnesses?.assertCapabilityCeiling(request, link.dispatchCapabilities)
     if (JSON.stringify(request) !== JSON.stringify(link.request)) {
       await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ request }))
       link = { ...link, request }
@@ -68,7 +99,7 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
   } catch (error) {
     return void await fail(bridge, link, error instanceof Error ? error.message : String(error))
   }
-  const threadId = link.threadId ?? workbenchThreadId(link.id)
+  const threadId = link.threadId ?? workbenchThreadId(link.id, link.dispatchReplacementCount)
   let thread = await bridge.deps.threads.getMetadata(threadId)
   if (!thread) {
     const model = link.request.execution?.model ?? bridge.deps.model()
@@ -79,10 +110,11 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
       ...(link.request.execution?.model?.harnessId ? { harnessId: link.request.execution.model.harnessId } : {}),
       ...(link.request.execution?.model?.credentialMode ? { credentialMode: link.request.execution.model.credentialMode } : {}),
       ...(code ? { collaboration: { enabled: false } } : {}),
-      ...(permission ? kunToolPermissionModeSettings(permission) : {}),
+      ...(link.dispatchAuthority ?? (permission ? kunToolPermissionModeSettings(permission) : {})),
       agentSurface: code ? 'code' : 'write', mode: executionMode(link.request) === 'plan' || executionMode(link.request) === 'auto' ? 'plan' : 'agent'
     }, { id: threadId, workbenchOrigin: { kind: 'bot', roomId: link.roomId, linkId: link.id,
-      agentId: link.participantAgentId, agentName: scope.name, ...(link.messageId ? { messageId: link.messageId } : {}) } })
+      agentId: link.participantAgentId, agentName: scope.name, ...(link.messageId ? { messageId: link.messageId } : {}),
+      ...(link.dispatchCapabilities ? { capabilityCeiling: link.dispatchCapabilities } : {}) } })
     const ceiling = await bridge.permissionCeiling(link.roomId, thread)
     if (ceiling) thread = await bridge.deps.threads.update(thread.id, ceiling)
   }
@@ -101,7 +133,11 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
     }
   }
   const ceiling = await bridge.permissionCeiling(link.roomId, thread)
-  if (ceiling) thread = await bridge.deps.threads.update(thread.id, ceiling)
+  if (link.dispatchCapabilities && JSON.stringify(thread.workbenchOrigin?.capabilityCeiling) !== JSON.stringify(link.dispatchCapabilities)) {
+    thread = await bridge.deps.threads.update(thread.id, { workbenchOrigin: { ...thread.workbenchOrigin!, capabilityCeiling: link.dispatchCapabilities } })
+  }
+  if (link.dispatchAuthority) thread = await bridge.deps.threads.update(thread.id, link.dispatchAuthority)
+  else if (ceiling) thread = await bridge.deps.threads.update(thread.id, ceiling)
   await admitFirstTurn(bridge, link, thread, scope.name)
 }
 
@@ -159,6 +195,7 @@ async function admitFirstTurn(bridge: WorkbenchBridge, link: WorkbenchLink, thre
       ...(link.request.execution?.model?.serviceTier ? { serviceTier: link.request.execution.model.serviceTier } : {}),
       ...(link.request.execution?.persona ? { persona: link.request.execution.persona.text } : {}),
       ...source, agentSurface: link.surface === 'code' ? 'code' : 'write', mode: mode === 'plan' || mode === 'auto' ? 'plan' : 'agent',
+      ...(link.dispatchAuthority ?? {}),
       ...(planPath ? { guiPlan: { operation: 'draft' as const, fixedPath: true, workspaceRoot: thread.workspace, relativePath: planPath,
         planId: `${thread.workspace}:${planPath}`, sourceRequest: link.request.goal, title: link.request.title } } : {}),
       orchestration: link.request.execution?.orchestration ?? 'direct', attachmentIds: [], composerContexts: [], fileReferences: [], enqueueIfBusy: true } })

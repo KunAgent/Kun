@@ -121,6 +121,7 @@ export async function workbenchFixture(options: WorkbenchFixtureOptions = {}) {
     communicationRequired: options.fresh ?? true, createdAt: now, updatedAt: now }), null)
   const context = (toolCallId = 'call-1'): ToolHostContext => ({ threadId: thread.id, turnId: 'turn-1', workspace: directory,
     sandboxMode: 'workspace-write', approvalPolicy: 'auto', threadMode: 'agent', roomStepKind: 'conversation', roomAgent: true,
+    managerToolBridgeAvailable: true,
     activeToolCallId: toolCallId, abortSignal: new AbortController().signal, awaitApproval: async () => 'allow' })
   const tools = [...workbenchCodeTools(deps.threadStore), ...workbenchWorkTools(deps.threadStore)]
   const tool = (name: string) => tools.find((item) => item.name === name)!

@@ -1,3 +1,4 @@
+import agentDispatch from './common/agent-dispatch.json'
 import agentUpdates from './common/agent-updates.json'
 import roomsPolish from './common/rooms-polish.json'
 import executionTasks from './common/execution-tasks.json'
@@ -47,6 +48,7 @@ import workSidebar from './common/work-sidebar.json'
 import conversationManage from './common/conversation-manage.json'
 
 const common = {
+  ...agentDispatch,
   ...agentUpdates,
   ...roomsInitIm,
   ...roomsDirect,

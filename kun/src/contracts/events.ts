@@ -1,3 +1,4 @@
+import { AgentDispatchIntentEvent } from './agent-dispatch-event.js'
 import { z } from 'zod'
 import {
   isPublicTurnItem,
@@ -48,6 +49,7 @@ import { HarnessNativeAgentListSchema } from './harness-native-agents.js'
  * SSE stream can be replayed with `since_seq` after reconnects.
  */
 export const RuntimeEventKind = z.enum([
+  'agent_dispatch_intent',
   'thread_created',
   'thread_updated',
   'thread_pruned',
@@ -643,6 +645,7 @@ export const CanvasReceiptEvent = RuntimeEventBase.extend({
 export type CanvasReceiptEvent = z.infer<typeof CanvasReceiptEvent>
 
 export const RuntimeEvent = z.discriminatedUnion('kind', [
+  AgentDispatchIntentEvent,
   ItemEvent,
   ThreadLifecycleEvent,
   TurnLifecycleEvent,

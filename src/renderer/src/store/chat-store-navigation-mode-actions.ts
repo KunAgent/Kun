@@ -300,7 +300,7 @@ export function createNavigationModeActions(
   startAdeDraft: () => {
     clearSelection({
       route: 'chat', adeDraftOpen: true, adeDraftRevision: get().adeDraftRevision + 1,
-      composerCollaborationEnabled: false,
+      composerCollaborationEnabled: true,
       composerProjectDefaults: null,
       composerRouteExplicitWorkspaceRoot: '',
       composerProjectCollaborationExplicitWorkspaceRoot: ''

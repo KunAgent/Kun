@@ -14,6 +14,7 @@ import { workbenchFixture, type WorkbenchFixture } from './workbench-test-suppor
 import { confirmWorkbenchLink, requestWorkbenchCancel } from './actions.js'
 import { validateExecution } from './execution.js'
 import { outcomePrompt, reconcileWorkbench } from './reconcile.js'
+import { kunToolPermissionModeSettings } from '../contracts/policy.js'
 
 const open: WorkbenchFixture[] = []
 afterEach(async () => { for (const f of open.splice(0)) await f.cleanup() })
@@ -75,6 +76,37 @@ async function fixture(options?: Parameters<typeof workbenchFixture>[0]) {
 }
 
 describe('Code harness discovery and validation', () => {
+  it('clamps inherited full access to the native Agent ceiling and preserves read-only authority', () => {
+    const h = harnessFixture()
+    const original = h.catalog.get('codex')!
+    const get = h.catalog.get.bind(h.catalog)
+    vi.spyOn(h.catalog, 'get').mockImplementation((id) => id === 'codex' ? { ...original,
+      permissionModes: [{ id: 'ask', label: 'Ask', kunPermissionMode: 'ask-for-approval' }] } : get(id))
+    expect(h.service.permissionCeiling(h.request(), kunToolPermissionModeSettings('full-access')))
+      .toEqual(kunToolPermissionModeSettings('ask-for-approval'))
+    const readOnly = { ...kunToolPermissionModeSettings('ask-for-approval'), sandboxMode: 'read-only' as const }
+    expect(h.service.permissionCeiling(h.request(), readOnly)).toEqual(readOnly)
+  })
+
+  it('does not treat an application-only entry as an executable Code Agent', async () => {
+    const h = harnessFixture()
+    const original = h.catalog.get('codex')!
+    const get = h.catalog.get.bind(h.catalog)
+    vi.spyOn(h.catalog, 'get').mockImplementation((id) => id === 'codex' ? { ...original, transport: 'application' } : get(id))
+    vi.spyOn(h.catalog, 'isDisabled').mockReturnValue(false)
+    await expect(h.service.resolve(h.request())).rejects.toThrow('application-only')
+  })
+
+  it('rejects native execution that cannot mediate the source tool limits, while unrestricted Code remains eligible', async () => {
+    const h = harnessFixture()
+    const ceiling = { blockedToolNames: ['write'], blockedProviderIds: ['private'], blockedSkillIds: [] }
+    expect(await h.service.resolve(h.request())).toMatchObject({ harnessId: 'codex' })
+    expect(() => h.service.assertCapabilityCeiling(h.request(), ceiling)).toThrow('cannot enforce')
+    const candidates = await h.service.list(undefined, ceiling)
+    expect(candidates.agents.find((agent) => agent.harnessId === 'codex')?.available).toBe(false)
+    expect(candidates.agents.find((agent) => agent.harnessId === 'kun')?.available).toBe(true)
+  })
+
   it('never discovers or dispatches an external Agent without explicit profile opt-in', async () => {
     const h = harnessFixture()
     h.enabledProfiles.splice(0)

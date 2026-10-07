@@ -222,7 +222,7 @@ export async function createRuntimeAgentComposition(
   const adeManagerContext = createAdeManagerContext({
     ...services.adeStores,
     harnessSummary: graphHarnessSummary,
-    canStartNewWork: () => core.activeOptions.ade?.enabled === true
+    canStartNewWork: () => core.activeOptions.capabilities?.subagents?.enabled !== false
   })
   const harnessRuntimeMap = new HarnessRuntimeMap(
     buildHarnessRuntimes(
@@ -262,6 +262,7 @@ export async function createRuntimeAgentComposition(
   // worker_* tool surface; AbortControllers outlive the manager turn.
   const childRunStore = new FileDelegationStore(join(core.activeOptions.dataDir, 'child-runs'))
   const dispatchDeliverer = new DispatchDeliverer({
+    agentDispatchService: services.agentDispatchService,
     teams: services.adeStores.teams,
     dispatches: services.adeStores.dispatches,
     taskWorkspaces: core.taskWorkspaces,
@@ -273,6 +274,8 @@ export async function createRuntimeAgentComposition(
   })
   // Worker-notice wake-ups (09 §6.2); runTurn is late-bound to runAgentTurn.
   const workerNoticeCoordinator = new WorkerNoticeCoordinator({
+    dispatches: services.adeStores.dispatches,
+    agentDispatchService: services.agentDispatchService,
     notices: services.adeStores.notices,
     teams: services.adeStores.teams,
     threads: threadStore,

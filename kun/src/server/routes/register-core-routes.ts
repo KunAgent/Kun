@@ -1,3 +1,4 @@
+import { registerAgentDispatchIntentRoutes } from './agent-dispatch-intents.js'
 import type { Router } from '../router.js'
 import { registerProviderConfigurationRoutes } from './provider-configuration.js'
 import { registerModelUtilityRoutes } from './model-utility.js'
@@ -95,6 +96,7 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   // never share the runtime-token authorization surface (docs/ade/05 §3.3).
   router.add('POST', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
   router.add('GET', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
+  registerAgentDispatchIntentRoutes(router, runtime)
   const strictGatewayAdmin = (request: Request) => strictRuntimeTokenAuthorized(request, runtime.runtimeToken)
   router.add('GET', '/v1/model-gateway/clients', (request) => {
     if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)

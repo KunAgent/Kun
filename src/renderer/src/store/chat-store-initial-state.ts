@@ -105,7 +105,7 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     composerRouteExplicitWorkspaceRoot: '',
     composerProjectCollaborationExplicitWorkspaceRoot: '',
     composerHarnessId: '',
-    composerCollaborationEnabled: false,
+    composerCollaborationEnabled: true,
     composerCredentialMode: '',
     composerIsolation: 'local' as const,
     composerIsolationExplicitWorkspaceRoot: '',

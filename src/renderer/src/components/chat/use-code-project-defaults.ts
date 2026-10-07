@@ -24,7 +24,7 @@ export function codeProjectDefaultsPatch(
   const route = snapshot.value.route
   const userSelectedRoute = state.composerRouteExplicitWorkspaceRoot === projectPath
   const collaboration = state.composerProjectCollaborationExplicitWorkspaceRoot === projectPath
-    ? state.composerCollaborationEnabled === true : snapshot.value.collaborationEnabled === true
+    ? state.composerCollaborationEnabled === true : snapshot.value.collaborationEnabled !== false
   const defaultResult = defaults && !route && !userSelectedRoute ? resolveCodeDefaultAgentRoute({
     ...defaults, groups: state.composerModelGroups, currentModel: state.composerModel,
     currentProviderId: state.composerProviderId, collaboration
@@ -81,9 +81,7 @@ export function codeProjectDefaultsPatch(
     ...(snapshot.value.collaborationEnabled !== undefined &&
       state.composerProjectCollaborationExplicitWorkspaceRoot !== projectPath
       ? { composerCollaborationEnabled: snapshot.value.collaborationEnabled }
-      : {}),
-    ...(!resolved && snapshot.value.collaborationEnabled === true && !route && !userSelectedRoute
-      ? { composerHarnessId: 'kun', composerCredentialMode: '' } : {})
+      : {})
   }
 }
 

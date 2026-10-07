@@ -1,3 +1,4 @@
+import { publishAgentDispatchIntent } from './agent-dispatch-client'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -578,6 +579,7 @@ export async function dispatchKunRuntimeEvent(
   sink: ThreadEventSink,
   handleApprovalRequest: (event: CoreRuntimeEventJson, sink: ThreadEventSink) => Promise<void>
 ): Promise<void> {
+  if (event.kind === 'agent_dispatch_intent') publishAgentDispatchIntent(event.dispatchIntent)
   const child = normalizeChildMetadata(event.child)
   if (child) {
     sink.onChildRuntimeEvent?.({

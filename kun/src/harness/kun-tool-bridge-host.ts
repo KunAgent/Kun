@@ -53,6 +53,7 @@ import { stashSdkToolResultMeta } from '../runtime/agent-sdk/sdk-tool-result-met
 import { isStalePlanContext } from '../loop/agent-loop.js'
 import { SVG_ARTIFACT_ALLOWED_TOOL_NAMES } from '../loop/design-mode.js'
 import { applyRoomToolPolicy, mergeRoomDeniedIds } from '../loop/room-turn-policy.js'
+import { hasWorkbenchCapabilityConstraints } from '../contracts/thread-workbench-origin.js'
 import { resolveTurnClientSurface } from '../loop/turn-context-resolver.js'
 import {
   delegatedGraphAllowedToolNames,
@@ -227,21 +228,22 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
     turn: ThreadRecord['turns'][number]
   ): Promise<readonly string[]> => {
     const key = skillTurnKey(thread.id, turn.id)
-    if (!deps.skillRuntime || thread.roomContext?.skillsEnabled === false) {
+    if (!deps.skillRuntime || thread.roomContext?.skillsEnabled === false || thread.workbenchOrigin?.capabilityCeiling?.skillsEnabled === false) {
       return activeSkillIdsByTurn.get(key) ?? []
     }
     const blockedSkillIds = mergeRoomDeniedIds(
       deps.toolContextBoundary?.blockedSkillIds,
-      thread.roomContext?.blockedSkillIds
+      thread.roomContext?.blockedSkillIds,
+      thread.workbenchOrigin?.capabilityCeiling?.blockedSkillIds
     )
+    const allowedSkillIds = intersectDelegatedToolNames(deps.toolContextBoundary?.allowedSkillIds,
+      thread.workbenchOrigin?.capabilityCeiling?.allowedSkillIds)
     const resolution = await deps.skillRuntime.resolveTurn({
       prompt: skillPromptByTurn.get(key) ?? turn.prompt ?? '',
       workspace: thread.workspace,
       threadId: thread.id,
       turnId: turn.id,
-      ...(deps.toolContextBoundary?.allowedSkillIds
-        ? { allowedSkillIds: deps.toolContextBoundary.allowedSkillIds }
-        : {}),
+      ...(allowedSkillIds ? { allowedSkillIds } : {}),
       ...(blockedSkillIds.length ? { blockedSkillIds } : {})
     })
     activeSkillIdsByTurn.set(key, resolution.activeSkillIds)
@@ -317,6 +319,11 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
       ...deps.toolContextBoundary,
       ...(turn.orchestration ? { orchestration: turn.orchestration } : {}),
       ...(turn.harnessId ? { harnessId: turn.harnessId } : {}),
+      managerToolBridgeAvailable: Boolean(deps.toolHost),
+      agentSurface: turn.agentSurface ?? thread.agentSurface ?? 'code',
+      collaborationEnabled: turn.collaborationEnabled ?? thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
+      collaborationEverEnabled: thread.collaboration?.everEnabled,
+      ...(turn.imContext ? { imContext: true } : {}),
       ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
       ...(thread.executionUnit?.kind
         ? { executionUnitKind: thread.executionUnit.kind }
@@ -345,7 +352,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
         ? async () => 'deny'
         : makeAwaitApproval(scope, opts.signal)
     }
-    return thread.roomContext ? applyRoomToolPolicy(context, thread) : context
+    return applyRoomToolPolicy(context, thread)
   }
 
   const resolvePolicy = (
@@ -389,14 +396,15 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
       ? { planMode: false as const }
       : resolveTurnPlanContext(thread, turnId)
     const clientSurface = resolveTurnClientSurface(turn)
-    const roomSkillsDisabled = thread.roomContext?.skillsEnabled === false
+    const roomSkillsDisabled = thread.roomContext?.skillsEnabled === false || thread.workbenchOrigin?.capabilityCeiling?.skillsEnabled === false
     const blockedSkillIds = mergeRoomDeniedIds(
       deps.toolContextBoundary?.blockedSkillIds,
-      thread.roomContext?.blockedSkillIds
+      thread.roomContext?.blockedSkillIds,
+      thread.workbenchOrigin?.capabilityCeiling?.blockedSkillIds
     )
     const allowedSkillIds = roomSkillsDisabled
       ? []
-      : deps.toolContextBoundary?.allowedSkillIds
+      : intersectDelegatedToolNames(deps.toolContextBoundary?.allowedSkillIds, thread.workbenchOrigin?.capabilityCeiling?.allowedSkillIds)
     const prompt = opts?.skillPrompt ?? turn.prompt ?? ''
     skillPromptByTurn.set(skillTurnKey(threadId, turnId), prompt)
     const skillResolution = !roomSkillsDisabled && deps.skillRuntime
@@ -482,6 +490,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
     const suppressOverlap =
       Boolean(scope.graphPolicy) ||
       Boolean(scope.thread.roomContext) ||
+      hasWorkbenchCapabilityConstraints(scope.thread.workbenchOrigin?.capabilityCeiling) ||
       scope.plan.planMode ||
       managedScope
     return selectBridgeableTools(catalog, {

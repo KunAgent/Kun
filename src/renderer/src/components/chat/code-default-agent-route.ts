@@ -32,7 +32,7 @@ export function resolveCodeDefaultAgentRoute(input: {
   collaboration: boolean
 }): CodeDefaultAgentResult {
   const { settings, groups } = input
-  const harnessId = input.collaboration ? 'kun' : settings.harnesses?.defaultHarnessId?.trim() || 'kun'
+  const harnessId = settings.harnesses?.defaultHarnessId?.trim() || 'kun'
   const defaults = settings.harnesses?.defaults[harnessId]
   const row = input.rows.find((entry) => entry.definition.id === harnessId)
   const credentialMode = harnessId === 'kun' ? 'provider'

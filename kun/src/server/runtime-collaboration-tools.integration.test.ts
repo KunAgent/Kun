@@ -43,7 +43,7 @@ async function captureModel() {
 }
 
 describe('Code collaboration model tools across configuration reloads', () => {
-  it('advertises newly enabled tools after hot apply and retains only existing controls when disabled', async () => {
+  it('keeps ordinary delegation available across advanced collaboration configuration reloads', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-collaboration-schema-'))
     cleanups.push(() => rm(root, { recursive: true, force: true }))
     const fixture = await captureModel()
@@ -68,7 +68,7 @@ describe('Code collaboration model tools across configuration reloads', () => {
       expect(names).toBeDefined()
       return names!
     }
-    expect(await send(manager.id, 'startup-disabled')).not.toContain('worker_create')
+    expect(await send(manager.id, 'startup-disabled')).toContain('worker_create')
     for (const marker of ['first-save', 'second-save']) {
       expect(await runtime.applyConfig({ ade: AdeConfigSchema.parse({ enabled: true }) }))
         .toMatchObject({ ok: true })
@@ -82,11 +82,11 @@ describe('Code collaboration model tools across configuration reloads', () => {
     const controls = await send(manager.id, 'globally-disabled')
     expect(controls).toContain('harness_list')
     expect(controls).toContain('worker_stop')
-    expect(controls).not.toContain('worker_create')
+    expect(controls).toContain('worker_create')
     await runtime.applyConfig({ ade: AdeConfigSchema.parse({ enabled: true }) })
     const ordinary = await runtime.threadService.create({ workspace: root, model: 'fixture-model', mode: 'agent', workspaceMode: 'code' })
     const ordinaryNames = await send(ordinary.id, 'ordinary-code')
-    expect(ordinaryNames).not.toContain('harness_list')
-    expect(ordinaryNames).not.toContain('worker_create')
+    expect(ordinaryNames).toContain('harness_list')
+    expect(ordinaryNames).toContain('worker_create')
   }, 30_000)
 })

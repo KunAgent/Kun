@@ -1,3 +1,4 @@
+import { createAgentDispatchToolProvider } from '../adapters/tool/agent-dispatch-tool-provider.js'
 import {
   HARNESS_CAPABILITY_KEYS,
   unsupported,
@@ -120,7 +121,7 @@ export function createHarnessListDeps(input: {
  * isolated/unattended/recentFailures/managerRoute/language per call.
  */
 export function createManagerRuntime(input: {
-  services: Pick<RuntimeServices, 'adeStores' | 'harnesses' | 'workerCallbacks' | 'attribution'>
+  services: Pick<RuntimeServices, 'adeStores' | 'harnesses' | 'workerCallbacks' | 'attribution' | 'agentDispatchService'>
   core: Pick<
     RuntimeServices['model']['core'],
     | 'taskWorkspaces'
@@ -163,7 +164,8 @@ export function createManagerRuntime(input: {
       harnessRuntimeMap
     ),
     language: () => Intl.DateTimeFormat().resolvedOptions().locale,
-    canStartNewWork: () => core.activeOptions.ade?.enabled === true,
+    agentDispatchService: input.services.agentDispatchService,
+    canStartNewWork: () => core.activeOptions.capabilities?.subagents?.enabled !== false,
     allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
     teamLimits: () => core.activeOptions.ade?.limits,
     teamBudgetPolicy: () => core.activeOptions.ade?.budget,
@@ -300,11 +302,13 @@ export function registerAdeManagerTooling(input: {
       }),
       managerMayApprove: () =>
         input.core.activeOptions.ade?.managerMayApprove === true,
-      canStartNewWork: () => input.core.activeOptions.ade?.enabled === true,
+      canStartNewWork: () => input.core.activeOptions.capabilities?.subagents?.enabled !== false,
+      advancedCollaborationEnabled: () => input.core.activeOptions.ade?.enabled === true,
       race: input.managerRuntime.raceServiceDeps,
       checks: input.managerRuntime.checkRunnerDeps
     })
   input.registry.registerProvider(provider)
+  input.registry.registerProvider(createAgentDispatchToolProvider(input.services.agentDispatchService))
   wireTaskWorkspaceChange(
     input.core.taskWorkspaces,
     input.managerRuntime,

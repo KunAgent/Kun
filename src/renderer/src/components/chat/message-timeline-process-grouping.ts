@@ -1,3 +1,4 @@
+import { isAgentDispatchBlock } from './AgentDispatchCard'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { blockHasPendingRuntimeWork } from './message-timeline-turns'
 import { isFastContextToolBlock } from './fast-context-card-copy'
@@ -58,6 +59,10 @@ export function groupProcessSections(blocks: ChatBlock[]): ProcessSection[] {
   const sections: ProcessSection[] = []
 
   for (const block of blocks) {
+    if (isAgentDispatchBlock(block)) {
+      sections.push({ id: `dispatch-${block.id}`, kind: 'execution', blocks: [block] })
+      continue
+    }
     if (isSubagentBlock(block)) {
       const last = sections[sections.length - 1]
       // Coalesce sibling non-explore delegations of one turn (same parentTurnId)

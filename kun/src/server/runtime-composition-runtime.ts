@@ -182,7 +182,10 @@ export function createServerRuntimeComposition(
   bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
   // The tool registry holds the lifecycle-fenced facade, which is a different identity from the room runtime's store.
   bindWorkbenchBridge(core.threadStore, roomComposition.rooms.workbench)
-  roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService,
+  events.addObserver({ record: (event) => {
+    if (event.kind === 'agent_dispatch_intent' && event.dispatchIntent.kind === 'workbench') roomComposition.rooms.workbench.wake()
+  } })
+  roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService, agentDispatch: services.agentDispatchService,
     harnesses: new WorkbenchHarnessService({ catalog: services.harnesses.catalog, detector: services.harnesses.detector, readiness: services.harnesses.readiness,
       runtimes: agent.harnessRuntimeMap, router: agent.harnessRouter,
       probedModels: (definition) => services.harnesses.probedModels(definition),
@@ -193,6 +196,7 @@ export function createServerRuntimeComposition(
       snapshot: () => modelConnections.snapshot(), defaultModel: () => roomComposition.rooms.deps.model() }) })
   return {
     threadService,
+    agentDispatchService: services.agentDispatchService,
     historyReferences: core.historyReferences,
     rooms: roomComposition.rooms,
     projectBoardService,
@@ -233,6 +237,7 @@ export function createServerRuntimeComposition(
     startBackgroundMaintenance: () => {
       backgroundMaintenance.start()
       roomComposition.start()
+      void services.agentDispatchService.start().catch((error) => console.warn('[kun] Agent dispatch startup failed:', error))
     },
     prepareForRequests: async () => {
       await prepareUsageCarryover()
@@ -523,6 +528,7 @@ export function createServerRuntimeComposition(
           await shutdownRuntimeExecutionForHost({
             prepare: async () => {
               eventStreamRegistry.closeAll()
+              await services.agentDispatchService.stop()
               await roomComposition.close()
               agent.shuttingDown = true
               await agent.queuedTurnDispatcher.dispose()

@@ -55,28 +55,24 @@ describe('Code collaboration intent', () => {
     expect(useChatStore.getState().threads[0]).toMatchObject({ title: 'Original', collaboration: { enabled: true } })
   })
 
-  it('saves a confirmed Kun handoff and collaboration together without an empty turn', async () => {
+  it('updates external root delegation without changing the selected Agent', async () => {
     const external = { ...thread, harnessId: 'codex' }
-    useChatStore.setState({ activeThreadId: 'task', composerHarnessId: 'kun', threads: [external] })
-    controls.enable.mockResolvedValue({ current: { collaborationEnabled: true, route: { harnessId: 'kun' } } })
-    await mount(external)
+    useChatStore.setState({ activeThreadId: 'task', composerHarnessId: 'codex', threads: [external] })
+    controls.update.mockResolvedValue({ ...external, collaboration: { enabled: true } })
+    await mount(external, 'codex')
     await act(async () => result.toggleCollaboration())
-    expect(controls.enable).toHaveBeenCalledWith('task', { model: 'model', providerId: 'provider' })
-    expect(controls.update).not.toHaveBeenCalled()
-    expect(useChatStore.getState().threads[0]).toMatchObject({ harnessId: 'kun', collaboration: { enabled: true } })
-    expect(useChatStore.getState().createThread).not.toHaveBeenCalled()
+    expect(controls.update).toHaveBeenCalledWith('task', true)
+    expect(useChatStore.getState().threads[0]).toMatchObject({ harnessId: 'codex', collaboration: { enabled: true } })
+    expect(controls.enable).not.toHaveBeenCalled()
   })
 
-  it('routes setup to the shared settings and does not enable an external manager', async () => {
+  it('allows ordinary delegation when advanced collaboration is disabled', async () => {
     controls.enabled = false
-    await mount(null)
-    await act(async () => result.toggleCollaboration())
-    expect(useChatStore.getState().openSettings).toHaveBeenCalledWith('agentsCollaboration')
-    await act(async () => rendered?.unmount())
-    controls.enabled = true
     await mount(null, 'codex')
     await act(async () => result.toggleCollaboration())
-    expect(result.collaborationError).toBeTruthy()
-    expect(useChatStore.getState().composerCollaborationEnabled).toBe(false)
+    expect(result.collaborationAvailable).toBe(true)
+    expect(useChatStore.getState().composerCollaborationEnabled).toBe(true)
+    expect(useChatStore.getState().openSettings).not.toHaveBeenCalled()
+    expect(useChatStore.getState().composerHarnessId).toBe('')
   })
 })

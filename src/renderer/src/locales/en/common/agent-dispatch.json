@@ -1,0 +1,44 @@
+{
+  "dispatchIntent": {
+    "loading": "Loading Agent task…",
+    "countdown": "Starts with the recommendation in {{seconds}}s",
+    "startNow": "Start with recommendation now",
+    "confirm": "Confirm and start",
+    "resume": "Resume recommendation",
+    "adjust": "Adjust",
+    "stop": "Stop",
+    "cancel": "Cancel",
+    "title": "Task title",
+    "task": "Task instructions",
+    "save": "Save recommendation",
+    "keepRecommendation": "Keep original recommendation",
+    "details": "Task and acceptance criteria",
+    "viewProcess": "View process",
+    "updateFailed": "Could not save the recommendation. The task remains paused.",
+    "status": {
+      "pending_confirmation": "Waiting for your confirmation",
+      "reviewing": "Agent is reviewing this dispatch",
+      "countdown": "Preparing to start",
+      "paused": "Paused for adjustment",
+      "queued": "Queued",
+      "starting": "Starting Agent",
+      "uncertain": "Checking task startup",
+      "running": "Agent is working",
+      "awaiting_parent": "Waiting for the main Agent to review",
+      "completed": "Completed",
+      "failed": "Could not complete task",
+      "cancelled": "Cancelled",
+      "stopping": "Stopping"
+    },
+    "permissionLabel": "Task permissions",
+    "permission": {
+      "ask-for-approval": "Ask for approval",
+      "approve-for-me": "Approve for me",
+      "full-access": "Full access"
+    },
+    "takeover": "Take over",
+    "takenOver": "You have control. Automatic follow-up is disabled.",
+    "elapsed": "{{seconds}}s in this phase"
+  },
+  "roomsWorkbenchDispatchPolicyHint": "Code task cards follow this conversation’s permissions: confirmation, automatic review, or a 60-second start window with full access. Other actions use the policy above."
+}

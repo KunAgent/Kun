@@ -177,7 +177,7 @@ export async function startRace(
           startFrom: { kind: 'commit', sha: startSha }
         },
         lifecycle: 'ephemeral'
-      }, toolContext)
+      }, { ...toolContext, activeToolCallId: undefined })
       .catch((error: unknown): WorkerCreateResult => ({
         ok: false,
         userReport: errorMessage(error)

@@ -202,12 +202,12 @@ export class AgentIdentityService {
   freeze(room: Room): Promise<Room> { return freezeAgentRoom(this, room) }
 }
 
-/** Coding Agents run their own engine: no Kun model, memory, review or workbench reach. */
+/** Coding Agents keep their fixed engine and may reach Code through the scoped bridge. */
 function normalizeExternalAgent(agent: AgentIdentity): AgentIdentity {
   if (!agent.executor) return agent
   agent.modelRef = undefined
   agent.fastModelRef = undefined
-  agent.workbench = undefined
+  if (agent.workbench) agent.workbench = { ...agent.workbench, work: 'off' }
   agent.reviewerAgentId = undefined
   agent.presetId = 'general'
   agent.defaultRole = 'developer'

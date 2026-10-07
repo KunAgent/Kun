@@ -1,3 +1,4 @@
+import { AgentDispatchGroup, isAgentDispatchBlock } from './AgentDispatchCard'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement, RefObject } from 'react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -126,6 +127,8 @@ export function ProcessSectionRow({
     immediate: shouldDeferDetails && (active || section.kind === 'execution'),
     root: viewportRef
   })
+
+  if (section.blocks.some(isAgentDispatchBlock)) return <AgentDispatchGroup blocks={section.blocks} readOnly={!allowThreadActions} />
 
   if (section.kind === 'subagent') {
     return <SubagentGroup blocks={section.blocks} onOpenChildThread={onOpenChildThread} />

@@ -29,6 +29,7 @@ import {
 import type { GoalElapsedTimer } from './goal-turn-coordinator.js'
 import { AgentLoopBase } from './agent-loop-base.js'
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
+import { hasWorkbenchCapabilityConstraints } from '../contracts/thread-workbench-origin.js'
 
 export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
   protected abstract loop(
@@ -248,12 +249,12 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     }
     try {
       goalTimer = turnRecord?.paperContext ? null : await this.goalTurns.begin(threadId)
-      // Coding Agent contacts chat and discuss under their engine's own read-only
-      // or permission gate (admission usage room-conversation); other room work
-      // still needs a runtime that applies Kun's room tool policy.
+      // Conversation members retain their engine-native gate; constrained Code
+      // handoffs still require the host to enforce their inherited ceiling.
       const conversationalEngine = Boolean(owningThread?.roomContext && turnHarnessId &&
         isConversationalRoomEngine(owningThread.roomContext.kind, turnHarnessId))
-      if (delegatedSdkRuntime && owningThread?.roomContext && !conversationalEngine &&
+      if (delegatedSdkRuntime && ((owningThread?.roomContext && !conversationalEngine) ||
+        hasWorkbenchCapabilityConstraints(owningThread?.workbenchOrigin?.capabilityCeiling)) &&
         delegatedSdkRuntime.capabilities(delegatedProviderId)?.roomToolPolicy !== true) {
         throw new Error('This provider cannot enforce the room tool policy; select an API model or a supported SDK provider.')
       }

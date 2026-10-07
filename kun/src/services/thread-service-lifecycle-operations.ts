@@ -223,6 +223,7 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
       historyRefId: current.historyRefId,
       title: options.title?.trim() || defaultTitle,
       workspace: current.workspace,
+      ...(current.workbenchOrigin ? { workbenchOrigin: structuredClone(current.workbenchOrigin) } : {}),
       additionalWorkspaces: current.additionalWorkspaces,
       knowledgeBases: current.knowledgeBases,
       model: current.model,
@@ -491,6 +492,7 @@ async resumeSession(this: ThreadService,
     const record = createThreadRecord({
       id: threadId,
       title: `${sourceTitle} resumed`,
+      ...(sourceThread?.workbenchOrigin ? { workbenchOrigin: structuredClone(sourceThread.workbenchOrigin) } : {}),
       historyRefId: sourceHistoryRefId,
       workspace: sourceDesignProfile
         ? sourceWorkspace!

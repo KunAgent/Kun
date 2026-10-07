@@ -100,10 +100,10 @@ describe('new Code default Agent route', () => {
     expect(codeProjectDefaultsPatch({ ...base(), workspaceRoot: '/other' }, project, '/repo', input)).toEqual({})
   })
 
-  it('keeps collaboration on Kun and never enables it merely because a default Agent changed', () => {
+  it('keeps the configured external route when ordinary delegation is enabled', () => {
     const state = { ...base(), composerCollaborationEnabled: true, composerProjectCollaborationExplicitWorkspaceRoot: '/repo' }
     expect(codeProjectDefaultsPatch(state, project, '/repo', input))
-      .toMatchObject({ composerHarnessId: 'kun', composerProviderId: 'deepseek' })
+      .toMatchObject({ composerHarnessId: 'codex', composerCredentialMode: 'native-login' })
     expect(codeProjectDefaultsPatch(base(), project, '/repo', input).composerCollaborationEnabled).toBeUndefined()
   })
 

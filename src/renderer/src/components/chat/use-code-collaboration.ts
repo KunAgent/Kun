@@ -5,14 +5,12 @@ import { getProvider } from '../../agent/registry'
 import { useChatStore } from '../../store/chat-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { formatRuntimeError } from '../../lib/format-runtime-error'
-import { useAdeEnabled } from '../ade/use-ade-enabled'
-import { enableKunCollaboration } from './enable-kun-collaboration'
 
 /** Persists task-level collaboration without changing an accepted turn's tools. */
 export function useCodeCollaboration({
   activeThreadId,
   activeThread,
-  harnessId,
+  harnessId: _harnessId,
   busy
 }: {
   activeThreadId: string | null
@@ -21,7 +19,7 @@ export function useCodeCollaboration({
   busy: boolean
 }) {
   const { t } = useTranslation('common')
-  const { enabled: collaborationAvailable } = useAdeEnabled()
+  const collaborationAvailable = true
   const draftEnabled = useChatStore((state) => state.composerCollaborationEnabled)
   const collaborationEnabled = activeThreadId
     ? activeThread?.collaboration?.enabled ?? (activeThread?.workspaceMode === 'ade')
@@ -38,18 +36,9 @@ export function useCodeCollaboration({
   }, [activeThreadId])
 
   const toggleCollaboration = async (): Promise<void> => {
-    if (!collaborationAvailable) {
-      useChatStore.getState().openSettings('agentsCollaboration')
-      return
-    }
-    if (harnessId !== 'kun' && !collaborationEnabled) {
-      setCollaborationError(t('codeCollaborationRequiresKun'))
-      return
-    }
     if (busy || collaborationBusy) return
     if (!activeThreadId) {
       const state = useChatStore.getState()
-      if (!collaborationEnabled) state.setComposerHarness('kun', '')
       useChatStore.setState({
         composerCollaborationEnabled: !collaborationEnabled,
         composerProjectCollaborationExplicitWorkspaceRoot: normalizeWorkspaceRoot(state.workspaceRoot)
@@ -62,18 +51,6 @@ export function useCodeCollaboration({
     try {
       const threadId = activeThreadId
       const provider = getProvider()
-      const selection = useChatStore.getState()
-      if (!collaborationEnabled && selection.composerHarnessId === 'kun') {
-        const result = await enableKunCollaboration(threadId, {
-          model: selection.composerModel, providerId: selection.composerProviderId
-        })
-        useChatStore.setState((current) => ({ threads: current.threads.map((item) => item.id === threadId ? {
-          ...item, collaboration: { enabled: result.current.collaborationEnabled, everEnabled: true },
-          ...(result.current.route.harnessId ? { harnessId: result.current.route.harnessId } : {})
-        } : item) }))
-        void useChatStore.getState().refreshThreads()
-        return
-      }
       if (!provider.updateThreadCollaboration) {
         throw new Error(t('codeCollaborationUnavailable'))
       }

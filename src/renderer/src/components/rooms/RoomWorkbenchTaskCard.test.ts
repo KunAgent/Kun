@@ -9,12 +9,17 @@ const mocks = vi.hoisted(() => ({
   client: { get: vi.fn(), confirm: vi.fn(), dismiss: vi.fn(), cancel: vi.fn() },
   subscribe: vi.fn(),
   open: vi.fn(),
-  openTarget: vi.fn()
+  openTarget: vi.fn(),
+  dispatch: { get: vi.fn(), act: vi.fn(), publish: vi.fn() }
 }))
 vi.mock('./workbench-client', () => ({ workbenchClient: mocks.client }))
 vi.mock('./useRoomEvents', () => ({ subscribeRoomEvents: (listener: unknown) => mocks.subscribe(listener) }))
 vi.mock('./workbench-navigation', () => ({
   openWorkbenchLinkTarget: mocks.open, workbenchOpenTarget: mocks.openTarget }))
+vi.mock('../../agent/agent-dispatch-client', () => ({ agentDispatchClient: mocks.dispatch, publishAgentDispatchIntent: mocks.dispatch.publish }))
+vi.mock('../chat/AgentDispatchIntentControls', () => ({
+  AgentDispatchIntentControls: ({ intentId }: { intentId: string }) => createElement('aside', { 'data-dispatch-controls': intentId }, 'Host dispatch decision')
+}))
 
 const room = { id: 'room', members: [] } as unknown as Room
 const message = { id: 'card-1', roomId: 'room', presentationKind: 'workbench_task', workbenchLinkId: 'link-1', body: 'Fix SSE',
@@ -39,6 +44,7 @@ describe('Room workbench task card', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
     Object.values(mocks.client).forEach((mock) => mock.mockReset())
+    Object.values(mocks.dispatch).forEach((mock) => mock.mockReset())
     mocks.open.mockReset().mockResolvedValue(undefined)
     mocks.openTarget.mockReset().mockReturnValue(null)
     mocks.subscribe.mockReset().mockImplementation((listener: (event: unknown) => void) => { emit = listener; return () => undefined })
@@ -172,5 +178,34 @@ describe('Room workbench task card', () => {
     mocks.client.get.mockRejectedValue(Object.assign(new Error('not found'), { status: 404 }))
     await mount()
     expect(text(renderer!)).toContain('This task is no longer available.')
+  })
+
+  it('uses host dispatch controls without showing another manual confirmation', async () => {
+    mocks.client.get.mockResolvedValue(link({ dispatchIntentId: 'dispatch-1' }))
+    await mount()
+    expect(renderer!.root.findByProps({ 'data-dispatch-controls': 'dispatch-1' })).toBeTruthy()
+    expect(button(renderer!, 'Start')).toBeUndefined()
+    expect(text(renderer!)).not.toContain('Needs your OK')
+    expect(mocks.client.confirm).not.toHaveBeenCalled()
+  })
+
+  it('waits for the host pause before editing and resumes the host on discard', async () => {
+    mocks.client.get.mockResolvedValue(link({ dispatchIntentId: 'dispatch-1' }))
+    const intent = { intentId: 'dispatch-1', revision: 1, state: 'countdown' }
+    mocks.dispatch.get.mockResolvedValue(intent)
+    let releasePause: (value: unknown) => void = () => undefined
+    mocks.dispatch.act.mockImplementationOnce(() => new Promise((resolve) => { releasePause = resolve }))
+    await mount()
+    await act(async () => { button(renderer!, 'Edit')!.props.onClick(); await Promise.resolve() })
+    expect(mocks.dispatch.act).toHaveBeenCalledWith(intent, 'pause')
+    expect(renderer!.root.findAllByType('textarea')).toHaveLength(0)
+    await act(async () => { releasePause({ ...intent, revision: 2, state: 'paused' }); await Promise.resolve() })
+    expect(renderer!.root.findAllByType('textarea')).toHaveLength(1)
+    expect(button(renderer!, 'At a time')).toBeUndefined()
+    mocks.dispatch.get.mockResolvedValue({ ...intent, revision: 2, state: 'paused' })
+    mocks.dispatch.act.mockResolvedValue({ ...intent, revision: 3, state: 'countdown' })
+    await act(async () => { button(renderer!, 'Cancel')!.props.onClick(); await Promise.resolve() })
+    expect(mocks.dispatch.act).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 2 }), 'resume')
+    expect(renderer!.root.findAllByType('textarea')).toHaveLength(0)
   })
 })

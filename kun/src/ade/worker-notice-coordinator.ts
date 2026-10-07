@@ -6,6 +6,9 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
 import type { FileTeamStore } from './team-store.js'
 import type { FileWorkerNoticeStore, WorkerNoticeSink } from './worker-notice-store.js'
+import { kunToolPermissionModeFromSettings, type KunToolPermissionSettings } from '../contracts/policy.js'
+import { intersectDispatchPolicy } from './worker-dispatch-security.js'
+import type { FileDispatchStore } from './dispatch-store.js'
 import { renderWorkerUpdates } from './notice-render.js'
 
 type RunTurn = (threadId: string, turnId: string) => Promise<unknown>
@@ -32,9 +35,11 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
 
   constructor(private readonly options: {
     notices: FileWorkerNoticeStore
-    teams: Pick<FileTeamStore, 'list'>
+    teams: Pick<FileTeamStore, 'list'> & Partial<Pick<FileTeamStore, 'get'>>
     threads: Pick<ThreadStore, 'get'>
-    turns: Pick<TurnService, 'startTurn'>
+    dispatches?: Pick<FileDispatchStore, 'get'>
+    agentDispatchService?: Pick<import('../delegation/agent-dispatch-service.js').AgentDispatchService, 'get'>
+    turns: Pick<TurnService, 'startTurn'> & Partial<Pick<TurnService, 'getTurn'>>
     runTurn: () => RunTurn | null
     nowIso: () => string
     nowMs?: () => number
@@ -128,7 +133,19 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
   }
 
   async deliverForManager(managerThreadId: string): Promise<void> {
-    const pending = await this.options.notices.pending(managerThreadId)
+    const stored = await this.options.notices.pending(managerThreadId)
+    const team = await this.options.teams.get?.(managerThreadId)
+    const pending: WorkerNotice[] = []
+    const suppressed: string[] = []
+    for (const notice of stored) {
+      const worker = team?.workers.find((entry) => entry.workerId === notice.workerId)
+      const intentId = notice.dispatchIntentId ?? worker?.dispatchIntentId
+      const intent = intentId ? await this.options.agentDispatchService?.get(intentId) : undefined
+      const completion = notice.kind === 'dispatch_completed' || notice.kind === 'dispatch_failed'
+      if (completion && (worker?.control === 'user' || intent?.takenOver || intent?.cancellationRequested)) suppressed.push(notice.noticeId)
+      else pending.push(notice)
+    }
+    if (suppressed.length) await this.options.notices.ack(managerThreadId, suppressed)
     if (!pending.length) return
     const thread = await this.options.threads.get(managerThreadId).catch(() => null)
     if (!thread) {
@@ -152,11 +169,30 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
       .digest('hex')
       .slice(0, 24)}`
     const rendered = renderWorkerUpdates(pending, this.options.language?.())
+    const originating = this.options.dispatches ? await Promise.all(pending.map((notice) => notice.dispatchId
+      ? this.options.dispatches!.get(managerThreadId, notice.dispatchId) : Promise.resolve(null))) : []
+    const sourceTurnId = pending.find((notice) => notice.parentTurnId)?.parentTurnId ?? originating.find(Boolean)?.parentTurnId
+    const sourceTurn = thread.turns.find((turn) => turn.id === sourceTurnId) ??
+      (sourceTurnId ? await this.options.turns.getTurn?.(managerThreadId, sourceTurnId).catch(() => null) : null)
     const execution = thread.pendingExecutionConfig ?? thread.executionConfig
-    const route = execution ? execution.managerModel ?? execution.route : this.options.managerModel?.() ?? {
-      providerId: thread.providerId,
-      model: thread.model
+    const route = sourceTurn ? {
+      harnessId: sourceTurn.harnessId ?? thread.harnessId,
+      model: sourceTurn.model ?? thread.model, providerId: sourceTurn.providerId ?? thread.providerId,
+      credentialMode: sourceTurn.credentialMode, gatewayBinding: sourceTurn.gatewayBinding, harnessAgentId: sourceTurn.harnessAgentId
+    } : execution?.route ?? {
+      providerId: thread.providerId, model: thread.model, harnessId: thread.harnessId,
+      credentialMode: thread.turns.at(-1)?.credentialMode,
+      gatewayBinding: thread.turns.at(-1)?.gatewayBinding
     }
+    const sourcePolicy: KunToolPermissionSettings | undefined = sourceTurn ? {
+      approvalPolicy: sourceTurn.approvalPolicy ?? thread.approvalPolicy,
+      sandboxMode: sourceTurn.sandboxMode ?? thread.sandboxMode,
+      approvalReviewer: sourceTurn.approvalReviewer ?? thread.approvalReviewer ?? 'user'
+    } : undefined
+    const authority = sourcePolicy ? intersectDispatchPolicy(sourcePolicy, kunToolPermissionModeFromSettings({
+      approvalPolicy: thread.approvalPolicy, sandboxMode: thread.sandboxMode,
+      approvalReviewer: thread.approvalReviewer
+    })) : undefined
     let admittedTurnId: string | undefined
     await this.options.turns.startTurn({
       threadId: managerThreadId,
@@ -166,7 +202,16 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
         messageSource: 'worker_update',
         clientRequestId: batchId,
         ...(route.providerId ? { providerId: route.providerId } : {}),
-        ...(route.model ? { model: route.model } : {})
+        ...(route.model ? { model: route.model } : {}),
+        ...(route.harnessId ? { harnessId: route.harnessId } : {}),
+        ...('harnessAgentId' in route && route.harnessAgentId ? { harnessAgentId: route.harnessAgentId } : {}),
+        ...(route.credentialMode ? { credentialMode: route.credentialMode } : {}),
+        ...(route.gatewayBinding ? { gatewayBinding: route.gatewayBinding } : {}),
+        ...(sourceTurn?.accountId ? { accountId: sourceTurn.accountId } : {}),
+        ...(sourceTurn?.clientSurface ? { clientSurface: sourceTurn.clientSurface } : {}),
+        ...(sourceTurn?.reasoningEffort ? { reasoningEffort: sourceTurn.reasoningEffort } : {}),
+        ...(sourceTurn?.serviceTier ? { serviceTier: sourceTurn.serviceTier } : {}),
+        ...authority
       }
     }, {
       onAdmitted: (response: StartTurnResponse) => { admittedTurnId = response.turnId }

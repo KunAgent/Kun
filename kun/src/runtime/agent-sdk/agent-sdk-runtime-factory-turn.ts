@@ -1,3 +1,5 @@
+import { dispatchGuidanceForTools } from '../../ade/dispatch-guidance.js'
+import { hasWorkbenchCapabilityConstraints } from '../../contracts/thread-workbench-origin.js'
 import { retainFrozenHarnessAliases } from '../../harness/gateway-alias-binding.js'
 import { observeHarnessAliasRoute } from '../../harness/gateway-alias-route-observer.js'
 /**
@@ -316,6 +318,7 @@ export function createAgentSdkTurnRuntimeDeps(
         ...turnDynamicContext.instructions
       ] : [
         ...historyReferenceInstructions(thread),
+        ...dispatchGuidanceForTools(bridgedTools),
         buildClientSurfaceInstruction(clientSurface),
         ...(additionalWorkspacesInstruction ? [additionalWorkspacesInstruction] : []),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
@@ -362,7 +365,7 @@ export function createAgentSdkTurnRuntimeDeps(
               approvalReviewer,
               planMode,
               allowSdkBuiltins:
-                graphPolicy || thread.roomContext || planMode || turn?.guiDesignArtifact?.kind === 'svg'
+                graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || planMode || turn?.guiDesignArtifact?.kind === 'svg'
                   ? false
                   : deps.allowSdkBuiltins ?? true,
               capabilities: agentSdkCapabilities(),
@@ -456,10 +459,10 @@ export function createAgentSdkTurnRuntimeDeps(
         },
         planMode,
         allowSdkBuiltins:
-          graphPolicy || thread.roomContext || planMode || turn?.guiDesignArtifact?.kind === 'svg'
+          graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || planMode || turn?.guiDesignArtifact?.kind === 'svg'
             ? false
             : deps.allowSdkBuiltins ?? true,
-        ...(graphPolicy || thread.roomContext || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
+        ...(graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
         ...(graphPolicy ? { graphPhase: graphPolicy.phase } : {}),
         ...(turn?.guiDesignArtifact?.kind === 'svg' ? { requireSvgCompletion: true } : {}),
         // Claude Code only accepts Anthropic models; coerce a thread's non-Claude

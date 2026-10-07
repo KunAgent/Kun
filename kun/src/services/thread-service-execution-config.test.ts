@@ -54,7 +54,7 @@ describe('thread execution configuration', () => {
     const { service } = serviceWith(() => ({ projectDefaults: defaults, defaultRoute: { model: 'global-model' } }))
     const legacy = await service.create({ workspace: root, model: 'global-model', mode: 'agent' })
     expect(legacy.model).toBe('global-model')
-    expect(legacy.collaboration).toBeUndefined()
+    expect(legacy.collaboration).toMatchObject({ enabled: true })
     const revision = adeProjectDefaultsRevision(projectKey, project)
     const inherited = await service.create({
       workspace: root, model: 'global-model', mode: 'agent',

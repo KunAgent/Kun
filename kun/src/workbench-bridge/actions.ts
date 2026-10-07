@@ -11,6 +11,7 @@ import { countActiveLinks, createWorkbenchLink, readWorkbenchLink, updateWorkben
 import { executionMode, validateExecution } from './execution.js'
 import { buildTurnKey } from './reconcile-phases.js'
 import { firstScheduleAt, seriesHasLiveChild } from './schedule.js'
+import { updateWorkbenchDispatch } from './dispatch.js'
 
 const LONG_RUNNING = ['code_task', 'work_task'] as const
 
@@ -51,6 +52,15 @@ export async function confirmWorkbenchLink(bridge: WorkbenchBridge, roomId: stri
     throw new RoomStoreConflictError('This mode requires a Code task')
   }
   request = await validateExecution(bridge, roomId, request, link.kind === 'code_task' || link.kind === 'schedule_series')
+  if (link.dispatchIntentId) {
+    if (link.revision !== input.expectedRevision) throw new RoomStoreConflictError('workbench link changed since it was read', link.revision)
+    const intent = await bridge.agentDispatch?.get(link.dispatchIntentId)
+    if (!intent || !bridge.agentDispatch) throw new Error('The dispatch decision is unavailable')
+    if (input.edits) await updateWorkbenchDispatch(bridge, link, request, input.clientRequestId)
+    else await bridge.agentDispatch.act(intent.intentId, { action: 'start_now', expectedRevision: intent.revision, requestId: input.clientRequestId })
+    bridge.wake()
+    return readWorkbenchLink(bridge.store, roomId, linkId)
+  }
   const scheduledFor = request.schedule ? firstScheduleAt(request.schedule) : undefined
   if (link.status === 'awaiting_confirmation' && (LONG_RUNNING as readonly string[]).includes(link.kind) && !request.schedule) {
     const scope = await bridge.agentScope(link.participantAgentId)
@@ -78,6 +88,8 @@ export async function confirmWorkbenchLink(bridge: WorkbenchBridge, roomId: stri
 
 export async function dismissWorkbenchLink(bridge: WorkbenchBridge, roomId: string, linkId: string, raw: unknown) {
   const input = ResolveWorkbenchLinkSchema.parse(raw)
+  const link = await readWorkbenchLink(bridge.store, roomId, linkId)
+  if (link.dispatchIntentId) return requestWorkbenchCancel(bridge, roomId, linkId, input)
   return decide(bridge, roomId, linkId, 'dismiss', input, (current) => {
     if (current.status !== 'awaiting_confirmation') throw new RoomStoreConflictError('task is not waiting for confirmation', current.revision)
     return { status: 'dismissed' }
@@ -89,8 +101,18 @@ export async function dismissWorkbenchLink(bridge: WorkbenchBridge, roomId: stri
  * its turn interrupted and the reconciler records the outcome it actually had.
  */
 export async function requestWorkbenchCancel(bridge: WorkbenchBridge, roomId: string, linkId: string,
-  decision?: { clientRequestId: string; expectedRevision: number }): Promise<WorkbenchLinkEntry> {
+  decision?: { clientRequestId: string; expectedRevision: number }, fromDispatch = false): Promise<WorkbenchLinkEntry> {
   const link = await readWorkbenchLink(bridge.store, roomId, linkId)
+  if (link.dispatchIntentId && !fromDispatch && bridge.agentDispatch) {
+    if (decision && decision.expectedRevision !== link.revision) throw new RoomStoreConflictError('workbench link changed since it was read', link.revision)
+    const intent = await bridge.agentDispatch.get(link.dispatchIntentId)
+    if (!intent) throw new Error('The dispatch decision is unavailable')
+    await bridge.agentDispatch.act(intent.intentId, { action: 'cancel', expectedRevision: intent.revision,
+      requestId: decision?.clientRequestId ?? `workbench-cancel:${link.id}:${intent.revision}` })
+    if (!intent.target) await requestWorkbenchCancel(bridge, roomId, linkId, undefined, true)
+    bridge.wake()
+    return readWorkbenchLink(bridge.store, roomId, linkId)
+  }
   if (isWorkbenchTerminal(link.status)) throw new RoomStoreConflictError('task already ended', link.revision)
   if (link.kind === 'watch') {
     return updateWorkbenchLink(bridge.store, roomId, linkId, () => ({ status: 'cancelled' }), decision ? { expectedRevision: decision.expectedRevision } : {})
@@ -105,7 +127,7 @@ export async function requestWorkbenchCancel(bridge: WorkbenchBridge, roomId: st
   }
   if (link.status === 'awaiting_confirmation' || (link.status === 'queued' && !link.threadId)) {
     return updateWorkbenchLink(bridge.store, roomId, linkId,
-      (current) => ({ status: current.status === 'awaiting_confirmation' ? 'dismissed' : 'cancelled', cancelRequested: true }),
+      (current) => ({ status: current.status === 'awaiting_confirmation' && !current.dispatchIntentId ? 'dismissed' : 'cancelled', cancelRequested: true }),
       decision ? { expectedRevision: decision.expectedRevision } : {})
   }
   if (link.taskWorkspaceId && bridge.taskWorkspaces) {

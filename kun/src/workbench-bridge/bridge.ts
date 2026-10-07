@@ -11,6 +11,8 @@ import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import type { RoomService } from '../rooms/room-service.js'
 import type { RoomStore } from '../rooms/room-store.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+import type { AgentDispatchService } from '../delegation/agent-dispatch-service.js'
+import { attachWorkbenchDispatch } from './dispatch.js'
 import type { WorkbenchHarnessService } from './harnesses.js'
 import { WorkbenchDirectoryService, pathWithin } from './directory.js'
 
@@ -18,6 +20,7 @@ export type WorkbenchExternalServices = {
   taskWorkspaces?: TaskWorkspaceService
   harnesses?: WorkbenchHarnessService
   projectBoard?: ProjectBoardService
+  agentDispatch?: AgentDispatchService
 }
 
 /** What an Agent identity currently allows; read live so a settings change applies to the next tool call. */
@@ -48,10 +51,15 @@ export class WorkbenchBridge {
     this.directory = WorkbenchDirectoryService.forDataDir(deps.dataDir)
   }
 
-  attach(external: WorkbenchExternalServices): void { this.external = { ...this.external, ...external } }
+  attach(external: WorkbenchExternalServices): void {
+    const previous = this.external.agentDispatch
+    this.external = { ...this.external, ...external }
+    if (external.agentDispatch && previous !== external.agentDispatch) attachWorkbenchDispatch(this, external.agentDispatch)
+  }
   get taskWorkspaces(): TaskWorkspaceService | undefined { return this.external.taskWorkspaces }
   get harnesses(): WorkbenchHarnessService | undefined { return this.external.harnesses }
   get projectBoard(): ProjectBoardService | undefined { return this.external.projectBoard }
+  get agentDispatch(): AgentDispatchService | undefined { return this.external.agentDispatch }
   get store(): RoomStore { return this.deps.store }
 
   async agentScope(agentId: string): Promise<WorkbenchAgentScope> {

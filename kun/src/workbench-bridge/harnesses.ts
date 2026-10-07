@@ -11,6 +11,9 @@ import { legacyProviderKindFor } from '../harness/harness-provider-kind.js'
 import type { HarnessRouter } from '../harness/harness-router.js'
 import { legacyHarnessForProvider } from '../harness/resolve-turn-harness.js'
 import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
+import { KUN_TOOL_PERMISSION_MODES, kunToolPermissionModeFromSettings, kunToolPermissionModeSettings,
+  type KunToolPermissionSettings } from '../contracts/policy.js'
+import { hasWorkbenchCapabilityConstraints, type WorkbenchCapabilityCeiling } from '../contracts/thread-workbench-origin.js'
 
 type Model = NonNullable<WorkbenchExecution['model']>
 const modelIds = (provider: ModelConnectionProfile) => [...new Set([provider.selectedModel, ...provider.models]
@@ -32,6 +35,40 @@ export class WorkbenchHarnessService {
     return this.resolveWithSnapshot(request, await this.deps.snapshot())
   }
 
+  /** Native permission declarations can only narrow the source conversation's authority. */
+  permissionCeiling(request: WorkbenchRequest, inherited: KunToolPermissionSettings): KunToolPermissionSettings {
+    const definition = this.deps.catalog.get(request.execution?.model?.harnessId ?? 'kun')
+    if (!definition) throw new Error('The selected Code Agent is unavailable')
+    if (definition.transport === 'native-loop') return inherited
+    const rank = KUN_TOOL_PERMISSION_MODES.indexOf(kunToolPermissionModeFromSettings(inherited))
+    const allowed = definition.permissionModes.map((mode) => KUN_TOOL_PERMISSION_MODES.indexOf(mode.kunPermissionMode))
+      .filter((mode) => mode <= rank)
+    if (!allowed.length) throw new Error('The selected Code Agent has no permission mode within the source conversation\'s limits')
+    const effective = Math.max(...allowed)
+    return effective < rank ? kunToolPermissionModeSettings(KUN_TOOL_PERMISSION_MODES[effective]!) : inherited
+  }
+
+  /** Constrained source Agents require proven host mediation, including native tools. */
+  assertCapabilityCeiling(request: WorkbenchRequest, ceiling?: WorkbenchCapabilityCeiling): void {
+    if (!hasWorkbenchCapabilityConstraints(ceiling)) return
+    const route = request.execution?.model
+    const thread = createThreadRecord({ id: 'workbench-scope-admission', title: request.title, workspace: request.workspaceRoot ?? '.',
+      model: route?.model ?? this.deps.defaultModel().model, providerId: route?.providerId, harnessId: route?.harnessId,
+      workbenchOrigin: { kind: 'bot', roomId: 'scope-check', linkId: 'scope-check', agentId: 'source', agentName: '', capabilityCeiling: ceiling } })
+    const turn = createTurnRecord({ id: 'scope-check', threadId: thread.id, prompt: '', ...route })
+    const admitted = this.deps.router.resolve(thread, turn)
+    if (!admitted.ok) throw new Error(`This Code Agent cannot enforce the source Agent's tool limits: ${admitted.error.userMessage}`)
+  }
+
+  isUserSelection(request: WorkbenchRequest, userIntent: string): boolean {
+    const id = request.execution?.model?.harnessId
+    if (!id) return false
+    const name = this.deps.catalog.get(id)?.displayName
+    const normalized = userIntent.toLocaleLowerCase().replace(/[\s_-]+/g, ' ')
+    return [id, name].filter((entry): entry is string => Boolean(entry))
+      .some((entry) => normalized.includes(entry.toLocaleLowerCase().replace(/[\s_-]+/g, ' ')))
+  }
+
   private async resolveWithSnapshot(request: WorkbenchRequest, snapshot: ModelConnectionSnapshot, knownStatus?: HarnessStatus | null): Promise<Model> {
     const selected: Model = request.execution?.model ?? this.deps.defaultModel()
     const provider = snapshot.providers.find((entry) => entry.id === selected.providerId)
@@ -42,7 +79,9 @@ export class WorkbenchHarnessService {
     if (!definition) throw new Error(`Unknown Code Agent: ${harnessId}`)
     if (this.deps.catalog.isDisabled(harnessId)) throw new Error(`Code Agent is disabled in settings: ${definition.displayName}`)
     if (harnessId !== 'kun' && !this.deps.router.enabled()) throw new Error('External Code Agent routing is disabled in settings')
-    if (definition.transport === 'terminal') throw new Error('Terminal-only Agents cannot execute a Code task')
+    if (definition.transport === 'terminal' || definition.transport === 'application') {
+      throw new Error('Terminal-only and application-only Agents cannot execute a Code task')
+    }
     const mode = request.execution?.mode ?? (request.mode === 'plan' ? 'plan' : 'direct')
     if (harnessId !== 'kun' && (mode !== 'direct' || request.execution?.orchestration === 'graph')) {
       throw new Error('External Code Agents support direct tasks only. Select Kun for plan, auto, goal or Graph tasks.')
@@ -96,9 +135,21 @@ export class WorkbenchHarnessService {
   }
 
   /** Bounded discovery output; launch commands, secret refs and credentials never leave the host. */
-  async list(signal?: AbortSignal) {
+  async list(signal?: AbortSignal, ceiling?: WorkbenchCapabilityCeiling) {
     const bounded = AbortSignal.any([AbortSignal.timeout(20_000), ...(signal ? [signal] : [])])
-    return await abortable(this.listWithin(bounded), bounded)
+    const result = await abortable(this.listWithin(bounded), bounded)
+    if (!hasWorkbenchCapabilityConstraints(ceiling)) return result
+    return { ...result, agents: result.agents.map((agent) => {
+      let reason = agent.reason
+      const models = agent.models.filter((model) => {
+        try {
+          this.assertCapabilityCeiling({ title: 'Code task', goal: '', mode: 'agent', isolation: 'inherit', report: 'final',
+            execution: { mode: 'direct', model } }, ceiling)
+          return true
+        } catch (error) { reason = error instanceof Error ? error.message : String(error); return false }
+      })
+      return { ...agent, models, available: agent.available && models.length > 0, ...(models.length ? {} : { reason }) }
+    }) }
   }
 
   private async listWithin(signal: AbortSignal) {

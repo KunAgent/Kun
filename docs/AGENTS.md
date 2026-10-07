@@ -105,6 +105,18 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
    The gap analysis and admission checklist live in `docs/ade/impl/p6-native-agent-adapters.md`
    and `docs/ade/13-governance-rollout.md`.
 
+## Conversation Agent Dispatch
+
+Ordinary new Code tasks can delegate without the advanced ADE switch. External
+main Agents require a functioning scoped Kun tool bridge; workers and delegated
+children must never create recursive teams. Both worker tools and private assistant
+Code handoffs use the shared host-owned dispatch intent: user confirmation,
+immediate automatic review, or a 60-second full-access intervention window.
+Renderer timers display deadlines only. Do not implement auto-click or create
+workspaces/processes before host admission. Controls use revisions and replay IDs;
+source authority only narrows, and completion preserves the source main route.
+See [conversation dispatch](./ade/16-conversation-agent-dispatch.md).
+
 ## Agent-Managed Plan Worktrees
 
 - `agents.kun.planExecution.useWorktreeByDefault` defaults to true for Direct

@@ -11,7 +11,7 @@ import type {
   WorkerRecord
 } from '../contracts/ade.js'
 import type { ThreadExecutionUnit } from '../contracts/threads.js'
-import type { SandboxMode } from '../contracts/policy.js'
+import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '../contracts/policy.js'
 import type { TaskWorkspaceRecord } from '../contracts/task-workspace.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 import type { ThreadStore } from '../ports/thread-store.js'
@@ -48,6 +48,8 @@ type RunChildInput = {
   /** Read-only policy/sandbox ceiling for reviewer workers (10 §5). */
   toolPolicyCeiling?: 'readOnly'
   sandboxMode?: SandboxMode
+  approvalPolicy?: ApprovalPolicy
+  approvalReviewer?: ApprovalReviewer
   childId?: string
   executionUnit?: ThreadExecutionUnit
   detach?: boolean
@@ -80,6 +82,7 @@ export type DelivererDelegation = {
 }
 
 export type DispatchDelivererDeps = {
+  agentDispatchService?: Pick<import('../delegation/agent-dispatch-service.js').AgentDispatchService, 'get'>
   teams: FileTeamStore
   dispatches: FileDispatchStore
   taskWorkspaces?: TaskWorkspaceService
@@ -202,6 +205,9 @@ export class DispatchDeliverer {
       await this.fail(teamId, dispatch, 'team or worker record missing')
       return { accepted: false }
     }
+    if (await this.intentBlocked(worker, dispatch)) {
+      return { accepted: false, pendingReason: 'user-control' }
+    }
     if (worker.control === 'user') {
       // User takeover (09 §9) holds the queue instead of destroying it —
       // hand-back resumes delivery through tryDeliverNext.
@@ -237,6 +243,10 @@ export class DispatchDeliverer {
       await this.fail(teamId, dispatch, 'delegation runtime is not enabled')
       return { accepted: false }
     }
+    const latestWorker = await this.deps.teams.worker(teamId, worker.workerId)
+    if (latestWorker?.control === 'user' || await this.intentBlocked(worker, dispatch)) {
+      return { accepted: false, pendingReason: 'user-control' }
+    }
     await this.deps.dispatches.update(teamId, dispatch.dispatchId, { state: 'delivering' })
     const prior = await this.deps.childRuns.get(dispatch.workerId).catch(() => undefined)
     let run: Promise<ChildRunRecord>
@@ -260,6 +270,12 @@ export class DispatchDeliverer {
     return { accepted: true }
   }
 
+  private async intentBlocked(worker: WorkerRecord, dispatch: DispatchRecord): Promise<boolean> {
+    const intent = worker.dispatchIntentId ? await this.deps.agentDispatchService?.get(worker.dispatchIntentId) : undefined
+    return Boolean(intent && intent.source.turnId === dispatch.parentTurnId &&
+      (intent.cancellationRequested || intent.takenOver))
+  }
+
   private startRun(
     team: TeamRecord,
     dispatch: DispatchRecord,
@@ -281,7 +297,8 @@ export class DispatchDeliverer {
       security: worker.securitySnapshot,
       harnessId: worker.route.harnessId,
       credentialMode: worker.route.credentialMode,
-      gatewayBinding: worker.route.gatewayBinding
+      gatewayBinding: worker.route.gatewayBinding,
+      ...worker.permissionSnapshot
     }
     const signal = this.signalFor(dispatch.workerId)
     if (prior) {

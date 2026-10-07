@@ -7,6 +7,7 @@ import type { WorkerNotice } from '../contracts/ade.js'
 import type { StartTurnResponse } from '../contracts/turns.js'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import { createThreadRecord } from '../domain/thread.js'
+import { FileDispatchStore } from './dispatch-store.js'
 import { FileTeamStore } from './team-store.js'
 import { FileWorkerNoticeStore } from './worker-notice-store.js'
 import { WorkerNoticeCoordinator } from './worker-notice-coordinator.js'
@@ -97,6 +98,7 @@ function harness(input: { startImpl?: (call: StartCall) => Promise<StartTurnResp
     notices,
     teams,
     threads,
+    dispatches: new FileDispatchStore(dataDir, () => NOW),
     turns: { startTurn: startTurn as never },
     runTurn: () => runTurn,
     nowIso: () => NOW,
@@ -168,6 +170,7 @@ describe('WorkerNoticeCoordinator', () => {
       notices: secondNotices,
       teams: secondTeams,
       threads,
+    dispatches: new FileDispatchStore(dataDir, () => NOW),
       turns: { startTurn: second.startTurn as never },
       runTurn: () => second.runTurn,
       nowIso: () => NOW,
@@ -272,9 +275,9 @@ describe('WorkerNoticeCoordinator', () => {
     expect(runTurn).toHaveBeenCalledTimes(1)
     expect(await notices.pending(MANAGER)).toHaveLength(0)
   })
-  it('uses the pending manager model at the next wake-up admission', async () => {
+  it('keeps the main Agent route at the next wake-up admission', async () => {
     const snapshot = resolveThreadExecutionConfig({
-      request: { workspace: '/tmp/ws', model: 'new-route', mode: 'agent' },
+      request: { workspace: '/tmp/ws', model: 'new-route', providerId: 'external-account', harnessId: 'codex', credentialMode: 'native-login', mode: 'agent' },
       global: { managerModel: { providerId: 'new-provider', model: 'new-manager' } }, nowIso: NOW
     }).snapshot
     await threads.upsert({ ...managerThread(), pendingExecutionConfig: snapshot })
@@ -282,8 +285,28 @@ describe('WorkerNoticeCoordinator', () => {
     await coordinator.enqueue(notice('ntc_pending_route'))
     await coordinator.deliverForManager(MANAGER)
     expect(startTurn).toHaveBeenCalledWith(expect.objectContaining({
-      request: expect.objectContaining({ providerId: 'new-provider', model: 'new-manager' })
+      request: expect.objectContaining({ providerId: 'external-account', model: 'new-route', harnessId: 'codex', credentialMode: 'native-login' })
     }), expect.anything())
+  })
+
+
+  it('returns results to the originating external turn route and account', async () => {
+    const thread = managerThread([{ status: 'completed' }])
+    thread.turns[0] = { ...thread.turns[0], harnessId: 'codex', model: 'source-model',
+      providerId: 'source-provider', credentialMode: 'native-login', accountId: 'source-account', clientSurface: 'gui' }
+    thread.executionConfig = resolveThreadExecutionConfig({ request: { workspace: '/tmp/ws', model: 'later-model',
+      harnessId: 'kun', mode: 'agent' }, nowIso: NOW }).snapshot
+    await threads.upsert(thread)
+    const dispatches = new FileDispatchStore(dataDir, () => NOW)
+    await dispatches.create({ dispatchId: 'source-dispatch', teamId: MANAGER, workerId: 'wrk_1',
+      parentTurnId: thread.turns[0].id, title: 'Source task', task: 'Task', mode: 'queue', state: 'completed', createdAt: NOW, updatedAt: NOW })
+    const { coordinator, startTurn } = harness()
+    await coordinator.enqueue(notice('ntc_source_route', { dispatchId: 'source-dispatch' }))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).toHaveBeenCalledWith(expect.objectContaining({ request: expect.objectContaining({
+      harnessId: 'codex', model: 'source-model', providerId: 'source-provider', credentialMode: 'native-login',
+      accountId: 'source-account', clientSurface: 'gui'
+    }) }), expect.anything())
   })
 
 })

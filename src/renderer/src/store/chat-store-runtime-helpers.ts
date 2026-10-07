@@ -327,7 +327,7 @@ export function clearedThreadSelection(): Pick<
 > {
   return {
     activeThreadId: null,
-    composerCollaborationEnabled: false,
+    composerCollaborationEnabled: true,
     threadLoadingId: null,
     threadRefreshingId: null,
     threadHistoryCursor: null,

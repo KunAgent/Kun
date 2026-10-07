@@ -19,6 +19,7 @@ import {
 import { makeDelegatedAwaitApproval } from '../../ade/delegated-approval.js'
 import type { AgentSdkRuntimeFactoryDeps } from './agent-sdk-runtime-factory-contracts.js'
 import type { AgentSdkFactoryContext } from './agent-sdk-runtime-factory-context.js'
+import { hasWorkbenchCapabilityConstraints } from '../../contracts/thread-workbench-origin.js'
 
 const SDK_ON_REQUEST_AUTO_ALLOWED_TOOLS = new Set([
   'Read',
@@ -50,7 +51,7 @@ export function createAgentSdkToolRuntimeDeps(
       if (toolName.startsWith('mcp__kun__')) return { allow: true }
       const thread = await deps.threadStore.get(threadId)
       const turn = thread?.turns.find((candidate) => candidate.id === turnId)
-      if (thread?.roomContext || deps.allowSdkBuiltins === false) {
+      if (thread?.roomContext || hasWorkbenchCapabilityConstraints(thread?.workbenchOrigin?.capabilityCeiling) || deps.allowSdkBuiltins === false) {
         return { allow: false, message: 'This turn only allows Kun-gated tools.' }
       }
       const approvalPolicy =

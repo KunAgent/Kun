@@ -229,9 +229,14 @@ export class ManagerWorkerLifecycle {
         console.warn(`[kun] ade reviewer merge failed for ${worker.reviewOf}:`, error)
       })
     }
-    await this.deps.notices.enqueue(this.noticeForDispatch(updated, worker)).catch((error) => {
-      console.warn(`[kun] ade worker notice enqueue failed for ${updated.dispatchId}:`, error)
-    })
+    const dispatchIntent = worker.dispatchIntentId
+      ? await this.deps.agentDispatchService?.get(worker.dispatchIntentId).catch(() => null) : undefined
+    const userOwned = worker.control === 'user' || dispatchIntent?.cancellationRequested || dispatchIntent?.takenOver
+    if (!userOwned) {
+      await this.deps.notices.enqueue(this.noticeForDispatch(updated, worker)).catch((error) => {
+        console.warn(`[kun] ade worker notice enqueue failed for ${updated.dispatchId}:`, error)
+      })
+    }
     // P3-15: a soft-cap crossing discovered at terminal still reaches the
     // manager once even if no new dispatch is sent afterwards.
     this.teamControls.notifyBudgetCheck(team, this.deps.teamBudget?.check(team))
@@ -251,6 +256,7 @@ export class ManagerWorkerLifecycle {
         console.warn(`[kun] ade race reconcile failed for ${team.teamId}:`, error)
       })
     }
+    if (userOwned) return
     await this.deps.deliverer.tryDeliverNext(team.teamId, worker.workerId).catch((error) => {
       console.warn(`[kun] ade next-dispatch delivery failed for ${worker.workerId}:`, error)
     })

@@ -34,6 +34,7 @@ export type ManagerToolProviderDeps = {
   managerMayApprove?: () => boolean
   /** Global admission switch. Existing teams retain read/stop/answer controls. */
   canStartNewWork?: () => boolean
+  advancedCollaborationEnabled?: () => boolean
   /** Race store/services (10 §6); absent → worker_race tools hidden. */
   race?: RaceToolDeps
   /** Host check runner (10 §4.2); absent → workspace_run_checks hidden. */
@@ -55,8 +56,7 @@ const START_FROM_SCHEMA = {
 
 /**
  * Manager (`worker_*`) tools (09 §4, 10 §2). `shouldAdvertiseManagerTools`
- * gates advertising AND execution — ADE-manager threads on the native loop
- * only, never workers or room agents.
+ * gates advertising AND execution for capable root Agents, never workers or room agents.
  */
 export function createManagerToolProvider(
   deps: ManagerToolProviderDeps
@@ -96,11 +96,11 @@ export function createManagerToolProvider(
       LocalToolHost.defineTool({
         name: 'worker_create',
         description:
-          'Create a worker and queue a dispatch for it. The worker runs as a side ' +
+          'Propose a worker dispatch with a durable card. Set agentSelection to auto unless the user explicitly chose this Agent. Kun handles the start decision from source permissions. The worker runs as a side ' +
           'thread under the chosen harness with an isolated task workspace. After ' +
           'a successful dispatch, end your turn — you are woken automatically when ' +
-          'the worker finishes or asks a question. Relay `userReport` to the user ' +
-          'verbatim. To dispatch several workers at once, use worker_create_batch ' +
+          'the worker finishes or asks a question. Explain the returned `userReport` ' +
+          'facts in the language used by the user. To dispatch several workers at once, use worker_create_batch ' +
           'instead of calling this repeatedly.',
         inputSchema: {
           type: 'object',
@@ -136,6 +136,7 @@ export function createManagerToolProvider(
               },
               additionalProperties: false
             },
+            agentSelection: { type: 'string', enum: ['user', 'auto'] },
             permissionMode: { type: 'string', maxLength: 64 },
             lifecycle: { type: 'string', enum: ['persistent', 'ephemeral'] },
             mode: { type: 'string', enum: ['queue', 'interrupt'] }
@@ -156,7 +157,7 @@ export function createManagerToolProvider(
         description:
           'Create several workers in one call. Items run in input order; when the ' +
           'worker limit is reached the remaining items are marked skipped. Relay ' +
-          'the summary `userReport` to the user verbatim.',
+          'the summary `userReport` facts in the language used by the user. Set agentSelection to auto unless the user explicitly chose the execution Agent. Kun saves one durable start decision for the batch.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -198,6 +199,7 @@ export function createManagerToolProvider(
                     },
                     additionalProperties: false
                   },
+                  agentSelection: { type: 'string', enum: ['user', 'auto'] },
                   permissionMode: { type: 'string', maxLength: 64 },
                   lifecycle: { type: 'string', enum: ['persistent', 'ephemeral'] },
                   mode: { type: 'string', enum: ['queue', 'interrupt'] }
@@ -551,7 +553,7 @@ export function createManagerToolProvider(
         },
         toolKind: 'tool_call',
         policy: 'auto',
-        shouldAdvertise: (context) => advertiseNewWork(context) && Boolean(deps.race),
+        shouldAdvertise: (context) => advertiseNewWork(context) && deps.advancedCollaborationEnabled?.() !== false && Boolean(deps.race),
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await workerRace(deps.manager, deps.race!, ctx, args, context) }

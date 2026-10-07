@@ -1,3 +1,4 @@
+import { createRuntimeAgentDispatch } from './runtime-composition-dispatch.js'
 import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { createReviewContextResolver } from '../services/review-composer-context.js'
 import { ManagerRemoteMemoryDistillationPendingStore } from '../manager/remote-memory-distillation-pending.js'
@@ -104,6 +105,7 @@ import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
 ) {
+  const agentDispatchService = createRuntimeAgentDispatch(model)
   const { core } = model
   const { options } = core
   const {
@@ -603,6 +605,7 @@ export async function createRuntimeServices(
   const defaultIsCursorSdk = process.env.KUN_RUNTIME_PROVIDER_KIND === 'cursor-sdk'
   return {
     model,
+    agentDispatchService,
     migrationMaintenance,
     executionLeases,
     turnService,

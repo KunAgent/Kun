@@ -10,7 +10,7 @@ export type NewManagerWorkRefusal = {
 
 /** Shared execution gate for model tools and authenticated GUI commands. */
 export async function newManagerWorkRefusal(
-  deps: Pick<ManagerRuntimeDeps, 'threads' | 'canStartNewWork' | 'providerPool' | 'language'>,
+  deps: Pick<ManagerRuntimeDeps, 'threads' | 'canStartNewWork' | 'providerPool' | 'language' | 'capabilitiesForRoute'>,
   managerThreadId: string,
   turnId?: string
 ): Promise<NewManagerWorkRefusal | null> {
@@ -23,7 +23,7 @@ export async function newManagerWorkRefusal(
   })
   if (deps.canStartNewWork?.() === false) return refuse()
   const thread = await deps.threads.get(managerThreadId)
-  if (!thread || thread.status === 'archived' || thread.status === 'deleted') return refuse()
+  if (!thread || thread.parentThreadId || thread.status === 'archived' || thread.status === 'deleted') return refuse()
   const turn = thread.turns.find((entry) => entry.id === turnId) ??
     thread.turns.find((entry) => entry.status === 'running')
   const execution = thread.pendingExecutionConfig ?? thread.executionConfig
@@ -35,10 +35,20 @@ export async function newManagerWorkRefusal(
       : provider?.kind === 'cursor-sdk' ? 'cursor'
         : provider?.kind === 'antigravity-cli' ? 'antigravity' : 'kun'
   }
+  const capability = harnessId !== 'kun' ? await deps.capabilitiesForRoute({
+    harnessId: harnessId as import('../contracts/harness.js').HarnessId,
+    model: turn?.model ?? execution?.route.model ?? thread.model,
+    credentialMode: turn?.credentialMode ?? execution?.route.credentialMode ?? 'native-login',
+    ...(turn?.providerId ?? execution?.route.providerId ?? thread.providerId
+      ? { providerId: turn?.providerId ?? execution?.route.providerId ?? thread.providerId } : {}),
+    ...(turn?.gatewayBinding ?? execution?.route.gatewayBinding
+      ? { gatewayBinding: turn?.gatewayBinding ?? execution?.route.gatewayBinding } : {})
+  }).catch(() => null) : null
   return shouldAdvertiseNewManagerWork({
     collaborationEnabled: enabled,
     workspaceMode: thread.workspaceMode,
     harnessId,
+    managerToolBridgeAvailable: capability?.statuses?.kunTools?.supported === true && capability.statuses?.abort?.supported === true,
     executionUnitKind: thread.executionUnit?.kind,
     roomAgent: Boolean(thread.roomContext),
     agentSurface: thread.agentSurface,

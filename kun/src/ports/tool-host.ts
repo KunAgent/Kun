@@ -218,6 +218,8 @@ export type ToolHostContext = {
   modelProviderId?: string
   /** Frozen harness identity for this turn; tool providers use it for harness-aware behavior. */
   harnessId?: string
+  /** Host proof that the active external route has a working, cancellable Kun tool bridge. */
+  managerToolBridgeAvailable?: boolean
   /**
    * Owning workspace mode of the turn's thread ('code' | 'ade'). Manager
    * (`worker_*`) tools advertise only when this is 'ade'; missing counts as

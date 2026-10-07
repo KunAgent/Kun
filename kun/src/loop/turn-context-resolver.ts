@@ -124,7 +124,9 @@ export class TurnContextResolver {
       input.thread.roomContext ? input.thread.approvalReviewer : input.turn.approvalReviewer ?? input.thread.approvalReviewer
     )
     const memoryStore = input.thread.roomContext ? undefined : this.deps.getMemoryStore?.() ?? this.deps.memoryStore
-    const blockedSkillIds = mergeRoomDeniedIds(this.deps.blockedSkillIds, input.thread.roomContext?.blockedSkillIds)
+    const workbenchCeiling = input.thread.workbenchOrigin?.capabilityCeiling
+    const blockedSkillIds = mergeRoomDeniedIds(this.deps.blockedSkillIds, input.thread.roomContext?.blockedSkillIds, workbenchCeiling?.blockedSkillIds)
+    const allowedSkillIds = intersectAllowedToolNames(this.deps.allowedSkillIds, workbenchCeiling?.allowedSkillIds)
     // These inputs are independent snapshots. Resolve their filesystem/store
     // I/O together so model dispatch pays the slowest branch, not their sum.
     const [attachments, skillResolution, instructionResolution, memoryContext] = await Promise.all([
@@ -134,12 +136,12 @@ export class TurnContextResolver {
         workspace,
         modelCapabilities: input.modelCapabilities
       }),
-      (input.thread.roomContext?.skillsEnabled === false ? undefined : this.deps.skillRuntime)?.resolveTurn({
+      (input.thread.roomContext?.skillsEnabled === false || workbenchCeiling?.skillsEnabled === false ? undefined : this.deps.skillRuntime)?.resolveTurn({
         prompt: input.turn.prompt,
         workspace,
         threadId: input.threadId,
         turnId: input.turnId,
-        ...(this.deps.allowedSkillIds ? { allowedSkillIds: this.deps.allowedSkillIds } : {}),
+        ...(allowedSkillIds ? { allowedSkillIds } : {}),
         ...(blockedSkillIds.length ? { blockedSkillIds } : {})
       }) ?? Promise.resolve(EMPTY_SKILL_RESOLUTION),
       this.deps.instructionRuntime?.resolveTurn({ workspace }) ??
@@ -174,7 +176,7 @@ export class TurnContextResolver {
         input.mode.dedicatedSvgTurn ? undefined : skillResolution.allowedToolNames,
         activeGoalInstruction !== null
       ),
-      intersectAllowedToolNames(forcedAllowedToolNames, input.thread.roomContext?.allowedToolNames)
+      intersectAllowedToolNames(intersectAllowedToolNames(forcedAllowedToolNames, input.thread.roomContext?.allowedToolNames), workbenchCeiling?.allowedToolNames)
     )
     const userInputDisabled = input.turn.disableUserInput === true
     const collaborationEnabled = input.turn.collaborationEnabled ?? input.thread.collaboration?.enabled

@@ -3,6 +3,7 @@ import { HarnessRouteSchema } from './harness.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES } from './capabilities-core.js'
 import { ChildSecuritySnapshot } from '../delegation/delegation-runtime-contracts.js'
 import { ReviewRevisionSchema } from './review-revision.js'
+import { ApprovalPolicySchema, ApprovalReviewerSchema, SandboxModeSchema } from './policy.js'
 
 /**
  * ADE manager control-plane records. Every file shell is strict and carries
@@ -55,6 +56,12 @@ export const WorkerRecordSchema = z
       .optional(),
     /** Harness permission mode id after the manager-authority clamp. */
     permissionMode: z.string().min(1).max(128),
+    permissionSnapshot: z.object({
+      approvalPolicy: ApprovalPolicySchema,
+      sandboxMode: SandboxModeSchema,
+      approvalReviewer: ApprovalReviewerSchema
+    }).strict().optional(),
+    dispatchIntentId: z.string().min(1).max(256).optional(),
     lifecycle: z.enum(['persistent', 'ephemeral']),
     taskWorkspaceId: z.string().min(1).optional(),
     /**
@@ -266,6 +273,8 @@ export const WorkerNoticeSchema = z
       'team_budget'
     ]),
     dispatchId: z.string().min(1).max(256).optional(),
+    parentTurnId: z.string().min(1).max(256).optional(),
+    dispatchIntentId: z.string().min(1).max(256).optional(),
     questionId: z.string().min(1).max(256).optional(),
     /** Approval id for worker_approval notices (feeds `worker_approve`). */
     approvalId: z.string().min(1).max(256).optional(),

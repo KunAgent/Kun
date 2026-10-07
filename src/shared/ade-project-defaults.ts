@@ -39,14 +39,7 @@ export const AdeProjectDefaultsFieldsSchema = z.object({
   budget: BudgetSchema.optional(),
   isolation: z.enum(['worktree', 'local', 'directory']).optional()
 }).strict()
-export const AdeProjectDefaultsSchema = AdeProjectDefaultsFieldsSchema.superRefine((value, ctx) => {
-  if (value.collaborationEnabled && value.route?.harnessId !== 'kun') {
-    ctx.addIssue({
-      code: 'custom', path: ['collaborationEnabled'],
-      message: 'Kun coordination requires the Kun main Agent route'
-    })
-  }
-})
+export const AdeProjectDefaultsSchema = AdeProjectDefaultsFieldsSchema
 export type AdeProjectDefaults = z.infer<typeof AdeProjectDefaultsSchema>
 
 export const AdeProjectDefaultsMapSchema = z.record(

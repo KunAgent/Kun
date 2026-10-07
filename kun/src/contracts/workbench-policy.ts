@@ -2,8 +2,9 @@ import { z } from 'zod'
 
 /**
  * How far a private Agent may reach into the user's Code and Work modes.
- * `confirm` always shows a card the user must accept; `auto` starts at once,
- * but only when the request that caused it is a fresh user message.
+ * Ordinary Code tasks follow the source conversation's dispatch permission.
+ * `confirm` and `auto` retain their legacy behavior for the other workbench
+ * operations; `off` always disables that surface.
  */
 export const WorkbenchCodePolicySchema = z.enum(['off', 'confirm', 'auto'])
 export const WorkbenchWorkPolicySchema = z.enum(['off', 'read', 'confirm', 'auto'])

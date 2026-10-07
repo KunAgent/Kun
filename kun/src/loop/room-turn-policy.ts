@@ -7,6 +7,7 @@ import type { ThreadRecord } from '../contracts/threads.js'
 import type { ToolHostContext } from '../ports/tool-host.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES } from '../contracts/capabilities-core.js'
 import { intersectAllowedToolNames } from './continuation-instructions.js'
+import { applyWorkbenchToolPolicy } from './workbench-turn-policy.js'
 
 export function mergeRoomDeniedIds(...lists: Array<readonly string[] | undefined>): string[] {
   return [...new Set(lists.flatMap((list) => list ?? []))]
@@ -21,6 +22,7 @@ export function roomBlockedProviders(thread: ThreadRecord): string[] {
 
 /** Re-applied to both discovery and actual execution, never a model instruction. */
 export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadRecord): ToolHostContext {
+  context = applyWorkbenchToolPolicy(context, thread)
   const policy = thread.roomContext
   if (!policy) return context
   const readOnly = !['execution', 'conversation'].includes(policy.kind) || thread.sandboxMode === 'read-only'

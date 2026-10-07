@@ -31,7 +31,7 @@ export function initialWorkbenchTaskDraft(request: WorkbenchRequest): WorkbenchT
 const MODES: WorkbenchExecution['mode'][] = ['direct', 'plan', 'auto', 'goal']
 const PERMISSIONS: NonNullable<WorkbenchExecution['permission']>[] = ['ask-for-approval', 'approve-for-me', 'full-access']
 
-export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, permissionCeiling, project }: {
+export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, permissionCeiling, project, allowSchedule = true }: {
   draft: WorkbenchTaskDraft
   onChange: (draft: WorkbenchTaskDraft) => void
   editing: boolean
@@ -39,6 +39,7 @@ export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, p
   code: boolean
   permissionCeiling?: WorkbenchExecution['permission']
   project?: string
+  allowSchedule?: boolean
 }) {
   const { t } = useTranslation('common')
   const presets = useChatStore((state) => state.codeAgentPresets)
@@ -98,10 +99,10 @@ export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, p
           <button type="button" aria-pressed={draft.execution.orchestration === 'graph'}
             onClick={() => changeExecution({ orchestration: 'graph' })}>Graph</button>
         </div></div> : null}
-      <div className="rooms-workbench-field rooms-workbench-field-span">
+      {allowSchedule ? <div className="rooms-workbench-field rooms-workbench-field-span">
         <WorkbenchSchedulePicker schedule={draft.schedule} onChange={(schedule) => onChange({ ...draft, schedule,
           report: schedule?.kind === 'recurring' && draft.schedule?.kind !== 'recurring' ? 'silent' : draft.report })} />
-      </div>
+      </div> : null}
       {draft.schedule?.kind === 'recurring' ? <label className="rooms-workbench-field">{t('roomsWorkbenchReportPolicy')}<select value={draft.report} onChange={(event) =>
         onChange({ ...draft, report: event.target.value as WorkbenchTaskDraft['report'] })}>
         <option value="silent">{t('roomsWorkbenchReportSilent')}</option><option value="final">{t('roomsWorkbenchReportFinal')}</option><option value="failure">{t('roomsWorkbenchReportFailure')}</option>

@@ -365,6 +365,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     const thread = input.resumeChild
       ? await threadStore.get(input.childId)
       : await threads.create({
+        collaboration: { enabled: false },
         title,
         workspace: input.workspace?.trim() || '~',
         model,

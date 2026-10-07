@@ -1,3 +1,4 @@
+import { dispatchGuidanceForTools } from '../../ade/dispatch-guidance.js'
 import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
 import type {
   ApprovalPolicy,
@@ -192,6 +193,7 @@ export function createCursorSdkRuntime(
           : undefined
       const instructionBlocks = [
         ...historyReferenceInstructions(thread),
+        ...dispatchGuidanceForTools(tools),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
         ...(graphHarnessInstruction ? [graphHarnessInstruction] : []),
         ...(plan.planMode ? [PLAN_MODE_INSTRUCTION] : []),

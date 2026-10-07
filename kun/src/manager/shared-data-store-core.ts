@@ -447,6 +447,7 @@ export abstract class ManagerSharedDataStoreCore {
 }
 
 const ATOMIC_REPLACE_PATHS = new Set([
+  'agent-dispatch/intents.json',
   'model-connections.v1.json',
   'model-connections.v2.json',
   'provider-header-migration.v1.json',

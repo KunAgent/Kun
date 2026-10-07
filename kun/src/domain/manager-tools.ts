@@ -4,7 +4,7 @@ type ManagerToolAdmissionContext = Pick<
   ToolHostContext,
   'workspaceMode' | 'collaborationEnabled' | 'collaborationEverEnabled' |
   'harnessId' | 'executionUnitKind' | 'roomAgent' | 'agentSurface' |
-  'clientSurface' | 'imContext'
+  'clientSurface' | 'imContext' | 'managerToolBridgeAvailable'
 >
 
 /** Shared discovery and execution gate for existing-team controls. */
@@ -15,7 +15,7 @@ export function shouldAdvertiseManagerTools(
     context.collaborationEverEnabled === true ||
     (context.collaborationEnabled === undefined && context.workspaceMode === 'ade')
   return collaborationAccess &&
-    (context.harnessId ?? 'kun') === 'kun' &&
+    ((context.harnessId ?? 'kun') === 'kun' || context.managerToolBridgeAvailable === true) &&
     context.executionUnitKind !== 'worker' &&
     context.roomAgent !== true &&
     (context.agentSurface ?? 'code') === 'code' &&

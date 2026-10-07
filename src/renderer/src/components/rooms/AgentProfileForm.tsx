@@ -106,6 +106,7 @@ export function AgentProfileForm({ agent: initialAgent, draft, active = true, on
             <label className="agent-profile-field">{t('roomsWorkbenchPolicyMax')}<input type="number" min={1} max={5} value={workbench.maxActiveTasks}
               onChange={(e) => setWorkbench({ ...workbench, maxActiveTasks: Math.min(5, Math.max(1, Math.round(Number(e.target.value)) || 1)) })} /></label>
             <span className="agent-profile-hint">{t('roomsWorkbenchPolicyHint')}</span>
+            <span className="agent-profile-hint">{t('roomsWorkbenchDispatchPolicyHint')}</span>
           </div>
           <details className="agent-profile-limits"><summary>{t('agentsLimits')}</summary>
             <div className="agent-profile-limits-body">

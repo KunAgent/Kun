@@ -1,3 +1,4 @@
+import type { AgentDispatchService } from '../../delegation/agent-dispatch-service.js'
 import type { ThreadActivityRegistry } from '../../services/thread-activity-registry.js'
 import type { ThreadService } from '../../services/thread-service.js'
 import type { TurnService } from '../../services/turn-service.js'
@@ -182,6 +183,7 @@ export type ExtensionPlatformRuntime = {
  * file-backed adapters without leaking concrete types into routes.
  */
 export type ServerRuntime = {
+  agentDispatchService?: AgentDispatchService
   historyReferences?: import('../../history/history-reference-service.js').HistoryReferenceService
   threadService: ThreadService
   rooms?: RoomRuntime
