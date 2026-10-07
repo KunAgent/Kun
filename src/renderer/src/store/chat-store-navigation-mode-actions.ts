@@ -82,8 +82,12 @@ import {
   writeWorkspaceForThreadId
 } from '../write/write-thread-registry'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
-import { beginWorkSessionTransition, useWorkSidebarStore } from '../write/work-sidebar-store'
-import { pinnedWriteSessionId, selectPinnedWorkSession } from '../write/work-session-thread-hooks'
+import { beginWorkSessionTransition, useWorkSidebarStore, workDocumentKey } from '../write/work-sidebar-store'
+import {
+  pinnedWriteSessionId,
+  selectPinnedWorkSession,
+  workSessionDraftPending
+} from '../write/work-session-thread-hooks'
 import {
   DESIGN_ASSISTANT_THREAD_TITLE,
   activeDesignThreadForWorkspace,
@@ -406,6 +410,10 @@ export function createNavigationModeActions(
       set({ route: 'write', error: null })
       return pinnedId
     }
+    // A drafted session must become a new conversation, never reuse one.
+    if (workSessionDraftPending(targetWorkspace)) {
+      return get().createWriteThread(targetWorkspace, targetFilePath)
+    }
 
     const registry = hydrateWriteThreadRegistry(
       state.threads,
@@ -485,7 +493,11 @@ export function createNavigationModeActions(
         readWriteThreadRegistry(),
         activeFilePath
       ))
-      useWorkSidebarStore.getState().pinSession(targetWorkspace, thread.id)
+      useWorkSidebarStore.getState().pinSession(
+        targetWorkspace,
+        thread.id,
+        workDocumentKey(useWriteWorkspaceStore.getState())
+      )
       set((s) => ({
         route: 'write',
         ...(pickedAgentId ? { composerAgentId: '' } : {}),

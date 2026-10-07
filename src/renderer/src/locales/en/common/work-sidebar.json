@@ -22,5 +22,9 @@
   "workHomeTitle": "What shall we work on today?",
   "workHomeSubtitle": "Write documents, read papers or organize material — start with a sentence.",
   "workHomeSpaceSwitch": "Choose the space for new sessions",
-  "workHomeSpaceHint": "New sessions are saved in this space"
+  "workHomeSpaceHint": "New sessions are saved in this space",
+  "workHomeComposerPlaceholder": "Describe what you want to write, read or organize…",
+  "workSessionJustNow": "Just now",
+  "workAssistantEmptyTitlePapers": "Research assistant ready",
+  "workAssistantEmptySubPapers": "Select text in a paper to quote it, or pick an action below."
 }

@@ -11,6 +11,7 @@ import {
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { useChatStore } from '../../store/chat-store'
 import { markSddAssistantThread } from '../../sdd/sdd-thread-registry'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
 import { useSddDraftStore } from '../../sdd/sdd-draft-store'
@@ -149,7 +150,6 @@ function makeProps(overrides: Partial<NavigationProps> = {}): NavigationProps {
     pluginHostRoute: 'chat',
     rightPanelMode: null,
     route: 'chat',
-    runtimeConnection: 'ready',
     sddDraftContent: '',
     threads: [],
     useWorktreePool: false,
@@ -158,9 +158,7 @@ function makeProps(overrides: Partial<NavigationProps> = {}): NavigationProps {
     clearFilePreviewTargets: vi.fn(),
     createConversation: vi.fn(async () => undefined),
     createThread: vi.fn(async () => 'thr_new'),
-    createWriteThread: vi.fn(async () => 'thr_write'),
     dismissActiveSddDraft: vi.fn(),
-    ensureWriteThreadForWorkspace: vi.fn(async () => null),
     findSddDraftForSidebarThread: vi.fn(async () => null),
     openClaw: vi.fn(),
     openCode: vi.fn(async () => undefined),
@@ -559,8 +557,12 @@ describe('workbench navigation controller Connect Phone return', () => {
 })
 
 describe('workbench navigation controller Work whiteboards', () => {
+  // New conversation now runs through the shared Work session entry, which
+  // creates whiteboard sessions via the chat store rather than a controller prop.
+  const initialChat = useChatStore.getState()
   afterEach(() => {
     useWriteWorkspaceStore.getState().resetWorkspace()
+    useChatStore.setState(initialChat, true)
     vi.restoreAllMocks()
   })
 
@@ -580,7 +582,8 @@ describe('workbench navigation controller Work whiteboards', () => {
       bindWhiteboardThread
     })
     const createWriteThread = vi.fn(async () => 'thread-new')
-    await renderController(makeProps({ route: 'write', createWriteThread }))
+    useChatStore.setState({ createWriteThread })
+    await renderController(makeProps({ route: 'write' }))
 
     await act(async () => {
       latestController.startNewWriteAssistantConversation()
@@ -611,7 +614,8 @@ describe('workbench navigation controller Work whiteboards', () => {
       },
       bindWhiteboardThread
     })
-    await renderController(makeProps({ route: 'write', createWriteThread }))
+    useChatStore.setState({ createWriteThread })
+    await renderController(makeProps({ route: 'write' }))
 
     await act(async () => latestController.startNewWriteAssistantConversation())
 
@@ -636,7 +640,8 @@ describe('workbench navigation controller Work whiteboards', () => {
       },
       bindWhiteboardThread
     })
-    await renderController(makeProps({ route: 'write', createWriteThread }))
+    useChatStore.setState({ createWriteThread })
+    await renderController(makeProps({ route: 'write' }))
 
     await act(async () => latestController.startNewWriteAssistantConversation())
     expect(createWriteThread).toHaveBeenCalledWith('/workspace', undefined, {

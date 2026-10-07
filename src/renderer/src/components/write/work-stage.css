@@ -27,6 +27,12 @@
   width: min(100%, 760px);
   margin-inline: auto;
 }
+/* The conversation shares the composer's column instead of spanning the stage. */
+.write-assistant-panel.is-stage .ds-chat-column-inset {
+  max-width: 760px;
+  padding-inline: 0;
+}
+.write-assistant-panel.is-stage .ds-user-message-bubble { max-width: min(88%, 600px); }
 /* Home: hero just above a vertically centered composer, as in Code. */
 .write-assistant-panel.is-stage.is-home .write-assistant-body {
   flex: 1 1 50%;

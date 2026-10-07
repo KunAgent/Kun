@@ -1,4 +1,5 @@
 import { useChatStore } from '../store/chat-store'
+import { workspaceRootScopeKey } from '../lib/workspace-path'
 import {
   enterPaperMode,
   PAPER_MODE_SWITCH_CANCELED,
@@ -10,11 +11,12 @@ import { openLibraryEntry } from '../paper/paper-library-actions'
 import { usePaperStore } from './paper/paper-store'
 import { useWriteWorkspaceStore, writeJoinPath } from './write-workspace-store'
 import { normalizePath } from './write-workspace-store-helpers'
-import type { WritePaperViewId } from './write-workspace-store-types'
+import type { WorkWhiteboard, WritePaperViewId } from './write-workspace-store-types'
 import {
   beginWorkSessionTransition,
   currentWorkSessionPin,
   useWorkSidebarStore,
+  workDocumentKey,
   writeHasDocumentContext
 } from './work-sidebar-store'
 import type { WorkSessionEntry, WorkSessionGroupKind } from './work-sessions-model'
@@ -106,9 +108,34 @@ export async function openWorkSession(
 }
 
 /**
- * New session: in the sessions view (or with nothing open) it is a draft that
- * the first send creates; a document conversation in the files view starts
- * right away, like the assistant's own New conversation.
+ * Whiteboards keep a bound conversation that their workflows depend on, so a
+ * new session there is created and bound right away. PPT review boards stay
+ * tied to the task that owns their workflow and get no new conversation.
+ */
+async function startWhiteboardSession(root: string, board: WorkWhiteboard): Promise<void> {
+  if (board.workflowId) return
+  const scope = workspaceRootScopeKey(root)
+  const threadId = await useChatStore.getState().createWriteThread(root, undefined, {
+    title: board.title,
+    titleAuto: false
+  })
+  if (!threadId) return
+  const latest = useWriteWorkspaceStore.getState()
+  const latestBoard = latest.whiteboards[board.id]
+  if (
+    latest.activeWhiteboardId !== board.id ||
+    workspaceRootScopeKey(latest.workspaceRoot) !== scope ||
+    !latestBoard ||
+    workspaceRootScopeKey(latestBoard.workspaceRoot) !== scope ||
+    latestBoard.workflowId
+  ) return
+  await latest.bindWhiteboardThread(board.id, threadId)
+}
+
+/**
+ * New session: a draft that the first send turns into a session bound to
+ * whatever is open then, so no empty conversations pile up. Only whiteboards
+ * create (and bind) their session immediately.
  */
 export async function startWorkSession(target?: { root: string; kind: WorkSessionGroupKind }): Promise<void> {
   if (target && !(await mountWorkRoot(target.root, target.kind))) return
@@ -116,13 +143,12 @@ export async function startWorkSession(target?: { root: string; kind: WorkSessio
   const root = write.workspaceRoot
   if (!root) return
   write.setAssistantOpen(true)
-  const view = useWorkSidebarStore.getState().view
-  if (view === 'sessions' || !writeHasDocumentContext(write)) {
-    useWorkSidebarStore.getState().startDraft(root)
+  const board = write.activeWhiteboardId ? write.whiteboards[write.activeWhiteboardId] ?? null : null
+  if (board) {
+    await startWhiteboardSession(root, board)
     return
   }
-  const resource = writeConversationResourcePath(root, write.activeFilePath)
-  await useChatStore.getState().createWriteThread(root, resource || undefined)
+  useWorkSidebarStore.getState().startDraft(root, workDocumentKey(write))
 }
 
 /**
@@ -135,10 +161,9 @@ export async function prepareWorkSessionForSend(): Promise<boolean> {
   const chat = useChatStore.getState()
   const root = write.workspaceRoot
   if (!root || chat.route !== 'write' || write.activeWhiteboardId) return true
-  const documentContext = writeHasDocumentContext(write)
-  const pin = currentWorkSessionPin(root, documentContext)
+  const pin = currentWorkSessionPin(root, write)
   const draft = Boolean(pin && !pin.threadId)
-  if (!draft && (documentContext || chat.activeThreadId)) return true
+  if (!draft && (writeHasDocumentContext(write) || chat.activeThreadId)) return true
   const resource = writeConversationResourcePath(root, write.activeFilePath)
   return Boolean(await chat.createWriteThread(root, resource || undefined))
 }
@@ -151,11 +176,19 @@ export async function ensureWorkSpaceMounted(): Promise<boolean> {
   return target ? mountWorkSpace(target) : false
 }
 
-/** A fresh Markdown draft in the mounted space; opening it docks the assistant. */
+/** First free `untitled.md`, `untitled-2.md`, ... in `directory`. */
+export function nextUntitledDocumentName(taken: Iterable<string>): string {
+  const names = new Set([...taken].map((name) => name.toLowerCase()))
+  let candidate = 'untitled.md'
+  for (let index = 2; names.has(candidate); index += 1) candidate = `untitled-${index}.md`
+  return candidate
+}
+
+/** A fresh Markdown document in the mounted space; opening it docks the assistant. */
 export async function createWorkDraftDocument(untitledHeading: string): Promise<void> {
   if (!(await ensureWorkSpaceMounted())) return
   const state = useWriteWorkspaceStore.getState()
   const root = state.rootDirectory || state.workspaceRoot
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  await state.createFile(state.workspaceRoot, writeJoinPath(root, `draft-${stamp}.md`), `# ${untitledHeading}\n\n`)
+  const name = nextUntitledDocumentName((state.entriesByDir[root] ?? []).map((entry) => entry.name))
+  await state.createFile(state.workspaceRoot, writeJoinPath(root, name), `# ${untitledHeading}\n\n`)
 }

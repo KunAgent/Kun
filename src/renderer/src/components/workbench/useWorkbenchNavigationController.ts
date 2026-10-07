@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
 import { useWorkbenchChatStarters } from './use-workbench-chat-starters'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
-import type { NormalizedThread, RuntimeConnectionStatus } from '../../agent/types'
+import type { NormalizedThread } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import type { ChatState } from '../../store/chat-store-types'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
-import { usePaperStore } from '../../write/paper/paper-store'
-import { paperModeView } from '../../paper/paper-view'
-import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
+import { startWorkSession } from '../../write/work-session-actions'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
 import { useSddDraftStore } from '../../sdd/sdd-draft-store'
 import { markSddAssistantThread } from '../../sdd/sdd-thread-registry'
@@ -21,7 +19,7 @@ import {
 } from '../../design/design-thread-registry'
 import { isDesignWorkbenchThread } from '../../design/design-task-classification'
 import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-error'
-import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../../lib/workspace-path'
+import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import { activateThreadTurnTarget, prepareThreadTurnTarget, useThreadTurnTarget } from '../chat/thread-turn-target'
@@ -39,7 +37,6 @@ export type UseWorkbenchNavigationControllerParams = {
   pluginHostRoute: ChatState['pluginHostRoute']
   rightPanelMode: RightPanelMode
   route: ChatState['route']
-  runtimeConnection: RuntimeConnectionStatus
   sddDraftContent: string
   threads: NormalizedThread[]
   /** ADE inventory is separate; openThread consults it for workspaceMode. */
@@ -51,9 +48,7 @@ export type UseWorkbenchNavigationControllerParams = {
   clearFilePreviewTargets: () => void
   createConversation: ChatState['createConversation']
   createThread: ChatState['createThread']
-  createWriteThread: ChatState['createWriteThread']
   dismissActiveSddDraft: (options?: { closeAssistant?: boolean }) => void
-  ensureWriteThreadForWorkspace: ChatState['ensureWriteThreadForWorkspace']
   findSddDraftForSidebarThread: (
     threadId: string,
     thread: NormalizedThread | null
@@ -151,7 +146,6 @@ export function useWorkbenchNavigationController({
   pluginHostRoute,
   rightPanelMode,
   route,
-  runtimeConnection,
   sddDraftContent,
   threads,
   adeThreads = [],
@@ -161,9 +155,7 @@ export function useWorkbenchNavigationController({
   clearFilePreviewTargets,
   createConversation,
   createThread,
-  createWriteThread,
   dismissActiveSddDraft,
-  ensureWriteThreadForWorkspace,
   findSddDraftForSidebarThread,
   openClaw,
   openBoard,
@@ -538,48 +530,12 @@ export function useWorkbenchNavigationController({
   ])
 
   const startNewWriteAssistantConversation = useCallback((): void => {
-    const writeState = useWriteWorkspaceStore.getState()
-    const writeWorkspaceRoot = writeState.workspaceRoot || workspaceRoot
-    const activeBoardId = writeState.activeWhiteboardId
-    const activeBoard = activeBoardId ? writeState.whiteboards[activeBoardId] ?? null : null
     setInput('')
-    writeState.clearQuotedSelections()
-    // PPT review boards are canonically tied to the task that created their
-    // workflow. A generic New conversation must not replace that parent
-    // identity (or create an unrelated Write task with no board to own it).
-    if (activeBoard?.workflowId) return
-    const writeWorkspaceScope = workspaceRootScopeKey(writeWorkspaceRoot)
-    const conversationResource = writeState.workSurface === 'papers'
-      ? paperConversationResourcePath({
-          surface: writeState.workSurface,
-          workspaceRoot: writeWorkspaceRoot,
-          activeFilePath: writeState.activeFilePath,
-          unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
-          entriesByDir: writeState.entriesByDir,
-          view: paperModeView(writeState),
-          researchSessionId: writeState.paperResearch.sessionId
-        }) ?? ''
-      : writeState.activeFilePath ?? undefined
-    void createWriteThread(
-      writeWorkspaceRoot,
-      conversationResource,
-      activeBoard
-        ? { title: activeBoard.title, titleAuto: false }
-        : undefined
-    ).then((threadId) => {
-      if (!activeBoardId || !threadId) return
-      const latest = useWriteWorkspaceStore.getState()
-      const latestBoard = latest.whiteboards[activeBoardId]
-      if (
-        latest.activeWhiteboardId !== activeBoardId ||
-        workspaceRootScopeKey(latest.workspaceRoot) !== writeWorkspaceScope ||
-        !latestBoard ||
-        workspaceRootScopeKey(latestBoard.workspaceRoot) !== writeWorkspaceScope ||
-        latestBoard.workflowId
-      ) return
-      void latest.bindWhiteboardThread(activeBoardId, threadId)
-    })
-  }, [createWriteThread, setInput, workspaceRoot])
+    useWriteWorkspaceStore.getState().clearQuotedSelections()
+    // Same entry as the sidebar's New session: a draft that the first send
+    // binds to whatever is open; whiteboards create and bind theirs at once.
+    void startWorkSession()
+  }, [setInput])
 
   const pickWriteAssistantWorkspace = useCallback(async (): Promise<void> => {
     try {
@@ -591,14 +547,12 @@ export function useWorkbenchNavigationController({
       const picked = await window.kunGui.pickWorkspaceDirectory(
         writeState.workspaceRoot || writeState.defaultWorkspaceRoot || workspaceRoot || undefined
       )
-      if (!picked.canceled && picked.path) {
-        await useWriteWorkspaceStore.getState().addWriteWorkspace(picked.path)
-        if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
-      }
+      // The space's first session starts with the first send; nothing is created here.
+      if (!picked.canceled && picked.path) await useWriteWorkspaceStore.getState().addWriteWorkspace(picked.path)
     } catch (error) {
       useWriteWorkspaceStore.getState().setFileError(formatWorkspacePickerError(error))
     }
-  }, [ensureWriteThreadForWorkspace, runtimeConnection, workspaceRoot])
+  }, [workspaceRoot])
 
   return {
     closeRightPanel,

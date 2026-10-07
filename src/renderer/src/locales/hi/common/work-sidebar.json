@@ -22,5 +22,9 @@
   "workHomeTitle": "आज हम किस पर काम करें?",
   "workHomeSubtitle": "दस्तावेज़ लिखें, शोध-पत्र पढ़ें, सामग्री व्यवस्थित करें — एक वाक्य से शुरू करें।",
   "workHomeSpaceSwitch": "नए सत्रों के लिए स्थान चुनें",
-  "workHomeSpaceHint": "नए सत्र इसी स्थान में सहेजे जाते हैं"
+  "workHomeSpaceHint": "नए सत्र इसी स्थान में सहेजे जाते हैं",
+  "workHomeComposerPlaceholder": "बताएँ कि आप क्या लिखना, पढ़ना या व्यवस्थित करना चाहते हैं…",
+  "workSessionJustNow": "अभी-अभी",
+  "workAssistantEmptyTitlePapers": "रिसर्च असिस्टेंट तैयार है",
+  "workAssistantEmptySubPapers": "उद्धृत करने के लिए पेपर में टेक्स्ट चुनें, या नीचे से कोई कार्रवाई चुनें।"
 }

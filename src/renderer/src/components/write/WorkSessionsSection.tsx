@@ -13,7 +13,8 @@ import {
   MoreHorizontal,
   PencilLine,
   Plus,
-  Shapes
+  Shapes,
+  Trash2
 } from 'lucide-react'
 import { useChatStore } from '../../store/chat-store'
 import { formatRelativeTime } from '../../lib/format-relative-time'
@@ -26,12 +27,15 @@ import { useWorkSidebarStore } from '../../write/work-sidebar-store'
 import type { WorkSessionEntry, WorkSessionGroup } from '../../write/work-sessions-model'
 import { openWorkSession, startWorkSession } from '../../write/work-session-actions'
 import { SidebarActivityIndicator } from '../sidebar/SidebarActivityIndicator'
+import { SidebarActionDialog, type SidebarActionDialogState } from '../chat/SidebarProjectOverlays'
 import { RoomPopover } from '../rooms/RoomPopover'
 import { useWorkSessionGroups } from './use-work-sessions'
 import '../rooms/conversation-manage.css'
 
 const COLLAPSE_KEY = 'kun.work.sessionGroups.v1'
 const VISIBLE_SESSIONS = 5
+/** Below this age a session reads "just now" instead of ticking seconds. */
+const JUST_NOW_MS = 60_000
 
 function readGroupState(): Record<string, boolean> {
   try {
@@ -71,6 +75,10 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
   )
   const sessionLabel = (session: WorkSessionEntry): string =>
     session.title || anchorName(session.anchor, (id) => whiteboards[id]?.title) || t('workSessionNew')
+  const sessionTime = (updatedAt: string): string => {
+    const age = Date.now() - Date.parse(updatedAt)
+    return age < JUST_NOW_MS ? t('workSessionJustNow') : formatRelativeTime(updatedAt, i18n.language)
+  }
   const defaultLibraryRoot = usePaperWorkspaceBootstrapStore((state) => state.defaultWorkspaceRoot)
   const pin = useWorkSidebarStore((state) => state.pin)
   const activity = useChatStore(useShallow((state): WriteResourceActivityContext & { route: string } => ({
@@ -84,9 +92,11 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
   })))
   const renameThread = useChatStore((state) => state.renameThread)
   const archiveThread = useChatStore((state) => state.archiveThread)
+  const deleteThread = useChatStore((state) => state.deleteThread)
   const [groupState, setGroupState] = useState(readGroupState)
   const [showAll, setShowAll] = useState<ReadonlySet<string>>(() => new Set())
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
+  const [actionDialog, setActionDialog] = useState<SidebarActionDialogState | null>(null)
   const mountedKey = writeWorkspaceKey(workspaceRoot)
   const searching = query.trim().length > 0
 
@@ -105,7 +115,7 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
     return new Set(refs.filter((group) => isExpanded(group)).map((group) => group.root))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaces, libraries, groupState, mountedKey, workSurface, searching])
-  const { groups: liveGroups, loadingRoots } = useWorkSessionGroups({ query, expandedRoots })
+  const { groups: liveGroups, loadingRoots, patchThread, forgetThread } = useWorkSessionGroups({ query, expandedRoots })
 
   const toggleGroup = (group: WorkSessionGroup): void => {
     setGroupState((current) => {
@@ -125,7 +135,43 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
   const commitRename = (session: WorkSessionEntry): void => {
     const value = renaming?.value.trim() ?? ''
     setRenaming(null)
-    if (value && value !== session.title) void renameThread(session.id, value)
+    if (!value || value === session.title) return
+    patchThread(session.id, { title: value, titleAuto: false })
+    void renameThread(session.id, value)
+  }
+
+  // A pinned session that goes away leaves the conversation to the open document.
+  const releaseSession = (threadId: string): void => {
+    if (useWorkSidebarStore.getState().pin?.threadId === threadId) useWorkSidebarStore.getState().clearPin()
+    forgetThread(threadId)
+  }
+  const archiveSession = (session: WorkSessionEntry): void => {
+    releaseSession(session.id)
+    void archiveThread(session.id, true)
+  }
+  const requestDelete = (session: WorkSessionEntry): void => {
+    setActionDialog({
+      title: t('sidebarThreadDeleteDialogTitle', { title: sessionLabel(session) }),
+      description: t('sidebarThreadDeleteDialogDescription'),
+      detail: t('sidebarThreadDeleteDialogDetail'),
+      confirmLabel: t('sidebarThreadDeleteConfirmButton'),
+      danger: true,
+      submitting: false,
+      onConfirm: async () => {
+        releaseSession(session.id)
+        await deleteThread(session.id)
+      }
+    })
+  }
+  const confirmActionDialog = async (): Promise<void> => {
+    const dialog = actionDialog
+    if (!dialog || dialog.submitting) return
+    setActionDialog({ ...dialog, submitting: true })
+    try {
+      await dialog.onConfirm()
+    } finally {
+      setActionDialog(null)
+    }
   }
 
   const visibleGroups = searching ? liveGroups.filter((group) => group.sessions.length > 0) : liveGroups
@@ -206,7 +252,7 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
                             failedLabel={t('sidebarThreadFailed')} unreadLabel={t('sidebarThreadUnread')}
                             awaitingInputLabel={t('sidebarThreadAwaitingInput')} />
                         ) : session.updatedAt ? (
-                          <span className="work-session-time">{formatRelativeTime(session.updatedAt, i18n.language)}</span>
+                          <span className="work-session-time">{sessionTime(session.updatedAt)}</span>
                         ) : null}
                       </button>
                       <RoomPopover label={t('workSessionMore')} trigger={<MoreHorizontal size={14} />}
@@ -219,12 +265,18 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
                             }}>
                               <PencilLine size={15} aria-hidden="true" /><span>{t('sidebarThreadRename')}</span>
                             </button>
-                            <button type="button" className="is-danger" onClick={() => {
+                            <button type="button" onClick={() => {
                               close()
-                              if (pin?.threadId === session.id) useWorkSidebarStore.getState().clearPin()
-                              void archiveThread(session.id, true)
+                              archiveSession(session)
                             }}>
                               <Archive size={15} aria-hidden="true" /><span>{t('sidebarThreadArchive')}</span>
+                            </button>
+                            <hr />
+                            <button type="button" className="is-danger" onClick={() => {
+                              close()
+                              requestDelete(session)
+                            }}>
+                              <Trash2 size={15} aria-hidden="true" /><span>{t('sidebarThreadDelete')}</span>
                             </button>
                           </div>
                         )}
@@ -257,6 +309,14 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
           </section>
         )
       })}
+      {actionDialog ? (
+        <SidebarActionDialog
+          state={actionDialog}
+          onClose={() => { if (!actionDialog.submitting) setActionDialog(null) }}
+          onConfirm={() => void confirmActionDialog()}
+          t={t}
+        />
+      ) : null}
     </div>
   )
 }

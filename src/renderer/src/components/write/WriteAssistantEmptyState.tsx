@@ -4,7 +4,7 @@ import { FileText, ListTodo, MessageSquareQuote } from 'lucide-react'
 import { WritePaperAssistantActions } from './WritePaperAssistantActions'
 import { WorkKunAvatar } from './WorkHomeEmptyState'
 
-/** The docked assistant before the first message: Kun plus three quick asks. */
+/** The docked assistant before the first message: Kun plus a few quick asks. */
 export function WriteAssistantEmptyState({
   papersSurface,
   paperContextLabel,
@@ -34,10 +34,10 @@ export function WriteAssistantEmptyState({
       <div className="write-assistant-ready flex flex-col items-center px-3 pb-8 pt-12 text-center">
         <WorkKunAvatar variant={papersSurface ? 'researcher' : 'writer'} size={56} />
         <h3 className="mt-5 text-[17px] font-semibold tracking-[-0.025em] text-ds-ink">
-          {t('writeAssistantEmptyTitle')}
+          {t(papersSurface ? 'workAssistantEmptyTitlePapers' : 'writeAssistantEmptyTitle')}
         </h3>
         <p className="mt-2 max-w-[270px] text-[12.5px] leading-5 text-ds-muted">
-          {t('writeAssistantEmptySub')}
+          {t(papersSurface ? 'workAssistantEmptySubPapers' : 'writeAssistantEmptySub')}
         </p>
       </div>
 

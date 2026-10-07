@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { NormalizedThread } from '../../agent/types'
 import { getProvider } from '../../agent/registry'
@@ -35,7 +35,13 @@ async function listSpaceWriteThreads(root: string): Promise<NormalizedThread[]> 
 export function useWorkSessionGroups({ query, expandedRoots }: {
   query: string
   expandedRoots: ReadonlySet<string>
-}): { groups: WorkSessionGroup[]; loadingRoots: ReadonlySet<string> } {
+}): {
+  groups: WorkSessionGroup[]
+  loadingRoots: ReadonlySet<string>
+  /** Mirror a rename/archive/delete into the per-space listings right away. */
+  patchThread: (threadId: string, patch: Partial<NormalizedThread>) => void
+  forgetThread: (threadId: string) => void
+} {
   const { spaces, libraries, whiteboards } = useWriteWorkspaceStore(useShallow((state) => ({
     spaces: state.workspaceRoots,
     libraries: state.paperMode.libraries,
@@ -78,6 +84,19 @@ export function useWorkSessionGroups({ query, expandedRoots }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedKey, runtimeReady])
 
+  const patchThread = useCallback((threadId: string, patch: Partial<NormalizedThread>): void => {
+    setExtra((current) => Object.fromEntries(Object.entries(current).map(([key, listed]) => [
+      key,
+      listed.map((thread) => (thread.id === threadId ? { ...thread, ...patch } : thread))
+    ])))
+  }, [])
+  const forgetThread = useCallback((threadId: string): void => {
+    setExtra((current) => Object.fromEntries(Object.entries(current).map(([key, listed]) => [
+      key,
+      listed.filter((thread) => thread.id !== threadId)
+    ])))
+  }, [])
+
   const groups = useMemo(() => {
     const known = new Set(threads.map((thread) => thread.id))
     const merged = [
@@ -99,5 +118,5 @@ export function useWorkSessionGroups({ query, expandedRoots }: {
     })
   }, [extra, libraries, query, spaces, threads, whiteboards])
 
-  return { groups, loadingRoots }
+  return { groups, loadingRoots, patchThread, forgetThread }
 }

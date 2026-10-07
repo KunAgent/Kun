@@ -69,7 +69,6 @@ type Params = {
   fileContent: string
   presentationEnabled: boolean
   presentationInFlight: boolean
-  runtimeConnection: string
   input: string
   setInput: (value: string) => void
   onSubmitPrompt?: (value: string) => void
@@ -79,7 +78,6 @@ type Params = {
   flushSave: WriteWorkspaceState['flushSave']
   setAssistantOpen: WriteWorkspaceState['setAssistantOpen']
   setFileError: WriteWorkspaceState['setFileError']
-  ensureWriteThreadForWorkspace: (workspaceRoot: string) => unknown
   completeOnboarding: () => void
   showExportNotice: (notice: WriteNotice) => void
   setExportMenuOpen: (value: boolean) => void
@@ -99,7 +97,6 @@ export function createWriteWorkspaceFileActions({
   fileContent,
   presentationEnabled,
   presentationInFlight,
-  runtimeConnection,
   input,
   setInput,
   onSubmitPrompt,
@@ -109,7 +106,6 @@ export function createWriteWorkspaceFileActions({
   flushSave,
   setAssistantOpen,
   setFileError,
-  ensureWriteThreadForWorkspace,
   completeOnboarding,
   showExportNotice,
   setExportMenuOpen,
@@ -127,10 +123,8 @@ export function createWriteWorkspaceFileActions({
       const picked = await window.kunGui.pickWorkspaceDirectory(workspaceRoot || undefined)
       if (!picked.canceled && picked.path) {
         await addWriteWorkspace(picked.path)
-        if (pathsEqual(useWriteWorkspaceStore.getState().workspaceRoot, picked.path)) {
-          completeOnboarding()
-          if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
-        }
+        // The space's session starts with the first send; none is created here.
+        if (pathsEqual(useWriteWorkspaceStore.getState().workspaceRoot, picked.path)) completeOnboarding()
       }
     } catch (error) {
       setFileError(formatWorkspacePickerError(error))

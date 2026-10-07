@@ -22,5 +22,9 @@
   "workHomeTitle": "今日は Kun と何に取り組みますか？",
   "workHomeSubtitle": "文書を書く、論文を読む、資料を整理する——ひとことから始めましょう。",
   "workHomeSpaceSwitch": "新しいセッションの保存先を選択",
-  "workHomeSpaceHint": "新しいセッションはこのスペースに保存されます"
+  "workHomeSpaceHint": "新しいセッションはこのスペースに保存されます",
+  "workHomeComposerPlaceholder": "書きたい・読みたい・整理したい内容を入力…",
+  "workSessionJustNow": "たった今",
+  "workAssistantEmptyTitlePapers": "リサーチアシスタント待機中",
+  "workAssistantEmptySubPapers": "論文内のテキストを選択して引用するか、下から操作を選んでください。"
 }

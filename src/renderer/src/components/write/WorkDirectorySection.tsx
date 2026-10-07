@@ -33,8 +33,6 @@ export function WorkDirectorySection({ actions, showLibraries }: {
   showLibraries: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
-  const ensureWriteThreadForWorkspace = useChatStore((s) => s.ensureWriteThreadForWorkspace)
-  const runtimeConnection = useChatStore((s) => s.runtimeConnection)
   const activityContext = useChatStore(useShallow((s): WriteResourceActivityContext => ({
     threads: s.threads,
     activeThreadId: s.activeThreadId,
@@ -82,9 +80,9 @@ export function WorkDirectorySection({ actions, showLibraries }: {
 
   const toggleWorkspaceGroup = async (workspacePath: string, mounted: boolean): Promise<void> => {
     if (!mounted) {
+      // Mounting only shows the space; its session starts with the first send.
       if (await mountWorkSpace(workspacePath)) {
         setCollapsedWorkspaces((current) => ({ ...current, [workspacePath]: false }))
-        if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(workspacePath)
       }
       return
     }

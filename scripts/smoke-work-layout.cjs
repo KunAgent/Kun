@@ -131,14 +131,24 @@ async function exerciseWorkLayout({ page, poll, capture, recordDiagnostic, resiz
   assert.equal(steps.sessionDoc.activeThreadId, steps.session.activeThreadId, 'session stays while a document opens')
   await capture('work-03-session-doc')
 
-  // Files view: the conversation follows the document again.
+  // Files view: switching views keeps the session; the conversation only
+  // follows the document once another one opens.
   await page.locator('[data-work-sidebar-view="files"]').click()
   await page.locator('[data-work-directory]').waitFor()
-  await poll(async () => (await workSnapshot(page)).activeThreadId !== steps.session.activeThreadId,
-    15_000, 'document-scoped conversation in files view')
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(800)
   steps.files = await workSnapshot(page)
+  assert.equal(steps.files.activeThreadId, steps.session.activeThreadId, 'view switch keeps the session')
   await capture('work-04-files')
+  await page.evaluate(async (root) => {
+    const { useWriteWorkspaceStore } = await import('/src/write/write-workspace-store.ts')
+    await useWriteWorkspaceStore.getState().openFile(root, root + '/notes/meeting.md')
+  }, initial.workspaceRoot)
+  await poll(async () => (await workSnapshot(page)).activeThreadId !== steps.session.activeThreadId,
+    15_000, 'document-scoped conversation after opening another file')
+  await page.waitForTimeout(600)
+  steps.filesOtherDoc = await workSnapshot(page)
+  assert.equal(steps.filesOtherDoc.pin, null, 'files view releases the pin when the document changes')
+  await capture('work-04b-files-other-doc')
 
   const views = []
   if (process.argv.includes('--work-papers')) {

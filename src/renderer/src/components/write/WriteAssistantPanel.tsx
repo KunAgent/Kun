@@ -38,6 +38,8 @@ import { WriteAssistantSparkleIcon } from './WriteAssistantIcons'
 import { WriteAssistantEmptyState } from './WriteAssistantEmptyState'
 import { WorkHomeHero, WorkHomeSpaceChip, WorkHomeStarters, WorkKunAvatar } from './WorkHomeEmptyState'
 import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
+import { focusedPaperViewId } from '../../paper/paper-view'
+import type { WritePaperViewId } from '../../write/write-workspace-store-types'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { useWorkSidebarStore } from '../../write/work-sidebar-store'
 import { workSessionDisplayTitle } from '../../write/work-sessions-model'
@@ -92,6 +94,15 @@ type Props = {
 }
 
 const EMPTY_SKILL_COMMANDS: CoreRuntimeSkillJson[] = []
+
+/** Context chip label for a library/discover page, which opens no file. */
+const PAPER_VIEW_LABEL_KEYS: Record<WritePaperViewId, string> = {
+  library: 'workSidebarLibrary',
+  'discover:search': 'writePaperDiscoverTab_search',
+  'discover:arxiv': 'writePaperDiscoverNav_arxiv',
+  'discover:venue': 'writePaperDiscoverNav_venue',
+  'discover:feeds': 'writePaperDiscoverNav_feeds'
+}
 
 export function WriteAssistantPanel({
   input,
@@ -189,7 +200,10 @@ export function WriteAssistantPanel({
   const activeFileLabel = activeFilePath
     ? writeRelativeToWorkspace(workspaceRoot, activeFilePath)
     : t('writeNoFileOpen')
-  const activeFileName = activeFilePath ? writeBasenameFromPath(activeFilePath) : activeFileLabel
+  const paperView = useWriteWorkspaceStore(focusedPaperViewId)
+  const activeFileName = activeFilePath
+    ? writeBasenameFromPath(activeFilePath)
+    : paperView ? t(PAPER_VIEW_LABEL_KEYS[paperView]) : activeFileLabel
   const presentationView = useWriteWorkspaceStore(selectFocusedPresentationView)
   const {
     childThreadId,
@@ -295,8 +309,10 @@ export function WriteAssistantPanel({
               {sessionTitle || t('workSessionNew')}
             </span>
           ) : (
-            <span className="ml-2 min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-ds-ink">
-              {t('writeAssistant')}
+            // The files view names a titled conversation too; only an unnamed one reads as the assistant.
+            <span className="ml-2 min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-ds-ink"
+              title={sessionTitle || t('writeAssistant')}>
+              {sessionTitle || t('writeAssistant')}
             </span>
           )}
           {/* In the sessions view the sidebar already lists every session. */}
@@ -331,7 +347,7 @@ export function WriteAssistantPanel({
         </div>
         <div className="write-assistant-context flex min-w-0 items-center gap-1.5 border-b border-ds-border-muted px-4 py-2.5">
           <span className="write-context-chip min-w-0" title={paperContextLabel ?? activeFileLabel}>
-            {papersSurface && activePaperEntry ? (
+            {papersSurface && (activePaperEntry || paperView) ? (
               <GraduationCap className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             ) : (
               <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
@@ -543,6 +559,8 @@ export function WriteAssistantPanel({
             modelPickerMode="combobox"
             modelControlVariant="split"
             showProviderInModelLabel
+            // The home invites like Code's; a docked draft keeps the short prompt.
+            placeholderOverride={home ? t('workHomeComposerPlaceholder') : activeThreadId ? undefined : t('placeholder')}
             queuedMessages={queuedMessages}
             onRemoveQueuedMessage={removeQueuedMessage}
             onGuideQueuedMessage={guideQueuedMessage}

@@ -17,9 +17,11 @@ import { paperConversationResourcePath } from '../../paper/paper-conversation-sc
 import {
   applicableWorkSessionPin,
   useWorkSidebarStore,
+  workDocumentKey,
   writeHasDocumentContext
 } from '../../write/work-sidebar-store'
 import { useWorkConversationStage } from '../../write/work-conversation-stage'
+import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 
 type WorkbenchWriteAssistantRuntimeOptions = {
   composerPickList: string[]
@@ -72,20 +74,25 @@ export function useWorkbenchWriteAssistantRuntime({
   useEffect(() => {
     if (route !== 'write' || !writeWorkspaceRoot || pinTransitions > 0) return
     const chatState = useChatStore.getState()
-    // A session chosen in the sidebar owns the conversation in the sessions
-    // view (and in the files view while nothing is open); an empty pin is a
+    // A session chosen in the sidebar owns the conversation: in the sessions
+    // view whatever opens, in the files view until another document opens
+    // (the conversation then follows the document again). An empty pin is a
     // draft that the next send turns into a new session. Whiteboards keep
     // their own bound thread, which their workflows depend on.
+    const document = { workSurface, activeFilePath: activeWriteFilePath, activeWhiteboardId }
     const pin = activeWhiteboardId ? null : applicableWorkSessionPin({
       view: sidebarView,
       pin: sessionPin,
       workspaceRoot: writeWorkspaceRoot,
-      documentContext: writeHasDocumentContext({
-        workSurface,
-        activeFilePath: activeWriteFilePath,
-        activeWhiteboardId
-      })
+      documentContext: writeHasDocumentContext(document),
+      documentKey: workDocumentKey(document)
     })
+    if (!pin && sessionPin && sidebarView === 'files' && !activeWhiteboardId &&
+      normalizeWorkspaceRoot(sessionPin.workspaceRoot) === normalizeWorkspaceRoot(writeWorkspaceRoot)) {
+      // The document moved on in the files view; the pin is spent.
+      useWorkSidebarStore.getState().clearPin()
+      return
+    }
     if (pin && !pin.threadId) {
       if (activeThreadId) chatState.clearActiveThreadSelection()
       return

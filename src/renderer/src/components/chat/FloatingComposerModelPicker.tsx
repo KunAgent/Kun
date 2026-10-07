@@ -165,9 +165,11 @@ export function FloatingComposerModelPicker({
     reasoningEnabled ? `${t('composerReasoning')} ${currentReasoningLabel}` : '',
     fastModeEnabled ? t('composerFastModeOn') : ''
   ].filter(Boolean).join(' / ')
+  // The trigger is a content-sized pill: stretch only lets it shrink in a
+  // cramped toolbar, it never grows, so it stays next to the right-side actions.
   const widthClass = stretch
-    ? 'min-w-0 flex-1 max-w-[min(300px,48vw)]'
-    : compact ? 'min-w-0 max-w-[232px]' : 'min-w-0 max-w-[min(300px,46vw)]'
+    ? 'min-w-0 shrink max-w-[min(300px,48vw)]'
+    : compact ? 'min-w-0 shrink-0 max-w-[232px]' : 'min-w-0 shrink-0 max-w-[min(300px,46vw)]'
 
   useEffect(() => {
     if (!reasoningEnabled) return
@@ -277,7 +279,7 @@ export function FloatingComposerModelPicker({
   return (
     <div
       ref={pickerRef}
-      className={`ds-composer-model-picker ds-no-drag relative flex h-9 shrink-0 items-center ${widthClass} ${
+      className={`ds-composer-model-picker ds-no-drag relative flex h-9 items-center ${widthClass} ${
         mode === 'combobox' && stretch ? 'justify-end' : ''
       }`}
     >

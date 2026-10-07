@@ -61,36 +61,21 @@ async function setPaperModeEnabled(enabled: boolean): Promise<PaperModeToggleRes
 export const PAPER_MODE_SWITCH_CANCELED = 'switch-canceled'
 
 /**
- * Keyboard/command-palette entry: paper mode lives on the Work route, so a
- * shortcut pressed in Code or Rooms first navigates to Work. Toggling from
- * another route always lands in paper mode rather than silently turning it
- * off behind the user's back.
+ * Keyboard/command-palette entry: papers are part of Work, so a shortcut
+ * pressed in Code first navigates to Work, then opens the library (or the
+ * import dialog) exactly like the sidebar rows do.
  */
-export async function runPaperModeShortcut(command: 'toggle' | 'import'): Promise<void> {
-  // Dynamic import: chat-store's send path imports this module.
+export async function runPaperModeShortcut(command: 'library' | 'import'): Promise<void> {
+  // Dynamic imports: chat-store's send path imports this module.
   const { useChatStore } = await import('../store/chat-store')
-  const onWorkRoute = useChatStore.getState().route === 'write'
-  if (!onWorkRoute) await useChatStore.getState().openWrite()
-  if (command === 'toggle' && onWorkRoute) {
-    await togglePaperMode()
-    return
-  }
-  const result = await enterPaperMode()
-  if (command === 'import' && result.ok && useWriteWorkspaceStore.getState().paperMode.activeLibrary) {
-    usePaperModeStore.getState().setImportDialogOpen(true)
-  }
+  if (useChatStore.getState().route !== 'write') await useChatStore.getState().openWrite()
+  const actions = await import('../write/work-session-actions')
+  if (command === 'import') await actions.openPaperImport()
+  else await actions.openPaperView('library')
 }
 
 export function enterPaperMode(): Promise<PaperModeToggleResult> {
   return serializeLibraryAction(() => setPaperModeEnabled(true))
-}
-
-export function exitPaperMode(): Promise<PaperModeToggleResult> {
-  return serializeLibraryAction(() => setPaperModeEnabled(false))
-}
-
-export function togglePaperMode(): Promise<PaperModeToggleResult> {
-  return serializeLibraryAction(() => setPaperModeEnabled(!useWriteWorkspaceStore.getState().paperMode.enabled))
 }
 
 /**

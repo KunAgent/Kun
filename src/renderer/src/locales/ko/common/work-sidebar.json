@@ -22,5 +22,9 @@
   "workHomeTitle": "오늘은 Kun과 무엇을 해볼까요?",
   "workHomeSubtitle": "문서 작성, 논문 읽기, 자료 정리 — 한 문장으로 시작하세요.",
   "workHomeSpaceSwitch": "새 세션을 저장할 공간 선택",
-  "workHomeSpaceHint": "새 세션은 이 공간에 저장됩니다"
+  "workHomeSpaceHint": "새 세션은 이 공간에 저장됩니다",
+  "workHomeComposerPlaceholder": "작성, 읽기, 정리하고 싶은 내용을 설명하세요…",
+  "workSessionJustNow": "방금",
+  "workAssistantEmptyTitlePapers": "리서치 어시스턴트 대기 중",
+  "workAssistantEmptySubPapers": "논문에서 텍스트를 선택해 인용하거나 아래에서 작업을 선택하세요."
 }

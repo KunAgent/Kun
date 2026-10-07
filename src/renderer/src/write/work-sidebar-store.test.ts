@@ -4,10 +4,13 @@ import {
   beginWorkSessionTransition,
   readWorkSidebarView,
   useWorkSidebarStore,
+  workDocumentKey,
   writeHasDocumentContext
 } from './work-sidebar-store'
 
 const ROOT = '/Users/me/Work'
+const README = workDocumentKey({ workSurface: 'docs', activeFilePath: `${ROOT}/README.md`, activeWhiteboardId: null })
+const NOTES = workDocumentKey({ workSurface: 'docs', activeFilePath: `${ROOT}/notes.md`, activeWhiteboardId: null })
 
 describe('work sidebar store', () => {
   beforeEach(() => {
@@ -35,20 +38,37 @@ describe('work sidebar store', () => {
     expect(readWorkSidebarView()).toBe('sessions')
   })
 
-  it('applies the pin in the sessions view, and in the files view only with nothing open', () => {
-    const pin = { workspaceRoot: ROOT, threadId: 'thr_1' }
-    expect(applicableWorkSessionPin({ view: 'sessions', pin, workspaceRoot: ROOT, documentContext: true })).toEqual(pin)
-    expect(applicableWorkSessionPin({ view: 'files', pin, workspaceRoot: ROOT, documentContext: true })).toBeNull()
-    expect(applicableWorkSessionPin({ view: 'files', pin, workspaceRoot: ROOT, documentContext: false })).toEqual(pin)
+  it('applies the pin in the sessions view whatever is open', () => {
+    const pin = { workspaceRoot: ROOT, threadId: 'thr_1', documentKey: README }
+    expect(applicableWorkSessionPin({ view: 'sessions', pin, workspaceRoot: ROOT, documentContext: true, documentKey: NOTES }))
+      .toEqual(pin)
     expect(applicableWorkSessionPin({ view: 'sessions', pin, workspaceRoot: '/Users/me/Other', documentContext: false }))
       .toBeNull()
   })
 
+  it('keeps the pin in the files view only while the same document is open', () => {
+    const pin = { workspaceRoot: ROOT, threadId: 'thr_1', documentKey: README }
+    expect(applicableWorkSessionPin({ view: 'files', pin, workspaceRoot: ROOT, documentContext: true, documentKey: README }))
+      .toEqual(pin)
+    expect(applicableWorkSessionPin({ view: 'files', pin, workspaceRoot: ROOT, documentContext: true, documentKey: NOTES }))
+      .toBeNull()
+    expect(applicableWorkSessionPin({ view: 'files', pin, workspaceRoot: ROOT, documentContext: false }))
+      .toEqual(pin)
+  })
+
+  it('adopts the open document when switching to the files view', () => {
+    useWorkSidebarStore.getState().pinSession(ROOT, 'thr_1', README)
+    useWorkSidebarStore.getState().setView('files', NOTES)
+    expect(useWorkSidebarStore.getState().pin?.documentKey).toBe(NOTES)
+    useWorkSidebarStore.getState().setView('sessions', README)
+    expect(useWorkSidebarStore.getState().pin?.documentKey).toBe(NOTES)
+  })
+
   it('keeps drafts and pins per space', () => {
-    useWorkSidebarStore.getState().startDraft(ROOT)
-    expect(useWorkSidebarStore.getState().pin).toEqual({ workspaceRoot: ROOT, threadId: '' })
+    useWorkSidebarStore.getState().startDraft(ROOT, README)
+    expect(useWorkSidebarStore.getState().pin).toEqual({ workspaceRoot: ROOT, threadId: '', documentKey: README })
     useWorkSidebarStore.getState().pinSession(ROOT, ' thr_2 ')
-    expect(useWorkSidebarStore.getState().pin).toEqual({ workspaceRoot: ROOT, threadId: 'thr_2' })
+    expect(useWorkSidebarStore.getState().pin).toEqual({ workspaceRoot: ROOT, threadId: 'thr_2', documentKey: '' })
     useWorkSidebarStore.getState().clearPin()
     expect(useWorkSidebarStore.getState().pin).toBeNull()
   })
@@ -69,5 +89,6 @@ describe('work sidebar store', () => {
     expect(writeHasDocumentContext({ workSurface: 'docs', activeFilePath: '/a.md', activeWhiteboardId: null })).toBe(true)
     expect(writeHasDocumentContext({ workSurface: 'docs', activeFilePath: null, activeWhiteboardId: 'b' })).toBe(true)
     expect(writeHasDocumentContext({ workSurface: 'papers', activeFilePath: null, activeWhiteboardId: null })).toBe(true)
+    expect(README).not.toBe(NOTES)
   })
 })

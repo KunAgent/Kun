@@ -22,5 +22,9 @@
   "workHomeTitle": "วันนี้อยากทำงานอะไรกับ Kun?",
   "workHomeSubtitle": "เขียนเอกสาร อ่านบทความ จัดระเบียบข้อมูล — เริ่มด้วยประโยคเดียว",
   "workHomeSpaceSwitch": "เลือกพื้นที่สำหรับเซสชันใหม่",
-  "workHomeSpaceHint": "เซสชันใหม่จะบันทึกไว้ในพื้นที่นี้"
+  "workHomeSpaceHint": "เซสชันใหม่จะบันทึกไว้ในพื้นที่นี้",
+  "workHomeComposerPlaceholder": "อธิบายสิ่งที่คุณต้องการเขียน อ่าน หรือจัดระเบียบ…",
+  "workSessionJustNow": "เมื่อสักครู่",
+  "workAssistantEmptyTitlePapers": "ผู้ช่วยวิจัยพร้อมแล้ว",
+  "workAssistantEmptySubPapers": "เลือกข้อความในบทความเพื่ออ้างอิง หรือเลือกการดำเนินการด้านล่าง"
 }

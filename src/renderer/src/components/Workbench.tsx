@@ -107,8 +107,8 @@ export function Workbench(): ReactElement {
     currentTurnOrchestration,
     route, pluginHostRoute, workspaceRoot, conversationWorkspaceRoot, runtimeConnection,
     codeWorkspaceRoots, selectWorkspaceRoot,
-    setRoute, openCode, openAde, openWrite, openDesign, ensureWriteThreadForWorkspace,
-    ensureDesignThreadForWorkspace, createWriteThread, clearDesignHistory, openSettings,
+    setRoute, openCode, openAde, openWrite, openDesign,
+    ensureDesignThreadForWorkspace, clearDesignHistory, openSettings,
     openPlugins, openClaw, openBoard, openSchedule, openWorkflow, chooseWorkspace, clawChannels,
     activeClawChannelId, selectClawChannel, resetClawChannelSession, setClawChannelModel,
     appendLocalClawTurn, setError, sendMessage, reviewActiveThread, queuedMessages,
@@ -552,9 +552,9 @@ export function Workbench(): ReactElement {
     toggleConnectPhone
   } = useWorkbenchNavigationController({
     activeSddDraft: Boolean(activeSddDraft), activeThreadId, pluginHostRoute, rightPanelMode, route,
-    runtimeConnection, sddDraftContent, threads, adeThreads, useWorktreePool, workspaceRoot, worktreeBranch,
-    clearFilePreviewTargets, createConversation, createThread, createWriteThread, dismissActiveSddDraft,
-    ensureWriteThreadForWorkspace, findSddDraftForSidebarThread, openClaw, openCode, openAde,
+    sddDraftContent, threads, adeThreads, useWorktreePool, workspaceRoot, worktreeBranch,
+    clearFilePreviewTargets, createConversation, createThread, dismissActiveSddDraft,
+    findSddDraftForSidebarThread, openClaw, openCode, openAde,
     openPlugins, openBoard, openSchedule, openWorkflow, openWrite,
     selectThread, setConnectPhoneSidebarOpen, setDesignAssistantOpen, setFilePreviewTarget, setInput,
     setRightPanelMode, setRoute, setUseWorktreePool, setWriteAssistantOpen

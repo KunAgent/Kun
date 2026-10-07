@@ -23,9 +23,7 @@ import { useWorkWhiteboardCreation } from './use-work-whiteboard-creation'
  * it first leaves a mounted paper library.
  */
 export function useWorkDirectoryActions() {
-  const ensureWriteThreadForWorkspace = useChatStore((s) => s.ensureWriteThreadForWorkspace)
   const renameThread = useChatStore((s) => s.renameThread)
-  const runtimeConnection = useChatStore((s) => s.runtimeConnection)
   const [entryDialog, setEntryDialog] = useState<WriteEntryDialogKind | null>(null)
   const [revealError, setRevealError] = useState<string | null>(null)
   const revealErrorTimerRef = useRef<number | null>(null)
@@ -91,10 +89,8 @@ export function useWorkDirectoryActions() {
         throw new Error('workspace:pick-directory unavailable')
       }
       const picked = await window.kunGui.pickWorkspaceDirectory(workspaceRoot || defaultWorkspaceRoot || undefined)
-      if (!picked.canceled && picked.path) {
-        await addWriteWorkspace(picked.path)
-        if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
-      }
+      // The first send starts the space's session; nothing is created up front.
+      if (!picked.canceled && picked.path) await addWriteWorkspace(picked.path)
     } catch (error) {
       setFileError(formatWorkspacePickerError(error))
     }

@@ -71,8 +71,6 @@ export function WriteWorkspaceView({
   onOpenAgentSettings
 }: Props): ReactElement {
   const { t } = useTranslation('common')
-  const ensureWriteThreadForWorkspace = useChatStore((s) => s.ensureWriteThreadForWorkspace)
-  const runtimeConnection = useChatStore((s) => s.runtimeConnection)
   const busy = useChatStore((s) => s.busy)
   // Field-level subscription: this view must follow fileContent, but it should
   // not re-render for sidebar-only state such as the directory tree or quoted
@@ -476,7 +474,6 @@ export function WriteWorkspaceView({
     fileContent,
     presentationEnabled,
     presentationInFlight,
-    runtimeConnection,
     input,
     setInput,
     onSubmitPrompt,
@@ -486,7 +483,6 @@ export function WriteWorkspaceView({
     flushSave,
     setAssistantOpen,
     setFileError,
-    ensureWriteThreadForWorkspace,
     completeOnboarding,
     showExportNotice,
     setExportMenuOpen,

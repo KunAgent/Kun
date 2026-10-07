@@ -4,18 +4,30 @@ import {
   beginWorkSessionTransition,
   currentWorkSessionPin,
   useWorkSidebarStore,
-  writeHasDocumentContext
+  workDocumentKey,
+  type WorkSessionPin
 } from './work-sidebar-store'
+
+/** The pin that applies to `workspaceRoot`, compared against what is open there. */
+function workspacePin(workspaceRoot: string): WorkSessionPin | null {
+  const write = useWriteWorkspaceStore.getState()
+  const mounted = normalizeWorkspaceRoot(write.workspaceRoot) === normalizeWorkspaceRoot(workspaceRoot)
+  return currentWorkSessionPin(workspaceRoot, mounted ? write : null)
+}
 
 /**
  * The pinned session that a Work send in `workspaceRoot` should reuse: only
  * when it is already the active thread, so a stale pin never redirects a turn.
  */
 export function pinnedWriteSessionId(workspaceRoot: string, activeThreadId: string | null): string | null {
-  const write = useWriteWorkspaceStore.getState()
-  const mounted = normalizeWorkspaceRoot(write.workspaceRoot) === normalizeWorkspaceRoot(workspaceRoot)
-  const pin = currentWorkSessionPin(workspaceRoot, mounted ? writeHasDocumentContext(write) : true)
+  const pin = workspacePin(workspaceRoot)
   return pin?.threadId && pin.threadId === activeThreadId ? pin.threadId : null
+}
+
+/** A draft is pending: the next send must start a new session, never reuse one. */
+export function workSessionDraftPending(workspaceRoot: string): boolean {
+  const pin = workspacePin(workspaceRoot)
+  return pin !== null && !pin.threadId
 }
 
 /** Pins an explicitly chosen Work thread while it is being selected. */
@@ -26,7 +38,9 @@ export async function selectPinnedWorkSession(
 ): Promise<void> {
   const end = beginWorkSessionTransition()
   try {
-    if (workspaceRoot) useWorkSidebarStore.getState().pinSession(workspaceRoot, threadId)
+    if (workspaceRoot) {
+      useWorkSidebarStore.getState().pinSession(workspaceRoot, threadId, workDocumentKey(useWriteWorkspaceStore.getState()))
+    }
     await select()
   } finally {
     end()

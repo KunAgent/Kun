@@ -18,15 +18,23 @@ longer has its own toggle or sidebar; libraries are part of Work.
 ## Which conversation is shown
 
 `write/work-sidebar-store.ts` keeps a pin: the session picked in the sidebar,
-or an empty draft after **New session**.
+or an empty draft after **New session**, together with the document that was
+open when it was set.
 
 - In the sessions view the pinned session stays in the assistant while
   documents open and close. Sends reuse it
   (`ensureWriteThreadForWorkspace` -> `pinnedWriteSessionId`).
-- In the files view the conversation follows the open document, as before.
-  The pin only applies while nothing is open.
-- A draft, or the empty home, becomes a new session on the first send
-  (`prepareWorkSessionForSend`), bound to whatever is open.
+- In the files view the conversation follows the open document. Switching
+  views never changes the conversation: the pin adopts the open document and
+  is released as soon as another one opens (or when nothing is open it keeps
+  the centered conversation).
+- **New session** anywhere (sidebar, group `+`, assistant header `+`) is a
+  draft: no thread exists until the first send, which binds it to whatever is
+  open then (`prepareWorkSessionForSend`; other senders such as the paper
+  reading dialog honor the draft through `ensureWriteThreadForWorkspace`).
+  Whiteboards are the exception and create their bound session at once.
+- Session rows offer rename, archive and delete; archived sessions are listed
+  under Settings -> Archives.
 
 ## Layout
 
