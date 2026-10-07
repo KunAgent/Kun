@@ -196,8 +196,14 @@ export const ServeProviderConfigSchema = z
       responses: z.string().min(1).max(2_048).optional(),
       messages: z.string().min(1).max(2_048).optional()
     }).strict().optional(),
-    /** HTTPS balance endpoint on the provider's own host; the URL fragment is a JSON pointer to the value. */
+    /** HTTPS balance endpoint; the URL fragment is a JSON pointer to the value. Its host is the provider's or `balanceHost`. */
     balanceUrl: z.string().url().max(2_048).optional(),
+    /** Unit shown for that balance when the response names none (`USD`, `credits`). */
+    balanceUnit: z.string().regex(/^[\p{L}\p{Sc}][\p{L}\p{N}\p{Sc} ._-]{0,15}$/u).optional(),
+    /** Header that carries the key instead of `Authorization: Bearer`. */
+    balanceKeyHeader: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/).optional(),
+    /** Another host the user confirmed by name to receive this provider's key for balance checks. */
+    balanceHost: z.string().min(1).max(253).optional(),
     endpointFormat: z
       .preprocess(normalizeModelEndpointFormat, z.enum(MODEL_ENDPOINT_FORMATS))
       .default(DEFAULT_MODEL_ENDPOINT_FORMAT)

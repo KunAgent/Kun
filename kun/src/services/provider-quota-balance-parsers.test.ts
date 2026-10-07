@@ -63,4 +63,27 @@ describe('custom balance endpoint', () => {
     expect(result.metrics[0]).toMatchObject({ remaining: 7 })
     expect(seen).toEqual(['https://relay.example/api/balance'])
   })
+  it('uses a confirmed other host, the chosen key header and the unit the user named', async () => {
+    const base = { id: 'relay', name: 'Relay', kind: 'http' as const, apiKey: 'k', baseUrl: 'https://api.relay.example/v1' }
+    const other = { ...base, balanceUrl: 'https://console.relay.example/api/wallet#/left' }
+    expect(classifyProviderQuotaProbe(other)).toBeNull()
+    expect(classifyProviderQuotaProbe({ ...other, balanceHost: 'elsewhere.example' })).toBeNull()
+    const confirmed = { ...other, balanceHost: 'console.relay.example', balanceUnit: 'credits', balanceKeyHeader: 'X-Api-Key' }
+    expect(classifyProviderQuotaProbe(confirmed)?.kind).toBe('custom-balance')
+    const seen: Array<{ url: string; headers: Headers }> = []
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      seen.push({ url: String(url), headers: new Headers(init?.headers) })
+      return new Response(JSON.stringify({ left: 40 }), { status: 200 })
+    }) as never
+    const result = await runProbe('custom-balance', confirmed, { fetcher: scopedQuotaFetch(fetcher, confirmed, 'custom-balance'), proxyUrl: '', apiKey: 'k' }, {})
+    expect(result.metrics[0]).toEqual({ id: 'balance', label: 'Balance', unit: 'credits', remaining: 40 })
+    expect(seen[0]!.url).toBe('https://console.relay.example/api/wallet')
+    expect(seen[0]!.headers.get('x-api-key')).toBe('k')
+    expect(seen[0]!.headers.get('authorization')).toBeNull()
+    // The scoped fetch still refuses any host that was not confirmed.
+    await expect(scopedQuotaFetch(fetcher, confirmed, 'custom-balance')('https://evil.example/x', {}, '')).rejects.toThrow('outside the adapter credential scope')
+  })
+  it('prefers a currency in the response over the unit the user named', () => {
+    expect(parseCustomBalance({ balance: 3, currency: 'eur' }, undefined, 'credits')[0]).toMatchObject({ unit: 'EUR' })
+  })
 })

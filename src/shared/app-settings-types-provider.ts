@@ -494,8 +494,12 @@ export type ModelProviderProfileV1 = {
   endpointFormat: ModelEndpointFormat
   /** Optional per-protocol base URL overrides (relay gateways). */
   endpoints?: ModelProviderEndpointsV1
-  /** HTTPS balance endpoint on the provider's own host; `#/json/pointer` picks the value. */
+  /** HTTPS balance endpoint; `#/json/pointer` picks the value. Rules in provider-balance-endpoint.ts. */
   balanceUrl?: string
+  balanceUnit?: string
+  balanceKeyHeader?: string
+  /** Another host the user confirmed to receive this key for balance checks. */
+  balanceHost?: string
   /** models.dev catalog keys consulted for metadata completion, first match wins. */
   catalogSources?: string[]
   /** Content-addressed custom icon id under userData/provider-icons. */

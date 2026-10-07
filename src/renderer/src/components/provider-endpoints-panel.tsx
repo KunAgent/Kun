@@ -8,6 +8,7 @@ import type { ProviderProtocolDetectResult } from '@shared/kun-gui-api'
 import { Loader2, Radar } from 'lucide-react'
 import { useEffect, useState, type ReactElement } from 'react'
 import { DetailSection, textInputClass } from './settings-section-providers-controls'
+import { ProviderBalanceEndpointField } from './provider-balance-endpoint-field'
 import { MODEL_ENDPOINT_FORMAT_LABEL_KEYS } from './settings-section-providers-profile'
 
 const ENDPOINT_FORMAT_FIELDS: {
@@ -152,7 +153,7 @@ export function ProviderEndpointsPanel({
           {t('modelProviderCatalogSourcesHint')}
         </span>
       </label>
-      <BalanceUrlField provider={provider} onChange={onChange} t={t} />
+      <ProviderBalanceEndpointField provider={provider} onChange={onChange} t={t} />
       <div className="grid gap-3">
         {ENDPOINT_FORMAT_FIELDS.map(({ format, labelKey }) => {
           const value = endpoints[format] ?? ''
@@ -178,39 +179,4 @@ export function ProviderEndpointsPanel({
       </div>
     </DetailSection>
   )
-}
-
-function balanceUrlProblem(value: string, baseUrl: string): string | null {
-  if (!value.trim()) return null
-  try {
-    const url = new URL(value.trim())
-    return url.protocol === 'https:' && url.host === new URL(baseUrl).host ? null : new URL(baseUrl).host
-  } catch {
-    try { return new URL(baseUrl).host } catch { return '' }
-  }
-}
-
-/** Optional balance endpoint on the provider's own host, read by the quota panel. */
-function BalanceUrlField({ provider, onChange, t }: {
-  provider: ModelProviderProfileV1
-  onChange: (patch: Partial<ModelProviderProfileV1>) => void
-  t: (key: string, options?: Record<string, unknown>) => string
-}): ReactElement {
-  const [draft, setDraft] = useState(provider.balanceUrl ?? '')
-  useEffect(() => { setDraft(provider.balanceUrl ?? '') }, [provider.balanceUrl])
-  const problem = balanceUrlProblem(draft, provider.baseUrl)
-  return <label className="grid gap-1.5 text-[12.5px] font-medium text-ds-muted">
-    {t('modelProviderBalanceUrl')}
-    <input
-      className={textInputClass}
-      value={draft}
-      placeholder={`${provider.baseUrl.replace(/\/v1\/?$/u, '') || 'https://…'}/api/balance#/data/balance`}
-      spellCheck={false}
-      aria-invalid={problem !== null}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => { if (balanceUrlProblem(draft, provider.baseUrl) === null) onChange({ balanceUrl: draft.trim() || undefined }) }}
-    />
-    {problem !== null ? <span className="text-[12px] font-normal text-amber-600 dark:text-amber-300">{t('modelProviderBalanceUrlInvalid', { host: problem })}</span>
-      : <span className="text-[11.5px] font-normal leading-4 text-ds-faint">{t('modelProviderBalanceUrlHint')}</span>}
-  </label>
 }

@@ -82,10 +82,10 @@ export async function runProbe(
   }
   if (kind === 'custom-balance') {
     const url = customBalanceUrl(provider)
-    if (!url) throw new ProviderQuotaRequestError('The balance URL must be HTTPS on the provider host.')
+    if (!url) throw new ProviderQuotaRequestError('The balance URL must be HTTPS on the provider host or the host confirmed for it.')
     const pointer = url.hash ? decodeURIComponent(url.hash.slice(1)) : undefined
     url.hash = ''
-    return { metrics: parseCustomBalance(await requestJson(url.toString(), context), pointer) }
+    return { metrics: parseCustomBalance(await requestJson(url.toString(), context, { keyHeader: provider.balanceKeyHeader }), pointer, provider.balanceUnit) }
   }
   if (kind === 'kimi-code') {
     return {
@@ -129,7 +129,7 @@ export async function probeMiniMax(
   throw lastError ?? new Error('MiniMax quota is unavailable.')
 }
 
-export async function requestJson(url: string, context: ProbeContext): Promise<unknown> {
+export async function requestJson(url: string, context: ProbeContext, options: { keyHeader?: string } = {}): Promise<unknown> {
   let response: Response
   try {
     response = await context.fetcher(url, {
@@ -137,7 +137,7 @@ export async function requestJson(url: string, context: ProbeContext): Promise<u
       redirect: 'error',
       headers: {
         Accept: 'application/json',
-        Authorization: `Bearer ${context.apiKey}`
+        ...(options.keyHeader ? { [options.keyHeader]: context.apiKey } : { Authorization: `Bearer ${context.apiKey}` })
       },
       signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS)
     }, context.proxyUrl)

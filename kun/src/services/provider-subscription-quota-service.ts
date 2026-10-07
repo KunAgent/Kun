@@ -65,8 +65,14 @@ export type ProviderQuotaProbeProfile = {
   headers?: Record<string, string>
   credentialSourceId?: string
   proxyUrl?: string
-  /** User-named balance endpoint on the provider's own host (fragment = JSON pointer). */
+  /** User-named balance endpoint (fragment = JSON pointer) on the provider's host or `balanceHost`. */
   balanceUrl?: string
+  /** Unit for that balance when the response names none. */
+  balanceUnit?: string
+  /** Header carrying the key instead of `Authorization: Bearer`. */
+  balanceKeyHeader?: string
+  /** Another host the user confirmed to receive the key for balance checks. */
+  balanceHost?: string
 }
 
 export type SubscriptionQuotaProbeKind =

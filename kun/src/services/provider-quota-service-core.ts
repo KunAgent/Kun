@@ -386,17 +386,22 @@ export function classifyProviderQuotaProbe(
       dashboardUrl: 'https://platform.openai.com/settings/organization/billing/overview'
     }
   }
-  // A balance endpoint the user named, only on the host that already receives the key.
+  // A balance endpoint the user named, on the host that already receives the key or one they confirmed.
   const custom = customBalanceUrl(provider)
   if (custom) return { kind: 'custom-balance', source: 'Custom balance endpoint', dashboardUrl: custom.origin }
   return null
 }
 
-/** The user's balance URL when it is HTTPS on the provider's own host; otherwise undefined. */
-export function customBalanceUrl(provider: Pick<ProviderQuotaProbeProfile, 'balanceUrl' | 'baseUrl'>): URL | undefined {
+/**
+ * The user's balance URL when it is HTTPS on the provider's own host, or on
+ * the one other host they confirmed by name; otherwise undefined. The key is
+ * sent there, so a changed URL host voids an earlier confirmation.
+ */
+export function customBalanceUrl(provider: Pick<ProviderQuotaProbeProfile, 'balanceUrl' | 'baseUrl' | 'balanceHost'>): URL | undefined {
   if (!provider.balanceUrl || !provider.baseUrl) return undefined
   try {
     const url = new URL(provider.balanceUrl)
-    return url.protocol === 'https:' && url.host === new URL(provider.baseUrl).host && !url.username && !url.password ? url : undefined
+    if (url.protocol !== 'https:' || url.username || url.password) return undefined
+    return url.host === new URL(provider.baseUrl).host || (provider.balanceHost !== undefined && url.host === provider.balanceHost.toLowerCase()) ? url : undefined
   } catch { return undefined }
 }

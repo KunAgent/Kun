@@ -447,7 +447,7 @@ export async function createRuntimeModelComposition(
           kind: profile.kind,
           configured: Boolean(config),
           ...(profile.baseUrl ? { baseUrl: profile.baseUrl } : {}),
-          ...(core.activeOptions.providers?.[profile.id]?.balanceUrl ? { balanceUrl: core.activeOptions.providers[profile.id]!.balanceUrl } : {}),
+          ...providerBalanceOptions(core.activeOptions.providers?.[profile.id]),
           apiKey,
           ...(config?.authProfile ? { authProfile: config.authProfile } : {}),
           proxyUrl: config?.modelProxyUrl ?? '',
@@ -629,4 +629,11 @@ export async function createRuntimeModelComposition(
       refreshModelConnectionDelegatedDeps = value
     }
   }
+}
+
+/** A provider's user-named balance endpoint settings, for the quota probe. */
+function providerBalanceOptions(config: { balanceUrl?: string; balanceUnit?: string; balanceKeyHeader?: string; balanceHost?: string } | undefined) {
+  if (!config?.balanceUrl) return {}
+  return { balanceUrl: config.balanceUrl, ...(config.balanceUnit ? { balanceUnit: config.balanceUnit } : {}),
+    ...(config.balanceKeyHeader ? { balanceKeyHeader: config.balanceKeyHeader } : {}), ...(config.balanceHost ? { balanceHost: config.balanceHost } : {}) }
 }

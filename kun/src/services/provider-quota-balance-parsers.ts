@@ -87,7 +87,7 @@ export function jsonPointerPath(pointer: string): string[] | null {
  * balance URL's fragment, or from the field names relays commonly use. The
  * currency comes from a `currency` field when present.
  */
-export function parseCustomBalance(payload: unknown, pointer?: string): ProviderQuotaMetric[] {
+export function parseCustomBalance(payload: unknown, pointer?: string, unit?: string): ProviderQuotaMetric[] {
   const root = record(payload, 'The balance endpoint returned an invalid response.')
   const explicit = pointer ? jsonPointerPath(pointer) : null
   if (pointer && !explicit) throw new Error('The balance URL fragment must be a JSON pointer such as #/data/balance.')
@@ -97,7 +97,8 @@ export function parseCustomBalance(payload: unknown, pointer?: string): Provider
     if (value === undefined) continue
     const parent = path.length > 1 ? at(root, path.slice(0, -1)) : root
     const currency = [at(parent, ['currency']), at(root, ['currency']), at(root, ['data', 'currency'])].find((item) => typeof item === 'string' && item.length <= 16)
-    return [{ id: 'balance', label: 'Balance', unit: typeof currency === 'string' ? currency.toUpperCase() : 'USD', remaining: value }]
+    // A currency in the response wins; the user's unit covers responses that name none.
+    return [{ id: 'balance', label: 'Balance', unit: typeof currency === 'string' ? currency.toUpperCase() : unit ?? 'USD', remaining: value }]
   }
   throw new Error(explicit ? `No number at ${pointer} in the balance response.` : 'No balance field was found; add #/path/to/value to the balance URL.')
 }
