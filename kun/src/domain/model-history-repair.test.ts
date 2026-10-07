@@ -157,6 +157,27 @@ describe('repairModelHistoryItems', () => {
     expect(repairModelHistoryItems(items)).toEqual([items[3]])
   })
 
+  it('keeps a parallel round when an interactive gate record lands between results', () => {
+    const gate = (kind: 'user_input' | 'approval', turnId = 'turn-1'): TurnItem => ({
+      id: `gate-${kind}-${turnId}`, turnId, threadId: 'thread-1', role: 'tool', status: 'completed', createdAt: CREATED_AT,
+      ...(kind === 'user_input'
+        ? { kind, inputId: 'in-1', prompt: 'Q1?', questions: [] }
+        : { kind, approvalId: 'ap-1', toolName: 'write_file', summary: 'write', status: 'allowed' })
+    } as TurnItem)
+    for (const kind of ['user_input', 'approval'] as const) {
+      const items = [
+        call('call-a', 'a', { toolName: 'send_im_message' }),
+        call('call-b', 'b', { toolName: kind === 'user_input' ? 'user_input' : 'write_file' }),
+        result('result-a', 'a'),
+        gate(kind),
+        result('result-b', 'b')
+      ]
+      expect(repairModelHistoryItems(items)).toBe(items)
+    }
+    const crossTurn = [call('call-a', 'a'), call('call-b', 'b'), result('result-a', 'a'), gate('user_input', 'turn-2'), result('result-b', 'b')]
+    expect(repairModelHistoryItems(crossTurn).map((item) => item.id)).toEqual(['gate-user_input-turn-2'])
+  })
+
   it('repairs a long complete history in a single forward pass', () => {
     const items: TurnItem[] = []
     for (let index = 0; index < 20_000; index += 1) {
