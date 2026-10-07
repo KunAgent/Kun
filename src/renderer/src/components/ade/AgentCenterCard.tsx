@@ -3,10 +3,6 @@ import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
 import type { AdeHarnessRow, AdeHarnessTestResult } from '@shared/ade-harnesses'
 import type { KunHarnessSettingsV1 } from '@shared/app-settings'
-import {
-  harnessUnavailableLabelKey,
-  harnessUnavailableNextStepKey
-} from '../../store/harness-store'
 import { useChatStore } from '../../store/chat-store'
 import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { SettingRow } from '../settings-controls'
@@ -15,7 +11,8 @@ import { AgentEnablementPanel } from './AgentEnablementPanel'
 import { AgentSettingsSelect } from './AgentSettingsSelect'
 import { permissionFollowsKunLevel } from '../../lib/harness-native-permission'
 import { AgentInstallControl } from './AgentInstallControl'
-import { AgentBadge, AgentDetailHeader, agentStatusTone } from './AgentCenterParts'
+import { AgentBadge, AgentDetailHeader } from './AgentCenterParts'
+import { agentLineText, agentPresentation } from './agent-center-presentation'
 import {
   agentCardModel,
   type AgentCardAction,
@@ -35,30 +32,6 @@ const TRANSPORT_LABEL_KEY: Record<string, string> = {
 }
 
 type T = (key: string, options?: Record<string, unknown>) => string
-
-function statusLine(
-  model: AgentCardModel,
-  status: AdeHarnessRow['status'],
-  t: T,
-  tSettings: T
-): string {
-  if (model.state === 'detecting') return t('adeHarnessUnavailable.detecting')
-  const code = model.reasonCode
-  if (code) {
-    const nextKey = harnessUnavailableNextStepKey(code)
-    return `${t(harnessUnavailableLabelKey(code))}${nextKey ? ` — ${t(nextKey)}` : ''}`
-  }
-  switch (status.login) {
-    case 'signed-in':
-      return tSettings('adeSettings.harnessLoginSignedIn')
-    case 'signed-out':
-      return tSettings('adeSettings.harnessLoginSignedOut')
-    case 'not-required':
-      return tSettings('adeSettings.harnessLoginNotRequired')
-    default:
-      return tSettings('adeSettings.harnessLoginUnknown')
-  }
-}
 
 /**
  * One Agent Center card (docs/ade/impl/p4 §3.2, P4-08): status, credential
@@ -134,6 +107,11 @@ export function AgentCenterCard({
     isDefault: settings.defaultHarnessId === definition.id
   })
   const busy = probing || testing !== false || model.state === 'detecting'
+  const profile = selectedHarnessProfile(row, settings)
+  const presentation = agentPresentation(row, {
+    enabled, platform, checking: false, credentialMode: profile.credentialMode,
+    defaultModel: settings.defaults[definition.id]?.model
+  })
 
   const runTest = async (level: 'handshake' | 'trial'): Promise<void> => {
     if (!onTest) return
@@ -234,8 +212,7 @@ export function AgentCenterCard({
   const setupNote = model.primary.kind === 'command' && model.primary.note
     ? model.primary.note
     : undefined
-  const statusText = providerOnly && (model.reasonCode === 'signed_out' || model.reasonCode === null)
-    ? t('adeAgentAction.providerConnection') : statusLine(model, status, t, tSettings)
+  const statusText = agentLineText(t, presentation.statusLine)
   const showsCommand = Boolean(status.resolvedCommand && !providerOnly)
   const hasDetailSettings = showsCommand || definition.permissionModes.length > 0
   const toggleAdvanced = (): void => setAdvancedOpen((open) => !open)
@@ -245,7 +222,7 @@ export function AgentCenterCard({
       <AgentDetailHeader
         harnessId={definition.id}
         name={definition.displayName}
-        tone={agentStatusTone(model.state)}
+        tone={presentation.tone}
         status={statusText}
         badges={<>
           {!isKun ? <AgentBadge>{t(TRANSPORT_LABEL_KEY[definition.transport] ?? 'adeAgentTransport.acp')}</AgentBadge> : null}

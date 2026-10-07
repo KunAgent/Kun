@@ -1,0 +1,33 @@
+{
+  "agentCenter": {
+    "state": {
+      "detecting": { "list": "Detecting…", "status": "Detecting…" },
+      "notInstalled": {
+        "list_install": "Not installed · one-click install",
+        "list_docs": "Not installed · see install guide",
+        "list_none": "Not installed",
+        "status_install": "Not installed. You can install it here.",
+        "status_docs": "Not installed. Follow the official install guide.",
+        "status_none": "Not installed"
+      },
+      "installing": { "list": "Installing…", "status": "Installing…" },
+      "installFailed": { "list": "Install failed", "status": "Install failed. See the log below." },
+      "versionLow": { "list": "Version too old", "status": "This version is too old. Update it to continue." },
+      "adapterMissing": { "list": "ACP adapter missing", "status": "The ACP adapter is missing. You can install it here." },
+      "available": { "list": "Installed · not connected", "status": "Installed. Not connected to chats yet." },
+      "checking": { "list": "Checking…", "status": "Checking…" },
+      "ready": {
+        "list": "{{model}} · {{mode}}",
+        "status": "Ready · {{mode}}",
+        "statusModels": "Ready · {{mode}} · {{count}} models"
+      },
+      "needsRecheck": {
+        "list": "Needs a re-check",
+        "status": "Needs a re-check",
+        "statusChanged": "Settings changed. Check again to use them."
+      },
+      "signedOut": { "list": "Sign in again", "status": "Signed out. New turns fail until you sign in." },
+      "connectFailed": { "list": "Connection failed", "status": "Connection failed. See the check results." }
+    }
+  }
+}

@@ -42,6 +42,7 @@ import paperEvidence from './common/paper-evidence.json'
 import mobileWork from './common/mobile-work.json'
 import agentHarness from './common/agent-harness.json'
 import agentIntegrations from './common/agent-integrations.json'
+import agentCenter from './common/agent-center.json'
 import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
 import workSidebar from './common/work-sidebar.json'
@@ -99,6 +100,7 @@ const common = {
   ...mobileWork,
   ...agentHarness,
   ...agentIntegrations,
+  ...agentCenter,
   ...ade,
   ...workLayout,
   ...workSidebar,

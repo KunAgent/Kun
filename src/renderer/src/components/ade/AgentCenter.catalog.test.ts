@@ -12,7 +12,7 @@ const f = vi.hoisted(() => ({ rows: Array.from({ length: 43 }, (_, index) => {
 }) }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 vi.mock('../../store/harness-store', () => ({
-  useHarnessStore: (select: (state: unknown) => unknown) => select({ rows: f.rows, rowsLoading: false, rowsError: null }),
+  useHarnessStore: (select: (state: unknown) => unknown) => select({ rows: f.rows, rowsLoading: false, rowsError: null, models: {} }),
   loadHarnesses: vi.fn(), applyHarnessEnablementSettings: vi.fn(),
   harnessUnavailableLabelKey: (key: string) => key,
   harnessRowUnavailableCode: () => 'readiness_required'

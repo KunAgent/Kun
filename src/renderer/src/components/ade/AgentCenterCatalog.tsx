@@ -3,10 +3,10 @@ import { Search, X } from 'lucide-react'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { KunHarnessSettingsV1 } from '@shared/app-settings'
 import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-enablement'
-import { harnessUnavailableLabelKey } from '../../store/harness-store'
+import { useHarnessStore } from '../../store/harness-store'
 import { AgentIcon } from '../agent-icon'
-import { agentCardModel } from './agent-center-actions'
-import { AgentStatusDot, agentStatusTone } from './AgentCenterParts'
+import { agentLineText, agentPresentation } from './agent-center-presentation'
+import { AgentStatusDot } from './AgentCenterParts'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
@@ -54,18 +54,21 @@ export function AgentCatalogRail({ rows, selectedId, settings, platform, onSelec
     onSelect(rows[next].definition.id)
     target.focus()
   }
+  const models = useHarnessStore((state) => state.models)
   return <div role="listbox" aria-label={tSettings('adeSettings.harnessesTitle')} aria-orientation="vertical"
     data-agent-catalog-rail
     className="flex max-h-72 min-w-0 flex-col gap-0.5 overflow-y-auto overscroll-contain p-2 md:sticky md:top-0 md:max-h-[36rem]">
     {rows.map((row, index) => {
       const id = row.definition.id
-      const model = agentCardModel(row, {
-        enabled: id === 'kun' || harnessProfileEnabled(settings, selectedHarnessProfile(row, settings)),
-        platform, isDefault: settings.defaultHarnessId === id
+      const profile = selectedHarnessProfile(row, settings)
+      const presentation = agentPresentation(row, {
+        enabled: id === 'kun' || harnessProfileEnabled(settings, profile), platform,
+        credentialMode: profile.credentialMode, defaultModel: settings.defaults[id]?.model,
+        modelCount: models[id]?.models.length || undefined
       })
       const selected = selectedId === id
-      const label = model.reasonCode ? t(harnessUnavailableLabelKey(model.reasonCode)) : tSettings(`adeSettings.agentState_${model.state}`)
-      const tone = agentStatusTone(model.state)
+      const label = agentLineText(t, presentation.listLine)
+      const tone = presentation.tone
       return <button key={id} type="button" role="option" data-agent-list-id={id} data-selected={selected || undefined}
         aria-selected={selected} tabIndex={selected ? 0 : -1}
         onClick={() => onSelect(id)} onKeyDown={(event) => navigate(event, index)}
