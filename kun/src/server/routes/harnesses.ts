@@ -75,7 +75,7 @@ export async function listHarnesses(
         // A fast-settling detection may already have replaced the
         // optimistic peek placeholder — prefer the fresh cache.
         harnesses.detector.cachedStatus(definition.id) ?? statuses.get(definition.id),
-        harnesses.detector.detecting(definition.id) || harnesses.readiness?.checking(definition.id) === true
+        harnesses.detector.detecting(definition.id) || harnesses.readiness?.verifying(definition.id) === true
       ) ?? {
         harnessId: definition.id,
         installed: 'unknown' as const,
@@ -87,7 +87,8 @@ export async function listHarnesses(
       const enabledProfiles = harnesses.catalog.enabledProfiles?.(definition.id) ?? []
       const readyProfiles = await harnesses.readiness?.readyProfiles(definition.id) ?? []
       // Warming already started for every row above; only report its state.
-      if (harnesses.readiness?.checking(definition.id)) status.detecting = true
+      // A background refresh of a valid proof is not "detecting" (the Agent stays usable).
+      if (harnesses.readiness?.verifying(definition.id)) status.detecting = true
       const row: Record<string, unknown> = { definition, status, enabled: !harnesses.catalog.isDisabled(definition.id), enabledProfiles, readyProfiles }
       if (usage && runtime.harnessAdmission && status) {
         row.admission = await runtime

@@ -6,7 +6,7 @@ import type {
   KunRuntimeSettingsV1
 } from '@shared/app-settings'
 import { getProvider } from '../../agent/registry'
-import { applyHarnessEnablementSettings, loadHarnesses, useHarnessStore } from '../../store/harness-store'
+import { applyHarnessEnablementSettings, harnessIdsWithChangedLaunchSettings, loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { AgentCenterCard } from './AgentCenterCard'
 import { AgentCatalogSkeleton } from './AgentCenterParts'
 import { AgentCatalogSearch, AgentCatalogRail } from './AgentCenterCatalog'
@@ -81,7 +81,8 @@ export function AgentCenter({
   }, [settingsHarnessId])
 
   const patchHarness = (patch: Partial<KunHarnessSettingsV1>): void => {
-    applyHarnessEnablementSettings({ ...settings, ...patch }, Boolean(patch.binaryPaths || patch.defaults || patch.custom))
+    const next = { ...settings, ...patch }
+    applyHarnessEnablementSettings(next, harnessIdsWithChangedLaunchSettings(settings, next))
     updateKun({ harnesses: { ...settings, ...patch } })
   }
 

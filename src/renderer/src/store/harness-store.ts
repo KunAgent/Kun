@@ -471,15 +471,43 @@ export function harnessUnavailableNextStepKey(code: string): string | null {
 }
 
 /** Drop removed grants immediately; an in-flight older catalog cannot restore them. */
+/**
+ * Agents whose launch settings (command path, profile defaults, custom
+ * definition) differ between two snapshots. Only these lose their readiness
+ * proof on save; editing one Agent must not send every other Agent back to checking.
+ */
+export function harnessIdsWithChangedLaunchSettings(before: import('@shared/app-settings').KunHarnessSettingsV1,
+  after: import('@shared/app-settings').KunHarnessSettingsV1): string[] {
+  const changed = new Set<string>()
+  const compare = (left: Record<string, unknown> | undefined, right: Record<string, unknown> | undefined): void => {
+    for (const id of new Set([...Object.keys(left ?? {}), ...Object.keys(right ?? {})])) {
+      if (JSON.stringify(left?.[id] ?? null) !== JSON.stringify(right?.[id] ?? null)) changed.add(id)
+    }
+  }
+  const byId = (entries: readonly { id: string }[] | undefined): Record<string, unknown> =>
+    Object.fromEntries((entries ?? []).map((entry) => [entry.id, entry]))
+  compare(before.binaryPaths, after.binaryPaths)
+  compare(before.defaults, after.defaults)
+  compare(byId(before.custom), byId(after.custom))
+  return [...changed]
+}
+
+/**
+ * Mirror saved enablement into the cached rows before the runtime answers.
+ * `invalidateReadiness` drops ready proofs for every row (`true`) or only
+ * for the listed Agent ids.
+ */
 export function applyHarnessEnablementSettings(settings: import('@shared/app-settings').KunHarnessSettingsV1,
-  invalidateReadiness = false): void {
+  invalidateReadiness: boolean | readonly string[] = false): void {
   catalogGeneration += 1
+  const invalidated = (id: string): boolean => invalidateReadiness === true ||
+    (Array.isArray(invalidateReadiness) && invalidateReadiness.includes(id))
   useHarnessStore.setState((state) => ({ rowsLoading: false, rowsLoadedAt: undefined, rows: state.rows.map((row) => {
     if (row.definition.id === 'kun') return row
     const enabledProfiles = settings.disabledIds.includes(row.definition.id) ? [] :
       (settings.enabledProfiles ?? []).filter((entry) => entry.harnessId === row.definition.id)
     return { ...row, enabled: enabledProfiles.length > 0, enabledProfiles,
-      readyProfiles: invalidateReadiness ? [] : (row.readyProfiles ?? []).filter((entry) =>
+      readyProfiles: invalidated(row.definition.id) ? [] : (row.readyProfiles ?? []).filter((entry) =>
         enabledProfiles.some((enabled) => harnessProfileKey(entry) === harnessProfileKey(enabled))) }
   }) }))
 }

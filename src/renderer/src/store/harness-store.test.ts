@@ -7,6 +7,7 @@ import {
   loadHarnessProviderGroups,
   resetHarnessPolling,
   applyHarnessEnablementSettings,
+  harnessIdsWithChangedLaunchSettings,
   HARNESS_CATALOG_TTL_MS,
   nextReadinessPoll,
   READINESS_REFRESH_AHEAD_MS,
@@ -119,6 +120,19 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
     provider.listHarnesses.mockResolvedValue([])
     await loadHarnesses()
     expect(provider.listHarnesses).toHaveBeenCalledTimes(3)
+  })
+
+  it('editing one Agent drops only that Agent\'s readiness proof', () => {
+    const before = { disabledIds: [], defaults: {}, custom: [], binaryPaths: {}, defaultHarnessId: 'kun', agentOrder: [], terminalAgents: [],
+      enabledProfiles: [{ harnessId: 'claude-code', credentialMode: 'native-login' as const }, { harnessId: 'devin', credentialMode: 'native-login' as const }] }
+    const after = { ...before, defaults: { 'claude-code': { model: 'opus' } }, binaryPaths: { codex: '/opt/codex' } }
+    expect(harnessIdsWithChangedLaunchSettings(before, after).sort()).toEqual(['claude-code', 'codex'])
+    expect(harnessIdsWithChangedLaunchSettings(before, { ...before })).toEqual([])
+    useHarnessStore.setState({ rows: [row('claude-code'), row('devin')] })
+    applyHarnessEnablementSettings(after, harnessIdsWithChangedLaunchSettings(before, after))
+    const [claude, devin] = useHarnessStore.getState().rows
+    expect(claude?.readyProfiles).toEqual([])
+    expect(devin?.readyProfiles).toHaveLength(1)
   })
 
   it('retains cached rows after a refresh error while retrying in the background', async () => {

@@ -55,6 +55,8 @@ export type HarnessReadinessDeps = {
 export class HarnessReadinessService {
   private readonly proofs = new Map<string, Proof>()
   private readonly warming = new Map<string, Promise<unknown>>()
+  /** Warm-ups that re-validate a still-valid proof ahead of its expiry. */
+  private readonly refreshingKeys = new Set<string>()
   private readonly warmed = new Map<string, string>()
   /** Background warm failures: retried with backoff instead of never again. */
   private readonly warmFailures = new Map<string, { attempts: number; retryAt: number }>()
@@ -213,8 +215,9 @@ export class HarnessReadinessService {
           if (result.ok) this.warmFailures.delete(key)
           else this.recordWarmFailure(key, (this.warmFailures.get(key)?.attempts ?? 0) + 1)
         }, () => { this.recordWarmFailure(key, (this.warmFailures.get(key)?.attempts ?? 0) + 1) })
-        .finally(() => this.warming.delete(key))
+        .finally(() => { this.warming.delete(key); this.refreshingKeys.delete(key) })
       this.warming.set(key, pending)
+      if (refreshing) this.refreshingKeys.add(key)
     }
   }
   private recordWarmFailure(key: string, attempts: number): { attempts: number; retryAt: number } {
@@ -225,6 +228,13 @@ export class HarnessReadinessService {
   }
   checking(id: string): boolean {
     return [...this.warming.keys()].some((key) => JSON.parse(key)[0] === id)
+  }
+  /**
+   * A warm-up for a profile that has no valid proof yet. A refresh of a
+   * still-valid proof keeps the Agent usable, so it must not read as detecting.
+   */
+  verifying(id: string): boolean {
+    return [...this.warming.keys()].some((key) => JSON.parse(key)[0] === id && !this.refreshingKeys.has(key))
   }
 
   async readyProfiles(id: string): Promise<ReadyHarnessProfile[]> {

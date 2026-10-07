@@ -60,4 +60,26 @@ describe('background readiness warming', () => {
     const [refreshed] = await f.service.readyProfiles('opencode')
     expect(Date.parse(refreshed!.expiresAt)).toBeGreaterThan(Date.parse(first!.expiresAt))
   })
+  it('reports a first check as verifying but a refresh of a valid proof as still usable', async () => {
+    const f = await fixture()
+    let release!: () => void
+    const held = () => new Promise<{ ok: true; supported: true; protocol: 'acp' }>((resolve) => {
+      release = () => resolve({ ok: true, supported: true, protocol: 'acp' })
+    })
+    f.handshake.mockImplementationOnce(held)
+    f.service.warmProfiles('opencode')
+    await vi.waitFor(() => expect(f.handshake).toHaveBeenCalledTimes(1))
+    expect(f.service.verifying('opencode')).toBe(true)
+    release(); await f.settle()
+    expect(f.service.verifying('opencode')).toBe(false)
+
+    f.advance(5 * 60_000 - PROOF_REFRESH_AHEAD_MS + 1_000)
+    f.handshake.mockImplementationOnce(held)
+    f.service.warmProfiles('opencode')
+    await vi.waitFor(() => expect(f.handshake).toHaveBeenCalledTimes(2))
+    expect(f.service.checking('opencode')).toBe(true)
+    expect(f.service.verifying('opencode')).toBe(false)
+    expect(await f.service.readyProfiles('opencode')).toHaveLength(1)
+    release(); await f.settle()
+  })
 })
