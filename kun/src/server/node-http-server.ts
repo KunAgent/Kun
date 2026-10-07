@@ -179,11 +179,25 @@ function toFetchRequest(incoming: IncomingMessage, outgoing: ServerResponse): {
   }
 }
 
+/**
+ * The client may leave before a slow handler returns its response; the
+ * 'close' event has then already fired, and waiting for it or for 'drain'
+ * would hold the request open for good.
+ */
+function clientGone(outgoing: ServerResponse): boolean {
+  return outgoing.destroyed || (outgoing as { closed?: boolean }).closed === true || outgoing.socket?.destroyed === true
+}
+
 async function writeFetchResponse(
   outgoing: ServerResponse,
   response: Response,
   faultInjection?: FaultInjectionController
 ): Promise<void> {
+  if (clientGone(outgoing)) {
+    // Cancelling the body runs the handler's own cancellation (upstream abort, lease release).
+    await response.body?.cancel().catch(() => undefined)
+    return
+  }
   outgoing.statusCode = response.status
   response.headers.forEach((value, key) => {
     outgoing.setHeader(key, value)
@@ -243,6 +257,7 @@ function readResponseChunk(
     const onError = (error: Error) => fail(error)
     outgoing.once('close', onClose)
     outgoing.once('error', onError)
+    if (clientGone(outgoing)) { onClose(); return }
     void reader.read().then(finish, fail)
   })
 }
@@ -269,5 +284,6 @@ function waitForDrain(outgoing: ServerResponse): Promise<void> {
     outgoing.once('drain', onDrain)
     outgoing.once('close', onClose)
     outgoing.once('error', onError)
+    if (clientGone(outgoing)) onClose()
   })
 }
