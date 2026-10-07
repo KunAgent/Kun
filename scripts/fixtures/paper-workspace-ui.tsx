@@ -6,8 +6,7 @@ import { normalizeAppSettings, mergeWriteSettings } from '../../src/shared/app-s
 import { PaperLibraryView } from '../../src/renderer/src/components/paper/PaperLibraryView'
 import { PaperLibraryOnboarding } from '../../src/renderer/src/components/paper/PaperLibraryOnboarding'
 import { PaperWorkspacesSection } from '../../src/renderer/src/components/paper/sidebar/PaperWorkspacesSection'
-import { PaperSidebarNav } from '../../src/renderer/src/components/paper/sidebar/PaperSidebarNav'
-import { PaperModeToggle } from '../../src/renderer/src/components/paper/PaperModeToggle'
+import { WorkSidebarPaperNav } from '../../src/renderer/src/components/write/WorkSidebarNav'
 import { PaperWorkspaceFixtureResearch } from './paper-workspace-assistant'
 import { useChatStore } from '../../src/renderer/src/store/chat-store'
 import { PaperNoticeToast } from '../../src/renderer/src/components/paper/PaperNoticeToast'
@@ -121,8 +120,8 @@ function App(): ReactElement {
     <div className="fixture-workbench">
       <aside className="fixture-sidebar">
         <div className="fixture-work-title">Work</div>
-        <PaperModeToggle />
-        {surface === 'papers' ? <><PaperSidebarNav activeView={activePaperViewId(layout)} total={0} /><PaperWorkspacesSection /></> : null}
+        <WorkSidebarPaperNav />
+        {surface === 'papers' ? <PaperWorkspacesSection /> : null}
       </aside>
       <main className="fixture-main">
         {surface !== 'papers' ? <section data-testid="fixture-documents" className="p-8"><h1>Documents</h1><p>{file || 'No open document'}</p><pre>{content}</pre></section>

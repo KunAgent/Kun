@@ -1,10 +1,11 @@
-import { lazy, Suspense, type ReactElement, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, type ReactElement, type ReactNode } from 'react'
 import { WorkbenchConversationStage, type WorkbenchConversationStageProps } from './WorkbenchConversationStage'
 import { normalizeWorkbenchRoute } from './workbench-route'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { PaperNoticeToast } from '../paper/PaperNoticeToast'
 import { WriteSideRail } from '../write/WriteSideRail'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
 import { useAgentChatPicker } from '../rooms/agent-chat-picker'
 
 const PluginMarketplaceView = lazy(() =>
@@ -100,18 +101,36 @@ function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
       />
     )
   }
+  return <WriteDocsStage write={write} rightPanel={rightPanel} />
+}
+
+/**
+ * Documents surface. With nothing open the empty editor steps aside (kept
+ * mounted for its lifecycle effects) and the assistant fills the center.
+ */
+function WriteDocsStage({ write, rightPanel }: { write: WriteStageProps; rightPanel: ReactNode }): ReactElement {
+  const conversationStage = useWorkConversationStage()
+  const chrome = useMemo(() => ({
+    leftSidebarCollapsed: write.leftSidebarCollapsed,
+    onToggleLeftSidebar: write.onToggleLeftSidebar
+  }), [write.leftSidebarCollapsed, write.onToggleLeftSidebar])
   return (
-    <div className="flex min-h-0 flex-1">
-      <WriteWorkspaceView
-        leftSidebarCollapsed={write.leftSidebarCollapsed}
-        onToggleLeftSidebar={write.onToggleLeftSidebar}
-        input={write.input}
-        setInput={write.setInput}
-        onSubmitPrompt={write.onSubmitPrompt}
-        onOpenAgentSettings={write.onOpenAgentSettings}
-      />
+    <WorkStageChromeContext.Provider value={chrome}>
+    <div className={`flex min-h-0 flex-1${conversationStage ? ' work-stage-conversation' : ''}`}
+      data-work-stage={conversationStage ? 'conversation' : 'documents'}>
+      <div className={conversationStage ? 'hidden' : 'flex min-h-0 min-w-0 flex-1'}>
+        <WriteWorkspaceView
+          leftSidebarCollapsed={write.leftSidebarCollapsed}
+          onToggleLeftSidebar={write.onToggleLeftSidebar}
+          input={write.input}
+          setInput={write.setInput}
+          onSubmitPrompt={write.onSubmitPrompt}
+          onOpenAgentSettings={write.onOpenAgentSettings}
+        />
+      </div>
       {rightPanel}
     </div>
+    </WorkStageChromeContext.Provider>
   )
 }
 

@@ -5,8 +5,9 @@ import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { useWriteEditorBridge } from '../../write/write-editor-bridge'
 import { sideRailButtonClass, WorkbenchSideRailSurface } from '../workbench/WorkbenchSideRail'
-import { formatWriteRailBadge, resolveWriteRailItems, type WriteRailItem } from './write-side-rail-items'
+import { formatWriteRailBadge, resolveWriteRailItems, WRITE_DOCUMENT_PANEL_IDS, type WriteRailItem } from './write-side-rail-items'
 import { WriteRightPanelIcon, writeRightPanelLabelKey } from './write-right-panel-meta'
+import { useWorkConversationStage } from '../../write/work-conversation-stage'
 
 /**
  * Work right rail: the same 48px surface and 32px buttons as the Code rail.
@@ -21,10 +22,13 @@ export function WriteSideRail(): ReactElement {
   })))
   const reviewCount = useWriteEditorBridge((state) => state.reviewChunks.length)
   const assistantRunning = useChatStore((state) => state.busy)
-  const items = resolveWriteRailItems({ reviewCount, referenceCount, assistantRunning })
+  const stage = useWorkConversationStage()
+  const items = resolveWriteRailItems({ reviewCount, referenceCount, assistantRunning, documentTools: !stage })
 
   const renderItem = (item: WriteRailItem): ReactElement => {
-    const active = panel.expanded && panel.activeId === item.id
+    const active = stage
+      ? (WRITE_DOCUMENT_PANEL_IDS.has(panel.activeId) ? 'assistant' : panel.activeId) === item.id
+      : panel.expanded && panel.activeId === item.id
     const label = t(writeRightPanelLabelKey(item.id))
     const description = item.badge
       ? t(item.id === 'review' ? 'workRailReviewCount' : 'workRailReferencesCount', { count: item.badge.count })
@@ -33,7 +37,11 @@ export function WriteSideRail(): ReactElement {
       <button
         key={item.id}
         type="button"
-        onClick={() => toggle(item.id)}
+        onClick={() => {
+          // The centered assistant cannot collapse; a second click is a no-op.
+          if (stage && active) return
+          toggle(item.id)
+        }}
         className={sideRailButtonClass(active, 'relative')}
         data-tooltip={description}
         data-write-rail-item={item.id}

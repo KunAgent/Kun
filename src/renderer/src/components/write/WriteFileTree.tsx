@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react'
-import { ChevronDown, ChevronRight, FileCode2, FileText, FilePlus2, Folder, FolderPlus, FolderSearch, GraduationCap, Image, Pencil, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, FolderSearch, GraduationCap, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import { SidebarActivityIndicator, type SidebarActivity } from '../sidebar/SidebarActivityIndicator'
@@ -14,6 +14,7 @@ import {
   SidebarSectionHeader,
   SidebarTreeRow
 } from '../sidebar/SidebarPrimitives'
+import { WorkFileTypeIcon, workFileKindForName } from './WorkFileTypeIcon'
 
 type Props = {
   rootDirectory: string
@@ -39,6 +40,8 @@ type Props = {
   showHeader?: boolean
   showRootLabel?: boolean
   activityForPath?: (path: string, isDirectory: boolean) => SidebarActivity
+  /** Inside a scrolling sidebar body: no own height or scroll container. */
+  embedded?: boolean
 }
 
 function normalizePath(value: string): string {
@@ -127,7 +130,8 @@ export function WriteFileTree({
   onRefresh,
   showHeader = true,
   showRootLabel = true,
-  activityForPath = () => 'idle'
+  activityForPath = () => 'idle',
+  embedded = false
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const hasRootSnapshot = Object.prototype.hasOwnProperty.call(entriesByDir, rootDirectory)
@@ -148,8 +152,11 @@ export function WriteFileTree({
           <SidebarTreeRow
             active={selected}
             onClick={() => (isDirectory ? onToggleDir(entry.path) : onSelectFile(entry.path))}
-            className="min-h-[34px]"
-            buttonStyle={{ paddingLeft: 10 + depth * 14 }}
+            className="min-h-[30px]"
+            buttonClassName="items-center gap-1.5 py-1.5 pr-2"
+            buttonStyle={{ paddingLeft: 8 + depth * 14 }}
+            actionsVisibility="hidden"
+            actionsLayout="overlay"
             title={relativeDisplayPath(rootDirectory, entry.path)}
             trailing={(
               <SidebarActivityIndicator
@@ -230,13 +237,14 @@ export function WriteFileTree({
               <span className="h-3 w-3 shrink-0" aria-hidden />
             )}
             {isDirectory ? (
-              <Folder className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.75} />
-            ) : imageEntry ? (
-              <Image className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-accent' : 'text-emerald-600/75 dark:text-emerald-300/80'}`} strokeWidth={1.8} />
-            ) : codeEntry ? (
-              <FileCode2 className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-accent' : 'text-sky-600/75 dark:text-sky-300/80'}`} strokeWidth={1.8} />
+              expanded
+                ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.75} />
+                : <Folder className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.75} />
             ) : (
-              <FileText className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-accent' : 'text-ds-faint/90'}`} strokeWidth={1.8} />
+              <WorkFileTypeIcon
+                kind={imageEntry ? 'image' : codeEntry ? 'code' : workFileKindForName(entry.name)}
+                size={15}
+              />
             )}
             <span className="min-w-0 flex-1 truncate">{entry.name}</span>
             {loading ? (
@@ -251,7 +259,7 @@ export function WriteFileTree({
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col">
+    <div className={embedded ? 'flex w-full flex-col' : 'flex h-full min-h-0 w-full flex-col'}>
       {showHeader ? (
         <SidebarSectionHeader
           label={t('writeWorkspaceFiles')}
@@ -293,7 +301,7 @@ export function WriteFileTree({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+      <div className={embedded ? 'pb-1' : 'min-h-0 flex-1 overflow-y-auto px-1 pb-2'}>
         {error ? (
           <div className="mx-2 mt-2 rounded-lg border border-red-200/70 bg-red-50/80 px-2.5 py-2 text-[12px] leading-5 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
             {error}

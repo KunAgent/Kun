@@ -4,6 +4,8 @@ import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import type { WriteRightPanelId } from '../../write/write-right-panel-state'
 import { WriteRightPanelHeader } from './WriteRightPanelHeader'
+import { useWorkConversationStage } from '../../write/work-conversation-stage'
+import { WRITE_DOCUMENT_PANEL_IDS } from './write-side-rail-items'
 
 const WriteAssistantPanel = lazy(() =>
   import('./WriteAssistantPanel').then((module) => ({ default: module.WriteAssistantPanel }))
@@ -47,10 +49,13 @@ export function WriteRightPanelContent({
   onOpenAgentSettings,
   onCollapse
 }: WriteRightPanelContentProps): ReactElement {
-  const { activeId, workspaceRoot } = useWriteWorkspaceStore(useShallow((state) => ({
-    activeId: state.writeRightPanel.activeId,
+  const { storedActiveId, workspaceRoot } = useWriteWorkspaceStore(useShallow((state) => ({
+    storedActiveId: state.writeRightPanel.activeId,
     workspaceRoot: state.workspaceRoot
   })))
+  // In the centered stage there is no document, so document tools yield to the assistant.
+  const stage = useWorkConversationStage()
+  const activeId: WriteRightPanelId = stage && WRITE_DOCUMENT_PANEL_IDS.has(storedActiveId) ? 'assistant' : storedActiveId
   const activeThreadId = useChatStore((state) => state.activeThreadId)
   const [visited, setVisited] = useState<Set<WriteRightPanelId>>(() => new Set([activeId]))
 

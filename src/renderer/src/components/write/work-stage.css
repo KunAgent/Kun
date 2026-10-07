@@ -1,0 +1,149 @@
+/* Conversation stage: with nothing open the Work assistant fills the center. */
+.work-stage-conversation > [role='separator'] { display: none; }
+.work-stage-conversation > [data-workbench-right-panel] {
+  flex: 1 1 auto;
+  width: auto !important;
+  min-width: 0;
+  background: var(--ds-bg-main);
+}
+.write-assistant-panel.is-stage {
+  border-left: 0;
+  background: var(--ds-bg-main);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.write-assistant-panel.is-stage .write-assistant-header,
+.write-assistant-panel.is-stage .write-assistant-footer,
+.write-assistant-panel.is-stage .write-assistant-body {
+  background: transparent;
+}
+.write-assistant-panel.is-stage .write-assistant-header > div:first-child { padding-inline: 8px 14px; }
+.write-assistant-panel.is-stage .write-assistant-context { display: none; }
+.write-assistant-panel.is-stage .write-assistant-footer {
+  border-top: 0;
+  padding: 0 24px 22px;
+}
+.write-assistant-panel.is-stage .write-assistant-footer > * {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+/* Home: hero just above a vertically centered composer, as in Code. */
+.write-assistant-panel.is-stage.is-home .write-assistant-body {
+  flex: 1 1 50%;
+  justify-content: flex-end;
+}
+.write-assistant-panel.is-stage.is-home .write-assistant-footer {
+  display: flex;
+  flex: 1 1 50%;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: 26px;
+}
+
+.work-home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 24px;
+  text-align: center;
+}
+.work-home-mascot {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  margin-bottom: 14px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.work-home-title {
+  margin: 0;
+  color: var(--ds-text);
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.work-home-subtitle {
+  margin: 10px 0 0;
+  color: var(--ds-text-muted);
+  font-size: 13.5px;
+}
+.work-home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+.work-home-pill {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ds-border);
+  border-radius: 999px;
+  background: var(--ds-surface-card);
+  padding: 0 13px;
+  color: var(--ds-text);
+  font-size: 13px;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.work-home-pill svg { color: var(--ds-text-muted); }
+.work-home-pill:hover { border-color: var(--ds-border-strong); box-shadow: 0 2px 10px rgba(20, 47, 95, 0.07); }
+.work-home-pill:focus-visible,
+.work-home-starter:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+.work-home-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 10px;
+  margin-top: 12px;
+}
+.work-home-starter {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 10px;
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+}
+.work-home-starter svg { color: color-mix(in srgb, var(--ds-accent) 70%, var(--ds-text-faint)); }
+.work-home-starter:hover { background: var(--ds-sidebar-row-hover); color: var(--ds-text); }
+
+/* Kun avatars cropped to the face, like the sidebar status. */
+.work-kun-avatar {
+  overflow: hidden;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--ds-sidebar-row-ring);
+}
+.work-kun-avatar span.rooms-avatar-art {
+  transform: scale(1.25);
+  transform-origin: 50% 34%;
+}
+.write-assistant-session-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.write-assistant-session-title[data-placeholder='true'] { color: var(--ds-text-muted); font-weight: 500; }
+
+.work-home-space {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 8px;
+}
+.work-home-space-trigger {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 8px;
+  color: var(--ds-text-muted);
+  font-size: 13px;
+}
+.work-home-space-trigger:hover { background: var(--ds-sidebar-row-hover); color: var(--ds-text); }
+.work-home-space-hint { color: var(--ds-text-faint); font-size: 12px; }

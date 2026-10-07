@@ -14,6 +14,12 @@ import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
 import { usePaperStore } from '../../write/paper/paper-store'
 import { paperModeView } from '../../paper/paper-view'
 import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
+import {
+  applicableWorkSessionPin,
+  useWorkSidebarStore,
+  writeHasDocumentContext
+} from '../../write/work-sidebar-store'
+import { useWorkConversationStage } from '../../write/work-conversation-stage'
 
 type WorkbenchWriteAssistantRuntimeOptions = {
   composerPickList: string[]
@@ -24,7 +30,13 @@ export function useWorkbenchWriteAssistantRuntime({
   composerPickList,
   composerModelGroups
 }: WorkbenchWriteAssistantRuntimeOptions) {
-  const writeAssistantOpen = useWriteWorkspaceStore((s) => s.writeRightPanel.expanded)
+  // With nothing open the assistant fills the center, so it is always shown.
+  const conversationStage = useWorkConversationStage()
+  const writeAssistantExpanded = useWriteWorkspaceStore((s) => s.writeRightPanel.expanded)
+  const writeAssistantOpen = writeAssistantExpanded || conversationStage
+  const sidebarView = useWorkSidebarStore((s) => s.view)
+  const sessionPin = useWorkSidebarStore((s) => s.pin)
+  const pinTransitions = useWorkSidebarStore((s) => s.transitions)
   const setWriteAssistantOpen = useWriteWorkspaceStore((s) => s.setAssistantOpen)
   const writeAssistantModel = useWriteWorkspaceStore((s) => s.assistantModel)
   const writeAssistantProviderId = useWriteWorkspaceStore((s) => s.assistantProviderId)
@@ -58,8 +70,39 @@ export function useWorkbenchWriteAssistantRuntime({
   }, [composerModelGroups, writeAssistantModel, writeAssistantProviderId])
 
   useEffect(() => {
-    if (route !== 'write' || !writeWorkspaceRoot) return
+    if (route !== 'write' || !writeWorkspaceRoot || pinTransitions > 0) return
     const chatState = useChatStore.getState()
+    // A session chosen in the sidebar owns the conversation in the sessions
+    // view (and in the files view while nothing is open); an empty pin is a
+    // draft that the next send turns into a new session. Whiteboards keep
+    // their own bound thread, which their workflows depend on.
+    const pin = activeWhiteboardId ? null : applicableWorkSessionPin({
+      view: sidebarView,
+      pin: sessionPin,
+      workspaceRoot: writeWorkspaceRoot,
+      documentContext: writeHasDocumentContext({
+        workSurface,
+        activeFilePath: activeWriteFilePath,
+        activeWhiteboardId
+      })
+    })
+    if (pin && !pin.threadId) {
+      if (activeThreadId) chatState.clearActiveThreadSelection()
+      return
+    }
+    // A brand-new session is not listed until its first message lands.
+    if (pin && pin.threadId === activeThreadId) return
+    const pinnedThread = pin ? threads.find((thread) => thread.id === pin.threadId) ?? null : null
+    if (pinnedThread?.archived === true) useWorkSidebarStore.getState().clearPin()
+    else if (pinnedThread) {
+      if (runtimeConnection !== 'ready') return
+      if (pendingThreadIdRef.current === pinnedThread.id) return
+      pendingThreadIdRef.current = pinnedThread.id
+      void chatState.selectWriteThread(pinnedThread.id, writeWorkspaceRoot).finally(() => {
+        if (pendingThreadIdRef.current === pinnedThread.id) pendingThreadIdRef.current = null
+      })
+      return
+    }
     if (activeWhiteboardId && activeWhiteboard) {
       if (runtimeConnection !== 'ready') {
         if (activeThreadId) chatState.clearActiveThreadSelection()
@@ -151,9 +194,12 @@ export function useWorkbenchWriteAssistantRuntime({
     activeWhiteboardId,
     activeWriteFilePath,
     paperView,
+    pinTransitions,
     researchSessionId,
     route,
     runtimeConnection,
+    sessionPin,
+    sidebarView,
     threads,
     workSurface,
     writeWorkspaceRoot

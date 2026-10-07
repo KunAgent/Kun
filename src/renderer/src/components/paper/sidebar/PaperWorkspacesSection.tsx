@@ -31,7 +31,11 @@ function workspaceLabel(root: string, duplicateBases: ReadonlySet<string>): stri
  * Non-active roots are indexed lazily while expanded; all row actions run
  * against the tree's own root so same-named units never collide.
  */
-export function PaperWorkspacesSection(): ReactElement {
+export function PaperWorkspacesSection({ variant = 'standalone' }: {
+  /** `embedded` sits in the Work directory list: compact label, shared scroll. */
+  variant?: 'standalone' | 'embedded'
+} = {}): ReactElement {
+  const embedded = variant === 'embedded'
   const { t } = useTranslation('common')
   const defaultRoot = usePaperWorkspaceBootstrapStore((s) => s.defaultWorkspaceRoot)
   const { busy, error, run, switchWorkspace, chooseWorkspace } = usePaperWorkspaceActions()
@@ -112,9 +116,11 @@ export function PaperWorkspacesSection(): ReactElement {
   }
 
   return (
-    <section aria-busy={busy} className="ds-no-drag flex min-h-0 flex-1 flex-col">
+    <section aria-busy={busy} data-paper-libraries
+      className={embedded ? 'ds-no-drag mt-2 flex flex-col' : 'ds-no-drag flex min-h-0 flex-1 flex-col'}>
       <SidebarSectionHeader
-        label={t('paperWorkspaces')}
+        label={embedded ? t('workSidebarLibraries') : t('paperWorkspaces')}
+        compact={embedded}
         actions={(
           <>
             <SidebarIconButton
@@ -165,7 +171,7 @@ export function PaperWorkspacesSection(): ReactElement {
       ) : null}
 
       {error ? <p role="alert" className="mx-3 mb-2 break-words text-[11.5px] text-red-600 dark:text-red-300">{error}</p> : null}
-      <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+      <div className={embedded ? 'pb-1' : 'min-h-0 flex-1 overflow-y-auto pb-2'}>
         {roots.length === 0 ? (
           <p className="px-4 py-4 text-[12px] text-ds-faint">{t('writePaperModeNoLibraries')}</p>
         ) : null}

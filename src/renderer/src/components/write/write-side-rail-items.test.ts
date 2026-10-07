@@ -20,6 +20,13 @@ describe('resolveWriteRailItems', () => {
     expect(byId.assistant?.running).toBe(true)
   })
 
+  it('drops document-only tools while the assistant fills the center', () => {
+    const items = resolveWriteRailItems({
+      reviewCount: 4, referenceCount: 1, assistantRunning: false, documentTools: false
+    })
+    expect(items.map((item) => item.id)).toEqual(['assistant', 'history', 'subagents', 'mcpSkills', 'usage'])
+  })
+
   it('caps badge text', () => {
     expect(formatWriteRailBadge(7)).toBe('7')
     expect(formatWriteRailBadge(120)).toBe('99+')

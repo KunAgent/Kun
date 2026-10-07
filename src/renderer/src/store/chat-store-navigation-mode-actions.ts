@@ -82,6 +82,8 @@ import {
   writeWorkspaceForThreadId
 } from '../write/write-thread-registry'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
+import { beginWorkSessionTransition, useWorkSidebarStore } from '../write/work-sidebar-store'
+import { pinnedWriteSessionId, selectPinnedWorkSession } from '../write/work-session-thread-hooks'
 import {
   DESIGN_ASSISTANT_THREAD_TITLE,
   activeDesignThreadForWorkspace,
@@ -398,6 +400,12 @@ export function createNavigationModeActions(
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return null
     }
+    // A session picked in the sidebar keeps the turn, whatever document is open.
+    const pinnedId = pinnedWriteSessionId(targetWorkspace, state.activeThreadId)
+    if (pinnedId) {
+      set({ route: 'write', error: null })
+      return pinnedId
+    }
 
     const registry = hydrateWriteThreadRegistry(
       state.threads,
@@ -443,6 +451,7 @@ export function createNavigationModeActions(
       await showWorkspaceMissingDialog(targetWorkspace)
       return null
     }
+    const endPinTransition = beginWorkSessionTransition()
     try {
       const p = getProvider()
       const pickedAgentId = get().composerAgentId?.trim() ?? ''
@@ -476,6 +485,7 @@ export function createNavigationModeActions(
         readWriteThreadRegistry(),
         activeFilePath
       ))
+      useWorkSidebarStore.getState().pinSession(targetWorkspace, thread.id)
       set((s) => ({
         route: 'write',
         ...(pickedAgentId ? { composerAgentId: '' } : {}),
@@ -493,6 +503,8 @@ export function createNavigationModeActions(
           : {})
       })
       return null
+    } finally {
+      endPinTransition()
     }
   },
 
@@ -512,7 +524,7 @@ export function createNavigationModeActions(
       ))
     }
     set({ route: 'write' })
-    await get().selectThread(targetId)
+    await selectPinnedWorkSession(targetWorkspace, targetId, () => get().selectThread(targetId))
   },
 
   ensureDesignThreadForWorkspace: async (workspaceRoot, docId) => {

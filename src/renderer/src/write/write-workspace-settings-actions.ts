@@ -309,21 +309,27 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
       const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
       set({ workspaceRoots: roots, settingsLoading: false })
+      // A work space is a documents-surface root: choosing one while a paper
+      // library is mounted leaves the papers surface through the settings load.
+      const leavePapers = get().workSurface === 'papers'
       try {
         const settings = await rendererRuntimeClient.setSettings({
           write: {
             activeWorkspaceRoot: normalized,
-            workspaces: roots
+            workspaces: roots,
+            ...(leavePapers ? { paperMode: { enabled: false } } : {})
           }
         })
         if (!requestIsCurrent(generation)) return
+        if (leavePapers) {
+          await get().loadWriteSettings()
+          return
+        }
         const write = applySettingsResponse(
           settings,
           inlineRevisionAtRequest,
           inlineWritePendingAtRequest
         )
-        // Workspace switching is a docs-surface operation; on the papers
-        // surface the library root stays mounted until the toggle flips back.
         if (get().workSurface === 'docs') {
           await get().initializeWorkspace(write.activeWorkspaceRoot)
         }
@@ -341,14 +347,20 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
       const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
       set({ settingsLoading: false })
+      const leavePapers = get().workSurface === 'papers'
       try {
         const settings = await rendererRuntimeClient.setSettings({
           write: {
             activeWorkspaceRoot: normalized,
-            workspaces: roots
+            workspaces: roots,
+            ...(leavePapers ? { paperMode: { enabled: false } } : {})
           }
         })
         if (!requestIsCurrent(generation)) return
+        if (leavePapers) {
+          await get().loadWriteSettings()
+          return
+        }
         const write = applySettingsResponse(
           settings,
           inlineRevisionAtRequest,

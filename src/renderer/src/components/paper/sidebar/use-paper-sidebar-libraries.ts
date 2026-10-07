@@ -13,7 +13,7 @@ import {
 export type PaperSidebarLibraries = {
   /** Ordered normalized roots, matching `write.paperMode.libraries`. */
   roots: string[]
-  /** Normalized mounted root (`workspaceRoot`) — '' while unmounted. */
+  /** Normalized mounted library root — '' while no library is mounted. */
   activeRoot: string
   /** Index slice per root; the active root mirrors `usePaperModeStore`. */
   byRoot: Record<string, PaperLibraryIndexSlice>
@@ -27,7 +27,9 @@ export type PaperSidebarLibraries = {
 export function usePaperSidebarLibraries(collapsed: ReadonlySet<string>): PaperSidebarLibraries {
   const libraries = useWriteWorkspaceStore((s) => s.paperMode.libraries)
   const papersDir = useWriteWorkspaceStore((s) => s.paperReading.papersDir)
-  const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
+  // Only a mounted papers surface owns a live index; on the documents surface
+  // every library is scanned lazily like any other non-active root.
+  const workspaceRoot = useWriteWorkspaceStore((s) => s.workSurface === 'papers' ? s.workspaceRoot : '')
   const activeEntries = usePaperModeStore((s) => s.entries)
   const activeGroups = usePaperModeStore((s) => s.groups)
   const activeCounts = usePaperModeStore((s) => s.counts)

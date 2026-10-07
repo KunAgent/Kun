@@ -131,15 +131,19 @@ function compactLibraries(libraries: readonly string[]): string[] {
 
 async function patchPaperModeLibraries(
   libraries: readonly string[],
-  activeLibrary: string
+  activeLibrary: string,
+  mount = false
 ): Promise<void> {
   await rendererRuntimeClient.setSettings({
-    write: { paperMode: { libraries: [...libraries], activeLibrary } }
+    write: { paperMode: { libraries: [...libraries], activeLibrary, ...(mount ? { enabled: true } : {}) } }
   })
   await useWriteWorkspaceStore.getState().loadWriteSettings()
 }
 
-/** Switch the mounted library while staying on the papers surface. */
+/**
+ * Open a library: papers are part of Work, so switching to a library always
+ * mounts the papers surface, whichever surface was showing before.
+ */
 async function switchPaperLibraryNow(libraryRoot: string): Promise<PaperModeToggleResult> {
   const normalized = normalizePath(libraryRoot)
   if (!normalized) return { ok: false, message: 'invalid-path' }
@@ -156,16 +160,16 @@ async function switchPaperLibraryNow(libraryRoot: string): Promise<PaperModeTogg
     return { ok: false, message: 'The workspace list is full. Remove a registration before adding another folder.' }
   }
   try {
-    await patchPaperModeLibraries(libraries, normalized)
+    await patchPaperModeLibraries(libraries, normalized, true)
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) }
   }
   const current = useWriteWorkspaceStore.getState()
   if (current.settingsError) return { ok: false, message: current.settingsError }
-  if (current.paperMode.activeLibrary !== normalized) {
+  if (current.paperMode.activeLibrary !== normalized || current.workSurface !== 'papers') {
     return { ok: false, message: PAPER_MODE_SWITCH_CANCELED }
   }
-  if (current.workSurface === 'papers' && normalizePath(current.workspaceRoot) !== normalized) {
+  if (normalizePath(current.workspaceRoot) !== normalized) {
     return { ok: false, message: usePaperWorkspaceBootstrapStore.getState().error ?? PAPER_MODE_SWITCH_CANCELED }
   }
   usePaperModeStore.getState().clearSelection()

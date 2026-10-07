@@ -175,4 +175,16 @@ describe('paper library transitions', () => {
     expect(useWriteWorkspaceStore.getState().workspaceRoot).toBe('/b')
     expect(Object.keys(window.kunGui)).not.toContain('deleteWorkspaceEntry')
   })
+
+  it('opens a library from the documents surface and leaves it when a work space is picked', async () => {
+    settings = { ...configured('/a'), write: mergeWriteSettings(configured('/a').write, { paperMode: { enabled: false } }) }
+    await useWriteWorkspaceStore.getState().loadWriteSettings()
+    expect(useWriteWorkspaceStore.getState()).toMatchObject({ workSurface: 'docs', workspaceRoot: '/docs' })
+    expect(await switchPaperLibrary('/a')).toEqual({ ok: true })
+    expect(settings.write.paperMode.enabled).toBe(true)
+    expect(useWriteWorkspaceStore.getState()).toMatchObject({ workSurface: 'papers', workspaceRoot: '/a' })
+    await useWriteWorkspaceStore.getState().selectWriteWorkspace('/docs')
+    expect(settings.write.paperMode.enabled).toBe(false)
+    expect(useWriteWorkspaceStore.getState()).toMatchObject({ workSurface: 'docs', workspaceRoot: '/docs' })
+  })
 })

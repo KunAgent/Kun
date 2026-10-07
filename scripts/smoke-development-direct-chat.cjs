@@ -14,6 +14,7 @@ const { exerciseRoomApprovals } = require('./smoke-room-approvals.cjs')
 const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
 const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
 const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-controls.cjs')
+const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -172,6 +173,7 @@ async function main() {
       : process.argv.includes('--avatar-only') ? exerciseLayeredAvatarControls
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
+      : process.argv.includes('--work-only') ? exerciseWorkLayout
       : process.argv.includes('--approvals') ? exerciseRoomApprovals
         : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
     const exercised = exercise({ page, request: runtimeRequest, poll, capture, recordDiagnostic, fixture: modelFixture,

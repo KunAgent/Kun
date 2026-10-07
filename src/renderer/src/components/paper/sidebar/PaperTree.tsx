@@ -99,8 +99,8 @@ export function PaperTree({
 
   const importInto = async (folder: string): Promise<void> => {
     setImportFolder(folder, libraryRoot)
-    const mounted = normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)
-    if (libraryRoot !== mounted) {
+    const state = useWriteWorkspaceStore.getState()
+    if (libraryRoot !== normalizePath(state.workspaceRoot) || state.workSurface !== 'papers') {
       // The import dialog targets the mounted library; switch first.
       const switched = await switchPaperLibrary(libraryRoot)
       if (!switched.ok) {

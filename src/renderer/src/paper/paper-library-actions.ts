@@ -92,7 +92,8 @@ export async function openLibraryEntry(
   t?: PaperTranslate
 ): Promise<void> {
   const requested = normalizePath(libraryRoot ?? '')
-  if (requested && requested !== normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)) {
+  const mounted = useWriteWorkspaceStore.getState()
+  if (requested && (requested !== normalizePath(mounted.workspaceRoot) || mounted.workSurface !== 'papers')) {
     const switched = await switchPaperLibrary(requested)
     if (!switched.ok) {
       if (switched.message !== PAPER_MODE_SWITCH_CANCELED) {

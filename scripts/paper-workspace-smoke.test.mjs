@@ -8,7 +8,7 @@ test('native smoke exercises production startup/components and labels the offlin
   const fixture = await read('scripts/fixtures/paper-workspace-ui.tsx')
   const research = await read('scripts/fixtures/paper-workspace-assistant.tsx')
   const smoke = await read('scripts/smoke-paper-workspace.mjs')
-  for (const production of ['PaperLibraryView', 'PaperLibraryOnboarding', 'PaperWorkspacesSection', 'PaperModeToggle', 'loadWriteSettings', 'paper-mode-actions']) {
+  for (const production of ['PaperLibraryView', 'PaperLibraryOnboarding', 'PaperWorkspacesSection', 'WorkSidebarPaperNav', 'loadWriteSettings', 'paper-mode-actions']) {
     assert.ok(fixture.includes(production), production)
   }
   assert.ok(research.includes('PaperResearchView'))

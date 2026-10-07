@@ -1,9 +1,8 @@
-import { useEffect, type ReactElement } from 'react'
+import { useContext, useEffect, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   FileText,
   GraduationCap,
-  ListTodo,
   Loader2,
   MessageSquareQuote,
   PanelRightClose,
@@ -36,7 +35,14 @@ import { FloatingComposer } from '../chat/FloatingComposer'
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
 import { SubagentReturnBar } from '../chat/message-timeline-empty'
 import { WriteAssistantSparkleIcon } from './WriteAssistantIcons'
-import { WritePaperAssistantActions } from './WritePaperAssistantActions'
+import { WriteAssistantEmptyState } from './WriteAssistantEmptyState'
+import { WorkHomeHero, WorkHomeSpaceChip, WorkHomeStarters, WorkKunAvatar } from './WorkHomeEmptyState'
+import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
+import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
+import { useWorkSidebarStore } from '../../write/work-sidebar-store'
+import { workSessionDisplayTitle } from '../../write/work-sessions-model'
+import { prepareWorkSessionForSend } from '../../write/work-session-actions'
+import './work-stage.css'
 import { WritePresentationViewChip } from './WritePresentationViewChip'
 import { WriteResourceConversationHistoryPopover } from './WriteResourceConversationHistoryPopover'
 import { useWriteResourceConversationHistory } from './useWriteResourceConversationHistory'
@@ -151,6 +157,12 @@ export function WriteAssistantPanel({
     }))
   )
   const papersSurface = workSurface === 'papers'
+  // Nothing open: the panel is the center stage (Code-like home/conversation).
+  const stage = useWorkConversationStage()
+  const stageChrome = useContext(WorkStageChromeContext)
+  const sessionHeader = useWorkSidebarStore((s) => s.view === 'sessions') || stage
+  const sessionTitle = useChatStore((s) =>
+    workSessionDisplayTitle(s.threads.find((thread) => thread.id === s.activeThreadId)?.title))
   const paperEntries = usePaperModeStore((s) => s.entries)
   const readerPage = usePaperModeStore((s) => s.readerPage)
   const knownUnits = usePaperStore((s) => s.unitsByDir)
@@ -225,6 +237,7 @@ export function WriteAssistantPanel({
   }
   const hasParentTimeline =
     blocks.length > 0 || liveReasoning.trim().length > 0 || liveAssistant.trim().length > 0
+  const home = stage && !hasParentTimeline && !viewingChildThread
   const selectionIsReadOnly = selection.sourceKind != null && selection.sourceKind !== 'text'
   const selectionIsSpreadsheet = selection.sourceKind === 'spreadsheet'
   const selectionActionLabel = selectionIsSpreadsheet
@@ -261,15 +274,33 @@ export function WriteAssistantPanel({
 
   return (
     <aside
-      className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${className}`}
+      className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${stage ? 'is-stage ' : ''}${home ? 'is-home ' : ''}${className}`}
+      data-work-assistant={stage ? 'stage' : 'panel'}
     >
       <div className="write-assistant-header ds-sidebar-surface-chrome relative shrink-0">
         <div className="flex h-[52px] min-w-0 items-center gap-1 border-b border-ds-border-muted pl-4 pr-2.5">
-          <WriteAssistantSparkleIcon className="write-ai-tint h-[18px] w-[18px] shrink-0" />
-          <span className="ml-2 min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-ds-ink">
-            {t('writeAssistant')}
-          </span>
-          {conversationHistory ? (
+          {stage && stageChrome ? (
+            <div className={`mr-1.5 flex shrink-0 items-center ${stageChrome.leftSidebarCollapsed ? 'ds-window-controls-collapsed-titlebar-inset' : ''}`}>
+              <SidebarTitlebarToggleButton
+                onClick={stageChrome.onToggleLeftSidebar}
+                title={stageChrome.leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+                ariaLabel={stageChrome.leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+              />
+            </div>
+          ) : null}
+          <WorkKunAvatar variant={papersSurface ? 'researcher' : 'writer'} size={22} />
+          {sessionHeader ? (
+            <span className="write-assistant-session-title ml-2 text-[14px] font-semibold tracking-[-0.01em] text-ds-ink"
+              data-placeholder={sessionTitle ? undefined : 'true'} title={sessionTitle || t('workSessionNew')}>
+              {sessionTitle || t('workSessionNew')}
+            </span>
+          ) : (
+            <span className="ml-2 min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-ds-ink">
+              {t('writeAssistant')}
+            </span>
+          )}
+          {/* In the sessions view the sidebar already lists every session. */}
+          {conversationHistory && !sessionHeader ? (
             <WriteResourceConversationHistoryPopover
               model={conversationHistory}
               lockedExternally={viewingChildThread}
@@ -286,17 +317,19 @@ export function WriteAssistantPanel({
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
           </button>
-          <button
-            type="button"
-            onClick={onCollapse}
-            className="write-panel-icon-button"
-            aria-label={t('rightPanelCollapse')}
-            title={t('rightPanelCollapse')}
-          >
-            <PanelRightClose className="h-4 w-4" strokeWidth={1.75} />
-          </button>
+          {stage ? null : (
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="write-panel-icon-button"
+              aria-label={t('rightPanelCollapse')}
+              title={t('rightPanelCollapse')}
+            >
+              <PanelRightClose className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          )}
         </div>
-        <div className="flex min-w-0 items-center gap-1.5 border-b border-ds-border-muted px-4 py-2.5">
+        <div className="write-assistant-context flex min-w-0 items-center gap-1.5 border-b border-ds-border-muted px-4 py-2.5">
           <span className="write-context-chip min-w-0" title={paperContextLabel ?? activeFileLabel}>
             {papersSurface && activePaperEntry ? (
               <GraduationCap className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
@@ -384,92 +417,24 @@ export function WriteAssistantPanel({
               onOpenSettings={onOpenSettings}
               onSelectSuggestion={(text) => setInput(text)}
               onOpenChildThread={openChildThread}
-              compactCards
+              compactCards={!stage}
             />
           </div>
+        ) : stage ? (
+          <WorkHomeHero />
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 py-5">
-            <div className="write-assistant-ready flex flex-col items-center px-3 pb-8 pt-12 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[16px] border border-accent/12 bg-accent/[0.07] text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.62)]">
-                <WriteAssistantSparkleIcon className="h-6 w-6" />
-              </div>
-              <h3 className="mt-5 text-[17px] font-semibold tracking-[-0.025em] text-ds-ink">
-                {t('writeAssistantEmptyTitle')}
-              </h3>
-              <p className="mt-2 max-w-[270px] text-[12.5px] leading-5 text-ds-muted">
-                {t('writeAssistantEmptySub')}
-              </p>
-            </div>
-
-            <div className="write-assistant-actions mt-auto overflow-hidden border-y border-ds-border-muted">
-              {papersSurface ? (
-                <WritePaperAssistantActions
-                  paperTitle={paperContextLabel ?? ''}
-                  selectionIsSpreadsheet={selectionIsSpreadsheet}
-                  selectionActionLabel={selectionActionLabel}
-                  selectionActionDescription={selectionActionDescription}
-                  selectionCharCount={selection.charCount}
-                  onSetPrompt={setAssistantPrompt}
-                  onQuoteSelection={quoteSelectionForAssistant}
-                  t={t}
-                />
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setAssistantPrompt(t('writeAssistantSummarizePrompt', { file: activeFileLabel }))}
-                    className="write-assistant-action-row"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-300">
-                      <FileText className="h-4 w-4" strokeWidth={1.9} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[13.5px] font-semibold text-ds-ink">{t('writeAssistantSummarize')}</span>
-                      <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('writeAssistantSummarizeSub')}</span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAssistantPrompt(t('writeAssistantOutlinePrompt', { file: activeFileLabel }))}
-                    className="write-assistant-action-row border-t border-ds-border-muted"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-                      <ListTodo className="h-4 w-4" strokeWidth={1.9} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[13.5px] font-semibold text-ds-ink">{t('writeAssistantOutline')}</span>
-                      <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('writeAssistantOutlineSub')}</span>
-                    </span>
-                  </button>
-                  {!selectionIsSpreadsheet ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (selection.charCount > 0) {
-                          quoteSelectionForAssistant()
-                        } else {
-                          setAssistantPrompt(t('writeAssistantPolishSelectionPrompt'))
-                        }
-                      }}
-                      className="write-assistant-action-row border-t border-ds-border-muted"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-300">
-                        <MessageSquareQuote className="h-4 w-4" strokeWidth={1.9} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[13.5px] font-semibold text-ds-ink">
-                          {selectionActionLabel}
-                        </span>
-                        <span className="mt-0.5 block truncate text-[12px] text-ds-faint">
-                          {selectionActionDescription}
-                        </span>
-                      </span>
-                    </button>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </div>
+          <WriteAssistantEmptyState
+            papersSurface={papersSurface}
+            paperContextLabel={paperContextLabel}
+            activeFileLabel={activeFileLabel}
+            selectionCharCount={selection.charCount}
+            selectionIsSpreadsheet={selectionIsSpreadsheet}
+            selectionActionLabel={selectionActionLabel}
+            selectionActionDescription={selectionActionDescription}
+            setAssistantPrompt={setAssistantPrompt}
+            quoteSelectionForAssistant={quoteSelectionForAssistant}
+            t={t}
+          />
         )}
       </div>
 
@@ -547,6 +512,7 @@ export function WriteAssistantPanel({
             ))}
           </div>
         ) : null}
+        {home ? <WorkHomeSpaceChip /> : null}
         {viewingChildThread ? (
           <SubagentReturnBar
             parentTitle={t('writeAssistant')}
@@ -590,12 +556,16 @@ export function WriteAssistantPanel({
             onSend={() => {
               if (papersSurface && activeUnitRel && !viewingChildThread) {
                 void openBoundedPaperReading({ workspaceRoot, unitDir: activeUnitRel, meta: activePaperEntry?.meta, question: input })
-              } else onSend()
+              } else {
+                // A draft or empty home becomes a new session before the turn.
+                void prepareWorkSessionForSend().then((ready) => { if (ready) onSend() })
+              }
             }}
             onInterrupt={onInterrupt}
             onConfigureProviders={onConfigureProviders}
           />
         )}
+        {home ? <WorkHomeStarters onPrompt={setAssistantPrompt} /> : null}
       </div>
     </aside>
   )

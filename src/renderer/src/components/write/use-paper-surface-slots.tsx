@@ -5,7 +5,7 @@ import type { WritePaperReadingSettingsV1 } from '@shared/app-settings'
 import type { WriteWorkSurface } from '../../write/write-surface'
 import { useWritePaperMode } from '../../write/paper/use-write-paper-mode'
 import { usePaperStore } from '../../write/paper/paper-store'
-import { enterPaperMode } from '../../paper/paper-mode-actions'
+import { openPaperView } from '../../write/work-session-actions'
 import { WritePaperStrip } from './paper/WritePaperStrip'
 import { PaperImportDialog } from '../paper/import/PaperImportDialog'
 
@@ -59,7 +59,7 @@ export function usePaperSurfaceSlots(props: {
       <button
         type="button"
         className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/[0.08] px-2.5 text-[12px] font-medium text-accent transition hover:bg-accent/15"
-        onClick={() => void enterPaperMode()}
+        onClick={() => void openPaperView('library')}
       >
         <GraduationCap className="h-3.5 w-3.5" strokeWidth={1.9} />
         {t('writePaperModeEnter')}

@@ -5,11 +5,7 @@ import {
   Clock3,
   Columns3,
   LayoutGrid,
-  Moon,
   Puzzle,
-  Settings,
-  Smartphone,
-  Sun,
   Workflow,
   Zap
 } from 'lucide-react'
@@ -34,13 +30,8 @@ import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDial
 import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
 import { useProjectBoardEnabled } from '../../project-board/use-project-board-enabled'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
-import {
-  SidebarCommandRow,
-  SidebarFrame,
-  SidebarIconButton
-} from '../sidebar/SidebarPrimitives'
-import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
-import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from '../sidebar/SidebarKunFooter'
+import { SidebarFrame } from '../sidebar/SidebarPrimitives'
+import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
 
 type Props = {
   threads: NormalizedThread[]
@@ -116,18 +107,6 @@ export function Sidebar({
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const iconProps = { className: 'h-4 w-4', strokeWidth: 1.75 }
-  const [isDarkMode, setIsDarkMode] = useState(
-    () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark'
-  )
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDarkMode(document.documentElement.getAttribute('data-theme') === 'dark')
-    })
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => observer.disconnect()
-  }, [])
-
   // HTML5 drag does not scroll containers; without this, dragged sidebar rows
   // cannot reach projects above or below the visible window.
   useEffect(() => registerSidebarDragAutoScroll(document), [])
@@ -185,56 +164,20 @@ export function Sidebar({
     ]
   )
 
-  const sceneFooter = useSidebarSceneFooter()
   return (
     <>
     <SidebarFrame
       title={t('appName')}
       footer={
-        <div className="space-y-1">
-          {sceneFooter ? (
-            <SidebarFocusModeControl
-              enabled={focusModeEnabled}
-              onChange={onFocusModeChange}
-            />
-          ) : !focusModeEnabled ? (
-            <div className="border-b border-[var(--ds-sidebar-divider)] pb-1">
-              <SidebarKunStatus onOpen={() => onOpenSettings('agents')} />
-            </div>
-          ) : null}
-          <div className="flex items-center gap-1">
-            <div className="min-w-0 flex-1">
-              <SidebarCommandRow
-                icon={<Settings className="h-4 w-4" strokeWidth={1.75} />}
-                label={t('settings')}
-                onClick={() => onOpenSettings('general')}
-                variant="footer"
-              />
-            </div>
-            {!sceneFooter ? (
-              <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} />
-            ) : null}
-            <SidebarIconButton
-              title={t('claw')}
-              ariaLabel={t('claw')}
-              onClick={onToggleConnectPhone}
-              active={connectPhoneSidebarOpen}
-            >
-              <Smartphone className="h-4 w-4" strokeWidth={1.75} />
-            </SidebarIconButton>
-            <SidebarIconButton
-              title={isDarkMode ? t('switchToLight') : t('switchToDark')}
-              ariaLabel={t('toggleTheme')}
-              onClick={onToggleTheme}
-            >
-              {isDarkMode ? (
-                <Sun className="h-4 w-4" strokeWidth={1.75} />
-              ) : (
-                <Moon className="h-4 w-4" strokeWidth={1.75} />
-              )}
-            </SidebarIconButton>
-          </div>
-        </div>
+        <SidebarStandardFooter
+          focusModeEnabled={focusModeEnabled}
+          connectPhoneSidebarOpen={connectPhoneSidebarOpen}
+          onFocusModeChange={onFocusModeChange}
+          onOpenSettings={() => onOpenSettings('general')}
+          onOpenAgentSettings={() => onOpenSettings('agents')}
+          onToggleConnectPhone={onToggleConnectPhone}
+          onToggleTheme={onToggleTheme}
+        />
       }
     >
       {codexDialogOpen && codexReferenceEnabled ? <CodexReferenceDialog workspaceRoot={workspaceRoot}

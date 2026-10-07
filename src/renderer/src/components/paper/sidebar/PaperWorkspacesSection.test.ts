@@ -42,6 +42,7 @@ function entry(title: string): PaperLibraryEntry {
 function seed(libraries: string[], entries: PaperLibraryEntry[]): void {
   const work = useWriteWorkspaceStore.getState()
   useWriteWorkspaceStore.setState({
+    workSurface: 'papers',
     workspaceRoot: ROOT,
     paperMode: { ...work.paperMode, libraries },
     activeFilePath: null

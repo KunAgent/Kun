@@ -53,7 +53,7 @@ import { WriteEditorGroups } from './WriteEditorGroups'
 import { useWriteEditorGroupFileWatches } from './use-write-editor-group-file-watches'
 import { shouldShowWriteInlineAgent } from './write-inline-agent-visibility'
 import { usePaperSurfaceSlots } from './use-paper-surface-slots'
-import { enterPaperMode } from '../../paper/paper-mode-actions'
+import { openPaperView } from '../../write/work-session-actions'
 
 type Props = {
   leftSidebarCollapsed: boolean; onToggleLeftSidebar: () => void
@@ -621,7 +621,7 @@ export function WriteWorkspaceView({
           onboardingDecision={onboardingDecision}
           onAskAssistant={setAssistantPrompt}
           onCreateDraft={() => void createDraftFile()}
-          onImportPaper={workSurface === 'papers' ? openPaperImport : () => void enterPaperMode()}
+          onImportPaper={workSurface === 'papers' ? openPaperImport : () => void openPaperView('library')}
           onPickWorkspace={() => void pickWriteWorkspace()}
         />
       </div>

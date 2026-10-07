@@ -4,8 +4,6 @@ import type { SettingsRouteSection } from '../../store/chat-store'
 import type { ClawInstallTarget } from '../chat/SidebarClawDialogHelpers'
 import { Sidebar } from '../chat/Sidebar'
 import { WriteSidebar } from '../write/WriteSidebar'
-import { PaperSidebar } from '../paper/PaperSidebar'
-import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import type { RegisteredContribution } from '../../extensions/contribution-registry'
 import { ExtensionViewOutlet } from '../../extensions/ControlledContributionSurfaces'
 import { normalizeWorkbenchRoute } from './workbench-route'
@@ -116,7 +114,6 @@ export function WorkbenchLeftSidebar({
 }: WorkbenchLeftSidebarProps): ReactElement | null {
   const { t } = useTranslation('common')
   const remoteMobile = useRemoteMobileLayout()
-  const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
   if (collapsed) return null
   const normalizedRoute = normalizeWorkbenchRoute(route)
   // On a phone the sidebar is an overlay drawer: navigation actions and the
@@ -140,29 +137,17 @@ export function WorkbenchLeftSidebar({
         />
       ) : normalizedRoute === 'write' ? (
         <Suspense fallback={<SidebarFallback />}>
-          {workSurface === 'papers' ? (
-            <PaperSidebar
-              activeView="write"
-              connectPhoneSidebarOpen={connectPhoneSidebarOpen}
-              focusModeEnabled={focusModeEnabled}
-              onCodeOpen={wrapClose(onCodeOpen)}
-              onWriteOpen={wrapClose(onWriteOpen)}
-              onFocusModeChange={onFocusModeChange}
-              onOpenSettings={wrapClose(onOpenSettings)}
-              onToggleConnectPhone={onToggleConnectPhone}
-            />
-          ) : (
-            <WriteSidebar
-              activeView="write"
-              connectPhoneSidebarOpen={connectPhoneSidebarOpen}
-              focusModeEnabled={focusModeEnabled}
-              onCodeOpen={wrapClose(onCodeOpen)}
-              onWriteOpen={wrapClose(onWriteOpen)}
-              onFocusModeChange={onFocusModeChange}
-              onOpenSettings={wrapClose(onOpenSettings)}
-              onToggleConnectPhone={onToggleConnectPhone}
-            />
-          )}
+          <WriteSidebar
+            activeView="write"
+            connectPhoneSidebarOpen={connectPhoneSidebarOpen}
+            focusModeEnabled={focusModeEnabled}
+            onCodeOpen={wrapClose(onCodeOpen)}
+            onWriteOpen={wrapClose(onWriteOpen)}
+            onFocusModeChange={onFocusModeChange}
+            onOpenSettings={wrapClose(onOpenSettings)}
+            onToggleConnectPhone={onToggleConnectPhone}
+            onToggleTheme={onToggleTheme}
+          />
         </Suspense>
       ) : (
         <Sidebar
