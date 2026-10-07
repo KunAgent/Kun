@@ -33,6 +33,7 @@ import { useAdeWorktreeGit } from './use-ade-worktree-git'
 import { isKunModelProviderGroup } from '../../lib/kun-model-provider-groups'
 import { selectHarnessProvider } from '../../lib/harness-provider-selection'
 import { useCodeProjectDefaults } from './use-code-project-defaults'
+import { readHarnessLastModel, rememberHarnessLastModel } from '../../lib/harness-last-model'
 
 /**
  * ADE composer wiring (docs/ade/12 §7.2–7.4): harness catalog, per-harness
@@ -155,7 +156,10 @@ export function useAdeComposerControls(input: {
     const state = useChatStore.getState()
     if (state.activeThreadId !== activeThreadId || state.workspaceRoot !== workspaceRoot ||
       state.composerHarnessId !== harnessId || state.composerModel) return
-    const model = modelCache?.modelInfo?.find((entry) => entry.isDefault)?.id ?? modelCache?.models[0]
+    const remembered = readHarnessLastModel(harnessId, credentialMode)
+    const model = (remembered && remembered.providerId === state.composerProviderId.trim() &&
+      modelCache?.models.includes(remembered.model) ? remembered.model : undefined) ??
+      modelCache?.modelInfo?.find((entry) => entry.isDefault)?.id ?? modelCache?.models[0]
     if (model) setComposerModel(model, state.composerProviderId, 'settings')
   }, [enabled, isNativeHarness, credentialMode, modelCache, activeThreadId, workspaceRoot, harnessId, setComposerModel])
 
@@ -221,16 +225,19 @@ export function useAdeComposerControls(input: {
         // Provider-routed modes carry the picked provider id so the turn
         // resolves `providerId + model` into the grant route; native sign-in
         // pins no provider.
-        setComposerModel(
-          modelId,
-          picked.gatewayBinding ? '' : picked.providerId ?? (picked.mode === 'native-login' ? '' : composerProviderId)
-        )
+        const pickedProviderId = picked.gatewayBinding ? '' : picked.providerId ?? (picked.mode === 'native-login' ? '' : composerProviderId)
+        setComposerModel(modelId, pickedProviderId)
         if (picked.gatewayBinding) setComposerGatewayBinding(picked.gatewayBinding)
+        else rememberHarnessLastModel(harnessId, picked.mode, modelId, pickedProviderId)
         return
       }
       onComposerModelChange?.(modelId, providerId)
+      const state = useChatStore.getState()
+      if (!state.composerGatewayBinding) {
+        rememberHarnessLastModel(harnessId, state.composerCredentialMode || credentialMode, state.composerModel, state.composerProviderId)
+      }
     }
-  }, [composerProviderId, enabled, harnessId, isNativeHarness, row, onComposerModelChange, setComposerHarness, setComposerModel, setComposerGatewayBinding])
+  }, [composerProviderId, credentialMode, enabled, harnessId, isNativeHarness, row, onComposerModelChange, setComposerHarness, setComposerModel, setComposerGatewayBinding])
 
   /**
    * External-session continuation (01 §8): a fresh one-to-one thread whose
@@ -297,21 +304,25 @@ export function useAdeComposerControls(input: {
       setComposerGatewayBinding(binding)
       if (!alias) void loadHarnessProviderGroups(nextId)
     } else if (cred !== 'native-login') {
+      const lastPicked = readHarnessLastModel(nextId, cred) ?? previous
       const cache = useHarnessStore.getState().providerGroups[nextId]
       const selection = selectHarnessProvider((cache?.groups ?? []).filter((group) => !nextRow || harnessProfileReady(nextRow, { harnessId: nextId, credentialMode: cred as 'provider' | 'kun-gateway', providerId: group.providerId })),
-        selectedProfile?.providerId ? { ...defaults, providerId: selectedProfile.providerId } : defaults, previous)
+        selectedProfile?.providerId ? { ...defaults, providerId: selectedProfile.providerId } : defaults, lastPicked)
       setComposerModel(selection.model, selection.providerId)
       if (!cache || cache.loading || cache.error) {
         const state = useChatStore.getState()
         pendingProvider.current = { harnessId: nextId, credentialMode: cred,
           threadId: state.activeThreadId, workspace: state.workspaceRoot, draft: state.adeDraftRevision,
-          previous, defaults: selectedProfile?.providerId ? { ...defaults, providerId: selectedProfile.providerId } : defaults }
+          previous: lastPicked, defaults: selectedProfile?.providerId ? { ...defaults, providerId: selectedProfile.providerId } : defaults }
         void loadHarnessProviderGroups(nextId)
       }
     } else {
       const nativeDefault = useHarnessStore.getState().models[nextId]?.modelInfo?.find((entry) => entry.isDefault)?.id
+      const remembered = readHarnessLastModel(nextId, cred)
+      const lastPicked = remembered && remembered.providerId === (selectedProfile?.providerId ?? '') &&
+        (!models.length || models.includes(remembered.model)) ? remembered.model : undefined
       // An unnamed ready profile is the system account, not a missing default.
-      setComposerModel(defaults?.model ?? nativeDefault ?? models[0] ?? '', selectedProfile?.providerId ?? '')
+      setComposerModel(defaults?.model ?? lastPicked ?? nativeDefault ?? models[0] ?? '', selectedProfile?.providerId ?? '')
     }
     if (managedDraft && defaults?.isolation) {
       setComposerIsolation(
