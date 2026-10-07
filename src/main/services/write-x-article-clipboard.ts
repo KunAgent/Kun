@@ -1,7 +1,7 @@
 import { clipboard, nativeImage } from 'electron'
 import { basename, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import sharp from 'sharp'
+import { loadSharp } from './lazy-sharp'
 import { resolveWriteMarkdownResource, resolveWriteMarkdownResourcePath } from '../../shared/write-markdown-resource'
 import {
   X_ARTICLE_IMAGE_MISSING,
@@ -107,7 +107,7 @@ export function resolveXArticleImageClipboardWrite(
 export async function writeXArticleImageToClipboard(filePath: string): Promise<void> {
   let image = nativeImage.createFromPath(filePath)
   if (image.isEmpty()) {
-    image = nativeImage.createFromBuffer(await sharp(filePath).png().toBuffer())
+    image = nativeImage.createFromBuffer(await (await loadSharp())(filePath).png().toBuffer())
   }
   if (image.isEmpty()) {
     throw new Error(`Unable to copy image ${basename(filePath)}`)

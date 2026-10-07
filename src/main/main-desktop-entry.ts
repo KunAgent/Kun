@@ -4,7 +4,6 @@ import {
   runningClawScheduleMcpServer
 } from './main-app-context'
 import { installRemoteIpcRegistry } from './remote/remote-ipc-registry'
-import { runClawScheduleMcpServerFromArgv } from './claw-schedule-mcp-server'
 import { releaseRuntimeDataRecoveryMigrationLock } from './main-migrations'
 import {
   runtimeShutdown,
@@ -28,7 +27,10 @@ export function startDesktopMainEntry(): void {
   // gateway can dispatch browser invokes through the same handlers.
   installRemoteIpcRegistry()
   if (runningClawScheduleMcpServer) {
-    void runClawScheduleMcpServerFromArgv(process.argv).catch((error) => {
+    // The MCP SDK (and its ajv validator) is only needed in this server mode.
+    void import('./claw-schedule-mcp-server').then(
+      ({ runClawScheduleMcpServerFromArgv }) => runClawScheduleMcpServerFromArgv(process.argv)
+    ).catch((error) => {
       console.error('[claw-schedule-mcp] server failed:', error)
       process.exit(1)
     })

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import sharp from 'sharp'
+import { loadSharp } from '../services/lazy-sharp'
 import type {
   HostActionContext,
   HostActionResult,
@@ -405,7 +405,7 @@ async function scaleScreenshot(source: Buffer, maxDimension: number): Promise<{
   width: number
   height: number
 }> {
-  const input = sharp(source)
+  const input = (await loadSharp())(source)
   const metadata = await input.metadata()
   if (!metadata.width || !metadata.height) {
     throw new CuaDriverError('invalid_screenshot', 'CUA Driver returned an image without dimensions.')

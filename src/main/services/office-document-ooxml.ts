@@ -1,4 +1,3 @@
-import yauzl from 'yauzl'
 import type { OfficeDocumentFormat } from '../../shared/office-document'
 
 const OOXML_CONTENT_TYPES_MAX_BYTES = 256 * 1024
@@ -18,7 +17,9 @@ export async function assertOoxmlPackageType(
   }
 }
 
-function readOoxmlContentTypes(filePath: string): Promise<string> {
+async function readOoxmlContentTypes(filePath: string): Promise<string> {
+  const yauzlModule = await import('yauzl')
+  const yauzl = yauzlModule.default ?? yauzlModule
   return new Promise<string>((resolve, reject) => {
     yauzl.open(filePath, { lazyEntries: true, autoClose: true }, (openError, zip) => {
       if (openError || !zip) {

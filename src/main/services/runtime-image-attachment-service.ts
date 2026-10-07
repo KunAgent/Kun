@@ -3,7 +3,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { clipboard } from 'electron'
-import sharp from 'sharp'
+import { loadSharp } from './lazy-sharp'
 import { z } from 'zod'
 import type { RuntimeRequestResult } from '../../shared/kun-gui-api'
 import type {
@@ -157,7 +157,7 @@ export async function prepareRuntimeImageAttachment(
   capabilities: AttachmentCapabilities
 ): Promise<{ upload: EncodedImage; fallback: EncodedImage }> {
   assertSourceByteLength(source.byteLength)
-  const metadata = await sharp(source, {
+  const metadata = await (await loadSharp())(source, {
     failOn: 'error',
     limitInputPixels: MAX_RUNTIME_IMAGE_SOURCE_PIXELS,
     sequentialRead: true
@@ -277,7 +277,7 @@ async function encodeWithinLimits(
 
   for (;;) {
     for (const quality of qualities) {
-      let pipeline = sharp(source, {
+      let pipeline = (await loadSharp())(source, {
         failOn: 'error',
         limitInputPixels: MAX_RUNTIME_IMAGE_SOURCE_PIXELS,
         sequentialRead: true

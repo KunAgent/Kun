@@ -59,9 +59,6 @@ import {
   writeRetrievalPayloadSchema
 } from './app-ipc-schemas'
 import {
-  lintProjectDesignMd
-} from '../services/project-design-md-lint'
-import {
   openPathWithShell
 } from '../services/workspace-service'
 import {
@@ -123,14 +120,10 @@ import {
   getComputerUsePermissions,
   requestComputerUsePermission
 } from '../services/computer-use-permissions'
-import {
-  copyWriteDocumentAsRichText,
-  exportDesignPrototype,
-  exportWriteDocument
-} from '../services/write-export-service'
-import {
-  exportConversation
-} from '../services/conversation-export-service'
+// Export renderers pull in html-to-docx, react-dom/server, KaTeX and the
+// markdown stack (hundreds of modules); load them on the first export only.
+const loadWriteExportService = () => import('../services/write-export-service')
+const loadConversationExportService = () => import('../services/conversation-export-service')
 import {
   exportMemoryMarkdown
 } from '../services/memory-export-service'
@@ -170,13 +163,13 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
     getMainWindow()?.webContents.send('speak:sanotts:progress', payload)
   })
   ipcMain.handle('write:export', async (_, payload: unknown) =>
-    exportWriteDocument(
+    (await loadWriteExportService()).exportWriteDocument(
       parseIpcPayload('write:export', writeExportPayloadSchema, payload),
       { parentWindow: getMainWindow() }
     )
   )
   ipcMain.handle('conversation:export', async (_, payload: unknown) =>
-    exportConversation(
+    (await loadConversationExportService()).exportConversation(
       parseIpcPayload('conversation:export', conversationExportPayloadSchema, payload),
       { parentWindow: getMainWindow() }
     )
@@ -188,17 +181,17 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
     )
   )
   ipcMain.handle('design:export-prototype', async (_, payload: unknown) =>
-    exportDesignPrototype(
+    (await loadWriteExportService()).exportDesignPrototype(
       parseIpcPayload('design:export-prototype', designExportPayloadSchema, payload),
       { parentWindow: getMainWindow() }
     )
   )
   ipcMain.handle('design:lint-project-design-md', async (_, payload: unknown) => {
     const request = parseIpcPayload('design:lint-project-design-md', projectDesignMdLintPayloadSchema, payload)
-    return lintProjectDesignMd(request.content)
+    return (await import('../services/project-design-md-lint')).lintProjectDesignMd(request.content)
   })
   ipcMain.handle('write:copy-rich-text', async (_, payload: unknown) =>
-    copyWriteDocumentAsRichText(
+    (await loadWriteExportService()).copyWriteDocumentAsRichText(
       parseIpcPayload('write:copy-rich-text', writeRichClipboardPayloadSchema, payload)
     )
   )
