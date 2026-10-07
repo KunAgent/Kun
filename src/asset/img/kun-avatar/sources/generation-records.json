@@ -1,0 +1,87 @@
+{
+  "created": "2026-10-07",
+  "tool": "image_gen.imagegen",
+  "transparentBackground": true,
+  "reference": "src/asset/img/room-avatars/kun-avatar-atlas.png",
+  "style": "Dark navy hand-inked outlines, soft cel shading, ivory bib, cute front-facing Kun bird; isolated parts on true alpha",
+  "registration": "scripts/kun-avatar-asset-recipes.mjs",
+  "sources": [
+    {
+      "file": "accessories.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "55f7e149286881a5f6a26c4c059ec7a21f6e912a082fdc8df564900231306276",
+      "promptSummary": "Headset, headphones, five eyeglasses, blue scarf"
+    },
+    {
+      "file": "body.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "bec2a65cc1ad1a21436434b6b2e4d376e9f8544c918ceab04b589f6ead9034dd",
+      "promptSummary": "Locked sky-blue blank-face body, no crest or accessories"
+    },
+    {
+      "file": "camera-shirt.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "e1f246c9e5b54bb7a98250862aa5915780d1476b41962ac5a23e30d48056a7c7",
+      "promptSummary": "Corrected photographer shirt: two straps without embedded camera"
+    },
+    {
+      "file": "clothes-a.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "34166f9d5094e777b7c59e26f21a6b7fff411932ded0b9419bd49f992a33c960",
+      "promptSummary": "Two hoodies, shirt, cardigan, lab coat, security jacket and three scarves"
+    },
+    {
+      "file": "clothes-b.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "11cdcdd250028ca77ee88797f27ca5fd000436be410ba4ca555afce2b635630e",
+      "promptSummary": "Spacesuit, flight jacket, sailor, overalls, chef, nurse, camera shirt, sports vest and front cape"
+    },
+    {
+      "file": "clothes-c.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "f8cdb0efd0817272e0e320af8f78ea746208e9f61a790fdb1e6eb4e1da43ce9d",
+      "promptSummary": "Front wizard cape, aprons, mailbag, robe and four rear layers"
+    },
+    {
+      "file": "color-variants.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "70c663cd4ed0aca8f75fc98c77c6f4bf740ab3d01a605c923b2cb2de4fe6b841",
+      "promptSummary": "Teal, periwinkle and mint bodies, crests and grip wings"
+    },
+    {
+      "file": "features.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "1a934611db781cc42f6dcdf5113b37b422f6c50ebd4592127ca74acff248eece",
+      "promptSummary": "Default and happy expressions, sky crest, sky gripping wing"
+    },
+    {
+      "file": "hats-a.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "635ca8c4e8f08d39168442c402c3ad0600180963dabf266aa7b33893ef356727",
+      "promptSummary": "Detective, beret, hardhat, baseball, pilot, sailor, straw, chef, nurse hats"
+    },
+    {
+      "file": "hats-b.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "1fe355cc42e77390fca7d1f03908e2010c951712c9d3ec69ff2b30f031cd9883",
+      "promptSummary": "Headband, beanie, hollow hood, wizard, newsboy, forehead goggles, laurel, hollow astronaut frame"
+    },
+    {
+      "file": "props.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "9dec8ab9bb311844bdbe2ff98d36c06f4d55f6bdcfc5d03c1f2f8b04839dbb4c",
+      "promptSummary": "Nine isolated handheld objects without fingers or bodies"
+    }
+  ]
+}

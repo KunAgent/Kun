@@ -24,5 +24,20 @@
   "roomsAvatarChoose": "选择头像",
   "roomsAvatarUpload": "上传图片",
   "roomsAvatarReset": "使用默认头像",
-  "roomsAvatarUploadFailed": "请选择小于 2 MB 的 PNG、JPEG 或 WebP 图片后重试。"
+  "roomsAvatarUploadFailed": "请选择小于 2 MB 的 PNG、JPEG 或 WebP 图片后重试。",
+  "roomsAvatarPresets": "角色预设",
+  "roomsAvatarBodyColor": "身体颜色",
+  "roomsAvatarExpression": "表情",
+  "roomsAvatarHeadwear": "头饰",
+  "roomsAvatarGlasses": "眼镜",
+  "roomsAvatarOutfit": "衣服",
+  "roomsAvatarProp": "道具",
+  "roomsAvatarBackground": "背景",
+  "roomsAvatarCustomize": "头像换装",
+  "roomsAvatarRandom": "随机搭配",
+  "roomsAvatarNone": "无",
+  "roomsAvatarTransparent": "透明",
+  "roomsAvatarCustomBackground": "自定义背景",
+  "roomsAvatarBackgroundColor": "背景 {{color}}",
+  "roomsAvatarConflictsRemoved": "已移除不兼容的配件：{{parts}}。"
 }

@@ -1,0 +1,652 @@
+{
+  "schemaVersion": 1,
+  "version": "1",
+  "canvas": 1024,
+  "anchors": {
+    "faceBox": [
+      232,
+      300,
+      792,
+      860
+    ],
+    "eyeLineY": 584,
+    "beak": [
+      512,
+      666
+    ]
+  },
+  "assets": {
+    "base/sky": {
+      "png": "base/sky.png",
+      "webp": {
+        "128": "128/base/sky.webp",
+        "256": "256/base/sky.webp",
+        "512": "512/base/sky.webp"
+      }
+    },
+    "face/normal": {
+      "png": "face/normal.png",
+      "webp": {
+        "128": "128/face/normal.webp",
+        "256": "256/face/normal.webp",
+        "512": "512/face/normal.webp"
+      }
+    },
+    "face/happy": {
+      "png": "face/happy.png",
+      "webp": {
+        "128": "128/face/happy.webp",
+        "256": "256/face/happy.webp",
+        "512": "512/face/happy.webp"
+      }
+    },
+    "crest/sky": {
+      "png": "crest/sky.png",
+      "webp": {
+        "128": "128/crest/sky.webp",
+        "256": "256/crest/sky.webp",
+        "512": "512/crest/sky.webp"
+      }
+    },
+    "crest/tucked-sky": {
+      "png": "crest/tucked-sky.png",
+      "webp": {
+        "128": "128/crest/tucked-sky.webp",
+        "256": "256/crest/tucked-sky.webp",
+        "512": "512/crest/tucked-sky.webp"
+      }
+    },
+    "wing/sky": {
+      "png": "wing/sky.png",
+      "webp": {
+        "128": "128/wing/sky.webp",
+        "256": "256/wing/sky.webp",
+        "512": "512/wing/sky.webp"
+      }
+    },
+    "headwear/headset": {
+      "png": "headwear/headset.png",
+      "webp": {
+        "128": "128/headwear/headset.webp",
+        "256": "256/headwear/headset.webp",
+        "512": "512/headwear/headset.webp"
+      }
+    },
+    "headwear/headphones": {
+      "png": "headwear/headphones.png",
+      "webp": {
+        "128": "128/headwear/headphones.webp",
+        "256": "256/headwear/headphones.webp",
+        "512": "512/headwear/headphones.webp"
+      }
+    },
+    "glasses/square": {
+      "png": "glasses/square.png",
+      "webp": {
+        "128": "128/glasses/square.webp",
+        "256": "256/glasses/square.webp",
+        "512": "512/glasses/square.webp"
+      }
+    },
+    "glasses/round": {
+      "png": "glasses/round.png",
+      "webp": {
+        "128": "128/glasses/round.webp",
+        "256": "256/glasses/round.webp",
+        "512": "512/glasses/round.webp"
+      }
+    },
+    "glasses/lab": {
+      "png": "glasses/lab.png",
+      "webp": {
+        "128": "128/glasses/lab.webp",
+        "256": "256/glasses/lab.webp",
+        "512": "512/glasses/lab.webp"
+      }
+    },
+    "glasses/rectangular": {
+      "png": "glasses/rectangular.png",
+      "webp": {
+        "128": "128/glasses/rectangular.webp",
+        "256": "256/glasses/rectangular.webp",
+        "512": "512/glasses/rectangular.webp"
+      }
+    },
+    "glasses/cat-eye": {
+      "png": "glasses/cat-eye.png",
+      "webp": {
+        "128": "128/glasses/cat-eye.webp",
+        "256": "256/glasses/cat-eye.webp",
+        "512": "512/glasses/cat-eye.webp"
+      }
+    },
+    "outfit/blue-scarf": {
+      "png": "outfit/blue-scarf.png",
+      "webp": {
+        "128": "128/outfit/blue-scarf.webp",
+        "256": "256/outfit/blue-scarf.webp",
+        "512": "512/outfit/blue-scarf.webp"
+      }
+    },
+    "headwear/detective-hat": {
+      "png": "headwear/detective-hat.png",
+      "webp": {
+        "128": "128/headwear/detective-hat.webp",
+        "256": "256/headwear/detective-hat.webp",
+        "512": "512/headwear/detective-hat.webp"
+      }
+    },
+    "headwear/beret": {
+      "png": "headwear/beret.png",
+      "webp": {
+        "128": "128/headwear/beret.webp",
+        "256": "256/headwear/beret.webp",
+        "512": "512/headwear/beret.webp"
+      }
+    },
+    "headwear/hard-hat": {
+      "png": "headwear/hard-hat.png",
+      "webp": {
+        "128": "128/headwear/hard-hat.webp",
+        "256": "256/headwear/hard-hat.webp",
+        "512": "512/headwear/hard-hat.webp"
+      }
+    },
+    "headwear/baseball-cap": {
+      "png": "headwear/baseball-cap.png",
+      "webp": {
+        "128": "128/headwear/baseball-cap.webp",
+        "256": "256/headwear/baseball-cap.webp",
+        "512": "512/headwear/baseball-cap.webp"
+      }
+    },
+    "headwear/pilot-cap": {
+      "png": "headwear/pilot-cap.png",
+      "webp": {
+        "128": "128/headwear/pilot-cap.webp",
+        "256": "256/headwear/pilot-cap.webp",
+        "512": "512/headwear/pilot-cap.webp"
+      }
+    },
+    "headwear/sailor-hat": {
+      "png": "headwear/sailor-hat.png",
+      "webp": {
+        "128": "128/headwear/sailor-hat.webp",
+        "256": "256/headwear/sailor-hat.webp",
+        "512": "512/headwear/sailor-hat.webp"
+      }
+    },
+    "headwear/straw-hat": {
+      "png": "headwear/straw-hat.png",
+      "webp": {
+        "128": "128/headwear/straw-hat.webp",
+        "256": "256/headwear/straw-hat.webp",
+        "512": "512/headwear/straw-hat.webp"
+      }
+    },
+    "headwear/chef-hat": {
+      "png": "headwear/chef-hat.png",
+      "webp": {
+        "128": "128/headwear/chef-hat.webp",
+        "256": "256/headwear/chef-hat.webp",
+        "512": "512/headwear/chef-hat.webp"
+      }
+    },
+    "headwear/nurse-cap": {
+      "png": "headwear/nurse-cap.png",
+      "webp": {
+        "128": "128/headwear/nurse-cap.webp",
+        "256": "256/headwear/nurse-cap.webp",
+        "512": "512/headwear/nurse-cap.webp"
+      }
+    },
+    "headwear/sports-headband": {
+      "png": "headwear/sports-headband.png",
+      "webp": {
+        "128": "128/headwear/sports-headband.webp",
+        "256": "256/headwear/sports-headband.webp",
+        "512": "512/headwear/sports-headband.webp"
+      }
+    },
+    "headwear/beanie": {
+      "png": "headwear/beanie.png",
+      "webp": {
+        "128": "128/headwear/beanie.webp",
+        "256": "256/headwear/beanie.webp",
+        "512": "512/headwear/beanie.webp"
+      }
+    },
+    "headwear/hood": {
+      "png": "headwear/hood.png",
+      "webp": {
+        "128": "128/headwear/hood.webp",
+        "256": "256/headwear/hood.webp",
+        "512": "512/headwear/hood.webp"
+      }
+    },
+    "headwear/wizard-hat": {
+      "png": "headwear/wizard-hat.png",
+      "webp": {
+        "128": "128/headwear/wizard-hat.webp",
+        "256": "256/headwear/wizard-hat.webp",
+        "512": "512/headwear/wizard-hat.webp"
+      }
+    },
+    "headwear/newsboy-cap": {
+      "png": "headwear/newsboy-cap.png",
+      "webp": {
+        "128": "128/headwear/newsboy-cap.webp",
+        "256": "256/headwear/newsboy-cap.webp",
+        "512": "512/headwear/newsboy-cap.webp"
+      }
+    },
+    "headwear/welding-goggles": {
+      "png": "headwear/welding-goggles.png",
+      "webp": {
+        "128": "128/headwear/welding-goggles.webp",
+        "256": "256/headwear/welding-goggles.webp",
+        "512": "512/headwear/welding-goggles.webp"
+      }
+    },
+    "headwear/laurel": {
+      "png": "headwear/laurel.png",
+      "webp": {
+        "128": "128/headwear/laurel.webp",
+        "256": "256/headwear/laurel.webp",
+        "512": "512/headwear/laurel.webp"
+      }
+    },
+    "headwear/astronaut-helmet": {
+      "png": "headwear/astronaut-helmet.png",
+      "webp": {
+        "128": "128/headwear/astronaut-helmet.webp",
+        "256": "256/headwear/astronaut-helmet.webp",
+        "512": "512/headwear/astronaut-helmet.webp"
+      }
+    },
+    "outfit/black-hoodie": {
+      "png": "outfit/black-hoodie.png",
+      "webp": {
+        "128": "128/outfit/black-hoodie.webp",
+        "256": "256/outfit/black-hoodie.webp",
+        "512": "512/outfit/black-hoodie.webp"
+      }
+    },
+    "outfit/mint-hoodie": {
+      "png": "outfit/mint-hoodie.png",
+      "webp": {
+        "128": "128/outfit/mint-hoodie.webp",
+        "256": "256/outfit/mint-hoodie.webp",
+        "512": "512/outfit/mint-hoodie.webp"
+      }
+    },
+    "outfit/cream-shirt": {
+      "png": "outfit/cream-shirt.png",
+      "webp": {
+        "128": "128/outfit/cream-shirt.webp",
+        "256": "256/outfit/cream-shirt.webp",
+        "512": "512/outfit/cream-shirt.webp"
+      }
+    },
+    "outfit/cardigan": {
+      "png": "outfit/cardigan.png",
+      "webp": {
+        "128": "128/outfit/cardigan.webp",
+        "256": "256/outfit/cardigan.webp",
+        "512": "512/outfit/cardigan.webp"
+      }
+    },
+    "outfit/lab-coat": {
+      "png": "outfit/lab-coat.png",
+      "webp": {
+        "128": "128/outfit/lab-coat.webp",
+        "256": "256/outfit/lab-coat.webp",
+        "512": "512/outfit/lab-coat.webp"
+      }
+    },
+    "outfit/security-jacket": {
+      "png": "outfit/security-jacket.png",
+      "webp": {
+        "128": "128/outfit/security-jacket.webp",
+        "256": "256/outfit/security-jacket.webp",
+        "512": "512/outfit/security-jacket.webp"
+      }
+    },
+    "outfit/red-scarf": {
+      "png": "outfit/red-scarf.png",
+      "webp": {
+        "128": "128/outfit/red-scarf.webp",
+        "256": "256/outfit/red-scarf.webp",
+        "512": "512/outfit/red-scarf.webp"
+      }
+    },
+    "outfit/cream-scarf": {
+      "png": "outfit/cream-scarf.png",
+      "webp": {
+        "128": "128/outfit/cream-scarf.webp",
+        "256": "256/outfit/cream-scarf.webp",
+        "512": "512/outfit/cream-scarf.webp"
+      }
+    },
+    "outfit/night-scarf": {
+      "png": "outfit/night-scarf.png",
+      "webp": {
+        "128": "128/outfit/night-scarf.webp",
+        "256": "256/outfit/night-scarf.webp",
+        "512": "512/outfit/night-scarf.webp"
+      }
+    },
+    "outfit/spacesuit": {
+      "png": "outfit/spacesuit.png",
+      "webp": {
+        "128": "128/outfit/spacesuit.webp",
+        "256": "256/outfit/spacesuit.webp",
+        "512": "512/outfit/spacesuit.webp"
+      }
+    },
+    "outfit/pilot-jacket": {
+      "png": "outfit/pilot-jacket.png",
+      "webp": {
+        "128": "128/outfit/pilot-jacket.webp",
+        "256": "256/outfit/pilot-jacket.webp",
+        "512": "512/outfit/pilot-jacket.webp"
+      }
+    },
+    "outfit/sailor-shirt": {
+      "png": "outfit/sailor-shirt.png",
+      "webp": {
+        "128": "128/outfit/sailor-shirt.webp",
+        "256": "256/outfit/sailor-shirt.webp",
+        "512": "512/outfit/sailor-shirt.webp"
+      }
+    },
+    "outfit/overalls": {
+      "png": "outfit/overalls.png",
+      "webp": {
+        "128": "128/outfit/overalls.webp",
+        "256": "256/outfit/overalls.webp",
+        "512": "512/outfit/overalls.webp"
+      }
+    },
+    "outfit/chef-coat": {
+      "png": "outfit/chef-coat.png",
+      "webp": {
+        "128": "128/outfit/chef-coat.webp",
+        "256": "256/outfit/chef-coat.webp",
+        "512": "512/outfit/chef-coat.webp"
+      }
+    },
+    "outfit/nurse-uniform": {
+      "png": "outfit/nurse-uniform.png",
+      "webp": {
+        "128": "128/outfit/nurse-uniform.webp",
+        "256": "256/outfit/nurse-uniform.webp",
+        "512": "512/outfit/nurse-uniform.webp"
+      }
+    },
+    "outfit/camera-shirt": {
+      "png": "outfit/camera-shirt.png",
+      "webp": {
+        "128": "128/outfit/camera-shirt.webp",
+        "256": "256/outfit/camera-shirt.webp",
+        "512": "512/outfit/camera-shirt.webp"
+      }
+    },
+    "outfit/sports-vest": {
+      "png": "outfit/sports-vest.png",
+      "webp": {
+        "128": "128/outfit/sports-vest.webp",
+        "256": "256/outfit/sports-vest.webp",
+        "512": "512/outfit/sports-vest.webp"
+      }
+    },
+    "outfit/storyteller-cape": {
+      "png": "outfit/storyteller-cape.png",
+      "webp": {
+        "128": "128/outfit/storyteller-cape.webp",
+        "256": "256/outfit/storyteller-cape.webp",
+        "512": "512/outfit/storyteller-cape.webp"
+      }
+    },
+    "outfit/wizard-cape": {
+      "png": "outfit/wizard-cape.png",
+      "webp": {
+        "128": "128/outfit/wizard-cape.webp",
+        "256": "256/outfit/wizard-cape.webp",
+        "512": "512/outfit/wizard-cape.webp"
+      }
+    },
+    "outfit/coffee-apron": {
+      "png": "outfit/coffee-apron.png",
+      "webp": {
+        "128": "128/outfit/coffee-apron.webp",
+        "256": "256/outfit/coffee-apron.webp",
+        "512": "512/outfit/coffee-apron.webp"
+      }
+    },
+    "outfit/tool-apron": {
+      "png": "outfit/tool-apron.png",
+      "webp": {
+        "128": "128/outfit/tool-apron.webp",
+        "256": "256/outfit/tool-apron.webp",
+        "512": "512/outfit/tool-apron.webp"
+      }
+    },
+    "outfit/mailbag": {
+      "png": "outfit/mailbag.png",
+      "webp": {
+        "128": "128/outfit/mailbag.webp",
+        "256": "256/outfit/mailbag.webp",
+        "512": "512/outfit/mailbag.webp"
+      }
+    },
+    "outfit/robe": {
+      "png": "outfit/robe.png",
+      "webp": {
+        "128": "128/outfit/robe.webp",
+        "256": "256/outfit/robe.webp",
+        "512": "512/outfit/robe.webp"
+      }
+    },
+    "outfit/storyteller-cape.back": {
+      "png": "outfit/storyteller-cape.back.png",
+      "webp": {
+        "128": "128/outfit/storyteller-cape.back.webp",
+        "256": "256/outfit/storyteller-cape.back.webp",
+        "512": "512/outfit/storyteller-cape.back.webp"
+      }
+    },
+    "outfit/wizard-cape.back": {
+      "png": "outfit/wizard-cape.back.png",
+      "webp": {
+        "128": "128/outfit/wizard-cape.back.webp",
+        "256": "256/outfit/wizard-cape.back.webp",
+        "512": "512/outfit/wizard-cape.back.webp"
+      }
+    },
+    "headwear/astronaut-helmet.back": {
+      "png": "headwear/astronaut-helmet.back.png",
+      "webp": {
+        "128": "128/headwear/astronaut-helmet.back.webp",
+        "256": "256/headwear/astronaut-helmet.back.webp",
+        "512": "512/headwear/astronaut-helmet.back.webp"
+      }
+    },
+    "headwear/hood.back": {
+      "png": "headwear/hood.back.png",
+      "webp": {
+        "128": "128/headwear/hood.back.webp",
+        "256": "256/headwear/hood.back.webp",
+        "512": "512/headwear/hood.back.webp"
+      }
+    },
+    "prop/magnifier": {
+      "png": "prop/magnifier.png",
+      "webp": {
+        "128": "128/prop/magnifier.webp",
+        "256": "256/prop/magnifier.webp",
+        "512": "512/prop/magnifier.webp"
+      }
+    },
+    "prop/paintbrush": {
+      "png": "prop/paintbrush.png",
+      "webp": {
+        "128": "128/prop/paintbrush.webp",
+        "256": "256/prop/paintbrush.webp",
+        "512": "512/prop/paintbrush.webp"
+      }
+    },
+    "prop/flask": {
+      "png": "prop/flask.png",
+      "webp": {
+        "128": "128/prop/flask.webp",
+        "256": "256/prop/flask.webp",
+        "512": "512/prop/flask.webp"
+      }
+    },
+    "prop/quill": {
+      "png": "prop/quill.png",
+      "webp": {
+        "128": "128/prop/quill.webp",
+        "256": "256/prop/quill.webp",
+        "512": "512/prop/quill.webp"
+      }
+    },
+    "prop/notebook": {
+      "png": "prop/notebook.png",
+      "webp": {
+        "128": "128/prop/notebook.webp",
+        "256": "256/prop/notebook.webp",
+        "512": "512/prop/notebook.webp"
+      }
+    },
+    "prop/wrench": {
+      "png": "prop/wrench.png",
+      "webp": {
+        "128": "128/prop/wrench.webp",
+        "256": "256/prop/wrench.webp",
+        "512": "512/prop/wrench.webp"
+      }
+    },
+    "prop/book": {
+      "png": "prop/book.png",
+      "webp": {
+        "128": "128/prop/book.webp",
+        "256": "256/prop/book.webp",
+        "512": "512/prop/book.webp"
+      }
+    },
+    "prop/leaf": {
+      "png": "prop/leaf.png",
+      "webp": {
+        "128": "128/prop/leaf.webp",
+        "256": "256/prop/leaf.webp",
+        "512": "512/prop/leaf.webp"
+      }
+    },
+    "prop/camera": {
+      "png": "prop/camera.png",
+      "webp": {
+        "128": "128/prop/camera.webp",
+        "256": "256/prop/camera.webp",
+        "512": "512/prop/camera.webp"
+      }
+    },
+    "base/teal": {
+      "png": "base/teal.png",
+      "webp": {
+        "128": "128/base/teal.webp",
+        "256": "256/base/teal.webp",
+        "512": "512/base/teal.webp"
+      }
+    },
+    "crest/teal": {
+      "png": "crest/teal.png",
+      "webp": {
+        "128": "128/crest/teal.webp",
+        "256": "256/crest/teal.webp",
+        "512": "512/crest/teal.webp"
+      }
+    },
+    "crest/tucked-teal": {
+      "png": "crest/tucked-teal.png",
+      "webp": {
+        "128": "128/crest/tucked-teal.webp",
+        "256": "256/crest/tucked-teal.webp",
+        "512": "512/crest/tucked-teal.webp"
+      }
+    },
+    "wing/teal": {
+      "png": "wing/teal.png",
+      "webp": {
+        "128": "128/wing/teal.webp",
+        "256": "256/wing/teal.webp",
+        "512": "512/wing/teal.webp"
+      }
+    },
+    "base/periwinkle": {
+      "png": "base/periwinkle.png",
+      "webp": {
+        "128": "128/base/periwinkle.webp",
+        "256": "256/base/periwinkle.webp",
+        "512": "512/base/periwinkle.webp"
+      }
+    },
+    "crest/periwinkle": {
+      "png": "crest/periwinkle.png",
+      "webp": {
+        "128": "128/crest/periwinkle.webp",
+        "256": "256/crest/periwinkle.webp",
+        "512": "512/crest/periwinkle.webp"
+      }
+    },
+    "crest/tucked-periwinkle": {
+      "png": "crest/tucked-periwinkle.png",
+      "webp": {
+        "128": "128/crest/tucked-periwinkle.webp",
+        "256": "256/crest/tucked-periwinkle.webp",
+        "512": "512/crest/tucked-periwinkle.webp"
+      }
+    },
+    "wing/periwinkle": {
+      "png": "wing/periwinkle.png",
+      "webp": {
+        "128": "128/wing/periwinkle.webp",
+        "256": "256/wing/periwinkle.webp",
+        "512": "512/wing/periwinkle.webp"
+      }
+    },
+    "base/mint": {
+      "png": "base/mint.png",
+      "webp": {
+        "128": "128/base/mint.webp",
+        "256": "256/base/mint.webp",
+        "512": "512/base/mint.webp"
+      }
+    },
+    "crest/mint": {
+      "png": "crest/mint.png",
+      "webp": {
+        "128": "128/crest/mint.webp",
+        "256": "256/crest/mint.webp",
+        "512": "512/crest/mint.webp"
+      }
+    },
+    "crest/tucked-mint": {
+      "png": "crest/tucked-mint.png",
+      "webp": {
+        "128": "128/crest/tucked-mint.webp",
+        "256": "256/crest/tucked-mint.webp",
+        "512": "512/crest/tucked-mint.webp"
+      }
+    },
+    "wing/mint": {
+      "png": "wing/mint.png",
+      "webp": {
+        "128": "128/wing/mint.webp",
+        "256": "256/wing/mint.webp",
+        "512": "512/wing/mint.webp"
+      }
+    }
+  }
+}

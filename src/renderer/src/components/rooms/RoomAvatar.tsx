@@ -6,6 +6,7 @@ import avatarAtlas from '../../../../asset/img/room-avatars/kun-avatar-atlas.png
 import { avatarForIdentity, ROOM_AVATARS, ROOM_AVATAR_BACKGROUND_SIZE } from './room-avatar-catalog'
 import './rooms-avatars.css'
 import { useRoomUploadedAvatar } from './room-uploaded-avatar'
+import { useRoomComposedAvatar } from './room-avatar-composed'
 
 const tones = [
   'var(--ds-accent)',
@@ -61,6 +62,7 @@ export function RoomAvatar({
   const isUser = user || identity === 'user'
   const reference = avatar !== undefined ? avatar : isUser ? profileAvatar : member?.avatar
   const uploaded = useRoomUploadedAvatar(reference?.kind === 'uploaded' ? reference.attachmentId : undefined)
+  const composed = useRoomComposedAvatar(reference?.kind === 'composed' ? reference : undefined, size)
   const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(() => new Set())
   const builtinId = reference?.kind === 'builtin' ? reference.id : undefined
   const selected = ROOM_AVATARS.find((item) => item.id === builtinId)
@@ -68,13 +70,17 @@ export function RoomAvatar({
   const compact = size <= 48
   const style = {
     '--rooms-avatar-size': `${size / 16}rem`,
-    '--rooms-avatar-tone': identityTone(identity)
+    '--rooms-avatar-tone': identityTone(identity),
+    background: reference?.kind === 'composed' && reference.parts.bg === 'transparent' ? 'transparent' : undefined
   } as CSSProperties
-  const image = uploaded && !failedImages.has(uploaded) ? uploaded : isUser && !selected && !failedImages.has(kunGreet) ? kunGreet : undefined
+  const image = composed && !failedImages.has(composed) ? composed
+    : uploaded && !failedImages.has(uploaded) ? uploaded
+    : isUser && !selected && !failedImages.has(kunGreet) ? kunGreet : undefined
   const content = (
     <>
       {image ? (
         <img key={image} className={`rooms-avatar-art ${image === kunGreet ? 'rooms-user-kun' : 'object-cover'}`}
+          data-composed={image === composed || undefined}
           src={image} alt="" aria-hidden="true" onError={() => setFailedImages((failed) => new Set([...failed, image]))} />
       ) : (
         <RoomAvatarPortrait index={selected?.index ?? avatarForIdentity(identity).index} />

@@ -24,5 +24,20 @@
   "roomsAvatarChoose": "Choose avatar",
   "roomsAvatarUpload": "Upload image",
   "roomsAvatarReset": "Use default avatar",
-  "roomsAvatarUploadFailed": "Choose a PNG, JPEG, or WebP image smaller than 2 MB and try again."
+  "roomsAvatarUploadFailed": "Choose a PNG, JPEG, or WebP image smaller than 2 MB and try again.",
+  "roomsAvatarPresets": "Characters",
+  "roomsAvatarBodyColor": "Body color",
+  "roomsAvatarExpression": "Expression",
+  "roomsAvatarHeadwear": "Headwear",
+  "roomsAvatarGlasses": "Glasses",
+  "roomsAvatarOutfit": "Clothes",
+  "roomsAvatarProp": "Props",
+  "roomsAvatarBackground": "Background",
+  "roomsAvatarCustomize": "Customize avatar",
+  "roomsAvatarRandom": "Randomize",
+  "roomsAvatarNone": "None",
+  "roomsAvatarTransparent": "Transparent",
+  "roomsAvatarCustomBackground": "Custom background",
+  "roomsAvatarBackgroundColor": "Background {{color}}",
+  "roomsAvatarConflictsRemoved": "Removed incompatible items: {{parts}}."
 }

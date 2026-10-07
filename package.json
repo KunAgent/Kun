@@ -17,7 +17,7 @@
     "dev:production": "node ./scripts/run-with-kun-flavor.cjs production npm run dev:app",
     "dev:tui": "npm run build:kun && node ./kun/dist/cli/serve-entry.js tui",
     "dev:tui:dv": "node ./scripts/run-with-kun-flavor.cjs development npm run dev:tui",
-    "build": "npm run build:extensions && npm run build:kun && npm run check:bundled-skills && npm run build:bundled-extensions && node ./scripts/run-electron-vite-build.cjs && npm run check:packaged-runtime-deps && npm run check:built-preload",
+    "build": "npm run check:avatar-assets && npm run build:extensions && npm run build:kun && npm run check:bundled-skills && npm run build:bundled-extensions && node ./scripts/run-electron-vite-build.cjs && npm run check:packaged-runtime-deps && npm run check:built-preload",
     "build:dv": "node ./scripts/run-with-kun-flavor.cjs development npm run build",
     "build:kun": "npm run build --workspace @kun/provider-catalog && npm run build --workspace @kun/extension-api && node ./scripts/ensure-kun-install.cjs && npm --prefix kun run build",
     "smoke:dual-runtime": "npm run build:kun && node ./scripts/smoke-dual-runtime.mjs",
@@ -104,7 +104,11 @@
     "typecheck:kun": "node ./scripts/ensure-kun-install.cjs && npm --prefix kun run typecheck",
     "prepare:whisper": "node ./scripts/prepare-whisper-runner.cjs",
     "prepare:officecli": "node ./scripts/prepare-officecli.cjs",
-    "mac:unquarantine": "bash ./scripts/mac-unquarantine.sh"
+    "mac:unquarantine": "bash ./scripts/mac-unquarantine.sh",
+    "generate:avatar-assets": "node scripts/build-kun-avatar-assets.mjs",
+    "check:avatar-assets": "node scripts/kun-avatar-compose-check.mjs --check-only",
+    "test:avatar-assets": "node --test scripts/kun-avatar-compose-check.test.mjs",
+    "smoke:avatar": "node scripts/smoke-kun-avatar.mjs"
   },
   "dependencies": {
     "@computer-use/nut-js": "^4.2.0",

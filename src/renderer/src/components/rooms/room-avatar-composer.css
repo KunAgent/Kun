@@ -1,0 +1,38 @@
+.rooms-avatar-composer { display: grid; gap: 12px; min-width: 0; color: var(--ds-text); }
+.rooms-avatar-picker-field > button { min-height: 44px; }
+.rooms-avatar-composer button, .rooms-avatar-composer select, .rooms-avatar-draft-actions button { min-height: 44px; }
+.rooms-avatar-composer button:focus-visible, .rooms-avatar-composer select:focus-visible, .rooms-avatar-composer input:focus-visible,
+.rooms-avatar-draft-actions button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.rooms-avatar-composer button:disabled { opacity: .55; cursor: wait; }
+.rooms-avatar-composer-preview { display: flex; justify-content: center; align-items: center; gap: 24px; }
+.rooms-avatar-composer-preview > button, .rooms-avatar-composer-actions > button, .rooms-avatar-draft-actions > button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px;
+  border: 1px solid var(--ds-border); border-radius: 10px; font-size: 13px; color: var(--ds-text);
+}
+.rooms-avatar-composer-preview img { width: 128px; height: 128px; object-fit: cover; border-radius: 12px; }
+.rooms-avatar-composer-category { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+.rooms-avatar-composer-category select { min-width: 160px; max-width: 70%; padding: 8px 12px; border: 1px solid var(--ds-border); border-radius: 9px; background: var(--ds-surface-card); color: var(--ds-text); }
+.rooms-avatar-composer-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 8px; max-height: 270px; overflow: auto; padding: 3px; overscroll-behavior: contain; }
+.rooms-avatar-composer-option { display: flex; position: relative; flex-direction: column; align-items: center; justify-content: start; gap: 5px; min-width: 0; padding: 7px 3px; border: 2px solid transparent; border-radius: 12px; background: var(--ds-surface-subtle); }
+.rooms-avatar-composer .rooms-avatar-composer-option { min-height: 108px; height: auto; }
+.rooms-avatar-composer-option > span:last-of-type { font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+.rooms-avatar-composer-option > svg { position: absolute; top: 4px; right: 4px; padding: 1px; color: var(--ds-control-foreground); background: var(--ds-accent); border-radius: 50%; }
+.rooms-avatar-composer-options button[aria-pressed='true'] { border-color: var(--ds-accent); }
+.rooms-avatar-composer-options button:hover, .rooms-avatar-composer-actions > button:hover { box-shadow: inset 0 0 0 1px var(--ds-border); }
+.rooms-avatar-composer-swatch { display: grid; place-items: center; min-height: 52px !important; border: 2px solid var(--ds-border); border-radius: 10px; color: #111; }
+.rooms-avatar-composer-swatch > svg { padding: 2px; background: #fff; border-radius: 50%; }
+.rooms-avatar-composer-transparent { border: 2px solid var(--ds-border); border-radius: 10px; padding: 7px; font-size: 12px; background-color: var(--ds-surface-subtle); }
+.rooms-avatar-composer-custom-color { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; align-items: center; font-size: 13px; }
+.rooms-avatar-composer-custom-color input { width: 76px; height: 44px; padding: 3px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-surface-card); }
+.rooms-avatar-composer-notice { margin: 0; min-height: 1em; font-size: 12px; color: var(--ds-text-muted); }
+.rooms-avatar-composer-actions, .rooms-avatar-draft-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.rooms-avatar-draft { display: grid; gap: 12px; min-width: 0; }
+.rooms-avatar-draft > small { color: var(--ds-text-muted); }
+.rooms-avatar-draft-actions { padding-top: 8px; }
+.rooms-avatar-draft-actions > .rooms-run-primary { color: var(--ds-control-foreground); background: var(--ds-accent); }
+.rooms-user-avatar-form .rooms-avatar-editor-actions > button { min-height: 44px; }
+@media (max-width: 480px) {
+  .rooms-avatar-composer-options { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); max-height: 240px; gap: 6px; }
+  .rooms-avatar-composer-preview { gap: 16px; }
+  .rooms-avatar-composer-actions > button { flex: 1; padding-inline: 8px; }
+}

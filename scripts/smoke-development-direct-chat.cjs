@@ -13,6 +13,7 @@ const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
 const { exerciseRoomApprovals } = require('./smoke-room-approvals.cjs')
 const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
 const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
+const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-controls.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -49,6 +50,8 @@ async function main() {
     'Personal workspace evidence must stay offline')
   assert(!(process.argv.includes('--agent-models-only') && process.argv.includes('--real-model')),
     'Agent model controls evidence must stay offline')
+  assert(!(process.argv.includes('--avatar-only') && process.argv.includes('--real-model')),
+    'Layered avatar evidence must stay offline')
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 180_000)
   const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'rooms-direct-smoke'))
   for (const entry of ['out/main/index.js', 'kun/dist/cli/serve-entry.js']) {
@@ -166,6 +169,7 @@ async function main() {
       : process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
       : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
+      : process.argv.includes('--avatar-only') ? exerciseLayeredAvatarControls
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
       : process.argv.includes('--approvals') ? exerciseRoomApprovals

@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import { ROOM_BUILTIN_AVATAR_IDS } from './kun-avatar-presets.js'
+import { KunComposedAvatarReferenceSchema } from './kun-avatar-schema.js'
+
+export { ROOM_BUILTIN_AVATAR_IDS } from './kun-avatar-presets.js'
 
 const Id = z.string().min(1).max(256)
 const titleSnapshot = z.string().max(300).optional()
@@ -20,13 +24,10 @@ export const RoomContentReferenceSchema = z.discriminatedUnion('kind', [
 ])
 export type RoomContentReference = z.infer<typeof RoomContentReferenceSchema>
 
-export const ROOM_BUILTIN_AVATAR_IDS = ['coordinator', 'coder', 'reviewer', 'detective', 'designer', 'architect',
-  'scientist', 'security', 'writer', 'researcher', 'data', 'operations', 'astronaut', 'pilot', 'navigator',
-  'librarian', 'musician', 'gardener', 'chef', 'medic', 'photographer', 'athlete', 'explorer', 'storyteller',
-  'magician', 'night-thinker', 'barista', 'maker', 'courier', 'strategist'] as const
 export const RoomAvatarReferenceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('builtin'), id: z.enum(ROOM_BUILTIN_AVATAR_IDS) }).strict(),
-  z.object({ kind: z.literal('uploaded'), attachmentId: z.string().regex(/^att_[a-f0-9]{24}$/) }).strict()
+  z.object({ kind: z.literal('uploaded'), attachmentId: z.string().regex(/^att_[a-f0-9]{24}$/) }).strict(),
+  KunComposedAvatarReferenceSchema
 ])
 export type RoomAvatarReference = z.infer<typeof RoomAvatarReferenceSchema>
 export const RoomAvatarAssetSchema = z.object({

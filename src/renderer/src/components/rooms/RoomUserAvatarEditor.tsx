@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RoomAvatarReference, RoomPreviewImage, RoomUserProfileDetail } from '@shared/rooms-api'
 import { RoomModal } from './RoomModal'
-import { RoomAvatar, RoomAvatarPortrait } from './RoomAvatar'
-import { ROOM_AVATARS } from './room-avatar-catalog'
+import { RoomAvatarComposer } from './RoomAvatarComposer'
 import { roomsRequest, roomRequestId } from './rooms-client'
 import { cacheRoomAvatar } from './room-uploaded-avatar'
 import { acceptRoomUserProfile } from './room-user-profile'
@@ -40,7 +39,7 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
   useEffect(renderPreview, [source, position])
   const chooseFile = async (selected: File) => {
     const serial = ++loadSerial.current
-    setError('')
+    setBusy(true); onBusy(true); setError('')
     try {
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(selected.type) || selected.size > 2 * 1024 * 1024) throw new Error('unsupported')
       const bitmap = await createImageBitmap(selected)
@@ -48,6 +47,7 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
       if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > 16 * 1024 * 1024) { bitmap.close(); throw new Error('unsupported') }
       setPosition({ x: 50, y: 50 }); setSource(bitmap)
     } catch { if (mounted.current && serial === loadSerial.current) setError(t('roomsAvatarInvalidFile')) }
+    finally { if (mounted.current && serial === loadSerial.current) { setBusy(false); onBusy(false) } }
   }
   const save = async () => {
     if (busy) return
@@ -72,25 +72,19 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
   }
   const select = (next: RoomAvatarReference | null) => { loadSerial.current++; setSource(null); setAvatar(next); setError('') }
   return <div className="rooms-user-avatar-form">
-    <div className="rooms-avatar-preview">{source ? <canvas width={256} height={256} ref={preview} aria-label={t('roomsAvatarCropPreview')} /> :
-      <RoomAvatar id="user-preview" user avatar={avatar} label={t('roomsMyAvatar')} size={128} />}</div>
-    {source ? <div className="rooms-avatar-crop-controls">
-      <label>{t('roomsAvatarCropHorizontal')}<input type="range" min="0" max="100" value={position.x} disabled={busy} onChange={(e) => setPosition({ ...position, x: Number(e.target.value) })} /></label>
-      <label>{t('roomsAvatarCropVertical')}<input type="range" min="0" max="100" value={position.y} disabled={busy} onChange={(e) => setPosition({ ...position, y: Number(e.target.value) })} /></label>
-    </div> : null}
-    <div className="rooms-avatar-picker-grid">{ROOM_AVATARS.map((portrait) => <button type="button" key={portrait.id} className="rooms-avatar-picker-option"
-      disabled={busy} aria-label={portrait.label} aria-pressed={!source && avatar?.kind === 'builtin' && avatar.id === portrait.id}
-      onClick={() => select({ kind: 'builtin', id: portrait.id })}><RoomAvatarPortrait index={portrait.index} /></button>)}</div>
-    <div className="rooms-avatar-editor-actions">
-      <button type="button" disabled={busy} onClick={() => file.current?.click()}>{t('roomsAvatarUpload')}</button>
-      <button type="button" disabled={busy} onClick={() => select(null)}>{t('roomsAvatarRestoreKun')}</button>
-    </div>
+    <RoomAvatarComposer id="user-preview" label={t('roomsMyAvatar')} avatar={avatar} user disabled={busy} photo={!!source}
+      onChange={select} onUpload={() => file.current?.click()}
+      preview={source ? <div className="rooms-avatar-preview"><canvas width={256} height={256} ref={preview} aria-label={t('roomsAvatarCropPreview')} /></div> : undefined}
+      previewControls={source ? <div className="rooms-avatar-crop-controls">
+        <label>{t('roomsAvatarCropHorizontal')}<input type="range" min="0" max="100" value={position.x} disabled={busy} onChange={(e) => setPosition({ ...position, x: Number(e.target.value) })} /></label>
+        <label>{t('roomsAvatarCropVertical')}<input type="range" min="0" max="100" value={position.y} disabled={busy} onChange={(e) => setPosition({ ...position, y: Number(e.target.value) })} /></label>
+      </div> : undefined} />
     <input ref={file} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
       const selected = e.target.files?.[0]; e.target.value = ''; if (selected) void chooseFile(selected)
     }} />
     <small>{t('roomsAvatarFileHint')}</small>
     {error ? <p role="alert" className="rooms-run-error">{error}</p> : null}
-    <div className="rooms-avatar-editor-actions"><button type="button" disabled={busy} onClick={onClose}>{t('roomsCancel')}</button>
+    <div className="rooms-avatar-draft-actions"><button type="button" disabled={busy} onClick={onClose}>{t('roomsCancel')}</button>
       <button type="button" className="rooms-run-primary" disabled={busy} onClick={() => void save()}>{t(busy ? 'roomsLoading' : 'agentsSave')}</button></div>
   </div>
 }
