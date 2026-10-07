@@ -7,7 +7,6 @@ import type {
   AdeCollaborationSettingsMutationResult
 } from '@shared/ade-collaboration-settings'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
-import { AdeLabSettingsPanel } from './settings-section-lab-ade'
 import { AgentsCollaborationSettingsPanel, collaborationApplyLabelKey } from './settings-section-agents-collaboration'
 import { AgentsHarnessesSettingsPanel } from './settings-section-agents-harnesses'
 import { WorktreeSettingsSection } from './settings-section-worktree'
@@ -76,34 +75,6 @@ function makeHarnessRow(id: string, builtin = true): AdeHarnessRow {
   }
 }
 
-describe('AdeLabSettingsPanel', () => {
-  it('keeps only the feature gates in Laboratory', () => {
-    const updateKun = vi.fn()
-    const kun = defaultKunRuntimeSettings()
-    let renderer: ReactTestRenderer
-    act(() => {
-      renderer = create(createElement(AdeLabSettingsPanel, {
-        view: { t, kun, updateKun }
-      }))
-    })
-    const switches = renderer!.root.findAllByProps({ role: 'switch' })
-    expect(switches).toHaveLength(3)
-    act(() => switches[0].props.onClick())
-    expect(updateKun).toHaveBeenCalledWith({ ade: { enabled: true } })
-    const saved = { ...kun, ade: { ...kun.ade, enabled: true } }
-    act(() => renderer!.unmount())
-    act(() => {
-      renderer = create(createElement(AdeLabSettingsPanel, {
-        view: { t, kun: saved, updateKun }
-      }))
-    })
-    const reopened = renderer!.root.findAllByProps({ role: 'switch' })
-    expect(reopened[0].props['aria-checked']).toBe(true)
-    act(() => renderer!.unmount())
-  })
-
-})
-
 describe('AgentsCollaborationSettingsPanel', () => {
   const revision = `ade-collaboration-v1:${'a'.repeat(64)}`
   const savedRevision = `ade-collaboration-v1:${'b'.repeat(64)}`
@@ -160,6 +131,22 @@ describe('AgentsCollaborationSettingsPanel', () => {
     expect(saveRequest).toHaveBeenCalledWith({
       expectedRevision: revision,
       value: expect.objectContaining({ limits: { softWorkers: 6, hardWorkers: 8 } })
+    })
+    act(() => renderer.unmount())
+  })
+
+  it('saves the routing rollback switches with the collaboration object', async () => {
+    const saveRequest = vi.fn(async (request: AdeCollaborationSettingsMutation) => ({
+      ok: true as const, value: request.value, revision: savedRevision, generation: 5
+    }))
+    const renderer = await renderPanel(saveRequest)
+    const router = renderer.root.findByProps({ role: 'switch', 'aria-label': 'adeSettings.harnessRouter' })
+    expect(router.props['aria-checked']).toBe(true)
+    act(() => router.props.onClick())
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).toHaveBeenCalledWith({
+      expectedRevision: revision,
+      value: expect.objectContaining({ harnessRouter: false, deterministicHandoff: true })
     })
     act(() => renderer.unmount())
   })

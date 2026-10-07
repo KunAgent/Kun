@@ -8,6 +8,9 @@ export type AdeCollaborationSettingsValue = {
   budget?: { softTokens?: number; hardTokens?: number }
   hibernation: { enabled: boolean; idleMinutes: number }
   stall: { structuredMinutes: number; terminalMinutes: number }
+  /** Rollback switches for harness-aware turn routing and deterministic handoff briefs. */
+  harnessRouter: boolean
+  deterministicHandoff: boolean
 }
 
 export type AdeCollaborationSettingsSnapshot = {

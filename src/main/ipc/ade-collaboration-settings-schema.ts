@@ -27,7 +27,9 @@ export const adeCollaborationMutationSchema = z.object({
     stall: z.object({
       structuredMinutes: z.number().int().min(1).max(240),
       terminalMinutes: z.number().int().min(1).max(480)
-    }).strict()
+    }).strict(),
+    harnessRouter: z.boolean(),
+    deterministicHandoff: z.boolean()
   }).strict().superRefine((value, context) => {
     if (value.limits.softWorkers > value.limits.hardWorkers) {
       context.addIssue({ code: 'custom', path: ['limits'], message: 'Suggested workers exceed the active limit.' })

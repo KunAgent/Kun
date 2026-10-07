@@ -23,13 +23,15 @@ function valueFromAde(ade: KunAdeSettingsV1): AdeCollaborationSettingsValue {
     limits: { ...ade.limits },
     ...(ade.budget ? { budget: { ...ade.budget } } : {}),
     hibernation: { ...ade.hibernation },
-    stall: { ...ade.stall }
+    stall: { ...ade.stall },
+    harnessRouter: ade.harnessRouter,
+    deterministicHandoff: ade.deterministicHandoff
   }
 }
 
 export function adeCollaborationSnapshot(settings: AppSettingsV1): AdeCollaborationSettingsSnapshot {
   const value = valueFromAde(getKunRuntimeSettings(settings).ade ?? defaultKunAdeSettings())
-  // Projection fixes key order and excludes notifications/internal routing.
+  // Projection fixes key order and excludes notifications.
   const revision = `ade-collaboration-v1:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`
   return { value, revision }
 }
@@ -74,7 +76,9 @@ export function createAdeCollaborationSettingsService(options: {
             limits: request.value.limits,
             budget: request.value.budget ?? null,
             hibernation: request.value.hibernation,
-            stall: request.value.stall
+            stall: request.value.stall,
+            harnessRouter: request.value.harnessRouter,
+            deterministicHandoff: request.value.deterministicHandoff
           } } }
         })
         const validationError = validateRuntimeSettingsForApply(next)

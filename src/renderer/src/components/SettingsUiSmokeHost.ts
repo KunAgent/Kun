@@ -57,7 +57,8 @@ export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
       managerMayApprove: ade.managerMayApprove,
       allowUnattendedFullAccess: ade.allowUnattendedFullAccess,
       limits: clone(ade.limits), budget: clone(ade.budget),
-      hibernation: clone(ade.hibernation), stall: clone(ade.stall)
+      hibernation: clone(ade.hibernation), stall: clone(ade.stall),
+      harnessRouter: ade.harnessRouter, deterministicHandoff: ade.deterministicHandoff
     }
   }
 

@@ -59,6 +59,20 @@ describe('conditional ADE collaboration settings', () => {
     expect((await store.load()).agents.kun.ade.notifications.waiting).toBe(false)
   })
 
+  it('persists the routing rollback switches', async () => {
+    const { store, service } = await fixture()
+    const initial = await service.get()
+    expect(initial.value).toMatchObject({ harnessRouter: true, deterministicHandoff: true })
+    const result = await service.save({
+      expectedRevision: initial.revision,
+      value: { ...initial.value, harnessRouter: false, deterministicHandoff: false }
+    })
+    expect(result).toMatchObject({ ok: true, value: { harnessRouter: false, deterministicHandoff: false } })
+    const ade = (await store.load()).agents.kun.ade
+    expect(ade.harnessRouter).toBe(false)
+    expect(ade.deterministicHandoff).toBe(false)
+  })
+
   it('keeps a failed persistence from reserving an application generation', async () => {
     const { store, service, onCommitted } = await fixture()
     const initial = await service.get()

@@ -43,6 +43,8 @@ type Draft = {
   idleMinutes: string
   structuredMinutes: string
   terminalMinutes: string
+  harnessRouter: boolean
+  deterministicHandoff: boolean
 }
 
 // The settings category unmounts when users visit Providers or Worktrees.
@@ -63,7 +65,9 @@ function draftFrom(ade: AdeCollaborationSettingsValue): Draft {
     hibernationEnabled: ade.hibernation.enabled,
     idleMinutes: String(ade.hibernation.idleMinutes),
     structuredMinutes: String(ade.stall.structuredMinutes),
-    terminalMinutes: String(ade.stall.terminalMinutes)
+    terminalMinutes: String(ade.stall.terminalMinutes),
+    harnessRouter: ade.harnessRouter,
+    deterministicHandoff: ade.deterministicHandoff
   }
 }
 
@@ -103,7 +107,9 @@ function draftValue(
     limits: { softWorkers, hardWorkers },
     ...(softTokens === undefined && hardTokens === undefined ? {} : { budget: { softTokens, hardTokens } }),
     hibernation: { enabled: draft.hibernationEnabled, idleMinutes },
-    stall: { structuredMinutes, terminalMinutes }
+    stall: { structuredMinutes, terminalMinutes },
+    harnessRouter: draft.harnessRouter,
+    deterministicHandoff: draft.deterministicHandoff
   }
 }
 
@@ -388,6 +394,29 @@ export function AgentsCollaborationSettingsPanel({ view }: { view: Collaboration
                   {numberInput('structuredMinutes', t('adeSettings.stallStructured'), 240)}
                   {numberInput('terminalMinutes', t('adeSettings.stallTerminal'), 480)}
                 </div>
+              }
+            />
+          </div>
+        </details>
+        <details className="mt-4 border-t border-ds-border-muted pt-4">
+          <summary className="cursor-pointer text-[13px] font-medium text-ds-ink">
+            {t('adeSettings.collaborationRouting')}
+          </summary>
+          <div className="mt-2">
+            <SettingRow
+              title={t('adeSettings.harnessRouter')}
+              description={t('adeSettings.harnessRouterDesc')}
+              control={
+                <Toggle checked={draft.harnessRouter} ariaLabel={t('adeSettings.harnessRouter')}
+                  onChange={(value) => edit('harnessRouter', value)} />
+              }
+            />
+            <SettingRow
+              title={t('adeSettings.deterministicHandoff')}
+              description={t('adeSettings.deterministicHandoffDesc')}
+              control={
+                <Toggle checked={draft.deterministicHandoff} ariaLabel={t('adeSettings.deterministicHandoff')}
+                  onChange={(value) => edit('deterministicHandoff', value)} />
               }
             />
           </div>
