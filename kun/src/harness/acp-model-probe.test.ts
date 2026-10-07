@@ -67,6 +67,18 @@ describe('AcpModelProbe', () => {
     other.dispose()
   })
 
+  it('serves a catalog seeded by the readiness handshake without starting the Agent', async () => {
+    const f = await sequence(working)
+    const probe = new AcpModelProbe({ spawn: f.spawnFixture, retryDelayMs: 0, log: () => undefined })
+    probe.seed(opencode, { models: ['seeded-model'], modelInfo: [{ id: 'seeded-model' }] })
+    expect(probe.peek(opencode)).toEqual(['seeded-model'])
+    expect((await probe.probeCatalog(opencode)).models).toEqual(['seeded-model'])
+    expect(f.spawned()).toBe(0)
+    probe.seed(devin, { models: [], modelInfo: [] })
+    expect(probe.peek(devin)).toBeUndefined()
+    probe.dispose()
+  })
+
   it('reports the categorical agent error instead of an indistinguishable empty list', async () => {
     const f = await sequence(failing, failing)
     const lines: string[] = []

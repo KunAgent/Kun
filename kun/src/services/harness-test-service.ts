@@ -120,11 +120,13 @@ async function runHandshake(
       ? detectStatus.resolvedCommand
       : (definition.launch?.command ?? definition.detect?.command ?? definition.id)
   switch (definition.transport) {
-    case 'acp':
-      return probeAcpHandshake(definition, command, {
+    case 'acp': {
+      const { catalog: _catalog, ...handshake } = await probeAcpHandshake(definition, command, {
         resolveSecretEnv: runtime.harnesses?.resolveSecretEnv,
         signal
       })
+      return handshake
+    }
     case 'codex-app-server':
       return probeCodexHandshake(definition, command, {
         resolveSecretEnv: runtime.harnesses?.resolveSecretEnv,

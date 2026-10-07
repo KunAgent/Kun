@@ -1,6 +1,9 @@
 import { providerModule } from './providers/registry.js'
 import type { HarnessModelCatalog, HarnessModelInfo } from '../contracts/harness-models.js'
-import type { AcpConfigOption } from '../runtime/acp/acp-schema.js'
+import type { AcpConfigOption, AcpSessionModes } from '../runtime/acp/acp-schema.js'
+import type { HarnessDefinition } from '../contracts/harness.js'
+import { nativeAgentsFromAcpModes } from '../contracts/harness-native-agents.js'
+import { acpSessionModeSelector } from '../runtime/acp/acp-session-modes.js'
 import { acpConfigOptionValues } from '../runtime/acp/acp-schema.js'
 
 /** Legacy `<model>/<variant>` suffixes that are reasoning levels, in Kun's vocabulary. */
@@ -91,4 +94,28 @@ export function acpModelCatalog(input: {
   const defaultRow = rows.get(input.defaultModel ?? selected ?? '')
   if (defaultRow) defaultRow.isDefault = true
   return { models: [...rows.keys()], modelInfo: [...rows.values()] }
+}
+
+/** Attach the native Agents an engine publishes as session modes (OpenCode). */
+export function attachNativeAgents(
+  definition: Pick<HarnessDefinition, 'nativeAgents'>,
+  catalog: HarnessModelCatalog,
+  session: { modes?: AcpSessionModes | null; configOptions?: readonly AcpConfigOption[] | null }
+): HarnessModelCatalog {
+  const modeSelector = acpSessionModeSelector(session)
+  const agents = definition.nativeAgents === 'session-modes' ? nativeAgentsFromAcpModes(modeSelector) : []
+  if (agents.length) {
+    catalog.agents = agents
+    const current = modeSelector?.currentModeId.trim()
+    if (current && agents.some((agent) => agent.id === current)) catalog.defaultAgentId = current
+  }
+  return catalog
+}
+
+/** Catalog of a freshly opened session: models, reasoning levels and native Agents. */
+export function acpSessionCatalog(
+  definition: Pick<HarnessDefinition, 'id' | 'nativeAgents'>,
+  session: { configOptions?: AcpConfigOption[] | null; models?: unknown; modes?: AcpSessionModes | null }
+): HarnessModelCatalog {
+  return attachNativeAgents(definition, acpModelCatalog({ harnessId: definition.id, ...session }), session)
 }

@@ -336,7 +336,8 @@ export async function probeHarnessDefinition(
   }
   const definition = built.data
   const started = Date.now()
-  const handshake = await probeAcpHandshake(
+  // The model catalog stays internal; the wire carries the handshake contract.
+  const { catalog: _catalog, ...handshake } = await probeAcpHandshake(
     definition,
     definition.launch?.command ?? '',
     { resolveSecretEnv: harnesses.resolveSecretEnv, signal: request.signal }

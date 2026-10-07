@@ -15,7 +15,8 @@ import {
   type AcpSpawnFn
 } from '../runtime/acp/acp-process.js'
 import { ACP_AGENT_METHODS, AcpError, AcpNewSessionResultSchema } from '../runtime/acp/acp-schema.js'
-import { acpModelCatalog } from './acp-model-catalog.js'
+import { acpSessionCatalog } from './acp-model-catalog.js'
+import type { HarnessModelCatalog } from '../contracts/harness-models.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { HarnessTestHandshake } from '../contracts/harness-test.js'
 import {
@@ -53,7 +54,7 @@ export async function probeAcpHandshake(
   definition: HarnessDefinition,
   command: string,
   deps: AcpHandshakeProbeDeps = {}
-): Promise<Omit<HarnessTestHandshake, 'durationMs'>> {
+): Promise<Omit<HarnessTestHandshake, 'durationMs'> & { catalog?: HarnessModelCatalog }> {
   const timeoutMs = deps.timeoutMs ?? ACP_READINESS_TIMEOUT_MS
   const signal = AbortSignal.any([
     ...(deps.signal ? [deps.signal] : []), AbortSignal.timeout(timeoutMs)
@@ -98,6 +99,7 @@ export async function probeAcpHandshake(
     const init = await raceProbeAbort(conn.initialize({ timeoutMs, fileWrites: definition.acpClientWrites !== false }), signal)
     signal.throwIfAborted()
     let models: string[] | undefined
+    let catalog: HarnessModelCatalog | undefined
     let detail: string | undefined
     if (deps.includeModels || deps.session) {
       workspace = await mkdtemp(join(tmpdir(), 'kun-acp-readiness-'))
@@ -105,7 +107,8 @@ export async function probeAcpHandshake(
         { cwd: workspace, mcpServers: [] }, { timeoutMs }), signal)
       signal.throwIfAborted()
       const session = AcpNewSessionResultSchema.parse(raw)
-      if (deps.includeModels) models = acpModelCatalog({ harnessId: definition.id, ...session }).models
+      catalog = acpSessionCatalog(definition, session)
+      if (deps.includeModels) models = catalog.models
       if (deps.session) {
         await raceProbeAbort(applyAcpSessionModel(conn, { ...session, models: parseAcpLegacyModels(session.models) }, deps.session.model), signal)
         const agentsOnly = definition.nativeAgents === 'session-modes' && Boolean(deps.session.permissionMode) &&
@@ -129,6 +132,7 @@ export async function probeAcpHandshake(
       protocol: 'acp',
       authentication: 'unverified',
       ...(models ? { models } : {}),
+      ...(catalog ? { catalog } : {}),
       ...(detail ? { detail } : {}),
       protocolVersion: init.protocolVersion,
       ...(init.agentInfo?.name || init.agentInfo?.version

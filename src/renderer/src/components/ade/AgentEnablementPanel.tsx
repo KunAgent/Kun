@@ -11,6 +11,7 @@ import { SettingRow } from '../settings-controls'
 import { useAgentEnablement } from './use-agent-enablement'
 import { AgentSettingsSelect } from './AgentSettingsSelect'
 import { AgentSettingsModelPicker } from './AgentSettingsModelPicker'
+import { AgentDiagnosticRows } from './AgentDiagnosticRows'
 
 /** Profile selection and enablement are intentionally one reviewable, cancellable operation. */
 export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
@@ -94,9 +95,11 @@ export function AgentEnablementPanel({ row, settings, patch, beforeCheck }: {
       <p className="mt-1 whitespace-pre-wrap">{gate.errorDetail}</p>
     </details> : null}
     {gate.result?.readiness ? <div className="space-y-1 text-[11px] text-ds-muted" data-agent-readiness-result>
-      {gate.result.readiness.checks.map((check) => <div key={check.id} data-agent-readiness-check={check.id} data-ok={check.ok}>
-        {check.ok ? '✓ ' : '✗ '}{t(`agentEnablement.checks.${check.id}`)}{check.detail ? `: ${check.detail}` : ''}
-      </div>)}
+      {gate.result.readiness.diagnostics?.length
+        ? <AgentDiagnosticRows rows={gate.result.readiness.diagnostics} />
+        : gate.result.readiness.checks.map((check) => <div key={check.id} data-agent-readiness-check={check.id} data-ok={check.ok}>
+          {check.ok ? '✓ ' : '✗ '}{t(`agentEnablement.checks.${check.id}`)}{check.detail ? `: ${check.detail}` : ''}
+        </div>)}
       <p>{t(gate.result.readiness.authentication === 'verified' ? 'agentEnablement.authVerified' : 'agentEnablement.authUnverified')}</p>
     </div> : null}
     <p className="text-[11px] text-ds-faint">{t('agentEnablement.quotaUnverified')}</p>

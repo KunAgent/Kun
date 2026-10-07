@@ -390,6 +390,15 @@
       "credentials": "Credentials",
       "protocol": "Protocol readiness"
     },
+    "diagnostics": {
+      "configuration": "구성",
+      "command": "명령",
+      "version": "버전",
+      "network": "네트워크",
+      "credentials": "자격 증명",
+      "protocol": "세션 연결",
+      "models": "모델"
+    },
     "nativeAccount": "Native account profile",
     "systemAccount": "System CLI account"
   }

@@ -15,9 +15,7 @@ import { AcpClientHost } from '../runtime/acp/acp-client-host.js'
 import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
 import { isAcpAuthenticationRequired } from '../runtime/acp/acp-authentication.js'
 import type { HarnessModelCatalog, HarnessModelCatalogError } from '../contracts/harness-models.js'
-import { acpModelCatalog } from './acp-model-catalog.js'
-import { nativeAgentsFromAcpModes } from '../contracts/harness-native-agents.js'
-import { acpSessionModeSelector } from '../runtime/acp/acp-session-modes.js'
+import { acpModelCatalog, attachNativeAgents } from './acp-model-catalog.js'
 import { startAcpProcess, type AcpSpawnFn } from '../runtime/acp/acp-process.js'
 import {
   ACP_AGENT_METHODS,
@@ -100,6 +98,13 @@ export class AcpModelProbe {
     for (const key of [...this.cache.keys()]) if (harnessOfKey(key) === id) this.cache.delete(key)
     // An explicit refresh gets a fresh process (for example after a login).
     for (const [key, entry] of [...this.connections]) if (harnessOfKey(key) === id && entry.users === 0) this.drop(key, entry)
+  }
+
+  /** Store a catalog another session already read (the readiness handshake). */
+  seed(definition: HarnessDefinition, catalog: HarnessModelCatalog): void {
+    if (catalog.models.length === 0) return
+    this.store(this.cacheKey(definition), catalog, this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS)
+    this.lastGood.set(this.identityKey(definition), catalog)
   }
 
   /** Close every warm probe process (runtime shutdown). */
@@ -222,13 +227,7 @@ export class AcpModelProbe {
         const catalog = acpModelCatalog({ harnessId: definition.id, configOptions: session.configOptions,
           models: session.models ? { ...(parsed.data.models as object), currentModelId: session.models.currentModelId } : parsed.data.models,
           defaultModel: initial.modelInfo.find((entry) => entry.isDefault)?.id })
-        const modeSelector = acpSessionModeSelector(parsed.data)
-        const agents = definition.nativeAgents === 'session-modes' ? nativeAgentsFromAcpModes(modeSelector) : []
-        if (agents.length) {
-          catalog.agents = agents
-          const current = modeSelector?.currentModeId.trim()
-          if (current && agents.some((agent) => agent.id === current)) catalog.defaultAgentId = current
-        }
+        attachNativeAgents(definition, catalog, parsed.data)
         lease.release(true)
         return catalog
       } finally { off() }

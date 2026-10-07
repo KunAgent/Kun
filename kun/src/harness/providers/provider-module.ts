@@ -28,6 +28,12 @@ export type ProviderCredentialContext = {
 export type ProviderCredentials = {
   /** Ambient variables forwarded to an explicitly chosen native profile. */
   readonly envKeys?: readonly string[]
+  /**
+   * The engine cannot report a missing sign-in over its protocol (ACP
+   * authenticate is a no-op, session/new succeeds), so readiness needs local
+   * evidence. Every other engine only warns when none is found.
+   */
+  readonly requireEvidence?: boolean
   /** Variables whose presence in the selected env counts as configured evidence. */
   readonly evidenceEnvKeys?: readonly string[]
   /** Local configuration pointers that accompany the credential into login probes. */

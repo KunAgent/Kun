@@ -247,11 +247,6 @@ export const HarnessDefinitionSchema = z
      */
     nativeAgents: z.literal('session-modes').optional(),
     /**
-     * Native login is optional: the Agent ships its own free models (OpenCode),
-     * so an ACP session that opens without auth_required is ready to use.
-     */
-    loginOptional: z.boolean().optional(),
-    /**
      * Offer ACP fs/write_text_file (default true). False keeps every write in
      * the Agent's own filesystem layer, e.g. CodeMaker's restricted-file policy,
      * which a client-side write would bypass.

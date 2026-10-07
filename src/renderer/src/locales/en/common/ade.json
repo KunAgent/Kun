@@ -575,6 +575,15 @@
       "credentials": "Credentials",
       "protocol": "Protocol readiness"
     },
+    "diagnostics": {
+      "configuration": "Configuration",
+      "command": "Command",
+      "version": "Version",
+      "network": "Network",
+      "credentials": "Credentials",
+      "protocol": "Session handshake",
+      "models": "Models"
+    },
     "nativeAccount": "Native account profile",
     "systemAccount": "System CLI account",
     "saveFailed": "Settings could not be saved. Retry and review the save error in Settings.",

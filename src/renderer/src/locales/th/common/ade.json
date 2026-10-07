@@ -390,6 +390,15 @@
       "credentials": "Credentials",
       "protocol": "Protocol readiness"
     },
+    "diagnostics": {
+      "configuration": "การกำหนดค่า",
+      "command": "คำสั่ง",
+      "version": "เวอร์ชัน",
+      "network": "เครือข่าย",
+      "credentials": "ข้อมูลรับรอง",
+      "protocol": "การเชื่อมต่อเซสชัน",
+      "models": "โมเดล"
+    },
     "nativeAccount": "Native account profile",
     "systemAccount": "System CLI account"
   }

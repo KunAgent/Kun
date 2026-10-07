@@ -17,7 +17,6 @@ export const OPENCODE2_DEFINITION: HarnessDefinition = {
   ],
   modelSource: 'probe',
   nativeAgents: 'session-modes',
-  loginOptional: true,
   staticModels: [],
   capabilities: ACP_DEFAULT_CAPABILITIES,
   // V2 has a separate command, credential store and config dialect. Do not
@@ -38,6 +37,6 @@ export const OPENCODE2_MODULE: AgentProviderModule = {
     configured: (context) => openCode2CredentialEvidence(context.merged).configured,
     fingerprint: (env) => openCode2CredentialEvidence(env).fingerprint
   },
-  login: async ({ env }) => openCode2CredentialEvidence(env).configured ? 'unknown' : 'signed-out',
+  // Free models need no sign-in; a missing V2 credential is not "signed out".
   update: { command: 'opencode2', packageName: '@opencode-ai/cli', tag: 'next' }
 }

@@ -5,6 +5,8 @@ import type { AgentProviderModule } from './provider-module.js'
 export const DEEPSEEK_HARNESS_MODULE: AgentProviderModule = {
   definition: DEEPSEEK_HARNESS_DEFINITION,
   credentials: {
+    // DSH's ACP authenticate is a no-op; credentials come from its own setup.
+    requireEvidence: true,
     env: (base): Record<string, string> => {
       const value = resolveDeepSeekHarnessNativeKey(base)
       return value === undefined ? {} : { DEEPSEEK_API_KEY: value }

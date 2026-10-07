@@ -1,6 +1,7 @@
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { HarnessCredentialModeSchema, HarnessStatusSchema } from './harness.js'
+import { HarnessDiagnosticRowSchema } from './harness-diagnostics.js'
 
 /**
  * `POST /v1/harnesses/:id/test` contract (docs/ade/impl/p4 §3.5, P4-10).
@@ -103,7 +104,9 @@ export const HarnessReadinessSchema = z.object({
     detail: z.string().optional()
   }).strict()),
   checkedAt: z.string().datetime(),
-  detail: z.string().optional()
+  detail: z.string().optional(),
+  /** Human-readable findings per stage (docs/ade/17 §4.2); never secrets. */
+  diagnostics: z.array(HarnessDiagnosticRowSchema).max(16).optional()
 }).strict()
 export type HarnessReadiness = z.infer<typeof HarnessReadinessSchema>
 

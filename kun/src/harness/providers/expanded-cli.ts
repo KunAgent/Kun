@@ -17,6 +17,7 @@ function expandedModule(definition: HarnessDefinition): AgentProviderModule {
     // fx keeps its login in the macOS Keychain; its prompt-free status
     // command is configured evidence, never verified authentication.
     ...(definition.id === 'fx' ? { credentials: {
+      requireEvidence: true,
       commandEvidence: (command: string | undefined, input: { env: Record<string, string>; signal: AbortSignal }) =>
         probeFxNativeCredentials(command, input)
     } } : {})

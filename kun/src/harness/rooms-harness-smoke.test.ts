@@ -86,8 +86,10 @@ it('installed Rooms fixtures cannot become ready without consent or without the 
   vi.stubEnv('WINDSURF_API_KEY', '')
   const result = await f.harnesses.readiness.test(f.harnesses.catalog.get('devin')!, { level: 'handshake', ...route })
   expect(result.ok).toBe(false)
-  expect(result.readiness).toMatchObject({ usable: false, authentication: 'missing',
-    checks: expect.arrayContaining([{ id: 'credentials', ok: false, detail: expect.any(String) }]) })
+  // Without the sentinel the stub refuses to start, so the session never opens;
+  // missing local evidence alone is a diagnostic, not the failure.
+  expect(result.readiness).toMatchObject({ usable: false,
+    checks: expect.arrayContaining([expect.objectContaining({ id: 'protocol', ok: false })]) })
   expect(await f.harnesses.readiness.readyProfiles('devin')).toEqual([])
   expect(await f.methods()).toEqual([])
 }, 60_000)

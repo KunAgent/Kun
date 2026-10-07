@@ -390,6 +390,15 @@
       "credentials": "Credentials",
       "protocol": "Protocol readiness"
     },
+    "diagnostics": {
+      "configuration": "設定",
+      "command": "コマンド",
+      "version": "バージョン",
+      "network": "ネットワーク",
+      "credentials": "認証情報",
+      "protocol": "セッション接続",
+      "models": "モデル"
+    },
     "nativeAccount": "Native account profile",
     "systemAccount": "System CLI account"
   }

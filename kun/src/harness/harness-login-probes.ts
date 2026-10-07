@@ -37,6 +37,5 @@ export async function probeHarnessLogin(
   }
   const state = module?.login ? await module.login({ definition: def, deps, command, env }) : 'unknown'
   deps.signal?.throwIfAborted()
-  // Missing credentials are not a sign-in requirement when login is optional.
-  return def.loginOptional === true && state === 'signed-out' ? 'unknown' : state
+  return state
 }

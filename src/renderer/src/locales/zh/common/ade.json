@@ -614,6 +614,15 @@
       "credentials": "凭据",
       "protocol": "协议就绪状态"
     },
+    "diagnostics": {
+      "configuration": "配置",
+      "command": "命令",
+      "version": "版本",
+      "network": "网络",
+      "credentials": "凭据",
+      "protocol": "会话握手",
+      "models": "模型"
+    },
     "nativeAccount": "原生账号配置",
     "systemAccount": "系统 CLI 账号",
     "saveFailed": "配置保存失败，请重试并查看设置页的保存错误。",

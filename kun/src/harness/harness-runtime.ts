@@ -131,7 +131,8 @@ export function createHarnessComposition(
   const readiness = new HarnessReadinessService({ options, catalog, detector, revision: deps.revision,
     resolveSecretEnv: deps.resolveSecretEnv, resolveProviderCredential: deps.resolveProviderCredential,
     resolveGatewayAliases: deps.resolveGatewayAliases,
-    sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal) })
+    sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal),
+    onCatalog: (definition, catalog) => { if (definition.transport === 'acp') acpModels.seed(definition, catalog) } })
   // Refreshing one Agent must not discard another Agent's catalog.
   const invalidateModels = (id: string): void => {
     const transport = catalog.get(id)?.transport

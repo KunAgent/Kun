@@ -390,6 +390,15 @@
       "credentials": "Credentials",
       "protocol": "Protocol readiness"
     },
+    "diagnostics": {
+      "configuration": "कॉन्फ़िगरेशन",
+      "command": "कमांड",
+      "version": "संस्करण",
+      "network": "नेटवर्क",
+      "credentials": "क्रेडेंशियल",
+      "protocol": "सत्र हैंडशेक",
+      "models": "मॉडल"
+    },
     "nativeAccount": "Native account profile",
     "systemAccount": "System CLI account"
   }

@@ -20,7 +20,6 @@ export const OPENCODE_DEFINITION: HarnessDefinition = {
   ],
   modelSource: 'probe',
   nativeAgents: 'session-modes',
-  loginOptional: true,
   staticModels: [],
   historySource: 'opencode',
   capabilities: ACP_DEFAULT_CAPABILITIES,
@@ -93,9 +92,8 @@ export const OPENCODE_MODULE: AgentProviderModule = {
  *   own filesystem layer, so Kun does not offer client-side file writes.
  */
 export function codeMakerDefinition(opencode: HarnessDefinition): HarnessDefinition {
-  // OpenCode's history reader, installers and free-model login exemption
-  // target OpenCode itself.
-  const { historySource: _history, setup: _setup, loginOptional: _login, ...shared } = opencode
+  // OpenCode's history reader and installers target OpenCode itself.
+  const { historySource: _history, setup: _setup, ...shared } = opencode
   return {
     ...shared,
     id: 'codemaker',
@@ -123,6 +121,7 @@ export function codeMakerDefinition(opencode: HarnessDefinition): HarnessDefinit
 export const CODEMAKER_MODULE: AgentProviderModule = {
   definition: codeMakerDefinition(OPENCODE_DEFINITION),
   credentials: {
+    requireEvidence: true,
     // ACP authenticate is a no-op in CodeMaker; these are its documented native credentials.
     envKeys: ['CODEMAKER_AUTH_TOKEN', 'CODEMAKER_AUTH_KEY', 'CODEMAKER_AUTH_USER', 'CODEMAKER_API_KEY'],
     // CODEMAKER_AUTH_USER only names the account; it is not a credential.

@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HarnessCatalog } from '../harness-catalog.js'
 import { codeMakerDefinition } from './opencode.js'
+import { providerModule } from './registry.js'
 import { nativeCredentialFiles, nativeHasKey } from '../harness-readiness-profile.js'
 import { nativeHarnessCredentialEnv } from '../harness-secret-env.js'
 import { probeAcpHandshake } from '../acp-handshake-probe.js'
@@ -27,7 +28,7 @@ describe('CodeMaker fork of OpenCode', () => {
       detect: { command: 'codemaker' }, launch: { command: 'codemaker', args: ['acp'] },
       permissionModes: opencode.permissionModes, nativeAgents: 'session-modes', gateway: opencode.gateway,
       acpClientWrites: false, setup: { login: { command: 'codemaker', args: ['auth', 'login'] } } })
-    expect(codemaker.loginOptional).toBeUndefined()
+    expect(providerModule('codemaker')?.credentials?.requireEvidence).toBe(true)
     expect(codemaker.historySource).toBeUndefined()
     expect(codemaker.setup?.install).toBeUndefined()
     expect(codemaker.capabilities.statuses.fsMediated.supported).toBe(false)
