@@ -52,6 +52,13 @@ export class GatewayRequestGuard {
     return true
   }
 
+  /** Milliseconds until the bucket holds a whole token again; 0 when it already does. */
+  retryAfterMs(): number {
+    if (this.tokens >= 1) return 0
+    const rate = this.options.refillPerSecond ?? DEFAULT_REFILL_PER_SECOND
+    return rate > 0 ? Math.ceil(((1 - this.tokens) / rate) * 1_000) : 60_000
+  }
+
   acquire(parentSignal: AbortSignal): GatewayLease | null {
     if (this.active >= (this.options.maxConcurrency ?? DEFAULT_CONCURRENCY)) return null
     this.active += 1

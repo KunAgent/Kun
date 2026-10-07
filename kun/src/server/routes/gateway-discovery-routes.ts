@@ -5,6 +5,7 @@ import { gatewayJsonResponse as jsonResponse } from './gateway-json-response.js'
 import { gatewayRouteTraceStore } from './gateway-route-trace.js'
 import { authorizeGateway, openAiError } from './model-gateway-core.js'
 import type { ServerRuntime } from './server-runtime.js'
+import { GATEWAY_BUSY_RETRY_MS, gatewayRetryHeaders, rateLimitedMessage, withResponseHeaders } from './gateway-retry.js'
 
 /**
  * `GET /api/hello`: unauthenticated identity probe so an agent can tell a Kun
@@ -39,7 +40,7 @@ export async function gatewayRouteTrace(runtime: ServerRuntime, request: Request
   const verdict = await authorizeGateway(runtime, request)
   if (!verdict.ok) {
     return verdict.reason === 'rate_limited'
-      ? openAiError('Gateway rate limit exceeded.', 'rate_limit_exceeded', 429)
+      ? withResponseHeaders(openAiError(rateLimitedMessage(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS), 'rate_limit_exceeded', 429), gatewayRetryHeaders(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS))
       : openAiError('Invalid gateway API key.', 'invalid_api_key', verdict.reason === 'unavailable' ? 503 : 401)
   }
   if (!runtime.modelGateway?.enabled()) return openAiError('Local model gateway is disabled.', 'gateway_disabled', 404)

@@ -33,10 +33,21 @@ describe('physical attempt accounting', () => {
       }))
       expect(dispatched).toBe(false)
       // Limit refusals point the caller at its own limit window.
-      const message = `Local budget cannot admit this attempt.${status === 429 ? ' See GET /v1/kun/limit for when it resets.' : ''}`
+      const message = `Local budget cannot admit this attempt.${status === 429 ? " See GET /v1/kun/limit for this key's limits." : ''}`
       expect(chunks).toEqual([expect.objectContaining({ code, message,
         failure: expect.objectContaining({ httpStatus: status, localAdmission: true, reason: 'request', failoverAllowed: false }) })])
     })
+  it('says when a budget refusal resets, so the gateway can send retry headers', async () => {
+    const endsAt = Date.parse('2026-10-08T00:00:00.000Z')
+    const request = { ...input(), attemptObserver: { begin: async () => { throw new GatewayBudgetError('token_budget_exceeded', 'Budget spent.', endsAt) } } }
+    const chunks = await drain(observeModelAttempts(request, async function* (observed) {
+      await observed.beforeWireDispatch!({ providerId: 'one', model: 'model', protocol: 'responses', estimatedTokens: 10 })
+      yield { kind: 'completed', stopReason: 'stop' }
+    }))
+    expect(chunks).toEqual([expect.objectContaining({
+      message: "Budget spent. It resets at 2026-10-08T00:00:00.000Z. See GET /v1/kun/limit for this key's limits.",
+      failure: expect.objectContaining({ httpStatus: 429, resetAt: '2026-10-08T00:00:00.000Z' }) })])
+  })
   it('executes official DeepSeek FIM through the same dispatch and usage hooks', async () => {
     let body: Record<string, unknown> = {}, url = ''
     const finished = vi.fn(async () => undefined), begin = vi.fn(async () => ({ finish: finished }))

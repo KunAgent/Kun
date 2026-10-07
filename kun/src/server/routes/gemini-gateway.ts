@@ -9,6 +9,7 @@ import type { GatewayLease } from './gateway-request-guard.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { beginGatewayUsage, wrapGatewayUsage, GatewayUsageError, type GatewayUsageRecorder, type GatewayUsageStream } from './gateway-usage.js'
 import { gatewayUpstream, gatewayCallerId } from './gateway-upstream.js'
+import { admitGatewayStream, failureRetryHeaders, GATEWAY_BUSY_MESSAGE, GATEWAY_BUSY_RETRY_MS, gatewayRetryHeaders, rateLimitedMessage, withResponseHeaders } from './gateway-retry.js'
 import { geminiIncludeThoughts, geminiToChatInput } from './gemini-gateway-input.js'
 import {
   acquireHarnessGrantLease,
@@ -62,7 +63,9 @@ async function authorizeGemini(runtime: ServerRuntime, request: Request) {
   if (verdict.ok) return verdict
   if (verdict.reason === 'unavailable') return geminiError('Gateway policy is unavailable.', 503)
   if (verdict.reason === 'forbidden') return geminiError('This protocol is not allowed for the gateway key.', 403)
-  return verdict.reason === 'rate_limited' ? geminiError('Gateway rate limit exceeded.', 429) : geminiError('Invalid gateway API key.', 401)
+  if (verdict.reason !== 'rate_limited') return geminiError('Invalid gateway API key.', 401)
+  const wait = verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS
+  return withResponseHeaders(geminiError(rateLimitedMessage(wait), 429), gatewayRetryHeaders(wait))
 }
 
 export async function geminiModels(runtime: ServerRuntime, request: Request): Promise<JsonResponse> {
@@ -99,7 +102,7 @@ export async function geminiGenerate(runtime: ServerRuntime, request: Request, c
   const publicAuth = auth.kind === 'public' ? auth : undefined
   if (!runtime.modelGateway?.enabled() || !runtime.modelClient) return geminiError('Local model gateway is disabled.', 404)
   const lease = grant ? acquireHarnessGrantLease(grant, request.signal) : acquirePublicGatewayLease(runtime, request, auth)
-  if (!lease) return geminiError('Too many concurrent gateway requests.', 429)
+  if (!lease) return withResponseHeaders(geminiError(GATEWAY_BUSY_MESSAGE, 429), gatewayRetryHeaders(GATEWAY_BUSY_RETRY_MS))
   let release = true
   try {
     const body = await readJsonBody(request, grant?.maxBodyBytes ?? publicAuth?.policy?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
@@ -147,9 +150,15 @@ export async function geminiGenerate(runtime: ServerRuntime, request: Request, c
     const chunks = wrapGatewayUsage(harnessGatewayStream(gatewayUpstream(runtime, request, auth, modelRequest, parsed.model, resolved.accountId), grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
-    release = false
     const output = new GeminiOutput(parsed.model, geminiIncludeThoughts(raw))
-    return stream ? geminiStream(chunks, output, lease, attribute) : geminiJson(chunks, output, lease, attribute)
+    if (!stream) { release = false; return geminiJson(chunks, output, lease, attribute) }
+    const admitted = await admitGatewayStream(chunks, lease.signal)
+    if ('refused' in admitted) {
+      await chunks.finish('failed').catch(() => undefined)
+      return withResponseHeaders(geminiError(admitted.refused.message, errorStatus(admitted.refused)), failureRetryHeaders(admitted.refused.failure))
+    }
+    release = false
+    return geminiStream(admitted.chunks, output, lease, attribute)
   } catch (error) {
     const status = (error as { status?: number }).status ?? 400
     return geminiError(errorMessage(error), status)
@@ -245,7 +254,7 @@ async function geminiJson(chunks: GatewayUsageStream, output: GeminiOutput, leas
       const chunk = result.value
       if (chunk.kind === 'error') {
         await chunks.finish('failed')
-        return geminiError(chunk.message, errorStatus(chunk))
+        return withResponseHeaders(geminiError(chunk.message, errorStatus(chunk)), failureRetryHeaders(chunk.failure))
       }
       output.accept(chunk)
       if (chunk.kind === 'completed') {

@@ -6,6 +6,7 @@ import { gatewayClientActiveRequests } from './gateway-client-policy.js'
 import { gatewayJsonResponse as jsonResponse } from './gateway-json-response.js'
 import { authorizeGateway, openAiError } from './model-gateway-core.js'
 import type { ServerRuntime } from './server-runtime.js'
+import { GATEWAY_BUSY_RETRY_MS, gatewayRetryHeaders, rateLimitedMessage, withResponseHeaders } from './gateway-retry.js'
 
 /** The same numbers the budget check uses before refusing a request with 429. */
 export type { GatewayClientLimit }
@@ -48,7 +49,7 @@ export async function gatewayClientLimit(runtime: ServerRuntime, request: Reques
   const verdict = await authorizeGateway(runtime, request)
   if (!verdict.ok) {
     return verdict.reason === 'rate_limited'
-      ? openAiError('Gateway rate limit exceeded.', 'rate_limit_exceeded', 429)
+      ? withResponseHeaders(openAiError(rateLimitedMessage(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS), 'rate_limit_exceeded', 429), gatewayRetryHeaders(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS))
       : openAiError('Invalid gateway API key.', 'invalid_api_key', verdict.reason === 'unavailable' ? 503 : 401)
   }
   if (!runtime.modelGateway?.enabled()) return openAiError('Local model gateway is disabled.', 'gateway_disabled', 404)

@@ -14,6 +14,7 @@ import { beginGatewayUsage, wrapGatewayUsage, GatewayUsageError, type GatewayUsa
 import { anthropicToChatInput } from './anthropic-gateway-input.js'
 import { gatewayThinkingSignature } from './anthropic-gateway-thinking.js'
 import { gatewayUpstream } from './gateway-upstream.js'
+import { admitGatewayStream, failureRetryHeaders, GATEWAY_BUSY_MESSAGE, GATEWAY_BUSY_RETRY_MS, gatewayRetryHeaders, rateLimitedMessage, withResponseHeaders } from './gateway-retry.js'
 import {
   type GatewayAuth,
   acquireHarnessGrantLease,
@@ -74,7 +75,7 @@ async function authorizeAnthropicGateway(
     if (verdict.reason === 'unavailable') return anthropicError('Gateway policy is unavailable.', 503)
     if (verdict.reason === 'forbidden') return anthropicError('This protocol is not allowed for the gateway key.', 403)
     return verdict.reason === 'rate_limited'
-      ? anthropicError('Gateway rate limit exceeded.', 429)
+      ? withResponseHeaders(anthropicError(rateLimitedMessage(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS), 429), gatewayRetryHeaders(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS))
       : anthropicError('Invalid gateway API key.', 401)
   }
   return { auth: verdict.auth, grant: verdict.auth.kind === 'harness' ? verdict.auth.grant : undefined }
@@ -101,7 +102,7 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
   const publicAuth = gate.auth.kind === 'public' ? gate.auth : undefined
   if (!runtime.modelGateway?.enabled() || !runtime.modelClient) return anthropicError('Local model gateway is disabled.', 404)
   const lease = acquireGatewayLease(runtime, request, grant, gate.auth)
-  if (!lease) return anthropicError('Too many concurrent gateway requests.', 429)
+  if (!lease) return withResponseHeaders(anthropicError(GATEWAY_BUSY_MESSAGE, 429), gatewayRetryHeaders(GATEWAY_BUSY_RETRY_MS))
   let body: Awaited<ReturnType<typeof readJsonBody>>
   try {
     body = await readJsonBody(request, grant?.maxBodyBytes ?? publicAuth?.policy?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
@@ -194,9 +195,14 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
     const chunks = wrapGatewayUsage(harnessGatewayStream(upstream, grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
-    return stream
-      ? anthropicStreamingResponse(chunks, model, lease, attribute)
-      : anthropicNonStreamingResponse(chunks, model, lease, attribute)
+    if (!stream) return anthropicNonStreamingResponse(chunks, model, lease, attribute)
+    const admitted = await admitGatewayStream(chunks, lease.signal)
+    if ('refused' in admitted) {
+      await chunks.finish('failed').catch(() => undefined)
+      lease.release()
+      return withResponseHeaders(anthropicError(admitted.refused.message, errorStatus(admitted.refused)), failureRetryHeaders(admitted.refused.failure))
+    }
+    return anthropicStreamingResponse(admitted.chunks, model, lease, attribute)
   } catch (error) {
     await recorder?.finish('failed').catch(() => undefined)
     lease.release()
@@ -217,7 +223,7 @@ export async function gatewayCountTokens(runtime: ServerRuntime, request: Reques
   const publicAuth = gate.auth.kind === 'public' ? gate.auth : undefined
   if (!runtime.modelGateway?.enabled()) return anthropicError('Local model gateway is disabled.', 404)
   const lease = acquireGatewayLease(runtime, request, grant, gate.auth)
-  if (!lease) return anthropicError('Too many concurrent gateway requests.', 429)
+  if (!lease) return withResponseHeaders(anthropicError(GATEWAY_BUSY_MESSAGE, 429), gatewayRetryHeaders(GATEWAY_BUSY_RETRY_MS))
   try {
     let body: Awaited<ReturnType<typeof readJsonBody>>
     try {
@@ -304,7 +310,7 @@ async function anthropicNonStreamingResponse(chunks: GatewayUsageStream, model: 
       }
       else if (chunk.kind === 'error') {
         await chunks.finish('failed')
-        return anthropicError(chunk.message, errorStatus(chunk))
+        return withResponseHeaders(anthropicError(chunk.message, errorStatus(chunk)), failureRetryHeaders(chunk.failure))
       }
     }
     for (const [callId, entry] of deltaToolCalls) {

@@ -29,6 +29,7 @@ import { clientGuardFor, clientRouteTargets, clientDirectTargets, combinedGatewa
 import { gatewaySessionHint } from './gateway-caller-agent.js'
 import { GATEWAY_SESSION_HEADER, gatewaySessionId } from '../../services/gateway-usage-service.js'
 import type { ServerRuntime } from './server-runtime.js'
+import { gatewayRetryHeaders, rateLimitedMessage, withResponseHeaders } from './gateway-retry.js'
 import { rawGatewayCredential, splitAttributedKey } from './gateway-caller-agent.js'
 
 export { exposableProvider } from '../../domain/model-gateway-export-policy.js'
@@ -77,7 +78,9 @@ export async function nextGatewayChunk(
 export function authorizePublicGateway(runtime: ServerRuntime, request: Request): JsonResponse | null {
   const guard = guardFor(runtime)
   if (!guard || !guard.authorize(request)) return openAiError('Invalid gateway API key.', 'invalid_api_key', 401)
-  if (!guard.consumeToken()) return openAiError('Gateway rate limit exceeded.', 'rate_limit_exceeded', 429)
+  if (!guard.consumeToken()) {
+    return withResponseHeaders(openAiError(rateLimitedMessage(guard.retryAfterMs()), 'rate_limit_exceeded', 429), gatewayRetryHeaders(guard.retryAfterMs()))
+  }
   return null
 }
 
@@ -92,7 +95,7 @@ export type GatewayAuth =
 
 export type GatewayAuthVerdict =
   | { ok: true; auth: GatewayAuth }
-  | { ok: false; reason: 'unauthorized' | 'rate_limited' | 'forbidden' | 'unavailable' }
+  | { ok: false; reason: 'unauthorized' | 'rate_limited' | 'forbidden' | 'unavailable'; retryAfterMs?: number }
 
 /** The verified credential: an attribution prefix (`kun-<app>.`) is stripped before verification. */
 export function bearerCandidate(request: Request): string | null {
@@ -126,9 +129,9 @@ export async function authorizeGateway(runtime: ServerRuntime, request: Request)
   if (!gatewayPolicyActive(policy)) return { ok: false, reason: 'unauthorized' }
   const protocol = gatewayRequestProtocol(request)
   if (protocol && !policy.allowedProtocols.includes(protocol)) return { ok: false, reason: 'forbidden' }
-  if (!clientGuardFor(runtime, client?.clientId ?? 'legacy', policy).consumeToken() || !guard.consumeToken()) {
-    return { ok: false, reason: 'rate_limited' }
-  }
+  const clientGuard = clientGuardFor(runtime, client?.clientId ?? 'legacy', policy)
+  if (!clientGuard.consumeToken()) return { ok: false, reason: 'rate_limited', retryAfterMs: clientGuard.retryAfterMs() }
+  if (!guard.consumeToken()) return { ok: false, reason: 'rate_limited', retryAfterMs: guard.retryAfterMs() }
   return { ok: true, auth: { kind: 'public', policy, policyRevision, ...(client ? { client } : {}) } }
 }
 

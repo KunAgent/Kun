@@ -15,14 +15,14 @@ import type { JsonResponse } from '../response.js'
 
 const roots: string[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))) })
-async function setup(inputTokenUpperBound?: number) {
+async function setup(inputTokenUpperBound?: number, limits: { requestsPerMinute?: number; burst?: number } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'kun-gateway-budget-')); roots.push(dir)
   const credentials = new GatewayCredentialService(dir, createAesEncryptor(randomBytes(32)))
   await credentials.initialize()
   const { client, key } = await credentials.createClient('Editor')
   const budget = new GatewayTokenBudget(credentials.directory)
   const policy = GatewayClientPolicySchema.parse({ mode: 'scoped', allowedModelIds: ['one/model'],
-    allowedConnectionIds: ['one'], maxOutputTokens: 10,
+    allowedConnectionIds: ['one'], maxOutputTokens: 10, ...limits,
     tokenBudget: { mode: 'hard', tokens: 100, period: 'day', timeZone: 'UTC' } })
   const upstream = vi.fn<typeof fetch>(async (_url, init) => {
     expect(init?.redirect).toBe('error')
@@ -39,9 +39,9 @@ async function setup(inputTokenUpperBound?: number) {
       snapshot: async () => ({ revision: 1, providers: [{ id: 'one', kind: 'http', authType: 'api-key',
         configured: true, credentialStatus: 'ready', models: ['model'] }], routePools: [], failover: [] }) }
   } as unknown as ServerRuntime
-  const call = () => gatewayChatCompletions(runtime, new Request('http://127.0.0.1/v1/chat/completions', {
+  const call = (stream = false) => gatewayChatCompletions(runtime, new Request('http://127.0.0.1/v1/chat/completions', {
     method: 'POST', headers: { authorization: `Bearer ${key}` }, body: JSON.stringify({ model: 'one/model',
-      messages: [{ role: 'user', content: 'Hello' }], max_completion_tokens: 2 }) })) as Promise<JsonResponse>
+      messages: [{ role: 'user', content: 'Hello' }], max_completion_tokens: 2, ...(stream ? { stream: true } : {}) }) })) as Promise<JsonResponse>
   return { call, budget, client, policy, upstream }
 }
 
@@ -54,6 +54,9 @@ describe('gateway budget to physical upstream dispatch', () => {
     const denied = await f.call()
     expect(denied.status).toBe(429)
     expect(JSON.parse(denied.body).error.code).toBe('token_budget_exceeded')
+    // The privacy filter rewrites refusal text; the reset time and limit hint must survive it.
+    expect(JSON.parse(denied.body).error.message).toMatch(/It resets at .+ See GET \/v1\/kun\/limit/)
+    expect(denied.headers['retry-after']).toBeDefined()
     expect(f.upstream).toHaveBeenCalledTimes(1)
   })
   it('rejects unbounded hard mode before contacting the provider', async () => {
@@ -61,5 +64,31 @@ describe('gateway budget to physical upstream dispatch', () => {
     expect((await f.call()).status).toBe(400)
     expect(f.upstream).not.toHaveBeenCalled()
     expect((await f.budget.summary(f.client.clientId)).windows).toEqual([])
+  })
+  it('refuses a streaming request over budget with a real 429 that says when the window resets', async () => {
+    const f = await setup(64)
+    expect((await f.call()).status).toBe(200)
+    f.policy.tokenBudget!.tokens = 60
+    const denied = await f.call(true)
+    expect(denied.status).toBe(429)
+    expect(denied.headers['content-type']).toContain('application/json')
+    expect(JSON.parse(denied.body).error.code).toBe('token_budget_exceeded')
+    const window = (await f.budget.summary(f.client.clientId)).windows[0]!
+    expect(denied.headers['x-kun-limit-reset']).toBe(new Date(window.endsAt).toISOString())
+    expect(Number(denied.headers['retry-after'])).toBeGreaterThan(0)
+    expect(JSON.parse(denied.body).error.message).toContain('It resets at')
+    expect(f.upstream).toHaveBeenCalledTimes(1)
+  })
+  it('tells a rate-limited key how long to wait', async () => {
+    const f = await setup(64, { requestsPerMinute: 1, burst: 1 })
+    expect((await f.call()).status).toBe(200)
+    const limited = await f.call()
+    expect(limited.status).toBe(429)
+    expect(JSON.parse(limited.body).error.code).toBe('rate_limit_exceeded')
+    const waitMs = Number(limited.headers['retry-after-ms'])
+    expect(waitMs).toBeGreaterThan(50_000)
+    expect(waitMs).toBeLessThanOrEqual(60_000)
+    expect(limited.headers['retry-after']).toBe(String(Math.ceil(waitMs / 1_000)))
+    expect(JSON.parse(limited.body).error.message).toMatch(/retry in \d+s/)
   })
 })

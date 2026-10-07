@@ -14,6 +14,14 @@ const GATEWAY_DIAGNOSTICS: Record<string, string> = {
   route_request_aborted: 'Gateway request aborted.'
 }
 
+/** Budget and cost refusals say when the window resets and where the key can read its limits. */
+function diagnosticMessage(code: string, failure: { resetAt?: string } | undefined): string {
+  const base = GATEWAY_DIAGNOSTICS[code]!
+  if (code !== 'token_budget_exceeded' && code !== 'cost_limit_exceeded') return base
+  const resetAt = failure?.resetAt && Number.isFinite(Date.parse(failure.resetAt)) ? new Date(failure.resetAt).toISOString() : undefined
+  return `${base}${resetAt ? ` It resets at ${resetAt}.` : ''} See GET /v1/kun/limit for this key's limits.`
+}
+
 /** Upstream diagnostics are untrusted: an auth error may echo the provider key. */
 export function gatewaySafeModelChunk(chunk: ModelStreamChunk): ModelStreamChunk {
   if (chunk.kind === 'retrying') {
@@ -29,7 +37,7 @@ export function gatewaySafeModelChunk(chunk: ModelStreamChunk): ModelStreamChunk
   if (failure) delete failure.providerCode
   return {
     kind: 'error',
-    message: diagnostic ? GATEWAY_DIAGNOSTICS[diagnostic]
+    message: diagnostic ? diagnosticMessage(diagnostic, failure)
       : `Gateway upstream request failed${httpStatus ? ` (HTTP ${httpStatus})` : ''}.`,
     code: diagnostic ?? (httpStatus ? `http_${httpStatus}` : 'upstream_error'),
     ...(failure ? { failure } : {}),

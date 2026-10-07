@@ -16,7 +16,9 @@ type State = z.infer<typeof State>
 const empty = (): State => ({ schemaVersion: 1, windows: {}, attempts: {} })
 
 export class GatewayBudgetError extends Error {
-  constructor(readonly code: 'token_budget_exceeded' | 'token_budget_unbounded' | 'token_budget_unavailable' | 'cost_limit_exceeded', message: string) {
+  constructor(readonly code: 'token_budget_exceeded' | 'token_budget_unbounded' | 'token_budget_unavailable' | 'cost_limit_exceeded', message: string,
+    /** When the refusing window ends (epoch ms), for budget and cost refusals. */
+    readonly resetsAt?: number) {
     super(message)
   }
 }
@@ -64,10 +66,10 @@ export class GatewayTokenBudget {
       }
       // A cost limit is a reference estimate: unknown-price attempts add nothing, so it can only be reached, never pre-reserved.
       if (input.costLimitUsd !== undefined && window.estimatedCostUsd >= input.costLimitUsd) {
-        throw new GatewayBudgetError('cost_limit_exceeded', 'The gateway client reached its estimated cost limit for this period.')
+        throw new GatewayBudgetError('cost_limit_exceeded', 'The gateway client reached its estimated cost limit for this period.', window.endsAt)
       }
       if (input.policy.mode === 'hard' && window.measured + window.reserved + amount > input.policy.tokens) {
-        throw new GatewayBudgetError('token_budget_exceeded', 'The gateway client token budget cannot admit another upstream attempt.')
+        throw new GatewayBudgetError('token_budget_exceeded', 'The gateway client token budget cannot admit another upstream attempt.', window.endsAt)
       }
       window.reserved += amount
       window.unknownCostAttempts += 1

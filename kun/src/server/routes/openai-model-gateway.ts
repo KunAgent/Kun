@@ -11,6 +11,7 @@ import { beginGatewayUsage, wrapGatewayUsage, GatewayUsageError, type GatewayUsa
 import { ResponsesToolNamespaces } from './responses-tool-namespaces.js'
 import { OpenAiGatewayOutput } from './openai-gateway-output.js'
 import { gatewayUpstream } from './gateway-upstream.js'
+import { admitGatewayStream, failureRetryHeaders, GATEWAY_BUSY_MESSAGE, GATEWAY_BUSY_RETRY_MS, gatewayRetryHeaders, rateLimitedMessage, withResponseHeaders } from './gateway-retry.js'
 import { gatewayModelsText } from './gateway-models-catalog.js'
 import {
   acquireHarnessGrantLease,
@@ -41,7 +42,7 @@ export async function gatewayModels(runtime: ServerRuntime, request: Request): P
     if (verdict.reason === 'unavailable') return openAiError('Gateway policy is unavailable.', 'gateway_unavailable', 503)
     if (verdict.reason === 'forbidden') return openAiError('This protocol is not allowed for the gateway key.', 'permission_denied', 403)
     return verdict.reason === 'rate_limited'
-      ? openAiError('Gateway rate limit exceeded.', 'rate_limit_exceeded', 429)
+      ? withResponseHeaders(openAiError(rateLimitedMessage(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS), 'rate_limit_exceeded', 429), gatewayRetryHeaders(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS))
       : openAiError('Invalid gateway API key.', 'invalid_api_key', 401)
   }
   const grant = verdict.auth.kind === 'harness' ? verdict.auth.grant : undefined
@@ -127,7 +128,7 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
     if (verdict.reason === 'unavailable') return openAiError('Gateway policy is unavailable.', 'gateway_unavailable', 503)
     if (verdict.reason === 'forbidden') return openAiError('This protocol is not allowed for the gateway key.', 'permission_denied', 403)
     return verdict.reason === 'rate_limited'
-      ? openAiError('Gateway rate limit exceeded.', 'rate_limit_exceeded', 429)
+      ? withResponseHeaders(openAiError(rateLimitedMessage(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS), 'rate_limit_exceeded', 429), gatewayRetryHeaders(verdict.retryAfterMs ?? GATEWAY_BUSY_RETRY_MS))
       : openAiError('Invalid gateway API key.', 'invalid_api_key', 401)
   }
   const grant = verdict.auth.kind === 'harness' ? verdict.auth.grant : undefined
@@ -136,7 +137,7 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
   const lease = grant
     ? acquireHarnessGrantLease(grant, request.signal)
     : acquirePublicGatewayLease(runtime, request, verdict.auth)
-  if (!lease) return openAiError('Too many concurrent gateway requests.', 'concurrency_limit', 429)
+  if (!lease) return withResponseHeaders(openAiError(GATEWAY_BUSY_MESSAGE, 'concurrency_limit', 429), gatewayRetryHeaders(GATEWAY_BUSY_RETRY_MS))
   let body: Awaited<ReturnType<typeof readJsonBody>>
   try {
     body = await readJsonBody(request, grant?.maxBodyBytes ?? publicAuth?.policy?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
@@ -195,9 +196,15 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
     const chunks = wrapGatewayUsage(harnessGatewayStream(gatewayUpstream(runtime, request, verdict.auth, modelRequest, model, resolved.accountId), grant), recorder, {
       timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
     })
-    return stream
-      ? streamingResponse(chunks, model, shape, lease, attribute, asRecord(input.stream_options).include_usage === true, namespaces)
-      : nonStreamingResponse(chunks, model, shape, lease, attribute, namespaces)
+    if (!stream) return nonStreamingResponse(chunks, model, shape, lease, attribute, namespaces)
+    const admitted = await admitGatewayStream(chunks, lease.signal)
+    if ('refused' in admitted) {
+      await chunks.finish('failed').catch(() => undefined)
+      lease.release()
+      const { refused } = admitted
+      return withResponseHeaders(openAiError(refused.message, refused.code ?? 'upstream_error', errorStatus(refused)), failureRetryHeaders(refused.failure))
+    }
+    return streamingResponse(admitted.chunks, model, shape, lease, attribute, asRecord(input.stream_options).include_usage === true, namespaces)
   } catch (error) {
     await recorder?.finish('failed').catch(() => undefined)
     lease.release()
@@ -216,7 +223,7 @@ async function nonStreamingResponse(chunks: GatewayUsageStream, model: string, s
       const chunk = result.value
       if (chunk.kind === 'error') {
         await chunks.finish('failed')
-        return openAiError(chunk.message, chunk.code ?? 'upstream_error', errorStatus(chunk))
+        return withResponseHeaders(openAiError(chunk.message, chunk.code ?? 'upstream_error', errorStatus(chunk)), failureRetryHeaders(chunk.failure))
       }
       output.accept(chunk)
       if (chunk.kind === 'completed') break

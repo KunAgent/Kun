@@ -26,10 +26,20 @@ export async function* observeModelAttempts(request: ModelRequest,
     }
   } catch (error) {
     if (!(error instanceof GatewayBudgetError)) throw error
-    // Callers can read the window, remaining allowance and reset time from GET /v1/kun/limit.
-    const limited = error.code === 'token_budget_exceeded' || error.code === 'cost_limit_exceeded'
-    yield { kind: 'error', code: error.code, message: limited ? `${error.message} See GET /v1/kun/limit for when it resets.` : error.message,
-      failure: { category: 'request', reason: 'request', localAdmission: true, httpStatus: error.code === 'token_budget_exceeded' || error.code === 'cost_limit_exceeded' ? 429
-        : error.code === 'token_budget_unbounded' ? 400 : 503, failoverAllowed: false } }
+    yield budgetRefusalChunk(error)
   } finally { await finish() }
+}
+
+/**
+ * A local budget refusal as a terminal chunk. It is marked as local admission
+ * so the gateway can answer with a plain 429 before any stream starts, and
+ * carries the window end so that answer says when to retry.
+ */
+export function budgetRefusalChunk(error: GatewayBudgetError): Extract<ModelStreamChunk, { kind: 'error' }> {
+  // Callers can read the window, remaining allowance and reset time from GET /v1/kun/limit.
+  const limited = error.code === 'token_budget_exceeded' || error.code === 'cost_limit_exceeded'
+  const resetAt = limited && error.resetsAt !== undefined ? new Date(error.resetsAt).toISOString() : undefined
+  return { kind: 'error', code: error.code, message: limited ? `${error.message}${resetAt ? ` It resets at ${resetAt}.` : ''} See GET /v1/kun/limit for this key's limits.` : error.message,
+    failure: { category: 'request', reason: 'request', localAdmission: true, httpStatus: limited ? 429
+      : error.code === 'token_budget_unbounded' ? 400 : 503, ...(resetAt ? { resetAt } : {}), failoverAllowed: false } }
 }
