@@ -9,15 +9,15 @@ import { loadHarnesses, useHarnessStore } from '../store/harness-store'
 import { useChatStore } from '../store/chat-store'
 import { settingsButtonClass } from './settings-button'
 import { GatewayClientCredentials } from './gateway-client-credentials'
-import { GatewayAgentsPanel } from './gateway-agents-panel'
-import { GatewayMiddlewarePanel } from './gateway-middleware-panel'
-import { GatewayRouteTracePanel } from './gateway-route-trace-panel'
-import { GatewayDiscoveryRow } from './gateway-discovery-row'
-import { GatewayExtensionExportsPanel, GatewaySubscriptionExportPanel } from './gateway-extension-exports-panel'
 import { GatewayClientSelect } from './gateway-client-select'
 import type { RoutePoolTestRecord, RouteStatus } from './settings-section-model-routes'
 
-export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, active, tests, translation, exportableModelIds, gatewayExportPools, onEditRoute, onChange }: {
+/**
+ * Isolated setup for one standalone client: a stable public alias, a scoped
+ * key, and a reviewed per-folder config, without touching the agent's own
+ * global settings (the Agents list does that).
+ */
+export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, active, tests, translation, exportableModelIds, gatewayExportPools, onEditRoute }: {
   settings: ModelProviderSettingsV1
   pools: ModelRoutePoolV1[]
   baseUrl: string
@@ -28,8 +28,6 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
   tests: RoutePoolTestRecord[]
   translation?: TFunction
   onEditRoute: (poolId: string) => void
-  /** Saves gateway settings (middleware); omitted in read-only previews. */
-  onChange?: (next: ModelProviderSettingsV1) => void
 }): ReactElement {
   const { t: localT } = useTranslation('settings')
   const t = translation ?? localT
@@ -63,14 +61,7 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
     useHarnessStore.setState({ settingsHarnessId: clientId })
     useChatStore.getState().openSettings('agentsHarnesses')
   }
-  return <div className="mt-4 grid min-w-0 gap-4">
-  {onChange ? <GatewayDiscoveryRow settings={settings} onChange={onChange} active={active} t={t} /> : null}
-  <GatewayAgentsPanel active={active} translation={t} />
-  <GatewayRouteTracePanel active={active} t={t} />
-  {onChange ? <GatewayMiddlewarePanel settings={settings} onChange={onChange} active={active} t={t} /> : null}
-  {onChange ? <GatewayExtensionExportsPanel settings={settings} onChange={onChange} active={active} t={t} /> : null}
-  {onChange ? <GatewaySubscriptionExportPanel settings={settings} onChange={onChange} t={t} /> : null}
-  <section className="grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-connection-center>
+  return <section className="grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-connection-center>
     <div>
       <h3 className="text-[14px] font-semibold text-ds-ink">{t('gatewayConnection.title')}</h3>
       <p className="mt-1 text-[12px] leading-5 text-ds-muted">{t('gatewayConnection.description')}</p>
@@ -139,5 +130,4 @@ export function GatewayConnectionCenter({ settings, pools, baseUrl, synced, acti
     </div> : null}
     <p className="text-[11px] leading-5 text-ds-faint">{t('gatewayConnection.boundaries')}</p>
   </section>
-  </div>
 }

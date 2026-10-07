@@ -1,12 +1,12 @@
 {
   "gatewayAgents": {
     "title": "Agents",
-    "description": "Point the coding agents on this computer at Kun. Kun changes only the keys it owns in each agent's config, gives each agent its own gateway key, and puts your values back when you disconnect.",
+    "description": "Turn on an agent's switch and it uses Kun's models. Kun changes only the keys it owns in the agent's config, keeps a backup, and gives each agent its own gateway key; turning the switch off puts your values back.",
     "connectedCount": "{{count}} connected",
     "sync": "Sync model lists",
     "syncHint": "Rewrite the model list in agents that keep their own copy (OpenCode, Pi, Crush, Droid, Goose, Continue, Kimi Code).",
     "refresh": "Refresh",
-    "gatewayOff": "Turn on the local API above before connecting agents.",
+    "gatewayOff": "Turn on the local gateway before connecting agents.",
     "noModelsHint": "The gateway serves no models yet. Create a routed model or expose provider models first.",
     "loading": "Looking for agents…",
     "noneInstalled": "No supported agent was found on this computer.",
@@ -75,6 +75,9 @@
       "config_unreadable": "{{agent}}'s config {{file}} could not be read. Fix the file, or connect after removing it.",
       "config_unsupported": "{{file}} uses a layout Kun will not rewrite automatically (YAML anchors, several documents, or a value that is not an object). Edit it by hand or simplify it, then connect again.",
       "strict_json_required": "{{agent}} ignores {{file}} because it contains comments or trailing commas, so settings written there would never take effect. Remove them, then connect again."
-    }
+    },
+    "newSessions": "takes effect in new sessions",
+    "working": "Working…",
+    "toggleFor": "Use Kun in {{agent}}"
   }
 }

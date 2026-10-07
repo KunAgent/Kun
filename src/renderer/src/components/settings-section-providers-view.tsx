@@ -150,7 +150,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
               onChange={setWorkspaceMode}
             />
             <p className="max-w-2xl px-1 text-[12px] leading-5 text-ds-muted">
-              {t('providersDesc')}
+              {workspaceMode === 'routes' ? t('gatewaySetup.pageDesc') : t('providersDesc')}
               <span className="text-ds-faint"> {t('modelProviderConfigFileHint')}</span>
             </p>
           </div>

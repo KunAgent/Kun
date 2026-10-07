@@ -21,7 +21,7 @@ export function GatewayAgentPreview({ preview, agentName, busy, onConfirm, onCan
   onCancel: () => void
   t: TFunction
 }): ReactElement {
-  return <div className="grid min-w-0 gap-2 rounded-xl border border-accent/40 bg-ds-main/60 p-3" data-gateway-agent-preview={preview.agentId}>
+  return <div className="grid min-w-0 gap-2 rounded-xl border border-ds-border bg-ds-main p-3" data-gateway-agent-preview={preview.agentId}>
     <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ds-ink">
       <FileDiff className="h-4 w-4 text-accent" />{t('gatewayAgents.previewTitle', { agent: agentName })}
     </div>
@@ -29,7 +29,7 @@ export function GatewayAgentPreview({ preview, agentName, busy, onConfirm, onCan
       {preview.files.map((file) => <li key={file.file} className="min-w-0 overflow-hidden rounded-lg border border-ds-border bg-ds-card">
         <div className="flex min-w-0 items-center gap-2 border-b border-ds-border px-2.5 py-1.5 text-[11px]">
           <span className="min-w-0 truncate font-mono text-ds-ink" title={file.file}>{homeRelativePath(file.file)}</span>
-          {file.created ? <span className="shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">{t('gatewayAgents.previewNewFile')}</span> : null}
+          {file.created ? <span className="shrink-0 rounded-full bg-accent-tint/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">{t('gatewayAgents.previewNewFile')}</span> : null}
         </div>
         <pre className="max-h-64 overflow-auto px-0 py-1 font-mono text-[11px] leading-[18px]">
           {file.diff.split('\n').filter((line) => line && !line.startsWith('\\')).map((line, index) =>

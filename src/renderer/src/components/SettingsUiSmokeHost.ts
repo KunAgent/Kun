@@ -209,9 +209,15 @@ export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
     if (url.pathname === '/v1/model-connections') return response(connections())
     if (url.pathname === '/v1/model-routes') {
       const provider = getModelProviderSettings(settings)
+      const pools = projectExecutableModelRoutePools(provider)
+      // What the gateway would list: enabled routes, plus provider/model ids while sharing is on.
+      const exportableModelIds = provider.localGateway.enabled ? [
+        ...pools.filter((pool) => pool.enabled).map((pool) => pool.modelId),
+        ...(provider.localGateway.exposeProviderModels ? provider.providers.flatMap((item) => item.models.map((model) => `${item.id}/${model}`)) : [])
+      ] : []
       return response({
         localGateway: { ...provider.localGateway, credential: { configured: false } },
-        pools: projectExecutableModelRoutePools(provider), configuredPools: provider.routePools,
+        pools, configuredPools: provider.routePools, exportableModelIds,
         metrics: {}, events: [], tests: []
       })
     }

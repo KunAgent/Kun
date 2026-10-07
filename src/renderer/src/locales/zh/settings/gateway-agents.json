@@ -1,12 +1,12 @@
 {
   "gatewayAgents": {
-    "title": "Agents",
-    "description": "让本机的编码 agent 使用 Kun 的模型。Kun 只修改它在各 agent 配置中负责的键，为每个 agent 单独签发网关密钥，断开时把你原来的值还原。",
-    "connectedCount": "已连接 {{count}} 个",
+    "title": "Agent",
+    "description": "打开开关，Agent 就会改用 Kun 的模型。Kun 只改它负责的配置项并保留备份，为每个 Agent 单独签发密钥；关掉开关即恢复原来的设置。",
+    "connectedCount": "已接入 {{count}} 个",
     "sync": "同步模型列表",
     "syncHint": "为自带模型列表的 agent（OpenCode、Pi、Crush、Droid、Goose、Continue、Kimi Code）重写模型列表。",
     "refresh": "刷新",
-    "gatewayOff": "请先开启上方的本地 API，再连接 agent。",
+    "gatewayOff": "请先开启本地网关，再接入 Agent。",
     "noModelsHint": "网关还没有可用模型。请先创建路由模型，或开启对外暴露供应商模型。",
     "loading": "正在查找 agent…",
     "noneInstalled": "本机没有找到支持的 agent。",
@@ -54,9 +54,9 @@
     "previewCancel": "取消",
     "previewConfirm": "应用改动",
     "status": {
-      "connected": "已连接",
+      "connected": "已接入",
       "drifted": "已被外部修改",
-      "idle": "未连接",
+      "idle": "未接入",
       "missing": "未安装"
     },
     "efforts": {
@@ -75,6 +75,9 @@
       "config_unreadable": "无法读取 {{agent}} 的配置文件 {{file}}。请修复该文件，或删除后再连接。",
       "config_unsupported": "{{file}} 使用了 Kun 不会自动改写的写法（YAML 锚点、多个文档，或不是对象的值）。请手动编辑或简化后再连接。",
       "strict_json_required": "{{agent}} 会忽略 {{file}}，因为其中有注释或末尾逗号，写入的设置不会生效。请删除它们后再连接。"
-    }
+    },
+    "newSessions": "新开的会话生效",
+    "working": "处理中…",
+    "toggleFor": "让 {{agent}} 使用 Kun"
   }
 }

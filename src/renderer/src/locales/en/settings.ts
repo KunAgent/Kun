@@ -4,6 +4,7 @@ import routeRules from './settings/route-rules.json'
 import gatewayMiddleware from './settings/gateway-middleware.json'
 import gatewayObservability from './settings/gateway-observability.json'
 import gatewayExtensions from './settings/gateway-extensions.json'
+import gatewaySetup from './settings/gateway-setup.json'
 import providerConfiguration from './settings/provider-configuration.json'
 import navigationProviders from './settings/navigation-providers.json'
 import settingsChrome from './settings/settings-chrome.json'
@@ -26,6 +27,7 @@ const settings = {
   ...gatewayMiddleware,
   ...gatewayObservability,
   ...gatewayExtensions,
+  ...gatewaySetup,
   ...navigationProviders,
   ...settingsChrome,
   ...modelRoutes,
