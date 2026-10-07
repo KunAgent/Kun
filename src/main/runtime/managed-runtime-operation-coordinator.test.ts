@@ -270,4 +270,17 @@ describe('ManagedRuntimeOperationCoordinator', () => {
     expect(coordinator.hasPendingOperation()).toBe(false)
   })
 
+  it('advances the lifecycle generation around restarts and settings applies but not ensures', async () => {
+    const coordinator = new ManagedRuntimeOperationCoordinator<string>()
+    await coordinator.ensure('a', async () => 'settings')
+    expect(coordinator.lifecycleGeneration()).toBe(0)
+    let during = -1
+    await coordinator.restart(async () => { during = coordinator.lifecycleGeneration() })
+    expect(during).toBe(1)
+    expect(coordinator.lifecycleGeneration()).toBe(2)
+    coordinator.enqueueSettingsApply(async () => undefined, () => undefined)
+    await coordinator.waitForIdle()
+    expect(coordinator.lifecycleGeneration()).toBe(4)
+  })
 })
+

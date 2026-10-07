@@ -382,7 +382,8 @@ export async function runtimeRequestViaHost(
   settings: AppSettingsV1,
   pathAndQuery: string,
   init: RuntimeRequestInit,
-  ensureRuntime: (settings: AppSettingsV1) => Promise<AppSettingsV1 | void>
+  ensureRuntime: (settings: AppSettingsV1) => Promise<AppSettingsV1 | void>,
+  onConnectionFailure?: () => void
 ): Promise<{ ok: boolean; status: number; body: string }> {
   init.signal?.throwIfAborted()
   const ensuredSettings = await ensureRuntime(settings)
@@ -401,6 +402,8 @@ export async function runtimeRequestViaHost(
     // whether the process is globally unhealthy instead of turning one slow
     // attachment preview into an immediate managed-runtime restart.
     if (!isRuntimeConnectionFailure(error)) throw error
+    // A refused connection invalidates any recently verified health result.
+    onConnectionFailure?.()
     const retrySettings = await ensureRuntime(requestSettings)
     init.signal?.throwIfAborted()
     const nextSettings = retrySettings ?? requestSettings

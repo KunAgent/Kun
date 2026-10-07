@@ -60,6 +60,7 @@ import {
 import { reconcileBrowserUseHostForRuntime } from './browser-use/browser-use-host'
 import { bundledSkillsDirectory } from './bundled-skill-resources'
 import { isAppQuitInProgress } from './main-lifecycle'
+import { forgetRecentRuntimeVerification } from './runtime/recent-runtime-verification'
 
 export function publishRuntimeSettingsSyncStatus(
   status: Omit<KunRuntimeSettingsSyncStatusPayload, 'at'>
@@ -640,7 +641,7 @@ export async function runtimeRequest(
     return runtimeFailure('runtime_shutting_down', 'Kun application is shutting down')
   }
   try {
-    return await runtimeRequestViaHost(settings, pathAndQuery, init, ensureRuntime)
+    return await runtimeRequestViaHost(settings, pathAndQuery, init, ensureRuntime, forgetRecentRuntimeVerification)
   } catch (e) {
     if (init.signal?.aborted) return runtimeFailure('aborted', 'Runtime request was cancelled.', 0)
     const message = e instanceof Error ? e.message : String(e)
