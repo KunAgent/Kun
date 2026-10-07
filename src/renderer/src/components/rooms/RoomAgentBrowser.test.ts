@@ -46,6 +46,7 @@ it('clears the browser status immediately across conversations and ignores a lat
   let event!: (value: unknown) => void
   vi.stubGlobal('window', { kunGui: { getBrowserUseState: get, onBrowserUseState: (listener: typeof event) => { event = listener; return vi.fn() } } })
   await act(async () => { renderer = create(createElement(RoomAgentBrowserStatus, { roomId: 'room-a', activity: activity(), onOpen: vi.fn() })) })
+  expect(renderer!.toJSON()).toBeNull()
   await act(async () => event({ threadId: 'thread-a', turnId: 'turn-a', sessionId: 'browser-session-a', lifecycle: 'manual-control', controlOwner: 'manual', updatedAt: '2026-10-02T00:00:01Z' }))
   expect(JSON.stringify(renderer!.toJSON())).toContain('You have browser control')
   await act(async () => resolve({ threadId: 'thread-a', turnId: 'turn-a', sessionId: 'old-session', lifecycle: 'loading', updatedAt: '2026-10-02T00:00:00Z' }))
