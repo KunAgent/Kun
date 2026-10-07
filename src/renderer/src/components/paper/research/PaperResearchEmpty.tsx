@@ -61,7 +61,7 @@ export function PaperResearchEmpty({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div data-testid="paper-research-empty" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto flex w-full max-w-[720px] flex-1 flex-col justify-center px-6 pb-[8vh] pt-10">
         <div className="text-center">
           <h1 className="text-[24px] font-medium leading-tight tracking-[-0.025em] text-ds-ink sm:text-[28px]">
@@ -111,8 +111,10 @@ export function PaperResearchEmpty({
             <button
               key={key}
               type="button"
+              data-paper-research-example
+              disabled={starting}
               onClick={() => assistant.setInput(t(key))}
-              className="rounded-full border border-ds-border-muted px-3 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+              className="rounded-full border border-ds-border-muted px-3 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
             >
               {t(key)}
             </button>

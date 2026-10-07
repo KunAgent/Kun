@@ -64,7 +64,7 @@ function seed(libraries: string[], entries: PaperLibraryEntry[]): void {
 
 function rootRow(tree: ReactTestRenderer, root: string) {
   return tree.root.find(
-    (node) => node.props.role === 'button' && node.props.title === root
+    (node) => node.type === 'button' && node.props['data-testid'] === 'paper-workspace-collapse' && node.props['data-workspace-root'] === root
   )
 }
 
@@ -75,7 +75,7 @@ function paperRowCount(tree: ReactTestRenderer): number {
 }
 
 describe('PaperWorkspacesSection collapse', () => {
-  it('hides the tree when the workspace root row is clicked, and restores on second click', async () => {
+  it('hides the tree with the dedicated collapse button, and restores on second click', async () => {
     seed([ROOT], [entry('OrcaLoca'), entry('Experts Rise')])
     let tree!: ReactTestRenderer
     await act(async () => {
@@ -119,27 +119,18 @@ describe('PaperWorkspacesSection collapse', () => {
     })
   })
 
-  it('toggles with Enter and Space like a native button', async () => {
+  it('uses native keyboard buttons and never nests interactive workspace controls', async () => {
     seed([ROOT], [entry('OrcaLoca')])
     let tree!: ReactTestRenderer
     await act(async () => {
       tree = createRenderer(createElement(PaperWorkspacesSection))
     })
-    const keyDown = (key: string) =>
-      rootRow(tree, ROOT).props.onKeyDown({ key, preventDefault: () => undefined })
-
-    await act(async () => {
-      keyDown(' ')
-    })
-    expect(paperRowCount(tree)).toBe(0)
-
-    await act(async () => {
-      keyDown('Enter')
-    })
-    expect(paperRowCount(tree)).toBe(1)
-    await act(async () => {
-      tree.unmount()
-    })
+    expect(rootRow(tree, ROOT).props['aria-expanded']).toBe(true)
+    const switchButton = tree.root.find((node) => node.type === 'button' && node.props['data-testid'] === 'paper-workspace-switch')
+    expect(switchButton.props['aria-current']).toBe('true')
+    expect(switchButton.findAll((node) => node !== switchButton && node.type === 'button')).toHaveLength(0)
+    expect(tree.root.findAll((node) => node.props.role === 'button' && node.props.title === ROOT)).toHaveLength(0)
+    await act(async () => tree.unmount())
   })
 
   it('keeps folder rows collapsible while filtering without touching persisted folds', async () => {

@@ -1,18 +1,13 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import { useCallback, useMemo, useState, type ReactElement } from 'react'
 import { ChevronRight, Folder, FolderOpen, Import, Loader2, MoreHorizontal, Plus, RotateCcw, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore, writeBasenameFromPath } from '../../../write/write-workspace-store'
-import { normalizePath } from '../../../write/write-workspace-store-helpers'
-import { usePaperStore } from '../../../write/paper/paper-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { confirmDialog } from '../../../lib/confirm-dialog'
-import { formatWorkspacePickerError } from '../../../lib/format-workspace-picker-error'
 import { revealWorkspacePathInFileManager } from '../../../lib/open-workspace-path'
-import {
-  registerPaperLibrary,
-  removePaperLibrary,
-  switchPaperLibrary
-} from '../../../paper/paper-mode-actions'
+import { removePaperLibrary } from '../../../paper/paper-mode-actions'
+import { usePaperWorkspaceBootstrapStore } from '../../../paper/paper-workspace-bootstrap'
+import { usePaperWorkspaceActions } from '../use-paper-workspace-actions'
 import { refreshPaperLibrary } from '../../../paper/paper-library-index'
 import { SidebarIconButton, SidebarSectionHeader } from '../../sidebar/SidebarPrimitives'
 import { PaperTree } from './PaperTree'
@@ -32,13 +27,14 @@ function workspaceLabel(root: string, duplicateBases: ReadonlySet<string>): stri
 
 /**
  * 「工作空间」 section: every configured library listed as its own tree —
- * root row (collapse, name, count, ⋮ menu) then its folders and papers.
+ * root row (independent collapse, switch, count, ⋮ menu) then its folders and papers.
  * Non-active roots are indexed lazily while expanded; all row actions run
  * against the tree's own root so same-named units never collide.
  */
 export function PaperWorkspacesSection(): ReactElement {
   const { t } = useTranslation('common')
-  const setFileError = useWriteWorkspaceStore((s) => s.setFileError)
+  const defaultRoot = usePaperWorkspaceBootstrapStore((s) => s.defaultWorkspaceRoot)
+  const { busy, error, run, switchWorkspace, chooseWorkspace } = usePaperWorkspaceActions()
   const setImportDialogOpen = usePaperModeStore((s) => s.setImportDialogOpen)
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => readCollapsedWorkspaces())
   const [filterOpen, setFilterOpen] = useState(false)
@@ -47,6 +43,7 @@ export function PaperWorkspacesSection(): ReactElement {
   const [menu, setMenu] = useState<{ root: string; x: number; y: number } | null>(null)
 
   const { roots, activeRoot, byRoot } = usePaperSidebarLibraries(collapsed)
+  const closeMenu = useCallback(() => setMenu(null), [])
 
   const labels = useMemo(() => {
     const baseCounts = new Map<string, number>()
@@ -55,8 +52,8 @@ export function PaperWorkspacesSection(): ReactElement {
       baseCounts.set(base, (baseCounts.get(base) ?? 0) + 1)
     }
     const duplicates = new Set([...baseCounts.entries()].filter(([, n]) => n > 1).map(([base]) => base))
-    return new Map(roots.map((root) => [root, workspaceLabel(root, duplicates)]))
-  }, [roots])
+    return new Map(roots.map((root) => [root, root === defaultRoot ? t('paperWorkspaceDefaultName') : workspaceLabel(root, duplicates)]))
+  }, [roots, defaultRoot, t])
 
   const setWorkspaceCollapsed = (root: string, next: boolean): void => {
     setCollapsed((current) => {
@@ -68,49 +65,37 @@ export function PaperWorkspacesSection(): ReactElement {
     })
   }
 
-  const addWorkspace = async (): Promise<void> => {
-    try {
-      setFileError(null)
-      if (typeof window.kunGui?.pickWorkspaceDirectory !== 'function') {
-        throw new Error('workspace:pick-directory unavailable')
-      }
-      const picked = await window.kunGui.pickWorkspaceDirectory(activeRoot || undefined)
-      if (picked.canceled || !picked.path) return
-      const normalized = normalizePath(picked.path)
-      const result = await registerPaperLibrary(normalized)
-      if (!result.ok) setFileError(result.message)
-      else setWorkspaceCollapsed(normalized, false)
-    } catch (error) {
-      setFileError(formatWorkspacePickerError(error))
-    }
+  const activateWorkspace = async (root: string): Promise<boolean> => {
+    const switched = await switchWorkspace(root)
+    if (switched) setWorkspaceCollapsed(root, false)
+    return switched
   }
 
   const importInto = async (root: string): Promise<void> => {
-    if (root !== activeRoot) {
-      const switched = await switchPaperLibrary(root)
-      if (!switched.ok) {
-        if (switched.message !== 'switch-canceled') {
-          usePaperStore.getState().setNotice({
-            tone: 'error',
-            message: switched.message === 'save-failed' ? t('writePaperSaveFailed') : switched.message
-          })
-        }
-        return
-      }
-    }
+    if (busy) return
+    if (root !== activeRoot && !(await activateWorkspace(root))) return
     setImportDialogOpen(true)
   }
 
-  const removeWorkspace = async (root: string): Promise<void> => {
-    if (!(await confirmDialog(
-      t('writePaperModeRemoveLibraryConfirm', { name: labels.get(root) ?? root })
-    ))) return
-    const result = await removePaperLibrary(root)
-    if (!result.ok) setFileError(result.message)
+  const addWorkspace = async (): Promise<void> => {
+    if (await chooseWorkspace()) {
+      setWorkspaceCollapsed(useWriteWorkspaceStore.getState().workspaceRoot, false)
+    }
   }
 
+  const removeWorkspace = (root: string): Promise<boolean> => run(async () => {
+    if (!(await confirmDialog(
+      t('writePaperModeRemoveLibraryConfirm', { name: labels.get(root) ?? root })
+    ))) return { ok: false, message: 'switch-canceled' }
+    return removePaperLibrary(root)
+  })
+
   const onMenuAction = (root: string, action: PaperWorkspaceMenuAction): void => {
+    if (busy) return
     switch (action) {
+      case 'switch':
+        void activateWorkspace(root)
+        return
       case 'reveal':
         void revealWorkspacePathInFileManager(root, root)
         return
@@ -127,7 +112,7 @@ export function PaperWorkspacesSection(): ReactElement {
   }
 
   return (
-    <section className="ds-no-drag flex min-h-0 flex-1 flex-col">
+    <section aria-busy={busy} className="ds-no-drag flex min-h-0 flex-1 flex-col">
       <SidebarSectionHeader
         label={t('paperWorkspaces')}
         actions={(
@@ -146,6 +131,7 @@ export function PaperWorkspacesSection(): ReactElement {
             <SidebarIconButton
               title={t('paperWorkspaceAdd')}
               ariaLabel={t('paperWorkspaceAdd')}
+              disabled={busy}
               onClick={() => void addWorkspace()}
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.9} />
@@ -166,17 +152,19 @@ export function PaperWorkspacesSection(): ReactElement {
                 setFilterOpen(false)
               }
             }}
+            aria-label={t('paperWorkspaceFilterPlaceholder')}
             placeholder={t('paperWorkspaceFilterPlaceholder')}
             className="min-w-0 flex-1 bg-transparent text-[12px] text-ds-ink outline-none placeholder:text-ds-faint"
           />
           {filter ? (
-            <button type="button" onClick={() => setFilter('')} className="text-ds-faint hover:text-ds-ink">
+            <button type="button" aria-label={t('clearSearch')} onClick={() => setFilter('')} className="text-ds-faint hover:text-ds-ink">
               <X className="h-3 w-3" strokeWidth={2} />
             </button>
           ) : null}
         </div>
       ) : null}
 
+      {error ? <p role="alert" className="mx-3 mb-2 break-words text-[11.5px] text-red-600 dark:text-red-300">{error}</p> : null}
       <div className="min-h-0 flex-1 overflow-y-auto pb-2">
         {roots.length === 0 ? (
           <p className="px-4 py-4 text-[12px] text-ds-faint">{t('writePaperModeNoLibraries')}</p>
@@ -188,53 +176,64 @@ export function PaperWorkspacesSection(): ReactElement {
           return (
             <div key={root} className="mt-0.5">
               <div
-                role="button"
-                tabIndex={0}
-                onClick={() => setWorkspaceCollapsed(root, expanded)}
-                onKeyDown={(event) => {
-                  if (event.target !== event.currentTarget) return
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    setWorkspaceCollapsed(root, expanded)
-                  }
-                }}
                 onContextMenu={(event) => {
                   event.preventDefault()
-                  setMenu({ root, x: event.clientX, y: event.clientY })
+                  if (!busy) setMenu({ root, x: event.clientX, y: event.clientY })
                 }}
                 title={root}
-                className="group/workspace flex h-7 w-full cursor-default items-center gap-1 rounded-md px-2 pr-1.5 text-[12.5px] transition hover:bg-ds-hover"
+                className={`group/workspace flex min-h-8 w-full items-center gap-0.5 rounded-md px-1 text-[12.5px] transition ${active ? 'bg-accent-tint/10' : 'hover:bg-ds-hover'}`}
               >
-                <ChevronRight
-                  className={`h-3 w-3 shrink-0 text-ds-faint transition-transform ${expanded ? 'rotate-90' : ''}`}
-                  strokeWidth={2}
-                />
-                {expanded ? (
-                  <FolderOpen className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-muted'}`} strokeWidth={1.8} />
-                ) : (
-                  <Folder className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-muted'}`} strokeWidth={1.8} />
-                )}
-                <span className={`min-w-0 flex-1 truncate ${active ? 'font-medium text-ds-ink' : 'text-ds-muted group-hover/workspace:text-ds-ink'}`}>
-                  {labels.get(root) ?? root}
-                </span>
-                <span className="shrink-0 text-[10.5px] tabular-nums text-ds-faint group-hover/workspace:invisible">
+                <button
+                  type="button"
+                  data-testid="paper-workspace-collapse"
+                  data-workspace-root={root}
+                  aria-label={t(expanded ? 'paperWorkspaceCollapse' : 'paperWorkspaceExpand', { name: labels.get(root) ?? root })}
+                  aria-expanded={expanded}
+                  onClick={() => setWorkspaceCollapsed(root, expanded)}
+                  className="flex h-7 w-5 shrink-0 items-center justify-center rounded text-ds-faint hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                >
+                  <ChevronRight className={`h-3 w-3 transition-transform ${expanded ? 'rotate-90' : ''}`} strokeWidth={2} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  data-testid="paper-workspace-switch"
+                  data-workspace-root={root}
+                  aria-current={active ? 'true' : undefined}
+                  aria-label={t('paperWorkspaceOpenNamed', { name: labels.get(root) ?? root })}
+                  title={root}
+                  disabled={busy}
+                  onClick={() => void activateWorkspace(root)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+                >
+                  {expanded ? (
+                    <FolderOpen className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-muted'}`} strokeWidth={1.8} aria-hidden="true" />
+                  ) : (
+                    <Folder className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-muted'}`} strokeWidth={1.8} aria-hidden="true" />
+                  )}
+                  <span className={`min-w-0 flex-1 truncate ${active ? 'font-medium text-ds-ink' : 'text-ds-muted group-hover/workspace:text-ds-ink'}`}>
+                    {labels.get(root) ?? root}
+                  </span>
+                  {active ? <span className="shrink-0 rounded bg-accent-tint/10 px-1 py-0.5 text-[9px] font-medium text-accent">{t('paperWorkspaceActive')}</span> : null}
+                </button>
+                <span className="shrink-0 px-1 text-[10.5px] tabular-nums text-ds-faint">
                   {slice?.status === 'loading' ? (
-                    <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />
-                  ) : slice?.status === 'ready' ? (
-                    slice.counts.total
-                  ) : null}
+                    <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} aria-label={t('loading')} />
+                  ) : slice?.status === 'ready' ? slice.counts.total : null}
                 </span>
                 <button
                   type="button"
-                  aria-label={t('paperWorkspaceMenu')}
+                  aria-label={t('paperWorkspaceMenuNamed', { name: labels.get(root) ?? root })}
                   title={t('paperWorkspaceMenu')}
+                  aria-haspopup="menu"
+                  aria-expanded={menu?.root === root}
+                  disabled={busy}
                   onClick={(event) => {
-                    event.stopPropagation()
-                    setMenu({ root, x: event.clientX, y: event.clientY })
+                    const rect = event.currentTarget.getBoundingClientRect()
+                    setMenu({ root, x: rect.left, y: rect.bottom + 4 })
                   }}
-                  className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-ds-faint transition hover:bg-ds-main hover:text-ds-ink group-hover/workspace:flex"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-ds-faint transition hover:bg-ds-main hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
+                  <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                 </button>
               </div>
 
@@ -260,9 +259,10 @@ export function PaperWorkspacesSection(): ReactElement {
                   </p>
                 ) : (
                   <>
-                    {slice && !slice.entries.length && !slice.groups.length && !filter.trim() ? (
+                    {slice && !slice.entries.length && !slice.groups.length && !filter.trim() && creatingFolderRoot !== root ? (
                       <button
                         type="button"
+                        disabled={busy}
                         onClick={() => void importInto(root)}
                         className="flex h-7 w-full items-center gap-1.5 rounded-md pl-9 pr-2 text-[12px] text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
                       >
@@ -291,9 +291,10 @@ export function PaperWorkspacesSection(): ReactElement {
         <PaperWorkspaceMenu
           x={menu.x}
           y={menu.y}
+          active={menu.root === activeRoot}
           canRemove={roots.length > 1}
           onAction={(action) => onMenuAction(menu.root, action)}
-          onClose={() => setMenu(null)}
+          onClose={closeMenu}
         />
       ) : null}
     </section>

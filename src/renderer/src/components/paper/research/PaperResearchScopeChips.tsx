@@ -17,13 +17,17 @@ const DEPTHS: PaperResearchDepth[] = ['quick', 'standard', 'deep']
 function ScopeChip({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }): ReactElement {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
+  const trigger = useRef<HTMLButtonElement | null>(null)
   useEffect(() => {
     if (!open) return
     const close = (event: MouseEvent): void => {
       if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false)
     }
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') {
+        setOpen(false)
+        trigger.current?.focus()
+      }
     }
     document.addEventListener('mousedown', close)
     document.addEventListener('keydown', onKey)
@@ -36,9 +40,12 @@ function ScopeChip({ icon, label, children }: { icon: ReactNode; label: string; 
     <div ref={ref} className="relative">
       <button
         type="button"
+        ref={trigger}
+        aria-haspopup="dialog"
+        data-paper-scope-trigger
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] transition ${
+        className={`inline-flex h-7 items-center gap-1.5 rounded-md border border-ds-border-muted px-2 text-[12px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
           open ? 'bg-ds-hover text-ds-ink' : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
         }`}
       >
@@ -47,7 +54,7 @@ function ScopeChip({ icon, label, children }: { icon: ReactNode; label: string; 
         <ChevronDown className="h-3 w-3 text-ds-faint" strokeWidth={2} />
       </button>
       {open ? (
-        <div className="absolute left-0 top-8 z-30 min-w-[220px] rounded-lg border border-ds-border bg-ds-elevated p-1.5 shadow-lg">
+        <div data-paper-scope-menu role="dialog" aria-label={label} className="absolute left-0 top-8 z-30 min-w-[220px] rounded-lg border border-ds-border bg-ds-elevated p-1.5 shadow-lg">
           {children}
         </div>
       ) : null}
@@ -78,7 +85,7 @@ export function PaperResearchScopeChips({
     ? scope.sources.map((source) => t(`writePaperSearchSource_${source}`)).join(', ')
     : t('paperResearchSourcesCount', { count: scope.sources.length })
   return (
-    <div className="flex flex-wrap items-center gap-0.5">
+    <div className="flex flex-wrap items-center gap-1.5">
       {showDepth ? <ScopeChip icon={<Gauge className="h-3.5 w-3.5" strokeWidth={1.8} />} label={t(`paperResearchDepth_${scope.depth}`)}>
         {DEPTHS.map((depth) => (
           <button

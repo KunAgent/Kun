@@ -3,6 +3,7 @@
  * rail turns into an overlay toggled from the header. */
 
 .surface {
+  composes: surface from '../PaperWorkspaceSurface.module.css';
   position: relative;
   display: flex;
   min-height: 0;
@@ -34,8 +35,8 @@
   min-height: 0;
   min-width: 0;
   flex-direction: column;
-  border-left: 1px solid var(--ds-border-muted);
-  background: var(--ds-card);
+  border-left: 1px solid var(--paper-surface-divider);
+  background: var(--paper-surface-rail);
 }
 
 .historyHeader {
@@ -43,7 +44,7 @@
   min-height: 40px;
   align-items: center;
   gap: 6px;
-  border-bottom: 1px solid var(--ds-border-muted);
+  border-bottom: 1px solid var(--paper-surface-divider);
   padding: 0 8px 0 12px;
 }
 
@@ -66,7 +67,7 @@
 }
 
 .historyRow:hover {
-  background: var(--ds-hover);
+  background: var(--ds-surface-hover);
 }
 
 .historyRow[data-active='true'] {
@@ -80,12 +81,12 @@
   gap: 6px;
   font-size: 12.5px;
   line-height: 18px;
-  color: var(--ds-ink);
+  color: var(--ds-text);
 }
 
 .historyTitle > svg {
   flex-shrink: 0;
-  color: var(--ds-faint);
+  color: var(--ds-text-faint);
 }
 
 .historyTitle > span {
@@ -102,7 +103,7 @@
   padding-left: 20px;
   font-size: 11px;
   line-height: 15px;
-  color: var(--ds-faint);
+  color: var(--ds-text-faint);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -110,7 +111,7 @@
 .historyEmpty {
   padding: 14px 10px;
   font-size: 12px;
-  color: var(--ds-faint);
+  color: var(--ds-text-faint);
 }
 
 @container (max-width: 980px) {
@@ -131,4 +132,20 @@
     width: min(320px, 85%);
     box-shadow: var(--ds-shadow-overlay, 0 18px 48px rgba(20, 47, 95, 0.22));
   }
+}
+
+
+:global([data-theme='dark']) .surface :is(header, .historyHeader) button[aria-pressed='true'] {
+  background: var(--ds-accent-soft);
+  color: var(--ds-text);
+}
+
+.surface [data-paper-research-new] {
+  margin-bottom: 8px;
+  border: 1px solid var(--paper-surface-control-border);
+}
+
+.historyRow:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
 }

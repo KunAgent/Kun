@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, type ReactElement, type ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { normalizePath } from '../../write/write-workspace-store-helpers'
 import { isWritePaperViewTab } from '../../write/write-editor-layout'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { usePaperWorkspaceBootstrapStore } from '../../paper/paper-workspace-bootstrap'
 import { PaperWorkbenchChromeContext, type PaperWorkbenchChrome } from '../../paper/paper-chrome-context'
 import { WriteWorkspaceView } from '../write/WriteWorkspaceView'
 import { WritePdfRendererProvider } from '../write/write-pdf-renderer-context'
@@ -60,7 +62,10 @@ export function PaperWorkspaceView({
   const infoDrawerOpen = usePaperModeStore((s) => s.infoDrawerOpen)
   const setInfoDrawerOpen = usePaperModeStore((s) => s.setInfoDrawerOpen)
 
-  const hasLibrary = paperMode.libraries.length > 0
+  const workspaceStatus = usePaperWorkspaceBootstrapStore((s) => s.status)
+  const hasLibrary = Boolean(paperMode.activeLibrary && workspaceRoot)
+    && normalizePath(paperMode.activeLibrary) === normalizePath(workspaceRoot)
+    && workspaceStatus !== 'loading' && workspaceStatus !== 'error'
 
   // Deep paper UI (reader layout presets, immersive mode) collapses the left
   // sidebar through the workbench callback rather than a parallel flag.
@@ -81,7 +86,7 @@ export function PaperWorkspaceView({
       group.tabs.some((tab) => isWritePaperViewTab(tab) && tab.view === 'library')
     )
     if (!pinned) openPaperViewTab('library')
-  }, [hasLibrary, openPaperViewTab])
+  }, [hasLibrary, workspaceRoot, openPaperViewTab])
 
   // Paper mode never shows the docs start page: when the reader closes the
   // last tab of a split group (typically the NOTES column), fold the group
@@ -134,7 +139,7 @@ export function PaperWorkspaceView({
     window.kunGui
       .paperLibraryList({ workspaceRoot, papersDir: paperReading.papersDir })
       .then((result) => {
-        if (canceled) return
+        if (canceled || useWriteWorkspaceStore.getState().workspaceRoot !== workspaceRoot) return
         if (result.ok) {
           setEntriesResult({
             entries: result.entries,
@@ -147,7 +152,7 @@ export function PaperWorkspaceView({
         }
       })
       .catch((error) => {
-        if (canceled) return
+        if (canceled || useWriteWorkspaceStore.getState().workspaceRoot !== workspaceRoot) return
         setEntriesError(error instanceof Error ? error.message : String(error))
       })
     return () => {
@@ -188,13 +193,13 @@ export function PaperWorkspaceView({
           ) : null}
           {hasLibrary ? <PaperTaskRing /> : null}
         </div>
-        {rightPanel}
+        {hasLibrary ? rightPanel : null}
       </div>
-      <PaperReadingDialogHost />
-      <PaperImportDialogHost
+      {hasLibrary ? <PaperReadingDialogHost /> : null}
+      {hasLibrary ? <PaperImportDialogHost
         workspaceRoot={workspaceRoot}
         paperReading={paperReading}
-      />
+      /> : null}
     </>
   )
 }

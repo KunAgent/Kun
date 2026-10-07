@@ -57,7 +57,9 @@ export async function addPdfToPaperLibrary(input: {
       })
       return
     }
-    usePaperStore.getState().rememberUnit(result.unitDir, result.meta)
+    if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) === library) {
+      usePaperStore.getState().rememberUnit(result.unitDir, result.meta)
+    }
     paperNotice({
       tone: 'success',
       message: t('writePaperAddedToLibrary', { title: result.meta.title })
@@ -121,6 +123,7 @@ export async function openLibraryEntry(
       { groupId: 'primary', viewMode: 'rich' }
     )
   }
+  if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== root) return
   // R1.1: the reader layout preset persists across papers — apply the stored
   // choice (阅读/笔记/助手) right after the unit opens.
   if (entry.hasPdf && entry.meta.pdfFile) {
@@ -130,6 +133,7 @@ export async function openLibraryEntry(
       pdfFile: entry.meta.pdfFile
     })
   }
+  if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== root) return
   const now = new Date().toISOString()
   void window.kunGui?.paperLocalStateWrite?.({
     libraryRoot: root,
@@ -142,7 +146,7 @@ export async function openLibraryEntry(
       unitDir: entry.unitDir,
       patch: { status: 'reading' }
     }).then((result) => {
-      if (result?.ok) {
+      if (result?.ok && normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) === root) {
         const state = usePaperModeStore.getState()
         state.setEntriesResult({
           entries: state.entries.map((item) =>

@@ -19,6 +19,7 @@ export function defaultWritePaperModeSettings(): WritePaperModeSettingsV1 {
     enabled: false,
     libraries: [],
     activeLibrary: '',
+    workspaceInitialized: false,
     autoMarkReading: true,
     translate: {
       targetLanguage: 'zh',
@@ -112,6 +113,7 @@ export function normalizeWritePaperModeSettings(
     enabled: source.enabled === true,
     libraries,
     activeLibrary,
+    workspaceInitialized: source.workspaceInitialized === true || !!activeLibrary || libraries.length > 0,
     autoMarkReading: source.autoMarkReading !== false,
     translate: {
       targetLanguage: translate.targetLanguage === 'en' ? 'en' : 'zh',
@@ -175,6 +177,9 @@ export function mergeWritePaperModeSettings(
   return normalizeWritePaperModeSettings({
     ...current,
     ...(patch ?? {}),
+    // A stale settings projection must not undo an explicit workspace removal.
+    workspaceInitialized: current.workspaceInitialized || !!current.activeLibrary ||
+      current.libraries.length > 0 || patch?.workspaceInitialized === true,
     translate: { ...current.translate, ...(patch?.translate ?? {}) },
     discover: nextDiscover,
     scholar: { ...current.scholar, ...(patch?.scholar ?? {}) },
@@ -182,4 +187,3 @@ export function mergeWritePaperModeSettings(
     reader: { ...current.reader, ...(patch?.reader ?? {}) }
   })
 }
-

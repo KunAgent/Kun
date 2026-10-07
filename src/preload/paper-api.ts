@@ -35,6 +35,7 @@ export const paperApi: KunGuiPaperApi = {
   },
 
   // ---- library (paper mode) -------------------------------------------------
+  paperWorkspaceEnsure: () => ipcRenderer.invoke('paper-workspace:ensure'),
   paperLibraryList: (payload) => ipcRenderer.invoke('paper-library:list', payload),
   paperDetectLibraries: (payload) => ipcRenderer.invoke('paper-library:detect', payload),
   paperUpdateMeta: (payload) => ipcRenderer.invoke('paper-library:update-meta', payload),

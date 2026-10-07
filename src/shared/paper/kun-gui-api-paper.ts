@@ -1,4 +1,5 @@
 import type { PaperEvidenceApi } from './paper-evidence-types'
+import type { PaperWorkspaceEnsureResult } from './paper-workspace-types'
 import type { PaperSearchResult, PaperSearchSource } from './paper-search'
 import type {
   PaperCoolNotesResult,
@@ -106,6 +107,8 @@ export type PaperUnitApi = {
  * v2 metadata patching, grouping, trash, local reading state, and BibTeX.
  */
 export type PaperLibraryApi = {
+  /** Initialize the default once, or validate the selected library. Desktop only. */
+  paperWorkspaceEnsure: () => Promise<PaperWorkspaceEnsureResult>
   /** Scan `<workspaceRoot>/<papersDir>` recursively (depth ≤3). */
   paperLibraryList: (payload: {
     workspaceRoot: string

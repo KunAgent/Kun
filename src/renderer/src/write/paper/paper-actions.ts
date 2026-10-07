@@ -38,6 +38,10 @@ function errorNotice(t: PaperTranslate, code: string, message: string): void {
   }
 }
 
+function workspaceIsCurrent(workspaceRoot: string): boolean {
+  return normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) === normalizePath(workspaceRoot)
+}
+
 function refreshWorkspace(workspaceRoot: string): Promise<void> {
   return useWriteWorkspaceStore.getState().refreshWorkspace(workspaceRoot)
 }
@@ -65,6 +69,7 @@ export async function importPaper(
       parentDir: deps.settings.papersDir,
       requestId
     })
+    if (!workspaceIsCurrent(workspaceRoot)) return result.ok
     if (!result.ok) {
       errorNotice(t, result.code, result.message)
       return false
@@ -75,6 +80,7 @@ export async function importPaper(
       message: t('writePaperImportDone', { title: result.meta.title })
     })
     await refreshWorkspace(workspaceRoot)
+    if (!workspaceIsCurrent(workspaceRoot)) return true
     await openPaperUnit({ workspaceRoot, unitDir: result.unitDir, meta: result.meta })
     deps.onImported?.(result.unitDir, result.meta)
     if (deps.settings.autoPreprocess) {
@@ -82,7 +88,9 @@ export async function importPaper(
     }
     return true
   } catch (error) {
-    paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    if (workspaceIsCurrent(workspaceRoot)) {
+      paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    }
     return false
   } finally {
     usePaperStore.getState().endJob(requestId)
@@ -122,6 +130,7 @@ export async function fetchCoolNotes(
       force: deps.force === true,
       requestId
     })
+    if (!workspaceIsCurrent(workspaceRoot)) return
     if (!result.ok) {
       if (result.code === 'no-notes-file') {
         paperNotice({ tone: 'info', message: t('writePaperCoolNotFound') })
@@ -140,7 +149,9 @@ export async function fetchCoolNotes(
     })
     await refreshWorkspace(workspaceRoot)
   } catch (error) {
-    paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    if (workspaceIsCurrent(workspaceRoot)) {
+      paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    }
   } finally {
     usePaperStore.getState().endJob(requestId)
   }
@@ -166,6 +177,7 @@ export async function preprocessPaper(
       force: deps.force === true,
       requestId
     })
+    if (!workspaceIsCurrent(workspaceRoot)) return result.ok
     if (!result.ok) {
       errorNotice(t, result.code, result.message)
       return false
@@ -176,10 +188,12 @@ export async function preprocessPaper(
     })
     await refreshWorkspace(workspaceRoot)
     const read = await window.kunGui.paperReadUnit({ workspaceRoot, unitDir })
-    if (read.ok) usePaperStore.getState().rememberUnit(read.unitDir, read.meta)
+    if (read.ok && workspaceIsCurrent(workspaceRoot)) usePaperStore.getState().rememberUnit(read.unitDir, read.meta)
     return true
   } catch (error) {
-    paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    if (workspaceIsCurrent(workspaceRoot)) {
+      paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    }
     return false
   } finally {
     usePaperStore.getState().endJob(requestId)
@@ -217,7 +231,7 @@ export async function checkPendingInterpretation(workspaceRoot: string): Promise
     workspaceRoot,
     path: pending.outputDir
   })
-  if (!listing.ok) return
+  if (!listing.ok || !workspaceIsCurrent(workspaceRoot)) return
   const candidates = listing.entries.filter(
     (entry) =>
       entry.type === 'file' &&
@@ -239,19 +253,23 @@ export async function checkPendingInterpretation(workspaceRoot: string): Promise
     unitDir: pending.unitDir,
     path
   })
+  if (!workspaceIsCurrent(workspaceRoot)) return
   await refreshWorkspace(workspaceRoot)
+  if (!workspaceIsCurrent(workspaceRoot)) return
   await openPaperInterpretation({ workspaceRoot, unitDir: pending.unitDir, path })
 }
 
 /** Reload meta for the given unit into the paper store. */
 export async function refreshPaperUnit(workspaceRoot: string, unitDir: string): Promise<void> {
   const read = await window.kunGui.paperReadUnit({ workspaceRoot, unitDir })
+  if (!workspaceIsCurrent(workspaceRoot)) return
   if (read.ok) usePaperStore.getState().rememberUnit(read.unitDir, read.meta)
 }
 
 /** List paper units under the configured papers dir for the sidebar. */
 export async function listPaperUnits(workspaceRoot: string, parentDir: string): Promise<void> {
   const result = await window.kunGui.paperListUnits({ workspaceRoot, parentDir })
+  if (!workspaceIsCurrent(workspaceRoot)) return
   if (result.ok) usePaperStore.getState().setUnitsFromResult(result)
   else usePaperStore.getState().setUnitsError(result.message)
 }

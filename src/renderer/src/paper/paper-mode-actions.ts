@@ -1,3 +1,4 @@
+import { PAPER_MODE_MAX_LIBRARIES } from '@shared/app-settings-paper-mode'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { normalizePath } from '../write/write-workspace-store-helpers'
@@ -5,21 +6,36 @@ import { usePaperStore } from '../write/paper/paper-store'
 import { usePaperModeStore } from './paper-mode-store'
 import { paperConversationResourcePath } from './paper-conversation-scope'
 import { paperModeView } from './paper-view'
+import { usePaperWorkspaceBootstrapStore } from './paper-workspace-bootstrap'
 
 export type PaperModeToggleResult = { ok: true } | { ok: false; message: string }
 
+// Settings mutations must see the preceding selection, not the snapshot from
+// another picker/click that is still saving. Failures never poison the queue.
+let pendingLibraryAction: Promise<unknown> = Promise.resolve()
+function serializeLibraryAction(action: () => Promise<PaperModeToggleResult>): Promise<PaperModeToggleResult> {
+  const next = pendingLibraryAction.then(action).catch((error: unknown): PaperModeToggleResult => ({
+    ok: false, message: error instanceof Error ? error.message : String(error)
+  }))
+  pendingLibraryAction = next
+  return next
+}
+
 /**
  * Enter/leave paper mode (plan §3.1 / §6.1). Both directions save dirty
- * documents first, persist `write.paperMode.enabled`, then let
+ * documents through the navigation guard, persist `write.paperMode.enabled`, then let
  * `loadWriteSettings` flip the surface and re-root the workspace — keeping a
  * single ordering: save old layout → setWorkSurface → initializeWorkspace.
  */
 async function setPaperModeEnabled(enabled: boolean): Promise<PaperModeToggleResult> {
   const store = useWriteWorkspaceStore.getState()
-  if (store.paperMode.enabled === enabled) return { ok: true }
-  const saved = await store.saveAllDocuments(store.workspaceRoot)
-  if (!saved) {
-    return { ok: false, message: 'save-failed' }
+  if (store.paperMode.enabled === enabled) {
+    if (enabled && usePaperWorkspaceBootstrapStore.getState().status !== 'ready') {
+      await store.loadWriteSettings()
+      const error = usePaperWorkspaceBootstrapStore.getState().error
+      if (error) return { ok: false, message: error }
+    }
+    return { ok: true }
   }
   try {
     await rendererRuntimeClient.setSettings({ write: { paperMode: { enabled } } })
@@ -27,10 +43,15 @@ async function setPaperModeEnabled(enabled: boolean): Promise<PaperModeToggleRes
     return { ok: false, message: error instanceof Error ? error.message : String(error) }
   }
   await useWriteWorkspaceStore.getState().loadWriteSettings()
+  const settingsError = useWriteWorkspaceStore.getState().settingsError
+  if (settingsError) return { ok: false, message: settingsError }
   // loadWriteSettings rolls the flag back when the user keeps unsaved edits
   // on the outgoing surface; report that as a silent cancel.
   if (useWriteWorkspaceStore.getState().workSurface !== (enabled ? 'papers' : 'docs')) {
     return { ok: false, message: PAPER_MODE_SWITCH_CANCELED }
+  }
+  if (enabled && usePaperWorkspaceBootstrapStore.getState().error) {
+    return { ok: false, message: usePaperWorkspaceBootstrapStore.getState().error! }
   }
   if (!enabled) usePaperModeStore.getState().clearSelection()
   return { ok: true }
@@ -61,16 +82,15 @@ export async function runPaperModeShortcut(command: 'toggle' | 'import'): Promis
 }
 
 export function enterPaperMode(): Promise<PaperModeToggleResult> {
-  return setPaperModeEnabled(true)
+  return serializeLibraryAction(() => setPaperModeEnabled(true))
 }
 
 export function exitPaperMode(): Promise<PaperModeToggleResult> {
-  return setPaperModeEnabled(false)
+  return serializeLibraryAction(() => setPaperModeEnabled(false))
 }
 
 export function togglePaperMode(): Promise<PaperModeToggleResult> {
-  const enabled = useWriteWorkspaceStore.getState().paperMode.enabled
-  return setPaperModeEnabled(!enabled)
+  return serializeLibraryAction(() => setPaperModeEnabled(!useWriteWorkspaceStore.getState().paperMode.enabled))
 }
 
 /**
@@ -120,26 +140,35 @@ async function patchPaperModeLibraries(
 }
 
 /** Switch the mounted library while staying on the papers surface. */
-export async function switchPaperLibrary(libraryRoot: string): Promise<PaperModeToggleResult> {
+async function switchPaperLibraryNow(libraryRoot: string): Promise<PaperModeToggleResult> {
   const normalized = normalizePath(libraryRoot)
   if (!normalized) return { ok: false, message: 'invalid-path' }
-  const store = useWriteWorkspaceStore.getState()
-  const rootChanged = normalizePath(store.paperMode.activeLibrary) !== normalized
-  const saved = await store.saveAllDocuments(store.workspaceRoot)
-  if (!saved) return { ok: false, message: 'save-failed' }
+  // Dirty-document navigation is settled by loadWriteSettings before mounting;
+  // respect autosave-off Save / Discard / Cancel rather than saving silently.
+  // Validate a selected root without creating or changing anything on disk.
+  if (typeof window.kunGui?.listWorkspaceDirectory === 'function') {
+    const admission = await window.kunGui.listWorkspaceDirectory({ workspaceRoot: normalized })
+    if (!admission.ok) return { ok: false, message: admission.message }
+  }
   const paperMode = useWriteWorkspaceStore.getState().paperMode
   const libraries = compactLibraries([normalized, ...paperMode.libraries])
+  if (libraries.length > PAPER_MODE_MAX_LIBRARIES) {
+    return { ok: false, message: 'The workspace list is full. Remove a registration before adding another folder.' }
+  }
   try {
     await patchPaperModeLibraries(libraries, normalized)
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) }
   }
-  usePaperModeStore.getState().clearSelection()
-  // A research selection from the previous root can never resolve here;
-  // clearing it lets the view restore the new library's last session.
-  if (rootChanged) {
-    useWriteWorkspaceStore.getState().setPaperResearch({ sessionId: null })
+  const current = useWriteWorkspaceStore.getState()
+  if (current.settingsError) return { ok: false, message: current.settingsError }
+  if (current.paperMode.activeLibrary !== normalized) {
+    return { ok: false, message: PAPER_MODE_SWITCH_CANCELED }
   }
+  if (current.workSurface === 'papers' && normalizePath(current.workspaceRoot) !== normalized) {
+    return { ok: false, message: usePaperWorkspaceBootstrapStore.getState().error ?? PAPER_MODE_SWITCH_CANCELED }
+  }
+  usePaperModeStore.getState().clearSelection()
   return { ok: true }
 }
 
@@ -148,14 +177,20 @@ export async function switchPaperLibrary(libraryRoot: string): Promise<PaperMode
  * library becomes active so the editor has a workspace; later additions only
  * join the sidebar workspace list.
  */
-export async function registerPaperLibrary(libraryRoot: string): Promise<PaperModeToggleResult> {
+async function registerPaperLibraryNow(libraryRoot: string): Promise<PaperModeToggleResult> {
   const normalized = normalizePath(libraryRoot)
   if (!normalized) return { ok: false, message: 'invalid-path' }
   const paperMode = useWriteWorkspaceStore.getState().paperMode
-  if (paperMode.libraries.some((item) => normalizePath(item) === normalized)) {
-    return { ok: true }
+  if (!normalizePath(paperMode.activeLibrary)) return switchPaperLibraryNow(normalized)
+  if (paperMode.libraries.some((item) => normalizePath(item) === normalized)) return { ok: true }
+  if (typeof window.kunGui?.listWorkspaceDirectory === 'function') {
+    const admission = await window.kunGui.listWorkspaceDirectory({ workspaceRoot: normalized })
+    if (!admission.ok) return { ok: false, message: admission.message }
   }
   const libraries = compactLibraries([...paperMode.libraries, normalized])
+  if (libraries.length > PAPER_MODE_MAX_LIBRARIES) {
+    return { ok: false, message: 'The workspace list is full. Remove a registration before adding another folder.' }
+  }
   const activeLibrary = normalizePath(paperMode.activeLibrary) || normalized
   try {
     await patchPaperModeLibraries(libraries, activeLibrary)
@@ -171,7 +206,7 @@ export function addPaperLibrary(libraryRoot: string): Promise<PaperModeToggleRes
 }
 
 /** Remove a library from the list only; files on disk are untouched. */
-export async function removePaperLibrary(libraryRoot: string): Promise<PaperModeToggleResult> {
+async function removePaperLibraryNow(libraryRoot: string): Promise<PaperModeToggleResult> {
   const normalized = normalizePath(libraryRoot)
   if (!normalized) return { ok: false, message: 'invalid-path' }
   const store = useWriteWorkspaceStore.getState()
@@ -179,15 +214,28 @@ export async function removePaperLibrary(libraryRoot: string): Promise<PaperMode
   const libraries = paperMode.libraries.filter((item) => normalizePath(item) !== normalized)
   const wasActive = normalizePath(paperMode.activeLibrary) === normalized
   const activeLibrary = wasActive ? libraries[0] ?? '' : paperMode.activeLibrary
-  if (wasActive) {
-    const saved = await store.saveAllDocuments(store.workspaceRoot)
-    if (!saved) return { ok: false, message: 'save-failed' }
-  }
   try {
     await patchPaperModeLibraries(libraries, activeLibrary)
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) }
   }
+  const current = useWriteWorkspaceStore.getState()
+  if (current.settingsError) return { ok: false, message: current.settingsError }
+  if (current.paperMode.libraries.some((root) => normalizePath(root) === normalized)) {
+    return { ok: false, message: PAPER_MODE_SWITCH_CANCELED }
+  }
   if (wasActive) usePaperModeStore.getState().clearSelection()
   return { ok: true }
+}
+
+export function switchPaperLibrary(libraryRoot: string): Promise<PaperModeToggleResult> {
+  return serializeLibraryAction(() => switchPaperLibraryNow(libraryRoot))
+}
+
+export function registerPaperLibrary(libraryRoot: string): Promise<PaperModeToggleResult> {
+  return serializeLibraryAction(() => registerPaperLibraryNow(libraryRoot))
+}
+
+export function removePaperLibrary(libraryRoot: string): Promise<PaperModeToggleResult> {
+  return serializeLibraryAction(() => removePaperLibraryNow(libraryRoot))
 }

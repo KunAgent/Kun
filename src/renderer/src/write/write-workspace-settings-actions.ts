@@ -3,7 +3,10 @@ import {
   resolveKunRuntimeSettings,
   resolveWriteInlineCompletionApiKey
 } from '@shared/app-settings'
+import type { PaperWorkspaceEnsureResult } from '@shared/paper/paper-workspace-types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
+import { resetPaperWorkspaceContent, usePaperWorkspaceBootstrapStore } from '../paper/paper-workspace-bootstrap'
+import { invalidatePaperLibraryIndex } from '../paper/paper-library-index'
 import { mobileDocumentsWorkspaceRoot } from '../mobile/work/mobile-documents-workspace'
 import { prepareActiveWriteFileForNavigation } from './write-workspace-file-action-helpers'
 import type { WriteWorkspaceGet, WriteWorkspaceSet, WriteWorkspaceState } from './write-workspace-store-types'
@@ -101,8 +104,57 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
     const inlineRevisionAtRequest = inlineCompletionSettingsRevision
     const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
     set({ settingsLoading: true, settingsError: null })
+    let loadingPaperWorkspace = false
     try {
-      const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
+      const previousPaperMode = get().paperMode
+      const previousPapersDir = get().paperReading.papersDir
+      let settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
+      if (!requestIsCurrent(generation)) return
+      // Initialization is desktop-only and uses main-process filesystem/settings
+      // admission. A phone never creates a host workspace as a side effect.
+      if (!mobile && settings.write?.paperMode?.enabled) {
+        loadingPaperWorkspace = true
+        const keepReady = usePaperWorkspaceBootstrapStore.getState().status === 'ready'
+          && get().workSurface === 'papers'
+          && normalizePath(get().workspaceRoot) === normalizePath(settings.write.paperMode.activeLibrary)
+        if (!keepReady) usePaperWorkspaceBootstrapStore.setState({ status: 'loading', error: null })
+        if (typeof window.kunGui?.paperWorkspaceEnsure === 'function') {
+          while (settings.write.paperMode.enabled && requestIsCurrent(generation)) {
+            const before = settings.write.paperMode
+            const selectionBefore = JSON.stringify([before.activeLibrary, before.libraries])
+            let result: PaperWorkspaceEnsureResult
+            try {
+              result = await window.kunGui.paperWorkspaceEnsure()
+            } catch (error) {
+              result = { ok: false, code: 'io',
+                message: error instanceof Error ? error.message : String(error),
+                defaultWorkspaceRoot: usePaperWorkspaceBootstrapStore.getState().defaultWorkspaceRoot }
+            }
+            if (!requestIsCurrent(generation)) return
+            // Bind admission to the selection that will actually be mounted.
+            // A newer explicit choice after the IPC result needs its own check.
+            settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
+            if (!requestIsCurrent(generation)) return
+            const latest = settings.write.paperMode
+            const sameAdmission = result.ok
+              ? normalizePath(result.workspaceRoot) === normalizePath(latest.activeLibrary)
+              : selectionBefore === JSON.stringify([latest.activeLibrary, latest.libraries])
+            if (!sameAdmission && latest.enabled) continue
+            usePaperWorkspaceBootstrapStore.setState({
+              defaultWorkspaceRoot: result.defaultWorkspaceRoot,
+              status: result.ok
+                ? (keepReady && normalizePath(get().workspaceRoot) === normalizePath(latest.activeLibrary) ? 'ready' : 'loading')
+                : 'error',
+              error: result.ok ? null : result.message
+            })
+            break
+          }
+        } else if (!settings.write.paperMode.activeLibrary) {
+          usePaperWorkspaceBootstrapStore.setState({
+            status: 'error', error: 'Paper workspace initialization is unavailable. Restart Kun or choose a folder.'
+          })
+        }
+      }
       if (!requestIsCurrent(generation)) return
       const write = applySettingsResponse(
         settings,
@@ -127,7 +179,14 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       // layout replaces the docs one (and vice versa).
       const targetSurface = write.paperMode.enabled ? 'papers' : 'docs'
       const surfaceChanged = get().workSurface !== targetSurface
-      if (surfaceChanged && get().workspaceRoot) {
+      const root = targetSurface === 'papers'
+        ? write.paperMode.activeLibrary
+        : write.activeWorkspaceRoot
+      const rootChanged = normalizePath(get().workspaceRoot) !== normalizePath(root)
+      const readinessError = targetSurface === 'papers' ? usePaperWorkspaceBootstrapStore.getState().error : null
+      const unavailable = targetSurface === 'papers' && usePaperWorkspaceBootstrapStore.getState().status === 'error'
+      const navigationPrepared = Boolean((surfaceChanged || rootChanged || unavailable) && get().workspaceRoot)
+      if (navigationPrepared) {
         // Settle the outgoing surface BEFORE flipping the layout namespace:
         // if the user keeps unsaved edits, stay put and roll the persisted
         // flag back instead of mounting the new surface over the old root.
@@ -135,27 +194,54 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
         if (!requestIsCurrent(generation)) return
         if (!canLeave) {
           const rolledBack = await rendererRuntimeClient.setSettings({
-            write: { paperMode: { enabled: get().workSurface === 'papers' } }
+            write: { paperMode: {
+              ...(get().workSurface === 'papers' ? {
+                libraries: previousPaperMode.libraries,
+                activeLibrary: previousPaperMode.activeLibrary
+              } : {}),
+              enabled: get().workSurface === 'papers'
+            } }
           })
           if (!requestIsCurrent(generation)) return
           applySettingsResponse(rolledBack, inlineRevisionAtRequest, inlineWritePendingAtRequest)
-          set({ settingsLoading: false })
+          const failedCurrentRoot = unavailable && !surfaceChanged && !rootChanged
+          usePaperWorkspaceBootstrapStore.setState({
+            status: failedCurrentRoot ? 'error' : 'ready',
+            error: failedCurrentRoot ? readinessError : null
+          })
+          set({ settingsLoading: false, ...(readinessError ? { fileError: readinessError } : {}) })
           return
         }
       }
       if (surfaceChanged) get().setWorkSurface(targetSurface)
-      const root = targetSurface === 'papers'
-        ? write.paperMode.activeLibrary
-        : write.activeWorkspaceRoot
-      await get().initializeWorkspace(root, { force: surfaceChanged })
+      const paperDirectoryChanged = previousPapersDir !== write.paperReading.papersDir
+      if (paperDirectoryChanged) invalidatePaperLibraryIndex()
+      if (surfaceChanged || rootChanged || unavailable || paperDirectoryChanged) {
+        if (get().workspaceRoot) invalidatePaperLibraryIndex(get().workspaceRoot)
+        resetPaperWorkspaceContent()
+        get().setPaperResearch({ sessionId: null })
+      }
+      await get().initializeWorkspace(unavailable ? '' : root, {
+        force: surfaceChanged,
+        ...(navigationPrepared ? { navigationPrepared: true } : {})
+      })
       if (!requestIsCurrent(generation)) return
+      if (targetSurface === 'papers' && !unavailable) {
+        const mounted = get()
+        const initializationError = mounted.treeError || (!mounted.rootDirectory
+          ? 'The paper workspace could not be opened. Restore access or choose another folder.' : null)
+        usePaperWorkspaceBootstrapStore.setState({
+          status: initializationError ? 'error' : 'ready', error: initializationError
+        })
+      }
       set({ settingsLoading: false })
     } catch (error) {
       if (!requestIsCurrent(generation)) return
-      set({
-        settingsLoading: false,
-        settingsError: error instanceof Error ? error.message : String(error)
-      })
+      const message = error instanceof Error ? error.message : String(error)
+      if (!mobile && (loadingPaperWorkspace || get().paperMode.enabled)) {
+        usePaperWorkspaceBootstrapStore.setState({ status: 'error', error: message })
+      }
+      set({ settingsLoading: false, settingsError: message })
     }
   }
 

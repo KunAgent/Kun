@@ -16,6 +16,7 @@ import speak from './common/speak.json'
 import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
+import paperWorkspace from './common/paper-workspace.json'
 import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
 
@@ -37,6 +38,7 @@ const common = {
   ...speak,
   ...remoteAccess,
   ...paper,
+  ...paperWorkspace,
   ...ade,
   ...workLayout,
 }

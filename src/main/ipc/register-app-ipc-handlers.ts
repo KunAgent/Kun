@@ -11,6 +11,7 @@ import { registerAppGitIpcHandlers } from './register-app-git-ipc-handlers'
 import { registerAppKunConfigIpcHandlers } from './register-app-kun-config-ipc-handlers'
 import { registerAppPaperIpcHandlers } from './register-app-paper-ipc-handlers'
 import { registerAppPaperLibraryIpcHandlers } from './register-app-paper-library-ipc-handlers'
+import { registerAppPaperWorkspaceIpcHandlers } from './register-app-paper-workspace-ipc-handlers'
 import { registerAppPaperEvidenceIpcHandlers } from './register-app-paper-evidence-ipc-handlers'
 import { registerAppPaperReaderIpcHandlers } from './register-app-paper-reader-ipc-handlers'
 import { registerAppRuntimeIpcHandlers } from './register-app-runtime-ipc-handlers'
@@ -54,6 +55,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   registerAppFileIpcHandlers(options)
   registerAppPaperIpcHandlers(options)
   registerAppPaperLibraryIpcHandlers(options)
+  registerAppPaperWorkspaceIpcHandlers(options)
   registerAppPaperReaderIpcHandlers(options)
   registerAppPaperEvidenceIpcHandlers(options)
   registerAppContentIpcHandlers(options)

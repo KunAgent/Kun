@@ -63,8 +63,10 @@ export type WritePaperModeReaderSettingsV1 = {
 export type WritePaperModeSettingsV1 = {
   enabled: boolean
   libraries: string[]
-  /** '' means unconfigured — the onboarding page shows. */
+  /** '' means no library is currently selected. */
   activeLibrary: string
+  /** One-time bootstrap marker; removing all libraries must not recreate one. */
+  workspaceInitialized: boolean
   /** First open of an unread paper marks it as reading. */
   autoMarkReading: boolean
   translate: WritePaperModeTranslateSettingsV1
