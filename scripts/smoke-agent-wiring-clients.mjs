@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WIRING_CLIENTS } from './lib/agent-wiring-smoke-clients.mjs'
-import { CATALOG, FIXTURE_TOKEN, lastTrace, loadWiringModules, startWiringGateway, wiringRuntime } from './lib/agent-wiring-smoke-runtime.mjs'
+import { CATALOG, FIXTURE_TOKEN, lastTrace, loadWiringModules, sessionTraceCount, startWiringGateway, wiringRuntime } from './lib/agent-wiring-smoke-runtime.mjs'
 
 // Agent wiring smoke: for every installed agent, Kun's wiring service edits
 // the agent's own config in an isolated home, the agent's real CLI runs with
@@ -101,6 +101,7 @@ async function runScenario(ctx, scenario) {
   ctx.state.scenario = scenario
   const before = ctx.calls.length
   const requestsBefore = ctx.requests.length
+  const sessionsBefore = sessionTraceCount(ctx.gateway, ctx.runtime)
   const result = await capture(ctx.binary, ctx.client.args(scenario, ctx.workspace), ctx.env, ctx.workspace, ctx.timeout)
   const calls = ctx.calls.slice(before).filter((call) => call.toolCount > 0 || call.historyKinds.length)
   const replied = ctx.client.succeeded(result.stdout)
@@ -111,7 +112,9 @@ async function runScenario(ctx, scenario) {
     middlewareApplied: calls.length > 0 && calls.every((call) => call.systemHasMark),
     ...(ctx.client.effort ? { effortSent: calls.some((call) => call.effort) } : {}),
     ...(scenario === 'tools' ? { toolRoundTrip: calls.some((call) => call.fixtureRead) } : {}),
-    ...(scenario === 'tools' && ctx.agentId === 'claude-code' ? { thinkingReplayed: calls.some((call) => call.replayedReasoning && call.restoredSignature) } : {})
+    ...(scenario === 'tools' && ctx.agentId === 'claude-code' ? { thinkingReplayed: calls.some((call) => call.replayedReasoning && call.restoredSignature) } : {}),
+    // Agents that send their own session id get usage and traces grouped by it.
+    ...(ctx.client.sendsSession ? { sessionAttributed: sessionTraceCount(ctx.gateway, ctx.runtime) > sessionsBefore } : {})
   }
   const trace = lastTrace(ctx.gateway, ctx.runtime)
   checks.traceDecision = trace?.decision === 'rule' && trace?.agent === ctx.agentId

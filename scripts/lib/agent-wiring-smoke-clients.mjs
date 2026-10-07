@@ -19,7 +19,7 @@ function wholeJson(stdout) {
 
 export const WIRING_CLIENTS = {
   'claude-code': {
-    bin: 'claude', smallModel: 'local-small', effort: 'high',
+    bin: 'claude', smallModel: 'local-small', effort: 'high', sendsSession: true,
     // Claude Code reads settings.json as strict JSON and silently ignores a file with comments.
     seed: { 'claude/settings.json': '{\n  "theme": "dark",\n  "env": {\n    "DISABLE_TELEMETRY": "1"\n  }\n}\n' },
     userEdit: { file: 'claude/settings.json', from: '"theme": "dark"', to: '"theme": "light"' },
@@ -31,7 +31,7 @@ export const WIRING_CLIENTS = {
     succeeded: (stdout) => jsonRecords(stdout).some((item) => item.type === 'result' && !item.is_error && String(item.result ?? '').includes(MARKER))
   },
   codex: {
-    bin: 'codex', effort: 'high',
+    bin: 'codex', effort: 'high', sendsSession: true,
     seed: { 'codex/config.toml': '# my codex config\napproval_policy = "never"\nmodel = "gpt-5"\n\n[profiles.fast]\nmodel = "gpt-5-mini"\n' },
     userEdit: { file: 'codex/config.toml', from: '[profiles.fast]\nmodel = "gpt-5-mini"', to: '[profiles.fast]\nmodel = "gpt-5-nano"' },
     env: (home) => ({ CODEX_HOME: join(home, 'codex') }),
@@ -41,7 +41,7 @@ export const WIRING_CLIENTS = {
     succeeded: (stdout) => jsonRecords(stdout).some((item) => item.type === 'item.completed' && item.item?.type === 'agent_message' && String(item.item.text ?? '').includes(MARKER))
   },
   opencode: {
-    bin: 'opencode', smallModel: 'local-small',
+    bin: 'opencode', smallModel: 'local-small', sendsSession: true,
     seed: { 'config/opencode/opencode.json': '{\n  // my OpenCode settings\n  "$schema": "https://opencode.ai/config.json",\n  "autoupdate": false,\n  "share": "disabled"\n}\n' },
     userEdit: { file: 'config/opencode/opencode.json', from: '"share": "disabled"', to: '"share": "manual"' },
     env: (home) => ({ XDG_CONFIG_HOME: join(home, 'config'), OPENCODE_DISABLE_DEFAULT_PLUGINS: '1', OPENCODE_DISABLE_AUTOUPDATE: '1',
@@ -72,7 +72,7 @@ export const WIRING_CLIENTS = {
   aider: { bin: 'aider', seed: {}, env: () => ({}),
     args: (scenario) => ['--yes-always', '--no-git', '--no-auto-commits', '--message', prompt(scenario)], succeeded: (stdout) => stdout.includes(MARKER) },
   kimi: {
-    bin: 'kimi',
+    bin: 'kimi', sendsSession: true,
     seed: { '.kimi-code/config.toml': '# my Kimi Code config\ndefault_model = "kimi-for-coding"\n\n[providers.moonshot]\ntype = "kimi"\nbase_url = "https://api.moonshot.cn/v1"\napi_key = "sk-mine"\n' },
     userEdit: { file: '.kimi-code/config.toml', from: 'base_url = "https://api.moonshot.cn/v1"', to: 'base_url = "https://api.moonshot.ai/v1"' },
     env: () => ({}),

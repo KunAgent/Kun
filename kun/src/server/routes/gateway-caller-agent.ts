@@ -71,25 +71,36 @@ export function gatewayCallerAgent(request: Request): string | undefined {
 const SESSION_TEXT = /^[A-Za-z0-9._-]{1,128}$/
 
 /**
- * The calling agent's own session id, when it reveals one: Codex and Claude
- * Code send it as a header; Claude Code also puts it in `metadata.user_id`
- * (a JSON string), and Kimi Code sends `prompt_cache_key: session_<id>`.
- * Used only to group usage and route traces; never for authorization.
+ * The calling agent's own session id, when it reveals one, as observed from
+ * the agents themselves: Codex sends a `session-id` header (older builds
+ * `session_id`) and `client_metadata.session_id`; Claude Code sends
+ * `x-claude-code-session-id` and repeats it in `metadata.user_id` (a JSON
+ * string); Kimi Code sends `prompt_cache_key: session_<id>`, and OpenCode,
+ * which Kun configures with `setCacheKey`, `promptCacheKey: ses_<id>`.
+ * Droid and Gemini CLI send none. Used only to group usage and route
+ * traces; never for authorization.
  */
 export function gatewaySessionHint(request: Request, body?: Record<string, unknown>): string | undefined {
-  for (const name of ['session_id', 'x-claude-code-session-id']) {
+  for (const name of ['session-id', 'session_id', 'x-claude-code-session-id']) {
     const value = request.headers.get(name)?.trim()
     if (value && SESSION_TEXT.test(value)) return value
   }
-  const metadata = body?.metadata
-  const userId = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>).user_id : undefined
+  const clientMetadata = record(body?.client_metadata)?.session_id
+  if (typeof clientMetadata === 'string' && SESSION_TEXT.test(clientMetadata)) return clientMetadata
+  const userId = record(body?.metadata)?.user_id
   if (typeof userId === 'string' && userId.startsWith('{') && userId.length <= 4_096) {
     try {
       const session = (JSON.parse(userId) as { session_id?: unknown }).session_id
       if (typeof session === 'string' && SESSION_TEXT.test(session)) return session
     } catch { /* not the Claude Code shape */ }
   }
-  const cacheKey = body?.prompt_cache_key
-  if (typeof cacheKey === 'string' && /^session[_-]/.test(cacheKey) && SESSION_TEXT.test(cacheKey)) return cacheKey
+  // Cache keys are often per-prompt hashes; only the session-shaped ones these agents send count.
+  for (const cacheKey of [body?.prompt_cache_key, body?.promptCacheKey]) {
+    if (typeof cacheKey === 'string' && /^(?:session[_-]|ses_)/.test(cacheKey) && SESSION_TEXT.test(cacheKey)) return cacheKey
+  }
   return undefined
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }

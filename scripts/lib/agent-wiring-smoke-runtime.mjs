@@ -135,6 +135,7 @@ export async function startWiringGateway(gateway, runtime) {
     router.add(method, path, async (request) => {
       const record = { method, path }
       requests.push(record)
+      if (method === 'POST') await captureRequest(path, request)
       const response = await handler(runtime, request)
       record.status = response.status
       if (response.status >= 400) record.error = String(response instanceof Response ? await response.clone().text() : response.body).slice(0, 400)
@@ -149,12 +150,44 @@ export async function startWiringGateway(gateway, runtime) {
   router.add('POST', '/v1beta/models/*call', async (request, ctx) => {
     const record = { method: 'POST', path: `/v1beta/models/${ctx.params.call}` }
     requests.push(record)
+    await captureRequest(record.path, request)
     const response = await gateway.geminiGenerate(runtime, request, ctx.params.call)
     record.status = response.status
     return response
   })
   const server = await gateway.startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
   return { origin: `http://127.0.0.1:${server.port}`, requests, close: () => server.close() }
+}
+
+/**
+ * `KUN_WIRING_CAPTURE=<file>` appends each request's headers and the body
+ * fields that could name a session, one JSON line per request, so session
+ * attribution can follow what agents really send. Keys are redacted.
+ */
+async function captureRequest(path, request) {
+  const file = process.env.KUN_WIRING_CAPTURE
+  if (!file) return
+  const secret = /^(authorization|x-api-key|x-goog-api-key|api-key)$/i
+  const headers = Object.fromEntries([...request.headers].map(([name, value]) => [name, secret.test(name) ? '<redacted>' : value.slice(0, 200)]))
+  let body = {}
+  try { body = await request.clone().json() } catch { /* not JSON */ }
+  const fields = {}
+  const visit = (value, at, depth) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 2) return
+    for (const [key, item] of Object.entries(value)) {
+      const name = at ? `${at}.${key}` : key
+      if (/session|user|metadata|cache|conversation|thread|prompt_id|request_id/i.test(key) && (typeof item !== 'object' || item === null)) fields[name] = String(item).slice(0, 300)
+      else visit(item, name, depth + 1)
+    }
+  }
+  visit(body, '', 0)
+  const { appendFileSync } = await import('node:fs')
+  appendFileSync(file, JSON.stringify({ path, headers, bodyKeys: Object.keys(body), fields }) + '\n')
+}
+
+/** Route traces filed under a caller's session: grows when an agent's own session id reached the gateway. */
+export function sessionTraceCount(gateway, runtime) {
+  return gateway.gatewayRouteTraceStore(runtime.modelGateway).sessions.size
 }
 
 export function lastTrace(gateway, runtime) {

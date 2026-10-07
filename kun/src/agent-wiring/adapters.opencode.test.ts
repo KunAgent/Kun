@@ -22,6 +22,8 @@ describe('OpenCode adapter', () => {
     expect(text).toContain('// mine')
     expect(getJsoncValue(text, ['model'])).toBe('kun/coding')
     expect(getJsoncValue(text, ['small_model'])).toBe('kun/glm-4.6')
+    // OpenCode then sends its session id as promptCacheKey, so usage groups by session.
+    expect(getJsoncValue(text, ['provider', 'kun', 'options', 'setCacheKey'])).toBe(true)
     expect(getJsoncValue(text, ['provider', 'kun', 'models', 'coding'])).toEqual({ name: 'Daily coding', limit: { context: 200_000, output: 32_000 },
       attachment: true, reasoning: true })
     expect(h.service.status('opencode', ORIGIN)).toMatchObject({ connected: true, drifted: false, model: 'coding' })

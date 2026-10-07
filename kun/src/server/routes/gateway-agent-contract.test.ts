@@ -227,6 +227,16 @@ describe('agent session ids', () => {
     expect(gatewaySessionHint(request(), { prompt_cache_key: 'tenant-cache' })).toBeUndefined()
     expect(gatewaySessionHint(request({ session_id: 'bad id!' }), { metadata: { user_id: 'plain-user' } })).toBeUndefined()
   })
+  it('reads what current agents send: Codex session-id and client_metadata, OpenCode promptCacheKey', async () => {
+    const { gatewaySessionHint } = await import('./gateway-caller-agent.js')
+    const request = (headers: Record<string, string> = {}) => new Request('http://x/v1/responses', { headers })
+    // Captured from Codex 0.145, Kimi Code 0.29 and OpenCode 1.1.47 through the wiring smoke.
+    expect(gatewaySessionHint(request({ 'session-id': '01a114d8-5822-7940-bb83-4c7a4b7037f2' }))).toBe('01a114d8-5822-7940-bb83-4c7a4b7037f2')
+    expect(gatewaySessionHint(request(), { prompt_cache_key: '01a114d8-5822', client_metadata: { session_id: '01a114d8-5822' } })).toBe('01a114d8-5822')
+    expect(gatewaySessionHint(request(), { promptCacheKey: 'ses_eeb23df1cffemJMMBlLedBjbEu' })).toBe('ses_eeb23df1cffemJMMBlLedBjbEu')
+    // A bare cache key could be a per-prompt hash and is not taken as a session.
+    expect(gatewaySessionHint(request(), { prompt_cache_key: '01a114d8-5822' })).toBeUndefined()
+  })
   it('groups traces by the agent session when the client sends no Kun session header', async () => {
     const model = new ScriptedModel([[{ kind: 'assistant_text_delta', text: 'hi' }, { kind: 'completed', stopReason: 'stop' }]])
     const rt = runtime(model)

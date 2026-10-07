@@ -118,7 +118,7 @@ const openCode: AgentAdapter = {
     }]))
     return [
       { slot: { file, format: 'json', path: ['provider', 'kun'] }, value: {
-        npm: '@ai-sdk/openai-compatible', name: 'Kun', options: { baseURL: v1(target.origin), apiKey: target.key }, models
+        npm: '@ai-sdk/openai-compatible', name: 'Kun', options: { baseURL: v1(target.origin), apiKey: target.key, setCacheKey: true }, models
       } },
       { slot: { file, format: 'json', path: ['model'] }, value: `kun/${target.model}` },
       { slot: { file, format: 'json', path: ['small_model'] }, value: target.smallModel ? `kun/${target.smallModel}` : undefined }
