@@ -80,7 +80,7 @@ async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorke
   const assignment = { label: 'Independent task', task: 'Implement a bounded change and verify it.',
     context: { constraints: ['Existing behavior remains correct.'] }, workspace: { isolation: 'worktree' as const } }
   return { source, clock, context, ctx, runtime, service, teams, dispatches, childRuns,
-    runChild, taskWorkspaces, disabled, threads, assignment, workspace }
+    runChild, taskWorkspaces, disabled, threads, assignment, workspace, deliverer }
 }
 
 async function startNow(fixture: Awaited<ReturnType<typeof setup>>, id: string) {
@@ -126,6 +126,62 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(result.dispatchIntentId).toBeTruthy(); expect(await f.service.list('parent')).toHaveLength(1)
     expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
     f.clock.now += 60_000; await f.service.reconcile(); expect(f.runChild).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['passed', 'needs_changes', 'rejected', 'waived'] as const)(
+    'reviews completed siblings before settling a mixed batch with verdict %s', async (verdict) => {
+      const f = await setup('full-access')
+      const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Cancelled task' }] }, f.context)
+      f.clock.now += 60_000; await f.service.reconcile()
+      const records = await f.dispatches.list('parent')
+      const completed = records.find((record) => record.title === f.assignment.label)!
+      const cancelled = records.find((record) => record.title === 'Cancelled task')!
+      await f.dispatches.update('parent', completed.dispatchId, { state: 'completed', resultExcerpt: 'Implemented and checked' })
+      await f.dispatches.update('parent', cancelled.dispatchId, { state: 'cancelled' })
+      await f.service.reconcile()
+      expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'awaiting_parent',
+        resultSummary: expect.stringContaining('Implemented and checked') })
+      await f.dispatches.update('parent', completed.dispatchId, { verdict: { status: verdict, checks: [] } })
+      await f.service.reconcile()
+      expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'cancelled',
+        resultSummary: expect.stringContaining('Cancelled: Cancelled task') })
+    })
+
+  it.each([
+    ['completed', 'cancelled', 'cancelled'], ['cancelled', 'completed', 'cancelled'],
+    ['cancelled', 'cancelled', 'cancelled'], ['completed', 'completed', 'completed'],
+    ['completed', 'failed', 'failed'], ['failed', 'cancelled', 'failed'], ['cancelled', 'failed', 'failed']
+  ] as const)('settles terminal batch %s + %s as %s', async (first, second, state) => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    const records = await f.dispatches.list('parent')
+    for (const [index, value] of [first, second].entries()) {
+      await f.dispatches.update('parent', records[index].dispatchId, { state: value, verdict: { status: 'passed', checks: [] } })
+    }
+    await f.service.reconcile()
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state })
+  })
+
+  it.each(['pending', 'accepted'] as const)('keeps a mixed batch active while another sibling is %s', async (state) => {
+    const f = await setup('full-access')
+    const deliver = f.deliverer.tryDeliver.bind(f.deliverer)
+    vi.spyOn(f.deliverer, 'tryDeliver').mockImplementation(async (teamId, dispatchId) => {
+      const record = await f.dispatches.get(teamId, dispatchId)
+      return state === 'pending' && record?.title === 'Active task'
+        ? { accepted: false, pendingReason: 'worker-busy' } : deliver(teamId, dispatchId)
+    })
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment,
+      { ...f.assignment, label: 'Cancelled task' }, { ...f.assignment, label: 'Active task' }] }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    for (const record of await f.dispatches.list('parent')) {
+      if (record.title === 'Active task') { expect(record.state).toBe(state); continue }
+      await f.dispatches.update('parent', record.dispatchId, {
+        state: record.title === f.assignment.label ? 'completed' : 'cancelled', verdict: { status: 'passed', checks: [] }
+      })
+    }
+    await f.service.reconcile()
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: state === 'pending' ? 'queued' : 'running' })
   })
 
   it('applies edits after pausing and gives a fresh 60-second window', async () => {

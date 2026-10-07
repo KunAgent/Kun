@@ -10,7 +10,7 @@ import { effectiveDispatchAuthority, sourceDispatchAuthority } from './dispatch-
 import { requestWorkbenchCancel } from './actions.js'
 import { readWorkbenchLink, updateWorkbenchLink } from './link-store.js'
 import { executionMode, validateExecution } from './execution.js'
-import { replaceFailedWorkbenchDispatch } from './dispatch-replacement.js'
+import { projectWorkbenchReplacement, replaceFailedWorkbenchDispatch } from './dispatch-replacement.js'
 import { pathWithin } from './directory.js'
 import { cancelWorkbenchParentReview } from './cancel-parent-review.js'
 import { WorkbenchCapabilityCeilingSchema } from '../contracts/thread-workbench-origin.js'
@@ -104,7 +104,9 @@ export function attachWorkbenchDispatch(bridge: WorkbenchBridge, service: AgentD
       return { ...payload, request }
     },
     start: async (intent) => {
-      const { payload, link } = await intentLink(bridge, intent)
+      const binding = await intentLink(bridge, intent)
+      const { payload } = binding
+      const link = await projectWorkbenchReplacement(bridge, intent, binding.link)
       const request = await requestFor(bridge, intent)
       const authority = await authorityFor(bridge, intent)
       const capabilities = await narrowWorkbenchCapabilities(bridge, payload.roomId, payload.memberId, payload.capabilityCeiling)
@@ -132,13 +134,14 @@ export function attachWorkbenchDispatch(bridge: WorkbenchBridge, service: AgentD
       bridge.wake()
     },
     reconcile: async (intent) => {
-      const { link } = await intentLink(bridge, intent)
+      const binding = await intentLink(bridge, intent)
+      const link = await projectWorkbenchReplacement(bridge, intent, binding.link)
       if (intent.takenOver && !link.userTookOver) {
         await cancelWorkbenchParentReview(bridge, link)
         await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ userTookOver: true }))
       }
       const target = { taskId: link.id, ...(link.threadId ? { threadId: link.threadId } : {}), ...(link.turnId ? { turnId: link.turnId } : {}) }
-      if (link.cancelRequested) return { state: link.turnId && !['completed', 'failed', 'cancelled'].includes(link.status)
+      if (link.cancelRequested) return { state: (link.turnId || link.admissionAttempted) && !['completed', 'failed', 'cancelled'].includes(link.status)
         ? 'stopping' : 'cancelled', target }
       if (link.status === 'awaiting_confirmation') return pending.includes(intent.state) ? null : { state: 'absent' }
       if (link.status === 'queued') return { state: 'queued', target }
@@ -209,6 +212,20 @@ export async function updateWorkbenchDispatch(bridge: WorkbenchBridge, link: Wor
 /** Review failures stay visible on the same card and use the ordinary outcome queue. */
 export async function projectWorkbenchDispatches(bridge: WorkbenchBridge): Promise<boolean> {
   if (!bridge.agentDispatch) return false
+  // A crash can land between the committed replacement and its link projection,
+  // including while a countdown is pending or an automatic review is refused.
+  // Repair before outcome delivery can publish the previous Agent's failure.
+  for (const intent of await bridge.agentDispatch.list()) {
+    if (intent.kind !== 'workbench' || !intent.replacementCount || intent.target) continue
+    try {
+      const { link } = await intentLink(bridge, intent)
+      if (intent.replacementCount > (link.dispatchReplacementCount ?? 0)) {
+        await projectWorkbenchReplacement(bridge, intent, link)
+      }
+    } catch (error) {
+      console.warn('[kun] workbench replacement recovery:', error instanceof Error ? error.message : String(error))
+    }
+  }
   let waiting = false
   const rows = await bridge.store.list<WorkbenchLink>('workbench_link', { status: 'awaiting_confirmation', limit: 200 })
   for (const row of rows) {

@@ -21,6 +21,7 @@ import { projectWorkbenchDispatches } from './dispatch.js'
 import { replaceFailedWorkbenchDispatch } from './dispatch-replacement.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
 import type { RoomRequestState } from '../rooms/room-runtime-types.js'
+import { reconcileWorkbenchCancellation } from './task-admission.js'
 
 type Attention = z.infer<typeof WorkbenchAttentionSchema>
 const BOT_STEER_PREFIX = 'workbench-steer-'
@@ -139,8 +140,8 @@ async function reconcileLink(bridge: WorkbenchBridge, row: RoomStoredDocument<Wo
     return
   }
   if (link.kind === 'watch') return reconcileTarget(bridge, row)
+  if (await reconcileWorkbenchCancellation(bridge, link)) return
   if (link.status === 'queued' && !link.turnId) {
-    if (link.cancelRequested) return void await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'cancelled' }))
     if (link.phase === 'build') return admitBuildPhase(bridge, link)
     return startTaskLink(bridge, row)
   }
@@ -191,6 +192,8 @@ async function flushReports(bridge: WorkbenchBridge): Promise<void> {
   for (const id of [...bridge.reportPending]) {
     const row = await bridge.store.get<WorkbenchLink>('workbench_link', id)
     if (!row || row.value.reported !== false) { bridge.reportPending.delete(id); continue }
+    const intent = row.value.dispatchIntentId ? await bridge.agentDispatch?.get(row.value.dispatchIntentId) : undefined
+    if (intent && intent.replacementCount > (row.value.dispatchReplacementCount ?? 0)) continue
     try { await reportOutcome(bridge, row); bridge.reportPending.delete(id) } catch (error) {
       console.warn('[kun] workbench outcome report:', error instanceof Error ? error.message : String(error))
     }
@@ -209,5 +212,5 @@ export async function reconcileWorkbench(bridge: WorkbenchBridge): Promise<boole
     }
   }
   await flushReports(bridge)
-  return dispatchPending || rows.some((row) => row.value.status !== 'recovery_required') || bridge.reportPending.size > 0
+  return dispatchPending || rows.some((row) => row.value.status !== 'recovery_required' || row.value.cancelRequested) || bridge.reportPending.size > 0
 }

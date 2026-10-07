@@ -2,12 +2,34 @@ import { execFile } from 'node:child_process'
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
-import type { WorkbenchLink } from '../contracts/workbench-links.js'
+import { WorkbenchRequestSchema, type WorkbenchLink } from '../contracts/workbench-links.js'
+import type { AgentDispatchIntent } from '../contracts/agent-dispatch-intents.js'
 import type { WorkbenchBridge } from './bridge.js'
 import { updateWorkbenchLink } from './link-store.js'
 import { pathWithin } from './directory.js'
 
 const run = promisify(execFile)
+
+/** The committed intent is the recovery record; never consume the previous generation's target. */
+export async function projectWorkbenchReplacement(bridge: WorkbenchBridge, intent: AgentDispatchIntent,
+  link: WorkbenchLink): Promise<WorkbenchLink> {
+  if (intent.replacementCount <= (link.dispatchReplacementCount ?? 0)) return link
+  const request = WorkbenchRequestSchema.parse(intent.payload.request)
+  const projected = await updateWorkbenchLink(bridge.store, link.roomId, link.id, (current) => {
+    if (intent.replacementCount <= (current.dispatchReplacementCount ?? 0) || current.cancelRequested || current.userTookOver) return null
+    if (current.dispatchIntentId !== intent.intentId || current.origin.kind !== 'tool' ||
+      current.origin.turnId !== intent.source.turnId || current.origin.toolCallId !== intent.source.toolCallId) {
+      throw new Error('Dispatch replacement source binding changed')
+    }
+    return { status: 'awaiting_confirmation', request,
+      threadId: undefined, turnId: undefined, taskWorkspaceId: undefined, clientRequestId: undefined,
+      admissionAttempted: false, reported: undefined, outcomeRequestId: undefined, result: undefined, error: undefined,
+      finishedAt: undefined, confirmedAt: undefined, attention: undefined, activity: undefined,
+      dispatchReplacementCount: intent.replacementCount, dispatchReplacementReason: intent.replacementReason?.slice(0, 2000) }
+  })
+  bridge.reportPending.delete(link.id)
+  return projected
+}
 
 /** One host-selected retry, after the old execution is proved stopped and its changes are inspected. */
 export async function replaceFailedWorkbenchDispatch(bridge: WorkbenchBridge, link: WorkbenchLink): Promise<boolean> {
@@ -51,14 +73,15 @@ export async function replaceFailedWorkbenchDispatch(bridge: WorkbenchBridge, li
     // The old result is settled before the shared decision is reset. Retrying
     // keeps the card identity but gives the scheduler a distinct admission key.
     await service.updateTarget(intent.intentId, { state: 'failed', error: link.error })
-    await service.replace(intent.intentId, { expectedRevision: (await service.get(intent.intentId))!.revision,
+    const replacement = await service.replace(intent.intentId, { expectedRevision: (await service.get(intent.intentId))!.revision,
       recommendation: { ...intent.recommendation, agentId: alternative.harnessId, agentName: alternative.displayName,
         model: model.model, task: request.goal }, payload: { ...intent.payload, request }, reason })
-    await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'awaiting_confirmation', request,
-      threadId: undefined, turnId: undefined, taskWorkspaceId: undefined, clientRequestId: undefined,
-      admissionAttempted: false, reported: undefined, outcomeRequestId: undefined, result: undefined, error: undefined, finishedAt: undefined,
-      dispatchReplacementCount: 1, dispatchReplacementReason: reason.slice(0, 2000) }))
     bridge.reportPending.delete(link.id)
+    // Admission and restart reconciliation use the same idempotent projection.
+    // A slower caller must not reset a replacement already admitted by the reviewer.
+    await projectWorkbenchReplacement(bridge, replacement, link).catch((error) => {
+      console.warn('[kun] workbench replacement projection:', error instanceof Error ? error.message : String(error))
+    })
     bridge.wake()
     return true
   } catch { return false }

@@ -36,6 +36,7 @@ import type { ServerRuntime } from './runtime-factory-dependencies.js'
 import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
 import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/owned-process.js'
 import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
+import { workbenchExecutionControl } from './runtime-workbench-execution.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -150,21 +151,8 @@ export function createServerRuntimeComposition(
       runTurn: runAgentTurn,
       peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
       backgroundExecutionActive: (threadId) => backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running'),
-      stopBackgroundExecution: async (threadId) => { await backgroundShellRuntime.stopThread(threadId) },
-      proveStopped: async (threadId, turnId) => {
-        if (turnId && turnService.isTurnExecutionActive(turnId)) return false
-        if (backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running')) return false
-        if (executionLeases && await executionLeases.owner(threadId)) return false
-        const thread = await threadService.getMetadata(threadId)
-        if (thread?.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')) return false
-        if (!turnId) return true
-        if (thread?.turns.some((turn) => turn.id === turnId && ['completed', 'failed', 'aborted'].includes(turn.status))) return true
-        // Lease absence alone does not prove a missing executor finished.
-        const highest = await sessionStore.highestSeq(threadId)
-        const tail = await sessionStore.loadEventsSince(threadId, Math.max(0, highest - 1000))
-        return tail.some((event) => event.turnId === turnId &&
-          ['turn_completed', 'turn_failed', 'turn_aborted'].includes(event.kind))
-      } }
+      ...workbenchExecutionControl({ turns: turnService, threads: threadService, sessions: sessionStore,
+        backgroundShells: backgroundShellRuntime, executionLeases }) }
   })
   events.addObserver(new RoomNotificationObserver({ threadStore: stores.threadStore, store: roomComposition.rooms.deps.store }))
   bindAgentCommitmentService(core.threadStore, roomComposition.rooms.commitments)

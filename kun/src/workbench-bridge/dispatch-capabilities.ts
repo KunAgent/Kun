@@ -52,8 +52,8 @@ export async function narrowWorkbenchCapabilities(bridge: WorkbenchBridge, roomI
     intersectAllowedToolNames(profile?.allowedTools, intersectAllowedToolNames(agent?.capabilityOverrides?.allowedTools, member?.capabilityOverrides?.allowedTools)))
   return { ...frozen, ...(allowed !== undefined ? { allowedToolNames: [...allowed] } : {}),
     blockedToolNames: union(frozen?.blockedToolNames, profile?.blockedTools, agent?.capabilityOverrides?.blockedTools, member?.capabilityOverrides?.blockedTools),
-    blockedProviderIds: union(frozen?.blockedProviderIds, agent?.capabilityOverrides?.blockedMcpServers, member?.capabilityOverrides?.blockedMcpServers),
-    blockedSkillIds: union(frozen?.blockedSkillIds, agent?.capabilityOverrides?.blockedSkills, member?.capabilityOverrides?.blockedSkills),
-    ...([frozen?.skillsEnabled, agent?.capabilityOverrides?.skillsEnabled, member?.capabilityOverrides?.skillsEnabled].includes(false)
+    blockedProviderIds: union(frozen?.blockedProviderIds, profile?.blockedMcpServers, agent?.capabilityOverrides?.blockedMcpServers, member?.capabilityOverrides?.blockedMcpServers),
+    blockedSkillIds: union(frozen?.blockedSkillIds, profile?.blockedSkills, agent?.capabilityOverrides?.blockedSkills, member?.capabilityOverrides?.blockedSkills),
+    ...([frozen?.skillsEnabled, profile?.skillsEnabled, agent?.capabilityOverrides?.skillsEnabled, member?.capabilityOverrides?.skillsEnabled].includes(false)
       ? { skillsEnabled: false } : {}) }
 }

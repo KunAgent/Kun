@@ -147,7 +147,9 @@ export type RoomRuntimeDeps = {
   waitForOwnership?: (signal?: AbortSignal) => Promise<void>
   assertOwnership: () => Promise<void>
   proveStopped?: (threadId: string, turnId?: string) => Promise<boolean>
+  /** Stop verification for one cancelled task; unrelated user turns remain independent. */
+  proveTurnStopped?: (threadId: string, turnId: string) => Promise<boolean>
   unsupportedProviderIds?: () => string[]
   backgroundExecutionActive?: (threadId: string) => boolean
-  stopBackgroundExecution?: (threadId: string) => Promise<void>
+  stopBackgroundExecution?: (threadId: string, turnId?: string) => Promise<void>
 }

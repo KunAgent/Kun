@@ -6,14 +6,15 @@ import type { WorkbenchBridge } from './bridge.js'
 import { buildTaskPlanPrompt, executionMode, validateExecution } from './execution.js'
 import { workbenchTurnSource } from './turn-source.js'
 import { updateWorkbenchLink } from './link-store.js'
+import { claimWorkbenchAdmission, reconcileWorkbenchCancellation, recordWorkbenchAdmission } from './task-admission.js'
 
 export const buildTurnKey = (linkId: string) => `workbench-build-${linkId}`
 
 async function failBuild(bridge: WorkbenchBridge, link: WorkbenchLink, error: string): Promise<void> {
   const wakes = (link.origin.kind === 'tool' || link.origin.kind === 'series') &&
     (link.request.report === 'final' || link.request.report === 'failure')
-  await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'failed', error,
-    ...(wakes ? { reported: false } : {}) }))
+  await updateWorkbenchLink(bridge.store, link.roomId, link.id, (current) => current.cancelRequested ? null :
+    ({ status: 'failed', error, ...(wakes ? { reported: false } : {}) }))
   if (wakes) bridge.reportPending.add(link.id)
 }
 
@@ -23,13 +24,14 @@ export async function finishPlanPhase(bridge: WorkbenchBridge, link: WorkbenchLi
     await failBuild(bridge, link, 'The planning turn did not save a plan.')
     return true
   }
-  await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => executionMode(link.request) === 'auto'
+  await updateWorkbenchLink(bridge.store, link.roomId, link.id, (current) => current.cancelRequested ? null : executionMode(link.request) === 'auto'
     ? { status: 'queued', phase: 'build', turnId: undefined, clientRequestId: buildTurnKey(link.id), admissionAttempted: false }
     : { status: 'plan_ready' })
   return true
 }
 
 export async function admitBuildPhase(bridge: WorkbenchBridge, link: WorkbenchLink): Promise<void> {
+  if (await reconcileWorkbenchCancellation(bridge, link)) return
   try {
     const scope = await bridge.agentScope(link.participantAgentId)
     if (scope.policy.code === 'off') throw new Error('This Agent is no longer allowed to start Code tasks.')
@@ -46,7 +48,7 @@ export async function admitBuildPhase(bridge: WorkbenchBridge, link: WorkbenchLi
   const key = buildTurnKey(link.id)
   const existing = thread.turns.find((turn) => turn.clientRequestId === key)
   if (existing) {
-    await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ turnId: existing.id, status: existing.status === 'running' ? 'running' : 'queued' }))
+    await recordWorkbenchAdmission(bridge, link, key, existing.id)
     return
   }
   if (link.admissionAttempted) {
@@ -68,7 +70,7 @@ export async function admitBuildPhase(bridge: WorkbenchBridge, link: WorkbenchLi
     await failBuild(bridge, link, error instanceof Error ? error.message : String(error))
     return
   }
-  await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ admissionAttempted: true, clientRequestId: key }))
+  if (!await claimWorkbenchAdmission(bridge, link, key)) return
   const admitted = await bridge.deps.turns.enqueueTurn({ threadId: thread.id, request: {
     prompt, displayText: `Build plan: ${link.planPath}`, clientRequestId: key,
     model: model.model, ...(model.providerId ? { providerId: model.providerId } : {}), ...(model.accountId ? { accountId: model.accountId } : {}),
@@ -80,5 +82,5 @@ export async function admitBuildPhase(bridge: WorkbenchBridge, link: WorkbenchLi
     ...source, agentSurface: 'code', mode: 'agent', orchestration: link.request.execution?.orchestration ?? 'direct',
     attachmentIds: [], composerContexts: [], fileReferences: [], enqueueIfBusy: true
   } })
-  await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ turnId: admitted.turnId, status: 'queued' }))
+  await recordWorkbenchAdmission(bridge, link, key, admitted.turnId)
 }

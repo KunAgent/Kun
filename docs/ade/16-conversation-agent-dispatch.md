@@ -43,12 +43,17 @@ During review or countdown no Agent process or task workspace is created.
 Approved startup is atomically claimed, then handed to the existing scheduler.
 Partially admitted batches use deterministic worker/dispatch IDs; restart
 reconciliation resumes missing work without rerunning admitted assignments.
+Deadline scans do not await Agent reviews or startup callbacks. Each intent keeps
+one operation in flight, so a slow assignment cannot delay another card's window.
 
 Pause takes effect in the host before the card becomes editable. Saving restarts
 the full-access window or automatic review. Immediate start, deadline, cancel,
 editing and takeover race through revision checks and idempotent request IDs.
 Cancellation after admission stops the exact target. Takeover applies the
 existing user ownership transition and suppresses automatic continuation.
+First-turn admission records a durable claim before enqueueing. Cancellation
+during an unresolved claim stays stopping until the admission is reconciled;
+a late receipt is stopped instead of leaving a cancelled card with live work.
 
 Runtime replacement within one application session retains deadlines. Reopening
 the application renews an unstarted full-access window. Application exit stops
@@ -84,12 +89,17 @@ Outcome continuations preserve the exact source route, account, credentials and
 client surface, with authority intersected against current restrictions. Results
 remain reference data until the main Agent checks the assignment and records its
 verdict. A card stays awaiting parent review while that continuation is pending.
+Mixed completed/cancelled batches retain the completed results for review and
+then settle as cancelled, rather than returning to the queue.
 
 An automatically selected failed Agent can be replaced once. The previous
 executor must be proven stopped and its workspace inspected first. Replacement
 preserves the card identity, uses a new stable startup identity, records its
 reason, and repeats the applicable permission decision. User-pinned Agents,
 cancelled work and user-controlled work cannot be replaced automatically.
+The committed replacement generation is authoritative across the intent and its
+task link. Link projection must finish before the new generation can consume a
+target result, and replay must not reset work already admitted for that generation.
 
 ## Validation
 

@@ -109,6 +109,36 @@ describe('durable dispatch decisions', () => {
     await vi.waitFor(() => expect(fixture.start).toHaveBeenCalledTimes(1), { timeout: 2500, interval: 10 })
   })
 
+  it.each(['review', 'start'] as const)('keeps other deadlines moving during a slow %s without duplicate work', async (phase) => {
+    let release!: () => void, enter!: () => void
+    const blocked = new Promise<void>((resolve) => { release = resolve })
+    const entered = new Promise<void>((resolve) => { enter = resolve })
+    const review = vi.fn(async (intent: AgentDispatchIntent) => {
+      if (intent.source.toolCallId === 'slow' && phase === 'review') { enter(); await blocked }
+      return { decision: 'allow' as const }
+    })
+    const start = vi.fn(async (intent: AgentDispatchIntent) => {
+      if (intent.source.toolCallId === 'slow' && phase === 'start') { enter(); await blocked }
+      return { threadId: intent.source.toolCallId }
+    })
+    const fixture = await setup({ review, start })
+    const scans = vi.spyOn(fixture.store, 'list')
+    const countdown = await fixture.service.propose(proposal())
+    await fixture.service.propose(proposal('approve-for-me', { source: { ...proposal().source, toolCallId: 'slow' } }))
+    await entered
+    try {
+      // Let multiple autonomous ticks encounter the blocked operation before expiry.
+      await vi.waitFor(() => expect(scans.mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 3000 })
+      expect(start.mock.calls.some(([intent]) => intent.intentId === countdown.intentId)).toBe(false)
+      fixture.clock.now += 60_000
+      await vi.waitFor(async () => expect(await fixture.service.get(countdown.intentId)).toMatchObject({ state: 'running' }),
+        { timeout: 2000 })
+      expect(review).toHaveBeenCalledTimes(1)
+      expect(start.mock.calls.filter(([intent]) => intent.intentId === countdown.intentId)).toHaveLength(1)
+      expect(start.mock.calls.filter(([intent]) => intent.source.toolCallId === 'slow')).toHaveLength(phase === 'start' ? 1 : 0)
+    } finally { release(); await fixture.service.reconcile() }
+  }, 7000)
+
   it('lets cancellation at 59 seconds beat the timer and deduplicates click/timer races', async () => {
     const fixture = await setup()
     const cancelled = await fixture.service.propose(proposal())
@@ -221,6 +251,48 @@ describe('durable dispatch decisions', () => {
 })
 
 describe('scheduler reconciliation and cancellation', () => {
+  it('polls deadlines while startup recovery is still reviewing another persisted card', async () => {
+    const fixture = await setup()
+    await fixture.service.stop()
+    let enter!: () => void, release!: () => void
+    const entered = new Promise<void>((resolve) => { enter = resolve })
+    const blocked = new Promise<void>((resolve) => { release = resolve })
+    const recovered = new AgentDispatchService({ store: fixture.store, applicationSessionId: 'app-1', now: () => fixture.clock.now })
+    recovered.registerHandler('worker', { ...fixture.handler, review: async () => {
+      enter(); await blocked; return { decision: 'allow' }
+    } })
+    services.push(recovered)
+    const countdown = await recovered.propose(proposal())
+    await recovered.propose(proposal('approve-for-me', { source: { ...proposal().source, toolCallId: 'recover-review' } }))
+    const starting = recovered.start()
+    await entered
+    try {
+      fixture.clock.now += 60_000
+      await vi.waitFor(async () => expect(await recovered.get(countdown.intentId)).toMatchObject({ state: 'running' }),
+        { timeout: 2500 })
+    } finally { release(); await starting }
+  })
+
+  it('deduplicates a blocked scan and drains it before shutdown without admitting returned intents', async () => {
+    const fixture = await setup()
+    const intent = await fixture.service.propose(proposal())
+    await fixture.service.reconcile()
+    fixture.clock.now += 60_000
+    let enter!: () => void, release!: () => void
+    const entered = new Promise<void>((resolve) => { enter = resolve })
+    const blocked = new Promise<void>((resolve) => { release = resolve })
+    const scans = vi.spyOn(fixture.store, 'list').mockImplementation(async () => { enter(); await blocked; return [intent] })
+    const first = fixture.service.reconcile(), second = fixture.service.reconcile()
+    await entered
+    let stopped = false
+    const stopping = fixture.service.stop().then(() => { stopped = true })
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(stopped).toBe(false); expect(scans).toHaveBeenCalledTimes(1)
+    } finally { release(); await Promise.all([first, second, stopping]) }
+    expect(stopped).toBe(true); expect(fixture.start).not.toHaveBeenCalled()
+  })
+
   it('applies actual target takeover once and preserves admitted execution status', async () => {
     const takeover = vi.fn(async () => undefined)
     const fixture = await setup({ takeover })

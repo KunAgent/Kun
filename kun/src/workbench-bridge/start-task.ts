@@ -10,6 +10,7 @@ import { updateWorkbenchLink } from './link-store.js'
 import { executionMode, planRelativePath, validateExecution } from './execution.js'
 import { effectiveDispatchAuthority } from './dispatch-authority.js'
 import { narrowWorkbenchCapabilities } from './dispatch-capabilities.js'
+import { claimWorkbenchAdmission, reconcileWorkbenchCancellation, recordWorkbenchAdmission } from './task-admission.js'
 
 /** Deterministic identities: a retry after a crash reaches the same thread and the same turn. */
 export const workbenchThreadId = (linkId: string, replacementCount = 0) => replacementCount
@@ -19,8 +20,8 @@ export const workbenchTurnKey = (linkId: string) => 'workbench-' + linkId
 const fail = async (bridge: WorkbenchBridge, link: WorkbenchLink, error: string) => {
   const wakes = (link.origin.kind === 'tool' || link.origin.kind === 'series') &&
     (link.request.report === 'final' || link.request.report === 'failure')
-  await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'failed', error: error.slice(0, 2000),
-    ...(wakes ? { reported: false } : {}) }))
+  await updateWorkbenchLink(bridge.store, link.roomId, link.id, (current) => current.cancelRequested ? null :
+    ({ status: 'failed', error: error.slice(0, 2000), ...(wakes ? { reported: false } : {}) }))
   if (wakes) bridge.reportPending.add(link.id)
 }
 
@@ -43,9 +44,10 @@ export function taskPrompt(link: WorkbenchLink, agentName: string): string {
  */
 export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocument<WorkbenchLink>): Promise<void> {
   let link = row.value
+  if (await reconcileWorkbenchCancellation(bridge, link)) return
   if (link.dispatchIntentId && bridge.agentDispatch) {
     const intent = await bridge.agentDispatch.get(link.dispatchIntentId)
-    if (!intent || intent.cancellationRequested || intent.takenOver || intent.state === 'cancelled') {
+    if (!intent || intent.takenOver) {
       await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'cancelled', cancelRequested: true }))
       return
     }
@@ -119,7 +121,8 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
     if (ceiling) thread = await bridge.deps.threads.update(thread.id, ceiling)
   }
   if (link.threadId !== thread.id) {
-    await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ threadId: thread!.id }))
+    const bound = await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ threadId: thread!.id }))
+    await reconcileWorkbenchCancellation(bridge, bound)
     return
   }
   if (code && link.request.isolation === 'worktree' && !thread.taskWorkspaceId) {
@@ -143,12 +146,14 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
 
 /** Returns true once the thread is bound to a ready worktree; false while waiting or after failing the link. */
 async function isolateInWorktree(bridge: WorkbenchBridge, link: WorkbenchLink, thread: ThreadRecord, directory: string): Promise<boolean> {
+  if (await reconcileWorkbenchCancellation(bridge, link)) return false
   const workspaces = bridge.taskWorkspaces
   if (!workspaces) { await fail(bridge, link, 'Isolated worktrees are unavailable in this runtime.'); return false }
   if (!link.taskWorkspaceId) {
     const record = workspaces.create({ ownerThreadId: thread.id, sourceRoot: directory, isolation: 'worktree', label: link.request.title.slice(0, 120),
       startFrom: { kind: 'default-branch' } })
-    await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ taskWorkspaceId: record.workspaceId }))
+    const bound = await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ taskWorkspaceId: record.workspaceId }))
+    await reconcileWorkbenchCancellation(bridge, bound)
     return false
   }
   const record = workspaces.get(link.taskWorkspaceId)
@@ -160,11 +165,11 @@ async function isolateInWorktree(bridge: WorkbenchBridge, link: WorkbenchLink, t
 }
 
 async function admitFirstTurn(bridge: WorkbenchBridge, link: WorkbenchLink, thread: ThreadRecord, agentName: string): Promise<void> {
+  if (await reconcileWorkbenchCancellation(bridge, link)) return
   const clientRequestId = link.clientRequestId ?? workbenchTurnKey(link.id)
   const existing = thread.turns.find((turn) => turn.clientRequestId === clientRequestId)
   if (existing) {
-    await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ turnId: existing.id, clientRequestId,
-      status: existing.status === 'running' ? 'running' : 'queued' }))
+    await recordWorkbenchAdmission(bridge, link, clientRequestId, existing.id)
     return
   }
   if (link.admissionAttempted) {
@@ -183,7 +188,7 @@ async function admitFirstTurn(bridge: WorkbenchBridge, link: WorkbenchLink, thre
     await fail(bridge, link, error instanceof Error ? error.message : String(error))
     return
   }
-  await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ admissionAttempted: true, clientRequestId }))
+  if (!await claimWorkbenchAdmission(bridge, link, clientRequestId)) return
   const model = link.request.execution?.model ?? bridge.deps.model()
   try {
     const admitted = await bridge.deps.turns.enqueueTurn({ threadId: thread.id, request: {
@@ -199,10 +204,10 @@ async function admitFirstTurn(bridge: WorkbenchBridge, link: WorkbenchLink, thre
       ...(planPath ? { guiPlan: { operation: 'draft' as const, fixedPath: true, workspaceRoot: thread.workspace, relativePath: planPath,
         planId: `${thread.workspace}:${planPath}`, sourceRequest: link.request.goal, title: link.request.title } } : {}),
       orchestration: link.request.execution?.orchestration ?? 'direct', attachmentIds: [], composerContexts: [], fileReferences: [], enqueueIfBusy: true } })
-    await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ turnId: admitted.turnId, status: 'queued' }))
+    await recordWorkbenchAdmission(bridge, link, clientRequestId, admitted.turnId)
   } catch (error) {
     const known = error instanceof TurnConflictError || error instanceof ThreadClosingError
-    if (known) await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'failed', admissionAttempted: false,
+    if (known) await updateWorkbenchLink(bridge.store, link.roomId, link.id, (current) => ({ status: current.cancelRequested ? 'cancelled' : 'failed', admissionAttempted: false,
       error: (error as Error).message.slice(0, 2000) }))
     // Otherwise leave admissionAttempted set: the next tick reconciles this exact admission.
   }

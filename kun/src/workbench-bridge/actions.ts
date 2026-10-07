@@ -12,6 +12,8 @@ import { executionMode, validateExecution } from './execution.js'
 import { buildTurnKey } from './reconcile-phases.js'
 import { firstScheduleAt, seriesHasLiveChild } from './schedule.js'
 import { updateWorkbenchDispatch } from './dispatch.js'
+import { reconcileWorkbenchCancellation } from './task-admission.js'
+import { projectWorkbenchReplacement } from './dispatch-replacement.js'
 
 const LONG_RUNNING = ['code_task', 'work_task'] as const
 
@@ -107,13 +109,19 @@ export async function requestWorkbenchCancel(bridge: WorkbenchBridge, roomId: st
     if (decision && decision.expectedRevision !== link.revision) throw new RoomStoreConflictError('workbench link changed since it was read', link.revision)
     const intent = await bridge.agentDispatch.get(link.dispatchIntentId)
     if (!intent) throw new Error('The dispatch decision is unavailable')
-    await bridge.agentDispatch.act(intent.intentId, { action: 'cancel', expectedRevision: intent.revision,
+    const cancelled = await bridge.agentDispatch.act(intent.intentId, { action: 'cancel', expectedRevision: intent.revision,
       requestId: decision?.clientRequestId ?? `workbench-cancel:${link.id}:${intent.revision}` })
+    if (cancelled.replacementCount > (link.dispatchReplacementCount ?? 0)) await projectWorkbenchReplacement(bridge, cancelled, link)
     if (!intent.target) await requestWorkbenchCancel(bridge, roomId, linkId, undefined, true)
     bridge.wake()
     return readWorkbenchLink(bridge.store, roomId, linkId)
   }
-  if (isWorkbenchTerminal(link.status)) throw new RoomStoreConflictError('task already ended', link.revision)
+  if (isWorkbenchTerminal(link.status)) {
+    // A new dispatch generation may be durable before its old failed link is
+    // projected. Its accepted cancellation has no old execution left to stop.
+    if (fromDispatch) return link
+    throw new RoomStoreConflictError('task already ended', link.revision)
+  }
   if (link.kind === 'watch') {
     return updateWorkbenchLink(bridge.store, roomId, linkId, () => ({ status: 'cancelled' }), decision ? { expectedRevision: decision.expectedRevision } : {})
   }
@@ -124,6 +132,18 @@ export async function requestWorkbenchCancel(bridge: WorkbenchBridge, roomId: st
   if (link.status === 'scheduled' || link.status === 'missed' || link.status === 'plan_ready') {
     return updateWorkbenchLink(bridge.store, roomId, linkId, () => ({ status: 'cancelled', scheduledFor: undefined, cancelRequested: true }),
       decision ? { expectedRevision: decision.expectedRevision } : {})
+  }
+  if ((link.kind === 'code_task' || link.kind === 'work_task') &&
+    !(link.status === 'awaiting_confirmation' && !link.dispatchIntentId)) {
+    // Mark the cancellation before looking for the target. The first-turn
+    // claim observes this same durable marker, and late receipts remain live
+    // reconciliation work instead of being mistaken for an unstarted task.
+    const marked = await updateWorkbenchLink(bridge.store, roomId, linkId,
+      (current) => current.cancelRequested ? null : { cancelRequested: true },
+      decision ? { expectedRevision: decision.expectedRevision } : {})
+    bridge.wake()
+    await reconcileWorkbenchCancellation(bridge, marked)
+    return readWorkbenchLink(bridge.store, roomId, linkId)
   }
   if (link.status === 'awaiting_confirmation' || (link.status === 'queued' && !link.threadId)) {
     return updateWorkbenchLink(bridge.store, roomId, linkId,

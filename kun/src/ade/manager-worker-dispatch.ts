@@ -350,11 +350,15 @@ export class ManagerWorkerDispatch {
       }
       return { state: 'failed', target, error: failed.failureReason ?? 'Worker execution failed.' }
     }
-    if (live.every((record) => record.state === 'cancelled')) return { state: 'cancelled', target }
-    if (live.every((record) => record.state === 'completed')) {
-      const reviewed = live.every((record) => (record.verdict?.status ?? 'pending') !== 'pending')
-      return { state: reviewed ? 'completed' : 'awaiting_parent', target,
-        resultSummary: live.map((record) => record.resultExcerpt ?? record.title).join('\n').slice(0, 32_000) }
+    if (live.every((record) => record.state === 'completed' || record.state === 'cancelled')) {
+      // Cancelled siblings have no result to review, but completed work still
+      // needs the parent's verdict before this partially cancelled batch settles.
+      const reviewed = live.filter((record) => record.state === 'completed')
+        .every((record) => (record.verdict?.status ?? 'pending') !== 'pending')
+      const settled = live.some((record) => record.state === 'cancelled') ? 'cancelled' : 'completed'
+      return { state: reviewed ? settled : 'awaiting_parent', target,
+        resultSummary: live.map((record) => record.state === 'cancelled'
+          ? `Cancelled: ${record.title}` : record.resultExcerpt ?? record.title).join('\n').slice(0, 32_000) }
     }
     return { state: live.some((record) => record.state === 'accepted') ? 'running' : 'queued', target }
   }

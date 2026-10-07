@@ -74,6 +74,7 @@ export class AgentDispatchService {
   private readonly commands = new Set<Promise<unknown>>()
   private readonly controller = new AbortController()
   private timer?: ReturnType<typeof setTimeout>
+  private scan?: Promise<Promise<void>[]>
   private accepting = true
   private started = false
   private readonly now: () => number
@@ -288,8 +289,8 @@ export class AgentDispatchService {
       return updated
     })
     for (const intent of reset) await this.emit(intent)
-    await this.reconcile()
     this.schedule()
+    await this.reconcile()
   }
 
   /** Close admission before aborting/draining callbacks. No timer survives app exit. */
@@ -297,14 +298,23 @@ export class AgentDispatchService {
     this.accepting = false; this.started = false
     if (this.timer) clearTimeout(this.timer)
     this.controller.abort(new Error('Dispatch service is stopping'))
-    await Promise.allSettled([...this.inFlight.values(), ...this.takeoverOperations.values(), ...this.commands])
+    await Promise.allSettled([this.scan, ...this.inFlight.values(), ...this.takeoverOperations.values(), ...this.commands])
   }
 
   async reconcile(): Promise<void> {
-    if (!this.accepting) return
-    const intents = await this.list()
-    await Promise.all(intents.filter((intent) => !terminal.has(intent.state) && intent.state !== 'paused' &&
-      intent.state !== 'pending_confirmation').map((intent) => this.launch(intent.intentId)))
+    await Promise.all(await this.scanIntents())
+  }
+
+  /** Timer cadence waits only for enumeration, never for a slow review or start. */
+  private scanIntents(): Promise<Promise<void>[]> {
+    if (!this.accepting) return Promise.resolve([])
+    if (this.scan) return this.scan
+    const scan = this.list().then((intents) => intents
+      .filter((intent) => !terminal.has(intent.state) && intent.state !== 'paused' && intent.state !== 'pending_confirmation')
+      .map((intent) => this.launch(intent.intentId)))
+      .finally(() => { this.scan = undefined })
+    this.scan = scan
+    return scan
   }
 
   private launch(intentId: string): Promise<void> {
@@ -525,7 +535,7 @@ export class AgentDispatchService {
   private schedule(): void {
     if (!this.started || !this.accepting) return
     this.timer = runWithoutTurnMutationFence(() => setTimeout(() => {
-      void this.reconcile().catch((error) => {
+      void this.scanIntents().catch((error) => {
         console.warn(`[kun] dispatch timer failed: ${message(error)}`)
       }).finally(() => this.schedule())
     }, 1000))
