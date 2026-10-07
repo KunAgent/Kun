@@ -234,6 +234,9 @@ describe('agent session ids', () => {
     expect(gatewaySessionHint(request({ 'session-id': '01a114d8-5822-7940-bb83-4c7a4b7037f2' }))).toBe('01a114d8-5822-7940-bb83-4c7a4b7037f2')
     expect(gatewaySessionHint(request(), { prompt_cache_key: '01a114d8-5822', client_metadata: { session_id: '01a114d8-5822' } })).toBe('01a114d8-5822')
     expect(gatewaySessionHint(request(), { promptCacheKey: 'ses_eeb23df1cffemJMMBlLedBjbEu' })).toBe('ses_eeb23df1cffemJMMBlLedBjbEu')
+    // Crush 0.97 and Goose 1.53.
+    expect(gatewaySessionHint(request({ 'x-session-id': 'c0f86c2404d24718' }))).toBe('c0f86c2404d24718')
+    expect(gatewaySessionHint(request({ 'agent-session-id': '20261007_1' }))).toBe('20261007_1')
     // A bare cache key could be a per-prompt hash and is not taken as a session.
     expect(gatewaySessionHint(request(), { prompt_cache_key: '01a114d8-5822' })).toBeUndefined()
   })

@@ -17,6 +17,15 @@ an isolated proxy. No global client configuration or Agent installation changes.
 | OpenCode | 1.1.47 | passed | passed | passed | explicitly reuses main |
 | Pi | 0.73.1 | passed | passed | passed | no independent protocol |
 
+Rerun on 2026-10-07 against the review-fix branch, with the pinned versions
+installed in a throwaway folder: all 13 scenarios passed (text with a live
+route change, a real read tool and the next model call, cancellation reaching
+the upstream, and Claude's separate small model). The first attempt hung in
+Codex's cancel scenario: a client that left during the gateway's new wait for
+a stream's first chunk left its request open, because the HTTP writer waited
+for 'close' and 'drain' events that had already fired. The writer now cancels
+a response whose client is gone, and a route test covers a real disconnect.
+
 The 13 scenarios verify successful fixture file contents, not merely presence of
 an arbitrary tool_result. Smoke reports include source revision, dirty state,
 exact versions and safe wire-shape/actual target summaries. Version mismatch
@@ -67,6 +76,30 @@ consecutive full runs gave the same result:
 | Kimi Code | 0.29.0 | passed | passed | yes | yes |
 | Goose, Aider, Pi, Crush, Continue | not installed | not gated | not gated | unit tests only | unit tests only |
 
+Rerun on 2026-10-07 on branch `codex/provider-gateway-review-fixes` with all
+eleven file-configured agents. The six installed ones ran from PATH; Goose,
+Aider, Pi, Crush and Continue were installed from their official releases into
+a throwaway folder, each seeded with a realistic user config and a later user
+edit. Command: `npm run smoke:agent-wiring`.
+
+| Agent | Version | Text | Read tool + next call | Exact restore | User edit kept | Session grouping |
+| --- | --- | --- | --- | --- | --- | --- |
+| Claude Code | 2.1.291 | passed | passed | yes | yes | `x-claude-code-session-id` |
+| Codex | 0.145.0 | passed | passed | yes | yes | `session-id`, `client_metadata.session_id` |
+| OpenCode | 1.1.47 | passed | passed | yes | yes | `promptCacheKey: ses_*` (setCacheKey) |
+| Gemini CLI | 0.52.0 | passed (trusted folder) | passed | yes | yes | none sent |
+| Droid | 0.234.0 | passed | passed | yes | yes | none sent |
+| Kimi Code | 0.29.0 | passed | passed | yes | yes | `prompt_cache_key: session_*` |
+| Goose | 1.53.0 | passed | passed | yes | yes | `agent-session-id` |
+| Aider | 0.86.2 | passed | n/a (no tool calls) | yes | yes | none sent |
+| Pi | 0.73.1 | passed | passed | yes | yes | none sent |
+| Crush | 0.97.1 | passed | passed | yes | yes | `x-session-id` |
+| Continue | 1.5.47 | passed | passed | yes | yes | none sent |
+
+Zed has no CLI to drive; its adapter is covered by unit tests and its key goes
+to the clipboard. The first Continue run found that a connected Continue kept
+using the user's own first model; Kun's entries now lead its model list.
+
 Blocked outbound attempts were update, telemetry and registry checks
 (chatgpt.com, github.com, registry.npmjs.org, play.googleapis.com,
 code.kimi.com, telemetry hosts, api.factory.ai). None carried the gateway key.
@@ -108,6 +141,20 @@ local develop, extracted and launched with `open -n`:
   In the first build this left a stale discovery file. The discovery file is now
   withdrawn before runtime shutdown starts, and a repeat run with the same forced
   exit left no file.
+
+Second packaged app check, 2026-10-07, after the review-fix merge
+(`dist/Kun-0.3.10-mac-arm64.zip`, 15:34), launched with a local debugging port
+and driven read-only through Settings → Providers → local gateway on the
+user's own profile:
+
+- The discovery row, Agents list, Recent routes, gateway middleware (folder
+  shown as `~/.kun/data/gateway-middleware`) and the provider balance
+  endpoint field rendered with no error banners and no console errors.
+- `~/.kun/gateway.json` was 0600 and its instance id matched `/api/hello`;
+  `/v1/kun/limit` refused a missing key with 401. Quitting removed the file.
+- The log showed every Recent routes poll cut off at 15 s: the main process
+  gave the 15-second long poll its default 15-second budget. Fixed in the
+  same branch; it now gets the same headroom as the other long polls.
 
 ## Fixed scale gate
 

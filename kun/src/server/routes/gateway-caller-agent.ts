@@ -76,12 +76,13 @@ const SESSION_TEXT = /^[A-Za-z0-9._-]{1,128}$/
  * `session_id`) and `client_metadata.session_id`; Claude Code sends
  * `x-claude-code-session-id` and repeats it in `metadata.user_id` (a JSON
  * string); Kimi Code sends `prompt_cache_key: session_<id>`, and OpenCode,
- * which Kun configures with `setCacheKey`, `promptCacheKey: ses_<id>`.
- * Droid and Gemini CLI send none. Used only to group usage and route
+ * which Kun configures with `setCacheKey`, `promptCacheKey: ses_<id>`;
+ * Crush sends `x-session-id` and Goose `agent-session-id`. Droid, Gemini
+ * CLI, Pi, Aider and Continue send none. Used only to group usage and route
  * traces; never for authorization.
  */
 export function gatewaySessionHint(request: Request, body?: Record<string, unknown>): string | undefined {
-  for (const name of ['session-id', 'session_id', 'x-claude-code-session-id']) {
+  for (const name of ['session-id', 'session_id', 'x-claude-code-session-id', 'x-session-id', 'agent-session-id']) {
     const value = request.headers.get(name)?.trim()
     if (value && SESSION_TEXT.test(value)) return value
   }

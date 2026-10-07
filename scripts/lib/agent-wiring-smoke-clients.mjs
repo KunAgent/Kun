@@ -68,7 +68,7 @@ export const WIRING_CLIENTS = {
     succeeded: (stdout) => stdout.includes(MARKER)
   },
   goose: {
-    bin: 'goose',
+    bin: 'goose', sendsSession: true,
     seed: { 'config/goose/config.yaml': '# my goose settings\nGOOSE_MODE: auto\nextensions:\n  developer:\n    bundled: true\n    display_name: Developer\n    enabled: true\n    name: developer\n    timeout: 300\n    type: builtin\n' },
     userEdit: { file: 'config/goose/config.yaml', from: 'GOOSE_MODE: auto', to: 'GOOSE_MODE: smart_approve' },
     // File-based secrets: the isolated run must never reach the login keychain.
@@ -95,7 +95,7 @@ export const WIRING_CLIENTS = {
     userEdit: { file: 'pi/settings.json', from: '"theme": "dark"', to: '"theme": "light"' },
     env: (home) => ({ PI_CODING_AGENT_DIR: join(home, 'pi') }),
     args: (scenario) => ['--print', '--mode', 'json', '--no-session', prompt(scenario)], succeeded: (stdout) => stdout.includes(MARKER) },
-  crush: { bin: 'crush',
+  crush: { bin: 'crush', sendsSession: true,
     seed: { 'config/crush/crush.json': '{\n  "$schema": "https://charm.land/crush.json",\n  "options": {\n    "debug": false\n  }\n}\n' },
     userEdit: { file: 'config/crush/crush.json', from: '"debug": false', to: '"debug": true' },
     env: (home) => ({ XDG_CONFIG_HOME: join(home, 'config') }),

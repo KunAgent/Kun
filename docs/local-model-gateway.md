@@ -84,8 +84,9 @@ one: `x-kun-gateway-session-id`, Codex's `session-id` header (older builds
 `session_id`) or `client_metadata.session_id`, Claude Code's
 `x-claude-code-session-id` (also inside `metadata.user_id`), Kimi Code's
 `prompt_cache_key: session_<id>`, and OpenCode's `promptCacheKey: ses_<id>`,
-which OpenCode sends because Kun's provider entry sets `setCacheKey`. Droid
-and Gemini CLI send no session id, so their usage groups by key only.
+which OpenCode sends because Kun's provider entry sets `setCacheKey`, Crush's
+`x-session-id` and Goose's `agent-session-id`. Droid, Gemini CLI, Pi, Aider
+and Continue send no session id, so their usage groups by key only.
 
 Send a session id and `GET /v1/kun/route?session=<id>` reports
 the asked model, the rule that decided the turn, every member tried with its
