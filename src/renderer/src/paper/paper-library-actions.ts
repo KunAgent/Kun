@@ -10,7 +10,7 @@ import {
 } from '../write/write-workspace-store'
 import { normalizePath } from '../write/write-workspace-store-helpers'
 import { usePaperModeStore } from './paper-mode-store'
-import { enterPaperMode, PAPER_MODE_SWITCH_CANCELED, switchPaperLibrary } from './paper-mode-actions'
+import { rememberPaperSpace } from './paper-mode-actions'
 import { applyPaperReaderLayout, readPaperReaderLayout } from './paper-reader-layout'
 import { paperImportParentDir, readImportFolder } from './paper-import-target'
 
@@ -19,11 +19,9 @@ function paperNotice(notice: { tone: 'info' | 'success' | 'error'; message: stri
 }
 
 /**
- * Docs-surface file-tree action (§3.2 「加入论文库」): copy a workspace PDF into
- * the active paper library as a unit. When no library is configured, entering
- * paper mode lands on the library onboarding which offers folder picking.
- * Unlike `openPdfAsPaper` this never disturbs the docs editor layout — it is a
- * background import reported through the paper notice strip.
+ * File-tree action 「加入论文」: copy a PDF of the space into its papers folder
+ * as a unit. A background import reported through the notice, which offers
+ * to open the new paper; the editor layout is left alone.
  */
 export async function addPdfToPaperLibrary(input: {
   pdfPath: string
@@ -31,14 +29,8 @@ export async function addPdfToPaperLibrary(input: {
 }): Promise<void> {
   const { t } = input
   const state = useWriteWorkspaceStore.getState()
-  const library =
-    normalizePath(state.paperMode.activeLibrary)
-    || normalizePath(state.paperMode.libraries[0] ?? '')
-  if (!library) {
-    paperNotice({ tone: 'info', message: t('writePaperModeNeedLibrary') })
-    void enterPaperMode()
-    return
-  }
+  const library = normalizePath(state.workspaceRoot)
+  if (!library) return
   const parentDir = paperImportParentDir(state.paperReading.papersDir, readImportFolder(library))
   const requestId = newPaperRequestId()
   usePaperStore.getState().beginJob('import', requestId)
@@ -57,12 +49,20 @@ export async function addPdfToPaperLibrary(input: {
       })
       return
     }
-    if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) === library) {
-      usePaperStore.getState().rememberUnit(result.unitDir, result.meta)
-    }
-    paperNotice({
+    if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== library) return
+    usePaperStore.getState().rememberUnit(result.unitDir, result.meta)
+    usePaperModeStore.getState().refreshEntries()
+    void rememberPaperSpace(library)
+    usePaperStore.getState().setNotice({
       tone: 'success',
-      message: t('writePaperAddedToLibrary', { title: result.meta.title })
+      message: t(result.reused ? 'workPaperAlreadyInLibrary' : 'writePaperAddedToLibrary', { title: result.meta.title }),
+      action: {
+        label: t('workPaperOpen'),
+        run: () => {
+          const entry = usePaperModeStore.getState().entries.find((item) => item.unitDir === result.unitDir)
+          if (entry) void openLibraryEntry(entry, library, t)
+        }
+      }
     })
   } catch (error) {
     paperNotice({
@@ -82,9 +82,9 @@ export async function addPdfToPaperLibrary(input: {
  * `lastOpenedAt` in the local library state and, when `autoMarkReading` is
  * enabled, flips unread units to `reading`.
  *
- * `libraryRoot` is the root of the tree the entry was clicked in. When it is
- * not the mounted library the editor switches to that root first (saving
- * dirty documents); a failed or cancelled save leaves the reader untouched.
+ * `libraryRoot` is the space the entry belongs to. When it is not the
+ * mounted space that space is mounted first (settling dirty documents); a
+ * cancelled switch leaves the reader untouched.
  */
 export async function openLibraryEntry(
   entry: PaperLibraryEntry,
@@ -92,18 +92,9 @@ export async function openLibraryEntry(
   t?: PaperTranslate
 ): Promise<void> {
   const requested = normalizePath(libraryRoot ?? '')
-  const mounted = useWriteWorkspaceStore.getState()
-  if (requested && (requested !== normalizePath(mounted.workspaceRoot) || mounted.workSurface !== 'papers')) {
-    const switched = await switchPaperLibrary(requested)
-    if (!switched.ok) {
-      if (switched.message !== PAPER_MODE_SWITCH_CANCELED) {
-        paperNotice({
-          tone: 'error',
-          message: switched.message === 'save-failed' && t ? t('writePaperSaveFailed') : switched.message
-        })
-      }
-      return
-    }
+  if (requested && requested !== normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)) {
+    await useWriteWorkspaceStore.getState().selectWriteWorkspace(requested)
+    if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== requested) return
   }
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(store.workspaceRoot)

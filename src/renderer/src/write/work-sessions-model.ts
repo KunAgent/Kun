@@ -8,6 +8,7 @@ import {
   type WriteThreadRegistry
 } from './write-thread-registry'
 import { WRITE_CONTEXT_HEADING } from './quoted-selection'
+import { researchSessionIdFromPath } from '../paper/paper-research-sessions'
 
 /** What a Work session is attached to; opening the session opens it too. */
 export type WorkSessionAnchor =
@@ -15,6 +16,7 @@ export type WorkSessionAnchor =
   | { kind: 'file'; path: string }
   | { kind: 'whiteboard'; boardId: string }
   | { kind: 'paper'; path: string }
+  | { kind: 'research'; sessionId: string }
 
 export type WorkSessionEntry = {
   id: string
@@ -22,14 +24,6 @@ export type WorkSessionEntry = {
   title: string
   updatedAt: string | null
   anchor: WorkSessionAnchor
-}
-
-export type WorkSessionGroupKind = 'space' | 'library'
-
-export type WorkSessionGroup = {
-  root: string
-  kind: WorkSessionGroupKind
-  sessions: WorkSessionEntry[]
 }
 
 export type WorkSessionBoard = { id: string; workspaceRoot: string; threadIds: string[] }
@@ -70,19 +64,17 @@ function hasFileExtension(path: string): boolean {
 
 function anchorFor(input: {
   threadId: string
-  kind: WorkSessionGroupKind
   resources: Map<string, string>
-  boards: WorkSessionBoard[]
+  boards: readonly WorkSessionBoard[]
 }): WorkSessionAnchor {
   const board = input.boards.find((candidate) => candidate.threadIds.includes(input.threadId))
   if (board) return { kind: 'whiteboard', boardId: board.id }
   const path = input.resources.get(input.threadId)
   if (!path) return { kind: 'space' }
-  // Library conversations are keyed by the paper unit directory (or a
-  // research session); documents are keyed by the file itself.
-  if (input.kind === 'library' && (!hasFileExtension(path) || path.includes('/.kun-research/'))) {
-    return { kind: 'paper', path }
-  }
+  const research = researchSessionIdFromPath(path)
+  if (research) return { kind: 'research', sessionId: research }
+  // Paper sessions are keyed by the unit directory, documents by the file.
+  if (!hasFileExtension(path)) return { kind: 'paper', path }
   return { kind: 'file', path }
 }
 
@@ -91,46 +83,35 @@ function belongsTo(thread: NormalizedThread, root: string, registry: WriteThread
   return writeWorkspaceKey(registered || thread.workspace) === writeWorkspaceKey(root)
 }
 
-/** Work conversations, one group per space and library, newest first. */
-export function buildWorkSessionGroups(input: {
-  spaces: readonly string[]
-  libraries: readonly string[]
+/** The Work sessions of one space, newest first. */
+export function buildWorkSessions(input: {
+  root: string
   threads: readonly NormalizedThread[]
   registry: WriteThreadRegistry
   boards?: readonly WorkSessionBoard[]
   query?: string
-}): WorkSessionGroup[] {
+}): WorkSessionEntry[] {
+  const key = writeWorkspaceKey(input.root)
+  if (!key) return []
   const query = input.query?.trim().toLocaleLowerCase() ?? ''
-  const seenRoots = new Set<string>()
-  const groups: WorkSessionGroup[] = []
-  const candidates = input.threads.filter((thread) =>
-    thread.archived !== true &&
-    thread.relation !== 'side' &&
-    !thread.executionUnit &&
-    isWriteAssistantThread(thread, input.registry)
-  )
-  const add = (root: string, kind: WorkSessionGroupKind): void => {
-    const key = writeWorkspaceKey(root)
-    if (!key || seenRoots.has(`${kind}:${key}`)) return
-    seenRoots.add(`${kind}:${key}`)
-    const resources = workSessionResourceIndex(input.registry, root)
-    const boards = (input.boards ?? []).filter((board) => writeWorkspaceKey(board.workspaceRoot) === key)
-    const seenThreads = new Set<string>()
-    const sessions = candidates
-      .filter((thread) => belongsTo(thread, root, input.registry))
-      .filter((thread) => (seenThreads.has(thread.id) ? false : (seenThreads.add(thread.id), true)))
-      .sort((left, right) => updatedMs(right.updatedAt) - updatedMs(left.updatedAt))
-      .map((thread): WorkSessionEntry => ({
-        id: thread.id,
-        title: workSessionDisplayTitle(thread.title),
-        updatedAt: thread.updatedAt || null,
-        anchor: anchorFor({ threadId: thread.id, kind, resources, boards })
-      }))
-      .filter((session) => !query || session.title.toLocaleLowerCase().includes(query) ||
-        ('path' in session.anchor && writeFileKey(session.anchor.path).toLocaleLowerCase().includes(query)))
-    groups.push({ root, kind, sessions })
-  }
-  for (const root of input.spaces) add(root, 'space')
-  for (const root of input.libraries) add(root, 'library')
-  return groups
+  const resources = workSessionResourceIndex(input.registry, input.root)
+  const boards = (input.boards ?? []).filter((board) => writeWorkspaceKey(board.workspaceRoot) === key)
+  const seen = new Set<string>()
+  return input.threads
+    .filter((thread) =>
+      thread.archived !== true &&
+      thread.relation !== 'side' &&
+      !thread.executionUnit &&
+      isWriteAssistantThread(thread, input.registry) &&
+      belongsTo(thread, input.root, input.registry))
+    .filter((thread) => (seen.has(thread.id) ? false : (seen.add(thread.id), true)))
+    .sort((left, right) => updatedMs(right.updatedAt) - updatedMs(left.updatedAt))
+    .map((thread): WorkSessionEntry => ({
+      id: thread.id,
+      title: workSessionDisplayTitle(thread.title),
+      updatedAt: thread.updatedAt || null,
+      anchor: anchorFor({ threadId: thread.id, resources, boards })
+    }))
+    .filter((session) => !query || session.title.toLocaleLowerCase().includes(query) ||
+      ('path' in session.anchor && writeFileKey(session.anchor.path).toLocaleLowerCase().includes(query)))
 }

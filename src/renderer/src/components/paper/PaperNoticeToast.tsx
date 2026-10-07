@@ -32,7 +32,7 @@ export function PaperNoticeToast(): ReactElement | null {
   return (
     <div
       role={notice.tone === 'error' ? 'alert' : 'status'}
-      className={`ds-no-drag fixed left-1/2 top-3 z-50 flex max-w-[min(560px,calc(100vw-32px))] -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-[13px] shadow-[0_14px_32px_rgba(20,47,95,0.12)] ${toneClass}`}
+      className={`ds-no-drag fixed bottom-5 left-1/2 z-50 flex max-w-[min(560px,calc(100vw-32px))] -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-[13px] shadow-[0_14px_32px_rgba(20,47,95,0.12)] ${toneClass}`}
     >
       <span className="min-w-0 flex-1 truncate" title={notice.message}>{notice.message}</span>
       {notice.action ? (

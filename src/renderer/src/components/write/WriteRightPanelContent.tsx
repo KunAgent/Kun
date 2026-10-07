@@ -19,9 +19,6 @@ const WriteReviewPanel = lazy(() =>
 const WriteReferencesPanel = lazy(() =>
   import('./WriteReferencesPanel').then((module) => ({ default: module.WriteReferencesPanel }))
 )
-const WriteHistoryPanel = lazy(() =>
-  import('./WriteHistoryPanel').then((module) => ({ default: module.WriteHistoryPanel }))
-)
 const SubagentDetailPanel = lazy(() =>
   import('../subagents/SubagentDetailPanel').then((module) => ({ default: module.SubagentDetailPanel }))
 )
@@ -73,10 +70,6 @@ export function WriteRightPanelContent({
         return <WriteReviewPanel onCollapse={onCollapse} />
       case 'references':
         return <WriteReferencesPanel onCollapse={onCollapse} />
-      case 'history':
-        return (
-          <WriteHistoryPanel busy={write.busy} onNewConversation={write.onNewConversation} onCollapse={onCollapse} />
-        )
       case 'subagents':
         return <SubagentDetailPanel className="h-full max-h-full w-full" onCollapse={onCollapse} />
       case 'mcpSkills':

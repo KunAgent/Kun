@@ -533,7 +533,7 @@ export function useWorkbenchNavigationController({
     setInput('')
     useWriteWorkspaceStore.getState().clearQuotedSelections()
     // Same entry as the sidebar's New session: a draft that the first send
-    // binds to whatever is open; whiteboards create and bind theirs at once.
+    // turns into a session anchored to whatever is open then.
     void startWorkSession()
   }, [setInput])
 

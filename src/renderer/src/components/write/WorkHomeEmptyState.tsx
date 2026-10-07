@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactElement } from 'react'
-import { Check, ChevronDown, FilePlus2, FileText, Folder, Import, MessageSquareQuote, Presentation, Search, Shapes, Table2 } from 'lucide-react'
+import { Check, ChevronDown, FilePlus2, Folder, Import, Search, Shapes } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import kunLaptopUrl from '../../../../asset/img/kun_laptop.png'
@@ -34,9 +34,9 @@ export function WorkHomeHero(): ReactElement {
   const actions = [
     { id: 'document', label: t('workSidebarNewDocument'), Icon: FilePlus2,
       run: () => void createWorkDraftDocument(t('writeUntitledDraft')) },
-    { id: 'import', label: t('workSidebarImportPaper'), Icon: Import, run: () => void openPaperImport() },
     { id: 'whiteboard', label: t('writeCreateWhiteboard'), Icon: Shapes,
       run: () => void ensureWorkSpaceMounted().then((ok) => { if (ok) void whiteboard.openNewWhiteboardDialog() }) },
+    { id: 'import', label: t('workSidebarImportPaper'), Icon: Import, run: () => void openPaperImport() },
     { id: 'search', label: t('writePaperDiscoverTab_search'), Icon: Search, run: () => void openPaperView('discover:search') }
   ]
   return (
@@ -59,27 +59,6 @@ export function WorkHomeHero(): ReactElement {
           onClose={() => { if (!whiteboard.creatingWhiteboard) whiteboard.closeNewWhiteboardDialog() }}
         />
       ) : null}
-    </div>
-  )
-}
-
-/** Starter prompts under the home composer; they fill the input, never send. */
-export function WorkHomeStarters({ onPrompt }: { onPrompt: (prompt: string) => void }): ReactElement {
-  const { t } = useTranslation('common')
-  const starters = [
-    { label: t('writeStarterSummarize'), prompt: t('writeStarterSummarizePrompt'), Icon: FileText },
-    { label: t('writeStarterPdf'), prompt: t('writeStarterPdfPrompt'), Icon: MessageSquareQuote },
-    { label: t('writeStarterSpreadsheet'), prompt: t('writeStarterSpreadsheetPrompt'), Icon: Table2 },
-    { label: t('writeStarterPresentation'), prompt: t('writeStarterPresentationPrompt'), Icon: Presentation }
-  ]
-  return (
-    <div className="work-home-starters" aria-label={t('writeStarterActionsLabel')}>
-      {starters.map(({ label, prompt, Icon }) => (
-        <button key={label} type="button" className="work-home-starter" onClick={() => onPrompt(prompt)}>
-          <Icon className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          <span>{label}</span>
-        </button>
-      ))}
     </div>
   )
 }

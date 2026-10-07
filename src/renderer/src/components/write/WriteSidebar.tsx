@@ -1,9 +1,8 @@
 import type { ReactElement } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
-import { useWorkSidebarStore } from '../../write/work-sidebar-store'
 import { startWorkSession } from '../../write/work-session-actions'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { ConnectPhoneSidebarPanel } from '../chat/ConnectPhoneView'
@@ -13,9 +12,11 @@ import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
 import { WorkWhiteboardTitleDialog } from './WorkWhiteboardTitleDialog'
 import { WriteEntryDialog } from './WriteEntryDialog'
 import { useWorkDirectoryActions } from './use-work-directory-actions'
-import { WorkSidebarPaperNav, WorkSidebarPrimaryActions, WorkSidebarViewHeader } from './WorkSidebarNav'
+import { WorkSidebarPrimaryActions } from './WorkSidebarNav'
+import { WorkSpaceSwitcher } from './WorkSpaceSwitcher'
 import { WorkSessionsSection } from './WorkSessionsSection'
-import { WorkDirectorySection } from './WorkDirectorySection'
+import { WorkFilesSection } from './WorkFilesSection'
+import { WorkPapersSection } from './WorkPapersSection'
 import './work-sidebar.css'
 
 type Props = {
@@ -31,10 +32,10 @@ type Props = {
 }
 
 /**
- * Work sidebar, shaped like Code's: mode menu, primary actions, navigation,
- * then a 会话 | 目录 switch between the session list and the directory tree.
- * Papers live inside it (library/discover in the nav, libraries next to the
- * work spaces), so there is no separate paper sidebar or mode toggle.
+ * Work sidebar, shaped like Code's: mode menu and primary actions, then the
+ * space you are in and its map — 会话 / 文件 / 论文, all visible at once.
+ * Spaces are folders; their papers live in `<space>/papers`, so there is no
+ * separate library list, view switch or paper mode.
  */
 export function WriteSidebar({
   activeView,
@@ -53,11 +54,7 @@ export function WriteSidebar({
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
   const runtimeReady = useChatStore((s) => s.runtimeConnection === 'ready')
   const loadWriteSettings = useWriteWorkspaceStore((s) => s.loadWriteSettings)
-  const refreshWorkspace = useWriteWorkspaceStore((s) => s.refreshWorkspace)
-  const view = useWorkSidebarStore((s) => s.view)
   const remoteMobile = useRemoteMobileLayout()
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [query, setQuery] = useState('')
   const actions = useWorkDirectoryActions()
   const { whiteboardCreation, entryDialog, setEntryDialog } = actions
 
@@ -88,7 +85,7 @@ export function WriteSidebar({
             onNewSession={() => void startWorkSession()}
             onNewDocument={() => void actions.openCreateFileDialog()}
           />
-          {remoteMobile ? null : <WorkSidebarPaperNav />}
+          <WorkSpaceSwitcher onAddSpace={() => void actions.pickWriteWorkspace()} />
         </div>
 
         {connectPhoneSidebarOpen ? (
@@ -102,42 +99,11 @@ export function WriteSidebar({
             onOpenSettings={() => onOpenSettings('claw')}
           />
         ) : (
-          <div className="ds-no-drag flex min-h-0 flex-1 flex-col px-1" data-work-sidebar={view}>
-            <WorkSidebarViewHeader
-              view={view}
-              searchOpen={searchOpen}
-              onToggleSearch={() => {
-                setSearchOpen((open) => !open)
-                setQuery('')
-              }}
-              onOpenArchives={() => onOpenSettings('archives')}
-              onAddSpace={() => void actions.pickWriteWorkspace()}
-              onRefresh={() => {
-                const root = useWriteWorkspaceStore.getState().workspaceRoot
-                if (root) void refreshWorkspace(root)
-              }}
-            />
-            {view === 'sessions' && searchOpen ? (
-              <div className="work-sidebar-search">
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Escape') return
-                    setQuery('')
-                    setSearchOpen(false)
-                  }}
-                  placeholder={t('workSidebarSearchPlaceholder')}
-                  aria-label={t('workSidebarSearchSessions')}
-                />
-              </div>
-            ) : null}
-            <div className="work-sidebar-body">
-              {view === 'sessions'
-                ? <WorkSessionsSection query={searchOpen ? query : ''} />
-                : <WorkDirectorySection actions={actions} showLibraries={!remoteMobile} />}
-            </div>
+          <div className="work-sidebar-body ds-no-drag px-1" data-work-sidebar>
+            <WorkSessionsSection onOpenArchives={() => onOpenSettings('archives')} />
+            <WorkFilesSection actions={actions} />
+            {/* Phones keep their own paper home. */}
+            {remoteMobile ? null : <WorkPapersSection />}
           </div>
         )}
       </SidebarFrame>

@@ -79,7 +79,8 @@ describe('WriteAssistantPanel', () => {
     expect(html).not.toContain('Disabled Skill')
     expect(html).toContain('write-assistant-ready')
     expect(html.match(/write-assistant-action-row/g)).toHaveLength(3)
-    expect(html).toContain('Current file')
+    // Nothing is open: no context chip until a document, paper or board is.
+    expect(html).not.toContain('data-work-context')
   })
 
   it('exposes queued plain-text messages from the collapsed queue', () => {

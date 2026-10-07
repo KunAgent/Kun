@@ -17,12 +17,11 @@ function layout(tabs: number): WriteEditorLayoutV1 {
 }
 
 describe('selectWorkConversationStage', () => {
-  it('centers the assistant only on the documents surface with nothing open', () => {
-    const base = { workSurface: 'docs' as const, workspaceRoot: '/w', activeWhiteboardId: null }
+  it('centers the assistant only while nothing is open in a mounted space', () => {
+    const base = { workspaceRoot: '/w', activeWhiteboardId: null }
     expect(selectWorkConversationStage({ ...base, editorLayout: layout(0) })).toBe(true)
     expect(selectWorkConversationStage({ ...base, editorLayout: layout(1) })).toBe(false)
     expect(selectWorkConversationStage({ ...base, activeWhiteboardId: 'board', editorLayout: layout(0) })).toBe(false)
-    expect(selectWorkConversationStage({ ...base, workSurface: 'papers', editorLayout: layout(0) })).toBe(false)
     expect(selectWorkConversationStage({ ...base, workspaceRoot: ' ', editorLayout: layout(0) })).toBe(false)
   })
 })

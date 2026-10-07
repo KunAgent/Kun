@@ -5,7 +5,7 @@ describe('resolveWriteRailItems', () => {
   it('orders primary tools before shared tools', () => {
     const items = resolveWriteRailItems({ reviewCount: 0, referenceCount: 0, assistantRunning: false })
     expect(items.map((item) => item.id)).toEqual([
-      'assistant', 'outline', 'review', 'references', 'history', 'subagents', 'mcpSkills', 'usage'
+      'assistant', 'outline', 'review', 'references', 'subagents', 'mcpSkills', 'usage'
     ])
     expect(items.filter((item) => item.group === 'secondary').map((item) => item.id))
       .toEqual(['mcpSkills', 'usage'])
@@ -24,7 +24,7 @@ describe('resolveWriteRailItems', () => {
     const items = resolveWriteRailItems({
       reviewCount: 4, referenceCount: 1, assistantRunning: false, documentTools: false
     })
-    expect(items.map((item) => item.id)).toEqual(['assistant', 'history', 'subagents', 'mcpSkills', 'usage'])
+    expect(items.map((item) => item.id)).toEqual(['assistant', 'subagents', 'mcpSkills', 'usage'])
   })
 
   it('caps badge text', () => {

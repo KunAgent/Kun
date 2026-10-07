@@ -5,7 +5,6 @@
   "workRailReviewCount": "संशोधन · {{count}} समीक्षा बाकी",
   "workRailReferences": "संदर्भ और सामग्री",
   "workRailReferencesCount": "संदर्भ और सामग्री · {{count}} आइटम",
-  "workRailHistory": "बातचीत इतिहास",
   "workOutlineSummary": "{{count}} शीर्षक",
   "workOutlineEmpty": "अभी कोई शीर्षक नहीं है। # से कोई अनुभाग शुरू करें, रूपरेखा यहाँ दिखेगी।",
   "workOutlineUnavailable": "रूपरेखा दस्तावेज़ संपादन दृश्य में उपलब्ध है।",
@@ -24,6 +23,5 @@
   "workReferencesClear": "साफ़ करें",
   "workReferencesPage": "पृष्ठ {{page}}",
   "workReferencesLines": "पंक्तियाँ {{start}}–{{end}}",
-  "workHistoryNoResource": "कोई फ़ाइल या व्हाइटबोर्ड खोलें, उसकी बातचीत यहाँ दिखेगी।",
   "workAssistantSelectionChip": "चयन · {{count}} अक्षर"
 }

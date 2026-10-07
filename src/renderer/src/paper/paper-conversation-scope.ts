@@ -1,5 +1,4 @@
 import type { WorkspaceEntry } from '@shared/workspace-file'
-import type { WriteWorkSurface } from '../write/write-surface'
 import {
   findPaperUnitDir,
   paperUnitDirFromKnownUnits
@@ -10,16 +9,13 @@ import { researchResourcePath } from './paper-research-sessions'
 export type PaperModeView = 'library' | 'reader' | 'discover' | 'research'
 
 /**
- * Map the active editor file to the conversation resource for the assistant
- * panel. On the papers surface a file inside a paper unit binds the
- * conversation to the whole unit (PDF and NOTES share one thread); the
- * library and discover views use the library-level (workspace) thread, and
- * the Agent research stage uses one thread per research session.
- * Returns the absolute unit dir, the file path itself, or undefined for the
- * library-level thread.
+ * The resource a new Work session is anchored to. A file inside a paper unit
+ * anchors to the whole unit (PDF and NOTES belong together); the library and
+ * discover views anchor to the space itself, and each Agent research session
+ * to its own virtual path. Returns the absolute unit dir, the file path
+ * itself, or undefined for a space-level session.
  */
 export function paperConversationResourcePath(input: {
-  surface: WriteWorkSurface
   workspaceRoot: string
   activeFilePath: string | null | undefined
   unitDirs: readonly string[]
@@ -28,8 +24,7 @@ export function paperConversationResourcePath(input: {
   /** Selected Agent research session when `view === 'research'`. */
   researchSessionId?: string | null
 }): string | undefined {
-  const { surface, workspaceRoot, activeFilePath, unitDirs, entriesByDir, view } = input
-  if (surface !== 'papers') return activeFilePath ?? undefined
+  const { workspaceRoot, activeFilePath, unitDirs, entriesByDir, view } = input
   // Each research session is its own conversation, bound to a virtual path.
   if (view === 'research') return researchResourcePath(workspaceRoot, input.researchSessionId)
   if (view === 'library' || view === 'discover') return undefined

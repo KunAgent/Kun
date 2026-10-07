@@ -1,30 +1,41 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatStore } from '../store/chat-store'
 import { useWriteWorkspaceStore } from './write-workspace-store'
-import { useWorkSidebarStore, workDocumentKey } from './work-sidebar-store'
-import { nextUntitledDocumentName, prepareWorkSessionForSend, startWorkSession } from './work-session-actions'
-import { pinnedWriteSessionId, workSessionDraftPending } from './work-session-thread-hooks'
+import { currentWorkSessionId, useWorkSessionStore } from './work-session-store'
+import {
+  nextUntitledDocumentName,
+  openWorkSession,
+  prepareWorkSessionForSend,
+  startWorkSession
+} from './work-session-actions'
 
 const ROOT = '/Users/me/Work'
 const now = '2026-08-13T00:00:00.000Z'
 
 describe('Work session actions', () => {
   const createWriteThread = vi.fn(async () => 'thr_new')
+  const selectWriteThread = vi.fn(async (threadId: string) => {
+    useChatStore.setState({ activeThreadId: threadId })
+  })
+  const openFile = vi.fn(async () => undefined)
   const initialChat = useChatStore.getState()
   const initialWrite = useWriteWorkspaceStore.getState()
 
   beforeEach(() => {
     createWriteThread.mockClear()
-    useChatStore.setState({ route: 'write', activeThreadId: null, createWriteThread })
+    selectWriteThread.mockClear()
+    openFile.mockClear()
+    useChatStore.setState({ route: 'write', activeThreadId: null, createWriteThread, selectWriteThread })
     useWriteWorkspaceStore.setState({
       workSurface: 'docs',
       workspaceRoot: ROOT,
       activeFilePath: null,
       activeWhiteboardId: null,
       whiteboards: {},
+      openFile,
       setAssistantOpen: vi.fn()
     })
-    useWorkSidebarStore.setState({ view: 'sessions', pin: null, transitions: 0 })
+    useWorkSessionStore.setState({ current: {}, transitions: 0 })
   })
 
   afterEach(() => {
@@ -32,28 +43,31 @@ describe('Work session actions', () => {
     useWriteWorkspaceStore.setState(initialWrite, true)
   })
 
-  it('turns the empty center into a new space session on the first send', async () => {
-    expect(await prepareWorkSessionForSend()).toBe(true)
-    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined)
-  })
-
-  it('creates the drafted session bound to the open document', async () => {
+  it('turns a draft into a new session anchored to the open document on the first send', async () => {
     useWriteWorkspaceStore.setState({ activeFilePath: `${ROOT}/README.md` })
-    useChatStore.setState({ activeThreadId: 'thr_doc' })
-    useWorkSidebarStore.getState().startDraft(ROOT)
-    expect(workSessionDraftPending(ROOT)).toBe(true)
     expect(await prepareWorkSessionForSend()).toBe(true)
     expect(createWriteThread).toHaveBeenCalledWith(ROOT, `${ROOT}/README.md`)
   })
 
-  it('leaves an existing conversation alone', async () => {
-    useChatStore.setState({ activeThreadId: 'thr_existing' })
+  it('anchors a session started with nothing open to the space', async () => {
     expect(await prepareWorkSessionForSend()).toBe(true)
-    useWriteWorkspaceStore.setState({ activeFilePath: `${ROOT}/README.md` })
-    useChatStore.setState({ activeThreadId: null })
+    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined)
+  })
+
+  it('keeps the current session whatever document is open', async () => {
+    useWorkSessionStore.getState().select(ROOT, 'thr_current')
+    useChatStore.setState({ activeThreadId: 'thr_current' })
+    useWriteWorkspaceStore.setState({ activeFilePath: `${ROOT}/other.md` })
     expect(await prepareWorkSessionForSend()).toBe(true)
     expect(createWriteThread).not.toHaveBeenCalled()
-    expect(workSessionDraftPending(ROOT)).toBe(false)
+    expect(selectWriteThread).not.toHaveBeenCalled()
+  })
+
+  it('selects the current session when it is not the active thread yet', async () => {
+    useWorkSessionStore.getState().select(ROOT, 'thr_current')
+    expect(await prepareWorkSessionForSend()).toBe(true)
+    expect(selectWriteThread).toHaveBeenCalledWith('thr_current', ROOT)
+    expect(createWriteThread).not.toHaveBeenCalled()
   })
 
   it('reports a session that could not be created', async () => {
@@ -61,20 +75,15 @@ describe('Work session actions', () => {
     expect(await prepareWorkSessionForSend()).toBe(false)
   })
 
-  it('starts a draft in either view instead of creating a thread up front', async () => {
+  it('starts a draft instead of creating a thread up front', async () => {
+    useWorkSessionStore.getState().select(ROOT, 'thr_current')
     await startWorkSession()
-    expect(useWorkSidebarStore.getState().pin).toEqual({
-      workspaceRoot: ROOT, threadId: '', documentKey: workDocumentKey(useWriteWorkspaceStore.getState())
-    })
-    useWorkSidebarStore.setState({ view: 'files', pin: null })
-    useWriteWorkspaceStore.setState({ activeFilePath: `${ROOT}/README.md` })
-    await startWorkSession()
-    expect(useWorkSidebarStore.getState().pin?.threadId).toBe('')
-    expect(useWorkSidebarStore.getState().pin?.documentKey).toBe(workDocumentKey(useWriteWorkspaceStore.getState()))
+    expect(currentWorkSessionId(ROOT)).toBe('')
+    expect(Object.values(useWorkSessionStore.getState().current)).toEqual([''])
     expect(createWriteThread).not.toHaveBeenCalled()
   })
 
-  it('creates and binds a whiteboard session right away', async () => {
+  it('binds an ordinary whiteboard to the session its first send creates', async () => {
     const bindWhiteboardThread = vi.fn(async () => true)
     useWriteWorkspaceStore.setState({
       activeWhiteboardId: 'board-1',
@@ -86,27 +95,51 @@ describe('Work session actions', () => {
         }
       }
     })
-    await startWorkSession()
-    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined, { title: 'Pitch', titleAuto: false })
+    expect(await prepareWorkSessionForSend()).toBe(true)
+    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined)
     expect(bindWhiteboardThread).toHaveBeenCalledWith('board-1', 'thr_new')
   })
 
-  it('lets a pinned session keep the turn whatever document is open in the sessions view', () => {
-    useWriteWorkspaceStore.setState({ activeFilePath: `${ROOT}/README.md` })
-    useWorkSidebarStore.getState().pinSession(ROOT, 'thr_pinned')
-    expect(pinnedWriteSessionId(ROOT, 'thr_pinned')).toBe('thr_pinned')
-    expect(pinnedWriteSessionId(ROOT, 'thr_other')).toBeNull()
+  it('neither sends nor binds a board when the space changes while the session is created', async () => {
+    const bindWhiteboardThread = vi.fn(async () => true)
+    let finish: (id: string) => void = () => undefined
+    createWriteThread.mockImplementationOnce(() => new Promise<string>((resolve) => { finish = resolve }))
+    useWriteWorkspaceStore.setState({
+      activeWhiteboardId: 'board-1',
+      bindWhiteboardThread,
+      whiteboards: {
+        'board-1': {
+          id: 'board-1', title: 'Notes', workspaceRoot: ROOT, threadId: null,
+          phase: 'blank', revision: 0, createdAt: now, updatedAt: now
+        }
+      }
+    })
+    const ready = prepareWorkSessionForSend()
+    useWriteWorkspaceStore.setState({ workspaceRoot: '/Users/me/Other' })
+    finish('thr_new')
+    expect(await ready).toBe(false)
+    expect(bindWhiteboardThread).not.toHaveBeenCalled()
   })
 
-  it('keeps a pinned session in the files view until another document opens', () => {
-    useWriteWorkspaceStore.setState({ activeFilePath: `${ROOT}/README.md` })
-    useWorkSidebarStore.setState({ view: 'files' })
-    useWorkSidebarStore.getState().pinSession(ROOT, 'thr_pinned', workDocumentKey(useWriteWorkspaceStore.getState()))
-    expect(pinnedWriteSessionId(ROOT, 'thr_pinned')).toBe('thr_pinned')
-    useWriteWorkspaceStore.setState({ activeFilePath: `${ROOT}/notes.md` })
-    expect(pinnedWriteSessionId(ROOT, 'thr_pinned')).toBeNull()
-    useWriteWorkspaceStore.setState({ activeFilePath: null })
-    expect(pinnedWriteSessionId(ROOT, 'thr_pinned')).toBe('thr_pinned')
+  it('leaves a PPT review board with the task session that owns it', async () => {
+    useWriteWorkspaceStore.setState({
+      activeWhiteboardId: 'board-ppt',
+      whiteboards: {
+        'board-ppt': {
+          id: 'board-ppt', title: 'Deck', workspaceRoot: ROOT, threadId: 'thr_task', workflowId: 'wf-1',
+          phase: 'review', revision: 1, createdAt: now, updatedAt: now
+        }
+      }
+    })
+    expect(await prepareWorkSessionForSend()).toBe(true)
+    expect(createWriteThread).not.toHaveBeenCalled()
+  })
+
+  it('opens a session as the current one and brings back what it is attached to', async () => {
+    await openWorkSession({ id: 'thr_doc', title: 'Plan', updatedAt: now, anchor: { kind: 'file', path: `${ROOT}/plan.md` } })
+    expect(currentWorkSessionId(ROOT)).toBe('thr_doc')
+    expect(selectWriteThread).toHaveBeenCalledWith('thr_doc', ROOT)
+    expect(openFile).toHaveBeenCalledWith(ROOT, `${ROOT}/plan.md`)
   })
 
   it('names new documents untitled, then untitled-2 and so on', () => {

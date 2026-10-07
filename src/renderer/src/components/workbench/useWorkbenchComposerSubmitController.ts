@@ -5,7 +5,6 @@ import { providerIdForComposerModel } from '../../store/chat-store-helpers'
 import { parseClawCommand } from '@shared/claw-commands'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { captureWriteDocumentContext, writeDocumentContextMatches } from '../../write/write-document-context'
-import type { WriteRetrievalContext } from '@shared/write-retrieval'
 import type { WriteOfficeDocumentContext } from '../../write/quoted-selection'
 import { writeDocumentKey } from '../../write/write-editor-layout'
 import { selectFocusedPresentationView } from '../../write/write-presentation-view-state'
@@ -46,6 +45,8 @@ import { mirrorWorkbenchClawCommand } from './workbench-claw-message-mirror'
 import { restoreWorkbenchWritePrompt } from './workbench-write-prompt-state'
 import { restoreChatComposerSnapshot } from './workbench-chat-prompt-state'
 import { workbenchWriteSourceContext } from './workbench-write-source-reference'
+import { workContextDetached } from '../../write/work-context-store'
+import { retrieveWorkbenchWriteContext } from './workbench-write-retrieval'
 import { submitWorkbenchPlanIntent } from './workbench-plan-submit'
 import { buildWorkbenchClawHelpText } from './workbench-claw-help'
 import { readWriteDocumentSha256 } from './read-write-document-sha256'
@@ -161,9 +162,13 @@ export function useWorkbenchComposerSubmitController({
     const writeActiveDocument = writeActiveFilePath
       ? writeState.documentsByPath[writeDocumentKey(writeActiveFilePath)]
       : undefined
-    const writeSource = workbenchWriteSourceContext(
-      writeWorkspaceRoot, writeActiveFilePath, writeState.activeFileKind,
-      writeActiveDocument?.officePreview?.sourceFormat)
+    // A removed context chip keeps the open document out of this turn.
+    const contextDetached = workContextDetached(writeState)
+    const writeSource = contextDetached
+      ? { activeResource: undefined, fileReference: undefined }
+      : workbenchWriteSourceContext(
+        writeWorkspaceRoot, writeActiveFilePath, writeState.activeFileKind,
+        writeActiveDocument?.officePreview?.sourceFormat)
     const writeDocumentEpoch = writeState.documentEpoch
     const writeContentRevision = writeState.contentRevision
     const quotedSelections = writeState.quotedSelections.map((selection) => ({
@@ -262,24 +267,12 @@ export function useWorkbenchComposerSubmitController({
         }
         officeDocument = loaded.context
       }
-      const retrievalQuery = v.trim()
-      let retrieval: WriteRetrievalContext | null = null
-      if (retrievalQuery && typeof window.kunGui?.retrieveWriteContext === 'function') {
-        try {
-          const result = await window.kunGui.retrieveWriteContext({
-            workspaceRoot: writeWorkspaceRoot,
-            currentFilePath: writeActiveFilePath ?? undefined,
-            query: retrievalQuery,
-            maxSnippets: 4,
-            includeCurrentFile: quotedSelections.length === 0
-          })
-          if (result.ok) retrieval = result.context
-        } catch (error) {
-          void window.kunGui?.logError?.('write-retrieval', 'Failed to retrieve write context', {
-            message: error instanceof Error ? error.message : String(error)
-          })
-        }
-      }
+      const retrieval = await retrieveWorkbenchWriteContext({
+        workspaceRoot: writeWorkspaceRoot,
+        currentFilePath: writeActiveFilePath,
+        query: v,
+        includeCurrentFile: quotedSelections.length === 0 && !contextDetached
+      })
       if (!writeDraftStillMatches()) {
         restorePrompt()
         return

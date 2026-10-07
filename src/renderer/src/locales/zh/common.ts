@@ -45,6 +45,7 @@ import agentIntegrations from './common/agent-integrations.json'
 import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
 import workSidebar from './common/work-sidebar.json'
+import workMainline from './common/work-mainline.json'
 import conversationManage from './common/conversation-manage.json'
 
 const common = {
@@ -100,6 +101,7 @@ const common = {
   ...ade,
   ...workLayout,
   ...workSidebar,
+  ...workMainline,
   ...conversationManage,
 }
 

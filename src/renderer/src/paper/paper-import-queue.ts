@@ -1,5 +1,6 @@
 import type { PaperImportLine } from './paper-import-classify'
 import type { PaperTitleSearchCandidate } from '@shared/paper/paper-library-types'
+import type { PaperUnitMeta } from '@shared/paper/paper-types'
 import { newPaperRequestId } from '../write/paper/paper-store'
 
 /**
@@ -25,6 +26,10 @@ export type PaperImportQueueItem = {
   detail: string
   requestId: string
   unitDir?: string
+  /** Imported paper's metadata, for follow-ups such as batch interpretation. */
+  meta?: PaperUnitMeta
+  /** The paper was already in the space (deduplicated), nothing new was added. */
+  reused?: boolean
   candidates?: PaperTitleSearchCandidate[]
   /** Set while the item waits for the user to pick a title candidate. */
   pick?: (choice: PaperTitleSearchCandidate | null) => void
@@ -116,7 +121,7 @@ async function runItem(
       })
       return
     }
-    emit({ status: 'done', detail: result.meta.title, unitDir: result.unitDir })
+    emit({ status: 'done', detail: result.meta.title, unitDir: result.unitDir, meta: result.meta, reused: result.reused })
   } catch (error) {
     emit({ status: 'failed', detail: error instanceof Error ? error.message : String(error) })
   }

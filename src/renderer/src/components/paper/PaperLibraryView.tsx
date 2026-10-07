@@ -2,12 +2,18 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement
 import { useShallow } from 'zustand/react/shallow'
 import {
   FolderInput,
+  Layers,
+  List,
   Loader2,
   Sparkles,
+  Table2,
   Trash2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { useWriteWorkspaceStore, writeBasenameFromPath } from '../../write/write-workspace-store'
+import { useChatStore } from '../../store/chat-store'
+import { paperSessionIds, usePaperBatchInterpret } from '../../paper/paper-batch-interpret'
+import { openPaperSession } from '../../paper/paper-session-open'
 import { normalizePath } from '../../write/write-workspace-store-helpers'
 import { confirmDialog } from '../../lib/confirm-dialog'
 import { emptyPaperLibraryFilter, usePaperModeStore } from '../../paper/paper-mode-store'
@@ -29,18 +35,18 @@ import { PaperMoveGroupDialog } from './library/PaperMoveGroupDialog'
 import { PaperLibraryTable } from './library/PaperLibraryTable'
 import { PaperLibraryToolbar } from './library/PaperLibraryToolbar'
 import { PaperLibraryEmptyState } from './library/PaperLibraryEmptyState'
-import { PaperWorkspaceHeader } from './PaperWorkspaceHeader'
 import paperSurface from './PaperWorkspaceSurface.module.css'
 import { PaperMatrixWorkspace } from './evidence/PaperMatrixWorkspace'
 import type { PaperMultiTask } from '../../paper/paper-multi-prompt'
 import { usePaperReadingRequest } from '../../paper/paper-reading-request'
-import { newPaperRequestId, usePaperStore } from '../../write/paper/paper-store'
+import { usePaperStore } from '../../write/paper/paper-store'
 import type {
   PaperLibraryEntry,
   PaperLibrarySortKey,
   PaperUnitReadingActivity
 } from '@shared/paper/paper-library-types'
-import { currentImportFolder, currentImportParentDir } from '../../paper/paper-import-target'
+import { setImportFolder } from '../../paper/paper-import-target'
+import { usePaperImportDraft } from '../../paper/paper-import-draft'
 
 function statusLabelKey(status: string | undefined): string {
   switch (status ?? 'unread') {
@@ -59,12 +65,16 @@ export function PaperLibraryView({
   onSubmitPrompt?: (value: string) => void
 } = {}): ReactElement {
   const { t } = useTranslation('common')
-  const { workspaceRoot, paperReading } = useWriteWorkspaceStore(
+  const { workspaceRoot, paperReading, defaultWorkspaceRoot } = useWriteWorkspaceStore(
     useShallow((s) => ({
       workspaceRoot: s.workspaceRoot,
-      paperReading: s.paperReading
+      paperReading: s.paperReading,
+      defaultWorkspaceRoot: s.defaultWorkspaceRoot
     }))
   )
+  // Readings and batch interpretations are sessions anchored to the paper.
+  const threadCount = useChatStore((s) => s.threads.length)
+  const batchItems = usePaperBatchInterpret((s) => s.job?.items)
   const {
     entries,
     entriesLoading,
@@ -142,6 +152,18 @@ export function PaperLibraryView({
     () => sortPaperEntries(filterPaperEntries(entries, filter), sort),
     [entries, filter, sort]
   )
+  const sessionCounts = useMemo(() => Object.fromEntries(
+    entries.map((entry) => [entry.unitDir, paperSessionIds(workspaceRoot, entry.unitDir).length])
+  ), [entries, workspaceRoot, threadCount, batchItems]) // eslint-disable-line react-hooks/exhaustive-deps
+  const openSessions = (entry: PaperLibraryEntry): void => {
+    const [latest] = paperSessionIds(workspaceRoot, entry.unitDir)
+    if (latest) void openPaperSession(workspaceRoot, latest, entry.unitDir)
+  }
+  const interpretSelected = (): void => {
+    const chosen = visible.filter((entry) => selection.has(entry.unitDir))
+    usePaperBatchInterpret.getState().openDialog(workspaceRoot, chosen.map(({ unitDir, meta }) => ({ unitDir, meta })))
+  }
+  const spaceName = workspaceRoot === defaultWorkspaceRoot ? t('writeDefaultSpace') : writeBasenameFromPath(workspaceRoot)
 
   const reload = async (): Promise<void> => {
     if (!workspaceRoot || typeof window.kunGui?.paperLibraryList !== 'function') return
@@ -251,6 +273,9 @@ export function PaperLibraryView({
       case 'open':
         await openLibraryEntry(entry, workspaceRoot, t)
         return
+      case 'interpret':
+        usePaperReadingRequest.getState().open({ workspaceRoot, unitDir: entry.unitDir, meta: entry.meta })
+        return
       case 'edit':
         setEditEntry(entry)
         return
@@ -287,7 +312,8 @@ export function PaperLibraryView({
 
   const allVisibleSelected = visible.length > 0 && visible.every((e) => selection.has(e.unitDir))
 
-  // PM4: drop PDFs anywhere on the table to import them into this library.
+  // Drop PDFs anywhere on the library: the import dialog takes them (with a
+  // folder filter active they land in that folder) and reports each one.
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault()
     setDropActive(false)
@@ -296,32 +322,10 @@ export function PaperLibraryView({
       .map((file) => (typeof getPath === 'function' ? getPath(file) : ''))
       .filter((path) => /\.pdf$/i.test(path))
     if (!pdfs.length || !workspaceRoot) return
-    const notice = usePaperStore.getState().setNotice
-    void (async () => {
-      let imported = 0
-      for (const localPdfPath of pdfs) {
-        const result = await window.kunGui.paperImport({
-          workspaceRoot,
-          input: '',
-          localPdfPath,
-          // Dropping while a folder filter is active files the PDFs there.
-          parentDir: currentImportParentDir(filter.group || currentImportFolder()),
-          requestId: newPaperRequestId()
-        })
-        if (result.ok) imported += 1
-        else notice({ tone: 'error', message: result.message })
-      }
-      if (imported) {
-        notice({
-          tone: 'success',
-          message: t('writePaperDroppedImported', { count: imported })
-        })
-        void reload()
-      }
-    })()
+    if (filter.group) setImportFolder(filter.group, workspaceRoot)
+    usePaperImportDraft.getState().queue(pdfs)
+    setImportDialogOpen(true)
   }
-
-  if (matrixOpen) return <PaperMatrixWorkspace workspaceRoot={workspaceRoot} selected={entries.filter((entry) => selection.has(entry.unitDir))} onClose={() => setMatrixOpen(false)} />
 
   return (
     <div
@@ -330,7 +334,28 @@ export function PaperLibraryView({
       onDragLeave={() => setDropActive(false)}
       onDrop={onDrop}
     >
-      <PaperWorkspaceHeader />
+      <header className="flex shrink-0 flex-wrap items-end gap-3 px-5 pb-3 pt-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-ds-ink">{t('workSidebarLibrary')}</h1>
+          <p className="mt-0.5 truncate text-[12.5px] text-ds-faint" title={workspaceRoot}>
+            {t('paperLibrarySummary', { space: spaceName, total: counts.total, unread: counts.unread, reading: counts.reading })}
+          </p>
+        </div>
+        <div role="tablist" aria-label={t('paperLibraryViewLabel')} className="inline-flex rounded-lg bg-ds-hover p-0.5">
+          <button type="button" role="tab" aria-selected={!matrixOpen} onClick={() => setMatrixOpen(false)}
+            className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition ${matrixOpen ? 'text-ds-muted hover:text-ds-ink' : 'bg-ds-card font-semibold text-ds-ink shadow-sm'}`}>
+            <List className="h-3.5 w-3.5" strokeWidth={1.9} />{t('paperLibraryViewList')}
+          </button>
+          <button type="button" role="tab" aria-selected={matrixOpen} data-testid="paper-open-matrix" onClick={() => setMatrixOpen(true)}
+            title={t('paperReadingLocalControls')}
+            className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition ${matrixOpen ? 'bg-ds-card font-semibold text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'}`}>
+            <Table2 className="h-3.5 w-3.5" strokeWidth={1.9} />{t('paperMatrixTitle')}
+          </button>
+        </div>
+      </header>
+      {matrixOpen ? (
+        <PaperMatrixWorkspace workspaceRoot={workspaceRoot} selected={entries.filter((entry) => selection.has(entry.unitDir))} onClose={() => setMatrixOpen(false)} />
+      ) : (<>
       <PaperLibraryToolbar
         filter={filter}
         counts={counts}
@@ -348,15 +373,20 @@ export function PaperLibraryView({
         t={t}
       />
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-ds-border-muted px-4 py-2">
-        <button type="button" data-testid="paper-open-matrix" className="rounded-md border border-ds-border-muted px-3 py-1.5 text-xs text-accent hover:bg-ds-hover" onClick={() => setMatrixOpen(true)}>{t('paperMatrixTitle')}</button>
-        <span className="text-xs text-ds-muted">{t('paperReadingLocalControls')}</span>
-      </div>
       {selection.size > 0 ? (
         <div className="flex items-center gap-2 border-b border-ds-border-muted bg-accent-tint/[0.05] px-4 py-2">
           <span className="text-[12px] font-medium text-ds-ink">
             {t('writePaperSelected', { count: selection.size })}
           </span>
+          <button
+            type="button"
+            data-testid="paper-batch-interpret"
+            onClick={interpretSelected}
+            className="inline-flex h-6 items-center gap-1 rounded-full bg-accent px-2.5 text-[11.5px] font-medium text-white transition hover:brightness-110"
+          >
+            <Layers className="h-3 w-3" strokeWidth={1.9} />
+            {t('paperBatchAction', { count: selection.size })}
+          </button>
           {(['unread', 'reading', 'read'] as const).map((status) => (
             <button
               key={status}
@@ -456,10 +486,13 @@ export function PaperLibraryView({
             )}
             onOpen={(entry) => void openLibraryEntry(entry, workspaceRoot, t)}
             onMenu={(entry, x, y) => setMenu({ entry, x, y })}
+            sessionCounts={sessionCounts}
+            onOpenSessions={openSessions}
             t={t}
           />
         )}
       </div>
+      </>)}
       {menu ? (
         <PaperRowMenu
           entry={menu.entry}

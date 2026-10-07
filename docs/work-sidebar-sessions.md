@@ -1,55 +1,72 @@
-# Work sidebar: sessions and files
+# Work: spaces, sessions and papers
 
-Work has one sidebar shaped like Code's: the mode menu, a **New session**
-button with a **New document** icon, two paper rows (**Library** and the
-**Discover papers** menu), then a **Sessions | Files** switch. Paper mode no
-longer has its own toggle or sidebar; libraries are part of Work.
+Work is one space at a time. The sidebar is the map of that space: the mode
+menu, **New session** with a **New document** icon, the space switcher, then
+three collapsible sections (collapse state in `kun.work.sidebarSections.v1`):
 
-## Views
+- **Sessions**: the Work conversations of this space, newest first, with the
+  draft row on top while a new session has not been sent yet. The `...` menu
+  opens Settings -> Archives; rows offer rename, archive (with **Undo**) and
+  delete.
+- **Files**: whiteboards and the file tree. The space's `papers` folder is
+  hidden here because the next section shows it.
+- **Papers**: the library (with the unread count), **Discover papers** and the
+  paper folders of `<space>/papers`. Library, discover, reader and research
+  open as editor tabs next to documents.
 
-- **Sessions** (default, remembered in `kun.work.sidebarView.v1`) lists Work
-  conversations grouped by work space and paper library, newest first. Each
-  row shows what the session is attached to: the space itself, a document, a
-  whiteboard or a paper. Opening a session mounts its space or library,
-  reopens that resource and selects the conversation.
-- **Files** shows every work space (whiteboards and file tree of the mounted
-  one) followed by the paper libraries. Row actions appear on hover.
+## The session law
 
-## Which conversation is shown
+`write/work-session-store.ts` keeps one current session per space (`''` is a
+draft). `useWorkbenchWriteAssistantRuntime` enforces it.
 
-`write/work-sidebar-store.ts` keeps a pin: the session picked in the sidebar,
-or an empty draft after **New session**, together with the document that was
-open when it was set.
+1. Opening a document, whiteboard or paper never switches the session. It
+   becomes the context chip above the composer (`WorkContextChip`), whose
+   menu lists the sessions about it, starts a new one about it, or removes it
+   from the next turns (`work-context-store.ts`; the submit path then sends no
+   active resource and skips current-file retrieval).
+2. Clicking a session makes it current and restores the tabs it had
+   (`work-session-tabs.ts`, `kun.work.sessionTabs.v1`); a session without
+   remembered tabs reopens what it is anchored to.
+3. **New session** is a draft. The first send creates the session anchored to
+   what is open (`prepareWorkSessionForSend`) and binds an ordinary whiteboard
+   to it. If the space changes while the session is created, nothing is sent.
+4. Pages that are sessions themselves become current when they come to the
+   front: a PPT review board's task and an Agent research run.
 
-- In the sessions view the pinned session stays in the assistant while
-  documents open and close. Sends reuse it
-  (`ensureWriteThreadForWorkspace` -> `pinnedWriteSessionId`).
-- In the files view the conversation follows the open document. Switching
-  views never changes the conversation: the pin adopts the open document and
-  is released as soon as another one opens (or when nothing is open it keeps
-  the centered conversation).
-- **New session** anywhere (sidebar, group `+`, assistant header `+`) is a
-  draft: no thread exists until the first send, which binds it to whatever is
-  open then (`prepareWorkSessionForSend`; other senders such as the paper
-  reading dialog honor the draft through `ensureWriteThreadForWorkspace`).
-  Whiteboards are the exception and create their bound session at once.
-- Session rows offer rename, archive and delete. Archiving shows a toast with
-  **Undo** (which also reopens the session if it was open); archived sessions
-  are listed under Settings -> Archives, reachable from the archive icon in
-  the sessions header, the same place Code keeps them.
+With nothing open the assistant fills the center (home: hero, quick pills,
+composer and continue cards); otherwise it docks right. It is the same session
+and composer either way.
 
-## Layout
+## Spaces and papers
 
-With nothing open on the documents surface the assistant fills the center
-(`work-conversation-stage.ts`): Kun, a heading, quick actions and the composer,
-like Code's home. Opening a document docks the assistant back into the right
-panel. Phone layouts keep the overlay assistant.
+Papers are not a mode. Every space has `<space>/papers`; importing or adding a
+PDF puts it into the current space. Former paper libraries were folded into
+the space list once (`work-space-migration.ts`) and are marked with a cap in
+the switcher. Removing a space also drops it from the phone's paper libraries.
 
-## Papers
+## Importing papers
 
-The documents/papers surfaces still exist internally, but the user never
-toggles them: `switchPaperLibrary` always mounts the papers surface, and
-`selectWriteWorkspace`/`addWriteWorkspace` always return to documents.
+The import dialog (from the library, the papers section, the home card, a
+dropped PDF or "Add to papers" on a PDF in Files) imports into the current
+space. Each line resolves on its own; a paper that is already in the space is
+reported as such instead of duplicated (dedupe by DOI/arXiv id and by the
+original PDF path). The summary offers **Open** (one paper), **Interpret these
+N** and **View in library**.
+
+## Batch interpretation
+
+Select papers in the library (or use the import summary) and choose **Batch
+interpret**. The dialog asks for the reading purpose, whether papers that
+already have a session are skipped, and one explicit consent for sending the
+paper text to the fixed provider/model shown. Then each paper, one at a time,
+gets its own session anchored to the paper (`paper-batch-interpret.ts`):
+
+- The paper text comes from the evidence material; a paper without text is
+  skipped, and deeper purposes skip papers with abstract-only material.
+- The turn is a bounded paper turn (one model request, fixed model, size cap).
+- The current session is never changed. Progress is in the task panel at the
+  bottom left (open, stop); the sessions appear in the sidebar and as a count
+  badge on the library rows; a notice at the end opens the first one.
 
 ## Verification
 
@@ -58,6 +75,9 @@ npm run build
 node scripts/smoke-development-direct-chat.cjs --work-only --work-papers --locale zh --evidence dist/work-smoke
 ```
 
-Add `--theme dark` for the dark variant and `--work-code` to capture Code for
-comparison. The smoke creates its spaces next to the smoke repository because
-folders under the OS temp root are never treated as workspaces.
+Add `--theme dark` for the dark variant. The smoke covers the home, the first
+send, documents keeping the session, the library tab, importing with dedupe,
+a batch interpretation, the draft, reopening a session with its tabs, archive
+with undo and the archives link. It creates its spaces next to the smoke
+repository because folders under the OS temp root are never treated as
+workspaces.

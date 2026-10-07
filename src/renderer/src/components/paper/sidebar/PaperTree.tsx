@@ -3,10 +3,8 @@ import { ChevronRight, FolderInput } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { normalizePath } from '../../../write/write-workspace-store-helpers'
-import { usePaperStore } from '../../../write/paper/paper-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { setImportFolder } from '../../../paper/paper-import-target'
-import { switchPaperLibrary } from '../../../paper/paper-mode-actions'
 import { usePaperRowMenu } from '../library/use-paper-row-menu'
 import { PaperTreeRow } from './PaperTreeRow'
 import { PaperNewFolderRow } from './PaperNewFolderRow'
@@ -99,18 +97,8 @@ export function PaperTree({
 
   const importInto = async (folder: string): Promise<void> => {
     setImportFolder(folder, libraryRoot)
-    const state = useWriteWorkspaceStore.getState()
-    if (libraryRoot !== normalizePath(state.workspaceRoot) || state.workSurface !== 'papers') {
-      // The import dialog targets the mounted library; switch first.
-      const switched = await switchPaperLibrary(libraryRoot)
-      if (!switched.ok) {
-        usePaperStore.getState().setNotice({
-          tone: 'error',
-          message: switched.message === 'save-failed' ? t('writePaperSaveFailed') : switched.message
-        })
-        return
-      }
-    }
+    // The import dialog targets the mounted space.
+    if (libraryRoot !== normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)) return
     usePaperModeStore.getState().setImportDialogOpen(true)
   }
 

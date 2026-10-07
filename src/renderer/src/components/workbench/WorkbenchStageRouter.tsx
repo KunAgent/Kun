@@ -1,7 +1,6 @@
 import { lazy, Suspense, useMemo, type ReactElement, type ReactNode } from 'react'
 import { WorkbenchConversationStage, type WorkbenchConversationStageProps } from './WorkbenchConversationStage'
 import { normalizeWorkbenchRoute } from './workbench-route'
-import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { PaperNoticeToast } from '../paper/PaperNoticeToast'
 import { WriteSideRail } from '../write/WriteSideRail'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
@@ -26,8 +25,8 @@ const WorkflowRunPanel = lazy(() =>
 const WriteWorkspaceView = lazy(() =>
   import('../write/WriteWorkspaceView').then((module) => ({ default: module.WriteWorkspaceView }))
 )
-const PaperWorkspaceView = lazy(() =>
-  import('../paper/PaperWorkspaceView').then((module) => ({ default: module.PaperWorkspaceView }))
+const WorkPaperHost = lazy(() =>
+  import('../write/WorkPaperHost').then((module) => ({ default: module.WorkPaperHost }))
 )
 const AgentChatStage = lazy(() =>
   import('../rooms/AgentChatStage').then((module) => ({ default: module.AgentChatStage }))
@@ -47,7 +46,7 @@ type WriteStageProps = {
   input: string
   setInput: (value: string) => void
   onSubmitPrompt?: (value: string) => void
-  /** Attach a base64 image to the composer (papers surface only). */
+  /** Attach a base64 image to the composer (paper reader region capture). */
   onAttachImage?: (input: { dataBase64: string; name: string }) => Promise<boolean>
   onOpenAgentSettings?: () => void
   rightPanel: ReactNode
@@ -77,38 +76,15 @@ function WorkbenchPaneFallback(): ReactElement {
 }
 
 /**
- * Write stage: docs surface renders the ordinary workspace; the papers
- * surface swaps in the paper workbench (library/discover + reader) without
- * changing the route (§3.1 D2).
+ * Work stage: one space, one set of tabs. Documents, whiteboards, the paper
+ * library, discover pages and readers all open in the editor groups; with
+ * nothing open the assistant fills the center instead.
  */
 function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
-  const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
-  // The Work rail sits right of the panel on both surfaces; phone-sized remote
-  // layouts keep the tab-bar assistant toggle instead.
+  // The Work rail sits right of the panel; phone-sized remote layouts keep the
+  // tab-bar assistant toggle instead.
   const remoteMobile = useRemoteMobileLayout()
   const rightPanel = <>{write.rightPanel}{remoteMobile ? null : <WriteSideRail />}</>
-  if (workSurface === 'papers') {
-    return (
-      <PaperWorkspaceView
-        leftSidebarCollapsed={write.leftSidebarCollapsed}
-        onToggleLeftSidebar={write.onToggleLeftSidebar}
-        input={write.input}
-        setInput={write.setInput}
-        onSubmitPrompt={write.onSubmitPrompt}
-        onAttachImage={write.onAttachImage}
-        onOpenAgentSettings={write.onOpenAgentSettings}
-        rightPanel={rightPanel}
-      />
-    )
-  }
-  return <WriteDocsStage write={write} rightPanel={rightPanel} />
-}
-
-/**
- * Documents surface. With nothing open the empty editor steps aside (kept
- * mounted for its lifecycle effects) and the assistant fills the center.
- */
-function WriteDocsStage({ write, rightPanel }: { write: WriteStageProps; rightPanel: ReactNode }): ReactElement {
   const conversationStage = useWorkConversationStage()
   const chrome = useMemo(() => ({
     leftSidebarCollapsed: write.leftSidebarCollapsed,
@@ -116,20 +92,27 @@ function WriteDocsStage({ write, rightPanel }: { write: WriteStageProps; rightPa
   }), [write.leftSidebarCollapsed, write.onToggleLeftSidebar])
   return (
     <WorkStageChromeContext.Provider value={chrome}>
-    <div className={`flex min-h-0 flex-1${conversationStage ? ' work-stage-conversation' : ''}`}
-      data-work-stage={conversationStage ? 'conversation' : 'documents'}>
-      <div className={conversationStage ? 'hidden' : 'flex min-h-0 min-w-0 flex-1'}>
-        <WriteWorkspaceView
-          leftSidebarCollapsed={write.leftSidebarCollapsed}
-          onToggleLeftSidebar={write.onToggleLeftSidebar}
-          input={write.input}
-          setInput={write.setInput}
-          onSubmitPrompt={write.onSubmitPrompt}
-          onOpenAgentSettings={write.onOpenAgentSettings}
-        />
-      </div>
-      {rightPanel}
-    </div>
+      <WorkPaperHost
+        leftSidebarCollapsed={write.leftSidebarCollapsed}
+        onToggleLeftSidebar={write.onToggleLeftSidebar}
+        input={write.input}
+        setInput={write.setInput}
+        onSubmitPrompt={write.onSubmitPrompt}
+        onAttachImage={write.onAttachImage}
+        conversationStage={conversationStage}
+        rightPanel={rightPanel}
+      >
+        {(submitPrompt) => (
+          <WriteWorkspaceView
+            leftSidebarCollapsed={write.leftSidebarCollapsed}
+            onToggleLeftSidebar={write.onToggleLeftSidebar}
+            input={write.input}
+            setInput={write.setInput}
+            onSubmitPrompt={submitPrompt}
+            onOpenAgentSettings={write.onOpenAgentSettings}
+          />
+        )}
+      </WorkPaperHost>
     </WorkStageChromeContext.Provider>
   )
 }

@@ -5,7 +5,6 @@
   "workRailReviewCount": "수정 사항 · 검토 대기 {{count}}개",
   "workRailReferences": "인용 및 자료",
   "workRailReferencesCount": "인용 및 자료 · {{count}}개",
-  "workRailHistory": "대화 기록",
   "workOutlineSummary": "제목 {{count}}개",
   "workOutlineEmpty": "아직 제목이 없습니다. #으로 섹션을 시작하면 여기에 개요가 표시됩니다.",
   "workOutlineUnavailable": "개요는 문서 편집 보기에서 사용할 수 있습니다.",
@@ -24,6 +23,5 @@
   "workReferencesClear": "모두 지우기",
   "workReferencesPage": "{{page}}페이지",
   "workReferencesLines": "{{start}}–{{end}}행",
-  "workHistoryNoResource": "파일이나 화이트보드를 열면 해당 대화가 여기에 표시됩니다.",
   "workAssistantSelectionChip": "선택 영역 · {{count}}자"
 }

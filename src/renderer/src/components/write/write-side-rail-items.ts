@@ -13,8 +13,9 @@ export type WriteRailItem = {
 }
 
 /**
- * Work rail order (design: assistant, outline, review, references, history,
- * subagents, then shared MCP/usage tools under a divider). Pending review
+ * Work rail order (design: assistant, outline, review, references,
+ * subagents, then shared MCP/usage tools under a divider). The sessions of
+ * an open item are listed by the assistant's context chip, not a panel. Pending review
  * chunks get an accent badge; reference counts stay neutral.
  */
 export function resolveWriteRailItems({
@@ -42,7 +43,6 @@ export function resolveWriteRailItems({
       group: 'primary',
       ...(referenceCount > 0 ? { badge: { count: referenceCount, tone: 'neutral' as const } } : {})
     },
-    { id: 'history', group: 'primary' },
     { id: 'subagents', group: 'primary' },
     { id: 'mcpSkills', group: 'secondary' },
     { id: 'usage', group: 'secondary' }

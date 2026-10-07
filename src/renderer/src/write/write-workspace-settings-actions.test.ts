@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defaultWriteSettings, normalizeAppSettings, type AppSettingsV1 } from '@shared/app-settings'
+import { mergeWriteSettings } from '@shared/app-settings-write'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useWriteWorkspaceStore } from './write-workspace-store'
 
@@ -141,8 +142,8 @@ describe('loadWriteSettings concurrency and surface switch', () => {
     expect(initializeWorkspace).toHaveBeenLastCalledWith('/workspace/second', { force: false })
   })
 
-  it('stays on the docs surface and rolls the flag back when leaving is declined', async () => {
-    const enabled = normalizeAppSettings({
+  it('folds a legacy paper library into the spaces and stays put when leaving is declined', async () => {
+    let settings = normalizeAppSettings({
       write: {
         activeWorkspaceRoot: '/workspace/docs',
         workspaces: ['/workspace/docs'],
@@ -151,9 +152,11 @@ describe('loadWriteSettings concurrency and surface switch', () => {
         paperMode: { enabled: true, libraries: ['/library'], activeLibrary: '/library' }
       }
     } as AppSettingsV1)
-    vi.spyOn(rendererRuntimeClient, 'getSettings').mockResolvedValue(enabled)
-    const setSettings = vi.spyOn(rendererRuntimeClient, 'setSettings')
-      .mockResolvedValue(settingsFor('/workspace/docs'))
+    vi.spyOn(rendererRuntimeClient, 'getSettings').mockImplementation(async () => settings)
+    vi.spyOn(rendererRuntimeClient, 'setSettings').mockImplementation(async (patch) => {
+      settings = { ...settings, write: mergeWriteSettings(settings.write, patch.write) }
+      return settings
+    })
     vi.stubGlobal('window', { confirm: vi.fn(() => false) })
     const initializeWorkspace = vi.fn(async () => undefined)
     useWriteWorkspaceStore.setState({
@@ -169,7 +172,9 @@ describe('loadWriteSettings concurrency and surface switch', () => {
 
     expect(useWriteWorkspaceStore.getState().workSurface).toBe('docs')
     expect(initializeWorkspace).not.toHaveBeenCalled()
-    expect(setSettings).toHaveBeenCalledWith({ write: { paperMode: { enabled: false } } })
+    expect(settings.write.paperMode.enabled).toBe(false)
+    expect(settings.write.workspaces).toEqual(expect.arrayContaining(['/workspace/docs', '/library']))
+    expect(settings.write.activeWorkspaceRoot).toBe('/workspace/docs')
     useWriteWorkspaceStore.setState({ documentsByPath: {} })
     vi.unstubAllGlobals()
   })

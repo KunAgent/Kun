@@ -5,7 +5,6 @@
   "workRailReviewCount": "Revisions · {{count}} pending",
   "workRailReferences": "References",
   "workRailReferencesCount": "References · {{count}} items",
-  "workRailHistory": "Conversation history",
   "workOutlineSummary": "{{count}} headings",
   "workOutlineEmpty": "No headings yet. Start a section with # and the outline appears here.",
   "workOutlineUnavailable": "The outline is available in the document editor view.",
@@ -24,6 +23,5 @@
   "workReferencesClear": "Clear",
   "workReferencesPage": "Page {{page}}",
   "workReferencesLines": "Lines {{start}}–{{end}}",
-  "workHistoryNoResource": "Open a file or whiteboard to see its conversations here.",
   "workAssistantSelectionChip": "Selection · {{count}} chars"
 }

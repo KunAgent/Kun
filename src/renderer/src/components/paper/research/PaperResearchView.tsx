@@ -11,7 +11,6 @@ import { buildResearchPool } from '../../../paper/paper-research-pool'
 import {
   listResearchSessions,
   listResearchSessionsAcrossLibraries,
-  readLastResearchSession,
   researchResourcePath
 } from '../../../paper/paper-research-sessions'
 import {
@@ -89,7 +88,6 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
   const userPickedTab = useRef(false)
   const [starting, setStarting] = useState(false)
   const stageRef = useRef<HTMLDivElement | null>(null)
-  const restoredFor = useRef<string | null>(null)
 
   const sessions = useMemo(() => listResearchSessions(libraryRoot, threads), [libraryRoot, threads])
   const history = useMemo(
@@ -104,18 +102,9 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
   const lastUserAt = [...blocks].reverse().find((block) => block.kind === 'user')?.createdAt
   const elapsed = useElapsed(lastUserAt, running)
 
-  // Reopen the library's last session once per library, unless the user is
-  // already on a session or arrived with a hand-off draft.
-  useEffect(() => {
-    if (restoredFor.current === libraryRoot || !sessions.length) return
-    restoredFor.current = libraryRoot
-    if (sessionId || draft) return
-    const last = readLastResearchSession(libraryRoot)
-    if (last && sessions.some((session) => session.sessionId === last)) selectPaperResearchSession(last)
-  }, [libraryRoot, sessions, sessionId, draft])
-
-  // The resource → thread effect normally binds the session within a tick;
-  // if something else holds editor focus or selection lags, select directly.
+  // A research run is a session: the Work runtime makes the selected run the
+  // current session within a tick; if selection lags, select it directly.
+  // Opening the page never picks a run by itself — the user does.
   useEffect(() => {
     if (!activeSession || bound) return
     const timer = setTimeout(() => {

@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePaperReadingRequest } from '../../../paper/paper-reading-request'
 import { confirmDialog } from '../../../lib/confirm-dialog'
 import { openLibraryEntry } from '../../../paper/paper-library-actions'
 import { trashPaperUnits } from '../../../paper/paper-unit-ops'
@@ -10,6 +11,8 @@ import {
   updatePaperEntryMeta
 } from '../../../paper/paper-library-row-actions'
 import { usePaperStore } from '../../../write/paper/paper-store'
+import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
+import { normalizePath } from '../../../write/write-workspace-store-helpers'
 import { PaperRowMenu, type PaperRowMenuAction } from './PaperRowMenu'
 import { PaperMetaEditDialog } from './PaperMetaEditDialog'
 import { PaperMoveGroupDialog } from './PaperMoveGroupDialog'
@@ -54,6 +57,9 @@ export function usePaperRowMenu(): {
     switch (action) {
       case 'open':
         await openLibraryEntry(entry, libraryRoot, t)
+        return
+      case 'interpret':
+        usePaperReadingRequest.getState().open({ workspaceRoot: normalizePath(libraryRoot ?? '') || normalizePath(useWriteWorkspaceStore.getState().workspaceRoot), unitDir: entry.unitDir, meta: entry.meta })
         return
       case 'edit':
         setEditEntry({ entry, libraryRoot })

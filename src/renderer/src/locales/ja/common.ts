@@ -20,6 +20,7 @@ import paperWorkspace from './common/paper-workspace.json'
 import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
 import workSidebar from './common/work-sidebar.json'
+import workMainline from './common/work-mainline.json'
 
 const common = {
   ...agentUpdates,
@@ -43,6 +44,7 @@ const common = {
   ...ade,
   ...workLayout,
   ...workSidebar,
+  ...workMainline,
 }
 
 export default common

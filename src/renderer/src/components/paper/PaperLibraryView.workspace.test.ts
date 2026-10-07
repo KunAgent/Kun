@@ -6,7 +6,6 @@ import { PaperLibraryView } from './PaperLibraryView'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { emptyPaperLibraryFilter, usePaperModeStore } from '../../paper/paper-mode-store'
 
-vi.mock('./PaperWorkspaceHeader', () => ({ PaperWorkspaceHeader: () => createElement('div', { 'data-testid': 'header' }) }))
 vi.mock('./library/PaperLibraryToolbar', () => ({
   PaperLibraryToolbar: ({ onRefresh }: { onRefresh: () => void }) => createElement('button', { onClick: onRefresh }, 'refresh')
 }))
@@ -20,6 +19,9 @@ const SECOND = '/papers/second'
 let root: Root
 let host: HTMLDivElement
 let list: ReturnType<typeof vi.fn>
+
+const refreshButton = (): HTMLButtonElement =>
+  [...host.querySelectorAll('button')].find((button) => button.textContent === 'refresh')!
 
 async function render(): Promise<void> {
   await act(async () => root.render(createElement(PaperLibraryView)))
@@ -49,7 +51,7 @@ describe('PaperLibraryView workspace boundaries', () => {
     let settle!: (value: ReturnType<typeof result>) => void
     list.mockReturnValue(new Promise((resolve) => { settle = resolve }))
     await render()
-    await act(async () => host.querySelector('button')!.click())
+    await act(async () => refreshButton().click())
     expect(list).toHaveBeenCalledOnce()
     await act(async () => {
       useWriteWorkspaceStore.setState({ workspaceRoot: SECOND })
@@ -64,7 +66,7 @@ describe('PaperLibraryView workspace boundaries', () => {
     let reject!: (reason: Error) => void
     list.mockReturnValue(new Promise((_resolve, fail) => { reject = fail }))
     await render()
-    await act(async () => host.querySelector('button')!.click())
+    await act(async () => refreshButton().click())
     await act(async () => {
       useWriteWorkspaceStore.setState({ workspaceRoot: SECOND })
       usePaperModeStore.setState({ entriesLoading: false })
@@ -80,6 +82,6 @@ describe('PaperLibraryView workspace boundaries', () => {
     expect(host.textContent).toContain('paperWorkspaceUnavailableHint')
     expect(host.textContent).toContain('paperWorkspaceRetry')
     expect(host.querySelector('[data-testid="paper-open-matrix"]')).not.toBeNull()
-    expect(host.textContent).toContain('paperReadingLocalControls')
+    expect(host.querySelector('[data-testid="paper-open-matrix"]')?.getAttribute('title')).toBe('paperReadingLocalControls')
   })
 })

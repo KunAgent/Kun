@@ -3,7 +3,6 @@ import {
   resolveKunRuntimeSettings,
   resolveWriteInlineCompletionApiKey
 } from '@shared/app-settings'
-import type { PaperWorkspaceEnsureResult } from '@shared/paper/paper-workspace-types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { resetPaperWorkspaceContent, usePaperWorkspaceBootstrapStore } from '../paper/paper-workspace-bootstrap'
 import { invalidatePaperLibraryIndex } from '../paper/paper-library-index'
@@ -16,6 +15,7 @@ import {
   normalizeWriteSettings,
   withResolvedInlineCompletionSettings
 } from './write-workspace-store-helpers'
+import { legacyPaperLibraryMigration, withoutPaperLibrary } from './work-space-migration'
 
 type WriteSettingsActions = Pick<
   WriteWorkspaceState,
@@ -104,58 +104,19 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
     const inlineRevisionAtRequest = inlineCompletionSettingsRevision
     const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
     set({ settingsLoading: true, settingsError: null })
-    let loadingPaperWorkspace = false
     try {
-      const previousPaperMode = get().paperMode
       const previousPapersDir = get().paperReading.papersDir
       let settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
       if (!requestIsCurrent(generation)) return
-      // Initialization is desktop-only and uses main-process filesystem/settings
-      // admission. A phone never creates a host workspace as a side effect.
-      if (!mobile && settings.write?.paperMode?.enabled) {
-        loadingPaperWorkspace = true
-        const keepReady = usePaperWorkspaceBootstrapStore.getState().status === 'ready'
-          && get().workSurface === 'papers'
-          && normalizePath(get().workspaceRoot) === normalizePath(settings.write.paperMode.activeLibrary)
-        if (!keepReady) usePaperWorkspaceBootstrapStore.setState({ status: 'loading', error: null })
-        if (typeof window.kunGui?.paperWorkspaceEnsure === 'function') {
-          while (settings.write.paperMode.enabled && requestIsCurrent(generation)) {
-            const before = settings.write.paperMode
-            const selectionBefore = JSON.stringify([before.activeLibrary, before.libraries])
-            let result: PaperWorkspaceEnsureResult
-            try {
-              result = await window.kunGui.paperWorkspaceEnsure()
-            } catch (error) {
-              result = { ok: false, code: 'io',
-                message: error instanceof Error ? error.message : String(error),
-                defaultWorkspaceRoot: usePaperWorkspaceBootstrapStore.getState().defaultWorkspaceRoot }
-            }
-            if (!requestIsCurrent(generation)) return
-            // Bind admission to the selection that will actually be mounted.
-            // A newer explicit choice after the IPC result needs its own check.
-            settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
-            if (!requestIsCurrent(generation)) return
-            const latest = settings.write.paperMode
-            const sameAdmission = result.ok
-              ? normalizePath(result.workspaceRoot) === normalizePath(latest.activeLibrary)
-              : selectionBefore === JSON.stringify([latest.activeLibrary, latest.libraries])
-            if (!sameAdmission && latest.enabled) continue
-            usePaperWorkspaceBootstrapStore.setState({
-              defaultWorkspaceRoot: result.defaultWorkspaceRoot,
-              status: result.ok
-                ? (keepReady && normalizePath(get().workspaceRoot) === normalizePath(latest.activeLibrary) ? 'ready' : 'loading')
-                : 'error',
-              error: result.ok ? null : result.message
-            })
-            break
-          }
-        } else if (!settings.write.paperMode.activeLibrary) {
-          usePaperWorkspaceBootstrapStore.setState({
-            status: 'error', error: 'Paper workspace initialization is unavailable. Restart Kun or choose a folder.'
-          })
+      // Papers live inside every space now; a desktop that still carries the
+      // old paper-mode surface folds its libraries into the space list once.
+      if (!mobile) {
+        const migration = legacyPaperLibraryMigration(settings.write)
+        if (migration) {
+          settings = await rendererRuntimeClient.setSettings({ write: migration })
+          if (!requestIsCurrent(generation)) return
         }
       }
-      if (!requestIsCurrent(generation)) return
       const write = applySettingsResponse(
         settings,
         inlineRevisionAtRequest,
@@ -174,74 +135,75 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
         if (requestIsCurrent(generation)) set({ settingsLoading: false })
         return
       }
-      // Paper mode re-roots the workspace at the active library; a same-root
-      // surface switch must force a full reinit so the papers-namespaced
-      // layout replaces the docs one (and vice versa).
-      const targetSurface = write.paperMode.enabled ? 'papers' : 'docs'
-      const surfaceChanged = get().workSurface !== targetSurface
-      const root = targetSurface === 'papers'
-        ? write.paperMode.activeLibrary
-        : write.activeWorkspaceRoot
-      const rootChanged = normalizePath(get().workspaceRoot) !== normalizePath(root)
-      const readinessError = targetSurface === 'papers' ? usePaperWorkspaceBootstrapStore.getState().error : null
-      const unavailable = targetSurface === 'papers' && usePaperWorkspaceBootstrapStore.getState().status === 'error'
-      const navigationPrepared = Boolean((surfaceChanged || rootChanged || unavailable) && get().workspaceRoot)
+      const surfaceChanged = get().workSurface !== 'docs'
+      const previousRoot = get().workspaceRoot
+      const root = write.activeWorkspaceRoot
+      const rootChanged = normalizePath(previousRoot) !== normalizePath(root)
+      const navigationPrepared = Boolean((surfaceChanged || rootChanged) && previousRoot)
       if (navigationPrepared) {
-        // Settle the outgoing surface BEFORE flipping the layout namespace:
-        // if the user keeps unsaved edits, stay put and roll the persisted
-        // flag back instead of mounting the new surface over the old root.
-        const canLeave = await prepareActiveWriteFileForNavigation(get, get().workspaceRoot)
+        // Settle the outgoing space before re-rooting: if the user keeps
+        // unsaved edits, stay put and point the setting back at it.
+        const canLeave = await prepareActiveWriteFileForNavigation(get, previousRoot)
         if (!requestIsCurrent(generation)) return
         if (!canLeave) {
           const rolledBack = await rendererRuntimeClient.setSettings({
-            write: { paperMode: {
-              ...(get().workSurface === 'papers' ? {
-                libraries: previousPaperMode.libraries,
-                activeLibrary: previousPaperMode.activeLibrary
-              } : {}),
-              enabled: get().workSurface === 'papers'
-            } }
+            write: { activeWorkspaceRoot: normalizePath(previousRoot) }
           })
           if (!requestIsCurrent(generation)) return
           applySettingsResponse(rolledBack, inlineRevisionAtRequest, inlineWritePendingAtRequest)
-          const failedCurrentRoot = unavailable && !surfaceChanged && !rootChanged
-          usePaperWorkspaceBootstrapStore.setState({
-            status: failedCurrentRoot ? 'error' : 'ready',
-            error: failedCurrentRoot ? readinessError : null
-          })
-          set({ settingsLoading: false, ...(readinessError ? { fileError: readinessError } : {}) })
+          set({ settingsLoading: false })
           return
         }
       }
-      if (surfaceChanged) get().setWorkSurface(targetSurface)
+      if (surfaceChanged) get().setWorkSurface('docs')
       const paperDirectoryChanged = previousPapersDir !== write.paperReading.papersDir
       if (paperDirectoryChanged) invalidatePaperLibraryIndex()
-      if (surfaceChanged || rootChanged || unavailable || paperDirectoryChanged) {
-        if (get().workspaceRoot) invalidatePaperLibraryIndex(get().workspaceRoot)
+      if (surfaceChanged || rootChanged || paperDirectoryChanged) {
+        if (previousRoot) invalidatePaperLibraryIndex(previousRoot)
         resetPaperWorkspaceContent()
         get().setPaperResearch({ sessionId: null })
       }
-      await get().initializeWorkspace(unavailable ? '' : root, {
+      await get().initializeWorkspace(root, {
         force: surfaceChanged,
         ...(navigationPrepared ? { navigationPrepared: true } : {})
       })
       if (!requestIsCurrent(generation)) return
-      if (targetSurface === 'papers' && !unavailable) {
-        const mounted = get()
-        const initializationError = mounted.treeError || (!mounted.rootDirectory
-          ? 'The paper workspace could not be opened. Restore access or choose another folder.' : null)
-        usePaperWorkspaceBootstrapStore.setState({
-          status: initializationError ? 'error' : 'ready', error: initializationError
-        })
-      }
+      usePaperWorkspaceBootstrapStore.setState({ status: 'ready', error: null })
       set({ settingsLoading: false })
     } catch (error) {
       if (!requestIsCurrent(generation)) return
       const message = error instanceof Error ? error.message : String(error)
-      if (!mobile && (loadingPaperWorkspace || get().paperMode.enabled)) {
-        usePaperWorkspaceBootstrapStore.setState({ status: 'error', error: message })
-      }
       set({ settingsLoading: false, settingsError: message })
+    }
+  }
+
+  /** Mount a space (registering it when new); every space is a docs root. */
+  const activateWorkspace = async (workspaceRoot: string): Promise<void> => {
+    const normalized = normalizePath(workspaceRoot)
+    if (!normalized) return
+    const generation = nextSettingsRequest()
+    const inlineRevisionAtRequest = inlineCompletionSettingsRevision
+    const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
+    const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
+    set({ workspaceRoots: roots, settingsLoading: false })
+    try {
+      const settings = await rendererRuntimeClient.setSettings({
+        write: { activeWorkspaceRoot: normalized, workspaces: roots }
+      })
+      if (!requestIsCurrent(generation)) return
+      const write = applySettingsResponse(
+        settings,
+        inlineRevisionAtRequest,
+        inlineWritePendingAtRequest
+      )
+      if (normalizePath(get().workspaceRoot) !== normalizePath(write.activeWorkspaceRoot)) {
+        resetPaperWorkspaceContent()
+        get().setPaperResearch({ sessionId: null })
+      }
+      await get().initializeWorkspace(write.activeWorkspaceRoot)
+    } catch (error) {
+      if (!requestIsCurrent(generation)) return
+      set({ settingsError: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -301,79 +263,9 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       }
     },
 
-    selectWriteWorkspace: async (workspaceRoot) => {
-      const normalized = normalizePath(workspaceRoot)
-      if (!normalized) return
-      const generation = nextSettingsRequest()
-      const inlineRevisionAtRequest = inlineCompletionSettingsRevision
-      const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
-      const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
-      set({ workspaceRoots: roots, settingsLoading: false })
-      // A work space is a documents-surface root: choosing one while a paper
-      // library is mounted leaves the papers surface through the settings load.
-      const leavePapers = get().workSurface === 'papers'
-      try {
-        const settings = await rendererRuntimeClient.setSettings({
-          write: {
-            activeWorkspaceRoot: normalized,
-            workspaces: roots,
-            ...(leavePapers ? { paperMode: { enabled: false } } : {})
-          }
-        })
-        if (!requestIsCurrent(generation)) return
-        if (leavePapers) {
-          await get().loadWriteSettings()
-          return
-        }
-        const write = applySettingsResponse(
-          settings,
-          inlineRevisionAtRequest,
-          inlineWritePendingAtRequest
-        )
-        if (get().workSurface === 'docs') {
-          await get().initializeWorkspace(write.activeWorkspaceRoot)
-        }
-      } catch (error) {
-        if (!requestIsCurrent(generation)) return
-        set({ settingsError: error instanceof Error ? error.message : String(error) })
-      }
-    },
+    selectWriteWorkspace: (workspaceRoot) => activateWorkspace(workspaceRoot),
 
-    addWriteWorkspace: async (workspaceRoot) => {
-      const normalized = normalizePath(workspaceRoot)
-      if (!normalized) return
-      const generation = nextSettingsRequest()
-      const inlineRevisionAtRequest = inlineCompletionSettingsRevision
-      const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
-      const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
-      set({ settingsLoading: false })
-      const leavePapers = get().workSurface === 'papers'
-      try {
-        const settings = await rendererRuntimeClient.setSettings({
-          write: {
-            activeWorkspaceRoot: normalized,
-            workspaces: roots,
-            ...(leavePapers ? { paperMode: { enabled: false } } : {})
-          }
-        })
-        if (!requestIsCurrent(generation)) return
-        if (leavePapers) {
-          await get().loadWriteSettings()
-          return
-        }
-        const write = applySettingsResponse(
-          settings,
-          inlineRevisionAtRequest,
-          inlineWritePendingAtRequest
-        )
-        if (get().workSurface === 'docs') {
-          await get().initializeWorkspace(write.activeWorkspaceRoot)
-        }
-      } catch (error) {
-        if (!requestIsCurrent(generation)) return
-        set({ settingsError: error instanceof Error ? error.message : String(error) })
-      }
-    },
+    addWriteWorkspace: (workspaceRoot) => activateWorkspace(workspaceRoot),
 
     removeWriteWorkspace: async (workspaceRoot) => {
       const normalized = normalizePath(workspaceRoot)
@@ -394,10 +286,14 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
         ? fallback
         : state.workspaceRoot
       try {
+        // A former paper library leaves the library list too, or the
+        // migration on the next load would bring it straight back.
+        const paperMode = withoutPaperLibrary(state.paperMode, normalized)
         const settings = await rendererRuntimeClient.setSettings({
           write: {
             activeWorkspaceRoot,
-            workspaces: roots
+            workspaces: roots,
+            ...(paperMode ? { paperMode } : {})
           }
         })
         if (!requestIsCurrent(generation)) return
@@ -406,10 +302,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           inlineRevisionAtRequest,
           inlineWritePendingAtRequest
         )
-        if (
-          get().workSurface === 'docs' &&
-          normalizePath(get().workspaceRoot) === normalized
-        ) {
+        if (normalizePath(get().workspaceRoot) === normalized) {
           await get().initializeWorkspace(write.activeWorkspaceRoot)
         }
       } catch (error) {

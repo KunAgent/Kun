@@ -10,13 +10,14 @@ import {
   readWriteThreadRegistry,
   writeWorkspaceKey
 } from '../../write/write-thread-registry'
-import { buildWorkSessionGroups, type WorkSessionGroup } from '../../write/work-sessions-model'
+import { buildWorkSessions, type WorkSessionEntry } from '../../write/work-sessions-model'
+import { usePaperBatchInterpret } from '../../paper/paper-batch-interpret'
 
 const PAGE_LIMIT = 80
 
 /**
  * The shared thread list only carries the most recent page across every
- * workspace, so each expanded space also lists its own Work threads once.
+ * workspace, so the current space also lists its own Work threads.
  */
 async function listSpaceWriteThreads(root: string): Promise<NormalizedThread[]> {
   const provider = getProvider()
@@ -32,110 +33,97 @@ async function listSpaceWriteThreads(root: string): Promise<NormalizedThread[]> 
   return page.threads.filter((thread) => isWriteAssistantThread(thread, registry))
 }
 
-export function useWorkSessionGroups({ query, expandedRoots }: {
-  query: string
-  expandedRoots: ReadonlySet<string>
-}): {
-  groups: WorkSessionGroup[]
-  loadingRoots: ReadonlySet<string>
-  /** Mirror a rename/archive/delete into the per-space listings right away. */
+/** The sessions of the current space, newest first. */
+export function useWorkSessions(query: string): {
+  root: string
+  sessions: WorkSessionEntry[]
+  loading: boolean
+  /** Mirror a rename/archive/delete into the listing right away. */
   patchThread: (threadId: string, patch: Partial<NormalizedThread>) => void
   forgetThread: (threadId: string) => void
-  /** List a space again, e.g. after a session came back from the archive. */
-  reloadRoot: (root: string) => void
+  /** List the space again, e.g. after a session came back from the archive. */
+  reload: () => void
 } {
-  const { spaces, libraries, whiteboards } = useWriteWorkspaceStore(useShallow((state) => ({
-    spaces: state.workspaceRoots,
-    libraries: state.paperMode.libraries,
+  const { root, whiteboards } = useWriteWorkspaceStore(useShallow((state) => ({
+    root: state.workspaceRoot,
     whiteboards: state.whiteboards
   })))
   const threads = useChatStore((state) => state.threads)
   const runtimeReady = useChatStore((state) => state.runtimeConnection === 'ready')
-  const [extra, setExtra] = useState<Record<string, NormalizedThread[]>>({})
-  const [loadingRoots, setLoadingRoots] = useState<ReadonlySet<string>>(() => new Set())
+  const [listed, setListed] = useState<{ key: string; threads: NormalizedThread[] }>({ key: '', threads: [] })
+  const [loading, setLoading] = useState(false)
   const [reloads, setReloads] = useState(0)
-  const requested = useRef(new Set<string>())
-  // Latest request per space: a slower, older listing never overwrites a newer one.
-  const sequence = useRef(new Map<string, number>())
+  // Latest request wins: a slower, older listing never overwrites a newer one.
+  const sequence = useRef(0)
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
     return () => { mounted.current = false }
   }, [])
 
-  const expandedKey = [...expandedRoots].map(writeWorkspaceKey).sort().join('\n')
+  const key = writeWorkspaceKey(root)
   useEffect(() => {
-    if (!runtimeReady) return
-    for (const root of expandedRoots) {
-      const key = writeWorkspaceKey(root)
-      if (!key || requested.current.has(key)) continue
-      requested.current.add(key)
-      const request = (sequence.current.get(key) ?? 0) + 1
-      sequence.current.set(key, request)
-      const current = (): boolean => mounted.current && sequence.current.get(key) === request
-      setLoadingRoots((loading) => new Set([...loading, key]))
-      // Expanding another space re-runs this effect; in-flight listings keep
-      // going rather than being dropped, so no space is left half loaded.
-      void listSpaceWriteThreads(root)
-        .then((listed) => {
-          if (current()) setExtra((existing) => ({ ...existing, [key]: listed }))
-        })
-        .catch(() => {
-          // The shared list still shows what it has; a later expand retries.
-          if (current()) requested.current.delete(key)
-        })
-        .finally(() => {
-          if (!current()) return
-          setLoadingRoots((loading) => {
-            const next = new Set(loading)
-            next.delete(key)
-            return next
-          })
-        })
-    }
+    if (!runtimeReady || !key) return
+    const request = ++sequence.current
+    const current = (): boolean => mounted.current && sequence.current === request
+    setLoading(true)
+    void listSpaceWriteThreads(root)
+      .then((result) => { if (current()) setListed({ key, threads: result }) })
+      .catch(() => undefined)
+      .finally(() => { if (current()) setLoading(false) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expandedKey, runtimeReady, reloads])
+  }, [key, runtimeReady, reloads])
 
-  const reloadRoot = useCallback((root: string): void => {
-    const key = writeWorkspaceKey(root)
-    if (!key) return
-    requested.current.delete(key)
-    setReloads((count) => count + 1)
-  }, [])
+  const reload = useCallback((): void => setReloads((count) => count + 1), [])
 
+  // Sessions created in the background (a batch interpretation) only pass
+  // through the shared list, whose next refresh may page them out. List the
+  // space again once for every such session the listing does not have yet.
+  const requested = useRef(new Set<string>())
+  useEffect(() => {
+    if (!runtimeReady || !key || listed.key !== key) return
+    const have = new Set(listed.threads.map((thread) => thread.id))
+    const missing = buildWorkSessions({ root, threads, registry: readWriteThreadRegistry() })
+      .map((session) => session.id)
+      .filter((id) => !have.has(id) && !requested.current.has(id))
+    if (missing.length === 0) return
+    for (const id of missing) requested.current.add(id)
+    reload()
+  }, [key, listed, reload, root, runtimeReady, threads])
+
+  // A finished batch moved its sessions forward; list them in their new order.
+  const batchRunning = usePaperBatchInterpret((state) => Boolean(state.job?.running))
+  const wasRunning = useRef(batchRunning)
+  useEffect(() => {
+    if (wasRunning.current && !batchRunning) reload()
+    wasRunning.current = batchRunning
+  }, [batchRunning, reload])
   const patchThread = useCallback((threadId: string, patch: Partial<NormalizedThread>): void => {
-    setExtra((current) => Object.fromEntries(Object.entries(current).map(([key, listed]) => [
-      key,
-      listed.map((thread) => (thread.id === threadId ? { ...thread, ...patch } : thread))
-    ])))
+    setListed((current) => ({
+      ...current,
+      threads: current.threads.map((thread) => (thread.id === threadId ? { ...thread, ...patch } : thread))
+    }))
   }, [])
   const forgetThread = useCallback((threadId: string): void => {
-    setExtra((current) => Object.fromEntries(Object.entries(current).map(([key, listed]) => [
-      key,
-      listed.filter((thread) => thread.id !== threadId)
-    ])))
+    setListed((current) => ({ ...current, threads: current.threads.filter((thread) => thread.id !== threadId) }))
   }, [])
 
-  const groups = useMemo(() => {
+  const sessions = useMemo(() => {
     const known = new Set(threads.map((thread) => thread.id))
-    const merged = [
-      ...threads,
-      ...Object.values(extra).flat().filter((thread) => !known.has(thread.id))
-    ]
+    const extra = listed.key === key ? listed.threads.filter((thread) => !known.has(thread.id)) : []
     const boards = Object.values(whiteboards).map((board) => ({
       id: board.id,
       workspaceRoot: board.workspaceRoot,
       threadIds: workWhiteboardThreadIds(board)
     }))
-    return buildWorkSessionGroups({
-      spaces,
-      libraries,
-      threads: merged,
+    return buildWorkSessions({
+      root,
+      threads: [...threads, ...extra],
       registry: readWriteThreadRegistry(),
       boards,
       query
     })
-  }, [extra, libraries, query, spaces, threads, whiteboards])
+  }, [key, listed, query, root, threads, whiteboards])
 
-  return { groups, loadingRoots, patchThread, forgetThread, reloadRoot }
+  return { root, sessions, loading: loading && listed.key !== key, patchThread, forgetThread, reload }
 }
