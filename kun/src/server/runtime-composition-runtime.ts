@@ -37,6 +37,7 @@ import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
 import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/owned-process.js'
 import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
 import { workbenchExecutionControl } from './runtime-workbench-execution.js'
+import { loadExtensionAgentProviders } from './extension-agent-provider-loader.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -142,6 +143,11 @@ export function createServerRuntimeComposition(
     extensionIndexClient
   } = extensions
   const { startedAt, rebuildCapabilities, applyConfig } = config
+  // Extension-declared Agents (docs/ade/17 §4.5) join the catalog once their
+  // extension is enabled with `agents.register`; listing Agents refreshes them.
+  services.harnesses.extensionAgents.setLoader(() =>
+    loadExtensionAgentProviders({ registry: extensionRegistry, packageManager: extensionPackageManager }))
+  void services.harnesses.extensionAgents.refresh()
   const roomComposition = createRuntimeRoomComposition({
     options: () => config.activeOptions,
     services: { threads: threadService, threadStore: stores.threadStore, eventBus,

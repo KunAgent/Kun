@@ -354,7 +354,8 @@ export function AgentCenterCard({
                   </button>
                 </div>}
               /> : null}
-              <SettingRow
+              {/* An extension owns its Agent's command; settings cannot patch it. */}
+              {definition.extension ? null : <SettingRow
                 wideControl
                 title={tSettings('adeSettings.harnessCommandPath')}
                 description={tSettings('adeSettings.harnessCommandPathDesc')}
@@ -367,7 +368,7 @@ export function AgentCenterCard({
                     onChange={(event) => onSetBinaryPath(event.target.value)}
                   />
                 }
-              />
+              />}
               {definition.builtin && onSetLaunchPatch ? (
                 <AgentLaunchOverrideFields id={definition.id} providers={settings.providers}
                   tSettings={tSettings} onChange={onSetLaunchPatch} />

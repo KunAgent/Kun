@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AgentProfileDeclarationSchema } from './agent.js'
+import { AgentProviderDeclarationSchema } from './agent-providers.js'
 import { AuthenticationProviderDeclarationSchema } from './accounts.js'
 import {
   ExtensionNameSchema,
@@ -199,6 +200,7 @@ export const ExtensionContributionsSchema = z.strictObject({
   agentProfiles: z.array(AgentProfileDeclarationSchema).max(64).default([]),
   tools: z.array(ExtensionToolDeclarationSchema).max(512).default([]),
   modelProviders: z.array(ModelProviderDeclarationSchema).max(64).default([]),
+  agentProviders: z.array(AgentProviderDeclarationSchema).max(16).default([]),
   authentication: z.array(AuthenticationProviderDeclarationSchema).max(64).default([]),
   hostContentScripts: z.array(HostContentScriptContributionSchema).max(32).default([])
 })
@@ -210,6 +212,7 @@ const BrowserOnlyContributionsSchema = ExtensionContributionsSchema.extend({
   agentProfiles: z.array(AgentProfileDeclarationSchema).max(0).default([]),
   tools: z.array(ExtensionToolDeclarationSchema).max(0).default([]),
   modelProviders: z.array(ModelProviderDeclarationSchema).max(0).default([]),
+  agentProviders: z.array(AgentProviderDeclarationSchema).max(0).default([]),
   authentication: z.array(AuthenticationProviderDeclarationSchema).max(0).default([])
 }).strict()
 
@@ -268,6 +271,7 @@ export const MANIFEST_CONTRIBUTION_PERMISSION_REQUIREMENTS = {
   agentProfiles: ['agent.run'],
   tools: ['tools.register'],
   modelProviders: ['providers.register'],
+  agentProviders: ['agents.register'],
   authentication: [],
   hostContentScripts: ['hostDom']
 } as const satisfies Record<keyof ExtensionContributions, readonly string[]>
@@ -400,6 +404,7 @@ export const ExtensionManifestSchema = StructuralExtensionManifestSchema.superRe
       ['agentProfiles', manifest.contributes.agentProfiles],
       ['tools', manifest.contributes.tools],
       ['modelProviders', manifest.contributes.modelProviders],
+      ['agentProviders', manifest.contributes.agentProviders],
       ['authentication', manifest.contributes.authentication],
       ['hostContentScripts', manifest.contributes.hostContentScripts]
     ] as const

@@ -74,6 +74,8 @@ export type AdeHarnessDefinition = {
   launch?: { command: string; args: string[] }
   /** The builtin engine a user Agent derives from (docs/ade/17 §4.3). */
   derivedFrom?: string
+  /** The installed extension that declared this Agent (docs/ade/17 §4.5). */
+  extension?: { id: string; name?: string }
   builtin: boolean
   /**
    * Install/login hints for the Agent Center (docs/ade/impl/p4 §3.3). Only

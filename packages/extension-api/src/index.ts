@@ -1,5 +1,6 @@
 export * from './accounts.js'
 export * from './agent.js'
+export * from './agent-providers.js'
 export * from './artifacts.js'
 export * from './chart.js'
 export * from './client.js'

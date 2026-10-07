@@ -19,6 +19,7 @@ import { CodexModelProbe } from './codex-model-probe.js'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
 import type { HarnessSecretRefResolver } from './harness-secret-env.js'
+import { ExtensionAgentProviderSource } from './extension-agent-providers.js'
 
 /** Executable override from the engine's environment variable (e.g. a dev build). */
 function binaryEnvOverride(id: string): string | undefined {
@@ -49,6 +50,8 @@ export type HarnessRuntimeComposition = {
   probedModels: (definition: HarnessDefinition) => string[] | undefined
   /** Process-local scoped bearer tokens for spawned harnesses (04 §4). */
   tokens: HarnessTokenService
+  /** Agents declared by enabled extensions; the runtime sets the loader. */
+  extensionAgents: ExtensionAgentProviderSource
   /**
    * Loopback `kun serve` endpoint for harness gateway env injection. The
    * serve layer fills `baseUrl` after the listener binds; absent means this
@@ -72,8 +75,10 @@ export function createHarnessComposition(
     Partial<Pick<KunServeRuntimeOptions, 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'routePools'>>,
   deps: { resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>; revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null> } = {}
 ): HarnessRuntimeComposition {
+  const extensionAgents = new ExtensionAgentProviderSource()
   const catalog = new HarnessCatalog({
     providers: () => harnessProviderOverrides(options().harnesses),
+    extensionAgents: () => extensionAgents.list(),
     nativeAgentNetwork: () => options().nativeAgentNetwork,
     enabledProfiles: () => options().harnesses?.enabledProfiles ?? [],
     disabled: () => options().harnesses?.disabledIds ?? [],
@@ -196,6 +201,7 @@ export function createHarnessComposition(
     installNetwork: () => options().nativeAgentNetwork?.installer,
     probedModels,
     tokens: new HarnessTokenService(),
+    extensionAgents,
     gatewayEndpoint: {},
     ...(deps.resolveSecretEnv ? { resolveSecretEnv: deps.resolveSecretEnv } : {})
   }

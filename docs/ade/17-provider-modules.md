@@ -2,7 +2,7 @@
 
 - 日期：2026-10-08
 - 基线：`develop@8e699533d`
-- 状态：P0-P3 已实施（见 §8 实施记录）；P4 进行中
+- 状态：P0-P4 已实施（见 §8 实施记录）
 - 设计输入：多 agent 控制台（`/Users/zxy/codeproject/ds_project/paseo@4417d7c`，下称"参考项目"）。
   按 [README](./README.md) 的约束，参考项目只作设计输入；源码、文件名、类名、注释、i18n 键里不得出现它的名字。
 
@@ -296,3 +296,10 @@ harnesses.providers?: Record<string, {
 - 输入框新增通用"设置"控件（Agent 发布了设置才出现），选择按 Agent 保存在本地，下一条消息生效。本机已装的 OpenCode 1.18、Devin、Kimi 目前只发布 model/mode/thought_level，因此这些 Agent 上该控件不出现；OpenCode 原生 Agent、Devin fusion、Codex 思考档位继续由各自已有控件承担（它们与 Kun 的权限梯度、模型分组绑定，不是通用设置）。
 - 权限请求核对结论：ACP、Claude Agent SDK、Cursor 走 `ApprovalGate.request(ApprovalRequest)`，Codex/Pi 经会话 sink 的 `requestApproval` 转成同一个 `createApprovalRequest`，已经是同一结构、同一条"策略 → 审阅者 → 用户"管线，不再改动。
 - 渲染层去硬编码：派生 Agent 的图标通过 `derivedFrom` 使用基座引擎图标（`lib/agent-icon-aliases.ts`）；`coding-agent-client` 的引擎联合类型改为引用 Kun 契约 `ConversationHarnessId`。会话准入 `CONVERSATION_HARNESS_IDS` 保留为显式白名单：它是"引擎原生工具能被 Kun 强制只读"的安全门，需要逐引擎审计，派生 Agent 不自动继承。
+
+### P4 插件 provider
+
+- 采用声明式贡献点，而不是 server 侧 `registerAgentProvider(module)` 代码注册：`@kun/extension-api` 的 Manifest 新增 `contributes.agentProviders`（id、displayName、command、args、非密钥 env、可选 `extends` 内置 ACP Agent、docsUrl、installHint），需要新的静态权限 `agents.register`。扩展代码不运行在 Agent 进程路径上，Kun 只读取声明，进程仍由 owned-process 启动器拥有、ACP 中介仍管文件写入与审批，所以不需要 ACP shim / transformers。
+- 信任与同意三道：安装时权限审阅（新增风险说明）→ 扩展全局启用且所选版本被授予 `agents.register`、Manifest 通过 `admitManifest` → 用户在 Agent 中心对该 Agent 单独启用并通过就绪检查。工作区级授权不增加 Agent（Agent 是全机范围的）。
+- `ExtensionAgentProviderSource`（`harness/extension-agent-providers.ts`）缓存最近一次读取的扩展 Agent，`GET /v1/harnesses` 每次先刷新；读取失败保留上一次结果。目录中它们排在设置里的用户 Agent 之后，同 id 时设置优先。harness id 为 `ext-<publisher>-<name>-<id>`，超过 48 字符时截断加哈希。定义带 `extension: { id, name }`，Agent 中心显示"来自扩展"徽标，并隐藏命令路径（命令归扩展所有）。
+- 真机验证：声明 `extends: 'opencode'` 的示例扩展 Agent 经 `loadExtensionAgentProviders` → 目录 → 就绪 handshake，在本机 OpenCode 1.18.35 上 usable，78 个模型写入缓存。没有跑真实推理回合：那会消耗用户的 OpenCode 账号额度；ACP 运行时本身与内置 ACP Agent 共用，已有的 fake-agent 运行时测试覆盖回合路径。

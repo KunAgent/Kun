@@ -83,7 +83,7 @@ When top-level `icon` is absent, the Host may fall back to the first icon-bearin
 
 At least one of `main` and `browser` is required. Any headless tool, Agent profile, model Provider, authentication handler, scheduled task, or background command requires `main`. Kun never substitutes `browser` for a Node entry.
 
-A browser-only Manifest (only `browser`) cannot declare `commands`, `agentProfiles`, `tools`, `modelProviders`, or `authentication`; each needs a Node handler. Every `browser` entry requires the `webview` permission.
+A browser-only Manifest (only `browser`) cannot declare `commands`, `agentProfiles`, `tools`, `modelProviders`, `agentProviders`, or `authentication`; each needs a Node entry. Every `browser` entry requires the `webview` permission.
 
 The full ID is `publisher.name` and must not change after publication. Renaming creates a new extension; state, grants, accounts, and threads are not transferred automatically.
 
@@ -179,6 +179,7 @@ v1 supports:
 | `agentProfiles` | Agent profiles | id, display metadata, instruction overlay, default binding/tool scope/budget/visibility |
 | `tools` | Extension tools | `id`, `description`, `inputSchema`; optional `outputSchema`/sideEffects/idempotent/maxOutputBytes (1 KiB–1 MiB) |
 | `modelProviders` | Complete model Providers | id, displayName, authenticationProviderId, model/capability metadata |
+| `agentProviders` | Local ACP command-line Agents | id, displayName, command, args, env (non-secret), optional extends (a built-in ACP Agent), docsUrl, installHint |
 | `authentication` | Authentication Providers | id, authentication kind, and protected-flow metadata |
 | `hostContentScripts` | Direct DOM | static scripts/styles, allowed host surfaces, activation conditions; high risk and unstable |
 
@@ -203,6 +204,7 @@ The validator derives and enforces these minimum permissions from entries/contri
 | `agentProfiles` | `agent.run` |
 | `tools` | `tools.register` |
 | `modelProviders` | `providers.register` |
+| `agentProviders` | `agents.register` |
 | `hostContentScripts` | `hostDom` |
 
 These permissions cover registration/presentation only. A handler also declares any workspace, network, account, or storage permissions it uses. Account read/manage/use/secret permissions for `authentication` are checked for the specific operation.
@@ -298,6 +300,7 @@ v1 permissions are exact strings:
 | `rooms.read` | Read all local room summaries, messages, task summaries, and public events |
 | `tools.register` | Register Manifest-declared tools |
 | `providers.register` | Register model Providers |
+| `agents.register` | Add local command-line Agents to the Agent Center; Kun starts one only after the user enables it there |
 | `accounts.read` | Read redacted account metadata within allowed scopes |
 | `accounts.use:<providerId>` | Use account handles for a Provider |
 | `accounts.manage:<providerId>` | Request protected account-management flows for a Provider |

@@ -4,6 +4,7 @@
     "search": "搜索 Agent",
     "clearSearch": "清除搜索",
     "advanced": "高级设置",
+    "fromExtension": "来自扩展 {{name}}",
     "filterLabel": "集成类型",
     "filters": { "all": "全部", "chat": "对话", "terminal": "终端", "application": "应用" },
     "loadingCatalog": "正在检测 Agent 和应用…",

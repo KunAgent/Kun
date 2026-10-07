@@ -195,6 +195,9 @@ function permissionRiskLabels(permissions: readonly string[]): string[] {
   if (permissions.some((permission) => permission === 'webview.external')) {
     labels.push('External Webview permission can display approved remote websites inside an isolated browser session.')
   }
+  if (permissions.some((permission) => permission === 'agents.register')) {
+    labels.push('Agent permission can add local command-line Agents that Kun starts only after you enable them in the Agent Center.')
+  }
   if (permissions.some((permission) => permission === 'providers.register')) {
     labels.push('Provider permission can receive full model inputs when the user explicitly selects that provider.')
   }

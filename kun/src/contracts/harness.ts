@@ -268,6 +268,8 @@ export const HarnessDefinitionSchema = z
     availability: z.enum(['active', 'preview', 'retired']).optional(),
     /** The builtin engine this Agent is a renamed or patched build of. */
     derivedFrom: HarnessIdSchema.optional(),
+    /** The installed extension that declared this Agent (docs/ade/17 §4.5). */
+    extension: z.object({ id: z.string().min(1).max(256), name: z.string().max(128).optional() }).strict().optional(),
     builtin: z.boolean()
   })
   .strict()

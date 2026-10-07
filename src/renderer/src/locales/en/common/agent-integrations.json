@@ -4,6 +4,7 @@
     "search": "Search Agents",
     "clearSearch": "Clear search",
     "advanced": "Advanced settings",
+    "fromExtension": "From extension {{name}}",
     "filterLabel": "Integration type",
     "filters": { "all": "All", "chat": "Chat", "terminal": "Terminal", "application": "Applications" },
     "loadingCatalog": "Checking agents and applications…",

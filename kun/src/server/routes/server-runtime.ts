@@ -290,6 +290,8 @@ export type ServerRuntime = {
      * (P4-12); undefined when the runtime has no credential store.
      */
     resolveSecretEnv?: import('../../harness/harness-secret-env.js').HarnessSecretRefResolver
+    /** Agents declared by enabled extensions (docs/ade/17 §4.5). */
+    extensionAgents?: import('../../harness/extension-agent-providers.js').ExtensionAgentProviderSource
   }
   /**
    * Process-local `kgw_` bearer tokens scoped to spawned harnesses

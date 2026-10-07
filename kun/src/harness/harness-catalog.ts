@@ -27,6 +27,7 @@ import { applyLaunchOverride, derivableProviderModule, deriveProviderModule } fr
 import { builtinProviderModule, setDerivedProviderModules } from './providers/registry.js'
 import type { AgentProviderModule } from './providers/provider-module.js'
 import type { NativeAgentNetworkSnapshot } from '../contracts/native-agent-network.js'
+import type { ExtensionAgentProvider } from './extension-agent-providers.js'
 
 export type CustomHarnessConfig = {
   id: string
@@ -117,6 +118,8 @@ export class HarnessCatalog {
       /** Pre-GA builtin ids explicitly opted into (harnesses.experimentalIds). */
       experimental?: () => readonly string[]
       nativeAgentNetwork?: () => NativeAgentNetworkSnapshot | undefined
+      /** Agents declared by enabled extensions; settings Agents win on id. */
+      extensionAgents?: () => readonly ExtensionAgentProvider[]
     } = {}
   ) {}
 
@@ -141,6 +144,16 @@ export class HarnessCatalog {
       const parsed = built && HarnessDefinitionSchema.safeParse(built.definition)
       if (!built || !parsed?.success) continue
       taken.add(id)
+      added.push(parsed.data)
+      if (built.module) derived.push({ ...built.module, definition: parsed.data })
+    }
+    for (const agent of this.deps.extensionAgents?.() ?? []) {
+      if (taken.has(agent.harnessId)) continue
+      const built = userAgentDefinition(agent.harnessId, agent.override)
+      const parsed = built && HarnessDefinitionSchema.safeParse({ ...built.definition as object,
+        extension: { id: agent.extensionId, ...(agent.extensionName ? { name: agent.extensionName.slice(0, 128) } : {}) } })
+      if (!built || !parsed?.success) continue
+      taken.add(agent.harnessId)
       added.push(parsed.data)
       if (built.module) derived.push({ ...built.module, definition: parsed.data })
     }

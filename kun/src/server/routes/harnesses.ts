@@ -39,6 +39,8 @@ export async function listHarnesses(
   const usage = url.searchParams.get('usage') ?? undefined
   const waitMs = clampWaitMs(url.searchParams.get('wait_ms'))
   const includeDisabled = url.searchParams.get('include_disabled') === 'true'
+  // Installing, enabling or revoking an extension changes its declared Agents.
+  await harnesses.extensionAgents?.refresh()
   const list = harnesses.catalog.list().filter((definition) => definition.availability !== 'retired' &&
     (includeDisabled || !harnesses.catalog.isDisabled(definition.id)))
 
