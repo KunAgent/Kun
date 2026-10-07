@@ -188,6 +188,8 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
             nextDisabled: busy || runtimeConnection !== 'ready' || sddDraftOperationStatus === 'upgrading'
           },
           chat: {
+            // Resume card on the Code home; ADE drafts keep their own empty state.
+            onOpenThread: route === 'chat' && !adeDraftOpen ? openThread : undefined,
             stageInsetClass,
             leftSidebarCollapsed,
             busy,

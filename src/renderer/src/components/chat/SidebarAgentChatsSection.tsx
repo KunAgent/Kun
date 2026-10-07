@@ -24,7 +24,7 @@ import {
   useAgentChatNavigationStore
 } from '../rooms/agent-chat-navigation'
 import { openAgentChatDialog } from '../rooms/agent-chat-picker'
-import { publishRoomActivityCounts } from '../rooms/room-activity-counts'
+import { publishLatestPrivateConversation, publishRoomActivityCounts } from '../rooms/room-activity-counts'
 import { SidebarIconButton, SidebarSearchField } from '../sidebar/SidebarPrimitives'
 import { SidebarAgentChatRow } from './SidebarAgentChatRow'
 import { SidebarAgentChatMenu, type SidebarAgentChatAction } from './SidebarAgentChatMenu'
@@ -81,6 +81,8 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
   const refresh = useRef(page.refresh)
   refresh.current = page.refresh
   useEffect(() => { publishRoomActivityCounts(page.entries) }, [page.entries])
+  const unfilteredList = listState === 'active' && filter === 'all' && !search.trim()
+  useEffect(() => { if (unfilteredList) publishLatestPrivateConversation(page.entries) }, [page.entries, unfilteredList])
   useEffect(() => {
     if (!props.runtimeReady) { setInitializationError(''); return }
     let active = true

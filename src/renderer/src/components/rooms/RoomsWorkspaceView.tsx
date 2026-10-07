@@ -404,7 +404,6 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               }))}
               onSend={send} responding={Boolean(direct.data?.active)} onStop={() => void direct.act('stop')}
               onConnectProject={privateChat ? () => void direct.context('workspace') : undefined}
-              quickTools
             />
           </>}
           </>

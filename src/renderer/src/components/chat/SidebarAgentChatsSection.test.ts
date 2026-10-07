@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   page: { entries: [] as RoomSidebarEntry[], busy: false, error: '', nextCursor: undefined as string | undefined },
   request: vi.fn(), refresh: vi.fn(), more: vi.fn(), query: vi.fn(), openRoom: vi.fn(), openAgent: vi.fn(),
   pin: vi.fn(), archive: vi.fn(), remove: vi.fn(), restore: vi.fn(), setRoute: vi.fn(), setNavigation: vi.fn(),
-  openDialog: vi.fn(), publish: vi.fn()
+  openDialog: vi.fn(), publish: vi.fn(), publishLatest: vi.fn()
 }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en-US' } }),
@@ -40,7 +40,7 @@ vi.mock('../rooms/agent-chat-navigation', () => ({
   AGENT_CHAT_SELECTED_KEY: 'kun.agentChats.selected'
 }))
 vi.mock('../rooms/agent-chat-picker', () => ({ openAgentChatDialog: mocks.openDialog }))
-vi.mock('../rooms/room-activity-counts', () => ({ publishRoomActivityCounts: mocks.publish }))
+vi.mock('../rooms/room-activity-counts', () => ({ publishRoomActivityCounts: mocks.publish, publishLatestPrivateConversation: mocks.publishLatest }))
 vi.mock('../rooms/room-sidebar-actions', () => ({ toggleRoomSidebarEntryArchived: mocks.archive }))
 vi.mock('../rooms/agent-chat-removal', async (importActual) => ({
   ...await importActual<typeof import('../rooms/agent-chat-removal')>(),

@@ -172,7 +172,8 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
     // Poll creation, a reaction, and the user's own ballot are all presentation-only operations.
     let publicPoll
     await quiet('poll creation has no request or discussion budget', async () => {
-      await mainComposer(page).getByRole('button', { name: 'Create poll', exact: true }).click()
+      await mainComposer(page).getByRole('button', { name: 'Add context', exact: true }).click()
+      await page.locator('.rooms-popover-surface').getByRole('button', { name: 'Create poll', exact: true }).click()
       const creator = page.getByRole('group', { name: 'Create poll', exact: true })
       await creator.getByLabel('Poll question', { exact: true }).fill(MARK + ': choose a readable API')
       await creator.getByLabel('Option 1', { exact: true }).fill('Small explicit API')

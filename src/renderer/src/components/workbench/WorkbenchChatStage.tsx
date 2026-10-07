@@ -42,6 +42,7 @@ import type {
 import { trajectoryUiState, useTrajectoryUiStore } from '../../store/trajectory-ui-store'
 import { useTrajectoryData } from '../trajectory/useTrajectoryData'
 import { TrajectoryView } from '../trajectory/TrajectoryView'
+import { CodeHomeQuickStart } from '../chat/CodeHomeQuickStart'
 
 const TerminalDrawer = lazy(() =>
   import('../terminal/TerminalDrawer').then((module) => ({ default: module.TerminalDrawer }))
@@ -97,6 +98,8 @@ export type WorkbenchChatStageProps = {
   onToggleRightWorkspace: () => void
   onOpenCommandPalette?: () => void
   onOpenRequirementDraft?: () => void
+  /** Code home only: opens a task like the sidebar does, for the resume card under the composer. */
+  onOpenThread?: (threadId: string) => unknown
   /** Remote-mobile only: opens the bottom-sheet version of the right rail. */
   onOpenMobileRail?: () => void
   extensionTopBarActions?: readonly RegisteredContribution<'actions.topBar'>[]
@@ -164,6 +167,7 @@ export function WorkbenchChatStage({
   onToggleRightWorkspace,
   onOpenCommandPalette,
   onOpenRequirementDraft,
+  onOpenThread,
   onOpenMobileRail,
   extensionTopBarActions = [],
   extensionComposerActions = [],
@@ -409,6 +413,9 @@ export function WorkbenchChatStage({
                   {...composerProps}
                   emptyTaskLayout={emptyTaskLayout}
                 />
+                {emptyTaskLayout && onOpenThread ? (
+                  <CodeHomeQuickStart disabled={runtimeConnection !== 'ready'} onOpenThread={onOpenThread} />
+                ) : null}
               </div>
             )}
           </div>

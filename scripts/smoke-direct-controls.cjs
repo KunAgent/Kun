@@ -23,7 +23,9 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   const composerModel = page.locator('.rooms-composer').getByRole('combobox', { name: 'Model for this conversation', exact: true })
   await poll(() => composerModel.isEnabled(), 10000, 'private composer model metadata loaded')
   await capture('01-empty-kun')
-  await page.locator('.rooms-composer-quick-tools').getByRole('button', { name: 'Emoji', exact: true }).click()
+  // Code conversations keep composer tools in the "+" menu, like the Code task composer.
+  await page.locator('.rooms-composer').getByRole('button', { name: 'Add context', exact: true }).click()
+  await page.locator('.rooms-popover-surface').getByRole('button', { name: 'Emoji', exact: true }).click()
   await page.getByRole('button', { name: '👍', exact: true }).click()
   await poll(async () => (await page.locator('.rooms-rich-input').innerText()).includes('👍'), 10000, 'nested emoji menu')
   await page.locator('.rooms-rich-input').fill('')
