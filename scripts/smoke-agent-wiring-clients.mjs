@@ -150,8 +150,8 @@ async function runClient(agentId, options, gateway, temp, proxy) {
     service.connect(agentId, target, 'gc_smoke')
     report.connected = service.status(agentId, server.origin)
     const ctx = { agentId, client, binary, env, workspace, timeout: options.timeout, calls, gateway, runtime, state, requests: server.requests }
-    report.scenarios.push(await runScenario(ctx, 'text'))
-    report.scenarios.push(await runScenario(ctx, 'tools'))
+    // Aider has no tool calls (it edits through its own reply format), so it runs the text scenario only.
+    for (const scenario of client.scenarios ?? ['text', 'tools']) report.scenarios.push(await runScenario(ctx, scenario))
     service.disconnect(agentId, server.origin)
     const restored = await Promise.all(Object.entries(seeded).map(async ([path, hash]) => {
       const text = await readFile(join(home, path), 'utf8').catch(() => '')

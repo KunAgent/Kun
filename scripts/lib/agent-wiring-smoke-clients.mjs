@@ -67,10 +67,21 @@ export const WIRING_CLIENTS = {
     args: (scenario, workspace) => ['exec', '--model', 'custom:local-model', '--cwd', workspace, '-o', 'json', prompt(scenario)],
     succeeded: (stdout) => stdout.includes(MARKER)
   },
-  goose: { bin: 'goose', seed: {}, env: (home) => ({ XDG_CONFIG_HOME: join(home, 'config') }),
-    args: (scenario) => ['run', '--no-session', '-t', prompt(scenario)], succeeded: (stdout) => stdout.includes(MARKER) },
-  aider: { bin: 'aider', seed: {}, env: () => ({}),
-    args: (scenario) => ['--yes-always', '--no-git', '--no-auto-commits', '--message', prompt(scenario)], succeeded: (stdout) => stdout.includes(MARKER) },
+  goose: {
+    bin: 'goose',
+    seed: { 'config/goose/config.yaml': '# my goose settings\nGOOSE_MODE: auto\nextensions:\n  developer:\n    bundled: true\n    display_name: Developer\n    enabled: true\n    name: developer\n    timeout: 300\n    type: builtin\n' },
+    userEdit: { file: 'config/goose/config.yaml', from: 'GOOSE_MODE: auto', to: 'GOOSE_MODE: smart_approve' },
+    // File-based secrets: the isolated run must never reach the login keychain.
+    env: (home) => ({ XDG_CONFIG_HOME: join(home, 'config'), GOOSE_DISABLE_KEYRING: '1' }),
+    args: (scenario) => ['run', '--no-session', '--quiet', '-t', prompt(scenario)], succeeded: (stdout) => stdout.includes(MARKER) },
+  aider: {
+    bin: 'aider', scenarios: ['text'],
+    seed: { '.aider.conf.yml': '# my aider settings\ndark-mode: true\nauto-commits: false\n' },
+    userEdit: { file: '.aider.conf.yml', from: 'dark-mode: true', to: 'dark-mode: false' },
+    env: () => ({}),
+    args: (scenario) => ['--yes-always', '--no-git', '--no-check-update', '--analytics-disable', '--no-show-release-notes', '--no-pretty',
+      '--message', prompt(scenario)],
+    succeeded: (stdout) => stdout.includes(MARKER) },
   kimi: {
     bin: 'kimi', sendsSession: true,
     seed: { '.kimi-code/config.toml': '# my Kimi Code config\ndefault_model = "kimi-for-coding"\n\n[providers.moonshot]\ntype = "kimi"\nbase_url = "https://api.moonshot.cn/v1"\napi_key = "sk-mine"\n' },
@@ -79,9 +90,18 @@ export const WIRING_CLIENTS = {
     args: (scenario) => ['-p', prompt(scenario), '--output-format', 'text'],
     succeeded: (stdout) => stdout.includes(MARKER)
   },
-  pi: { bin: 'pi', seed: {}, env: (home) => ({ PI_CODING_AGENT_DIR: join(home, 'pi') }),
+  pi: { bin: 'pi',
+    seed: { 'pi/settings.json': '{\n  "theme": "dark",\n  "defaultThinkingLevel": "low"\n}\n' },
+    userEdit: { file: 'pi/settings.json', from: '"theme": "dark"', to: '"theme": "light"' },
+    env: (home) => ({ PI_CODING_AGENT_DIR: join(home, 'pi') }),
     args: (scenario) => ['--print', '--mode', 'json', '--no-session', prompt(scenario)], succeeded: (stdout) => stdout.includes(MARKER) },
-  crush: { bin: 'crush', seed: {}, env: (home) => ({ XDG_CONFIG_HOME: join(home, 'config') }),
+  crush: { bin: 'crush',
+    seed: { 'config/crush/crush.json': '{\n  "$schema": "https://charm.land/crush.json",\n  "options": {\n    "debug": false\n  }\n}\n' },
+    userEdit: { file: 'config/crush/crush.json', from: '"debug": false', to: '"debug": true' },
+    env: (home) => ({ XDG_CONFIG_HOME: join(home, 'config') }),
     args: (scenario) => ['run', prompt(scenario)], succeeded: (stdout) => stdout.includes(MARKER) },
-  continue: { bin: 'cn', seed: {}, env: () => ({}), args: (scenario) => ['-p', prompt(scenario)], succeeded: (stdout) => stdout.includes(MARKER) }
+  continue: { bin: 'cn',
+    seed: { '.continue/config.yaml': 'name: My Assistant\nversion: 1.0.0\nschema: v1\n# my local model\nmodels:\n  - name: Local Llama\n    provider: ollama\n    model: llama3\n' },
+    userEdit: { file: '.continue/config.yaml', from: 'name: Local Llama', to: 'name: Local Llama 3' },
+    env: () => ({}), args: (scenario) => ['-p', prompt(scenario)], succeeded: (stdout) => stdout.includes(MARKER) }
 }

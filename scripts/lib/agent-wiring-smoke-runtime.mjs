@@ -62,7 +62,7 @@ function readTool(request, workspace) {
     // Fill whichever path or command field the agent's own schema declares.
     const properties = Object.keys(tool.inputSchema?.properties ?? {})
     const args = {}
-    for (const field of ['file_path', 'filePath', 'absolute_path', 'path']) {
+    for (const field of ['file_path', 'filePath', 'filepath', 'absolute_path', 'path']) {
       if (properties.includes(field)) { args[field] = field === 'path' && name === 'read' ? 'fixture.txt' : path; break }
     }
     for (const field of ['cmd', 'command']) if (properties.includes(field)) args[field] = 'cat fixture.txt'
