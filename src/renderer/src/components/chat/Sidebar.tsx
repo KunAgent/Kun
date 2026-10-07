@@ -189,7 +189,7 @@ export function Sidebar({
           onWriteOpen={onWriteOpen}
         />
 
-        {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' ? (
+        {activeView !== 'claw' ? (
           <SidebarPrimaryActions
             runtimeReady={runtimeReady}
             newTaskLabel={t('newAgent')}
@@ -207,8 +207,9 @@ export function Sidebar({
             icon={<Zap {...iconProps} />}
             label={t('sidebarAutomation')}
             items={[
-              { id: 'schedule', label: t('schedule'), icon: <Clock3 {...iconProps} />, active: activeView === 'schedule', onSelect: onScheduleOpen },
-              { id: 'workflow', label: t('workflow'), icon: <Workflow {...iconProps} />, active: activeView === 'workflow', onSelect: onWorkflowOpen }
+              // Re-selecting the open automation view toggles back to Code.
+              { id: 'schedule', label: t('schedule'), icon: <Clock3 {...iconProps} />, active: activeView === 'schedule', onSelect: activeView === 'schedule' ? onCodeOpen : onScheduleOpen },
+              { id: 'workflow', label: t('workflow'), icon: <Workflow {...iconProps} />, active: activeView === 'workflow', onSelect: activeView === 'workflow' ? onCodeOpen : onWorkflowOpen }
             ]}
           />
           <SidebarMenuRow
@@ -269,45 +270,6 @@ export function Sidebar({
           })}
           t={t}
         />
-      ) : activeView === 'workflow' ? (
-        <div className="ds-no-drag flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-          <Workflow className="h-7 w-7 text-ds-faint" strokeWidth={1.5} />
-          <p className="text-[12.5px] leading-5 text-ds-faint">{t('workflowSidebarHint')}</p>
-        </div>
-      ) : activeView === 'schedule' ? (
-        <SidebarProjectsSection
-          threads={threads}
-          activeView="chat"
-          activeThreadId={activeThreadId}
-          runtimeReady={runtimeReady}
-          threadListStatus={threadListStatus}
-          threadListError={threadListError}
-          onRetryThreads={() => void refreshThreads()}
-          onLoadMoreThreads={(workspacePath) => void loadMoreThreads(workspacePath)}
-          threadListCursorByWorkspace={threadListCursorByWorkspace}
-          searchQuery={threadSearch}
-          showArchived={showArchivedThreads}
-          workspaceRoot={workspaceRoot}
-          workspaceRoots={codeWorkspaceRoots}
-          conversationRoot={conversationWorkspaceRoot}
-          busy={busy}
-          watchTurnCompletion={watchTurnCompletion}
-          unreadThreadIds={unreadThreadIds}
-          scheduledThreadActivities={scheduledThreadActivities}
-          awaitingUserInputThreadIds={awaitingUserInputThreadIds}
-          locale={i18n.language}
-          onPickWorkspace={() => void chooseWorkspace()}
-          onRemoveWorkspace={removeWorkspace}
-          onCreateThreadInWorkspace={onNewChatInWorkspace}
-          onSelectThread={onSelectThread}
-          onRenameThread={onRenameThread}
-          onPinThread={onPinThread}
-          onArchiveThread={onArchiveThread}
-          onDeleteThread={onDeleteThread}
-          onRestoreThread={onRestoreThread}
-          onSearchQueryChange={onThreadSearchChange}
-          t={t}
-        />
       ) : (
       <>
       <SidebarAgentChatsSection
@@ -324,7 +286,7 @@ export function Sidebar({
         onRestoreThread={onRestoreThread}
         t={t}
       />
-      {!threadSearch.trim() && (activeView === 'chat' || activeView === 'write') ? (
+      {!threadSearch.trim() && ['chat', 'write', 'schedule', 'workflow'].includes(activeView) ? (
         <SidebarAttentionPanel
           threads={threads}
           activityContext={sidebarActivityContext}

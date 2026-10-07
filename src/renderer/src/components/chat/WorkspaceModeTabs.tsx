@@ -147,7 +147,9 @@ export function WorkspaceModeTabs({
 
   const selectMode = (mode: WorkspaceMode): void => {
     setOpen(false)
-    if (mode === selectedMode) {
+    // Automation and board views map to the Code tab but are not Code itself,
+    // so picking Code from them must still navigate back.
+    if (mode === selectedMode && (mode === 'write' || activeView === 'chat')) {
       triggerRef.current?.focus()
       return
     }
