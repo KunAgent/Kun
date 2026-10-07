@@ -18,6 +18,7 @@ import { AdeWorkspaceProjectPicker } from './AdeWorkspaceProjectPicker'
 import { AdeWorktreeStartPicker } from './AdeWorktreeStartPicker'
 import { FloatingComposerAgentModePicker } from './FloatingComposerAgentModePicker'
 import { FloatingComposerNativeAgentPicker } from './FloatingComposerNativeAgentPicker'
+import { FloatingComposerAgentSettings } from './FloatingComposerAgentSettings'
 
 export function FloatingComposerSurfaceView({
   context
@@ -544,6 +545,10 @@ export function FloatingComposerSurfaceView({
                   )}
                   {!hideModelPicker && externalAgent && adeComposer ? (
                     <FloatingComposerNativeAgentPicker harnessId={adeComposer.harnessId} threadId={activeThreadId}
+                      compact={compact} disabled={!canCompose || busy} />
+                  ) : null}
+                  {!hideModelPicker && externalAgent && adeComposer ? (
+                    <FloatingComposerAgentSettings harnessId={adeComposer.harnessId} threadId={activeThreadId}
                       compact={compact} disabled={!canCompose || busy} />
                   ) : null}
                   {!side && showVoiceDictation ? (

@@ -2,7 +2,7 @@
 
 - 日期：2026-10-08
 - 基线：`develop@8e699533d`
-- 状态：P0-P2 已实施（见 §8 实施记录）；P3、P4 进行中
+- 状态：P0-P3 已实施（见 §8 实施记录）；P4 进行中
 - 设计输入：多 agent 控制台（`/Users/zxy/codeproject/ds_project/paseo@4417d7c`，下称"参考项目"）。
   按 [README](./README.md) 的约束，参考项目只作设计输入；源码、文件名、类名、注释、i18n 键里不得出现它的名字。
 
@@ -288,3 +288,11 @@ harnesses.providers?: Record<string, {
 - 派生只支持内置 ACP 引擎（`derivableProviderModule`）：agent-sdk、antigravity-cli、cursor-sdk 的运行时按 id 绑定，codex/pi 的派生没有用户场景。`deriveProviderModule` 继承协议行为、凭据、网关、失败解释，去掉安装器、更新、内置可执行文件和历史读取；目录列出时用 `setDerivedProviderModules` 注册，阶段文件里的 `providerModule(id)` 因此无需改动。定义带 `derivedFrom`。CodeMaker 仍是手写模块（它的凭据和写文件策略与 OpenCode 不同），用户派生走同一套 hook。
 - Agent 中心：添加表单增加"基于"选择（通用 ACP 或内置 ACP 引擎，命令可留空沿用基座）；内置 Agent 的"高级"里在命令路径之外增加附加参数和环境变量（失焦保存）；移除/导出覆盖所有用户 Agent。`probe-definition` 接受 `extends`。
 - 真机验证：`extends: 'opencode'` 的派生 Agent 在本机 OpenCode 1.18.35 上 handshake 通过，凭据诊断沿用 OpenCode 的 `auth.json`，78 个模型写入缓存。
+
+### P3 会话契约
+
+- 新增通用会话设置 `HarnessSessionSetting = select | toggle`（`contracts/harness-session-settings.ts`）：ACP 会话里 Kun 自己不建模的配置项（分类不是 model/mode/thought_level，且不是 `acpPermission.configOptionId`）。它同时出现在握手/模型目录（`HarnessModelCatalog.settings`，首轮前可用）和 `harness_session_state.settings`（会话建立与 `config_option_update` 后刷新）。
+- 回合请求新增 `harnessSettings: Record<id, string | boolean>`，与 `harnessAgentId` 一样冻结在回合上并随队列、房间续写、worker 通知传递；ACP 会话在 prompt 前按 id 校验后调用 `session/set_config_option`，会话不提供的 id 或取值一律保留 Agent 自己的值。
+- 输入框新增通用"设置"控件（Agent 发布了设置才出现），选择按 Agent 保存在本地，下一条消息生效。本机已装的 OpenCode 1.18、Devin、Kimi 目前只发布 model/mode/thought_level，因此这些 Agent 上该控件不出现；OpenCode 原生 Agent、Devin fusion、Codex 思考档位继续由各自已有控件承担（它们与 Kun 的权限梯度、模型分组绑定，不是通用设置）。
+- 权限请求核对结论：ACP、Claude Agent SDK、Cursor 走 `ApprovalGate.request(ApprovalRequest)`，Codex/Pi 经会话 sink 的 `requestApproval` 转成同一个 `createApprovalRequest`，已经是同一结构、同一条"策略 → 审阅者 → 用户"管线，不再改动。
+- 渲染层去硬编码：派生 Agent 的图标通过 `derivedFrom` 使用基座引擎图标（`lib/agent-icon-aliases.ts`）；`coding-agent-client` 的引擎联合类型改为引用 Kun 契约 `ConversationHarnessId`。会话准入 `CONVERSATION_HARNESS_IDS` 保留为显式白名单：它是"引擎原生工具能被 Kun 强制只读"的安全门，需要逐引擎审计，派生 Agent 不自动继承。

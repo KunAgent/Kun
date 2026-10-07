@@ -35,6 +35,8 @@ import { applyAcpSessionPermission } from './acp-session-permissions.js'
 import { applyAcpSessionAgent } from './acp-session-agent.js'
 import { isAcpAuthenticationRequired } from './acp-authentication.js'
 import { AcpModelSelectionError, acpLegacyVariantModel, applyAcpSessionModel, parseAcpLegacyModels, type AcpLegacyModels } from './acp-legacy-models.js'
+import { applyAcpSessionSettings } from './acp-session-settings.js'
+import type { HarnessSettingValues } from '../../contracts/harness-session-settings.js'
 
 /** Per-turn input the runtime hands to the session manager. */
 export type AcpSessionRequest = {
@@ -50,6 +52,8 @@ export type AcpSessionRequest = {
   /** Composer-selected native Agent; replaces the permission-mapped mode. */
   nativeAgentId?: string
   reasoningEffort?: string
+  /** Composer values for Agent-published settings (docs/ade/17 §4.4). */
+  harnessSettings?: HarnessSettingValues
   /** Kun Tools MCP server descriptors; user MCP servers are not forwarded. */
   mcpServers?: McpServer[]
   /** Stable native-session descriptor, activated for this turn only. */
@@ -297,6 +301,7 @@ export class AcpSessionManager {
     await this.setIfDifferent(conn, session, byCategory.get('thought_level'), [
       ...(ctx.reasoningEffort ? effortCandidates(ctx.reasoningEffort) : [])
     ])
+    await applyAcpSessionSettings(conn, session, ctx.harnessSettings, ctx.acpPermission?.configOptionId)
   }
 
   private async setIfDifferent(

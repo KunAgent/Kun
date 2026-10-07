@@ -47,6 +47,7 @@ export function createTurnRecord(input: {
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: HarnessCredentialMode
   harnessAgentId?: string
+  harnessSettings?: Record<string, string | boolean>
   accountId?: string
   actingModelRoute?: ActingTurnModelRoute
   reasoningEffort?: TurnReasoningEffort
@@ -121,6 +122,8 @@ export function createTurnRecord(input: {
       ? { collaborationEnabled: input.collaborationEnabled } : {}),
     ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
     ...(input.harnessAgentId?.trim() ? { harnessAgentId: input.harnessAgentId.trim() } : {}),
+    ...(input.harnessSettings && Object.keys(input.harnessSettings).length
+      ? { harnessSettings: { ...input.harnessSettings } } : {}),
     ...(input.gatewayBinding ? { gatewayBinding: structuredClone(input.gatewayBinding) } : {}),
     ...(accountId ? { accountId } : {}),
     ...(input.actingModelRoute ? { actingModelRoute: { ...input.actingModelRoute } } : {}),

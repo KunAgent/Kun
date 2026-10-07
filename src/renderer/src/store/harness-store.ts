@@ -10,11 +10,17 @@ import type {
 import { harnessProfileKey, readyHarnessProfiles } from '@shared/harness-enablement'
 import { getProvider } from '../agent/registry'
 import type { HarnessNativeAgent } from '../../../../kun/src/contracts/harness-native-agents'
+import { rememberAgentIconAliases } from '../lib/agent-icon-aliases'
 
 /** A model-detail lookup may omit the Agent list; keep the last known one. */
 function nativeAgentCacheFields(source: { agents?: HarnessNativeAgent[]; defaultAgentId?: string } | undefined) {
   return source?.agents?.length
     ? { agents: source.agents, ...(source.defaultAgentId ? { defaultAgentId: source.defaultAgentId } : {}) } : {}
+}
+
+/** Agent settings follow the same rule as the Agent list. */
+function settingsCacheFields(source: { settings?: AdeHarnessModels['settings'] } | undefined) {
+  return source?.settings?.length ? { settings: source.settings } : {}
 }
 
 /**
@@ -31,6 +37,7 @@ export type HarnessSessionSurface = {
   commands?: AdeHarnessCommand[]
   currentModeId?: string
   agents?: HarnessNativeAgent[]
+  settings?: AdeHarnessSessionState['settings']
   updatedAt: string
 }
 
@@ -44,6 +51,7 @@ export type HarnessModelCacheEntry = {
   modelInfo?: AdeHarnessModels['modelInfo']
   agents?: HarnessNativeAgent[]
   defaultAgentId?: string
+  settings?: AdeHarnessModels['settings']
   detailsModel?: string
   catalogStatus?: AdeHarnessModels['catalogStatus']
   loadedAt?: number
@@ -185,6 +193,7 @@ export async function loadHarnesses(
       delete providerGroups[id]
     }
     scheduleReadinessExpiry(rows)
+    rememberAgentIconAliases(rows)
     useHarnessStore.setState({ rows, rowsLoadedAt: now(), rowsLoading: false, models, providerGroups })
     retryCount = 0
     if (anyRowDetecting(rows)) {
@@ -284,6 +293,7 @@ export async function loadHarnessModels(harnessId: string, force = false, select
         return { ...(entry.reasoningEfforts === undefined && previous?.reasoningEfforts !== undefined
           ? { reasoningEfforts: previous.reasoningEfforts, defaultReasoningEffort: previous.defaultReasoningEffort } : {}), ...entry }
       }), ...nativeAgentCacheFields(result.agents?.length ? result : existing),
+        ...settingsCacheFields(result.settings?.length ? result : existing),
         detailsModel: selectedModel, catalogStatus: result.catalogStatus,
         loadedAt: Date.now(), loading: false,
         ...(failed ? { error: lookupError?.message ?? lookupError?.code ?? 'model_catalog_unavailable',
@@ -375,6 +385,11 @@ export function receiveHarnessSessionState(state: AdeHarnessSessionState): void 
           ? { agents: state.agents }
           : current.sessions[threadId]?.harnessId === state.harnessId && current.sessions[threadId]?.agents
             ? { agents: current.sessions[threadId]!.agents }
+            : {}),
+        ...(state.settings !== undefined
+          ? { settings: state.settings }
+          : current.sessions[threadId]?.harnessId === state.harnessId && current.sessions[threadId]?.settings
+            ? { settings: current.sessions[threadId]!.settings }
             : {}),
         updatedAt: new Date().toISOString()
       }

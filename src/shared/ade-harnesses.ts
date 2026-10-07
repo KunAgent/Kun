@@ -170,6 +170,8 @@ export type AdeHarnessModels = {
   /** Switchable native Agents (OpenCode primary agents) and the session default. */
   agents?: import('../../kun/src/contracts/harness-native-agents').HarnessNativeAgent[]
   defaultAgentId?: string
+  /** Agent-published controls Kun does not model itself (docs/ade/17 §4.4). */
+  settings?: import('../../kun/src/contracts/harness-session-settings').HarnessSessionSetting[]
   /**
    * Present when `credential_mode=provider|kun-gateway` was requested: the
    * gateway-exposable providers (04 §5.5 `exposableProvider`) with the model
@@ -287,4 +289,6 @@ export type AdeHarnessSessionState = {
   currentModeId?: string
   /** Native Agents the live session offers (includes workspace-local ones). */
   agents?: import('../../kun/src/contracts/harness-native-agents').HarnessNativeAgent[]
+  /** Agent-published controls with the live session's current values. */
+  settings?: import('../../kun/src/contracts/harness-session-settings').HarnessSessionSetting[]
 }

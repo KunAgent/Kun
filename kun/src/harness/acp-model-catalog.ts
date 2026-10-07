@@ -5,6 +5,7 @@ import type { HarnessDefinition } from '../contracts/harness.js'
 import { nativeAgentsFromAcpModes } from '../contracts/harness-native-agents.js'
 import { acpSessionModeSelector } from '../runtime/acp/acp-session-modes.js'
 import { acpConfigOptionValues } from '../runtime/acp/acp-schema.js'
+import { acpSessionSettings } from '../runtime/acp/acp-session-settings.js'
 
 /** Legacy `<model>/<variant>` suffixes that are reasoning levels, in Kun's vocabulary. */
 const LEGACY_VARIANT_EFFORTS: Readonly<Record<string, string>> = {
@@ -112,10 +113,12 @@ export function attachNativeAgents(
   return catalog
 }
 
-/** Catalog of a freshly opened session: models, reasoning levels and native Agents. */
+/** Catalog of a freshly opened session: models, reasoning levels, native Agents and other settings. */
 export function acpSessionCatalog(
-  definition: Pick<HarnessDefinition, 'id' | 'nativeAgents'>,
+  definition: Pick<HarnessDefinition, 'id' | 'nativeAgents' | 'acpPermission'>,
   session: { configOptions?: AcpConfigOption[] | null; models?: unknown; modes?: AcpSessionModes | null }
 ): HarnessModelCatalog {
-  return attachNativeAgents(definition, acpModelCatalog({ harnessId: definition.id, ...session }), session)
+  const catalog = attachNativeAgents(definition, acpModelCatalog({ harnessId: definition.id, ...session }), session)
+  const settings = acpSessionSettings(session.configOptions, definition.acpPermission?.configOptionId)
+  return settings.length ? { ...catalog, settings } : catalog
 }

@@ -9,7 +9,8 @@ export type CodingAgentRoute = {
   credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
 }
 export type CodingAgentEntry = {
-  harnessId: 'claude-code' | 'codex' | 'opencode' | 'codemaker'
+  /** Engines whose native tools Kun can force read-only (kun contracts/agent-executor). */
+  harnessId: import('../../../../../kun/src/contracts/agent-executor').ConversationHarnessId
   displayName: string
   available: boolean
   reason?: string

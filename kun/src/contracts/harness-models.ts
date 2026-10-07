@@ -1,4 +1,5 @@
 import type { HarnessNativeAgent } from './harness-native-agents.js'
+import type { HarnessSessionSetting } from './harness-session-settings.js'
 
 /** Native model facts; absence of a capability means unknown, not unsupported. */
 export type HarnessModelInfo = {
@@ -25,5 +26,7 @@ export type HarnessModelCatalog = {
   agents?: HarnessNativeAgent[]
   /** The Agent a fresh native session starts with. */
   defaultAgentId?: string
+  /** Agent-published controls Kun does not model itself, as a fresh session reports them. */
+  settings?: HarnessSessionSetting[]
   error?: HarnessModelCatalogError
 }

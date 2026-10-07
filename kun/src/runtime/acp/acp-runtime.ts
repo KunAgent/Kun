@@ -81,6 +81,7 @@ export type { AcpCredentialEnvInput }
 
 export type { AcpRuntimeDeps } from './acp-runtime-deps.js'
 import type { AcpRuntimeDeps } from './acp-runtime-deps.js'
+import { acpSessionSettings } from './acp-session-settings.js'
 
 export class AcpRuntime implements DelegatedTurnRuntime {
   private readonly pool: AcpConnectionPool
@@ -207,6 +208,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       threadId,
       turnId,
       harnessId: definition.id,
+      ...(definition.acpPermission?.configOptionId ? { permissionOptionId: definition.acpPermission.configOptionId } : {}),
       model: model ?? 'default',
       nextId: (prefix) => this.deps.ids.next(prefix),
       nowIso: this.deps.nowIso,
@@ -272,6 +274,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           ...(resolved.ctx.nativeAgentId ? { nativeAgentId: resolved.ctx.nativeAgentId } : {}),
           acpPermission: definition.acpPermission,
           reasoningEffort: turn.reasoningEffort,
+          ...(turn.harnessSettings ? { harnessSettings: turn.harnessSettings } : {}),
           sessionMcpServers,
           items,
           validateLaunch: async () => {
@@ -331,12 +334,15 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       },
       sandbox: definition.capabilities.facts?.sandbox ?? 'native'
     })
-    // Workspace-local Agents only appear in a real session; refresh the picker.
+    // Workspace-local Agents and generic settings only appear in a real
+    // session; refresh the composer controls.
     const modeSelector = acpSessionModeSelector(session)
     const nativeAgents = definition.nativeAgents === 'session-modes' ? nativeAgentsFromAcpModes(modeSelector) : []
-    if (nativeAgents.length) {
-      await emitter.emitAll([{ kind: 'harness_session_state', threadId, turnId, harnessId: definition.id, agents: nativeAgents,
-        ...(modeSelector?.currentModeId ? { currentModeId: modeSelector.currentModeId } : {}) }]).catch(() => undefined)
+    const settings = acpSessionSettings(session.configOptions, definition.acpPermission?.configOptionId)
+    if (nativeAgents.length || settings.length) {
+      await emitter.emitAll([{ kind: 'harness_session_state', threadId, turnId, harnessId: definition.id,
+        ...(nativeAgents.length ? { agents: nativeAgents } : {}), ...(settings.length ? { settings } : {}),
+        ...(nativeAgents.length && modeSelector?.currentModeId ? { currentModeId: modeSelector.currentModeId } : {}) }]).catch(() => undefined)
     }
 
     const imageCapable =

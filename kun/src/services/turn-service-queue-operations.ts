@@ -190,6 +190,7 @@ export const turnServiceQueueOperations = {
       collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
       credentialMode: turnCredentialMode,
       harnessAgentId: input.request.harnessAgentId,
+      harnessSettings: input.request.harnessSettings,
             gatewayBinding,
       accountId: turnAccountId,
       reasoningEffort: input.request.reasoningEffort,

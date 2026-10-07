@@ -28,12 +28,16 @@ import {
   toKunToolResult,
   type AcpToolCallWire
 } from './acp-tool-call-mapper.js'
+import { acpSessionSettings } from './acp-session-settings.js'
+import type { HarnessSessionSetting } from '../../contracts/harness-session-settings.js'
 
 export type AcpEventMapperContext = {
   threadId: string
   turnId: string
   /** Harness id for harness_session_state events. */
   harnessId?: string
+  /** Config option the definition's `acpPermission` drives; not a generic setting. */
+  permissionOptionId?: string
   /** Monotonic id generator, e.g. `(p) => `${p}_${++n}``. */
   nextId: (prefix: string) => string
   nowIso?: () => string
@@ -391,6 +395,7 @@ export class AcpEventMapper {
   ): RuntimeEventDraft[] {
     this.facts.configOptions = update.configOptions as AcpConfigOption[]
     return [this.sessionState({
+      settings: acpSessionSettings(update.configOptions as AcpConfigOption[], this.ctx.permissionOptionId),
       configOptions: (update.configOptions as AcpConfigOption[]).slice(0, 32).map((option) => ({
         id: option.id,
         ...(option.name ? { name: option.name } : {}),
@@ -554,6 +559,7 @@ export class AcpEventMapper {
       values?: string[]
     }>
     currentModeId?: string
+    settings?: HarnessSessionSetting[]
   }): RuntimeEventDraft {
     return {
       kind: 'harness_session_state',

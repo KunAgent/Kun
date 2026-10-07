@@ -535,6 +535,8 @@ export type CoreRuntimeEventJson = {
   commands?: Array<{ name?: unknown; description?: unknown; inputHint?: unknown }>
   configOptions?: Array<{ id?: unknown; name?: unknown; currentValue?: unknown }>
   currentModeId?: string
+  /** harness_session_state: Agent-published settings (docs/ade/17 §4.4). */
+  settings?: unknown
   /** task_workspace lifecycle/state transition on the owner thread (docs/ade/07 §5). */
   taskWorkspace?: {
     workspaceId?: string; unitId?: string; state?: string

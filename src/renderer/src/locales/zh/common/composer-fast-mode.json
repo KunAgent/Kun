@@ -11,5 +11,11 @@
     "autoHint": "跟随输入框权限档",
     "triggerTitle": "{{agent}} Agent：{{name}}",
     "ownPermissions": "选定的 Agent 使用它自己的工具权限；只读任务仍使用最严格的模式。"
+  },
+  "agentSettingsPicker": {
+    "title": "设置",
+    "triggerTitle": "{{agent}} 的会话设置",
+    "hint": "由 Agent 提供，下一条消息生效。",
+    "reset": "恢复默认"
   }
 }

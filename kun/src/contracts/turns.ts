@@ -31,6 +31,7 @@ import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
 import { HarnessNativeAgentIdSchema } from './harness-native-agents.js'
 import { ActingTurnModelRouteSchema } from './turn-acting-route.js'
 import { ManagerLeaseSettlementSchema } from './turn-manager-lease.js'
+import { HarnessSettingValuesSchema } from './harness-session-settings.js'
 export * from './turn-manager-lease.js'
 
 export { TurnReasoningEffortSchema } from './turn-reasoning.js'
@@ -187,6 +188,7 @@ export const TurnSchema = z.object({
   credentialMode: HarnessCredentialModeSchema.optional(),
   /** Native Agent (OpenCode primary agent) frozen for this turn; absent keeps permission mapping. */
   harnessAgentId: HarnessNativeAgentIdSchema.optional(),
+  harnessSettings: HarnessSettingValuesSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional(),
   gatewayAliasGrants: z.array(HarnessGatewayAliasGrantSchema).max(2).optional(),
   accountId: z.string().min(1).optional(),
@@ -320,6 +322,8 @@ export const StartTurnRequest = z.object({
   credentialMode: HarnessCredentialModeSchema.optional(),
   /** Native Agent for harnesses that declare `nativeAgents`; ignored by others. */
   harnessAgentId: HarnessNativeAgentIdSchema.optional(),
+  /** Values for Agent-published settings (docs/ade/17 §4.4); unknown ids are ignored. */
+  harnessSettings: HarnessSettingValuesSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional(),
   accountId: z.string().min(1).optional(),
   reasoningEffort: TurnReasoningEffortSchema.optional(),

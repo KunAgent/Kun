@@ -19,9 +19,15 @@ import type {
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
 import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
 import { nativeAgentsFromAcpModes } from '../../../../kun/src/contracts/harness-native-agents'
+import { HarnessSessionSettingListSchema } from '../../../../kun/src/contracts/harness-session-settings'
 
 function nativeAgentsField(agents: unknown) {
   return Array.isArray(agents) ? { agents: nativeAgentsFromAcpModes({ availableModes: agents }) } : {}
+}
+
+function sessionSettingsField(settings: unknown) {
+  const parsed = HarnessSessionSettingListSchema.safeParse(settings)
+  return settings !== undefined && parsed.success ? { settings: parsed.data } : {}
 }
 
 export type KunEventNormalizerDeps = {
@@ -257,7 +263,8 @@ function normalizeKunRuntimeEventPayload(
           ...(typeof event.currentModeId === 'string' && event.currentModeId.trim()
             ? { currentModeId: event.currentModeId.trim() }
             : {}),
-          ...nativeAgentsField((event as { agents?: unknown }).agents)
+          ...nativeAgentsField((event as { agents?: unknown }).agents),
+          ...sessionSettingsField(event.settings)
         }
       }]
     }

@@ -16,6 +16,7 @@ import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-l
 import { isAcpAuthenticationRequired } from '../runtime/acp/acp-authentication.js'
 import type { HarnessModelCatalog, HarnessModelCatalogError } from '../contracts/harness-models.js'
 import { acpModelCatalog, attachNativeAgents } from './acp-model-catalog.js'
+import { acpSessionSettings } from '../runtime/acp/acp-session-settings.js'
 import { startAcpProcess, type AcpSpawnFn } from '../runtime/acp/acp-process.js'
 import {
   ACP_AGENT_METHODS,
@@ -228,8 +229,9 @@ export class AcpModelProbe {
           models: session.models ? { ...(parsed.data.models as object), currentModelId: session.models.currentModelId } : parsed.data.models,
           defaultModel: initial.modelInfo.find((entry) => entry.isDefault)?.id })
         attachNativeAgents(definition, catalog, parsed.data)
+        const settings = acpSessionSettings(session.configOptions, definition.acpPermission?.configOptionId)
         lease.release(true)
-        return catalog
+        return settings.length ? { ...catalog, settings } : catalog
       } finally { off() }
     } catch (error) {
       // A failed lookup never leaves a possibly wedged process in the pool.

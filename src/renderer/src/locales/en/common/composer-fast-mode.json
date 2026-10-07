@@ -11,5 +11,11 @@
     "autoHint": "Follows the composer permission level",
     "triggerTitle": "{{agent}} Agent: {{name}}",
     "ownPermissions": "A selected Agent uses its own tool permissions. Read-only tasks still use the strictest mode."
+  },
+  "agentSettingsPicker": {
+    "title": "Settings",
+    "triggerTitle": "{{agent}} session settings",
+    "hint": "Provided by the Agent; applies to your next message.",
+    "reset": "Reset"
   }
 }

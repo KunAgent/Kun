@@ -210,6 +210,7 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
         ...(sourceTurn?.accountId ? { accountId: sourceTurn.accountId } : {}),
         ...(sourceTurn?.clientSurface ? { clientSurface: sourceTurn.clientSurface } : {}),
         ...(sourceTurn?.reasoningEffort ? { reasoningEffort: sourceTurn.reasoningEffort } : {}),
+        ...(sourceTurn?.harnessSettings ? { harnessSettings: sourceTurn.harnessSettings } : {}),
         ...(sourceTurn?.serviceTier ? { serviceTier: sourceTurn.serviceTier } : {}),
         ...authority
       }

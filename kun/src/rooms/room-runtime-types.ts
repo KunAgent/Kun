@@ -26,7 +26,7 @@ export type RoomRequestState = {
     inboxId?: string
     /** Exact accepted parent route and authority; a task return cannot select a new engine. */
     route?: Pick<import('../contracts/turns.js').Turn, 'model' | 'providerId' | 'accountId' | 'harnessId' |
-      'credentialMode' | 'gatewayBinding' | 'reasoningEffort' | 'serviceTier' | 'harnessAgentId'>
+      'credentialMode' | 'gatewayBinding' | 'reasoningEffort' | 'serviceTier' | 'harnessAgentId' | 'harnessSettings'>
     policy?: import('../contracts/policy.js').KunToolPermissionSettings
   }
   /** Provenance of the durable reminder that woke this private request. */

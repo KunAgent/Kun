@@ -101,6 +101,7 @@ import type { ComposerContextAttachment } from '@kun/extension-api'
 import { KunRuntimeThreadServices } from './kun-runtime-thread-services'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 import { harnessAgentRequestField } from '../lib/harness-native-agent'
+import { harnessSettingsRequestField } from '../lib/harness-session-settings'
 import type {
   DesignDocumentTarget,
   DesignImagePlacementTarget,
@@ -576,7 +577,8 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       ...(selectedModel ? { model: selectedModel } : {}),
       ...(selectedProviderId ? { providerId: selectedProviderId } : {}),
       ...(selectedAccountId ? { accountId: selectedAccountId } : {}),
-      ...(options?.harnessId?.trim() ? { harnessId: options.harnessId.trim(), ...harnessAgentRequestField(options.harnessId) } : {}),
+      ...(options?.harnessId?.trim() ? { harnessId: options.harnessId.trim(), ...harnessAgentRequestField(options.harnessId),
+        ...harnessSettingsRequestField(options.harnessId) } : {}),
       ...(options?.credentialMode ? { credentialMode: options.credentialMode } : {}),
       ...(options?.gatewayBinding ? { gatewayBinding: options.gatewayBinding } : {}),
       approvalPolicy: options?.approvalPolicy ?? runtime.approvalPolicy,

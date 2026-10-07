@@ -43,6 +43,7 @@ import { HarnessIdSchema } from './harness.js'
 import { HarnessCapabilitiesSchema } from './harness-capabilities.js'
 import { TaskWorkspaceEventPayloadSchema } from './task-workspace.js'
 import { HarnessNativeAgentListSchema } from './harness-native-agents.js'
+import { HarnessConfigOptionSchema, HarnessSessionSettingListSchema } from './harness-session-settings.js'
 
 /**
  * Persisted runtime events. Every event has a per-thread `seq` so the
@@ -495,20 +496,10 @@ export const HarnessRuntimeEvent = RuntimeEventBase.extend({
 })
 export type HarnessRuntimeEvent = z.infer<typeof HarnessRuntimeEvent>
 
-/** Sanitized snapshot of one harness session config option (ACP §7.3). */
-export const HarnessConfigOptionSchema = z
-  .object({
-    id: z.string().min(1).max(256),
-    name: z.string().max(256).optional(),
-    category: z.string().max(64).optional(),
-    currentValue: z.union([z.string().max(1_024), z.boolean()]).optional(),
-    values: z.array(z.string().max(1_024)).max(128).optional()
-  })
-  .strict()
-
 /**
- * Harness-reported session surface state: slash commands, current mode, and
- * config options (docs/ade/03 §7.3). Composer controls refresh off this.
+ * Harness-reported session surface state: slash commands, current mode,
+ * config options and generic settings (docs/ade/03 §7.3, 17 §4.4).
+ * Composer controls refresh off this.
  */
 export const HarnessSessionStateEvent = RuntimeEventBase.extend({
   kind: z.literal('harness_session_state'),
@@ -527,7 +518,9 @@ export const HarnessSessionStateEvent = RuntimeEventBase.extend({
     .optional(),
   configOptions: z.array(HarnessConfigOptionSchema).max(32).optional(),
   currentModeId: z.string().max(256).optional(),
-  agents: HarnessNativeAgentListSchema.optional()
+  agents: HarnessNativeAgentListSchema.optional(),
+  /** Agent-published controls Kun does not model itself (docs/ade/17 §4.4). */
+  settings: HarnessSessionSettingListSchema.optional()
 })
 export type HarnessSessionStateEvent = z.infer<typeof HarnessSessionStateEvent>
 
