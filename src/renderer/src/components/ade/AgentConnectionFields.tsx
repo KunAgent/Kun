@@ -87,6 +87,9 @@ export function AgentConnectionFields({ row, value, profile, modelsEnabled, onCh
       options={[{ value: '', label: t('agentEnablement.chooseProvider') },
         ...(profile.credentialMode === 'kun-gateway' ? groups?.aliasGroups ?? [] : []).map((alias) => ({ value: `@alias:${alias.routeId}`, label: `${t('agentEnablement.alias')} · ${alias.label}`, icon: <Network size={15} /> })),
         ...(groups?.groups ?? []).map((group) => ({ value: group.providerId, label: group.label, icon: <KeyRound size={15} /> }))]} />} /> : null}
+    {!native ? <div className="px-3 pb-2"><button type="button" data-agent-manage-providers
+      onClick={() => useChatStore.getState().openSettings('providers')}
+      className="text-[12px] font-medium text-accent hover:underline">{t('agentCenter.connection.manageProviders')}</button></div> : null}
     {profile.gatewayBinding ? <div className="px-3 pb-3"><AgentAliasSettings binding={profile.gatewayBinding} aliases={groups?.aliasGroups ?? []}
       supportsSmall={Boolean(row.definition.gateway?.env.smallModel)} change={(gatewayBinding) => onChange({ gatewayBinding })} /></div> : null}
     {terminal && native ? <p className="px-3 py-3.5 text-[12px] text-ds-muted" data-agent-terminal-model-hint>{t('agentIntegrations.terminalModelManaged')}</p>

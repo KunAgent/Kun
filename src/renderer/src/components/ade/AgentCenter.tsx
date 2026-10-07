@@ -19,7 +19,7 @@ import { agentPresentationFor } from './agent-center-presentation'
 import { useAgentActivityStore } from './agent-center-activity-store'
 import { useAgentInstallWatch } from './use-agent-install-watch'
 import { exportCustomEntry } from './agent-center-custom-form'
-import { AgentCenterAddWizard } from './agent-center-add-wizard'
+import { AgentAddDialog } from './AgentAddDialog'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 import { isUserAgent, userAgentEntry, withAgentCommandPath, withAgentLaunchPatch } from '@shared/harness-provider-settings'
 
@@ -250,12 +250,10 @@ export function AgentCenter({
         )}
       </section>
       {addOpen ? (
-        <AgentCenterAddWizard
+        <AgentAddDialog
           settingsSurface={settingsSurface}
-          rows={rows}
           settings={settings}
           updateKun={updateKun}
-          onSetupCommand={onSetupCommand}
           onSelectAgent={setSelectedId}
           onClose={() => setAddOpen(false)}
         />

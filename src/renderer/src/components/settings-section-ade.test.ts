@@ -294,6 +294,7 @@ describe('AgentsHarnessesSettingsPanel', () => {
     const renderer = renderPanel(updateKun)
     await act(async () => renderer.root.findByProps({ 'data-agent-add-open': true }).props.onClick())
     await act(async () => renderer.root.findByProps({ 'data-agent-add-custom': true }).props.onClick())
+    await act(async () => renderer.root.findByProps({ 'data-agent-add-next': true }).props.onClick())
     const inputs = renderer.root.findAllByType('input' as never)
     const textarea = renderer.root.findByType('textarea' as never)
     act(() => {
@@ -337,7 +338,8 @@ describe('AgentsHarnessesSettingsPanel', () => {
         }
       })
     })
-    expect(renderer.root.findAllByProps({ 'data-agent-add-finish': true })).toHaveLength(1)
+    // Saving closes the dialog and selects the new Agent.
+    expect(renderer.root.findAllByProps({ 'data-agent-custom-form': true })).toHaveLength(0)
     act(() => renderer.unmount())
   })
 })

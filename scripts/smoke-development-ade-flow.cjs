@@ -63,8 +63,11 @@ async function runUnifiedCodeFlow({
   const claudeCard = harnessPanel.locator('[data-agent-card="claude-code"]')
   await claudeCard.waitFor()
   await capture('3-agent-connection-settings')
-  await claudeCard.locator('[data-agent-advanced-toggle]').click()
-  await claudeCard.locator('[data-agent-advanced-settings] input').first().fill(claudeStubUpdated)
+  await claudeCard.getByRole('tab', { name: 'Launch', exact: true }).click()
+  const commandPath = claudeCard.locator('[data-agent-command-path]')
+  await commandPath.fill(claudeStubUpdated)
+  // The path is saved when the field loses focus, never per keystroke.
+  await commandPath.blur()
   await poll(async () => {
     const probe = await runtimeRequest(page, '/v1/harnesses/claude-code/probe', 'POST')
     return probe.status?.resolvedCommand === claudeStubUpdated
@@ -75,9 +78,9 @@ async function runUnifiedCodeFlow({
   await harnessPanel.locator('[data-agent-list-id="cursor"]').click()
   const cursorCard = harnessPanel.locator('[data-agent-card="cursor"]')
   await cursorCard.waitFor()
-  assert.equal(await cursorCard.getByRole('button', { name: 'Sign in', exact: true }).count(), 0)
-  assert.equal(await cursorCard.getByRole('button', { name: 'Set command path', exact: true }).count(), 0)
-  await cursorCard.getByRole('button', { name: 'Configure model source', exact: true }).click()
+  assert.equal(await cursorCard.getByRole('button', { name: 'Sign in in terminal', exact: true }).count(), 0)
+  assert.equal(await cursorCard.locator('[data-agent-command-path]').count(), 0)
+  await cursorCard.getByRole('button', { name: 'Manage model providers', exact: true }).click()
   await page.locator('[data-settings-category="providers"][aria-current="page"]').waitFor()
   await capture('4b-cursor-model-source-settings')
   await page.locator('[data-settings-category="harnesses"]').click()
@@ -88,6 +91,7 @@ async function runUnifiedCodeFlow({
   const wizard = page.locator('[data-agent-add-wizard]')
   await wizard.waitFor()
   await wizard.locator('[data-agent-add-custom]').click()
+  await wizard.locator('[data-agent-add-next]').click()
   const customForm = wizard.locator('[data-agent-custom-form]')
   await customForm.getByPlaceholder(/Display name/u).fill('Smoke Form Agent')
   await customForm.getByPlaceholder(/Command path/u).fill(acpStub)
@@ -104,7 +108,8 @@ async function runUnifiedCodeFlow({
     const catalog = await runtimeRequest(page, '/v1/harnesses')
     return (catalog.harnesses ?? []).some((row) => row.definition.id === 'custom-smoke-form-agent')
   }, 30_000, 'saved custom ACP agent reaching the catalog')
-  await wizard.locator('[data-agent-add-done]').click()
+  // Saving closes the dialog and selects the new Agent.
+  await wizard.waitFor({ state: 'detached' })
   await harnessPanel.locator('[data-agent-list-id="custom-smoke-form-agent"]').waitFor()
 
   const importFile = join(temporaryRoot, 'import-agent.json')
@@ -112,7 +117,8 @@ async function runUnifiedCodeFlow({
     displayName: 'Imported Agent', command: acpStub, args: ['--acp']
   }))
   await harnessPanel.locator('[data-agent-add-open]').click()
-  await wizard.locator('[data-agent-add-custom]').click()
+  await wizard.locator('[data-agent-add-import]').click()
+  await wizard.locator('[data-agent-add-next]').click()
   await customForm.locator('input[type="file"]').setInputFiles(importFile)
   await poll(async () => (await customForm.getByPlaceholder(/Display name/u).inputValue()) === 'Imported Agent',
     10_000, 'imported Agent definition filling the form')
@@ -120,7 +126,7 @@ async function runUnifiedCodeFlow({
   await customForm.getByRole('button', { name: 'Test connection', exact: true }).click()
   await customForm.locator('[data-probe-result="ok"]').waitFor({ timeout: 60_000 })
   await addButton.click()
-  await wizard.locator('[data-agent-add-done]').click()
+  await wizard.waitFor({ state: 'detached' })
   await harnessPanel.locator('[data-agent-list-id="custom-imported-agent"]').waitFor({ timeout: 30_000 })
   await capture('5-custom-agents')
   assertions.push('Custom ACP probe, protected secret reference, import, and list/detail all work')
@@ -150,9 +156,10 @@ async function runUnifiedCodeFlow({
   assert(geminiRow, 'Gemini CLI must be in the builtin catalog')
   const command = expectedSetupCommand(geminiRow.definition, process.platform, 'install')
   assert(command, 'Missing Gemini CLI install command')
-  await harnessPanel.locator('[data-agent-add-open]').click()
-  await wizard.locator('[data-agent-add-select="gemini-cli"]').click()
-  await wizard.locator('[data-agent-add-connect]').getByRole('button', { name: /Install.*terminal/iu }).click()
+  // The list folds long groups, so find the Agent through the search box.
+  await harnessPanel.locator('[data-agent-catalog-search]').fill('gemini')
+  await harnessPanel.locator('[data-agent-list-id="gemini-cli"]').click()
+  await harnessPanel.locator('[data-agent-setup-terminal]').click()
   await page.locator('[data-workbench-left-sidebar]').waitFor()
   await page.locator('[data-terminal-open="true"]').waitFor()
   await poll(async () => (await page.locator('.xterm-rows').innerText()).includes(command.command),

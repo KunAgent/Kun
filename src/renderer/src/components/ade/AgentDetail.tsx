@@ -187,7 +187,7 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, on
 
     {presentation.mode === 'setup' ? <>
       <AgentSetupSteps row={row} presentation={presentation} settings={settings} entry={entry} profile={gate.profile}
-        modelsEnabled={gate.savedEnabled} checking={gate.checking} onConnectionChange={change} onEnable={() => void gate.enable()}
+        modelsEnabled={gate.savedEnabled} checking={gate.checking} platform={platform} onSetupCommand={onSetupCommand} onConnectionChange={change} onEnable={() => void gate.enable()}
         onPatchHarness={onPatchHarness} onSetBinaryPath={onSetBinaryPath} beforeEnableCheck={beforeEnableCheck} t={t} tSettings={tSettings} />
       {shown ? <AgentDiagnosticsCard harnessId={id} readiness={readiness} error={shownError} errorDetail={shownDetail}
         checking={gate.checking} busy={busy} onRecheck={() => void gate.enable()} reportText={reportText} issue={issue} t={t} /> : null}

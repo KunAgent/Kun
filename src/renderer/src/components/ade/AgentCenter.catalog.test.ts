@@ -25,7 +25,7 @@ vi.mock('../agent-icon', () => ({ AgentIcon: () => null }))
 vi.mock('./AgentDetail', () => ({ AgentDetail: ({ row }: { row: { definition: { id: string } } }) =>
   createElement('div', { 'data-agent-card': row.definition.id }) }))
 vi.mock('./agent-center-custom-form', () => ({ exportCustomEntry: vi.fn() }))
-vi.mock('./agent-center-add-wizard', () => ({ AgentCenterAddWizard: () => null }))
+vi.mock('./AgentAddDialog', () => ({ AgentAddDialog: () => null }))
 import { AgentCenter } from './AgentCenter'
 it('groups chat Agents by next step, leaves Kun to the default picker, and keeps selection while searching', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)

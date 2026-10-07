@@ -9,6 +9,7 @@ import { AgentCommandPathField } from './AgentCommandPathField'
 import { AgentConnectionFields } from './AgentConnectionFields'
 import { AgentInstallControl } from './AgentInstallControl'
 import { AgentUpdateControl } from './AgentUpdateControl'
+import { setupInstallCommand } from './agent-center-actions'
 import type { AgentPresentation } from './agent-center-presentation'
 
 type T = (key: string, options?: Record<string, unknown>) => string
@@ -39,7 +40,7 @@ function Step({ index, done, active, title, description, children }: {
  * reaches its models, then check and turn it on. The check is the same action
  * as the switch in the header.
  */
-export function AgentSetupSteps({ row, presentation, settings, entry, profile, modelsEnabled, checking, onConnectionChange, onEnable, onPatchHarness, onSetBinaryPath, beforeEnableCheck, t, tSettings }: {
+export function AgentSetupSteps({ row, presentation, settings, entry, profile, modelsEnabled, checking, platform, onConnectionChange, onEnable, onPatchHarness, onSetBinaryPath, onSetupCommand, beforeEnableCheck, t, tSettings }: {
   row: AdeHarnessRow
   presentation: AgentPresentation
   settings: KunHarnessSettingsV1
@@ -47,10 +48,13 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
   profile: KunHarnessEnabledProfileV1
   modelsEnabled: boolean
   checking: boolean
+  platform: string
   onConnectionChange: (patch: Partial<KunHarnessDefaultsEntryV1>) => void
   onEnable: () => void
   onPatchHarness: (patch: Partial<KunHarnessSettingsV1>) => void
   onSetBinaryPath: (path: string) => void
+  /** Hands a reviewed command to a Kun terminal tab; the user runs it. */
+  onSetupCommand?: (harnessId: string, command: string, title: string) => void
   beforeEnableCheck?: () => Promise<boolean>
   t: T
   tSettings: T
@@ -61,6 +65,7 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
     presentation.state !== 'installFailed' && presentation.state !== 'adapterMissing' && presentation.state !== 'detecting'
   const installable = definition.builtin && Boolean(definition.setup?.install?.length || definition.setup?.adapter)
   const docsUrl = definition.setup?.docsUrl
+  const terminalInstall = definition.builtin ? setupInstallCommand(definition.setup, platform) : null
   const locked = !installed && presentation.state !== 'versionLow'
   const name = definition.displayName
   const bundled = usesProviderOnlySdk(row)
@@ -90,6 +95,9 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
             className="inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:underline">
             {t('agentCenter.setup.docs')}<ExternalLink aria-hidden size={11} />
           </button> : null}
+          {!installed && terminalInstall && onSetupCommand ? <button type="button" data-agent-setup-terminal
+            onClick={() => onSetupCommand(definition.id, terminalInstall.command, name)}
+            className="text-[12px] font-medium text-accent hover:underline">{t('agentCenter.setup.terminalInstall')}</button> : null}
           {definition.extension || bundled ? null : <button type="button" aria-expanded={pathOpen} onClick={() => setPathOpen((open) => !open)}
             className="text-[12px] font-medium text-accent hover:underline">
             {t(installed ? 'agentCenter.setup.pathLink' : 'agentCenter.setup.pathLinkMissing')}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { Download, Plus, Upload } from 'lucide-react'
+import { Plus, Upload } from 'lucide-react'
 import type {
   KunHarnessCustomEntryV1,
   KunHarnessSecretEnvEntryV1,
@@ -10,14 +10,16 @@ import { userAgentOverride } from '@shared/harness-provider-settings'
 import { getProvider } from '../../agent/registry'
 import { loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { AgentSettingsSelect } from './AgentSettingsSelect'
+import { launchPreview } from './agent-launch-preview'
+import { ENV_NAME, customAgentId, parseCustomEntryJson, parseEnvLines } from './agent-center-custom-entry'
+
+export { customAgentId, exportCustomEntry, exportCustomEntryJson, parseCustomEntryJson, parseEnvLines } from './agent-center-custom-entry'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
 type ProbeStamp = { fingerprint: string; result: AdeHarnessProbeDefinitionResult }
 
-const ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/
 const CUSTOM_DRAFT_KEY = 'kun-agent-custom-draft-v1'
-const AGENT_ID = /^[a-z][a-z0-9-]{1,47}$/
 
 type PersistedCustomDraft = {
   id?: string
@@ -36,10 +38,6 @@ function readCustomDraft(): PersistedCustomDraft {
   } catch {
     return {}
   }
-}
-
-export function customAgentId(displayName: string): string {
-  return `custom-${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'agent'}`
 }
 
 /** What the probe actually tested — stale once any field changes. */
@@ -63,70 +61,6 @@ function fingerprintOf(
   })
 }
 
-export function parseEnvLines(text: string): Record<string, string> | null {
-  const env: Record<string, string> = {}
-  for (const line of text.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const eq = trimmed.indexOf('=')
-    if (eq <= 0) return null
-    env[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim()
-  }
-  return env
-}
-
-/** Minimal shape validation for an imported definition JSON. */
-export function parseCustomEntryJson(text: string): KunHarnessCustomEntryV1 | null {
-  let raw: unknown
-  try {
-    raw = JSON.parse(text)
-  } catch {
-    return null
-  }
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
-  const entry = raw as Record<string, unknown>
-  // A derived Agent may keep its base engine's command.
-  const base = typeof entry.extends === 'string' && AGENT_ID.test(entry.extends.trim()) ? entry.extends.trim() : undefined
-  if (
-    typeof entry.displayName !== 'string' ||
-    !entry.displayName.trim() ||
-    typeof entry.command !== 'string' ||
-    (!entry.command.trim() && !base)
-  ) {
-    return null
-  }
-  const env = typeof entry.env === 'object' && entry.env !== null && !Array.isArray(entry.env)
-    ? Object.fromEntries(
-        Object.entries(entry.env as Record<string, unknown>).filter(
-          ([k, v]) => ENV_NAME.test(k) && typeof v === 'string'
-        ) as [string, string][]
-      )
-    : {}
-  const secretEnv = Array.isArray(entry.secretEnv)
-    ? (entry.secretEnv as unknown[]).flatMap((row): KunHarnessSecretEnvEntryV1[] => {
-        if (typeof row !== 'object' || row === null) return []
-        const r = row as Record<string, unknown>
-        return typeof r.name === 'string' && ENV_NAME.test(r.name) &&
-          typeof r.secretRef === 'string' && r.secretRef.trim()
-          ? [{ name: r.name, secretRef: r.secretRef.trim() }]
-          : []
-      })
-    : []
-  return {
-    id: typeof entry.id === 'string' && AGENT_ID.test(entry.id.trim())
-      ? entry.id.trim()
-      : customAgentId(entry.displayName),
-    ...(base ? { extends: base } : {}),
-    displayName: entry.displayName.trim(),
-    command: entry.command.trim(),
-    args: Array.isArray(entry.args)
-      ? (entry.args as unknown[]).filter((a): a is string => typeof a === 'string')
-      : [],
-    env,
-    secretEnv
-  }
-}
-
 /**
  * "Add custom ACP agent" form (docs/ade/impl/p4 §3.7, P4-12): fields,
  * `secretEnv` credential-store bindings, test-before-save, and JSON
@@ -134,20 +68,33 @@ export function parseCustomEntryJson(text: string): KunHarnessCustomEntryV1 | nu
  * protocol behaviour and default arguments, another command). Persists under
  * agents.kun.harnesses.providers (docs/ade/17 §4.3).
  */
+export type CustomFormMode = 'free' | 'derive' | 'acp' | 'import'
+
 export function AgentCenterCustomForm({
   settings,
   updateKun,
   t,
+  tCommon,
+  mode = 'free',
   onSaved
 }: {
   settings: KunHarnessSettingsV1
   updateKun: (patch: { harnesses?: Partial<KunHarnessSettingsV1> }) => void
+  /** settings-ns translator (the acpForm* wording). */
   t: T
+  /** common-ns translator for the Agent Center wording; falls back to `t`. */
+  tCommon?: T
+  /**
+   * `derive` requires a base engine, `acp` has none, `import` starts from a
+   * file; `free` is the original form with an optional base.
+   */
+  mode?: CustomFormMode
   onSaved?: (id: string, probe: AdeHarnessProbeDefinitionResult | null) => void
 }): ReactElement {
+  const tc = tCommon ?? t
   const [initialDraft] = useState(readCustomDraft)
   const [draftId, setDraftId] = useState(initialDraft.id ?? '')
-  const [base, setBase] = useState(initialDraft.base ?? '')
+  const [base, setBase] = useState(mode === 'acp' ? '' : initialDraft.base ?? '')
   const [name, setName] = useState(initialDraft.name ?? '')
   const [command, setCommand] = useState(initialDraft.command ?? '')
   const [args, setArgs] = useState(initialDraft.args ?? '')
@@ -183,6 +130,10 @@ export function AgentCenterCustomForm({
 
   const baseRows = useHarnessStore((state) => state.rows).filter((row) => row.definition.builtin &&
     row.definition.transport === 'acp' && row.definition.availability !== 'retired' && row.definition.launch)
+  useEffect(() => {
+    // Deriving needs a base engine; start from the first one that can be derived.
+    if (mode === 'derive' && !base && baseRows[0]) setBase(baseRows[0].definition.id)
+  }, [mode, base, baseRows])
   const baseCommand = baseRows.find((row) => row.definition.id === base)?.definition.launch?.command ?? ''
   const displayName = name.trim()
   const effectiveId = draftId || customAgentId(displayName)
@@ -387,107 +338,148 @@ export function AgentCenterCustomForm({
   }
 
   const inputClass =
-    'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none'
+    'h-9 w-full min-w-0 rounded-xl border border-ds-border bg-ds-card px-3 text-[13px] text-ds-ink shadow-sm placeholder:text-ds-faint focus:border-accent focus:outline-none'
   const subButtonClass =
-    'inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-3 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-50'
+    'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-ds-border-muted px-3 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-50'
+  const labelClass = 'mb-1.5 block text-[12.5px] font-semibold text-ds-ink'
+  const hintClass = 'mt-1 text-[11px] leading-[1.45] text-ds-faint'
+  const showBase = mode === 'derive' ? baseRows.length > 0 : mode === 'acp' ? false : baseRows.length > 0
+  const secretNames = secretEnv.map((row) => row.name)
+  const preview = launchPreview({ command: launchCommand, args: argList, env: envRecord, secretNames })
 
   return (
-    <div className="space-y-2.5" data-agent-custom-form>
-      {baseRows.length ? (
-        <div data-agent-custom-base>
-          <AgentSettingsSelect label={t('adeSettings.acpFormBase')} value={base}
-            onChange={(value) => { setBase(value); invalidate() }}
-            options={[{ value: '', label: t('adeSettings.acpFormBaseGeneric') },
-              ...baseRows.map((row) => ({ value: row.definition.id, label: row.definition.displayName }))]} />
-          <div className="mt-1 text-[11px] text-ds-faint">{t('adeSettings.acpFormBaseHint')}</div>
+    <div className="space-y-4" data-agent-custom-form data-agent-custom-mode={mode}>
+      {mode === 'import' ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-ds-border px-3.5 py-3">
+          <p className="min-w-0 text-[12.5px] text-ds-muted">{tc('agentCenter.addDialog.importHint')}</p>
+          <button data-settings-action="secondary" data-settings-size="default" type="button" className={subButtonClass}
+            onClick={() => fileInput.current?.click()} data-agent-import-pick>
+            <Upload className="h-3.5 w-3.5" strokeWidth={1.8} />
+            {t('adeSettings.acpFormImport')}
+          </button>
         </div>
       ) : null}
-      <input className={inputClass} value={name} spellCheck={false}
-        placeholder={t('adeSettings.acpFormName')}
-        onChange={(e) => { setName(e.target.value); invalidate() }} />
-      <div className="flex items-center gap-2">
-        <input className={`${inputClass} font-mono text-[12px]`} value={command} spellCheck={false}
-          placeholder={base && baseCommand ? t('adeSettings.acpFormCommandOptional', { command: baseCommand }) : t('adeSettings.acpFormCommand')}
-          onChange={(e) => { setCommand(e.target.value); invalidate() }} />
-        <button data-settings-action="secondary" data-settings-size="default"
-          type="button"
-          className={subButtonClass}
-          onClick={() => {
-            void window.kunGui?.pickLocalFiles?.().then((picked) => {
-              const path = picked?.paths?.[0]
-              if (path) { setCommand(path); invalidate() }
-            })
-          }}
-        >
-          {t('adeSettings.acpFormPickCommand')}
-        </button>
+      {showBase ? (
+        <div data-agent-custom-base>
+          <span id="agent-custom-base-label" className={labelClass}>{tc('agentCenter.addDialog.base')}</span>
+          <AgentSettingsSelect label={t('adeSettings.acpFormBase')} value={base}
+            onChange={(value) => { setBase(value); invalidate() }}
+            options={[...(mode === 'derive' ? [] : [{ value: '', label: t('adeSettings.acpFormBaseGeneric') }]),
+              ...baseRows.map((row) => ({ value: row.definition.id, label: row.definition.displayName }))]} />
+          <div className={hintClass}>{t('adeSettings.acpFormBaseHint')}</div>
+        </div>
+      ) : null}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="agent-custom-name" className={labelClass}>{tc('agentCenter.addDialog.name')}</label>
+          <input id="agent-custom-name" className={inputClass} value={name} spellCheck={false}
+            placeholder={t('adeSettings.acpFormName')}
+            onChange={(e) => { setName(e.target.value); invalidate() }} />
+          <div className={hintClass}>{tc('agentCenter.addDialog.idHint', { id: effectiveId })}</div>
+        </div>
+        <div>
+          <label htmlFor="agent-custom-command" className={labelClass}>{tc('agentCenter.addDialog.command')}</label>
+          <div className="flex items-center gap-2">
+            <input id="agent-custom-command" className={`${inputClass} font-mono text-[12px]`} value={command} spellCheck={false}
+              placeholder={base && baseCommand ? t('adeSettings.acpFormCommandOptional', { command: baseCommand }) : t('adeSettings.acpFormCommand')}
+              onChange={(e) => { setCommand(e.target.value); invalidate() }} />
+            <button data-settings-action="secondary" data-settings-size="default"
+              type="button"
+              className={subButtonClass}
+              onClick={() => {
+                void window.kunGui?.pickLocalFiles?.().then((picked) => {
+                  const path = picked?.paths?.[0]
+                  if (path) { setCommand(path); invalidate() }
+                })
+              }}
+            >
+              {t('adeSettings.acpFormPickCommand')}
+            </button>
+          </div>
+          <div className={hintClass}>{tc(base ? 'agentCenter.addDialog.commandHintBase' : 'agentCenter.addDialog.commandHint')}</div>
+        </div>
       </div>
-      <input className={`${inputClass} font-mono text-[12px]`} value={args} spellCheck={false}
-        placeholder={t('adeSettings.acpFormArgs')}
-        onChange={(e) => { setArgs(e.target.value); invalidate() }} />
       <div>
-        <textarea className={`${inputClass} resize-none font-mono text-[12px]`} value={env}
+        <label htmlFor="agent-custom-args" className={labelClass}>{tc('agentCenter.addDialog.args')}</label>
+        <input id="agent-custom-args" className={`${inputClass} font-mono text-[12px]`} value={args} spellCheck={false}
+          placeholder={t('adeSettings.acpFormArgs')}
+          onChange={(e) => { setArgs(e.target.value); invalidate() }} />
+      </div>
+      <div>
+        <label htmlFor="agent-custom-env" className={labelClass}>{tc('agentCenter.addDialog.env')}</label>
+        <textarea id="agent-custom-env" className={`${inputClass} h-auto resize-none py-2 font-mono text-[12px]`} value={env}
           rows={2} spellCheck={false}
           placeholder={t('adeSettings.acpFormEnv')}
           onChange={(e) => { setEnv(e.target.value); invalidate() }} />
-        <div className="mt-1 text-[11px] text-ds-faint">{t('adeSettings.acpFormEnvNoSecrets')}</div>
+        <div className={hintClass}>{t('adeSettings.acpFormEnvNoSecrets')}</div>
       </div>
 
-      {secretEnv.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {secretEnv.map((row) => (
-            <span
-              key={row.name}
-              data-secret-env-chip={row.name}
-              className="inline-flex items-center gap-1.5 rounded-full border border-ds-border-muted px-2.5 py-1 text-[11px] font-mono text-ds-muted"
-            >
-              {row.name}
-              <button data-settings-action="danger-ghost" data-settings-size="icon"
-                type="button"
-                className="text-ds-faint transition hover:text-red-500"
-                aria-label={`Remove ${row.name}`}
-                onClick={() => unbindSecret(row)}
+      <div>
+        <span className={labelClass}>{tc('agentCenter.addDialog.secrets')}</span>
+        {secretEnv.length > 0 ? (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {secretEnv.map((row) => (
+              <span
+                key={row.name}
+                data-secret-env-chip={row.name}
+                className="inline-flex items-center gap-1.5 rounded-full border border-ds-border-muted px-2.5 py-1 text-[11px] font-mono text-ds-muted"
               >
-                ×
-              </button>
-            </span>
-          ))}
+                {row.name}
+                <button data-settings-action="danger-ghost" data-settings-size="icon"
+                  type="button"
+                  className="text-ds-faint transition hover:text-ds-ink"
+                  aria-label={`Remove ${row.name}`}
+                  onClick={() => unbindSecret(row)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
+        <div className="flex items-center gap-2">
+          <input
+            className={`${inputClass} max-w-[170px] font-mono text-[12px]`}
+            value={secretName}
+            spellCheck={false}
+            placeholder={t('adeSettings.acpFormSecretName')}
+            onChange={(e) => setSecretName(e.target.value.toUpperCase())}
+          />
+          <input
+            type="password"
+            className={`${inputClass} font-mono text-[12px]`}
+            value={secretValue}
+            spellCheck={false}
+            autoComplete="off"
+            placeholder={t('adeSettings.acpFormSecretValue')}
+            onChange={(e) => setSecretValue(e.target.value)}
+          />
+          <button aria-busy={binding} data-settings-action="secondary" data-settings-size="default"
+            type="button"
+            className={subButtonClass}
+            disabled={binding || !secretName.trim() || !secretValue}
+            onClick={() => void bindSecret()}
+          >
+            {t('adeSettings.acpFormSecretBind')}
+          </button>
+        </div>
+        <div className={hintClass}>{t('adeSettings.acpFormSecretHint')}</div>
+      </div>
+
+      {preview ? (
+        <div data-agent-custom-preview>
+          <span className={labelClass}>{tc('agentCenter.addDialog.preview')}</span>
+          <pre className="whitespace-pre-wrap break-all rounded-xl bg-ds-subtle px-3 py-2.5 font-mono text-[12px] leading-[1.6] text-ds-ink">{preview}</pre>
         </div>
       ) : null}
-      <div className="flex items-center gap-2">
-        <input
-          className={`${inputClass} max-w-[160px] font-mono text-[12px]`}
-          value={secretName}
-          spellCheck={false}
-          placeholder={t('adeSettings.acpFormSecretName')}
-          onChange={(e) => setSecretName(e.target.value.toUpperCase())}
-        />
-        <input
-          type="password"
-          className={`${inputClass} font-mono text-[12px]`}
-          value={secretValue}
-          spellCheck={false}
-          autoComplete="off"
-          placeholder={t('adeSettings.acpFormSecretValue')}
-          onChange={(e) => setSecretValue(e.target.value)}
-        />
-        <button aria-busy={binding} data-settings-action="secondary" data-settings-size="default"
-          type="button"
-          className={subButtonClass}
-          disabled={binding || !secretName.trim() || !secretValue}
-          onClick={() => void bindSecret()}
-        >
-          {t('adeSettings.acpFormSecretBind')}
-        </button>
-      </div>
-      <div className="text-[11px] text-ds-faint">{t('adeSettings.acpFormSecretHint')}</div>
 
       {probe && probeFresh ? (
         <div
-          className={`rounded-lg border px-3 py-2 text-[12px] ${
+          role="status"
+          className={`rounded-xl border px-3 py-2.5 text-[12.5px] ${
             probe.result.ok
-              ? 'border-emerald-200/80 bg-emerald-50/60 text-emerald-800 dark:border-emerald-800/40 dark:bg-emerald-500/10 dark:text-emerald-300'
-              : 'border-red-200/80 bg-red-50/80 text-red-700 dark:border-red-800/40 dark:bg-red-500/10 dark:text-red-300'
+              ? 'border-[color-mix(in_srgb,var(--ds-success)_35%,transparent)] bg-ds-success-soft text-ds-status-success'
+              : 'border-[color-mix(in_srgb,var(--ds-danger)_35%,transparent)] bg-ds-danger-soft text-ds-status-danger'
           }`}
           data-probe-result={probe.result.ok ? 'ok' : 'failed'}
         >
@@ -501,14 +493,25 @@ export function AgentCenterCustomForm({
                 detail: probe.result.detail ?? ''
               })}
         </div>
-      ) : null}
-      {probe && !probeFresh ? (
-        <div className="text-[11px] text-ds-faint">{t('adeSettings.acpFormProbeStale')}</div>
-      ) : null}
+      ) : probe ? (
+        <div className="text-[11.5px] text-ds-faint">{t('adeSettings.acpFormProbeStale')}</div>
+      ) : (
+        <div className="rounded-xl bg-ds-subtle px-3 py-2.5 text-[12.5px] text-ds-muted">{tc('agentCenter.addDialog.testFirst')}</div>
+      )}
 
-      {error ? <div className="text-[12px] text-red-600 dark:text-red-400">{error}</div> : null}
+      {error ? <div role="alert" className="text-[12px] text-ds-status-danger">{error}</div> : null}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <p className="text-[11.5px] text-ds-faint">{tc('agentCenter.addDialog.failureHint')}</p>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {probeFresh && probe && !probe.result.ok ? (
+          <button data-settings-action="secondary" data-settings-size="default"
+            type="button"
+            className={`${subButtonClass} mr-auto`}
+            onClick={() => setSaveAnyway(true)}
+          >
+            {t('adeSettings.acpFormSaveAnyway')}
+          </button>
+        ) : null}
         <button aria-busy={probing} data-settings-action="secondary" data-settings-size="default"
           type="button"
           className={subButtonClass}
@@ -521,28 +524,21 @@ export function AgentCenterCustomForm({
           type="button"
           onClick={save}
           disabled={!canSave}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-3 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-control px-4 text-[12.5px] font-medium text-control-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
           {t('adeSettings.acpFormAdd')}
         </button>
-        {probeFresh && probe && !probe.result.ok ? (
+        {mode === 'free' ? (
           <button data-settings-action="secondary" data-settings-size="default"
             type="button"
             className={subButtonClass}
-            onClick={() => setSaveAnyway(true)}
+            onClick={() => fileInput.current?.click()}
           >
-            {t('adeSettings.acpFormSaveAnyway')}
+            <Upload className="h-3.5 w-3.5" strokeWidth={1.8} />
+            {t('adeSettings.acpFormImport')}
           </button>
         ) : null}
-        <button data-settings-action="secondary" data-settings-size="default"
-          type="button"
-          className={subButtonClass}
-          onClick={() => fileInput.current?.click()}
-        >
-          <Upload className="h-3.5 w-3.5" strokeWidth={1.8} />
-          {t('adeSettings.acpFormImport')}
-        </button>
         <input
           ref={fileInput}
           type="file"
@@ -557,35 +553,4 @@ export function AgentCenterCustomForm({
       </div>
     </div>
   )
-}
-
-/**
- * Serialize a saved custom entry as the portable JSON definition (p4 §3.7).
- * `secretEnv` refs are machine-local credential-store ids — they export
- * verbatim so a same-profile re-import keeps working.
- */
-export function exportCustomEntryJson(entry: KunHarnessCustomEntryV1): string {
-  return `${JSON.stringify(
-    {
-      id: entry.id,
-      ...(entry.extends ? { extends: entry.extends } : {}),
-      displayName: entry.displayName,
-      command: entry.command,
-      args: entry.args,
-      env: entry.env,
-      secretEnv: entry.secretEnv ?? []
-    },
-    null,
-    2
-  )}\n`
-}
-
-/** Save-as-dialog export for one custom entry (reuses file:save-as). */
-export async function exportCustomEntry(entry: KunHarnessCustomEntryV1): Promise<void> {
-  const dataBase64 = window.btoa(unescape(encodeURIComponent(exportCustomEntryJson(entry))))
-  await window.kunGui?.saveWorkspaceFileAs?.({
-    suggestedName: `${entry.id}.json`,
-    dataBase64,
-    mimeType: 'application/json'
-  })
 }

@@ -6,7 +6,6 @@
       "attention": "{{count}} to fix"
     },
     "refreshAll": "Re-detect all Agents",
-    "add": "Add",
     "description": "Connect Codex, Claude Code, OpenCode and other Agents to your chats. Once connected and checked, they show up when you start a chat or add a group member.",
     "defaultAgent": "Default for new chats",
     "defaultAgentLabel": "Default Agent for new chats",
@@ -88,7 +87,8 @@
       "title": "Connection",
       "desc": "How {{name}} reaches its models. A change is checked before it replaces the saved connection.",
       "discard": "Discard changes",
-      "draftNote": "You changed the connection. It is checked first; the saved connection keeps working until the check passes."
+      "draftNote": "You changed the connection. It is checked first; the saved connection keeps working until the check passes.",
+      "manageProviders": "Manage model providers"
     },
     "modeDesc": {
       "nativeLogin": "Use the account the Agent itself is signed in with.",
@@ -194,7 +194,8 @@
       "check": "Check and turn on",
       "checkDesc": "Checks the command, sign-in and protocol handshake. It sends no prompt and uses no quota.",
       "checkHint": "You can also use the switch at the top right.",
-      "checkLocked": "Finish the install first."
+      "checkLocked": "Finish the install first.",
+      "terminalInstall": "Install in a terminal instead"
     },
     "source": {
       "derived": "Based on {{base}}"
@@ -207,6 +208,40 @@
       "launch": "Launch",
       "version": "Version",
       "updateAvailable": "New version available"
+    },
+    "add": "Add",
+    "addDialog": {
+      "steps": "Steps",
+      "step_choose": "Choose how",
+      "step_form": "Fill in and test",
+      "intro": "Codex, Claude Code, OpenCode and the other built-in Agents are already in the list. Pick one there to connect it. Add an Agent that is not in the list here.",
+      "kindLabel": "How to add the Agent",
+      "next": "Next",
+      "kind_derive": {
+        "title": "Based on a built-in Agent",
+        "desc": "Run a built-in engine with another command, arguments or environment, for example a company fork of OpenCode, or a second account for the same Agent."
+      },
+      "kind_acp": {
+        "title": "Any ACP Agent",
+        "desc": "Enter a command that speaks the Agent Client Protocol. Kun talks to it through the generic adapter."
+      },
+      "kind_import": {
+        "title": "Import a configuration file",
+        "desc": "Import a .json Agent definition exported from Kun. Sensitive values have to be entered again on this computer."
+      },
+      "importHint": "Choose the .json file to read. The form below is filled from it and still needs a test before it can be added.",
+      "base": "Based on",
+      "name": "Name",
+      "idHint": "ID: {{id}}",
+      "command": "Command",
+      "commandHint": "An executable name or a full path.",
+      "commandHintBase": "Leave empty to use the built-in engine's command.",
+      "args": "Extra arguments",
+      "env": "Environment variables",
+      "secrets": "Sensitive values",
+      "preview": "Will run",
+      "testFirst": "Test before adding: it checks that the command starts and completes the handshake. It sends no prompt.",
+      "failureHint": "If the test fails you can still add it and troubleshoot from its page."
     }
   }
 }
