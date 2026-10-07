@@ -1,0 +1,71 @@
+/* Shared paper-workspace hierarchy for the library and both search modes.
+ * Derive the dark surfaces from the configured Kun palette, without changing
+ * the global theme or the light-mode palette. */
+.surface {
+  --paper-surface-canvas: var(--ds-bg-main);
+  --paper-surface-rail: var(--ds-surface-card);
+  --paper-surface-composer: var(--ds-surface-elevated);
+  --paper-surface-control-border: var(--ds-border-strong);
+  --paper-surface-divider: var(--ds-border-muted);
+}
+
+:global([data-theme='dark']) .surface {
+  background: var(--paper-surface-canvas);
+  --paper-surface-canvas: color-mix(in srgb, var(--bg-app) 65%, var(--surface-1));
+  --paper-surface-rail: color-mix(in srgb, var(--bg-app) 30%, var(--surface-1));
+  --paper-surface-composer: color-mix(in srgb, var(--surface-2) 94%, white);
+  --paper-surface-control-border: color-mix(in srgb, var(--border-strong) 60%, white);
+  --paper-surface-divider: color-mix(in srgb, var(--border-strong) 70%, white);
+  --ds-text: color-mix(in srgb, var(--text-primary) 45%, white);
+  --ds-text-muted: color-mix(in srgb, var(--text-secondary) 88%, white);
+  --ds-text-faint: color-mix(in srgb, var(--text-tertiary) 88%, white);
+}
+
+:global([data-theme='dark']) .surface > header {
+  border-color: var(--paper-surface-divider);
+  background: var(--paper-surface-rail);
+}
+
+:global([data-theme='dark']) .surface :global(.ds-floating-composer .ds-composer-shell.ds-chat-composer) {
+  border-color: var(--paper-surface-control-border);
+  background: var(--paper-surface-composer);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 18%), 0 1px 0 rgb(255 255 255 / 4%) inset;
+}
+
+:global([data-theme='dark']) .surface :global(.ds-floating-composer .ds-composer-shell.ds-chat-composer):focus-within {
+  border-color: var(--ds-focus-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-focus-ring) 20%, transparent), 0 12px 32px rgb(0 0 0 / 18%);
+}
+
+:global([data-theme='dark']) .surface textarea::placeholder,
+:global([data-theme='dark']) .surface input::placeholder {
+  color: var(--ds-text-faint);
+  opacity: 1;
+}
+
+:global([data-theme='dark']) .surface :is([data-paper-scope-trigger], [data-paper-research-example], [data-paper-research-new]) {
+  border-color: var(--paper-surface-control-border);
+  background: var(--paper-surface-rail);
+  color: var(--ds-text-muted);
+}
+
+:global([data-theme='dark']) .surface :is([data-paper-scope-trigger], [data-paper-research-example], [data-paper-research-new]):hover {
+  background: var(--paper-surface-composer);
+  color: var(--ds-text);
+}
+
+:global([data-theme='dark']) .surface [data-paper-scope-menu] {
+  border-color: var(--paper-surface-control-border);
+  background: var(--paper-surface-composer);
+}
+
+:global([data-theme='dark']) .surface :is(select, input:not([type='checkbox']), [data-testid='paper-workspace-add']) {
+  border-color: var(--paper-surface-control-border);
+}
+
+.surface button:focus-visible,
+.surface select:focus-visible,
+.surface input:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}

@@ -184,6 +184,7 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <button
           type="button"
+          aria-pressed={railTab === 'history'}
           onClick={() => pickRailTab('history')}
           className={`min-w-0 truncate rounded-md px-2 py-1 text-[12px] transition ${
             railTab === 'history' ? 'bg-ds-subtle font-medium text-ds-ink' : 'text-ds-muted hover:text-ds-ink'
@@ -193,6 +194,7 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
         </button>
         <button
           type="button"
+          aria-pressed={railTab === 'pool'}
           onClick={() => pickRailTab('pool')}
           className={`min-w-0 truncate rounded-md px-2 py-1 text-[12px] transition ${
             railTab === 'pool' ? 'bg-ds-subtle font-medium text-ds-ink' : 'text-ds-muted hover:text-ds-ink'
@@ -209,7 +211,7 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
   )
 
   return (
-    <div ref={rootRef} className={layout.surface}>
+    <div ref={rootRef} data-paper-search="agent" className={layout.surface}>
       <header className="flex h-11 shrink-0 items-center gap-3 border-b border-ds-border-muted px-4">
         <PaperSearchTabs tab="agent" compact onChange={(tab) => tab === 'direct' && onShowDirect()} />
         <div className="flex min-w-0 flex-1 items-center gap-2">

@@ -245,7 +245,7 @@ export type WriteWorkspaceState = {
   setInlineCompletionEnabled: (enabled: boolean) => Promise<void>
   initializeWorkspace: (
     workspaceRoot: string,
-    options?: { force?: boolean }
+    options?: { force?: boolean; navigationPrepared?: boolean }
   ) => Promise<void>
   loadDirectory: (workspaceRoot: string, path?: string) => Promise<string | null>
   toggleDirectory: (workspaceRoot: string, path: string) => Promise<void>

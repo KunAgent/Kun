@@ -17,6 +17,7 @@ export async function openPaperUnit(input: {
 }): Promise<void> {
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(input.workspaceRoot)
+  if (normalizePath(store.workspaceRoot) !== root) return
   const unitAbs = input.unitDir.startsWith(root)
     ? normalizePath(input.unitDir)
     : writeJoinPath(root, input.unitDir)
@@ -30,6 +31,7 @@ export async function openPaperUnit(input: {
   const pdfPath = writeJoinPath(unitAbs, input.meta.pdfFile)
 
   await store.openFile(root, pdfPath, { groupId: 'primary' })
+  if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== root) return
   const layout = useWriteWorkspaceStore.getState().editorLayout
   if (layout.groups.length < 2) {
     store.splitEditorGroup('horizontal')
@@ -51,6 +53,7 @@ export async function openPaperInterpretation(input: {
 }): Promise<void> {
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(input.workspaceRoot)
+  if (normalizePath(store.workspaceRoot) !== root) return
   const target = input.path.startsWith(root)
     ? normalizePath(input.path)
     : writeJoinPath(root, input.path)

@@ -158,7 +158,7 @@ export function PaperAgentSessionRows({
     normalizePath(session.libraryRoot) === normalizePath(activeRoot)
   return (
     <>
-      <button type="button" onClick={onNew} className={layout.historyRow}>
+      <button type="button" data-paper-research-new onClick={onNew} className={layout.historyRow}>
         <span className={layout.historyTitle}>
           <Plus className="h-3 w-3" strokeWidth={2} />
           <span>{newLabel}</span>

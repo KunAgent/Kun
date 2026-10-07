@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from 'react'
 import { act, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PaperWorkspaceView } from '../PaperWorkspaceView'
+import { usePaperWorkspaceBootstrapStore } from '../../../paper/paper-workspace-bootstrap'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { usePaperReadingRequest } from '../../../paper/paper-reading-request'
 import { usePaperStore } from '../../../write/paper/paper-store'
@@ -23,6 +24,7 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('window', { kunGui: {} })
   usePaperReadingRequest.setState({ request: null })
+  usePaperWorkspaceBootstrapStore.setState({ status: 'idle', error: null })
   usePaperModeStore.setState({ entries: [], entriesLoading: true, composerBridge: null })
   usePaperStore.setState({ unitsByDir: { [entry.unitDir]: { ...entry.meta, version: 1, pdfFile: 'paper.pdf' } } })
   useWriteWorkspaceStore.setState({ workspaceRoot: '/library', activeFilePath: '/library/papers/a/paper.pdf',
@@ -52,8 +54,9 @@ describe('paper workspace composer bridge admission', () => {
 
   it('routes nested workspace quick-ask through the same bounded admission boundary', async () => {
     usePaperModeStore.setState({ entries: [entry], entriesLoading: false })
+    usePaperWorkspaceBootstrapStore.setState({ status: 'ready', error: null })
     const originalOpen = useWriteWorkspaceStore.getState().openPaperViewTab
-    useWriteWorkspaceStore.setState({ paperMode: { ...useWriteWorkspaceStore.getState().paperMode, libraries: ['/library'] },
+    useWriteWorkspaceStore.setState({ paperMode: { ...useWriteWorkspaceStore.getState().paperMode, libraries: ['/library'], activeLibrary: '/library' },
       openPaperViewTab: vi.fn() })
     const onSubmitPrompt = vi.fn()
     try {

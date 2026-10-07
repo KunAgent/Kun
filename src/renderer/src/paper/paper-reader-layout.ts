@@ -79,12 +79,14 @@ export async function applyPaperReaderLayout(
 ): Promise<void> {
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(unit.workspaceRoot)
-  if (!root) return
+  const isCurrent = (): boolean => normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) === root
+  if (!root || !isCurrent()) return
   // Flush unsaved edits before the layout churns tabs/groups.
-  await store.saveAllDocuments(root)
+  if (!(await store.saveAllDocuments(root)) || !isCurrent()) return
 
   if (preset === 'read') {
     await closeUnitNotesTab(root, unit.unitDir)
+    if (!isCurrent()) return
     closeEmptySecondaryGroup()
     store.setAssistantOpen(false)
     chrome?.setLeftSidebarCollapsed(true)
@@ -92,6 +94,7 @@ export async function applyPaperReaderLayout(
   }
   if (preset === 'assistant') {
     await closeUnitNotesTab(root, unit.unitDir)
+    if (!isCurrent()) return
     closeEmptySecondaryGroup()
     store.setAssistantOpen(true)
     return
@@ -104,6 +107,7 @@ export async function applyPaperReaderLayout(
       unitDir: unit.unitDir,
       meta: { pdfFile: unit.pdfFile }
     })
+    if (!isCurrent()) return
     useWriteWorkspaceStore.getState().setSplitRatio(NOTES_SPLIT_RATIO)
   } else {
     await store.openFile(
@@ -112,5 +116,5 @@ export async function applyPaperReaderLayout(
       { groupId: 'primary', viewMode: 'rich' }
     )
   }
-  useWriteWorkspaceStore.getState().setAssistantOpen(false)
+  if (isCurrent()) useWriteWorkspaceStore.getState().setAssistantOpen(false)
 }

@@ -94,7 +94,7 @@ export function invalidatePaperLibraryIndex(libraryRoot?: string): void {
     if (normalized) {
       invalidations[normalized] = (invalidations[normalized] ?? 0) + 1
     } else {
-      for (const root of Object.keys(invalidations)) {
+      for (const root of new Set([...Object.keys(invalidations), ...Object.keys(state.byRoot), ...inflight.keys()])) {
         invalidations[root] = (invalidations[root] ?? 0) + 1
       }
     }

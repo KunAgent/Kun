@@ -1,0 +1,87 @@
+name: Paper workspace native smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/paper-workspace-smoke.yml'
+      - 'scripts/*paper-workspace*'
+      - 'scripts/fixtures/paper-workspace*'
+      - 'src/shared/app-settings*'
+      - 'src/shared/paper/**'
+      - 'src/main/services/paper/**'
+      - 'src/main/ipc/*paper*'
+      - 'src/main/ipc/register-app-ipc-handlers.ts'
+      - 'src/main/ipc/app-ipc-schemas/settings-paper-mode.ts'
+      - 'src/preload/paper-api*'
+      - 'src/renderer/src/paper/**'
+      - 'src/renderer/src/components/paper/**'
+      - 'src/renderer/src/components/write/use-paper-surface-slots.tsx'
+      - 'src/renderer/src/write/write-workspace*'
+      - 'src/renderer/src/write/write-editor*'
+      - 'src/renderer/src/write/write-surface.ts'
+      - 'src/renderer/src/write/write-thread-registry*'
+      - 'src/renderer/src/locales/*/common/paper-workspace.json'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paper-workspace-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-paper-workspace:
+    name: Paper workspace on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      KUN_PAPER_WORKSPACE_EVIDENCE: dist/paper-workspace-smoke
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Check smoke harness coverage contract
+        run: node --test scripts/paper-workspace-smoke.test.mjs
+      - name: Verify real disk creation, settings persistence, IPC and renderer transitions
+        run: >-
+          npx vitest run --maxWorkers=1
+          src/main/services/paper/paper-workspace-service.test.ts
+          src/renderer/src/paper/paper-workspace-admission-races.test.ts
+          src/main/ipc/register-app-paper-workspace-ipc-handlers.test.ts
+          src/preload/paper-api.test.ts
+          src/shared/app-settings-paper-mode.test.ts
+          src/renderer/src/paper/paper-workspace-bootstrap.test.ts
+          src/renderer/src/write/write-workspace-settings-actions.test.ts
+          src/renderer/src/write/write-workspace-file-actions.test.ts
+          src/renderer/src/components/paper/PaperWorkspaceHeader.test.ts
+          src/renderer/src/components/paper/PaperWorkspaceSurface.test.ts
+          src/renderer/src/components/paper/PaperLibraryView.workspace.test.ts
+          src/renderer/src/components/paper/library/PaperLibraryEmptyState.test.ts
+          src/renderer/src/components/paper/sidebar/PaperWorkspacesSection.test.ts
+          src/renderer/src/components/paper/sidebar/PaperWorkspaceMenu.test.ts
+      - name: Verify supplemental DOM wiring (not native screenshot evidence)
+        run: node scripts/test-paper-workspace-fixture.mjs
+      - name: Ensure native Electron binary
+        run: npm run ensure:electron
+      - name: Exercise real production components in native Electron with offline IPC
+        run: node scripts/smoke-paper-workspace.mjs
+      - name: Upload labelled native screenshots and exact assertion report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-workspace-${{ matrix.os }}
+          path: dist/paper-workspace-smoke
+          if-no-files-found: warn
+          retention-days: 14

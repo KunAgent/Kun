@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState, type DragEvent, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
-  BookOpen,
   FolderInput,
   Loader2,
   Sparkles,
@@ -11,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { normalizePath } from '../../write/write-workspace-store-helpers'
 import { confirmDialog } from '../../lib/confirm-dialog'
-import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { emptyPaperLibraryFilter, usePaperModeStore } from '../../paper/paper-mode-store'
 import {
   filterPaperEntries,
   sortPaperEntries
@@ -29,6 +28,9 @@ import { PaperMetaEditDialog } from './library/PaperMetaEditDialog'
 import { PaperMoveGroupDialog } from './library/PaperMoveGroupDialog'
 import { PaperLibraryTable } from './library/PaperLibraryTable'
 import { PaperLibraryToolbar } from './library/PaperLibraryToolbar'
+import { PaperLibraryEmptyState } from './library/PaperLibraryEmptyState'
+import { PaperWorkspaceHeader } from './PaperWorkspaceHeader'
+import paperSurface from './PaperWorkspaceSurface.module.css'
 import { PaperMatrixWorkspace } from './evidence/PaperMatrixWorkspace'
 import type { PaperMultiTask } from '../../paper/paper-multi-prompt'
 import { usePaperReadingRequest } from '../../paper/paper-reading-request'
@@ -112,19 +114,27 @@ export function PaperLibraryView({
   const [moveUnits, setMoveUnits] = useState<string[] | null>(null)
   // R3.1: mark-density data for the per-row heat bar; fetched once per tab
   // visit (main process mtime-caches the per-unit aggregates).
+  const activityRequest = useRef(0)
+  const reloadRequest = useRef(0)
   const [activity, setActivity] = useState<Record<string, PaperUnitReadingActivity>>({})
 
   const loadActivity = async (): Promise<void> => {
     if (!workspaceRoot || typeof window.kunGui?.paperReadingActivity !== 'function') return
+    const request = ++activityRequest.current
     const result = await window.kunGui.paperReadingActivity({
       workspaceRoot,
       papersDir: paperReading.papersDir
     }).catch(() => null)
-    if (result?.ok) setActivity(result.activity)
+    if (result?.ok && request === activityRequest.current && workspaceRoot === useWriteWorkspaceStore.getState().workspaceRoot) setActivity(result.activity)
   }
 
   useEffect(() => {
+    setActivity({})
     void loadActivity()
+    return () => {
+      activityRequest.current += 1
+      reloadRequest.current += 1
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceRoot])
 
@@ -135,12 +145,15 @@ export function PaperLibraryView({
 
   const reload = async (): Promise<void> => {
     if (!workspaceRoot || typeof window.kunGui?.paperLibraryList !== 'function') return
+    const request = ++reloadRequest.current
+    const isCurrent = (): boolean => request === reloadRequest.current && workspaceRoot === useWriteWorkspaceStore.getState().workspaceRoot
     setEntriesLoading(true)
     try {
       const result = await window.kunGui.paperLibraryList({
         workspaceRoot,
         papersDir: paperReading.papersDir
       })
+      if (!isCurrent()) return
       if (result.ok) {
         setEntriesResult({
           entries: result.entries,
@@ -153,6 +166,7 @@ export function PaperLibraryView({
         setEntriesError(result.message)
       }
     } catch (error) {
+      if (!isCurrent()) return
       setEntriesError(error instanceof Error ? error.message : String(error))
     }
   }
@@ -311,11 +325,12 @@ export function PaperLibraryView({
 
   return (
     <div
-      className={`flex min-h-0 min-w-0 flex-1 flex-col ${dropActive ? 'bg-accent-tint/[0.04]' : ''}`}
+      className={`${paperSurface.surface} flex min-h-0 min-w-0 flex-1 flex-col ${dropActive ? 'bg-accent-tint/[0.04]' : ''}`}
       onDragOver={(event) => { event.preventDefault(); setDropActive(true) }}
       onDragLeave={() => setDropActive(false)}
       onDrop={onDrop}
     >
+      <PaperWorkspaceHeader />
       <PaperLibraryToolbar
         filter={filter}
         counts={counts}
@@ -402,7 +417,7 @@ export function PaperLibraryView({
       ) : null}
 
       {entriesError ? (
-        <div className="mx-4 mt-3 rounded-lg border border-red-200/70 bg-red-50/80 px-3 py-2 text-[12px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+        <div role="alert" className="mx-4 mt-3 break-words rounded-lg border border-red-200/70 bg-red-50/80 px-3 py-2 text-[12px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
           {entriesError}
         </div>
       ) : null}
@@ -414,21 +429,20 @@ export function PaperLibraryView({
             <span className="text-[13px]">{t('loading')}</span>
           </div>
         ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
-            <BookOpen className="h-8 w-8 text-ds-faint" strokeWidth={1.4} />
-            <p className="text-[13px] text-ds-muted">
-              {entries.length ? t('writePaperLibraryNoMatch') : t('writePaperLibraryEmpty')}
-            </p>
-            {entries.length ? null : (
-              <button
-                type="button"
-                onClick={() => setImportDialogOpen(true)}
-                className="mt-1 inline-flex h-8 items-center rounded-md bg-[var(--ds-control)] px-4 text-[12.5px] font-medium text-[var(--ds-control-foreground)] transition hover:opacity-90"
-              >
-                {t('writePaperImport')}
+          entriesError ? (
+            <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+              <p className="max-w-md text-[13px] leading-6 text-ds-muted">{t('paperWorkspaceUnavailableHint')}</p>
+              <button type="button" onClick={() => void reload()} className="rounded-lg border border-ds-border-muted px-4 py-2 text-[12px] text-ds-ink hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+                {t('paperWorkspaceRetry')}
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <PaperLibraryEmptyState
+              filtered={entries.length > 0}
+              onImport={() => setImportDialogOpen(true)}
+              onClearFilters={() => setFilter(emptyPaperLibraryFilter())}
+            />
+          )
         ) : (
           <PaperLibraryTable
             rows={visible}
