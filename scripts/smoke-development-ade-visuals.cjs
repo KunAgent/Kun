@@ -44,8 +44,7 @@ async function runUnifiedCodeVisuals({ page, capture, poll, runtimeRequest, resi
   await taskDrawer.getByRole('button', { name: /^(Close|关闭)$/u }).click()
 
   await page.locator('[data-workbench-left-sidebar]').getByRole('button', { name: /Settings|设置/u }).click()
-  await page.locator('[data-settings-category="agents"]').click()
-  await page.locator('#agents-settings-tab-harnesses').click()
+  await page.locator('[data-settings-category="harnesses"]').click()
   const harnessPanel = page.locator('#agents-settings-panel-harnesses')
   await harnessPanel.locator('[data-agent-list-id="claude-code"]').click()
   await harnessPanel.locator('[data-agent-card="claude-code"]').waitFor()
@@ -55,11 +54,11 @@ async function runUnifiedCodeVisuals({ page, capture, poll, runtimeRequest, resi
   await devinCard.locator('[data-agent-icon="devin"]').waitFor()
   await devinCard.getByRole('button', { name: /^(Log in|Sign in|登录)$/u }).waitFor()
   await capture('visual-devin-settings-960')
-  await page.locator('#agents-settings-tab-collaboration').click()
+  await page.locator('[data-settings-category="collaboration"]').click()
   const collaboration = page.locator('#agents-settings-panel-collaboration')
   await poll(() => collaboration.getByRole('spinbutton').first().isEnabled(), 20_000, 'collaboration settings loaded')
   await capture('visual-collaboration-settings-960')
-  await page.locator('#agents-settings-tab-project').click()
+  await page.locator('[data-settings-category="projects"]').click()
   await page.locator('#agents-settings-panel-project').getByRole('checkbox').first().waitFor()
   await capture('visual-project-settings-960')
   return [

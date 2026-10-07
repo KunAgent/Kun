@@ -17,25 +17,19 @@ import {
   compactList,
   statusPill
 } from './settings-section-agents-utils'
+import { AgentsServiceSettingsCard } from './settings-section-agents-assistant'
 
 export function AgentsRuntimeSettingsPanel({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, selectControlClass, compactHomePath, expandHomePath, runtimeInfo, toolDiagnostics, memoryRecords, runtimeDiagnosticsBusy, runtimeDiagnosticsNotice, refreshKunDiagnostics, disableMemoryRecord, restoreMemoryRecord, deleteMemoryRecord, activePanel, storage, contextCompaction, modelContext, runtimeTuning, toolOutputLimits, tokenEconomy, updateTokenEconomy, updateHistoryHygiene, updateStorage, updateContextCompaction, updateRuntimeTuning, updateToolOutputLimits, updateToolStorm, updateToolArgumentRepair, provider } = view
+  const { t, selectControlClass, compactHomePath, expandHomePath, runtimeInfo, toolDiagnostics, memoryRecords, runtimeDiagnosticsBusy, runtimeDiagnosticsNotice, refreshKunDiagnostics, disableMemoryRecord, restoreMemoryRecord, deleteMemoryRecord, storage, contextCompaction, modelContext, runtimeTuning, toolOutputLimits, tokenEconomy, updateTokenEconomy, updateHistoryHygiene, updateStorage, updateContextCompaction, updateRuntimeTuning, updateToolOutputLimits, updateToolStorm, updateToolArgumentRepair, provider } = view
   return (
     <>
               <div
                 id="agents-settings-panel-runtime"
-                role="tabpanel"
-                aria-labelledby="agents-settings-tab-runtime"
-                className={activePanel === 'runtime' ? 'grid items-start gap-4 xl:grid-cols-2' : 'hidden'}
+                className="ds-settings-panel-stack"
               >
+              <AgentsServiceSettingsCard view={view} />
               <div>
-                <SettingsCard title={t('kunAdvanced')}>
-                  <div className="px-3 py-4">
-                    <AdvancedSettingsDisclosure
-                      title={t('kunAdvancedDetails')}
-                      description={t('kunAdvancedDetailsDesc')}
-                    >
-                      <div className="divide-y divide-ds-border-muted">
+                <SettingsCard title={t('settingsIaRuntimeTuningCard')} description={t('kunAdvancedDetailsDesc')}>
                   <SettingRow
                     title={t('kunTokenEconomyOptions')}
                     description={t('kunTokenEconomyOptionsDesc')}
@@ -408,9 +402,6 @@ export function AgentsRuntimeSettingsPanel({ view }: { view: Record<string, any>
                       />
                     }
                   />
-                      </div>
-                    </AdvancedSettingsDisclosure>
-                  </div>
                 </SettingsCard>
               </div>
 

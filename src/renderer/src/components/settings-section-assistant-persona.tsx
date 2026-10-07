@@ -1,7 +1,7 @@
 import type { CodeAgentPresetV1 } from '@shared/app-settings'
 import type { ReactElement } from 'react'
 import { CodeAgentPresetsEditor } from './settings-code-agent-presets'
-import { SettingRow, SettingsCard, Toggle } from './settings-controls'
+import { SettingRow, SettingsCard, SettingsReveal, Toggle } from './settings-controls'
 
 type Translate = (key: string) => string
 
@@ -31,7 +31,7 @@ export function ComposerPersonaSettingsPanel({
             />
           }
         />
-        {enabled ? (
+        <SettingsReveal open={enabled}>
           <SettingRow
             title={t('codeAgentPresets')}
             description={t('codeAgentPresetsDesc')}
@@ -43,7 +43,7 @@ export function ComposerPersonaSettingsPanel({
               />
             }
           />
-        ) : null}
+        </SettingsReveal>
       </SettingsCard>
     </div>
   )

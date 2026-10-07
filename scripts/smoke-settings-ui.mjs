@@ -113,7 +113,7 @@ app.on('window-all-closed', () => app.quit())
   const categories = await page.locator('[data-settings-category]').evaluateAll(elements =>
     elements.map(element => element.getAttribute('data-settings-category')))
   report.categories = categories
-  assert.equal(new Set(categories).size, nativePlatform === 'win32' ? 22 : 21,
+  assert.equal(new Set(categories).size, nativePlatform === 'win32' ? 33 : 32,
     'Every destination, including fixture extension settings and Windows-only storage, must be present')
   assert(!categories.includes('integrations'), 'Retired integrations must not appear in settings navigation')
   const sizes = [{ name: 'wide', width: 1440, height: 1000 }, { name: 'small', width: 900, height: 720 }]
@@ -237,12 +237,12 @@ async function capture(category, panel, config) {
   // Top-of-panel images cannot show nested routes or switches below the fold.
   // Preserve an additional unchanged native frame at each requested detail.
   const detailKind = category === 'general' && panel === 'landing' ? 'general-switch'
-    : category === 'providers' && /provider-workspace-tab-routes|model-routes-settings-tab-/.test(panel)
+    : category === 'gateway' && /model-routes-settings-tab-/.test(panel)
       ? 'model-route-tabs' : null
   const detailKinds = detailKind ? [detailKind] : []
   // The baseline predates Connection Center. Capture its real, visible controls
   // when present, without fabricating credentials, aliases or provider readiness.
-  if (category === 'providers' && await page.locator('[data-gateway-connection-controls]:visible').count()) {
+  if (category === 'gateway' && await page.locator('[data-gateway-connection-controls]:visible').count()) {
     detailKinds.push('gateway-connection-controls')
   }
   for (const detailKind of detailKinds) {

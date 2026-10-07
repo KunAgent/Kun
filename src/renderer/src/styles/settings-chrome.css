@@ -309,6 +309,34 @@
   font-weight: 500;
 }
 
+/* The sliding selection: one highlight that travels between rows (SettingsSidebar). */
+.ds-settings-nav {
+  position: relative;
+}
+
+.ds-settings-nav-indicator {
+  position: absolute;
+  top: 0;
+  right: 0.625rem;
+  left: 0.625rem;
+  border-radius: 0.6875rem;
+  background: var(--st-row-active-bg);
+  box-shadow: inset 0 0 0 1px var(--st-row-active-ring), 0 1px 2px rgb(16 24 40 / 0.04);
+  pointer-events: none;
+}
+
+.ds-settings-nav-indicator[data-animate='true'] {
+  transition:
+    transform var(--st-med) var(--st-ease),
+    height var(--st-med) var(--st-ease);
+}
+
+.ds-settings-nav[data-indicator='true'] .ds-settings-nav-item[aria-current='page'],
+.ds-settings-nav[data-indicator='true'] .ds-settings-nav-item[aria-current='page']:hover {
+  background: transparent;
+  box-shadow: none;
+}
+
 .ds-settings-nav[data-searching='true'] .ds-settings-nav-item {
   animation: ds-settings-fade-up var(--st-med) var(--st-ease) both;
 }

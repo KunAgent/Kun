@@ -229,26 +229,46 @@ not change the runtime contract, only which renderer and local workflow state th
 Settings is one `SettingsView` with a searchable sidebar and lazily loaded pages.
 Keep new pages inside this system instead of styling them from scratch:
 
+- **Information architecture** — one page per topic, in seven groups:
+  General (general, appearance, notifications, shortcuts, Kun avatar), Models
+  (providers, local gateway, voice input, media generation), Kun Agent
+  (assistant, permissions, skills, MCP tools, memory, subagents, project
+  config), Collaborate & connect (third-party Agents, collaboration, phone,
+  extensions), Workspaces (code, terminal, Work, papers, design), Data
+  (archives, migration, Windows storage) and System (labs, advanced runtime,
+  diagnostics, updates, uninstall). A page has at most four tabs and never
+  nests a second tab row; a topic that is only a switch or two is a card, not a
+  tab. Labs is a list of switchable feature cards, not a tab per feature.
 - **Navigation model** — `settings-navigation.ts` owns categories, groups,
-  platform/extension guards, the decorative `tone` of every icon tile, and the
-  sidebar search matcher (short label, full label, group, and description).
+  platform/extension guards, the decorative `tone` of every icon tile, the
+  sidebar search matcher (short label, full label, group, description, and the
+  translated names of the settings a page holds via `searchKeys`), and
+  `settingsCategoryForRouteSection`, which maps every deep link (including old
+  ones such as `agentsHarnesses`, `skill`, `worktree`) to the page that owns it.
+  The Kun Agent pages share `AgentsSettingsSection`, one panel per page
+  (`AGENT_SETTINGS_PANELS`).
 - **Icon tiles** — `SettingsIconTile` draws a soft tinted tile in the sidebar
   (solid when selected) and a large tile in the page header. Tones resolve to
   theme tokens (`--ds-accent`, `--ds-success`, `--ds-warning`, `--ds-danger`,
   `--ds-skill`, and mixes of them), so plugin and dark themes stay coherent.
 - **Shared controls** — `settings-controls.tsx` (cards, rows, segmented tabs with
-  a sliding indicator, switches, notices, disclosures) and
-  `settings-button.ts`. Pages with more than four primary tabs pass
-  `contentSized` so labels wrap instead of truncating.
+  a sliding indicator, switches, notices, disclosures), `SettingsReveal`
+  (settings that only matter while another is on ease open and stay inert while
+  closed), `SettingsFeatureCard` (a switchable capability whose settings slide
+  open), and `settings-button.ts`.
 - **Styles** — `settings-layout.css` (geometry and responsive layout),
   `settings-chrome.css` (motion tokens, sidebar, header, status, toasts,
   skeleton), `settings-controls.css` (surfaces, states, fields),
-  `settings-pages.css` (page-specific lists), and `settings-buttons.css`.
+  `settings-pages.css` (page-specific lists), `settings-features.css`
+  (reveals, feature cards, theme and permission pickers, arrival ring), and
+  `settings-buttons.css`.
   Everything is scoped to `.ds-settings-surface` and uses theme tokens only.
 - **Motion** — micro (140 ms), standard (220 ms), and slow (320 ms) durations
   with an ease-out curve; springs only for thumbs, chevrons, and pop-ins. Page,
   tab-panel, and disclosure entrances are opacity-only so controls never move
-  under measurement, and every animation is disabled under reduced motion.
+  under measurement, and every animation is disabled under reduced motion. The
+  sidebar selection is one highlight that slides between rows, and a deep link
+  rings the page's leading card for 1.4 s (`useSettingsArrivalFlash`).
 - **Loading** — `lazySection` preloads a page's chunk on sidebar hover, focus,
   or search match, so opening it does not flash the skeleton.
 
@@ -468,7 +488,7 @@ Manual smoke (full list in `docs/AGENTS.md`):
   selected-text agent.
 - Connect phone: save settings, run a manual task through a Kun
   thread.
-- Settings → Agents: shows only Kun.
+- Settings → Kun Agent pages: show only Kun.
 - Cache telemetry on a hot thread should stay ≥ 90% hit.
 
 If any check fails, the change is not ready.

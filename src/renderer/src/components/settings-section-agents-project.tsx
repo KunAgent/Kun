@@ -33,8 +33,6 @@ export function AgentsProjectSettingsPanel({ view }: { view: Record<string, any>
     <>
               <div
                 id="agents-settings-panel-project"
-                role="tabpanel"
-                aria-labelledby="agents-settings-tab-project"
                 className={activePanel === 'project' ? '' : 'hidden'}
               >
                 <AdeProjectDefaultsPanel

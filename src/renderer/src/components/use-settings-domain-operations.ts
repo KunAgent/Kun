@@ -1,3 +1,4 @@
+import { isAgentSettingsCategory } from './settings-navigation'
 import {
   type AppSettingsPatch
 } from '@shared/app-settings'
@@ -62,7 +63,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }, [])
 
   useEffect(() => {
-    if (category !== 'agents') return
+    if (category !== 'skills') return
     void refreshSkillRoots()
   }, [category, refreshSkillRoots])
 
@@ -87,7 +88,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }
 
   useEffect(() => {
-    if (category !== 'agents' || mcpLoaded || mcpLoading) return
+    if (category !== 'mcp' || mcpLoaded || mcpLoading) return
     void loadMcpConfig()
   }, [category, mcpLoaded, mcpLoading])
 
@@ -173,7 +174,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }, [activeProjectWorkspaceRoot])
 
   useEffect(() => {
-    if (category !== 'agents') return
+    if (category !== 'projects') return
     void loadProjectConfig()
   }, [category, loadProjectConfig, projectConfigGrantFingerprint])
 
@@ -285,7 +286,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }, [activeProjectWorkspaceRoot])
 
   useEffect(() => {
-    if (category !== 'agents' && category !== 'laboratory' && category !== 'memory') return
+    if (!isAgentSettingsCategory(category) && category !== 'laboratory' && category !== 'memory') return
     void refreshKunDiagnostics()
   }, [category, refreshKunDiagnostics])
 

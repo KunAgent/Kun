@@ -3,6 +3,7 @@ import { type ReactElement } from 'react'
 import { defaultTerminalColors, type TerminalColorSettingsV1 } from '@shared/app-settings'
 import { SettingsCard, SettingRow } from './settings-controls'
 import { SshServersCard } from './remote-ssh/SshServersCard'
+import { CliCommandSettingsCard } from './settings-section-general-desktop'
 
 type ColorField = {
   key: keyof TerminalColorSettingsV1
@@ -160,6 +161,7 @@ export function TerminalSettingsSection({ ctx }: { ctx: Record<string, any> }): 
         </>
       )}
       </SettingsCard>
+      <CliCommandSettingsCard locale={form.locale} />
     </div>
   )
 }

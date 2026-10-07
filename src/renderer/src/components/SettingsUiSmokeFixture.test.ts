@@ -29,7 +29,7 @@ it('renders all real SettingsView destinations and every discovered nested tab o
   await waitUntil(() => !!document.querySelector('[data-settings-category-view="general"]'))
   const categories = [...document.querySelectorAll<HTMLButtonElement>('[data-settings-category]')]
     .map(element => element.dataset.settingsCategory!)
-  expect(new Set(categories).size).toBe(22)
+  expect(new Set(categories).size).toBe(33)
   expect(categories).not.toContain('integrations')
   const panels: string[] = []
   const discovered = new Set<string>()
@@ -61,7 +61,8 @@ it('renders all real SettingsView destinations and every discovered nested tab o
       expect(iteration).toBeLessThan(119)
     }
   }
-  expect(panels.length).toBeGreaterThan(30)
+  // Topics are pages now, not tabs, so a page walk visits fewer tab panels than before.
+  expect(panels.length).toBeGreaterThan(24)
   const fixture = (window as unknown as { settingsFixture: {
     label(key: string, fallback?: string): string
     host: ReturnType<typeof import('./SettingsUiSmokeHost').installSettingsSmokeHost>

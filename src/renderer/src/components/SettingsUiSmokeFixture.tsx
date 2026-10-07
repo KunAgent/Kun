@@ -18,6 +18,7 @@ import '../styles/settings-layout.css'
 import '../styles/settings-chrome.css'
 import '../styles/settings-controls.css'
 import '../styles/settings-pages.css'
+import '../styles/settings-features.css'
 import '../styles/neutral-polish.css'
 import '../styles/provider-quota-panel.css'
 

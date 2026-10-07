@@ -27,8 +27,6 @@ export function AgentsHarnessesSettingsPanel({ view }: { view: Record<string, an
   return (
     <div
       id="agents-settings-panel-harnesses"
-      role="tabpanel"
-      aria-labelledby="agents-settings-tab-harnesses"
       className={activePanel === 'harnesses' ? '' : 'hidden'}
     >
       {activePanel === 'harnesses' ? <AgentCenter

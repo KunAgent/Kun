@@ -85,7 +85,6 @@ export const VIDEO_GENERATION_PROTOCOL_LABEL_KEYS: Record<VideoGenerationProtoco
 }
 
 export type ProviderTaskTab = 'connection' | 'models' | 'capabilities' | 'reliability' | 'advanced'
-export type ProviderWorkspaceMode = 'providers' | 'routes'
 export type ProviderCapability = 'image' | 'speech' | 'tts' | 'music' | 'video'
 export type SubscriptionRegionFilter = 'all' | ModelProviderSubscriptionRegion
 

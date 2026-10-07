@@ -257,13 +257,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         }
       })
 
-      const workspacePanels = renderer.root.findAllByProps({ role: 'tabpanel' })
-        .filter((panel) => String(panel.props.id ?? '').startsWith('provider-workspace-panel-'))
-      expect(workspacePanels.map((panel) => panel.props.id)).toEqual([
-        'provider-workspace-panel-providers',
-        'provider-workspace-panel-routes'
-      ])
-      expect(workspacePanels.map((panel) => panel.props.hidden)).toEqual([false, true])
+      // The local gateway is its own settings page; providers keep one workspace.
+      expect(renderer.root.findAllByProps({ id: 'provider-workspace-panel-providers' })).toHaveLength(1)
+      expect(renderer.root.findAllByProps({ id: 'provider-workspace-panel-routes' })).toHaveLength(0)
 
       const tabs = renderer.root
         .findAllByProps({ role: 'tab' })

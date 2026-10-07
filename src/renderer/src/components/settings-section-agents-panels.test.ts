@@ -23,13 +23,20 @@ import {
 } from './settings-section-agents.test-support'
 import { defaultKunLabSettings } from '@shared/app-settings'
 
+/** Every Kun Agent settings page as one string; each panel is its own settings page now. */
+function allAgentPanels(ctx: Record<string, unknown>): string {
+  return (['assistant', 'permissions', 'skills', 'tools', 'project', 'runtime'] as const)
+    .map((panel) => renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx, panel })))
+    .join('\n')
+}
+
 
 describe('AgentsSettingsSection Kun diagnostics smoke', () => {
   it('keeps advanced agent controls behind collapsed disclosures', () => {
-    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx: baseCtx() }))
+    const html = allAgentPanels(baseCtx())
 
-    expect(html).toContain('Assistant advanced settings')
-    expect(html).toContain('Storage, model context, and tool guards')
+    expect(html).toContain('settingsIaServiceCard')
+    expect(html).toContain('settingsIaRuntimeTuningCard')
     expect(html).toContain('Maximum concurrent turns')
     expect(html).toContain('value="256"')
     expect(html).toContain('Maximum turn duration')
@@ -40,15 +47,14 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
   })
 
   it('does not render image generation settings inside the agent section', () => {
-    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx: baseCtx() }))
+    const html = allAgentPanels(baseCtx())
 
     expect(html).not.toContain('imageGen')
   })
 
   it('renders exactly three unified permission controls with full access as the default', () => {
-    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx: baseCtx() }))
+    const html = allAgentPanels(baseCtx())
 
-    expect(html).toContain('Permissions')
     expect(html).toContain('Choose who reviews approval-worthy actions or grant full access')
     expect(html).toContain('Tool permission mode')
     expect(html).toContain('role="radiogroup"')
@@ -71,6 +77,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     let renderer!: ReactTestRenderer
     act(() => {
       renderer = createRenderer(createElement(AgentsSettingsSection, {
+        panel: 'permissions',
         ctx: {
           ...baseCtx(),
           kun: {
@@ -103,47 +110,19 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     })
   })
 
-  it('keeps permissions in the assistant and experimental features in a standalone laboratory', () => {
+  it('gives permissions their own page and lists experimental features without tabs', () => {
     let renderer!: ReactTestRenderer
     act(() => {
       renderer = createRenderer(createElement(AgentsSettingsSection, {
-        ctx: {
-          ...baseCtx(),
-          settingsSection: 'permissions'
-        }
+        ctx: baseCtx(),
+        panel: 'permissions'
       }))
     })
 
-    const primaryPermissionsPanel = renderer.root.findByProps({
-      id: 'agents-settings-panel-permissions'
-    })
-    expect(renderer.root.findByProps({
-      id: 'agents-settings-tab-permissions'
-    }).props['aria-selected']).toBe(true)
-    expect(primaryPermissionsPanel.props.className).not.toContain('hidden')
-
-    const secondaryTabs = renderer.root
-      .findAllByProps({ role: 'tab' })
-      .filter((tab) => String(tab.props.id ?? '').startsWith('agents-permissions-tab-'))
-    expect(secondaryTabs.map(instanceText)).toEqual([
-      'Tool permission mode',
-      'Design quality'
-    ])
-    expect(secondaryTabs.map((tab) => tab.props['aria-selected']))
-      .toEqual([true, false])
-    expect(secondaryTabs.map((tab) => tab.props['aria-controls'])).toEqual([
-      'agents-permissions-panel-policy',
-      'agents-permissions-panel-quality'
-    ])
-
-    const secondaryPanels = renderer.root
-      .findAllByProps({ role: 'tabpanel' })
-      .filter((panel) => String(panel.props.id ?? '').startsWith('agents-permissions-panel-'))
-    expect(secondaryPanels).toHaveLength(2)
-    expect(secondaryPanels.map((panel) => panel.props.hidden))
-      .toEqual([false, true])
-    expect(secondaryPanels[0].findAllByProps({ role: 'radiogroup' })).toHaveLength(1)
-    expect(renderer.root.findAllByProps({ id: 'agents-settings-tab-laboratory' })).toHaveLength(0)
+    const permissionsPage = renderer.root.findByProps({ id: 'agents-settings-panel-permissions' })
+    expect(renderer.root.findAllByProps({ role: 'tab' })).toHaveLength(0)
+    expect(permissionsPage.findAllByProps({ role: 'radiogroup' })).toHaveLength(1)
+    expect(instanceText(permissionsPage)).toContain('Design quality')
 
     act(() => {
       renderer = createRenderer(createElement(LaboratorySettingsSection, {
@@ -155,46 +134,27 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       }))
     })
 
-    const laboratoryTabs = renderer.root
-      .findAllByProps({ role: 'tab' })
-      .filter((tab) => String(tab.props.id ?? '').startsWith('laboratory-settings-tab-'))
-    expect(laboratoryTabs.map(instanceText)).toEqual([
+    expect(renderer.root.findAllByProps({ role: 'tab' })).toHaveLength(0)
+    const groups = renderer.root.findAll((node) =>
+      node.type === 'section' && node.props.className === 'ds-settings-feature-group')
+    expect(groups.map((group) => group.props['aria-label'])).toEqual([
+      'settingsIaLabsGroupConversation',
+      'settingsIaLabsGroupAutomation',
+      'settingsIaLabsGroupControl'
+    ])
+    const features = renderer.root.findAll((node) =>
+      node.type === 'section' && node.props.className === 'ds-settings-feature')
+    expect(features.map((feature) => feature.props['aria-label'])).toEqual([
       'Context compression',
       'Session display optimization',
+      'Codex history branches',
       'Automatic plan and build',
-      'Computer control',
-      'Browser',
       'Graph mode',
       'PPT agent',
-      'Codex history branches',
-      'Project board', 'adeSettings.labTitle'
+      'Project board',
+      'Computer control',
+      'Browser'
     ])
-    expect(laboratoryTabs.map((tab) => tab.props['aria-selected']))
-      .toEqual([true, false, false, false, false, false, false, false, false, false])
-    expect(laboratoryTabs.map((tab) => tab.props['aria-controls'])).toEqual([
-      'laboratory-settings-panel-contextWindow',
-      'laboratory-settings-panel-visualization',
-      'laboratory-settings-panel-autoPlanBuild',
-      'laboratory-settings-panel-computer',
-      'laboratory-settings-panel-browser',
-      'laboratory-settings-panel-graph',
-      'laboratory-settings-panel-ppt',
-      'laboratory-settings-panel-codexReferenceBranches',
-      'laboratory-settings-panel-projectBoard', 'laboratory-settings-panel-ade'
-    ])
-    expect(laboratoryTabs.every((tab) => tab.props.className.includes('min-w-max'))).toBe(true)
-    expect(laboratoryTabs.flatMap((tab) => tab.findAllByType('span'))
-      .every((label) => !label.props.className.includes('truncate'))).toBe(true)
-
-    const laboratoryPanels = renderer.root
-      .findAllByProps({ role: 'tabpanel' })
-      .filter((panel) => String(panel.props.id ?? '').startsWith('laboratory-settings-panel-'))
-    expect(laboratoryPanels).toHaveLength(10)
-    expect(laboratoryPanels.map((panel) => panel.props.hidden))
-      .toEqual([true, false, true, true, true, true, true, true, true, true])
-    expect(renderer.root.findAllByProps({
-      id: 'laboratory-settings-panel-persona'
-    })).toHaveLength(0)
   })
 
   it('passes the runtime Browser Use capability into its settings panel', () => {
@@ -217,15 +177,13 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       }))
     })
 
-    const browserTab = renderer.root.findByProps({ id: 'laboratory-settings-tab-browser' })
-    act(() => browserTab.props.onClick())
-    const browserPanel = renderer.root.findByProps({ id: 'laboratory-settings-panel-browser' })
-    expect(instanceText(browserPanel)).toContain(
+    const browserFeature = renderer.root.findByProps({ className: 'ds-settings-feature', 'aria-label': 'Browser' })
+    expect(instanceText(browserFeature)).toContain(
       'browserUseRuntimeStatusInteractionRequired: visible GUI is required'
     )
   })
 
-  it('updates contextCompaction flags from the laboratory tab', () => {
+  it('updates contextCompaction flags from the laboratory feature list', () => {
     const updateKun = vi.fn()
     let renderer!: ReactTestRenderer
     act(() => {
@@ -233,8 +191,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         ctx: { ...baseCtx(), updateKun }
       }))
     })
-    const panel = renderer.root.findByProps({ id: 'laboratory-settings-panel-contextWindow' })
-    expect(instanceText(panel)).toContain('Context compression')
+    const panel = renderer.root.findByProps({ className: 'ds-settings-feature', 'aria-label': 'Context compression' })
     const parentToggle = panel.findByProps({
       role: 'switch',
       'aria-label': 'Model-initiated context compression'
@@ -359,7 +316,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       pptAgent: { enabled: false, model: '', providerId: '', fast: false, imageFirst: true },
       conversationVisualization: { enabled: false }
     })
-    expect(disabled).not.toContain('Follow main model')
+    // Switched off, the policy controls stay folded away and inert.
+    expect(disabled).toContain('data-open="false" aria-hidden="true" inert=""')
   })
 
   it('enables the fast toggle only when the selected model advertises Codex priority', async () => {
@@ -418,7 +376,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
   })
 
   it('renders pure JSONL as a selectable storage backend', () => {
-    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx: baseCtx() }))
+    const html = allAgentPanels(baseCtx())
 
     expect(html).toContain('Storage backend')
     expect(html).toContain('<option value="hybrid"')
@@ -428,7 +386,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
   })
 
   it('shows DeepSeek V4 model compaction thresholds from the model profile', () => {
-    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx: baseCtx() }))
+    const html = allAgentPanels(baseCtx())
 
     expect(html).toContain('Current model context policy')
     expect(html).toContain('deepseek-v4-pro')
@@ -473,7 +431,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       ]
     }
 
-    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx }))
+    const html = allAgentPanels(ctx)
 
     expect(html).toContain('Kun diagnostics')
     expect(html).toContain('MCP')
@@ -495,7 +453,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
   })
 
   it('describes MCP config as an external-tool JSON file instead of model credentials', () => {
-    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx: baseCtx() }))
+    const html = allAgentPanels(baseCtx())
 
     expect(html).toContain('External tool config path')
     expect(html).toContain('/tmp/project/.kun/mcp.json')
@@ -506,7 +464,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
   })
 
   it('renders valid untrusted project config with redacted summaries and approval actions', () => {
-    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx: baseCtx() }))
+    const html = allAgentPanels(baseCtx())
 
     expect(html).toContain('Project MCP &amp; Skills')
     expect(html).toContain('/tmp/project/.kun/project.json')
@@ -521,59 +479,49 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
   })
 
   it('renders trusted, stale, invalid, and missing-workspace project states', () => {
-    const trusted = renderToStaticMarkup(createElement(AgentsSettingsSection, {
-      ctx: {
-        ...baseCtx(),
-        projectConfig: { ...(baseCtx().projectConfig as object), trust: 'trusted' }
-      }
-    }))
+    const trusted = allAgentPanels({
+      ...baseCtx(),
+      projectConfig: { ...(baseCtx().projectConfig as object), trust: 'trusted' }
+    })
     expect(trusted).toContain('MCP approved')
     expect(trusted).toContain('Revoke project MCP')
 
-    const stale = renderToStaticMarkup(createElement(AgentsSettingsSection, {
-      ctx: {
-        ...baseCtx(),
-        projectConfig: { ...(baseCtx().projectConfig as object), trust: 'stale' }
-      }
-    }))
+    const stale = allAgentPanels({
+      ...baseCtx(),
+      projectConfig: { ...(baseCtx().projectConfig as object), trust: 'stale' }
+    })
     expect(stale).toContain('Approval stale')
     expect(stale).toContain('Reapprove project MCP')
     expect(stale).toContain('Revoke project MCP')
 
-    const staleInvalid = renderToStaticMarkup(createElement(AgentsSettingsSection, {
-      ctx: {
-        ...baseCtx(),
-        projectConfig: {
-          ...(baseCtx().projectConfig as object),
-          status: 'invalid',
-          trust: 'stale',
-          message: 'Project config is invalid'
-        }
+    const staleInvalid = allAgentPanels({
+      ...baseCtx(),
+      projectConfig: {
+        ...(baseCtx().projectConfig as object),
+        status: 'invalid',
+        trust: 'stale',
+        message: 'Project config is invalid'
       }
-    }))
+    })
     expect(staleInvalid).toContain('Revoke project MCP')
     expect(staleInvalid).toMatch(/Reapprove project MCP<\/button>/)
     expect(staleInvalid).toContain('disabled=""')
 
-    const invalid = renderToStaticMarkup(createElement(AgentsSettingsSection, {
-      ctx: {
-        ...baseCtx(),
-        projectConfig: {
-          ...(baseCtx().projectConfig as object),
-          status: 'invalid',
-          trust: 'untrusted',
-          message: 'Skill root escapes the workspace'
-        }
+    const invalid = allAgentPanels({
+      ...baseCtx(),
+      projectConfig: {
+        ...(baseCtx().projectConfig as object),
+        status: 'invalid',
+        trust: 'untrusted',
+        message: 'Skill root escapes the workspace'
       }
-    }))
+    })
     expect(invalid).toContain('Invalid configuration')
     expect(invalid).toContain('Skill root escapes the workspace')
     expect(invalid).toMatch(/Approve project MCP<\/button>/)
     expect(invalid).toContain('disabled=""')
 
-    const missingWorkspace = renderToStaticMarkup(createElement(AgentsSettingsSection, {
-      ctx: { ...baseCtx(), activeProjectWorkspaceRoot: '' }
-    }))
+    const missingWorkspace = allAgentPanels({ ...baseCtx(), activeProjectWorkspaceRoot: '' })
     expect(missingWorkspace).toContain('Select a workspace first')
     expect(missingWorkspace).not.toContain('Save project config')
   })
@@ -642,7 +590,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       })
     }
 
-    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx }))
+    const html = allAgentPanels(ctx)
 
     expect(html).toContain('Skill permission sources')
     expect(html).toContain('Enabled roots')

@@ -80,8 +80,7 @@ async function runUnifiedCodeFlow({
   await cursorCard.getByRole('button', { name: 'Configure model source', exact: true }).click()
   await page.locator('[data-settings-category="providers"][aria-current="page"]').waitFor()
   await capture('4b-cursor-model-source-settings')
-  await page.locator('[data-settings-category="agents"]').click()
-  await page.locator('#agents-settings-tab-harnesses').click()
+  await page.locator('[data-settings-category="harnesses"]').click()
   await harnessPanel.waitFor()
   assertions.push('Cursor SDK connects through model source settings without a CLI login or command-path prompt')
 
@@ -126,7 +125,7 @@ async function runUnifiedCodeFlow({
   await capture('5-custom-agents')
   assertions.push('Custom ACP probe, protected secret reference, import, and list/detail all work')
 
-  await page.locator('#agents-settings-tab-collaboration').click()
+  await page.locator('[data-settings-category="collaboration"]').click()
   const collaboration = page.locator('#agents-settings-panel-collaboration')
   await collaboration.waitFor()
   const softLimit = collaboration.getByRole('spinbutton', { name: 'Suggested workers' })
@@ -145,7 +144,7 @@ async function runUnifiedCodeFlow({
   await capture('6-collaboration-defaults')
   assertions.push('Global collaboration defaults save only on click and return an object revision')
 
-  await page.locator('#agents-settings-tab-harnesses').click()
+  await page.locator('[data-settings-category="harnesses"]').click()
   const catalog = await runtimeRequest(page, '/v1/harnesses')
   const geminiRow = (catalog.harnesses ?? []).find((row) => row.definition.id === 'gemini-cli')
   assert(geminiRow, 'Gemini CLI must be in the builtin catalog')

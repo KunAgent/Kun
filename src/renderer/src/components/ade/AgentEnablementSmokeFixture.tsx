@@ -16,6 +16,7 @@ import '../../styles/settings-layout.css'
 import '../../styles/settings-chrome.css'
 import '../../styles/settings-controls.css'
 import '../../styles/settings-pages.css'
+import '../../styles/settings-features.css'
 import '../../styles/neutral-polish.css'
 
 const initial = coerceRendererSettings({ version: 1, locale: 'en', theme: 'light', initialSetupCompleted: true,

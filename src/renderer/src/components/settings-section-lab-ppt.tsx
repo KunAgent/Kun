@@ -9,13 +9,13 @@ import {
   MODEL_REASONING_EFFORTS
 } from '@shared/app-settings'
 import { modelProviderModelProfile } from '@shared/app-settings-provider-core'
+import { Presentation } from 'lucide-react'
 import {
-  InlineNoticeView,
   ModelSelect,
-  SettingsCard,
   SettingRow,
   Toggle
 } from './settings-controls'
+import { SettingsFeatureCard } from './settings-feature-card'
 import { composerSupportsCodexFastMode } from './chat/composer-fast-mode'
 import { useChatStore } from '../store/chat-store'
 
@@ -86,192 +86,182 @@ export function PptAgentSettingsPanel({
   const fastSupported = composerSupportsCodexFastMode(composerModelGroups, model, providerId)
 
   return (
-    <div className="mt-6">
-      <SettingsCard title={t('labPptTitle')}>
-        <div className="space-y-3 px-3 py-4">
-          <InlineNoticeView notice={{ tone: 'info', message: t('labPptDescription') }} />
+    <SettingsFeatureCard
+      icon={Presentation}
+      tone="orange"
+      title={t('labPptTitle')}
+      description={t('labPptDescription')}
+      enabled={agent.enabled}
+      onEnabledChange={(enabled) => onChange({ pptAgent: { enabled } })}
+      toggleLabel={t('labPptEnabled')}
+      enabledLabel={t('settingsIaFeatureOn')}
+    >
+      <SettingRow
+        title={t('labPptImageFirst')}
+        description={t('labPptImageFirstDesc')}
+        control={
+          <Toggle
+            checked={agent.imageFirst !== false}
+            onChange={(imageFirst) => onChange({ pptAgent: { imageFirst } })}
+          />
+        }
+      />
+      {agent.imageFirst !== false ? (
+        <div className="px-3 pb-3">
+          <p className={`text-[12px] leading-5 ${imageGen?.available ? 'text-emerald-700 dark:text-emerald-200' : 'text-ds-faint'}`}>
+            {imageGen?.available
+              ? `${t('labPptImageFirstReadyHint')} ${imageGen.supportsReferenceEdit
+                ? t('labPptImageFirstReferenceEditHint')
+                : t('labPptImageFirstRegenerateOnlyHint')}`
+              : `${t('labPptImageFirstUnavailableHint')}${imageGen?.reason ? ` ${imageGen.reason}` : ''}`}
+          </p>
         </div>
+      ) : null}
+      <SettingRow
+        title={t('labPptModelMode')}
+        description={t('labPptModelModeDesc')}
+        control={
+          <select
+            className={selectControlClass}
+            value={fixed ? 'fixed' : 'inherit'}
+            onChange={(event) => {
+              if (event.target.value === 'inherit') {
+                onChange({
+                  pptAgent: {
+                    model: '',
+                    providerId: '',
+                    reasoningEffort: undefined,
+                    fast: false
+                  }
+                })
+                return
+              }
+              const providerId = provider?.id || leadProviderId
+              const model = (provider?.models ?? []).includes(leadModel)
+                ? leadModel
+                : provider?.models?.[0] ?? leadModel
+              onChange({
+                pptAgent: {
+                  model,
+                  providerId,
+                  reasoningEffort: undefined,
+                  fast: false
+                }
+              })
+            }}
+          >
+            <option value="inherit">{t('labPptModelModeInherit')}</option>
+            <option value="fixed">{t('labPptModelModeFixed')}</option>
+          </select>
+        }
+      />
+      {fixed ? (
         <SettingRow
-          title={t('labPptEnabled')}
-          description={t('labPptEnabledDesc')}
+          title={t('labPptModel')}
+          description={t('labPptModelDesc')}
+          wideControl
+          control={
+            <div className="grid gap-3 sm:grid-cols-2">
+              <select
+                aria-label={t('labPptProvider')}
+                className={selectControlClass}
+                value={provider?.id ?? providerId}
+                onChange={(event) => {
+                  const nextProviderId = event.target.value
+                  const nextProvider = modelProviders.find((item) => item.id === nextProviderId)
+                  const nextModel = nextProvider?.models?.includes(model)
+                    ? model
+                    : nextProvider?.models?.[0] ?? model
+                  onChange({
+                    pptAgent: {
+                      model: nextModel,
+                      providerId: nextProviderId,
+                      reasoningEffort: compatibleReasoningEffort(
+                        nextProvider,
+                        nextModel,
+                        agent.reasoningEffort
+                      )
+                    }
+                  })
+                }}
+              >
+                {modelProviders.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+              <ModelSelect
+                value={model}
+                options={provider?.models ?? []}
+                allowCustom
+                customLabel={t('modelSelectCustomOption')}
+                customPlaceholder={t('modelSelectCustomPlaceholder')}
+                selectClassName={selectControlClass}
+                onChange={(nextModel) => {
+                  const trimmed = nextModel.trim()
+                  onChange({
+                    pptAgent: {
+                      model: trimmed || model,
+                      providerId: provider?.id ?? providerId,
+                      reasoningEffort: compatibleReasoningEffort(
+                        provider,
+                        trimmed || model,
+                        agent.reasoningEffort
+                      )
+                    }
+                  })
+                }}
+              />
+            </div>
+          }
+        />
+      ) : null}
+      {fixed ? (
+        <SettingRow
+          title={t('labPptReasoning')}
+          description={t('labPptReasoningDesc')}
+          control={
+            <select
+              aria-label={t('labPptReasoning')}
+              className={selectControlClass}
+              value={agent.reasoningEffort ?? ''}
+              onChange={(event) => onChange({
+                pptAgent: {
+                  reasoningEffort: event.target.value
+                    ? event.target.value as ModelReasoningEffort
+                    : undefined
+                }
+              })}
+            >
+              <option value="">{t('labPptReasoningInherit')}</option>
+              {reasoningEfforts.map((effort) => (
+                <option key={effort} value={effort}>
+                  {t(REASONING_EFFORT_LABEL_KEYS[effort])}
+                </option>
+              ))}
+            </select>
+          }
+        />
+      ) : null}
+      {fixed ? (
+        <SettingRow
+          title={t('labPptFast')}
+          description={t('labPptFastDesc')}
           control={
             <Toggle
-              checked={agent.enabled}
-              onChange={(enabled) => onChange({ pptAgent: { enabled } })}
+              checked={agent.fast === true && fastSupported}
+              disabled={!fastSupported}
+              onChange={(fast) => onChange({ pptAgent: { fast } })}
             />
           }
         />
-        {agent.enabled ? (
-          <>
-            <SettingRow
-              title={t('labPptImageFirst')}
-              description={t('labPptImageFirstDesc')}
-              control={
-                <Toggle
-                  checked={agent.imageFirst !== false}
-                  onChange={(imageFirst) => onChange({ pptAgent: { imageFirst } })}
-                />
-              }
-            />
-            {agent.imageFirst !== false ? (
-              <div className="px-3 pb-3">
-                <p className={`text-[12px] leading-5 ${imageGen?.available ? 'text-emerald-700 dark:text-emerald-200' : 'text-ds-faint'}`}>
-                  {imageGen?.available
-                    ? `${t('labPptImageFirstReadyHint')} ${imageGen.supportsReferenceEdit
-                      ? t('labPptImageFirstReferenceEditHint')
-                      : t('labPptImageFirstRegenerateOnlyHint')}`
-                    : `${t('labPptImageFirstUnavailableHint')}${imageGen?.reason ? ` ${imageGen.reason}` : ''}`}
-                </p>
-              </div>
-            ) : null}
-            <SettingRow
-              title={t('labPptModelMode')}
-              description={t('labPptModelModeDesc')}
-              control={
-                <select
-                  className={selectControlClass}
-                  value={fixed ? 'fixed' : 'inherit'}
-                  onChange={(event) => {
-                    if (event.target.value === 'inherit') {
-                      onChange({
-                        pptAgent: {
-                          model: '',
-                          providerId: '',
-                          reasoningEffort: undefined,
-                          fast: false
-                        }
-                      })
-                      return
-                    }
-                    const providerId = provider?.id || leadProviderId
-                    const model = (provider?.models ?? []).includes(leadModel)
-                      ? leadModel
-                      : provider?.models?.[0] ?? leadModel
-                    onChange({
-                      pptAgent: {
-                        model,
-                        providerId,
-                        reasoningEffort: undefined,
-                        fast: false
-                      }
-                    })
-                  }}
-                >
-                  <option value="inherit">{t('labPptModelModeInherit')}</option>
-                  <option value="fixed">{t('labPptModelModeFixed')}</option>
-                </select>
-              }
-            />
-            {fixed ? (
-              <SettingRow
-                title={t('labPptModel')}
-                description={t('labPptModelDesc')}
-                wideControl
-                control={
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <select
-                      aria-label={t('labPptProvider')}
-                      className={selectControlClass}
-                      value={provider?.id ?? providerId}
-                      onChange={(event) => {
-                        const nextProviderId = event.target.value
-                        const nextProvider = modelProviders.find((item) => item.id === nextProviderId)
-                        const nextModel = nextProvider?.models?.includes(model)
-                          ? model
-                          : nextProvider?.models?.[0] ?? model
-                        onChange({
-                          pptAgent: {
-                            model: nextModel,
-                            providerId: nextProviderId,
-                            reasoningEffort: compatibleReasoningEffort(
-                              nextProvider,
-                              nextModel,
-                              agent.reasoningEffort
-                            )
-                          }
-                        })
-                      }}
-                    >
-                      {modelProviders.map((item) => (
-                        <option key={item.id} value={item.id}>{item.name}</option>
-                      ))}
-                    </select>
-                    <ModelSelect
-                      value={model}
-                      options={provider?.models ?? []}
-                      allowCustom
-                      customLabel={t('modelSelectCustomOption')}
-                      customPlaceholder={t('modelSelectCustomPlaceholder')}
-                      selectClassName={selectControlClass}
-                      onChange={(nextModel) => {
-                        const trimmed = nextModel.trim()
-                        onChange({
-                          pptAgent: {
-                            model: trimmed || model,
-                            providerId: provider?.id ?? providerId,
-                            reasoningEffort: compatibleReasoningEffort(
-                              provider,
-                              trimmed || model,
-                              agent.reasoningEffort
-                            )
-                          }
-                        })
-                      }}
-                    />
-                  </div>
-                }
-              />
-            ) : null}
-            {fixed ? (
-              <SettingRow
-                title={t('labPptReasoning')}
-                description={t('labPptReasoningDesc')}
-                control={
-                  <select
-                    aria-label={t('labPptReasoning')}
-                    className={selectControlClass}
-                    value={agent.reasoningEffort ?? ''}
-                    onChange={(event) => onChange({
-                      pptAgent: {
-                        reasoningEffort: event.target.value
-                          ? event.target.value as ModelReasoningEffort
-                          : undefined
-                      }
-                    })}
-                  >
-                    <option value="">{t('labPptReasoningInherit')}</option>
-                    {reasoningEfforts.map((effort) => (
-                      <option key={effort} value={effort}>
-                        {t(REASONING_EFFORT_LABEL_KEYS[effort])}
-                      </option>
-                    ))}
-                  </select>
-                }
-              />
-            ) : null}
-            {fixed ? (
-              <SettingRow
-                title={t('labPptFast')}
-                description={t('labPptFastDesc')}
-                control={
-                  <Toggle
-                    checked={agent.fast === true && fastSupported}
-                    disabled={!fastSupported}
-                    onChange={(fast) => onChange({ pptAgent: { fast } })}
-                  />
-                }
-              />
-            ) : null}
-            {fixed && !fastSupported ? (
-              <div className="px-3 pb-3">
-                <p className="text-[12px] leading-5 text-ds-faint">
-                  {t('labPptFastUnsupportedHint')}
-                </p>
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </SettingsCard>
-    </div>
+      ) : null}
+      {fixed && !fastSupported ? (
+        <div className="px-3 pb-3">
+          <p className="text-[12px] leading-5 text-ds-faint">
+            {t('labPptFastUnsupportedHint')}
+          </p>
+        </div>
+      ) : null}
+    </SettingsFeatureCard>
   )
 }

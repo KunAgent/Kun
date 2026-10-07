@@ -23,6 +23,8 @@ import {
 } from 'lucide-react'
 import { useSlidingTabIndicator } from './settings-tab-indicator'
 
+export { SettingsReveal } from './settings-reveal'
+
 export type InlineNotice = {
   tone: 'success' | 'error' | 'info'
   message: string
@@ -371,16 +373,20 @@ export function SettingsCard({
   className = '',
   collapsible = false,
   defaultOpen = false,
-  description
+  description,
+  action
 }: {
-  title: string
+  /** Omit for a single-row card whose row already names it. */
+  title?: string
   children: ReactNode
   className?: string
   collapsible?: boolean
   defaultOpen?: boolean
   description?: string
+  /** A header-level action, e.g. "Restore all defaults". */
+  action?: ReactNode
 }): ReactElement {
-  if (collapsible) {
+  if (collapsible && title) {
     return (
       <details
         className={`ds-settings-card ds-settings-card--collapsible group overflow-hidden rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card ${className}`}
@@ -404,14 +410,19 @@ export function SettingsCard({
 
   return (
     <section
-      className={`ds-settings-card rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card ${className}`}
+      className={`ds-settings-card rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card ${title ? '' : 'ds-settings-card--headless'} ${className}`}
     >
-      <div className="ds-settings-card-header px-5">
-        <h2 className="ds-settings-card-title">{title}</h2>
-        {description ? (
-          <p className="ds-settings-card-description mt-1">{description}</p>
-        ) : null}
-      </div>
+      {title ? (
+        <div className="ds-settings-card-header flex items-start justify-between gap-4 px-5">
+          <div className="min-w-0">
+            <h2 className="ds-settings-card-title">{title}</h2>
+            {description ? (
+              <p className="ds-settings-card-description mt-1">{description}</p>
+            ) : null}
+          </div>
+          {action ?? null}
+        </div>
+      ) : null}
       <div className="ds-settings-card-body divide-y divide-ds-border-muted px-2">{children}</div>
     </section>
   )

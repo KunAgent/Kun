@@ -6,6 +6,7 @@ import {
   SETTINGS_NAVIGATION_GROUPS,
   filterSettingsNavigationGroups,
   settingsCategoryDescriptionKey,
+  settingsCategoryForRouteSection,
   settingsNavigationItem,
   visibleSettingsNavigationGroups
 } from './settings-navigation'
@@ -15,7 +16,8 @@ import { SettingsSidebar } from './SettingsSidebar'
 const labels: Record<string, string> = {
   general: 'General',
   providers: 'Providers',
-  settingsGroupCore: 'Basics',
+  settingsIaGroupGeneral: 'Basics',
+  port: 'Local service port',
   settingsGroupSystem: 'System',
   keyboardShortcuts: 'Keyboard shortcuts',
   settingsNavShortcuts: 'Shortcuts',
@@ -46,7 +48,9 @@ describe('settings navigation model', () => {
     expect(mac).not.toContain('extensions')
     expect(windows).toContain('storage')
     expect(windows).toContain('extensions')
-    expect(windows).toHaveLength(23)
+    expect(windows).toHaveLength(33)
+    expect(mac).toHaveLength(31)
+    expect(mac).not.toContain('integrations')
   })
 
   it('matches short names, full names, groups and descriptions case-insensitively', () => {
@@ -56,6 +60,33 @@ describe('settings navigation model', () => {
     expect(categories(filterSettingsNavigationGroups(groups, 'base urls', t))).toEqual(['providers'])
     expect(categories(filterSettingsNavigationGroups(groups, 'basics general', t))).toEqual(['general'])
     expect(filterSettingsNavigationGroups(groups, 'no such page', t)).toEqual([])
+  })
+
+  it('finds a page by the settings it holds, ignoring untranslated keys', () => {
+    const groups = visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin' })
+    expect(categories(filterSettingsNavigationGroups(groups, 'service port', t))).toEqual(['agentRuntime'])
+    // Search keys without copy fall back to the raw key; that must never match.
+    expect(categories(filterSettingsNavigationGroups(groups, 'kunMaxConcurrentTurns', t))).toEqual([])
+  })
+
+  it('keeps every page to one topic, with no more than seven per group', () => {
+    for (const group of SETTINGS_NAVIGATION_GROUPS) {
+      expect(group.items.length).toBeLessThanOrEqual(7)
+    }
+    const all = SETTINGS_NAVIGATION_GROUPS.flatMap((group) => group.items.map((item) => item.category))
+    expect(new Set(all).size).toBe(all.length)
+  })
+
+  it('maps old deep links to the page that now owns their content', () => {
+    expect(settingsCategoryForRouteSection('agentsHarnesses')).toBe('harnesses')
+    expect(settingsCategoryForRouteSection('agentsCollaboration')).toBe('collaboration')
+    expect(settingsCategoryForRouteSection('skill')).toBe('skills')
+    expect(settingsCategoryForRouteSection('mcp')).toBe('mcp')
+    expect(settingsCategoryForRouteSection('permissions')).toBe('permissions')
+    expect(settingsCategoryForRouteSection('worktree')).toBe('code')
+    expect(settingsCategoryForRouteSection('imageGeneration')).toBe('mediaGeneration')
+    expect(settingsCategoryForRouteSection('speak')).toBe('mediaGeneration')
+    expect(settingsCategoryForRouteSection(null)).toBe('agents')
   })
 })
 

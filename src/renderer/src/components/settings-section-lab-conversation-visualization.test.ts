@@ -20,7 +20,8 @@ describe('ConversationVisualizationSettingsPanel', () => {
       onChange: () => undefined
     }))
     expect(markup).toContain('Session display optimization')
-    expect(markup).toContain('Preserves visualizations in history.')
+    expect(markup).toContain('Experimental visualization.')
+    expect(markup).toContain('aria-label="Enable session display optimization"')
     expect(markup).toContain('aria-checked="false"')
   })
 })

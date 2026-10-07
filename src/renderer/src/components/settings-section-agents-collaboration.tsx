@@ -265,8 +265,6 @@ export function AgentsCollaborationSettingsPanel({ view }: { view: Collaboration
   return (
     <div
       id="agents-settings-panel-collaboration"
-      role="tabpanel"
-      aria-labelledby="agents-settings-tab-collaboration"
       className={activePanel === 'collaboration' ? '' : 'hidden'}
     >
       <SettingsCard title={t('adeSettings.collaborationTitle')}>

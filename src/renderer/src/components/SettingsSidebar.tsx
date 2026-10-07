@@ -1,5 +1,5 @@
 import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, ReactElement, SetStateAction } from 'react'
-import { useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, Search, SearchX, X } from 'lucide-react'
 import kunLogo from '../../../asset/img/kun.png'
 import { SettingsIconTile } from './settings-icon-tile'
@@ -17,6 +17,43 @@ export {
 } from './settings-navigation'
 
 const CATEGORY_SELECTOR = 'button[data-settings-category]'
+
+type IndicatorBox = { top: number; height: number; animate: boolean } | null
+
+/**
+ * One highlight that slides between destinations instead of each row painting
+ * its own: the eye follows the selection to its new place. Measured from the
+ * selected row, so search filtering and UI scaling keep it aligned.
+ */
+function useSelectionIndicator(nav: HTMLElement | null, category: string, layoutKey: string): IndicatorBox {
+  const [box, setBox] = useState<IndicatorBox>(null)
+  const measuredOnce = useRef(false)
+  useLayoutEffect(() => {
+    if (!nav) return
+    const measure = (): void => {
+      const selected = nav.querySelector<HTMLElement>(`${CATEGORY_SELECTOR}[aria-current='page']`)
+      if (!selected) {
+        setBox(null)
+        return
+      }
+      setBox({ top: selected.offsetTop, height: selected.offsetHeight, animate: measuredOnce.current })
+      measuredOnce.current = true
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    // The row grows with the UI font scale even when the sidebar keeps its size.
+    const observer = new ResizeObserver(measure)
+    observer.observe(nav)
+    const selected = nav.querySelector<HTMLElement>(`${CATEGORY_SELECTOR}[aria-current='page']`)
+    if (selected) observer.observe(selected)
+    return () => observer.disconnect()
+  }, [nav, category, layoutKey])
+  useLayoutEffect(() => {
+    nav?.querySelector<HTMLElement>(`${CATEGORY_SELECTOR}[aria-current='page']`)
+      ?.scrollIntoView?.({ block: 'nearest' })
+  }, [nav, category])
+  return box
+}
 
 /** Moves focus between visible destinations without changing the selection. */
 function focusSibling(nav: HTMLElement | null, from: Element | null, step: 1 | -1 | 'first' | 'last'): boolean {
@@ -53,6 +90,7 @@ export function SettingsSidebar({
 }): ReactElement {
   const [query, setQuery] = useState('')
   const navRef = useRef<HTMLElement | null>(null)
+  const [navElement, setNavElement] = useState<HTMLElement | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
   const groups = useMemo(
     () => visibleSettingsNavigationGroups({ extensionSettingsAvailable, platform }),
@@ -61,6 +99,11 @@ export function SettingsSidebar({
   const filteredGroups = useMemo(() => filterSettingsNavigationGroups(groups, query, t), [groups, query, t])
   const searching = query.trim().length > 0
   const firstMatch = filteredGroups[0]?.items[0]
+  const indicator = useSelectionIndicator(
+    navElement,
+    category,
+    filteredGroups.map((group) => group.items.map((item) => item.category).join(',')).join('|')
+  )
 
   const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
     // Enter/Esc/arrows also confirm or cancel IME candidates (pinyin, kana, hangul).
@@ -168,13 +211,25 @@ export function SettingsSidebar({
       </div>
 
       <nav
-        ref={navRef}
+        ref={(node) => {
+          navRef.current = node
+          setNavElement(node)
+        }}
         id="settings-navigation"
         aria-label={t('title')}
         className="ds-settings-nav ds-no-drag min-h-0 flex-1 overflow-y-auto overscroll-contain"
         data-searching={searching ? 'true' : undefined}
+        data-indicator={indicator ? 'true' : undefined}
         onKeyDown={onNavKeyDown}
       >
+        {indicator ? (
+          <span
+            aria-hidden="true"
+            className="ds-settings-nav-indicator"
+            data-animate={indicator.animate ? 'true' : undefined}
+            style={{ transform: `translateY(${indicator.top}px)`, height: indicator.height }}
+          />
+        ) : null}
         {filteredGroups.map((group) => {
           const headingId = `settings-nav-group-${group.id}`
           return (

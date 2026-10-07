@@ -28,8 +28,6 @@ export function AgentsToolsSettingsPanels({ view }: { view: Record<string, any> 
               <div
                 id="agents-settings-panel-skills"
                 ref={skillSectionRef}
-                role="tabpanel"
-                aria-labelledby="agents-settings-tab-skills"
                 className={activePanel === 'skills' ? '' : 'hidden'}
               >
                 <SettingsCard title={t('skill')}>
@@ -172,8 +170,6 @@ export function AgentsToolsSettingsPanels({ view }: { view: Record<string, any> 
               <div
                 id="agents-settings-panel-tools"
                 ref={mcpSectionRef}
-                role="tabpanel"
-                aria-labelledby="agents-settings-tab-tools"
                 className={activePanel === 'tools' ? '' : 'hidden'}
               >
                 <SettingsCard title={t('mcp')}>

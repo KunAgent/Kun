@@ -18,10 +18,8 @@ import {
   Loader2,
   PlugZap,
   Plus,
-  Route,
   Search,
   Server,
-  ServerCog,
   Trash2,
   X
 } from 'lucide-react'
@@ -31,8 +29,6 @@ import {
 import {
   InlineNoticeView,
   SettingsSubTabs,
-  SettingsTabPanel,
-  SettingsTabs,
   Toggle
 } from './settings-controls'
 import {
@@ -44,7 +40,7 @@ import {
 import {
   MODEL_ENDPOINT_FORMAT_LABEL_KEYS, PROVIDER_TASK_TABS,
   providerModelCount,
-  type ProviderTaskTab, type ProviderWorkspaceMode
+  type ProviderTaskTab
 } from './settings-section-providers-profile'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
@@ -62,12 +58,11 @@ import { ProviderQuickAddPanel } from './provider-quick-add-panel'
 import { ProviderAddSheet } from './provider-add-sheet'
 import { ProviderIcon } from './provider-icon'
 import { SettingsIconTile } from './settings-icon-tile'
-import { ModelRoutesSettings } from './settings-section-model-routes'
 import { ProviderConnectionAdvancedPanels } from './settings-section-providers-connection-panels'
 import { ProviderModelsCapabilitiesPanels } from './settings-section-providers-model-panels'
 
 export function ProvidersSettingsView({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider,
+  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider,
     externalImportOpen, setExternalImportOpen, quickAddEntry, setQuickAddEntry, submitQuickAdd, stagedImportLink, setStagedImportLink,
     importLinkInput, setImportLinkInput, importLinkError, setImportLinkError, stageImportLinkInput } = view
   const activeProvider = view.activeProvider as ModelProviderProfileV1 | undefined
@@ -102,7 +97,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
             <div className="flex min-w-0 items-center gap-3">
               <SettingsIconTile icon={Server} tone="blue" className="ds-provider-workspace-tile" />
               <div className="min-w-0">
-                <h2 className="truncate text-[16px] font-semibold text-ds-ink">{t('providers')}</h2>
+                <h2 className="truncate text-[16px] font-semibold text-ds-ink">{t('settingsIaProviders')}</h2>
                 <p className="mt-0.5 truncate text-[11.5px] text-ds-faint">
                   {zh
                     ? `${displayProviders.length} 个已配置`
@@ -123,43 +118,27 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                 <FilePenLine className="h-3.5 w-3.5" strokeWidth={2} />
                 {t('modelProviderOpenConfigFile')}
               </button>
-              {workspaceMode === 'providers' ? (
-                <button
-                  ref={addProviderButtonRef}
-                  type="button"
-                  aria-haspopup="dialog"
-                  aria-expanded={addMenuOpen}
-                  onClick={openAddProviderDialog}
-                  className={settingsButtonClass({ size: 'compact', className: 'shrink-0 whitespace-nowrap' })}
-                >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                  {t('modelProviderAdd')}
-                </button>
-              ) : null}
+              <button
+                ref={addProviderButtonRef}
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={addMenuOpen}
+                onClick={openAddProviderDialog}
+                className={settingsButtonClass({ size: 'compact', className: 'shrink-0 whitespace-nowrap' })}
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                {t('modelProviderAdd')}
+              </button>
             </div>
           </div>
           <div className="grid min-w-0 content-start gap-2.5 px-4 py-3 sm:px-6">
-            <SettingsTabs<ProviderWorkspaceMode>
-              baseId="provider-workspace"
-              ariaLabel={t('providers')}
-              items={[
-                { id: 'providers', label: t('modelProviderModeProviders'), icon: ServerCog },
-                { id: 'routes', label: t('modelProviderModeRoutes'), icon: Route }
-              ]}
-              value={workspaceMode}
-              onChange={setWorkspaceMode}
-            />
             <p className="max-w-2xl px-1 text-[12px] leading-5 text-ds-muted">
-              {workspaceMode === 'routes' ? t('gatewaySetup.pageDesc') : t('providersDesc')}
+              {t('providersDesc')}
               <span className="text-ds-faint"> {t('modelProviderConfigFileHint')}</span>
             </p>
           </div>
         </header>
-        <SettingsTabPanel<ProviderWorkspaceMode>
-          baseId="provider-workspace"
-          tabId="providers"
-          active={workspaceMode === 'providers'}
-        >
+        <div id="provider-workspace-panel-providers">
           <div className="grid min-w-0">
             <label className="grid gap-1.5 px-4 py-4 lg:hidden">
             <span className="flex items-center gap-2 text-[12px] font-semibold text-ds-muted">
@@ -409,24 +388,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
             )}
           </div>
           </div>
-        </SettingsTabPanel>
-        <SettingsTabPanel<ProviderWorkspaceMode>
-          baseId="provider-workspace"
-          tabId="routes"
-          active={workspaceMode === 'routes'}
-          className="p-4 sm:p-6"
-        >
-          <ModelRoutesSettings
-            settings={provider}
-            onChange={(next) => update({ provider: { routePools: next.routePools, localGateway: next.localGateway } })}
-            translation={t}
-            saveStatus={saveStatus}
-            saveError={saveError}
-            onRetrySave={retrySave}
-            active={workspaceMode === 'routes'}
-            publicBaseUrl={`http://127.0.0.1:${kun.port}`}
-          />
-        </SettingsTabPanel>
+        </div>
       </section>
       <ProviderConfigurationPanel t={t} activeProviderId={activeProvider?.id} />
       <details

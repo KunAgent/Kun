@@ -45,7 +45,7 @@ it('runs the real settings check, composer gate and late-result cancellation wit
   expect(document.querySelector('[data-harness-id="deepseek-harness"]')).toBeNull()
   expect(document.querySelector('[data-harness-id="gemini-cli"]')).toBeNull()
   click('[data-composer-harness-picker]')
-  expect(document.querySelector('[data-settings-category-view="agents"]')).toBeTruthy()
+  expect(document.querySelector('[data-settings-category-view="harnesses"]')).toBeTruthy()
   expect(fixture.snapshot().calls.mutations).toBeGreaterThan(0)
   fixture.close()
   await vi.waitFor(() => expect(document.querySelector('[data-agent-enablement]')).toBeNull())

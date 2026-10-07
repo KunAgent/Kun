@@ -1,13 +1,16 @@
 import {
   Archive,
   AudioLines,
+  Bell,
   Bot,
   BrainCircuit,
-  Bug,
+  Cable,
   CircleFadingArrowUp,
+  CodeXml,
   FlaskConical,
+  FolderCog,
   FolderSync,
-  GitBranch,
+  GraduationCap,
   HardDrive,
   Keyboard,
   Mic,
@@ -15,39 +18,58 @@ import {
   PenLine,
   Plug,
   Puzzle,
+  Route,
   Server,
   Settings,
+  ShieldCheck,
+  SlidersHorizontal,
   Smartphone,
   Sparkles,
   SquareTerminal,
+  Stethoscope,
+  SunMoon,
   Trash2,
   UsersRound,
+  WandSparkles,
+  Workflow,
+  Wrench,
   type LucideIcon
 } from 'lucide-react'
+import type { SettingsRouteSection } from '../store/settings-route-sections'
 
 export type SettingsCategory =
   | 'general'
-  | 'providers'
-  | 'integrations'
-  | 'write'
-  | 'design'
-  | 'mediaGeneration'
-  | 'speechToText'
-  | 'agents'
-  | 'laboratory'
-  | 'subagents'
-  | 'archives'
-  | 'worktree'
-  | 'memory'
+  | 'appearance'
+  | 'notifications'
   | 'shortcuts'
   | 'easterEgg'
+  | 'providers'
+  | 'gateway'
+  | 'speechToText'
+  | 'mediaGeneration'
+  | 'agents'
+  | 'permissions'
+  | 'skills'
+  | 'mcp'
+  | 'memory'
+  | 'subagents'
+  | 'projects'
+  | 'harnesses'
+  | 'collaboration'
   | 'claw'
-  | 'updates'
-  | 'debug'
-  | 'terminal'
   | 'extensions'
-  | 'storage'
+  | 'code'
+  | 'terminal'
+  | 'write'
+  | 'paper'
+  | 'design'
+  | 'archives'
   | 'dataMigration'
+  | 'storage'
+  | 'laboratory'
+  | 'agentRuntime'
+  | 'debug'
+  | 'updates'
   | 'uninstall'
 
 /** Decorative icon-tile hues. Each one resolves to a theme token in settings-chrome.css. */
@@ -66,6 +88,8 @@ export type SettingsNavigationItem = {
   category: SettingsCategory
   labelKey: string
   navigationLabelKey?: string
+  /** Translation keys of the settings a page holds, so search finds "port" → Advanced runtime. */
+  searchKeys?: readonly string[]
   icon: LucideIcon
   tone: SettingsIconTone
   extensionOnly?: boolean
@@ -78,47 +102,94 @@ export type SettingsNavigationGroup = {
   items: SettingsNavigationItem[]
 }
 
+/**
+ * One destination per topic. Pages keep at most four tabs and never nest tab
+ * rows; settings that are only a switch or two live in cards, not tabs.
+ */
 export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
   {
-    id: 'core',
-    labelKey: 'settingsGroupCore',
+    id: 'general',
+    labelKey: 'settingsIaGroupGeneral',
     items: [
-      { category: 'general', labelKey: 'general', icon: Settings, tone: 'slate' },
-      { category: 'providers', labelKey: 'providers', icon: Server, tone: 'blue' },
-      { category: 'integrations', labelKey: 'integrations', icon: Plug, tone: 'green' },
-      { category: 'extensions', labelKey: 'extensions', icon: Puzzle, tone: 'violet', extensionOnly: true }
+      {
+        category: 'general', labelKey: 'general', icon: Settings, tone: 'slate',
+        searchKeys: ['language', 'composerSendKey', 'chatWelcomeMessage', 'desktopBehavior', 'desktopOpenAtLogin', 'desktopKeepAwake', 'onboardingPreview']
+      },
+      {
+        category: 'appearance', labelKey: 'settingsIaAppearance', icon: SunMoon, tone: 'violet',
+        searchKeys: ['theme', 'fontScale', 'chatContentMaxWidth', 'cursorSpotlight', 'darkUiColorsTitle']
+      },
+      {
+        category: 'notifications', labelKey: 'settingsIaNotifications', icon: Bell, tone: 'amber',
+        searchKeys: ['turnCompleteNotification', 'subagentTurnCompleteNotification', 'quotaReminderNotification']
+      },
+      { category: 'shortcuts', labelKey: 'keyboardShortcuts', navigationLabelKey: 'settingsNavShortcuts', icon: Keyboard, tone: 'slate' },
+      { category: 'easterEgg', labelKey: 'easterEgg', navigationLabelKey: 'settingsIaAvatar', icon: Sparkles, tone: 'pink' }
     ]
   },
   {
-    id: 'workbench',
-    labelKey: 'settingsGroupWorkbench',
+    id: 'models',
+    labelKey: 'settingsIaGroupModels',
     items: [
-      { category: 'write', labelKey: 'write', icon: PenLine, tone: 'amber' },
-      { category: 'design', labelKey: 'design', icon: Palette, tone: 'pink' },
       {
-        category: 'mediaGeneration',
-        labelKey: 'mediaGeneration',
-        navigationLabelKey: 'settingsNavMedia',
-        icon: AudioLines,
-        tone: 'red'
+        category: 'providers', labelKey: 'settingsIaProviders', icon: Server, tone: 'blue',
+        searchKeys: ['modelProviderGlobalNetwork']
       },
       {
-        category: 'speechToText',
-        labelKey: 'speechToText',
-        navigationLabelKey: 'settingsNavSpeech',
-        icon: Mic,
-        tone: 'teal'
+        category: 'gateway', labelKey: 'settingsIaGateway', icon: Route, tone: 'teal',
+        searchKeys: ['modelProviderModeRoutes']
+      },
+      { category: 'speechToText', labelKey: 'speechToText', navigationLabelKey: 'settingsIaSpeechInput', icon: Mic, tone: 'teal' },
+      {
+        category: 'mediaGeneration', labelKey: 'mediaGeneration', icon: AudioLines, tone: 'red',
+        searchKeys: ['imageGen', 'textToSpeech', 'musicGeneration', 'videoGeneration']
       }
     ]
   },
   {
-    id: 'intelligence',
-    labelKey: 'settingsGroupIntelligence',
+    id: 'assistant',
+    labelKey: 'settingsIaGroupAssistant',
     items: [
-      { category: 'agents', labelKey: 'agents', navigationLabelKey: 'settingsNavAssistant', icon: Bot, tone: 'blue' },
-      { category: 'laboratory', labelKey: 'agentsQuickLaboratory', icon: FlaskConical, tone: 'green' },
+      {
+        category: 'agents', labelKey: 'settingsIaAssistant', icon: Bot, tone: 'blue',
+        searchKeys: ['kunProvider', 'kunModel', 'codePromptPrefix', 'kunPromptOptimization', 'autoStart']
+      },
+      {
+        category: 'permissions', labelKey: 'settingsIaPermissions', icon: ShieldCheck, tone: 'green',
+        searchKeys: ['toolPermissionMode', 'approvalReviewModelTitle', 'designQualityTitle']
+      },
+      { category: 'skills', labelKey: 'settingsIaSkills', icon: WandSparkles, tone: 'violet', searchKeys: ['skillsDetectedDirs', 'skillsScanDirs'] },
+      { category: 'mcp', labelKey: 'settingsIaMcp', icon: Wrench, tone: 'orange', searchKeys: ['mcpSearchEnabled', 'mcpEditor'] },
+      { category: 'memory', labelKey: 'memory', icon: BrainCircuit, tone: 'pink' },
       { category: 'subagents', labelKey: 'subagents', icon: UsersRound, tone: 'violet' },
-      { category: 'memory', labelKey: 'memory', icon: BrainCircuit, tone: 'pink' }
+      { category: 'projects', labelKey: 'settingsIaProjects', icon: FolderCog, tone: 'slate', searchKeys: ['projectConfigTitle'] }
+    ]
+  },
+  {
+    id: 'connect',
+    labelKey: 'settingsIaGroupConnect',
+    items: [
+      { category: 'harnesses', labelKey: 'settingsIaHarnesses', icon: Cable, tone: 'blue' },
+      { category: 'collaboration', labelKey: 'settingsIaCollaboration', icon: Workflow, tone: 'green' },
+      { category: 'claw', labelKey: 'claw', navigationLabelKey: 'settingsNavPhone', icon: Smartphone, tone: 'green' },
+      { category: 'extensions', labelKey: 'extensions', icon: Puzzle, tone: 'violet', extensionOnly: true }
+    ]
+  },
+  {
+    id: 'workspaces',
+    labelKey: 'settingsIaGroupWorkspaces',
+    items: [
+      {
+        category: 'code', labelKey: 'settingsIaCode', icon: CodeXml, tone: 'orange',
+        searchKeys: ['workspaceRoot', 'conversationWorkspaceRoot', 'worktree', 'gitCheckpointTitle']
+      },
+      { category: 'terminal', labelKey: 'terminal', icon: SquareTerminal, tone: 'slate', searchKeys: ['terminalColorMode'] },
+      {
+        category: 'write', labelKey: 'write', icon: PenLine, tone: 'amber',
+        searchKeys: ['writeTypography', 'writeInlineCompletion', 'writeSelectionAssistTitle', 'writeAgentPresets']
+      },
+      { category: 'paper', labelKey: 'settingsIaPaper', icon: GraduationCap, tone: 'blue' },
+      { category: 'design', labelKey: 'design', icon: Palette, tone: 'pink' }
     ]
   },
   {
@@ -126,15 +197,11 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
     labelKey: 'settingsGroupData',
     items: [
       { category: 'archives', labelKey: 'archives', navigationLabelKey: 'settingsNavArchives', icon: Archive, tone: 'amber' },
-      { category: 'storage', labelKey: 'storageRelocation', icon: HardDrive, tone: 'slate', windowsOnly: true },
       {
-        category: 'dataMigration',
-        labelKey: 'dataMigration',
-        navigationLabelKey: 'settingsNavMigration',
-        icon: FolderSync,
-        tone: 'teal'
+        category: 'dataMigration', labelKey: 'dataMigration', navigationLabelKey: 'settingsNavMigration',
+        icon: FolderSync, tone: 'teal', searchKeys: ['legacyImportTitle']
       },
-      { category: 'worktree', labelKey: 'worktree', icon: GitBranch, tone: 'orange' }
+      { category: 'storage', labelKey: 'storageRelocation', icon: HardDrive, tone: 'slate', windowsOnly: true }
     ]
   },
   {
@@ -142,58 +209,122 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
     labelKey: 'settingsGroupSystem',
     items: [
       {
-        category: 'shortcuts',
-        labelKey: 'keyboardShortcuts',
-        navigationLabelKey: 'settingsNavShortcuts',
-        icon: Keyboard,
-        tone: 'slate'
+        category: 'laboratory', labelKey: 'settingsIaLabs', icon: FlaskConical, tone: 'green',
+        searchKeys: ['computerUseTitle', 'browserUseSettingsTitle', 'graphSettingsTitle', 'labPptTitle', 'labProjectBoardTitle', 'labContextCompressionTitle', 'labAutoPlanBuildTitle']
       },
       {
-        category: 'easterEgg',
-        labelKey: 'easterEgg',
-        navigationLabelKey: 'settingsNavAppearance',
-        icon: Sparkles,
-        tone: 'violet'
+        category: 'agentRuntime', labelKey: 'settingsIaRuntime', icon: SlidersHorizontal, tone: 'slate',
+        searchKeys: ['port', 'kunBinary', 'kunDataDir', 'runtimeToken', 'kunTokenEconomy', 'kunInstructions', 'kunStorageBackend', 'kunMaxConcurrentTurns', 'kunToolOutputLimits', 'kunDiagnostics']
       },
       {
-        category: 'updates',
-        labelKey: 'updates',
-        navigationLabelKey: 'settingsNavUpdates',
-        icon: CircleFadingArrowUp,
-        tone: 'blue'
+        category: 'debug', labelKey: 'settingsIaDiagnostics', icon: Stethoscope, tone: 'orange',
+        searchKeys: ['logTitle', 'logDir', 'llmDebugRecords']
       },
-      { category: 'claw', labelKey: 'claw', navigationLabelKey: 'settingsNavPhone', icon: Smartphone, tone: 'green' },
-      { category: 'terminal', labelKey: 'terminal', icon: SquareTerminal, tone: 'slate' },
-      { category: 'debug', labelKey: 'debug', icon: Bug, tone: 'orange' },
+      { category: 'updates', labelKey: 'updates', navigationLabelKey: 'settingsNavUpdates', icon: CircleFadingArrowUp, tone: 'blue' },
       { category: 'uninstall', labelKey: 'uninstall', icon: Trash2, tone: 'red' }
     ]
   }
 ]
 
 const SETTINGS_CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategory, string> = {
-  general: 'subtitle',
-  providers: 'providersDesc',
-  integrations: 'integrationsDesc',
-  extensions: 'extensionsDesc',
-  write: 'writeDesc',
-  design: 'designDesc',
-  mediaGeneration: 'mediaGenerationDesc',
-  speechToText: 'speechToTextEnabledDesc',
-  agents: 'kunProviderDesc',
-  laboratory: 'laboratorySettingsDesc',
-  subagents: 'subagentsSettingsIntro',
-  archives: 'archivesOverviewDesc',
-  worktree: 'worktreeOverviewDesc',
-  memory: 'memoryOverviewDesc',
+  general: 'settingsIaGeneralDesc',
+  appearance: 'settingsIaAppearanceDesc',
+  notifications: 'settingsIaNotificationsDesc',
   shortcuts: 'shortcutsDesc',
   easterEgg: 'uiModeWorkshopDesc',
+  providers: 'providersDesc',
+  gateway: 'settingsIaGatewayDesc',
+  speechToText: 'speechToTextEnabledDesc',
+  mediaGeneration: 'mediaGenerationDesc',
+  agents: 'settingsIaAssistantDesc',
+  permissions: 'settingsIaPermissionsDesc',
+  skills: 'settingsIaSkillsDesc',
+  mcp: 'settingsIaMcpDesc',
+  memory: 'memoryOverviewDesc',
+  subagents: 'subagentsSettingsIntro',
+  projects: 'settingsIaProjectsDesc',
+  harnesses: 'settingsIaHarnessesDesc',
+  collaboration: 'settingsIaCollaborationDesc',
   claw: 'clawEnabledDesc',
-  updates: 'guiUpdateDesc',
-  debug: 'llmDebugDesc',
-  terminal: 'terminalColorModeDesc',
-  storage: 'storageRelocationSubtitle',
+  extensions: 'extensionsDesc',
+  code: 'settingsIaCodeDesc',
+  terminal: 'settingsIaTerminalDesc',
+  write: 'writeDesc',
+  paper: 'settingsIaPaperDesc',
+  design: 'designDesc',
+  archives: 'archivesOverviewDesc',
   dataMigration: 'dataMigrationSubtitle',
+  storage: 'storageRelocationSubtitle',
+  laboratory: 'settingsIaLabsDesc',
+  agentRuntime: 'settingsIaRuntimeDesc',
+  debug: 'settingsIaDiagnosticsDesc',
+  updates: 'guiUpdateDesc',
   uninstall: 'uninstallSubtitle'
+}
+
+/** Settings pages the Kun Agents section renders, one panel each. */
+export const AGENT_SETTINGS_PANELS = {
+  agents: 'assistant',
+  permissions: 'permissions',
+  skills: 'skills',
+  mcp: 'tools',
+  projects: 'project',
+  agentRuntime: 'runtime',
+  harnesses: 'harnesses',
+  collaboration: 'collaboration'
+} as const satisfies Partial<Record<SettingsCategory, string>>
+
+export type AgentSettingsCategory = keyof typeof AGENT_SETTINGS_PANELS
+export type AgentSettingsPanel = (typeof AGENT_SETTINGS_PANELS)[AgentSettingsCategory]
+
+export function isAgentSettingsCategory(category: SettingsCategory): category is AgentSettingsCategory {
+  return Object.prototype.hasOwnProperty.call(AGENT_SETTINGS_PANELS, category)
+}
+
+/**
+ * Deep links predate this layout: several used to name a tab inside another
+ * page. Each still resolves to the page that now owns that content.
+ */
+const ROUTE_SECTION_CATEGORIES: Record<SettingsRouteSection, SettingsCategory> = {
+  general: 'general',
+  appearance: 'appearance',
+  notifications: 'notifications',
+  providers: 'providers',
+  gateway: 'gateway',
+  extensions: 'extensions',
+  write: 'write',
+  paper: 'paper',
+  design: 'design',
+  imageGeneration: 'mediaGeneration',
+  mediaGeneration: 'mediaGeneration',
+  speak: 'mediaGeneration',
+  speechToText: 'speechToText',
+  agents: 'agents',
+  agentsHarnesses: 'harnesses',
+  agentsCollaboration: 'collaboration',
+  projects: 'projects',
+  agentRuntime: 'agentRuntime',
+  laboratory: 'laboratory',
+  subagents: 'subagents',
+  archives: 'archives',
+  code: 'code',
+  worktree: 'code',
+  memory: 'memory',
+  permissions: 'permissions',
+  skill: 'skills',
+  mcp: 'mcp',
+  shortcuts: 'shortcuts',
+  easterEgg: 'easterEgg',
+  claw: 'claw',
+  updates: 'updates',
+  terminal: 'terminal',
+  debug: 'debug',
+  storage: 'storage',
+  dataMigration: 'dataMigration'
+}
+
+export function settingsCategoryForRouteSection(section: SettingsRouteSection | null | undefined): SettingsCategory {
+  return (section && ROUTE_SECTION_CATEGORIES[section]) || 'agents'
 }
 
 export function settingsNavigationItem(category: SettingsCategory): SettingsNavigationItem | null {
@@ -241,9 +372,16 @@ function normalizeSearchText(value: string): string {
   return value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
+/** Untranslated keys fall back to themselves; never let a raw key become searchable text. */
+function translatedOrEmpty(key: string, t: (key: string) => string): string {
+  const value = t(key)
+  return value === key ? '' : value
+}
+
 /**
  * Case- and width-insensitive match against everything a person may remember
- * about a page: its short and full names, its group, and its description.
+ * about a page: its short and full names, its group, its description and the
+ * names of the settings it holds.
  */
 export function filterSettingsNavigationGroups(
   groups: SettingsNavigationGroup[],
@@ -261,7 +399,8 @@ export function filterSettingsNavigationGroups(
         t(item.labelKey),
         settingsNavigationLabel(item, t),
         t(group.labelKey),
-        t(settingsCategoryDescriptionKey(item.category))
+        t(settingsCategoryDescriptionKey(item.category)),
+        ...(item.searchKeys ?? []).map((key) => translatedOrEmpty(key, t))
       ].join(' '))
       return terms.every((term) => haystack.includes(term))
     })
