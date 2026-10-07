@@ -1,13 +1,14 @@
 import type { spawn } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
-import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
+import { sdkProcessBaseEnv } from '../agent-sdk/sdk-process-environment.js'
 import { spawnOwnedProcess, stopOwnedProcess, type SpawnOwnedProcessOptions } from '../../process/owned-process.js'
 import { harnessExecutableEnv } from '../../harness/harness-executable-env.js'
+import { adaptAntigravityModelSelectionArgs } from './antigravity-model-selection.js'
 
 const MAX_STDOUT_BYTES = 8 * 1024 * 1024
 const MAX_STDERR_BYTES = 256 * 1024
 
-export async function runAntigravityProcess(input: {
+type AntigravityProcessInput = {
   binaryPath: string
   env?: Record<string, string>
   args: string[]
@@ -16,7 +17,24 @@ export async function runAntigravityProcess(input: {
   validateLaunch?: () => Promise<unknown>
   timeoutMs: number
   spawnFn?: typeof spawn
-}): Promise<string> {
+}
+
+export async function runAntigravityProcess(input: AntigravityProcessInput): Promise<string> {
+  try {
+    return await runAntigravityProcessOnce(input)
+  } catch (error) {
+    // `agy` rejects an unsupported --model/--effort pairing before it starts a
+    // turn (no model request has run), so repairing the pairing and resending
+    // once cannot duplicate work.
+    const args = error instanceof Error && !input.signal.aborted
+      ? adaptAntigravityModelSelectionArgs(input.args, error.message)
+      : undefined
+    if (!args) throw error
+    return runAntigravityProcessOnce({ ...input, args })
+  }
+}
+
+async function runAntigravityProcessOnce(input: AntigravityProcessInput): Promise<string> {
   const beforeLaunch = async (): Promise<void> => {
     input.signal.throwIfAborted()
     await input.validateLaunch?.()
@@ -25,7 +43,9 @@ export async function runAntigravityProcess(input: {
   const options: SpawnOwnedProcessOptions = {
     beforeLaunch,
     cwd: input.cwd,
-    env: { ...harnessExecutableEnv(shellSpawnEnv()), ...input.env },
+    // agy reaches Google services itself; an inherited proxy is part of its
+    // network, unlike the shell tool's credential-free allow-list.
+    env: { ...harnessExecutableEnv(sdkProcessBaseEnv()), ...input.env },
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false
   }

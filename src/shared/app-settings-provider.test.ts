@@ -217,7 +217,7 @@ describe('Gemini subscription provider preset', () => {
       baseUrl: '',
       endpointFormat: 'custom_endpoint',
       useProxy: false,
-      models: expect.arrayContaining(['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro'])
+      models: expect.arrayContaining(['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.1-pro'])
     })
   })
 
@@ -269,7 +269,7 @@ describe('Gemini subscription provider preset', () => {
     ).toMatchObject({
       kind: 'antigravity-cli',
       apiKey: '',
-      models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro']
+      models: ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.1-pro']
     })
   })
 })

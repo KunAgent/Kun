@@ -102,6 +102,9 @@ installations. Third-party settings are not rewritten automatically.
   `session/set_mode` before the prompt. A picked Agent runs under its own tool
   permissions; read-only and unattended turns still use the strictest mode, and
   an Agent the session does not offer fails before any prompt is sent.
+  OpenCode 1.18 reports these modes only as the `mode` config option; Kun reads
+  either shape. When a plugin replaces build/plan with its own Agents, readiness
+  still passes, Auto turns fail closed, and the user picks one of those Agents.
 
 ## Installation and updates
 

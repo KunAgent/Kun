@@ -134,9 +134,12 @@ export const OLLAMA_CLOUD_MODEL_IDS = [
   'qwen3.5:397b'
 ] as const
 
+// Bootstrap ids for the Antigravity CLI (`agy models`, 1.3.1). The live list
+// replaces this catalog once the user refreshes models.
 export const GEMINI_SUBSCRIPTION_MODEL_IDS = [
   'gemini-3.6-flash',
-  'gemini-3.5-flash',
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
   'gemini-3.1-pro'
 ] as const
 

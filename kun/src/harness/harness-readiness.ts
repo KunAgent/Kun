@@ -74,7 +74,10 @@ export class HarnessReadinessService {
     const aliasModel = gatewayBinding ? this.deps.options().routePools?.find((pool) => pool.id === gatewayBinding.main.routeId)?.modelId : undefined
     return { harnessId: definition.id, credentialMode,
       ...(gatewayBinding ? { gatewayBinding } : providerId ? { providerId } : credentialMode !== 'native-login' ? { providerId: 'default' } : {}),
-      model: (gatewayBinding && input.model === 'default' ? undefined : input.model) ?? aliasModel ?? defaults?.model ?? (credentialMode === 'native-login' ? 'default' : this.deps.options().model ?? '') }
+      // Kun's own main model is never an external Agent's provider model; an
+      // unselected native or provider route lets the Agent pick its default.
+      model: (gatewayBinding && input.model === 'default' ? undefined : input.model) ?? aliasModel ?? defaults?.model ??
+        (credentialMode === 'native-login' || credentialMode === 'provider' ? 'default' : this.deps.options().model ?? '') }
   }
 
   async test(definition: HarnessDefinition, input: HarnessTestRequest, signal?: AbortSignal): Promise<HarnessTestResponse> {
@@ -414,7 +417,9 @@ export class HarnessReadinessService {
         !legacyProviderKindFor(definition.id) || provider.kind === legacyProviderKindFor(definition.id)))
       configured &&= validProvider && Boolean(route.model) && (!gateway || Boolean(definition.gateway))
       const modelPool = [...(provider?.models ?? []), ...(provider?.selectedModel ? [provider.selectedModel] : [])]
-      if ((gateway || modelPool.length) && !modelPool.includes(parseGatewayModelId(route.model)?.model ?? route.model)) { configured = false; detail = 'Selected model is not in this provider profile' }
+      // "Agent default model" defers to the provider profile's own default.
+      const agentDefault = !gateway && route.model === 'default' && modelPool.length > 0
+      if ((gateway || modelPool.length) && !agentDefault && !modelPool.includes(parseGatewayModelId(route.model)?.model ?? route.model)) { configured = false; detail = 'Selected model is not in this provider profile' }
       if (!validProvider) detail = 'Select a supported provider profile'
       // Protocol initialization must not consume the provider key or issue a gateway grant.
       // Its model route and credential are checked locally, independently of login.

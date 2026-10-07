@@ -162,7 +162,8 @@ export class CursorTurnInterruptedError extends Error {
 
 export function normalizeCursorModel(model: string | undefined): string {
   const normalized = model?.trim()
-  return normalized || DEFAULT_CURSOR_MODEL
+  // The composer's "Agent default model" maps to Cursor's own automatic choice.
+  return normalized && normalized !== 'default' ? normalized : DEFAULT_CURSOR_MODEL
 }
 
 export function cursorAgentExecutionOptions(input: {

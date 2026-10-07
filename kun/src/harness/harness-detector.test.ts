@@ -446,4 +446,18 @@ describe('safe current detection evidence', () => {
     await Promise.resolve()
     expect(detector.cachedStatus('opencode')).toBeUndefined()
   })
+
+  it('falls back to an alias when the primary command name belongs to another vendor', async () => {
+    // Cursor installs both `agent` and `cursor-agent`; Grok also ships an `agent`.
+    const def = acpDef({ detect: { command: 'agent', aliases: ['cursor-agent'], versionArgs: ['--version'],
+      identityPattern: '(?:^|\\n)(?:Cursor(?: Agent)?\\b|\\d{4}\\.\\d{1,2}\\.\\d{1,2})' } })
+    const detector = makeDetector({
+      defs: [def],
+      resolve: async (command) => command === 'agent' ? '/home/.grok/bin/agent' : '/home/.local/bin/cursor-agent',
+      spawnCaptured: async (command) => ({ stdout: command.includes('grok') ? 'grok 1.0.5 (5115b46)\n' : '2026.10.01-e373342\n',
+        stderr: '', timedOut: false, exitCode: 0 }),
+      probeReady: async () => ({ ready: 'yes' })
+    })
+    expect(await detector.status('opencode')).toMatchObject({ installed: 'yes', resolvedCommand: '/home/.local/bin/cursor-agent' })
+  })
 })

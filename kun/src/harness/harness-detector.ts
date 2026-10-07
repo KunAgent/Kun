@@ -411,14 +411,21 @@ export class HarnessDetector {
     if (!override && !this.deps.resolveExecutable && def.transport === 'codex-app-server' && def.detect.command === 'codex') {
       return resolve(await raceProbeAbort(resolveCodexExecutable(), signal))
     }
-    for (const candidate of [def.detect.command, ...(def.detect.aliases ?? [])]) {
+    const candidates = [def.detect.command, ...(def.detect.aliases ?? [])]
+    let first: string | undefined
+    for (const candidate of candidates) {
       signal.throwIfAborted()
       const resolved = await raceProbeAbort(resolve(candidate), signal)
       signal.throwIfAborted()
       if (resolved && def.detect.rejectApplicationLauncher && await isApplicationLauncher(resolved)) continue
-      if (resolved) return resolved
+      if (!resolved) continue
+      if (!def.detect.identityPattern || candidates.length === 1) return resolved
+      // A generic command name (Cursor's `agent`) can belong to another
+      // vendor earlier on PATH; keep looking for an alias that identifies it.
+      first ??= resolved
+      if ((await this.readVersion(def, resolved, signal))?.identityMismatch !== true) return resolved
     }
-    return undefined
+    return first
   }
 
   private async readVersion(

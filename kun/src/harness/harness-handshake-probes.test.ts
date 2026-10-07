@@ -26,7 +26,22 @@ it('classifies an actual ACP auth_required response as login required without au
   expect(child.requests.map((request) => request.method)).toEqual(['initialize', 'session/new'])
   expect(child.stop).toHaveBeenCalledOnce()
 })
-function fixture(options: { silent?: boolean; account?: unknown; accountError?: boolean; models?: unknown[]; modelError?: boolean; modelHang?: boolean; session?: unknown; sessionError?: boolean; authRequired?: boolean; sessionHang?: boolean } = {}) {
+it('reports an upstream-retired client instead of asking the user to sign in', async () => {
+  const child = fixture({ authRequired: true, authMessage: 'This client is no longer supported for Gemini Code Assist for individuals.' })
+  spawn.mockResolvedValue(child.process)
+  const result = await probeAcpHandshake(catalog.get('gemini-cli')!, 'fixture', { session: {} })
+  expect(result).toMatchObject({ ok: false, detail: expect.stringContaining('no longer supports this client') })
+  expect(result.authRequired).toBeUndefined()
+})
+it('keeps an ACP session usable when plugins replace the permission-mapped modes with native Agents', async () => {
+  const child = fixture({ session: { sessionId: 'fixture', configOptions: [{ id: 'mode', name: 'Mode', category: 'mode',
+    type: 'select', currentValue: 'Sisyphus', options: [{ value: 'Sisyphus', name: 'Sisyphus' }, { value: 'Prometheus', name: 'Prometheus' }] }] } })
+  spawn.mockResolvedValue(child.process)
+  const result = await probeAcpHandshake(catalog.get('opencode')!, 'fixture', { session: { permissionMode: 'plan' } })
+  expect(result).toMatchObject({ ok: true, detail: expect.stringContaining('pick one in the composer') })
+  expect(child.requests.map((request) => request.method)).toEqual(['initialize', 'session/new'])
+})
+function fixture(options: { silent?: boolean; account?: unknown; accountError?: boolean; models?: unknown[]; modelError?: boolean; modelHang?: boolean; session?: unknown; sessionError?: boolean; authRequired?: boolean; authMessage?: string; sessionHang?: boolean } = {}) {
   const stdin = new PassThrough(), stdout = new PassThrough()
   let exited!: () => void
   const exit = new Promise<{ code: number; signal: null }>((resolve) => {
@@ -48,7 +63,7 @@ function fixture(options: { silent?: boolean; account?: unknown; accountError?: 
       : request.method === 'session/new'
       ? options.sessionError || options.authRequired
         ? { id: request.id, error: { code: options.authRequired ? -32000 : -32603,
-            message: options.authRequired ? 'Authentication required' : 'metadata unavailable' } }
+            message: options.authRequired ? options.authMessage ?? 'Authentication required' : 'metadata unavailable' } }
         : { id: request.id, result: options.session ?? { sessionId: 'fixture' } }
       : request.type === 'get_available_models'
       ? { id: request.id, type: 'response', command: request.type, success: !options.modelError,

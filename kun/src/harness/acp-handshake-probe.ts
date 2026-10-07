@@ -26,7 +26,7 @@ import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
 import { raceProbeAbort } from './probe-abort.js'
 import { nativeAgentLaunchEnv } from './native-agent-network.js'
 import { applyDevinSessionPermission } from '../runtime/acp/devin-session-permissions.js'
-import { applyAcpSessionPermission } from '../runtime/acp/acp-session-permissions.js'
+import { acpPermissionModeUnoffered, applyAcpSessionPermission } from '../runtime/acp/acp-session-permissions.js'
 import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
 import { isAcpAuthenticationRequired } from '../runtime/acp/acp-authentication.js'
 
@@ -98,6 +98,7 @@ export async function probeAcpHandshake(
     const init = await raceProbeAbort(conn.initialize({ timeoutMs }), signal)
     signal.throwIfAborted()
     let models: string[] | undefined
+    let detail: string | undefined
     if (deps.includeModels || deps.session) {
       workspace = await mkdtemp(join(tmpdir(), 'kun-acp-readiness-'))
       const raw = await raceProbeAbort(conn.rpc.request(ACP_AGENT_METHODS.sessionNew,
@@ -107,7 +108,12 @@ export async function probeAcpHandshake(
       if (deps.includeModels) models = acpModelCatalog({ harnessId: definition.id, ...session }).models
       if (deps.session) {
         await raceProbeAbort(applyAcpSessionModel(conn, { ...session, models: parseAcpLegacyModels(session.models) }, deps.session.model), signal)
+        const agentsOnly = definition.nativeAgents === 'session-modes' && Boolean(deps.session.permissionMode) &&
+          acpPermissionModeUnoffered(session, deps.session.permissionMode!, definition.acpPermission)
         if (definition.id === 'devin') await raceProbeAbort(applyDevinSessionPermission(conn, session, deps.session.permissionMode), signal)
+        // The session still works through an explicitly picked native Agent;
+        // Auto turns keep failing closed in applyAcpSessionPermission.
+        else if (agentsOnly) detail = 'The Agent replaced its permission modes with its own Agents; pick one in the composer'
         else await raceProbeAbort(applyAcpSessionPermission(conn, session, deps.session.permissionMode, definition.acpPermission), signal)
       }
     }
@@ -122,6 +128,7 @@ export async function probeAcpHandshake(
       protocol: 'acp',
       authentication: 'unverified',
       ...(models ? { models } : {}),
+      ...(detail ? { detail } : {}),
       protocolVersion: init.protocolVersion,
       ...(init.agentInfo?.name || init.agentInfo?.version
         ? {
@@ -152,13 +159,19 @@ export async function probeAcpHandshake(
     const stderr = process.sanitizedStderrTail()
     if (stderr) parts.push(`stderr: ${stderr}`)
     const detail = parts.join(' — ').slice(0, 400)
+    // Gemini CLI 0.52 reports Google's retirement of the individual Code
+    // Assist tier with the auth-required code; signing in cannot fix that.
+    const retired = isAcpAuthenticationRequired(error) && /no longer supported/i.test(errorMessage(error))
+    const authRequired = isAcpAuthenticationRequired(error) && !retired
     return {
       ok: false,
       supported: true,
       protocol: 'acp',
-      ...(isAcpAuthenticationRequired(error) ? { authRequired: true, authentication: 'missing' as const } : {}),
+      ...(authRequired ? { authRequired: true, authentication: 'missing' as const } : {}),
       detail:
-        isAcpAuthenticationRequired(error)
+        retired
+          ? `The Agent's service no longer supports this client; signing in will not help: ${errorMessage(error).slice(0, 240)}`
+          : authRequired
           ? 'The Agent requires login. Sign in with its native CLI, then check and enable this profile again.'
           : error instanceof AcpError && error.code === 'request_timeout'
           ? `probe timed out after ${timeoutMs}ms`
