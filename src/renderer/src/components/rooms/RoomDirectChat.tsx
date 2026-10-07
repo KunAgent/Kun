@@ -119,6 +119,23 @@ export function RoomDirectProgress({ room, state, onRun, openRunId, onModels, ac
   const queued = Math.max(0, (state.data?.pendingCount ?? 0) - 1)
   const failedKey = failed ? `failed:${failed.id}:${failed.status}:${failed.error ?? ''}` : ''
   const errorKey = state.error ? `error:${state.error}` : ''
+  // Seeing the failure here is the acknowledgement the sidebar's pending badge waits for.
+  const acknowledging = useRef('')
+  const refreshActivity = useRef(state.refresh); refreshActivity.current = state.refresh
+  const unseenFailure = failed?.status === 'failed' && !failed.failureAcknowledged ? `${failed.id}:${failed.revision}` : ''
+  useEffect(() => {
+    if (!unseenFailure) return
+    const requestId = unseenFailure.slice(0, unseenFailure.lastIndexOf(':'))
+    const acknowledge = () => {
+      if (acknowledging.current === unseenFailure || !document.hasFocus()) return
+      acknowledging.current = unseenFailure
+      void roomsRequest(`${roomPath(room.id)}/requests/${encodeURIComponent(requestId)}/acknowledge`, 'POST',
+        { clientRequestId: roomRequestId() }).then(() => refreshActivity.current()).catch(() => { acknowledging.current = '' })
+    }
+    acknowledge()
+    window.addEventListener('focus', acknowledge)
+    return () => window.removeEventListener('focus', acknowledge)
+  }, [room.id, unseenFailure])
   if (!active && !(failed && failedKey !== dismissed) && !(state.error && errorKey !== dismissed) && !room.privateWorkspace) return null
   return <div className="direct-progress">
     {room.privateWorkspace ? <p className="direct-project"><FolderOpen size={13} /><span title={room.privateWorkspace}>{room.privateWorkspace.split('/').at(-1)}</span></p> : null}

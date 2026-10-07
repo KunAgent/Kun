@@ -57,6 +57,8 @@ export type RoomRequestState = {
   turnId?: string
   admissionAttempted?: boolean
   error?: string
+  /** Document revision at which the user saw this failure; any later write raises attention again. */
+  failureAcknowledgedRevision?: number
   round?: number
   stage?: 'coordinate' | 'discuss'
   stepAttempt?: number

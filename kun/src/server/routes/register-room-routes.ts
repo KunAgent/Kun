@@ -228,6 +228,10 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     rooms.wake()
     return result
   })
+  add('POST', '/v1/rooms/:roomId/requests/:requestId/acknowledge', async (rooms, request, { params }) => {
+    const input = z.object({ clientRequestId: RoomIdSchema }).parse(await body(request))
+    return rooms.exclusive(() => rooms.product.acknowledgeRequestFailure(params.roomId, params.requestId, input.clientRequestId))
+  })
   add('POST', '/v1/rooms/:roomId/requests/:requestId/retry', async (rooms, request, context) => {
     const input = RoomTaskActionSchema.parse(await body(request))
     const result = await rooms.exclusive(() => rooms.product.retryRequest(context.params.roomId, context.params.requestId, input.clientRequestId, input.expectedRevision))

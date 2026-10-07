@@ -10,6 +10,8 @@ vi.mock('./agent-client', () => ({
   useAgentResource: () => ({ data: null, refresh: vi.fn(), error: '' })
 }))
 vi.mock('./RoomAvatar', () => ({ RoomAvatar: () => null }))
+const roomsRequest = vi.hoisted(() => vi.fn(async () => ({})))
+vi.mock('./rooms-client', async (importOriginal) => ({ ...await importOriginal<typeof import('./rooms-client')>(), roomsRequest }))
 vi.mock('./RoomPopover', () => ({
   RoomPopover: ({ label, children }: { label: string; children: (close: () => void) => ReactNode }) => {
     const [open, setOpen] = useState(false)
@@ -163,10 +165,15 @@ const progressProps = (state: Parameters<typeof RoomDirectProgress>[0]['state'])
 
 describe('RoomDirectProgress dismissible notices', () => {
   let renderer: ReactTestRenderer
+  let focused = true
   beforeEach(async () => {
     await i18n.changeLanguage('en')
+    focused = true
+    roomsRequest.mockClear()
+    vi.stubGlobal('document', { hasFocus: () => focused })
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
   })
-  afterEach(() => { if (renderer) act(() => renderer.unmount()) })
+  afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.unstubAllGlobals() })
 
   const errorAlert = () => renderer.root.findAllByProps({ role: 'alert' })
   const dismissButton = () => renderer.root.findByProps({ 'aria-label': 'Dismiss notice' })
@@ -216,5 +223,32 @@ describe('RoomDirectProgress dismissible notices', () => {
     })
     await act(async () => { renderer.update(createElement(RoomDirectProgress, progressProps(next))) })
     expect(renderer.root.findAllByProps({ className: 'direct-failed' })).toHaveLength(1)
+  })
+
+  it('acknowledges a failed reply once the focused window shows it, so the sidebar stops marking it pending', async () => {
+    const failedRequest = { id: 'req-1', revision: 3, status: 'failed', error: 'Error: boom' }
+    const state = directState({
+      data: { requests: [failedRequest], pendingCount: 0, approvals: [], userInputs: [] } as unknown as AgentDirectActivity
+    })
+    await act(async () => { renderer = create(createElement(RoomDirectProgress, progressProps(state))) })
+    expect(roomsRequest).toHaveBeenCalledOnce()
+    expect(roomsRequest).toHaveBeenCalledWith('/v1/rooms/room-1/requests/req-1/acknowledge', 'POST',
+      { clientRequestId: expect.any(String) })
+  })
+
+  it('leaves an already acknowledged or unseen failure alone', async () => {
+    const seen = { id: 'req-1', revision: 4, status: 'failed', error: 'Error: boom', failureAcknowledged: true }
+    await act(async () => {
+      renderer = create(createElement(RoomDirectProgress, progressProps(directState({
+        data: { requests: [seen], pendingCount: 0, approvals: [], userInputs: [] } as unknown as AgentDirectActivity
+      }))))
+    })
+    focused = false
+    await act(async () => {
+      renderer.update(createElement(RoomDirectProgress, progressProps(directState({
+        data: { requests: [{ ...seen, id: 'req-2', failureAcknowledged: false }], pendingCount: 0, approvals: [], userInputs: [] } as unknown as AgentDirectActivity
+      }))))
+    })
+    expect(roomsRequest).not.toHaveBeenCalled()
   })
 })

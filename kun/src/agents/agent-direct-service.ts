@@ -30,7 +30,8 @@ export async function directActivity(rooms: RoomRuntime, roomId: string) {
   const activeRows = await rooms.deps.store.list<RoomRequestState>('request', { roomId, status: ['running', 'pending', 'stopping', 'recovery_required'], order: 'asc', limit: 1000 })
   const requestSummary = (row: typeof rows[number]) => ({ id: row.id, revision: row.revision, status: row.value.status,
     runId: row.value.privateRunId, threadId: row.value.turnId ? row.value.threadId : undefined, turnId: row.value.turnId,
-    clientRequestId: row.value.message.clientRequestId, steer: row.value.steer, error: row.value.error })
+    clientRequestId: row.value.message.clientRequestId, steer: row.value.steer, error: row.value.error,
+    failureAcknowledged: row.value.status === 'failed' && row.value.failureAcknowledgedRevision === row.revision })
   const requests = rows.filter((row) => row.value.privateProtocol).map(requestSummary)
   const activeRow = activeRows.find((row) => row.value.privateProtocol)
   const active = activeRow ? requestSummary(activeRow) : undefined

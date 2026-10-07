@@ -117,6 +117,29 @@ export class RoomProductService {
       puts: [{ kind: 'request', id, roomId, value }],
       events: [{ roomId, kind: 'request.updated', payload: { id } }], result: { id } })
   }
+  /**
+   * The user has seen this failed direct reply, so the sidebar stops listing
+   * it as pending. The marker pins the revision it was written at: a retry or
+   * any later failure writes the request again and raises attention anew.
+   */
+  async acknowledgeRequestFailure(roomId: string, id: string, clientRequestId: string) {
+    const key = 'ack-request-failure-' + roomFingerprint({ roomId, id, clientRequestId })
+    const fingerprint = roomFingerprint({ roomId, id })
+    const replay = await this.deps.store.getRequest(key)
+    if (replay) {
+      if (replay.fingerprint !== fingerprint) throw new RoomStoreConflictError('request acknowledgement identity conflict')
+      return { id, acknowledged: true }
+    }
+    const row = await this.deps.store.get<RoomRequestState>('request', id)
+    if (!row || row.roomId !== roomId) throw new Error('request not found')
+    if (!row.value.privateProtocol || row.value.status !== 'failed' ||
+      row.value.failureAcknowledgedRevision === row.revision) return { id, acknowledged: false }
+    await this.deps.store.commit({ requestId: key, fingerprint,
+      checks: [{ kind: 'request', id, expectedRevision: row.revision }],
+      puts: [{ kind: 'request', id, roomId, value: { ...row.value, failureAcknowledgedRevision: row.revision + 1 } }],
+      events: [{ roomId, kind: 'request.updated', payload: { id } }], result: { id } })
+    return { id, acknowledged: true }
+  }
   recovery(roomId: string, taskId: string) { return inspectRoomRecovery(this.deps, roomId, taskId) }
   recover(roomId: string, taskId: string, input: unknown) { return recoverRoomTask(this.deps, roomId, taskId, input) }
   async deliveries(roomId: string, taskId: string) { return (await this.deliveryPage(roomId, taskId)).deliveries }
