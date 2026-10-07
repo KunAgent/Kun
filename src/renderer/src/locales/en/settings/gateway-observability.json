@@ -18,6 +18,7 @@
     "title": "Recent routes",
     "description": "Which provider and model served each external request, why it went there, and every fallback tried. Prompt text is never kept.",
     "empty": "No gateway requests yet. Requests from connected agents appear here as they arrive.",
+    "loadFailed": "Recent routes could not be loaded ({{reason}}). Kun keeps retrying every few seconds.",
     "refresh": "Refresh",
     "pause": "Pause",
     "resume": "Resume",

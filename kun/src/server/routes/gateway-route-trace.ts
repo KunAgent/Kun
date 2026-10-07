@@ -1,6 +1,8 @@
 import type { GatewayRouteTrace } from '../../contracts/gateway-route-trace.js'
 import type { ModelStreamChunk } from '../../ports/model-client.js'
 import { tapGatewayStream } from './gateway-stream-tap.js'
+import { join } from 'node:path'
+import { GatewayRouteTraceFile } from './gateway-route-trace-file.js'
 
 export type { GatewayRouteTrace, GatewayRouteTry } from '../../contracts/gateway-route-trace.js'
 
@@ -12,7 +14,8 @@ export type { GatewayRouteTrace, GatewayRouteTry } from '../../contracts/gateway
  * routed alias picked, and every fallback it tried, before the first token.
  * Session traces are keyed by the caller-scoped session hash the usage ledger
  * already uses, so one client can never read another client's session. The
- * recent list keeps the last requests of every caller for the admin view.
+ * recent list keeps the last requests of every caller for the admin view;
+ * its finished entries survive a restart when the store has a file.
  */
 type SessionTrace = { seq: number; trace: GatewayRouteTrace }
 
@@ -29,7 +32,11 @@ export class GatewayRouteTraceStore {
   private readonly waiters = new Map<string, Set<() => void>>()
   private seq = 0
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(private readonly now: () => number = Date.now, private readonly file?: GatewayRouteTraceFile) {
+    // Restored traces keep their sequence numbers, so cursors stay monotonic across restarts.
+    for (const trace of file?.load() ?? []) this.recentTraces.push(trace)
+    this.seq = this.recentTraces.at(-1)?.seq ?? 0
+  }
 
   begin(sessionKey: string | undefined, input: { requestId: string; asked: string; agent?: string; client?: string; effort?: string }): GatewayRouteTraceWriter {
     const startedAt = this.now()
@@ -49,6 +56,7 @@ export class GatewayRouteTraceStore {
         this.wake(sessionKey)
       }
       this.wake(RECENT_KEY)
+      if (trace.done) this.file?.save(this.recentTraces.filter((item) => item.done).map((item) => structuredClone(item)))
     }
     publish()
     let sawRoute = false
@@ -148,10 +156,17 @@ export type GatewayRouteTraceWriter = {
 }
 
 const STORES = new WeakMap<object, GatewayRouteTraceStore>()
+export const GATEWAY_ROUTE_TRACES_FILE = 'gateway-route-traces.v1.json'
 
+/** The trace store of a runtime's gateway; it persists next to the gateway credentials when they have a folder. */
 export function gatewayRouteTraceStore(owner: object): GatewayRouteTraceStore {
   let store = STORES.get(owner)
-  if (!store) { store = new GatewayRouteTraceStore(); STORES.set(owner, store) }
+  if (!store) {
+    const directory = (owner as { credentials?: { directory?: unknown } }).credentials?.directory
+    const file = typeof directory === 'string' && directory ? new GatewayRouteTraceFile(join(directory, GATEWAY_ROUTE_TRACES_FILE), RECENT) : undefined
+    store = new GatewayRouteTraceStore(Date.now, file)
+    STORES.set(owner, store)
+  }
   return store
 }
 

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ModelStreamChunk } from '../../ports/model-client.js'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { GatewayRouteTraceStore, traceGatewayStream } from './gateway-route-trace.js'
+import { GatewayRouteTraceFile } from './gateway-route-trace-file.js'
 
 async function run(store: GatewayRouteTraceStore, session: string | undefined, chunks: ModelStreamChunk[], requestId = 'r1') {
   const writer = store.begin(session, { requestId, asked: 'coding', agent: 'codex', client: 'Agent · Codex' })
@@ -48,5 +52,34 @@ describe('gateway route traces', () => {
     const parked = store.waitRecent(store.recent().seq, 5_000, aborted.signal)
     aborted.abort()
     expect((await parked).traces).toEqual([])
+  })
+  it('keeps finished requests across a restart, with cursors that keep increasing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kun-route-traces-'))
+    try {
+      const path = join(dir, 'traces.json')
+      const first = new GatewayRouteTraceStore(Date.now, new GatewayRouteTraceFile(path, 100))
+      await run(first, undefined, [{ kind: 'assistant_text_delta', text: 'a', route: route('a', 'rule') }, { kind: 'completed', stopReason: 'stop' }], 'done-1')
+      first.begin(undefined, { requestId: 'still-running', asked: 'coding' })
+      // Saves are debounced; force the pending one through the store's own file.
+      await (first as unknown as { file: GatewayRouteTraceFile }).file.flush()
+      const file = new GatewayRouteTraceFile(path, 100)
+      expect(JSON.parse(readFileSync(path, 'utf8')).traces.map((trace: { requestId: string }) => trace.requestId)).toEqual(['done-1'])
+      if (process.platform !== 'win32') expect(statSync(path).mode & 0o777).toBe(0o600)
+      const restarted = new GatewayRouteTraceStore(Date.now, file)
+      const before = restarted.recent(0)
+      expect(before.traces.map((trace) => trace.requestId)).toEqual(['done-1'])
+      await run(restarted, undefined, [{ kind: 'completed', stopReason: 'stop' }], 'after-restart')
+      const after = restarted.recent(before.seq)
+      expect(after.traces.map((trace) => trace.requestId)).toEqual(['after-restart'])
+      expect(after.seq).toBeGreaterThan(before.seq)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+  it('ignores a damaged trace file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kun-route-traces-'))
+    try {
+      const path = join(dir, 'traces.json')
+      writeFileSync(path, '{not json')
+      expect(new GatewayRouteTraceStore(Date.now, new GatewayRouteTraceFile(path, 100)).recent(0)).toEqual({ seq: 0, traces: [] })
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })

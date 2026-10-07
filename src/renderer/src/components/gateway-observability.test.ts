@@ -46,6 +46,40 @@ describe('recent routes', () => {
     expect(cancelRuntimeRequest).toHaveBeenCalled()
     renderer.unmount()
   })
+  it('says when recent routes cannot be loaded and clears it once they can', async () => {
+    let failing = true
+    const runtimeRequest = vi.fn(async (path: string) => path.includes('wait=')
+      ? await new Promise<ReturnType<typeof ok>>(() => undefined)
+      : failing ? { ok: false, status: 503, body: '{}' } : ok({ seq: 1, traces: [trace('r1', 1)] }))
+    ;(globalThis as { window?: unknown }).window = { kunGui: { runtimeRequest, cancelRuntimeRequest: vi.fn() } }
+    let renderer!: ReactTestRenderer
+    await act(async () => { renderer = create(createElement(GatewayRouteTracePanel, { active: false, t })) })
+    const refresh = renderer.root.find((node) => node.type === 'button' && node.props['aria-label'] === 'Refresh')
+    await act(async () => refresh.props.onClick())
+    expect(renderer.root.findAll((node) => node.props.role === 'alert').map(text).join('')).toContain('HTTP 503')
+    failing = false
+    await act(async () => refresh.props.onClick())
+    expect(renderer.root.findAll((node) => node.props.role === 'alert')).toHaveLength(0)
+    expect(text(renderer.root)).toContain('beta/b1')
+    renderer.unmount()
+  })
+  it('starts over when the runtime counts from zero again', async () => {
+    const seqs = [9, 2]
+    const runtimeRequest = vi.fn(async () => {
+      const seq = seqs.shift() ?? 2
+      return ok({ seq, traces: seq === 9 ? [trace('old', 9)] : [trace('new', 2)] })
+    })
+    ;(globalThis as { window?: unknown }).window = { kunGui: { runtimeRequest, cancelRuntimeRequest: vi.fn() } }
+    let renderer!: ReactTestRenderer
+    await act(async () => { renderer = create(createElement(GatewayRouteTracePanel, { active: false, t })) })
+    const refresh = renderer.root.find((node) => node.type === 'button' && node.props['aria-label'] === 'Refresh')
+    await act(async () => refresh.props.onClick())
+    await act(async () => refresh.props.onClick())
+    expect(runtimeRequest).toHaveBeenLastCalledWith('/v1/model-gateway/route-traces?after=0', 'GET', undefined, expect.anything())
+    const rows = renderer.root.findAll((node) => node.type === 'tr' && node.props['aria-expanded'] !== undefined)
+    expect(rows).toHaveLength(1)
+    renderer.unmount()
+  })
   it('does not poll while the page is hidden', async () => {
     const runtimeRequest = vi.fn()
     ;(globalThis as { window?: unknown }).window = { kunGui: { runtimeRequest } }

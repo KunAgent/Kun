@@ -33,12 +33,26 @@ export function GatewayRouteTracePanel({ active, t }: { active: boolean; t: TFun
   const [traces, setTraces] = useState<GatewayRouteTrace[]>([])
   const [paused, setPaused] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const seq = useRef(0)
   const fetchOnce = useCallback(async (wait: number, requestId?: string): Promise<boolean> => {
-    const result = await window.kunGui.runtimeRequest(`${PATH}?after=${seq.current}${wait ? `&wait=${wait}` : ''}`, 'GET', undefined,
-      requestId ? { requestId, priority: 'background' } : { priority: 'background' })
-    if (!result.ok) return false
+    let result: Awaited<ReturnType<typeof window.kunGui.runtimeRequest>>
+    try {
+      result = await window.kunGui.runtimeRequest(`${PATH}?after=${seq.current}${wait ? `&wait=${wait}` : ''}`, 'GET', undefined,
+        requestId ? { requestId, priority: 'background' } : { priority: 'background' })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+      return false
+    }
+    if (!result.ok) { setError(`HTTP ${result.status}`); return false }
     const body = JSON.parse(result.body) as { seq?: number; traces?: GatewayRouteTrace[] }
+    setError(null)
+    // A runtime that restarted without its saved traces counts from zero again: start over.
+    if (typeof body.seq === 'number' && body.seq < seq.current) {
+      seq.current = 0
+      setTraces([])
+      return fetchOnce(0)
+    }
     if (typeof body.seq === 'number') seq.current = body.seq
     if (body.traces?.length) setTraces((current) => mergeRouteTraces(current, body.traces!))
     return true
@@ -48,11 +62,11 @@ export function GatewayRouteTracePanel({ active, t }: { active: boolean; t: TFun
     let stopped = false
     const requestId = `route-traces-${Math.random().toString(36).slice(2)}`
     void (async () => {
-      try { await fetchOnce(0) } catch { /* informational */ }
+      await fetchOnce(0)
       while (!stopped) {
         const started = Date.now()
         let ok = false
-        try { ok = await fetchOnce(WAIT_SECONDS, requestId) } catch { ok = false }
+        ok = await fetchOnce(WAIT_SECONDS, requestId)
         // Back off after failures, and never poll faster than once a second even if the runtime answers at once.
         const pause = !ok ? 5_000 : Math.max(0, 1_000 - (Date.now() - started))
         if (pause && !stopped) await new Promise((resolve) => setTimeout(resolve, pause))
@@ -79,10 +93,12 @@ export function GatewayRouteTracePanel({ active, t }: { active: boolean; t: TFun
           aria-label={t(paused ? 'gatewayRoutes.resume' : 'gatewayRoutes.pause')}>
           {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}{t(paused ? 'gatewayRoutes.resume' : 'gatewayRoutes.pause')}
         </button>
-        <button type="button" className={settingsButtonClass()} aria-label={t('gatewayRoutes.refresh')} onClick={() => void fetchOnce(0).catch(() => undefined)}>
+        <button type="button" className={settingsButtonClass()} aria-label={t('gatewayRoutes.refresh')} onClick={() => void fetchOnce(0)}>
           <RefreshCw className="h-3.5 w-3.5" /></button>
       </div>
     </div>
+    {error ? <p role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[11.5px] text-amber-700 dark:text-amber-200">
+      {t('gatewayRoutes.loadFailed', { reason: error })}</p> : null}
     {!traces.length ? <p className="rounded-lg bg-ds-main px-3 py-2 text-[11.5px] text-ds-muted">{t('gatewayRoutes.empty')}</p> :
       <div className="min-w-0 overflow-x-auto">
         <table className="w-full min-w-[40rem] border-collapse text-left text-[11.5px]">
