@@ -81,9 +81,11 @@ function GroupInfoMember({ member, responding, waiting, onDetails, onMessage }: 
   const models = useAgentResource<AgentModels>(agentId ? agentPath(agentId) + '/models' : null)
   const archived = Boolean(models.data?.agent.archivedAt)
   const status = archived ? 'archived' : memberConversationStatus(member, responding, waiting)
-  const binding = models.data?.main
-  const provider = modelProviderLabel(binding, models.data?.options)
-  const role = member.agentTitle || t('rooms' + member.role[0].toUpperCase() + member.role.slice(1))
+  // A coding Agent answers with its own engine model, not a Kun connection.
+  const engine = models.data?.agent?.executor
+  const binding = engine ? { model: engine.model } : models.data?.main
+  const provider = engine ? undefined : modelProviderLabel(binding, models.data?.options)
+  const role = engine ? t('directCodingAgentRole') : member.agentTitle || t('rooms' + member.role[0].toUpperCase() + member.role.slice(1))
   return <li data-member-status={status}>
     <button type="button" className="conversation-info-member" aria-label={t('conversationInfoMemberDetails', { name: member.displayName })}
       onClick={onDetails}>
@@ -94,7 +96,7 @@ function GroupInfoMember({ member, responding, waiting, onDetails, onMessage }: 
         <strong>{member.displayName}</strong>
         <small>{role} · {t('conversationStatus_' + status)}</small>
       </span>
-      {binding ? <span className="conversation-info-member-model" data-available={archived ? undefined : String(models.data?.mainAvailable !== false)}
+      {binding ? <span className="conversation-info-member-model" data-available={archived ? undefined : String(Boolean(engine) || models.data?.mainAvailable !== false)}
         title={[provider, binding.model].filter(Boolean).join(' / ')}>{binding.model}</span> : null}
       <ChevronRight size={14} aria-hidden="true" />
     </button>

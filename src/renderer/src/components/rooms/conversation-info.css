@@ -295,3 +295,18 @@
 @media (prefers-reduced-motion: reduce) {
   .conversation-info * { transition: none !important; }
 }
+/* A coding Agent's engine route replaces the Kun model pair. */
+.conversation-info-engine {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--info-line);
+  border-radius: 12px;
+  background: var(--info-card);
+}
+.conversation-info-engine > span { display: flex; min-width: 0; flex-direction: column; }
+.conversation-info-engine strong { overflow: hidden; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-info-engine small { font-size: 11px; color: var(--ds-text-muted); }
+.conversation-info-engine p { grid-column: 1 / -1; font-size: 11px; line-height: 1.4; color: var(--ds-text-muted); }

@@ -4,6 +4,7 @@ import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import type { HarnessId } from '../contracts/harness.js'
 import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 import { KUN_NATIVE_CAPABILITIES } from '../harness/builtin-harnesses.js'
+import { isConversationalRoomEngine } from '../contracts/agent-executor.js'
 import { effectiveKunTurnIntent, isInternalGraphWorker, unsupportedKunTurnIntent } from '../harness/kun-turn-intent.js'
 import {
   isHostShutdownTurnSuspension,
@@ -247,7 +248,12 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     }
     try {
       goalTimer = turnRecord?.paperContext ? null : await this.goalTurns.begin(threadId)
-      if (delegatedSdkRuntime && owningThread?.roomContext &&
+      // Coding Agent contacts chat and discuss under their engine's own read-only
+      // or permission gate (admission usage room-conversation); other room work
+      // still needs a runtime that applies Kun's room tool policy.
+      const conversationalEngine = Boolean(owningThread?.roomContext && turnHarnessId &&
+        isConversationalRoomEngine(owningThread.roomContext.kind, turnHarnessId))
+      if (delegatedSdkRuntime && owningThread?.roomContext && !conversationalEngine &&
         delegatedSdkRuntime.capabilities(delegatedProviderId)?.roomToolPolicy !== true) {
         throw new Error('This provider cannot enforce the room tool policy; select an API model or a supported SDK provider.')
       }

@@ -5,3 +5,6 @@
 .direct-composer-model-picker [role="alert"] { display: grid; font-size: 11px; color: var(--ds-danger, #bd4545); overflow-wrap: anywhere; }
 .direct-composer-model-picker [role="alert"] button { text-align: start; text-decoration: underline; }
 @media (max-width: 600px) { .direct-composer-model-picker { max-width: min(220px, 45vw); } }
+.direct-coding-agent-chip > span { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 5px 8px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-bg-main); font-size: 12px; }
+.direct-coding-agent-chip strong { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.direct-coding-agent-chip > span small { flex: none; font-size: 11px; color: var(--ds-text-muted); }

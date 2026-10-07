@@ -7,6 +7,7 @@ import { avatarForIdentity, ROOM_AVATARS, ROOM_AVATAR_BACKGROUND_SIZE } from './
 import './rooms-avatars.css'
 import { useRoomUploadedAvatar } from './room-uploaded-avatar'
 import { useRoomComposedAvatar } from './room-avatar-composed'
+import { AgentIcon } from '../agent-icon'
 
 const tones = [
   'var(--ds-accent)',
@@ -65,6 +66,8 @@ export function RoomAvatar({
   const composed = useRoomComposedAvatar(reference?.kind === 'composed' ? reference : undefined, size)
   const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(() => new Set())
   const builtinId = reference?.kind === 'builtin' ? reference.id : undefined
+  // Coding Agents show their engine mark in a rounded square, never a portrait.
+  const engine = reference?.kind === 'harness' ? reference.harnessId : undefined
   const selected = ROOM_AVATARS.find((item) => item.id === builtinId)
   // List, header and group sizes crop the portrait to the face (rooms-avatars.css).
   const compact = size <= 48
@@ -76,7 +79,7 @@ export function RoomAvatar({
   const image = composed && !failedImages.has(composed) ? composed
     : uploaded && !failedImages.has(uploaded) ? uploaded
     : isUser && !selected && !failedImages.has(kunGreet) ? kunGreet : undefined
-  const content = (
+  const content = engine ? <AgentIcon harnessId={engine} size={Math.round(size * 0.58)} /> : (
     <>
       {image ? (
         <img key={image} className={`rooms-avatar-art ${image === kunGreet ? 'rooms-user-kun' : 'object-cover'}`}
@@ -95,6 +98,7 @@ export function RoomAvatar({
       type="button"
       className="rooms-avatar rooms-avatar-button"
       data-compact={compact || undefined}
+      data-engine={engine}
       style={style}
       title={label}
       aria-label={label}
@@ -106,6 +110,7 @@ export function RoomAvatar({
     <span
       className="rooms-avatar"
       data-compact={compact || undefined}
+      data-engine={engine}
       style={style}
       title={label}
       role="img"

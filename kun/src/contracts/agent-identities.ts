@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { RoomAvatarReferenceSchema } from './room-content.js'
 import { AgentWorkbenchPolicySchema } from './workbench-policy.js'
+import { AgentExecutorSchema } from './agent-executor.js'
 
 export const ParticipantAgentId = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/)
 export const ConversationKind = z.enum(['group', 'user_agent', 'agent_agent'])
@@ -40,6 +41,8 @@ const fields = {
   allowedRepositoryRoots: z.array(z.string().min(1).max(4096)).max(100).optional(),
   reviewerAgentId: ParticipantAgentId.optional(),
   workbench: AgentWorkbenchPolicySchema.optional(),
+  /** External engine route; absent for Kun Agents. Only the model may change later. */
+  executor: AgentExecutorSchema.optional(),
   memory: AgentMemorySettings.default({ readEnabled: true, captureEnabled: true })
 }
 export const AgentIdentitySchema = z.object({

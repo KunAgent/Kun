@@ -29,6 +29,9 @@ import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
 import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
 import { WORKBENCH_TOOL_NAMES, resolveWorkbenchPolicy, workbenchToolNamesForPolicy } from '../contracts/workbench-policy.js'
 import { agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
+import { agentExecutorRouteKey } from '../contracts/agent-executor.js'
+import { EXTERNAL_AGENT_BLOCKED_TOOLS, externalAgentBinding, externalAgentSystemPrompt, externalAgentThreadRoute } from './agent-external.js'
+import { publishExternalAgentReply } from './agent-external-publication.js'
 
 export function agentWorkspace(dataDir: string, agentId: string) { return join(dataDir, 'agents', 'workspaces', agentId) }
 export class AgentDirectRunner {
@@ -79,8 +82,10 @@ export class AgentDirectRunner {
       return this.save(row, { ...request, status: 'cancelled' })
     }
     if (!request.privateInput) {
-      const main = request.privateModel ?? agentMainModel(this.deps, member)
-      await assertAgentModel(this.deps, main)
+      const external = member.executor
+      const main = request.privateModel ?? (external ? externalAgentBinding(external) : agentMainModel(this.deps, member))
+      // An external route is re-validated by harness admission on every turn.
+      if (!external) await assertAgentModel(this.deps, main)
       const workspace = request.roomSnapshot.privateWorkspace ?? agentWorkspace(this.deps.dataDir, member.participantAgentId)
       if (!request.roomSnapshot.privateWorkspace) await mkdir(workspace, { recursive: true })
       if (!(await stat(workspace)).isDirectory()) throw new Error('Working directory is unavailable')
@@ -89,7 +94,8 @@ export class AgentDirectRunner {
       const agent = await this.deps.agentDirectory?.get(member.participantAgentId)
       const fingerprint = JSON.stringify([request.roomId, request.roomSnapshot.privateEpoch ?? 0, canonical,
         main.providerId, main.accountId, request.roomSnapshot.privateExecutionPolicy, member.presetId, member.agentInstructions,
-        profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', resolveWorkbenchPolicy(agent?.workbench)])
+        profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', resolveWorkbenchPolicy(agent?.workbench),
+        ...(external ? [agentExecutorRouteKey(external)] : [])])
       const threadId = agentStableId('agent-chat', createHash('sha256').update(fingerprint).digest('hex'))
       const reply = request.message.replyToMessageId ? await this.deps.store.get<RoomMessage>('message', request.message.replyToMessageId) : null
       const reminderInput = request.privateReminder ? await this.reminderWakeInput(request) : null
@@ -109,6 +115,9 @@ export class AgentDirectRunner {
     if (!thread) {
       if (!allowNewTurn) return
       if (request.admissionAttempted) return this.save(row, { ...request, status: 'recovery_required', error: 'Original conversation is unavailable; do not resend this execution.' })
+      if (member.executor) thread = await this.createExternalThread(request, member)
+    }
+    if (!thread) {
       const profile = member.presetSnapshot ?? this.deps.profiles()[member.presetId]
       const limits = member.capabilityOverrides
       const agent = await this.deps.agentDirectory?.get(member.participantAgentId)
@@ -163,14 +172,16 @@ export class AgentDirectRunner {
     const bridged = existingInput ? existingInput.value.prompt :
       await freezeConversationBridge(this.deps, request, scoped, identity, request.privateInput!)
     if (bridged === null) return
-    const prompt = existingInput?.value.prompt ?? await freezeAgentMemoryInput(this.deps, scoped, identity, bridged)
+    // External engines never read Kun's long-term Agent memory.
+    const prompt = existingInput?.value.prompt ?? (member.executor ? bridged : await freezeAgentMemoryInput(this.deps, scoped, identity, bridged))
     const freshUserRequest = !request.privateContinuation && !request.privateReminder && !request.handoffReturnId &&
       request.message.body !== AGENT_SETUP_KICKOFF
     const run = await prepareRoomRun(this.deps, scoped, identity, prompt, request.message.attachmentIds, {
       requestId: request.id, rootRequestId: request.rootRequestId, triggerMessageId: request.sourceMessageId, phase: 'conversation',
-      communicationRequired: freshUserRequest,
-      finalResponseRequired: freshUserRequest || request.privateContinuation?.kind === 'app_connection' ||
-        request.privateContinuation?.kind === 'workbench_task',
+      // The host publishes an external Agent's reply, so no in-turn delivery gate applies.
+      communicationRequired: freshUserRequest && !member.executor,
+      finalResponseRequired: !member.executor && (freshUserRequest || request.privateContinuation?.kind === 'app_connection' ||
+        request.privateContinuation?.kind === 'workbench_task'),
       ...request.privateModel })
     if (!turn) {
       if (run.admissionAttempted || request.admissionAttempted) return this.save(row, { ...request, privateRunId: run.id, status: 'recovery_required' })
@@ -183,6 +194,7 @@ export class AgentDirectRunner {
       try {
         const admitted = await this.deps.turns.enqueueTurn({ threadId: thread.id, request: { prompt, clientRequestId: identity,
           ...request.privateModel, attachmentIds: request.message.attachmentIds, clientSurface: request.clientSurface ?? 'gui', agentSurface: 'code',
+          ...(member.executor ? { harnessId: member.executor.harnessId, credentialMode: member.executor.credentialMode } : {}),
           displayText: request.message.body.slice(0, 8000),
           mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true } })
         await updateRoomRun(this.deps.store, run.id, { turnId: admitted.turnId })
@@ -210,11 +222,28 @@ export class AgentDirectRunner {
     if (pendingInputs.length) await persistDirectChoiceMessages(this.deps.store, request, pendingInputs)
     const finished = !['queued', 'running'].includes(turn.status)
     if (finished) {
+      if (member.executor && turn.status === 'completed') {
+        await publishExternalAgentReply(this.deps, this.service, { roomId: request.roomId, runId: run.id,
+          threadId: thread.id, turnId: turn.id, memberId: member.id })
+      }
       await settleConversationRunOutcome(this.deps, run.id, turn)
       if (turn.status === 'aborted') await withdrawRunProposals(this.deps.store, run.id, 'run_cancelled')
       await this.save(row, { ...request, status: turn.status === 'completed' ? 'completed' : turn.status === 'aborted' ? 'cancelled' : 'failed',
         error: turn.status === 'failed' ? 'The response failed. Its partial output is retained; inspect the run or retry.' : undefined })
     }
+  }
+  /** An external engine runs in the private workspace under the conversation's own permission policy. */
+  private async createExternalThread(request: RoomRequestState, member: RoomMember): Promise<ThreadRecord> {
+    const executor = member.executor!
+    return this.deps.threads.create({ title: member.displayName, workspace: request.privateWorkspace!,
+      ...externalAgentThreadRoute(executor), ...request.privateModel, agentId: member.presetId, mode: 'agent', agentSurface: 'code',
+      ...(request.roomSnapshot.privateExecutionPolicy ?? {}),
+      sandboxMode: request.roomSnapshot.privateExecutionPolicy?.sandboxMode ?? 'workspace-write',
+      systemPrompt: externalAgentSystemPrompt({ name: member.displayName, instructions: member.agentInstructions,
+        roleNotes: member.roleNotes, group: false })
+    }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
+      participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
+      blockedToolNames: [...EXTERNAL_AGENT_BLOCKED_TOOLS], blockedProviderIds: [], blockedSkillIds: [], skillsEnabled: true } })
   }
   private clientId(request: RoomRequestState) {
     return 'private-' + request.id + '-' + (request.stepAttempt ?? 0)
@@ -242,7 +271,7 @@ export class AgentDirectRunner {
    */
   private async steerTarget(request: RoomRequestState, thread: ThreadRecord, member: RoomMember): Promise<Turn | undefined> {
     if (request.clientSurface === 'im' || request.privateContinuation || request.privateReminder || request.handoffReturnId ||
-      request.message.attachmentIds.length || request.message.taskId) return
+      request.message.attachmentIds.length || request.message.taskId || member.executor) return
     const agent = await this.deps.agentDirectory?.get(member.participantAgentId!)
     if (!agent || agentSetupPending(agent)) return
     return thread.turns.find((turn) => turn.status === 'running' && (turn.clientSurface ?? 'gui') === (request.clientSurface ?? 'gui') &&

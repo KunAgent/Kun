@@ -1,0 +1,16 @@
+.direct-coding-agents { display: grid; gap: 2px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--ds-border); }
+.direct-coding-agents > header { display: grid; gap: 2px; padding: 0 8px 6px; }
+.direct-coding-agents h3 { font-size: 12px; font-weight: 600; color: var(--ds-text-muted); }
+.direct-coding-agents > header p { font-size: 11px; line-height: 1.4; color: var(--ds-text-muted); }
+.direct-coding-agent { display: flex; align-items: center; gap: 8px; min-width: 0; border-radius: 10px; }
+.direct-coding-agent:hover, .direct-coding-agent:has(> button[aria-pressed='true']) { background: var(--ds-surface-hover); }
+.direct-coding-agent > button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 10px; text-align: left; }
+.direct-coding-agent > button > span:last-child { min-width: 0; }
+.direct-coding-agent strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 550; }
+.direct-coding-agent small { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ds-text-muted); }
+.direct-new-chat .direct-coding-agent:not([data-ready]) > button:disabled { cursor: not-allowed; }
+.direct-coding-agent select { flex: 0 1 180px; min-width: 0; margin-right: 8px; padding: 5px 8px; border: 1px solid var(--ds-border); border-radius: 8px; color: var(--ds-text); background: var(--ds-bg-main); font-size: 12px; text-overflow: ellipsis; }
+.direct-coding-agent select:focus-visible, .direct-coding-agent > button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.direct-coding-agents-error { padding: 0 8px; font-size: 12px; color: var(--ds-danger, #bd4545); overflow-wrap: anywhere; }
+.direct-group-lead-hint { margin-top: 10px; font-size: 12px; color: var(--ds-text-muted); text-align: right; }
+@media (max-width: 600px) { .direct-coding-agent select { flex-basis: 40%; } }

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Cpu, Eraser, FolderOpen, SquarePen, Trash2, UserX } from 'lucide-react'
 import type { AgentDirectActivity, AgentIdentity, Room } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
+import { CodingAgentEngineCard } from './RoomCodingAgentParts'
 import type { AgentModels } from './AgentModelSettings'
 import type { ConversationRemoval } from './agent-chat-removal'
 import { agentConversationStatus, workspaceName } from './conversation-info'
@@ -43,17 +44,17 @@ export function AgentInfoBoard({ room, agent, models, activity, onEditProfile, o
       <InfoStatus status={status} label={t('conversationStatus_' + status)} />
       <InfoQuickActions actions={[
         { id: 'profile', icon: SquarePen, label: t('conversationInfoEditProfile'), onClick: onEditProfile },
-        { id: 'models', icon: Cpu, label: t('conversationInfoChangeModel'), onClick: onModels, disabled: archived },
+        ...(agent?.executor ? [] : [{ id: 'models', icon: Cpu, label: t('conversationInfoChangeModel'), onClick: onModels, disabled: archived }]),
         { id: 'context', icon: Eraser, label: t('conversationInfoNewContext'), onClick: onNewContext, disabled: archived }
       ]} />
     </section>
     <InfoSection title={t('conversationInfoModels')}>
-      <div className="conversation-info-models">
+      {agent?.executor ? <CodingAgentEngineCard agent={agent} /> : <div className="conversation-info-models">
         <InfoModelCard label={t('conversationInfoMainModel')} binding={models?.main} available={models?.mainAvailable}
           source={models?.mainSource as InfoModelSource | undefined} verifiedAt={models?.mainVerifiedAt} options={models?.options} />
         <InfoModelCard compact label={t('conversationInfoFastModel')} binding={models?.fast} available={models?.fastAvailable}
           source={models?.fastSource as InfoModelSource | undefined} verifiedAt={models?.fastVerifiedAt} options={models?.options} />
-      </div>
+      </div>}
     </InfoSection>
     <InfoSection title={t('conversationInfoWorkspace')} action={<button type="button" className="conversation-info-link"
       data-info-action="workspace" disabled={archived} onClick={onWorkspace}>{t('conversationInfoChangeWorkspace')}</button>}>

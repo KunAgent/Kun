@@ -67,6 +67,8 @@ export function memberModelUnavailable(
   catalog: RoomPresetCatalog,
   agentModels?: AgentModelSnapshot
 ) {
+  // Engine readiness for coding Agents is checked by harness admission per turn.
+  if (agentModels?.agent?.executor) return false
   if (agentModels) return agentModels.mainAvailable === false
   const preset = catalog.presets.find((item) => item.id === member.presetId)
   const provider = member.modelRef?.providerId ?? preset?.providerId ?? catalog.defaultModel?.providerId

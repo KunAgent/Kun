@@ -92,5 +92,20 @@
   "directModelSaved": "Model saved",
   "directCreationReconciling": "Checking whether your Agent was created…",
   "directCreationUnknown": "Creation status is unknown. Retry uses the same request. If you close this dialog, check the Agent list before creating another.",
-  "directCreationRestored": "Your previous creation request has not completed. Retry to continue with the selected model."
+  "directCreationRestored": "Your previous creation request has not completed. Retry to continue with the selected model.",
+  "directCodingAgents": "Coding Agents",
+  "directCodingAgentsHint": "Runs on each Agent's own engine and sign-in; your messages go to that service.",
+  "directCodingAgentsGroupHint": "Coding Agents join the discussion when mentioned. A Kun Agent leads the group and does the work.",
+  "directCodingAgentsLoading": "Checking coding Agents…",
+  "directCodingAgentsEmpty": "No coding Agent is ready. Set up Codex, Claude Code or OpenCode in Code first.",
+  "directCodingAgentUnavailable": "Not ready",
+  "directCodingAgentModel": "{{name}} model",
+  "directCodingAgentGatewayModel": "{{model}} (Kun gateway)",
+  "directGroupNeedsKun": "Add at least one Kun Agent to lead the group.",
+  "directCodingAgentOwnSignIn": "Own sign-in",
+  "directCodingAgentViaGateway": "Kun gateway",
+  "directCodingAgentViaProvider": "API connection",
+  "directCodingAgentBilledByEngine": "Billed by the Agent",
+  "directCodingAgentChipHelp": "This Agent runs its own engine. To use another model, choose it again from New chat.",
+  "directCodingAgentRole": "Coding Agent"
 }

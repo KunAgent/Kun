@@ -32,6 +32,7 @@ export const ADMISSION_RULES: Record<
     required: ['kunTools', 'externalApproval', 'nativeToolInterception'],
     sandbox: 'host'
   },
+  'room-conversation': { required: ['abort'], sandbox: 'isolated-or-native' },
   scheduled: { required: ['abort'] },
   im: { required: ['abort'] },
   'plan-build': { required: ['abort'], sandbox: 'isolated-or-native' },

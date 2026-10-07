@@ -8,6 +8,8 @@ import './room-new-chat-actions.css'
 import { RoomAvatar } from './RoomAvatar'
 import { agentMember, useAgentCatalog, useAgentResource } from './agent-client'
 import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
+import { RoomNewChatCodingAgents } from './RoomNewChatCodingAgents'
+import { codingRouteKey, ensureCodingAgent, groupLeadId, type CodingAgentEntry, type CodingAgentRoute } from './coding-agent-client'
 
 export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus = true, closeAfterAgent = true, initialGroup = false, selectionMode = 'all' }: {
   onClose: () => void; onOpen: (roomId: string) => void; onAgent: (agentId: string) => void | Promise<void>; onFill?: (() => void) | null; autoFocus?: boolean; closeAfterAgent?: boolean
@@ -50,6 +52,18 @@ export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus
   const openAgent = (agentId: string): void => {
     void run('open:' + agentId, async () => { await onAgent(agentId) }, closeAfterAgent)
   }
+  const chooseCoding = (entry: CodingAgentEntry, route: CodingAgentRoute): void => {
+    if (group && selected.some((agent) => agent.executor?.harnessId === entry.harnessId)) {
+      setSelected(selected.filter((agent) => agent.executor?.harnessId !== entry.harnessId))
+      return
+    }
+    void run('coding:' + entry.harnessId + ':' + codingRouteKey(route), async (id) => {
+      const agent = await ensureCodingAgent(id, entry.harnessId, route)
+      if (!group) await onAgent(agent.id)
+      else if (mounted.current) setSelected((old) => [...old.filter((item) => item.id !== agent.id), agent])
+    }, !group && closeAfterAgent)
+  }
+  const lead = groupLeadId(selected)
   const create = (templateId: string) => void run('create:' + (templateId ?? ''), async (clientRequestId) => {
     const result = await roomsRequest<{ roomId: string }>('/v1/agents/quick-create', 'POST', {
       clientRequestId, templateId
@@ -70,15 +84,17 @@ export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus
       </div>}
       {selected.length && group ? <div className="direct-selected">{selected.map((agent) => <button key={agent.id} disabled={busy} onClick={() => setSelected(selected.filter((item) => item.id !== agent.id))}>{agent.name} ×</button>)}</div> : null}
       {!catalog.agents.length && !catalog.error ? <p className="direct-new-chat-empty" role="status">{t(catalog.data ? 'agentsEmpty' : 'roomsLoading')}</p> : null}
-      <div className="direct-agent-choices">{catalog.agents.map((agent) => <button type="button" key={agent.id} disabled={busy} aria-pressed={group && selected.some((item) => item.id === agent.id)}
+      <div className="direct-agent-choices">{catalog.agents.filter((agent) => !agent.executor).map((agent) => <button type="button" key={agent.id} disabled={busy} aria-pressed={group && selected.some((item) => item.id === agent.id)}
         onClick={() => { if (group) setSelected((old) => old.some((item) => item.id === agent.id) ? old.filter((item) => item.id !== agent.id) : [...old, agent]); else openAgent(agent.id) }}>
         <RoomAvatar avatar={agent.avatar} id={agent.id} label={agent.name} size={38} /><span><strong>{agent.name}</strong><small>{agent.title}</small></span>
       </button>)}{catalog.cursor ? <button disabled={busy || catalog.busy} onClick={() => void catalog.more()}>{t('roomsLoadMore')}</button> : null}</div>
+      <RoomNewChatCodingAgents busy={busy} group={group} selected={selected} onChoose={chooseCoding} />
       {allowPrivate ? <button className="direct-template-toggle" disabled={busy} aria-expanded={templatesOpen} onClick={() => setTemplatesOpen(!templatesOpen)}>{t('directTemplates')}<ChevronDown size={14} aria-hidden="true" /></button> : null}
       {allowPrivate && templatesOpen ? <div className="direct-template-list">{templates.data?.templates.filter((item) => item.defaultRole !== 'coordinator').map((item) =>
         <button disabled={busy} key={item.templateId} onClick={() => { if (item.templateId) create(item.templateId) }}><RoomAvatar avatar={item.avatar} label={item.name} id={item.templateId} size={30} /><span>{item.name}</span></button>)}</div> : null}
-      {group ? <button type="button" className="rooms-run-primary direct-start-group" aria-busy={busy} disabled={busy || selected.length < 2} onClick={() => void run('group:' + selected.map((agent) => agent.id).join(','), async (id) => {
-        const result = await roomsClient.create({ name: selected.map((agent) => agent.name).join('、').slice(0, 80), description: '', repositories: [], members: selected.map((agent) => agentMember(agent)), defaultMemberId: selected[0].id, collaborationMode: 'peer' }, id)
+      {group && selected.length >= 2 && !lead ? <p className="direct-group-lead-hint" role="status">{t('directGroupNeedsKun')}</p> : null}
+      {group ? <button type="button" className="rooms-run-primary direct-start-group" aria-busy={busy} disabled={busy || selected.length < 2 || !lead} onClick={() => void run('group:' + selected.map((agent) => agent.id).join(','), async (id) => {
+        const result = await roomsClient.create({ name: selected.map((agent) => agent.name).join('、').slice(0, 80), description: '', repositories: [], members: selected.map((agent) => agentMember(agent)), defaultMemberId: lead!, collaborationMode: 'peer' }, id)
         if (mounted.current) onOpen(result.room.id)
       })}>{busy ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> : <Users size={18} aria-hidden="true" />}<span>{t('directStartGroup', { count: selected.length })}</span></button> : null}
       {error || catalog.error || templates.error ? <div className="direct-new-chat-error" role="alert">

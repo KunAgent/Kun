@@ -8,6 +8,7 @@ export async function bindAgentMembers(directory: AgentIdentityService, room: Ro
   const checks: NonNullable<RoomStoreCommit['checks']> = []
   const puts: NonNullable<RoomStoreCommit['puts']> = []
   const members = []
+  const external = new Set<string>()
   for (const member of room.members) {
     const before = previous?.members.find((item) => item.id === member.id)
     if (before?.participantAgentId && member.participantAgentId && before.participantAgentId !== member.participantAgentId) throw new RoomStoreConflictError('agent membership identity cannot change')
@@ -38,15 +39,19 @@ export async function bindAgentMembers(directory: AgentIdentityService, room: Ro
         throw new RoomStoreConflictError('repository is outside the agent scope')
       }
       checks.push({ kind: 'agent_identity', id, expectedRevision: row.revision })
-      if (!row.value.modelRef && member.modelRef) {
+      if (row.value.executor) external.add(member.id)
+      if (!row.value.modelRef && member.modelRef && !row.value.executor) {
         puts.push({ kind: 'agent_identity', id, value: AgentIdentitySchema.parse({
           ...row.value, modelRef: member.modelRef, revision: row.revision + 1, updatedAt: new Date().toISOString() }) })
       }
     }
     const { modelRef: _modelRef, ...rest } = member
-    members.push(RoomMemberSchema.parse({ ...rest, participantAgentId: id,
+    members.push(RoomMemberSchema.parse({ ...rest, participantAgentId: id, executor: undefined,
       agentRevision: undefined, agentInstructions: undefined, presetSnapshot: undefined, workbenchPolicy: undefined,
       configuredReviewerAgentId: undefined, taskScopedMemory: undefined }))
+  }
+  if ((room.conversationKind ?? 'group') === 'group' && external.has(room.defaultMemberId)) {
+    throw new RoomStoreConflictError('a Kun Agent must lead this group; coding Agents can only join the discussion')
   }
   return { room: RoomSchema.parse({ ...room, conversationKind: room.conversationKind ?? 'group',
     participantAgentIds: members.filter((member) => !member.removedAt).map((member) => member.participantAgentId!),
@@ -70,7 +75,10 @@ export async function freezeAgentRoom(directory: AgentIdentityService, room: Roo
       presetId: agent.presetId, presetSnapshot: profile, agentInstructions: agent.instructions,
       configuredReviewerAgentId: agent.reviewerAgentId, fastModelRef: agent.fastModelRef,
       workbenchPolicy: agent.workbench,
-      modelRef: agent.modelRef,
+      modelRef: agent.executor ? undefined : agent.modelRef,
+      executor: agent.executor,
+      // External coding Agents answer when mentioned unless the room asks for more.
+      attention: member.attention ?? (agent.executor ? 'mentions' : undefined),
       allowedRepositoryIds: repositories,
       defaultRepositoryId: repositories.includes(member.defaultRepositoryId ?? '') ? member.defaultRepositoryId : undefined,
       capabilityOverrides: { allowedTools: allowed,
@@ -82,5 +90,19 @@ export async function freezeAgentRoom(directory: AgentIdentityService, room: Roo
   if (!members.some((member) => member.id === room.defaultMemberId && member.enabled && !member.removedAt)) {
     throw new RoomStoreConflictError('the default agent is unavailable; choose another agent')
   }
+  assertExternalMemberRoles(room, members)
   return RoomSchema.parse({ ...room, members })
+}
+
+/** Groups stay led by Kun: coding Agents discuss, but never coordinate or review. */
+function assertExternalMemberRoles(room: Room, members: Room['members']): void {
+  if ((room.conversationKind ?? 'group') !== 'group') return
+  const external = new Set(members.filter((member) => member.executor).map((member) => member.id))
+  if (!external.size) return
+  if (external.has(room.defaultMemberId)) {
+    throw new RoomStoreConflictError('a Kun Agent must lead this group; coding Agents can only join the discussion')
+  }
+  if (members.some((member) => member.reviewPolicy && external.has(member.reviewPolicy.reviewerMemberId))) {
+    throw new RoomStoreConflictError('coding Agents cannot review group tasks; choose a Kun Agent reviewer')
+  }
 }

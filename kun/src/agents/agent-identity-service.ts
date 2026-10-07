@@ -9,6 +9,7 @@ import type { RoomStore, RoomStoreCommit } from '../rooms/room-store.js'
 import { RoomStoreConflictError } from '../rooms/room-store.js'
 import { DEFAULT_AGENT_TEMPLATES } from './agent-defaults.js'
 import { bindAgentMembers, freezeAgentRoom } from './agent-membership.js'
+import { agentExecutorRouteKey, type AgentExecutor } from '../contracts/agent-executor.js'
 
 export const agentStableId = (kind: string, ...parts: string[]): string =>
   kind + '-' + createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 40)
@@ -17,6 +18,9 @@ const namespace = 'agent-directory'
 
 export class AgentIdentityService {
   private initializing?: Promise<void>
+  private executorValidator?: (executor: AgentExecutor) => Promise<AgentExecutor>
+  /** Coding Agent routes resolve through the same catalog and admission checks as Code tasks. */
+  setExecutorValidator(validator: (executor: AgentExecutor) => Promise<AgentExecutor>): void { this.executorValidator = validator }
   constructor(readonly store: RoomStore, readonly profiles: () => Record<string, SubagentProfileConfig>,
     private readonly validateAvatars?: (members: RoomMember[]) => Promise<void>) {}
 
@@ -95,7 +99,7 @@ export class AgentIdentityService {
       id: 'agent-' + randomUUID(), schemaVersion: 1, revision: 0, createdAt: now, updatedAt: now,
       archivedAt: undefined, migratedFrom: undefined,
       setup: copy ? undefined : { status: 'completed' as const, startedAt: now, completedAt: now } })
-    await this.validate(agent)
+    await this.validate(normalizeExternalAgent(agent))
     const result = { agent }
     const saved = await this.store.commit({ requestId: key, fingerprint: hash,
       checks: [{ kind: 'agent_identity', id: agent.id, expectedRevision: null }],
@@ -126,21 +130,33 @@ export class AgentIdentityService {
       updatedAt: now, ...(archived === undefined ? {} : {
         archivedAt: archived ? now : undefined }),
       ...(takeover ? { setup: { status: 'skipped', startedAt: old.setup!.startedAt, completedAt: now } } : {}) })
-    await this.validate(agent)
+    if (Boolean(old.executor) !== Boolean(agent.executor) ||
+      (old.executor && agentExecutorRouteKey(old.executor) !== agentExecutorRouteKey(agent.executor!))) {
+      throw new RoomStoreConflictError('an Agent\'s engine route cannot change; only a coding Agent\'s model can')
+    }
+    await this.validate(normalizeExternalAgent(agent), old.executor)
     const saved = await this.store.commit({ requestId: key, fingerprint: hash,
       checks: [{ kind: 'agent_identity', id, expectedRevision }],
       puts: [{ kind: 'agent_identity', id, value: agent }], result: { agent },
       events: [{ roomId: namespace, kind: 'agent.updated', payload: { id } }] })
     return saved.result as { agent: AgentIdentity }
   }
-  private async validate(agent: AgentIdentity) {
+  private async validate(agent: AgentIdentity, previousExecutor?: AgentExecutor) {
     if (agent.allowedRepositoryRoots) {
       const repositories = await Promise.all(agent.allowedRepositoryRoots.map((root) => observeRoomRepository(root)))
       agent.allowedRepositoryRoots = [...new Set(repositories.map((repo) => repo.root))]
     }
     if (agent.reviewerAgentId) {
       if (agent.reviewerAgentId === agent.id) throw new RoomStoreConflictError('an agent cannot review its own work')
-      await this.active(agent.reviewerAgentId)
+      if ((await this.active(agent.reviewerAgentId)).executor) throw new RoomStoreConflictError('coding Agents cannot review Agent work')
+    }
+    if (agent.avatar?.kind === 'harness' && agent.avatar.harnessId !== agent.executor?.harnessId) {
+      throw new RoomStoreConflictError('engine marks belong to their coding Agents')
+    }
+    // Profile edits keep working while an engine is signed out; only a new route is resolved.
+    if (agent.executor && JSON.stringify(agent.executor) !== JSON.stringify(previousExecutor)) {
+      if (!this.executorValidator) throw new RoomStoreConflictError('coding Agents are unavailable')
+      agent.executor = await this.executorValidator(agent.executor)
     }
     if (agent.avatar?.kind === 'uploaded') {
       if (!this.validateAvatars) throw new Error('avatar storage unavailable')
@@ -184,4 +200,17 @@ export class AgentIdentityService {
     room: Room; checks: NonNullable<RoomStoreCommit['checks']>; puts: NonNullable<RoomStoreCommit['puts']>
   }> { return bindAgentMembers(this, room, previous) }
   freeze(room: Room): Promise<Room> { return freezeAgentRoom(this, room) }
+}
+
+/** Coding Agents run their own engine: no Kun model, memory, review or workbench reach. */
+function normalizeExternalAgent(agent: AgentIdentity): AgentIdentity {
+  if (!agent.executor) return agent
+  agent.modelRef = undefined
+  agent.fastModelRef = undefined
+  agent.workbench = undefined
+  agent.reviewerAgentId = undefined
+  agent.presetId = 'general'
+  agent.defaultRole = 'developer'
+  agent.memory = { readEnabled: false, captureEnabled: false }
+  return agent
 }

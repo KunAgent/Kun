@@ -37,6 +37,7 @@ export function roomCoordinationPrompt(request: RoomRequestState, context: RoomC
     'executionIntent=discussion forbids execution. executionIntent=execute explicitly requests work, but still clarify missing targets.',
     'Explicit taskParticipants are authorized only for task work; they are not private-chat readers or discussion members. If executionAgentId is set, use that Agent as execution owner. Do not silently replace it.',
     'Use only enabled member IDs and their explicitly allowed repository IDs. Each assignment has ONE owner and ONE repository.',
+    'Members with an executor are external coding Agents: invite them to discussion only; never assign them execution or review.',
     'A repository is selected from explicit user selection, referenced task, then member default. Ask if still ambiguous.',
     'Directed mode: only explicitly mentioned members or the default responder participate; do not invent extra workers.',
     'Autonomous mode: invite relevant members to discuss, or assign independent tasks within the user goal.',

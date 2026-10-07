@@ -256,6 +256,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint('/v1/agents/chat-entry', ['GET', 'POST']),
   compileEndpoint('/v1/agents/quick-create', ['POST']),
   compileEndpoint('/v1/agents/creation-models', ['GET']),
+  compileEndpoint('/v1/agents/coding-agents', ['GET', 'POST']),
   compileEndpoint('/v1/agents/creation-requests/{requestId}', ['GET']),
   compileEndpoint('/v1/agents/{agentId}/models', ['GET', 'PUT']),
   compileEndpoint('/v1/rooms/{roomId}/direct', ['GET']),

@@ -1,6 +1,6 @@
 # 外部编程 Agent 作为私聊对象和群成员：方案
 
-> 状态：方案，尚未实施（2026-10-07）。目标是在 Code 的「对话」里，像跟 Kun Agent 一样，直接和 Claude Code、Codex、Devin 等外部编程 Agent 私聊，或者把它们拉进群一起讨论、干活。
+> 状态：首批已实施（2026-10-07）：Codex、Claude Code、OpenCode 可作为私聊对象和群讨论成员，见第 11 节。群内干活（P3）和其余引擎（P4）仍是方案。目标是在 Code 的「对话」里，像跟 Kun Agent 一样，直接和外部编程 Agent 私聊，或者把它们拉进群一起讨论。
 
 ## 1. 现状
 
@@ -156,8 +156,24 @@ executor?:
 | 回复格式不稳定 | 只取最终正文；为空或出错时，在对话里显示失败卡片并支持重试 |
 | 隐私 | 首次拉人进群时明确提示内容会发往哪家服务 |
 
-## 10. 待决定
+## 10. 已定的问题
 
-1. 首批开放哪些引擎？建议先做 Claude Code（Agent SDK），因为关闭自带工具的能力最明确；再做 Codex，最后是 ACP 类。
-2. 外部 Agent 在群里默认发言规则：只在被 @ 时发言（推荐），还是参与轮流讨论？
-3. 外部 Agent 身份是否需要支持自定义名字和头像，还是固定用官方图标？
+1. 首批开放 Claude Code（Agent SDK）、Codex（app-server）、OpenCode（ACP）。三者都能被 Kun 强制只读，其余引擎暂不开放。
+2. 外部 Agent 在群里默认只在被 @ 时发言（成员 `attention` 冻结为 `mentions`），群设置里仍可改。
+3. 外部 Agent 身份默认用引擎官方图标，名字可改；头像也可换成内置头像，但引擎图标只能给对应的编程 Agent 用。
+
+## 11. 实施记录（2026-10-07）
+
+| 部分 | 做法 | 位置 |
+| --- | --- | --- |
+| 数据结构 | `AgentExecutor`：`{ kind: 'harness', harnessId, credentialMode, model, providerId?, accountId? }`，`harnessId` 只允许三个首批引擎；身份和成员都带它；头像新增 `{ kind: 'harness', harnessId }` | `kun/src/contracts/agent-executor.ts` |
+| 身份 | 写入时经 Code 的同一套路由校验（`WorkbenchHarnessService.resolve`）；只有路由变化才重新校验，引擎路由创建后不能改，只能换模型；Kun 模型、记忆、评审、工作台权限一律关掉 | `agent-identity-service.ts`、`agent-coding-agents.ts` |
+| 受理 | 新增用途 `room-conversation`（私聊和群讨论），只要求可中断，接受引擎自带沙箱；协调、执行、评审仍是 `room-execution`，要求 Kun 托管沙箱 | `usage-for-turn.ts`、`harness-admission.ts` |
+| 私聊 | 线程带 `harnessId`、`credentialMode`、模型，`mode: 'agent'`，按会话自己的权限运行；不注入 Kun 记忆；本轮最后一段助手正文由宿主发成该成员的消息，`send_im_message` 等 Kun 专用工具被屏蔽 | `agent-direct-runner.ts`、`agent-external-publication.ts` |
+| 群讨论 | 只读沙箱，引擎选最严格档位（Codex `read-only`、OpenCode `plan`、Claude Code `default` 且无自带工具）；Codex 和 OpenCode 的提权请求一律拒绝（`approvalPolicy: never`），避免无人值守时卡住 | `room-execution.ts` |
+| 群规则 | 群必须由 Kun Agent 牵头（建群和发送时都校验）；外部 Agent 不能承接执行、不能当评审、不参与 Agent 间协作；协调提示里注明它们只参与讨论 | `agent-membership.ts`、`room-request-runner.ts`、`agent-handoff-*.ts` |
+| 接口 | `GET /v1/agents/coding-agents` 列出可用引擎和模型；`POST /v1/agents/coding-agents` 按路由找到或创建联系人，换模型时更新同一个联系人 | `register-agent-chat-routes.ts` |
+| 界面 | 「发起对话」新增「编程 Agent」一组（引擎图标、模型下拉、未就绪原因）；群聊至少要选一位 Kun Agent；私聊输入框、标题和资料卡显示引擎模型而不是 Kun 模型；引擎图标画在圆角方块里 | `RoomNewChatCodingAgents.tsx`、`RoomCodingAgentParts.tsx`、`RoomAvatar.tsx` |
+| 验证 | 单测覆盖受理、只读档位、身份规则、私聊发布、群讨论线程；离线冒烟用一个 OpenCode ACP 替身跑通选人、私聊回复和群里被 @ 后以 plan 模式回复 | `agent-external.test.ts`、`agent-direct-external.test.ts`、`scripts/smoke-coding-agent-*.cjs`（`smoke-development-ade.cjs --coding-agent-only`） |
+
+尚未做：群内让外部 Agent 改代码（P3）、按引擎逐个做真实账号的只读验证、手机端添加入口、外部 Agent 的单轮时长预算。

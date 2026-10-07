@@ -128,6 +128,7 @@ export class RoomRequestRunner {
         if (!member || member.role === 'reviewer' || member.role === 'coordinator') {
           throw new Error('当前 Agent 不能承接执行任务，请选择具备开发或诊断能力的执行负责人。')
         }
+        if (member.executor) throw new Error('编程 Agent 只参与讨论，不承接群内执行任务，请把任务交给 Kun Agent。')
         const task = await this.prepareTask(request, assignment, member)
         if (task && 'clarify' in task) return this.finish(row, 'needs_input', task.clarify)
         if (task) prepared.push(task)

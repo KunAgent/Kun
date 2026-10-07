@@ -23,4 +23,14 @@ describe('Agent model selection runtime bridge', () => {
     expect(() => runtimeRequestPayloadSchema.parse({ path: '/v1/agents/creation-requests/confirmed-request-1/commit', method: 'POST' }))
       .toThrow('runtime request path is not allowed')
   })
+  it('admits the coding Agent catalog and contact upsert only', () => {
+    for (const method of ['GET', 'POST'] as const) {
+      expect(runtimeRequestPayloadSchema.parse({ path: '/v1/agents/coding-agents', method }).path).toBe('/v1/agents/coding-agents')
+    }
+    for (const method of ['PUT', 'PATCH', 'DELETE']) {
+      expect(() => runtimeRequestPayloadSchema.parse({ path: '/v1/agents/coding-agents', method })).toThrow('runtime request path is not allowed')
+    }
+    expect(() => runtimeRequestPayloadSchema.parse({ path: '/v1/agents/coding-agents/probe', method: 'POST' }))
+      .toThrow('runtime request path is not allowed')
+  })
 })

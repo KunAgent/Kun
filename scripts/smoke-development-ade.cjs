@@ -40,6 +40,8 @@ const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
 const { startModelFixture } = require('./smoke-development-ade-model.cjs')
 const { writeRoomsHarnessStub, configureRoomsHarnessFixture } = require('./smoke-rooms-harness-fixture.cjs')
 const { runRoomsHarnessFlow, verifyRoomsHarnessReadiness } = require('./smoke-rooms-harness-controls.cjs')
+const { configureCodingAgentFixture, writeOpenCodeStub } = require('./smoke-coding-agent-fixture.cjs')
+const { runCodingAgentFlow, verifyCodingAgentReadiness } = require('./smoke-coding-agent-controls.cjs')
 
 const exec = promisify(execFile)
 const MODEL = 'deepseek-chat'
@@ -50,6 +52,7 @@ async function main() {
   const nativeApprovalTimeoutMs = positiveIntegerArgument('--native-approval-timeout-ms', 180_000)
   const keepDirs = process.argv.includes('--keep-dirs')
   const roomsHarnessOnly = process.argv.includes('--rooms-harness-only')
+  const codingAgentOnly = process.argv.includes('--coding-agent-only')
   const visualOnly = process.argv.includes('--visual-only')
   const agentModeOnly = process.argv.includes('--agent-mode-only')
   const nativeModelOnly = process.argv.includes('--native-model-only')
@@ -155,6 +158,8 @@ async function main() {
     const codexStub = nativeModelOnly ? await writeCodexModelStub(stubDir) : undefined
     const openCodeStub = openCodeAgentsOnly ? await writeOpenCodeAgentStub(stubDir) : undefined
     if (openCodeStub) await writeOpenCodeCredentialFixture(home)
+    const codingAgentAudit = join(temporaryRoot, 'opencode-audit.jsonl')
+    const codingAgentStub = codingAgentOnly ? await writeOpenCodeStub(stubDir, codingAgentAudit) : undefined
     // Claude Code login detection reads ~/.claude/.credentials.json.
     await mkdir(join(home, '.claude'), { recursive: true })
     await writeFile(join(home, '.claude', '.credentials.json'),
@@ -193,6 +198,7 @@ async function main() {
       }]
     }
     if (roomsHarnessOnly) configureRoomsHarnessFixture(settings, isolatedEnvironment)
+    if (codingAgentStub) await configureCodingAgentFixture(settings, codingAgentStub, home, isolatedEnvironment)
     // External Agents are opt-in; the offline Devin catalog fixture needs its consented profile.
     if (devinModelsOnly || agentModeOnly) {
       settings.agents.kun.harnesses.enabledProfiles = [{ harnessId: 'devin', credentialMode: 'native-login' }]
@@ -259,7 +265,11 @@ async function main() {
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
 
     let assertions
-    if (roomsHarnessOnly) {
+    if (codingAgentOnly) {
+      roomsHarnessReadiness = await verifyCodingAgentReadiness({ page, poll, runtimeRequest })
+      assertions = await runCodingAgentFlow({ page, capture, poll, runtimeRequest, auditFile: codingAgentAudit,
+        resize: (width, height) => resize(electronApplication, width, height) })
+    } else if (roomsHarnessOnly) {
       roomsHarnessReadiness = await verifyRoomsHarnessReadiness({ page, poll, runtimeRequest })
       assertions = await runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, workspaceRoot, releaseFile, modelFixture,
         resize: (width, height) => resize(electronApplication, width, height) })

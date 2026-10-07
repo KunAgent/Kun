@@ -62,11 +62,14 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
     models !== undefined || !member.participantAgentId ? null : agentPath(member.participantAgentId) + '/models'
   )
   const current = models ?? loaded.data
+  // A coding Agent keeps its engine model; Kun's model settings do not apply.
+  const engineModel = current?.agent?.executor?.model
+  const coding = Boolean(engineModel)
   // Grouped like the Code menus: who the Agent is, where it works, then destructive actions.
   const menuItems: Array<{ id: string; icon: LucideIcon; label: string; run: () => void } | null> = [
     ...(onInfo ? [{ id: 'info', icon: IdCard, label: t('conversationViewAgentInfo'), run: onInfo }] : []),
     { id: 'profile', icon: BookUser, label: t('agentsProfileAndMemory'), run: onProfile },
-    { id: 'models', icon: Cpu, label: t('directModels'), run: onModels },
+    ...(coding ? [] : [{ id: 'models', icon: Cpu, label: t('directModels'), run: onModels }]),
     null,
     { id: 'files', icon: Folders, label: t('directFiles'), run: onFiles },
     { id: 'connect', icon: FolderOpen, label: t('directConnectProject'), run: onConnect },
@@ -79,7 +82,7 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
   return <header className="rooms-main-titlebar rooms-header direct-header">
     {embedded ? <button className="rooms-icon-button" aria-label={t('sidebarToggle')} onClick={onToggleLeftSidebar}><PanelLeft size={18} /></button>
       : <button className="rooms-icon-button rooms-sidebar-toggle" aria-label={t('roomsLabel')} onClick={onSidebar}><Menu size={19} /></button>}
-    <button className="direct-chat-title" title={onInfo ? t('conversationViewAgentInfo') : undefined} onClick={onInfo ?? onProfile}><RoomAvatar member={member} label={member.displayName} size={36} /><span className="direct-chat-title-text"><strong>{member.displayName}</strong>{!embedded ? <small>{modelLabel(current?.main)}</small> : null}</span></button>
+    <button className="direct-chat-title" title={onInfo ? t('conversationViewAgentInfo') : undefined} onClick={onInfo ?? onProfile}><RoomAvatar member={member} label={member.displayName} size={36} /><span className="direct-chat-title-text"><strong>{member.displayName}</strong>{!embedded ? <small>{engineModel ?? modelLabel(current?.main)}</small> : null}</span></button>
     {embedded ? <span className="rooms-private-badge">{t('agentPrivateChatLabel')}</span> : null}
     {embedded ? <button className="direct-workspace-control" onClick={onConnect} title={room.privateWorkspace ?? t('agentPrivateWorkspace')}>
       <FolderOpen size={14} /><span>{room.privateWorkspace?.replaceAll('\\', '/').split('/').at(-1) ?? t('agentPrivateWorkspace')}</span><ChevronDown size={12} /></button> : null}

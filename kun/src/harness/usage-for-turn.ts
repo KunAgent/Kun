@@ -12,6 +12,7 @@ export const HARNESS_USAGES = [
   'graph-worker',
   'graph-lead',
   'room-execution',
+  'room-conversation',
   'scheduled',
   'im',
   'plan-build',
@@ -44,7 +45,12 @@ export function usageForTurn(
   // An explicit plan-build marker wins: the isolated-workspace rule must
   // apply regardless of which host feature scheduled the turn.
   if (turn.planBuild === true) return 'plan-build'
-  if (thread.roomContext) return 'room-execution'
+  // Private chats and read-only group discussion accept an engine-native
+  // sandbox; coordination, execution and review keep the host-enforced rule.
+  if (thread.roomContext) {
+    return thread.roomContext.kind === 'conversation' || thread.roomContext.kind === 'discussion'
+      ? 'room-conversation' : 'room-execution'
+  }
   if (turn.orchestration === 'graph') {
     return turn.graphLeadLifecycle || turn.graphPlanningLifecycle
       ? 'graph-lead'

@@ -82,6 +82,7 @@ export class AgentHandoffService {
     if (!(await this.agents.features()).collaboration) throw new RoomStoreConflictError('agent collaboration is disabled')
     if (input.senderAgentId === input.recipientAgentId) throw new RoomStoreConflictError('cannot collaborate with yourself')
     const sender = await this.agents.active(input.senderAgentId), recipient = await this.agents.active(input.recipientAgentId)
+    if (sender.executor || recipient.executor) throw new RoomStoreConflictError('coding Agents only join conversations; ask a Kun Agent instead')
     const parent = origin?.parent
     if (input.parentHandoffId && input.parentHandoffId !== parent?.id) throw new RoomStoreConflictError('handoff parent is host-bound')
     const root = await this.deps.store.get<RoomRequestState>('request', input.sourceRootRequestId)

@@ -4,6 +4,7 @@ import { ConversationKind, ParticipantAgentId, AgentModelRef } from './agent-ide
 import { SubagentProfileConfig } from './capabilities-core.js'
 import { RoomAvatarReferenceSchema, RoomContentReferenceSchema } from './room-content.js'
 import { AgentWorkbenchPolicySchema } from './workbench-policy.js'
+import { AgentExecutorSchema } from './agent-executor.js'
 
 export const RoomIdSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/)
 const Revision = z.number().int().nonnegative()
@@ -20,6 +21,8 @@ export const RoomMemberSchema = z.object({
   agentInstructions: z.string().max(8000).optional(),
   /** Frozen from the Agent identity: how far this Agent may reach into Code and Work. */
   workbenchPolicy: AgentWorkbenchPolicySchema.optional(),
+  /** Frozen from the Agent identity: an external engine runs this member's turns. */
+  executor: AgentExecutorSchema.optional(),
   presetSnapshot: SubagentProfileConfig.nullable().optional(),
   id: RoomIdSchema,
   displayName: z.string().trim().min(1).max(80),

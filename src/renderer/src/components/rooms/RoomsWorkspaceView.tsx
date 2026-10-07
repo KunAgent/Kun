@@ -20,6 +20,7 @@ import { useChatStore } from '../../store/chat-store'
 import { RoomSettings, roomButtonClass } from './RoomSettings'
 import { RoomComposer } from './RoomComposer'
 import { RoomDirectModelPicker } from './RoomDirectModelPicker'
+import { RoomCodingAgentChip } from './RoomCodingAgentParts'
 import { RoomHeader } from './RoomHeader'
 import { RoomMemberDetails } from './RoomMemberDetails'
 import { roomsClient } from './rooms-client'
@@ -393,7 +394,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               <RoomComposer
                 compactControls
                 modelUpdating={modelUpdating}
-                modelControl={privateChat ? <RoomDirectModelPicker key={room.id} room={room} agentRevision={agentModels.data?.agent.revision} onBusyChange={setModelUpdating}
+                modelControl={privateChat ? agentModels.data?.agent?.executor ? <RoomCodingAgentChip agent={agentModels.data.agent} />
+                  : <RoomDirectModelPicker key={room.id} room={room} agentRevision={agentModels.data?.agent.revision} onBusyChange={setModelUpdating}
                   onSaved={async () => { agentModels.refresh(); await state.refresh() }} /> : undefined}
               key={room.id + '-composer'}
               room={room}

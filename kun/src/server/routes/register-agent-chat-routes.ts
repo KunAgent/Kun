@@ -8,6 +8,8 @@ import { chatEntryState, quickCreateAgent, CHAT_ENTRY_ID, QuickAgentRequest } fr
 import { startAgentSetupTurn } from '../../agents/agent-setup.js'
 import { agentModelOptions, agentFastModel, assertAgentModel, assertExplicitAgentModel } from '../../agents/agent-models.js'
 import { updateDirectModel } from '../../agents/agent-direct-model.js'
+import { externalAgentBinding } from '../../agents/agent-external.js'
+import { codingAgentCatalog, prepareCodingAgent, resolveCodingAgentExecutor, saveCodingAgent } from '../../agents/agent-coding-agents.js'
 import { directActivity, directFiles, controlDirectRequest, updateDirectWorkspace } from '../../agents/agent-direct-service.js'
 
 type Add = (method: string, path: string, handle: (rooms: RoomRuntime, request: Request, context: RouteContext) => Promise<unknown>) => void
@@ -20,6 +22,8 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
       const member = room.members.find((value) => value.id === room.defaultMemberId)!
       const agent = await runtime.rooms!.agents.active(member.participantAgentId!)
       if (room.privateWorkspace && agent.allowedRepositoryRoots && !agent.allowedRepositoryRoots.includes(room.privateWorkspace)) throw new Error('Project is outside this Agent\'s allowed directories')
+      // An external coding Agent always runs its own pinned engine route.
+      if (agent.executor) return externalAgentBinding(agent.executor)
       const resolved = await agentModelOptions(runtime.rooms!.deps, agent)
       const main = room.privateModelRef ?? resolved.main
       const fast = room.privateModelRef ? agentFastModel(runtime.rooms!.deps, agent, main) : resolved.fast
@@ -27,7 +31,14 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
         accountId: fast.accountId ?? resolved.options.find((option) => option.providerId === fast.providerId)?.accountId }
       return main
     })
+    const rooms = runtime.rooms
+    rooms.agents.setExecutorValidator((executor) => resolveCodingAgentExecutor(rooms.workbench.harnesses, executor))
   }
+  add('GET', '/v1/agents/coding-agents', (rooms) => codingAgentCatalog(rooms.workbench.harnesses))
+  add('POST', '/v1/agents/coding-agents', async (rooms, request) => {
+    const prepared = await prepareCodingAgent(rooms.workbench.harnesses, await body(request))
+    return rooms.exclusive(() => saveCodingAgent(rooms.agents, prepared))
+  })
   add('GET', '/v1/agents/chat-entry', (rooms) => chatEntryState(rooms.agents))
   add('POST', '/v1/agents/chat-entry', async (rooms, request) => {
     const input = z.object({ clientRequestId: Id, action: z.enum(['initialize', 'seen']) }).strict().parse(await body(request))

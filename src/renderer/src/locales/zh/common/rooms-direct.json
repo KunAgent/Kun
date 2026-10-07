@@ -92,5 +92,20 @@
   "directModelSaved": "模型已保存",
   "directCreationReconciling": "正在确认 Agent 是否已创建…",
   "directCreationUnknown": "尚无法确认创建结果。重试会使用同一请求。关闭后，请先检查 Agent 列表，再创建另一个。",
-  "directCreationRestored": "上次创建请求尚未完成。可重试并继续使用所选模型。"
+  "directCreationRestored": "上次创建请求尚未完成。可重试并继续使用所选模型。",
+  "directCodingAgents": "编程 Agent",
+  "directCodingAgentsHint": "由各 Agent 自己的引擎和账号运行，消息会发送到对应服务。",
+  "directCodingAgentsGroupHint": "编程 Agent 被 @ 时参与讨论；群聊由 Kun Agent 协调并负责干活。",
+  "directCodingAgentsLoading": "正在检查编程 Agent…",
+  "directCodingAgentsEmpty": "还没有可用的编程 Agent。请先在 Code 里配置 Codex、Claude Code 或 OpenCode。",
+  "directCodingAgentUnavailable": "未就绪",
+  "directCodingAgentModel": "{{name}} 的模型",
+  "directCodingAgentGatewayModel": "{{model}}（经 Kun 网关）",
+  "directGroupNeedsKun": "群聊至少需要一位 Kun Agent 来协调。",
+  "directCodingAgentOwnSignIn": "自有账号",
+  "directCodingAgentViaGateway": "经 Kun 网关",
+  "directCodingAgentViaProvider": "API 连接",
+  "directCodingAgentBilledByEngine": "由 Agent 计费",
+  "directCodingAgentChipHelp": "该 Agent 使用自己的引擎运行。如需换模型，请在「发起对话」里重新选择。",
+  "directCodingAgentRole": "编程 Agent"
 }

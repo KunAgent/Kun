@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ROOM_BUILTIN_AVATAR_IDS } from './kun-avatar-presets.js'
 import { KunComposedAvatarReferenceSchema } from './kun-avatar-schema.js'
+import { ConversationHarnessIdSchema } from './agent-executor.js'
 
 export { ROOM_BUILTIN_AVATAR_IDS } from './kun-avatar-presets.js'
 
@@ -27,7 +28,9 @@ export type RoomContentReference = z.infer<typeof RoomContentReferenceSchema>
 export const RoomAvatarReferenceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('builtin'), id: z.enum(ROOM_BUILTIN_AVATAR_IDS) }).strict(),
   z.object({ kind: z.literal('uploaded'), attachmentId: z.string().regex(/^att_[a-f0-9]{24}$/) }).strict(),
-  KunComposedAvatarReferenceSchema
+  KunComposedAvatarReferenceSchema,
+  /** The engine's own mark for an external coding Agent. */
+  z.object({ kind: z.literal('harness'), harnessId: ConversationHarnessIdSchema }).strict()
 ])
 export type RoomAvatarReference = z.infer<typeof RoomAvatarReferenceSchema>
 export const RoomAvatarAssetSchema = z.object({

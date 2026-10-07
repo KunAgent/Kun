@@ -21,7 +21,8 @@ export async function updateDirectModel(rooms: RoomRuntime, roomId: string, inpu
   const room = await rooms.service.get(roomId)
   if (room.conversationKind !== 'user_agent') throw new RoomStoreConflictError('Private conversation required')
   if (room.archivedAt || room.deletedAt) throw new RoomStoreConflictError('Restore the conversation before changing its model')
-  await rooms.agents.active(room.members.find((member) => member.id === room.defaultMemberId)!.participantAgentId!)
+  const agent = await rooms.agents.active(room.members.find((member) => member.id === room.defaultMemberId)!.participantAgentId!)
+  if (agent.executor) throw new RoomStoreConflictError('A coding Agent keeps its engine model; choose another model when starting the chat')
   await assertExplicitAgentModel(rooms.deps, input.modelRef)
   const next = RoomSchema.parse({ ...room, privateModelRef: input.modelRef,
     revision: room.revision + 1, updatedAt: new Date().toISOString() })

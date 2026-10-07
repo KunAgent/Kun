@@ -212,7 +212,7 @@ export class HarnessRouter {
     }
     const usage = usageForTurn(thread, turn)
     let effective = effectiveCapabilitiesForRoute(definition, runtime, route.providerId)
-    if (usage === 'room-execution') {
+    if (usage === 'room-execution' || usage === 'room-conversation') {
       // A room turn strips native tools entirely: when the runtime declares
       // `roomToolPolicy`, Kun's tool host mediates every call, so the
       // room-scoped sandbox is host-enforced regardless of the harness's own

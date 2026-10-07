@@ -14,6 +14,8 @@ import { roomEvidenceHistory } from './room-evidence-history.js'
 import { roomTurnItems } from './room-item-history.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES } from '../contracts/capabilities-core.js'
 import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
+import { EXTERNAL_AGENT_BLOCKED_TOOLS, EXTERNAL_AGENT_ROOM_KINDS, externalAgentSystemPrompt, externalAgentThreadRoute,
+  externalDiscussionApprovalPolicy } from '../agents/agent-external.js'
 
 export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   id: string; roomId: string; taskId?: string; requestId?: string; member: RoomMember;
@@ -31,6 +33,10 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
     return old
   }
   await deps.assertOwnership()
+  const executor = input.member.executor
+  if (executor && !(EXTERNAL_AGENT_ROOM_KINDS as readonly string[]).includes(input.kind)) {
+    throw new Error('编程 Agent 只参与对话和讨论，协调、执行和评审请交给 Kun Agent。')
+  }
   const workspace = input.workspace ?? join(deps.dataDir, 'rooms', 'discussion', input.roomId)
   if (input.workspace) {
     if (!(await stat(workspace)).isDirectory()) throw new Error('authorized workspace is unavailable')
@@ -38,7 +44,7 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   const profile = input.profile !== undefined ? input.profile ?? undefined : (input.member.presetSnapshot !== undefined ? input.member.presetSnapshot ?? undefined : deps.profiles()[input.member.presetId])
   const binding = input.member.modelRef ?? (profile?.model && profile.providerId
     ? { model: profile.model, providerId: profile.providerId } : deps.model())
-  if (binding.providerId && deps.unsupportedProviderIds?.().includes(binding.providerId)) {
+  if (!executor && binding.providerId && deps.unsupportedProviderIds?.().includes(binding.providerId)) {
     throw new Error('Rooms require a native API model; the selected provider uses an unsupported execution engine')
   }
   const invitationRequest = input.requestId ? await deps.store.get<import('./room-runtime-types.js').RoomRequestState>('request', input.requestId) : null
@@ -61,17 +67,26 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   if (input.kind === 'discussion' && input.collaborationProtocol === 'peer' && allowed) {
     allowed.push(...['read_room_updates', 'send_room_message'].filter((name) => !blocked.includes(name)))
   }
-  if (input.kind === 'discussion' && input.member.participantAgentId && allowed && !blocked.includes('propose_room_action')) {
+  if (input.kind === 'discussion' && input.member.participantAgentId && allowed && !blocked.includes('propose_room_action') && !executor) {
     allowed.push('propose_room_action')
   }
-  if (input.member.participantAgentId && allowed) allowed.push(...AGENT_COLLABORATION_TOOLS.filter((name) => !blocked.includes(name)))
+  if (input.member.participantAgentId && allowed && !executor) allowed.push(...AGENT_COLLABORATION_TOOLS.filter((name) => !blocked.includes(name)))
+  if (executor) blocked.push(...EXTERNAL_AGENT_BLOCKED_TOOLS.filter((name) => !blocked.includes(name)))
+  if (executor && allowed) allowed = allowed.filter((name) => !blocked.includes(name))
+  // External engines reject Kun's plan mode; the read-only sandbox is the discussion ceiling.
+  const approvalPolicy = executor && readOnly ? externalDiscussionApprovalPolicy(executor) : undefined
   return deps.threads.create({
-    workspace, title: input.member.displayName, model: binding.model, providerId: binding.providerId,
-    ...('accountId' in binding && typeof binding.accountId === 'string' ? { accountId: binding.accountId } : {}),
-    mode: readOnly ? 'plan' : 'agent', agentSurface: 'code',
+    workspace, title: input.member.displayName,
+    ...(executor ? externalAgentThreadRoute(executor) : { model: binding.model, providerId: binding.providerId,
+      ...('accountId' in binding && typeof binding.accountId === 'string' ? { accountId: binding.accountId } : {}) }),
+    mode: readOnly && !executor ? 'plan' : 'agent', agentSurface: 'code',
     sandboxMode: readOnly ? 'read-only' : 'workspace-write',
+    ...(approvalPolicy ? { approvalPolicy } : {}),
     agentId: input.member.presetId,
-    systemPrompt: [profile?.systemPrompt, profile?.promptPreamble, input.member.agentInstructions, input.member.roleNotes].filter(Boolean).join('\n')
+    systemPrompt: executor
+      ? externalAgentSystemPrompt({ name: input.member.displayName, instructions: input.member.agentInstructions,
+        roleNotes: input.member.roleNotes, group: input.kind === 'discussion' })
+      : [profile?.systemPrompt, profile?.promptPreamble, input.member.agentInstructions, input.member.roleNotes].filter(Boolean).join('\n')
   }, { id: input.id, relation: 'side', roomContext: {
     participantAgentId: input.member.participantAgentId, agentRevision: input.member.agentRevision, taskScopedMemory: input.member.taskScopedMemory, handoffId: input.handoffId,
     roomId: input.roomId, taskId: input.taskId, requestId: input.requestId, memberId: input.member.id, kind: input.kind,
@@ -101,7 +116,12 @@ export async function enqueueRoomTurn(deps: RoomRuntimeDeps, threadId: string,
       if (commit.puts?.length) await deps.store.commit(commit)
     }
   }
-  prompt = await freezeAgentMemoryInput(deps, thread, clientRequestId, prompt)
+  const roomRequest = thread.roomContext.requestId ? await deps.store.get<import('./room-runtime-types.js').RoomRequestState>('request', thread.roomContext.requestId) : null
+  // The frozen request snapshot owns an external member's route; threads keep only the engine id.
+  const external = Boolean(thread.harnessId && thread.harnessId !== 'kun')
+  const executor = external ? roomRequest?.value.roomSnapshot.members.find((member) => member.id === thread.roomContext!.memberId)?.executor : undefined
+  if (external && executor?.harnessId !== thread.harnessId) throw new Error('external Agent route is unavailable for this room thread')
+  if (!executor) prompt = await freezeAgentMemoryInput(deps, thread, clientRequestId, prompt)
   const run = await prepareRoomRun(deps, thread, clientRequestId, prompt, attachmentIds, runInput)
   const sourceRequest = run.requestId ? await deps.store.get<import('./room-runtime-types.js').RoomRequestState>('request', run.requestId) : null
   const clientSurface = sourceRequest?.value.clientSurface ?? 'gui'
@@ -123,7 +143,8 @@ export async function enqueueRoomTurn(deps: RoomRuntimeDeps, threadId: string,
   try {
     const admitted = await deps.turns.enqueueTurn({ threadId, request: {
       prompt, clientRequestId, attachmentIds, clientSurface, agentSurface: 'code',
-      mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true
+      mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true,
+      ...(executor ? { harnessId: executor.harnessId, credentialMode: executor.credentialMode } : {})
     } })
     await updateRoomRun(deps.store, run.id, { turnId: admitted.turnId })
     deps.turns.notifyTurnQueued(threadId)
