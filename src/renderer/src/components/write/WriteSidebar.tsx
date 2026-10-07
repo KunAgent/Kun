@@ -110,6 +110,7 @@ export function WriteSidebar({
                 setSearchOpen((open) => !open)
                 setQuery('')
               }}
+              onOpenArchives={() => onOpenSettings('archives')}
               onAddSpace={() => void actions.pickWriteWorkspace()}
               onRefresh={() => {
                 const root = useWriteWorkspaceStore.getState().workspaceRoot

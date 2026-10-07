@@ -26,5 +26,7 @@
   "workHomeComposerPlaceholder": "Опишите, что вы хотите написать, прочитать или упорядочить…",
   "workSessionJustNow": "Только что",
   "workAssistantEmptyTitlePapers": "Исследовательский ассистент готов",
-  "workAssistantEmptySubPapers": "Выделите текст в статье, чтобы процитировать его, или выберите действие ниже."
+  "workAssistantEmptySubPapers": "Выделите текст в статье, чтобы процитировать его, или выберите действие ниже.",
+  "workSessionArchived": "«{{title}}» в архиве",
+  "workSessionUndo": "Отменить"
 }

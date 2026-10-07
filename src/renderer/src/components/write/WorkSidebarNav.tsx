@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Compass, FilePlus2, FolderPlus, Import, LibraryBig, Newspaper, RefreshCw, Rss, Search, SquarePen, Trophy } from 'lucide-react'
+import { Archive, Compass, FilePlus2, FolderPlus, Import, LibraryBig, Newspaper, RefreshCw, Rss, Search, SquarePen, Trophy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { focusedPaperViewId } from '../../paper/paper-view'
@@ -83,10 +83,12 @@ export function WorkSidebarPaperNav(): ReactElement {
 }
 
 /** 会话 | 目录 switch with the actions of the current view. */
-export function WorkSidebarViewHeader({ view, searchOpen, onToggleSearch, onAddSpace, onRefresh }: {
+export function WorkSidebarViewHeader({ view, searchOpen, onToggleSearch, onOpenArchives, onAddSpace, onRefresh }: {
   view: WorkSidebarView
   searchOpen: boolean
   onToggleSearch: () => void
+  /** Archived sessions live in Settings → Archives, as in Code. */
+  onOpenArchives: () => void
   onAddSpace: () => void
   onRefresh: () => void
 }): ReactElement {
@@ -115,6 +117,10 @@ export function WorkSidebarViewHeader({ view, searchOpen, onToggleSearch, onAddS
             <SidebarIconButton onClick={onToggleSearch} active={searchOpen} className="h-6 w-6"
               title={t('workSidebarSearchSessions')} ariaLabel={t('workSidebarSearchSessions')}>
               <Search className="h-3.5 w-3.5" strokeWidth={1.85} />
+            </SidebarIconButton>
+            <SidebarIconButton onClick={onOpenArchives} className="h-6 w-6"
+              title={t('sidebarShowArchivedThreads')} ariaLabel={t('sidebarShowArchivedThreads')}>
+              <Archive className="h-3.5 w-3.5" strokeWidth={1.75} />
             </SidebarIconButton>
             <SidebarIconButton onClick={onAddSpace} className="h-6 w-6"
               title={t('writeAddWorkspace')} ariaLabel={t('writeAddWorkspace')}>

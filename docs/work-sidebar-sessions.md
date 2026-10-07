@@ -33,8 +33,10 @@ open when it was set.
   open then (`prepareWorkSessionForSend`; other senders such as the paper
   reading dialog honor the draft through `ensureWriteThreadForWorkspace`).
   Whiteboards are the exception and create their bound session at once.
-- Session rows offer rename, archive and delete; archived sessions are listed
-  under Settings -> Archives.
+- Session rows offer rename, archive and delete. Archiving shows a toast with
+  **Undo** (which also reopens the session if it was open); archived sessions
+  are listed under Settings -> Archives, reachable from the archive icon in
+  the sessions header, the same place Code keeps them.
 
 ## Layout
 

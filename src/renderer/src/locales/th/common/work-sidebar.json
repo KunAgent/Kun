@@ -26,5 +26,7 @@
   "workHomeComposerPlaceholder": "อธิบายสิ่งที่คุณต้องการเขียน อ่าน หรือจัดระเบียบ…",
   "workSessionJustNow": "เมื่อสักครู่",
   "workAssistantEmptyTitlePapers": "ผู้ช่วยวิจัยพร้อมแล้ว",
-  "workAssistantEmptySubPapers": "เลือกข้อความในบทความเพื่ออ้างอิง หรือเลือกการดำเนินการด้านล่าง"
+  "workAssistantEmptySubPapers": "เลือกข้อความในบทความเพื่ออ้างอิง หรือเลือกการดำเนินการด้านล่าง",
+  "workSessionArchived": "เก็บถาวร \"{{title}}\" แล้ว",
+  "workSessionUndo": "เลิกทำ"
 }

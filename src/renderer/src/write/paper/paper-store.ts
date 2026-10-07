@@ -20,6 +20,8 @@ export type PaperJobUiState = {
 export type PaperNotice = {
   tone: 'success' | 'error' | 'info'
   message: string
+  /** One follow-up such as Undo; running it dismisses the notice. */
+  action?: { label: string; run: () => void }
 } | null
 
 export type PendingPaperInterpretation = {

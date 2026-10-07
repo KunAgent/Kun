@@ -194,6 +194,19 @@ async function exerciseWorkLayout({ page, poll, capture, recordDiagnostic, resiz
   steps.draft = await workSnapshot(page)
   await capture('work-07-new-session-draft')
   assert.equal((await workSnapshot(page)).route, 'write')
+
+  // Archiving a session offers Undo, which puts the row back.
+  const archivedRow = page.locator(`[data-work-session="${steps.session.activeThreadId}"]`)
+  await archivedRow.hover()
+  await archivedRow.locator('.work-session-menu').click()
+  await page.locator('[data-work-session-action="archive"]').click()
+  await archivedRow.waitFor({ state: 'detached', timeout: 15_000 })
+  const undo = page.locator('[data-work-notice-action]')
+  await undo.waitFor({ timeout: 15_000 })
+  await capture('work-08-archived-undo')
+  await undo.click()
+  await archivedRow.waitFor({ timeout: 30_000 })
+  steps.restored = await workSnapshot(page)
   await recordDiagnostic('work-layout', { steps, views })
   return { steps, views }
 }

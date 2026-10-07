@@ -26,5 +26,7 @@
   "workHomeComposerPlaceholder": "描述你想写、读或整理的内容…",
   "workSessionJustNow": "刚刚",
   "workAssistantEmptyTitlePapers": "研究助手待命中",
-  "workAssistantEmptySubPapers": "选中论文中的内容即可引用，或从下面选择一个操作。"
+  "workAssistantEmptySubPapers": "选中论文中的内容即可引用，或从下面选择一个操作。",
+  "workSessionArchived": "已归档「{{title}}」",
+  "workSessionUndo": "撤销"
 }

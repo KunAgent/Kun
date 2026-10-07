@@ -23,6 +23,7 @@ import { useWriteWorkspaceStore, writeBasenameFromPath } from '../../write/write
 import { usePaperWorkspaceBootstrapStore } from '../../paper/paper-workspace-bootstrap'
 import { writeWorkspaceKey } from '../../write/write-thread-registry'
 import { writeActivityForThreadIds, type WriteResourceActivityContext } from '../../write/write-resource-activity'
+import { usePaperStore } from '../../write/paper/paper-store'
 import { useWorkSidebarStore } from '../../write/work-sidebar-store'
 import type { WorkSessionEntry, WorkSessionGroup } from '../../write/work-sessions-model'
 import { openWorkSession, startWorkSession } from '../../write/work-session-actions'
@@ -115,7 +116,8 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
     return new Set(refs.filter((group) => isExpanded(group)).map((group) => group.root))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaces, libraries, groupState, mountedKey, workSurface, searching])
-  const { groups: liveGroups, loadingRoots, patchThread, forgetThread } = useWorkSessionGroups({ query, expandedRoots })
+  const { groups: liveGroups, loadingRoots, patchThread, forgetThread, reloadRoot } =
+    useWorkSessionGroups({ query, expandedRoots })
 
   const toggleGroup = (group: WorkSessionGroup): void => {
     setGroupState((current) => {
@@ -145,11 +147,35 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
     if (useWorkSidebarStore.getState().pin?.threadId === threadId) useWorkSidebarStore.getState().clearPin()
     forgetThread(threadId)
   }
-  const archiveSession = (session: WorkSessionEntry): void => {
-    releaseSession(session.id)
-    void archiveThread(session.id, true)
+  // Store actions report failures through `error`; a failed removal lists the space again.
+  const removeSession = async (group: WorkSessionGroup, threadId: string, remove: () => Promise<void>): Promise<boolean> => {
+    const errorBefore = useChatStore.getState().error
+    releaseSession(threadId)
+    await remove()
+    const { error } = useChatStore.getState()
+    if (!error || error === errorBefore) return true
+    reloadRoot(group.root)
+    return false
   }
-  const requestDelete = (session: WorkSessionEntry): void => {
+  // Undo puts the session back where it was, reopening it if it was the open one.
+  const archiveSession = (group: WorkSessionGroup, session: WorkSessionEntry): void => {
+    const wasOpen = useChatStore.getState().activeThreadId === session.id
+    void removeSession(group, session.id, () => archiveThread(session.id, true)).then((archived) => {
+      if (!archived) return
+      usePaperStore.getState().setNotice({
+        tone: 'info',
+        message: t('workSessionArchived', { title: sessionLabel(session) }),
+        action: {
+          label: t('workSessionUndo'),
+          run: () => void useChatStore.getState().archiveThread(session.id, false).then(() => {
+            reloadRoot(group.root)
+            if (wasOpen) void openWorkSession(group, session)
+          })
+        }
+      })
+    })
+  }
+  const requestDelete = (group: WorkSessionGroup, session: WorkSessionEntry): void => {
     setActionDialog({
       title: t('sidebarThreadDeleteDialogTitle', { title: sessionLabel(session) }),
       description: t('sidebarThreadDeleteDialogDescription'),
@@ -158,8 +184,7 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
       danger: true,
       submitting: false,
       onConfirm: async () => {
-        releaseSession(session.id)
-        await deleteThread(session.id)
+        await removeSession(group, session.id, () => deleteThread(session.id))
       }
     })
   }
@@ -259,22 +284,22 @@ export function WorkSessionsSection({ query }: { query: string }): ReactElement 
                         className="work-session-menu rooms-icon-button" align="end" width={188}>
                         {(close) => (
                           <div className="rooms-menu-list conversation-menu">
-                            <button type="button" onClick={() => {
+                            <button type="button" data-work-session-action="rename" onClick={() => {
                               close()
                               setRenaming({ id: session.id, value: session.title })
                             }}>
                               <PencilLine size={15} aria-hidden="true" /><span>{t('sidebarThreadRename')}</span>
                             </button>
-                            <button type="button" onClick={() => {
+                            <button type="button" data-work-session-action="archive" onClick={() => {
                               close()
-                              archiveSession(session)
+                              archiveSession(group, session)
                             }}>
                               <Archive size={15} aria-hidden="true" /><span>{t('sidebarThreadArchive')}</span>
                             </button>
                             <hr />
-                            <button type="button" className="is-danger" onClick={() => {
+                            <button type="button" className="is-danger" data-work-session-action="delete" onClick={() => {
                               close()
-                              requestDelete(session)
+                              requestDelete(group, session)
                             }}>
                               <Trash2 size={15} aria-hidden="true" /><span>{t('sidebarThreadDelete')}</span>
                             </button>

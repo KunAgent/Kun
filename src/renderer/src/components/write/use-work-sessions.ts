@@ -41,6 +41,8 @@ export function useWorkSessionGroups({ query, expandedRoots }: {
   /** Mirror a rename/archive/delete into the per-space listings right away. */
   patchThread: (threadId: string, patch: Partial<NormalizedThread>) => void
   forgetThread: (threadId: string) => void
+  /** List a space again, e.g. after a session came back from the archive. */
+  reloadRoot: (root: string) => void
 } {
   const { spaces, libraries, whiteboards } = useWriteWorkspaceStore(useShallow((state) => ({
     spaces: state.workspaceRoots,
@@ -51,38 +53,55 @@ export function useWorkSessionGroups({ query, expandedRoots }: {
   const runtimeReady = useChatStore((state) => state.runtimeConnection === 'ready')
   const [extra, setExtra] = useState<Record<string, NormalizedThread[]>>({})
   const [loadingRoots, setLoadingRoots] = useState<ReadonlySet<string>>(() => new Set())
+  const [reloads, setReloads] = useState(0)
   const requested = useRef(new Set<string>())
+  // Latest request per space: a slower, older listing never overwrites a newer one.
+  const sequence = useRef(new Map<string, number>())
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
 
   const expandedKey = [...expandedRoots].map(writeWorkspaceKey).sort().join('\n')
   useEffect(() => {
     if (!runtimeReady) return
-    let canceled = false
     for (const root of expandedRoots) {
       const key = writeWorkspaceKey(root)
       if (!key || requested.current.has(key)) continue
       requested.current.add(key)
-      setLoadingRoots((current) => new Set([...current, key]))
+      const request = (sequence.current.get(key) ?? 0) + 1
+      sequence.current.set(key, request)
+      const current = (): boolean => mounted.current && sequence.current.get(key) === request
+      setLoadingRoots((loading) => new Set([...loading, key]))
+      // Expanding another space re-runs this effect; in-flight listings keep
+      // going rather than being dropped, so no space is left half loaded.
       void listSpaceWriteThreads(root)
         .then((listed) => {
-          if (!canceled) setExtra((current) => ({ ...current, [key]: listed }))
+          if (current()) setExtra((existing) => ({ ...existing, [key]: listed }))
         })
         .catch(() => {
           // The shared list still shows what it has; a later expand retries.
-          requested.current.delete(key)
+          if (current()) requested.current.delete(key)
         })
         .finally(() => {
-          setLoadingRoots((current) => {
-            const next = new Set(current)
+          if (!current()) return
+          setLoadingRoots((loading) => {
+            const next = new Set(loading)
             next.delete(key)
             return next
           })
         })
     }
-    return () => {
-      canceled = true
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expandedKey, runtimeReady])
+  }, [expandedKey, runtimeReady, reloads])
+
+  const reloadRoot = useCallback((root: string): void => {
+    const key = writeWorkspaceKey(root)
+    if (!key) return
+    requested.current.delete(key)
+    setReloads((count) => count + 1)
+  }, [])
 
   const patchThread = useCallback((threadId: string, patch: Partial<NormalizedThread>): void => {
     setExtra((current) => Object.fromEntries(Object.entries(current).map(([key, listed]) => [
@@ -118,5 +137,5 @@ export function useWorkSessionGroups({ query, expandedRoots }: {
     })
   }, [extra, libraries, query, spaces, threads, whiteboards])
 
-  return { groups, loadingRoots, patchThread, forgetThread }
+  return { groups, loadingRoots, patchThread, forgetThread, reloadRoot }
 }

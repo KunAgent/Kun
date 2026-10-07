@@ -26,5 +26,7 @@
   "workHomeComposerPlaceholder": "작성, 읽기, 정리하고 싶은 내용을 설명하세요…",
   "workSessionJustNow": "방금",
   "workAssistantEmptyTitlePapers": "리서치 어시스턴트 대기 중",
-  "workAssistantEmptySubPapers": "논문에서 텍스트를 선택해 인용하거나 아래에서 작업을 선택하세요."
+  "workAssistantEmptySubPapers": "논문에서 텍스트를 선택해 인용하거나 아래에서 작업을 선택하세요.",
+  "workSessionArchived": "\"{{title}}\" 보관됨",
+  "workSessionUndo": "실행 취소"
 }

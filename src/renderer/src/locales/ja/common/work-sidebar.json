@@ -26,5 +26,7 @@
   "workHomeComposerPlaceholder": "書きたい・読みたい・整理したい内容を入力…",
   "workSessionJustNow": "たった今",
   "workAssistantEmptyTitlePapers": "リサーチアシスタント待機中",
-  "workAssistantEmptySubPapers": "論文内のテキストを選択して引用するか、下から操作を選んでください。"
+  "workAssistantEmptySubPapers": "論文内のテキストを選択して引用するか、下から操作を選んでください。",
+  "workSessionArchived": "「{{title}}」をアーカイブしました",
+  "workSessionUndo": "元に戻す"
 }
