@@ -22,10 +22,22 @@ import { readinessProbeEnvironment } from './harness-readiness-env.js'
 import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { spawnCaptured } from './harness-detector.js'
 import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
+import { HarnessReadinessProofFile, type PersistedReadinessProof } from './harness-readiness-store.js'
 
-const PROOF_TTL_MS = 5 * 60_000
-/** Background re-validation starts this long before a proof expires. */
-export const PROOF_REFRESH_AHEAD_MS = 90_000
+/**
+ * How long a successful handshake admits turns without re-spawning the Agent.
+ * Each handshake starts the real CLI (Claude Code, Codex, agy, ...), so this is
+ * deliberately long; identity changes (binary, credentials, config) still
+ * invalidate a proof immediately through the cheap snapshot check.
+ */
+export const PROOF_TTL_MS = 30 * 60_000
+/**
+ * After its admission TTL a proof stays visible (the Agent keeps showing as
+ * ready in pickers) for this long while its identity is unchanged. Nothing
+ * re-validates it in the background: the next turn admission, an explicit
+ * test, or selecting the Agent in the composer does.
+ */
+export const PROOF_DISPLAY_TTL_MS = 12 * 60 * 60_000
 /** Turn admission reuses a proof only when it still has this much life left. */
 const PROOF_REUSE_MIN_REMAINING_MS = 15_000
 const WARM_RETRY_BASE_MS = 15_000
@@ -37,7 +49,8 @@ export type ReadyHarnessProfile = HarnessEnabledProfile & { expiresAt: string; r
 type Handshake = Omit<HarnessTestHandshake, 'durationMs'> & { catalog?: HarnessModelCatalog }
 type Snapshot = { definition: HarnessDefinition; route: HarnessRoute; secretEnv: Record<string, string>;
   env: Record<string, string>; identity: string; configured: boolean; hasKey: boolean; detail?: string }
-type Proof = { route: HarnessRoute; identity: string; command?: string; expires: number; revision?: number; result: HarnessTestResponse }
+type Proof = { route: HarnessRoute; identity: string; command?: string; expires: number; displayExpires: number;
+  revision?: number; readiness?: HarnessReadiness }
 const proofKey = (route: HarnessRoute): string => JSON.stringify([harnessProfileKey(route), route.model])
 
 export type HarnessReadinessDeps = {
@@ -53,6 +66,17 @@ export type HarnessReadinessDeps = {
   onCatalog?: (definition: HarnessDefinition, catalog: HarnessModelCatalog) => void
   handshake?: (definition: HarnessDefinition, command: string, env: Record<string, string>, signal: AbortSignal) => Promise<Handshake>
   nowMs?: () => number
+  /**
+   * File that keeps display proofs across Runtime restarts, so startup does not
+   * spawn every enabled Agent just to repaint the picker. Restored proofs are
+   * display-only; the first turn admission re-checks them.
+   */
+  proofStorePath?: string
+}
+
+export type WarmProfilesOptions = {
+  /** Re-validate proofs past their admission TTL (user intent, e.g. composer selection). */
+  refreshStale?: boolean
 }
 
 /** Process-local proofs: no model prompts or interactive login. Adapter metadata may contact its service. */
@@ -68,7 +92,44 @@ export class HarnessReadinessService {
   private readonly generations = new Map<string, number>()
   private readonly maintenance = new Set<string>()
   private readonly preparing = new Map<string, string>()
-  constructor(private readonly deps: HarnessReadinessDeps) {}
+  private readonly store: HarnessReadinessProofFile | undefined
+  private readonly restored: Promise<void>
+  private restoredDone: boolean
+  /** Warm requests that arrived before restored proofs were loaded. */
+  private readonly deferredWarms = new Set<string>()
+  constructor(private readonly deps: HarnessReadinessDeps) {
+    this.store = deps.proofStorePath ? new HarnessReadinessProofFile(deps.proofStorePath) : undefined
+    this.restoredDone = !this.store
+    this.restored = this.store
+      ? this.restoreProofs().finally(() => { this.restoredDone = true })
+      : Promise.resolve()
+  }
+
+  private async restoreProofs(): Promise<void> {
+    if (!this.store) return
+    const now = this.now()
+    for (const entry of await this.store.load()) {
+      if (entry.displayExpires <= now) continue
+      const key = proofKey(entry.route)
+      if (this.proofs.has(key)) continue
+      // Restored proofs only repaint the picker. Turn admission never reuses
+      // them, because the handshake that produced them belongs to another process.
+      this.proofs.set(key, { route: entry.route, identity: entry.identity,
+        ...(entry.command ? { command: entry.command } : {}), expires: 0, displayExpires: entry.displayExpires,
+        ...(entry.readiness ? { readiness: entry.readiness } : {}) })
+    }
+  }
+
+  private persistProofs(): void {
+    if (!this.store) return
+    const now = this.now()
+    const entries: PersistedReadinessProof[] = [...this.proofs.values()]
+      .filter((proof) => proof.displayExpires > now)
+      .map((proof) => ({ route: proof.route, identity: proof.identity,
+        ...(proof.command ? { command: proof.command } : {}), displayExpires: proof.displayExpires,
+        ...(proof.readiness ? { readiness: proof.readiness } : {}) }))
+    this.store.schedule(entries)
+  }
 
   route(definition: HarnessDefinition, input: Pick<HarnessTestRequest, 'credentialMode' | 'providerId' | 'model' | 'gatewayBinding'>): HarnessRoute {
     const defaults = this.deps.options().harnesses?.defaults?.[definition.id]
@@ -92,9 +153,11 @@ export class HarnessReadinessService {
 
   private invalidateProfile(key: string): void {
     this.generations.set(key, (this.generations.get(key) ?? 0) + 1)
+    let removed = false
     for (const [candidate, proof] of this.proofs) {
-      if (harnessProfileKey(proof.route) === key) this.proofs.delete(candidate)
+      if (harnessProfileKey(proof.route) === key) { this.proofs.delete(candidate); removed = true }
     }
+    if (removed) this.persistProofs()
   }
 
   private async check(definition: HarnessDefinition, route: HarnessRoute, input: HarnessTestRequest, signal?: AbortSignal,
@@ -194,16 +257,27 @@ export class HarnessReadinessService {
       // is validating. Different models retain independent launch evidence.
       if (existing?.identity === snapshot.identity) {
         existing.expires = this.now() + PROOF_TTL_MS
+        existing.displayExpires = this.now() + PROOF_DISPLAY_TTL_MS
         existing.revision = revision
-        existing.result = result
+        existing.readiness = readiness
+        if (status.resolvedCommand) existing.command = status.resolvedCommand
       } else {
-        this.proofs.set(proofKey(route), { route, identity: snapshot.identity, command: status.resolvedCommand, expires: this.now() + PROOF_TTL_MS, revision, result })
+        this.proofs.set(proofKey(route), { route, identity: snapshot.identity, command: status.resolvedCommand,
+          expires: this.now() + PROOF_TTL_MS, displayExpires: this.now() + PROOF_DISPLAY_TTL_MS, revision, readiness })
       }
+      this.persistProofs()
     }
     return result
   }
 
-  warmProfiles(id: string): void {
+  warmProfiles(id: string, options: WarmProfilesOptions = {}): void {
+    // Listing Agents right after startup must see restored proofs, otherwise it
+    // would spawn every enabled Agent to rediscover what the last run knew.
+    if (!this.restoredDone) {
+      this.deferredWarms.add(id)
+      void this.restored.then(() => { this.deferredWarms.delete(id); this.warmProfiles(id, options) })
+      return
+    }
     const definition = this.deps.catalog.get(id)
     if (!definition || id === 'kun' || this.maintenance.has(id)) return
     const now = this.now()
@@ -214,12 +288,15 @@ export class HarnessReadinessService {
       const key = harnessProfileKey(route)
       const signature = this.configurationSignature(route)
       const expired = this.proofs.get(proofKey(route))
-      if (expired && expired.expires <= now) { this.proofs.delete(proofKey(route)); this.warmed.delete(key) }
+      if (expired && expired.displayExpires <= now) {
+        this.proofs.delete(proofKey(route)); this.warmed.delete(key); this.persistProofs()
+      }
       if (this.warming.has(key)) continue
       const proof = this.proofs.get(proofKey(route))
-      // Refresh ahead of expiry so the profile never drops out of the picker
-      // while a slow agent (10-20 s handshakes) re-validates.
-      const refreshing = Boolean(proof && proof.expires - now <= PROOF_REFRESH_AHEAD_MS)
+      // Polling the Agent list never re-spawns an Agent whose proof is still
+      // displayable. A stale proof is refreshed only on explicit user intent;
+      // otherwise the next turn admission re-checks it on demand.
+      const refreshing = Boolean(proof && proof.expires <= now && options.refreshStale)
       if (proof && !refreshing) continue
       if (refreshing && (this.warmFailures.get(key)?.retryAt ?? 0) > now) continue
       if (!proof && this.warmed.get(key) === signature) {
@@ -246,6 +323,7 @@ export class HarnessReadinessService {
     return entry
   }
   checking(id: string): boolean {
+    if (this.deferredWarms.has(id)) return true
     return [...this.warming.keys()].some((key) => JSON.parse(key)[0] === id)
   }
   /**
@@ -257,17 +335,20 @@ export class HarnessReadinessService {
   }
 
   async readyProfiles(id: string): Promise<ReadyHarnessProfile[]> {
+    await this.restored
     const signal = AbortSignal.timeout(5_000)
     const profiles: ReadyHarnessProfile[] = []
     for (const [key, proof] of this.proofs) {
       if (proof.route.harnessId !== id) continue
-      if (proof.expires <= this.now()) { this.proofs.delete(key); continue }
+      if (proof.displayExpires <= this.now()) {
+        this.proofs.delete(key); this.warmed.delete(harnessProfileKey(proof.route)); this.persistProofs(); continue
+      }
       if (!this.deps.catalog.isProfileEnabled(proof.route)) continue
       try {
         if ((await raceProbeAbort(this.snapshot(proof.route, proof.command), signal)).identity !== proof.identity) { this.proofs.delete(key); this.warmed.delete(harnessProfileKey(proof.route)); continue }
         if (!profiles.some((profile) => harnessProfileKey(profile) === harnessProfileKey(proof.route))) {
-          profiles.push({ ...harnessProfile(proof.route), expiresAt: new Date(proof.expires).toISOString(),
-            ...(proof.result.readiness ? { readiness: proof.result.readiness } : {}) })
+          profiles.push({ ...harnessProfile(proof.route), expiresAt: new Date(proof.displayExpires).toISOString(),
+            ...(proof.readiness ? { readiness: proof.readiness } : {}) })
         }
       } catch { this.proofs.delete(key) }
     }
@@ -328,6 +409,7 @@ export class HarnessReadinessService {
 
   async assertReady(route: HarnessRoute, signal?: AbortSignal): Promise<string> {
     if (route.harnessId === 'kun') return 'native'
+    await this.restored
     const definition = this.deps.catalog.get(route.harnessId)
     if (!definition || definition.availability === 'retired' || !this.deps.catalog.isProfileEnabled(route)) {
       throw new Error(`Agent profile is disabled: ${route.harnessId}. Test and enable this profile in Agent settings.`)

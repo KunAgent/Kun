@@ -73,7 +73,9 @@ export type HarnessRuntimeComposition = {
 export function createHarnessComposition(
   options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir' | 'nativeAgentNetwork' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId'> &
     Partial<Pick<KunServeRuntimeOptions, 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'routePools'>>,
-  deps: { resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>; revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null> } = {}
+  deps: { resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>; revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null>
+    /** Persist display readiness proofs here (the live Runtime only, never a probe composition). */
+    readinessProofStorePath?: string } = {}
 ): HarnessRuntimeComposition {
   const extensionAgents = new ExtensionAgentProviderSource()
   const catalog = new HarnessCatalog({
@@ -138,6 +140,7 @@ export function createHarnessComposition(
     resolveSecretEnv: deps.resolveSecretEnv, resolveProviderCredential: deps.resolveProviderCredential,
     resolveGatewayAliases: deps.resolveGatewayAliases,
     sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal),
+    ...(deps.readinessProofStorePath ? { proofStorePath: deps.readinessProofStorePath } : {}),
     onCatalog: (definition, catalog) => { if (definition.transport === 'acp') acpModels.seed(definition, catalog) } })
   // Refreshing one Agent must not discard another Agent's catalog.
   const invalidateModels = (id: string): void => {
@@ -169,7 +172,7 @@ export function createHarnessComposition(
       const override = { ...original, harnesses: HarnessesConfigSchema.parse({
         ...original.harnesses, providers: { ...original.harnesses?.providers, [id]: { ...original.harnesses?.providers?.[id], command: path } }
       }) }
-      const probe = createHarnessComposition(() => override, deps)
+      const probe = createHarnessComposition(() => override, { ...deps, readinessProofStorePath: undefined })
       const definition = probe.catalog.get(id)
       if (!definition) throw new Error('Agent definition is unavailable')
       const status = await probe.detector.status(id, { force: true, signal })

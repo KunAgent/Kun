@@ -11,6 +11,8 @@ import { harnessProfileKey, readyHarnessProfiles } from '@shared/harness-enablem
 import { getProvider } from '../agent/registry'
 import type { HarnessNativeAgent } from '../../../../kun/src/contracts/harness-native-agents'
 import { rememberAgentIconAliases } from '../lib/agent-icon-aliases'
+import { rendererRuntimeClient } from '../agent/runtime-client'
+import { kunHarnessWarmPath } from '@shared/kun-endpoints'
 
 /** A model-detail lookup may omit the Agent list; keep the last known one. */
 function nativeAgentCacheFields(source: { agents?: HarnessNativeAgent[]; defaultAgentId?: string } | undefined) {
@@ -165,6 +167,24 @@ export function resetHarnessPolling(): void {
     clearTimeout(pollTimer)
     pollTimer = null
   }
+}
+
+const HARNESS_WARM_MIN_INTERVAL_MS = 5 * 60_000
+const lastWarmRequestAt = new Map<string, number>()
+
+/**
+ * Selecting an Agent in the composer re-validates its readiness proof ahead of
+ * the next turn. This replaces background refresh-ahead, which re-spawned every
+ * enabled Agent CLI every few minutes while the app sat idle.
+ */
+export function warmHarnessReadiness(harnessId: string): void {
+  if (harnessId === 'kun' || typeof window === 'undefined' || !window.kunGui?.runtimeRequest) return
+  const last = lastWarmRequestAt.get(harnessId) ?? 0
+  if (now() - last < HARNESS_WARM_MIN_INTERVAL_MS) return
+  lastWarmRequestAt.set(harnessId, now())
+  void rendererRuntimeClient.runtimeRequest(kunHarnessWarmPath(harnessId), 'POST', '{}').catch(() => {
+    lastWarmRequestAt.delete(harnessId)
+  })
 }
 
 export async function loadHarnesses(

@@ -31,7 +31,7 @@ vi.mock('../../store/harness-store', () => ({
     getState: () => fixture.harnesses
   }),
   harnessRowAvailable: () => true, harnessRowRunsTurns: () => true, harnessRowUnavailableCode: () => null, harnessModelFingerprint: () => '',
-  loadHarnessModels: vi.fn(), loadHarnessProviderGroups: vi.fn(), loadHarnesses: vi.fn()
+  loadHarnessModels: vi.fn(), loadHarnessProviderGroups: vi.fn(), loadHarnesses: vi.fn(), warmHarnessReadiness: vi.fn()
 }))
 vi.mock('../../store/task-workspace-store', () => ({ useTaskWorkspaceStore: () => undefined }))
 vi.mock('../../history-reference/use-codex-reference-enabled', () => ({ useCodexReferenceEnabled: () => false }))

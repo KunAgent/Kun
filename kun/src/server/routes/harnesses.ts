@@ -118,6 +118,19 @@ function markDetecting(
   return { ...status, detecting: inflight }
 }
 
+export function warmHarness(
+  runtime: ServerRuntime,
+  params: Record<string, string>
+): JsonResponse {
+  const harnesses = runtime.harnesses
+  if (!harnesses) return ERRORS.notFound('harness catalog is unavailable')
+  const parsedId = HarnessIdSchema.safeParse(params.id)
+  if (!parsedId.success) return ERRORS.validation('invalid harness id')
+  if (!harnesses.catalog.get(parsedId.data)) return ERRORS.notFound('unknown harness')
+  harnesses.readiness?.warmProfiles(parsedId.data, { refreshStale: true })
+  return jsonResponse({ ok: true, checking: harnesses.readiness?.checking(parsedId.data) === true }, 202)
+}
+
 export async function probeHarness(
   runtime: ServerRuntime,
   request: Request,

@@ -317,6 +317,11 @@ export const KUN_HARNESSES_PATH = '/v1/harnesses'
 export const KUN_HARNESSES_TEMPLATE = '/v1/harnesses'
 export const KUN_HARNESS_MODELS_TEMPLATE = '/v1/harnesses/{id}/models'
 export const KUN_HARNESS_PROBE_TEMPLATE = '/v1/harnesses/{id}/probe'
+/** Re-validate this Agent's stale readiness proofs (composer selection, not polling). */
+export const KUN_HARNESS_WARM_TEMPLATE = '/v1/harnesses/{id}/warm'
+export function kunHarnessWarmPath(harnessId: string): string {
+  return `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/warm`
+}
 export const KUN_HARNESS_INTEGRATION_TEMPLATE = '/v1/harnesses/{id}/integration'
 export const KUN_HARNESS_INTEGRATION_RESOLVE_TEMPLATE = '/v1/harnesses/{id}/integration/resolve'
 export const KUN_HARNESS_TEST_TEMPLATE = '/v1/harnesses/{id}/test'

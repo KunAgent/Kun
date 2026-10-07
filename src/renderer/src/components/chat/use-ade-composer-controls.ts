@@ -15,6 +15,7 @@ import {
   loadHarnessModels,
   loadHarnessProviderGroups,
   loadHarnesses,
+  warmHarnessReadiness,
   useHarnessStore
 } from '../../store/harness-store'
 import { useTaskWorkspaceStore } from '../../store/task-workspace-store'
@@ -122,6 +123,9 @@ export function useAdeComposerControls(input: {
   useEffect(() => {
     if (enabled && harnessId !== 'kun') void loadHarnessModels(harnessId)
   }, [enabled, harnessId, rowFingerprint])
+  useEffect(() => {
+    if (enabled && harnessId !== 'kun') warmHarnessReadiness(harnessId)
+  }, [enabled, harnessId])
   // A failed native catalog lookup (for example a transient backend timeout
   // inside the Agent) retries on its own with backoff instead of waiting for
   // the user to find the refresh button.

@@ -12,7 +12,8 @@ import {
   listHarnessModels,
   probeHarness,
   probeHarnessDefinition,
-  testHarness
+  testHarness,
+  warmHarness
 } from './harnesses.js'
 
 export function registerHarnessRoutes(router: Router, runtime: ServerRuntime): void {
@@ -26,6 +27,12 @@ export function registerHarnessRoutes(router: Router, runtime: ServerRuntime): v
   router.add('POST', '/v1/harnesses/:id/probe', (request, context) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return probeHarness(runtime, request, context.params)
+  })
+  // Composer selection re-validates a stale proof ahead of the turn, so
+  // background polling never has to spawn Agents to keep them fresh.
+  router.add('POST', '/v1/harnesses/:id/warm', (request, context) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return warmHarness(runtime, context.params)
   })
   router.add('GET', '/v1/harnesses/:id/models', (request, context) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
