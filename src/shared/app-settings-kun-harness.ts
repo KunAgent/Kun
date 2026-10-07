@@ -1,9 +1,16 @@
 import { BUILTIN_HARNESS_IDS } from '../../kun/src/contracts/builtin-harness-ids.js'
 import { HarnessGatewayBindingSchema } from '../../kun/src/contracts/harness-gateway-binding.js'
+import {
+  GENERIC_ACP_BASE,
+  HarnessProviderOverrideSchema,
+  TERMINAL_BASE,
+  harnessProviderOverrides
+} from '../../kun/src/config/kun-config-harness-providers.js'
 import type {
   KunAdeSettingsV1,
   KunHarnessCustomEntryV1,
   KunHarnessDefaultsEntryV1,
+  KunHarnessProviderOverrideV1,
   KunHarnessSettingsV1,
   KunTerminalAgentEntryV1,
   KunWorktreeSettingsV1,
@@ -91,12 +98,10 @@ export function defaultKunHarnessSettings(): KunHarnessSettingsV1 {
   return {
     enabledProfiles: [],
     disabledIds: [],
-    binaryPaths: {},
-    custom: [],
+    providers: {},
     defaults: {},
     defaultHarnessId: 'kun',
-    agentOrder: [],
-    terminalAgents: []
+    agentOrder: []
   }
 }
 
@@ -202,14 +207,12 @@ function foldLegacyPermissionModes(
   return out
 }
 
-export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV1 {
-  const input = isRecord(value) ? value : {}
-  const defaults = defaultKunHarnessSettings()
-  const builtinIds = new Set<string>(BUILTIN_HARNESS_IDS)
+/** Pre-P2 `custom[]` rows, sanitized before they fold into `providers`. */
+function legacyCustomList(value: unknown, builtinIds: ReadonlySet<string>): KunHarnessCustomEntryV1[] {
   const custom: KunHarnessCustomEntryV1[] = []
-  if (Array.isArray(input.custom)) {
+  if (Array.isArray(value)) {
     const seen = new Set<string>()
-    for (const entry of input.custom) {
+    for (const entry of value) {
       if (!isRecord(entry)) continue
       const id = nonEmpty(entry.id, 128)
       const command = nonEmpty(entry.command, 4_096)
@@ -227,6 +230,62 @@ export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV
       if (custom.length >= 32) break
     }
   }
+  return custom
+}
+
+/** Drop invalid env rows and clamp the label instead of losing the whole entry. */
+function sanitizeProviderOverride(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...raw }
+  if (typeof raw.label === 'string') out.label = raw.label.trim().slice(0, 64) || undefined
+  if (isRecord(raw.env)) {
+    out.env = Object.fromEntries(Object.entries(raw.env).filter(([name, value]) =>
+      HARNESS_ENV_NAME.test(name) && typeof value === 'string' && value.length <= 1_024))
+  }
+  if (raw.secretEnv !== undefined) out.secretEnv = secretEnvList(raw.secretEnv)
+  return out
+}
+
+/**
+ * `providers` (docs/ade/17 §4.3) with the pre-P2 `binaryPaths`, `custom[]`
+ * and `terminalAgents[]` folded in once; saved settings carry only the
+ * result. Each entry validates on its own so one bad row never discards a
+ * sibling. A builtin id only takes launch patches; any other id must name
+ * what it extends, and generic ACP or terminal Agents need a command.
+ */
+function normalizeHarnessProviders(
+  input: Record<string, unknown>,
+  builtinIds: ReadonlySet<string>
+): Record<string, KunHarnessProviderOverrideV1> {
+  const custom = legacyCustomList(input.custom, builtinIds)
+  const folded = harnessProviderOverrides({
+    providers: isRecord(input.providers) ? input.providers as Record<string, KunHarnessProviderOverrideV1> : {},
+    binaryPaths: stringRecord(input.binaryPaths),
+    custom,
+    terminalAgents: terminalAgentsList(input.terminalAgents, new Set([...builtinIds, ...custom.map((entry) => entry.id)]))
+  })
+  const out: Record<string, KunHarnessProviderOverrideV1> = {}
+  for (const [rawId, raw] of Object.entries(folded)) {
+    const id = nonEmpty(rawId, 48)
+    if (!id || !/^[a-z][a-z0-9-]{1,47}$/.test(id) || !isRecord(raw)) continue
+    const parsed = HarnessProviderOverrideSchema.safeParse(sanitizeProviderOverride(raw))
+    if (!parsed.success) continue
+    const { extends: base, terminal, ...patch } = parsed.data
+    const generic = base === GENERIC_ACP_BASE || base === TERMINAL_BASE
+    if (builtinIds.has(id)) {
+      if (Object.keys(patch).length) out[id] = patch
+    } else if (base && (generic ? patch.command : builtinIds.has(base))) {
+      out[id] = { extends: base, ...patch, ...(base === TERMINAL_BASE && terminal ? { terminal } : {}) }
+    }
+    if (Object.keys(out).length >= 64) break
+  }
+  return out
+}
+
+export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV1 {
+  const input = isRecord(value) ? value : {}
+  const defaults = defaultKunHarnessSettings()
+  const builtinIds = new Set<string>(BUILTIN_HARNESS_IDS)
+  const providers = normalizeHarnessProviders(input, builtinIds)
   const defaultHarnessId = nonEmpty(input.defaultHarnessId, 128)
   return {
     enabledProfiles: normalizeEnabledProfiles(input.enabledProfiles),
@@ -234,32 +293,29 @@ export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV
     disabledIds: stringList(input.disabledIds).filter(
       (id) => builtinIds.has(id) && id !== 'kun'
     ),
-    binaryPaths: stringRecord(input.binaryPaths),
-    custom,
+    providers,
     defaults: foldLegacyPermissionModes(
       normalizeHarnessDefaults(input.defaults),
       input.defaultPermissionMode
     ),
     defaultHarnessId: defaultHarnessId ?? defaults.defaultHarnessId,
-    agentOrder: agentOrderList(input.agentOrder, builtinIds, custom),
-    terminalAgents: terminalAgentsList(
-      input.terminalAgents,
-      new Set([...builtinIds, ...custom.map((entry) => entry.id)])
-    )
+    agentOrder: agentOrderList(input.agentOrder, builtinIds, providers)
   }
 }
 
 /**
  * ADE worker-selection preference (10 §3.2): an ordered harness-id list.
- * Unknown/duplicate ids drop; custom ACP ids are allowed alongside builtins.
+ * Unknown/duplicate ids drop; user Agents that can host turns are allowed
+ * alongside builtins.
  */
 function agentOrderList(
   value: unknown,
   builtinIds: ReadonlySet<string>,
-  custom: readonly KunHarnessCustomEntryV1[]
+  providers: Readonly<Record<string, KunHarnessProviderOverrideV1>>
 ): string[] {
   if (!Array.isArray(value)) return []
-  const known = new Set<string>([...builtinIds, ...custom.map((entry) => entry.id)])
+  const known = new Set<string>([...builtinIds, ...Object.entries(providers)
+    .flatMap(([id, entry]) => entry.extends && entry.extends !== TERMINAL_BASE ? [id] : [])])
   const out: string[] = []
   for (const entry of value) {
     const id = nonEmpty(entry, 128)
@@ -276,11 +332,16 @@ export function mergeKunHarnessSettings(
 ): KunHarnessSettingsV1 {
   const base = normalizeKunHarnessSettings(current)
   if (!patch) return base
+  // A stored pre-P2 settings file arrives here as a patch; its command
+  // paths, custom and terminal Agents fold into `providers` once.
+  const legacy = patch as Record<string, unknown>
   return normalizeKunHarnessSettings({
     enabledProfiles: patch.enabledProfiles ?? base.enabledProfiles,
     disabledIds: patch.disabledIds ?? base.disabledIds,
-    binaryPaths: patch.binaryPaths ?? base.binaryPaths,
-    custom: patch.custom ?? base.custom,
+    providers: patch.providers ?? base.providers,
+    binaryPaths: legacy.binaryPaths,
+    custom: legacy.custom,
+    terminalAgents: legacy.terminalAgents,
     // `defaults` replaces whole like the other records. A legacy
     // `defaultPermissionMode` patch is a deliberate write, not a migration
     // fold — it overrides permissionMode on matching entries.
@@ -302,8 +363,7 @@ export function mergeKunHarnessSettings(
     defaultPermissionMode:
       patch.defaults !== undefined ? patch.defaultPermissionMode : undefined,
     defaultHarnessId: patch.defaultHarnessId ?? base.defaultHarnessId,
-    agentOrder: patch.agentOrder ?? base.agentOrder,
-    terminalAgents: patch.terminalAgents ?? base.terminalAgents
+    agentOrder: patch.agentOrder ?? base.agentOrder
   })
 }
 

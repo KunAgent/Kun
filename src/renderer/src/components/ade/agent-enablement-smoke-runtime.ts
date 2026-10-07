@@ -46,7 +46,7 @@ export function createAgentEnablementSmokeRuntime(settings: () => KunHarnessSett
   const proofs = new Map<string, KunHarnessEnabledProfileV1 & { expiresAt: string; fingerprint: string }>()
   const pending = new Set<(ok: boolean) => void>()
   const calls = { tests: 0 }
-  const fingerprint = (): string => JSON.stringify({ defaults: settings().defaults, paths: settings().binaryPaths, custom: settings().custom })
+  const fingerprint = (): string => JSON.stringify({ defaults: settings().defaults, providers: settings().providers })
   const rows = (): AdeHarnessRow[] => fixtureRows.filter((row) => row.definition.availability !== 'retired').map((row) => {
     const enabledProfiles = (settings().enabledProfiles ?? []).filter((entry) => entry.harnessId === row.definition.id && !settings().disabledIds.includes(entry.harnessId))
     return { ...row, enabled: row.definition.id === 'kun' || enabledProfiles.length > 0, enabledProfiles,

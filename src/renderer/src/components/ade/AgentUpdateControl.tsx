@@ -7,6 +7,7 @@ import { invalidateHarnessModels, loadHarnesses, loadHarnessModels } from '../..
 import { waitForAgentSettings } from './agent-enablement-settings'
 import { useChatStore } from '../../store/chat-store'
 import { AgentSetupHelpButton } from './AgentSetupHelpButton'
+import { agentCommandPath, withAgentCommandPath } from '@shared/harness-provider-settings'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
@@ -33,9 +34,9 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
     if (row.status.resolvedCommand && current.previousPath && row.status.resolvedCommand !== current.previousPath &&
       row.status.resolvedCommand !== current.activationPath) { setError(t('agentUpdate.settingsChanged')); return }
     applying.current = current.id; setPending(true); setError('')
-    const selected = latest.current.settings.binaryPaths[id]
+    const selected = agentCommandPath(latest.current.settings.providers, id)
     const original = selected === current.activationPath ? current.previousPath : selected
-    const paths = { ...latest.current.settings.binaryPaths, [id]: current.activationPath }
+    const providers = withAgentCommandPath(latest.current.settings.providers, id, current.activationPath)
     let saved = false
     try {
       const confirmed = await agentUpdateRequest<HarnessUpdateState>(id)
@@ -43,10 +44,10 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
         confirmed.job.activationFingerprint !== current.activationFingerprint || confirmed.job.activationPath !== current.activationPath) {
         throw new Error(t('agentUpdate.settingsChanged'))
       }
-      latest.current.patch({ binaryPaths: paths })
+      latest.current.patch({ providers })
       saved = true
       if (latest.current.beforeCheck && !await latest.current.beforeCheck()) throw new Error(t('agentUpdate.saveFailed'))
-      await waitForAgentSettings({ ...latest.current.settings, binaryPaths: paths }, AbortSignal.timeout(30_000), { harnessId: id })
+      await waitForAgentSettings({ ...latest.current.settings, providers }, AbortSignal.timeout(30_000), { harnessId: id })
       await agentUpdateRequest(id, 'activate', { jobId: current.id })
       invalidateHarnessModels(id)
       await loadHarnesses(true)
@@ -57,11 +58,11 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
       if (saved) {
         // Settings diffs cannot represent deletion with undefined; pin the
         // previous effective executable when discovery was previously automatic.
-        const restore = { ...latest.current.settings.binaryPaths, [id]: original || current.previousPath || '' }
-        latest.current.patch({ binaryPaths: restore })
+        const restore = withAgentCommandPath(latest.current.settings.providers, id, original || current.previousPath || '')
+        latest.current.patch({ providers: restore })
         try {
           if (latest.current.beforeCheck && !await latest.current.beforeCheck()) throw new Error(t('agentUpdate.saveFailed'))
-          await waitForAgentSettings({ ...latest.current.settings, binaryPaths: restore }, AbortSignal.timeout(30_000), { harnessId: id })
+          await waitForAgentSettings({ ...latest.current.settings, providers: restore }, AbortSignal.timeout(30_000), { harnessId: id })
           await agentUpdateRequest(id, 'cancel', { jobId: current.id })
           await checkHarnessUpdate(id, true)
           await loadHarnesses(true)

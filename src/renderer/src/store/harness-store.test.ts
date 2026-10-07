@@ -110,8 +110,8 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
     let finish!: (rows: AdeHarnessRow[]) => void
     provider.listHarnesses.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const refresh = loadHarnesses(true)
-    applyHarnessEnablementSettings({ disabledIds: ['devin'], enabledProfiles: [], defaults: {}, custom: [], binaryPaths: {},
-      defaultHarnessId: 'kun', agentOrder: [], terminalAgents: [] }, true)
+    applyHarnessEnablementSettings({ disabledIds: ['devin'], enabledProfiles: [], defaults: {}, providers: {},
+      defaultHarnessId: 'kun', agentOrder: [] }, true)
     expect(useHarnessStore.getState().rowsLoadedAt).toBeUndefined()
     expect(useHarnessStore.getState().rows[0]?.readyProfiles).toEqual([])
     finish([cached])
@@ -123,9 +123,9 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
   })
 
   it('editing one Agent drops only that Agent\'s readiness proof', () => {
-    const before = { disabledIds: [], defaults: {}, custom: [], binaryPaths: {}, defaultHarnessId: 'kun', agentOrder: [], terminalAgents: [],
+    const before = { disabledIds: [], defaults: {}, providers: {}, defaultHarnessId: 'kun', agentOrder: [],
       enabledProfiles: [{ harnessId: 'claude-code', credentialMode: 'native-login' as const }, { harnessId: 'devin', credentialMode: 'native-login' as const }] }
-    const after = { ...before, defaults: { 'claude-code': { model: 'opus' } }, binaryPaths: { codex: '/opt/codex' } }
+    const after = { ...before, defaults: { 'claude-code': { model: 'opus' } }, providers: { codex: { command: '/opt/codex' } } }
     expect(harnessIdsWithChangedLaunchSettings(before, after).sort()).toEqual(['claude-code', 'codex'])
     expect(harnessIdsWithChangedLaunchSettings(before, { ...before })).toEqual([])
     useHarnessStore.setState({ rows: [row('claude-code'), row('devin')] })

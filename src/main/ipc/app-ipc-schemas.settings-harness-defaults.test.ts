@@ -58,45 +58,25 @@ describe('app-ipc-schemas harnesses.defaults (P4-11)', () => {
   })
 })
 
-describe('app-ipc-schemas harnesses.terminalAgents (P4-13)', () => {
+describe('app-ipc-schemas harnesses.providers', () => {
   const patch = (harnesses: unknown) => ({ agents: { kun: { harnesses } } })
 
-  it('accepts a full terminal agent entry', () => {
-    const parsed = settingsPatchSchema.parse(patch({
-      terminalAgents: [{
-        id: 'zed-shell',
-        displayName: 'Zed Shell',
-        command: '/bin/zsh-agent',
-        args: ['--tty'],
-        taskFlag: '-i',
-        resumeArgs: ['--resume'],
-        hooks: 'claude-settings'
-      }]
-    }))
-    expect(parsed.agents?.kun?.harnesses?.terminalAgents?.[0]).toEqual({
-      id: 'zed-shell',
-      displayName: 'Zed Shell',
-      command: '/bin/zsh-agent',
-      args: ['--tty'],
-      taskFlag: '-i',
-      resumeArgs: ['--resume'],
-      hooks: 'claude-settings'
-    })
+  it('accepts launch overrides, derived and terminal Agents', () => {
+    const providers = {
+      codex: { command: '/opt/codex', args: { mode: 'append', values: ['--verbose'] }, env: { CODEX_X: '1' } },
+      'opencode-fork': { extends: 'opencode', label: 'Fork', command: 'fork' },
+      'zed-shell': { extends: 'terminal', label: 'Zed Shell', command: '/bin/zsh-agent',
+        args: { mode: 'replace', values: ['--tty'] }, terminal: { taskFlag: '-i', resumeArgs: ['--resume'], hooks: 'claude-settings' } }
+    }
+    expect(settingsPatchSchema.parse(patch({ providers })).agents?.kun?.harnesses?.providers).toEqual(providers)
   })
 
-  it('rejects entries without a command and unknown hooks values', () => {
-    expect(() =>
-      settingsPatchSchema.parse(patch({ terminalAgents: [{ id: 'x' }] }))
-    ).toThrow()
-    expect(() =>
-      settingsPatchSchema.parse(patch({
-        terminalAgents: [{ id: 'x', command: '/bin/x', hooks: 'bogus' }]
-      }))
-    ).toThrow()
-    expect(() =>
-      settingsPatchSchema.parse(patch({
-        terminalAgents: [{ id: 'x', command: '/bin/x', mystery: true }]
-      }))
-    ).toThrow(/Unrecognized key/)
+  it('rejects unknown fields, bad env names and the retired legacy fields', () => {
+    expect(() => settingsPatchSchema.parse(patch({ providers: { x: { command: '/bin/x', mystery: true } } })))
+      .toThrow(/Unrecognized key/)
+    expect(() => settingsPatchSchema.parse(patch({ providers: { x: { env: { lower: '1' } } } }))).toThrow()
+    expect(() => settingsPatchSchema.parse(patch({ providers: { x: { terminal: { hooks: 'bogus' } } } }))).toThrow()
+    expect(() => settingsPatchSchema.parse(patch({ terminalAgents: [] }))).toThrow(/Unrecognized key/)
+    expect(() => settingsPatchSchema.parse(patch({ binaryPaths: {} }))).toThrow(/Unrecognized key/)
   })
 })

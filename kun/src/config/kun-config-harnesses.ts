@@ -5,6 +5,9 @@ import {
   HarnessIdSchema,
   HarnessTransportSchema
 } from '../contracts/harness.js'
+import { HarnessProviderOverrideSchema } from './kun-config-harness-providers.js'
+
+export { HarnessProviderOverrideSchema, type HarnessProviderOverride } from './kun-config-harness-providers.js'
 
 /** User-defined external harness entry (ACP/terminal transports launch it). */
 export const HarnessCustomEntrySchema = z
@@ -79,7 +82,13 @@ export const HarnessesConfigSchema = z
     enabledProfiles: z.array(HarnessEnabledProfileSchema).max(128).default([]),
     /** Builtin harnesses the user turned off; they stay out of pickers. */
     disabledIds: z.array(HarnessIdSchema).max(64).default([]),
-    /** Per-harness binary path overrides (settings override > bundled > PATH). */
+    /**
+     * Per-Agent launch overrides and user Agents (docs/ade/17 §4.3). The GUI
+     * writes only this; `binaryPaths`, `custom` and `terminalAgents` remain
+     * accepted for hand-written config and fold in where it names nothing.
+     */
+    providers: z.record(HarnessIdSchema, HarnessProviderOverrideSchema).default({}),
+    /** Legacy per-harness binary path overrides (settings override > bundled > PATH). */
     binaryPaths: z.record(HarnessIdSchema, z.string().min(1).max(4_096)).default({}),
     /**
      * Hidden per-harness transport pin (P6-07): maps a builtin harness id to
@@ -96,7 +105,7 @@ export const HarnessesConfigSchema = z
      * the P6-12 acceptance matrix lands.
      */
     experimentalIds: z.array(HarnessIdSchema).max(64).default([]),
-    /** User-defined ACP harnesses; ids colliding with builtins are dropped. */
+    /** Legacy user-defined ACP harnesses (now `providers` with `extends: 'acp'`). */
     custom: z.array(HarnessCustomEntrySchema).max(32).default([]),
     /**
      * Legacy pre-P4-11 map; superseded by `defaults[*].permissionMode`.
@@ -109,7 +118,7 @@ export const HarnessesConfigSchema = z
     defaultHarnessId: HarnessIdSchema.default('kun'),
     /** Ordered user preference for the ADE worker selector (10 §3.2). */
     agentOrder: z.array(HarnessIdSchema).max(16).default([]),
-    /** Terminal-only agents (p4 §3.8); join the catalog as `transport: 'terminal'`. */
+    /** Legacy terminal-only agents (now `providers` with `extends: 'terminal'`). */
     terminalAgents: z.array(HarnessTerminalAgentSchema).max(32).default([])
   })
   .strict()

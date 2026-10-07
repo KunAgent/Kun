@@ -47,13 +47,13 @@ function readState(): WizardState {
   }
 }
 
-function fingerprint(row: AdeHarnessRow | undefined, binaryPath: string | undefined, defaults?: unknown): string {
+function fingerprint(row: AdeHarnessRow | undefined, launch: unknown, defaults?: unknown): string {
   return JSON.stringify({
     id: row?.definition.id,
     transport: row?.definition.transport,
     command: row?.status.resolvedCommand,
     version: row?.status.version,
-    binaryPath, defaults
+    launch, defaults
   })
 }
 
@@ -83,7 +83,7 @@ export function AgentCenterAddWizard({
   const generation = useRef(0)
   const activeCheck = useRef<AbortController | null>(null)
   const row = rows.find((candidate) => candidate.definition.id === state.selectedId)
-  const checkFingerprint = fingerprint(row, settings.binaryPaths[state.selectedId], settings.defaults[state.selectedId])
+  const checkFingerprint = fingerprint(row, settings.providers[state.selectedId], settings.defaults[state.selectedId])
   const checkFresh = Boolean(state.check && state.check.id === state.selectedId &&
     (state.kind !== 'builtin' || state.check.fingerprint === checkFingerprint) &&
     Date.now() - state.check.checkedAt < CHECK_TTL_MS)

@@ -164,26 +164,27 @@ describe('harness/ade settings bridge', () => {
     })
     // GUI-only notifications never reach the runtime config.
     expect(configA.ade).not.toHaveProperty('notifications')
-    expect((configA.harnesses.custom as Array<{ id: string }>).map((c) => c.id))
-      .toEqual(['alpha', 'zeta'])
+    // Legacy command paths, custom and terminal Agents fold into one
+    // `providers` map whose keys sort by id.
+    const providers = configA.harnesses.providers as Record<string, Record<string, unknown>>
+    expect(Object.keys(providers)).toEqual(['alpha', 'claude-code', 'cursor', 'plain-cli', 'zed-shell', 'zeta'])
+    expect(configA.harnesses).not.toHaveProperty('custom')
+    expect(configA.harnesses).not.toHaveProperty('binaryPaths')
+    expect(configA.harnesses).not.toHaveProperty('terminalAgents')
+    expect(providers['claude-code']).toEqual({ command: '/opt/claude' })
     // P4-12: secretEnv refs emit sorted by name; values never appear — the
     // runtime config carries only opaque credential-store references.
-    const zeta = (configA.harnesses.custom as Array<Record<string, unknown>>)
-      .find((c) => c.id === 'zeta')
-    expect(zeta?.secretEnv).toEqual([
-      { name: 'A_KEY', secretRef: 'cred_a' },
-      { name: 'Z_KEY', secretRef: 'cred_z' }
-    ])
-    // P4-13: terminalAgents emit sorted by id with a fixed field order, so
-    // input key order never changes the generated config bytes.
-    expect(configA.harnesses.terminalAgents).toEqual([
-      { id: 'plain-cli', displayName: 'Plain CLI', command: '/bin/plain', args: [] },
-      {
-        id: 'zed-shell', displayName: 'Zed Shell', command: '/bin/zsh-agent',
-        args: ['--tty'], taskFlag: '-i', resumeArgs: ['--resume'],
-        hooks: 'claude-settings'
-      }
-    ])
+    expect(providers.zeta).toEqual({
+      extends: 'acp', label: 'Zeta', command: '/bin/zeta', args: { mode: 'replace', values: ['--x'] },
+      env: { A: '1', B: '2' },
+      secretEnv: [{ name: 'A_KEY', secretRef: 'cred_a' }, { name: 'Z_KEY', secretRef: 'cred_z' }]
+    })
+    // P4-13: terminal Agents keep their launch details with a fixed field order.
+    expect(providers['zed-shell']).toEqual({
+      extends: 'terminal', label: 'Zed Shell', command: '/bin/zsh-agent', args: { mode: 'replace', values: ['--tty'] },
+      terminal: { taskFlag: '-i', resumeArgs: ['--resume'], hooks: 'claude-settings' }
+    })
+    expect(providers['plain-cli']).toEqual({ extends: 'terminal', label: 'Plain CLI', command: '/bin/plain' })
     expect(JSON.stringify(configA)).not.toContain('api-key')
   })
 
@@ -204,12 +205,10 @@ describe('harness/ade settings bridge', () => {
     expect(harnessesConfigForRuntime(runtime.harnesses)).toEqual({
       enabledProfiles: [],
       disabledIds: [],
-      binaryPaths: {},
-      custom: [],
+      providers: {},
       defaults: {},
       defaultHarnessId: 'kun',
-      agentOrder: [],
-      terminalAgents: []
+      agentOrder: []
     })
   })
 
@@ -254,8 +253,10 @@ describe('harness/ade settings bridge', () => {
     const full = kunRuntimePatchSchema.safeParse({
       harnesses: {
         disabledIds: ['cursor'],
-        binaryPaths: { cursor: '/usr/local/bin/cursor' },
-        custom: [{ id: 'mine', displayName: 'Mine', command: '/bin/mine', args: ['--serve'], env: { PORT: '1' } }],
+        providers: {
+          cursor: { command: '/usr/local/bin/cursor' },
+          mine: { extends: 'acp', label: 'Mine', command: '/bin/mine', args: { mode: 'replace', values: ['--serve'] }, env: { PORT: '1' } }
+        },
         defaultPermissionMode: { mine: 'default' },
         defaults: {
           mine: { credentialMode: 'native-login', permissionMode: 'default', isolation: 'local' }
@@ -279,6 +280,8 @@ describe('harness/ade settings bridge', () => {
       harnesses: { disabledIds: [], bogus: 1 }
     })
     expect(unknownHarnessSubkey.success).toBe(false)
+    // The pre-P2 fields only ever come from a settings file, never a patch.
+    expect(kunRuntimePatchSchema.safeParse({ harnesses: { binaryPaths: {} } }).success).toBe(false)
   })
 
   it('writes both sections into config.json and survives sanitize of a broken ade section', async () => {

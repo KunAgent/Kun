@@ -43,12 +43,10 @@ function row(id: string, overrides: {
 const settings = (patch: Partial<KunHarnessSettingsV1> = {}): KunHarnessSettingsV1 => ({
   enabledProfiles: [],
   disabledIds: [],
-  binaryPaths: {},
-  custom: [],
+  providers: {},
   defaults: {},
   defaultHarnessId: 'kun',
   agentOrder: [],
-  terminalAgents: [],
   ...patch
 })
 

@@ -26,7 +26,7 @@ import {
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
 import { raceProbeAbort } from './probe-abort.js'
 import { nativeAgentLaunchEnv } from './native-agent-network.js'
-import { providerModule } from './providers/registry.js'
+import { providerModuleFor } from './providers/registry.js'
 import { acpPermissionModeUnoffered, applyAcpSessionPermission } from '../runtime/acp/acp-session-permissions.js'
 import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
 import { isAcpAuthenticationRequired } from '../runtime/acp/acp-authentication.js'
@@ -87,7 +87,7 @@ export async function probeAcpHandshake(
       ok: false,
       supported: true,
       protocol: 'acp',
-      detail: providerModule(definition.id)?.explainFailure?.(errorMessage(error), false)?.detail ?? `spawn failed: ${errorMessage(error)}`
+      detail: providerModuleFor(definition)?.explainFailure?.(errorMessage(error), false)?.detail ?? `spawn failed: ${errorMessage(error)}`
     }
   }
   const conn = AcpConnection.start({ process, identity: 'handshake-probe' })
@@ -113,7 +113,7 @@ export async function probeAcpHandshake(
         await raceProbeAbort(applyAcpSessionModel(conn, { ...session, models: parseAcpLegacyModels(session.models) }, deps.session.model), signal)
         const agentsOnly = definition.nativeAgents === 'session-modes' && Boolean(deps.session.permissionMode) &&
           acpPermissionModeUnoffered(session, deps.session.permissionMode!, definition.acpPermission)
-        const applyPermission = providerModule(definition.id)?.acp?.applyPermission
+        const applyPermission = providerModuleFor(definition)?.acp?.applyPermission
         if (applyPermission) await raceProbeAbort(applyPermission(conn, session, deps.session.permissionMode), signal)
         // The session still works through an explicitly picked native Agent;
         // Auto turns keep failing closed in applyAcpSessionPermission.
@@ -165,7 +165,7 @@ export async function probeAcpHandshake(
     if (stderr) parts.push(`stderr: ${stderr}`)
     const detail = parts.join(' — ').slice(0, 400)
     // An engine may know what a startup or auth error really means.
-    const explained = providerModule(definition.id)?.explainFailure?.(detail, isAcpAuthenticationRequired(error))
+    const explained = providerModuleFor(definition)?.explainFailure?.(detail, isAcpAuthenticationRequired(error))
     const authRequired = explained ? explained.authRequired : isAcpAuthenticationRequired(error)
     return {
       ok: false,

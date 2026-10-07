@@ -35,6 +35,7 @@ import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import { buildCodexAppServerDeps } from './runtime-composition-codex.js'
 import { buildPiRpcDeps } from './runtime-composition-pi.js'
 import type { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
+import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
 
 export type MainDelegatedRuntimeInput = {
   options: KunServeRuntimeOptions
@@ -115,7 +116,7 @@ export function buildMainDelegatedRuntime(
     ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
     ...(input.memoryStore ? { memoryStore: input.memoryStore } : {}),
     ...(input.memoryFeedback ? { memoryFeedback: input.memoryFeedback } : {}),
-    ...((input.options.harnesses?.binaryPaths?.['claude-code'] ?? process.env.KUN_CLAUDE_BINARY) ? { pathToClaudeCodeExecutable: input.options.harnesses?.binaryPaths?.['claude-code'] ?? process.env.KUN_CLAUDE_BINARY } : {}),
+    ...((harnessCommandOverride(input.options.harnesses, 'claude-code') ?? process.env.KUN_CLAUDE_BINARY) ? { pathToClaudeCodeExecutable: harnessCommandOverride(input.options.harnesses, 'claude-code') ?? process.env.KUN_CLAUDE_BINARY } : {}),
     sessionCoordinator: delegatedSessions,
     contextProfile: delegatedContextProfile,
     deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
@@ -144,7 +145,7 @@ export function buildMainDelegatedRuntime(
     defaultModel: input.options.model,
     systemPrompt: prefix.systemPrompt,
     binaryPath:
-      input.options.harnesses?.binaryPaths?.antigravity ?? process.env.KUN_ANTIGRAVITY_BINARY ??
+      harnessCommandOverride(input.options.harnesses, 'antigravity') ?? process.env.KUN_ANTIGRAVITY_BINARY ??
       resolveAntigravityCliCommand(core.activeOptions.dataDir)?.command,
     threadStore,
     sessionStore,
@@ -202,7 +203,7 @@ export function buildMainDelegatedRuntime(
   const acpRuntimeDeps: AcpRuntimeDeps = {
     readiness: services.harnesses.readiness,
     catalog: services.harnesses.catalog,
-    binaryPath: (harnessId) => core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+    binaryPath: (harnessId) => harnessCommandOverride(core.activeOptions.harnesses, harnessId),
     harnessDefaults: (id) => harnessDefaultsFor(core.activeOptions.harnesses, id),
     resolveSecretEnv: services.harnesses.resolveSecretEnv, threadStore, sessionStore,
     turns: turnService,

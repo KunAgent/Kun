@@ -4,6 +4,7 @@ import { harnessUpdateCompatible } from './harness-update-compatibility.js'
 import { harnessIntegrationInfo, resolveHarnessIntegrationTarget } from './harness-integration.js'
 import type { HarnessIntegrationInfo, HarnessIntegrationOpenRequest, HarnessIntegrationTarget } from '../contracts/harness-integration.js'
 import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
+import { harnessCommandOverride, harnessProviderOverrides } from '../config/kun-config-harness-providers.js'
 import { HarnessReadinessService } from './harness-readiness.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import { PROVIDER_MODULES, providerModule } from './providers/registry.js'
@@ -72,9 +73,8 @@ export function createHarnessComposition(
   deps: { resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>; revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null> } = {}
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({
-    custom: () => options().harnesses?.custom ?? [],
+    providers: () => harnessProviderOverrides(options().harnesses),
     nativeAgentNetwork: () => options().nativeAgentNetwork,
-    terminalAgents: () => options().harnesses?.terminalAgents ?? [],
     enabledProfiles: () => options().harnesses?.enabledProfiles ?? [],
     disabled: () => options().harnesses?.disabledIds ?? [],
     transportOverrides: () => options().harnesses?.transportOverrides ?? {},
@@ -88,7 +88,8 @@ export function createHarnessComposition(
           const path = binaryEnvOverride(module.definition.id)
           return path ? [[module.definition.id, path]] : []
         })),
-        ...options().harnesses?.binaryPaths
+        ...Object.fromEntries(Object.entries(harnessProviderOverrides(options().harnesses))
+          .flatMap(([id, override]) => override.command ? [[id, override.command]] : []))
       }
       return Object.fromEntries(
         Object.entries(binaryPaths).map(([id, binaryPath]) => [id, { binaryPath }])
@@ -107,18 +108,18 @@ export function createHarnessComposition(
     nowIso: () => new Date().toISOString()
   })
   const acpModels = new AcpModelProbe({
-    binaryPath: (id) => options().harnesses?.binaryPaths?.[id],
+    binaryPath: (id) => harnessCommandOverride(options().harnesses, id),
     resolveSecretEnv: deps.resolveSecretEnv
   })
   const agentSdkModels = new AgentSdkModelProbe({
     binaryPath: (id) =>
-      options().harnesses?.binaryPaths?.[id] ?? binaryEnvOverride(id)
+      harnessCommandOverride(options().harnesses, id) ?? binaryEnvOverride(id)
   })
   const codexModels = new CodexModelProbe({
-    binaryPath: (id) => options().harnesses?.binaryPaths?.[id],
+    binaryPath: (id) => harnessCommandOverride(options().harnesses, id),
     resolveSecretEnv: deps.resolveSecretEnv
   })
-  const piModels = new PiModelProbe({ binaryPath: (id) => options().harnesses?.binaryPaths?.[id], resolveSecretEnv: deps.resolveSecretEnv })
+  const piModels = new PiModelProbe({ binaryPath: (id) => harnessCommandOverride(options().harnesses, id), resolveSecretEnv: deps.resolveSecretEnv })
   const probedModels = (definition: HarnessDefinition): string[] | undefined =>
     definition.transport === 'acp'
       ? acpModels.peek(definition)
@@ -161,7 +162,7 @@ export function createHarnessComposition(
     verify: async (id, path, signal) => {
       const original = options()
       const override = { ...original, harnesses: HarnessesConfigSchema.parse({
-        ...original.harnesses, binaryPaths: { ...original.harnesses?.binaryPaths, [id]: path }
+        ...original.harnesses, providers: { ...original.harnesses?.providers, [id]: { ...original.harnesses?.providers?.[id], command: path } }
       }) }
       const probe = createHarnessComposition(() => override, deps)
       const definition = probe.catalog.get(id)
@@ -178,11 +179,11 @@ export function createHarnessComposition(
   return {
     integration: async (id) => {
       const definition = catalog.get(id)
-      return definition ? harnessIntegrationInfo(definition, { binaryPath: options().harnesses?.binaryPaths?.[id] }) : undefined
+      return definition ? harnessIntegrationInfo(definition, { binaryPath: harnessCommandOverride(options().harnesses, id) }) : undefined
     },
     resolveIntegration: async (request) => {
       const definition = catalog.get(request.harnessId)
-      return definition ? resolveHarnessIntegrationTarget(definition, request, { binaryPath: options().harnesses?.binaryPaths?.[request.harnessId] }) : undefined
+      return definition ? resolveHarnessIntegrationTarget(definition, request, { binaryPath: harnessCommandOverride(options().harnesses, request.harnessId) }) : undefined
     },
     updates, invalidateModels,
     catalog,

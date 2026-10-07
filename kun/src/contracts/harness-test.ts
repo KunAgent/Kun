@@ -135,6 +135,8 @@ export type HarnessTestResponse = z.infer<typeof HarnessTestResponseSchema>
 export const HarnessProbeDefinitionRequestSchema = z
   .object({
     id: z.string().trim().min(1).max(128).optional(),
+    /** A builtin ACP engine the Agent derives from; absent means a generic ACP agent. */
+    extends: z.string().trim().min(1).max(64).optional(),
     displayName: z.string().trim().min(1).max(64),
     command: z.string().trim().min(1).max(4_096),
     args: z.array(z.string().max(1_024)).max(32).default([]),

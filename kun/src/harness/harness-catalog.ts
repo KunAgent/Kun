@@ -17,6 +17,15 @@ import {
 } from './builtin-harnesses.js'
 import { bindNativeAgentNetwork } from './native-agent-network.js'
 import type { HarnessEnabledProfile } from '../config/kun-config-harnesses.js'
+import {
+  GENERIC_ACP_BASE,
+  TERMINAL_BASE,
+  harnessProviderOverrides,
+  type HarnessProviderOverride
+} from '../config/kun-config-harness-providers.js'
+import { applyLaunchOverride, derivableProviderModule, deriveProviderModule } from './providers/derive.js'
+import { builtinProviderModule, setDerivedProviderModules } from './providers/registry.js'
+import type { AgentProviderModule } from './providers/provider-module.js'
 import type { NativeAgentNetworkSnapshot } from '../contracts/native-agent-network.js'
 
 export type CustomHarnessConfig = {
@@ -81,14 +90,19 @@ const TERMINAL_AGENT_CAPABILITIES: HarnessCapabilities = {
 }
 
 /**
- * Read-only catalog of harness definitions: builtin entries merged with
- * user-defined ACP harnesses and terminal agents from config. Definitions
- * colliding with an earlier id are dropped (builtin > custom > terminal).
+ * Read-only catalog of harness definitions: builtin entries patched by
+ * their `providers` overrides, then user Agents derived from a builtin ACP
+ * engine, generic ACP agents and terminal agents. A user Agent never
+ * replaces a builtin id.
  */
 export class HarnessCatalog {
   constructor(
     private readonly deps: {
-      custom: () => readonly CustomHarnessConfig[]
+      /** `harnesses.providers`, already folded with legacy fields or not. */
+      providers?: () => Readonly<Record<string, HarnessProviderOverride>>
+      /** Legacy `harnesses.custom[]`; folds into `providers`. */
+      custom?: () => readonly CustomHarnessConfig[]
+      /** Legacy `harnesses.terminalAgents[]`; folds into `providers`. */
       terminalAgents?: () => readonly TerminalAgentConfig[]
       /** User-disabled builtin harness ids; they stay visible but unadmittable. */
       disabled?: () => readonly HarnessId[]
@@ -103,33 +117,35 @@ export class HarnessCatalog {
       /** Pre-GA builtin ids explicitly opted into (harnesses.experimentalIds). */
       experimental?: () => readonly string[]
       nativeAgentNetwork?: () => NativeAgentNetworkSnapshot | undefined
-    } = {
-      custom: () => []
-    }
+    } = {}
   ) {}
 
   list(): HarnessDefinition[] {
-    const customs: HarnessDefinition[] = []
-    const taken = new Set(BUILTIN_HARNESSES.map((d) => d.id))
-    for (const entry of this.deps.custom()) {
-      const parsed = HarnessDefinitionSchema.safeParse(customToDefinition(entry))
-      if (parsed.success && !taken.has(parsed.data.id)) {
-        taken.add(parsed.data.id)
-        customs.push(parsed.data)
-      }
-    }
-    for (const entry of this.deps.terminalAgents?.() ?? []) {
-      const parsed = HarnessDefinitionSchema.safeParse(terminalAgentToDefinition(entry))
-      if (parsed.success && !taken.has(parsed.data.id)) {
-        taken.add(parsed.data.id)
-        customs.push(parsed.data)
-      }
-    }
-    const overrides = this.deps.transportOverrides?.() ?? {}
+    const overrides = harnessProviderOverrides({
+      providers: this.deps.providers?.(),
+      custom: this.deps.custom?.(),
+      terminalAgents: this.deps.terminalAgents?.()
+    })
+    const transports = this.deps.transportOverrides?.() ?? {}
     const builtins = BUILTIN_HARNESSES.map((def) =>
-      applyTransportOverride(def, overrides[def.id])
-    )
-    return [...builtins, ...customs].map((definition) =>
+      applyLaunchOverride(applyTransportOverride(def, transports[def.id]), overrides[def.id]))
+    const taken = new Set(builtins.map((d) => d.id))
+    const added: HarnessDefinition[] = []
+    const derived: AgentProviderModule[] = []
+    // Engine-backed Agents first, terminal-only ones after (the pre-P2 order).
+    const entries = Object.entries(overrides).sort(([, a], [, b]) =>
+      Number(a.extends === TERMINAL_BASE) - Number(b.extends === TERMINAL_BASE))
+    for (const [id, override] of entries) {
+      if (taken.has(id)) continue
+      const built = userAgentDefinition(id, override)
+      const parsed = built && HarnessDefinitionSchema.safeParse(built.definition)
+      if (!built || !parsed?.success) continue
+      taken.add(id)
+      added.push(parsed.data)
+      if (built.module) derived.push({ ...built.module, definition: parsed.data })
+    }
+    setDerivedProviderModules(derived)
+    return [...builtins, ...added].map((definition) =>
       bindNativeAgentNetwork(definition, this.deps.nativeAgentNetwork?.()))
   }
 
@@ -184,6 +200,26 @@ export class HarnessCatalog {
         : (Boolean(route.providerId?.trim()) && profile.providerId?.trim() === route.providerId?.trim())))
   }
 
+}
+
+/** Definition (and derived module) for a user Agent; `undefined` when its base is unusable. */
+export function userAgentDefinition(
+  id: string,
+  override: HarnessProviderOverride
+): { definition: unknown; module?: AgentProviderModule } | undefined {
+  if (override.extends === TERMINAL_BASE || override.extends === GENERIC_ACP_BASE) {
+    if (!override.command) return undefined
+    const common = { id, displayName: override.label ?? id, command: override.command, args: override.args?.values ?? [] }
+    return {
+      definition: override.extends === TERMINAL_BASE
+        ? terminalAgentToDefinition({ ...common, ...override.terminal })
+        : customToDefinition({ ...common, env: override.env ?? {}, secretEnv: override.secretEnv })
+    }
+  }
+  const base = builtinProviderModule(override.extends)
+  if (!derivableProviderModule(base)) return undefined
+  const module = deriveProviderModule(base, id, override)
+  return { definition: module.definition, module }
 }
 
 /** Build the catalog definition for a `harnesses.custom[]` entry (P4-12: also used by probe-definition). */

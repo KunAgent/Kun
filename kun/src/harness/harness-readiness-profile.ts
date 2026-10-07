@@ -10,6 +10,7 @@ import { nativeAgentNetworkStatus } from './native-agent-network.js'
 import { nativeAgentCredentialFiles, nativeAgentCredentialsConfigured } from './native-agent-credentials.js'
 import { providerBinaryEnvKeys, providerModule } from './providers/registry.js'
 import { homeOf, readBoundedFile } from './providers/support.js'
+import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
 
 export type ReadinessOptions = Partial<Pick<KunServeRuntimeOptions,
   'providers' | 'routePools' | 'harnesses' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId' | 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'>>
@@ -74,11 +75,11 @@ export function readinessFingerprint(input: {
 }): string {
   const { options, definition, route } = input
   let binary: unknown
-  try { const s = statSync(input.command || options.harnesses?.binaryPaths?.[definition.id] || definition.detect?.command || '');
+  try { const s = statSync(input.command || harnessCommandOverride(options.harnesses, definition.id) || definition.detect?.command || '');
     binary = [s.dev, s.ino, s.size, s.mtimeMs, s.ctimeMs] } catch { binary = null }
   return createHash('sha256').update(JSON.stringify({
     definition, route, network: nativeAgentNetworkStatus(definition).networkFingerprint,
-    binaryPath: options.harnesses?.binaryPaths?.[definition.id], binary,
+    binaryPath: harnessCommandOverride(options.harnesses, definition.id), binary,
     runtimeBinaryEnv: [...providerBinaryEnvKeys().map((key) => process.env[key]), process.env.KUN_RUNTIME_PROVIDER_KIND],
     defaults: options.harnesses?.defaults?.[definition.id],
     permissionPolicy: [options.approvalPolicy, options.sandboxMode, options.approvalReviewer],

@@ -472,8 +472,8 @@ export function harnessUnavailableNextStepKey(code: string): string | null {
 
 /** Drop removed grants immediately; an in-flight older catalog cannot restore them. */
 /**
- * Agents whose launch settings (command path, profile defaults, custom
- * definition) differ between two snapshots. Only these lose their readiness
+ * Agents whose launch settings (command path and other `providers`
+ * overrides, profile defaults) differ between two snapshots. Only these lose their readiness
  * proof on save; editing one Agent must not send every other Agent back to checking.
  */
 export function harnessIdsWithChangedLaunchSettings(before: import('@shared/app-settings').KunHarnessSettingsV1,
@@ -484,11 +484,8 @@ export function harnessIdsWithChangedLaunchSettings(before: import('@shared/app-
       if (JSON.stringify(left?.[id] ?? null) !== JSON.stringify(right?.[id] ?? null)) changed.add(id)
     }
   }
-  const byId = (entries: readonly { id: string }[] | undefined): Record<string, unknown> =>
-    Object.fromEntries((entries ?? []).map((entry) => [entry.id, entry]))
-  compare(before.binaryPaths, after.binaryPaths)
+  compare(before.providers, after.providers)
   compare(before.defaults, after.defaults)
-  compare(byId(before.custom), byId(after.custom))
   return [...changed]
 }
 

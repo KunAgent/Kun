@@ -23,8 +23,7 @@ export function useAgentEnablement(input: {
   const enabled = harnessProfileEnabled(settings, profile)
   const fingerprint = agentConfigurationKey({ profileKey, definition: row.definition,
     network: row.status.networkFingerprint,
-    binary: settings.binaryPaths[row.definition.id], defaults: settings.defaults[row.definition.id],
-    custom: settings.custom.find((entry) => entry.id === row.definition.id) })
+    launch: settings.providers[row.definition.id], defaults: settings.defaults[row.definition.id] })
   const current = useRef({ fingerprint, settings, patch })
   current.current = { fingerprint, settings, patch }
   const generation = useRef(0)

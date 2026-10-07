@@ -26,6 +26,7 @@ import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import type { HarnessSecretRefResolver } from '../harness/harness-secret-env.js'
 import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import { DEFAULT_APPROVAL_REVIEWER } from '../contracts/policy.js'
+import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
 
 /** The composition locals the codex transport needs, grouped for the call site. */
 export type CodexRuntimeSharedDeps = {
@@ -63,7 +64,7 @@ export function buildCodexAppServerDeps(
     capabilitiesV2: CODEX_APP_SERVER_CAPABILITIES,
     catalog: harnesses.catalog,
     readiness: harnesses.readiness,
-    binaryPath: (harnessId) => options.harnesses?.binaryPaths?.[harnessId],
+    binaryPath: (harnessId) => harnessCommandOverride(options.harnesses, harnessId),
     harnessDefaults: (id) => harnessDefaultsFor(options.harnesses, id),
     resolveSecretEnv: deps.resolveSecretEnv ?? harnesses.resolveSecretEnv,
     threadStore: deps.threadStore,

@@ -14,17 +14,16 @@ import { filterAgentCatalog, orderedAgentCatalog } from './agent-center-catalog'
 import { exportCustomEntry } from './agent-center-custom-form'
 import { AgentCenterAddWizard } from './agent-center-add-wizard'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
+import { isUserAgent, userAgentEntry, withAgentCommandPath, withAgentLaunchPatch } from '@shared/harness-provider-settings'
 
 export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1 {
   return kun.harnesses ?? {
     enabledProfiles: [],
     disabledIds: [],
-    binaryPaths: {},
-    custom: [],
+    providers: {},
     defaults: {},
     defaultHarnessId: 'kun',
-    agentOrder: [],
-    terminalAgents: []
+    agentOrder: []
   }
 }
 
@@ -178,22 +177,18 @@ export function AgentCenter({
                 beforeEnableCheck={beforeEnableCheck}
                 onProbe={() => void probe(id)}
                 onSetDefault={() => patchHarness({ defaultHarnessId: id })}
-                // P4-13: terminal agents are catalog rows too but live under
-                // `terminalAgents[]`, not `custom[]` — only true custom ACP
-                // entries get remove/export affordances.
-                onRemoveCustom={settings.custom.some((entry) => entry.id === id) ? () =>
-                  patchHarness({ custom: settings.custom.filter((entry) => entry.id !== id) })
-                  : undefined}
+                // User Agents (derived, generic ACP or terminal) can be removed;
+                // only ACP ones export as a portable definition.
+                onRemoveCustom={isUserAgent(settings.providers, id) ? () => {
+                  const { [id]: _removed, ...providers } = settings.providers
+                  patchHarness({ providers })
+                } : undefined}
                 onExportCustom={(() => {
-                  const entry = settings.custom.find((candidate) => candidate.id === id)
+                  const entry = userAgentEntry(settings.providers, id)
                   return entry ? () => void exportCustomEntry(entry) : undefined
                 })()}
-                onSetBinaryPath={(path) => {
-                  const binaryPaths = { ...settings.binaryPaths }
-                  if (path.trim()) binaryPaths[id] = path.trim()
-                  else delete binaryPaths[id]
-                  patchHarness({ binaryPaths })
-                }}
+                onSetBinaryPath={(path) => patchHarness({ providers: withAgentCommandPath(settings.providers, id, path) })}
+                onSetLaunchPatch={(patch) => patchHarness({ providers: withAgentLaunchPatch(settings.providers, id, patch) })}
                 onSetPermissionMode={(modeId) => {
                   // P4-11: permission defaults live under defaults[id].
                   const defaults = { ...settings.defaults }

@@ -31,6 +31,7 @@ import { diffUsage, hasUsage } from '../domain/usage.js'
 import { roomResultProvider } from '../rooms/room-result-tools.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
+import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
 
 export function createRuntimeRegistry(
   services: Awaited<ReturnType<typeof createRuntimeServices>>
@@ -95,7 +96,7 @@ export function createRuntimeRegistry(
           prefix: child.prefix,
           readiness: services.harnesses.readiness,
           providerConfigs: core.activeOptions.providers ?? {},
-          pathToClaudeCodeExecutable: core.activeOptions.harnesses?.binaryPaths?.['claude-code'] ?? process.env.KUN_CLAUDE_BINARY,
+          pathToClaudeCodeExecutable: harnessCommandOverride(core.activeOptions.harnesses, 'claude-code') ?? process.env.KUN_CLAUDE_BINARY,
           agentSdkProviderIds,
           defaultApprovalPolicy: core.activeOptions.approvalPolicy,
           defaultSandboxMode: core.activeOptions.sandboxMode,
@@ -165,7 +166,7 @@ export function createRuntimeRegistry(
           defaultModel: core.activeOptions.model,
           systemPrompt: child.prefix.systemPrompt,
           binaryPath:
-            core.activeOptions.harnesses?.binaryPaths?.antigravity ?? process.env.KUN_ANTIGRAVITY_BINARY ??
+            harnessCommandOverride(core.activeOptions.harnesses, 'antigravity') ?? process.env.KUN_ANTIGRAVITY_BINARY ??
             resolveAntigravityCliCommand(core.activeOptions.dataDir)?.command,
           threadStore: child.threadStore,
           sessionStore: child.sessionStore,
@@ -244,7 +245,7 @@ export function createRuntimeRegistry(
       catalog: services.harnesses.catalog,
       readiness: services.harnesses.readiness,
       binaryPath: (harnessId: string) =>
-        core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+        harnessCommandOverride(core.activeOptions.harnesses, harnessId),
       threadStore: child.threadStore,
       sessionStore: child.sessionStore,
       turns: child.turns,

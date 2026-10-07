@@ -266,6 +266,8 @@ export const HarnessDefinitionSchema = z
     gateway: HarnessGatewaySchema.optional(),
     setup: HarnessSetupSchema.optional(),
     availability: z.enum(['active', 'preview', 'retired']).optional(),
+    /** The builtin engine this Agent is a renamed or patched build of. */
+    derivedFrom: HarnessIdSchema.optional(),
     builtin: z.boolean()
   })
   .strict()

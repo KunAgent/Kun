@@ -1,5 +1,6 @@
 import { ModelMetadataEvidenceSchema } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
+import { HarnessProviderOverrideSchema } from '../../../../kun/src/config/kun-config-harness-providers.js'
 import { z } from 'zod'
 import { GatewayMiddlewareSchema } from '../../../../kun/src/contracts/gateway-middleware.js'
 import { routePoolPatchesSchema } from './settings-route-pools'
@@ -587,18 +588,8 @@ export const kunRuntimePatchSchema = z.object({
       providerId: z.string().trim().min(1).max(128).optional()
     }).strict()).max(128).optional(),
     disabledIds: z.array(z.string().trim().min(1).max(128)).max(64).optional(),
-    binaryPaths: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(4_096)).optional(),
-    custom: z.array(z.object({
-      id: z.string().trim().min(1).max(128),
-      displayName: z.string().trim().min(1).max(128).optional(),
-      command: z.string().trim().min(1).max(4_096),
-      args: z.array(z.string().max(1_024)).max(32).optional(),
-      env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).optional(),
-      secretEnv: z.array(z.object({
-        name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
-        secretRef: z.string().trim().min(1).max(256)
-      }).strict()).max(32).optional()
-    }).strict()).max(32).optional(),
+    // Launch overrides and user Agents; normalize validates each entry.
+    providers: z.record(z.string().trim().min(1).max(128), HarnessProviderOverrideSchema).optional(),
     defaults: z.record(z.string().trim().min(1).max(128), z.object({
       credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
     gatewayBinding: HarnessGatewayBindingSchema.optional(),
@@ -611,17 +602,7 @@ export const kunRuntimePatchSchema = z.object({
     // value — normalize folds it into `defaults[*].permissionMode`.
     defaultPermissionMode: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(64)).optional(),
     defaultHarnessId: z.string().trim().min(1).max(128).optional(),
-    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional(),
-    // Terminal-only agents for the "new agent tab" menu (p4 §3.8, P4-13).
-    terminalAgents: z.array(z.object({
-      id: z.string().trim().min(1).max(128),
-      displayName: z.string().trim().min(1).max(128).optional(),
-      command: z.string().trim().min(1).max(4_096),
-      args: z.array(z.string().max(1_024)).max(32).optional(),
-      taskFlag: z.string().trim().min(1).max(64).optional(),
-      resumeArgs: z.array(z.string().max(1_024)).max(32).optional(),
-      hooks: z.enum(['none', 'claude-settings']).optional()
-    }).strict()).max(32).optional()
+    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional()
   }).strict().optional(),
   ade: z.object({
     enabled: z.boolean().optional(),

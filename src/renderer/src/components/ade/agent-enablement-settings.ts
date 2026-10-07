@@ -12,8 +12,8 @@ export const AGENT_SETTINGS_TIMEOUT_MS = 125_000
 function configuration(value: KunHarnessSettingsV1, id?: string): string {
   const settings = normalizeKunHarnessSettings(value)
   return agentConfigurationKey(id
-    ? { binary: settings.binaryPaths[id], custom: settings.custom.find((entry) => entry.id === id), defaults: settings.defaults[id] }
-    : { binaryPaths: settings.binaryPaths, custom: settings.custom, defaults: settings.defaults })
+    ? { launch: settings.providers[id], defaults: settings.defaults[id] }
+    : { providers: settings.providers, defaults: settings.defaults })
 }
 
 /** Never check an older binary/default profile while Settings is still saving. */

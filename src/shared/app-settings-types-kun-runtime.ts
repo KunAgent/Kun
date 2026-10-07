@@ -367,9 +367,21 @@ export type KunHarnessSecretEnvEntryV1 = {
   secretRef: string
 }
 
-/** User-defined custom (ACP) harness entry under agents.kun.harnesses.custom. */
+/**
+ * Per-Agent launch override or user Agent under agents.kun.harnesses.providers
+ * (docs/ade/17 §4.3); the shape is Kun's config schema.
+ */
+export type KunHarnessProviderOverrideV1 =
+  import('../../kun/src/config/kun-config-harness-providers.js').HarnessProviderOverride
+
+/**
+ * Portable user-Agent definition: the import/export JSON and the pre-P2
+ * `harnesses.custom[]` entry. `extends` names a builtin ACP engine it derives
+ * from; absent means a generic ACP agent.
+ */
 export type KunHarnessCustomEntryV1 = {
   id: string
+  extends?: string
   displayName: string
   command: string
   args: string[]
@@ -426,22 +438,18 @@ export type KunHarnessSettingsV1 = {
   enabledProfiles: KunHarnessEnabledProfileV1[]
   /** Builtin harnesses the user turned off; they stay out of pickers. */
   disabledIds: string[]
-  /** Per-harness local command path overrides. */
-  binaryPaths: Record<string, string>
-  /** User-defined ACP harnesses (id must not collide with builtins). */
-  custom: KunHarnessCustomEntryV1[]
+  /**
+   * Launch overrides for builtin Agents (command path, arguments, env) and
+   * user Agents (`extends`: a builtin ACP engine, `acp` or `terminal`).
+   * Replaces the pre-P2 `binaryPaths`, `custom[]` and `terminalAgents[]`.
+   */
+  providers: Record<string, KunHarnessProviderOverrideV1>
   /** Per-harness defaults; the migrated home of `defaultPermissionMode`. */
   defaults: Record<string, KunHarnessDefaultsEntryV1>
   /** Default harness for new one-to-one ADE conversations. */
   defaultHarnessId: string
   /** User preference order for ADE worker selection (10 §3.2 userPreference). */
   agentOrder: string[]
-  /**
-   * Interactive CLIs exposed in the terminal "new agent tab" menu (p4 §3.8).
-   * They join the harness catalog as `transport: 'terminal'` — visible to
-   * `harness_list` as terminal-only, never dispatchable as turn runtimes.
-   */
-  terminalAgents: KunTerminalAgentEntryV1[]
 }
 
 export type KunAdeSettingsV1 = {

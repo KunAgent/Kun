@@ -16,7 +16,7 @@ import {
   HarnessTestRequestSchema
 } from '../../contracts/harness-test.js'
 import { runHarnessTest } from '../../services/harness-test-service.js'
-import { customToDefinition } from '../../harness/harness-catalog.js'
+import { userAgentDefinition } from '../../harness/harness-catalog.js'
 import { probeAcpHandshake } from '../../harness/acp-handshake-probe.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
@@ -321,16 +321,14 @@ export async function probeHarnessDefinition(
   if (!parsed.success) {
     return ERRORS.validation('invalid harness definition', parsed.error.issues)
   }
-  const built = HarnessDefinitionSchema.safeParse(
-    customToDefinition({
-      id: parsed.data.id ?? 'custom-probe',
-      displayName: parsed.data.displayName,
-      command: parsed.data.command,
-      args: parsed.data.args,
-      env: parsed.data.env,
-      secretEnv: parsed.data.secretEnv
-    })
-  )
+  const { id, extends: base, displayName, args, env, secretEnv, command } = parsed.data
+  const draft = userAgentDefinition(id ?? 'custom-probe', {
+    extends: base ?? 'acp', label: displayName, command, env, secretEnv,
+    // A derived Agent keeps its base engine's arguments unless the form lists its own.
+    ...(args.length || !base ? { args: { mode: 'replace' as const, values: args } } : {})
+  })
+  if (!draft) return ERRORS.validation('invalid harness definition', [{ message: `'${base}' cannot be extended` }])
+  const built = HarnessDefinitionSchema.safeParse(draft.definition)
   if (!built.success) {
     return ERRORS.validation('invalid harness definition', built.error.issues)
   }

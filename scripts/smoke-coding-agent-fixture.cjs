@@ -14,7 +14,7 @@ async function configureCodingAgentFixture(settings, stubPath, home, environment
   await writeFile(join(data, 'opencode', 'auth.json'),
     JSON.stringify({ fixture: { type: 'api', key: 'opencode-offline-fixture-no-service-access' } }))
   const harnesses = settings.agents.kun.harnesses
-  harnesses.binaryPaths = { ...(harnesses.binaryPaths ?? {}), opencode: stubPath }
+  harnesses.providers = { ...(harnesses.providers ?? {}), opencode: { ...harnesses.providers?.opencode, command: stubPath } }
   harnesses.enabledProfiles = [{ ...CODING_AGENT_PROFILE }]
   harnesses.defaults = { ...(harnesses.defaults ?? {}),
     opencode: { credentialMode: CODING_AGENT_PROFILE.credentialMode, model: CODING_AGENT_MODEL } }

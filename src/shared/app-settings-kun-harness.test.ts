@@ -20,48 +20,53 @@ describe('normalizeKunHarnessSettings', () => {
       custom: [{ id: 'opencode2', command: '/wrong/custom' }]
     })
     expect(settings.enabledProfiles).toEqual([{ harnessId: 'opencode2', credentialMode: 'native-login' }])
-    expect(settings.binaryPaths.opencode2).toBe('/selected/opencode2')
+    expect(settings.providers).toEqual({ opencode2: { command: '/selected/opencode2' } })
     expect(settings.defaults.opencode2?.model).toBe('openai/gpt-5.2')
     expect(settings.defaultHarnessId).toBe('opencode2')
     expect(settings.disabledIds).toEqual(['opencode'])
     expect(settings.agentOrder.slice(0, 2)).toEqual(['opencode2', 'opencode'])
-    expect(settings.custom).toEqual([])
+    expect(settings).not.toHaveProperty('binaryPaths')
+    expect(settings).not.toHaveProperty('custom')
+    expect(settings).not.toHaveProperty('terminalAgents')
   })
-  it('keeps Devin builtin settings and rejects a custom definition impersonating it', () => {
+  it('keeps Devin builtin settings and rejects a user Agent impersonating it', () => {
     const normalized = normalizeKunHarnessSettings({
       disabledIds: ['devin'],
       defaultHarnessId: 'devin',
       binaryPaths: { devin: '/opt/agents/devin' },
       custom: [{ id: 'devin', displayName: 'Other', command: '/bin/other' }],
-      terminalAgents: [{ id: 'devin', displayName: 'Other', command: '/bin/other' }]
+      terminalAgents: [{ id: 'devin', displayName: 'Other', command: '/bin/other' }],
+      providers: { devin: { extends: 'acp', label: 'Other', args: { mode: 'append', values: ['--x'] } } }
     })
     expect(normalized.disabledIds).toEqual(['devin'])
     expect(normalized.defaultHarnessId).toBe('devin')
-    expect(normalized.binaryPaths).toEqual({ devin: '/opt/agents/devin' })
-    expect(normalized.custom).toEqual([])
-    expect(normalized.terminalAgents).toEqual([])
+    // A builtin id only keeps its launch patch; `extends` cannot rebind it.
+    expect(normalized.providers).toEqual({ devin: { label: 'Other', args: { mode: 'append', values: ['--x'] }, command: '/opt/agents/devin' } })
   })
   it('returns defaults for missing/garbage input', () => {
     expect(normalizeKunHarnessSettings(undefined)).toEqual(defaultKunHarnessSettings())
     expect(normalizeKunHarnessSettings('junk')).toEqual(defaultKunHarnessSettings())
   })
 
-  it('drops non-builtin disabledIds, never disables kun, drops builtin-colliding custom ids', () => {
+  it('drops non-builtin disabledIds, never disables kun, folds valid custom Agents', () => {
     const normalized = normalizeKunHarnessSettings({
       disabledIds: ['cursor', 'bogus-harness', 'kun'],
       custom: [
         { id: 'claude-code', displayName: 'X', command: '/bin/x', args: [], env: {} },
-        { id: 'mine', displayName: 'Mine', command: '/bin/mine', args: ['-a'], env: { A: '1' } },
+        { id: 'mine', displayName: 'Mine', command: '/bin/mine', args: ['-a'], env: { A: '1', lower: 'dropped' } },
         { id: '', command: '/bin/none' },
-        { id: 'mine2', displayName: 'No command' }
+        { id: 'mine2', displayName: 'No command' },
+        { id: 'Bad_Id', displayName: 'Bad', command: '/bin/bad' }
       ],
-      defaultHarnessId: 'mine'
+      defaultHarnessId: 'mine',
+      agentOrder: ['mine', 'bad-id']
     })
     expect(normalized.disabledIds).toEqual(['cursor'])
-    expect(normalized.custom).toEqual([
-      { id: 'mine', displayName: 'Mine', command: '/bin/mine', args: ['-a'], env: { A: '1' } }
-    ])
+    expect(normalized.providers).toEqual({
+      mine: { extends: 'acp', label: 'Mine', command: '/bin/mine', args: { mode: 'replace', values: ['-a'] }, env: { A: '1' } }
+    })
     expect(normalized.defaultHarnessId).toBe('mine')
+    expect(normalized.agentOrder).toEqual(['mine'])
   })
 
   // P4-12: secretEnv entries carry only opaque credential-store refs.
@@ -81,7 +86,7 @@ describe('normalizeKunHarnessSettings', () => {
         ]
       }]
     })
-    expect(normalized.custom[0]?.secretEnv).toEqual([
+    expect(normalized.providers.mine?.secretEnv).toEqual([
       { name: 'GOOD_KEY', secretRef: 'cred_9' }
     ])
   })
@@ -89,12 +94,26 @@ describe('normalizeKunHarnessSettings', () => {
   it('omits secretEnv when the entry has none (keeps settings lean)', () => {
     const normalized = normalizeKunHarnessSettings({
       custom: [
-        { id: 'a', displayName: 'A', command: '/bin/a', secretEnv: 'nope' },
-        { id: 'b', displayName: 'B', command: '/bin/b' }
+        { id: 'aa', displayName: 'A', command: '/bin/a', secretEnv: 'nope' },
+        { id: 'bb', displayName: 'B', command: '/bin/b' }
       ]
     })
-    expect(normalized.custom[0]).not.toHaveProperty('secretEnv')
-    expect(normalized.custom[1]).not.toHaveProperty('secretEnv')
+    expect(normalized.providers.aa).not.toHaveProperty('secretEnv')
+    expect(normalized.providers.bb).not.toHaveProperty('secretEnv')
+  })
+
+  it('keeps derived Agents and builtin patches, drops entries that cannot launch', () => {
+    const normalized = normalizeKunHarnessSettings({ providers: {
+      'opencode-fork': { extends: 'opencode', label: ' Fork '.repeat(20), command: 'fork' },
+      'generic-no-command': { extends: 'acp' },
+      orphan: { command: '/bin/orphan' },
+      'unknown-base': { extends: 'nowhere', command: '/bin/x' },
+      codex: { env: { CODEX_HOME: '/tmp/codex' } },
+      junk: 'nope'
+    } })
+    expect(Object.keys(normalized.providers)).toEqual(['opencode-fork', 'codex'])
+    expect(normalized.providers['opencode-fork']?.label).toHaveLength(64)
+    expect(normalized.providers.codex).toEqual({ env: { CODEX_HOME: '/tmp/codex' } })
   })
 
   it('merges patch fields over current', () => {
@@ -201,9 +220,9 @@ describe('normalizeKunHarnessSettings', () => {
     })
   })
 
-  // P4-13: terminalAgents join the catalog as `transport: 'terminal'` —
+  // P4-13: terminal agents join the catalog as `transport: 'terminal'` —
   // interactive CLIs that never host delegated turns.
-  it('normalizes terminalAgents and drops collisions with builtin/custom ids', () => {
+  it('folds terminalAgents and drops collisions with builtin/custom ids', () => {
     const normalized = normalizeKunHarnessSettings({
       custom: [{ id: 'mine', displayName: 'Mine', command: '/bin/mine' }],
       terminalAgents: [
@@ -218,32 +237,32 @@ describe('normalizeKunHarnessSettings', () => {
         { id: 'no-cmd', displayName: 'No command' },
         'garbage',
         { id: 'quiet', command: '/bin/quiet', hooks: 'bogus-hook' }
-      ]
+      ],
+      agentOrder: ['zed-shell', 'mine']
     })
-    expect(normalized.terminalAgents).toEqual([
-      {
-        id: 'zed-shell',
-        displayName: 'Zed Shell',
-        command: '/bin/zsh-agent',
-        args: ['--tty'],
-        taskFlag: '-i',
-        resumeArgs: ['--resume'],
-        hooks: 'claude-settings'
+    expect(normalized.providers).toEqual({
+      mine: { extends: 'acp', label: 'Mine', command: '/bin/mine' },
+      'zed-shell': {
+        extends: 'terminal', label: 'Zed Shell', command: '/bin/zsh-agent',
+        args: { mode: 'replace', values: ['--tty'] },
+        terminal: { taskFlag: '-i', resumeArgs: ['--resume'], hooks: 'claude-settings' }
       },
-      { id: 'quiet', displayName: 'quiet', command: '/bin/quiet', args: [] }
-    ])
+      quiet: { extends: 'terminal', label: 'quiet', command: '/bin/quiet' }
+    })
+    // Terminal agents never host turns, so they cannot rank as workers.
+    expect(normalized.agentOrder).toEqual(['mine'])
   })
 
-  it('patch merge replaces terminalAgents whole', () => {
+  it('patch merge replaces providers whole', () => {
     const current = normalizeKunHarnessSettings({
-      terminalAgents: [{ id: 'a', displayName: 'A', command: '/bin/a' }]
+      providers: { aa: { extends: 'terminal', command: '/bin/a' } }
     })
     const merged = mergeKunHarnessSettings(current, {
-      terminalAgents: [{ id: 'b', displayName: 'B', command: '/bin/b', args: [] }]
+      providers: { bb: { extends: 'terminal', command: '/bin/b' } }
     })
-    expect(merged.terminalAgents.map((entry) => entry.id)).toEqual(['b'])
+    expect(Object.keys(merged.providers)).toEqual(['bb'])
     const untouched = mergeKunHarnessSettings(current, {})
-    expect(untouched.terminalAgents.map((entry) => entry.id)).toEqual(['a'])
+    expect(Object.keys(untouched.providers)).toEqual(['aa'])
   })
 })
 

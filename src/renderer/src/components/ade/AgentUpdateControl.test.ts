@@ -31,7 +31,7 @@ it('shows the effective source and verifies the server activation plan before sa
       beforeCheck: async () => true, t: (key: string) => key })))
     expect(patch).not.toHaveBeenCalled()
     await act(async () => receiveHarnessUpdate(ready))
-    expect(patch).toHaveBeenCalledWith({ binaryPaths: { 'claude-code': '/new' } })
+    expect(patch).toHaveBeenCalledWith({ providers: { 'claude-code': { command: '/new' } } })
     expect(f.request.mock.calls[0][0]).toBe('/v1/harnesses/claude-code/updates')
     expect(f.request.mock.calls.some(([path]) => path.endsWith('/activate'))).toBe(true)
     expect(f.invalidate).toHaveBeenCalledWith('claude-code')
@@ -46,7 +46,7 @@ it('does not activate an installation on the basis of a stale update notice', as
     previousPath: '/old', activationPath: '/unverified', activationFingerprint: 'fake' } })
   try {
     await act(async () => root.render(createElement(AgentUpdateControl, { row, settings: defaultKunHarnessSettings(), patch, t: (key: string) => key })))
-    expect(patch.mock.calls.some(([value]) => value.binaryPaths?.['claude-code'] === '/unverified')).toBe(false)
+    expect(patch.mock.calls.some(([value]) => value.providers?.['claude-code']?.command === '/unverified')).toBe(false)
   } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
 })
 it('restores the prior effective executable and releases maintenance if activation loses account readiness', async () => {
@@ -61,7 +61,7 @@ it('restores the prior effective executable and releases maintenance if activati
   try {
     await act(async () => root.render(createElement(AgentUpdateControl, { row, settings: defaultKunHarnessSettings(), patch,
       beforeCheck, t: (key: string) => key })))
-    expect(patch.mock.calls.map(([value]) => value.binaryPaths['claude-code'])).toEqual(['/new', '/old'])
+    expect(patch.mock.calls.map(([value]) => value.providers['claude-code']?.command)).toEqual(['/new', '/old'])
     expect(beforeCheck).toHaveBeenCalledTimes(2)
     expect(f.request.mock.calls.some(([path]) => path.endsWith('/cancel'))).toBe(true)
   } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }

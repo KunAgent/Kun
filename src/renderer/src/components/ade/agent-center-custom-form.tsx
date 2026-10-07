@@ -6,8 +6,10 @@ import type {
   KunHarnessSettingsV1
 } from '@shared/app-settings'
 import type { AdeHarnessProbeDefinitionResult } from '@shared/ade-harnesses'
+import { userAgentOverride } from '@shared/harness-provider-settings'
 import { getProvider } from '../../agent/registry'
 import { loadHarnesses, useHarnessStore } from '../../store/harness-store'
+import { AgentSettingsSelect } from './AgentSettingsSelect'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
@@ -19,6 +21,7 @@ const AGENT_ID = /^[a-z][a-z0-9-]{1,47}$/
 
 type PersistedCustomDraft = {
   id?: string
+  base?: string
   name?: string
   command?: string
   args?: string
@@ -42,6 +45,7 @@ export function customAgentId(displayName: string): string {
 /** What the probe actually tested — stale once any field changes. */
 function fingerprintOf(
   id: string,
+  base: string,
   displayName: string,
   command: string,
   args: string[],
@@ -50,6 +54,7 @@ function fingerprintOf(
 ): string {
   return JSON.stringify({
     id,
+    base,
     displayName,
     command,
     args,
@@ -80,11 +85,13 @@ export function parseCustomEntryJson(text: string): KunHarnessCustomEntryV1 | nu
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
   const entry = raw as Record<string, unknown>
+  // A derived Agent may keep its base engine's command.
+  const base = typeof entry.extends === 'string' && AGENT_ID.test(entry.extends.trim()) ? entry.extends.trim() : undefined
   if (
     typeof entry.displayName !== 'string' ||
     !entry.displayName.trim() ||
     typeof entry.command !== 'string' ||
-    !entry.command.trim()
+    (!entry.command.trim() && !base)
   ) {
     return null
   }
@@ -109,6 +116,7 @@ export function parseCustomEntryJson(text: string): KunHarnessCustomEntryV1 | nu
     id: typeof entry.id === 'string' && AGENT_ID.test(entry.id.trim())
       ? entry.id.trim()
       : customAgentId(entry.displayName),
+    ...(base ? { extends: base } : {}),
     displayName: entry.displayName.trim(),
     command: entry.command.trim(),
     args: Array.isArray(entry.args)
@@ -122,7 +130,9 @@ export function parseCustomEntryJson(text: string): KunHarnessCustomEntryV1 | nu
 /**
  * "Add custom ACP agent" form (docs/ade/impl/p4 §3.7, P4-12): fields,
  * `secretEnv` credential-store bindings, test-before-save, and JSON
- * import. Persists under agents.kun.harnesses.custom.
+ * import. "Based on" derives the Agent from a builtin ACP engine (its
+ * protocol behaviour and default arguments, another command). Persists under
+ * agents.kun.harnesses.providers (docs/ade/17 §4.3).
  */
 export function AgentCenterCustomForm({
   settings,
@@ -137,6 +147,7 @@ export function AgentCenterCustomForm({
 }): ReactElement {
   const [initialDraft] = useState(readCustomDraft)
   const [draftId, setDraftId] = useState(initialDraft.id ?? '')
+  const [base, setBase] = useState(initialDraft.base ?? '')
   const [name, setName] = useState(initialDraft.name ?? '')
   const [command, setCommand] = useState(initialDraft.command ?? '')
   const [args, setArgs] = useState(initialDraft.args ?? '')
@@ -158,27 +169,32 @@ export function AgentCenterCustomForm({
     if (typeof window === 'undefined') return
     try {
       window.sessionStorage.setItem(CUSTOM_DRAFT_KEY, JSON.stringify({
-        id: draftId || undefined, name, command, args, env, secretEnv
+        id: draftId || undefined, base: base || undefined, name, command, args, env, secretEnv
       } satisfies PersistedCustomDraft))
     } catch {
       // A blocked session store must not prevent editing the form.
     }
-  }, [draftId, name, command, args, env, secretEnv])
+  }, [draftId, base, name, command, args, env, secretEnv])
 
   useEffect(() => () => {
     probeGeneration.current += 1
     activeProbe.current?.abort()
   }, [])
 
+  const baseRows = useHarnessStore((state) => state.rows).filter((row) => row.definition.builtin &&
+    row.definition.transport === 'acp' && row.definition.availability !== 'retired' && row.definition.launch)
+  const baseCommand = baseRows.find((row) => row.definition.id === base)?.definition.launch?.command ?? ''
   const displayName = name.trim()
   const effectiveId = draftId || customAgentId(displayName)
   const cmd = command.trim()
+  // The probe launches the base engine's command when a derived Agent leaves it empty.
+  const launchCommand = cmd || (base ? baseCommand : '')
   const argList = args.trim() ? args.trim().split(/\s+/) : []
   const envRecord = parseEnvLines(env) ?? {}
-  const fingerprint = fingerprintOf(effectiveId, displayName, cmd, argList, envRecord, secretEnv)
+  const fingerprint = fingerprintOf(effectiveId, base, displayName, cmd, argList, envRecord, secretEnv)
   const probeFresh = probe?.fingerprint === fingerprint
   const canSave =
-    displayName.length > 0 && cmd.length > 0 &&
+    displayName.length > 0 && launchCommand.length > 0 &&
     ((probeFresh && probe.result.ok) || (probeFresh && !probe.result.ok && saveAnyway))
 
   const invalidate = (): void => {
@@ -191,7 +207,7 @@ export function AgentCenterCustomForm({
   }
 
   const runProbe = async (): Promise<void> => {
-    if (!displayName || !cmd) {
+    if (!displayName || !launchCommand) {
       setError(t('adeSettings.acpFormRequired'))
       return
     }
@@ -213,8 +229,9 @@ export function AgentCenterCustomForm({
     try {
       const result = await probeDefinition({
         id: effectiveId,
+        ...(base ? { extends: base } : {}),
         displayName,
-        command: cmd,
+        command: launchCommand,
         args: argList,
         env: envRecord,
         secretEnv
@@ -287,7 +304,7 @@ export function AgentCenterCustomForm({
   const save = (): void => {
     if (saveSubmitted.current) return
     const parsedEnv = parseEnvLines(env)
-    if (!displayName || !cmd) {
+    if (!displayName || !launchCommand) {
       setError(t('adeSettings.acpFormRequired'))
       return
     }
@@ -296,14 +313,14 @@ export function AgentCenterCustomForm({
       return
     }
     const id = effectiveId
-    if (settings.custom.some((e) => e.id === id) ||
-      settings.terminalAgents.some((e) => e.id === id) ||
+    if (settings.providers[id]?.extends ||
       useHarnessStore.getState().rows.some((row) => row.definition.id === id)) {
       setError(t('adeSettings.acpFormDuplicate'))
       return
     }
     const entry: KunHarnessCustomEntryV1 = {
       id,
+      ...(base ? { extends: base } : {}),
       displayName,
       command: cmd,
       args: argList,
@@ -312,7 +329,7 @@ export function AgentCenterCustomForm({
     }
     saveSubmitted.current = true
     try {
-      updateKun({ harnesses: { ...settings, custom: [...settings.custom, entry] } })
+      updateKun({ harnesses: { ...settings, providers: { ...settings.providers, [id]: userAgentOverride(entry) } } })
       onSaved?.(id, probeFresh ? probe?.result ?? null : null)
     } catch (cause) {
       saveSubmitted.current = false
@@ -334,6 +351,7 @@ export function AgentCenterCustomForm({
     }
     setName('')
     setDraftId('')
+    setBase('')
     setCommand('')
     setArgs('')
     setEnv('')
@@ -354,6 +372,7 @@ export function AgentCenterCustomForm({
     }
     setName(entry.displayName)
     setDraftId(entry.id)
+    setBase(entry.extends ?? '')
     setCommand(entry.command)
     setArgs(entry.args.join(' '))
     setEnv(
@@ -374,12 +393,21 @@ export function AgentCenterCustomForm({
 
   return (
     <div className="space-y-2.5" data-agent-custom-form>
+      {baseRows.length ? (
+        <div data-agent-custom-base>
+          <AgentSettingsSelect label={t('adeSettings.acpFormBase')} value={base}
+            onChange={(value) => { setBase(value); invalidate() }}
+            options={[{ value: '', label: t('adeSettings.acpFormBaseGeneric') },
+              ...baseRows.map((row) => ({ value: row.definition.id, label: row.definition.displayName }))]} />
+          <div className="mt-1 text-[11px] text-ds-faint">{t('adeSettings.acpFormBaseHint')}</div>
+        </div>
+      ) : null}
       <input className={inputClass} value={name} spellCheck={false}
         placeholder={t('adeSettings.acpFormName')}
         onChange={(e) => { setName(e.target.value); invalidate() }} />
       <div className="flex items-center gap-2">
         <input className={`${inputClass} font-mono text-[12px]`} value={command} spellCheck={false}
-          placeholder={t('adeSettings.acpFormCommand')}
+          placeholder={base && baseCommand ? t('adeSettings.acpFormCommandOptional', { command: baseCommand }) : t('adeSettings.acpFormCommand')}
           onChange={(e) => { setCommand(e.target.value); invalidate() }} />
         <button data-settings-action="secondary" data-settings-size="default"
           type="button"
@@ -484,7 +512,7 @@ export function AgentCenterCustomForm({
         <button aria-busy={probing} data-settings-action="secondary" data-settings-size="default"
           type="button"
           className={subButtonClass}
-          disabled={probing || !displayName || !cmd}
+          disabled={probing || !displayName || !launchCommand}
           onClick={() => void runProbe()}
         >
           {probing ? t('adeSettings.acpFormProbing') : t('adeSettings.acpFormTest')}
@@ -540,6 +568,7 @@ export function exportCustomEntryJson(entry: KunHarnessCustomEntryV1): string {
   return `${JSON.stringify(
     {
       id: entry.id,
+      ...(entry.extends ? { extends: entry.extends } : {}),
       displayName: entry.displayName,
       command: entry.command,
       args: entry.args,

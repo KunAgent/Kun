@@ -3,6 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { KunHarnessSettingsV1 } from '@shared/app-settings'
 import { AgentCenterCustomForm } from './agent-center-custom-form'
+import { useHarnessStore } from '../../store/harness-store'
+import { AgentSettingsSelect } from './AgentSettingsSelect'
 
 const mocks = vi.hoisted(() => ({
   probeHarnessDefinition: vi.fn(),
@@ -21,19 +23,17 @@ vi.mock('../../agent/registry', () => ({
 const t = (key: string, options?: Record<string, unknown>): string =>
   options ? `${key} ${JSON.stringify(options)}` : key
 
-function settings(custom: KunHarnessSettingsV1['custom'] = []): KunHarnessSettingsV1 {
+function settings(providers: KunHarnessSettingsV1['providers'] = {}): KunHarnessSettingsV1 {
   return {
     enabledProfiles: [], disabledIds: [],
-    binaryPaths: {},
-    custom,
+    providers,
     defaults: {},
     defaultHarnessId: 'kun',
-    agentOrder: [],
-    terminalAgents: []
+    agentOrder: []
   }
 }
 
-function render(custom: KunHarnessSettingsV1['custom'] = []) {
+function render(custom: KunHarnessSettingsV1['providers'] = {}) {
   const updateKun = vi.fn()
   let root!: ReactTestRenderer
   act(() => {
@@ -128,13 +128,9 @@ describe('AgentCenterCustomForm test-before-save gating (P4-12)', () => {
     expect(updateKun).toHaveBeenCalledWith(
       expect.objectContaining({
         harnesses: expect.objectContaining({
-          custom: [
-            expect.objectContaining({
-              id: 'custom-my-agent',
-              displayName: 'My Agent',
-              command: '/bin/my-agent'
-            })
-          ]
+          providers: {
+            'custom-my-agent': { extends: 'acp', label: 'My Agent', command: '/bin/my-agent' }
+          }
         })
       })
     )
@@ -157,7 +153,7 @@ describe('AgentCenterCustomForm test-before-save gating (P4-12)', () => {
       { signal: expect.any(AbortSignal) }
     )
     await act(async () => buttonByText(root, 'adeSettings.acpFormAdd').props.onClick())
-    expect(updateKun.mock.calls[0]?.[0].harnesses.custom[0].id).toBe('custom-stable-id')
+    expect(Object.keys(updateKun.mock.calls[0]?.[0].harnesses.providers)).toEqual(['custom-stable-id'])
   })
 
   it('submits a probed definition only once across rapid duplicate clicks', async () => {
@@ -255,22 +251,16 @@ describe('AgentCenterCustomForm test-before-save gating (P4-12)', () => {
       buttonByText(root, 'adeSettings.acpFormAdd').props.onClick()
     })
     const patch = updateKun.mock.calls[0]?.[0]
-    expect(patch.harnesses.custom[0].secretEnv).toEqual([
+    expect(patch.harnesses.providers['custom-my-agent'].secretEnv).toEqual([
       { name: 'MY_KEY', secretRef: 'cred_new' }
     ])
     expect(JSON.stringify(patch)).not.toContain('super-secret')
   })
 
   it('rejects a duplicate id before save', async () => {
-    const { root, updateKun } = render([
-      {
-        id: 'custom-my-agent',
-        displayName: 'My Agent',
-        command: '/bin/x',
-        args: [],
-        env: {}
-      }
-    ])
+    const { root, updateKun } = render({
+      'custom-my-agent': { extends: 'acp', label: 'My Agent', command: '/bin/x' }
+    })
     mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
     await fillBasics(root)
     await act(async () => {
@@ -281,5 +271,27 @@ describe('AgentCenterCustomForm test-before-save gating (P4-12)', () => {
       buttonByText(root, 'adeSettings.acpFormAdd').props.onClick()
     })
     expect(updateKun).not.toHaveBeenCalled()
+  })
+
+  it('derives an Agent from a builtin ACP engine and keeps its command when left empty', async () => {
+    useHarnessStore.setState({ rows: [{ definition: { id: 'opencode', displayName: 'OpenCode', transport: 'acp', builtin: true,
+      credentialModes: ['native-login'], permissionModes: [], modelSource: 'probe', staticModels: [],
+      launch: { command: 'opencode', args: ['acp'] } } } as never] })
+    try {
+      const { root, updateKun } = render()
+      await act(async () => root.root.findByType(AgentSettingsSelect).props.onChange('opencode'))
+      await act(async () => {
+        inputByPlaceholder(root, 'adeSettings.acpFormName').props.onChange({ target: { value: 'Fork' } })
+      })
+      expect(inputByPlaceholder(root, 'adeSettings.acpFormCommandOptional {"command":"opencode"}')).toBeTruthy()
+      mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+      await act(async () => { buttonByText(root, 'adeSettings.acpFormTest').props.onClick() })
+      expect(mocks.probeHarnessDefinition).toHaveBeenCalledWith(
+        expect.objectContaining({ extends: 'opencode', command: 'opencode', args: [] }), { signal: expect.any(AbortSignal) })
+      await act(async () => { buttonByText(root, 'adeSettings.acpFormAdd').props.onClick() })
+      expect(updateKun.mock.calls[0]?.[0].harnesses.providers).toEqual({ 'custom-fork': { extends: 'opencode', label: 'Fork' } })
+    } finally {
+      useHarnessStore.setState({ rows: [] })
+    }
   })
 })

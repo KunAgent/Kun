@@ -62,7 +62,7 @@ describe('finite, cancellable enablement', () => {
   it.each(['model', 'provider', 'binary'] as const)('rejects %s edits during an in-flight check', async (kind) => {
     const pending = deferred<AdeHarnessTestResult>(); mocks.test.mockReturnValue(pending.promise); mount()
     let checking!: Promise<void>; await act(async () => { checking = gate.enable() })
-    act(() => edit(kind === 'binary' ? { binaryPaths: { pi: '/changed/pi' } }
+    act(() => edit(kind === 'binary' ? { providers: { pi: { command: '/changed/pi' } } }
       : { defaults: { pi: kind === 'model' ? { model: 'changed' } : { credentialMode: 'kun-gateway', providerId: 'new' } } }))
     await act(async () => { pending.resolve(result()); await checking })
     expect(saved.enabledProfiles).toEqual([]); expect(writes).toEqual([])

@@ -21,6 +21,8 @@ import {
   type AgentCardAction,
   type AgentCardModel
 } from './agent-center-actions'
+import { agentCommandPath } from '@shared/harness-provider-settings'
+import { AgentLaunchOverrideFields } from './AgentLaunchOverrideFields'
 
 const TRANSPORT_LABEL_KEY: Record<string, string> = {
   'native-loop': 'adeAgentTransport.nativeLoop',
@@ -78,6 +80,7 @@ export function AgentCenterCard({
   onRemoveCustom,
   onExportCustom,
   onSetBinaryPath,
+  onSetLaunchPatch,
   onSetPermissionMode,
   onSetupCommand,
   onTest
@@ -98,6 +101,8 @@ export function AgentCenterCard({
   /** P4-12: exports this custom definition as a single JSON file. */
   onExportCustom?: () => void
   onSetBinaryPath: (path: string) => void
+  /** Appended arguments and environment for a builtin Agent's launch. */
+  onSetLaunchPatch?: (patch: { args?: string[]; env?: Record<string, string> }) => void
   onSetPermissionMode: (modeId: string) => void
   onSetupCommand?: (harnessId: string, command: string, title: string) => void
   /**
@@ -356,13 +361,17 @@ export function AgentCenterCard({
                 control={
                   <input
                     className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 font-mono text-[12px] text-ds-ink shadow-sm focus:border-accent focus:outline-none"
-                    value={settings.binaryPaths[definition.id] ?? ''}
+                    value={agentCommandPath(settings.providers, definition.id) ?? ''}
                     placeholder={status.resolvedCommand ?? definition.id}
                     spellCheck={false}
                     onChange={(event) => onSetBinaryPath(event.target.value)}
                   />
                 }
               />
+              {definition.builtin && onSetLaunchPatch ? (
+                <AgentLaunchOverrideFields id={definition.id} providers={settings.providers}
+                  tSettings={tSettings} onChange={onSetLaunchPatch} />
+              ) : null}
             </div>
           ) : null}
         </div>

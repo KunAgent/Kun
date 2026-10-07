@@ -70,6 +70,10 @@ export type AdeHarnessDefinition = {
     hooks?: { kind: string; events: string[] }
   }
   availability?: 'active' | 'preview' | 'retired'
+  /** Executable and default arguments (ACP and other spawned transports). */
+  launch?: { command: string; args: string[] }
+  /** The builtin engine a user Agent derives from (docs/ade/17 §4.3). */
+  derivedFrom?: string
   builtin: boolean
   /**
    * Install/login hints for the Agent Center (docs/ade/impl/p4 §3.3). Only
@@ -251,10 +255,12 @@ export type AdeHarnessTestResult = {
 
 /**
  * `POST /v1/harnesses/probe-definition` request (p4 §3.7, P4-12): handshake
- * a custom ACP definition before it is saved into `harnesses.custom[]`.
+ * a user ACP Agent before it is saved into `harnesses.providers`.
  */
 export type AdeHarnessProbeDefinitionRequest = {
   id?: string
+  /** A builtin ACP engine the Agent derives from. */
+  extends?: string
   displayName: string
   command: string
   args?: string[]

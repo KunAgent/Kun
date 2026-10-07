@@ -11,8 +11,8 @@ vi.mock('../../agent/registry', () => ({ getProvider: () => provider }))
 import { AgentCenterAddWizard } from './agent-center-add-wizard'
 
 const settings: KunHarnessSettingsV1 = {
-  enabledProfiles: [], disabledIds: [], binaryPaths: {}, custom: [], defaults: {},
-  defaultHarnessId: 'kun', agentOrder: [], terminalAgents: []
+  enabledProfiles: [], disabledIds: [], providers: {}, defaults: {},
+  defaultHarnessId: 'kun', agentOrder: []
 }
 
 const codex: AdeHarnessRow = {
@@ -138,7 +138,7 @@ describe('AgentCenterAddWizard', () => {
     expect(root.root.findByProps({ 'data-agent-add-check-state': 'passed' })).toBeTruthy()
     await act(async () => root.update(createElement(AgentCenterAddWizard, {
       rows: [codex],
-      settings: { ...settings, binaryPaths: { codex: '/another/codex' } },
+      settings: { ...settings, providers: { codex: { command: '/another/codex' } } },
       updateKun, onClose, onSelectAgent
     })))
     expect(root.root.findByProps({ 'data-agent-add-check-state': 'stale' })).toBeTruthy()

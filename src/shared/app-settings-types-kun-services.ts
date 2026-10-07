@@ -21,14 +21,13 @@ import {
   KunDesignQualitySettingsV1,
   KunFastContextSettingsV1,
   KunGraphSettingsPatchV1,
-  KunHarnessCustomEntryV1,
   KunHarnessDefaultsEntryV1,
+  KunHarnessProviderOverrideV1,
   KunInstructionSettingsV1,
   KunLabSettingsPatchV1,
   KunPlanExecutionSettingsV1,
   KunRuntimeSettingsV1,
-  KunSubagentsSettingsPatchV1,
-  KunTerminalAgentEntryV1
+  KunSubagentsSettingsPatchV1
 } from './app-settings-types-kun-runtime'
 import {
   CheckpointCleanupIntervalDays,
@@ -332,8 +331,8 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
 export type KunHarnessSettingsPatchV1 = {
   enabledProfiles?: import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1[]
   disabledIds?: string[]
-  binaryPaths?: Record<string, string>
-  custom?: KunHarnessCustomEntryV1[]
+  /** Replaces the whole override map, like the other records. */
+  providers?: Record<string, KunHarnessProviderOverrideV1>
   defaults?: Record<string, KunHarnessDefaultsEntryV1>
   /**
    * Legacy pre-P4-11 shape: merges into `defaults[*].permissionMode` for
@@ -342,8 +341,6 @@ export type KunHarnessSettingsPatchV1 = {
   defaultPermissionMode?: Record<string, string>
   defaultHarnessId?: string
   agentOrder?: string[]
-  /** Terminal-only agents for the "new agent tab" menu (p4 §3.8, P4-13). */
-  terminalAgents?: KunTerminalAgentEntryV1[]
 }
 
 /** Patch shape for agents.kun.ade; nested objects merge field-wise. */

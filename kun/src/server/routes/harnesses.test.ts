@@ -569,6 +569,21 @@ describe('harness routes', () => {
     expect(json.durationMs).toBeGreaterThanOrEqual(0)
   })
 
+  it('handshakes a derived draft and rejects bases that cannot be extended', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }), undefined, undefined, fakeCredentials())
+    const derived = await postJson(router, '/v1/harnesses/probe-definition', {
+      extends: 'opencode', displayName: 'Fork', command: process.execPath, args: [FAKE_ACP_AGENT],
+      env: { FAKE_ACP_SCENARIO: `${ACP_SCENARIOS}basic-chat.json` }
+    })
+    expect(derived.status).toBe(200)
+    expect(derived.json.ok).toBe(true)
+    for (const base of ['codex', 'claude-code', 'nowhere']) {
+      expect((await postJson(router, '/v1/harnesses/probe-definition', {
+        extends: base, displayName: 'x', command: 'tool'
+      })).status).toBe(400)
+    }
+  })
+
   it('injects resolved secretEnv into the probed child env without leaking it', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'kun-probe-def-'))
     const outFile = join(dir, 'env-out.txt')

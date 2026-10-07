@@ -16,6 +16,7 @@ import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import { DEFAULT_APPROVAL_REVIEWER } from '../contracts/policy.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import type { CodexRuntimeSharedDeps } from './runtime-composition-codex.js'
+import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
 
 export function buildPiRpcDeps(
   options: KunServeRuntimeOptions,
@@ -35,7 +36,7 @@ export function buildPiRpcDeps(
     capabilitiesV2: PI_RPC_CAPABILITIES,
     catalog: harnesses.catalog,
     readiness: harnesses.readiness,
-    binaryPath: (harnessId) => options.harnesses?.binaryPaths?.[harnessId],
+    binaryPath: (harnessId) => harnessCommandOverride(options.harnesses, harnessId),
     harnessDefaults: (id) => harnessDefaultsFor(options.harnesses, id),
     resolveSecretEnv: deps.resolveSecretEnv ?? harnesses.resolveSecretEnv,
     threadStore: deps.threadStore,

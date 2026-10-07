@@ -2,7 +2,7 @@
 
 - 日期：2026-10-08
 - 基线：`develop@8e699533d`
-- 状态：方案，未实施；待用户决定实施范围（见 §7）
+- 状态：P0-P2 已实施（见 §8 实施记录）；P3、P4 进行中
 - 设计输入：多 agent 控制台（`/Users/zxy/codeproject/ds_project/paseo@4417d7c`，下称"参考项目"）。
   按 [README](./README.md) 的约束，参考项目只作设计输入；源码、文件名、类名、注释、i18n 键里不得出现它的名字。
 
@@ -265,3 +265,26 @@ harnesses.providers?: Record<string, {
 1. 实施范围：建议先做 P0 + P1（纯收口 + 诊断，直接消灭今天这类故障的复发面），P2 起视反馈推进。
 2. 凭据门槛：建议所有引擎统一改为诊断，握手 `authRequired` 作为唯一认证硬门槛。
 3. 插件 provider 的信任声明粒度（整体信任 vs 按能力）。
+
+## 8. 实施记录
+
+按阶段合入本地 `develop`，下面只记录与 §4/§5 方案的偏差和落点。
+
+### P0 模块化（`e67989cd7`）
+
+- 模块是平铺文件 `kun/src/harness/providers/<id>.ts`，没有每引擎一个目录；`registry.ts` 组装 `PROVIDER_MODULES`，`builtin-harnesses.ts` 只是 `builtinProviderDefinitions()` 的索引。
+- 运行时组合仍按 transport 构建（`runtime-composition-*`），没有搬进模块的 `runtime` 字段；`harness-provider-kind.ts` 保留为渲染层安全的纯表。
+- `registry.test.ts` 的 lint 守住阶段文件中 harness id 字面量为 0。
+
+### P1 诊断（`0acff3564`）
+
+- 没有新建 `ProviderSnapshotService` 和 `/snapshot` 路由：就绪结果直接带 `diagnostics: HarnessDiagnosticRow[]`（`contracts/harness-diagnostics.ts`），握手拿到的模型目录经 `onCatalog` 写入 `AcpModelProbe` 缓存，启用时不再单独 spawn 一次取模型。
+- 凭据判定集中在 `harness-readiness-verdict.ts`：原生登录只在三种确定信号下阻断——会话报 `authRequired`、引擎状态命令报 signed-out、模块声明 `credentials.requireEvidence`（CodeMaker、DeepSeek harness、fx：协议层无法报告未登录）且本地无证据；其余缺证据只给警告行。`loginOptional` 已退役。
+
+### P2 配置覆盖与派生
+
+- 设置与 Kun 配置统一为 `harnesses.providers[id]`（`kun/src/config/kun-config-harness-providers.ts`）：`extends`、`label`、`command`（替换可执行文件、保留参数）、`args {mode: append|replace}`、`env`、`secretEnv`、`terminal`。没有采纳 `models/additionalModels/enabled/order`：模型目录以会话上报为准，启用仍走 `enabledProfiles` 同意模型，排序仍是 `agentOrder`。
+- 迁移：GUI 设置在 normalize/merge 时把 `binaryPaths`、`custom[]`、`terminalAgents[]` 一次性折叠进 `providers`，保存后只剩新字段；Kun 配置继续接受旧字段（手写 config），由 `harnessProviderOverrides()` 折叠，`harnessCommandOverride()` 是所有命令路径读取点的唯一入口。
+- 派生只支持内置 ACP 引擎（`derivableProviderModule`）：agent-sdk、antigravity-cli、cursor-sdk 的运行时按 id 绑定，codex/pi 的派生没有用户场景。`deriveProviderModule` 继承协议行为、凭据、网关、失败解释，去掉安装器、更新、内置可执行文件和历史读取；目录列出时用 `setDerivedProviderModules` 注册，阶段文件里的 `providerModule(id)` 因此无需改动。定义带 `derivedFrom`。CodeMaker 仍是手写模块（它的凭据和写文件策略与 OpenCode 不同），用户派生走同一套 hook。
+- Agent 中心：添加表单增加"基于"选择（通用 ACP 或内置 ACP 引擎，命令可留空沿用基座）；内置 Agent 的"高级"里在命令路径之外增加附加参数和环境变量（失焦保存）；移除/导出覆盖所有用户 Agent。`probe-definition` 接受 `extends`。
+- 真机验证：`extends: 'opencode'` 的派生 Agent 在本机 OpenCode 1.18.35 上 handshake 通过，凭据诊断沿用 OpenCode 的 `auth.json`，78 个模型写入缓存。

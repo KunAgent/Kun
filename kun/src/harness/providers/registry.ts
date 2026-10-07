@@ -33,11 +33,30 @@ export const PROVIDER_MODULES: readonly AgentProviderModule[] = [
 ]
 
 let byId: Map<string, AgentProviderModule> | undefined
+let derived = new Map<string, AgentProviderModule>()
 
-/** The built-in module for an engine id; custom and terminal Agents have none. */
-export function providerModule(id: string | undefined): AgentProviderModule | undefined {
+/** The built-in module for an engine id, ignoring settings-derived Agents. */
+export function builtinProviderModule(id: string | undefined): AgentProviderModule | undefined {
   byId ??= new Map(PROVIDER_MODULES.map((module) => [module.definition.id, module]))
   return id ? byId.get(id) : undefined
+}
+
+/**
+ * The module for an Agent id: a builtin engine or an Agent derived from one
+ * in settings. Custom ACP and terminal Agents have none.
+ */
+export function providerModule(id: string | undefined): AgentProviderModule | undefined {
+  return builtinProviderModule(id) ?? (id ? derived.get(id) : undefined)
+}
+
+/** Like `providerModule`, but an unsaved derived draft falls back to its base engine. */
+export function providerModuleFor(definition: Pick<HarnessDefinition, 'id' | 'derivedFrom'>): AgentProviderModule | undefined {
+  return providerModule(definition.id) ?? builtinProviderModule(definition.derivedFrom)
+}
+
+/** Settings-derived Agents; the catalog replaces the set each time it is listed. */
+export function setDerivedProviderModules(modules: readonly AgentProviderModule[]): void {
+  derived = new Map(modules.map((module) => [module.definition.id, module]))
 }
 
 export function builtinProviderDefinitions(): readonly HarnessDefinition[] {
