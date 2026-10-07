@@ -1,21 +1,13 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
-import { AgentIcon } from '../agent-icon'
-import type { AgentCardModel } from './agent-center-actions'
+import type { AgentTone } from './agent-center-presentation'
 
 /**
- * Shared Agent Center chrome: status dots, badges, the detail header, and the
- * first-load skeleton, so the list and the detail pane speak one visual language.
+ * Shared Agent Center chrome: status dots, badges and the first-load skeleton,
+ * so the list and the detail pane speak one visual language.
  */
 
-export type AgentStatusTone = 'success' | 'warning' | 'muted' | 'running'
-
-export function agentStatusTone(state: AgentCardModel['state']): AgentStatusTone {
-  if (state === 'ready') return 'success'
-  if (state === 'unavailable') return 'warning'
-  if (state === 'detecting') return 'running'
-  return 'muted'
-}
+export type AgentStatusTone = AgentTone
 
 const DOT_CLASS: Record<Exclude<AgentStatusTone, 'running'>, string> = {
   success: 'bg-ds-status-dot-success',
@@ -45,35 +37,6 @@ export function AgentBadge({ children, tone = 'neutral', mono = false }: {
     <span className={`inline-flex shrink-0 items-center rounded-md px-1.5 text-[11px] font-medium leading-[18px] ${mono ? 'font-mono' : ''} ${BADGE_CLASS[tone]}`}>
       {children}
     </span>
-  )
-}
-
-export function AgentDetailHeader({ harnessId, name, badges, tone, status, meta }: {
-  harnessId: string
-  name: string
-  badges?: ReactNode
-  tone: AgentStatusTone
-  status: ReactNode
-  /** Secondary chips under the status line, e.g. supported credential modes. */
-  meta?: ReactNode
-}): ReactElement {
-  return (
-    <header className="flex min-w-0 items-start gap-3.5" data-agent-detail-header>
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-ds-border-muted bg-ds-subtle text-ds-ink">
-        <AgentIcon harnessId={harnessId} size={22} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <h3 className="min-w-0 break-words text-[15px] font-semibold leading-6 text-ds-ink">{name}</h3>
-          {badges}
-        </div>
-        <p role="status" aria-live="polite" className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-ds-muted">
-          <AgentStatusDot tone={tone} />
-          <span className="min-w-0 break-words">{status}</span>
-        </p>
-        {meta ? <div className="mt-2 flex flex-wrap items-center gap-1">{meta}</div> : null}
-      </div>
-    </header>
   )
 }
 

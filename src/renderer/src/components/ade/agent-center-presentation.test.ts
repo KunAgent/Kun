@@ -150,6 +150,12 @@ describe('agentPresentation', () => {
     }
   })
 
+  it('never offers a built-in install command for an Agent the user defined', () => {
+    const custom = row({ status: { installed: 'no', reasonCode: 'not_installed' } })
+    custom.definition.builtin = false
+    expect(agentPresentation(custom, ctx()).next).toBeNull()
+  })
+
   it('treats Kun as always ready', () => {
     const kun = row({ id: 'kun', transport: 'native-loop', setup: null })
     expect(agentPresentation(kun, ctx({ enabled: true }))).toMatchObject({ state: 'ready', group: 'connected', mode: 'manage' })

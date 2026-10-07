@@ -2,7 +2,7 @@
 
 - 日期：2026-10-08
 - 基线：`develop@2dd1145a2`（[17 Provider 模块](./17-provider-modules.md) P0-P4 已合入）
-- 状态：实施中（U1-U5 已完成，进度见 §9）
+- 状态：已实施（U1-U6，见 §9 实施记录；未推送）
 - 设计稿（画布，7 个页面 + 2 个组件）：<https://claude.ai/artifact/DsY2hkKqtgFVFQM6WAVafW>
 - 设计输入：参考项目（同 17）的 provider 列表、目录和诊断面板；Kun 自己的设置页规则（[desktop-renderer-and-operations §7.6](../design/desktop-renderer-and-operations.md)）和 ADE 界面原则（[12 §2](./12-workbench-ui.md)）。
   源码、文件名、类名、注释、i18n 键里不得出现参考项目的名字。
@@ -204,42 +204,46 @@ type AgentPresentation = {
 
 其余全部是渲染层改动，设置结构不变（`agentOrder`、`defaults`、`enabledProfiles`、`providers` 都已存在）。
 
-## 7. 组件拆分
+## 7. 组件拆分（实际落地）
 
-| 新组件 / 模块 | 取代 | 约行数 |
-| --- | --- | --- |
-| `agent-center-presentation.ts`（§4） | `agent-center-actions.ts` 的卡片模型、`statusLine()`、列表副标题 | 200 |
-| `AgentCenter.tsx`（工作区外壳） | 现 `AgentCenter.tsx` | 200 |
-| `AgentCenterRail.tsx`（分组、折叠、拖动） | `AgentCenterCatalog.tsx` | 220 |
-| `AgentDetailHeader.tsx`（头部、开关、更多菜单、提示条） | `AgentCenterParts.tsx` 的头部 + 卡片动作区 | 200 |
-| `AgentSetupSteps.tsx`（§3.4） | 安装盒子 + 启用面板的未接入部分 | 250 |
-| `AgentConnectionTab.tsx`、`AgentDiagnosticsCard.tsx` | `AgentEnablementPanel.tsx`、`HarnessTestBlock` | 250 + 150 |
-| `AgentModelsTab.tsx` | 散落在模型选择器里的目录信息 | 180 |
-| `AgentLaunchTab.tsx` | 高级设置折叠区 + `AgentLaunchOverrideFields.tsx` | 220 |
-| `AgentVersionTab.tsx` | `AgentUpdateControl.tsx` 的布局（逻辑抽成 hook 保留） | 160 |
-| `AgentAddDialog.tsx` | `agent-center-add-wizard.tsx` + 自定义表单布局 | 260 |
+| 模块 | 取代 / 作用 |
+| --- | --- |
+| `agent-center-presentation.ts`（§4） | 取代卡片动作表、`statusLine()`、列表副标题；`agentPresentationFor` 是列表和详情共用的入口 |
+| `agent-center-activity-store.ts`、`use-agent-install-watch.ts` | 列表和详情共享的在途状态：检查中、未保存的连接草稿、已观察到的安装任务、最近一次检查结果 |
+| `agent-center-catalog.ts`、`AgentCenterRail.tsx` | 分组、折叠、拖动 / Alt+↑↓ 排序、搜索；取代 `AgentCenterCatalog.tsx` |
+| `AgentCenter.tsx` | 工作区外壳：页头（摘要、新对话默认、重新检测、添加）+ 列表 + 详情 |
+| `AgentDetail.tsx`、`AgentDetailHeader.tsx` | 一个 Agent 的页面：头部、开关、「更多」菜单、检查进度条、提示条；取代 `AgentCenterCard.tsx` |
+| `AgentSetupSteps.tsx` | 未接入时的三步（安装 / 连接方式 / 检查并启用） |
+| `AgentConnectionFields.tsx`、`AgentConnectionTab.tsx`、`AgentDraftBar.tsx` | 连接方式卡片、账号 / 供应商 / 路由、默认模型；已接入时的草稿提示；取代 `AgentEnablementPanel.tsx` |
+| `AgentDiagnosticsCard.tsx`、`agent-diagnostics-text.ts`、`agent-last-check.ts` | 常驻检查结果、复制诊断、试运行确认、交给小 Kun；取代 `HarnessTestBlock` |
+| `AgentModelsTab.tsx` | 可用模型列表、设为默认、手填模型 ID |
+| `AgentLaunchTab.tsx`、`AgentEnvTable.tsx`、`AgentCommandPathField.tsx`、`agent-launch-preview.ts` | 命令路径、附加参数、环境变量表（含敏感值）、实际启动命令预览；取代 `AgentLaunchOverrideFields.tsx` |
+| `AgentVersionTab.tsx` + `AgentUpdateControl.tsx` | 版本页；更新流程逻辑不变，只重做布局 |
+| `AgentAddDialog.tsx`、`agent-center-custom-form.tsx`、`agent-center-custom-entry.ts` | 两步添加弹窗；自定义表单加上标签、模式和命令预览；纯函数（解析、导入导出）拆到 `-entry.ts`；取代 `agent-center-add-wizard.tsx` |
 
-每个文件不超过 700 行。删除：`HarnessTestBlock`、列表里的 Kun 行、添加向导的内置列表步骤、启用面板的「测试连接」和「重试检测」按钮。
+删除：`AgentCenterCard.tsx`、`AgentEnablementPanel.tsx`、`AgentCenterCatalog.tsx`、`AgentLaunchOverrideFields.tsx`、`agent-center-add-wizard.tsx`、`agentCardModel`、`HarnessTestBlock`、列表里的 Kun 行、添加向导的内置列表步骤、「测试连接」「重试检测」「设为默认」按钮。每个文件不超过 700 行。
 
 ## 8. 测试与冒烟
 
-- `agent-center-presentation.test.ts`：§4.2 每一行一个用例，外加「出问题时开关保持 on」「草稿进入需要重新检查」「扩展 Agent 启动设置只读」。
-- 现有用例迁移：`agent-center-actions.test.ts`、`AgentCenter.catalog.test.ts`、`agent-center-add-wizard*.test.ts`、`agent-center-custom-form*.test.ts`、`AgentDiagnosticRows.test.ts`。
-- 冒烟脚本依赖的选择器保留在等价控件上，不能悄悄改名：
-  - `smoke-agent-enablement.mjs`、`agent-enablement-smoke.test.mjs`：`data-agent-card`、`data-agent-list-id`、`data-agent-enable`（开关和第 ③ 步按钮都带）、`data-agent-enablement-state`、`data-agent-profile-mode/provider/model`、`data-agent-recheck`、`data-agent-readiness-result`、`data-agent-enable-cancel`。
-  - `smoke-development-agent-install.cjs`：`data-agent-install-start`。
-  - `smoke-development-ade-flow.cjs`、`smoke-development-ade-visuals.cjs`：`data-agent-add-*` 改为两步后同步更新脚本。
-- 设置页冒烟 `smoke-settings-ui.mjs --quick`：第三方 Agent 页不再出现嵌套标签行，窄窗口下无横向滚动。
-- Electron 冒烟 `--coding-agent-only`：接入一个 Agent 后能在新对话里选到并跑一轮。
+- `agent-center-presentation.test.ts`：§4.2 每一行一个用例，外加「出问题时开关保持 on」「用户自己定义的 Agent 不给内置安装命令」「Kun 一直就绪」。
+- `use-agent-enablement.test.ts`：草稿只在检查开始时写入；失败、取消、被新一次检查替换都写回原样；开关关闭的是已保存的连接。
+- `AgentDetail.test.ts`、`AgentCenterRail.test.ts`、`AgentConnectionFields.test.ts`、`AgentEnvTable.test.ts`、`AgentAddDialog.test.ts`、`agent-center-catalog.test.ts`：开关锁定 / 忙 / 开、登出提示条和登录命令、草稿栏、试运行二次确认、证明里带的检查结果、启动命令里敏感值被遮住、环境变量失焦保存与校验、敏感值只存引用、三种添加方式、草稿恢复不含敏感值、折叠与排序。
+- `agent-center-locale.test.ts`：每个 Agent 中心文案在 en / zh 都是字符串（一个键既当标签又当分组会被悄悄变成对象，这个测试和 `i18n-usage.test.ts` 的严格文件清单一起拦住它）。其余五种语言按英文兜底，待翻译。
+- 冒烟脚本：
+  - `smoke-agent-enablement.mjs`（含 `agent-enablement-smoke.test.mjs` 的静态断言）：开关带 `data-agent-enable`，「检查并启用」按钮带 `data-agent-enable-step`；连接方式是 `data-agent-profile-mode-option` 单选卡；已接入的 Agent 改默认模型后先是草稿，点 `data-agent-draft-check` 才保存。
+  - `smoke-development-ade-flow.cjs`：添加流程改为两步；命令路径在「启动」标签里失焦保存；原「在终端准备安装」改为接入步骤里的 `data-agent-setup-terminal`。该脚本需要完整开发构建，这次只按选择器更新，没有运行。
+  - `smoke-rooms-harness-controls.cjs`：就绪证明多了 `readiness`，比较前剔除。
+- 仍待人工或后续冒烟：`smoke-settings-ui.mjs --quick`（页面数没变）、`--coding-agent-only`（接入一个 Agent 后在新对话里选到并跑一轮）。
 
-## 9. 实施顺序
+## 9. 实施记录
 
-1. **U1 状态模型**：`agentPresentation` + 测试，先让现有界面改用它（行为不变），消掉四处状态不一致。
-2. **U2 列表与页面外壳**：分组、折叠、拖动排序、搜索、「新对话默认」、移出 Kun。
-3. **U3 详情框架**：头部、开关、更多菜单、提示条；未接入走接入步骤。
-4. **U4 连接标签**：连接草稿、常驻检查结果、复制诊断、让小 Kun 处理、`lastReadiness` 契约。
-5. **U5 模型 / 启动 / 版本标签**。
-6. **U6 添加弹窗**。
-7. **U7 清理**：删旧组件、7 种语言的文案、冒烟脚本、`docs/ade/agent-updates.md` 与 `supported-agent-integrations.md` 里的截图说明。
+| 阶段 | 内容 | 与计划的差异 |
+| --- | --- | --- |
+| U1 状态模型 | `agentPresentation` + 测试，列表和详情头部先改用它 | 「已停用」并入「已安装 · 未接入」：关闭开关只移除这条连接的启用记录，没有单独的停用状态 |
+| U2 列表与外壳 | 三组、折叠、拖动排序、搜索、新对话默认、移出 Kun；提供商页和 Agent 页共用宽工作区布局 | 顺带修了两个原本就红的测试（自定义 ACP 添加流程、harness 默认值刷新范围） |
+| U3 详情框架 | 头部、开关、更多菜单、提示条、三步接入、连接 / 模型标签、连接草稿、常驻检查结果 | 计划里的模型标签提前到这一步；草稿的写回语义见 §5.2 |
+| U4 启动 / 版本 / 检查历史 | 环境变量表（含敏感值）、实际启动命令预览、版本页重做、`readyProfiles[].readiness` | 契约从计划的 `lastReadiness` 改为复用已有的就绪证明（§6） |
+| U5 添加弹窗 | 两步添加；内置 Agent 不再走弹窗；表单加标签与预览 | 保留「改在终端里安装」和「管理模型供应商」两个入口，避免丢掉一键安装不可用时的退路 |
+| U6 清理 | 删除旧卡片模型和未用的部件，补测试 | 其余五种语言的文案先用英文兜底；`adeSettings.agentState_*` 等不再使用的旧文案未删 |
 
-每步单独可合入；U1 之后任何一步出问题都能回退到上一阶段，不会出现两套状态并存。
+每步单独合入 `develop`；U1 之后任何一步出问题都能回退到上一阶段，不会出现两套状态并存。

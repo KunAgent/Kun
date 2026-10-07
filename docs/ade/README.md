@@ -19,7 +19,7 @@
 - 界面可用性问题、harness 的添加与配置方式，以及 P4 修复计划见 [impl/p4-usable-ade.md](./impl/p4-usable-ade.md)。
 - 2026-09-30 的完整交互与配置细化计划，以及用户反馈的 Agent 接入失败和品牌图标修复，见 [P7 实施入口](./impl/p7-workbench-configuration.md)；文档已编写，产品实现尚待按清单推进。
 - 2026-10-08 按多 agent 控制台的 provider 模型把 Agent 接入按引擎收口（模块化、一次 spawn 的快照与诊断、凭据降为诊断、覆盖/派生配置、统一会话控件、插件 provider），见 [17 Provider 模块](./17-provider-modules.md)；P0-P4 已实施并合入 `develop`（`2dd1145a2`）。
-- 2026-10-08 第三方 Agent 配置界面重构（按状态分组的列表、单一状态来源、三步接入、连接 / 模型 / 启动 / 版本四个标签、两步添加），见 [18 Agent 配置界面](./18-agent-config-ui.md)；设计稿，未实施。
+- 2026-10-08 第三方 Agent 配置界面重构（按状态分组的列表、单一状态来源、三步接入、连接 / 模型 / 启动 / 版本四个标签、两步添加），见 [18 Agent 配置界面](./18-agent-config-ui.md)；已实施并合入本地 `develop`（见该文 §9）。
 
 ## 1. 目标
 
