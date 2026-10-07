@@ -62,7 +62,11 @@ import type { ModelRoundEngine } from './model-round-engine.js'
 import { modelClientDiagnostics } from './model-client-diagnostics.js'
 import { recoverModelContextOverflow } from './model-context-overflow-recovery.js'
 import { effectiveOutputBudgetTokens, ordinaryOutputReserveTokens } from './model-request-composer.js'
-import { contextCapExceededAction } from './context-cap-exceeded-action.js'
+import {
+  assumedWindowOutputBudget,
+  describeContextCapFailure,
+  sourceResultBudgetTokensFor
+} from './context-cap-guard.js'
 import { estimateModelRequestInputTokenBreakdown } from './model-request-estimator.js'
 import type { ModelRoutingService } from './model-routing-service.js'
 import {
@@ -394,20 +398,17 @@ export class ModelStepService extends ModelStepPreparationService {
           : composedRequest.request
       }
     }
-    if (inputTokens + outputBudgetTokens > requestHardCapTokens) {
-      const overBy = inputTokens + outputBudgetTokens - requestHardCapTokens
-      const reason = outputBudgetTokens > requestHardCapTokens
-        ? 'output_budget_exceeds_cap'
-        : !fallbackCompactionAttempted
-          ? 'request_too_large'
-          : fallbackCompactionApplied
-            ? 'still_exceeds_after_compaction'
-            : 'no_compactable_history'
-      const action = contextCapExceededAction(reason)
-      const message =
-        `request exceeds the ${requestHardCapTokens}-token context cap ` +
-        `(${inputTokens} input + ${outputBudgetTokens} output budget; over by ${overBy}); ` +
-        `${reason}. ${action}`
+    const assumedWindowBudget = assumedWindowOutputBudget(modelCapabilities, {
+      inputTokens, outputBudgetTokens, outputReserveTokens, requestHardCapTokens
+    })
+    if (assumedWindowBudget !== undefined) {
+      outputBudgetTokens = assumedWindowBudget
+      if (outputBudgetTokens > 0) {
+        composedRequest = { ...composedRequest, request: { ...composedRequest.request, maxTokens: outputBudgetTokens } }
+      }
+    } else if (inputTokens + outputBudgetTokens > requestHardCapTokens) {
+      const { reason, message } = describeContextCapFailure({ inputTokens, outputBudgetTokens, outputReserveTokens,
+        requestHardCapTokens, fallbackCompactionAttempted, fallbackCompactionApplied })
       const details = {
         inputTokens,
         outputBudgetTokens,
@@ -457,8 +458,8 @@ export class ModelStepService extends ModelStepPreparationService {
     // built-in source tools can return the largest honest page that has a
     // realistic chance of fitting instead of relying on the send-time history
     // cleaner to silently rewrite it.
-    const sourceResultBudgetTokens =
-      Math.max(0, requestHardCapTokens - inputTokens - outputReserveTokens)
+    const sourceResultBudgetTokens = sourceResultBudgetTokensFor(modelCapabilities,
+      { inputTokens, outputReserveTokens, requestHardCapTokens })
     const contextThresholds = this.deps.compactor.thresholds(model, providerId)
     const contextWindowTokens = modelCapabilities.contextWindowTokens ??
       Math.max(contextThresholds.softThreshold, contextThresholds.hardThreshold)

@@ -466,7 +466,7 @@ export function conversationDeliveryInstruction(recoveryStep = 0, maxSteps = 0,
     ].join(' ')
   }
   if (deliveryGate === 'start') {
-    return 'Respond to this user in their language before doing work. Call send_im_message with phase start and one concrete next action, or phase final for a complete answer. If you need the user to decide or connect an app, use the visible question or connection-card tool. Continue the task after a start message.'
+    return 'Respond to this user in their language before doing work. Call send_im_message with phase start and one concrete next action, or phase final for a complete answer. If you need the user to decide or connect an app, use the visible question or connection-card tool. Continue the task after a start message. Only the reply tools are listed for this first step; shell, file, and other tools are not revoked and unlock right after it, so never tell the user you lack terminal or tool permissions.'
   }
   if (deliveryGate === 'progress') {
     return 'The user has not received an update during this long task. Call send_im_message with phase progress to report a verified finding and next action, or phase final if the work is complete. Avoid generic waiting notices; continue the task after progress.'

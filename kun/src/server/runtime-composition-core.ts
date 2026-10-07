@@ -86,6 +86,7 @@ import { createPersistentStores } from './runtime-factory-storage.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { HistoryReferenceService } from '../history/history-reference-service.js'
 import { consumeNativeAgentNetworkEnvironment } from '../contracts/native-agent-network.js'
+import { mergeModelContextProfiles } from '../loop/model-context-profile-merge.js'
 
 export async function createRuntimeCore(
   options: KunServeRuntimeOptions,
@@ -128,9 +129,27 @@ export async function createRuntimeCore(
     models: activeOptions.models
   })
   let providerModelProfiles = modelContextProfilesByProvider(activeOptions.providers)
-  const profilesForProvider = (providerId?: string) => providerId
-    ? providerModelProfiles.get(providerId.trim().toLowerCase()) ?? modelProfiles
-    : modelProfiles
+  // A provider's own profiles win, but models it does not describe still
+  // resolve through the global profiles instead of the 32k placeholder window.
+  // Rebuilt only when a hot apply swaps either profile set.
+  let mergedProfiles = new Map<string, ReturnType<typeof mergeModelContextProfiles>>()
+  let mergedFor: [typeof providerModelProfiles, typeof modelProfiles] | undefined
+  const profilesForProvider = (providerId?: string) => {
+    if (!providerId) return modelProfiles
+    const scoped = providerModelProfiles.get(providerId.trim().toLowerCase())
+    if (!scoped) return modelProfiles
+    if (mergedFor?.[0] !== providerModelProfiles || mergedFor[1] !== modelProfiles) {
+      mergedProfiles = new Map()
+      mergedFor = [providerModelProfiles, modelProfiles]
+    }
+    const key = providerId.trim().toLowerCase()
+    let merged = mergedProfiles.get(key)
+    if (!merged) {
+      merged = mergeModelContextProfiles(scoped, modelProfiles)
+      mergedProfiles.set(key, merged)
+    }
+    return merged
+  }
   const compactor = new ContextCompactor({
     contextCompaction: activeOptions.contextCompaction,
     models: activeOptions.models,
