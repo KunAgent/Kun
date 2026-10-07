@@ -626,8 +626,8 @@ it('persists remote MCP OAuth client state outside the server config', async () 
     const storagePath = join(root, 'google_drive.json')
     const provider = new FileMcpOAuthProvider('google_drive', server, storagePath, async () => undefined)
 
-    await provider.saveClientInformation({ client_id: 'client-1', client_secret: 'secret-1' })
-    await provider.saveTokens({ access_token: 'access-1', token_type: 'Bearer', refresh_token: 'refresh-1' })
+    await provider.saveClientInformation({ issuer: 'https://auth.example.test', client_id: 'client-1', client_secret: 'secret-1' })
+    await provider.saveTokens({ issuer: 'https://auth.example.test', access_token: 'access-1', token_type: 'Bearer', refresh_token: 'refresh-1' })
     await provider.saveCodeVerifier('verifier-1')
 
     const restored = new FileMcpOAuthProvider('google_drive', server, storagePath, async () => undefined)
@@ -657,7 +657,7 @@ it('reports and clears remote MCP OAuth credential state', async () => {
     const server = config.mcp.servers.google_drive as McpServerConfig
     const provider = createMcpOAuthProvider('google_drive', server, { storageDir: root })
     expect(provider).toBeDefined()
-    await provider?.saveTokens({ access_token: 'access-1', token_type: 'Bearer', refresh_token: 'refresh-1' })
+    await provider?.saveTokens({ issuer: 'https://auth.example.test', access_token: 'access-1', token_type: 'Bearer', refresh_token: 'refresh-1' })
 
     const before = await listMcpOAuthDiagnostics(config.mcp, { storageDir: root })
     expect(before).toHaveLength(1)

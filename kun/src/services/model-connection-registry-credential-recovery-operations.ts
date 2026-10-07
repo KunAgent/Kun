@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { readProviderHeaders } from './provider-protected-headers.js'
+import { parseProviderHeaders } from './provider-protected-headers.js'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
@@ -431,10 +431,28 @@ async projectWithCredentialHealth(this: ModelConnectionRegistry,
 async inspectCredentialHealth(this: ModelConnectionRegistry,
     document: RegistryDocument
   ): Promise<ReadonlyMap<string, ProjectedCredentialHealth>> {
-    const entries = await Promise.all(Object.values(document.profiles).map(async (profile) => {
+    const profiles = Object.values(document.profiles)
+    const headerRefs = new Set(profiles.flatMap((profile) => profile.customHeadersRef ? [profile.customHeadersRef] : []))
+    const healthByRef = await this['options'].credentials.inspectHealth(
+      profiles.flatMap((profile) => [
+        ...(profile.customHeadersRef ? [profile.customHeadersRef] : []),
+        ...(profile.credentialRef && !document.credentialTransactions[profile.id] &&
+          !(profile.configured && isAnonymousHttpProfile(profile)) ? [profile.credentialRef] : [])
+      ]),
+      (payload, reference) => {
+        let headersReadable = false
+        if (headerRefs.has(reference)) {
+          try { parseProviderHeaders(payload); headersReadable = true } catch { /* Fail closed. */ }
+        }
+        return { apiKeyPresent: Boolean(payload?.apiKey?.trim()), headersReadable }
+      }
+    )
+    const inspect = async (profile: StoredProfile) => {
       if (profile.customHeadersRef) {
-        try { await readProviderHeaders(this, profile) }
-        catch { return [profile.id, credentialHealth('unreadable')] as const }
+        const headers = healthByRef.get(profile.customHeadersRef)
+        if (!headers?.readable || !headers.health.headersReadable) {
+          return [profile.id, credentialHealth('unreadable')] as const
+        }
       }
       if (profile.configured && isAnonymousHttpProfile(profile)) {
         return [profile.id, credentialHealth('not-required')] as const
@@ -443,14 +461,9 @@ async inspectCredentialHealth(this: ModelConnectionRegistry,
         return [profile.id, credentialHealth('missing')] as const
       }
       if (profile.credentialRef) {
-        try {
-          const credential = await this['options'].credentials.get(profile.credentialRef)
-          return [profile.id, credential?.apiKey?.trim()
-            ? credentialHealth('ready')
-            : credentialHealth('missing')] as const
-        } catch {
-          return [profile.id, credentialHealth('unreadable')] as const
-        }
+        const inspected = healthByRef.get(profile.credentialRef)
+        return [profile.id, credentialHealth(!inspected?.readable ? 'unreadable'
+          : inspected.health.apiKeyPresent ? 'ready' : 'missing')] as const
       }
       if (profile.credentialSourceId && this['options'].inspectCredentialSource) {
         try {
@@ -469,7 +482,15 @@ async inspectCredentialHealth(this: ModelConnectionRegistry,
         return [profile.id, credentialHealth('missing')] as const
       }
       return null
+    }
+    const entries = new Map<string, ProjectedCredentialHealth>()
+    let next = 0
+    await Promise.all(Array.from({ length: Math.min(8, profiles.length) }, async () => {
+      while (next < profiles.length) {
+        const entry = await inspect(profiles[next++])
+        if (entry) entries.set(...entry)
+      }
     }))
-    return new Map(entries.filter((entry): entry is NonNullable<typeof entry> => entry !== null))
+    return entries
   },
 }

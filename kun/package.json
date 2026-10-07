@@ -89,7 +89,7 @@
     "@emnapi/runtime": "^1.10.0",
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
-    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/client": "^2.2.0",
     "@xmldom/xmldom": "^0.9.12",
     "ajv": "^8.20.0",
     "better-sqlite3": "^12.10.0",
