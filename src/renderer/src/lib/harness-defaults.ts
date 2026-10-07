@@ -10,7 +10,7 @@ import {
 import type { AdeHarnessDefinition } from '@shared/ade-harnesses'
 import { getKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
 import { rendererRuntimeClient } from '../agent/runtime-client'
-import { applyHarnessEnablementSettings, loadHarnesses } from '../store/harness-store'
+import { applyHarnessEnablementSettings, harnessIdsWithChangedLaunchSettings, loadHarnesses } from '../store/harness-store'
 import { SETTINGS_CHANGED_EVENT } from './keyboard-shortcut-settings'
 
 /**
@@ -34,13 +34,18 @@ export function harnessDefaultsSnapshot(): Record<string, KunHarnessDefaultsEntr
 
 /** Only connection-affecting settings invalidate runtime readiness, not theme/draft edits. */
 export function harnessCatalogSettingsFingerprint(settings: AppSettingsV1): string {
+  return JSON.stringify({ harnesses: getKunRuntimeSettings(settings).harnesses, ...runtimeConnectionSettings(settings) })
+}
+
+/** The non-Agent part of the fingerprint: a change here can affect every Agent's readiness. */
+function runtimeConnectionSettings(settings: AppSettingsV1): Record<string, unknown> {
   const runtime = getKunRuntimeSettings(settings)
-  return JSON.stringify({
-    harnesses: runtime.harnesses, provider: settings.provider,
+  return {
+    provider: settings.provider,
     binaryPath: runtime.binaryPath, port: runtime.port, dataDir: runtime.dataDir,
     apiKey: runtime.apiKey, baseUrl: runtime.baseUrl, providerId: runtime.providerId,
     endpointFormat: runtime.endpointFormat
-  })
+  }
 }
 
 /**
@@ -73,8 +78,10 @@ export function useHarnessDefaults(enabled = true): Record<string, KunHarnessDef
     let cancelled = false
     let settingsRevision = 0
     let catalogFingerprint: string | undefined
+    let applied: AppSettingsV1 | undefined
     const apply = (settings: AppSettingsV1): void => {
       if (cancelled) return
+      applied = settings
       catalogFingerprint = harnessCatalogSettingsFingerprint(settings)
       snapshot = harnessDefaultsFromApp(settings)
       setDefaults(snapshot)
@@ -92,9 +99,14 @@ export function useHarnessDefaults(enabled = true): Record<string, KunHarnessDef
       if (settings) {
         settingsRevision += 1
         const changed = catalogFingerprint !== harnessCatalogSettingsFingerprint(settings)
+        const previous = applied
         apply(settings)
         if (changed) {
-          applyHarnessEnablementSettings(getKunRuntimeSettings(settings).harnesses, true)
+          const harnesses = getKunRuntimeSettings(settings).harnesses
+          // A provider/runtime connection edit can affect every Agent; an Agent edit only itself.
+          const scope = !previous || JSON.stringify(runtimeConnectionSettings(previous)) !== JSON.stringify(runtimeConnectionSettings(settings))
+            ? true : harnessIdsWithChangedLaunchSettings(getKunRuntimeSettings(previous).harnesses, harnesses)
+          applyHarnessEnablementSettings(harnesses, scope)
           void loadHarnesses(true)
         }
       }

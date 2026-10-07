@@ -4,7 +4,7 @@ import { getKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
 import { normalizeKunHarnessSettings } from '@shared/app-settings-kun-harness'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { emitRendererSettingsChanged } from '../../lib/keyboard-shortcut-settings'
-import { applyHarnessEnablementSettings } from '../../store/harness-store'
+import { applyHarnessEnablementSettings, harnessIdsWithChangedLaunchSettings } from '../../store/harness-store'
 
 export function onboardingHarnessSettings(settings: AppSettingsV1): KunHarnessSettingsV1 {
   return normalizeKunHarnessSettings(getKunRuntimeSettings(settings).harnesses)
@@ -30,8 +30,9 @@ export function useOnboardingHarnessSettings(input: {
   const patch = (change: Partial<KunHarnessSettingsV1>): void => {
     const current = latest.current.getForm()
     if (!current) return
-    const harnesses = { ...onboardingHarnessSettings(current), ...change }
-    applyHarnessEnablementSettings(harnesses, Boolean(change.binaryPaths || change.defaults || change.custom))
+    const previous = onboardingHarnessSettings(current)
+    const harnesses = { ...previous, ...change }
+    applyHarnessEnablementSettings(harnesses, harnessIdsWithChangedLaunchSettings(previous, harnesses))
     latest.current.setForm({
       ...current,
       agents: { ...current.agents, kun: { ...current.agents.kun, harnesses } }

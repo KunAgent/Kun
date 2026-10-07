@@ -28,6 +28,23 @@ type StoredDraft = { body?: string; references?: RoomContentReference[]; [key: s
 const referenceKey = (reference: RoomContentReference): string => JSON.stringify({ ...reference, titleSnapshot: undefined })
 
 /**
+ * Merge text and references into a private chat's stored draft and tell an
+ * open composer to reload it. Nothing is sent; repeating the same text is a no-op.
+ */
+export function appendRoomDraft(roomId: string, input: { references?: RoomContentReference[]; body?: string }): void {
+  const key = `kun.rooms.draft.${roomId}`
+  let draft: StoredDraft = {}
+  try { draft = JSON.parse(readBrowserStorageItem(key) ?? '{}') as StoredDraft } catch { draft = {} }
+  const existing = Array.isArray(draft.references) ? draft.references : []
+  const merged = [...existing, ...(input.references ?? []).filter((reference) => !existing.some((item) => referenceKey(item) === referenceKey(reference)))].slice(0, 20)
+  const previous = draft.body?.trim() ?? '', added = input.body?.trim() ?? ''
+  const body = added && previous.includes(added) ? previous : [previous, added].filter(Boolean).join('\n\n')
+  writeBrowserStorageItem(key, JSON.stringify({ mentions: [], taskId: '', repositoryId: '', intent: 'auto', attachments: [], requestId: '', fingerprint: '',
+    ...draft, body, references: merged }))
+  window.dispatchEvent(new CustomEvent('kun-room-draft-updated', { detail: { roomId } }))
+}
+
+/**
  * Put content in front of the bot without sending anything: the references and
  * optional text land in the private chat's draft, and the user decides what to ask.
  */
@@ -46,15 +63,7 @@ export async function sendReferencesToBot(input: { references: RoomContentRefere
   try {
     const roomId = await resolveBotRoomId(route)
     if (!roomId) return showWorkbenchFlash(tr('roomsWorkbenchNoBot'), 'error')
-    const key = `kun.rooms.draft.${roomId}`
-    let draft: StoredDraft = {}
-    try { draft = JSON.parse(readBrowserStorageItem(key) ?? '{}') as StoredDraft } catch { draft = {} }
-    const existing = Array.isArray(draft.references) ? draft.references : []
-    const merged = [...existing, ...input.references.filter((reference) => !existing.some((item) => referenceKey(item) === referenceKey(reference)))].slice(0, 20)
-    const body = [draft.body?.trim(), input.body?.trim()].filter(Boolean).join('\n\n')
-    writeBrowserStorageItem(key, JSON.stringify({ mentions: [], taskId: '', repositoryId: '', intent: 'auto', attachments: [], requestId: '', fingerprint: '',
-      ...draft, body, references: merged }))
-    window.dispatchEvent(new CustomEvent('kun-room-draft-updated', { detail: { roomId } }))
+    appendRoomDraft(roomId, input)
     if (navigated || useChatStore.getState().route !== route ||
       selectionKeys.some((key, index) => readBrowserStorageItem(key) !== selections[index])) return
     if (route === 'rooms') {

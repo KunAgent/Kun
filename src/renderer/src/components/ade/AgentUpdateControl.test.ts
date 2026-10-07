@@ -10,6 +10,8 @@ vi.mock('../../agent/runtime-client', () => ({ rendererRuntimeClient: { runtimeR
 vi.mock('../../store/harness-store', () => ({ loadHarnesses: f.load, loadHarnessModels: f.models, invalidateHarnessModels: f.invalidate }))
 vi.mock('./agent-enablement-settings', () => ({ waitForAgentSettings: f.wait }))
 vi.mock('../../store/chat-store', () => ({ useChatStore: { getState: () => ({ openSettings: vi.fn() }) } }))
+vi.mock('./AgentSetupHelpButton', () => ({ AgentSetupHelpButton: ({ issue }: { issue: unknown }) =>
+  createElement('div', { 'data-ask-kun-issue': JSON.stringify(issue) }) }))
 import { AgentUpdateControl } from './AgentUpdateControl'
 import { receiveHarnessUpdate, useHarnessUpdateStore } from '../../store/harness-update-store'
 const row = { definition: { id: 'claude-code' }, status: { installed: 'yes', resolvedCommand: '/old' } } as AdeHarnessRow
@@ -62,5 +64,20 @@ it('restores the prior effective executable and releases maintenance if activati
     expect(patch.mock.calls.map(([value]) => value.binaryPaths['claude-code'])).toEqual(['/new', '/old'])
     expect(beforeCheck).toHaveBeenCalledTimes(2)
     expect(f.request.mock.calls.some(([path]) => path.endsWith('/cancel'))).toBe(true)
+  } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
+})
+it('offers 小 Kun with versions, error and installer log when an update fails', async () => {
+  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  const host = document.createElement('div'), root = createRoot(host)
+  const failed: HarnessUpdateState = { ...initial, job: { id: 'failed-update', action: 'update', status: 'failed', startedAt: '',
+    output: 'npm warn cleanup EACCES', error: 'Agent compatibility verification failed; the current selection was kept', version: '2.1.281' } }
+  f.request.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify(failed) })
+  receiveHarnessUpdate(failed)
+  try {
+    await act(async () => root.render(createElement(AgentUpdateControl, { row, settings: defaultKunHarnessSettings(), patch: vi.fn(), t: (key: string) => key })))
+    expect(JSON.parse(host.querySelector('[data-ask-kun-issue]')!.getAttribute('data-ask-kun-issue')!)).toEqual({
+      harnessId: 'claude-code', operation: 'update', error: 'Agent compatibility verification failed; the current selection was kept',
+      output: 'npm warn cleanup EACCES', currentVersion: '2.1.220', currentPath: '/old', targetVersion: '2.1.281'
+    })
   } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
 })

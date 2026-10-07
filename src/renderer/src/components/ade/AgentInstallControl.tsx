@@ -3,6 +3,7 @@ import { Download, LoaderCircle, CheckCircle2 } from 'lucide-react'
 import type { HarnessInstallAction, HarnessInstallState } from '../../../../../kun/src/contracts/harness-install'
 import { harnessInstallRequest } from '../../agent/kun-harness-install-client'
 import { loadHarnesses } from '../../store/harness-store'
+import { AgentSetupHelpButton } from './AgentSetupHelpButton'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
@@ -75,6 +76,10 @@ export function AgentInstallControl({ harnessId, action, needed, t }: {
     {state?.plan?.missingCommand ? <p className="mt-2 text-[11px] text-amber-600">{t('agentInstall.missingCommand', { command: state.plan.missingCommand })}</p> : null}
     {error || job?.error ? <p className="mt-2 break-words text-[11px] text-red-600" role="alert">{error || job?.error}</p> : null}
     {error ? <button data-settings-action="link" data-settings-size="compact" type="button" onClick={() => setRevision((value) => value + 1)} className="mt-1 text-[11px] text-accent">{t('adeAgentAction.retry')}</button> : null}
+    {!busy && (error || job?.status === 'failed') ? <AgentSetupHelpButton t={t} issue={{
+      harnessId, operation: action === 'adapter' ? 'adapter' : 'install',
+      command: job?.command ?? state?.plan?.command, error: error || job?.error, output: job?.output
+    }} /> : null}
     {state?.plan || job ? <details className="mt-2 text-[11px] text-ds-muted">
       <summary className="cursor-pointer">{t('agentInstall.details')}</summary>
       <code className="mt-2 block break-all">{job?.command ?? state?.plan?.command}</code>
