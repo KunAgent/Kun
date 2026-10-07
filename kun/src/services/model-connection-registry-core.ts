@@ -187,7 +187,14 @@ export type MaterializedModelConnections = {
 
 export class ModelConnectionRegistry {
   async assertActiveConfiguration(revision?: number): Promise<void> {
-    const document = await this.file.read(emptyDocument)
+    let document = await this.file.read(emptyDocument)
+    if (this.lastAppliedRevision < document.revision) {
+      // Another registry instance on the same data dir (Electron Main OAuth
+      // refresh, TUI) can advance the durable revision without notifying this
+      // process. Catch up before refusing dispatch, or the gate stays shut.
+      await this.applyLatest().catch(() => undefined)
+      document = await this.file.read(emptyDocument)
+    }
     if (this.lastAppliedRevision !== document.revision || (revision !== undefined && revision !== document.revision)) {
       throw new Error('Provider configuration is not active; retry after settings finish applying')
     }
