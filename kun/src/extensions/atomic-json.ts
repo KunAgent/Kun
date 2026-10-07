@@ -214,14 +214,16 @@ async function readManagerSnapshot(
   manager: ManagerAtomicJsonConfig,
   path: string
 ): Promise<ManagerAtomicJsonSnapshot> {
-  const response = await fetch(`${manager.baseUrl}/v1/data/atomic-json/read`, {
-    method: 'POST',
-    headers: managerHeaders(manager.token),
-    body: JSON.stringify({ path }),
-    signal: managerClientRequestSignal()
+  return withManagerRequestSignal(undefined, async (signal) => {
+    const response = await fetch(`${manager.baseUrl}/v1/data/atomic-json/read`, {
+      method: 'POST',
+      headers: managerHeaders(manager.token),
+      body: JSON.stringify({ path }),
+      signal
+    })
+    if (!response.ok) throw await managerRequestError(response, path)
+    return ManagerAtomicJsonSnapshotSchema.parse(await response.json()).snapshot
   })
-  if (!response.ok) throw await managerRequestError(response, path)
-  return ManagerAtomicJsonSnapshotSchema.parse(await response.json()).snapshot
 }
 
 async function writeManagerSnapshot<T>(
@@ -231,22 +233,24 @@ async function writeManagerSnapshot<T>(
   value: T,
   options: AtomicJsonMutationOptions
 ): Promise<boolean> {
-  const response = await fetch(`${manager.baseUrl}/v1/data/atomic-json/write`, {
-    method: 'PUT',
-    headers: managerHeaders(manager.token),
-    body: JSON.stringify({
-      path,
-      expectedRevision,
-      value,
-      ...(options.fence ? { fence: options.fence } : {}),
-      ...(options.commitId ? { commitId: options.commitId } : {})
-    }),
-    signal: managerClientRequestSignal(options.signal)
+  return withManagerRequestSignal(options.signal, async (signal) => {
+    const response = await fetch(`${manager.baseUrl}/v1/data/atomic-json/write`, {
+      method: 'PUT',
+      headers: managerHeaders(manager.token),
+      body: JSON.stringify({
+        path,
+        expectedRevision,
+        value,
+        ...(options.fence ? { fence: options.fence } : {}),
+        ...(options.commitId ? { commitId: options.commitId } : {})
+      }),
+      signal
+    })
+    if (response.status === 409) return classifyConflict(response, path)
+    if (!response.ok) throw await managerRequestError(response, path)
+    ManagerAtomicJsonSnapshotSchema.parse(await response.json())
+    return true
   })
-  if (response.status === 409) return classifyConflict(response, path)
-  if (!response.ok) throw await managerRequestError(response, path)
-  ManagerAtomicJsonSnapshotSchema.parse(await response.json())
-  return true
 }
 
 async function deleteManagerSnapshot(
@@ -255,21 +259,23 @@ async function deleteManagerSnapshot(
   expectedRevision: number,
   options: AtomicJsonMutationOptions
 ): Promise<boolean> {
-  const response = await fetch(`${manager.baseUrl}/v1/data/atomic-json/delete`, {
-    method: 'DELETE',
-    headers: managerHeaders(manager.token),
-    body: JSON.stringify({
-      path,
-      expectedRevision,
-      ...(options.fence ? { fence: options.fence } : {}),
-      ...(options.commitId ? { commitId: options.commitId } : {})
-    }),
-    signal: managerClientRequestSignal(options.signal)
+  return withManagerRequestSignal(options.signal, async (signal) => {
+    const response = await fetch(`${manager.baseUrl}/v1/data/atomic-json/delete`, {
+      method: 'DELETE',
+      headers: managerHeaders(manager.token),
+      body: JSON.stringify({
+        path,
+        expectedRevision,
+        ...(options.fence ? { fence: options.fence } : {}),
+        ...(options.commitId ? { commitId: options.commitId } : {})
+      }),
+      signal
+    })
+    if (response.status === 409) return classifyConflict(response, path)
+    if (!response.ok) throw await managerRequestError(response, path)
+    ManagerAtomicJsonSnapshotSchema.parse(await response.json())
+    return true
   })
-  if (response.status === 409) return classifyConflict(response, path)
-  if (!response.ok) throw await managerRequestError(response, path)
-  ManagerAtomicJsonSnapshotSchema.parse(await response.json())
-  return true
 }
 
 async function classifyConflict(response: Response, path: string): Promise<false> {
@@ -314,4 +320,4 @@ function managerConflictError(path: string): Error {
 function isMissingFile(error: unknown): boolean {
   return (error as NodeJS.ErrnoException)?.code === 'ENOENT'
 }
-import { managerClientRequestSignal } from '../manager/manager-client-lifetime.js'
+import { withManagerRequestSignal } from '../manager/manager-client-lifetime.js'

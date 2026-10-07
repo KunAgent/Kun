@@ -142,7 +142,24 @@ export function createServerRuntimeComposition(
     bundledSeedResults,
     extensionIndexClient
   } = extensions
-  const { startedAt, rebuildCapabilities, applyConfig } = config
+  const { startedAt, rebuildCapabilities, applyConfig: applyConfigNow } = config
+  // The desktop watchdog and attachment paths poll /v1/runtime/info; the
+  // capability manifest is rebuilt at most every few seconds and immediately
+  // after any config apply.
+  let capabilitiesMemo: { at: number; value: ReturnType<typeof rebuildCapabilities> } | undefined
+  const currentCapabilities = (): ReturnType<typeof rebuildCapabilities> => {
+    const now = Date.now()
+    if (capabilitiesMemo && now - capabilitiesMemo.at < 5_000) return capabilitiesMemo.value
+    capabilitiesMemo = { at: now, value: rebuildCapabilities() }
+    return capabilitiesMemo.value
+  }
+  const applyConfig: typeof applyConfigNow = async (request) => {
+    try {
+      return await applyConfigNow(request)
+    } finally {
+      capabilitiesMemo = undefined
+    }
+  }
   // Extension-declared Agents (docs/ade/17 §4.5) join the catalog once their
   // extension is enabled with `agents.register`; listing Agents refreshes them.
   services.harnesses.extensionAgents.setLoader(() =>
@@ -404,7 +421,7 @@ export function createServerRuntimeComposition(
           heapTotalBytes: memory.heapTotal,
           externalBytes: memory.external
         },
-        capabilities: rebuildCapabilities(),
+        capabilities: currentCapabilities(),
 	        extensions: {
 	          enabled: true,
 	          apiVersions: [...SUPPORTED_EXTENSION_API_VERSIONS],
