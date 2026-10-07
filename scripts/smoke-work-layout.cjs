@@ -207,6 +207,16 @@ async function exerciseWorkLayout({ page, poll, capture, recordDiagnostic, resiz
   await undo.click()
   await archivedRow.waitFor({ timeout: 30_000 })
   steps.restored = await workSnapshot(page)
+
+  // The header's archive icon leads to Settings → Archives, where Code keeps them too.
+  await page.locator('[data-work-sidebar="sessions"] .work-sidebar-head-actions button').nth(1).click()
+  await poll(async () => page.evaluate(async () => {
+    const { useChatStore } = await import('/src/store/chat-store.ts')
+    const state = useChatStore.getState()
+    return state.route === 'settings' && state.settingsSection === 'archives'
+  }), 15_000, 'Settings archives')
+  await page.waitForTimeout(1200)
+  await capture('work-09-settings-archives')
   await recordDiagnostic('work-layout', { steps, views })
   return { steps, views }
 }
