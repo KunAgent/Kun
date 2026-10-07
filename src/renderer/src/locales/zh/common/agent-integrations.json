@@ -43,6 +43,25 @@
     "terminalModelManaged": "原生模型请在 CLI 中选择。此终端集成不提供原生模型目录。",
     "terminalReady": "可在终端中打开",
     "openTerminal": "打开 Agent 终端",
-    "terminalOpenHint": "启用并通过检测后即可打开终端。"
+    "terminalOpenHint": "启用并通过检测后即可打开终端。",
+    "askKun": "让小 Kun 处理",
+    "askKunHint": "会打开与小 Kun 的对话并带上错误和日志，确认后发送即可。",
+    "askKunFailed": "无法打开小 Kun 的对话：{{error}}",
+    "askKunUnavailable": "找不到可用的小 Kun 对话，请先在对话列表中恢复或新建。",
+    "askKunOperation": {
+      "install": "安装",
+      "adapter": "适配器安装",
+      "update": "更新"
+    },
+    "askKunPrompt": {
+      "intro": "我在 Kun 里为第三方 Agent「{{agent}}」执行{{operation}}时失败了，请帮我排查并修复。",
+      "agent": "Agent：{{agent}}（{{id}}）",
+      "command": "执行的命令：`{{command}}`",
+      "current": "当前使用：{{current}}",
+      "target": "目标版本：{{version}}",
+      "error": "错误：{{error}}",
+      "log": "日志末尾：",
+      "instructions": "请先根据日志判断原因，告诉我打算执行哪些命令；删除、覆盖文件或需要 sudo 的操作要先征得我同意。修复后验证命令能正常运行，并提醒我回到「设置 → AI 助手 → Agent 接入」点「重试检测」。"
+    }
   }
 }

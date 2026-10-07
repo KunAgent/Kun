@@ -6,6 +6,7 @@ import { agentUpdateRequest, checkHarnessUpdate, dismissHarnessUpdate, harnessUp
 import { invalidateHarnessModels, loadHarnesses, loadHarnessModels } from '../../store/harness-store'
 import { waitForAgentSettings } from './agent-enablement-settings'
 import { useChatStore } from '../../store/chat-store'
+import { AgentSetupHelpButton } from './AgentSetupHelpButton'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
@@ -86,6 +87,7 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
   }
   const refreshModels = async (): Promise<void> => { invalidateHarnessModels(id); await loadHarnessModels(id, true) }
   const button = 'rounded-lg border border-ds-border-muted px-3 py-1.5 text-[12px] text-ds-ink hover:bg-ds-hover disabled:opacity-50'
+  const failure = error || entry?.error || job?.error || state?.error
   return <div className="mt-3 space-y-2 rounded-xl border border-ds-border-muted bg-ds-main/40 p-3" data-agent-update={id}>
     <div className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
       <span className="font-medium">{t('agentUpdate.title')}</span>
@@ -114,7 +116,11 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
     </div>
     {state?.status === 'available' && !busy ? <div className="flex gap-3 text-[11px] text-ds-muted"><button onClick={() => dismissHarnessUpdate(id, true)}>{t('agentUpdate.later')}</button><button onClick={() => dismissHarnessUpdate(id)}>{t('agentUpdate.ignore')}</button></div> : null}
     <p className="text-[11px] leading-5 text-ds-faint">{t('agentUpdate.hint')}</p>
-    {error || entry?.error || job?.error || state?.error ? <p role="alert" className="break-words text-[11px] text-orange-600">{error || entry?.error || job?.error || state?.error}</p> : null}
+    {failure ? <p role="alert" className="break-words text-[11px] text-orange-600">{failure}</p> : null}
+    {failure && !busy ? <AgentSetupHelpButton t={t} issue={{
+      harnessId: id, operation: 'update', error: failure, output: job?.output,
+      currentVersion: state?.current.version, currentPath: state?.current.path, targetVersion: job?.version ?? state?.latestVersion
+    }} /> : null}
     <details className="text-[11px] text-ds-muted"><summary className="cursor-pointer">{t('agentUpdate.details')}</summary>
       <code className="mt-2 block break-all">{state?.current.path}</code>
       {state?.checkedAt ? <p>{t('agentUpdate.checkedAt', { time: new Date(state.checkedAt).toLocaleString() })}</p> : null}

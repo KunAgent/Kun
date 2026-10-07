@@ -9,6 +9,8 @@ import type { HarnessInstallState } from '../../../../../kun/src/contracts/harne
 
 vi.mock('../../agent/kun-harness-install-client', () => ({ harnessInstallRequest: vi.fn() }))
 vi.mock('../../store/harness-store', () => ({ loadHarnesses: vi.fn(async () => undefined) }))
+vi.mock('./AgentSetupHelpButton', () => ({ AgentSetupHelpButton: ({ issue }: { issue: unknown }) =>
+  createElement('div', { 'data-ask-kun-issue': JSON.stringify(issue) }) }))
 let root: Root
 let host: HTMLDivElement
 let state: HarnessInstallState
@@ -63,4 +65,20 @@ it('shows a recoverable request failure instead of silently doing nothing', asyn
   await render()
   expect(host.querySelector('[role="alert"]')?.textContent).toBe('connection interrupted')
   expect(host.textContent).toContain('adeAgentAction.retry')
+})
+
+it('offers 小 Kun with the command, error and log once an install fails', async () => {
+  state = { ...state, job: { id: 'job-1', harnessId: 'devin', command: 'official-installer', status: 'failed',
+    output: 'npm error code EEXIST', error: 'Installer exited with code 1', startedAt: new Date().toISOString() } }
+  await render()
+  expect(JSON.parse(host.querySelector('[data-ask-kun-issue]')!.getAttribute('data-ask-kun-issue')!)).toEqual({
+    harnessId: 'devin', operation: 'install', command: 'official-installer', error: 'Installer exited with code 1', output: 'npm error code EEXIST'
+  })
+})
+
+it('does not offer 小 Kun while an install is still running', async () => {
+  state = { ...state, job: { id: 'job-1', harnessId: 'devin', command: 'official-installer', status: 'running',
+    output: '', startedAt: new Date().toISOString() } }
+  await render()
+  expect(host.querySelector('[data-ask-kun-issue]')).toBeNull()
 })
