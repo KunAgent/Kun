@@ -50,6 +50,7 @@
     "title": "Discovery file",
     "on": "Agents on this computer can find the gateway through {{path}}.",
     "off": "Off. Give agents the gateway address by hand.",
+    "other": "Another Kun at {{address}} holds the discovery file. This one takes over when that one quits.",
     "toggle": "Publish discovery file",
     "copyPath": "Copy path",
     "copied": "Copied"

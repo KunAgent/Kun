@@ -50,6 +50,7 @@
     "title": "发现文件",
     "on": "本机上的 agent 可以通过 {{path}} 找到网关。",
     "off": "已关闭。需要手动把网关地址告诉 agent。",
+    "other": "另一个 Kun（{{address}}）正在使用发现文件。它退出后，这个 Kun 会自动接管。",
     "toggle": "发布发现文件",
     "copyPath": "复制路径",
     "copied": "已复制"

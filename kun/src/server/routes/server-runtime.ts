@@ -393,7 +393,7 @@ export type ServerRuntime = {
     /** Whether the user wants the discovery file published (default true). */
     advertiseDiscovery?(): boolean
     /** Live discovery-file state, set by the production server once it listens. */
-    discovery?: { status(): { allowed: boolean; advertised: boolean; path: string } }
+    discovery?: { readonly instanceId: string; status(): import('../gateway-discovery-file.js').GatewayDiscoveryStatus }
   }
   defaultModel?: string
   /**

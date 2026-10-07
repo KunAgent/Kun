@@ -16,6 +16,8 @@ export function gatewayHello(runtime: ServerRuntime, request: Request): JsonResp
   return jsonResponse({
     name: 'kun',
     version: KUN_SERVICE_VERSION,
+    // Matches `instanceId` in ~/.kun/gateway.json, so a reader can tell the file names this process.
+    ...(runtime.modelGateway?.discovery ? { instanceId: runtime.modelGateway.discovery.instanceId } : {}),
     gateway: {
       enabled: runtime.modelGateway?.enabled() ?? false,
       v1: `${origin}/v1`,
