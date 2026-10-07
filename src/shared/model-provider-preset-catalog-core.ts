@@ -119,11 +119,12 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     endpointFormat: 'messages',
     // Ids match what the SDK's supportedModels() returns (see claude-subscription-models).
     models: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-    // The SDK does NOT report a context window, so we set it manually: Opus 4.8 and
-    // Sonnet 4.x support 1M; Haiku 4.5 is 200K. All Claude 4.x models are vision-capable,
-    // so every profile uses visionChatProfile (inputModalities text+image). Cosmetic on
-    // the agent-sdk path (the SDK enforces the real limit); preset profiles are
-    // authoritative, so edit them here.
+    // The SDK only reports a window after a query has run (`result.modelUsage`), so the
+    // pre-turn window comes from here: Opus 4.8 and Sonnet 4.x support 1M; Haiku 4.5 is
+    // 200K. All Claude 4.x models are vision-capable, so every profile uses
+    // visionChatProfile (inputModalities text+image). Once a query finishes, the window
+    // the SDK reports replaces this one in the context gauge (the SDK enforces the real
+    // limit); preset profiles are authoritative, so edit them here.
     modelProfiles: {
       'claude-opus-4-8': visionChatProfile(1_000_000, CLAUDE_ADAPTIVE_REASONING),
       'claude-sonnet-4-6': visionChatProfile(1_000_000, CLAUDE_ADAPTIVE_REASONING),

@@ -22,6 +22,7 @@
  */
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 import { sdkCostIncrement } from './sdk-session-cost.js'
+import { SdkContextOccupancyTracker, type SdkContextOccupancy } from './sdk-context-occupancy.js'
 import { redactBrowserUseActionForPersistence } from '../../contracts/browser-use.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import { DEFAULT_MODEL_STREAM_LIMITS } from '../../adapters/model/model-stream-resource-budget.js'
@@ -174,6 +175,7 @@ export class SdkEventMapper {
   private toolReadyCount = 0
   private final?: SdkTurnFinal
   private readonly budget: SdkStreamResourceBudget
+  private readonly occupancy = new SdkContextOccupancyTracker()
 
   constructor(private readonly ctx: SdkEventMapperContext) {
     this.budget = new SdkStreamResourceBudget(normalizeSdkStreamLimits(ctx.streamLimits))
@@ -187,6 +189,11 @@ export class SdkEventMapper {
   /** Final status/text once the `result` message has been seen. */
   getFinal(): SdkTurnFinal | undefined {
     return this.final
+  }
+
+  /** Real context occupancy/window the SDK reported so far, if any. */
+  getContextOccupancy(): SdkContextOccupancy | undefined {
+    return this.occupancy.snapshot()
   }
 
   /** Diagnostic/test seam proving completed tool calls release retained name state. */
@@ -204,6 +211,7 @@ export class SdkEventMapper {
 
   map(message: SdkMessage): RuntimeEventDraft[] {
     this.budget.addEvent(message, this.toolNames.size)
+    this.occupancy.observe(message)
     switch (message.type) {
       case 'system':
         if ((message as { subtype?: string }).subtype === 'init') {

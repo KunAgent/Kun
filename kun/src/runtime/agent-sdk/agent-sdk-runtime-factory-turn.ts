@@ -478,7 +478,7 @@ export function createAgentSdkTurnRuntimeDeps(
         ...(claudeConfigDir ? { claudeConfigDir } : {}),
         ...(preparation ? { sessionPreparation: preparation } : {}),
         ...(deps.contextProfile
-          ? { contextProfile: deps.contextProfile(model ?? 'claude-default') }
+          ? { contextProfile: deps.contextProfile(model ?? 'claude-default', providerId) }
           : {}),
         oauthToken: token || undefined,
         ...(gatewayEnv ? { gateway: gatewayEnv } : {}),

@@ -294,7 +294,7 @@ export async function runCursorSdkTurnOwned(
       capabilitiesV2: capabilitiesV2FromLegacy(capabilities, CURSOR_CAPABILITIES)
     })
     await recordHandoff()
-    const contextProfile = deps.contextProfile?.(model)
+    const contextProfile = deps.contextProfile?.(model, resolvedProviderId)
     const recordContextSnapshot = async (resumed: boolean): Promise<void> => {
       if (!contextProfile) return
       const system = estimateDelegatedTokens(instructionBlocks.join('\n'))

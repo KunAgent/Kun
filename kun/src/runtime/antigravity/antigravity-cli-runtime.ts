@@ -93,7 +93,7 @@ export interface AntigravityCliRuntimeDeps {
    * transcript instead of the deterministic brief (docs/ade/08 §4).
    */
   deterministicHandoff?: boolean
-  contextProfile?: (model: string) => {
+  contextProfile?: (model: string, providerId?: string) => {
     contextWindowTokens: number
     softThresholdTokens: number
     hardThresholdTokens: number
@@ -399,7 +399,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       { threadId, turnId, harnessId: 'antigravity' },
       turnHandoff
     )
-    const contextProfile = this.deps.contextProfile?.(model)
+    const contextProfile = this.deps.contextProfile?.(model, resolvedProviderId)
     if (contextProfile) {
       const system = estimateAntigravityTokens(instructionBlocks.join('\n'))
       const messages = estimateAntigravityTokens(prompt) - system

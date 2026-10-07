@@ -129,7 +129,7 @@ export interface CursorSdkRuntimeDeps {
    * transcript instead of the deterministic brief (docs/ade/08 §4).
    */
   deterministicHandoff?: boolean
-  contextProfile?: (model: string) => {
+  contextProfile?: (model: string, providerId?: string) => {
     contextWindowTokens: number
     softThresholdTokens: number
     hardThresholdTokens: number

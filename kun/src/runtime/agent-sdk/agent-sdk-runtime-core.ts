@@ -328,14 +328,11 @@ export class AgentSdkRuntime {
         { threadId, turnId, harnessId: 'claude-code' },
         ctx.handoffEvent
       )
-      const recordContextSnapshot = (): Promise<void> =>
+      const recordContextSnapshot = (live?: ReturnType<SdkEventMapper['getContextOccupancy']>): Promise<void> =>
         recordAgentSdkContextSnapshot({
-          ctx,
-          threadId,
-          turnId,
+          ctx, threadId, turnId, live,
           resumed: Boolean(resumeSessionId),
-          historyText:
-            ctx.handoffBrief ?? (resumeSessionId ? '' : ctx.historyTranscript ?? ''),
+          historyText: ctx.handoffBrief ?? (resumeSessionId ? '' : ctx.historyTranscript ?? ''),
           selectedKunTools,
           record: (draft) => this.deps.recordEvent(draft),
           kunSystemPrompt: () => this.deps.kunSystemPrompt()
@@ -468,6 +465,8 @@ export class AgentSdkRuntime {
             // `result` is terminal and already carries usage/final status. Give
             // the Query a bounded chance to clean up before a recovery query starts.
             if (attemptFinalSeen) {
+              const live = mapper.getContextOccupancy()
+              if (live) await recordContextSnapshot(live)
               const closed = await closeIterator(iterator, abort.signal)
               if (!closed) interruptActiveStream()
               break

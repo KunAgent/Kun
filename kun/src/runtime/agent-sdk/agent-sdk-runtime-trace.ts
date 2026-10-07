@@ -11,6 +11,11 @@ import {
 } from '../../services/llm-debug-recorder.js'
 import { bridgedToolModelName, type BridgeableTool } from './sdk-tool-bridge.js'
 import { itemOf } from './agent-sdk-runtime-items.js'
+import {
+  attributeSdkContext,
+  rebaseContextProfile,
+  type SdkContextOccupancy
+} from './sdk-context-occupancy.js'
 import type { SdkRuntimeDeps, SdkTurnContext, TurnStatus } from './agent-sdk-runtime-contracts.js'
 
 type AgentSdkTrace = {
@@ -244,9 +249,11 @@ export function sanitizeAgentSdkError(error: unknown, oauthToken: string | undef
 }
 
 /**
- * Record the `context_snapshot` telemetry for a delegated SDK turn start.
+ * Record the `context_snapshot` telemetry for a delegated SDK turn.
  * `historyText` is the prompt-level history actually sent (handoff brief,
  * portable transcript, or '' when the provider resumed natively).
+ * At turn start the figures are Kun-side estimates; once the SDK has reported
+ * the real occupancy (`live`) they are replaced by it, history included.
  */
 export async function recordAgentSdkContextSnapshot(input: {
   ctx: SdkTurnContext
@@ -254,11 +261,12 @@ export async function recordAgentSdkContextSnapshot(input: {
   turnId: string
   resumed: boolean
   historyText: string
+  live?: SdkContextOccupancy
   selectedKunTools: readonly BridgeableTool[]
   record: (draft: RuntimeEventDraft) => Promise<unknown> | unknown
   kunSystemPrompt: () => string
 }): Promise<void> {
-  const { ctx } = input
+  const { ctx, live } = input
   if (!ctx.contextProfile) return
   const system = estimatedTokens([input.kunSystemPrompt(), ctx.threadPersona ?? ''].join('\n'))
   const tools = estimatedTokens(JSON.stringify(input.selectedKunTools))
@@ -272,12 +280,16 @@ export async function recordAgentSdkContextSnapshot(input: {
     model: ctx.model ?? 'claude-default',
     providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
     stepIndex: 0,
-    ...ctx.contextProfile,
-    estimatedInputTokens: tools + system + skills + messages + other,
-    breakdown: { tools, system, skills, messages, other },
+    ...(live?.contextWindowTokens
+      ? rebaseContextProfile(ctx.contextProfile, live.contextWindowTokens)
+      : ctx.contextProfile),
+    estimatedInputTokens: live ? live.usedTokens : tools + system + skills + messages + other,
+    breakdown: live
+      ? attributeSdkContext({ tools, system, skills }, live.usedTokens)
+      : { tools, system, skills, messages, other },
     toolCount: input.selectedKunTools.length,
     activeSkillIds: [...(ctx.activeSkillIds ?? [])],
     contextManagement: 'sdk-managed',
-    nativeHistory: input.resumed ? 'unknown' : 'none'
+    nativeHistory: live ? 'known' : input.resumed ? 'unknown' : 'none'
   })
 }

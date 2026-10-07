@@ -22,7 +22,6 @@ import {
   modelCapabilitiesForModel,
   modelCapabilitiesForProviderModel,
   modelContextProfilesFromConfig,
-  contextThresholdsForModel,
   DEFAULT_GRAPH_RUNTIME_CONFIG,
   type GraphRuntimeConfig,
   createAgentObservabilityRecorder,
@@ -81,6 +80,7 @@ import {
   tokenEconomyConfigForOptions
 } from './runtime-factory-config.js'
 import { modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { delegatedContextProfile as resolveDelegatedContextProfile } from './delegated-context-profile.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { createPersistentStores } from './runtime-factory-storage.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
@@ -440,22 +440,22 @@ export async function createRuntimeCore(
       kind: profile?.kind,
       model
     }, modelProfiles)
-  const delegatedContextProfile = (model: string) => {
-    const thresholds = contextThresholdsForModel(model, {
-      softThreshold:
-        activeOptions.contextCompaction?.defaultSoftThreshold ??
-        DEFAULT_CONTEXT_THRESHOLDS.softThreshold,
-      hardThreshold:
-        activeOptions.contextCompaction?.defaultHardThreshold ??
-        DEFAULT_CONTEXT_THRESHOLDS.hardThreshold
-    }, modelProfiles)
-    return {
-      contextWindowTokens: modelCapabilities(model).contextWindowTokens ??
-        Math.max(thresholds.softThreshold, thresholds.hardThreshold),
-      softThresholdTokens: thresholds.softThreshold,
-      hardThresholdTokens: thresholds.hardThreshold
-    }
-  }
+  const delegatedContextProfile = (model: string, providerId?: string) =>
+    resolveDelegatedContextProfile({
+      model,
+      ...(providerId ? { providerId } : {}),
+      defaults: {
+        softThreshold:
+          activeOptions.contextCompaction?.defaultSoftThreshold ??
+          DEFAULT_CONTEXT_THRESHOLDS.softThreshold,
+        hardThreshold:
+          activeOptions.contextCompaction?.defaultHardThreshold ??
+          DEFAULT_CONTEXT_THRESHOLDS.hardThreshold
+      },
+      providers: activeOptions.providers,
+      profilesForProvider,
+      modelCapabilities
+    })
   return {
     options,
     dataDirLease,
