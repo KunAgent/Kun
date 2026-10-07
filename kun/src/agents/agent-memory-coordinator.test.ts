@@ -118,3 +118,35 @@ it('leaves a conflicting inference pending instead of overwriting a user-locked 
   expect(proposals[0]!.value).toMatchObject({ status: 'pending', reason: 'user_locked', targetId: existing.memory.id })
   expect(proposals[0]!.value.candidate.consolidation?.sourceMemoryIds).toContain(existing.memory.id)
 })
+
+it('does not report a capture job blocked on its conversation as live work', async () => {
+  const f = await fixture()
+  await f.publish('old-history')
+  await f.capture.tick()
+  await f.publish('new-response')
+  const [request] = await f.store.list<RoomRequestState>('request', { roomId: f.room.id })
+  await f.store.commit({ requestId: 'reopen', checks: [{ kind: 'request', id: request!.id, expectedRevision: request!.revision }],
+    puts: [{ kind: 'request', id: request!.id, roomId: f.room.id, value: { ...request!.value, status: 'running' } }] })
+  expect(await f.capture.tick()).toBe(false)
+  const jobs = await f.store.list<{ status: string }>('agent_memory_job', { phase: 'capture' })
+  expect(jobs.map((job) => job.value.status)).toContain('pending')
+  expect(f.calls()).toBe(0)
+})
+
+it('runs the forgotten-memory scrub at most once per interval unless forced or marked due', async () => {
+  let now = 1_000_000
+  const memoryStore = { isForgotten: async () => false }
+  let lists = 0
+  const agents = { store: { list: async () => { lists += 1; return [] } } }
+  const { AgentMemoryService: Service, AGENT_MEMORY_SCRUB_INTERVAL_MS } = await import('./agent-memory-service.js')
+  const service = new Service(agents as never, () => memoryStore as never, () => true, () => now)
+  await service.scrubForgotten()
+  expect(lists).toBe(2)
+  await service.scrubForgotten()
+  expect(lists).toBe(2)
+  await service.scrubForgotten({ force: true })
+  expect(lists).toBe(4)
+  now += AGENT_MEMORY_SCRUB_INTERVAL_MS
+  await service.scrubForgotten()
+  expect(lists).toBe(6)
+})

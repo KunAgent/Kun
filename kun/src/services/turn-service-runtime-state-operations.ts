@@ -296,7 +296,13 @@ async reconcileManagerSettledInterruptions(this: TurnService, input: {
         (summary.relation !== 'primary' && summary.relation !== 'fork')
       ) continue
       try {
-        const thread = await this['deps'].threadStore.get(summary.id)
+        // Only metadata is inspected here (turn states and settlement fields);
+        // loading every full record moved hundreds of MB through the Manager
+        // at startup on large histories.
+        const thread = await (
+          this['deps'].threadStore.getMetadata?.(summary.id) ??
+          this['deps'].threadStore.get(summary.id)
+        )
         if (
           !thread ||
           thread.status === 'archived' ||

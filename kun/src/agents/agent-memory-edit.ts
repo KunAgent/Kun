@@ -24,7 +24,7 @@ async function finish(service: AgentMemoryService, row: RoomStoredDocument<EditJ
 async function finishErasure(service: AgentMemoryService, row: RoomStoredDocument<EditJob>, affectedIds: string[]) {
   const job = row.value
   const result = { erased: true, memoryId: job.memoryId, affectedIds }
-  await service.scrubForgotten()
+  await service.scrubForgotten({ force: true })
   if (service.agents.store.scrubMemoryData) {
     for (let start = 0; start < affectedIds.length; start += 1000) {
       await service.agents.store.scrubMemoryData({ memoryIds: affectedIds.slice(start, start + 1000), preserveOperationId: job.id })
@@ -69,7 +69,7 @@ async function apply(service: AgentMemoryService, row: RoomStoredDocument<EditJo
         shared: input.shared ?? owner.shared, sharedConversationIds: input.sharedConversationIds ?? owner.sharedConversationIds,
         sharedProjectRoots: input.sharedProjectRoots ?? owner.sharedProjectRoots }
     }), access)
-  if (input.forget) await service.scrubForgotten()
+  if (input.forget) await service.scrubForgotten({ force: true })
   return finish(service, row, memory)
 }
 export async function recoverAgentMemoryEdits(service: AgentMemoryService, memoryId?: string) {

@@ -48,9 +48,19 @@ export const AgentMemoryPage = z.object({
 }).strict()
 const Cursor = z.object({ agentId: Id, updatedAt: z.string(), id: z.string().max(256) }).strict()
 
+/**
+ * Pending capture snapshots are scrubbed against the forgetting ledger. Every
+ * check is a Manager RPC that re-reads the ledger, and the room loop ticks
+ * every 1-15 s, so the full pass runs at most this often unless a local edit
+ * (forget/erase) marks it due. Applying a capture re-checks forgetting anyway.
+ */
+export const AGENT_MEMORY_SCRUB_INTERVAL_MS = 5 * 60_000
+
 export class AgentMemoryService {
+  private scrubbedAt = 0
+  private scrubDue = true
   constructor(readonly agents: AgentIdentityService, private readonly storage: () => MemoryStore | undefined,
-    private readonly enabled: () => boolean = () => true) {}
+    private readonly enabled: () => boolean = () => true, private readonly now: () => number = Date.now) {}
   store(): MemoryStore {
     const store = this.storage()
     if (!store) throw new Error('agent memory storage is unavailable')
@@ -128,9 +138,24 @@ export class AgentMemoryService {
     return { memory, fingerprint: canonicalMemoryHash(memory) }
   }
   async edit(agentId: string, id: string, raw: unknown) {
-    return editAgentMemory(this, agentId, id, raw)
+    try {
+      return await editAgentMemory(this, agentId, id, raw)
+    } finally {
+      this.scrubDue = true
+    }
   }
-  async scrubForgotten() { return scrubForgottenAgentMemory(this) }
+  async scrubForgotten(options: { force?: boolean } = {}) {
+    const now = this.now()
+    if (!options.force && !this.scrubDue && now - this.scrubbedAt < AGENT_MEMORY_SCRUB_INTERVAL_MS) return
+    this.scrubDue = false
+    this.scrubbedAt = now
+    try {
+      await scrubForgottenAgentMemory(this)
+    } catch (error) {
+      this.scrubDue = true
+      throw error
+    }
+  }
   async recoverEdits() { return recoverAgentMemoryEdits(this) }
 
   async context(agentId: string, conversationId: string, query: string, project?: string, handoffId?: string, byteBudget = 4000, taskId?: string) {
