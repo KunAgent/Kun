@@ -103,6 +103,8 @@ it('uses themed keyboard-accessible popovers for profile and permission choices'
   await click('[data-agent-setting-option="native"]')
   expect(onChange).not.toHaveBeenCalled()
   await click('[data-agent-profile-mode]')
+  // Opening focuses the selected option on the next frame; let that land before moving focus.
+  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))) })
   const first = document.querySelector<HTMLButtonElement>('[data-agent-setting-option="native"]')!
   first.focus()
   await act(async () => first.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
