@@ -32,7 +32,8 @@ const WARM_RETRY_BASE_MS = 15_000
 const WARM_RETRY_MAX_MS = 5 * 60_000
 // Matches the ACP cold-start budget so a first-run bootstrap is not misread as unready.
 const DEFAULT_TIMEOUT_MS = 60_000
-export type ReadyHarnessProfile = HarnessEnabledProfile & { expiresAt: string }
+/** `readiness` is what the check that earned the proof found, so a client can show it again without re-checking. */
+export type ReadyHarnessProfile = HarnessEnabledProfile & { expiresAt: string; readiness?: HarnessReadiness }
 type Handshake = Omit<HarnessTestHandshake, 'durationMs'> & { catalog?: HarnessModelCatalog }
 type Snapshot = { definition: HarnessDefinition; route: HarnessRoute; secretEnv: Record<string, string>;
   env: Record<string, string>; identity: string; configured: boolean; hasKey: boolean; detail?: string }
@@ -265,7 +266,8 @@ export class HarnessReadinessService {
       try {
         if ((await raceProbeAbort(this.snapshot(proof.route, proof.command), signal)).identity !== proof.identity) { this.proofs.delete(key); this.warmed.delete(harnessProfileKey(proof.route)); continue }
         if (!profiles.some((profile) => harnessProfileKey(profile) === harnessProfileKey(proof.route))) {
-          profiles.push({ ...harnessProfile(proof.route), expiresAt: new Date(proof.expires).toISOString() })
+          profiles.push({ ...harnessProfile(proof.route), expiresAt: new Date(proof.expires).toISOString(),
+            ...(proof.result.readiness ? { readiness: proof.result.readiness } : {}) })
         }
       } catch { this.proofs.delete(key) }
     }

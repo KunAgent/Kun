@@ -116,7 +116,19 @@
       "desc": "How Kun starts {{name}}. Leave a field empty to use what was detected. Changes need a re-check.",
       "detected": "Detected: {{path}}",
       "managedByExtension": "The extension {{name}} manages this Agent's command and arguments, so they cannot be edited here.",
-      "openExtensions": "Open extensions"
+      "openExtensions": "Open extensions",
+      "envName": "Variable name",
+      "envValue": "Value",
+      "removeVariable": "Remove {{name}}",
+      "stored": "Stored in the keychain",
+      "secretValue": "Sensitive value",
+      "saveSecret": "Save",
+      "addVariable": "Add variable",
+      "addSecret": "Add sensitive value",
+      "envDesc": "Passed to the Agent when Kun starts it. Sensitive values go to the system credential store; this file only keeps a reference.",
+      "previewTitle": "Command Kun will run",
+      "previewDesc": "This is how Kun starts {{name}} after you save. Sensitive values are never shown.",
+      "copy": "Copy"
     },
     "menu": {
       "redetect": "Re-detect",

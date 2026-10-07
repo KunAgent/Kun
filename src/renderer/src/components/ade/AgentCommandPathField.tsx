@@ -9,13 +9,15 @@ const inputClass = 'h-9 w-full min-w-0 rounded-xl border border-ds-border bg-ds-
  * Enter or when the field loses focus, so a half-typed path never reaches the
  * runtime. Leaving it empty restores automatic detection.
  */
-export function AgentCommandPathField({ value, placeholder, onCommit, t, autoFocus = false, label }: {
+export function AgentCommandPathField({ value, placeholder, onCommit, t, label, autoFocus = false }: {
   value: string
   placeholder: string
   onCommit: (path: string) => void
+  /** common-ns translator. */
   t: T
+  /** The accessible name of the field. */
+  label: string
   autoFocus?: boolean
-  label?: string
 }): ReactElement {
   const [draft, setDraft] = useState(value)
   useEffect(() => setDraft(value), [value])
@@ -31,7 +33,7 @@ export function AgentCommandPathField({ value, placeholder, onCommit, t, autoFoc
   }
   return <div className="flex w-full min-w-0 items-center gap-2">
     <input data-agent-command-path className={inputClass} value={draft} placeholder={placeholder} spellCheck={false}
-      autoFocus={autoFocus} aria-label={label ?? t('adeSettings.harnessCommandPath')}
+      autoFocus={autoFocus} aria-label={label}
       onChange={(event) => setDraft(event.target.value)} onBlur={() => commit(draft)}
       onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commit(draft) } }} />
     <button type="button" onClick={pick}

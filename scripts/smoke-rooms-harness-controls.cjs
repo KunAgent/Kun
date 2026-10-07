@@ -21,7 +21,7 @@ async function verifyRoomsHarnessReadiness({ page, poll, runtimeRequest }) {
   assert.equal(result.handshake?.agent?.name, 'Devin offline fixture')
   assert(result.handshake?.models?.includes(ROOMS_HARNESS_MODEL), 'The real ACP session must expose the pinned fixture model')
   assert.equal(result.trial, undefined, 'Readiness must not run a model trial')
-  assert.deepEqual((await row()).readyProfiles.map(({ expiresAt: _expiresAt, ...profile }) => profile), [ROOMS_HARNESS_PROFILE])
+  assert.deepEqual((await row()).readyProfiles.map(({ expiresAt: _expiresAt, readiness: _readiness, ...profile }) => profile), [ROOMS_HARNESS_PROFILE])
   return result
 }
 

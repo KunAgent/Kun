@@ -38,11 +38,11 @@ export function agentExtraArgs(providers: Providers, id: string): string[] {
   return args?.mode === 'append' ? [...args.values] : []
 }
 
-/** Set the appended arguments and environment of an Agent (empty clears them). */
+/** Set the appended arguments, environment and credential-store variables of an Agent (empty clears them). */
 export function withAgentLaunchPatch(
   providers: Providers,
   id: string,
-  patch: { args?: readonly string[]; env?: Readonly<Record<string, string>> }
+  patch: { args?: readonly string[]; env?: Readonly<Record<string, string>>; secretEnv?: readonly { name: string; secretRef: string }[] }
 ): Record<string, KunHarnessProviderOverrideV1> {
   const entry: KunHarnessProviderOverrideV1 = { ...providers[id] }
   if (patch.args) {
@@ -52,6 +52,10 @@ export function withAgentLaunchPatch(
   if (patch.env) {
     if (Object.keys(patch.env).length) entry.env = { ...patch.env }
     else delete entry.env
+  }
+  if (patch.secretEnv) {
+    if (patch.secretEnv.length) entry.secretEnv = patch.secretEnv.map((row) => ({ ...row }))
+    else delete entry.secretEnv
   }
   return withEntry(providers, id, entry)
 }

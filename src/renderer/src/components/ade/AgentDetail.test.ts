@@ -110,4 +110,26 @@ describe('AgentDetail', () => {
     expect(text(tree.root.findByProps({ 'data-agent-trial-result': 'ok' }))).toContain('842')
     act(() => tree.unmount())
   })
+
+  it('shows the check the runtime kept with its proof, without the user checking again', () => {
+    const row = withHarnessReadiness(agentRow())
+    const proof = { ...row.readyProfiles![0]!, readiness: { profileKey: 'claude-code:native-login', usable: true, authentication: 'unverified' as const,
+      checkedAt: '2026-10-08T10:00:00.000Z', checks: [], diagnostics: [{ id: 'command' as const, status: 'ok' as const, value: '/usr/local/bin/claude' }] } }
+    const { tree } = mount({ ...row, readyProfiles: [proof] }, enabled())
+    const rows = tree.root.findAllByProps({ 'data-agent-readiness-result': true })
+    expect(rows).toHaveLength(1)
+    expect(text(rows[0]!)).toContain('/usr/local/bin/claude')
+    act(() => tree.unmount())
+  })
+
+  it('shows the launch command with sensitive variables masked', () => {
+    const settings = { ...enabled(), providers: { 'claude-code': { env: { HOME_DIR: '/work' }, secretEnv: [{ name: 'TOKEN', secretRef: 'ref-1' }] } } }
+    const { tree } = mount(withHarnessReadiness(agentRow()), settings)
+    act(() => tree.root.findAllByProps({ role: 'tab' })[2]!.props.onClick())
+    const preview = text(tree.root.findByProps({ 'data-agent-launch-preview': true }))
+    expect(preview).toContain('HOME_DIR=/work')
+    expect(preview).toContain('TOKEN=•••••')
+    expect(preview).not.toContain('ref-1')
+    act(() => tree.unmount())
+  })
 })

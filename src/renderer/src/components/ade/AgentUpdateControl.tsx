@@ -7,6 +7,7 @@ import { invalidateHarnessModels, loadHarnesses, loadHarnessModels } from '../..
 import { waitForAgentSettings } from './agent-enablement-settings'
 import { useChatStore } from '../../store/chat-store'
 import { AgentSetupHelpButton } from './AgentSetupHelpButton'
+import { settingsButtonClass } from '../settings-button'
 import { agentCommandPath, withAgentCommandPath } from '@shared/harness-provider-settings'
 
 type T = (key: string, options?: Record<string, unknown>) => string
@@ -87,45 +88,86 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
     } catch (cause) { setError(String(cause)) } finally { setPending(false) }
   }
   const refreshModels = async (): Promise<void> => { invalidateHarnessModels(id); await loadHarnessModels(id, true) }
-  const button = 'rounded-lg border border-ds-border-muted px-3 py-1.5 text-[12px] text-ds-ink hover:bg-ds-hover disabled:opacity-50'
   const failure = error || entry?.error || job?.error || state?.error
-  return <div className="mt-3 space-y-2 rounded-xl border border-ds-border-muted bg-ds-main/40 p-3" data-agent-update={id}>
-    <div className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
-      <span className="font-medium">{t('agentUpdate.title')}</span>
-      <span className="text-ds-muted" role="status">{t(`agentUpdate.${job?.status ?? (entry?.loading ? 'checking' : state?.status ?? 'unchecked')}`)}</span>
+  const statusKey = job?.status ?? (entry?.loading ? 'checking' : state?.status ?? 'unchecked')
+  const available = !busy && Boolean(state?.canUpdate || state?.candidate)
+  const rowClass = 'flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-3 py-3'
+  const small = settingsButtonClass({ size: 'compact' })
+  return <section className="ds-settings-card rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card" data-agent-update={id}>
+    <div className="flex items-start justify-between gap-4 px-5 pb-2 pt-[18px]">
+      <div className="min-w-0">
+        <h2 className="ds-settings-card-title">{t('agentUpdate.title')}</h2>
+        <p className="ds-settings-card-description mt-1" role="status">{t(`agentUpdate.${statusKey}`)}</p>
+      </div>
+      <span className="shrink-0 font-mono text-[20px] font-semibold text-ds-ink" data-agent-version>{state?.current.version ?? '—'}</span>
     </div>
-    {state ? <>
-      <p className="text-[12px] text-ds-muted">{t('agentUpdate.currentVersion', { version: state.current.version ?? '—', source: t(`agentUpdate.source.${state.current.source}`) })}{state.current.source === 'application' && state.current.owner ? ` · ${state.current.owner}` : ''}</p>
-      {state.latestVersion ? <p className="text-[12px] text-ds-muted">{t('agentUpdate.latestVersion', { version: state.latestVersion, channel: state.channel })}</p> : null}
-      {state.candidate ? <p className="text-[12px] text-accent">{t('agentUpdate.localVersion', { version: state.candidate.version })}</p> : null}
-    </> : null}
-    <div className="flex flex-wrap gap-2">
-      <button type="button" className={button} disabled={busy || entry?.loading} onClick={() => void checkHarnessUpdate(id, true)}>{t('agentUpdate.check')}</button>
-      {!busy && state?.candidate ? <button type="button" className={button} onClick={() => void start('use-local')}>{t('agentUpdate.useLocal')}</button> : null}
-      {!busy && state?.canUpdate ? <button type="button" className={button} onClick={() => void start('update')}>{t('agentUpdate.update')}</button> : null}
-      {!busy && state?.canInstallManaged && state.latestVersion && state.current.source !== 'managed' ? <button type="button" className={button} onClick={() => void start('managed')}>{t('agentUpdate.managed')}</button> : null}
-      {!busy && state?.ownerUpdateRequired ? <button type="button" className={button} onClick={() => {
-        if (state.current.owner === 'Kun') useChatStore.getState().openSettings('updates')
-        else if (state.docsUrl?.startsWith('https://')) void window.kunGui?.openExternal(state.docsUrl)
-      }}>{t('agentUpdate.updateOwner')}</button> : null}
-      <button type="button" className={button} disabled={busy} onClick={() => void refreshModels()}>{t('agentUpdate.refreshModels')}</button>
-      {job && harnessUpdateBusy(job) && !pending ? <button type="button" className={button} onClick={() => void agentUpdateRequest(id, 'cancel', { jobId: job.id }).then(() => checkHarnessUpdate(id, true))}>{t('cancel')}</button> : null}
-      {job?.status === 'ready' && error ? <button type="button" className={button} onClick={() => void activate(job)}>{t('agentUpdate.activate')}</button> : null}
-      {job?.status === 'completed' && job.previousPath && job.previousPath !== job.activationPath ? <button type="button" className={button} onClick={() => {
-        void agentUpdateRequest<HarnessUpdateState>(id, 'rollback', { jobId: job.id }).then(receiveHarnessUpdate).catch((cause) => setError(String(cause)))
-      }}>{t('agentUpdate.rollback')}</button> : null}
+    <div className="divide-y divide-ds-border-muted px-2">
+      {state ? <div className={rowClass}>
+        <div className="min-w-0 text-[12px] text-ds-muted">
+          <p>{t('agentUpdate.currentVersion', { version: state.current.version ?? '—', source: t(`agentUpdate.source.${state.current.source}`) })}{state.current.source === 'application' && state.current.owner ? ` · ${state.current.owner}` : ''}</p>
+          {state.current.path ? <p className="mt-0.5 break-all font-mono text-[11px] text-ds-faint">{state.current.path}</p> : null}
+        </div>
+      </div> : null}
+      {available ? <div className={`${rowClass} my-2 rounded-xl bg-accent-soft`} data-agent-update-available>
+        <div className="min-w-0 text-[12px] text-ds-ink">
+          {state?.latestVersion ? <p className="font-medium">{t('agentUpdate.latestVersion', { version: state.latestVersion, channel: state.channel })}</p> : null}
+          {state?.candidate ? <p className="font-medium">{t('agentUpdate.localVersion', { version: state.candidate.version })}</p> : null}
+          <p className="mt-0.5 text-ds-muted">{t('agentUpdate.hint')}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {state?.status === 'available' ? <>
+            <button type="button" className={settingsButtonClass({ variant: 'link', size: 'compact' })} onClick={() => dismissHarnessUpdate(id, true)}>{t('agentUpdate.later')}</button>
+            <button type="button" className={settingsButtonClass({ variant: 'link', size: 'compact' })} onClick={() => dismissHarnessUpdate(id)}>{t('agentUpdate.ignore')}</button>
+          </> : null}
+          {state?.canUpdate ? <button type="button" className={settingsButtonClass({ variant: 'primary', size: 'compact' })} onClick={() => void start('update')}>{t('agentUpdate.update')}</button> : null}
+          {!state?.canUpdate && state?.candidate ? <button type="button" className={settingsButtonClass({ variant: 'primary', size: 'compact' })} onClick={() => void start('use-local')}>{t('agentUpdate.useLocal')}</button> : null}
+        </div>
+      </div> : null}
+      <div className={rowClass}>
+        <div className="min-w-0 text-[12px] text-ds-muted">
+          <div className="text-[13px] font-medium text-ds-ink">{t('agentUpdate.check')}</div>
+          {state?.checkedAt ? <p className="mt-0.5">{t('agentUpdate.checkedAt', { time: new Date(state.checkedAt).toLocaleString() })}</p> : null}
+        </div>
+        <button type="button" className={small} disabled={busy || entry?.loading} onClick={() => void checkHarnessUpdate(id, true)}>{t('agentUpdate.check')}</button>
+      </div>
+      {!busy && state?.candidate && state.canUpdate ? <div className={rowClass}>
+        <span className="text-[13px] font-medium text-ds-ink">{t('agentUpdate.useLocal')}</span>
+        <button type="button" className={small} onClick={() => void start('use-local')}>{t('agentUpdate.useLocal')}</button>
+      </div> : null}
+      {!busy && state?.canInstallManaged && state.latestVersion && state.current.source !== 'managed' ? <div className={rowClass}>
+        <span className="text-[13px] font-medium text-ds-ink">{t('agentUpdate.managed')}</span>
+        <button type="button" className={small} onClick={() => void start('managed')}>{t('agentUpdate.managed')}</button>
+      </div> : null}
+      {!busy && state?.ownerUpdateRequired ? <div className={rowClass}>
+        <span className="text-[13px] font-medium text-ds-ink">{t('agentUpdate.updateOwner')}</span>
+        <button type="button" className={small} onClick={() => {
+          if (state.current.owner === 'Kun') useChatStore.getState().openSettings('updates')
+          else if (state.docsUrl?.startsWith('https://')) void window.kunGui?.openExternal(state.docsUrl)
+        }}>{t('agentUpdate.updateOwner')}</button>
+      </div> : null}
+      <div className={rowClass}>
+        <span className="text-[13px] font-medium text-ds-ink">{t('agentUpdate.refreshModels')}</span>
+        <button type="button" className={small} disabled={busy} onClick={() => void refreshModels()}>{t('agentUpdate.refreshModels')}</button>
+      </div>
+      {(job && harnessUpdateBusy(job) && !pending) || (job?.status === 'ready' && error) ||
+        (job?.status === 'completed' && job.previousPath && job.previousPath !== job.activationPath) ? <div className={`${rowClass} justify-end`}>
+        {job && harnessUpdateBusy(job) && !pending ? <button type="button" className={small} onClick={() => void agentUpdateRequest(id, 'cancel', { jobId: job.id }).then(() => checkHarnessUpdate(id, true))}>{t('cancel')}</button> : null}
+        {job?.status === 'ready' && error ? <button type="button" className={small} onClick={() => void activate(job)}>{t('agentUpdate.activate')}</button> : null}
+        {job?.status === 'completed' && job.previousPath && job.previousPath !== job.activationPath ? <button type="button" className={small} onClick={() => {
+          void agentUpdateRequest<HarnessUpdateState>(id, 'rollback', { jobId: job.id }).then(receiveHarnessUpdate).catch((cause) => setError(String(cause)))
+        }}>{t('agentUpdate.rollback')}</button> : null}
+      </div> : null}
+      {failure ? <div className="space-y-1 px-3 py-3">
+        <p role="alert" className="break-words text-[11px] text-orange-600">{failure}</p>
+        {!busy ? <AgentSetupHelpButton t={t} issue={{
+          harnessId: id, operation: 'update', error: failure, output: job?.output,
+          currentVersion: state?.current.version, currentPath: state?.current.path, targetVersion: job?.version ?? state?.latestVersion
+        }} /> : null}
+      </div> : null}
+      <details className="px-3 py-3 text-[11px] text-ds-muted"><summary className="cursor-pointer">{t('agentUpdate.details')}</summary>
+        <code className="mt-2 block break-all">{state?.current.path}</code>
+        {job?.output ? <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap">{job.output}</pre> : null}
+      </details>
     </div>
-    {state?.status === 'available' && !busy ? <div className="flex gap-3 text-[11px] text-ds-muted"><button onClick={() => dismissHarnessUpdate(id, true)}>{t('agentUpdate.later')}</button><button onClick={() => dismissHarnessUpdate(id)}>{t('agentUpdate.ignore')}</button></div> : null}
-    <p className="text-[11px] leading-5 text-ds-faint">{t('agentUpdate.hint')}</p>
-    {failure ? <p role="alert" className="break-words text-[11px] text-orange-600">{failure}</p> : null}
-    {failure && !busy ? <AgentSetupHelpButton t={t} issue={{
-      harnessId: id, operation: 'update', error: failure, output: job?.output,
-      currentVersion: state?.current.version, currentPath: state?.current.path, targetVersion: job?.version ?? state?.latestVersion
-    }} /> : null}
-    <details className="text-[11px] text-ds-muted"><summary className="cursor-pointer">{t('agentUpdate.details')}</summary>
-      <code className="mt-2 block break-all">{state?.current.path}</code>
-      {state?.checkedAt ? <p>{t('agentUpdate.checkedAt', { time: new Date(state.checkedAt).toLocaleString() })}</p> : null}
-      {job?.output ? <pre className="max-h-40 overflow-auto whitespace-pre-wrap">{job.output}</pre> : null}
-    </details>
-  </div>
+  </section>
 }

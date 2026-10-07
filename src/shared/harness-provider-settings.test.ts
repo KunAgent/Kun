@@ -37,6 +37,14 @@ describe('harness provider settings edits', () => {
     expect(agentExtraArgs({ mine: { extends: 'acp', command: 'x', args: { mode: 'replace', values: ['--acp'] } } }, 'mine')).toEqual([])
   })
 
+  it('edits credential-store variables without touching the other launch fields', () => {
+    const base = withAgentLaunchPatch({}, 'opencode', { args: ['--x'], env: { A: '1' } })
+    const withSecret = withAgentLaunchPatch(base, 'opencode', { secretEnv: [{ name: 'TOKEN', secretRef: 'ref-1' }] })
+    expect(withSecret).toEqual({ opencode: { args: { mode: 'append', values: ['--x'] }, env: { A: '1' }, secretEnv: [{ name: 'TOKEN', secretRef: 'ref-1' }] } })
+    expect(withAgentLaunchPatch(withSecret, 'opencode', { secretEnv: [] }).opencode).toEqual({ args: { mode: 'append', values: ['--x'] }, env: { A: '1' } })
+    expect(withAgentLaunchPatch(withSecret, 'opencode', { args: [], env: {}, secretEnv: [] })).toEqual({})
+  })
+
   it('round-trips a portable user Agent definition', () => {
     const entry = { id: 'fork', extends: 'opencode', displayName: 'Fork', command: '', args: [], env: {} }
     const override = userAgentOverride(entry)

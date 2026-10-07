@@ -59,6 +59,8 @@ describe('explicit per-profile readiness', () => {
     expect(tested.readiness?.authentication).toBe('unverified')
     f.enable()
     expect(await f.service.readyProfiles('opencode')).toEqual([expect.objectContaining({ providerId: 'account-a', expiresAt: expect.any(String) })])
+    // The check that earned the proof stays attached, so a client can show it again without re-checking.
+    expect((await f.service.readyProfiles('opencode'))[0]?.readiness).toEqual(tested.readiness)
     await expect(f.service.assertReady({ ...route, providerId: 'account-b' })).rejects.toThrow('disabled')
     await expect(f.service.assertReady(route)).resolves.toMatch(/^[a-f0-9]{64}$/)
     expect(f.handshake).toHaveBeenCalledTimes(2)

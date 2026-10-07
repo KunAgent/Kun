@@ -66,7 +66,7 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
   const bundled = usesProviderOnlySdk(row)
   const pathField = <div className="mt-3 max-w-xl">
     <AgentCommandPathField value={agentCommandPath(settings.providers, definition.id) ?? ''} placeholder={status.resolvedCommand ?? definition.id}
-      autoFocus onCommit={onSetBinaryPath} t={tSettings} />
+      autoFocus onCommit={onSetBinaryPath} t={t} label={tSettings('adeSettings.harnessCommandPath')} />
     <p className="mt-1.5 text-[11px] text-ds-faint">{tSettings('adeSettings.harnessCommandPathDesc')}</p>
   </div>
 

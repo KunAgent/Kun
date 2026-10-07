@@ -150,7 +150,7 @@ export type AdeHarnessRow = {
   status: AdeHarnessStatus
   enabled?: boolean
   enabledProfiles?: import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1[]
-  readyProfiles?: (import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1 & { expiresAt?: string })[]
+  readyProfiles?: (import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1 & { expiresAt?: string; readiness?: AdeHarnessReadiness })[]
 }
 
 /** Per-provider model group for `provider`/`kun-gateway` credential modes. */

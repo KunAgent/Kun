@@ -116,7 +116,19 @@
       "desc": "Kun 怎么启动 {{name}}。留空就用自动检测到的结果；修改后需要重新检查。",
       "detected": "自动检测：{{path}}",
       "managedByExtension": "这个 Agent 的命令和参数由扩展「{{name}}」管理，不能在这里修改。",
-      "openExtensions": "打开扩展"
+      "openExtensions": "打开扩展",
+      "envName": "变量名",
+      "envValue": "值",
+      "removeVariable": "删除 {{name}}",
+      "stored": "已存入钥匙串",
+      "secretValue": "敏感值",
+      "saveSecret": "保存",
+      "addVariable": "添加变量",
+      "addSecret": "添加敏感值",
+      "envDesc": "Kun 启动 Agent 时传给它。敏感值存进系统凭据库，设置文件里只留引用。",
+      "previewTitle": "实际启动命令",
+      "previewDesc": "保存后 Kun 会这样启动 {{name}}；敏感值不会显示。",
+      "copy": "复制"
     },
     "menu": {
       "redetect": "重新检测",

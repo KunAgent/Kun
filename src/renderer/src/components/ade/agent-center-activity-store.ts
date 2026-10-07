@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { LastCheck } from './agent-last-check'
 import type { AgentInstallObservation } from './agent-center-presentation'
 
 /**
@@ -10,9 +11,10 @@ type ActivityState = {
   checking: Record<string, true>
   changed: Record<string, true>
   install: Record<string, AgentInstallObservation>
+  lastCheck: Record<string, LastCheck>
 }
 
-export const useAgentActivityStore = create<ActivityState>(() => ({ checking: {}, changed: {}, install: {} }))
+export const useAgentActivityStore = create<ActivityState>(() => ({ checking: {}, changed: {}, install: {}, lastCheck: {} }))
 
 export function setAgentFlag(kind: 'checking' | 'changed', id: string, on: boolean): void {
   useAgentActivityStore.setState((state) => {
@@ -33,4 +35,8 @@ export function setAgentInstall(id: string, observation: AgentInstallObservation
     else delete next[id]
     return { install: next }
   })
+}
+
+export function setAgentLastCheck(id: string, check: LastCheck): void {
+  useAgentActivityStore.setState((state) => ({ lastCheck: { ...state.lastCheck, [id]: check } }))
 }

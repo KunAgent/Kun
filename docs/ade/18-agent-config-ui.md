@@ -2,7 +2,7 @@
 
 - 日期：2026-10-08
 - 基线：`develop@2dd1145a2`（[17 Provider 模块](./17-provider-modules.md) P0-P4 已合入）
-- 状态：实施中（U1 状态模型、U2 列表与外壳、U3 详情框架已完成，进度见 §9）
+- 状态：实施中（U1-U4 已完成，进度见 §9）
 - 设计稿（画布，7 个页面 + 2 个组件）：<https://claude.ai/artifact/DsY2hkKqtgFVFQM6WAVafW>
 - 设计输入：参考项目（同 17）的 provider 列表、目录和诊断面板；Kun 自己的设置页规则（[desktop-renderer-and-operations §7.6](../design/desktop-renderer-and-operations.md)）和 ADE 界面原则（[12 §2](./12-workbench-ui.md)）。
   源码、文件名、类名、注释、i18n 键里不得出现参考项目的名字。
@@ -180,12 +180,13 @@ type AgentPresentation = {
 
 ### 5.2 连接草稿
 
-现在 `AgentEnablementPanel.change()` 直接写 `defaults[id]`，改一下下拉就让当前 route 失效。改为：
+之前 `AgentEnablementPanel.change()` 直接写 `defaults[id]`，改一下下拉就让当前连接失效。现在：
 
-- 连接方式、账号 / 供应商 / 路由、默认模型的改动先存在组件状态里（按 Agent id 存在 harness store，切换 Agent 不丢）。
-- 「重新检查」= 保存草稿到 `defaults` + `gate.enable()` 新 profile；成功后从 `enabledProfiles` 移除旧 profile。
-- 失败或取消：丢弃草稿，`defaults` 与 `enabledProfiles` 恢复原样。
-- 启动设置（命令、参数、环境）仍是失焦即保存（`AgentLaunchOverrideFields` 现状），保存后状态进入「需要重新检查」。
+- Agent 还没打开时（接入步骤），连接方式、账号 / 供应商 / 路由、默认模型的改动立即保存，同时取消正在进行的检查。
+- Agent 已打开时，这些改动先存成草稿（`useAgentEnablement({ draft })`）：界面显示「设置已修改，需要重新检查」，开关保持打开，已保存的连接不动。
+- 「重新检查」把检查对准草稿；检查开始时才把草稿写进 `defaults`（与其他设置一样等待运行时同步），通过后启用新连接并清掉草稿。检查失败、取消，或又改了草稿，都会把这个 Agent 的 `defaults` 写回原样，草稿保留供再试；写回后重新读取目录，运行时会自动重新握手，旧连接随之恢复。
+- 开关关闭的永远是已保存的连接，并丢弃草稿。
+- 启动设置（命令、参数、环境变量）仍是失焦即保存；保存后运行时让该 Agent 的就绪证明失效，状态变为「需要重新检查」。
 
 ### 5.3 复制诊断信息
 
@@ -197,8 +198,9 @@ type AgentPresentation = {
 
 ## 6. 契约增量
 
-1. `GET /v1/harnesses` 的每行加 `lastReadiness?: { checkedAt; usable; diagnostics }`（取当前选中 route 最近一次就绪检查），让检查结果在重启和切换页面后还能显示。运行时已有 `readyProfiles` 的证明缓存，按同一 key 存即可。没有时界面显示「还没有检查过」和「重新检查」。
+1. `GET /v1/harnesses` 每行的 `readyProfiles[]` 多一个可选 `readiness`：取得该就绪证明的那次检查结果（含逐项诊断），运行时已经持有，只是之前没有带出。界面重新打开页面后能直接显示上次通过的检查，不必重新检查。只有通过的检查才有证明；失败的检查结果保存在渲染层的活动 store（`agent-center-activity-store`），页面关闭后清掉。`agent-last-check.ts` 按时间取同一连接最新的一条，不显示别的连接的结果。
 2. `AgentSetupIssue.operation` 加 `'readiness'`（只在渲染层，`agent-setup-help.ts`）。
+3. `withAgentLaunchPatch` 支持 `secretEnv`（共享层）：内置 Agent 的敏感环境变量走 `providers[id].secretEnv`，设置里只存凭据库引用。
 
 其余全部是渲染层改动，设置结构不变（`agentOrder`、`defaults`、`enabledProfiles`、`providers` 都已存在）。
 
