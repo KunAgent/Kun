@@ -298,7 +298,7 @@ export class AcpModelProbe {
     // issues during session/new gets a sessionUnavailable error.
     new AcpClientHost().attach(conn)
     try {
-      await conn.initialize()
+      await conn.initialize({ fileWrites: definition.acpClientWrites !== false })
       return conn
     } catch (error) {
       await conn.close().catch(() => undefined)

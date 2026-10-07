@@ -66,6 +66,7 @@ const AGENT_ASSETS: Readonly<Record<string, string>> = {
  */
 const AGENT_MONOGRAMS: Readonly<Record<string, string>> = {
   omp: 'OMP',
+  codemaker: 'CM',
   aside: 'A',
   omo: 'OmO',
   crush: 'C',

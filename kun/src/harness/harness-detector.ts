@@ -250,7 +250,8 @@ export class HarnessDetector {
     const codex = process.env.CODEX_HOME ?? join(home, '.codex')
     const configPaths = [join(claude, '.credentials.json'), join(claude, 'settings.json'),
       join(codex, 'auth.json'), join(codex, 'config.toml'),
-      join(home, '.config', 'opencode', 'opencode.json'), join(home, '.local', 'share', 'opencode', 'auth.json')]
+      join(home, '.config', 'opencode', 'opencode.json'), join(home, '.local', 'share', 'opencode', 'auth.json'),
+      join(home, '.config', 'codemaker', 'opencode.json'), join(home, '.local', 'share', 'codemaker', 'auth.json')]
     return createHash('sha256').update(JSON.stringify({
       definition: def,
       network: def ? nativeAgentNetworkStatus(def).networkFingerprint : undefined,

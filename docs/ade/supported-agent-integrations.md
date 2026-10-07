@@ -15,6 +15,7 @@ owned terminal workflow. Applications retain their native client interface.
 | Gemini CLI | `gemini-cli` | Conversation |
 | Antigravity CLI | `antigravity` | Conversation |
 | OpenCode | `opencode` | Conversation |
+| CodeMaker | `codemaker` | Conversation |
 | OpenChamber | `openchamber` | Application / configuration |
 | MiMo Code | `mimocode` | Conversation |
 | Pi | `pi` | Conversation |
@@ -110,6 +111,15 @@ installations. Third-party settings are not rewritten automatically.
   (authentication stays unverified). OpenCode2 may create the shared
   `opencode.db` without OpenCode's `session` table; OpenCode then refuses to
   start and readiness tells the user to move that file aside.
+- CodeMaker is an OpenCode fork and derives its definition from OpenCode's
+  (`kun/src/harness/codemaker-harness.ts`): same ACP server, modes,
+  `opencode.json` names and `OPENCODE_*` overrides under the `codemaker` XDG
+  directories. It differs in three places: login is required (ACP
+  `authenticate` is a no-op there; credentials come from `codemaker auth
+  login` or `CODEMAKER_AUTH_TOKEN` / `CODEMAKER_AUTH_KEY` / `CODEMAKER_API_KEY`),
+  Kun does not offer `fs/write_text_file` so every write stays behind
+  CodeMaker's restricted-file policy (`acpClientWrites: false`), and there is
+  no installer or history reader.
 
 ## Installation and updates
 

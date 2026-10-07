@@ -69,6 +69,8 @@ export function nativeCredentialFiles(definition: HarnessDefinition, overrideEnv
     case 'claude-code': return [join(env.CLAUDE_CONFIG_DIR || join(home, '.claude'), '.credentials.json')]
     case 'codex': return [join(env.CODEX_HOME || join(home, '.codex'), 'auth.json')]
     case 'opencode': return [join(env.XDG_DATA_HOME || join(home, '.local/share'), 'opencode/auth.json')]
+    // The CodeMaker fork keeps OpenCode's layout under its own XDG app name.
+    case 'codemaker': return [join(env.XDG_DATA_HOME || join(home, '.local/share'), 'codemaker/auth.json')]
     case 'devin': return [join(process.platform === 'win32'
       ? env.APPDATA || join(home, 'AppData/Roaming')
       : env.XDG_DATA_HOME || join(home, '.local/share'), 'devin/credentials.toml')]
@@ -85,16 +87,22 @@ function nativeProfileFiles(definition: HarnessDefinition, overrides: Record<str
     : definition.id === 'claude-code' ? [join(env.CLAUDE_CONFIG_DIR || join(home, '.claude'), 'settings.json')]
     : definition.id === 'pi' ? ['settings.json', 'models.json'].map((name) => join(env.PI_CODING_AGENT_DIR || join(home, '.pi/agent'), name))
     : definition.id === 'antigravity' ? [join(home, '.gemini', 'antigravity-cli', 'settings.json')]
-    : definition.id === 'opencode' || definition.id === 'opencode2'
-      ? [env.OPENCODE_CONFIG || join(env.OPENCODE_CONFIG_DIR || join(env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode'), 'opencode.json'),
-        join(env.OPENCODE_CONFIG_DIR || join(env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode'), 'opencode.jsonc')] : []
+    : definition.id === 'opencode' || definition.id === 'opencode2' || definition.id === 'codemaker'
+      ? openCodeConfigFiles(env, home, definition.id === 'codemaker' ? 'codemaker' : 'opencode') : []
   return [...credentials, ...configs]
+}
+/** CodeMaker reads the same OPENCODE_* overrides and opencode.json(c) names under its own directory. */
+function openCodeConfigFiles(env: Record<string, string | undefined>, home: string, app: string): string[] {
+  const dir = env.OPENCODE_CONFIG_DIR || join(env.XDG_CONFIG_HOME || join(home, '.config'), app)
+  return [env.OPENCODE_CONFIG || join(dir, 'opencode.json'), join(dir, 'opencode.jsonc')]
 }
 const NATIVE_KEYS: Record<string, readonly string[]> = {
   'deepseek-harness': ['DEEPSEEK_API_KEY'], devin: ['WINDSURF_API_KEY'],
   antigravity: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS'],
   codex: ['OPENAI_API_KEY'], cursor: ['CURSOR_API_KEY'],
-  'claude-code': ['CLAUDE_CODE_OAUTH_TOKEN']
+  'claude-code': ['CLAUDE_CODE_OAUTH_TOKEN'],
+  // CODEMAKER_AUTH_USER only names the account; it is not a credential.
+  codemaker: ['CODEMAKER_AUTH_TOKEN', 'CODEMAKER_AUTH_KEY', 'CODEMAKER_API_KEY']
 }
 /** Only the selected engine's deliberately supported variables cross into its probe. */
 export function nativeProfileEnv(definition: HarnessDefinition): Record<string, string> {
@@ -119,11 +127,15 @@ export function nativeHasKey(definition: HarnessDefinition, env: Record<string, 
   if (definition.id === 'codex') return nativeCredentialFiles(definition, env).some((path) => {
     const value = object(path); return typeof value.OPENAI_API_KEY === 'string' && value.OPENAI_API_KEY.trim().length > 0
   })
-  if (definition.id === 'pi' || definition.id === 'opencode') {
+  if (definition.id === 'pi' || definition.id === 'opencode' || definition.id === 'codemaker') {
     return nativeCredentialFiles(definition, env).some((path) => Object.values(object(path)).some((value) => {
       if (!value || typeof value !== 'object') return false
       const entry = value as Record<string, unknown>
       if (['api', 'api_key'].includes(String(entry.type))) return typeof entry.key === 'string' && entry.key.trim().length > 0
+      // CodeMaker's account login may use its own record type; any stored
+      // secret is configured evidence, never verified authentication.
+      if (definition.id === 'codemaker' && ['key', 'token', 'access'].some((field) =>
+        typeof entry[field] === 'string' && (entry[field] as string).trim().length > 0)) return true
       // Both engines own refresh and authentication. A complete OAuth record is
       // configured evidence, just like an API key; it is never verified login.
       return entry.type === 'oauth' && typeof entry.access === 'string' && entry.access.trim().length > 0 &&

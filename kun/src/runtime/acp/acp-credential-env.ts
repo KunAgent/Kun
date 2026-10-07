@@ -123,6 +123,8 @@ export function createAcpCredentialEnv(
     )
     switch (`${input.harnessId}:${gateway.protocol}`) {
       case 'opencode:openai-chat':
+      // CodeMaker keeps OpenCode's OPENCODE_CONFIG override and config format.
+      case 'codemaker:openai-chat':
         return {
           ...env,
           OPENCODE_CONFIG: writeConfigFile(

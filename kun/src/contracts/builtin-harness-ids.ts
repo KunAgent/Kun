@@ -8,6 +8,7 @@ export const BUILTIN_HARNESS_IDS = [
   'codex',
   'opencode',
   'opencode2',
+  'codemaker',
   'devin',
   'pi',
   'deepseek-harness',

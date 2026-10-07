@@ -9,7 +9,7 @@ export type CodingAgentRoute = {
   credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
 }
 export type CodingAgentEntry = {
-  harnessId: 'claude-code' | 'codex' | 'opencode'
+  harnessId: 'claude-code' | 'codex' | 'opencode' | 'codemaker'
   displayName: string
   available: boolean
   reason?: string

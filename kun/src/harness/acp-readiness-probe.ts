@@ -69,7 +69,7 @@ export async function probeAcpReadiness(
   // sessionUnavailable reply instead of touching the real workspace.
   new AcpClientHost().attach(conn)
   try {
-    await conn.initialize({ timeoutMs })
+    await conn.initialize({ timeoutMs, fileWrites: definition.acpClientWrites !== false })
     return { ready: 'yes' }
   } catch (error) {
     const parts = [errorMessage(error)]

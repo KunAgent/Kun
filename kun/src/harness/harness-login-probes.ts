@@ -38,7 +38,7 @@ export async function probeHarnessLogin(
   // Only local configuration pointers accompany the selected native credential.
   const pointers: Record<string, string[]> = { 'claude-code': ['CLAUDE_CONFIG_DIR'], codex: ['CODEX_HOME'],
     antigravity: ['CLOUDSDK_CONFIG', 'GOOGLE_APPLICATION_CREDENTIALS'], pi: ['PI_CODING_AGENT_DIR'],
-    opencode: ['OPENCODE_CONFIG_DIR', 'OPENCODE_CONFIG'] }
+    opencode: ['OPENCODE_CONFIG_DIR', 'OPENCODE_CONFIG'], codemaker: ['OPENCODE_CONFIG_DIR', 'OPENCODE_CONFIG'] }
   for (const key of pointers[def.id] ?? []) {
     if (source[key]) env[key] = source[key]
   }

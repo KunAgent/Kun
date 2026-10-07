@@ -2,6 +2,7 @@ import { KUN_TOOL_PERMISSION_MODES } from '../contracts/policy.js'
 import { CODEX_APP_SERVER_MIN_VERSION } from '../runtime/codex/codex-protocol.js'
 import { PI_MIN_VERSION } from '../runtime/pi/pi-protocol.js'
 import { DEEPSEEK_HARNESS_DEFINITION } from './deepseek-harness-definition.js'
+import { withCodeMaker } from './codemaker-harness.js'
 import { expandedCliHarnesses } from './expanded-cli-harnesses.js'
 import { APPLICATION_HARNESSES } from './application-harnesses.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
@@ -472,7 +473,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     availability: 'active',
     builtin: true
   },
-  {
+  ...withCodeMaker({
     id: 'opencode',
     displayName: 'OpenCode',
     transport: 'acp',
@@ -523,7 +524,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       docsUrl: 'https://opencode.ai/docs'
     },
     builtin: true
-  },
+  }),
   {
     id: 'opencode2',
     displayName: 'OpenCode2',

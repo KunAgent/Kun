@@ -251,6 +251,12 @@ export const HarnessDefinitionSchema = z
      * so an ACP session that opens without auth_required is ready to use.
      */
     loginOptional: z.boolean().optional(),
+    /**
+     * Offer ACP fs/write_text_file (default true). False keeps every write in
+     * the Agent's own filesystem layer, e.g. CodeMaker's restricted-file policy,
+     * which a client-side write would bypass.
+     */
+    acpClientWrites: z.boolean().optional(),
     staticModels: z.array(z.string().min(1).max(256)).max(64).default([]),
     /** Links to existing history-sources for "continue external session". */
     historySource: z.enum(['claude-code', 'codex', 'opencode']).optional(),

@@ -117,7 +117,7 @@ export async function acquireAcpConnection(
       throw new AcpError('request_aborted', 'turn aborted before initialize')
     }
     try {
-      await conn.initialize()
+      await conn.initialize({ fileWrites: input.definition.acpClientWrites !== false })
     } catch (error) {
       await conn.close().catch(() => undefined)
       throw error

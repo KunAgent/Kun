@@ -78,7 +78,9 @@ export const NATIVE_HARNESS_CREDENTIAL_ENV_KEYS: Readonly<Record<string, readonl
   // These engines already support their own documented native key modes.
   codex: ['OPENAI_API_KEY'], cursor: ['CURSOR_API_KEY'],
   'claude-code': ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'],
-  antigravity: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS']
+  antigravity: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS'],
+  // ACP authenticate is a no-op in CodeMaker; these are its documented native credentials.
+  codemaker: ['CODEMAKER_AUTH_TOKEN', 'CODEMAKER_AUTH_KEY', 'CODEMAKER_AUTH_USER', 'CODEMAKER_API_KEY']
 }
 
 /** Never call for kun-gateway: host provider keys must not bypass the gateway. */

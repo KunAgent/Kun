@@ -105,7 +105,7 @@ export async function probeAcpHandshake(
   // sessionUnavailable reply instead of touching a real workspace.
   new AcpClientHost().attach(conn)
   try {
-    const init = await raceProbeAbort(conn.initialize({ timeoutMs }), signal)
+    const init = await raceProbeAbort(conn.initialize({ timeoutMs, fileWrites: definition.acpClientWrites !== false }), signal)
     signal.throwIfAborted()
     let models: string[] | undefined
     let detail: string | undefined
