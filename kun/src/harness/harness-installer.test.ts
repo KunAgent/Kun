@@ -71,6 +71,12 @@ describe('Agent installation jobs', () => {
     expect(detect).toHaveBeenCalledOnce()
     expect((await installer.state('devin')).job).toMatchObject({ status: 'completed', detected: { login: 'signed-out' } })
   })
+  it('installs npm packages from the official registry, not a lagging mirror', async () => {
+    const { installer, spawn } = fixture()
+    await installer.start('devin', 'install')
+    const options = (spawn.mock.calls[0] as unknown[])[2] as { env: Record<string, string> }
+    expect(options.env.npm_config_registry).toBe('https://registry.npmjs.org')
+  })
   it('does not mistake a zero installer exit for a working command', async () => {
     const { installer, child } = fixture({ installed: false })
     await installer.start('devin', 'install')

@@ -105,6 +105,11 @@ installations. Third-party settings are not rewritten automatically.
   OpenCode 1.18 reports these modes only as the `mode` config option; Kun reads
   either shape. When a plugin replaces build/plan with its own Agents, readiness
   still passes, Auto turns fail closed, and the user picks one of those Agents.
+- OpenCode and OpenCode2 declare `loginOptional`: they ship free models, so a
+  session that opens without auth_required is usable without a local credential
+  (authentication stays unverified). OpenCode2 may create the shared
+  `opencode.db` without OpenCode's `session` table; OpenCode then refuses to
+  start and readiness tells the user to move that file aside.
 
 ## Installation and updates
 
@@ -112,6 +117,8 @@ Installer and update commands are curated from official publisher documentation.
 Scanning never installs or signs in an Agent. A user-started managed update stages
 and verifies a replacement before selecting it. Application-owned executables
 stay with their native updater. Unknown release channels remain unknown.
+npm installs use the official registry, like managed updates: mirrors can lag
+behind prerelease platform packages.
 
 ## Validation
 

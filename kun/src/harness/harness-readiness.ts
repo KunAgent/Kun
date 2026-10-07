@@ -137,11 +137,16 @@ export class HarnessReadinessService {
       const nativeEvidence = !terminalLaunch && !requiresLogin && route.credentialMode === 'native-login' && (handshake?.authentication === 'verified' ||
         ((!route.providerId || route.providerId === 'default') &&
           !(definition.id === 'claude-code' && snapshot.env.CLAUDE_CODE_OAUTH_TOKEN) && status.login === 'signed-in'))
-      authentication = requiresLogin ? 'missing' : nativeEvidence ? 'verified' : terminalLaunch || snapshot.hasKey ? 'unverified' : 'missing'
+      // An Agent with its own free models needs no sign-in unless its session
+      // answers auth_required; that is still not verified authentication.
+      // Protocol failures are reported by the protocol check, not as credentials.
+      const optionalLogin = definition.loginOptional === true && route.credentialMode === 'native-login' && !requiresLogin
+      authentication = requiresLogin ? 'missing' : nativeEvidence ? 'verified' : terminalLaunch || snapshot.hasKey || optionalLogin ? 'unverified' : 'missing'
       // Initializing ACP or returning model names is never evidence of authentication.
-      const credentials = !requiresLogin && (terminalLaunch || definition.transport === 'native-loop' || snapshot.hasKey || (route.credentialMode === 'native-login' && nativeEvidence))
+      const credentials = !requiresLogin && (terminalLaunch || definition.transport === 'native-loop' || snapshot.hasKey || optionalLogin || (route.credentialMode === 'native-login' && nativeEvidence))
       checks.push({ id: 'credentials', ok: credentials, detail: requiresLogin ? 'The Agent requires login. Sign in with its native CLI and retry.' : terminalLaunch ? 'Terminal launch checked; sign-in is handled by the CLI when opened' : nativeEvidence ? 'Local account status verified; quota not tested' :
-        snapshot.hasKey ? 'Credential configured; authentication and quota not tested' : 'No verified local account or configured API credential' })
+        snapshot.hasKey ? 'Credential configured; authentication and quota not tested' :
+          optionalLogin ? "No sign-in needed: the Agent's own free models are available; sign in to use your own providers" : 'No verified local account or configured API credential' })
       const localSdk = definition.transport === 'cursor-sdk' && handshake?.protocol === 'cursor-sdk-local-api'
       const protocol = terminalLaunch || definition.transport === 'native-loop' || (handshake?.ok === true && (handshake.supported || localSdk) && (route.credentialMode !== 'native-login' || handshake.authRequired !== true))
       const modelMatches = terminalLaunch || route.credentialMode !== 'native-login' || (handshake?.models === undefined

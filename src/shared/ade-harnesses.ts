@@ -56,6 +56,8 @@ export type AdeHarnessDefinition = {
   modelSource: 'static' | 'probe' | 'provider'
   /** Switchable native Agents published as ACP session modes (OpenCode). */
   nativeAgents?: 'session-modes'
+  /** Native login is optional; the Agent ships its own free models (OpenCode). */
+  loginOptional?: boolean
   staticModels: string[]
   /** Existing local-history source this harness can continue (01 §8). */
   historySource?: 'claude-code' | 'codex' | 'opencode'

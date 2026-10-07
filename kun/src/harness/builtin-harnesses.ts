@@ -486,6 +486,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     ],
     modelSource: 'probe',
     nativeAgents: 'session-modes',
+    loginOptional: true,
     staticModels: [],
     historySource: 'opencode',
     capabilities: ACP_DEFAULT_CAPABILITIES,
@@ -536,6 +537,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     ],
     modelSource: 'probe',
     nativeAgents: 'session-modes',
+    loginOptional: true,
     staticModels: [],
     capabilities: ACP_DEFAULT_CAPABILITIES,
     // V2 has a separate command, credential store and config dialect. Do not

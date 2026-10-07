@@ -44,6 +44,16 @@ export type AcpHandshakeProbeDeps = {
   resolveSecretEnv?: HarnessSecretRefResolver
 }
 
+/**
+ * OpenCode 1 refuses a shared opencode.db that OpenCode2 created first (it has
+ * session_v2 but no session table). Only the user may move that file.
+ */
+function knownStartupFailure(message: string): string | undefined {
+  return /has no session table/i.test(message)
+    ? 'OpenCode cannot open its database: opencode.db in its data directory (usually ~/.local/share/opencode) was created by OpenCode2 without the session table OpenCode needs. Back it up, move it out of that directory together with its -wal and -shm files, then check again; OpenCode recreates it and OpenCode2 can use the new file.'
+    : undefined
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -86,7 +96,7 @@ export async function probeAcpHandshake(
       ok: false,
       supported: true,
       protocol: 'acp',
-      detail: `spawn failed: ${errorMessage(error)}`
+      detail: knownStartupFailure(errorMessage(error)) ?? `spawn failed: ${errorMessage(error)}`
     }
   }
   const conn = AcpConnection.start({ process, identity: 'handshake-probe' })
@@ -163,6 +173,7 @@ export async function probeAcpHandshake(
     // Assist tier with the auth-required code; signing in cannot fix that.
     const retired = isAcpAuthenticationRequired(error) && /no longer supported/i.test(errorMessage(error))
     const authRequired = isAcpAuthenticationRequired(error) && !retired
+    const startupFailure = knownStartupFailure(detail)
     return {
       ok: false,
       supported: true,
@@ -173,6 +184,8 @@ export async function probeAcpHandshake(
           ? `The Agent's service no longer supports this client; signing in will not help: ${errorMessage(error).slice(0, 240)}`
           : authRequired
           ? 'The Agent requires login. Sign in with its native CLI, then check and enable this profile again.'
+          : startupFailure
+          ? startupFailure
           : error instanceof AcpError && error.code === 'request_timeout'
           ? `probe timed out after ${timeoutMs}ms`
           : detail

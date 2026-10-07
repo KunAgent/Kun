@@ -246,6 +246,11 @@ export const HarnessDefinitionSchema = z
      * `harnessAgentId` selects one instead of the permission-mapped mode.
      */
     nativeAgents: z.literal('session-modes').optional(),
+    /**
+     * Native login is optional: the Agent ships its own free models (OpenCode),
+     * so an ACP session that opens without auth_required is ready to use.
+     */
+    loginOptional: z.boolean().optional(),
     staticModels: z.array(z.string().min(1).max(256)).max(64).default([]),
     /** Links to existing history-sources for "continue external session". */
     historySource: z.enum(['claude-code', 'codex', 'opencode']).optional(),

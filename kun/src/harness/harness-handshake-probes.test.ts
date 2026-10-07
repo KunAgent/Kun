@@ -33,6 +33,20 @@ it('reports an upstream-retired client instead of asking the user to sign in', a
   expect(result).toMatchObject({ ok: false, detail: expect.stringContaining('no longer supports this client') })
   expect(result.authRequired).toBeUndefined()
 })
+it.each(['launch', 'initialize'])('explains the OpenCode database written by OpenCode2 when the %s fails', async (stage) => {
+  const crash = 'Error: Unexpected error Database is not empty and has no session table'
+  if (stage === 'launch') spawn.mockRejectedValue(new Error(`ACP agent process exited (code 1, signal null): ${crash}`))
+  else {
+    // The process accepts initialize and then exits before answering.
+    const stdin = new PassThrough(), stdout = new PassThrough()
+    let exited!: (value: { code: number; signal: null }) => void
+    const exit = new Promise<{ code: number; signal: null }>((resolve) => { exited = resolve })
+    stdin.on('data', () => { stdout.end(); exited({ code: 1, signal: null }) })
+    spawn.mockResolvedValue({ stdin, stdout, exit, stop: vi.fn(async () => undefined), sanitizedStderrTail: () => crash } as unknown as HarnessProcess)
+  }
+  const result = await probeAcpHandshake(catalog.get('opencode')!, 'fixture', { session: {} })
+  expect(result).toMatchObject({ ok: false, detail: expect.stringContaining('created by OpenCode2') })
+})
 it('keeps an ACP session usable when plugins replace the permission-mapped modes with native Agents', async () => {
   const child = fixture({ session: { sessionId: 'fixture', configOptions: [{ id: 'mode', name: 'Mode', category: 'mode',
     type: 'select', currentValue: 'Sisyphus', options: [{ value: 'Sisyphus', name: 'Sisyphus' }, { value: 'Prometheus', name: 'Prometheus' }] }] } })
