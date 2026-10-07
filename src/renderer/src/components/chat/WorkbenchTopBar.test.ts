@@ -273,12 +273,11 @@ describe('WorkbenchSideRail', () => {
     expect(html.indexOf('data-tooltip="Usage &amp; quota"')).toBeLessThan(
       html.indexOf('data-contribution-id="extension:acme.issues/summary"')
     )
-    expect(html.indexOf('data-tooltip="MCP &amp; Skills"')).toBeLessThan(
-      html.indexOf('data-tooltip="Files"')
-    )
-    expect(html.indexOf('data-tooltip="Files"')).toBeLessThan(
-      html.indexOf('data-contribution-id="extension:acme.issues/summary"')
-    )
+    // Workspace tools lead, collaboration follows, tools and status sit at the bottom.
+    const order = ['Files', 'Changes', 'Plan', 'Preview', 'Open branch conversation', 'Subagents', 'Whiteboard', 'MCP &amp; Skills']
+      .map((label) => html.indexOf(`data-tooltip="${label}"`))
+    expect(order).toEqual([...order].sort((left, right) => left - right))
+    expect(html.match(/ds-side-rail-divider/g)).toHaveLength(2)
     expect(html).toContain('ds-extension-side-rail-group')
     expect(html).not.toContain('data-tooltip="Extension Views"')
     expect(html).not.toContain('aria-label="Open extension Views"')

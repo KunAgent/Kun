@@ -562,3 +562,11 @@
 .ds-runtime-wake-flow.is-right::after {
   animation-delay: 0.42s;
 }
+
+/* Selected rail tool: a short accent bar on the content side of the button. */
+.ds-side-rail-button-active {
+  background-image: linear-gradient(var(--ds-accent), var(--ds-accent));
+  background-position: 0 50%;
+  background-repeat: no-repeat;
+  background-size: 3px 16px;
+}

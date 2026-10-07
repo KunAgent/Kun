@@ -120,22 +120,29 @@ export function RoomAvatarGroup({
   size?: number
   onClick?: () => void
 }) {
-  const visible = members.filter((member) => !member.removedAt).slice(0, 4)
-  const label = explicitLabel ?? (visible.map((member) => member.displayName).join(', ') || 'Kun')
+  const active = members.filter((member) => !member.removedAt)
+  // Two members overlap diagonally; larger groups use a 2x2 grid whose last
+  // cell counts the members that do not fit.
+  const overflow = active.length > 4 ? active.length - 3 : 0
+  const visible = active.slice(0, overflow ? 3 : 4)
+  const label = explicitLabel ?? (active.map((member) => member.displayName).join(', ') || 'Kun')
   if (avatar) {
     return <RoomAvatar avatar={avatar} id={id} label={label} size={size} onClick={onClick} />
   }
-  const className = `rooms-avatar-group rooms-avatar-group-${Math.max(1, visible.length)}`
+  const className = `rooms-avatar-group rooms-avatar-group-${Math.min(4, Math.max(1, active.length))}`
   const style = { '--rooms-avatar-size': `${size / 16}rem` } as CSSProperties
   const content = visible.length ? (
-    visible.map((member) => (
-      <RoomAvatar
-        key={member.id}
-        member={member}
-        label={member.displayName}
-        size={size}
-      />
-    ))
+    <>
+      {visible.map((member) => (
+        <RoomAvatar
+          key={member.id}
+          member={member}
+          label={member.displayName}
+          size={size}
+        />
+      ))}
+      {overflow ? <span className="rooms-avatar-group-more" aria-hidden="true">+{overflow}</span> : null}
+    </>
   ) : (
     <RoomAvatar label="Kun" size={size} />
   )
