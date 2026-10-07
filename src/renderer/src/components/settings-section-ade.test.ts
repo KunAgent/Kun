@@ -215,12 +215,13 @@ describe('AgentsHarnessesSettingsPanel', () => {
     return renderer
   }
 
-  it('lists harness rows with version and login state', () => {
+  it('lists harness rows with version and login state, leaving Kun to the default picker', () => {
     useHarnessStore.setState({
-      rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code')],
+      rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code'), makeHarnessRow('codex')],
       rowsLoadedAt: 1_000
     })
     const renderer = renderPanel(vi.fn())
+    expect(renderer.root.findAllByProps({ 'data-agent-list-id': 'kun' })).toHaveLength(0)
     const claudeListItem = renderer.root.findByProps({ 'data-agent-list-id': 'claude-code' })
     act(() => claudeListItem.props.onClick())
     const text = instanceText(renderer.root)
@@ -228,24 +229,23 @@ describe('AgentsHarnessesSettingsPanel', () => {
     expect(text).toContain('1.2.3')
     expect(text).toContain('agentEnablement.disabled')
     expect(renderer.root.findAllByProps({ 'data-agent-card': 'claude-code' })).toHaveLength(1)
-    const kunListItem = renderer.root.findAllByType('button' as never)
-      .find((button) => instanceText(button).includes('kun display'))!
-    act(() => kunListItem.props.onClick())
-    expect(kunListItem.props['aria-selected']).toBe(true)
-    expect(kunListItem.props['data-selected']).toBe(true)
+    const codexListItem = renderer.root.findByProps({ 'data-agent-list-id': 'codex' })
+    act(() => codexListItem.props.onClick())
+    expect(codexListItem.props['aria-selected']).toBe(true)
+    expect(codexListItem.props['data-selected']).toBe(true)
     expect(renderer.root.findAllByProps({ 'data-agent-card': 'claude-code' })).toHaveLength(0)
-    expect(renderer.root.findAllByProps({ 'data-agent-card': 'kun' })).toHaveLength(1)
+    expect(renderer.root.findAllByProps({ 'data-agent-card': 'codex' })).toHaveLength(1)
     act(() => renderer.unmount())
   })
 
   it('opens the requested Agent detail from a repair deep link', () => {
     useHarnessStore.setState({
-      rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code')],
+      rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code'), makeHarnessRow('codex')],
       rowsLoadedAt: 1_000,
-      settingsHarnessId: 'kun'
+      settingsHarnessId: 'codex'
     })
     const renderer = renderPanel(vi.fn())
-    expect(renderer.root.findAllByProps({ 'data-agent-card': 'kun' })).toHaveLength(1)
+    expect(renderer.root.findAllByProps({ 'data-agent-card': 'codex' })).toHaveLength(1)
     expect(useHarnessStore.getState().settingsHarnessId).toBeUndefined()
     act(() => renderer.unmount())
   })
@@ -317,36 +317,17 @@ describe('AgentsHarnessesSettingsPanel', () => {
     await act(async () => addButton.props.onClick())
     expect(updateKun).toHaveBeenCalledWith({
       harnesses: expect.objectContaining({
-        custom: [
-          {
-            id: 'custom-my-agent',
-            displayName: 'My Agent',
+        providers: {
+          'custom-my-agent': {
+            extends: 'acp',
+            label: 'My Agent',
             command: '/usr/local/bin/my-agent',
-            args: ['--acp', '--fast'],
-            env: { TOKEN: 'abc' },
-            secretEnv: []
+            args: { mode: 'replace', values: ['--acp', '--fast'] },
+            env: { TOKEN: 'abc' }
           }
-        ]
+        }
       })
     })
-    // Reopen: the saved custom entry still feeds the form state.
-    const saved = {
-      ...defaultKunRuntimeSettings(),
-      harnesses: {
-        ...defaultKunRuntimeSettings().harnesses,
-        custom: [
-          {
-            id: 'custom-my-agent',
-            displayName: 'My Agent',
-            command: '/usr/local/bin/my-agent',
-            args: ['--acp', '--fast'],
-            env: { TOKEN: 'abc' },
-            secretEnv: []
-          }
-        ]
-      }
-    }
-    expect(saved.harnesses.custom[0].id).toBe('custom-my-agent')
     expect(renderer.root.findAllByProps({ 'data-agent-add-finish': true })).toHaveLength(1)
     act(() => renderer.unmount())
   })

@@ -4,6 +4,9 @@ import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import type { KunRuntimeSettingsV1 } from '@shared/app-settings'
 import { defaultKunHarnessSettings } from '@shared/app-settings-kun-harness'
+vi.mock('../settings-icon-tile', () => ({ SettingsIconTile: () => null }))
+vi.mock('../../store/chat-store', () => ({ useChatStore: { getState: () => ({ openSettings: vi.fn() }) } }))
+vi.mock('./AgentSettingsSelect', () => ({ AgentSettingsSelect: () => null }))
 const f = vi.hoisted(() => ({ rows: Array.from({ length: 43 }, (_, index) => {
   const id = index === 0 ? 'kun' : index === 2 ? 'gemini-cli' : `agent-${index}`
   return { definition: { id, displayName: id, transport: index === 0 ? 'native-loop' : index % 3 === 0 ? 'application' : index % 3 === 1 ? 'terminal' : 'acp',
@@ -24,22 +27,25 @@ vi.mock('./AgentCenterCard', () => ({ AgentCenterCard: ({ row }: { row: { defini
 vi.mock('./agent-center-custom-form', () => ({ exportCustomEntry: vi.fn() }))
 vi.mock('./agent-center-add-wizard', () => ({ AgentCenterAddWizard: () => null }))
 import { AgentCenter } from './AgentCenter'
-it('lists only chat Agents, preserving selection and saved ordering while searching', async () => {
+it('groups chat Agents by next step, leaves Kun to the default picker, and keeps selection while searching', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   const container = document.createElement('div'), root = createRoot(container)
-  const settings = { ...defaultKunHarnessSettings(), agentOrder: ['agent-11', 'kun', 'agent-3', 'agent-5'] }
+  const settings = { ...defaultKunHarnessSettings(), agentOrder: ['agent-11', 'agent-5'] }
   try {
     await act(async () => root.render(createElement(AgentCenter, {
       kun: { harnesses: settings } as KunRuntimeSettingsV1, updateKun: vi.fn()
     })))
     const ids = () => [...container.querySelectorAll('[data-agent-list-id]')].map((element) => element.getAttribute('data-agent-list-id'))
-    const chat = f.rows.filter((row) => row.definition.transport !== 'application' && row.definition.transport !== 'terminal')
+    const chat = f.rows.filter((row) => row.definition.transport === 'acp')
+    // Nothing is enabled, so every installed chat Agent is "ready to connect", sorted by name; Kun is not listed.
     expect(ids()).toHaveLength(chat.length)
-    // agent-3 is an application and agent-11 a chat Agent: only chat rows keep their saved slots.
-    expect(ids().slice(0, 3)).toEqual(['agent-11', 'kun', 'agent-5'])
+    expect(ids()).not.toContain('kun')
     expect(ids()).not.toContain('agent-3')
     expect(ids()).not.toContain('agent-7')
     expect(ids()).toContain('gemini-cli')
+    expect([...container.querySelectorAll('[data-agent-group]')].map((element) => element.getAttribute('data-agent-group'))).toEqual(['available'])
+    expect(container.querySelector('[data-agent-default-select]')).not.toBeNull()
+    expect(container.querySelector('[data-agent-center-summary]')?.textContent).toBe('agentCenter.summary.connected')
     expect(container.querySelector('[data-agent-catalog-filter]')).toBeNull()
     await act(async () => container.querySelector<HTMLButtonElement>('[data-agent-list-id="agent-11"]')!.click())
     expect(container.querySelector('[data-agent-card]')?.getAttribute('data-agent-card')).toBe('agent-11')

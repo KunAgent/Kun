@@ -2,7 +2,7 @@
 
 - 日期：2026-10-08
 - 基线：`develop@2dd1145a2`（[17 Provider 模块](./17-provider-modules.md) P0-P4 已合入）
-- 状态：实施中（U1 状态模型已完成，进度见 §9）
+- 状态：实施中（U1 状态模型、U2 列表与外壳已完成，进度见 §9）
 - 设计稿（画布，7 个页面 + 2 个组件）：<https://claude.ai/artifact/DsY2hkKqtgFVFQM6WAVafW>
 - 设计输入：参考项目（同 17）的 provider 列表、目录和诊断面板；Kun 自己的设置页规则（[desktop-renderer-and-operations §7.6](../design/desktop-renderer-and-operations.md)）和 ADE 界面原则（[12 §2](./12-workbench-ui.md)）。
   源码、文件名、类名、注释、i18n 键里不得出现参考项目的名字。

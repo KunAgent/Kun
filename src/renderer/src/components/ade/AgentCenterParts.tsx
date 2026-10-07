@@ -81,9 +81,9 @@ export function AgentDetailHeader({ harnessId, name, badges, tone, status, meta 
 export function AgentCatalogSkeleton({ label }: { label: string }): ReactElement {
   return (
     <div role="status" aria-live="polite" aria-busy="true" data-agent-catalog-skeleton
-      className="grid min-w-0 md:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)]">
+      className="grid min-w-0 lg:grid-cols-[300px_minmax(0,1fr)]">
       <span className="sr-only">{label}</span>
-      <div aria-hidden className="flex flex-col gap-1 border-b border-ds-border-muted bg-ds-subtle p-2 md:border-b-0 md:border-r">
+      <div aria-hidden className="flex flex-col gap-1 border-b border-ds-border-muted bg-ds-subtle p-2 lg:border-b-0 lg:border-r">
         {Array.from({ length: 7 }, (_, index) => (
           <div key={index} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2">
             <div className="h-8 w-8 shrink-0 animate-pulse rounded-lg bg-ds-hover" />

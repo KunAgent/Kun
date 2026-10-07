@@ -1,7 +1,33 @@
 {
   "agentCenter": {
+    "title": "第三方 Agent",
+    "summary": {
+      "connected": "{{count}} 个已接入",
+      "attention": "{{count}} 个需要处理"
+    },
+    "refreshAll": "重新检测全部 Agent",
+    "add": "添加",
+    "description": "把 Codex、Claude Code、OpenCode 等 Agent 接入你的对话。接入并通过检查后，它们会出现在新建对话和群聊成员里。",
+    "defaultAgent": "新对话默认",
+    "defaultAgentLabel": "新对话默认使用的 Agent",
+    "group": {
+      "connected": "已接入",
+      "available": "可以接入",
+      "notInstalled": "未安装"
+    },
+    "rail": {
+      "showMore": "显示其余 {{count}} 个",
+      "showLess": "收起",
+      "reorderHint": "拖动调整顺序，或按 Alt+↑ / Alt+↓。这就是对话和群聊选择器里的顺序。",
+      "moved": "{{name}} 已移到第 {{position}} 位（共 {{total}} 个）",
+      "footer": "列表里没有？",
+      "findInExtensions": "在扩展里找"
+    },
     "state": {
-      "detecting": { "list": "检测中…", "status": "检测中…" },
+      "detecting": {
+        "list": "检测中…",
+        "status": "检测中…"
+      },
       "notInstalled": {
         "list_install": "未安装 · 可一键安装",
         "list_docs": "未安装 · 查看安装说明",
@@ -10,12 +36,30 @@
         "status_docs": "未安装，请按官方说明安装。",
         "status_none": "未安装"
       },
-      "installing": { "list": "正在安装…", "status": "正在安装…" },
-      "installFailed": { "list": "安装失败", "status": "安装失败，请查看下面的日志。" },
-      "versionLow": { "list": "版本过低", "status": "版本过低，更新后才能继续使用。" },
-      "adapterMissing": { "list": "缺少 ACP 适配器", "status": "缺少 ACP 适配器，可以在这里安装。" },
-      "available": { "list": "已安装 · 未接入", "status": "已安装，还没有接入对话。" },
-      "checking": { "list": "正在检查…", "status": "正在检查…" },
+      "installing": {
+        "list": "正在安装…",
+        "status": "正在安装…"
+      },
+      "installFailed": {
+        "list": "安装失败",
+        "status": "安装失败，请查看下面的日志。"
+      },
+      "versionLow": {
+        "list": "版本过低",
+        "status": "版本过低，更新后才能继续使用。"
+      },
+      "adapterMissing": {
+        "list": "缺少 ACP 适配器",
+        "status": "缺少 ACP 适配器，可以在这里安装。"
+      },
+      "available": {
+        "list": "已安装 · 未接入",
+        "status": "已安装，还没有接入对话。"
+      },
+      "checking": {
+        "list": "正在检查…",
+        "status": "正在检查…"
+      },
       "ready": {
         "list": "{{model}} · {{mode}}",
         "status": "可以使用 · {{mode}}",
@@ -26,8 +70,14 @@
         "status": "需要重新检查",
         "statusChanged": "设置已修改，重新检查后才会使用。"
       },
-      "signedOut": { "list": "需要重新登录", "status": "账号已登出，登录前新的对话轮次会失败。" },
-      "connectFailed": { "list": "连接失败", "status": "连接失败，请查看检查结果。" }
+      "signedOut": {
+        "list": "需要重新登录",
+        "status": "账号已登出，登录前新的对话轮次会失败。"
+      },
+      "connectFailed": {
+        "list": "连接失败",
+        "status": "连接失败，请查看检查结果。"
+      }
     }
   }
 }

@@ -1,7 +1,33 @@
 {
   "agentCenter": {
+    "title": "Third-party Agents",
+    "summary": {
+      "connected": "{{count}} connected",
+      "attention": "{{count}} need attention"
+    },
+    "refreshAll": "Re-detect all Agents",
+    "add": "Add",
+    "description": "Connect Codex, Claude Code, OpenCode and other Agents to your chats. Once connected and checked, they show up when you start a chat or add a group member.",
+    "defaultAgent": "Default for new chats",
+    "defaultAgentLabel": "Default Agent for new chats",
+    "group": {
+      "connected": "Connected",
+      "available": "Ready to connect",
+      "notInstalled": "Not installed"
+    },
+    "rail": {
+      "showMore": "Show the other {{count}}",
+      "showLess": "Show fewer",
+      "reorderHint": "Drag to reorder, or press Alt+Up / Alt+Down. This is the order in the chat and group pickers.",
+      "moved": "{{name}} moved to position {{position}} of {{total}}",
+      "footer": "Not in the list?",
+      "findInExtensions": "Find in extensions"
+    },
     "state": {
-      "detecting": { "list": "Detecting…", "status": "Detecting…" },
+      "detecting": {
+        "list": "Detecting…",
+        "status": "Detecting…"
+      },
       "notInstalled": {
         "list_install": "Not installed · one-click install",
         "list_docs": "Not installed · see install guide",
@@ -10,12 +36,30 @@
         "status_docs": "Not installed. Follow the official install guide.",
         "status_none": "Not installed"
       },
-      "installing": { "list": "Installing…", "status": "Installing…" },
-      "installFailed": { "list": "Install failed", "status": "Install failed. See the log below." },
-      "versionLow": { "list": "Version too old", "status": "This version is too old. Update it to continue." },
-      "adapterMissing": { "list": "ACP adapter missing", "status": "The ACP adapter is missing. You can install it here." },
-      "available": { "list": "Installed · not connected", "status": "Installed. Not connected to chats yet." },
-      "checking": { "list": "Checking…", "status": "Checking…" },
+      "installing": {
+        "list": "Installing…",
+        "status": "Installing…"
+      },
+      "installFailed": {
+        "list": "Install failed",
+        "status": "Install failed. See the log below."
+      },
+      "versionLow": {
+        "list": "Version too old",
+        "status": "This version is too old. Update it to continue."
+      },
+      "adapterMissing": {
+        "list": "ACP adapter missing",
+        "status": "The ACP adapter is missing. You can install it here."
+      },
+      "available": {
+        "list": "Installed · not connected",
+        "status": "Installed. Not connected to chats yet."
+      },
+      "checking": {
+        "list": "Checking…",
+        "status": "Checking…"
+      },
       "ready": {
         "list": "{{model}} · {{mode}}",
         "status": "Ready · {{mode}}",
@@ -26,8 +70,14 @@
         "status": "Needs a re-check",
         "statusChanged": "Settings changed. Check again to use them."
       },
-      "signedOut": { "list": "Sign in again", "status": "Signed out. New turns fail until you sign in." },
-      "connectFailed": { "list": "Connection failed", "status": "Connection failed. See the check results." }
+      "signedOut": {
+        "list": "Sign in again",
+        "status": "Signed out. New turns fail until you sign in."
+      },
+      "connectFailed": {
+        "list": "Connection failed",
+        "status": "Connection failed. See the check results."
+      }
     }
   }
 }

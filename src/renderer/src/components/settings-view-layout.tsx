@@ -152,6 +152,8 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
     category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall'
   // These two pages edit a draft and save it with their own button.
   const explicitSavePanel = category === 'collaboration' || category === 'projects'
+  // Workspaces carry their own header and use the full content width.
+  const workspacePage = category === 'providers' || category === 'harnesses'
   const sectionContext = { ...settingsSectionContext, openSettingsCategory: setCategory }
   const saveIssueSummary = saveIssue?.kind === 'provider-model-limit'
     ? settingsSaveIssueMessage(saveIssue, t)
@@ -175,13 +177,13 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
         <div
           ref={settingsScrollerRef}
           className={`ds-settings-scroller ds-no-drag h-full min-h-0 overflow-y-auto ${
-            category === 'providers' ? 'ds-settings-scroller--providers' : ''
+            workspacePage ? 'ds-settings-scroller--providers' : ''
           }`}
         >
           <div className={`ds-settings-content mx-auto ${
-            category === 'providers' ? 'ds-settings-content--providers' : ''
+            workspacePage ? 'ds-settings-content--providers' : ''
           }`}>
-          {category !== 'providers' ? (
+          {!workspacePage ? (
             <SettingsPageHeader
               key={`header-${category}`}
               category={category}
