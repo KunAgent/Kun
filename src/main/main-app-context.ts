@@ -72,6 +72,7 @@ import {
   NativeDialogCoordinator
 } from './native-dialog-coordinator'
 import { DesktopStartupState } from './desktop-startup-state'
+import { KUN_NODE_CHILD_V8_FLAGS } from '../../kun/src/process/node-child-v8-flags.js'
 import {
   type ClawRuntime
 } from './claw-runtime'
@@ -280,6 +281,9 @@ export const appIdentity = configureAppIdentity({
 })
 process.env.KUN_APP_FLAVOR = appIdentity.flavor
 process.env.KUN_RUNTIME_FLAVOR = appIdentity.runtimeFlavor
+// Renderer and utility processes start after this point and inherit the cap on
+// V8's young generation (the main process heap is already configured).
+app.commandLine.appendSwitch('js-flags', KUN_NODE_CHILD_V8_FLAGS.join(' '))
 if (appIdentity.flavor === 'development') {
   process.title = appIdentity.appName
   app.commandLine.appendSwitch('kun-app-flavor', appIdentity.flavor)

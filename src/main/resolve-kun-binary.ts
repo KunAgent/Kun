@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { readRuntimeBuildIdForEntry } from '../../kun/src/server/runtime-build-identity.js'
+import { KUN_NODE_CHILD_V8_FLAGS } from '../../kun/src/process/node-child-v8-flags.js'
 
 /**
  * Resolve the Kun executable. Kun ships as a TypeScript
@@ -121,6 +122,7 @@ export function buildKunServeArgs(input: {
   insecure: boolean
 }): string[] {
   return [
+    ...(input.resolution.kind === 'node-script' ? KUN_NODE_CHILD_V8_FLAGS : []),
     ...input.resolution.args,
     'serve',
     '--host',

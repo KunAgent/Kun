@@ -51,6 +51,7 @@ import {
   waitForStartingSharedRuntime
 } from './shared-runtime-launch.js'
 import { createSharedRuntimeReadiness } from './shared-runtime-readiness.js'
+import { KUN_NODE_CHILD_V8_FLAGS } from '../process/node-child-v8-flags.js'
 import {
   assertOneShotRuntimeControlAllowed,
   assertRuntimeSelfControlAllowed,
@@ -333,6 +334,7 @@ export async function ensureSharedRuntime(input: {
       : process.env.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim()
     const command = input.launch?.command ?? packagedRuntimeExecutable ?? process.execPath
     const args = input.launch?.args ?? [
+      ...(command === process.execPath ? KUN_NODE_CHILD_V8_FLAGS : []),
       entry,
       'serve',
       '--host', '127.0.0.1',
