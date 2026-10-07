@@ -80,6 +80,8 @@ export interface AgentAdapter {
   pickInAgent?: boolean
   /** A condition the agent itself puts on reading Kun's settings, shown while connected. */
   notice?: AgentWiringNotice
+  /** Files the agent reads only as strict JSON; it ignores them whole when they have comments. */
+  strictJsonFiles?(ctx: WiringContext): string[]
   /** For shared arrays: whether an entry is Kun's own (removed on disconnect). */
   ownsArrayItem?(item: unknown): boolean
 }
@@ -135,6 +137,10 @@ export type AgentWiringStatus = {
   pickInAgent: boolean
   notice?: AgentWiringNotice
   error?: string
+  /** Stable reason for `error`, for a translated explanation. */
+  errorCode?: import('./errors.js').AgentWiringErrorCode
+  /** The config file the error is about. */
+  errorFile?: string
 }
 
 export type { TomlScalar, TomlTable }

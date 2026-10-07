@@ -66,6 +66,11 @@
     },
     "notices": {
       "trusted-folders": "{{agent}} reads Kun's settings only in folders you have trusted in it. In an untrusted folder it stops with a missing API key error instead of using Kun."
+    },
+    "errors": {
+      "config_unreadable": "{{agent}}'s config {{file}} could not be read. Fix the file, or connect after removing it.",
+      "config_unsupported": "{{file}} uses a layout Kun will not rewrite automatically (YAML anchors, several documents, or a value that is not an object). Edit it by hand or simplify it, then connect again.",
+      "strict_json_required": "{{agent}} ignores {{file}} because it contains comments or trailing commas, so settings written there would never take effect. Remove them, then connect again."
     }
   }
 }

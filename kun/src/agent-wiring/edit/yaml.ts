@@ -1,4 +1,5 @@
 import { isAlias, isMap, isScalar, isSeq, parseAllDocuments, parseDocument, visit, type Document, type Node } from 'yaml'
+import { WiringUnsupportedError } from '../errors.js'
 
 /**
  * Comment-keeping YAML editing for agent configs (Goose, Continue, Aider).
@@ -13,13 +14,13 @@ const OPTIONS = { lineWidth: 0, minContentWidth: 0 } as const
 
 function load(text: string): Document {
   if (!text.trim()) return parseDocument('{}\n')
-  if (parseAllDocuments(text).length > 1) throw new Error('YAML files with several documents are not supported')
+  if (parseAllDocuments(text).length > 1) throw new WiringUnsupportedError('YAML files with several documents are not supported')
   const doc = parseDocument(text, { keepSourceTokens: false })
   if (doc.errors.length) throw new Error(`YAML parse error: ${doc.errors[0]!.message}`)
   let unsupported = false
   visit(doc, { Node(_key, node) { if (isAlias(node) || ('anchor' in node && node.anchor)) unsupported = true } })
-  if (unsupported) throw new Error('YAML anchors and aliases are not supported; edit this file by hand')
-  if (doc.contents !== null && !isMap(doc.contents)) throw new Error('The YAML document is not a mapping')
+  if (unsupported) throw new WiringUnsupportedError('YAML anchors and aliases are not supported; edit this file by hand')
+  if (doc.contents !== null && !isMap(doc.contents)) throw new WiringUnsupportedError('The YAML document is not a mapping')
   return doc
 }
 

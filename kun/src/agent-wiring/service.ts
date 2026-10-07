@@ -6,6 +6,7 @@ import { createTwoFilesPatch } from 'diff'
 import { applyWiringEdits, planWiringEdits, readFileText, restoreWiring, writeFileAtomic } from './engine.js'
 import type { AgentWiringFilePreview } from './protocol.js'
 import type { AgentAdapter, AgentWiringRecord, AgentWiringStatus, WiringContext, WiringProfile, WiringState, WiringTarget } from './types.js'
+import { AgentWiringError, strictJson, wiringFailure, type AgentWiringErrorCode } from './errors.js'
 
 const PROFILE_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,47}$/u
 
@@ -43,12 +44,7 @@ function emptyRecord(): AgentWiringRecord {
   return { connected: false, originals: {}, createdFiles: [], ownedArrays: [] }
 }
 
-export class AgentWiringError extends Error {
-  constructor(message: string, readonly code: 'unknown_agent' | 'not_connected' | 'invalid_profile' | 'invalid_target' | 'config_unreadable') {
-    super(message)
-    this.name = 'AgentWiringError'
-  }
-}
+export { AgentWiringError } from './errors.js'
 
 export class AgentWiringService {
   constructor(private readonly ctx: WiringContext = createWiringContext()) {}
@@ -87,10 +83,13 @@ export class AgentWiringService {
     const files = Object.values(adapter.files(this.ctx))
     const installed = Boolean(binary) || adapter.configDirs(this.ctx).some((dir) => existsSync(dir))
     let inspected: ReturnType<AgentAdapter['inspect']> = { pointsAtGateway: false }
-    let error: string | undefined
+    let failure: { error: string; errorCode?: AgentWiringErrorCode; errorFile?: string } | undefined
     try { inspected = adapter.inspect(this.ctx, readFileText, record?.origin ?? origin) } catch (cause) {
-      error = cause instanceof Error ? cause.message : String(cause)
+      const error = wiringFailure(adapter.name, 'read', cause)
+      failure = { error: error.message, errorCode: error.code, ...(error.file ? { errorFile: error.file } : {}) }
     }
+    const strict = this.strictJsonProblem(adapter)
+    if (strict && !failure) failure = { error: strict.message, errorCode: strict.code, errorFile: strict.file }
     const connected = record?.connected === true
     return {
       id: adapter.id, name: adapter.name, protocol: adapter.protocol, homepage: adapter.homepage,
@@ -104,8 +103,25 @@ export class AgentWiringService {
       restartRequired: adapter.restartRequired, keepsModelList: adapter.keepsModelList,
       pickInAgent: adapter.pickInAgent === true,
       ...(adapter.notice ? { notice: adapter.notice } : {}),
-      ...(error ? { error } : {})
+      ...failure
     }
+  }
+
+  /**
+   * A config file the agent reads only as strict JSON but that has comments or
+   * trailing commas. The agent already ignores such a file, so Kun would
+   * write settings that never take effect; it says so instead.
+   */
+  private strictJsonProblem(adapter: AgentAdapter): AgentWiringError | undefined {
+    for (const file of adapter.strictJsonFiles?.(this.ctx) ?? []) {
+      let text: string
+      try { text = readFileText(file) } catch { continue }
+      if (!strictJson(text)) {
+        return new AgentWiringError(`${adapter.name} ignores ${file} because it is not strict JSON (comments or trailing commas). Remove them, then connect again.`,
+          'strict_json_required', file)
+      }
+    }
+    return undefined
   }
 
   private validTarget(adapter: AgentAdapter, target: WiringTarget): void {
@@ -126,9 +142,11 @@ export class AgentWiringService {
     this.validTarget(adapter, target)
     const current = this.load().agents[id]
     const record = current?.connected ? structuredClone(current) : emptyRecord()
+    const strict = this.strictJsonProblem(adapter)
+    if (strict) throw strict
     let writes
     try { writes = planWiringEdits(adapter.edits(this.ctx, target), record) } catch (cause) {
-      throw new AgentWiringError(`Could not read ${adapter.name}'s config: ${cause instanceof Error ? cause.message : String(cause)}`, 'config_unreadable')
+      throw wiringFailure(adapter.name, 'read', cause)
     }
     const hide = (text: string): string => text.split(target.key).join(mask)
     return writes.map((write) => ({ file: write.file, created: !write.before && !existsSync(write.file),
@@ -143,10 +161,12 @@ export class AgentWiringService {
     const state = this.load()
     const record = state.agents[id] ?? emptyRecord()
     if (!record.connected) Object.assign(record, emptyRecord())
+    const strict = this.strictJsonProblem(adapter)
+    if (strict) throw strict
     try {
       applyWiringEdits(adapter.edits(this.ctx, target), record)
     } catch (cause) {
-      throw new AgentWiringError(`Could not update ${adapter.name}'s config: ${cause instanceof Error ? cause.message : String(cause)}`, 'config_unreadable')
+      throw wiringFailure(adapter.name, 'update', cause)
     }
     const now = new Date().toISOString()
     state.agents[id] = { ...record, connected: true, model: target.model, origin: target.origin,
@@ -166,7 +186,7 @@ export class AgentWiringService {
     try {
       restoreWiring(record, (_file, _path, item) => adapter.ownsArrayItem?.(item) === true)
     } catch (cause) {
-      throw new AgentWiringError(`Could not restore ${adapter.name}'s config: ${cause instanceof Error ? cause.message : String(cause)}`, 'config_unreadable')
+      throw wiringFailure(adapter.name, 'restore', cause)
     }
     const clientId = record.clientId
     delete state.agents[id]

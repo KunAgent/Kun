@@ -66,6 +66,11 @@
     },
     "notices": {
       "trusted-folders": "{{agent}}는 신뢰한 폴더에서만 Kun 설정을 읽습니다. 신뢰하지 않은 폴더에서는 Kun을 쓰지 않고 API 키가 없다는 오류로 멈춥니다."
+    },
+    "errors": {
+      "config_unreadable": "{{agent}}의 설정 {{file}}을(를) 읽을 수 없습니다. 파일을 고치거나 삭제한 뒤 연결하세요.",
+      "config_unsupported": "{{file}}은(는) Kun이 자동으로 다시 쓰지 않는 형식입니다(YAML 앵커, 여러 문서, 객체가 아닌 값). 직접 편집하거나 단순하게 바꾼 뒤 다시 연결하세요.",
+      "strict_json_required": "{{agent}}은(는) 주석이나 끝 쉼표가 있는 {{file}}을(를) 무시하므로 써 넣은 설정이 적용되지 않습니다. 이를 지운 뒤 다시 연결하세요."
     }
   }
 }

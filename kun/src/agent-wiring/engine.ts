@@ -6,6 +6,7 @@ import { getJsoncValue, setJsoncValue } from './edit/jsonc.js'
 import { getYamlValue, setYamlValue } from './edit/yaml.js'
 import { getTomlTable, getTomlTopLevel, setTomlTable, setTomlTopLevel, type TomlScalar, type TomlTable } from './edit/toml.js'
 import type { AgentWiringRecord, StashedValue, WiringEdit, WiringSlot } from './types.js'
+import { WiringFileError } from './errors.js'
 
 export function slotId(slot: WiringSlot): string {
   switch (slot.format) {
@@ -83,37 +84,41 @@ export function planWiringEdits(edits: WiringEdit[], record: AgentWiringRecord, 
   // Read and transform every file first so a parse error leaves nothing half-written.
   const writes: PlannedWrite[] = []
   for (const [file, fileEdits] of byFile) {
-    const before = read(file)
-    let text = before
-    for (const edit of fileEdits) {
-      if ('ownedArray' in edit) {
-        const current = readSlot(text, edit.slot)
-        const kept = Array.isArray(current) ? current.filter((item) => !edit.ownedArray.owns(item)) : []
-        text = writeSlot(text, edit.slot, [...kept, ...edit.ownedArray.items])
-        if (!record.ownedArrays.some((entry) => entry.file === file && JSON.stringify(entry.path) === JSON.stringify(edit.slot.path))) {
-          record.ownedArrays.push({ file, path: [...edit.slot.path], ...(edit.slot.format === 'yaml' ? { format: 'yaml' as const } : {}) })
+    try {
+      const before = read(file)
+      let text = before
+      for (const edit of fileEdits) {
+        if ('ownedArray' in edit) {
+          const current = readSlot(text, edit.slot)
+          const kept = Array.isArray(current) ? current.filter((item) => !edit.ownedArray.owns(item)) : []
+          text = writeSlot(text, edit.slot, [...kept, ...edit.ownedArray.items])
+          if (!record.ownedArrays.some((entry) => entry.file === file && JSON.stringify(entry.path) === JSON.stringify(edit.slot.path))) {
+            record.ownedArrays.push({ file, path: [...edit.slot.path], ...(edit.slot.format === 'yaml' ? { format: 'yaml' as const } : {}) })
+          }
+          continue
         }
-        continue
-      }
-      const id = slotId(edit.slot)
-      if (edit.slot.format === 'json' || edit.slot.format === 'yaml') {
-        for (let size = 1; size < edit.slot.path.length; size += 1) {
-          const parent = { ...edit.slot, path: edit.slot.path.slice(0, size) }
-          const parentId = slotId(parent)
-          if (!record.originals[parentId] && readSlot(text, parent) === undefined) {
-            record.originals[parentId] = { slot: parent, absent: true, pruneIfEmpty: true }
+        const id = slotId(edit.slot)
+        if (edit.slot.format === 'json' || edit.slot.format === 'yaml') {
+          for (let size = 1; size < edit.slot.path.length; size += 1) {
+            const parent = { ...edit.slot, path: edit.slot.path.slice(0, size) }
+            const parentId = slotId(parent)
+            if (!record.originals[parentId] && readSlot(text, parent) === undefined) {
+              record.originals[parentId] = { slot: parent, absent: true, pruneIfEmpty: true }
+            }
           }
         }
+        if (!record.originals[id]) {
+          const original = readSlot(text, edit.slot)
+          record.originals[id] = original === undefined
+            ? { slot: edit.slot, absent: true }
+            : { slot: edit.slot, absent: false, value: structuredClone(original) }
+        }
+        text = writeSlot(text, edit.slot, edit.value)
       }
-      if (!record.originals[id]) {
-        const original = readSlot(text, edit.slot)
-        record.originals[id] = original === undefined
-          ? { slot: edit.slot, absent: true }
-          : { slot: edit.slot, absent: false, value: structuredClone(original) }
-      }
-      text = writeSlot(text, edit.slot, edit.value)
+      if (text !== before) writes.push({ file, before, after: text })
+    } catch (cause) {
+      throw cause instanceof WiringFileError ? cause : new WiringFileError(file, cause)
     }
-    if (text !== before) writes.push({ file, before, after: text })
   }
   return writes
 }
@@ -151,44 +156,48 @@ export function restoreWiring(record: AgentWiringRecord, owns: (file: string, pa
     ...record.ownedArrays.map((entry) => entry.file)
   ])
   for (const file of files) {
-    const before = readFileText(file)
-    if (!before && !existsSync(file)) continue
-    const tracked = record.files?.[file]
-    if (tracked && tracked.writtenHash === hashText(before)) {
-      // Nobody edited the file since Kun's last write: put the original back exactly.
-      if (tracked.backup && existsSync(backupPath(file))) {
-        writeFileAtomic(file, readFileText(backupPath(file)))
-        unlinkSync(backupPath(file))
-      } else if (record.createdFiles.includes(file)) unlinkSync(file)
-      else continue
-      continue
-    }
-    let text = before
-    // Restore table and nested slots after their children so parents are rebuilt last.
-    const entries: StashedValue[] = Object.values(record.originals).filter((entry) => entry.slot.file === file)
-      .sort((left, right) => depth(right.slot) - depth(left.slot))
-    for (const entry of entries) {
-      if (entry.pruneIfEmpty) {
-        const current = readSlot(text, entry.slot)
-        const empty = current !== null && typeof current === 'object' && !Array.isArray(current) && !Object.keys(current).length
-        if (empty) text = writeSlot(text, entry.slot, undefined)
+    try {
+      const before = readFileText(file)
+      if (!before && !existsSync(file)) continue
+      const tracked = record.files?.[file]
+      if (tracked && tracked.writtenHash === hashText(before)) {
+        // Nobody edited the file since Kun's last write: put the original back exactly.
+        if (tracked.backup && existsSync(backupPath(file))) {
+          writeFileAtomic(file, readFileText(backupPath(file)))
+          unlinkSync(backupPath(file))
+        } else if (record.createdFiles.includes(file)) unlinkSync(file)
+        else continue
         continue
       }
-      text = writeSlot(text, entry.slot, entry.absent ? undefined : entry.value)
-    }
-    for (const owned of record.ownedArrays.filter((entry) => entry.file === file)) {
-      const slot: WiringSlot = owned.format === 'yaml' ? { file, format: 'yaml', path: owned.path } : { file, format: 'json', path: owned.path }
-      const current = readSlot(text, slot)
-      if (Array.isArray(current)) {
-        const kept = current.filter((item) => !owns(file, owned.path, item))
-        text = writeSlot(text, slot, kept.length ? kept : undefined)
+      let text = before
+      // Restore table and nested slots after their children so parents are rebuilt last.
+      const entries: StashedValue[] = Object.values(record.originals).filter((entry) => entry.slot.file === file)
+        .sort((left, right) => depth(right.slot) - depth(left.slot))
+      for (const entry of entries) {
+        if (entry.pruneIfEmpty) {
+          const current = readSlot(text, entry.slot)
+          const empty = current !== null && typeof current === 'object' && !Array.isArray(current) && !Object.keys(current).length
+          if (empty) text = writeSlot(text, entry.slot, undefined)
+          continue
+        }
+        text = writeSlot(text, entry.slot, entry.absent ? undefined : entry.value)
       }
+      for (const owned of record.ownedArrays.filter((entry) => entry.file === file)) {
+        const slot: WiringSlot = owned.format === 'yaml' ? { file, format: 'yaml', path: owned.path } : { file, format: 'json', path: owned.path }
+        const current = readSlot(text, slot)
+        if (Array.isArray(current)) {
+          const kept = current.filter((item) => !owns(file, owned.path, item))
+          text = writeSlot(text, slot, kept.length ? kept : undefined)
+        }
+      }
+      if (record.createdFiles.includes(file) && entries.every((entry) => entry.absent) && isEmptyDocument(text, entries[0]?.slot ?? { file, format: 'json', path: [] })) {
+        unlinkSync(file)
+        continue
+      }
+      if (text !== before) writeFileAtomic(file, text)
+    } catch (cause) {
+      throw cause instanceof WiringFileError ? cause : new WiringFileError(file, cause)
     }
-    if (record.createdFiles.includes(file) && entries.every((entry) => entry.absent) && isEmptyDocument(text, entries[0]?.slot ?? { file, format: 'json', path: [] })) {
-      unlinkSync(file)
-      continue
-    }
-    if (text !== before) writeFileAtomic(file, text)
   }
 }
 

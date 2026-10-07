@@ -17,6 +17,8 @@ const claudeCode: AgentAdapter = {
   bins: ['claude'],
   files: (ctx) => ({ settings: join(ctx.env.CLAUDE_CONFIG_DIR?.trim() || join(ctx.home, '.claude'), 'settings.json') }),
   configDirs: (ctx) => [ctx.env.CLAUDE_CONFIG_DIR?.trim() || join(ctx.home, '.claude')],
+  // Claude Code skips a settings.json that is not strict JSON without saying so.
+  strictJsonFiles(ctx) { return [this.files(ctx).settings!] },
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   restartRequired: true,
   keepsModelList: false,

@@ -33,6 +33,19 @@ describe('agent rows', () => {
       agent: { ...base, id: 'gemini-cli', name: 'Gemini CLI', notice: 'trusted-folders' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))
     expect(html).toContain('Gemini CLI reads Kun&#x27;s settings only in folders you have trusted in it.')
   })
+  it('explains coded wiring errors in the user\'s language and keeps unknown ones as sent', async () => {
+    const strict = renderToStaticMarkup(createElement(GatewayAgentRow, { t: i18n.getFixedT('en', 'settings'),
+      agent: { ...base, error: 'raw', errorCode: 'strict_json_required', errorFile: '/Users/me/.claude/settings.json' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))
+    expect(strict).toContain('Claude Code ignores ~/.claude/settings.json because it contains comments or trailing commas')
+    expect(strict).not.toContain('>raw<')
+    const plain = renderToStaticMarkup(createElement(GatewayAgentRow, { t: i18n.getFixedT('en', 'settings'),
+      agent: { ...base, error: 'Something else broke' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))
+    expect(plain).toContain('Something else broke')
+    await i18n.changeLanguage('zh')
+    const zh = renderToStaticMarkup(createElement(GatewayAgentRow, { t: i18n.getFixedT('zh', 'settings'),
+      agent: { ...base, error: 'raw', errorCode: 'config_unsupported', errorFile: '/Users/me/.config/goose/config.yaml' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))
+    expect(zh).toContain('~/.config/goose/config.yaml 使用了 Kun 不会自动改写的写法')
+  })
   it('flags drift and offers reconnect plus disconnect', () => {
     const html = renderToStaticMarkup(createElement(GatewayAgentRow, { t: i18n.getFixedT('en', 'settings'),
       agent: { ...base, connected: true, drifted: true, model: 'coding' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))

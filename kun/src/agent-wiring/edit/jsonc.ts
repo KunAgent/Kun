@@ -6,6 +6,7 @@
  * accepts JSON with `//` and block comments and trailing commas (VS Code,
  * OpenCode and Claude Code all tolerate these).
  */
+import { WiringUnsupportedError } from '../errors.js'
 export type JsonPath = readonly string[]
 
 type Node =
@@ -177,10 +178,10 @@ export function setJsoncValue(text: string, path: JsonPath, value: unknown): str
     return serialize(nested, unit, '', eol) + eol
   }
   const root = new Parser(text).parseDocument()
-  if (root.kind !== 'object') throw new Error('The config file is not a JSON object')
+  if (root.kind !== 'object') throw new WiringUnsupportedError('The config file is not a JSON object')
   let node: Node = root
   for (let depth = 0; depth < path.length; depth += 1) {
-    if (node.kind !== 'object') throw new Error(`Cannot edit ${path.join('.')}: ${path.slice(0, depth).join('.')} is not an object`)
+    if (node.kind !== 'object') throw new WiringUnsupportedError(`Cannot edit ${path.join('.')}: ${path.slice(0, depth).join('.')} is not an object`)
     const key = path[depth]!
     const prop: Prop | undefined = [...node.props].reverse().find((entry) => entry.key === key)
     const last = depth === path.length - 1

@@ -1,10 +1,10 @@
-import { Fragment, useCallback, useEffect, useState, type ReactElement } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Bookmark, ChevronDown, Loader2, RefreshCw, Save, Users, X } from 'lucide-react'
 import type { AgentWiringAction, AgentWiringOverview, AgentWiringPreview } from '@shared/agent-wiring'
 import { GatewayAgentPreview } from './gateway-agent-preview'
-import { GatewayAgentRow, type AgentConnectRequest } from './gateway-agent-row'
+import { agentWiringErrorText, GatewayAgentRow, type AgentConnectRequest } from './gateway-agent-row'
 import { settingsButtonClass } from './settings-button'
 
 type Notice = { tone: 'ok' | 'warn' | 'error'; text: string }
@@ -18,6 +18,9 @@ export function GatewayAgentsPanel({ active, translation }: { active: boolean; t
   const { t: localT } = useTranslation('settings')
   const t = translation ?? localT
   const [overview, setOverview] = useState<AgentWiringOverview | null>(null)
+  // Agent names for error text, read inside the action callback without re-creating it.
+  const agentNames = useRef(new Map<string, string>())
+  agentNames.current = new Map(overview?.agents.map((agent) => [agent.id, agent.name]))
   const [loading, setLoading] = useState(false)
   const [busyAgent, setBusyAgent] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -30,7 +33,11 @@ export function GatewayAgentsPanel({ active, translation }: { active: boolean; t
     else setLoading(true)
     try {
       const result = await window.kunGui.agentWiring(action)
-      if (!result.ok) { setNotice({ tone: 'error', text: result.error }); return false }
+      if (!result.ok) {
+        const agent = 'agentId' in action ? agentNames.current.get(action.agentId) : undefined
+        setNotice({ tone: 'error', text: agentWiringErrorText(t, { error: result.error, code: result.code, file: result.file, agent }) })
+        return false
+      }
       const { ok: _ok, notice: hint, applied, failed, preview, ...next } = result
       setOverview(next)
       if (action.action === 'preview') {

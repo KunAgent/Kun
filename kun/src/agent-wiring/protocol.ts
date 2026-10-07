@@ -25,7 +25,7 @@ export type AgentWiringPreview = { agentId: string; files: AgentWiringFilePrevie
 
 export type AgentWiringResult =
   | ({ ok: true; notice?: string; applied?: string[]; failed?: { agentId: string; error: string }[]; preview?: AgentWiringPreview } & AgentWiringOverview)
-  | { ok: false; error: string; code?: string }
+  | { ok: false; error: string; code?: string; file?: string }
 
 /** Maps a `/v1/model-gateway/catalog` row onto the model facts agent configs can use. */
 export function gatewayModelInfo(row: Record<string, unknown>): GatewayModelInfo | null {

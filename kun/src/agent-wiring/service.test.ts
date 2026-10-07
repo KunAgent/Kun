@@ -34,9 +34,9 @@ beforeEach(() => {
 afterEach(() => rmSync(home, { recursive: true, force: true }))
 
 describe('Claude Code', () => {
+  // Claude Code reads settings.json as strict JSON only, so the fixture has no comments.
   const ORIGINAL = `{
-  // my settings
-  "theme": "dark",
+  "theme":   "dark",
   "model": "opus",
   "env": {
     "ANTHROPIC_API_KEY": "sk-ant-mine",
@@ -50,7 +50,9 @@ describe('Claude Code', () => {
     const status = service.connect('claude-code', target('coding', { smallModel: 'alpha/a1', effort: 'high' }), 'gc_1')
     expect(status).toMatchObject({ installed: true, connected: true, drifted: false, model: 'coding', clientId: 'gc_1' })
     const wired = read(file)
-    expect(wired).toContain('// my settings')
+    // Untouched keys keep their exact spacing.
+    expect(wired).toContain('"theme":   "dark"')
+    expect(() => JSON.parse(wired)).not.toThrow()
     expect(getJsoncValue(wired, ['env', 'ANTHROPIC_BASE_URL'])).toBe(ORIGIN)
     expect(getJsoncValue(wired, ['env', 'ANTHROPIC_AUTH_TOKEN'])).toBe('kun-agent.kun_local_secret')
     expect(getJsoncValue(wired, ['env', 'ANTHROPIC_API_KEY'])).toBeUndefined()
@@ -71,11 +73,11 @@ describe('Claude Code', () => {
     const file = write('.claude/settings.json', ORIGINAL)
     service.connect('claude-code', target('coding'))
     expect(existsSync(`${file}.kun-backup`)).toBe(true)
-    writeFileSync(file, read(file).replace('"theme": "dark"', '"theme": "light"'))
+    writeFileSync(file, read(file).replace('"theme":   "dark"', '"theme": "light"'))
     service.disconnect('claude-code', ORIGIN)
     const restored = parseJsonc(read(file)) as Record<string, any>
     expect(restored).toEqual({ theme: 'light', model: 'opus', env: { ANTHROPIC_API_KEY: 'sk-ant-mine', DISABLE_TELEMETRY: '1' }, effortLevel: 'medium' })
-    expect(read(file)).toContain('// my settings')
+    expect(() => JSON.parse(read(file))).not.toThrow()
   })
   it('reports drift when the user points the agent elsewhere', () => {
     const file = write('.claude/settings.json', '{}\n')
@@ -194,10 +196,34 @@ describe('profiles and detection', () => {
     expect(rows.find((row) => row.id === 'codex')).toMatchObject({ installed: true })
     expect(rows.find((row) => row.id === 'crush')).toMatchObject({ installed: false, connected: false })
   })
-  it('leaves files untouched when a config cannot be parsed', () => {
-    const file = write('.claude/settings.json', '{ "broken": ')
-    expect(() => service.connect('claude-code', target('coding'))).toThrow('Could not update')
+  it('leaves files untouched when a config cannot be parsed, and names the file', () => {
+    const file = write('.config/opencode/opencode.json', '{ "broken": ')
+    expect(() => service.connect('opencode', target('coding'))).toThrow('Could not update')
+    try { service.connect('opencode', target('coding')) } catch (error) {
+      expect(error).toMatchObject({ code: 'config_unreadable', file })
+    }
     expect(read(file)).toBe('{ "broken": ')
+    expect(service.status('opencode', ORIGIN).connected).toBe(false)
+  })
+  it('refuses to edit a Claude Code settings.json with comments, which Claude Code ignores', () => {
+    const original = '{\n  // mine\n  "theme": "dark",\n}\n'
+    const file = write('.claude/settings.json', original)
+    expect(service.status('claude-code', ORIGIN)).toMatchObject({ errorCode: 'strict_json_required', errorFile: file })
+    expect(() => service.preview('claude-code', target('coding'), '***')).toThrow('not strict JSON')
+    try { service.connect('claude-code', target('coding')) } catch (error) {
+      expect(error).toMatchObject({ code: 'strict_json_required', file })
+    }
+    expect(read(file)).toBe(original)
     expect(service.status('claude-code', ORIGIN).connected).toBe(false)
+  })
+  it('reports YAML it will not rewrite as unsupported rather than unreadable', () => {
+    const file = write('.config/goose/config.yaml', 'base: &b\n  a: 1\nother: *b\n')
+    try {
+      service.connect('goose', target('coding'))
+      throw new Error('expected a refusal')
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'config_unsupported', file })
+    }
+    expect(read(file)).toBe('base: &b\n  a: 1\nother: *b\n')
   })
 })

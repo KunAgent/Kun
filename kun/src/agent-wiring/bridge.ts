@@ -128,7 +128,7 @@ export class AgentWiringBridge {
       return { ok: true, applied, failed, ...await this.overview() }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error),
-        ...(error instanceof AgentWiringError ? { code: error.code } : {}) }
+        ...(error instanceof AgentWiringError ? { code: error.code, ...(error.file ? { file: error.file } : {}) } : {}) }
     }
   }
 }

@@ -18,6 +18,15 @@ export function modelLabel(model: GatewayModelInfo): string {
   return model.displayName && model.displayName !== model.id ? `${model.displayName} · ${model.id}` : model.id
 }
 
+const TRANSLATED_ERRORS = new Set(['config_unreadable', 'config_unsupported', 'strict_json_required'])
+
+/** A wiring failure in the user's language when its code is known; the runtime's own text otherwise. */
+export function agentWiringErrorText(t: TFunction, failure: { error: string; code?: string; file?: string; agent?: string }): string {
+  return failure.code && TRANSLATED_ERRORS.has(failure.code)
+    ? t(`gatewayAgents.errors.${failure.code}`, { file: failure.file ? shortPath(failure.file) : '', agent: failure.agent ?? '' })
+    : failure.error
+}
+
 function shortPath(path: string): string {
   return path.replace(/^\/(?:Users|home)\/[^/]+/, '~').replace(/^[A-Z]:\\Users\\[^\\]+/i, '~')
 }
@@ -119,6 +128,7 @@ export function GatewayAgentRow({ agent, models, busy, disabled, onConnect, onDi
     {agent.drifted ? <p className="text-[11px] leading-5 text-amber-700 dark:text-amber-200">{t('gatewayAgents.driftedHint')}</p> : null}
     {agent.connected && agent.pickInAgent ? <p className="text-[11px] leading-5 text-ds-muted">{t('gatewayAgents.pickInAgent', { agent: agent.name })}</p> : null}
     {agent.notice ? <p className="text-[11px] leading-5 text-amber-700 dark:text-amber-200" data-agent-notice={agent.notice}>{t(`gatewayAgents.notices.${agent.notice}`, { agent: agent.name })}</p> : null}
-    {agent.error ? <p role="alert" className="text-[11px] text-red-600">{agent.error}</p> : null}
+    {agent.error ? <p role="alert" className="text-[11px] leading-5 text-red-600" data-agent-error={agent.errorCode}>
+      {agentWiringErrorText(t, { error: agent.error, code: agent.errorCode, file: agent.errorFile, agent: agent.name })}</p> : null}
   </li>
 }
