@@ -193,8 +193,9 @@ export function FloatingComposerModelPicker({
       if (event.key !== 'Escape') return
       event.preventDefault()
       event.stopPropagation()
+      // Move focus before the panel unmounts so it never falls back to the body.
+      triggerRef.current?.focus()
       setOpen(false)
-      window.requestAnimationFrame(() => triggerRef.current?.focus())
     }
     window.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('keydown', onKeyDown, true)

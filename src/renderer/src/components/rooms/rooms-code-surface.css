@@ -23,3 +23,39 @@
 .rooms-workspace[data-room-surface='agent-chat'] .rooms-message-row:not(.rooms-message-user):not(.rooms-message-system) .rooms-message-bubble {
   border-radius: 6px 16px 16px 16px;
 }
+/* Header and composer icons follow the Code top bar: 16px, 1.75 stroke. */
+.rooms-workspace[data-room-surface='agent-chat'] :is(.rooms-header > .rooms-icon-button, .rooms-header-title .rooms-icon-button) svg,
+.rooms-workspace[data-room-surface='agent-chat'] :is(.rooms-composer-quick-tools > button, .rooms-composer-context-popover) svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-header .rooms-icon-button { width: 32px; height: 32px; border-radius: 8px; }
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-header > .rooms-mode-control select {
+  border-color: transparent;
+  background-color: transparent;
+}
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-header > .rooms-mode-control select:hover { background-color: var(--ds-surface-hover); }
+/* Intent and recipients read as chips, set off from the tool icons. */
+.rooms-workspace[data-room-surface='agent-chat'] .rooms-composer-intent::before {
+  content: '';
+  width: 1px;
+  height: 16px;
+  margin: 0 6px 0 4px;
+  background: var(--ds-border);
+}
+.rooms-workspace[data-room-surface='agent-chat'] :is(.rooms-composer-intent select, .rooms-composer-recipient) {
+  height: 30px;
+  border-color: transparent;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.rooms-workspace[data-room-surface='agent-chat'] :is(.rooms-composer-intent select, .rooms-composer-recipient):hover:not(:disabled) {
+  background-color: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+/* Size the native selects to the current choice, not the longest option. */
+.rooms-workspace[data-room-surface='agent-chat'] :is(.rooms-header > .rooms-mode-control select, .rooms-composer-intent select) { field-sizing: content; }

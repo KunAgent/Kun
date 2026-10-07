@@ -178,7 +178,6 @@ describe('composer model and reasoning control', () => {
     await act(async () => trigger.click())
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
     expect(panel()).toBeNull()
-    await act(async () => new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined))))
     expect(document.activeElement).toBe(trigger)
   })
 

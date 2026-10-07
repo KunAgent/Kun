@@ -294,6 +294,9 @@
   color: var(--ds-text-muted);
   font-size: 12px;
 }
+.rooms-composer-intent { position: relative; display: inline-flex; align-items: center; }
+.rooms-composer-intent select { appearance: none; padding-right: 22px; }
+.rooms-composer-intent > svg { position: absolute; right: 8px; pointer-events: none; color: var(--ds-text-muted); }
 .rooms-composer-model > span,
 .rooms-composer-recipient > span {
   overflow: hidden;

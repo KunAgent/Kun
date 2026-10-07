@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AtSign, BarChart3, FolderOpen, LoaderCircle, Paperclip, Plus, ArrowUp, Square } from 'lucide-react'
+import { AtSign, BarChart3, ChevronDown, FolderOpen, LoaderCircle, Paperclip, Plus, ArrowUp, Square } from 'lucide-react'
 import type { Room, RoomTask, SendRoomMessage } from '@shared/rooms-api'
 import { RoomEmojiPicker } from './RoomEmojiPicker'
 import { RoomPopover } from './RoomPopover'
@@ -56,7 +56,7 @@ export function RoomComposerToolbar({ room, tasks, taskId, repositoryId, rootReq
         <option value="auto">{t('roomsIntentAutoShort')}</option>
         <option value="discussion">{t('roomsIntentDiscussionShort')}</option>
         <option value="execute">{t('roomsIntentExecuteShort')}</option>
-      </select></label>
+      </select><ChevronDown size={12} aria-hidden="true" /></label>
       <button type="button" className="rooms-composer-recipient" disabled={disabled} onClick={onMention}
         title={recipientLabel} aria-label={t('roomsMention')}><AtSign size={14} /><span>{recipientLabel || t('roomsAllMembers')}</span></button>
     </>}

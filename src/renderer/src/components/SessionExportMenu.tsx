@@ -8,6 +8,7 @@ import {
 } from '@shared/conversation-export'
 import type { ChatBlock } from '../agent/types'
 import { buildConversationExportDocument } from '../lib/conversation-export'
+import { HEADER_ICON_BUTTON_CLASS, HEADER_ICON_CLASS, HEADER_ICON_STROKE } from './workbench/header-action-button'
 
 type Props = {
   title: string
@@ -165,18 +166,18 @@ export function SessionExportMenu({
           setOpen((value) => !value)
           setError('')
         }}
-        className="ds-topbar-action-button inline-flex h-8 w-8 items-center justify-center rounded-[var(--ds-radius-control)] border border-transparent bg-transparent text-ds-faint opacity-90 transition hover:border-ds-border-muted hover:bg-ds-hover hover:text-ds-ink hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-40"
+        className={HEADER_ICON_BUTTON_CLASS}
         data-tooltip={tooltip}
         aria-label={tooltip}
         aria-haspopup="menu"
         aria-expanded={open}
       >
         {exportingFormat ? (
-          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.8} />
+          <Loader2 className={`${HEADER_ICON_CLASS} animate-spin`} strokeWidth={HEADER_ICON_STROKE} />
         ) : success ? (
           <Check className="h-4 w-4 text-emerald-500" strokeWidth={2} />
         ) : (
-          <Download className="h-4 w-4" strokeWidth={1.8} />
+          <Download className={HEADER_ICON_CLASS} strokeWidth={HEADER_ICON_STROKE} />
         )}
       </button>
 

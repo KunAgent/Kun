@@ -12,6 +12,7 @@ import { resolveProjectWorkspacePath } from '../lib/worktree-project-path'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import { SessionExportMenu } from './SessionExportMenu'
 import { TaskSettingsButton } from './workbench/TaskSettingsButton'
+import { HEADER_ICON_CLASS, HEADER_ICON_STROKE, headerTextButtonClass } from './workbench/header-action-button'
 import { WorkbenchSessionActions, WorkbenchOriginChip } from './rooms/WorkbenchSessionBits'
 import {
   formatCompactNumber,
@@ -214,17 +215,13 @@ export function SessionHeader({
               {trajectoryEnabled && onToggleTrajectory ? (
                 <button
                   type="button"
-                  className={`session-header-compact-trajectory ds-no-drag relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--ds-radius-control)] border px-2 text-[11.5px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
-                    trajectoryOpen
-                      ? 'border-ds-border-strong bg-ds-card text-ds-ink'
-                      : 'border-ds-border-muted bg-ds-card text-ds-muted hover:border-ds-border-strong hover:bg-ds-hover hover:text-ds-ink'
-                  }`}
+                  className={`session-header-compact-trajectory ${headerTextButtonClass(trajectoryOpen)}`}
                   onClick={onToggleTrajectory}
                   data-tooltip={t('trajectoryButtonTooltip')}
                   aria-label={t('trajectoryButtonTooltip')}
                   aria-pressed={trajectoryOpen}
                 >
-                  <Activity className="h-3.5 w-3.5 shrink-0" strokeWidth={1.85} aria-hidden="true" />
+                  <Activity className={HEADER_ICON_CLASS} strokeWidth={HEADER_ICON_STROKE} aria-hidden="true" />
                   <span>{t('trajectoryButton')}</span>
                   {trajectoryRunning ? (
                     <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
@@ -236,12 +233,12 @@ export function SessionHeader({
               {onOpenRequirementDraft ? (
                 <button
                   type="button"
-                  className="session-header-compact-requirement ds-no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--ds-radius-control)] border border-ds-border-muted bg-ds-card px-2 text-[11.5px] font-medium text-ds-muted transition hover:border-ds-border-strong hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+                  className={`session-header-compact-requirement ${headerTextButtonClass()}`}
                   onClick={onOpenRequirementDraft}
                   title={t('sddDraftTitle')}
                   aria-label={t('sddDraftTitle')}
                 >
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.85} />
+                  <FileText className={`${HEADER_ICON_CLASS} text-accent`} strokeWidth={HEADER_ICON_STROKE} />
                   <span className="max-w-24 truncate">{t('sddDraftTitle')}</span>
                 </button>
               ) : null}
@@ -262,6 +259,7 @@ export function SessionHeader({
               currentTurnId={currentTurnId}
               currentTurnUserId={currentTurnUserId}
             />
+            <span aria-hidden="true" className="session-header-compact-divider mx-0.5 h-4 w-px shrink-0 bg-ds-border" />
           </>
         ) : (
           <div className="session-header-compact-empty flex min-w-0 items-center gap-1.5 text-[12.5px] font-medium text-ds-faint">

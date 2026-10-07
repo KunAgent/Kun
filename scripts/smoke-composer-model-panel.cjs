@@ -33,7 +33,8 @@ async function exerciseComposerModelPanel({ page, poll, capture, prefix }) {
   await capture(`${prefix}-model-panel`)
   await page.keyboard.press('Escape')
   await panel.waitFor({ state: 'detached' })
-  assert(await trigger.evaluate((element) => element === document.activeElement), 'Escape returns focus to the composer button')
+  await poll(() => trigger.evaluate((element) => element === document.activeElement), 5000,
+    'Escape returns focus to the composer button')
   return ['The composer shows one model and reasoning button whose panel sets effort and lists models']
 }
 
