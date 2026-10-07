@@ -12,6 +12,7 @@ const MAX_SANITIZE_DEPTH = 32
 export type MessageDetailProjection = {
   state: 'available' | 'not_captured' | 'truncated' | 'evicted'
   content?: unknown
+  renderMode?: 'plain-text' | 'safe-markdown'
   truncated?: boolean
   warning?: string
 }
@@ -41,9 +42,19 @@ export function projectMessageRenderedDetail(
   const text = selected.flatMap(renderedTextForItem).filter(Boolean).join('\n\n')
   if (!text) return { state: 'not_captured', warning: 'rendered message content is unavailable' }
   const limited = boundedText(redactSecrets(text), DETAIL_CONTENT_LIMIT)
+  // A joined preview must never weaken any selected assistant item's policy.
+  const modes = selected.flatMap((item) =>
+    item.kind === 'assistant_text' || item.kind === 'assistant_reasoning'
+      ? [item.renderMode]
+      : []
+  )
+  const renderMode = modes.includes('plain-text')
+    ? 'plain-text'
+    : modes.includes('safe-markdown') ? 'safe-markdown' : undefined
   return {
     state: limited.truncated ? 'truncated' : 'available',
     content: limited.value,
+    ...(renderMode ? { renderMode } : {}),
     truncated: limited.truncated,
     ...(limited.truncated ? { warning: 'rendered content exceeded the inline detail limit' } : {})
   }

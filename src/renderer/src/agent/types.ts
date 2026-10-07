@@ -392,7 +392,7 @@ export type PaperListBlock = {
 export type SourceHistoryOrder = { referenceId: string; turnIndex: number; itemIndex: number }
 export type SourceHistoryAttachment = { index: number; name: string; mimeType?: string }
 export type ChatBlock = ({
-  renderMode?: 'plain-text'
+  renderMode?: 'plain-text' | 'safe-markdown'
   sourceHistoryOrder?: SourceHistoryOrder
   sourceAttachments?: SourceHistoryAttachment[]
   sourceRecords?: Array<{ itemId: string; kind: string }>
@@ -639,7 +639,7 @@ export type ThreadDeltaEvent = {
 }
 
 export type AssistantItemSnapshotPayload = {
-  renderMode?: 'plain-text'
+  renderMode?: 'plain-text' | 'safe-markdown'
   itemId: string
   threadId: string
   turnId: string

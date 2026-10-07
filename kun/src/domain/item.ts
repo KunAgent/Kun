@@ -158,7 +158,7 @@ export function makeAssistantTextItem(input: {
   turnId: string
   threadId: string
   text: string
-  renderMode?: 'plain-text'
+  renderMode?: 'plain-text' | 'safe-markdown'
   status?: 'running' | 'completed' | 'failed'
   createdAt?: string
 }): TurnItem {
@@ -180,7 +180,7 @@ export function makeAssistantReasoningItem(input: {
   turnId: string
   threadId: string
   text: string
-  renderMode?: 'plain-text'
+  renderMode?: 'plain-text' | 'safe-markdown'
   status?: 'running' | 'completed' | 'failed'
   createdAt?: string
 }): TurnItem {

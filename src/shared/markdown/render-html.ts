@@ -60,10 +60,10 @@ const MERMAID_SLOT_TAG = 'work-mermaid-slot'
 
 /**
  * Replace mermaid code blocks with placeholder nodes (raw svg slots) and
- * record every remaining fenced block's source in `codeSlots`, in document
- * order — the post-sanitize pass zips them with `<pre>` elements.
+ * bind every remaining code block to its parser-assigned source offset. Raw
+ * HTML and LaTeX fallbacks also produce <pre> elements; they are not code slots.
  */
-function markMermaidBlocks(tree: LooseNode, slots: string[], codeSlots: string[]): void {
+function markMermaidBlocks(tree: LooseNode, slots: string[], codeSlots: Map<number, string>): void {
   const visit = (node: LooseNode): LooseNode => {
     if (node.type === 'code') {
       if ((node.lang ?? '') === 'mermaid') {
@@ -74,7 +74,8 @@ function markMermaidBlocks(tree: LooseNode, slots: string[], codeSlots: string[]
           value: String(slots.length - 1)
         }
       }
-      codeSlots.push(node.value ?? '')
+      const offset = node.position?.start.offset
+      if (typeof offset === 'number') codeSlots.set(offset, node.value ?? '')
     }
     if (node.children) {
       node.children = node.children.map((child) => visit(child))
@@ -168,9 +169,8 @@ const workSanitizeSchema = {
 
 /** Post-sanitize passes: mermaid svg injection + shiki slot injection +
  * resource rewriting. */
-function workPostProcess(slots: string[], codeSlots: string[], options: WorkRenderHtmlOptions) {
+function workPostProcess(slots: string[], codeSlots: ReadonlyMap<number, string>, options: WorkRenderHtmlOptions) {
   return (tree: HastRoot) => {
-    let preIndex = 0
     const visit = (node: Node | HastRoot): void => {
       if (node.type === 'root') {
         for (const child of (node as HastRoot).children ?? []) visit(child)
@@ -179,9 +179,13 @@ function workPostProcess(slots: string[], codeSlots: string[], options: WorkRend
       if (node.type !== 'element') return
       const element = node as Element
       if (element.tagName === 'pre' && options.highlightedCode) {
-        const highlighted = options.highlightedCode[codeSlots[preIndex] ?? '']
-        preIndex += 1
-        if (highlighted) {
+        // Positions survive rehype-raw/sanitize and cannot be forged by HTML
+        // attributes. Never assign a later fence to a literal <pre> wrapper.
+        const offset = element.position?.start.offset
+        const source = typeof offset === 'number' ? codeSlots.get(offset) : undefined
+        const highlighted = source !== undefined && Object.hasOwn(options.highlightedCode, source)
+          ? options.highlightedCode[source] : undefined
+        if (typeof highlighted === 'string' && highlighted) {
           element.children = [{ type: 'raw', value: highlighted } as ElementContent]
         }
         return
@@ -219,7 +223,7 @@ export function renderWorkMarkdownToHtml(
   const { body } = splitFrontmatter(markdown)
   const mdast = parseWorkMdast(body)
   const slots: string[] = []
-  const codeSlots: string[] = []
+  const codeSlots = new Map<number, string>()
   markMermaidBlocks(mdast as unknown as LooseNode, slots, codeSlots)
 
   const pipeline = unified()

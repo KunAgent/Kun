@@ -67,7 +67,7 @@ export async function runPaperModelStep(input: {
     paperReadOnly: { assertCurrent: guard, takeAttempt: () => attempts++ === 0 }
   }
   const streamed = await engine.run({
-    threadId, turnId, signal, request, maxToolCallsPerStep: 0, plainTextOutput: true,
+    threadId, turnId, signal, request, maxToolCallsPerStep: 0, outputRenderMode: 'safe-markdown',
     streamToolMetadata: new Map(),
     cacheSignature: { model: context.model, providerId: context.providerId,
       endpointFormat: 'paper-read-only', prefixFingerprint: opts.prefix.fingerprint,

@@ -17,6 +17,9 @@ export function restoredThreadLiveProjection(
       item.status !== 'running' ||
       !item.text
     ) continue
+    // Constrained replies must retain their policy-bearing blocks on reopen.
+    // The generic live slots contain text only and would lose this boundary.
+    if (item.renderMode) continue
     const target = item.kind === 'assistant_text'
       ? 'assistant'
       : item.kind === 'assistant_reasoning'

@@ -229,6 +229,7 @@ export function ProcessSectionRow({
               <AssistantMarkdown
                 text={reasoningText}
                 plainText={section.blocks.some((block) => block.renderMode === 'plain-text')}
+                safeMarkdown={section.blocks.some((block) => block.renderMode === 'safe-markdown')}
                 streaming={active && processing}
                 hideHtmlComments
               />

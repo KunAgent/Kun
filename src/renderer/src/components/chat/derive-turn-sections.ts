@@ -258,7 +258,8 @@ export function deriveTurnSections({
           id: `${block.id}-think`,
           turnId: block.turnId,
           createdAt: block.createdAt,
-          text: split.think
+          text: split.think,
+          ...(block.renderMode ? { renderMode: block.renderMode } : {})
         }
         processBlocks.push(reasoningBlock)
         processTimelineBlocks.push(reasoningBlock)
