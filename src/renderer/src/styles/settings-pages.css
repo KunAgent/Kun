@@ -1,0 +1,209 @@
+/* Page-specific settings surfaces: extension booleans and the keyboard shortcut list.
+   Shared tokens (--st-*) come from settings-chrome.css. */
+
+/* ---------- Extension booleans: native checkboxes drawn as switches ---------- */
+
+.ds-settings-page--extensions input[type='checkbox'] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  inline-size: 2.25rem;
+  block-size: 1.25rem;
+  margin: 0;
+  border-radius: 9999px;
+  background: var(--settings-switch-off, var(--ds-text-faint));
+  cursor: pointer;
+  transition: background-color var(--st-med) var(--st-ease);
+}
+
+.ds-settings-page--extensions input[type='checkbox']::before {
+  content: '';
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  inline-size: 1rem;
+  block-size: 1rem;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2), 0 0 0 0.5px rgb(0 0 0 / 0.04);
+  transition:
+    transform var(--st-slow) var(--st-spring),
+    background-color var(--st-med) var(--st-ease);
+}
+
+.ds-settings-page--extensions input[type='checkbox']:checked {
+  background: var(--ds-control);
+}
+
+.ds-settings-page--extensions input[type='checkbox']:checked::before {
+  transform: translateX(1rem);
+  background: var(--ds-control-foreground);
+}
+
+@media (forced-colors: active) {
+  .ds-settings-page--extensions input[type='checkbox'] {
+    -webkit-appearance: auto;
+    appearance: auto;
+  }
+}
+
+/* ---------- Keyboard shortcuts ---------- */
+
+.ds-shortcut-search {
+  display: flex;
+  min-block-size: 2.5rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0 0.5rem 0 0.875rem;
+  border: 1px solid var(--ds-border);
+  border-radius: 9999px;
+  background: var(--ds-surface-card);
+  box-shadow: var(--st-card-shadow);
+  cursor: text;
+  transition:
+    border-color var(--st-fast) var(--st-ease),
+    box-shadow var(--st-fast) var(--st-ease);
+}
+
+.ds-shortcut-search:hover {
+  border-color: var(--ds-border-strong);
+}
+
+.ds-shortcut-search:focus-within {
+  border-color: color-mix(in srgb, var(--ds-focus-ring) 60%, var(--ds-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-focus-ring) 16%, transparent);
+}
+
+.ds-settings-surface .ds-shortcut-search input:focus-visible {
+  outline: none;
+}
+
+.ds-shortcut-count {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--st-segment-bg);
+  color: var(--ds-text-faint);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.5rem 0.75rem 0.75rem;
+}
+
+.ds-settings-surface .ds-shortcut-binding {
+  display: inline-flex;
+  inline-size: 13.5rem;
+  min-block-size: 2.25rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px dashed transparent;
+  border-radius: 0.75rem;
+  background: var(--st-segment-bg);
+  text-align: left;
+  transition:
+    background-color var(--st-fast) var(--st-ease),
+    border-color var(--st-fast) var(--st-ease),
+    box-shadow var(--st-fast) var(--st-ease);
+}
+
+.ds-settings-surface .ds-shortcut-binding:hover {
+  border-color: var(--ds-border-strong);
+  background: var(--ds-surface-card);
+}
+
+.ds-settings-surface .ds-shortcut-binding[data-capturing='true'] {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--ds-focus-ring) 60%, var(--ds-border));
+  background: color-mix(in srgb, var(--ds-focus-ring) 8%, var(--ds-surface-card));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-focus-ring) 14%, transparent);
+}
+
+.ds-shortcut-combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+}
+
+.ds-shortcut-key {
+  display: inline-grid;
+  min-inline-size: 1.375rem;
+  block-size: 1.375rem;
+  place-items: center;
+  padding: 0 0.375rem;
+  border: 1px solid var(--ds-border);
+  border-bottom-width: 2px;
+  border-radius: 0.375rem;
+  background: var(--ds-surface-card);
+  color: var(--ds-text);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+[data-theme='dark'] .ds-shortcut-key {
+  border-color: var(--ds-border-strong);
+  background: color-mix(in srgb, white 6%, var(--ds-surface-card));
+}
+
+.ds-shortcut-recording {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: color-mix(in srgb, var(--ds-focus-ring) 80%, var(--ds-text));
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.ds-shortcut-recording-dot {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 9999px;
+  background: var(--ds-danger);
+  animation: ds-shortcut-pulse 1.2s var(--st-ease-in-out) infinite;
+}
+
+.ds-shortcut-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  color: var(--ds-text-faint);
+  font-size: 0.8125rem;
+}
+
+@keyframes ds-shortcut-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+
+@container (max-width: 580px) {
+  .ds-shortcut-row { flex-wrap: wrap; }
+  .ds-settings-surface .ds-shortcut-binding { inline-size: auto; flex: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-shortcut-recording-dot {
+    animation: none;
+  }
+
+  .ds-settings-page--extensions input[type='checkbox'],
+  .ds-settings-page--extensions input[type='checkbox']::before,
+  .ds-settings-surface .ds-shortcut-binding,
+  .ds-shortcut-search {
+    transition: none;
+  }
+}

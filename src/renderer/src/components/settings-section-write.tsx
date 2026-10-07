@@ -131,13 +131,14 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                 ariaLabel={t('write')}
                 value={activeTab}
                 onChange={setActiveTab}
+                contentSized
                 items={[
                   { id: 'workspace', label: t('sectionWrite'), icon: FolderOpen },
                   { id: 'typography', label: t('writeTypography'), icon: Type },
                   { id: 'suggestions', label: t('writeInlineCompletion'), icon: Sparkles },
                   { id: 'selection', label: t('writeSelectionAssistTitle'), icon: TextCursorInput },
                   { id: 'agents', label: t('writeAgentPresets'), icon: Bot },
-                  { id: 'paper', label: t('writePaperModeSettingsTitle'), icon: GraduationCap }
+                  { id: 'paper', label: tCommon('writePaperModeSettingsTitle'), icon: GraduationCap }
                 ]}
               />
               <SettingsTabPanel baseId="write-settings" tabId="workspace" active={activeTab === 'workspace'}>

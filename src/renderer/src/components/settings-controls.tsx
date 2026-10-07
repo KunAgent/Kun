@@ -9,7 +9,19 @@ import {
   type ReactElement,
   type ReactNode
 } from 'react'
-import { Check, ChevronDown, Copy, Eye, EyeOff, Loader2, type LucideIcon } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  CircleAlert,
+  CircleCheck,
+  Copy,
+  Eye,
+  EyeOff,
+  Info,
+  Loader2,
+  type LucideIcon
+} from 'lucide-react'
+import { useSlidingTabIndicator } from './settings-tab-indicator'
 
 export type InlineNotice = {
   tone: 'success' | 'error' | 'info'
@@ -49,7 +61,8 @@ export function SecretInput({
 }): ReactElement {
   return (
     <div
-      className={`flex min-h-9 w-full min-w-0 items-stretch overflow-hidden rounded-full bg-ds-card ${className} ${
+      data-invalid={invalid ? 'true' : undefined}
+      className={`ds-settings-secret flex min-h-9 w-full min-w-0 items-stretch overflow-hidden rounded-full bg-ds-card ${className} ${
         invalid
           ? 'border border-amber-300 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-200'
           : 'border border-ds-border focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/15'
@@ -60,7 +73,7 @@ export function SecretInput({
         autoComplete={autoComplete}
         aria-label={ariaLabel}
         placeholder={placeholder}
-        className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[13px] text-ds-ink focus:outline-none"
+        className="ds-settings-secret-input min-w-0 flex-1 bg-transparent px-3.5 py-2 text-[13px] text-ds-ink placeholder:text-ds-faint focus:outline-none"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
@@ -72,7 +85,7 @@ export function SecretInput({
         onClick={onToggleVisibility}
         disabled={toggleBusy}
         aria-busy={toggleBusy}
-        className="shrink-0 border-l border-ds-border-muted px-3 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-wait disabled:opacity-60"
+        className="ds-settings-secret-toggle shrink-0 px-3 text-ds-faint transition hover:text-ds-ink disabled:cursor-wait disabled:opacity-60"
       >
         {toggleBusy
           ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
@@ -102,7 +115,7 @@ export function SectionJumpButton({
       aria-selected={active}
       aria-controls={controls}
       onClick={onClick}
-      className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
+      className={`ds-settings-jump rounded-full border px-3 py-1.5 text-[12px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
         active
           ? 'border-transparent bg-[var(--ds-control)] text-[var(--ds-control-foreground)]'
           : 'border-ds-border bg-ds-card text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
@@ -141,8 +154,11 @@ function SettingsTabList<T extends string>({
 }: SettingsTabsProps<T> & {
   variant: SettingsTabVariant
 }): ReactElement {
+  const listRef = useRef<HTMLDivElement | null>(null)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const secondary = variant === 'secondary'
+  const activeIndex = items.findIndex((item) => item.id === value)
+  const indicator = useSlidingTabIndicator(listRef, tabRefs, activeIndex, items.length)
 
   const handleKeyDown = (
     event: ReactKeyboardEvent<HTMLButtonElement>,
@@ -171,19 +187,24 @@ function SettingsTabList<T extends string>({
 
   return (
     <div
+      ref={listRef}
       role="tablist"
       aria-label={ariaLabel}
       aria-orientation="horizontal"
+      data-indicator={indicator.state}
       className={
         secondary
-          ? 'ds-settings-subtabs flex w-full min-w-0 items-center gap-1 overflow-x-auto rounded-full border border-ds-border-muted bg-ds-main/60 p-1'
-          : `ds-settings-tabs grid w-full ${
+          ? 'ds-settings-subtabs ds-settings-tablist relative flex w-full min-w-0 items-center gap-1 overflow-x-auto rounded-full border border-ds-border-muted bg-ds-main/60 p-1'
+          : `ds-settings-tabs ds-settings-tablist relative grid w-full ${
               contentSized
                 ? 'ds-settings-tabs--wrap grid-flow-row grid-cols-[repeat(auto-fit,minmax(9.5rem,max-content))] justify-start rounded-[22px]'
                 : 'grid-flow-col overflow-x-auto rounded-full auto-cols-[minmax(8rem,1fr)]'
             } gap-1 border border-ds-border bg-ds-main p-1`
       }
     >
+      {indicator.style ? (
+        <span aria-hidden="true" className="ds-settings-tab-indicator" style={indicator.style} />
+      ) : null}
       {items.map((item, index) => {
         const active = item.id === value
         const Icon = item.icon
@@ -203,12 +224,12 @@ function SettingsTabList<T extends string>({
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={
               secondary
-                ? `group flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[12px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
+                ? `ds-settings-tab group relative flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[12px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
                     active
                       ? 'border-ds-border bg-ds-card text-ds-ink'
                       : 'border-transparent text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
                   }`
-                : `group flex h-9 items-center justify-center gap-2 rounded-full border px-3 text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
+                : `ds-settings-tab group relative flex h-9 items-center justify-center gap-2 rounded-full border px-3 text-[13px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
                     contentSized ? 'min-w-max whitespace-nowrap' : 'min-w-0'
                   } ${
                     active
@@ -220,7 +241,7 @@ function SettingsTabList<T extends string>({
             {Icon ? (
               <Icon
                 aria-hidden="true"
-                className={secondary ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4 shrink-0'}
+                className={`ds-settings-tab-icon ${secondary ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4 shrink-0'}`}
                 strokeWidth={1.9}
               />
             ) : null}
@@ -292,13 +313,18 @@ export function InlineNoticeView({
       : notice.tone === 'success'
         ? 'border-emerald-300/80 bg-emerald-50 text-emerald-800 dark:border-emerald-800/70 dark:bg-emerald-950/25 dark:text-emerald-200'
         : 'border-ds-border bg-ds-main/50 text-ds-muted'
+  const ToneIcon = notice.tone === 'error' ? CircleAlert : notice.tone === 'success' ? CircleCheck : Info
 
   return (
     // `min-w-0 break-words` keeps long messages (a failed-probe error can carry
     // a full URL or a 300-char response body) wrapping inside the container
     // instead of forcing horizontal overflow that stretches the settings panel
     // — the success notice is short so the bug only ever showed on failure (#617).
-    <div className={`ds-settings-inline-notice flex min-w-0 items-start gap-2 rounded-[var(--ds-radius-card)] border px-3 py-2 text-[12px] leading-5 ${className}`}>
+    <div
+      data-tone={notice.tone}
+      className={`ds-settings-inline-notice flex min-w-0 items-start gap-2 rounded-[var(--ds-radius-card)] border px-3 py-2 text-[12px] leading-5 ${className}`}
+    >
+      <ToneIcon aria-hidden="true" className="ds-settings-inline-notice-icon mt-[3px] h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
       <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{notice.message}</span>
       {notice.action || notice.copy ? (
         <span className="flex shrink-0 items-center gap-1.5">
@@ -360,17 +386,16 @@ export function SettingsCard({
         className={`ds-settings-card ds-settings-card--collapsible group overflow-hidden rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card ${className}`}
         open={defaultOpen || undefined}
       >
-        <summary className="ds-settings-card-header flex cursor-pointer list-none items-center justify-between gap-4 px-5 transition hover:bg-ds-hover/55 [&::-webkit-details-marker]:hidden">
+        <summary className="ds-settings-card-header flex cursor-pointer list-none items-center justify-between gap-4 px-5 transition [&::-webkit-details-marker]:hidden">
           <span className="min-w-0">
-            <h2 className="text-[16px] font-medium leading-tight text-ds-ink">{title}</h2>
+            <h2 className="ds-settings-card-title">{title}</h2>
             {description ? (
-              <span className="mt-1 block text-[12px] leading-[1.4] text-ds-muted">{description}</span>
+              <span className="ds-settings-card-description mt-1 block">{description}</span>
             ) : null}
           </span>
-          <ChevronDown
-            className="h-4 w-4 shrink-0 text-ds-faint transition group-open:rotate-180"
-            strokeWidth={1.9}
-          />
+          <span aria-hidden="true" className="ds-settings-chevron">
+            <ChevronDown className="h-4 w-4" strokeWidth={2} />
+          </span>
         </summary>
         <div className="ds-settings-card-body divide-y divide-ds-border-muted px-2">{children}</div>
       </details>
@@ -382,9 +407,9 @@ export function SettingsCard({
       className={`ds-settings-card rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card ${className}`}
     >
       <div className="ds-settings-card-header px-5">
-        <h2 className="text-[16px] font-medium leading-tight text-ds-ink">{title}</h2>
+        <h2 className="ds-settings-card-title">{title}</h2>
         {description ? (
-          <p className="mt-1 text-[12px] leading-[1.4] text-ds-muted">{description}</p>
+          <p className="ds-settings-card-description mt-1">{description}</p>
         ) : null}
       </div>
       <div className="ds-settings-card-body divide-y divide-ds-border-muted px-2">{children}</div>
@@ -444,7 +469,7 @@ export function SettingRow({
       <div className={`min-w-0 ${wideControl ? 'w-full max-w-none shrink-0' : 'flex-1'}`}>
         <div id={titleId} className="ds-setting-row-label text-[13px] font-medium text-ds-ink">{title}</div>
         {description ? (
-          <p id={descriptionId} className="mt-1 text-[12px] leading-[1.4] text-ds-muted">{description}</p>
+          <p id={descriptionId} className="ds-setting-row-description mt-1 text-[12px] leading-[1.45] text-ds-muted">{description}</p>
         ) : null}
       </div>
       <div
@@ -584,14 +609,16 @@ export function AdvancedSettingsDisclosure({
 }): ReactElement {
   return (
     <details className="ds-settings-disclosure group overflow-hidden rounded-[var(--ds-radius-card)] border border-ds-border-muted bg-ds-main/35">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-ds-hover/70 [&::-webkit-details-marker]:hidden">
+      <summary className="ds-settings-disclosure-summary flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left transition [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
           <span className="block text-[13px] font-medium text-ds-ink">{title}</span>
           {description ? (
             <span className="mt-1 block text-[12px] leading-[1.4] text-ds-muted">{description}</span>
           ) : null}
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-ds-faint transition group-open:rotate-180" strokeWidth={1.9} />
+        <span aria-hidden="true" className="ds-settings-chevron">
+          <ChevronDown className="h-4 w-4" strokeWidth={2} />
+        </span>
       </summary>
       <div className={`border-t border-ds-border-muted bg-ds-card/45 ${contentClassName}`}>{children}</div>
     </details>
@@ -625,7 +652,7 @@ export function Toggle({
       } ${disabled ? 'cursor-not-allowed opacity-60' : 'active:scale-[0.98]'}`}
     >
       <span
-        className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-150 ease-out ${
+        className={`ds-settings-toggle-thumb absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-150 ease-out ${
           checked ? 'translate-x-4' : 'translate-x-0'
         }`}
       />

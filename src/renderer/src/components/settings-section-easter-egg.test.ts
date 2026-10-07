@@ -191,7 +191,8 @@ describe('EasterEggSettingsSection (mode workshop)', () => {
     }))
 
     expect(html).toContain('Mode workshop')
-    expect(html).toContain('bg-[var(--ds-control)]')
+    expect(html).toMatch(/aria-current="page"[^>]*data-settings-category="easterEgg"/)
+    expect(html).toContain('data-active="true"')
   })
 
   it('disables plugin removal while another workshop operation is busy', async () => {

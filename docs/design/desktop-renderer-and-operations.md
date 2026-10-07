@@ -224,6 +224,34 @@ not change the runtime contract, only which renderer and local workflow state th
   `ClawRuntime` (main process), which calls Kun over
   HTTP just like the renderer does.
 
+### 7.6 Settings surface
+
+Settings is one `SettingsView` with a searchable sidebar and lazily loaded pages.
+Keep new pages inside this system instead of styling them from scratch:
+
+- **Navigation model** — `settings-navigation.ts` owns categories, groups,
+  platform/extension guards, the decorative `tone` of every icon tile, and the
+  sidebar search matcher (short label, full label, group, and description).
+- **Icon tiles** — `SettingsIconTile` draws a soft tinted tile in the sidebar
+  (solid when selected) and a large tile in the page header. Tones resolve to
+  theme tokens (`--ds-accent`, `--ds-success`, `--ds-warning`, `--ds-danger`,
+  `--ds-skill`, and mixes of them), so plugin and dark themes stay coherent.
+- **Shared controls** — `settings-controls.tsx` (cards, rows, segmented tabs with
+  a sliding indicator, switches, notices, disclosures) and
+  `settings-button.ts`. Pages with more than four primary tabs pass
+  `contentSized` so labels wrap instead of truncating.
+- **Styles** — `settings-layout.css` (geometry and responsive layout),
+  `settings-chrome.css` (motion tokens, sidebar, header, status, toasts,
+  skeleton), `settings-controls.css` (surfaces, states, fields),
+  `settings-pages.css` (page-specific lists), and `settings-buttons.css`.
+  Everything is scoped to `.ds-settings-surface` and uses theme tokens only.
+- **Motion** — micro (140 ms), standard (220 ms), and slow (320 ms) durations
+  with an ease-out curve; springs only for thumbs, chevrons, and pop-ins. Page,
+  tab-panel, and disclosure entrances are opacity-only so controls never move
+  under measurement, and every animation is disabled under reduced motion.
+- **Loading** — `lazySection` preloads a page's chunk on sidebar hover, focus,
+  or search match, so opening it does not flash the skeleton.
+
 ---
 
 ## 8. Data persistence (renderer + main)

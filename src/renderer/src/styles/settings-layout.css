@@ -1,6 +1,6 @@
 .ds-settings-content {
   width: 100%;
-  max-width: 920px;
+  max-width: 880px;
 }
 
 .ds-settings-content--providers {
@@ -25,7 +25,7 @@
 }
 
 .ds-settings-scroller {
-  padding: 56px 24px 128px 16px;
+  padding: 52px 32px 128px;
   scrollbar-gutter: stable;
 }
 
@@ -36,8 +36,8 @@
 .ds-settings-page {
   display: grid;
   min-width: 0;
-  gap: 14px;
-  animation: ds-settings-page-enter 150ms ease-out;
+  gap: 16px;
+  animation: ds-settings-page-enter 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ds-settings-page > *,
@@ -62,7 +62,7 @@
 }
 
 .ds-settings-page-header {
-  margin-bottom: 18px;
+  margin-bottom: 24px;
 }
 
 .ds-settings-tabs,
@@ -87,13 +87,13 @@
 
 .ds-settings-tab-panel:not([hidden]) {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .ds-settings-panel-stack {
   display: grid;
   min-width: 0;
-  gap: 14px;
+  gap: 16px;
 }
 
 .ds-settings-card {
@@ -103,7 +103,7 @@
 }
 
 .ds-settings-card-header {
-  padding-block: 20px 14px;
+  padding-block: 18px 10px;
 }
 
 .ds-settings-card-body {
@@ -115,7 +115,7 @@
 }
 
 .ds-setting-row p {
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 @keyframes ds-settings-page-enter {
@@ -134,15 +134,6 @@
 .ds-settings-tab-panel > :is(.mt-5, .mt-6).ds-settings-card,
 .ds-settings-tab-panel > .ds-settings-card:is(.mt-5, .mt-6) {
   margin-top: 0;
-}
-
-.ds-settings-page--shortcuts .ds-settings-card-body > div:last-child {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.ds-settings-page--shortcuts .ds-settings-card-body > div:last-child > * {
-  border-bottom: 1px solid var(--ds-border-muted);
 }
 
 .ds-settings-page--dataMigration [data-testid='data-migration-settings'] {
@@ -173,10 +164,6 @@
 
   .ds-provider-workspace {
     min-height: 0;
-  }
-
-  .ds-settings-page--shortcuts .ds-settings-card-body > div:last-child {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -227,7 +214,7 @@
 .ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch]) {
   --settings-switch-track-height: 1.25rem;
   --settings-switch-thumb-half: 0.5rem;
-  --settings-switch-track-color: var(--ds-text-faint);
+  --settings-switch-track-color: var(--settings-switch-off, var(--ds-text-faint));
   min-block-size: max(2rem, calc(25px / var(--ds-ui-scale, 1)));
   background: transparent;
 }
@@ -303,8 +290,8 @@
 
 .ds-settings-surface .ds-settings-tabs,
 .ds-settings-surface .ds-settings-subtabs {
-  scroll-padding-inline: 0.375rem;
-  padding: 0.375rem;
+  scroll-padding-inline: 0.25rem;
+  padding: 0.25rem;
 }
 
 .ds-settings-surface .ds-settings-tabs button,
@@ -314,13 +301,17 @@
   padding-block: 0.5rem;
 }
 
+.ds-settings-sidebar {
+  width: 252px;
+}
+
 .ds-settings-compact-navigation {
   display: none;
 }
 
 @media (max-width: 1100px) {
-  .ds-settings-sidebar { width: 216px; }
-  .ds-settings-scroller { padding-inline: 20px; }
+  .ds-settings-sidebar { width: 224px; }
+  .ds-settings-scroller { padding-inline: 24px; }
 }
 
 @media (max-width: 760px) {
@@ -338,6 +329,7 @@
   .ds-settings-sidebar-heading h1 { font-size: 1rem; }
   .ds-settings-sidebar .ds-titlebar-safe-block,
   .ds-settings-sidebar nav,
+  .ds-settings-search,
   .ds-settings-sidebar-footer { display: none; }
   .ds-settings-compact-navigation {
     display: block;
@@ -356,7 +348,7 @@
   .ds-settings-scroller,
   .ds-settings-scroller--providers { padding: 1.5rem 1rem 3rem; }
   .ds-settings-page-header { margin-bottom: 1.25rem; }
-  .ds-settings-page-header h1 { font-size: 1.375rem; }
+  .ds-settings-page-header h1 { font-size: 1.25rem; }
   .ds-settings-card { --settings-space: 1rem; }
   .ds-settings-surface .ds-setting-row > :first-child { padding-block-start: 0; }
   .ds-settings-surface .ds-settings-page :is(.ds-settings-tabs, .ds-settings-subtabs) {

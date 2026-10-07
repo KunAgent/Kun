@@ -1,191 +1,36 @@
-import type { Dispatch, ReactElement, SetStateAction } from 'react'
+import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, ReactElement, SetStateAction } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { ChevronLeft, Search, SearchX, X } from 'lucide-react'
+import kunLogo from '../../../asset/img/kun.png'
+import { SettingsIconTile } from './settings-icon-tile'
 import {
-  Archive,
-  AudioLines,
-  Bot,
-  BrainCircuit,
-  Bug,
-  ChevronLeft,
-  FlaskConical,
-  GitBranch,
-  Globe,
-  HardDrive,
-  Keyboard,
-  Mic,
-  PackageOpen,
-  Palette,
-  PencilLine,
-  Puzzle,
-  Plug,
-  RefreshCw,
-  ServerCog,
-  Settings,
-  ShieldCheck,
-  Smartphone,
-  Sparkles,
-  TerminalSquare,
-  Trash2,
-  UsersRound,
-  type LucideIcon
-} from 'lucide-react'
+  filterSettingsNavigationGroups,
+  settingsNavigationLabel,
+  visibleSettingsNavigationGroups,
+  type SettingsCategory
+} from './settings-navigation'
 
-export type SettingsCategory =
-  | 'general'
-  | 'providers'
-  | 'integrations'
-  | 'write'
-  | 'design'
-  | 'mediaGeneration'
-  | 'speechToText'
-  | 'agents'
-  | 'laboratory'
-  | 'subagents'
-  | 'archives'
-  | 'worktree'
-  | 'memory'
-  | 'shortcuts'
-  | 'easterEgg'
-  | 'claw'
-  | 'updates'
-  | 'debug'
-  | 'terminal'
-  | 'extensions'
-  | 'storage'
-  | 'dataMigration'
-  | 'uninstall'
+export {
+  settingsCategoryDescriptionKey,
+  settingsCategoryLabelKey,
+  type SettingsCategory
+} from './settings-navigation'
 
-type SettingsNavigationItem = {
-  category: SettingsCategory
-  labelKey: string
-  navigationLabelKey?: string
-  icon: LucideIcon
-  extensionOnly?: boolean
-  windowsOnly?: boolean
-}
+const CATEGORY_SELECTOR = 'button[data-settings-category]'
 
-type SettingsNavigationGroup = {
-  id: string
-  labelKey: string
-  items: SettingsNavigationItem[]
-}
-
-const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
-  {
-    id: 'core',
-    labelKey: 'settingsGroupCore',
-    items: [
-      { category: 'general', labelKey: 'general', icon: Globe },
-      { category: 'providers', labelKey: 'providers', icon: ServerCog },
-      { category: 'integrations', labelKey: 'integrations', icon: Plug },
-      { category: 'extensions', labelKey: 'extensions', icon: Puzzle, extensionOnly: true }
-    ]
-  },
-  {
-    id: 'workbench',
-    labelKey: 'settingsGroupWorkbench',
-    items: [
-      { category: 'write', labelKey: 'write', icon: PencilLine },
-      { category: 'design', labelKey: 'design', icon: Palette },
-      {
-        category: 'mediaGeneration',
-        labelKey: 'mediaGeneration',
-        navigationLabelKey: 'settingsNavMedia',
-        icon: AudioLines
-      },
-      {
-        category: 'speechToText',
-        labelKey: 'speechToText',
-        navigationLabelKey: 'settingsNavSpeech',
-        icon: Mic
-      }
-    ]
-  },
-  {
-    id: 'intelligence',
-    labelKey: 'settingsGroupIntelligence',
-    items: [
-      { category: 'agents', labelKey: 'agents', navigationLabelKey: 'settingsNavAssistant', icon: Bot },
-      { category: 'laboratory', labelKey: 'agentsQuickLaboratory', icon: FlaskConical },
-      { category: 'subagents', labelKey: 'subagents', icon: UsersRound },
-      { category: 'memory', labelKey: 'memory', icon: BrainCircuit }
-    ]
-  },
-  {
-    id: 'data',
-    labelKey: 'settingsGroupData',
-    items: [
-      { category: 'archives', labelKey: 'archives', navigationLabelKey: 'settingsNavArchives', icon: Archive },
-      { category: 'storage', labelKey: 'storageRelocation', icon: HardDrive, windowsOnly: true },
-      {
-        category: 'dataMigration',
-        labelKey: 'dataMigration',
-        navigationLabelKey: 'settingsNavMigration',
-        icon: PackageOpen
-      },
-      { category: 'worktree', labelKey: 'worktree', icon: GitBranch }
-    ]
-  },
-  {
-    id: 'system',
-    labelKey: 'settingsGroupSystem',
-    items: [
-      {
-        category: 'shortcuts',
-        labelKey: 'keyboardShortcuts',
-        navigationLabelKey: 'settingsNavShortcuts',
-        icon: Keyboard
-      },
-      {
-        category: 'easterEgg',
-        labelKey: 'easterEgg',
-        navigationLabelKey: 'settingsNavAppearance',
-        icon: Sparkles
-      },
-      { category: 'updates', labelKey: 'updates', navigationLabelKey: 'settingsNavUpdates', icon: RefreshCw },
-      { category: 'claw', labelKey: 'claw', navigationLabelKey: 'settingsNavPhone', icon: Smartphone },
-      { category: 'terminal', labelKey: 'terminal', icon: TerminalSquare },
-      { category: 'debug', labelKey: 'debug', icon: Bug },
-      { category: 'uninstall', labelKey: 'uninstall', icon: Trash2 }
-    ]
-  }
-]
-
-const SETTINGS_CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategory, string> = {
-  general: 'subtitle',
-  providers: 'providersDesc',
-  integrations: 'integrationsDesc',
-  extensions: 'extensionsDesc',
-  write: 'writeDesc',
-  design: 'designDesc',
-  mediaGeneration: 'mediaGenerationDesc',
-  speechToText: 'speechToTextEnabledDesc',
-  agents: 'kunProviderDesc',
-  laboratory: 'laboratorySettingsDesc',
-  subagents: 'subagentsSettingsIntro',
-  archives: 'archivesOverviewDesc',
-  worktree: 'worktreeOverviewDesc',
-  memory: 'memoryOverviewDesc',
-  shortcuts: 'shortcutsDesc',
-  easterEgg: 'uiModeWorkshopDesc',
-  claw: 'clawEnabledDesc',
-  updates: 'guiUpdateDesc',
-  debug: 'llmDebugDesc',
-  terminal: 'terminalColorModeDesc',
-  storage: 'storageRelocationSubtitle',
-  dataMigration: 'dataMigrationSubtitle',
-  uninstall: 'uninstallSubtitle'
-}
-
-export function settingsCategoryLabelKey(category: SettingsCategory): string {
-  for (const group of SETTINGS_NAVIGATION_GROUPS) {
-    const item = group.items.find((candidate) => candidate.category === category)
-    if (item) return item.labelKey
-  }
-  return 'title'
-}
-
-export function settingsCategoryDescriptionKey(category: SettingsCategory): string {
-  return SETTINGS_CATEGORY_DESCRIPTION_KEYS[category]
+/** Moves focus between visible destinations without changing the selection. */
+function focusSibling(nav: HTMLElement | null, from: Element | null, step: 1 | -1 | 'first' | 'last'): boolean {
+  if (!nav) return false
+  const items = [...nav.querySelectorAll<HTMLButtonElement>(CATEGORY_SELECTOR)]
+  if (items.length === 0) return false
+  const index = from ? items.indexOf(from as HTMLButtonElement) : -1
+  const next = step === 'first'
+    ? items[0]
+    : step === 'last'
+      ? items[items.length - 1]
+      : items[(index + step + items.length) % items.length]
+  next?.focus()
+  return Boolean(next)
 }
 
 export function SettingsSidebar({
@@ -194,6 +39,7 @@ export function SettingsSidebar({
   setCategory,
   extensionSettingsAvailable = false,
   platform = 'unknown',
+  onPreloadCategory,
   t
 }: {
   category: SettingsCategory
@@ -201,26 +47,103 @@ export function SettingsSidebar({
   setCategory: Dispatch<SetStateAction<SettingsCategory>>
   extensionSettingsAvailable?: boolean
   platform?: string
+  /** Warms a destination's code before it is opened (hover, focus, search match). */
+  onPreloadCategory?: (category: SettingsCategory) => void
   t: (key: string) => string
 }): ReactElement {
+  const [query, setQuery] = useState('')
+  const navRef = useRef<HTMLElement | null>(null)
+  const searchRef = useRef<HTMLInputElement | null>(null)
+  const groups = useMemo(
+    () => visibleSettingsNavigationGroups({ extensionSettingsAvailable, platform }),
+    [extensionSettingsAvailable, platform]
+  )
+  const filteredGroups = useMemo(() => filterSettingsNavigationGroups(groups, query, t), [groups, query, t])
+  const searching = query.trim().length > 0
+  const firstMatch = filteredGroups[0]?.items[0]
+
+  const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === 'Enter' && firstMatch) {
+      event.preventDefault()
+      setCategory(firstMatch.category)
+    } else if (event.key === 'ArrowDown') {
+      if (focusSibling(navRef.current, null, 'first')) event.preventDefault()
+    } else if (event.key === 'Escape' && query) {
+      event.preventDefault()
+      event.stopPropagation()
+      setQuery('')
+    }
+  }
+
+  const onNavKeyDown = (event: ReactKeyboardEvent<HTMLElement>): void => {
+    const target = event.target as Element
+    if (!target.matches(CATEGORY_SELECTOR)) return
+    const nav = navRef.current
+    const items = nav ? [...nav.querySelectorAll(CATEGORY_SELECTOR)] : []
+    let moved = false
+    if (event.key === 'ArrowDown') moved = focusSibling(nav, target, 1)
+    else if (event.key === 'ArrowUp') {
+      if (items.indexOf(target) === 0 && searchRef.current) {
+        searchRef.current.focus()
+        moved = true
+      } else moved = focusSibling(nav, target, -1)
+    } else if (event.key === 'Home') moved = focusSibling(nav, target, 'first')
+    else if (event.key === 'End') moved = focusSibling(nav, target, 'last')
+    if (moved) event.preventDefault()
+  }
+
   return (
-    <aside className="ds-settings-sidebar ds-drag flex h-full min-h-0 w-[260px] shrink-0 flex-col bg-ds-sidebar">
-      <div className="ds-settings-sidebar-header shrink-0 px-5 pb-4 pt-5">
+    <aside className="ds-settings-sidebar ds-drag flex h-full min-h-0 shrink-0 flex-col">
+      <div className="ds-settings-sidebar-header shrink-0">
         <div aria-hidden className="ds-titlebar-safe-block" />
-        <div className="ds-settings-sidebar-heading flex items-center gap-2">
+        <div className="ds-settings-sidebar-heading flex items-center gap-1.5">
           <button
             type="button"
             aria-label={t('back')}
             title={t('back')}
             data-cursor-spotlight-target
             onClick={goBack}
-            className="ds-no-drag flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+            className="ds-settings-back ds-no-drag"
           >
-            <ChevronLeft className="h-5 w-5" strokeWidth={1.8} />
+            <ChevronLeft aria-hidden="true" className="h-[18px] w-[18px]" strokeWidth={2} />
           </button>
-          <h1 className="truncate text-[24px] font-medium leading-tight tracking-[-0.02em] text-ds-ink">
-            {t('title')}
-          </h1>
+          <h1 className="ds-settings-sidebar-title min-w-0 truncate">{t('title')}</h1>
+        </div>
+        <div className="ds-settings-search ds-no-drag" role="search">
+          <Search aria-hidden="true" className="ds-settings-search-icon" strokeWidth={2} />
+          <input
+            ref={searchRef}
+            type="text"
+            inputMode="search"
+            enterKeyHint="go"
+            spellCheck={false}
+            autoComplete="off"
+            aria-label={t('settingsSearchPlaceholder')}
+            aria-controls="settings-navigation"
+            placeholder={t('settingsSearchPlaceholder')}
+            value={query}
+            onChange={(event) => {
+              const next = event.target.value
+              setQuery(next)
+              const match = filterSettingsNavigationGroups(groups, next, t)[0]?.items[0]
+              if (match && next.trim()) onPreloadCategory?.(match.category)
+            }}
+            onKeyDown={onSearchKeyDown}
+          />
+          {query ? (
+            <button
+              type="button"
+              className="ds-settings-search-clear"
+              aria-label={t('settingsSearchClear')}
+              title={t('settingsSearchClear')}
+              onClick={() => {
+                setQuery('')
+                searchRef.current?.focus()
+              }}
+            >
+              <X aria-hidden="true" className="h-3 w-3" strokeWidth={2.4} />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -230,12 +153,9 @@ export function SettingsSidebar({
           value={category}
           onChange={(event) => setCategory(event.target.value as SettingsCategory)}
         >
-          {SETTINGS_NAVIGATION_GROUPS.map((group) => (
+          {groups.map((group) => (
             <optgroup key={group.id} label={t(group.labelKey)}>
-              {group.items.filter((item) =>
-                (!item.extensionOnly || extensionSettingsAvailable) &&
-                (!item.windowsOnly || platform === 'win32')
-              ).map((item) => (
+              {group.items.map((item) => (
                 <option key={item.category} value={item.category}>{t(item.labelKey)}</option>
               ))}
             </optgroup>
@@ -244,38 +164,24 @@ export function SettingsSidebar({
       </div>
 
       <nav
+        ref={navRef}
+        id="settings-navigation"
         aria-label={t('title')}
-        className="ds-no-drag min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 pb-5"
+        className="ds-settings-nav ds-no-drag min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        data-searching={searching ? 'true' : undefined}
+        onKeyDown={onNavKeyDown}
       >
-        {SETTINGS_NAVIGATION_GROUPS.map((group, groupIndex) => {
-          const items = group.items.filter((item) =>
-            (!item.extensionOnly || extensionSettingsAvailable) &&
-            (!item.windowsOnly || platform === 'win32')
-          )
-          if (items.length === 0) return null
+        {filteredGroups.map((group) => {
           const headingId = `settings-nav-group-${group.id}`
           return (
-            <section
-              key={group.id}
-              aria-labelledby={headingId}
-              className={groupIndex === 0 ? '' : 'mt-3.5'}
-            >
-              <h2
-                id={headingId}
-                className="px-3 pb-1.5 text-[11px] font-medium tracking-[0.02em] text-ds-faint"
-              >
+            <section key={group.id} aria-labelledby={headingId} className="ds-settings-nav-group">
+              <h2 id={headingId} className="ds-settings-nav-heading">
                 {t(group.labelKey)}
               </h2>
-              <div className="space-y-1">
-                {items.map((item) => {
-                  const Icon = item.icon
+              <div className="ds-settings-nav-items">
+                {group.items.map((item) => {
                   const selected = category === item.category
                   const fullLabel = t(item.labelKey)
-                  const navigationLabelKey = item.navigationLabelKey ?? item.labelKey
-                  const translatedNavigationLabel = t(navigationLabelKey)
-                  const label = translatedNavigationLabel === navigationLabelKey
-                    ? fullLabel
-                    : translatedNavigationLabel
                   return (
                     <button
                       key={item.category}
@@ -285,21 +191,13 @@ export function SettingsSidebar({
                       title={fullLabel}
                       data-settings-category={item.category}
                       data-cursor-spotlight-target
-                      className={`group flex h-9 w-full min-w-0 items-center gap-2.5 rounded-full border px-3 text-left text-[13px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
-                        selected
-                          ? 'border-transparent bg-[var(--ds-control)] font-medium text-[var(--ds-control-foreground)]'
-                          : 'border-transparent font-normal text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
-                      }`}
+                      className="ds-settings-nav-item group"
+                      onPointerEnter={() => onPreloadCategory?.(item.category)}
+                      onFocus={() => onPreloadCategory?.(item.category)}
                       onClick={() => setCategory(item.category)}
                     >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center transition ${
-                          selected ? 'text-[var(--ds-control-foreground)]' : 'text-ds-faint group-hover:text-ds-ink'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" strokeWidth={1.75} />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{label}</span>
+                      <SettingsIconTile icon={item.icon} tone={item.tone} active={selected} />
+                      <span className="min-w-0 flex-1 truncate">{settingsNavigationLabel(item, t)}</span>
                     </button>
                   )
                 })}
@@ -307,18 +205,19 @@ export function SettingsSidebar({
             </section>
           )
         })}
+        {filteredGroups.length === 0 ? (
+          <div role="status" className="ds-settings-nav-empty">
+            <SearchX aria-hidden="true" className="h-5 w-5" strokeWidth={1.75} />
+            <span>{t('settingsSearchEmpty')}</span>
+          </div>
+        ) : null}
       </nav>
 
-      <div className="ds-settings-sidebar-footer ds-no-drag shrink-0 border-t border-ds-border px-5 py-3.5">
-        <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center text-ds-faint">
-            <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
-          </div>
-          <div className="min-w-0 text-[11px] leading-4 text-ds-faint">
-            <div className="truncate font-medium text-ds-muted">Kun</div>
-            <div className="truncate">{t('settingsFooter')}</div>
-          </div>
-          <Settings aria-hidden className="ml-auto h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.75} />
+      <div className="ds-settings-sidebar-footer ds-no-drag shrink-0">
+        <img src={kunLogo} alt="" aria-hidden="true" draggable={false} className="ds-settings-sidebar-logo" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[12px] font-medium leading-4 text-ds-ink">Kun</div>
+          <div className="truncate text-[11px] leading-4 text-ds-faint">{t('settingsFooter')}</div>
         </div>
       </div>
     </aside>

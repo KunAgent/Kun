@@ -1,0 +1,433 @@
+/* Shared settings controls: cards, rows, segmented tabs, switches, fields, notices and
+   disclosures. Geometry stays owned by settings-layout.css; this file adds surface,
+   state and motion. Animations are opacity-only wherever a control may be measured. */
+
+/* ---------- Cards and rows ---------- */
+
+.ds-settings-surface .ds-settings-card {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-card);
+  box-shadow: var(--st-card-shadow);
+}
+
+.ds-settings-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.006em;
+  color: var(--ds-text);
+}
+
+.ds-settings-card-description {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--ds-text-muted);
+}
+
+.ds-settings-surface .ds-setting-row-label {
+  line-height: 1.35;
+}
+
+.ds-settings-surface .ds-setting-row-description {
+  color: var(--ds-text-muted);
+}
+
+/* ---------- Collapsible surfaces ---------- */
+
+.ds-settings-card--collapsible > summary,
+.ds-settings-disclosure-summary {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.ds-settings-card--collapsible > summary:hover,
+.ds-settings-disclosure-summary:hover {
+  background: color-mix(in srgb, var(--ds-surface-hover) 60%, transparent);
+}
+
+.ds-settings-chevron {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 1.625rem;
+  block-size: 1.625rem;
+  border-radius: 9999px;
+  color: var(--ds-text-faint);
+  transition:
+    background-color var(--st-fast) var(--st-ease),
+    color var(--st-fast) var(--st-ease);
+}
+
+.ds-settings-chevron > svg {
+  transition: transform var(--st-slow) var(--st-spring);
+}
+
+:is(.ds-settings-card--collapsible, .ds-settings-disclosure) > summary:hover .ds-settings-chevron {
+  background: var(--st-segment-bg);
+  color: var(--ds-text);
+}
+
+:is(.ds-settings-card--collapsible, .ds-settings-disclosure)[open] > summary .ds-settings-chevron > svg {
+  transform: rotate(180deg);
+}
+
+:is(.ds-settings-card--collapsible, .ds-settings-disclosure)[open] > :not(summary) {
+  animation: ds-settings-fade-in var(--st-med) var(--st-ease) both;
+}
+
+/* Unstyled native disclosures from shared panels get the same chevron language. */
+.ds-settings-page details > summary:not([class]) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  list-style: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.ds-settings-page details > summary:not([class])::-webkit-details-marker {
+  display: none;
+}
+
+.ds-settings-page details > summary:not([class])::before {
+  content: '';
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+  flex-shrink: 0;
+  background-color: var(--ds-text-faint);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform var(--st-med) var(--st-spring);
+}
+
+.ds-settings-page details[open] > summary:not([class])::before {
+  transform: rotate(90deg);
+}
+
+.ds-settings-page details > summary:not([class]):hover::before {
+  background-color: var(--ds-text);
+}
+
+/* ---------- Segmented tabs ---------- */
+
+.ds-settings-surface .ds-settings-tablist {
+  isolation: isolate;
+  border: 1px solid transparent;
+  background: var(--st-segment-bg);
+}
+
+.ds-settings-surface .ds-settings-subtabs.ds-settings-tablist {
+  border-color: var(--ds-border-muted);
+  background: transparent;
+}
+
+.ds-settings-surface .ds-settings-tab {
+  z-index: 1;
+  transition:
+    background-color var(--st-fast) var(--st-ease),
+    border-color var(--st-fast) var(--st-ease),
+    color var(--st-fast) var(--st-ease),
+    box-shadow var(--st-fast) var(--st-ease);
+}
+
+.ds-settings-surface .ds-settings-tab[aria-selected='false']:hover {
+  background-color: var(--st-segment-hover);
+}
+
+.ds-settings-surface .ds-settings-tab[aria-selected='true'] {
+  border-color: transparent;
+  box-shadow: var(--st-raised-shadow);
+}
+
+.ds-settings-surface .ds-settings-subtabs .ds-settings-tab[aria-selected='true'] {
+  background-color: var(--st-segment-bg);
+  box-shadow: none;
+}
+
+.ds-settings-tab-icon {
+  color: var(--ds-text-faint);
+  transition:
+    color var(--st-fast) var(--st-ease),
+    transform var(--st-med) var(--st-spring);
+}
+
+.ds-settings-tab:hover .ds-settings-tab-icon,
+.ds-settings-tab[aria-selected='true'] .ds-settings-tab-icon {
+  color: currentColor;
+}
+
+.ds-settings-tab:active .ds-settings-tab-icon {
+  transform: scale(0.88);
+}
+
+.ds-settings-tab-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: 9999px;
+  background: var(--ds-surface-card);
+  box-shadow: var(--st-raised-shadow);
+  pointer-events: none;
+}
+
+.ds-settings-subtabs .ds-settings-tab-indicator {
+  background: color-mix(in srgb, var(--ds-text) 7%, transparent);
+  box-shadow: none;
+}
+
+[data-theme='dark'] .ds-settings-subtabs .ds-settings-tab-indicator {
+  background: color-mix(in srgb, white 9%, transparent);
+}
+
+.ds-settings-tablist[data-indicator='animated'] .ds-settings-tab-indicator {
+  transition:
+    transform var(--st-slow) var(--st-ease),
+    width var(--st-slow) var(--st-ease),
+    height var(--st-slow) var(--st-ease);
+}
+
+/* Once measured, one shared highlight replaces the per-tab background. */
+.ds-settings-tablist[data-indicator] > .ds-settings-tab[aria-selected='true'],
+.ds-settings-surface .ds-settings-tablist[data-indicator] > .ds-settings-tab[aria-selected='true'] {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.ds-settings-tab-panel:not([hidden]) {
+  animation: ds-settings-fade-in var(--st-med) var(--st-ease) both;
+}
+
+/* ---------- Switches ---------- */
+
+.ds-settings-surface {
+  --settings-switch-off: color-mix(in srgb, var(--ds-text-faint) 62%, var(--ds-border));
+}
+
+[data-theme='dark'] .ds-settings-surface {
+  --settings-switch-off: color-mix(in srgb, var(--ds-text-faint) 48%, var(--ds-border));
+}
+
+.ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch])::before {
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.06);
+  transition: background-color var(--st-med) var(--st-ease);
+}
+
+.ds-settings-surface .ds-settings-toggle:hover:not(:disabled)::before {
+  background: color-mix(in srgb, var(--settings-switch-track-color) 88%, var(--ds-text));
+}
+
+.ds-settings-surface .ds-settings-toggle[aria-checked='true']:hover:not(:disabled)::before {
+  background: color-mix(in srgb, var(--settings-switch-track-color) 90%, var(--ds-surface-card));
+}
+
+.ds-settings-surface .ds-settings-toggle > .ds-settings-toggle-thumb {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2), 0 0 0 0.5px rgb(0 0 0 / 0.04);
+  transition:
+    transform var(--st-slow) var(--st-spring),
+    width var(--st-med) var(--st-ease),
+    background-color var(--st-med) var(--st-ease);
+}
+
+.ds-settings-surface .ds-settings-toggle[aria-checked='true'] > .ds-settings-toggle-thumb {
+  background-color: var(--ds-control-foreground);
+}
+
+/* Press stretches the thumb toward its travel direction. */
+.ds-settings-surface .ds-settings-toggle:active:not(:disabled) > .ds-settings-toggle-thumb {
+  width: 1.25rem;
+}
+
+.ds-settings-surface .ds-settings-toggle[aria-checked='true']:active:not(:disabled) > .ds-settings-toggle-thumb {
+  transform: translateX(0.75rem);
+}
+
+/* ---------- Fields ---------- */
+
+.ds-settings-surface :is(input, textarea)::placeholder {
+  color: var(--text-placeholder, var(--ds-text-faint));
+  opacity: 1;
+}
+
+.ds-settings-surface select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-inline-end: 2.125rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239299a8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 15 5 5 5-5'/%3E%3Cpath d='m7 9 5-5 5 5'/%3E%3C/svg%3E");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 0.875rem;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.ds-settings-surface select:disabled {
+  cursor: not-allowed;
+}
+
+.ds-settings-surface select option,
+.ds-settings-surface select optgroup {
+  background-color: var(--ds-surface-elevated);
+  color: var(--ds-text);
+}
+
+.ds-settings-surface :is(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+  select,
+  textarea
+)[class*='border'] {
+  transition:
+    border-color var(--st-fast) var(--st-ease),
+    box-shadow var(--st-fast) var(--st-ease),
+    background-color var(--st-fast) var(--st-ease);
+}
+
+.ds-settings-surface :is(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+  select,
+  textarea
+)[class*='border-ds-border']:not([class*='border-red']):not([class*='border-amber']):not([aria-invalid='true']):hover:not(:disabled):not(:focus) {
+  border-color: var(--ds-border-strong);
+}
+
+.ds-settings-surface :is(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+  select,
+  textarea
+)[class*='border-ds-border']:not([class*='border-red']):not([class*='border-amber']):not([aria-invalid='true']):focus {
+  border-color: color-mix(in srgb, var(--ds-focus-ring) 60%, var(--ds-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-focus-ring) 16%, transparent);
+}
+
+/* Dark panels: recess fields slightly so they read as wells instead of vanishing into the card. */
+[data-theme='dark'] .ds-settings-surface :is(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+  select,
+  textarea,
+  .ds-settings-secret
+)[class*='bg-ds-card'] {
+  background-color: color-mix(in srgb, var(--ds-bg-main) 42%, var(--ds-surface-card));
+}
+
+[data-theme='dark'] .ds-settings-surface :is(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+  select,
+  textarea,
+  .ds-settings-secret
+)[class*='border-ds-border']:not([class*='border-red']):not([class*='border-amber']):not([aria-invalid='true']):not(:focus):not(:focus-within) {
+  border-color: var(--ds-border-strong);
+}
+
+[data-theme='dark'] .ds-settings-surface :is(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+  select,
+  textarea,
+  .ds-settings-secret
+)[class*='border-ds-border']:not([class*='border-red']):not([class*='border-amber']):not([aria-invalid='true']):not(:focus):not(:focus-within):hover {
+  border-color: color-mix(in srgb, var(--ds-text-faint) 40%, var(--ds-border-strong));
+}
+
+.ds-settings-secret {
+  transition:
+    border-color var(--st-fast) var(--st-ease),
+    box-shadow var(--st-fast) var(--st-ease);
+}
+
+.ds-settings-secret:not([data-invalid='true']):hover:not(:focus-within) {
+  border-color: var(--ds-border-strong);
+}
+
+.ds-settings-secret:not([data-invalid='true']):focus-within {
+  border-color: color-mix(in srgb, var(--ds-focus-ring) 60%, var(--ds-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-focus-ring) 16%, transparent);
+}
+
+.ds-settings-secret-toggle {
+  position: relative;
+}
+
+.ds-settings-secret-toggle::before {
+  content: '';
+  position: absolute;
+  inset-block: 0.5rem;
+  left: 0;
+  width: 1px;
+  background: var(--ds-border-muted);
+}
+
+.ds-settings-secret-toggle > svg {
+  transition: transform var(--st-med) var(--st-spring);
+}
+
+.ds-settings-secret-toggle:active > svg {
+  transform: scale(0.86);
+}
+
+/* ---------- Notices and section jumps ---------- */
+
+.ds-settings-surface .ds-settings-inline-notice {
+  border-radius: 0.75rem;
+  animation: ds-settings-fade-in var(--st-med) var(--st-ease) both;
+}
+
+.ds-settings-inline-notice[data-tone='info'] .ds-settings-inline-notice-icon {
+  color: var(--ds-text-faint);
+}
+
+.ds-settings-surface .ds-settings-jump {
+  transition:
+    background-color var(--st-fast) var(--st-ease),
+    border-color var(--st-fast) var(--st-ease),
+    color var(--st-fast) var(--st-ease),
+    transform var(--st-fast) var(--st-ease);
+}
+
+.ds-settings-surface .ds-settings-jump:active {
+  transform: scale(0.97);
+}
+
+/* ---------- Scrollbars ---------- */
+
+.ds-settings-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ds-scrollbar-thumb) transparent;
+}
+
+.ds-settings-scroller::-webkit-scrollbar {
+  inline-size: 10px;
+}
+
+.ds-settings-scroller::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background: var(--ds-scrollbar-thumb) padding-box;
+}
+
+.ds-settings-scroller::-webkit-scrollbar-thumb:hover {
+  background: var(--ds-scrollbar-thumb-hover) padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-settings-surface :is(
+    .ds-settings-tab-panel,
+    .ds-settings-inline-notice,
+    :is(.ds-settings-card--collapsible, .ds-settings-disclosure)[open] > :not(summary)
+  ) {
+    animation: none;
+  }
+
+  .ds-settings-surface :is(
+    .ds-settings-tab-indicator,
+    .ds-settings-tab,
+    .ds-settings-tab-icon,
+    .ds-settings-chevron > svg,
+    .ds-settings-page details > summary:not([class])::before,
+    .ds-settings-toggle > .ds-settings-toggle-thumb,
+    .ds-settings-secret-toggle > svg
+  ) {
+    transition: none;
+  }
+}

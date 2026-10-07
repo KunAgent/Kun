@@ -14,11 +14,13 @@ import {
   Download,
   FilePenLine,
   ChevronDown,
+  KeyRound,
   Loader2,
   PlugZap,
   Plus,
   Route,
   Search,
+  Server,
   ServerCog,
   Trash2,
   X
@@ -59,6 +61,7 @@ import { ProviderReliabilityPanel } from './provider-reliability-panel'
 import { ProviderQuickAddPanel } from './provider-quick-add-panel'
 import { ProviderAddSheet } from './provider-add-sheet'
 import { ProviderIcon } from './provider-icon'
+import { SettingsIconTile } from './settings-icon-tile'
 import { ModelRoutesSettings } from './settings-section-model-routes'
 import { ProviderConnectionAdvancedPanels } from './settings-section-providers-connection-panels'
 import { ProviderModelsCapabilitiesPanels } from './settings-section-providers-model-panels'
@@ -80,11 +83,14 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
   return (
     <>
       {providerSetupNeedsApiKey ? (
-        <div className="mb-6 rounded-2xl border border-amber-300/80 bg-amber-50/95 px-5 py-4 text-amber-950 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/35 dark:text-amber-100">
-          <div className="text-[15px] font-semibold">{t('apiKeyRequiredTitle')}</div>
-          <p className="mt-1 text-[13px] leading-6 text-amber-900/90 dark:text-amber-100/90">
-            {t('apiKeyRequiredBody')}
-          </p>
+        <div className="mb-6 flex items-start gap-3.5 rounded-2xl border border-amber-300/80 bg-amber-50/95 px-5 py-4 text-amber-950 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/35 dark:text-amber-100">
+          <SettingsIconTile icon={KeyRound} tone="amber" className="mt-0.5" />
+          <div className="min-w-0">
+            <div className="text-[15px] font-semibold">{t('apiKeyRequiredTitle')}</div>
+            <p className="mt-1 text-[13px] leading-6 text-amber-900/90 dark:text-amber-100/90">
+              {t('apiKeyRequiredBody')}
+            </p>
+          </div>
         </div>
       ) : null}
       <section className="ds-provider-workspace overflow-hidden rounded-xl border border-ds-border bg-ds-card">
@@ -93,14 +99,16 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
             className="grid min-w-0 content-start gap-3 border-b border-ds-border-muted px-4 py-3 lg:border-b-0 lg:border-r"
             data-testid="provider-workspace-meta"
           >
-            <div className="min-w-0">
-              <h2 className="truncate text-[16px] font-semibold text-ds-ink">{t('providers')}</h2>
-              <p className="mt-0.5 truncate text-[11.5px] text-ds-faint">
-                {zh
-                  ? `${displayProviders.length} 个已配置`
-                  : `${displayProviders.length} configured`}
-              </p>
-              <p className="mt-2 text-[11.5px] leading-5 text-ds-faint">{t('modelProviderConfigFileHint')}</p>
+            <div className="flex min-w-0 items-center gap-3">
+              <SettingsIconTile icon={Server} tone="blue" className="ds-provider-workspace-tile" />
+              <div className="min-w-0">
+                <h2 className="truncate text-[16px] font-semibold text-ds-ink">{t('providers')}</h2>
+                <p className="mt-0.5 truncate text-[11.5px] text-ds-faint">
+                  {zh
+                    ? `${displayProviders.length} 个已配置`
+                    : `${displayProviders.length} configured`}
+                </p>
+              </div>
             </div>
             <div
               className="flex min-w-0 flex-wrap items-center gap-2"
@@ -109,7 +117,8 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
               <button
                 type="button"
                 onClick={() => void openSettingsConfigFile()}
-                className={settingsButtonClass({ className: 'shrink-0 whitespace-nowrap' })}
+                title={t('modelProviderConfigFileHint')}
+                className={settingsButtonClass({ size: 'compact', className: 'shrink-0 whitespace-nowrap' })}
               >
                 <FilePenLine className="h-3.5 w-3.5" strokeWidth={2} />
                 {t('modelProviderOpenConfigFile')}
@@ -121,7 +130,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                   aria-haspopup="dialog"
                   aria-expanded={addMenuOpen}
                   onClick={openAddProviderDialog}
-                  className={settingsButtonClass({ className: 'shrink-0 whitespace-nowrap' })}
+                  className={settingsButtonClass({ size: 'compact', className: 'shrink-0 whitespace-nowrap' })}
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                   {t('modelProviderAdd')}
@@ -129,7 +138,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
               ) : null}
             </div>
           </div>
-          <div className="flex min-w-0 items-start px-4 py-3 sm:px-6">
+          <div className="grid min-w-0 content-start gap-2.5 px-4 py-3 sm:px-6">
             <SettingsTabs<ProviderWorkspaceMode>
               baseId="provider-workspace"
               ariaLabel={t('providers')}
@@ -140,6 +149,10 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
               value={workspaceMode}
               onChange={setWorkspaceMode}
             />
+            <p className="max-w-2xl px-1 text-[12px] leading-5 text-ds-muted">
+              {t('providersDesc')}
+              <span className="text-ds-faint"> {t('modelProviderConfigFileHint')}</span>
+            </p>
           </div>
         </header>
         <SettingsTabPanel<ProviderWorkspaceMode>

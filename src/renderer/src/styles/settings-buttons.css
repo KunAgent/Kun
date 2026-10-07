@@ -18,7 +18,14 @@
   text-align: center;
   overflow-wrap: anywhere;
   cursor: pointer;
-  transition: background-color var(--ds-duration-functional), border-color var(--ds-duration-functional), color var(--ds-duration-functional), opacity var(--ds-duration-functional);
+  box-shadow: 0 1px 1px rgb(16 24 40 / 0.035);
+  transition:
+    background-color var(--ds-duration-functional) cubic-bezier(0.22, 1, 0.36, 1),
+    border-color var(--ds-duration-functional) cubic-bezier(0.22, 1, 0.36, 1),
+    color var(--ds-duration-functional) cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow var(--ds-duration-functional) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity var(--ds-duration-functional),
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :is(.ds-settings-button, .ds-settings-surface [data-settings-action]) > svg {
@@ -26,19 +33,29 @@
 }
 
 :is(.ds-settings-button, .ds-settings-surface [data-settings-action]):hover:enabled {
-  border-color: color-mix(in srgb, var(--ds-text-muted) 55%, var(--ds-border));
+  border-color: color-mix(in srgb, var(--ds-text-muted) 45%, var(--ds-border));
   background: var(--ds-surface-hover);
+}
+
+:is(.ds-settings-button, .ds-settings-surface [data-settings-action]):active:enabled {
+  transform: scale(0.97);
 }
 
 :is(.ds-settings-button--primary, .ds-settings-surface [data-settings-action='primary']) {
   border-color: transparent;
   background: var(--ds-control);
   color: var(--ds-control-foreground);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 1px 2px color-mix(in srgb, var(--ds-control) 28%, transparent);
 }
 
 :is(.ds-settings-button--primary, .ds-settings-surface [data-settings-action='primary']):hover:enabled {
   border-color: transparent;
   background: color-mix(in srgb, var(--ds-control) 88%, var(--ds-surface-card));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 3px 8px color-mix(in srgb, var(--ds-control) 22%, transparent);
 }
 
 :is(.ds-settings-button--ghost, .ds-settings-surface [data-settings-action='ghost']),
@@ -46,12 +63,25 @@
 :is(.ds-settings-button--danger-ghost, .ds-settings-surface [data-settings-action='danger-ghost']) {
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
   color: var(--ds-text-muted);
+}
+
+:is(.ds-settings-button--ghost, .ds-settings-surface [data-settings-action='ghost']):hover:enabled {
+  border-color: transparent;
+  color: var(--ds-text);
+}
+
+:is(.ds-settings-button--link, .ds-settings-surface [data-settings-action='link']):hover:enabled {
+  border-color: transparent;
+  background: transparent;
+  text-decoration-color: currentColor;
 }
 
 :is(.ds-settings-button--link, .ds-settings-surface [data-settings-action='link']) {
   color: var(--ds-text);
   text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 0.2em;
 }
 
@@ -110,6 +140,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   :is(.ds-settings-button, .ds-settings-surface [data-settings-action]) { transition: none; }
+  :is(.ds-settings-button, .ds-settings-surface [data-settings-action]):active:enabled { transform: none; }
 }
 
 @media (forced-colors: active) {

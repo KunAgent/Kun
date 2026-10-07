@@ -78,6 +78,6 @@ describe('SubagentsSettingsSection', () => {
     expect(subagentsIndex).toBeGreaterThan(laboratoryIndex)
     expect(archivesIndex).toBeGreaterThan(subagentsIndex)
     expect(html).toContain('lucide-users-round')
-    expect(html).toContain('bg-[var(--ds-control)]')
+    expect(html).toMatch(/aria-current="page"[^>]*data-settings-category="subagents"/)
   })
 })

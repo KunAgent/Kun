@@ -1,79 +1,111 @@
 import { settingsButtonClass } from './settings-button'
 import type { ComponentProps, ReactElement } from 'react'
 import { Suspense, lazy, useEffect } from 'react'
+import { CircleAlert, RotateCw } from 'lucide-react'
 import { ExtensionDeclarativeSettingsPane } from '../extensions/ExtensionDeclarativeSettingsPane'
 import { GeneralSettingsSection } from './settings-section-general'
 import {
   SettingsSidebar
 } from './SettingsSidebar'
 import { settingsSaveIssueMessage } from './settings-save-error'
+import { SettingsPageHeader, SettingsSaveStatusPill, settingsSaveStatusTone } from './settings-page-header'
+import { lazySection } from './settings-lazy-section'
+import type { SettingsCategory } from './settings-navigation'
 
-const IntegrationsSettingsSection = lazy(() =>
+const IntegrationsSettingsSection = lazySection(() =>
   import('./settings-section-integrations').then((module) => ({ default: module.IntegrationsSettingsSection }))
 )
-const ProvidersSettingsSection = lazy(() =>
+const ProvidersSettingsSection = lazySection(() =>
   import('./settings-section-providers').then((module) => ({ default: module.ProvidersSettingsSection }))
 )
-const WriteSettingsSection = lazy(() =>
+const WriteSettingsSection = lazySection(() =>
   import('./settings-section-write').then((module) => ({ default: module.WriteSettingsSection }))
 )
-const DesignSettingsSection = lazy(() =>
+const DesignSettingsSection = lazySection(() =>
   import('./settings-section-design').then((module) => ({ default: module.DesignSettingsSection }))
 )
-const MediaGenerationSettingsSection = lazy(() =>
+const MediaGenerationSettingsSection = lazySection(() =>
   import('./settings-section-media-generation').then((module) => ({ default: module.MediaGenerationSettingsSection }))
 )
-const SpeechToTextSettingsSection = lazy(() =>
+const SpeechToTextSettingsSection = lazySection(() =>
   import('./settings-section-speech-to-text').then((module) => ({ default: module.SpeechToTextSettingsSection }))
 )
-const AgentsSettingsSection = lazy(() =>
+const AgentsSettingsSection = lazySection(() =>
   import('./settings-section-agents').then((module) => ({ default: module.AgentsSettingsSection }))
 )
-const LaboratorySettingsSection = lazy(() =>
+const LaboratorySettingsSection = lazySection(() =>
   import('./settings-section-agents').then((module) => ({ default: module.LaboratorySettingsSection }))
 )
-const SubagentsSettingsSection = lazy(() =>
+const SubagentsSettingsSection = lazySection(() =>
   import('./settings-section-subagents').then((module) => ({ default: module.SubagentsSettingsSection }))
 )
-const ArchivedThreadsSettingsSection = lazy(() =>
+const ArchivedThreadsSettingsSection = lazySection(() =>
   import('./settings-section-archives').then((module) => ({ default: module.ArchivedThreadsSettingsSection }))
 )
-const WorktreeSettingsSection = lazy(() =>
+const WorktreeSettingsSection = lazySection(() =>
   import('./settings-section-worktree').then((module) => ({ default: module.WorktreeSettingsSection }))
 )
-const MemorySettingsSection = lazy(() =>
+const MemorySettingsSection = lazySection(() =>
   import('./settings-section-memory').then((module) => ({ default: module.MemorySettingsSection }))
 )
-const KeyboardShortcutsSettingsSection = lazy(() =>
+const KeyboardShortcutsSettingsSection = lazySection(() =>
   import('./settings-section-shortcuts').then((module) => ({ default: module.KeyboardShortcutsSettingsSection }))
 )
-const EasterEggSettingsSection = lazy(() =>
+const EasterEggSettingsSection = lazySection(() =>
   import('./settings-section-easter-egg').then((module) => ({ default: module.EasterEggSettingsSection }))
 )
-const ClawSettingsSection = lazy(() =>
+const ClawSettingsSection = lazySection(() =>
   import('./settings-section-claw').then((module) => ({ default: module.ClawSettingsSection }))
 )
-const UpdatesSettingsSection = lazy(() =>
+const UpdatesSettingsSection = lazySection(() =>
   import('./settings-section-updates').then((module) => ({ default: module.UpdatesSettingsSection }))
 )
-const TerminalSettingsSection = lazy(() =>
+const TerminalSettingsSection = lazySection(() =>
   import('./settings-section-terminal').then((module) => ({ default: module.TerminalSettingsSection }))
 )
-const LlmDebugSettingsSection = lazy(() =>
+const LlmDebugSettingsSection = lazySection(() =>
   import('./settings-section-llm-debug').then((module) => ({ default: module.LlmDebugSettingsSection }))
 )
-const DataMigrationSettingsSection = lazy(() =>
+const DataMigrationSettingsSection = lazySection(() =>
   import('./settings-section-data-migration').then((module) => ({ default: module.DataMigrationSettingsSection }))
 )
-const StorageRelocationSettingsSection = lazy(() =>
+const StorageRelocationSettingsSection = lazySection(() =>
   import('./settings-section-storage-relocation').then((module) => ({ default: module.StorageRelocationSettingsSection }))
 )
-const UninstallSettingsSection = lazy(() =>
+const UninstallSettingsSection = lazySection(() =>
   import('./settings-section-uninstall').then((module) => ({ default: module.UninstallSettingsSection }))
 )
 const WriteDebugLogModal = lazy(() =>
   import('./settings-debug-log').then((module) => ({ default: module.WriteDebugLogModal }))
 )
+
+const SECTION_PRELOADERS: Partial<Record<SettingsCategory, () => void>> = {
+  integrations: IntegrationsSettingsSection.preload,
+  providers: ProvidersSettingsSection.preload,
+  write: WriteSettingsSection.preload,
+  design: DesignSettingsSection.preload,
+  mediaGeneration: MediaGenerationSettingsSection.preload,
+  speechToText: SpeechToTextSettingsSection.preload,
+  agents: AgentsSettingsSection.preload,
+  laboratory: LaboratorySettingsSection.preload,
+  subagents: SubagentsSettingsSection.preload,
+  archives: ArchivedThreadsSettingsSection.preload,
+  worktree: WorktreeSettingsSection.preload,
+  memory: MemorySettingsSection.preload,
+  shortcuts: KeyboardShortcutsSettingsSection.preload,
+  easterEgg: EasterEggSettingsSection.preload,
+  claw: ClawSettingsSection.preload,
+  updates: UpdatesSettingsSection.preload,
+  terminal: TerminalSettingsSection.preload,
+  debug: LlmDebugSettingsSection.preload,
+  dataMigration: DataMigrationSettingsSection.preload,
+  storage: StorageRelocationSettingsSection.preload,
+  uninstall: UninstallSettingsSection.preload
+}
+
+function preloadSettingsCategory(category: SettingsCategory): void {
+  SECTION_PRELOADERS[category]?.()
+}
 
 function LoadedAgentsSettingsSection({
   onReady,
@@ -87,15 +119,29 @@ function LoadedAgentsSettingsSection({
 
 function SettingsSectionFallback(): ReactElement {
   return (
-    <div aria-busy="true" className="space-y-3" data-testid="settings-section-fallback">
-      <div className="h-7 w-48 animate-pulse rounded-lg bg-ds-subtle" />
-      <div className="h-32 animate-pulse rounded-2xl bg-ds-subtle" />
+    <div aria-busy="true" className="ds-settings-skeleton" data-testid="settings-section-fallback">
+      <div className="ds-settings-skeleton-bar h-10 w-full max-w-[420px] rounded-full" />
+      <div className="ds-settings-skeleton-card">
+        <div className="ds-settings-skeleton-bar h-4 w-40 rounded-md" />
+        <div className="ds-settings-skeleton-bar mt-2 h-3 w-64 max-w-full rounded-md" />
+        {[0, 1, 2].map((row) => (
+          <div key={row} className="ds-settings-skeleton-row">
+            <div className="min-w-0 flex-1">
+              <div className="ds-settings-skeleton-bar h-3.5 w-36 rounded-md" />
+              <div className="ds-settings-skeleton-bar mt-2 h-3 w-56 max-w-full rounded-md" />
+            </div>
+            <div className="ds-settings-skeleton-bar h-8 w-28 shrink-0 rounded-full" />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
 export function SettingsViewLayout({ view }: { view: Record<string, any> }): ReactElement {
   const { t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, activeAgentsPanel, saveStatus, saveError, saveIssue, writeDebugModalOpen, setWriteDebugModalOpen, writeCompletionDebugEntries, writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId, writeDebugLoading, writeDebugError, extensionSettingsService, extensionSettingsContributions, extensionSettingsAvailable, settingsScrollerRef, markAgentsSectionReady, categoryTitle, categoryDescription, loadWriteDebugEntries, portError, flushPendingSave, goBack, clearWriteDebugEntries, settingsSectionContext } = view
+  const autoApplyCategory = category !== 'integrations' && category !== 'extensions' &&
+    category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall'
   const explicitSavePanel = category === 'agents' &&
     (activeAgentsPanel === 'collaboration' || activeAgentsPanel === 'project')
   const saveIssueSummary = saveIssue?.kind === 'provider-model-limit'
@@ -112,6 +158,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
         goBack={goBack}
         extensionSettingsAvailable={extensionSettingsAvailable}
         platform={window.kunGui.platform}
+        onPreloadCategory={preloadSettingsCategory}
         t={t}
       />
 
@@ -125,62 +172,39 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
           <div className={`ds-settings-content mx-auto ${
             category === 'providers' ? 'ds-settings-content--providers' : ''
           }`}>
-          {category !== 'providers' ? <div className="ds-settings-page-header flex items-start justify-between gap-5">
-            <div className="min-w-0">
-              <h1 className="text-[24px] font-medium leading-tight tracking-[-0.02em] text-ds-ink">
-                {categoryTitle}
-              </h1>
-              <p className="mt-1.5 max-w-2xl text-[12px] leading-[1.4] text-ds-muted">
-                {categoryDescription}
-              </p>
-            </div>
-            {category !== 'integrations' && category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' ? <span
-              role="status"
-              aria-live="polite"
-              title={saveStatus === 'error' && saveIssueSummary ? saveIssueSummary : undefined}
-              className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-medium ${
-                explicitSavePanel
-                  ? 'bg-ds-subtle text-ds-muted'
-                  : portError
-                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
-                  : saveStatus === 'saved'
-                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
-                    : saveStatus === 'error'
-                      ? 'bg-red-500/15 text-red-700 dark:text-red-200'
-                      : 'bg-ds-subtle text-ds-muted'
-              }`}
-            >
-              {explicitSavePanel
-                ? t('adeSettings.manualSaveHint')
-                : portError
-                ? t('autoApplyBlocked')
-                : saveStatus === 'saving'
-                  ? t('applying')
-                  : saveStatus === 'saved'
-                    ? t('applied')
-                    : saveStatus === 'error'
-                      ? t('applyFailed')
-                      : t('autoApplyHint')}
-            </span> : null}
-          </div> : null}
-
-          {category !== 'integrations' && category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' && saveStatus === 'error' && saveError ? (
-            <div
-              role="alert"
-              className="mb-5 rounded-[var(--ds-radius-card)] border border-red-200 bg-red-50 px-4 py-3 text-[13px] leading-5 text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200"
-            >
-              <div>{saveIssueSummary}</div>
-              {saveIssue?.kind === 'provider-model-limit' ? (
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <button type="button" className={settingsButtonClass({ variant: 'link' })} onClick={viewProblemModel}>
-                    {t('providerModelSaveViewProblem')}
-                  </button>
-                  <details className="text-[11px] opacity-80">
-                    <summary className="cursor-pointer">{t('providerModelSaveTechnicalDetails')}</summary>
-                    <div className="mt-1 break-all font-mono">{saveError}</div>
-                  </details>
-                </div>
+          {category !== 'providers' ? (
+            <SettingsPageHeader
+              key={`header-${category}`}
+              category={category}
+              title={categoryTitle}
+              description={categoryDescription}
+              status={autoApplyCategory ? (
+                <SettingsSaveStatusPill
+                  t={t}
+                  tone={settingsSaveStatusTone({ explicitSavePanel, portError, saveStatus })}
+                  title={saveStatus === 'error' && saveIssueSummary ? saveIssueSummary : undefined}
+                />
               ) : null}
+            />
+          ) : null}
+
+          {autoApplyCategory && saveStatus === 'error' && saveError ? (
+            <div role="alert" className="ds-settings-alert mb-5">
+              <CircleAlert aria-hidden="true" className="ds-settings-alert-icon" strokeWidth={2} />
+              <div className="min-w-0 flex-1">
+                <div>{saveIssueSummary}</div>
+                {saveIssue?.kind === 'provider-model-limit' ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <button type="button" className={settingsButtonClass({ variant: 'link' })} onClick={viewProblemModel}>
+                      {t('providerModelSaveViewProblem')}
+                    </button>
+                    <details className="text-[11px] opacity-80">
+                      <summary className="cursor-pointer">{t('providerModelSaveTechnicalDetails')}</summary>
+                      <div className="mt-1 break-all font-mono">{saveError}</div>
+                    </details>
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
@@ -226,25 +250,28 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
           </div>
         </div>
       </div>
-      {category !== 'integrations' && category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' && saveStatus === 'error' && saveError ? (
-        <div
-          role="alert"
-          className="ds-no-drag fixed bottom-6 right-8 z-30 flex max-w-[min(560px,calc(100vw-3rem))] items-center gap-3 rounded-2xl border border-red-300/70 bg-red-50/95 px-4 py-3 text-red-900 shadow-2xl shadow-red-950/10 backdrop-blur dark:border-red-500/30 dark:bg-red-950/90 dark:text-red-100"
-        >
-          <div className="min-w-0">
-            <div className="text-[13px] font-semibold">{t('applyFailed')}</div>
-            <div className="mt-0.5 truncate text-[12px] text-red-800/85 dark:text-red-100/80">
+      {autoApplyCategory && saveStatus === 'error' && saveError ? (
+        <div role="alert" className="ds-settings-toast ds-no-drag">
+          <span className="ds-settings-toast-icon" aria-hidden="true">
+            <CircleAlert className="h-4 w-4" strokeWidth={2.2} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-medium text-ds-ink">{t('applyFailed')}</div>
+            <div className="mt-0.5 truncate text-[12px] text-ds-muted">
               {saveIssueSummary}
             </div>
           </div>
           <button
             type="button"
-             className={settingsButtonClass({ variant: 'primary', className: 'shrink-0' })}
+            className={settingsButtonClass({ variant: 'primary', className: 'shrink-0' })}
             disabled={saveIssue?.kind === 'provider-model-limit' ? false : Boolean(portError)}
             onClick={saveIssue?.kind === 'provider-model-limit'
               ? viewProblemModel
               : () => void flushPendingSave()}
           >
+            {saveIssue?.kind === 'provider-model-limit' ? null : (
+              <RotateCw aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.2} />
+            )}
             {saveIssue?.kind === 'provider-model-limit'
               ? t('providerModelSaveViewProblem')
               : t('retrySave')}
