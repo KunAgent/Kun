@@ -105,8 +105,13 @@ passed the hit-test. This does not establish support below the app's minimum
 window width or native-provider conversation quality.
 
 Run all desktop scenarios with `node scripts/smoke-development-rooms.cjs`;
-`--peer-only` runs just the scoped peer interaction checks. Avoid changing the
-renderer or rebuilding/removing `kun/dist` during a running development smoke.
+`--peer-only` runs just the scoped peer interaction checks. The peer scenario
+(`scripts/smoke-rooms-peer-controls.cjs`) starts the group from the Code New
+conversation picker with the five default-team Agents, renames it in its header,
+reads the topic from the composer's Add context menu, and checks that the docked
+Room details leave the Code mode trigger usable instead of the former drawer
+overlay hit-test. Avoid changing the renderer or rebuilding/removing `kun/dist`
+during a running development smoke.
 
 ## Real-model comparison
 

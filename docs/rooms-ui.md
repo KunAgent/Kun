@@ -86,6 +86,11 @@ node scripts/smoke-development-direct-chat.cjs --workbench-only --evidence /tmp/
 The fixture uses isolated settings, a temporary Manager profile, synthetic
 messages, and a local model stub. It checks menus, focus restoration, mentions,
 attachments, search, reading position, input growth, and horizontal overflow.
+The scenario (`scripts/smoke-rooms-ui-controls.cjs`) opens conversations from the
+Code sidebar and checks its row preview. Search shows a result list beside the
+timeline, Reply quotes into the main composer, the sidebar's Conversations menu
+replaces Chat management, and Room details is an embedded right-panel region.
+The narrow renderer emulation reveals the Code sidebar with Toggle sidebar.
 Screenshots cover light/dark themes at desktop sizes and a separately labelled
 narrow renderer emulation. Real desktop window dimensions are recorded because
 the application's minimum window size can prevent a requested smaller size.

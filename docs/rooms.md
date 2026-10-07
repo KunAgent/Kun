@@ -406,6 +406,10 @@ cd kun
   src/services/thread-service.rooms.test.ts
 ```
 
-Smoke helpers isolate their settings, Git repository, Runtime data, Manager
-control directory and processes, and remove temporary execution state afterward.
+`smoke-development-rooms.cjs` opens groups and private chats from the Code
+sidebar; the Rooms mode it originally switched to has been retired. Room details
+is the embedded right-panel region, and tool, integration and cleanup
+confirmations are clicked in Kun's protected windows. Smoke helpers isolate
+their settings, Git repository, Runtime data, Manager control directory and
+processes, and remove temporary execution state afterward.
 Reports and screenshots are ignored build evidence rather than committed assets.

@@ -36,18 +36,25 @@ not create messages, unread state, memory jobs, requests or model calls.
 
 Private Agent conversations and groups share one server-paged list. A durable
 Agent with no private conversation yet is represented by the same stable sidebar
-key it will use after its conversation opens. Collaboration transcripts remain
-available through the type filter.
+key it will use after its conversation opens. The Code sidebar lists only private
+chats and groups; collaboration transcripts stay in the server page but are not
+shown as sidebar rows.
 
 Queries filter and order the combined rows before pagination. Cursors bind the
 filter scope. Recency uses complete messages, not streaming drafts or profile
 edits. Loaded pages are revalidated after relevant events and navigation, which
 also covers initialization preceding the initial SSE subscription cursor.
 
-The sidebar keeps search, type/status/repository filters, pin/archive actions,
-unread and attention indicators, and virtual scrolling. Agent management and
-user-avatar settings are available from the footer. Code and Work navigation
-are unchanged.
+The list is the Conversations section of the Code sidebar, above the projects.
+It has search, a New conversation button, and a Conversations menu with the All
+conversations, Unread only, Needs you only and Groups only filters, the Agent
+directory, archived conversations and recently deleted conversations. Each row
+menu pins, archives or deletes the conversation; rows show unread, attention,
+working, draft, muted and pinned state. The section shows the first four
+conversations until View all expands it, and further pages load on demand
+instead of through a virtualized list. The user avatar is edited from a group
+header's More actions menu (Conversation appearance > My avatar). Opening a
+conversation keeps the Code shell; Work navigation is unchanged.
 
 Rooms use a single IM presentation: user bubbles and avatars on the right,
 Agent bubbles and avatars on the left, with left-aligned text inside both.
@@ -99,10 +106,16 @@ node scripts/smoke-development-rooms.cjs --init-im-only --evidence dist/rooms-in
 node scripts/smoke-development-rooms.cjs --with-agents --ui-visual --evidence dist/rooms-init-im-full
 ```
 
-It uses isolated settings, Manager data and local model fixtures. The new
-scenario checks zero-call setup, five native private responses and exact runs,
-non-destructive examples, avatar cropping/persistence, IM geometry, themes,
-viewport bounds and restored state.
+It uses isolated settings, Manager data and local model fixtures. The scenario
+(`scripts/smoke-rooms-init-im.cjs`) runs inside Code: Rooms initialization is
+now the Code default Agent, so it checks that exactly one default Agent and its
+empty private conversation exist without model calls, lists that chat with a
+group in the Code sidebar, edits the user avatar (crop, no save on preview,
+128 by 128 persistence, cancel) from a group header's More actions menu, gets a
+native private response and exact completed run from the default Agent and an
+added reviewer, and checks IM geometry, light/dark themes, narrow viewport
+bounds and restored state after reload. The five-Agent onboarding, welcome
+examples and the `--init-upgrade-only` upgrade-preview entry were removed.
 
 Acceptance on 2026-09-14 passed against local develop including its accepted
 submission and empty post-submission response fixes. The final selected suites

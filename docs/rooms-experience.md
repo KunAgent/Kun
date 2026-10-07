@@ -137,6 +137,14 @@ npm run check:file-lines
 
 The isolated fixture uses a real Manager and Kun queue with a local model stub.
 It checks model-call and topic-budget counters around presentation operations.
+The scenario (`scripts/smoke-rooms-experience-controls.cjs`) opens groups from
+the Code sidebar. Room details is an embedded region of the Code right panel;
+discussion threads open from a message's More actions menu while Reply only
+quotes into the main composer; runs open as the Agent session panel; appearance
+and notifications live in the group header's More actions menu; and the unread
+and attention filters use the Code sidebar's Conversations menu. The Rooms-list
+repository filter, list resize and cross-room search jump were removed with that
+list and are no longer checked.
 Do not modify renderer sources or rebuild Runtime output during a running smoke.
 
 Acceptance on 2026-09-13, including the latest local develop changes:

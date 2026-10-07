@@ -54,13 +54,22 @@ fallback for unavailable streams and old runtimes.
 
 `node scripts/smoke-development-direct-chat.cjs --pin-stream --evidence <directory>`
 uses an isolated real Electron/preload/main/Manager/Runtime and a model-only local
-fixture. It creates conversations through the UI and verifies:
+fixture. The scenario (`scripts/smoke-rooms-pin-stream.cjs`) opens the default
+private chat from the Code sidebar, creates three more conversations through the
+UI and verifies:
 
-- Immediate pinning despite an artificial 700ms save delay, with active movement
-  animations, persisted pin state and no conversation/draft change.
-- 100 model fragments at 40ms intervals, exact final text, no rewinds, typing
-  responsiveness and renderer reload during a second stream without duplicates.
-- More than 60 conversations, virtual-list anchor preservation and reduced motion.
+- Optimistic pin from the Code Conversations row menu despite an artificial
+  700ms save delay, persisted pin state, and no change to the selected
+  conversation or composer draft. Unpin from the same menu is persisted too.
+- Typing latency while a held reply is pending: input-to-frame p95 stays below
+  200ms and the typed draft survives the published reply.
+- A renderer reload while a second reply is held, followed by exactly one
+  published bubble per run and no duplicate message rows.
+
+Since 2026-09-21 private replies are published as whole `send_im_message`
+bubbles, so the smoke no longer measures live text streaming. The Rooms list was
+removed with the Rooms mode, so virtual-list anchors and reduced motion are no
+longer covered by this smoke. The measurements below predate both changes.
 
 The final pre-merge measurement reported 28ms pin feedback, 53 visible updates
 across the four-second stream, 106ms first-text lag and 120ms p95 update spacing.
