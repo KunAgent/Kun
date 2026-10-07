@@ -201,12 +201,23 @@ export async function initializeMainServices(input: {
     configureKunManagerDataPlaneForCurrentProcess(serviceManager)
     const sharedSettingsBackend = new ManagerRevisionedDocumentClient(serviceManager, 'settings')
     const sharedClientStateDocument = new ManagerRevisionedDocumentClient(serviceManager, 'client-state')
+    // The renderer syncs shared client state on a short interval. Keep the last
+    // parsed snapshot and ask the Manager only whether its etag changed.
+    let sharedClientStateCache: {
+      etag: string
+      revision: number
+      value: ReturnType<typeof parseSharedClientState>
+    } | null = null
     ipcMain.handle('shared-client-state:get', async () => {
-      const snapshot = await sharedClientStateDocument.read()
-      return {
-        revision: snapshot.revision,
-        value: parseSharedClientState(snapshot.value)
+      const snapshot = await sharedClientStateDocument.readIfChanged(sharedClientStateCache?.etag)
+      if ('unchanged' in snapshot && sharedClientStateCache) {
+        sharedClientStateCache.revision = snapshot.revision
+        return { revision: snapshot.revision, value: sharedClientStateCache.value }
       }
+      const full = 'unchanged' in snapshot ? await sharedClientStateDocument.read() : snapshot
+      const value = parseSharedClientState(full.value)
+      sharedClientStateCache = full.etag ? { etag: full.etag, revision: full.revision, value } : null
+      return { revision: full.revision, value }
     })
     ipcMain.handle('shared-client-state:put', async (_event, input: unknown) => {
       const parsed = parseSharedClientStateWrite(input)
@@ -214,6 +225,7 @@ export async function initializeMainServices(input: {
         parsed.expectedRevision,
         `${JSON.stringify(parsed.entries, null, 2)}\n`
       )
+      sharedClientStateCache = null
       return {
         revision: committed.revision,
         value: parsed.entries

@@ -114,7 +114,12 @@ export type SettingsCredentialMigration = {
 }
 
 export type SettingsDocumentBackend = {
-  read(): Promise<{ revision: number; value: string | null }>
+  read(): Promise<{ revision: number; value: string | null; etag?: string }>
+  /** Optional conditional read; unchanged documents return only their etag. */
+  readIfChanged?(ifNoneMatch?: string): Promise<
+    | { revision: number; value: string | null; etag?: string }
+    | { revision: number; etag: string; unchanged: true }
+  >
   write(expectedRevision: number, value: string): Promise<{ revision: number; value: string }>
 }
 

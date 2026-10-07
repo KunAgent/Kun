@@ -73,14 +73,44 @@ export class ManagerRevisionedDocumentClient {
     private readonly key: 'settings' | 'client-state'
   ) {}
 
-  async read(): Promise<{ revision: number; value: string | null }> {
-    const body = await requestManagerJson(this.manager, `/v1/documents/${this.key}`, {})
-    return z.object({
-      snapshot: z.object({
-        revision: z.number().int().nonnegative(),
-        value: z.string().nullable()
-      })
+  async read(): Promise<{ revision: number; value: string | null; etag?: string }> {
+    const snapshot = await this.readIfChanged()
+    if ('unchanged' in snapshot) throw new Error('unconditional document read returned no value')
+    return snapshot
+  }
+
+  /**
+   * Conditional read for pollers. With `ifNoneMatch` set to the etag from a
+   * previous read, an unchanged document comes back as `{ unchanged: true }`
+   * instead of its full text. Managers that predate etags ignore the query and
+   * always return the value, which callers handle the same as a change.
+   */
+  async readIfChanged(ifNoneMatch?: string): Promise<
+    | { revision: number; value: string | null; etag?: string }
+    | { revision: number; etag: string; unchanged: true }
+  > {
+    const query = ifNoneMatch ? `?ifNoneMatch=${encodeURIComponent(ifNoneMatch)}` : ''
+    const body = await requestManagerJson(this.manager, `/v1/documents/${this.key}${query}`, {})
+    const snapshot = z.object({
+      snapshot: z.union([
+        z.object({
+          revision: z.number().int().nonnegative(),
+          etag: z.string().min(1),
+          unchanged: z.literal(true)
+        }),
+        z.object({
+          revision: z.number().int().nonnegative(),
+          value: z.string().nullable(),
+          etag: z.string().min(1).optional()
+        })
+      ])
     }).parse(body).snapshot
+    if ('unchanged' in snapshot) return snapshot
+    return {
+      revision: snapshot.revision,
+      value: snapshot.value,
+      ...(snapshot.etag ? { etag: snapshot.etag } : {})
+    }
   }
 
   async write(expectedRevision: number, value: string): Promise<{ revision: number; value: string }> {

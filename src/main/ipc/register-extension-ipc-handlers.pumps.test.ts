@@ -229,6 +229,38 @@ describe('extension IPC security bridge pumps', () => {
     }
   })
 
+  it('stretches the notification pump cadence while the queue stays empty and snaps back on work', async () => {
+    vi.useFakeTimers()
+    try {
+      const state = fixture()
+      let notifications: unknown[] = []
+      state.runtimeRequest.mockImplementation(async () => ({
+        ok: true,
+        status: 200,
+        body: JSON.stringify({ schemaVersion: 1, notifications })
+      }))
+      const stop = startExtensionNotificationPump(state.options, 250)
+      await vi.advanceTimersByTimeAsync(0)
+      // Four empty polls keep the base cadence before the stretch begins.
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(state.runtimeRequest).toHaveBeenCalledTimes(5)
+      await vi.advanceTimersByTimeAsync(499)
+      expect(state.runtimeRequest).toHaveBeenCalledTimes(5)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(state.runtimeRequest).toHaveBeenCalledTimes(6)
+      await vi.advanceTimersByTimeAsync(1_000 + 2_000 + 4_000)
+      expect(state.runtimeRequest).toHaveBeenCalledTimes(9)
+      await vi.advanceTimersByTimeAsync(3_999)
+      expect(state.runtimeRequest).toHaveBeenCalledTimes(9)
+      notifications = []
+      await vi.advanceTimersByTimeAsync(1)
+      expect(state.runtimeRequest).toHaveBeenCalledTimes(10)
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('dispatches fire-and-forget guest notifications through the broker route', async () => {
     const state = fixture()
     const record = state.viewSessions.create({

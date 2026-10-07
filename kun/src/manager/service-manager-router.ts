@@ -645,7 +645,9 @@ export function buildServiceManagerRouter(input: {
     async () => {
       const key = z.enum(['settings', 'client-state']).safeParse(context.params.key)
       if (!key.success) return validation('invalid document key')
-      return jsonResponse({ snapshot: await input.documents!.read(key.data) })
+      // Conditional read: an unchanged document answers with its etag only.
+      const ifNoneMatch = new URL(request.url).searchParams.get('ifNoneMatch')?.trim().slice(0, 128) || undefined
+      return jsonResponse({ snapshot: await input.documents!.readIfChanged(key.data, ifNoneMatch) })
     }
   ))
   if (input.documents) router.add('PUT', '/v1/documents/:key', (request, context) => authorizedAsync(
