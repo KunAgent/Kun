@@ -15,6 +15,10 @@ export type ExtensionCredentialPayload = {
   scope?: string
 }
 
+export type ExtensionCredentialInspection<T> =
+  | { readable: true; health: T }
+  | { readable: false }
+
 export interface PrimaryCredentialBackend {
   readonly id: string
   isAvailable(): Promise<boolean>
@@ -130,6 +134,48 @@ export class ExtensionCredentialStore {
     await this.ensureInitialized()
     const raw = await this.readRaw(reference)
     return raw === null ? null : parsePayload(raw)
+  }
+
+  /**
+   * Inspect a fresh request-scoped batch without returning or caching plaintext.
+   * Project each decrypted payload immediately, retaining only its health result.
+   * A configured primary remains authoritative and is read with bounded fan-out.
+   */
+  async inspectHealth<T>(
+    references: Iterable<string>,
+    project: (payload: ExtensionCredentialPayload | null, reference: string) => T
+  ): Promise<ReadonlyMap<string, ExtensionCredentialInspection<T>>> {
+    const pending = [...new Set(references)]
+    const results = new Map<string, ExtensionCredentialInspection<T>>()
+    if (!pending.length) return results
+    let document: EncryptedCredentialDocument | undefined
+    try {
+      await this.ensureInitialized()
+      if (!this.primaryActive) {
+        if (!this.fallbackKey && !this.keyProviderActive) throw new Error('credential storage unavailable')
+        document = await this.readEncryptedDocument()
+      }
+    } catch {
+      for (const reference of pending) results.set(reference, { readable: false })
+      return results
+    }
+    const inspect = async (reference: string): Promise<void> => {
+      try {
+        validateReference(reference)
+        const encrypted = document?.credentials[reference]
+        const raw = document
+          ? encrypted ? this.decryptFallback(reference, encrypted) : null
+          : await this.options.primary!.get(this.scopedReference(reference))
+        results.set(reference, { readable: true, health: project(raw === null ? null : parsePayload(raw), reference) })
+      } catch {
+        results.set(reference, { readable: false })
+      }
+    }
+    let next = 0
+    await Promise.all(Array.from({ length: Math.min(8, pending.length) }, async () => {
+      while (next < pending.length) await inspect(pending[next++])
+    }))
+    return results
   }
 
   /**

@@ -47,6 +47,18 @@ The top-level object is strict and must contain `"version": 1`. Unknown fields, 
 
 A project cannot declare `trustScope`, `trustedWorkspaceRoots`, or `workspaceRoots`. Kun owns those fields and always restricts an approved project server to its real workspace.
 
+For remote OAuth servers with a preconfigured `oauth.clientId`, set
+`oauth.expectedIssuer` to the exact authorization-server issuer supplied by the
+trusted service operator (for example, `https://auth.example.com/tenant`). This
+also applies when configuring `oauth.clientSecret`. Kun does not infer this trust
+setting from the MCP server's discovery response. The issuer must be an HTTP(S)
+URL without embedded credentials, query, or fragment; comparison is exact.
+
+Stored OAuth credentials without an issuer, or with a different configured issuer,
+are withheld and reported as requiring authorization again. They remain on disk
+until an explicit authorization replaces them or the user clears the connection.
+Ordinary startup does not open a browser to repair these connections.
+
 ### Skill fields
 
 - `enabled`: controls project-local Skills only. Setting it to `false` does not disable user-global Skills.

@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/model-gateway-clients.yml'
       - 'scripts/smoke-model-gateway-clients*'
+      - 'scripts/lib/gateway-client-smoke-profiles.mjs'
       - 'kun/src/server/routes/*gateway*'
       - 'kun/src/server/routes/gateway-*'
       - 'kun/src/domain/model-gateway-*'
@@ -22,7 +23,9 @@ concurrency:
 jobs:
   official-clients:
     name: Official clients against offline gateway
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04+ AppArmor blocks Codex's read-only bubblewrap loopback setup.
+    # Use a compatible hosted image without changing kernel security settings.
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -36,16 +39,25 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=6144
         run: npm ci
-      - name: Install pinned official Codex client in isolated test directory
-        run: npm install --prefix "$RUNNER_TEMP/gateway-clients" --no-audit --no-fund @openai/codex@0.160.0
+      - name: Install pinned official clients in isolated test directory
+        run: |
+          npm install --prefix "$RUNNER_TEMP/gateway-clients" --no-audit --no-fund \
+            @openai/codex@0.160.0 opencode-ai@1.1.47 @mariozechner/pi-coding-agent@0.73.1
       - name: Check fixture safety and exercise real client protocols
         shell: bash
         run: |
           node --test scripts/smoke-model-gateway-clients.test.mjs
           mkdir -p dist/gateway-client-evidence
+          CLIENT_BIN_DIR="$RUNNER_TEMP/gateway-clients/node_modules/.bin"
           CODEX_BINARY="$(find "$RUNNER_TEMP/gateway-clients/node_modules/@openai" -type f -path '*/bin/codex' | head -1)"
-          test -n "$CODEX_BINARY"
-          node scripts/smoke-model-gateway-clients.mjs --codex "$CODEX_BINARY" > dist/gateway-client-evidence/report.json
+          CLAUDE_BINARY="$GITHUB_WORKSPACE/kun/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude"
+          for binary in "$CODEX_BINARY" "$CLAUDE_BINARY" "$CLIENT_BIN_DIR/opencode" "$CLIENT_BIN_DIR/pi"; do
+            test -x "$binary"
+          done
+          node scripts/smoke-model-gateway-clients.mjs --client all --scenario all \
+            --codex "$CODEX_BINARY" --claude "$CLAUDE_BINARY" \
+            --opencode "$CLIENT_BIN_DIR/opencode" --pi "$CLIENT_BIN_DIR/pi" \
+            > dist/gateway-client-evidence/report.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

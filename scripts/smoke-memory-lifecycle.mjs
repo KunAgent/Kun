@@ -131,7 +131,11 @@ try {
   await page.getByRole('button', { name: 'Correct', exact: true }).click()
   await page.getByRole('textbox', { name: 'Memory content' }).fill(corrected)
   await page.getByRole('button', { name: 'Save', exact: true }).evaluate(button => { button.click(); button.click() })
-  await page.locator('[data-memory-id="' + metadata.memoryId + '"]').getByText(corrected, { exact: true }).waitFor()
+  const correctedEntry = page.locator('[data-memory-id="' + metadata.memoryId + '"]')
+  // Text matching can see the unsaved textarea value. The editor closes only
+  // after the PATCH resolves; wait for that receipt before checking disk state.
+  await correctedEntry.getByRole('button', { name: 'Correct', exact: true }).waitFor()
+  await correctedEntry.getByText(corrected, { exact: true }).waitFor()
   const persisted = await backend.snapshot()
   assert.equal(persisted.memory.content, corrected)
   assert.equal(persisted.calls.slice(beforeSaveCalls).filter(call => call.method === 'PATCH').length, 1)

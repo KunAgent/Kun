@@ -1,6 +1,7 @@
 import { withManagerDataMutex } from '../manager/data-mutex.js'
 import { protectLegacyRegistryHeaders, retireLegacyHeaderJournal } from './provider-legacy-header-migration.js'
 import { randomUUID } from 'node:crypto'
+import type { ExtensionCredentialPayload } from './extension-credential-store.js'
 import { CustomHeadersSchema } from '../contracts/custom-headers.js'
 import { type ModelConnectionRegistry, type StoredProfile, emptyDocument,
   appendCredentialRefs, credentialReferenceIsLive } from './model-connection-registry-core.js'
@@ -50,6 +51,10 @@ export async function settleProviderHeaders(registry: ModelConnectionRegistry,
 export async function readProviderHeaders(registry: ModelConnectionRegistry, profile: StoredProfile): Promise<Record<string, string>> {
   if (!profile.customHeadersRef) return { ...(profile.customHeaders ?? {}) }
   const stored = await registry['options'].credentials.get(profile.customHeadersRef)
+  return parseProviderHeaders(stored)
+}
+
+export function parseProviderHeaders(stored: ExtensionCredentialPayload | null): Record<string, string> {
   if (!stored?.apiKey) throw new Error('Provider request headers are unavailable; replace the connection headers')
   try { return CustomHeadersSchema.parse(JSON.parse(stored.apiKey)) }
   catch { throw new Error('Provider request headers are unreadable; replace the connection headers') }

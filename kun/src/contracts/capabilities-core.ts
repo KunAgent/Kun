@@ -132,6 +132,17 @@ export const McpOAuthConfig = z
     clientName: z.string().min(1).optional(),
     clientId: z.string().min(1).optional(),
     clientSecret: z.string().min(1).optional(),
+    // Trusted configuration, never inferred from remote MCP discovery.
+    expectedIssuer: z.string().refine((value) => {
+      if (value.trim() !== value) return false
+      try {
+        const url = new URL(value)
+        return ['https:', 'http:'].includes(url.protocol)
+          && !url.username && !url.password && !url.search && !url.hash
+      } catch {
+        return false
+      }
+    }, 'Expected issuer must be an HTTP(S) URL without credentials, query, or fragment').optional(),
     scopes: z.array(z.string().min(1)).default([]),
     redirectPort: z.number().int().min(1024).max(65535).optional(),
     callbackTimeoutMs: z.number().int().positive().default(120_000)
