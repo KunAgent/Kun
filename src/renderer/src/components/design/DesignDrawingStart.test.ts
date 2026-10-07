@@ -57,14 +57,13 @@ beforeEach(() => {
 })
 
 describe('DesignDrawingStart', () => {
-  it('shows separate Codex model, reasoning, and Fast controls', () => {
+  it('shows the Codex model, reasoning and Fast in one control', () => {
     const html = renderToStaticMarkup(createElement(DesignDrawingStart, props()))
 
     expect(html).toContain('data-design-start-composer="true"')
     expect(html).toContain('Codex · gpt-5.6-luna')
-    expect(html).toContain('aria-label="Reasoning: High"')
-    expect(html).toContain('aria-label="Fast mode on"')
-    expect(html).toContain('aria-pressed="true"')
+    expect(html).toContain('aria-label="Model and reasoning settings: Codex / gpt-5.6-luna / Reasoning High / Fast mode on"')
+    expect(html).toContain('lucide-zap')
   })
 
   it('opens a blank Excalidraw drawing without the HTML composer', () => {

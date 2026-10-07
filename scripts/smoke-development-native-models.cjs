@@ -43,10 +43,10 @@ async function runNativeModelFlow({ page, capture, poll }) {
   await poll(() => codex.isEnabled(), 60_000, 'Codex metadata fixture ready')
   await codex.click()
   assert.equal(await trigger.getAttribute('data-composer-agent'), 'codex')
-  const model = page.locator('.ds-composer-model-picker button[aria-haspopup="menu"]').first()
+  const model = page.locator('[data-composer-model-trigger]').first()
   await poll(async () => (await model.innerText()).includes(models[0]), 30_000, 'Native configured default')
   await model.click()
-  await page.getByRole('menuitem', { name: /Native sign-in|原生登录/u }).hover()
+  await page.locator('[data-composer-model-panel]').waitFor()
   const items = page.getByRole('menuitemradio')
   await poll(async () => await items.count() === models.length, 30_000, 'All paginated models visible')
   for (const id of models) {

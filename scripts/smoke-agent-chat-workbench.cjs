@@ -1,4 +1,5 @@
 'use strict'
+const { exerciseComposerModelPanel } = require('./smoke-composer-model-panel.cjs')
 const assert = require('node:assert/strict')
 const { confirmAgentCreationModel } = require('./smoke-agent-creation-model.cjs')
 const { mkdir, writeFile } = require('node:fs/promises')
@@ -113,6 +114,7 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
   await page.keyboard.press('Escape')
   await capture('workbench-01-project-task')
   assertions.push('The workspace mode menu offers only Work and Code')
+  assertions.push(...await exerciseComposerModelPanel({ page, poll, capture, prefix: 'workbench-01b' }))
 
   await openPrivate()
   const entry = await request(page, '/v1/agents/chat-entry')

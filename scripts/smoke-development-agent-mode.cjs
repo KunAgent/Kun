@@ -77,11 +77,9 @@ async function runAgentModeFlow({ page, capture, poll, runtimeRequest }) {
   await page.keyboard.press('Escape')
   checks.push('Selecting Devin preserves the draft and removes Kun-only authoring and workflow controls')
 
-  const model = page.locator('.ds-composer-model-picker button[aria-haspopup="menu"]').first()
+  const model = page.locator('[data-composer-model-trigger]').first()
   await model.click()
-  const nativeSource = page.getByRole('menuitem', { name: /Native sign-in|原生登录/u })
-  await nativeSource.waitFor()
-  await nativeSource.hover()
+  await page.locator('[data-composer-model-panel]').waitFor()
   await page.getByRole('menuitemradio', { name: /^Devin alternative model/u }).click()
   await model.locator('[data-model-source-icon="native-login"]').waitFor()
   assert.equal(await model.locator('[data-provider-icon="kun"]').count(), 0)

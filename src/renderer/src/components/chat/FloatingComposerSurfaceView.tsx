@@ -40,7 +40,7 @@ export function FloatingComposerSurfaceView({
     handleComposerDragOver, handleComposerDrop, handleComposerKeyDown, handleComposerMenuButtonClick,
     handleComposerPaste, handleComposerShellMouseDown, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, handlePrimaryAction,
     handlePromptOptimizationClick, hideModelPicker, input, isComposerDirectoryReference, mode,
-    imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, modelControlVariant, modelPickerMode, onComposerFastModeChange, onComposerModelChange,
+    imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, modelPickerMode, onComposerFastModeChange, onComposerModelChange,
     onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange, onInterrupt,
     onRemoveAttachment, onRemoveContextChip, onRemoveFileReference, onDismissPromptOptimizationError, onToggleWorktreeMode,
     onWorktreeBranchChange, openSettings, orchestration, placeholder, primaryActionDisabled,
@@ -522,7 +522,6 @@ export function FloatingComposerSurfaceView({
                       composerFastMode={composerFastMode}
                       showProviderInModelLabel={showProviderInModelLabel}
                       canChangeModel={canChangeModel}
-                      controlVariant={modelControlVariant}
                       stretch={stretchModelPicker || showToolbarStartControls}
                       onComposerModelChange={onComposerModelChange}
                       onComposerReasoningEffortChange={onComposerReasoningEffortChange}

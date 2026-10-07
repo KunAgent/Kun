@@ -80,7 +80,7 @@ describe('DesignAIRail target toggle', () => {
     expect(html).toContain('Preparing the drawing and starting the agent')
   })
 
-  it('shows separate provider/model, reasoning, and Fast controls in the side composer', () => {
+  it('shows provider/model, reasoning and Fast in one side composer control', () => {
     const html = renderToStaticMarkup(createElement(DesignAIRail, props({
       composerModel: 'gpt-5.6-luna',
       composerProviderId: 'codex',
@@ -104,9 +104,8 @@ describe('DesignAIRail target toggle', () => {
     })))
 
     expect(html).toContain('Codex · gpt-5.6-luna')
-    expect(html).toContain('aria-label="Reasoning: High"')
-    expect(html).toContain('aria-label="Fast mode on"')
-    expect(html).toContain('aria-pressed="true"')
+    expect(html).toContain('aria-label="Model and reasoning settings: Codex / gpt-5.6-luna / Reasoning High / Fast mode on"')
+    expect(html).toContain('lucide-zap')
   })
 
   it('exposes queued plain-text messages from the collapsed queue', () => {

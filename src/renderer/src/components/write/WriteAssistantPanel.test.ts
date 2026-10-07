@@ -128,7 +128,7 @@ describe('WriteAssistantPanel', () => {
     expect(html).toContain('aria-label="1 queued"')
   })
 
-  it('shows separate reasoning and Fast controls for Codex models', () => {
+  it('shows the model, reasoning and Fast state in one composer control', () => {
     useChatStore.setState({
       activeThreadId: 'thr_write',
       activeThreadGoal: null,
@@ -193,8 +193,8 @@ describe('WriteAssistantPanel', () => {
     }))
 
     expect(html).toContain('Codex · gpt-5.4')
-    expect(html).toContain('aria-label="Reasoning: High"')
-    expect(html).toContain('aria-label="Fast mode on"')
+    expect(html).toContain('aria-label="Model and reasoning settings: Codex / gpt-5.4 / Reasoning High / Fast mode on"')
+    expect(html).toContain('lucide-zap')
   })
 
 })

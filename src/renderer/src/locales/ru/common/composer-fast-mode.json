@@ -3,5 +3,6 @@
   "composerFastModeOff": "Быстрый режим выключен",
   "composerFastModeHint": "Ответы Codex быстрее, но расход подписки выше.",
   "composerFastModeUnverified": "Быстрый режим для этой модели не подтверждён. Обновите список моделей в настройках провайдера.",
-  "composerFastModeUnsupported": "Эта модель не поддерживает быстрый режим."
+  "composerFastModeUnsupported": "Эта модель не поддерживает быстрый режим.",
+  "composerFastModeLabel": "Быстро"
 }

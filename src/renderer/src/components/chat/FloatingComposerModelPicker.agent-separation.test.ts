@@ -47,12 +47,12 @@ describe('Model picker after Agent selection moves to the mode control', () => {
       canChangeModel: true, onComposerModelChange: vi.fn()
     })))
     expect(onReasoning).toHaveBeenCalledWith('medium')
-    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click())
-    const source = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button')]
-      .find((button) => button.textContent?.includes('Native sign-in'))!
-    await act(async () => source.click())
-    expect([...document.querySelectorAll<HTMLOptionElement>('[data-devin-model-list] select option')].map((option) => option.value))
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!.click())
+    expect(document.querySelector('[data-devin-model-list]')).not.toBeNull()
+    expect([...document.querySelectorAll<HTMLButtonElement>('[role="radiogroup"] [role="radio"]')].map((option) => option.dataset.reasoningEffort))
       .toEqual(['medium', 'high'])
+    // The panel's reasoning control replaces the Devin list's own selector.
+    expect(document.querySelector('[data-devin-model-list] select')).toBeNull()
   })
 
   it('offers an Agent model only the levels it advertises, plus Auto', async () => {
@@ -87,7 +87,7 @@ describe('Model picker after Agent selection moves to the mode control', () => {
           { id: 'vision', inputModalities: ['text', 'image'] }, { id: 'text', inputModalities: ['text'] }
         ]) }], canChangeModel: true, onComposerModelChange: vi.fn()
     })))
-    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click())
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!.click())
     const source = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button')]
       .find((button) => button.textContent?.includes('Native sign-in'))!
     await act(async () => source.click())
@@ -103,11 +103,11 @@ describe('Model picker after Agent selection moves to the mode control', () => {
   ] as const)('shows the %s catalog state without suggesting an HTTP provider', async (emptyModelState, label) => {
     const onConfigureProviders = vi.fn()
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {
-      compact: false, mode: 'select', controlVariant: 'split', composerModel: 'default', composerPickList: [],
+      compact: false, mode: 'select', composerModel: 'default', composerPickList: [],
       composerModelGroups: [{ providerId: 'ade-cred:native-login', label: 'Native sign-in', modelIds: [] }],
       canChangeModel: true, onComposerModelChange: vi.fn(), emptyModelState, onConfigureProviders
     })))
-    const trigger = host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!
+    const trigger = host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!
     expect(trigger.textContent).toContain(label)
     expect(trigger.textContent).not.toContain('Set up provider')
     await act(async () => trigger.click())
@@ -119,11 +119,11 @@ describe('Model picker after Agent selection moves to the mode control', () => {
 
   it('explains a failed Agent catalog lookup with its reason instead of the default-model hint', async () => {
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {
-      compact: false, mode: 'select', controlVariant: 'split', composerModel: 'default', composerPickList: [],
+      compact: false, mode: 'select', composerModel: 'default', composerPickList: [],
       composerModelGroups: [], canChangeModel: true, onComposerModelChange: vi.fn(),
       emptyModelState: 'agent-failed', emptyModelReason: 'agent_error'
     })))
-    const trigger = host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!
+    const trigger = host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!
     expect(trigger.textContent).toContain('Models unavailable')
     await act(async () => trigger.click())
     expect(document.body.textContent).toContain("the Agent's service returned an error")
@@ -133,22 +133,22 @@ describe('Model picker after Agent selection moves to the mode control', () => {
 
   it('says the Agent is still being checked when no readiness proof exists', async () => {
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {
-      compact: false, mode: 'select', controlVariant: 'split', composerModel: 'default', composerPickList: [],
+      compact: false, mode: 'select', composerModel: 'default', composerPickList: [],
       composerModelGroups: [], canChangeModel: true, onComposerModelChange: vi.fn(), emptyModelState: 'agent-not-ready'
     })))
-    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click())
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!.click())
     expect(document.body.textContent).toContain('This Agent is being checked')
   })
 
   it('retains the provider/model trigger and provider selection without an Agent section', async () => {
     const onComposerModelChange = vi.fn()
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {
-      compact: false, mode: 'select', controlVariant: 'split',
+      compact: false, mode: 'select',
       composerModel: 'model-a', composerProviderId: 'provider-a', composerPickList: ['model-a', 'model-b'],
       composerModelGroups: [{ providerId: 'provider-a', label: 'Provider A', modelIds: ['model-a', 'model-b'] }],
       canChangeModel: true, onComposerModelChange, showProviderInModelLabel: true
     })))
-    const trigger = host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!
+    const trigger = host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!
     expect(trigger.textContent).toContain('Provider A · model-a')
     expect(trigger.querySelector('[data-agent-icon]')).toBeNull()
     await act(async () => trigger.click())
@@ -163,11 +163,11 @@ describe('Model picker after Agent selection moves to the mode control', () => {
   it('keeps native-sign-in model routes without adding an Agent identity to the model trigger', async () => {
     const onComposerModelChange = vi.fn()
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {
-      compact: false, mode: 'select', controlVariant: 'split', composerModel: 'sonnet', composerPickList: ['sonnet', 'opus'],
+      compact: false, mode: 'select', composerModel: 'sonnet', composerPickList: ['sonnet', 'opus'],
       composerModelGroups: [{ providerId: 'ade-cred:native-login', label: 'Native sign-in', modelIds: ['sonnet', 'opus'] }],
       canChangeModel: true, onComposerModelChange
     })))
-    const trigger = host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!
+    const trigger = host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!
     expect(trigger.textContent).toContain('sonnet')
     expect(trigger.textContent).not.toContain('Claude')
     expect(trigger.querySelector('[data-model-source-icon="native-login"]')).not.toBeNull()

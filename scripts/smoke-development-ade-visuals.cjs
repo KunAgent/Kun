@@ -6,7 +6,7 @@ const assert = require('node:assert/strict')
 async function runUnifiedCodeVisuals({ page, capture, poll, runtimeRequest, resize }) {
   const composer = page.locator('.ds-composer-textarea')
   await composer.waitFor()
-  const modelTrigger = page.locator('.ds-composer-model-picker button[aria-haspopup="menu"]').first()
+  const modelTrigger = page.locator('[data-composer-model-trigger]').first()
   await poll(() => modelTrigger.isEnabled(), 30_000, 'Code composer ready')
   await page.locator('#chat-empty-hero-title').waitFor()
   for (const [width, height] of [[1360, 900], [1280, 800], [960, 800]]) {
@@ -17,7 +17,7 @@ async function runUnifiedCodeVisuals({ page, capture, poll, runtimeRequest, resi
   }
 
   await modelTrigger.click()
-  await page.locator('[role="menu"]').first().waitFor()
+  await page.locator('[data-composer-model-panel]').waitFor()
   assert.equal(await page.locator('[data-model-agent-section]').count(), 0)
   await capture('visual-model-menu-960')
   await page.keyboard.press('Escape')

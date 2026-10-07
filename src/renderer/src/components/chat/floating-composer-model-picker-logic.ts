@@ -261,6 +261,7 @@ export function calculateFloatingMenuPlacement({
   viewportHeight,
   viewportWidth,
   preferredWidth = FLOATING_MENU_WIDTH,
+  maximumHeight = FLOATING_MENU_MAX_HEIGHT,
   coordinateScale = 1
 }: {
   anchorRect: FloatingMenuAnchorRect
@@ -268,6 +269,7 @@ export function calculateFloatingMenuPlacement({
   viewportHeight: number
   viewportWidth: number
   preferredWidth?: number
+  maximumHeight?: number
   coordinateScale?: number
 }): FloatingMenuPlacement {
   const scale = Number.isFinite(coordinateScale) && coordinateScale > 0 ? coordinateScale : 1
@@ -294,10 +296,10 @@ export function calculateFloatingMenuPlacement({
     0,
     normalizedViewportHeight - normalizedAnchorRect.bottom - FLOATING_MENU_MARGIN - FLOATING_MENU_GAP
   )
-  const targetHeight = Math.min(contentHeight, FLOATING_MENU_MAX_HEIGHT)
+  const targetHeight = Math.min(contentHeight, maximumHeight)
   const openAbove = spaceAbove >= targetHeight || spaceAbove >= spaceBelow
   const availableHeight = Math.max(openAbove ? spaceAbove : spaceBelow, FLOATING_MENU_MIN_HEIGHT)
-  const maxHeight = Math.min(FLOATING_MENU_MAX_HEIGHT, availableHeight)
+  const maxHeight = Math.min(maximumHeight, availableHeight)
   const visibleHeight = Math.min(contentHeight, maxHeight)
   const preferredTop = openAbove
     ? normalizedAnchorRect.top - FLOATING_MENU_GAP - visibleHeight

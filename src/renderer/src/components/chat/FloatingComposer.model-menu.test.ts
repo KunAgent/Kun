@@ -298,12 +298,11 @@ describe('FloatingComposer model controls', () => {
     expect(html).toContain('High')
   })
 
-  it('renders Code split controls as borderless model and reasoning triggers', () => {
+  it('renders model and reasoning as one trigger', () => {
     const html = renderToStaticMarkup(
       createElement(FloatingComposerModelPicker, {
         compact: false,
         mode: 'select',
-        controlVariant: 'split',
         composerModel: 'deepseek-v4-pro',
         composerPickList: ['deepseek-v4-pro'],
         composerModelGroups: [DEEPSEEK_PROVIDER_GROUP],
@@ -314,36 +313,11 @@ describe('FloatingComposer model controls', () => {
       })
     )
 
+    expect(html.match(/<button/g)).toHaveLength(1)
     expect(html).toContain('deepseek-v4-pro')
-    expect(html).toContain('Reasoning')
     expect(html).toContain('Ultra')
-    expect(html).toContain('aria-label="Model: DeepSeek / deepseek-v4-pro"')
-    expect(html).toContain('aria-label="Reasoning: Ultra"')
-    expect(html).not.toContain('Model and reasoning settings')
-  })
-
-  it('shows an active Fast toggle for an eligible multi-account Codex subscription', () => {
-    const html = renderToStaticMarkup(
-      createElement(FloatingComposerModelPicker, {
-        compact: false,
-        mode: 'select',
-        controlVariant: 'split',
-        composerModel: 'gpt-5.4',
-        composerProviderId: 'codex-2',
-        composerPickList: ['gpt-5.4'],
-        composerModelGroups: [CODEX_PROVIDER_GROUP],
-        composerReasoningEffort: 'high',
-        composerFastMode: true,
-        canChangeModel: true,
-        onComposerModelChange: () => undefined,
-        onComposerReasoningEffortChange: () => undefined,
-        onComposerFastModeChange: () => undefined
-      })
-    )
-
-    expect(html).toContain('aria-label="Fast mode on"')
-    expect(html).toContain('aria-pressed="true"')
-    expect(html).toContain('lucide-zap')
+    expect(html).toContain('data-reasoning-effort="max"')
+    expect(html).toContain('aria-label="Model and reasoning settings: DeepSeek / deepseek-v4-pro / Reasoning Ultra"')
   })
 
   it('uses the shared preset icon in the current model control and provider menu', async () => {
@@ -369,7 +343,7 @@ describe('FloatingComposer model controls', () => {
         }))
       })
       const trigger = renderer!.root.findAllByType('button')
-        .find((button) => button.props['aria-haspopup'] === 'menu')
+        .find((button) => button.props['aria-haspopup'] === 'dialog')
       expect(trigger).toBeTruthy()
       await act(async () => trigger!.props.onClick())
 
@@ -380,72 +354,6 @@ describe('FloatingComposer model controls', () => {
       vi.unstubAllGlobals()
       ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false
     }
-  })
-
-  it('shows a disabled Fast toggle that explains an unverified Codex model', () => {
-    const html = renderToStaticMarkup(
-      createElement(FloatingComposerModelPicker, {
-        compact: false,
-        mode: 'select',
-        controlVariant: 'split',
-        composerModel: 'gpt-5.4-mini',
-        composerProviderId: 'codex-2',
-        composerPickList: ['gpt-5.4-mini'],
-        composerModelGroups: [CODEX_PROVIDER_GROUP],
-        composerFastMode: true,
-        canChangeModel: true,
-        onComposerModelChange: () => undefined,
-        onComposerFastModeChange: () => undefined
-      })
-    )
-
-    expect(html).toContain('lucide-zap')
-    expect(html).toContain('aria-disabled="true"')
-    expect(html).toContain('aria-pressed="false"')
-    expect(html).toContain('Fast support is not confirmed for this model')
-  })
-
-  it('shows a disabled Fast toggle that explains an explicitly unsupported Codex model', () => {
-    const html = renderToStaticMarkup(
-      createElement(FloatingComposerModelPicker, {
-        compact: false,
-        mode: 'select',
-        controlVariant: 'split',
-        composerModel: 'gpt-6-astra',
-        composerProviderId: 'codex-2',
-        composerPickList: ['gpt-6-astra'],
-        composerModelGroups: [CODEX_PROVIDER_GROUP],
-        composerFastMode: true,
-        canChangeModel: true,
-        onComposerModelChange: () => undefined,
-        onComposerFastModeChange: () => undefined
-      })
-    )
-
-    expect(html).toContain('lucide-zap')
-    expect(html).toContain('aria-disabled="true"')
-    expect(html).toContain('This model does not offer Fast mode.')
-  })
-
-  it('hides Fast for non-Codex providers', () => {
-    const html = renderToStaticMarkup(
-      createElement(FloatingComposerModelPicker, {
-        compact: false,
-        mode: 'select',
-        controlVariant: 'split',
-        composerModel: 'deepseek-v4-pro',
-        composerProviderId: 'deepseek',
-        composerPickList: ['deepseek-v4-pro'],
-        composerModelGroups: [DEEPSEEK_PROVIDER_GROUP],
-        composerFastMode: true,
-        canChangeModel: true,
-        onComposerModelChange: () => undefined,
-        onComposerReasoningEffortChange: () => undefined,
-        onComposerFastModeChange: () => undefined
-      })
-    )
-
-    expect(html).not.toContain('lucide-zap')
   })
 
   it('keeps provider setup reachable when no chat providers are available', () => {
@@ -463,7 +371,7 @@ describe('FloatingComposer model controls', () => {
     )
 
     expect(html).toContain('Set up provider')
-    expect(html).toContain('aria-haspopup="menu"')
+    expect(html).toContain('aria-haspopup="dialog"')
     expect(html).not.toContain('disabled=""')
   })
 

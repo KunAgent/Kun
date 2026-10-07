@@ -20,11 +20,11 @@ async function runUnifiedCodeFlow({
   await capture('1-code-home')
   assertions.push('Code opens directly with no ADE mode or empty collaboration panel')
 
-  const modelTrigger = () => page.locator('.ds-composer-model-picker button[aria-haspopup="menu"]').first()
+  const modelTrigger = () => page.locator('[data-composer-model-trigger]').first()
   const agentSection = page.locator('[data-agent-mode-menu]')
   const ensureModelMenuOpen = async () => {
     if (await modelTrigger().getAttribute('aria-expanded') !== 'true') await modelTrigger().click()
-    await page.locator('[role="menu"]').first().waitFor()
+    await page.locator('[data-composer-model-panel]').waitFor()
   }
   const openModelAgentList = async () => {
     if (!(await agentSection.isVisible().catch(() => false))) await page.locator('[data-agent-mode-trigger]').click()
