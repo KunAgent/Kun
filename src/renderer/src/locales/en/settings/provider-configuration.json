@@ -218,5 +218,15 @@
     "externalReferences": "Bindings in roles, ADE, scheduled tasks and projects must be changed in their own settings first. Historical identities are preserved.",
     "clearRegistryReferences": "Explicitly clear this connection’s default, route, failover and client scope references in the reviewed transaction",
     "review": "Review removal and reference changes"
+  },
+  "providerStaleModels": {
+    "title": "Models this provider no longer lists",
+    "description": "The provider's latest model list leaves these out, but Kun still uses them. Requests to them will likely fail. Models you added by hand are never listed here.",
+    "selected": "selected for this connection",
+    "routes": "route members in {{names}}",
+    "keys": "allowed for keys {{names}}",
+    "default": "still the default model; change it in the default model setting",
+    "keptRoutes": "{{names}} would have no members left, so they keep theirs; edit those routes on the Routing page.",
+    "review": "Review removal"
   }
 }

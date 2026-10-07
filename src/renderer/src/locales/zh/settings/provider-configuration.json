@@ -218,5 +218,15 @@
     "externalReferences": "角色、ADE、计划任务与项目中的引用须先在对应设置修改；历史标识会保留。",
     "clearRegistryReferences": "明确在本次预览事务中清除该连接的默认值、路由、回退与调用方范围引用",
     "review": "预览删除与引用调整"
+  },
+  "providerStaleModels": {
+    "title": "该供应商已不再提供的模型",
+    "description": "供应商最新的模型列表里已没有这些模型，但 Kun 仍在使用，发往它们的请求很可能失败。你手动添加的模型不会出现在这里。",
+    "selected": "已在本连接中选用",
+    "routes": "是路由 {{names}} 的成员",
+    "keys": "被密钥 {{names}} 允许使用",
+    "default": "仍是默认模型，请在默认模型设置中更换",
+    "keptRoutes": "{{names}} 删除后将没有成员，因此保留原样；请到路由页面修改。",
+    "review": "预览删除"
   }
 }

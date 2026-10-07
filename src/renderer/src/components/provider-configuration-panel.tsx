@@ -3,6 +3,7 @@ import { ProviderAccountsWorkspace } from './provider-accounts-workspace'
 import { ProviderConfigurationExchange } from './provider-configuration-exchange'
 import { ProviderTemplateActions } from './provider-template-actions'
 import { ProviderCatalogObservation } from './provider-catalog-observation'
+import { ProviderStaleModels } from './provider-stale-models'
 import { ProviderAdvancedFields } from './provider-advanced-fields'
 import { useEffect, useState } from 'react'
 import type { ProviderConfigurationOperation, ProviderConfigurationPreview,
@@ -116,6 +117,8 @@ export function ProviderConfigurationPanel({ t, activeProviderId }: { t: T; acti
               onChange={(event) => { if (draft.discovery?.mode === 'custom') edit({ discovery: { ...draft.discovery, modelsUrl: event.target.value } }) }} />
           </label> : null}
           <ProviderCatalogObservation key={selected} connectionId={selected} />
+          <ProviderStaleModels key={`stale-${selected}`} snapshot={snapshot} connectionId={selected} disabled={busy} t={t}
+            review={(operations) => void run(() => review(operations))} />
           <ProviderRemovalActions key={selected} snapshot={snapshot} connectionId={selected} disabled={busy} t={t}
             review={(operations) => void run(() => review(operations))} />
           <ProviderTemplateActions snapshot={snapshot} connectionId={selected} disabled={busy} review={(operations) => void run(() => review(operations))} />
