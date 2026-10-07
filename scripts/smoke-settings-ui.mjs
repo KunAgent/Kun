@@ -13,7 +13,7 @@ import { annotateSettingsTabs, readGatewayClientPicker, scrollSettingsDetail, ve
 import { captureReadySettingsDetail, readGatewayClientAccessibility } from './settings-ui-smoke-detail.mjs'
 
 // Native offline renderer smoke; no app build, runtime, provider network or secrets.
-// node scripts/smoke-settings-ui.mjs [--baseline] [--quick] [--serve]
+// node scripts/smoke-settings-ui.mjs [--baseline] [--quick] [--serve [--port <n>]]
 // KUN_SETTINGS_SOURCE_ROOT selects a complete baseline checkout with the two
 // fixture files copied in. Production TSX and CSS both come from that checkout.
 const require = createRequire(import.meta.url)
@@ -184,7 +184,7 @@ async function fixtureServer() {
       '@kun/extension-api': resolve(sourceRoot, 'packages/extension-api/src/index.ts'),
       '@kun/provider-catalog': resolve(sourceRoot, 'packages/provider-catalog/src/index.ts')
     } },
-    server: { host: '127.0.0.1', port: 0 },
+    server: { host: '127.0.0.1', port: servePort(), strictPort: servePort() !== 0 },
     plugins: [{ name: 'actual-settings-fixture', configureServer(vite) {
       vite.middlewares.use(async (request, response, next) => {
         if (!request.url?.startsWith('/__settings')) return next()
@@ -465,4 +465,11 @@ async function actionStates(config) {
   const destructive = await page.evaluate(() => window.settingsFixture.host.calls
     .filter(call => call.name === 'uninstall.perform'))
   assert.equal(destructive.length, 0, 'Destructive service must never be invoked')
+}
+
+/** `--serve --port <n>` keeps the fixture on a known port for a browser preview. */
+function servePort() {
+  const index = process.argv.indexOf('--port')
+  const port = index > 0 ? Number(process.argv[index + 1]) : 0
+  return Number.isInteger(port) && port > 0 && port < 65_536 ? port : 0
 }

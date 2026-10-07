@@ -4,97 +4,217 @@ import type {
   ReactElement
 } from 'react'
 import { useEffect, useState } from 'react'
+import ai302IconUrl from '../assets/provider-icons/ai302.svg?url'
+import aihubmixIconUrl from '../assets/provider-icons/aihubmix.svg?url'
 import alibabaIconUrl from '../assets/provider-icons/alibaba.svg?url'
+import anthropicIconUrl from '../assets/provider-icons/anthropic.svg?url'
 import antigravityIconUrl from '../assets/provider-icons/antigravity.svg?url'
+import azureIconUrl from '../assets/provider-icons/azure.svg?url'
+import baiducloudIconUrl from '../assets/provider-icons/baiducloud.svg?url'
+import bedrockIconUrl from '../assets/provider-icons/bedrock.svg?url'
+import cherryinIconUrl from '../assets/provider-icons/cherryin.svg?url'
 import claudeIconUrl from '../assets/provider-icons/claude.svg?url'
 import codexIconUrl from '../assets/provider-icons/codex.svg?url'
+import commandcodeIconUrl from '../assets/provider-icons/commandcode.svg?url'
 import cursorIconUrl from '../assets/provider-icons/cursor.svg?url'
 import deepseekIconUrl from '../assets/provider-icons/deepseek.svg?url'
 import doubaoIconUrl from '../assets/provider-icons/doubao.svg?url'
+import fireworksIconUrl from '../assets/provider-icons/fireworks.svg?url'
+import gatewayIconUrl from '../assets/provider-icons/gateway.svg?url'
 import geminiIconUrl from '../assets/provider-icons/gemini.svg?url'
 import grokIconUrl from '../assets/provider-icons/grok.svg?url'
+import groqIconUrl from '../assets/provider-icons/groq.svg?url'
+import huaweicloudIconUrl from '../assets/provider-icons/huaweicloud.svg?url'
+import kiloIconUrl from '../assets/provider-icons/kilo.svg?url'
 import kimiIconUrl from '../assets/provider-icons/kimi.svg?url'
 import litellmIconUrl from '../assets/provider-icons/litellm.svg?url'
+import lmstudioIconUrl from '../assets/provider-icons/lmstudio.svg?url'
+import localServerIconUrl from '../assets/provider-icons/local-server.svg?url'
 import longcatIconUrl from '../assets/provider-icons/longcat.svg?url'
 import mimoIconUrl from '../assets/provider-icons/mimo.svg?url'
 import minimaxIconUrl from '../assets/provider-icons/minimax.svg?url'
+import mistralIconUrl from '../assets/provider-icons/mistral.svg?url'
+import modelscopeIconUrl from '../assets/provider-icons/modelscope.svg?url'
+import nvidiaIconUrl from '../assets/provider-icons/nvidia.svg?url'
 import ollamaIconUrl from '../assets/provider-icons/ollama.svg?url'
+import omlxIconUrl from '../assets/provider-icons/omlx.svg?url'
+import openaiIconUrl from '../assets/provider-icons/openai.svg?url'
 import opencodeGoIconUrl from '../assets/provider-icons/opencodego.svg?url'
+import openrouterIconUrl from '../assets/provider-icons/openrouter.svg?url'
+import pipellmIconUrl from '../assets/provider-icons/pipellm.svg?url'
+import siliconflowIconUrl from '../assets/provider-icons/siliconflow.svg?url'
 import stepfunIconUrl from '../assets/provider-icons/stepfun.svg?url'
+import tencentcloudIconUrl from '../assets/provider-icons/tencentcloud.svg?url'
+import togetherIconUrl from '../assets/provider-icons/together.svg?url'
+import vercelIconUrl from '../assets/provider-icons/vercel.svg?url'
+import xaiIconUrl from '../assets/provider-icons/xai.svg?url'
+import yylxIconUrl from '../assets/provider-icons/yylx.svg?url'
 import zaiIconUrl from '../assets/provider-icons/zai.svg?url'
 import zenmuxIconUrl from '../assets/provider-icons/zenmux.svg?url'
+import zhipuIconUrl from '../assets/provider-icons/zhipu.svg?url'
 import kunIconUrl from '../../../asset/img/kun_tray_mac.svg?url'
 
 export type ProviderBrandIconKey =
+  | 'ai302'
+  | 'aihubmix'
   | 'alibaba'
+  | 'anthropic'
   | 'antigravity'
+  | 'azure'
+  | 'baiducloud'
+  | 'bedrock'
+  | 'cherryin'
   | 'claude'
   | 'codex'
+  | 'commandcode'
   | 'cursor'
   | 'deepseek'
   | 'doubao'
+  | 'fireworks'
+  | 'gateway'
   | 'gemini'
   | 'grok'
+  | 'groq'
+  | 'huaweicloud'
+  | 'kilo'
   | 'kimi'
   | 'kun'
   | 'litellm'
+  | 'lmstudio'
+  | 'local-server'
   | 'longcat'
   | 'mimo'
   | 'minimax'
+  | 'mistral'
+  | 'modelscope'
+  | 'nvidia'
   | 'ollama'
+  | 'omlx'
+  | 'openai'
   | 'opencodego'
+  | 'openrouter'
+  | 'pipellm'
+  | 'siliconflow'
   | 'stepfun'
+  | 'tencentcloud'
+  | 'together'
+  | 'vercel'
+  | 'xai'
+  | 'yylx'
   | 'zai'
   | 'zenmux'
+  | 'zhipu'
 
 const PROVIDER_ICON_ASSETS: Readonly<Record<ProviderBrandIconKey, string>> = {
+  ai302: ai302IconUrl,
+  aihubmix: aihubmixIconUrl,
   alibaba: alibabaIconUrl,
+  anthropic: anthropicIconUrl,
   antigravity: antigravityIconUrl,
+  azure: azureIconUrl,
+  baiducloud: baiducloudIconUrl,
+  bedrock: bedrockIconUrl,
+  cherryin: cherryinIconUrl,
   claude: claudeIconUrl,
   codex: codexIconUrl,
+  commandcode: commandcodeIconUrl,
   cursor: cursorIconUrl,
   deepseek: deepseekIconUrl,
   doubao: doubaoIconUrl,
+  fireworks: fireworksIconUrl,
+  gateway: gatewayIconUrl,
   gemini: geminiIconUrl,
   grok: grokIconUrl,
+  groq: groqIconUrl,
+  huaweicloud: huaweicloudIconUrl,
+  kilo: kiloIconUrl,
   kimi: kimiIconUrl,
   kun: kunIconUrl,
   litellm: litellmIconUrl,
+  lmstudio: lmstudioIconUrl,
+  'local-server': localServerIconUrl,
   longcat: longcatIconUrl,
   mimo: mimoIconUrl,
   minimax: minimaxIconUrl,
+  mistral: mistralIconUrl,
+  modelscope: modelscopeIconUrl,
+  nvidia: nvidiaIconUrl,
   ollama: ollamaIconUrl,
+  omlx: omlxIconUrl,
+  openai: openaiIconUrl,
   opencodego: opencodeGoIconUrl,
+  openrouter: openrouterIconUrl,
+  pipellm: pipellmIconUrl,
+  siliconflow: siliconflowIconUrl,
   stepfun: stepfunIconUrl,
+  tencentcloud: tencentcloudIconUrl,
+  together: togetherIconUrl,
+  vercel: vercelIconUrl,
+  xai: xaiIconUrl,
+  yylx: yylxIconUrl,
   zai: zaiIconUrl,
-  zenmux: zenmuxIconUrl
+  zenmux: zenmuxIconUrl,
+  zhipu: zhipuIconUrl
 }
 
 const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
+  aihubmix: 'aihubmix',
   aliyun: 'alibaba',
-  codex: 'codex',
+  'amazon-bedrock': 'bedrock',
+  'anthropic-api': 'anthropic',
+  'azure-openai': 'azure',
+  'baidu-qianfan': 'baiducloud',
+  cherryin: 'cherryin',
   'claude-subscription': 'claude',
+  codex: 'codex',
+  commandcode: 'commandcode',
   'cursor-subscription': 'cursor',
+  fireworks: 'fireworks',
+  'gemini-api': 'gemini',
   'gemini-cli-subscription': 'gemini',
   'gemini-subscription': 'antigravity',
   'grok-subscription': 'grok',
+  'groq-api': 'groq',
+  'huaweicloud-maas': 'huaweicloud',
+  'kilo-gateway': 'kilo',
   'kimi-code': 'kimi',
   litellm: 'litellm',
+  lmstudio: 'lmstudio',
+  'local-openai': 'local-server',
   longcat: 'longcat',
   minimax: 'minimax',
+  'mistral-api': 'mistral',
+  modelscope: 'modelscope',
   'moonshot-cn': 'kimi',
   'moonshot-global': 'kimi',
+  'nvidia-nim': 'nvidia',
   ollama: 'ollama',
+  'ollama-local': 'ollama',
+  omlx: 'omlx',
+  'openai-api': 'openai',
   'opencode-go': 'opencodego',
   'opencode-zen': 'opencodego',
+  openrouter: 'openrouter',
+  opper: 'gateway',
+  pipellm: 'pipellm',
+  siliconflow: 'siliconflow',
   stepfun: 'stepfun',
+  'tencent-tokenhub': 'tencentcloud',
+  tencentcloud: 'tencentcloud',
+  three02ai: 'ai302',
+  together: 'together',
+  'vercel-ai-gateway': 'vercel',
   volcengine: 'doubao',
   'volcengine-agent-plan': 'doubao',
   'volcengine-coding-plan': 'doubao',
+  'xai-api': 'xai',
   xiaomi: 'mimo',
+  yylx: 'yylx',
+  'zai-api': 'zai',
   'zai-coding-plan': 'zai',
   zenmux: 'zenmux',
-  'zhipu-coding-plan': 'zai'
+  'zhipu-api': 'zhipu',
+  'zhipu-coding-plan': 'zhipu'
 }
 
 const ICON_BY_EXACT_PROVIDER_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
