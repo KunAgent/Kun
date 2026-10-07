@@ -30,7 +30,7 @@
 /* Identity */
 .conversation-info-hero { display: flex; flex-direction: column; align-items: center; text-align: center; }
 .conversation-info-avatar { position: relative; display: inline-flex; flex: 0 0 auto; }
-.conversation-info-avatar:not([data-group]) .rooms-avatar { border: 0; border-radius: 50%; }
+.conversation-info-avatar:not([data-group]) .rooms-avatar:not([data-engine]) { border: 0; border-radius: 50%; }
 .conversation-info .rooms-avatar-letter { display: none; }
 .conversation-info-avatar:not([data-group])::after {
   content: '';

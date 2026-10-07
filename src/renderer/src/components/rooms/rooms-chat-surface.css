@@ -3,12 +3,12 @@
 
 /* Header: compact title bar with a round avatar. */
 .rooms-workspace .rooms-main-titlebar { min-height: 56px; padding-block: 8px; }
-.rooms-workspace .rooms-main-titlebar .rooms-avatar { border: 0; border-radius: 50%; }
+.rooms-workspace .rooms-main-titlebar .rooms-avatar:not([data-engine]) { border: 0; border-radius: 50%; }
 .rooms-workspace .rooms-main-titlebar .rooms-avatar-letter { display: none; }
 .rooms-workspace .direct-chat-title strong { font-size: 16px; font-weight: 600; }
 
 /* Messages: round avatars, flat tinted bubbles, no reserved action row. */
-.rooms-workspace .rooms-message-row > .rooms-avatar { border: 0; border-radius: 50%; }
+.rooms-workspace .rooms-message-row > .rooms-avatar:not([data-engine]) { border: 0; border-radius: 50%; }
 .rooms-workspace .rooms-message-row > .rooms-avatar .rooms-avatar-letter { display: none; }
 .rooms-workspace .rooms-message-meta { font-size: 12px; }
 .rooms-workspace .rooms-message-bubble { border-color: transparent; border-radius: 8px; background: var(--ds-surface-subtle); }

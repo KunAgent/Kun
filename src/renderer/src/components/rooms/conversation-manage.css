@@ -22,7 +22,7 @@
   background: var(--ds-surface-subtle);
   padding: 10px 12px;
 }
-.conversation-removal-identity .rooms-avatar { border-radius: 50%; }
+.conversation-removal-identity .rooms-avatar:not([data-engine]) { border-radius: 50%; }
 .conversation-removal-identity .rooms-avatar-letter { display: none; }
 .conversation-removal[data-removal='group'] .conversation-removal-identity .rooms-avatar { border-radius: 10px; }
 .conversation-removal-identity > span { display: flex; min-width: 0; flex-direction: column; }

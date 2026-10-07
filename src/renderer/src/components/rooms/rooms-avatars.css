@@ -151,7 +151,8 @@
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--rooms-avatar-tone) 45%, transparent);
   pointer-events: none;
 }
-/* Coding Agents: the engine mark in a rounded square, at every size. */
+/* Coding Agents: the engine mark in a rounded square, at every size.
+   Surfaces that crop portraits into circles exclude [data-engine]. */
 .rooms-avatar[data-engine] {
   border: 1px solid var(--ds-border);
   border-radius: 28%;

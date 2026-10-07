@@ -148,7 +148,7 @@
 }
 .sidebar-agent-chat-row.is-selected .sidebar-agent-chat-avatar > i { border-color: var(--ds-sidebar-row-active); }
 .sidebar-agent-chat-copy { min-width: 0; flex: 1; }
-.sidebar-agent-chat-avatar:not([data-group]) .rooms-avatar { border-radius: 50%; border: 0; }
+.sidebar-agent-chat-avatar:not([data-group]) .rooms-avatar:not([data-engine]) { border-radius: 50%; border: 0; }
 .sidebar-agent-chat-avatar .rooms-avatar-letter { display: none; }
 .sidebar-agent-chat-name,
 .sidebar-agent-chat-preview { display: flex; min-width: 0; align-items: center; gap: 6px; }
