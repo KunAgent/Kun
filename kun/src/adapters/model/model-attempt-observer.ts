@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { ModelAttemptInput, ModelAttemptLease } from '../../ports/model-attempt.js'
 import type { ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
+import type { ModelFailureMetadata } from '../../contracts/model-route-pool.js'
 
 /** Observes each physical attempt before route precommit buffering can discard its usage. */
 export async function* observeModelAttempts(request: ModelRequest,
@@ -35,7 +36,7 @@ export async function* observeModelAttempts(request: ModelRequest,
  * so the gateway can answer with a plain 429 before any stream starts, and
  * carries the window end so that answer says when to retry.
  */
-export function budgetRefusalChunk(error: GatewayBudgetError): Extract<ModelStreamChunk, { kind: 'error' }> {
+export function budgetRefusalChunk(error: GatewayBudgetError): { kind: 'error'; code: string; message: string; failure: ModelFailureMetadata } {
   // Callers can read the window, remaining allowance and reset time from GET /v1/kun/limit.
   const limited = error.code === 'token_budget_exceeded' || error.code === 'cost_limit_exceeded'
   const resetAt = limited && error.resetsAt !== undefined ? new Date(error.resetsAt).toISOString() : undefined

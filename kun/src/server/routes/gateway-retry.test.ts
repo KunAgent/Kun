@@ -63,7 +63,7 @@ describe('streaming admission', () => {
     expect(source.finished).toEqual(['completed'])
   })
   it('does not hold a slow upstream back, and an upstream error stays in the stream', async () => {
-    const upstreamError: ModelStreamChunk = { kind: 'error', message: 'upstream 500', failure: { category: 'server', failoverAllowed: false } }
+    const upstreamError: ModelStreamChunk = { kind: 'error', message: 'upstream 500', failure: { category: 'unavailable', failoverAllowed: false } }
     const slow = stream([{ kind: 'assistant_text_delta', text: 'late' }, upstreamError], 40)
     const started = Date.now()
     const admitted = await admitGatewayStream(slow, new AbortController().signal, 10)
