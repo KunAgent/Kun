@@ -213,7 +213,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
     content: 'roomsReplyContentTitle', files: 'directFiles', models: 'directModels', reminders: 'roomsReminders',
     settings: 'roomsSettings', directory: 'agentsDirectory', profile: 'roomsMyAvatar'
   }[topDrawerTarget.kind]) : undefined
-  const latestRunId = privateChat ? direct.data?.active?.runId ?? direct.data?.requests[0]?.runId : undefined
+  const activeRunId = privateChat ? direct.data?.active?.runId : undefined
+  const latestRunId = activeRunId ?? (privateChat ? direct.data?.requests[0]?.runId : undefined)
   const toggleSession = (): void => {
     if (openRunId) drawer.back()
     else if (latestRunId) openRun(latestRunId)
@@ -381,7 +382,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
                     onUpdated={async () => { await direct.refresh(); await state.refresh() }} />
                 </div> : null}
                 {showActivity && activity ? <RoomAgentActivity room={room} memberId={activity.memberId} label={activity.label}
-                  startedAt={privateChat ? direct.data?.activity?.startedAt : undefined} /> : null}
+                  startedAt={privateChat ? direct.data?.activity?.startedAt : undefined}
+                  onSession={activeRunId ? () => openRun(activeRunId) : undefined} sessionOpen={Boolean(activeRunId) && openRunId === activeRunId} /> : null}
               </>}
               renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)} title={message.body}
                 resolvedAnswer={choiceReplies[message.clientRequestId ?? '']}

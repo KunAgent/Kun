@@ -1,5 +1,7 @@
 import type { TFunction } from 'i18next'
+import { PanelRightOpen } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import './rooms-experience.css'
@@ -36,10 +38,15 @@ export function groupActivity(room: Room, typingIds: string[], waitingIds: strin
   return { label: t('roomsReceipt_fallback') }
 }
 
-/** Transient IM row, separate from persisted RoomMessage records. */
-export function RoomAgentActivity({ room, memberId, label, startedAt }: {
-  room: Room; memberId?: string; label: string; startedAt?: string
+/**
+ * Transient IM row, separate from persisted RoomMessage records. A private
+ * turn passes `onSession` so the Agent session can be opened while it runs,
+ * not only after it failed.
+ */
+export function RoomAgentActivity({ room, memberId, label, startedAt, onSession, sessionOpen = false }: {
+  room: Room; memberId?: string; label: string; startedAt?: string; onSession?: () => void; sessionOpen?: boolean
 }) {
+  const { t } = useTranslation('common')
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     if (!startedAt) return
@@ -59,6 +66,8 @@ export function RoomAgentActivity({ room, memberId, label, startedAt }: {
         </span>
         <span>{label}</span>
         {elapsed >= 5 && Number.isFinite(elapsed) ? <small aria-hidden="true">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</small> : null}
+        {onSession ? <button type="button" className={'rooms-agent-activity-session' + (sessionOpen ? ' is-active' : '')}
+          aria-pressed={sessionOpen} onClick={onSession}><PanelRightOpen size={13} aria-hidden="true" />{t('roomsViewAgentSession')}</button> : null}
       </div>
     </div>
   </div>

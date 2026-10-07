@@ -39,6 +39,15 @@
   color: var(--ds-text-muted);
   font-size: 0.8125rem;
 }
+.rooms-agent-activity-session {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: 0.25rem;
+  padding: 3px 8px; border-radius: 7px;
+  color: var(--ds-text-muted);
+  font-size: 11px; line-height: 1.35; white-space: nowrap;
+}
+.rooms-agent-activity-session:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+.rooms-agent-activity-session.is-active { color: var(--ds-accent, #4f46e5); }
+.rooms-agent-activity-session:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
 .rooms-timeline-gates { width: min(480px, calc(100% - 3.5rem)); margin: 8px 8px 16px 3.1rem; }
 .rooms-message-continuation .rooms-message-meta {
   position: absolute;
