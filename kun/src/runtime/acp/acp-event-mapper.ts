@@ -17,7 +17,6 @@ import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
 import {
-  acpConfigOptionValues,
   type AcpConfigOption,
   type AcpSessionModes,
   type SessionUpdate
@@ -29,6 +28,7 @@ import {
   type AcpToolCallWire
 } from './acp-tool-call-mapper.js'
 import { acpSessionSettings } from './acp-session-settings.js'
+import { boundedCommands, boundedConfigOptions } from './acp-session-state-bounds.js'
 import type { HarnessSessionSetting } from '../../contracts/harness-session-settings.js'
 
 export type AcpEventMapperContext = {
@@ -375,11 +375,7 @@ export class AcpEventMapper {
   ): RuntimeEventDraft[] {
     this.facts.sawAvailableCommands = true
     return [this.sessionState({
-      commands: update.availableCommands.slice(0, 200).map((command) => ({
-        name: command.name,
-        ...(command.description ? { description: command.description } : {}),
-        ...(command.input?.hint ? { inputHint: command.input.hint } : {})
-      }))
+      commands: boundedCommands(update.availableCommands)
     })]
   }
 
@@ -396,15 +392,8 @@ export class AcpEventMapper {
     this.facts.configOptions = update.configOptions as AcpConfigOption[]
     return [this.sessionState({
       settings: acpSessionSettings(update.configOptions as AcpConfigOption[], this.ctx.permissionOptionId),
-      configOptions: (update.configOptions as AcpConfigOption[]).slice(0, 32).map((option) => ({
-        id: option.id,
-        ...(option.name ? { name: option.name } : {}),
-        ...(option.category ? { category: option.category } : {}),
-        currentValue: option.currentValue,
-        ...(option.type === 'select'
-          ? { values: acpConfigOptionValues(option) }
-          : {})
-      }))
+      // Within the event's bounds: an Agent may list hundreds of models.
+      configOptions: boundedConfigOptions(update.configOptions as AcpConfigOption[])
     })]
   }
 

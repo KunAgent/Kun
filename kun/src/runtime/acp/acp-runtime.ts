@@ -82,6 +82,7 @@ export type { AcpCredentialEnvInput }
 export type { AcpRuntimeDeps } from './acp-runtime-deps.js'
 import type { AcpRuntimeDeps } from './acp-runtime-deps.js'
 import { acpSessionSettings } from './acp-session-settings.js'
+import { emitTolerantSessionState } from './acp-session-state-bounds.js'
 
 export class AcpRuntime implements DelegatedTurnRuntime {
   private readonly pool: AcpConnectionPool
@@ -242,7 +243,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         failStream(error)
         return
       }
-      emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
+      // A mirror of Agent controls never fails the turn; everything else does.
+      emitQueue = emitQueue.then(() => emitTolerantSessionState(drafts, (draft) => emitter.emit(draft), (error) =>
+        this.deps.debug?.({ direction: 'note', summary: `harness_session_state dropped: ${String(error).slice(0, 300)}` }))).catch(failStream)
     }
 
     let kunToolsServers: import('./acp-schema.js').McpServer[] = []
