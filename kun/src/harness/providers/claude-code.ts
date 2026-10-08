@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { claudeCodeSdkExecutable, installedClaudeCode, sdkBundledClaudeBinary } from '../claude-code-executable.js'
 import type { HarnessDefinition } from '../../contracts/harness.js'
 import { CLAUDE_CODE_CAPABILITIES, CLAUDE_SETTINGS_HOOK_EVENTS } from './capabilities.js'
 import type { AgentProviderModule, HarnessLoginState, ProviderEnv } from './provider-module.js'
@@ -76,16 +77,20 @@ export const CLAUDE_CODE_DEFINITION: HarnessDefinition = {
 
 const runtimeRequire = createRequire(import.meta.url)
 
-/** The Agent SDK ships its own `claude` executable per platform. */
+/**
+ * The Agent SDK's own `claude` executable, when its platform package is
+ * installed (development checkouts). Packaged builds omit it; detection then
+ * reports the user's installation and its real version instead of claiming
+ * the SDK package version for a binary that is not there.
+ */
 function bundledClaudeCode(): { version?: string; command?: string } | undefined {
+  const command = sdkBundledClaudeBinary()
+  if (!command) return undefined
   try {
     const pkgPath = join(dirname(runtimeRequire.resolve('@anthropic-ai/claude-agent-sdk')), 'package.json')
-    const version = (runtimeRequire(pkgPath) as { version?: string }).version
-    let command: string | undefined
-    try { command = runtimeRequire.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/${process.platform === 'win32' ? 'claude.exe' : 'claude'}`) } catch { /* SDK resolves its own platform package for model/account control requests. */ }
-    return { version, command }
+    return { version: (runtimeRequire(pkgPath) as { version?: string }).version, command }
   } catch {
-    return undefined
+    return { command }
   }
 }
 
@@ -137,6 +142,10 @@ export const CLAUDE_CODE_MODULE: AgentProviderModule = {
   loginStatusIgnoredWhen: ['CLAUDE_CODE_OAUTH_TOKEN'],
   binaryEnv: 'KUN_CLAUDE_BINARY',
   bundled: bundledClaudeCode,
+  // Same choice as the SDK launch (claude-code-executable.ts), so the
+  // detected command is the one readiness and turns start.
+  resolveExecutable: async () => installedClaudeCode() ?? 'claude',
+  sdkExecutable: (override) => claudeCodeSdkExecutable(override),
   nativeNetwork: { transport: 'agent-sdk', snapshotKey: 'claude-code' },
   installation: {
     bundledPathMarkers: ['/node_modules/@anthropic-ai/claude-agent-sdk', '/agent-sdk/'],

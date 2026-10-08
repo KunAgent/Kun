@@ -57,6 +57,7 @@ import { loadLiveUsageRemainders, loadUsageHistory } from '../services/usage-his
 import { GatewayCredentialService } from '../services/gateway-credential-service.js'
 import { GatewayUsageService } from '../services/gateway-usage-service.js'
 import { createApprovalReviewModelContextResolver } from '../services/approval-review-context-resolver.js'
+import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
 
 export async function createRuntimeModelComposition(
   core: Awaited<ReturnType<typeof createRuntimeCore>>
@@ -224,8 +225,8 @@ export async function createRuntimeModelComposition(
     defaultApiKey: options.apiKey,
     defaultModel: options.model,
     reviewCwd: join(options.dataDir, 'approval-review'),
-    ...(process.env.KUN_CLAUDE_BINARY
-      ? { pathToClaudeCodeExecutable: process.env.KUN_CLAUDE_BINARY }
+    ...(claudeCodeSdkExecutable()
+      ? { pathToClaudeCodeExecutable: claudeCodeSdkExecutable() }
       : {})
   })
   const initialModelClients = buildModelClientRouterInput(

@@ -119,8 +119,13 @@ export function createHarnessComposition(
     resolveSecretEnv: deps.resolveSecretEnv
   })
   const agentSdkModels = new AgentSdkModelProbe({
-    binaryPath: (id) =>
-      harnessCommandOverride(options().harnesses, id) ?? binaryEnvOverride(id)
+    // An engine with its own SDK executable choice (Claude Code falls back to
+    // the user's installation) starts what the detector reported.
+    binaryPath: (id) => {
+      const override = harnessCommandOverride(options().harnesses, id)
+      const engine = providerModule(id)
+      return engine?.sdkExecutable ? engine.sdkExecutable(override) : override ?? binaryEnvOverride(id)
+    }
   })
   const codexModels = new CodexModelProbe({
     binaryPath: (id) => harnessCommandOverride(options().harnesses, id),

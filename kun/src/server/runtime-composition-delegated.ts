@@ -36,6 +36,7 @@ import { buildCodexAppServerDeps } from './runtime-composition-codex.js'
 import { buildPiRpcDeps } from './runtime-composition-pi.js'
 import type { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
+import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
 
 export type MainDelegatedRuntimeInput = {
   options: KunServeRuntimeOptions
@@ -116,7 +117,7 @@ export function buildMainDelegatedRuntime(
     ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
     ...(input.memoryStore ? { memoryStore: input.memoryStore } : {}),
     ...(input.memoryFeedback ? { memoryFeedback: input.memoryFeedback } : {}),
-    ...((harnessCommandOverride(input.options.harnesses, 'claude-code') ?? process.env.KUN_CLAUDE_BINARY) ? { pathToClaudeCodeExecutable: harnessCommandOverride(input.options.harnesses, 'claude-code') ?? process.env.KUN_CLAUDE_BINARY } : {}),
+    ...withClaudeCodeExecutable(claudeCodeSdkExecutable(harnessCommandOverride(input.options.harnesses, 'claude-code'))),
     sessionCoordinator: delegatedSessions,
     contextProfile: delegatedContextProfile,
     deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
@@ -277,4 +278,8 @@ export function buildMainDelegatedRuntime(
     // native turns so the usage index and composer footer stay correct.
     usage: core.usageService
   }
+}
+
+function withClaudeCodeExecutable(path: string | undefined): { pathToClaudeCodeExecutable?: string } {
+  return path ? { pathToClaudeCodeExecutable: path } : {}
 }

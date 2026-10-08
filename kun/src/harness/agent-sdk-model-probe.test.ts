@@ -228,13 +228,44 @@ it('does not classify API-key presence or an empty account reply as native OAuth
   }
 })
 
-it('bounds account metadata checks and closes the query on cancellation', async () => {
+it('bounds account metadata checks, reports the timeout and closes the query', async () => {
   const close = vi.fn()
   const probe = new AgentSdkModelProbe({ loadSdk: fakeSdk(() => ({
     supportedModels: async () => MODEL_ROWS, accountInfo: async () => new Promise(() => {}), close
-  })), timeoutMs: 20 })
-  await expect(probe.probeReadiness(definition, {}, new AbortController().signal)).rejects.toThrow()
+  })), timeoutMs: 20, binaryPath: () => '/home/user/.local/bin/claude' })
+  expect(await probe.probeReadiness(definition, {}, new AbortController().signal)).toEqual({ ok: false, supported: true,
+    protocol: 'agent-sdk', detail: expect.stringMatching(/^Claude Code at \/home\/user\/\.local\/bin\/claude did not answer within 0s/) })
   expect(close).toHaveBeenCalled()
+})
+
+it('still throws when the caller cancels the check', async () => {
+  const controller = new AbortController()
+  const probe = new AgentSdkModelProbe({ loadSdk: fakeSdk(() => ({
+    supportedModels: async () => { controller.abort(new Error('cancelled')); return new Promise(() => {}) }, close: vi.fn()
+  })) })
+  await expect(probe.probeReadiness(definition, {}, controller.signal)).rejects.toThrow('cancelled')
+})
+
+it('explains a missing SDK binary and other startup failures instead of throwing', async () => {
+  const missing = new AgentSdkModelProbe({ loadSdk: fakeSdk(() => {
+    throw new Error('Native CLI binary for darwin-arm64 not found. Reinstall @anthropic-ai/claude-agent-sdk without --omit=optional, or set options.pathToClaudeCodeExecutable.')
+  }) })
+  expect(await missing.probeReadiness(definition, {}, new AbortController().signal)).toMatchObject({ ok: false,
+    detail: expect.stringContaining('Kun found no Claude Code executable to start') })
+  const crashed = new AgentSdkModelProbe({ binaryPath: () => '/usr/local/bin/claude', loadSdk: fakeSdk(() => ({
+    supportedModels: async () => { throw new Error('Claude Code process exited with code 1\nerror: unknown option --input-format') }, close: vi.fn()
+  })) })
+  expect(await crashed.probeReadiness(definition, {}, new AbortController().signal)).toMatchObject({ ok: false,
+    detail: 'Claude Code at /usr/local/bin/claude failed during the check: Claude Code process exited with code 1 error: unknown option --input-format' })
+})
+
+it('launches the executable Kun chose and reports an empty model list as not ready', async () => {
+  const query = vi.fn((_input: unknown) => ({ supportedModels: async () => [], close: vi.fn() }))
+  const probe = new AgentSdkModelProbe({ binaryPath: () => '/home/user/.local/bin/claude', loadSdk: fakeSdk(query) })
+  expect(await probe.probeReadiness(definition, {}, new AbortController().signal))
+    .toMatchObject({ ok: false, models: [], detail: 'Claude Code started but listed no models' })
+  expect(query).toHaveBeenCalledWith(expect.objectContaining({ options: expect.objectContaining({
+    pathToClaudeCodeExecutable: '/home/user/.local/bin/claude' }) }))
 })
 
 

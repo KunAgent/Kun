@@ -114,7 +114,7 @@ export function codeMakerDefinition(opencode: HarnessDefinition): HarnessDefinit
     // executable, and the fork keeps OpenCode's documentation links.
     setup: {
       login: { command: 'codemaker', args: ['auth', 'login'],
-        note: 'CodeMaker is distributed by your organization; set its command path in Kun if it is not on PATH' },
+        note: 'Kun looks in ~/.codemaker/bin (its installer default) and on PATH; set the command path in Kun for other locations' },
       docsUrl: 'https://opencode.ai/docs'
     }
   }

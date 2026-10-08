@@ -138,6 +138,12 @@ export type AgentProviderModule = {
   bundled?(): { version?: string; command?: string } | undefined
   /** Resolve the executable when the definition's command alone is not enough. */
   resolveExecutable?(): Promise<string>
+  /**
+   * Executable an embedded SDK launches, given the settings override;
+   * undefined lets the SDK use its own. Without it the override or
+   * `binaryEnv` applies.
+   */
+  sdkExecutable?(override: string | undefined): string | undefined
   /** Snapshot entry that carries this engine's native network policy. */
   readonly nativeNetwork?: { readonly transport: HarnessTransport; readonly snapshotKey: Exclude<keyof NativeAgentNetworkSnapshot, 'harnesses' | 'installer'> }
   readonly installation?: ProviderInstallation

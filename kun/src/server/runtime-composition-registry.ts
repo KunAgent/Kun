@@ -32,6 +32,7 @@ import { roomResultProvider } from '../rooms/room-result-tools.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
 import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
+import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
 
 export function createRuntimeRegistry(
   services: Awaited<ReturnType<typeof createRuntimeServices>>
@@ -96,7 +97,7 @@ export function createRuntimeRegistry(
           prefix: child.prefix,
           readiness: services.harnesses.readiness,
           providerConfigs: core.activeOptions.providers ?? {},
-          pathToClaudeCodeExecutable: harnessCommandOverride(core.activeOptions.harnesses, 'claude-code') ?? process.env.KUN_CLAUDE_BINARY,
+          pathToClaudeCodeExecutable: claudeCodeSdkExecutable(harnessCommandOverride(core.activeOptions.harnesses, 'claude-code')),
           agentSdkProviderIds,
           defaultApprovalPolicy: core.activeOptions.approvalPolicy,
           defaultSandboxMode: core.activeOptions.sandboxMode,
@@ -138,8 +139,8 @@ export function createRuntimeRegistry(
           ...(services.attachmentStore
             ? { attachmentStore: services.attachmentStore }
             : {}),
-          ...(process.env.KUN_CLAUDE_BINARY
-            ? { pathToClaudeCodeExecutable: process.env.KUN_CLAUDE_BINARY }
+          ...(claudeCodeSdkExecutable()
+            ? { pathToClaudeCodeExecutable: claudeCodeSdkExecutable() }
             : {}),
           nowIso,
           sessionCoordinator: delegatedSessions,
