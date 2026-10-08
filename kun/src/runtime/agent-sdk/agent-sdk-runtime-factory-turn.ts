@@ -357,6 +357,11 @@ export function createAgentSdkTurnRuntimeDeps(
             }),
             workspace: thread.workspace,
             model: model ?? 'claude-default',
+            // The SDK applies `model` on every query, including a resumed one,
+            // so an explicit model change continues the same Claude session.
+            // Gateway turns already bind the session to the route through the
+            // credential identity, and no model at all is its own session.
+            ...(model && !gatewayEnv ? { modelScope: 'session' as const } : {}),
             capabilityFingerprint: delegatedCapabilityFingerprint({
               systemPrompt: deps.prefix.systemPrompt,
               threadPersona: thread.systemPrompt?.trim() || '',

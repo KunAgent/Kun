@@ -429,6 +429,9 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         credentialIdentity: ctx.credentialIdentity,
         workspace: ctx.workspace,
         model: ctx.model ?? 'default',
+        // Codex sends the model with every turn and Pi sets it per session,
+        // so a model change keeps the native session (no handoff brief).
+        modelScope: 'session',
         capabilityFingerprint: delegatedCapabilityFingerprint(
           caps.fingerprint ?? {}
         ),

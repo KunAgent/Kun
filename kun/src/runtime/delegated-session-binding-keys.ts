@@ -1,10 +1,16 @@
 import { createHash } from 'node:crypto'
 import type { DelegatedSessionRoute } from './delegated-session-binding.js'
 
+/** Route model when the turn names none (the Agent's own default). */
+export const DEFAULT_DELEGATED_MODEL = 'default'
+
 /**
  * Stable identity of a route — keys provider-state dirs and parked entries.
  * Projects the route fields explicitly so a DelegatedSessionBinding (a
- * superset) hashes to the same key as the plain route.
+ * superset) hashes to the same key as the plain route. A session-scoped route
+ * leaves the model out: one native session serves every explicit model of the
+ * Agent. The Agent's default model stays apart, because a live session cannot
+ * be given "no model" again.
  */
 export function delegatedRouteKey(route: DelegatedSessionRoute): string {
   return sha256(stableStringify({
@@ -12,7 +18,9 @@ export function delegatedRouteKey(route: DelegatedSessionRoute): string {
     providerId: route.providerId,
     credentialIdentity: route.credentialIdentity,
     workspace: route.workspace,
-    model: route.model,
+    ...(route.modelScope === 'session'
+      ? { modelScope: route.model === DEFAULT_DELEGATED_MODEL ? 'session-default' : 'session' }
+      : { model: route.model }),
     capabilityFingerprint: route.capabilityFingerprint,
     continuationMode: route.continuationMode
   }))

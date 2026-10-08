@@ -240,6 +240,28 @@ describe('AcpSessionManager', () => {
     await conn.close()
   })
 
+  test('a model change keeps the same session: no new session, no handoff, the new model is applied', async () => {
+    const { conn, requests } = await startFixture('basic-chat.json')
+    await conn.initialize()
+    const { manager } = makeManager()
+    const first = await manager.ensureSession(makeCtx({ model: 'fake-model-1' }), conn)
+    const history = [userItem('turn_1', 'remember the secret')]
+    await manager.commit(first, { committedItems: history, lastCommittedTurnId: 'turn_1' })
+    first.detach()
+    const second = await manager.ensureSession(makeCtx({ turnId: 'turn_2', model: 'fake-model-2', items: history }), conn)
+    expect(second.sessionId).toBe(first.sessionId)
+    expect(second.preparation).toMatchObject({ resumed: true, nativeSessionId: first.sessionId })
+    expect(second.preparation.rebaseReason).toBeUndefined()
+    expect(second.replayedHistory).toBe(false)
+    expect(requests('session/new')).toHaveLength(1)
+    // The agent's session switches to the new model before the prompt.
+    expect(requests('session/set_config_option').map((entry) => entry.params)).toEqual([
+      expect.objectContaining({ sessionId: first.sessionId, configId: 'model', value: 'fake-model-2' })
+    ])
+    second.detach()
+    await conn.close()
+  })
+
   test('a model value absent from the option list is never guessed', async () => {
     const { conn, journal } = await startFixture('basic-chat.json')
     await conn.initialize()

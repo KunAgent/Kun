@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import type { TurnItem } from '../contracts/items.js'
 import { effectiveHistoryAfterLatestCompaction } from '../loop/compaction-history.js'
 import {
+  DEFAULT_DELEGATED_MODEL,
   delegatedRouteKey,
   sha256,
   stableStringify
@@ -26,6 +27,14 @@ export type DelegatedSessionRoute = {
   credentialIdentity: string
   workspace: string
   model: string
+  /**
+   * `session`: the Agent applies the turn's model to its live native session
+   * on every turn (Codex `turn/start`, an ACP model selector, Pi `set_model`),
+   * so changing the model continues the same conversation instead of starting
+   * a new native session with a handoff brief. Unset (`pinned`): the model is
+   * part of the session identity. Everything else in the route still is.
+   */
+  modelScope?: 'pinned' | 'session'
   capabilityFingerprint: string
   continuationMode: DelegatedContinuationMode
 }
@@ -602,9 +611,26 @@ function sameRoute(
     binding.providerId === route.providerId &&
     binding.credentialIdentity === route.credentialIdentity &&
     binding.workspace === route.workspace &&
-    binding.model === route.model &&
+    sameModel(binding, route) &&
     binding.capabilityFingerprint === route.capabilityFingerprint &&
     binding.continuationMode === route.continuationMode
+}
+
+/**
+ * The model only identifies a session for routes that pin it. The route being
+ * asked for decides, not the stored binding: an older binding of the same
+ * transport holds a native session that takes any model just the same.
+ *
+ * Moving to the Agent's default model is the exception. A live session keeps
+ * the last model it ran with and "no model" is never sent to it, so the
+ * default can only be had from a fresh session.
+ */
+function sameModel(
+  binding: Pick<DelegatedSessionBinding, 'model'>,
+  route: Pick<DelegatedSessionRoute, 'model' | 'modelScope'>
+): boolean {
+  if (binding.model === route.model) return true
+  return route.modelScope === 'session' && route.model !== DEFAULT_DELEGATED_MODEL
 }
 
 function rebaseReason(
@@ -618,7 +644,7 @@ function rebaseReason(
     binding.providerId !== route.providerId ||
     binding.credentialIdentity !== route.credentialIdentity ||
     binding.workspace !== route.workspace ||
-    binding.model !== route.model ||
+    !sameModel(binding, route) ||
     binding.continuationMode !== route.continuationMode
   ) return 'route_changed'
   if (binding.capabilityFingerprint !== route.capabilityFingerprint) {

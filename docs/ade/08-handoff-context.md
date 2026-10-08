@@ -191,9 +191,15 @@ worker 被收编自一个已有的一对一会话时（09 §9），第一轮带 
 
 ## 8. 换模型
 
-- 同一 harness 的原生会话中途换模型 = 重建执行单元：路由的 `model` 变化 → `route_changed` → 停泊旧会话 + 新会话 + 全量简报（旧模型的会话仍可在切回时恢复）。
+- 同一 harness 的原生会话中途换模型 = **同一个会话**，不产生交接简报。这类路由带 `modelScope: 'session'`：`model` 不再参与 `sameRoute` / `rebaseReason` / `delegatedRouteKey`，换模型走原生续接（`resumed: true`），新模型由各 runtime 在续接时下发——Codex 每个 `turn/start` 都带 `model`，ACP 走 `session/set_config_option`（`applyConfigOptions`），Pi 的 `bindSession` 走 `set_model`，Claude SDK 每次 `query` 都带 `model`（`resume` 同样生效，已用本机 `claude --resume --model` 在 sonnet→haiku→opus 间实测保持上下文）。目前启用的是 Codex、Pi、ACP 系（OpenCode / Devin / DeepSeek Harness 等）和 Claude SDK（显式选了模型时）。
+- 例外，仍是重建执行单元（`route_changed` → 停泊旧会话 + 新会话 + 全量简报）：
+  - 换回 Agent 默认模型（路由 `model` 为 `default` / `claude-default`）：活会话不能"取消"已设的模型，所以默认模型自成一个会话；之后再选具体模型会接着这个默认会话。
+  - `kun-gateway` 路线：模型 / 别名写进了 `credentialIdentity`、网关授权和生成的 harness 配置（`CODEX_HOME`、`OPENCODE_CONFIG`、`PI_CODING_AGENT_DIR` 等按路线生成），换模型要换进程和授权，仍需新的原生会话。
+  - 模型属于会话状态、且没有验证过续接换模型的路线（Cursor、Antigravity）保持 `modelScope` 缺省（`pinned`）：模型是会话身份的一部分。
+  - 工作区、账号、能力指纹、历史前缀变化照旧触发重建。
+- 升级迁移：路由键不再含模型，所以升级前创建的会话里，只有"状态目录按路由键派生"的那一类受影响——用 Kun 保存的订阅凭据（OAuth）跑的 Claude 会话。它的 `CLAUDE_CONFIG_DIR` 换了目录，第一轮续接找不到原生会话，走既有的 `native_state_unavailable` 重新同步（一次性，附一次交接简报），之后稳定。Codex / Pi / ACP 不依赖路由键目录，不受影响；已停泊的旧会话键不再匹配，回切时按新会话处理。
 - 推理强度是每轮参数，不触发重建（路由不包含 effort）。
-- UI：会话进行中切换模型时，提示"切换模型会为该 agent 开一个新的原生会话，上下文会以交接简报的形式带过去"（12 §6）。
+- UI：同一 agent 内换模型不提示、不交接；换 agent 才会开新的原生会话并以交接简报带上下文（12 §7.2）。
 
 ## 9. 检索工具：`read_thread_history`
 

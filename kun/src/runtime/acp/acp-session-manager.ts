@@ -124,6 +124,9 @@ export class AcpSessionManager {
         credentialIdentity: conn.identity,
         workspace: ctx.workspacePath,
         model: ctx.model ?? 'default',
+        // applyConfigOptions sets the turn's model on live, loaded and fresh
+        // sessions alike, so a model change keeps the native session.
+        modelScope: 'session',
         capabilityFingerprint: delegatedCapabilityFingerprint(capabilities ?? {}),
         // All ACP agents accept more prompts on a live session. loadSession
         // only determines whether it can be restored after process exit.
