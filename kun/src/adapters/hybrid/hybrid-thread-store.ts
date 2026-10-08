@@ -19,6 +19,7 @@ import { type ThreadIndexRecord, type ThreadRow } from './hybrid-thread-index-ma
 import { requiresLegacyWorkThreadHydration } from './hybrid-thread-legacy-surface.js'
 import { HybridThreadIndexRepository } from './hybrid-thread-index.js'
 import { HybridThreadIndexDirtyTracker } from './hybrid-thread-index-dirty.js'
+import { ThreadRowReadability } from './hybrid-thread-row-readability.js'
 import { hybridThreadStoreListPage, summariesFromRows } from './hybrid-thread-list-page.js'
 import { HybridThreadBackfillCoordinator } from './hybrid-thread-backfill.js'
 import { readMissingIndexRecords } from './hybrid-thread-backfill-read.js'
@@ -68,6 +69,11 @@ export class HybridThreadStore implements ThreadStore {
   // re-compiles the SQL on every prepare() call otherwise.
   private readonly statementCache = new Map<string, Statement>()
   private readonly documents: HybridThreadDocumentRepository
+  private readonly rowReadability = new ThreadRowReadability({
+    threadDir: (id) => this.threadDir(id), metadataPath: (id) => this.metadataPath(id),
+    legacyThreadPath: (id) => this.legacyThreadPath(id), messagesPath: (id) => this.messagesPath(id),
+    eventsPath: (id) => this.eventsPath(id)
+  }, (id) => this.index?.repairPaths(id))
   // Per-thread floor that keeps metadata compaction from re-running on every
   // append when a single snapshot is already larger than the threshold.
   private readonly metadataCompactFloor = new Map<string, number>()
@@ -539,6 +545,7 @@ export class HybridThreadStore implements ThreadStore {
   }
 
   private deleteIndexRow(threadId: string): void {
+    this.rowReadability.forget(threadId)
     this.index?.delete(threadId)
     this.highWaterBuffer.clearThread(threadId)
   }
@@ -655,25 +662,8 @@ export class HybridThreadStore implements ThreadStore {
     return this.filesystemSummaries.readByIds(ids)
   }
 
-  private async rowHasReadableJsonl(row: ThreadRow): Promise<boolean> {
-    if (!isSafeThreadId(row.id)) return false
-    if (!(await pathExists(this.threadDir(row.id)))) return false
-    const readable =
-      (await pathExists(this.metadataPath(row.id))) ||
-      (await pathExists(this.legacyThreadPath(row.id)))
-    if (!readable) return false
-    if (
-      row.metadata_path !== this.metadataPath(row.id) ||
-      row.messages_path !== this.messagesPath(row.id) ||
-      row.events_path !== this.eventsPath(row.id)
-    ) {
-      // JSONL is canonical and the SQLite paths are derived. Moving a Runtime
-      // data directory (including the GUI's legacy migration) must not make a
-      // valid thread disappear merely because its cached absolute paths still
-      // point at the previous root.
-      this.index?.repairPaths(row.id)
-    }
-    return true
+  private rowHasReadableJsonl(row: ThreadRow): Promise<boolean> {
+    return this.rowReadability.check(row)
   }
 
   private threadDir(threadId: string): string {
