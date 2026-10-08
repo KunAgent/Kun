@@ -69,6 +69,7 @@ import {
   type DelegatedTrace
 } from './delegated-trace.js'
 import { KunTimelineTurnSink } from './turn-sink.js'
+import { harnessTurnTiming } from '../runtime/harness-turn-timing.js'
 import {
   HarnessTransportError,
   type HarnessAgent,
@@ -338,6 +339,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
 
     try {
       await validateLaunch()
+      harnessTurnTiming(threadId, turnId).requestStarted()
       const result = await session.runTurn(input, sink, signal)
       await sink.flush()
       await finishDelegatedTrace(

@@ -369,6 +369,32 @@ describe('harness-grant gateway requests', () => {
     })
   }
 
+  it('times a granted Messages call so a gateway-routed Claude Code shows TTFT and tok/s', async () => {
+    const tokens = new HarnessTokenService()
+    const slow: ModelClient = {
+      provider: 'test',
+      model: 'default',
+      async *stream(): AsyncIterable<ModelStreamChunk> {
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        yield { kind: 'assistant_text_delta', text: 'hi' }
+        await new Promise((resolve) => setTimeout(resolve, 70))
+        yield { kind: 'usage', usage: { promptTokens: 7, completionTokens: 30, totalTokens: 37, cacheHitRate: null } as never }
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }
+    const { base, usageEvents } = grantRuntime(slow, tokens)
+    const token = issue(tokens, [{ providerId: 'anthropic-key', model: 'claude-sonnet-4-6', role: 'main' }])
+    const response = await gatewayMessages(base, grantRequest({
+      model: 'kun/anthropic-key/claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hi' }]
+    }, token))
+    expect(response.status).toBe(200)
+    const usage = usageEvents.find((event) => event.kind === 'usage') as { usage: Record<string, number> } | undefined
+    expect(usage!.usage.requestTtftMs).toBeGreaterThanOrEqual(25)
+    expect(usage!.usage.requestGenerationMs).toBeGreaterThanOrEqual(60)
+    expect(usage!.usage.requestGenerationMs).toBeLessThan(5_000)
+  })
+
   it('routes kun/<provider>/<model> through the grant and attributes usage to the running turn', async () => {
     const tokens = new HarnessTokenService()
     const model = new ScriptedModel([

@@ -1,3 +1,4 @@
+import { timeModelStream } from '../../loop/model-timing-decorator.js'
 import type { ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { gatewayCallerAgent } from './gateway-caller-agent.js'
 import { captureGatewayContinuations, gatewayContinuationStore, restoreGatewayContinuations } from './gateway-continuations.js'
@@ -32,7 +33,9 @@ export function gatewayUpstream(runtime: ServerRuntime, request: Request, auth: 
   const client = auth.kind === 'public' ? auth.client?.name : undefined
   const trace = gatewayRouteTraceStore(owner).begin(session, { requestId: modelRequest.turnId, asked,
     ...(agent ? { agent } : {}), ...(client ? { client } : {}), ...(modelRequest.reasoningEffort ? { effort: modelRequest.reasoningEffort } : {}) })
-  const upstream = runtime.modelClient!.stream(modelRequest)
+  // Every call a harness routes through the gateway reports its own TTFT and
+  // generation time on the usage chunk, exactly like a native model call.
+  const upstream = timeModelStream(runtime.modelClient!.stream(modelRequest))
   return traceGatewayStream(captureGatewayContinuations(middleware ? middleware.wrapStream(upstream, middlewareContext) : upstream,
     continuations, callerId), trace)
 }

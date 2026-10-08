@@ -3,6 +3,7 @@ import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js
 import { CursorSdkEventMapper, cursorTodosRequestFromMessage } from './cursor-sdk-event-mapper.js'
 import { sanitizeCursorSdkError, type CursorSdkRuntimeDeps } from './cursor-sdk-runtime-support.js'
 import { captureCursorMessage, captureCursorTraceDraft, itemOf, type CursorTrace } from './cursor-sdk-runtime-trace.js'
+import { harnessTurnTiming } from '../harness-turn-timing.js'
 
 export async function consumeCursorMessage(
   deps: CursorSdkRuntimeDeps,
@@ -15,6 +16,7 @@ export async function consumeCursorMessage(
   ): Promise<void> {
     captureCursorMessage(trace, message)
     const drafts = mapper.map(message)
+    harnessTurnTiming(threadId, turnId).observe(drafts)
     const outputItem = message.type === 'assistant'
       ? mapper.runningTextItem
       : message.type === 'thinking'

@@ -87,6 +87,7 @@
       "build": "Build"
     },
     "usageReportedByAgent": "Reported by the Agent",
+    "usageTimingByAgent": "Average time-to-first-token (TTFT) and streaming speed, measured by Kun on this Agent's output stream: TTFT runs from handing over the prompt to the first streamed text, tok/s counts only the time text was flowing",
     "progress": {
       "wait": "Wait for this Agent's current turn",
       "install": "Download and install {{version}}",

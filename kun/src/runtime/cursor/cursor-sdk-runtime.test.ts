@@ -33,6 +33,7 @@ import {
   delegatedHistoryDigest
 } from '../delegated-session-binding.js'
 import { goalContextKey } from '../../loop/continuation-instructions.js'
+import { setHarnessTimingClock } from '../harness-turn-timing.js'
 
 function messages(values: SDKMessage[]): AsyncGenerator<SDKMessage, void> {
   return (async function* () {
@@ -615,6 +616,46 @@ describe('CursorSdkRuntime', () => {
     }))
     expect(h.finished).toContainEqual(expect.objectContaining({ status: 'completed' }))
   })
+
+  test('stamps the turn usage with the TTFT and speed of the streamed answer', async () => {
+    let clock = 0
+    setHarnessTimingClock(() => clock)
+    try {
+      const base = fakeRun({
+        result: { usage: { inputTokens: 500, outputTokens: 120, totalTokens: 620, cacheReadTokens: 0, cacheWriteTokens: 0 } }
+      })
+      const assistant = (index: number): SDKMessage => ({
+        type: 'assistant',
+        agent_id: 'agent_1',
+        run_id: 'run_1',
+        // 35 ASCII chars = 10 estimated tokens; distinct text so each message is a new fragment
+        message: { role: 'assistant', content: [{ type: 'text', text: String.fromCharCode(65 + index).repeat(35) }] }
+      })
+      const run = {
+        ...base,
+        stream: () => (async function* () {
+          for (let i = 0; i < 10; i += 1) {
+            clock = 800 + i * 100
+            yield assistant(i)
+          }
+        })()
+      } as Run
+      const h = harness({ run })
+      await expect(h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal, 'cursor-subscription'))
+        .resolves.toBe('completed')
+      const usage = h.recorded.find((event) => (event as { kind?: string }).kind === 'usage') as
+        { usage: Record<string, unknown> } | undefined
+      expect(usage?.usage).toMatchObject({
+        completionTokens: 120,
+        requestTtftMs: 800, // prompt handed to the agent at 0, first fragment at 800
+        requestGenerationMs: 900,
+        requestGenerationTokens: 90
+      })
+    } finally {
+      setHarnessTimingClock(undefined)
+    }
+  })
+
 
 
 })

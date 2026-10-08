@@ -1,5 +1,6 @@
 import { cursorSessionPrompt } from './cursor-session-prompt.js'
 import { cursorTurnFailure } from './cursor-turn-failure.js'
+import { harnessTurnTiming } from '../harness-turn-timing.js'
 import type { Run, SDKAgent, SDKUserMessage } from '@cursor/sdk'
 import { goalContextTexts } from '../../contracts/items.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
@@ -482,6 +483,7 @@ export async function runCursorSdkTurnOwned(
         let runAccepted = false
         try {
           await deps.readiness?.validateTurn(threadId, turnId, signal)
+          harnessTurnTiming(threadId, turnId).requestStarted()
           run = await Promise.race([
             agent.send(attemptMessage, {
               mode: options.mode,
@@ -525,7 +527,9 @@ export async function runCursorSdkTurnOwned(
           if (result.status === 'error') {
             throw cursorRunError(result)
           }
-          for (const draft of mapper.finalize(result.result, result.usage)) {
+          const finalDrafts = mapper.finalize(result.result, result.usage)
+          harnessTurnTiming(threadId, turnId).observe(finalDrafts)
+          for (const draft of finalDrafts) {
             await emitCursorDraft(deps,threadId, draft)
           }
           finishCursorTraceChunks(trace, mapper.text, result.usage, resolvedProviderId, model)

@@ -105,6 +105,15 @@ export const UsageSnapshotSchema = z.object({
    * until the final usage/completed chunk. Used with `completionTokens` to
    * derive per-request tokens-per-second. */
   requestGenerationMs: z.number().nonnegative().optional(),
+  /**
+   * Tokens produced within `requestGenerationMs` when that differs from
+   * `completionTokens`. Delegated Agents report tokens per call or turn but
+   * not when they were generated, so Kun measures the stream itself and
+   * estimates the tokens that flowed in it (capped by the reported
+   * completion). Tokens-per-second divides this by the generation time;
+   * absent means `completionTokens`.
+   */
+  requestGenerationTokens: z.number().nonnegative().optional(),
   /** Average TTFT across model calls of the current turn (null = no data). */
   turnAvgTtftMs: z.number().nonnegative().nullable().optional(),
   /** Average tokens-per-second across model calls of the current turn. */

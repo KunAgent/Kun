@@ -83,6 +83,7 @@ export type { AcpRuntimeDeps } from './acp-runtime-deps.js'
 import type { AcpRuntimeDeps } from './acp-runtime-deps.js'
 import { acpSessionSettings } from './acp-session-settings.js'
 import { emitTolerantSessionState } from './acp-session-state-bounds.js'
+import { harnessTurnTiming } from '../harness-turn-timing.js'
 
 export class AcpRuntime implements DelegatedTurnRuntime {
   private readonly pool: AcpConnectionPool
@@ -222,6 +223,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       // credentialEnv is non-empty only for kun-gateway routes (native login is {}).
       { gatewayMetered: Object.keys(credentialEnv).length > 0 }
     )
+    const timing = harnessTurnTiming(threadId, turnId)
     let emitQueue: Promise<void> = Promise.resolve()
     let acceptEvidence = true
     let streamError: AcpError | undefined
@@ -243,6 +245,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         failStream(error)
         return
       }
+      timing.observe(drafts)
       // A mirror of Agent controls never fails the turn; everything else does.
       emitQueue = emitQueue.then(() => emitTolerantSessionState(drafts, (draft) => emitter.emit(draft), (error) =>
         this.deps.debug?.({ direction: 'note', summary: `harness_session_state dropped: ${String(error).slice(0, 300)}` }))).catch(failStream)
@@ -468,6 +471,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       await this.deps.readiness?.validateTurn(threadId, turnId, signal)
       signal.throwIfAborted()
       if (streamError) throw streamError
+      timing.requestStarted()
       const raw = await Promise.race([conn.rpc.request(
         ACP_AGENT_METHODS.sessionPrompt,
         { sessionId: session.sessionId, prompt },
@@ -484,7 +488,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           'session/prompt response is missing required fields'
         )
       }
-      await emitter.emitAll(mapper.applyPromptResult(parsed.data.usage))
+      const resultDrafts = mapper.applyPromptResult(parsed.data.usage)
+      timing.observe(resultDrafts)
+      await emitter.emitAll(resultDrafts)
       await emitter.emitAll(mapper.flush())
       if (streamError) throw streamError
       await commitAcpSession(

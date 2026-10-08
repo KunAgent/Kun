@@ -446,6 +446,8 @@ export type CoreUsageSnapshotJson = {
   requestTtftMs?: number
   /** Generation duration of this single model request (ms). */
   requestGenerationMs?: number
+  /** Tokens produced within `requestGenerationMs`; absent means the completion tokens. */
+  requestGenerationTokens?: number
   /** Average TTFT across model calls of the current turn. */
   turnAvgTtftMs?: number | null
   /** Average tokens-per-second across model calls of the current turn. */

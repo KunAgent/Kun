@@ -1,0 +1,237 @@
+{
+  "sessionId": "sess-timing",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": true,
+      "promptCapabilities": {
+        "image": true,
+        "embeddedContext": true
+      },
+      "mcpCapabilities": {
+        "http": true
+      }
+    },
+    "authMethods": [],
+    "agentInfo": {
+      "name": "fake-acp-agent",
+      "version": "0.0.1"
+    }
+  },
+  "newSession": {
+    "modes": {
+      "currentModeId": "ask",
+      "availableModes": [
+        {
+          "id": "ask",
+          "name": "Ask"
+        },
+        {
+          "id": "auto",
+          "name": "Auto"
+        }
+      ]
+    },
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "fake-model-1",
+        "options": [
+          {
+            "value": "fake-model-1",
+            "name": "Fake Model 1"
+          },
+          {
+            "value": "fake-model-2",
+            "name": "Fake Model 2"
+          }
+        ]
+      },
+      {
+        "id": "thought",
+        "name": "Thinking",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "medium",
+        "options": [
+          {
+            "value": "low",
+            "name": "Low"
+          },
+          {
+            "value": "medium",
+            "name": "Medium"
+          },
+          {
+            "value": "high",
+            "name": "High"
+          }
+        ]
+      }
+    ]
+  },
+  "turns": [
+    {
+      "steps": [
+        {
+          "sleep": 200
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg "
+            }
+          }
+        },
+        {
+          "sleep": 40
+        }
+      ],
+      "response": {
+        "stopReason": "end_turn",
+        "usage": {
+          "inputTokens": 120,
+          "outputTokens": 400,
+          "totalTokens": 520
+        }
+      }
+    }
+  ]
+}

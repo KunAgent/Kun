@@ -453,8 +453,9 @@ function summarize(records: TrajectoryRecord[]): TrajectorySummary {
     costUsd += usage?.costUsd ?? 0; costCny += usage?.costCny ?? 0
     valueEstimateUsd += usage?.valueEstimateUsd ?? 0; valueEstimateCny += usage?.valueEstimateCny ?? 0
     if (usage?.requestTtftMs !== undefined) { ttftTotal += usage.requestTtftMs; ttftCount += 1 }
-    if (usage?.requestGenerationMs && usage.completionTokens > 0) {
-      tpsTotal += usage.completionTokens / (usage.requestGenerationMs / 1_000); tpsCount += 1
+    const generatedTokens = usage?.requestGenerationTokens ?? usage?.completionTokens ?? 0
+    if (usage?.requestGenerationMs && generatedTokens > 0) {
+      tpsTotal += generatedTokens / (usage.requestGenerationMs / 1_000); tpsCount += 1
     }
   }
   const cacheTotal = cacheReadTokens + Math.max(0, inputTokens - cacheReadTokens)

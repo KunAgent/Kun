@@ -7,6 +7,7 @@
 import type { ApprovalRequest } from '../domain/approval.js'
 import { createApprovalRequest } from '../domain/approval.js'
 import { AcpDraftEmitter } from '../runtime/acp/acp-turn-emitter.js'
+import { harnessTurnTiming } from '../runtime/harness-turn-timing.js'
 import type { UserInputGate, UserInputQuestion } from '../ports/user-input-gate.js'
 import type {
   HarnessApprovalRequest,
@@ -41,6 +42,8 @@ export class KunTimelineTurnSink implements HarnessTurnSink {
   constructor(private readonly deps: KunTimelineTurnSinkDeps) {}
 
   emit(drafts: Parameters<AcpDraftEmitter['emitAll']>[0]): Promise<void> {
+    // Sampled on arrival: the emitter queue below delays persistence.
+    harnessTurnTiming(this.deps.threadId, this.deps.turnId).observe(drafts)
     const next = this.pending.then(() => {
       if (this.failed) throw this.failure
       return this.deps.emitter.emitAll(drafts)

@@ -173,7 +173,7 @@ export function FloatingComposerFooterView({
                 {timingThreadUsage?.avgTtftMs != null ? (
                   <span
                     className="ds-composer-usage-metric ds-composer-usage-ttft shrink-0 tabular-nums"
-                    title={t('sessionUsageAvgMetricsTitle')}
+                    title={t(agentBilled ? 'agentUpdate.usageTimingByAgent' : 'sessionUsageAvgMetricsTitle')}
                   >
                     {t('sessionUsageFooterTtft', {
                       ttft: formatTtftSeconds(timingThreadUsage.avgTtftMs) ?? '-'
@@ -183,7 +183,7 @@ export function FloatingComposerFooterView({
                 {timingThreadUsage?.avgTokensPerSecond != null ? (
                   <span
                     className="ds-composer-usage-metric ds-composer-usage-tps shrink-0 tabular-nums"
-                    title={t('sessionUsageAvgMetricsTitle')}
+                    title={t(agentBilled ? 'agentUpdate.usageTimingByAgent' : 'sessionUsageAvgMetricsTitle')}
                   >
                     {t('sessionUsageFooterTps', {
                       tps: formatTps(timingThreadUsage.avgTokensPerSecond) ?? '-'

@@ -25,6 +25,7 @@ function translate(key: string, values: Record<string, unknown> = {}): string {
     sessionUsageFooterTtft: `TTFT ${values.ttft}`,
     sessionUsageFooterTps: `${values.tps} tok/s`,
     sessionUsageAvgMetricsTitle: 'Average timing',
+    'agentUpdate.usageTimingByAgent': 'Agent-measured timing',
     sessionUsageDetailsTitle: `${values.tokens} tokens · ${values.cost} · ${values.turns} turns`,
     sessionUsageDetailsTitleWithLatestCache: `${values.tokens} tokens · ${values.cost} · ${values.turns} turns`,
     sessionUsageLoading: 'Loading usage',
@@ -237,6 +238,19 @@ describe('FloatingComposerFooterView', () => {
     expect(css).toMatch(/@container \(max-width: 560px\)[\s\S]*?\.ds-composer-usage-ttft/s)
     expect(css).toContain('.ds-composer-usage-money-estimate')
     expect(css).toMatch(/@container \(max-width: 460px\)[\s\S]*?\.ds-composer-usage-turns/s)
+  })
+  it('shows TTFT and tok/s for an external Agent and says Kun measured them on its output stream', () => {
+    const usage = usageSummary()
+    const external = renderFooter({ threadUsage: usage, timingThreadUsage: usage,
+      adeComposerEnabled: true, adeComposer: { harnessId: 'devin' } })
+    expect(external).toContain('ds-composer-usage-ttft')
+    expect(external).toContain('ds-composer-usage-tps')
+    expect(external).toContain('title="Agent-measured timing"')
+    expect(external).not.toContain('title="Average timing"')
+    const native = renderFooter({ threadUsage: usage, timingThreadUsage: usage,
+      adeComposerEnabled: true, adeComposer: { harnessId: 'kun' } })
+    expect(native).toContain('title="Average timing"')
+    expect(native).not.toContain('Agent-measured timing')
   })
   it('labels price-less external Agent usage as billed by the Agent instead of an error', () => {
     const usage = usageSummary({ costUsd: null, totalTokens: 48_000, turns: 2 })

@@ -428,7 +428,7 @@ export class AgentSdkRuntime {
               attemptFinalSeen = true
               attemptTurns = sdkResultTurnCount(message)
             }
-            for (const draft of mapper.map(message)) {
+            for (const draft of observeSdkMessage(threadId, turnId, message, mapper.map(message))) {
               captureAgentSdkTraceDraft(trace, draft)
               const delta = assistantDeltaOf(draft)
               if (delta) {
@@ -696,3 +696,4 @@ export class AgentSdkRuntime {
   }
 }
 import { createOwnedSdkProcessSpawner } from './owned-sdk-process.js'
+import { observeSdkMessage } from './agent-sdk-timing.js'

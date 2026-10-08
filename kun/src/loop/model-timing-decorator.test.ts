@@ -3,7 +3,7 @@ import type { ModelClient, ModelStreamChunk } from '../ports/model-client.js'
 import { emptyUsageSnapshot } from '../contracts/usage.js'
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../contracts/model-route-pool.js'
 import { isPoolAliasActingRoute } from './model-step-preparation-helpers.js'
-import { withModelTiming } from './model-timing-decorator.js'
+import { timeModelStream, withModelTiming } from './model-timing-decorator.js'
 
 class FakeRoutedClient implements ModelClient {
   readonly provider = 'route-pool'
@@ -190,5 +190,36 @@ describe('isPoolAliasActingRoute', () => {
     expect(isPoolAliasActingRoute({ model: 'kimi-k3', providerId: 'kimi' }, target)).toBe(false)
     expect(isPoolAliasActingRoute({ model: 'kk', providerId: 'route-pool:other' }, target)).toBe(false)
     expect(isPoolAliasActingRoute({ model: 'other-alias', providerId: LOCAL_MODEL_GATEWAY_PROVIDER_ID }, target)).toBe(false)
+  })
+})
+
+describe('timeModelStream', () => {
+  it('stamps the usage chunk with the same TTFT and generation time as the wrapped client', async () => {
+    const clock = { value: 0 }
+    const source = makeClient([
+      { kind: 'assistant_text_delta', text: 'hi' },
+      usageChunk(40),
+      { kind: 'completed', stopReason: 'stop' }
+    ], clock).stream({} as never)
+    const seen: ModelStreamChunk[] = []
+    for await (const chunk of timeModelStream(source, () => clock.value)) seen.push(chunk)
+    const usage = seen.find((chunk) => chunk.kind === 'usage')
+    expect(usage && usage.kind === 'usage' && usage.usage).toMatchObject({
+      completionTokens: 40, requestTtftMs: 250, requestGenerationMs: 250
+    })
+  })
+
+  it('passes return() straight to a provider that is still waiting, instead of queueing it behind next()', async () => {
+    let returned = 0
+    const hanging: AsyncIterable<ModelStreamChunk> = {
+      [Symbol.asyncIterator]: () => ({
+        next: () => new Promise<IteratorResult<ModelStreamChunk>>(() => undefined),
+        return: async () => { returned += 1; return { done: true, value: undefined } }
+      })
+    }
+    const iterator = timeModelStream(hanging)[Symbol.asyncIterator]()
+    void iterator.next()
+    await iterator.return!()
+    expect(returned).toBe(1)
   })
 })

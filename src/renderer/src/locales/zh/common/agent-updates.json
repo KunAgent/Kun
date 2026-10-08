@@ -87,6 +87,7 @@
       "build": "构建"
     },
     "usageReportedByAgent": "由 Agent 上报",
+    "usageTimingByAgent": "由 Kun 在该 Agent 的输出流上测得的平均首 token 延迟（TTFT，从提示词送达到首个流式文字）与流式输出速度（tokens/s，只计文字实际流出的时间）",
     "progress": {
       "wait": "等待此 Agent 完成当前轮次",
       "install": "下载并安装 {{version}}",
