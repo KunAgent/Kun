@@ -60,7 +60,6 @@ import {
 } from './desktop-instance-identity'
 import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
 import { join, resolve } from 'node:path'
-import { prefetchCatalogPricing } from './catalog-prefetch'
 import { attachModelsDevDiskCache } from './models-dev-catalog'
 import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
 import { installHostPowerRecovery } from './host-power-recovery'
@@ -270,9 +269,8 @@ export function startMainApp(): Promise<void> {
     // Persist the models.dev catalog across restarts so provider metadata is
     // available immediately and offline launches reuse the last fetch.
     attachModelsDevDiskCache(join(app.getPath('userData'), 'cache', 'models-dev.json'))
-    void prefetchCatalogPricing(mainState.store).catch((err) => {
-      console.warn('[kun-gui] catalog pricing prefetch failed:', err)
-    })
+    // Runtime owns public catalog warming and derived pricing; startup never
+    // writes automatic prices into user model profiles.
 
     await runPostWindowRuntimeStartup(initial, {
       startupState: mainState.startupState,

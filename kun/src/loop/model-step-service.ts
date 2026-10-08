@@ -61,7 +61,7 @@ import { modelCapabilitiesForModel } from './model-context-profile.js'
 import type { ModelRoundEngine } from './model-round-engine.js'
 import { modelClientDiagnostics } from './model-client-diagnostics.js'
 import { recoverModelContextOverflow } from './model-context-overflow-recovery.js'
-import { effectiveOutputBudgetTokens, ordinaryOutputReserveTokens } from './model-request-composer.js'
+import { modelStepRequestBudget } from './model-step-request-budget.js'
 import {
   assumedWindowOutputBudget,
   describeContextCapFailure,
@@ -205,34 +205,8 @@ export class ModelStepService extends ModelStepPreparationService {
       tokenEconomy: this.deps.tokenEconomy, signal,
       history: items
     })
-    // The compaction reservation and the forwarded `max_tokens` differ: the
-    // reservation stays bounded (huge capabilities must not force compaction
-    // every request), while the forwarded value honors the configured limit.
-    const declaredOutputBudgetTokens = modelCapabilities.maxOutputTokens
-    const requestHardCapTokens = modelCapabilities.contextWindowTokens
-      ? Math.floor(modelCapabilities.contextWindowTokens * 0.85)
-      : this.deps.compactor.hardCap(model, providerId)
-    const declaredOutputBudgetAbsent =
-      modelCapabilities.endpointFormat === 'messages' && declaredOutputBudgetTokens === undefined
-    const outputReserveTokens = declaredOutputBudgetAbsent
-      ? 0
-      : ordinaryOutputReserveTokens({
-          inputTokens: 0,
-          contextCapTokens: requestHardCapTokens,
-          ...(declaredOutputBudgetTokens !== undefined
-            ? { declaredMaxOutputTokens: declaredOutputBudgetTokens }
-            : {})
-        })
-    const effectiveBudget = (inputTokens: number): number =>
-      declaredOutputBudgetAbsent
-        ? 0
-        : effectiveOutputBudgetTokens({
-            inputTokens,
-            contextCapTokens: requestHardCapTokens,
-            ...(declaredOutputBudgetTokens !== undefined
-              ? { declaredMaxOutputTokens: declaredOutputBudgetTokens }
-              : {})
-          })
+    const { requestMaxInputTokens, requestHardCapTokens, outputReserveTokens, effectiveBudget } =
+      modelStepRequestBudget(modelCapabilities, this.deps.compactor.hardCap(model, providerId))
     let outputBudgetTokens = outputReserveTokens
     // History compaction retries from the latest canonical snapshot to avoid
     // losing concurrent writes. That snapshot deliberately retains internal
@@ -260,7 +234,7 @@ export class ModelStepService extends ModelStepPreparationService {
       requestOverheadTokens,
       requestInputTokens,
       outputBudgetTokens,
-      requestHardCapTokens,
+      requestHardCapTokens, requestMaxInputTokens,
       reserveModelRequest: () => this.deps.budgetGate.reserveAdditionalModelRequest(threadId, turnId)
     })
     if (signal.aborted) return 'aborted'
@@ -337,7 +311,7 @@ export class ModelStepService extends ModelStepPreparationService {
     // (never a second model call), rebuild, and only then fail if it still
     // does not fit. No loops, no recursion, no upstream dispatch before this
     // guard passes.
-    if (inputTokens + outputBudgetTokens > requestHardCapTokens) {
+    if (inputTokens > (requestMaxInputTokens ?? Infinity) || inputTokens + outputBudgetTokens > requestHardCapTokens) {
       fallbackCompactionAttempted = true
       const fallbackCompaction = await this.deps.historyCompaction.compactIfNeeded({
         items: history,
@@ -353,7 +327,7 @@ export class ModelStepService extends ModelStepPreparationService {
         requestOverheadTokens,
         requestInputTokens: inputTokens,
         outputBudgetTokens: outputReserveTokens,
-        requestHardCapTokens,
+        requestHardCapTokens, requestMaxInputTokens,
         allowModelSummary: false,
         reserveModelRequest: () => this.deps.budgetGate.reserveAdditionalModelRequest(threadId, turnId)
       })
@@ -399,20 +373,20 @@ export class ModelStepService extends ModelStepPreparationService {
       }
     }
     const assumedWindowBudget = assumedWindowOutputBudget(modelCapabilities, {
-      inputTokens, outputBudgetTokens, outputReserveTokens, requestHardCapTokens
+      inputTokens, outputBudgetTokens, outputReserveTokens, requestHardCapTokens, requestMaxInputTokens
     })
     if (assumedWindowBudget !== undefined) {
       outputBudgetTokens = assumedWindowBudget
       if (outputBudgetTokens > 0) {
         composedRequest = { ...composedRequest, request: { ...composedRequest.request, maxTokens: outputBudgetTokens } }
       }
-    } else if (inputTokens + outputBudgetTokens > requestHardCapTokens) {
+    } else if (inputTokens > (requestMaxInputTokens ?? Infinity) || inputTokens + outputBudgetTokens > requestHardCapTokens) {
       const { reason, message } = describeContextCapFailure({ inputTokens, outputBudgetTokens, outputReserveTokens,
-        requestHardCapTokens, fallbackCompactionAttempted, fallbackCompactionApplied })
+        requestHardCapTokens, requestMaxInputTokens, fallbackCompactionAttempted, fallbackCompactionApplied })
       const details = {
         inputTokens,
         outputBudgetTokens,
-        requestHardCapTokens,
+        requestHardCapTokens, requestMaxInputTokens,
         softThresholdTokens: this.deps.compactor.thresholds(model, providerId).softThreshold,
         hardThresholdTokens: this.deps.compactor.thresholds(model, providerId).hardThreshold,
         fallbackCompactionAttempted,
@@ -442,7 +416,7 @@ export class ModelStepService extends ModelStepPreparationService {
       requestOverheadTokens,
       outputBudgetTokens,
       outputReserveTokens,
-      requestHardCapTokens,
+      requestHardCapTokens, requestMaxInputTokens,
       fallbackCompactionAttempted,
       fallbackCompactionApplied
     })
@@ -459,7 +433,7 @@ export class ModelStepService extends ModelStepPreparationService {
     // realistic chance of fitting instead of relying on the send-time history
     // cleaner to silently rewrite it.
     const sourceResultBudgetTokens = sourceResultBudgetTokensFor(modelCapabilities,
-      { inputTokens, outputReserveTokens, requestHardCapTokens })
+      { inputTokens, outputReserveTokens, requestHardCapTokens, requestMaxInputTokens })
     const contextThresholds = this.deps.compactor.thresholds(model, providerId)
     const contextWindowTokens = modelCapabilities.contextWindowTokens ??
       Math.max(contextThresholds.softThreshold, contextThresholds.hardThreshold)
@@ -471,6 +445,7 @@ export class ModelStepService extends ModelStepPreparationService {
       ...(request.providerId ? { providerId: request.providerId } : {}),
       stepIndex,
       contextWindowTokens,
+      ...(requestMaxInputTokens ? { maxInputTokens: requestMaxInputTokens } : {}),
       softThresholdTokens: contextThresholds.softThreshold,
       hardThresholdTokens: contextThresholds.hardThreshold,
       estimatedInputTokens: requestContext.total,

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "aliyun",
   "name": "Aliyun",
   "category": "api",
@@ -41,6 +41,11 @@
       "qwen-vl-max",
       "qwen3-vl-plus"
     ],
-    "credentialUrl": "https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key"
+    "credentialUrl": "https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key",
+    "discovery": {
+      "strategy": "live-with-fallback",
+      "sourceUrl": "https://help.aliyun.com/zh/model-studio/",
+      "checkedAt": "2026-10-08"
+    }
   }
 }

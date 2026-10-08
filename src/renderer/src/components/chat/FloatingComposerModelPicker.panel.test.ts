@@ -22,7 +22,12 @@ const CODEX: ModelProviderModelGroup = {
     'gpt-6-astra': { inputModalities: ['text', 'image'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text', 'image_url'], serviceTiers: [] }
   }
 }
-const DEEPSEEK: ModelProviderModelGroup = { providerId: 'deepseek', label: 'DeepSeek', modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash'] }
+const DEEPSEEK: ModelProviderModelGroup = { providerId: 'deepseek', label: 'DeepSeek', modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+  modelProfiles: Object.fromEntries(['deepseek-v4-pro', 'deepseek-v4-flash'].map((id) => [id, {
+    inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
+    reasoning: { supportedEfforts: ['off', 'low', 'medium', 'high', 'max'], defaultEffort: 'high', requestProtocol: 'deepseek-chat-completions' }
+  }])) }
+
 const numbered = (prefix: string, count: number): string[] => Array.from({ length: count }, (_, index) => `${prefix}-${index + 1}`)
 
 let host: HTMLDivElement
@@ -93,7 +98,7 @@ describe('composer model and reasoning control', () => {
     expect(onReasoning).toHaveBeenCalledWith('low')
     // Changing the effort keeps the panel open for a model pick.
     expect(panel()).not.toBeNull()
-    expect([...document.querySelectorAll('[role="menuitemradio"]')].map((row) => row.textContent)).toEqual(['deepseek-v4-pro', 'deepseek-v4-flash'])
+    expect([...document.querySelectorAll('[role="menuitemradio"]')].map((row) => row.getAttribute('title'))).toEqual(['deepseek-v4-pro', 'deepseek-v4-flash'])
   })
 
   it('moves the effort with arrow keys', async () => {

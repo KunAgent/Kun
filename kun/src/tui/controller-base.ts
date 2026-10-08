@@ -175,6 +175,7 @@ export abstract class TuiControllerBase {
   }
 
   applyModelSelection(snapshot: ModelConnectionSnapshot, notify = true): void {
+    const configurationChanged = this.stateValue.modelConnections?.revision !== snapshot.revision
     const activeSession = this.stateValue.projection
     if (snapshot.defaultModel) this.runtime.runtimeInfo.model = snapshot.defaultModel
     else if (!activeSession) this.runtime.runtimeInfo.model = ''
@@ -195,19 +196,19 @@ export abstract class TuiControllerBase {
           ...(this.stateValue.reasoningEffort ? { preferred: this.stateValue.reasoningEffort } : {})
         })
     this.patch({ modelConnections: snapshot, reasoningEffort })
-    if (snapshot.defaultProviderId && snapshot.defaultAccountId && snapshot.defaultModel) {
+    if (configurationChanged && snapshot.defaultProviderId && snapshot.defaultAccountId && snapshot.defaultModel) {
       void this.recordRecentModel({
         providerId: snapshot.defaultProviderId,
         accountId: snapshot.defaultAccountId,
         model: snapshot.defaultModel
       })
     }
-    if (this.onModelSelectionChanged) {
+    if (configurationChanged && this.onModelSelectionChanged) {
       void Promise.resolve(this.onModelSelectionChanged(snapshot)).catch((error) => {
         this.notify(`Could not persist the shared default model: ${safeMessage(error)}`, 'error')
       })
     }
-    if (notify) this.notify(
+    if (notify && configurationChanged) this.notify(
       snapshot.defaultProviderId && snapshot.defaultModel
         ? `${this.runtime.legacyGui ? 'Shared model' : 'Default model'}: ${snapshot.defaultProviderId}/${snapshot.defaultModel}`
         : 'Model connection updated.'
@@ -231,6 +232,7 @@ export abstract class TuiControllerBase {
       if (!initialSnapshot) this.applyModelSelection(initial, false)
       await this.client.subscribeModelConnections({
         sinceRevision: initial.revision,
+        sinceMetadataRevision: initial.metadataRevision ?? 0,
         signal: abort.signal,
         onSnapshot: (snapshot) => this.applyModelSelection(snapshot),
         onError: (error) => this.notify(safeMessage(error), 'error')
@@ -413,11 +415,18 @@ export abstract class TuiControllerBase {
       (entry.id === providerId && (!input.accountId || entry.accountId === input.accountId)) ||
       (!providerId && entry.models.includes(model))
     )
-    const derived = profile?.modelCapabilities?.[model]?.reasoning
+    const effective = profile?.modelCapabilities?.[model]
+    const derived = effective?.reasoning
+    // Versioned Runtime metadata already resolved user overrides and account constraints.
+    // Only unversioned legacy snapshots may need the old compatibility fallback.
+    if (effective?.metadata || effective?.supportsReasoning === false) {
+      return effective.supportsReasoning === false ? undefined : derived
+    }
     const builtIn = modelCapabilitiesForProviderModel({
       providerId: profile?.id ?? providerId,
       presetSource: profile?.presetSource,
       baseUrl: profile?.baseUrl,
+      endpointFormat: profile?.endpointFormat, endpoints: profile?.endpoints,
       kind: profile?.kind,
       model
     }).reasoning

@@ -18,5 +18,6 @@
     "triggerTitle": "{{agent}} session settings",
     "hint": "Provided by the Agent; applies to your next message.",
     "reset": "Reset"
-  }
+  },
+  "contextCapacityInputLimit": "Input limit {{input}} · Total context {{context}}"
 }

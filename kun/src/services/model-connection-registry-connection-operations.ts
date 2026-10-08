@@ -1,3 +1,4 @@
+import { migrateRegistryModelMetadata } from './registry-model-metadata.js'
 import { protectLegacyRegistryHeaders } from './provider-legacy-header-migration.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -49,6 +50,7 @@ async initialize(this: ModelConnectionRegistry,
     await this['migrateLegacyRegistry']()
     // Protect legacy values in existing v2 before any canonical routing-marker write.
     await migrateProviderHeaders(this)
+    await migrateRegistryModelMetadata(this)
     let current = await this['file'].update(emptyDocument, (document) => document)
     current = await this['file'].read(emptyDocument)
     if (repairRegistryModelCapabilityLimits(current)) {
@@ -237,10 +239,11 @@ subscribe(this: ModelConnectionRegistry, listener: (snapshot: ModelConnectionSna
 async waitForRevision(this: ModelConnectionRegistry,
     sinceRevision: number,
     signal: AbortSignal,
-    timeoutMs: number
+    timeoutMs: number,
+    sinceMetadataRevision?: number
   ): Promise<ModelConnectionSnapshot> {
     const initial = await this.snapshot()
-    if (initial.revision > sinceRevision || signal.aborted || timeoutMs <= 0) return initial
+    if (initial.revision > sinceRevision || (sinceMetadataRevision !== undefined && (initial.metadataRevision ?? 0) > sinceMetadataRevision) || signal.aborted || timeoutMs <= 0) return initial
     return new Promise((resolve) => {
       let settled = false
       let unsubscribe: (() => void) | undefined
@@ -257,11 +260,11 @@ async waitForRevision(this: ModelConnectionRegistry,
       const timer = setTimeout(readLatest, timeoutMs)
       timer.unref?.()
       unsubscribe = this.subscribe((snapshot) => {
-        if (snapshot.revision > sinceRevision) finish(snapshot)
+        if (snapshot.revision > sinceRevision || (sinceMetadataRevision !== undefined && (snapshot.metadataRevision ?? 0) > sinceMetadataRevision)) finish(snapshot)
       })
       signal.addEventListener('abort', aborted, { once: true })
       // Close the read/subscribe race if a writer committed between them.
-      readLatestIfChanged(this, sinceRevision, finish)
+      readLatestIfChanged(this, sinceRevision, finish, sinceMetadataRevision)
     })
   },
 

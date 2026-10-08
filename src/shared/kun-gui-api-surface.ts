@@ -291,6 +291,9 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   claudeSubscriptionProbe: (token?: string, providerId?: string) => Promise<ClaudeSubscriptionProbeResult>
   /** List Claude models available to the subscription (via the SDK's supportedModels). */
   claudeSubscriptionModels: (token?: string, providerId?: string) => Promise<string[]>
+  claudeSubscriptionModelCatalog?: (token?: string, providerId?: string) => Promise<Array<{
+    id: string; displayName?: string; aliases?: string[]; inferredModelId?: string; profile?: Partial<ModelProviderModelProfileV1>
+  }>>
   /** Whether the on-demand Claude Code binary is present + any in-flight download. */
   claudeSubscriptionSdkStatus: () => Promise<{
     installed: boolean
@@ -321,7 +324,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
     credentialSource?: 'keychain' | 'file'
   }>
   /** Concrete models routed through the Gemini CLI Code Assist API contract. */
-  geminiCliSubscriptionModels: () => Promise<string[]>
+  geminiCliSubscriptionModels: (providerId?: string) => Promise<string[]>
   /** Validate a Cursor API key and list models visible to that Cursor account. */
   cursorSubscriptionDiscover: (apiKey?: string, providerId?: string) => Promise<{
     account: {

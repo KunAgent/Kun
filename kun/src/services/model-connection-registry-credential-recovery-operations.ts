@@ -1,3 +1,4 @@
+import { resolveRegistryDocumentMetadata } from './registry-model-metadata.js'
 import { randomUUID } from 'node:crypto'
 import { parseProviderHeaders } from './provider-protected-headers.js'
 import { join } from 'node:path'
@@ -422,6 +423,18 @@ async applyLatest(this: ModelConnectionRegistry): Promise<void> {
     await operation
   },
 
+async refreshMetadata(this: ModelConnectionRegistry): Promise<void> {
+    const operation = this['changeOperation'].then(async () => {
+      const document = await this['file'].read(emptyDocument)
+      await this['apply'](document)
+      await this['metadataRevisionFile'].update(() => ({ revision: 0 }), (current) => ({ revision: current.revision + 1 }))
+      const snapshot = await this['projectWithCredentialHealth'](document)
+      for (const listener of this['listeners']) listener(snapshot)
+    })
+    this['changeOperation'] = operation.catch(() => undefined)
+    await operation
+  },
+
 project(this: ModelConnectionRegistry, document: RegistryDocument): ModelConnectionSnapshot {
     return project(document, this['options'].modelCapabilities, this['credentialHealth'])
   },
@@ -434,7 +447,11 @@ async projectWithCredentialHealth(this: ModelConnectionRegistry,
       this['credentialHealthRevision'] = document.revision
       this['credentialHealth'] = new Map(health)
     }
-    return project(document, this['options'].modelCapabilities, health)
+    // Capture the cursor before reading facts: a concurrent refresh must not
+    // label an older materialization with a newer cursor and hide the update.
+    const { revision: metadataRevision } = await this['metadataRevisionFile'].read(() => ({ revision: 0 }))
+    const enriched = await resolveRegistryDocumentMetadata(this, document)
+    return { ...project(enriched, this['options'].modelCapabilities, health), metadataRevision }
   },
 
 async inspectCredentialHealth(this: ModelConnectionRegistry,

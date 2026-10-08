@@ -1,3 +1,4 @@
+import { safeProviderReasoningCapability } from '../loop/model-context-profile.js'
 import { resolveProviderCatalogSource } from '@kun/provider-catalog'
 import {
   MAX_MODEL_CONTEXT_WINDOW_TOKENS,
@@ -28,6 +29,20 @@ export function normalizeModelCapabilityMetadata(
     ...(!invalidMaxOutput && capability.maxOutputTokens !== undefined
       ? { maxOutputTokens: capability.maxOutputTokens }
       : {})
+  }
+}
+
+/** Apply provider transport restrictions to the effective view, preserving raw preferences. */
+export function enforceProviderModelSafety(capability: ModelCapabilityMetadata | undefined,
+  profile: { id: string; presetSource?: string }): ModelCapabilityMetadata | undefined {
+  if (!capability) return undefined
+  const reasoning = safeProviderReasoningCapability({ providerId: profile.id, presetSource: profile.presetSource }, capability.reasoning)
+  if (reasoning === capability.reasoning) return capability
+  return { ...capability, reasoning,
+    evidence: { ...capability.evidence, reasoning: { source: 'adapter', status: 'declared', sourceId: 'provider-protocol-safety' } },
+    metadataResolution: { ...capability.metadataResolution, reasoning: {
+      ...capability.metadataResolution?.reasoning, effectiveValue: reasoning, source: 'adapter', reason: 'unsupported'
+    } }
   }
 }
 

@@ -73,6 +73,8 @@ const api = {
     ipcRenderer.invoke('claude-subscription:probe', token, providerId),
   claudeSubscriptionModels: (token, providerId) =>
     ipcRenderer.invoke('claude-subscription:models', token, providerId),
+  claudeSubscriptionModelCatalog: (token, providerId) =>
+    ipcRenderer.invoke('claude-subscription:model-catalog', token, providerId),
   claudeSubscriptionSdkStatus: () => ipcRenderer.invoke('claude-subscription:sdk-status'),
   claudeSubscriptionSdkInstall: () => ipcRenderer.invoke('claude-subscription:sdk-install'),
   onClaudeSubscriptionSdkProgress: (handler) => {
@@ -95,7 +97,7 @@ const api = {
   },
   geminiSubscriptionModels: () => ipcRenderer.invoke('gemini-subscription:models'),
   geminiCliSubscriptionStatus: () => ipcRenderer.invoke('gemini-cli-subscription:status'),
-  geminiCliSubscriptionModels: () => ipcRenderer.invoke('gemini-cli-subscription:models'),
+  geminiCliSubscriptionModels: (providerId) => ipcRenderer.invoke('gemini-cli-subscription:models', providerId),
   cursorSubscriptionDiscover: (apiKey, providerId) =>
     ipcRenderer.invoke('cursor-subscription:discover', { apiKey, providerId }),
   setSettings: (partial) =>

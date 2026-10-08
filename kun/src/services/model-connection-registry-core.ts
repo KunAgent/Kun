@@ -1,3 +1,6 @@
+import { modelCatalogRevisionFile } from './model-catalog-revision.js'
+import { migrateModelMetadata, resolveModelMetadata, withModelObservation } from './model-metadata-resolver.js'
+import { metadataEvidence } from '../contracts/model-metadata-evidence.js'
 import { assertProviderConfigurationUrls } from '../contracts/provider-safe-url.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -11,7 +14,7 @@ import { providerConfigurationOperations, type ConfigurationPreview } from './pr
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
 import type { ServeProviderConfig } from '../config/kun-config.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
-import { normalizeModelCapabilityMetadata } from './model-capability-limits.js'
+import { normalizeModelCapabilityMetadata, enforceProviderModelSafety } from './model-capability-limits.js'
 import {
   ModelConnectionConnectRequestSchema,
   ModelConnectionCredentialCommitRequestSchema,
@@ -105,6 +108,7 @@ export const CredentialRefCleanupEntrySchema = z.object({
 }).strict()
 export const RegistryDocumentSchema = z.object({
   schemaVersion: z.literal(2),
+  modelMetadataVersion: z.literal(1).optional(),
   configuration: ProviderConfigurationStateSchema.default(() => ProviderConfigurationStateSchema.parse({})),
   proxyRoutingVersion: z.literal(1),
   revision: z.number().int().nonnegative(),
@@ -228,6 +232,7 @@ export class ModelConnectionRegistry {
   declare private projectWithCredentialHealth: (document: RegistryDocument) => Promise<ModelConnectionSnapshot>
   declare private inspectCredentialHealth: (document: RegistryDocument) => Promise<ReadonlyMap<string, ProjectedCredentialHealth>>
 
+  private readonly metadataRevisionFile: ReturnType<typeof modelCatalogRevisionFile>
   private readonly file: AtomicJsonFile<RegistryDocument>
   private readonly configurationImportSecrets = new Map<string, ProviderSecretBinding[]>()
   private readonly configurationPreviews = new Map<string, ConfigurationPreview>()
@@ -247,7 +252,7 @@ export class ModelConnectionRegistry {
     credentials: ExtensionCredentialStore
     modelCapabilities?: (
       model: string,
-      profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind'>
+      profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind' | 'endpointFormat' | 'endpoints'>
     ) => ModelCapabilityMetadata
     onChanged?: (connections: MaterializedModelConnections) => Promise<void> | void
     retireLegacyCredentialSource?: (sourceId: string) => Promise<void>
@@ -266,6 +271,7 @@ export class ModelConnectionRegistry {
       headers?: Record<string, string>
     }>
   }) {
+    this.metadataRevisionFile = modelCatalogRevisionFile(options.dataDir)
     const registryPath = join(options.dataDir, PROVIDER_REGISTRY_FILE)
     assertManagerAtomicJsonPath(registryPath)
     this.file = new AtomicJsonFile(
@@ -312,10 +318,11 @@ export function credentialHealth(status: ModelConnectionCredentialStatus): Proje
 export function readLatestIfChanged(
   registry: ModelConnectionRegistry,
   sinceRevision: number,
-  finish: (snapshot: ModelConnectionSnapshot) => void
+  finish: (snapshot: ModelConnectionSnapshot) => void,
+  sinceMetadataRevision?: number
 ): void {
   void registry.snapshot().then((snapshot) => {
-    if (snapshot.revision > sinceRevision) finish(snapshot)
+    if (snapshot.revision > sinceRevision || (sinceMetadataRevision !== undefined && (snapshot.metadataRevision ?? 0) > sinceMetadataRevision)) finish(snapshot)
   })
 }
 
@@ -497,7 +504,7 @@ export function project(
   document: RegistryDocument,
   resolveModelCapabilities?: (
     model: string,
-    profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind'>
+    profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind' | 'endpointFormat' | 'endpoints'>
   ) => ModelCapabilityMetadata,
   credentialHealthByProvider: ReadonlyMap<string, ProjectedCredentialHealth> = new Map()
 ): ModelConnectionSnapshot {
@@ -563,39 +570,15 @@ export function project(
 export function mergeProjectedCapability(
   stored: ModelCapabilityMetadata | undefined,
   derived: ModelCapabilityMetadata | undefined,
-  profile: Pick<ModelConnectionProfile, 'id' | 'endpointFormat'>,
+  profile: Pick<ModelConnectionProfile, 'id' | 'endpointFormat'> & { presetSource?: string },
   model: string
 ): ModelCapabilityMetadata | undefined {
-  if (!stored) return normalizeModelCapabilityMetadata(derived)
-  const serviceTiers = stored.serviceTiers ?? derived?.serviceTiers
-  if (!derived?.reasoning || stored.reasoning === derived.reasoning) {
-    return normalizeModelCapabilityMetadata(
-      serviceTiers ? { ...stored, serviceTiers: [...serviceTiers] } : stored
-    )
-  }
-  const placeholder = stored.reasoning?.requestProtocol === 'none' &&
-    derived.reasoning.requestProtocol !== 'none' &&
-    stored.reasoning.defaultEffort === 'auto' &&
-    stored.reasoning.supportedEfforts.every((effort) => effort === 'auto' || effort === 'off')
-  const chatResponsesMismatch =
-    profile.endpointFormat === 'chat_completions' &&
-    stored.reasoning?.requestProtocol === 'openai-responses' &&
-    derived.reasoning.requestProtocol === 'openai-chat-completions' &&
-    (
-      (profile.id.toLowerCase().includes('kimi-code') && model.trim().toLowerCase() === 'k3') ||
-      (profile.id.toLowerCase().includes('opencode-go') &&
-        model.trim().toLowerCase().endsWith('grok-4.5'))
-    )
-  if (!stored.reasoning || placeholder || chatResponsesMismatch) {
-    return normalizeModelCapabilityMetadata({
-      ...stored,
-      reasoning: derived.reasoning,
-      ...(serviceTiers ? { serviceTiers: [...serviceTiers] } : {})
-    })
-  }
-  return normalizeModelCapabilityMetadata(
-    serviceTiers ? { ...stored, serviceTiers: [...serviceTiers] } : stored
-  )
+  if (!stored) return enforceProviderModelSafety(normalizeModelCapabilityMetadata(derived), profile)
+  const value = derived ? withModelObservation(stored, {
+    id: 'runtime-adapter', source: 'adapter', values: derived,
+    evidence: derived.evidence ?? metadataEvidence(derived, 'adapter'), match: 'exact'
+  }) : stored
+  return enforceProviderModelSafety(normalizeModelCapabilityMetadata({ ...resolveModelMetadata(value), id: model }), profile)
 }
 
 export function assertRevision(
@@ -603,7 +586,7 @@ export function assertRevision(
   expected: number,
   resolveModelCapabilities?: (
     model: string,
-    profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind'>
+    profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind' | 'endpointFormat' | 'endpoints'>
   ) => ModelCapabilityMetadata,
   credentialHealthByProvider: ReadonlyMap<string, ProjectedCredentialHealth> = new Map()
 ): void {
@@ -629,7 +612,7 @@ export function capabilitiesForModels(
   return Object.fromEntries(models.flatMap((model) => {
     const capability = input[model] ?? input[model.trim().toLowerCase()]
     const normalized = capability
-      ? normalizeModelCapabilityMetadata({ ...capability, id: model })
+      ? normalizeModelCapabilityMetadata(migrateModelMetadata({ ...capability, id: model }))
       : undefined
     return normalized ? [[model, normalized]] : []
   }))

@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Room } from '@shared/rooms-api'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { ModelReasoningEffort } from '@shared/app-settings'
 import i18n from '../../i18n'
 import { useChatStore } from '../../store/chat-store'
 import { FloatingComposerModelPicker } from '../chat/FloatingComposerModelPicker'
@@ -17,8 +18,9 @@ const unavailable = { ...first, model: 'unsupported', available: false, reason: 
 const options = [first, second, unavailable]
 const room = { id: 'private-1', revision: 7, conversationKind: 'user_agent', members: [{ participantAgentId: 'agent-1' }] } as Room
 const puts = () => api.request.mock.calls.filter(([, method]) => method === 'PUT')
-const reasoning = (supportedEfforts: string[], defaultEffort: string) =>
-  ({ inputModalities: ['text'], outputModalities: ['text'], reasoning: { supportedEfforts, defaultEffort } }) as unknown as NonNullable<ModelProviderModelGroup['modelProfiles']>[string]
+const reasoning = (supportedEfforts: ModelReasoningEffort[], defaultEffort: ModelReasoningEffort): NonNullable<ModelProviderModelGroup['modelProfiles']>[string] =>
+  ({ inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
+    reasoning: { supportedEfforts, defaultEffort, requestProtocol: 'openai-chat-completions' } })
 
 describe('direct composer model pill', () => {
   let renderer: ReactTestRenderer

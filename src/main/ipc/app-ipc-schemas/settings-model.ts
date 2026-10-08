@@ -1,3 +1,4 @@
+import { ModelMetadataStateSchema, ModelMetadataResolutionSchema, ModelCapabilityFactsSchema, ModelReasoningCapabilityMetadata } from '../../../../kun/src/contracts/capabilities-core.js'
 import { ModelMetadataEvidenceSchema } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { HarnessProviderOverrideSchema } from '../../../../kun/src/config/kun-config-harness-providers.js'
@@ -157,6 +158,11 @@ const modelReasoningEffortSchema = z.enum(MODEL_REASONING_EFFORTS)
 const modelReasoningRequestProtocolSchema = z.enum(MODEL_REASONING_REQUEST_PROTOCOLS)
 const modelServiceTierSchema = z.enum(MODEL_SERVICE_TIERS)
 const modelProfilePatchShape = {
+  metadata: ModelMetadataStateSchema.optional(),
+  metadataResolution: ModelMetadataResolutionSchema.optional(),
+  maxInputTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
+  supportsReasoning: z.boolean().optional(),
+  conditionalCapabilities: ModelCapabilityFactsSchema.shape.conditionalCapabilities,
   aliases: z.array(modelIdSchema).max(50).optional(),
   contextWindowTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
   maxOutputTokens: z.number().int().positive().max(MAX_MODEL_OUTPUT_TOKENS).optional(),
@@ -169,7 +175,10 @@ const modelProfilePatchShape = {
   reasoning: z.object({
     supportedEfforts: z.array(modelReasoningEffortSchema).min(1).max(8),
     defaultEffort: modelReasoningEffortSchema,
-    requestProtocol: modelReasoningRequestProtocolSchema
+    requestProtocol: modelReasoningRequestProtocolSchema,
+    nativeEfforts: ModelReasoningCapabilityMetadata.shape.nativeEfforts,
+    nativeDefaultEffort: ModelReasoningCapabilityMetadata.shape.nativeDefaultEffort,
+    effortMapping: ModelReasoningCapabilityMetadata.shape.effortMapping
   }).strict().optional(),
   pricing: z.object({
     inputUsdPerMillion: z.number().nonnegative().max(1_000_000),

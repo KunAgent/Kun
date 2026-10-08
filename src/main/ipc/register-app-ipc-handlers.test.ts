@@ -93,7 +93,9 @@ describe('registerAppIpcHandlers security and provider', () => {
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const trustedEvent = { sender: contents, senderFrame: mainFrame }
     const withRegistryCredentials = vi.fn(async () => projected)
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: JSON.stringify({ models: ['account-model'], modelProfiles: { 'account-model': { name: 'Account Model' } }, source: 'provider' }) }))
     registerAppIpcHandlers(registerOptions({
+      runtimeRequest,
       store: { load: vi.fn(async () => stored) } as never,
       getMainWindow: () => mainWindow as never,
       withRegistryCredentials
@@ -117,12 +119,12 @@ describe('registerAppIpcHandlers security and provider', () => {
     expect(protectedProviderMocks.probeClaudeSubscription).toHaveBeenCalledWith(expect.objectContaining({
       token: 'registry-claude-secret'
     }))
-    expect(protectedProviderMocks.fetchSdkModels).toHaveBeenCalledWith(expect.objectContaining({
-      token: 'registry-claude-secret'
-    }))
-    expect(protectedProviderMocks.discoverCursorSubscription).toHaveBeenCalledWith(expect.objectContaining({
-      apiKey: 'registry-cursor-secret'
-    }))
+    expect(protectedProviderMocks.fetchSdkModels).not.toHaveBeenCalled()
+    expect(protectedProviderMocks.discoverCursorSubscription).not.toHaveBeenCalled()
+    expect(runtimeRequest.mock.calls).toEqual([
+      ['/v1/model-connections/claude-subscription/probe', 'POST'],
+      ['/v1/model-connections/cursor-subscription/probe', 'POST']
+    ])
     expect(withRegistryCredentials).toHaveBeenCalledTimes(3)
     expect(withRegistryCredentials.mock.calls).toEqual([
       [stored, ['claude-subscription']],

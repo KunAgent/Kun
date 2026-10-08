@@ -11,6 +11,8 @@ export type ContextCategory = {
 
 export type ContextCapacity = {
   windowTokens: number
+  totalWindowTokens: number
+  maxInputTokens?: number
   usedTokens: number
   freeTokens: number
   usedRatio: number
@@ -45,7 +47,9 @@ function nonnegativeInteger(value: number): number {
  * are never scaled to provider usage or cumulative thread counters.
  */
 export function buildContextCapacity(snapshot: RequestContextSnapshot): ContextCapacity {
-  const windowTokens = Math.max(1, nonnegativeInteger(snapshot.contextWindowTokens))
+  const totalWindowTokens = Math.max(1, nonnegativeInteger(snapshot.contextWindowTokens))
+  const maxInputTokens = snapshot.maxInputTokens && snapshot.maxInputTokens > 0 ? nonnegativeInteger(snapshot.maxInputTokens) : undefined
+  const windowTokens = Math.min(totalWindowTokens, maxInputTokens ?? totalWindowTokens)
   const categories = CATEGORY_ORDER.map((key) => {
     const tokens = nonnegativeInteger(snapshot.breakdown[key])
     return {
@@ -58,6 +62,8 @@ export function buildContextCapacity(snapshot: RequestContextSnapshot): ContextC
   const freeTokens = Math.max(0, windowTokens - usedTokens)
   return {
     windowTokens,
+    totalWindowTokens,
+    ...(maxInputTokens ? { maxInputTokens } : {}),
     usedTokens,
     freeTokens,
     usedRatio: clamp(usedTokens / windowTokens, 0, 1),

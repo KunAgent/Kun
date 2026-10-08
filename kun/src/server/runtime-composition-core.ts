@@ -1,3 +1,4 @@
+import { modelContextProfilesForProvider } from '../loop/model-context-profile.js'
 import {
   mkdir,
   join,
@@ -129,23 +130,24 @@ export async function createRuntimeCore(
     models: activeOptions.models
   })
   let providerModelProfiles = modelContextProfilesByProvider(activeOptions.providers)
-  // A provider's own profiles win, but models it does not describe still
-  // resolve through the global profiles instead of the 32k placeholder window.
-  // Rebuilt only when a hot apply swaps either profile set.
+  // Explicit provider profiles win; global preferences fill missing models.
+  // Built-in vendor facts are scoped to the actual endpoint before budgeting.
   let mergedProfiles = new Map<string, ReturnType<typeof mergeModelContextProfiles>>()
-  let mergedFor: [typeof providerModelProfiles, typeof modelProfiles] | undefined
+  let mergedFor: [typeof providerModelProfiles, typeof modelProfiles, number] | undefined
   const profilesForProvider = (providerId?: string) => {
-    if (!providerId) return modelProfiles
-    const scoped = providerModelProfiles.get(providerId.trim().toLowerCase())
-    if (!scoped) return modelProfiles
-    if (mergedFor?.[0] !== providerModelProfiles || mergedFor[1] !== modelProfiles) {
+    if (mergedFor?.[0] !== providerModelProfiles || mergedFor[1] !== modelProfiles || mergedFor[2] !== optionsRevision) {
       mergedProfiles = new Map()
-      mergedFor = [providerModelProfiles, modelProfiles]
+      mergedFor = [providerModelProfiles, modelProfiles, optionsRevision]
     }
-    const key = providerId.trim().toLowerCase()
+    const key = (providerId ?? activeOptions.activeProviderId ?? '').trim().toLowerCase()
     let merged = mergedProfiles.get(key)
     if (!merged) {
-      merged = mergeModelContextProfiles(scoped, modelProfiles)
+      const provider = Object.entries(activeOptions.providers ?? {}).find(([id]) => id.toLowerCase() === key)?.[1]
+      const scoped = providerModelProfiles.get(key)
+      merged = modelContextProfilesForProvider({ providerId: key, presetSource: provider?.presetSource, kind: provider?.kind,
+        endpointFormat: provider?.endpointFormat, endpoints: provider?.endpoints,
+        baseUrl: provider?.baseUrl ?? (!providerId || key === activeOptions.activeProviderId?.toLowerCase() ? activeOptions.baseUrl : undefined) },
+      scoped ? mergeModelContextProfiles(scoped, modelProfiles) : modelProfiles)
       mergedProfiles.set(key, merged)
     }
     return merged
@@ -456,6 +458,7 @@ export async function createRuntimeCore(
       providerId: profile?.id,
       presetSource: profile?.presetSource,
       baseUrl: profile?.baseUrl,
+      endpointFormat: profile?.endpointFormat, endpoints: profile?.endpoints,
       kind: profile?.kind,
       model
     }, modelProfiles)
@@ -529,7 +532,10 @@ export async function createRuntimeCore(
     registryModelCapabilities,
     delegatedContextProfile,
     get activeOptions() { return activeOptions },
-    set activeOptions(value: KunServeRuntimeOptions) { activeOptions = value; optionsRevision += 1 },
+    set activeOptions(value: KunServeRuntimeOptions) {
+      if (value.providers !== activeOptions.providers) providerModelProfiles = modelContextProfilesByProvider(value.providers)
+      activeOptions = value; optionsRevision += 1
+    },
     get optionsRevision() { return optionsRevision },
     get modelProfiles() { return modelProfiles },
     set modelProfiles(value: typeof modelProfiles) { modelProfiles = value },

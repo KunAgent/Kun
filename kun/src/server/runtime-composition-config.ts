@@ -469,7 +469,8 @@ export function createRuntimeConfigController(
 	      nextOptions,
 	      (model) => modelCapabilitiesForModel(model, nextModelProfiles),
 	      llmDebug,
-	      resolveLegacyRequestCredentials
+	      resolveLegacyRequestCredentials,
+              () => modelConnections
 	    )
             for (const [providerId, client] of extensionModelProviders.clientMap()) {
               nextModelClients.providers.set(providerId, client)

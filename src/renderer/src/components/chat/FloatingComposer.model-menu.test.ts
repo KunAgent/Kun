@@ -76,7 +76,11 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 const DEEPSEEK_PROVIDER_GROUP = {
   providerId: 'deepseek',
   label: 'DeepSeek',
-  modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash']
+  modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+  modelProfiles: Object.fromEntries(['deepseek-v4-pro', 'deepseek-v4-flash'].map((id): [string, NonNullable<ModelProviderModelGroup['modelProfiles']>[string]] => [id, {
+    inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
+    reasoning: { supportedEfforts: ['off', 'high', 'max'], defaultEffort: 'max', requestProtocol: 'deepseek-chat-completions' }
+  }]))
 }
 
 const CODEX_PROVIDER_GROUP: ModelProviderModelGroup = {
@@ -279,7 +283,7 @@ describe('FloatingComposer model controls', () => {
     expect(filterComposerModelIds(modelIds, '128K')).toEqual(['moonshot-v1-128k'])
   })
 
-  it('keeps the reasoning strength visible in the model control', () => {
+  it('shows automatic reasoning for an unresolved automatic model', () => {
     const html = renderToStaticMarkup(
       createElement(FloatingComposerModelPicker, {
         compact: false,
@@ -295,7 +299,7 @@ describe('FloatingComposer model controls', () => {
     )
 
     expect(html).toContain('Auto')
-    expect(html).toContain('High')
+    expect(html).toContain('Adaptive')
   })
 
   it('renders model and reasoning as one trigger', () => {

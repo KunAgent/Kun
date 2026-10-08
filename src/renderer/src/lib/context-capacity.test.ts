@@ -56,6 +56,14 @@ describe('buildContextCapacity', () => {
     expect(cap.hardThresholdRatio).toBe(0.85)
   })
 
+  it('uses a smaller input limit for occupancy while retaining the total window', () => {
+    const cap = buildContextCapacity(snapshot({ maxInputTokens: 100_000 }))
+    expect(cap.totalWindowTokens).toBe(200_000)
+    expect(cap.windowTokens).toBe(100_000)
+    expect(cap.usedRatio).toBe(0.6)
+    expect(cap.freeTokens).toBe(40_000)
+  })
+
   it('does not scale category values to an unexplained total', () => {
     const cap = buildContextCapacity(snapshot({
       estimatedInputTokens: 322_900,

@@ -11,6 +11,10 @@ export {
   ModelReasoningRequestProtocol,
   ModelReasoningCapabilityMetadata,
   ModelCapabilityMetadata,
+  ModelCapabilityFactsSchema,
+  ModelMetadataStateSchema,
+  ModelMetadataObservationSchema,
+  ModelMetadataResolutionSchema,
   ModelCatalogPricing,
   McpTransportKind,
   McpTrustScope,
@@ -59,3 +63,5 @@ export {
   RuntimeCapabilityManifest,
   buildRuntimeCapabilityManifest
 } from './capabilities-media.js'
+
+export type { ModelCapabilityFacts, ModelMetadataState, ModelMetadataObservation, ModelMetadataResolution } from './capabilities-core.js'

@@ -1,4 +1,4 @@
-import { ModelMetadataEvidenceSchema } from './model-metadata-evidence.js'
+import { ModelMetadataEvidenceSchema, MODEL_METADATA_FIELDS } from './model-metadata-evidence.js'
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { KUN_MANAGED_GITHUB_MCP_MARKER } from './builtin-mcp.js'
@@ -51,7 +51,10 @@ export const ModelReasoningCapabilityMetadata = z
   .object({
     supportedEfforts: z.array(ModelReasoningEffort).min(1),
     defaultEffort: ModelReasoningEffort,
-    requestProtocol: ModelReasoningRequestProtocol
+    requestProtocol: ModelReasoningRequestProtocol,
+    nativeEfforts: z.array(z.string().min(1).max(64)).max(32).optional(),
+    nativeDefaultEffort: z.string().min(1).max(64).optional(),
+    effortMapping: z.partialRecord(ModelReasoningEffort, z.string().min(1).max(64)).optional()
   })
   .strict()
 export type ModelReasoningCapabilityMetadata = z.infer<typeof ModelReasoningCapabilityMetadata>
@@ -71,22 +74,31 @@ export const ModelCatalogPricing = z
   .strict()
 export type ModelCatalogPricing = z.infer<typeof ModelCatalogPricing>
 
-export const ModelCapabilityMetadata = z
+const ModelCapabilityMetadataBase = z
   .object({
     id: z.string().min(1),
-    inputModalities: z.array(ModelInputModality).min(1),
-    outputModalities: z.array(ModelInputModality).min(1),
+    inputModalities: z.array(ModelInputModality),
+    outputModalities: z.array(ModelInputModality),
     supportsToolCalling: z.boolean(),
     parallelTools: z.boolean().optional(), streaming: z.boolean().optional(), structuredOutput: z.boolean().optional(),
     evidence: ModelMetadataEvidenceSchema,
     contextWindowTokens: z.number().int().positive().optional(),
+    maxInputTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
+    supportsReasoning: z.boolean().optional(),
     // Maximum tokens the model may emit per response. When set it caps the
     // request's output budget (max_tokens / max_output_tokens). Absent means
     // "use the runtime default" — which is reasoning-aware for the Anthropic
     // Messages format so thinking models don't truncate their tool calls.
     maxOutputTokens: z.number().int().positive().optional(),
-    messageParts: z.array(ModelMessagePartSupport).min(1),
+    messageParts: z.array(ModelMessagePartSupport),
     reasoning: ModelReasoningCapabilityMetadata.optional(),
+    conditionalCapabilities: z.array(z.object({
+      condition: z.string().min(1).max(512),
+      contextWindowTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
+      maxInputTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
+      maxOutputTokens: z.number().int().positive().max(MAX_MODEL_OUTPUT_TOKENS).optional(),
+      reasoning: ModelReasoningCapabilityMetadata.optional()
+    }).strict()).max(64).optional(),
     /** Reference catalog pricing for local cost estimation. */
     pricing: ModelCatalogPricing.optional(),
     /**
@@ -107,6 +119,37 @@ export const ModelCapabilityMetadata = z
     wireModelId: z.string().min(1).max(512).optional()
   })
   .strict()
+export const ModelCapabilityFactsSchema = ModelCapabilityMetadataBase.omit({
+  id: true, evidence: true, responsesMode: true, wireModelId: true
+}).partial().extend({
+  contextWindowTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
+  maxOutputTokens: z.number().int().positive().max(MAX_MODEL_OUTPUT_TOKENS).optional()
+})
+export type ModelCapabilityFacts = z.infer<typeof ModelCapabilityFactsSchema>
+export const ModelMetadataObservationSchema = z.object({
+  id: z.string().min(1).max(512), source: z.enum(['provider', 'adapter', 'catalog']),
+  values: ModelCapabilityFactsSchema, evidence: ModelMetadataEvidenceSchema,
+  match: z.enum(['exact', 'alias', 'family']).optional(),
+  observedAt: z.string().datetime().optional(), scope: z.string().max(256).optional(),
+  stale: z.boolean().optional()
+}).strict()
+export type ModelMetadataObservation = z.infer<typeof ModelMetadataObservationSchema>
+export const ModelMetadataStateSchema = z.object({
+  schemaVersion: z.literal(1), overrides: ModelCapabilityFactsSchema,
+  clearedOverrides: z.array(z.enum(MODEL_METADATA_FIELDS)).max(MODEL_METADATA_FIELDS.length).optional(),
+  overrideEvidence: ModelMetadataEvidenceSchema,
+  observations: z.array(ModelMetadataObservationSchema).max(32)
+}).strict()
+export type ModelMetadataState = z.infer<typeof ModelMetadataStateSchema>
+export const ModelMetadataResolutionSchema = z.record(z.string(), z.object({
+  automaticValue: z.unknown().optional(), configuredValue: z.unknown().optional(), effectiveValue: z.unknown().optional(),
+  source: z.string().optional(), reason: z.enum(['user-limit', 'provider-limit', 'unsupported', 'suggestion-only']).optional()
+}).strict())
+export type ModelMetadataResolution = z.infer<typeof ModelMetadataResolutionSchema>
+export const ModelCapabilityMetadata = ModelCapabilityMetadataBase.extend({
+  metadata: ModelMetadataStateSchema.optional(),
+  metadataResolution: ModelMetadataResolutionSchema.optional()
+})
 export type ModelCapabilityMetadata = z.infer<typeof ModelCapabilityMetadata>
 
 export const CapabilityToggleConfig = z

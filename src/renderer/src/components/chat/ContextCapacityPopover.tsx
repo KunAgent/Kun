@@ -75,6 +75,8 @@ export function ContextCapacityPopover({ capacity, style }: Props): ReactElement
         </span>
       </div>
 
+      {capacity.maxInputTokens ? <p className="mt-1 text-[11px] text-ds-faint">{t('contextCapacityInputLimit', { input: formatCompactNumber(capacity.maxInputTokens), context: formatCompactNumber(capacity.totalWindowTokens) })}</p> : null}
+
       {!capacity.nativeHistoryUnknown ? <div className="relative mb-1.5 mt-3">
         <div
           className="flex h-2 overflow-hidden rounded-full"

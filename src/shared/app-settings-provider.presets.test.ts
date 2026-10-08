@@ -1,3 +1,5 @@
+import { metadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
+import { resolveModelMetadata } from '../../kun/src/services/model-metadata-resolver.js'
 import { describe, expect, it } from 'vitest'
 import {
   activeModelProviderNeedsApiKey,
@@ -383,7 +385,7 @@ describe('provider presets', () => {
     }
   })
 
-  it('publishes and narrowly repairs the OpenCode Go Grok 4.5 capacity profile', () => {
+  it('preserves historical Grok limits and bounds runtime output by the current adapter', () => {
     const preset = getModelProviderPreset('opencode-go')!
     const profile = modelProviderPresetProfile(preset, 'sk-opencode')
 
@@ -401,6 +403,7 @@ describe('provider presets', () => {
 
     profile.modelProfiles['grok-4.5'] = {
       ...profile.modelProfiles['grok-4.5']!,
+      evidence: undefined,
       contextWindowTokens: 256_000,
       maxOutputTokens: 500_000
     }
@@ -408,12 +411,15 @@ describe('provider presets', () => {
       providers: [profile]
     }).providers.find((provider) => provider.id === 'opencode-go')
     expect(repaired?.modelProfiles['grok-4.5']).toMatchObject({
-      contextWindowTokens: 500_000,
-      maxOutputTokens: 64_000
+      contextWindowTokens: 256_000, maxOutputTokens: 500_000
+    })
+    expect(resolveModelMetadata(repaired!.modelProfiles['grok-4.5'])).toMatchObject({
+      contextWindowTokens: 256_000, maxOutputTokens: 64_000
     })
 
     profile.modelProfiles['grok-4.5'] = {
       ...profile.modelProfiles['grok-4.5']!,
+      evidence: undefined,
       contextWindowTokens: 300_000,
       maxOutputTokens: 80_000
     }
@@ -438,6 +444,7 @@ describe('provider presets', () => {
       }
     }
 
+    profile.modelProfiles['glm-5.2'].evidence = metadataEvidence(profile.modelProfiles['glm-5.2'], 'adapter')
     const normalized = normalizeModelProviderSettings({
       providers: [profile]
     }).providers.find((provider) => provider.id === 'opencode-go')
@@ -469,6 +476,8 @@ describe('provider presets', () => {
       }
     }
 
+    aliyun.modelProfiles['qwq-plus'].evidence = metadataEvidence(aliyun.modelProfiles['qwq-plus'], 'adapter')
+    kimi.modelProfiles.k3.evidence = metadataEvidence(kimi.modelProfiles.k3, 'adapter')
     const normalized = normalizeModelProviderSettings({ providers: [aliyun, kimi] }).providers
     expect(normalized.find((provider) => provider.id === 'aliyun')
       ?.modelProfiles['qwq-plus']?.reasoning?.requestProtocol).toBe('qwen-chat-completions')
@@ -478,6 +487,18 @@ describe('provider presets', () => {
         defaultEffort: 'high',
         requestProtocol: 'openai-chat-completions'
       })
+  })
+
+  it('preserves unknown-provenance reasoning and only refreshes identified adapter observations', () => {
+    const profile = modelProviderPresetProfile(getModelProviderPreset('opencode-go')!, '')
+    profile.modelProfiles['glm-5.2'] = { ...profile.modelProfiles['glm-5.2'], evidence: undefined, reasoning: {
+      supportedEfforts: ['auto'], defaultEffort: 'auto', requestProtocol: 'none'
+    } }
+    const normalized = normalizeModelProviderSettings({ providers: [profile] }).providers.find((item) => item.id === profile.id)!
+    expect(normalized.modelProfiles['glm-5.2'].reasoning?.supportedEfforts).toEqual(['auto'])
+    expect(normalized.modelProfiles['glm-5.2'].metadata?.overrideEvidence?.reasoning?.source).toBe('legacy')
+    const repeated = normalizeModelProviderSettings({ providers: [normalized] }).providers.find((item) => item.id === profile.id)!
+    expect(repeated.modelProfiles['glm-5.2'].metadata).toEqual(normalized.modelProfiles['glm-5.2'].metadata)
   })
 
   it('adds K3 when normalizing the legacy Kimi Code model catalog', () => {
@@ -540,7 +561,7 @@ describe('provider presets', () => {
         kun: { ...defaultKunRuntimeSettings(), providerId: profile.id, model: 'deepseek-v4-pro' }
       }
     })
-    expect(resolved.modelProfiles['deepseek-v4-pro']).toEqual(profile.modelProfiles['deepseek-v4-pro'])
-    expect(resolved.modelProfiles['deepseek-v4-flash']).toEqual(profile.modelProfiles['deepseek-v4-flash'])
+    expect(resolved.modelProfiles['deepseek-v4-pro']).toMatchObject(profile.modelProfiles['deepseek-v4-pro'])
+    expect(resolved.modelProfiles['deepseek-v4-flash']).toMatchObject(profile.modelProfiles['deepseek-v4-flash'])
   })
 })

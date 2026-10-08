@@ -76,6 +76,7 @@ export const ModelConnectionSnapshotSchema = z.object({
   schemaVersion: z.literal(1),
   proxyRoutingVersion: z.literal(1),
   revision: z.number().int().nonnegative(),
+  metadataRevision: z.number().int().nonnegative().optional(),
   providers: z.array(ModelConnectionProfileSchema),
   defaultProviderId: z.string().min(1).optional(),
   defaultAccountId: z.string().min(1).optional(),

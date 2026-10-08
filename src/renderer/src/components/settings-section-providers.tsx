@@ -1,3 +1,4 @@
+import { sharedModelProfiles } from './settings-section-providers-shared-reconcile'
 import type {
   ModelProviderModelProfileV1,
   ModelProviderPresetMode,
@@ -203,11 +204,14 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     | {
         providerId: string
         providerModelIds: string[]
+        importRequestId?: number
+        catalogLoading?: boolean
         modelAliases?: Record<string, string[]>
         discoveredModelProfiles?: Record<string, ModelProviderModelProfileV1>
         catalogResult: ModelsDevCatalogResult
         providerError?: string
         authoritative?: boolean
+        discoverySource?: 'provider' | 'preset' | 'manual'
       }
     | null
   >(null)
@@ -254,9 +258,12 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
       .map((item) => {
         const pendingCatalog = pendingSharedProviderCatalogs.current.get(item.id)
         const pendingName = pendingSharedProviderNames.current.get(item.id)
+        const liveConnection = sharedConnections?.providers.find((connection) => connection.id === item.id)
         return {
           ...item,
           ...(pendingName ? { name: pendingName.localName } : {}),
+          ...(!pendingCatalog && liveConnection?.modelCapabilities
+            ? { modelProfiles: sharedModelProfiles({ ...liveConnection, models: item.models }, item) } : {}),
           ...(pendingCatalog
             ? {
                 models: [...pendingCatalog.localModels],
@@ -269,7 +276,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
         }
       })
     return mergeProviderDraftForDisplay(providersWithCredentialDrafts, draftProvider)
-  }, [credentialDrafts, draftProvider, modelProviders])
+  }, [credentialDrafts, draftProvider, modelProviders, sharedConnections])
   const activeProvider =
     displayProviders.find((item) => item.id === selectedProviderId) ??
     displayProviders[0]
@@ -358,7 +365,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     selectedProviderId, setSelectedProviderId, activeTab, setActiveTab,
     previousProviderSelectionRef, setProbeStates, setPendingImport, cursorMetadataRepairAttempts,
     draftProvider, setDraftProvider, displayProviders, activeProvider, activeKunProviderId,
-    confirmAction, updateModelProviders, patchProviderProfile })
+    confirmAction, updateModelProviders, patchProviderProfile, providerProxy })
 
   const { runProbe, importPickedModels } = useProviderProbeOperations({ t, setProbeStates,
     setCursorAccounts, sharedConnectionFor, patchProviderProfile, fetchModelsDevCatalogFor,

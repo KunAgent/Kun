@@ -236,10 +236,11 @@ describe('probeModelProvider', () => {
       endpointFormat: 'chat_completions'
     })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       latencyMs: expect.any(Number),
-      modelIds: ['model-b', 'model-a']
+      modelIds: ['model-b', 'model-a'],
+      modelProfiles: { 'model-a': { evidence: { supportsToolCalling: { status: 'unknown' } } } }
     })
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example.com/v1/models',
@@ -268,10 +269,11 @@ describe('probeModelProvider', () => {
       endpointFormat: 'chat_completions'
     })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       latencyMs: expect.any(Number),
-      modelIds: ['gpt-oss:120b', 'qwen3.5:397b']
+      modelIds: ['gpt-oss:120b', 'qwen3.5:397b'],
+      modelProfiles: { 'gpt-oss:120b': { evidence: { contextWindowTokens: { status: 'unknown' } } } }
     })
     expect(fetchMock).toHaveBeenCalledWith(
       'https://ollama.com/v1/models',

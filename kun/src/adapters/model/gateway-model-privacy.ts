@@ -2,6 +2,10 @@ import type { ModelStreamChunk } from '../../ports/model-client.js'
 import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
 
 const GATEWAY_DIAGNOSTICS: Record<string, string> = {
+  model_input_capability_unsupported: 'Configured input modalities are incompatible with the selected model.',
+  model_tools_unsupported: 'The selected model does not support tool calling. Choose a compatible model or send without tools.',
+  model_input_limit_exceeded: 'Estimated request input exceeds the selected model maximum input. Shorten the input, tools, or attachments.',
+  model_context_limit_exceeded: 'Estimated request input leaves no output room in the selected model context. Shorten the request.',
   paper_request_budget_exhausted: 'Paper reading permits one upstream request; explicitly submit again to retry.',
   provider_configuration_changed: 'Provider configuration is not active. Retry after settings finish applying.' ,
   token_budget_exceeded: 'Gateway client token budget exhausted.',

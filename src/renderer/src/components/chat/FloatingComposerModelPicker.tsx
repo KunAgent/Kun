@@ -136,7 +136,9 @@ export function FloatingComposerModelPicker({
   const nativeModel = nativeHarnessId ? selectedProviderGroup?.modelInfo?.[currentModel] : undefined
   // Other Agents list per-model levels with the catalog; offer only those (plus Auto).
   const nativeChoices = nativeHarnessId && nativeHarnessId !== 'devin' ? nativeReasoningChoices(nativeModel) : undefined
-  const reasoningOptions = (nativeChoices ? REASONING_OPTIONS : reasoningOptionsForModel(currentModelProfile)).filter((option) =>
+  const adapterChoices = nativeChoices !== undefined || (nativeHarnessId === 'devin' && nativeModel?.reasoningEfforts !== undefined) ||
+    (!currentModelProfile?.reasoning && currentModelProfile?.supportsReasoning !== false && allowedReasoningEfforts !== undefined)
+  const reasoningOptions = (adapterChoices ? REASONING_OPTIONS : reasoningOptionsForModel(currentModelProfile)).filter((option) =>
     (!allowedReasoningEfforts || allowedReasoningEfforts.includes(option.id)) && (!nativeChoices || nativeChoices.includes(option.id)) &&
     (nativeHarnessId !== 'devin' || nativeModel?.reasoningEfforts?.includes(option.id)))
   const reasoningEnabled =
@@ -145,7 +147,7 @@ export function FloatingComposerModelPicker({
     ? composerFastModeState(composerModelGroups, currentModel, composerProviderId)
     : 'hidden'
   const fastModeEnabled = fastModeState === 'supported' && composerFastMode
-  const normalizedReasoning = nativeChoices
+  const normalizedReasoning = adapterChoices
     ? normalizeComposerReasoningEffortValue(composerReasoningEffort) ?? 'auto'
     : normalizeComposerReasoningEffort(composerReasoningEffort, currentModelProfile)
   const currentReasoning = reasoningOptions.some((option) => option.id === normalizedReasoning) ? normalizedReasoning

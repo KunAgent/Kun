@@ -450,6 +450,8 @@ const ATOMIC_REPLACE_PATHS = new Set([
   'agent-dispatch/intents.json',
   'model-connections.v1.json',
   'model-connections.v2.json',
+  'model-metadata-v1-backup.json',
+  'model-catalog/revision.json',
   'provider-header-migration.v1.json',
   'model-gateway/gateway-token-budget.v1.json',
   'model-gateway/api-key.enc.json',

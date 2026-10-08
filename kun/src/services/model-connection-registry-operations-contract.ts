@@ -59,7 +59,8 @@ export interface ModelConnectionRegistryOperations {
   waitForRevision(
     sinceRevision: number,
     signal: AbortSignal,
-    timeoutMs: number
+    timeoutMs: number,
+    sinceMetadataRevision?: number
   ): Promise<ModelConnectionSnapshot>;
   connect(raw: unknown): Promise<ModelConnectionSnapshot>;
   connectAuthenticated(
@@ -82,11 +83,12 @@ export interface ModelConnectionRegistryOperations {
     model: string
   }): Promise<ModelConnectionSnapshot>;
   updateGlobals(raw: unknown): Promise<ModelConnectionSnapshot>;
-  probe(providerId: string, signal?: AbortSignal): Promise<{ ok: true; models: string[] }>;
+  probe(providerId: string, signal?: AbortSignal): Promise<import('./provider-catalog-operations.js').ConnectionProbeResult>;
   /**
    * Last persisted model-list fetch for the provider
    * (`model-catalog/providers/<id>.json`), or null when never fetched.
    */
+  refreshMetadata(): Promise<void>;
   catalog(providerId: string): Promise<import('./model-catalog-store.js').ModelCatalogEntry | null>;
   credentialForCompatibility(providerId: string): Promise<string | null>;
   credentialFingerprints(): Promise<Record<string, string>>;

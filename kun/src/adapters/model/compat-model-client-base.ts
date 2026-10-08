@@ -1,3 +1,4 @@
+import { fitModelRequestOutput } from './model-request-capacity.js'
 import { modelInputHasNoTextBound } from './model-input-bound.js'
 import { protectInferenceHeaders, ProviderSecretScopeError } from '../../services/provider-request-security.js'
 import { randomUUID } from 'node:crypto'
@@ -139,7 +140,7 @@ export class CompatModelClientBase {
     model: string,
     fallback?: number
   ): number | undefined {
-    return request.maxTokens ?? this.maxOutputTokensFor(model) ?? fallback
+    return fitModelRequestOutput(request, this.config.modelCapabilities?.(model), fallback)
   }
 
   protected async postChatCompletion(

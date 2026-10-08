@@ -78,6 +78,7 @@ export type CompactIfNeededInput = {
     requestOverheadTokens?: number
     requestInputTokens?: number
     outputBudgetTokens?: number
+    requestMaxInputTokens?: number
     requestHardCapTokens?: number
     allowModelSummary?: boolean
     reserveModelRequest?: () => Promise<{ allowed: boolean; reason?: string }>
@@ -140,6 +141,7 @@ export class HistoryCompactionService {
       overheadTokens,
       requestInputTokens: input.requestInputTokens,
       outputBudgetTokens: input.outputBudgetTokens,
+      requestMaxInputTokens: input.requestMaxInputTokens,
       requestHardCapTokens: input.requestHardCapTokens
     })
     if (!plan) {
@@ -199,6 +201,7 @@ export class HistoryCompactionService {
               // so the budget-driven force compaction still applies.
               requestInputTokens: input.requestInputTokens,
               outputBudgetTokens: input.outputBudgetTokens,
+              requestMaxInputTokens: input.requestMaxInputTokens,
               requestHardCapTokens: input.requestHardCapTokens
             })
         if (!currentPlan) {

@@ -258,6 +258,7 @@ export function contextSnapshotFromCore(event: CoreRuntimeEventJson): RequestCon
     ...(event.providerId?.trim() ? { providerId: event.providerId.trim() } : {}),
     stepIndex,
     contextWindowTokens,
+    ...(positiveInteger(event.maxInputTokens) ? { maxInputTokens: positiveInteger(event.maxInputTokens) } : {}),
     softThresholdTokens,
     hardThresholdTokens,
     estimatedInputTokens,

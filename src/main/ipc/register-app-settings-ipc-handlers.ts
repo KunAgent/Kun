@@ -1,3 +1,4 @@
+import type { ModelDiscoveryResult } from '../../../kun/src/services/provider-model-descriptors'
 import { ProviderConfigurationDeleteGuard } from './provider-configuration-delete-guard'
 import { registerGatewayLaunchProfileIpc } from './register-gateway-launch-profile-ipc'
 import { registerGatewayClientsIpc } from './register-gateway-clients-ipc'
@@ -56,7 +57,7 @@ import {
   runClaudeSubscriptionLogin
 } from '../claude-subscription-auth'
 import {
-  fetchSdkModels
+  fetchSdkModels, fetchSdkModelCatalog
 } from '../claude-subscription-models'
 import {
   agentSdkDownloadState,
@@ -249,13 +250,28 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
       binaryPath: claudeSubBinary()
     })
   )
-  ipcMain.handle('claude-subscription:models', async (event, token: unknown, providerId: unknown) =>
-    fetchSdkModels({
+  const savedNativeCatalog = async (event: Electron.IpcMainInvokeEvent, token: unknown, providerId: unknown,
+    kind: 'agent-sdk' | 'cursor-sdk'): Promise<ModelDiscoveryResult | undefined> => {
+    if (typeof providerId !== 'string' || !providerId.trim() || typeof token === 'string' && token.trim()) return undefined
+    // Validate the trusted caller and saved provider kind using the existing boundary.
+    await resolveProtectedProviderCredential(event, token, providerId, kind)
+    const response = await runtimeRequest(`/v1/model-connections/${encodeURIComponent(providerId)}/probe`, 'POST')
+    const body = JSON.parse(response.body)
+    if (!response.ok || !Array.isArray(body.models) || !body.modelProfiles) throw new Error(body.message || 'Kun native model discovery failed')
+    return body as ModelDiscoveryResult
+  }
+  ipcMain.handle('claude-subscription:models', async (event, token: unknown, providerId: unknown) => {
+    const saved = await savedNativeCatalog(event, token, providerId, 'agent-sdk')
+    return saved ? saved.models : fetchSdkModels({
       token: await resolveProtectedProviderCredential(event, token, providerId, 'agent-sdk'),
-      kunRoots: claudeSubKunDirs(),
-      binaryPath: claudeSubBinary()
-    })
-  )
+      kunRoots: claudeSubKunDirs(), binaryPath: claudeSubBinary() })
+  })
+  ipcMain.handle('claude-subscription:model-catalog', async (event, token: unknown, providerId: unknown) => {
+    const saved = await savedNativeCatalog(event, token, providerId, 'agent-sdk')
+    return saved ? saved.models.map((id) => ({ id, ...saved.modelDetails?.[id], displayName: saved.modelProfiles[id]?.name, profile: saved.modelProfiles[id] }))
+      : fetchSdkModelCatalog({ token: await resolveProtectedProviderCredential(event, token, providerId, 'agent-sdk'),
+        kunRoots: claudeSubKunDirs(), binaryPath: claudeSubBinary() })
+  })
   ipcMain.handle('gemini-subscription:cli-status', async () =>
     requestOfficialProviderCliStatus(runtimeRequest)
   )
@@ -276,15 +292,23 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
   ipcMain.handle('gemini-cli-subscription:status', async () =>
     geminiCliSubscriptionStatus()
   )
-  ipcMain.handle('gemini-cli-subscription:models', async () =>
-    geminiCliSubscriptionModels()
-  )
+  ipcMain.handle('gemini-cli-subscription:models', async (event, providerId: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    if (typeof providerId !== 'string' || !providerId.trim()) return geminiCliSubscriptionModels()
+    const result = await runtimeRequest(`/v1/model-connections/${encodeURIComponent(providerId)}/probe`, 'POST')
+    const payload = JSON.parse(result.body) as { models?: unknown; message?: string }
+    if (!result.ok || !Array.isArray(payload.models)) throw new Error(payload.message || 'Gemini CLI model discovery failed')
+    return payload.models.filter((model): model is string => typeof model === 'string')
+  })
   ipcMain.handle('cursor-subscription:discover', async (event, payload: unknown) => {
     const { apiKey, providerId } = parseIpcPayload(
       'cursor-subscription:discover',
       cursorSubscriptionDiscoveryPayloadSchema,
       payload
     )
+    const saved = await savedNativeCatalog(event, apiKey, providerId, 'cursor-sdk')
+    if (saved) return { account: { apiKeyName: saved.account?.apiKeyName ?? 'Cursor', ...saved.account },
+      models: saved.models.map((id) => ({ id, ...saved.modelDetails?.[id], displayName: saved.modelProfiles[id]?.name ?? id, profile: saved.modelProfiles[id] })) }
     const credential = await resolveProtectedProviderCredential(
       event,
       apiKey,

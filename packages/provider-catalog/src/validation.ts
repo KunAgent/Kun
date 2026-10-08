@@ -8,7 +8,7 @@ const v1Fields = ['schemaVersion', 'id', 'name', 'category', 'kind', 'authFlow',
   'credentialRequirement', 'baseUrl', 'endpointFormat', 'models', 'docsUrl', 'credentialUrl', 'tokenPlan']
 /** Schema v2 adds declarative picker, endpoint and account-observation metadata. */
 const v2Fields = ['origin', 'regions', 'regionLabel', 'endpoints', 'headerHints', 'noList', 'endpointHint',
-  'balance', 'planQuota']
+  'balance', 'planQuota', 'discovery']
 const balanceSources = new Set(['deepseek', 'moonshot', 'openrouter', 'siliconflow', 'stepfun', 'aihubmix', 'new-api'])
 const planQuotaSources = new Set(['zhipu', 'zai', 'kimi-code', 'minimax'])
 const endpointKeys = new Set(['chat_completions', 'responses', 'messages'])
@@ -57,13 +57,14 @@ function regions(value: unknown, label: string, firstBaseUrl?: unknown): void {
   for (const entry of value) {
     const region = object(entry)
     for (const key of Object.keys(region)) {
-      if (!['id', 'name', 'baseUrl', 'endpoints'].includes(key)) throw new Error('Unknown region field')
+      if (!['id', 'name', 'baseUrl', 'endpoints', 'discovery'].includes(key)) throw new Error('Unknown region field')
     }
     text(region.id, 'region id')
     if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(region.id) || ids.has(region.id)) throw new Error('Duplicate region id')
     ids.add(region.id)
     if (region.name !== undefined) text(region.name, 'region name')
     url(region.baseUrl, 'region base')
+    if (region.discovery !== undefined) discovery(region.discovery)
     if (region.endpoints !== undefined) endpoints(region.endpoints, `region ${region.id}`)
   }
   if (firstBaseUrl !== undefined && object(value[0]).baseUrl !== firstBaseUrl) {
@@ -74,7 +75,7 @@ function regions(value: unknown, label: string, firstBaseUrl?: unknown): void {
 function validateTokenPlan(raw: unknown, version: number): void {
   const plan = object(raw)
   const allowed = new Set(['displayName', 'baseUrl', 'regions', 'endpointFormat', 'models', 'credentialUrl',
-    ...(version >= 2 ? ['endpoints', 'planQuota'] : [])])
+    ...(version >= 2 ? ['endpoints', 'planQuota', 'discovery'] : [])])
   for (const key of Object.keys(plan)) if (!allowed.has(key)) throw new Error(`Unknown token-plan field: ${key}`)
   url(plan.baseUrl, 'token-plan base')
   link(plan.credentialUrl, 'token-plan credentials')
@@ -82,6 +83,7 @@ function validateTokenPlan(raw: unknown, version: number): void {
   models(plan.models)
   if (plan.displayName !== undefined) text(plan.displayName, 'token-plan name')
   if (plan.regions !== undefined) regions(plan.regions, 'token-plan')
+  if (plan.discovery !== undefined) discovery(plan.discovery)
   if (plan.endpoints !== undefined) endpoints(plan.endpoints, 'token-plan')
   if (plan.planQuota !== undefined && !planQuotaSources.has(String(plan.planQuota))) throw new Error('Invalid plan quota source')
 }
@@ -111,6 +113,7 @@ export function validateProviderCatalog(input: readonly unknown[]): readonly Pro
     link(row.docsUrl, 'documentation')
     link(row.credentialUrl, 'credentials')
     models(row.models)
+    if (row.discovery !== undefined) discovery(row.discovery)
     if (row.tokenPlan !== undefined) validateTokenPlan(row.tokenPlan, version)
     if (row.origin !== undefined && !['vendor', 'relay', 'local'].includes(String(row.origin))) throw new Error('Invalid provider origin')
     if (row.regions !== undefined) regions(row.regions, 'API', row.baseUrl)
@@ -133,4 +136,12 @@ export function validateProviderCatalog(input: readonly unknown[]): readonly Pro
     const { schemaVersion: _version, ...preset } = row
     return preset as ProviderCatalogPreset
   })
+}
+
+function discovery(value: unknown): void {
+  const row = object(value)
+  if (Object.keys(row).some((key) => !['strategy', 'sourceUrl', 'checkedAt'].includes(key))) throw new Error('Invalid discovery field')
+  if (!['live', 'live-with-fallback', 'preset', 'manual'].includes(String(row.strategy))) throw new Error('Invalid discovery strategy')
+  link(row.sourceUrl, 'discovery source')
+  if (typeof row.checkedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.checkedAt)) throw new Error('Invalid discovery date')
 }

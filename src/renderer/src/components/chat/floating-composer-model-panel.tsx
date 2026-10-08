@@ -1,3 +1,4 @@
+import { capabilityFieldKnown } from '../../../../../kun/src/contracts/model-metadata-evidence.js'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode, type RefObject } from 'react'
 import type { TFunction } from 'i18next'
 import { Check, ChevronRight, Search, Settings2, Sparkles, Zap } from 'lucide-react'
@@ -253,7 +254,7 @@ function ComposerModelList({
         }`}
       >
         <span className={`min-w-0 flex-1 truncate text-[13px]${selected ? ' font-semibold' : ''}`}>{title}</span>
-        {!profile ? null : modelSupportsImageInput(profile)
+        {!profile || !capabilityFieldKnown(profile, 'inputModalities') ? null : modelSupportsImageInput(profile)
           ? <ModelCapabilityBadge kind="vision" label={t('composerModelVision')} />
           : <ModelCapabilityBadge kind="text" label={t('composerModelTextOnly')} />}
         <span className="flex w-4 shrink-0 justify-center">

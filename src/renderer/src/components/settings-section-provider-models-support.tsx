@@ -116,6 +116,7 @@ export type EditorState = {
   mode: 'add' | 'edit'
   form: ProviderModelForm
   contextText: string
+  maxInputText: string
   maxOutputText: string
   pricingInputText: string
   pricingOutputText: string
@@ -130,6 +131,7 @@ export function editorStateForNew(provider: ModelProviderProfileV1): EditorState
     mode: 'add',
     form,
     contextText: form.contextWindowTokens ? describeContextWindowTokens(form.contextWindowTokens) : '',
+    maxInputText: form.maxInputTokens ? describeContextWindowTokens(form.maxInputTokens) : '',
     maxOutputText: form.maxOutputTokens ? describeContextWindowTokens(form.maxOutputTokens) : '',
     pricingInputText: '',
     pricingOutputText: '',
@@ -149,6 +151,7 @@ export function editorStateForExisting(
     mode: 'edit',
     form,
     contextText: form.contextWindowTokens ? describeContextWindowTokens(form.contextWindowTokens) : '',
+    maxInputText: form.maxInputTokens ? describeContextWindowTokens(form.maxInputTokens) : '',
     maxOutputText: form.maxOutputTokens ? describeContextWindowTokens(form.maxOutputTokens) : '',
     pricingInputText: pricingFieldText(form.pricing?.inputUsdPerMillion),
     pricingOutputText: pricingFieldText(form.pricing?.outputUsdPerMillion),
@@ -196,6 +199,7 @@ export function effectiveFormForEditor(editor: EditorState): ProviderModelForm {
   return {
     ...editor.form,
     contextWindowTokens,
+    maxInputTokens: editor.form.kind !== 'chat' || !editor.maxInputText.trim() ? null : parseContextWindowInput(editor.maxInputText) ?? Number.NaN,
     maxOutputTokens,
     pricing,
     aliases: parseAliasesText(editor.aliasesText)
@@ -211,6 +215,10 @@ export function formErrorMessage(t: Translate, error: ProviderModelFormError): s
     case 'invalidContextWindow':
       return t('providerModelErrorContext')
     case 'contextWindowTooLarge':
+      return t('providerModelErrorContextTooLarge', { max: error.maximum.toLocaleString() })
+    case 'invalidMaxInput':
+      return t('providerConfiguration.invalidMaxInput')
+    case 'maxInputTooLarge':
       return t('providerModelErrorContextTooLarge', { max: error.maximum.toLocaleString() })
     case 'invalidMaxOutput':
       return t('providerModelErrorMaxOutput')

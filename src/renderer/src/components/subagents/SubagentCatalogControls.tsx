@@ -141,8 +141,11 @@ export function CategoryBatchControls({
   const ids = agents.map((agent) => agent.profile.id)
   const hasOverrides = agents.some((agent) =>
     Boolean(agent.profile.model || agent.profile.providerId || agent.profile.reasoningEffort))
+  const sharedOptions = REASONING_OPTIONS.filter((option) => agents.every((agent) =>
+    resolveReasoningOptions(groups, agent.profile.model ?? '', agent.profile.providerId ?? '')
+      .some((supported) => supported.id === option.id)))
   const reasoningOptions = shared.mixed
-    ? REASONING_OPTIONS
+    ? sharedOptions.length ? sharedOptions : REASONING_OPTIONS.filter((option) => option.id === 'auto')
     : resolveReasoningOptions(groups, shared.model, shared.providerId)
   return (
     <div

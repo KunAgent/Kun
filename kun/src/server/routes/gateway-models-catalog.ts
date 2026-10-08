@@ -1,5 +1,5 @@
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities-core.js'
-import { capabilityFieldKnown } from '../../contracts/model-metadata-evidence.js'
+import { capabilityFieldKnown, type MODEL_METADATA_FIELDS } from '../../contracts/model-metadata-evidence.js'
 import type { ModelConnectionSnapshot } from '../../contracts/model-connections.js'
 
 /**
@@ -15,8 +15,9 @@ export type GatewayModelDescription = {
   supported_reasoning_levels?: { effort: string }[]
   default_reasoning_level?: string
   context_window?: number
+  max_input_tokens?: number
   max_output_tokens?: number
-  modalities?: { input: string[]; output: string[] }
+  modalities?: { input?: string[]; output?: string[] }
   supports_tools?: boolean
   native_endpoints?: string[]
 }
@@ -27,7 +28,7 @@ const ENDPOINT_PATHS = { chat_completions: '/v1/chat/completions', responses: '/
 type Member = { providerId: string; modelId: string }
 type Capabilities = (modelId: string, providerId?: string) => ModelCapabilityMetadata | undefined
 
-function known(capability: ModelCapabilityMetadata, field: 'contextWindowTokens' | 'maxOutputTokens' | 'reasoning' | 'inputModalities'): boolean {
+function known(capability: ModelCapabilityMetadata, field: typeof MODEL_METADATA_FIELDS[number]): boolean {
   return capabilityFieldKnown(capability as unknown as Record<string, unknown>, field as never)
 }
 
@@ -49,8 +50,11 @@ export function describeGatewayModel(snapshot: ModelConnectionSnapshot, members:
   const capabilities = members.map((member) => capabilitiesFor?.(member.modelId, member.providerId))
   if (!members.length || capabilities.some((entry) => !entry)) return out
   const all = capabilities as ModelCapabilityMetadata[]
-  out.supports_tools = all.every((entry) => entry.supportsToolCalling)
-  if (all.every((entry) => known(entry, 'reasoning'))) {
+  if (all.every((entry) => known(entry, 'supportsToolCalling'))) out.supports_tools = all.every((entry) => entry.supportsToolCalling)
+  const reasoningSupport = all.map((entry) => known(entry, 'supportsReasoning') ? entry.supportsReasoning
+    : known(entry, 'reasoning') ? Boolean(entry.reasoning?.supportedEfforts.some((effort) => effort !== 'off')) : undefined)
+  if (reasoningSupport.every((value) => value !== undefined)) out.reasoning = reasoningSupport.every(Boolean)
+  if (out.reasoning !== false && all.every((entry) => known(entry, 'reasoning'))) {
     const reasoning = all.map((entry) => entry.reasoning)
     if (reasoning.every((entry) => !entry)) out.reasoning = false
     else if (reasoning.every(Boolean)) {
@@ -62,11 +66,13 @@ export function describeGatewayModel(snapshot: ModelConnectionSnapshot, members:
     }
   }
   if (all.every((entry) => known(entry, 'contextWindowTokens'))) out.context_window = Math.min(...all.map((entry) => entry.contextWindowTokens!))
+  if (all.every((entry) => known(entry, 'maxInputTokens'))) out.max_input_tokens = Math.min(...all.map((entry) => entry.maxInputTokens!))
   if (all.every((entry) => known(entry, 'maxOutputTokens'))) out.max_output_tokens = Math.min(...all.map((entry) => entry.maxOutputTokens!))
-  if (all.every((entry) => known(entry, 'inputModalities'))) {
-    const input = ['text', 'image'].filter((modality) => all.every((entry) => entry.inputModalities.includes(modality as never)))
-    const output = ['text', 'image'].filter((modality) => all.every((entry) => entry.outputModalities.includes(modality as never)))
-    out.modalities = { input, output }
+  for (const [field, direction] of [['inputModalities', 'input'], ['outputModalities', 'output']] as const) {
+    if (all.every((entry) => known(entry, field))) {
+      const modalities = all[0]![field].filter((modality) => all.every((entry) => entry[field].includes(modality)))
+      out.modalities = { ...out.modalities, [direction]: modalities }
+    }
   }
   // A routed alias may translate on any member, so it advertises no native passthrough.
   if (!options.routed) {

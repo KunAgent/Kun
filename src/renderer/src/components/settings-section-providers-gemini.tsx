@@ -182,9 +182,11 @@ export function GeminiSubscriptionSection({
 }
 
 export function GeminiCliApiSubscriptionSection({
+  providerId,
   onModelsChange,
   t
 }: {
+  providerId?: string
   onModelsChange: (models: string[]) => void
   t: (key: string, params?: Record<string, unknown>) => string
 }): ReactElement {
@@ -220,7 +222,7 @@ export function GeminiCliApiSubscriptionSection({
     setSyncing(true)
     setNotice(null)
     try {
-      const models = await window.kunGui.geminiCliSubscriptionModels()
+      const models = await window.kunGui.geminiCliSubscriptionModels(providerId)
       onModelsChange(models)
       setNotice({
         tone: 'success',

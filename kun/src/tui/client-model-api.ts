@@ -79,6 +79,7 @@ export class KunTuiClientModelApi extends KunTuiClientRuntimeApi {
 
   async subscribeModelConnections(input: {
     sinceRevision: number
+    sinceMetadataRevision?: number
     signal: AbortSignal
     onSnapshot: (snapshot: z.infer<typeof ModelConnectionSnapshotSchema>) => void | Promise<void>
     onError?: (error: Error) => void
@@ -86,15 +87,16 @@ export class KunTuiClientModelApi extends KunTuiClientRuntimeApi {
   }): Promise<void> {
     if (this.modelConnectionTransport) return this.modelConnectionTransport.subscribeModelConnections(input)
     let revision = Math.max(0, input.sinceRevision)
+    let metadataRevision = Math.max(0, input.sinceMetadataRevision ?? 0)
     let failures = 0
     const sleep = input.sleep ?? abortableDelay
     while (!input.signal.aborted) {
       try {
         await this.refreshConnection()
         const response = await this.fetchImpl(
-          `${this.baseUrl}/v1/model-connections/events?since_revision=${revision}`,
+          `${this.baseUrl}/v1/model-connections/events?since_revision=${revision}&since_metadata_revision=${metadataRevision}`,
           {
-            headers: this.headers({ Accept: 'text/event-stream', 'Last-Event-ID': String(revision) }),
+            headers: this.headers({ Accept: 'text/event-stream', 'Last-Event-ID': `${revision}:${metadataRevision}` }),
             signal: input.signal
           }
         )
@@ -110,8 +112,9 @@ export class KunTuiClientModelApi extends KunTuiClientRuntimeApi {
             let body: unknown
             try { body = JSON.parse(frame.data) } catch { throw new Error('model connection stream returned invalid JSON') }
             const snapshot = ModelConnectionSnapshotSchema.parse(body)
-            if (snapshot.revision <= revision) continue
+            if (snapshot.revision <= revision && (snapshot.metadataRevision ?? 0) <= metadataRevision) continue
             revision = snapshot.revision
+            metadataRevision = snapshot.metadataRevision ?? 0
             await input.onSnapshot(snapshot)
           }
         }

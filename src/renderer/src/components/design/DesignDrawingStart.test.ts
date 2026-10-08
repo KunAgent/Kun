@@ -30,7 +30,8 @@ function props(overrides: Partial<DesignDrawingStartProps> = {}): DesignDrawingS
           outputModalities: ['text'],
           supportsToolCalling: true,
           messageParts: ['text'],
-          serviceTiers: ['priority']
+          serviceTiers: ['priority'],
+          reasoning: { supportedEfforts: ['low', 'medium', 'high', 'max'], defaultEffort: 'high', requestProtocol: 'openai-responses' }
         }
       }
     }],

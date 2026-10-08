@@ -468,8 +468,10 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
         provider={pendingImportProvider}
         providerModelIds={pendingImport.providerModelIds}
         catalogResult={pendingImport.catalogResult}
+        catalogLoading={pendingImport.catalogLoading}
         providerError={pendingImport.providerError}
         authoritative={pendingImport.authoritative}
+        discoverySource={pendingImport.discoverySource}
         t={t}
         onCancel={() => setPendingImport(null)}
         onConfirm={async (picked) => {

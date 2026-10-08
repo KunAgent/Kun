@@ -134,7 +134,7 @@ async updateGlobals(this: ModelConnectionRegistry, raw: unknown): Promise<ModelC
     return this['projectWithCredentialHealth'](document)
   },
 
-async probe(this: ModelConnectionRegistry, providerId: string, signal?: AbortSignal): Promise<{ ok: true; models: string[] }> {
+async probe(this: ModelConnectionRegistry, providerId: string, signal?: AbortSignal): Promise<import('./provider-catalog-operations.js').ConnectionProbeResult> {
     return probeConnectionCatalog(this, providerId, signal)
   },
 

@@ -18,5 +18,6 @@
     "triggerTitle": "{{agent}} 的会话设置",
     "hint": "由 Agent 提供，下一条消息生效。",
     "reset": "恢复默认"
-  }
+  },
+  "contextCapacityInputLimit": "输入上限 {{input}} · 总上下文 {{context}}"
 }

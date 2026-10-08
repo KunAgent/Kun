@@ -21,6 +21,7 @@ type CapBudget = {
   inputTokens: number
   outputBudgetTokens: number
   outputReserveTokens: number
+  requestMaxInputTokens?: number
   requestHardCapTokens: number
 }
 
@@ -36,7 +37,7 @@ export function assumedWindowOutputBudget(
   capabilities: ModelCapabilityMetadata,
   budget: CapBudget
 ): number | undefined {
-  if (!contextWindowIsAssumed(capabilities)) return undefined
+  if (!contextWindowIsAssumed(capabilities) || budget.inputTokens > (budget.requestMaxInputTokens ?? Infinity)) return undefined
   if (budget.inputTokens + budget.outputBudgetTokens <= budget.requestHardCapTokens) return undefined
   return budget.outputReserveTokens
 }
@@ -46,8 +47,9 @@ export function sourceResultBudgetTokensFor(
   capabilities: ModelCapabilityMetadata,
   budget: Omit<CapBudget, 'outputBudgetTokens'>
 ): number {
-  const fits = Math.max(0, budget.requestHardCapTokens - budget.inputTokens - budget.outputReserveTokens)
-  return contextWindowIsAssumed(capabilities)
+  const fits = Math.max(0, Math.min(budget.requestHardCapTokens - budget.inputTokens - budget.outputReserveTokens,
+    (budget.requestMaxInputTokens ?? Infinity) - budget.inputTokens))
+  return contextWindowIsAssumed(capabilities) && budget.requestMaxInputTokens === undefined
     ? Math.max(fits, ASSUMED_WINDOW_SOURCE_RESULT_FLOOR_TOKENS)
     : fits
 }
@@ -58,6 +60,11 @@ export function describeContextCapFailure(input: CapBudget & {
   fallbackCompactionApplied: boolean
 }): { reason: ContextCapExceededReason; message: string } {
   const { inputTokens, outputBudgetTokens, requestHardCapTokens } = input
+  if (inputTokens > (input.requestMaxInputTokens ?? Infinity)) return {
+    reason: 'request_too_large',
+    message: `request exceeds the ${input.requestMaxInputTokens}-token maximum input (${inputTokens} input); ` +
+      contextCapExceededAction('request_too_large')
+  }
   const overBy = inputTokens + outputBudgetTokens - requestHardCapTokens
   const reason: ContextCapExceededReason = outputBudgetTokens > requestHardCapTokens
     ? 'output_budget_exceeds_cap'

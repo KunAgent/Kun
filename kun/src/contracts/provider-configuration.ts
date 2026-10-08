@@ -1,3 +1,5 @@
+import { MODEL_METADATA_FIELDS } from './model-metadata-evidence.js'
+import { ModelCapabilityFactsSchema } from './capabilities-core.js'
 import { ProviderSafeUrlSchema } from './provider-safe-url.js'
 import { z } from 'zod'
 import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
@@ -98,6 +100,8 @@ export const ProviderConfigurationStateSchema = z.object({
   commits: z.record(z.string(), z.object({ previewId: z.string().uuid(), digest: z.string(), revision: z.number().int(), committedAt: z.string().datetime() }).strict()).default({})
 }).strict()
 export const ProviderConfigurationOperationSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('set-model-overrides'), connectionId: id, modelId: z.string().min(1).max(512), values: ModelCapabilityFactsSchema }).strict(),
+  z.object({ kind: z.literal('clear-model-overrides'), connectionId: id, modelId: z.string().min(1).max(512), fields: z.array(z.enum(MODEL_METADATA_FIELDS)).min(1).max(MODEL_METADATA_FIELDS.length) }).strict(),
   z.object({ kind: z.literal('add-connection'), connection: ModelConnectionConnectRequestSchema
     .omit({ expectedRevision: true, credential: true, customHeaders: true, select: true, probe: true })
     .extend({ id }) }).strict(),
@@ -136,6 +140,7 @@ export type ProviderConfigurationOperation = z.infer<typeof ProviderConfiguratio
 export type ProviderAdmission = z.infer<typeof ProviderAdmissionSchema>
 export type ProviderConfigurationSnapshot = {
   schemaVersion: 2; revision: number; activeRevision: number
+  metadataRevision?: number
   defaultProviderId?: string; defaultAccountId?: string; defaultModel?: string
   configuration: Omit<ProviderConfigurationState, 'commits'>
   connections: import('./model-connections.js').ModelConnectionProfile[]

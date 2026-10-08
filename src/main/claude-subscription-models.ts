@@ -1,3 +1,6 @@
+import { parseProviderModelDescriptor } from '../../kun/src/services/provider-model-descriptors.js'
+import type { ModelProviderModelProfileV1 } from '../shared/app-settings'
+import { metadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
 /**
  * Fetch the Claude models available to a subscription, via the Agent SDK's
  * `query().supportedModels()`. The SDK lives in kun's
@@ -28,7 +31,7 @@ function scopedEnv(token?: string): NodeJS.ProcessEnv {
   return env
 }
 
-export function fetchSdkModels(options: {
+type SdkModelOptions = {
   token?: string
   kunRoots: readonly string[]
   /** Explicit Claude Code binary path (when not bundled in kun/node_modules). */
@@ -37,7 +40,15 @@ export function fetchSdkModels(options: {
   nodePath?: string
   spawnFn?: typeof spawn
   timeoutMs?: number
-}): Promise<string[]> {
+}
+
+export async function fetchSdkModels(options: SdkModelOptions): Promise<string[]> {
+  return (await fetchSdkModelCatalog(options)).map((model) => model.id)
+}
+
+export type ClaudeSdkCatalogModel = { id: string; displayName?: string; aliases?: string[]; inferredModelId?: string; profile?: Partial<ModelProviderModelProfileV1> }
+
+export function fetchSdkModelCatalog(options: SdkModelOptions): Promise<ClaudeSdkCatalogModel[]> {
   const kunDir = resolveKunDir(options.kunRoots)
   if (!kunDir) return Promise.resolve([])
   const spawnFn = options.spawnFn ?? spawn
@@ -59,7 +70,7 @@ export function fetchSdkModels(options: {
   if (!options.spawnFn) {
     return runOwnedCommand(nodePath, ['--input-type=module', '-e', script], {
       cwd: kunDir, env: scopedEnv(options.token), timeoutMs, maxOutputBytes: 1024 * 1024
-    }).then((result) => parseModelIds(result.stdout), () => [])
+    }).then((result) => parseModelCatalog(result.stdout), () => [])
   }
 
   return new Promise((resolve) => {
@@ -68,7 +79,7 @@ export function fetchSdkModels(options: {
     let timer: ReturnType<typeof setTimeout> | undefined
     let child: ReturnType<typeof spawn> | undefined
 
-    const done = (models: string[]): void => {
+    const done = (models: ClaudeSdkCatalogModel[]): void => {
       if (settled) return
       settled = true
       if (timer) clearTimeout(timer)
@@ -96,12 +107,14 @@ export function fetchSdkModels(options: {
       buffer += chunk.toString()
     })
     child.on('error', () => done([]))
-    child.on('exit', () => done(parseModelIds(buffer)))
+    child.on('exit', () => done(parseModelCatalog(buffer)))
   })
 }
 
 /** Extract the framed JSON of ModelInfo[] from stdout and return unique model ids. */
-export function parseModelIds(stdout: string): string[] {
+export function parseModelIds(stdout: string): string[] { return parseModelCatalog(stdout).map((model) => model.id) }
+
+export function parseModelCatalog(stdout: string): ClaudeSdkCatalogModel[] {
   const start = stdout.indexOf(MARK)
   if (start < 0) return []
   const end = stdout.indexOf(MARK, start + MARK.length)
@@ -113,20 +126,35 @@ export function parseModelIds(stdout: string): string[] {
     return []
   }
   if (!Array.isArray(parsed)) return []
-  const ids = parsed.map(modelIdFromInfo).filter(Boolean)
-  return [...new Set(ids)]
+  const models = new Map<string, ClaudeSdkCatalogModel>()
+  for (const entry of parsed.slice(0, 500)) {
+    const id = modelIdFromInfo(entry)
+    if (!id || id.length > 512 || models.has(id)) continue
+    const info = entry as Record<string, unknown>
+    const inferredModelId = modelIdFromDescription(info.description)
+    const aliases = [info.value, inferredModelId].filter((alias): alias is string => typeof alias === 'string' && alias !== id && !!alias)
+    const facts = parseProviderModelDescriptor(info, 'anthropic-thinking')
+    models.set(id, { id,
+      ...(typeof info.displayName === 'string' ? { displayName: info.displayName.slice(0, 256) } : {}),
+      ...(aliases.length ? { aliases: [...new Set(aliases)] } : {}),
+      ...(inferredModelId && inferredModelId !== id ? { inferredModelId } : {}),
+      ...(Object.keys(facts).some((field) => field !== 'evidence') ? { profile: { ...facts, evidence: metadataEvidence(facts, 'provider', new Date().toISOString()) } } : {})
+    })
+  }
+  return [...models.values()]
 }
 
-/**
- * The SDK's ModelInfo.value is an alias (`opus`/`sonnet`/`haiku`/`default`), but
- * its description carries the concrete version (`Opus 4.8`, `Sonnet 4.6`, …). We
- * prefer the specific code (`claude-opus-4-8`) and fall back to the alias.
- */
+/** Explicit SDK identifiers are authoritative; descriptive aliases are only hints. */
 export function modelIdFromInfo(entry: unknown): string {
-  if (!entry || typeof entry !== 'object') return ''
-  const info = entry as { value?: unknown; description?: unknown }
-  const description = typeof info.description === 'string' ? info.description : ''
-  const match = description.match(/\b(opus|sonnet|haiku)\s+(\d+(?:\.\d+)*)/i)
-  if (match) return `claude-${match[1].toLowerCase()}-${match[2].replace(/\./g, '-')}`
-  return typeof info.value === 'string' ? info.value.trim() : ''
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return ''
+  const info = entry as Record<string, unknown>
+  for (const field of ['modelId', 'id', 'value']) {
+    if (typeof info[field] === 'string' && info[field].trim()) return info[field].trim()
+  }
+  return ''
+}
+
+function modelIdFromDescription(description: unknown): string | undefined {
+  const match = typeof description === 'string' ? description.match(/\b(opus|sonnet|haiku)\s+(\d+(?:\.\d+)*)/i) : undefined
+  return match ? `claude-${match[1].toLowerCase()}-${match[2].replace(/\./g, '-')}` : undefined
 }

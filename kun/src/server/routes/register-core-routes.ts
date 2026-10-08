@@ -44,6 +44,7 @@ import {
   fenceModelCredential,
   detectModelConnectionProtocols,
   getModelConnectionCatalog,
+  getPublicModelCatalog,
   getModelConnectionCustomHeaders,
   listModelConnections,
   modelConnectionEvents,
@@ -337,9 +338,13 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return detectModelConnectionProtocols(runtime.modelConnections, request)
   })
+  router.add('POST', '/v1/model-catalog/public', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getPublicModelCatalog(runtime.modelConnections, request)
+  })
   router.add('GET', '/v1/model-connections/:providerId/catalog', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return getModelConnectionCatalog(runtime.modelConnections, ctx.params.providerId)
+    return getModelConnectionCatalog(runtime.modelConnections, ctx.params.providerId, request)
   })
   router.add('GET', '/v1/model-connections/:providerId/custom-headers', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

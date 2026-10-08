@@ -1,3 +1,4 @@
+import { resolveRegistryProfileMetadata } from './registry-model-metadata.js'
 import { readProviderGeneratedHeaders } from './provider-protected-headers.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -48,7 +49,8 @@ async materializeDocument(this: ModelConnectionRegistry,
     const providers = new Map<string, ServeProviderConfig>()
     let selected: MaterializedModelConnections['selected']
     for (const rawProfile of Object.values(document.profiles)) {
-      const resolved = effectiveProviderConfiguration(rawProfile, document.configuration)
+      const metadataProfile = await resolveRegistryProfileMetadata(this, rawProfile, !document.credentialTransactions[rawProfile.id])
+      const resolved = effectiveProviderConfiguration(metadataProfile, document.configuration)
       const profile = resolved.profile
       if (!resolved.enabled) continue
       const credentialReplacementPending = Boolean(

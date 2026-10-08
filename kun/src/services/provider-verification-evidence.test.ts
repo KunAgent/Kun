@@ -54,3 +54,22 @@ describe('provider verification evidence', () => {
     expect(capabilityFieldKnown(declared, 'pricing')).toBe(false)
   })
 })
+
+it('retains the last account list and metadata when a plan falls back after a failed refresh', async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'kun-plan-retained-')); dirs.push(dataDir)
+  const registry = new ModelConnectionRegistry({ dataDir, credentials: new ExtensionCredentialStore({ dataDir, profileId: 'test' }) })
+  await registry.initialize()
+  await registry.connect({ expectedRevision: 0, id: 'tencentcloud-token-plan', presetSource: 'tencentcloud', presetMode: 'token-plan',
+    name: 'Plan', kind: 'http', authType: 'api-key', baseUrl: 'https://api.lkeap.cloud.tencent.com/plan/v3',
+    endpointFormat: 'chat_completions', models: ['selected'], credential: 'fixture-key', probe: false, select: false })
+  const fetcher = vi.fn(async () => Response.json({ data: [{ id: 'account-only', context_window: 123456 }] }))
+  vi.stubGlobal('fetch', fetcher)
+  await registry.probe('tencentcloud-token-plan')
+  const first = await registry.catalog('tencentcloud-token-plan')
+  fetcher.mockResolvedValueOnce(new Response('{}', { status: 404 }))
+  expect(await registry.probe('tencentcloud-token-plan')).toMatchObject({ models: ['account-only'], source: 'provider', lastAttemptStatus: 'fallback', stale: true })
+  expect(await registry.catalog('tencentcloud-token-plan')).toMatchObject({ models: ['account-only'], fetchedAt: first?.fetchedAt,
+    modelProfiles: { 'account-only': { contextWindowTokens: 123456 } }, stale: true })
+  fetcher.mockResolvedValueOnce(Response.json({ data: [] }))
+  expect((await registry.probe('tencentcloud-token-plan')).models).toEqual([])
+})

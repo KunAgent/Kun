@@ -1,3 +1,4 @@
+import { refreshPublicCatalogs } from '../services/provider-catalog-operations.js'
 import { scopedProviderOAuthFetch } from '../services/provider-request-security.js'
 import { createProviderQuotaRoutingLookup } from '../services/provider-quota-routing-cache.js'
 import { refreshRuntimeProviderIdentitySets } from './runtime-provider-identity-sets.js'
@@ -233,7 +234,8 @@ export async function createRuntimeModelComposition(
     core.activeOptions,
     modelCapabilities,
     llmDebug,
-    resolveLegacyRequestCredentials
+    resolveLegacyRequestCredentials,
+    () => modelConnections
   )
   const accountScheduler = new ProviderRequestScheduler()
   const directModelClient = new MultiProviderModelClient(initialModelClients, accountScheduler)
@@ -298,7 +300,8 @@ export async function createRuntimeModelComposition(
       core.activeOptions,
       modelCapabilities,
       llmDebug,
-      resolveLegacyRequestCredentials
+      resolveLegacyRequestCredentials,
+      () => modelConnections
     )
     for (const [providerId, client] of extensionModelProviders.clientMap()) {
       next.providers.set(providerId, client)
@@ -365,7 +368,8 @@ export async function createRuntimeModelComposition(
         nextOptions,
         modelCapabilities,
         llmDebug,
-        resolveLegacyRequestCredentials
+        resolveLegacyRequestCredentials,
+        () => modelConnections
       )
       for (const [providerId, client] of extensionModelProviders.clientMap()) {
         nextClients.providers.set(providerId, client)
@@ -387,6 +391,7 @@ export async function createRuntimeModelComposition(
     failover: core.activeOptions.providerFailover ?? [],
     localModelGateway: core.activeOptions.localModelGateway ?? { enabled: false, exposeProviderModels: false }
   })
+  void refreshPublicCatalogs(modelConnections).catch(() => undefined)
   const resolveCapabilityProviderCredential = async (providerId: string): Promise<{
     apiKey: string
     headers?: Record<string, string>

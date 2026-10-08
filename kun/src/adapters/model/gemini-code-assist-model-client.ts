@@ -1,3 +1,4 @@
+import { fitModelRequestOutput, modelRequestCapacityFailure } from './model-request-capacity.js'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
 import type { GeminiCodeAssistCredential } from '../../contracts/gemini-code-assist.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
@@ -132,6 +133,10 @@ export class GeminiCodeAssistModelClient implements ModelClient {
     }
 
     const model = request.model?.trim() || this.model
+    const capability = this.modelCapabilities?.(model)
+    const failure = modelRequestCapacityFailure(request, capability)
+    if (failure) { yield failure; return }
+    request = { ...request, maxTokens: fitModelRequestOutput(request, capability) }
     const body = buildGeminiCodeAssistRequest({
       request,
       model,

@@ -1,3 +1,4 @@
+import { configuredModelMetadata, modelMetadataPreferences } from '../../../../kun/src/services/model-metadata-resolver.js'
 import type {
   ModelProviderModelProfileV1,
   ModelProviderProfileV1
@@ -36,7 +37,7 @@ export function wireModelCapability(
 ): NonNullable<SharedModelConnection['modelCapabilities']>[string] | undefined {
   if (!profile) return undefined
   const { aliases: _aliases, ...capability } = profile
-  return { id: model, ...capability }
+  return { id: model, ...(capability.metadata ? configuredModelMetadata(capability) : capability) }
 }
 
 export function catalogCapabilities(
@@ -53,7 +54,10 @@ export function sameCatalogCapabilities(
   left: SharedModelConnection['modelCapabilities'],
   right: SharedModelConnection['modelCapabilities']
 ): boolean {
-  return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {})
+  const preferences = (value: SharedModelConnection['modelCapabilities']) => Object.fromEntries(
+    Object.entries(value ?? {}).sort(([left], [right]) => left.localeCompare(right))
+      .map(([model, profile]) => [model, modelMetadataPreferences(profile)]))
+  return JSON.stringify(preferences(left)) === JSON.stringify(preferences(right))
 }
 
 export function registryPresetFields(

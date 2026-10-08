@@ -141,12 +141,13 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                     <GeminiSubscriptionSection
                       onModelsChange={(catalog) => updateModelProvider(
                         activeProvider.id,
-                        antigravityProviderCatalogPatch(catalog, activeProvider.modelProfiles)
+                        antigravityProviderCatalogPatch(catalog, activeProvider.modelProfiles, activeProvider.models)
                       )}
                       t={t}
                     />
                   ) : isGeminiCliApiSubscriptionProvider(activeProvider) ? (
                     <GeminiCliApiSubscriptionSection
+                      providerId={activeProvider.id}
                       onModelsChange={(models) => updateModelProvider(
                         activeProvider.id,
                         geminiCliApiCatalogPatch(models, activeProvider.models, activeProvider.modelProfiles)

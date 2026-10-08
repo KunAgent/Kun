@@ -1,3 +1,4 @@
+import { estimateModelRequestInputTokens } from '../../loop/model-request-estimator.js'
 import { createHash } from 'node:crypto'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
 import {
@@ -27,12 +28,9 @@ const DECISION_TTL_MS = 30 * 60_000
 const CLASSIFY_TIMEOUT_MS = 8_000
 const OVERFLOW_SHARE = 0.95
 
-/** Rough prompt size: four characters a token, plus a flat cost per image. */
-export function estimateRequestTokens(request: Pick<ModelRequest, 'systemPrompt' | 'prefix' | 'history' | 'attachments' | 'tools'>): number {
-  let chars = (request.systemPrompt ?? '').length
-  for (const item of [...request.prefix, ...request.history]) chars += JSON.stringify(item).length
-  for (const tool of request.tools) chars += JSON.stringify(tool).length
-  return Math.ceil(chars / 4) + (request.attachments?.length ?? 0) * 1_000
+/** Same complete request estimator used by compaction and transport admission. */
+export function estimateRequestTokens(request: ModelRequest): number {
+  return estimateModelRequestInputTokens(request)
 }
 
 export function requestHasImages(request: Pick<ModelRequest, 'attachments' | 'messageAttachments'>): boolean {
@@ -84,8 +82,9 @@ function promote<T>(items: readonly T[], predicate: (item: T) => boolean): T[] {
 export function demoteOverflow(targets: ModelRouteTargetConfig[], tokens: number,
   capabilities: (modelId: string, providerId?: string) => ModelCapabilityMetadata | undefined): ModelRouteTargetConfig[] {
   const crowded = (target: ModelRouteTargetConfig): boolean => {
-    const window = capabilities(target.modelId, target.providerId)?.contextWindowTokens
-    return window !== undefined && tokens >= window * OVERFLOW_SHARE
+    const capability = capabilities(target.modelId, target.providerId)
+    const window = Math.min(capability?.contextWindowTokens ?? Infinity, capability?.maxInputTokens ?? Infinity)
+    return tokens >= window * OVERFLOW_SHARE
   }
   if (!targets.some(crowded) || targets.every(crowded)) return targets
   return promote(targets, (target) => !crowded(target))

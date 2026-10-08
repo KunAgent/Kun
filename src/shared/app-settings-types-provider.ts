@@ -1,3 +1,4 @@
+import type { ModelMetadataState, ModelMetadataResolution, ModelCapabilityMetadata as RuntimeModelCapability } from '../../kun/src/contracts/capabilities-core.js'
 import type { ModelMetadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
 import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
@@ -361,6 +362,9 @@ export type ModelProviderReasoningCapabilityV1 = {
   supportedEfforts: ModelReasoningEffort[]
   defaultEffort: ModelReasoningEffort
   requestProtocol: ModelReasoningRequestProtocol
+  nativeEfforts?: string[]
+  nativeDefaultEffort?: string
+  effortMapping?: Partial<Record<ModelReasoningEffort, string>>
 }
 
 export type ModelProviderModelPricingV1 = {
@@ -375,6 +379,11 @@ export type ModelProviderModelPricingV1 = {
 }
 
 export type ModelProviderModelProfileV1 = {
+  metadata?: ModelMetadataState
+  metadataResolution?: ModelMetadataResolution
+  maxInputTokens?: number
+  supportsReasoning?: boolean
+  conditionalCapabilities?: RuntimeModelCapability['conditionalCapabilities']
   aliases?: string[]
   contextWindowTokens?: number
   maxOutputTokens?: number

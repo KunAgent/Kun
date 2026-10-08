@@ -1,0 +1,25 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { nativeModelCatalogIdentity } from './native-model-catalog-identity.js'
+const loadGemini = vi.hoisted(() => vi.fn())
+const loadClaude = vi.hoisted(() => vi.fn())
+vi.mock('../adapters/model/gemini-cli-oauth.js', () => ({ loadOfficialGeminiCliCredential: loadGemini }))
+vi.mock('./provider-subscription-quota-credentials.js', () => ({ resolveClaudeToken: loadClaude }))
+afterEach(() => vi.clearAllMocks())
+it('binds external credentials without exposing them and rejects a logged-out identity', async () => {
+  loadGemini.mockResolvedValue({ refreshToken: 'account-one', accessToken: 'short-lived-one' })
+  const first = await nativeModelCatalogIdentity('gemini-cli-api', '')
+  loadGemini.mockResolvedValue({ refreshToken: 'account-one', accessToken: 'short-lived-two' })
+  expect(await nativeModelCatalogIdentity('gemini-cli-api', '')).toBe(first)
+  loadGemini.mockResolvedValue({ refreshToken: 'account-two', accessToken: 'short-lived-three' })
+  expect(await nativeModelCatalogIdentity('gemini-cli-api', '')).not.toBe(first)
+  expect(first).toMatch(/^[a-f0-9]{64}$/)
+  loadGemini.mockResolvedValue(null)
+  await expect(nativeModelCatalogIdentity('gemini-cli-api', '')).rejects.toThrow('account is unavailable')
+  loadClaude.mockResolvedValue(undefined)
+  await expect(nativeModelCatalogIdentity('agent-sdk', '')).rejects.toThrow('identity is unavailable')
+})
+it('leaves Registry-owned keys to the existing credential fence', async () => {
+  expect(await nativeModelCatalogIdentity('agent-sdk', 'saved-key')).toBeUndefined()
+  expect(await nativeModelCatalogIdentity('cursor-sdk', 'saved-key')).toBeUndefined()
+  expect(loadClaude).not.toHaveBeenCalled()
+})

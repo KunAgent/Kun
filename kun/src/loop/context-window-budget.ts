@@ -16,6 +16,8 @@ export type WindowBudgetState = {
   model: string
   /** Effective capacity from the model profile. */
   capacityTokens: number
+  /** Independent input cap; output consumes only the total context capacity. */
+  maxInputTokens?: number
   /** Tokens consumed by emitted budget/threshold notices; they count into the budget. */
   noticeTokens: number
   /** Threshold fractions already announced for this window. */
@@ -93,6 +95,7 @@ export class ContextWindowBudget {
     windowSeq: number
     model: string
     capacityTokens?: number
+    maxInputTokens?: number
   }): WindowBudgetState {
     const state: WindowBudgetState = {
       threadId: input.threadId,
@@ -102,6 +105,7 @@ export class ContextWindowBudget {
       capacityTokens: Math.max(1, Math.floor(
         input.capacityTokens ?? this.capacityFor(input.model)
       )),
+      maxInputTokens: input.maxInputTokens ?? resolveModelContextProfile(input.model, this.profiles)?.maxInputTokens,
       noticeTokens: 0,
       coveredThresholds: [],
       lastActualInputTokens: null,
@@ -128,11 +132,13 @@ export class ContextWindowBudget {
     threadId: string,
     windowId: string,
     model: string,
-    capacityTokens?: number
+    capacityTokens?: number,
+    maxInputTokens?: number
   ): WindowBudgetState | undefined {
     const state = this.states.get(this.key(threadId, windowId))
     if (!state) return undefined
     state.model = model
+    state.maxInputTokens = maxInputTokens ?? resolveModelContextProfile(model, this.profiles)?.maxInputTokens
     state.capacityTokens = Math.max(1, Math.floor(capacityTokens ?? this.capacityFor(model)))
     state.updatedAt = this.nowIso()
     return { ...state, coveredThresholds: [...state.coveredThresholds] }
@@ -147,9 +153,11 @@ export class ContextWindowBudget {
       sample.outputReserveTokens ?? this.outputReserveFor(state.model, effectiveInputTokens)
     ))
     const used = effectiveInputTokens + outputReserveTokens + state.noticeTokens
-    const remainingTokens = Math.max(0, state.capacityTokens - used)
+    const inputUsed = effectiveInputTokens + state.noticeTokens
+    const remainingTokens = Math.max(0, Math.min(state.capacityTokens - used,
+      (state.maxInputTokens ?? Infinity) - inputUsed))
     const usageRatio = state.capacityTokens > 0
-      ? Math.min(1, used / state.capacityTokens)
+      ? Math.min(1, Math.max(used / state.capacityTokens, inputUsed / (state.maxInputTokens ?? Infinity)))
       : 1
     return { usageRatio, remainingTokens, effectiveInputTokens, outputReserveTokens }
   }

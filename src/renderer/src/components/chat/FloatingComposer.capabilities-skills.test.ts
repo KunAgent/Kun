@@ -76,7 +76,11 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 const DEEPSEEK_PROVIDER_GROUP = {
   providerId: 'deepseek',
   label: 'DeepSeek',
-  modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash']
+  modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+  modelProfiles: Object.fromEntries(['deepseek-v4-pro', 'deepseek-v4-flash'].map((id): [string, NonNullable<ModelProviderModelGroup['modelProfiles']>[string]] => [id, {
+    inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
+    reasoning: { supportedEfforts: ['off', 'high', 'max'], defaultEffort: 'max', requestProtocol: 'deepseek-chat-completions' }
+  }]))
 }
 
 const CODEX_PROVIDER_GROUP: ModelProviderModelGroup = {

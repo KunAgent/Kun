@@ -1,3 +1,4 @@
+import { ModelMetadataStateSchema, ModelMetadataResolutionSchema, ModelCapabilityFactsSchema } from '../contracts/capabilities-core.js'
 import { ModelMetadataEvidenceSchema } from '../contracts/model-metadata-evidence.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -104,6 +105,11 @@ export const ModelContextProfileConfigSchema = z
   .object({
     aliases: z.array(z.string().min(1)).optional(),
     contextWindowTokens: PositiveInt.optional(),
+    maxInputTokens: PositiveInt.optional(),
+    supportsReasoning: z.boolean().optional(),
+    metadata: ModelMetadataStateSchema.optional(),
+    metadataResolution: ModelMetadataResolutionSchema.optional(),
+    conditionalCapabilities: ModelCapabilityFactsSchema.shape.conditionalCapabilities,
     maxOutputTokens: PositiveInt.optional(),
     contextCompaction: ModelContextCompactionProfileConfigSchema.optional(),
     softRatio: PositiveRatio.optional(),

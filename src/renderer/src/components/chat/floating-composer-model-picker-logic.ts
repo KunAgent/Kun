@@ -1,3 +1,4 @@
+import { resolveModelMetadata } from '../../../../../kun/src/services/model-metadata-resolver.js'
 import {
   MODEL_REASONING_EFFORTS,
   type ModelReasoningEffort,
@@ -163,15 +164,15 @@ export function shouldShowProviderSetupPrompt(groups: readonly ComposerModelMenu
 
 export function normalizeComposerReasoningEffort(
   value: string | undefined,
-  profile?: Pick<ModelProviderModelProfileV1, 'reasoning'>
+  profile?: Pick<ModelProviderModelProfileV1, 'reasoning' | 'supportsReasoning' | 'metadata' | 'evidence'>
 ): ComposerReasoningEffort {
   const normalized = normalizeComposerReasoningEffortValue(value)
-  if (!profile?.reasoning) {
-    return normalized && LEGACY_REASONING_EFFORTS.includes(normalized) ? normalized : 'max'
-  }
-  const supported = profile.reasoning.supportedEfforts
+  const effective = profile ? resolveModelMetadata(profile) : undefined
+  if (effective?.supportsReasoning === false) return 'off'
+  if (!effective?.reasoning) return 'auto'
+  const supported = effective.reasoning.supportedEfforts
   if (normalized && supported.includes(normalized)) return normalized
-  return profile.reasoning.defaultEffort
+  return effective.reasoning.defaultEffort
 }
 
 export function normalizeComposerReasoningEffortValue(
@@ -495,10 +496,10 @@ export function modelProfileForModel(
   if (!key) return undefined
   const profiles = group.modelProfiles ?? {}
   const direct = profiles[key] ?? profiles[modelId.trim()]
-  if (direct) return direct
-  return Object.values(profiles).find((profile) =>
-    profile.aliases?.some((alias) => normalizeModelCapabilityKey(alias) === key)
+  const profile = direct ?? Object.values(profiles).find((candidate) =>
+    candidate.aliases?.some((alias) => normalizeModelCapabilityKey(alias) === key)
   )
+  return profile ? resolveModelMetadata(profile) : undefined
 }
 
 export function modelProfileForSelection(
@@ -509,10 +510,8 @@ export function modelProfileForSelection(
   const selectedGroup = providerId
     ? groups.find((group) => group.providerId === providerId)
     : null
-  if (selectedGroup && selectedGroup.modelIds.some((id) => modelIdsMatch(id, modelId))) {
-    const profile = modelProfileForModel(selectedGroup, modelId)
-    if (profile) return profile
-  }
+  // A selected connection with unknown metadata cannot borrow another account's limits.
+  if (providerId) return modelProfileForModel(selectedGroup, modelId)
   for (const group of groups) {
     if (!group.modelIds.some((id) => modelIdsMatch(id, modelId))) continue
     const profile = modelProfileForModel(group, modelId)
@@ -540,9 +539,10 @@ export function nativeReasoningChoices(
 }
 
 export function reasoningOptionsForModel(
-  profile: Pick<ModelProviderModelProfileV1, 'reasoning'> | undefined
+  profile: Pick<ModelProviderModelProfileV1, 'reasoning' | 'supportsReasoning' | 'metadata' | 'evidence'> | undefined
 ): Array<{ id: ComposerReasoningEffort; labelKey: string }> {
-  const supported = profile?.reasoning?.supportedEfforts ?? LEGACY_REASONING_EFFORTS
+  const effective = profile ? resolveModelMetadata(profile) : undefined
+  const supported: ModelReasoningEffort[] = effective?.supportsReasoning === false ? ['off'] : effective?.reasoning?.supportedEfforts ?? ['auto']
   return supported
     .map((effort) => REASONING_OPTIONS.find((option) => option.id === effort))
     .filter((option): option is { id: ComposerReasoningEffort; labelKey: string } => Boolean(option))

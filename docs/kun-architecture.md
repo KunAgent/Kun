@@ -428,6 +428,9 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
 
 ## Settings / Migration
 
+供应商模型发现、能力来源、用户限制与运行预算的规则见
+[`provider-model-metadata.md`](./provider-model-metadata.md)。
+
 保存后的 settings 结构只应有：
 
 ```json

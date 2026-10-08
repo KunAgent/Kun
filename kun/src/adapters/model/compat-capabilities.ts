@@ -43,11 +43,13 @@ export function resolveCompatModelCapabilities(input: {
     messageParts,
     supportsStreaming: true,
     supportsVision: inputModalities.includes('image'),
-    supportsReasoning: metadata?.reasoning !== undefined,
+    supportsReasoning: metadata?.supportsReasoning ?? metadata?.reasoning !== undefined,
     supportsCacheUsage: true,
     supportsToolCalling: metadata?.supportsToolCalling ?? true,
     ...(metadata?.maxOutputTokens ? { maxOutputTokens: metadata.maxOutputTokens } : {}),
-    ...(metadata?.reasoning ? { reasoning: metadata.reasoning } : {}),
+    ...(metadata?.supportsReasoning === false
+      ? { reasoning: { supportedEfforts: ['off'], defaultEffort: 'off' as const, requestProtocol: 'none' as const } }
+      : metadata?.reasoning ? { reasoning: metadata.reasoning } : {}),
     ...(metadata?.pricing ? { pricing: metadata.pricing } : {}),
     ...(metadata?.serviceTiers ? { serviceTiers: metadata.serviceTiers } : {}),
     ...(metadata?.responsesMode ? { responsesMode: metadata.responsesMode } : {}),

@@ -54,6 +54,7 @@ export type SharedModelConnectionsSnapshot = {
   schemaVersion: 1
   proxyRoutingVersion: 1
   revision: number
+  metadataRevision?: number
   providers: SharedModelConnection[]
   defaultProviderId?: string
   defaultAccountId?: string
@@ -97,6 +98,7 @@ export function validateSharedModelConnections(value: unknown): SharedModelConne
   if (snapshot?.schemaVersion !== 1 || !Number.isInteger(snapshot.revision) || !Array.isArray(snapshot.providers)) {
     throw new Error('Invalid shared model connection response')
   }
+  if (snapshot.metadataRevision !== undefined && (!Number.isSafeInteger(snapshot.metadataRevision) || snapshot.metadataRevision < 0)) throw new Error('Invalid model metadata revision')
   return snapshot
 }
 
@@ -397,7 +399,18 @@ export async function requestSharedModelConnections(
   return parseSharedModelConnections(result.body)
 }
 
+export type SharedModelProbeDetails = {
+  models: string[]
+  modelProfiles: Record<string, ModelProviderModelProfileV1>
+  source?: 'provider' | 'manual' | 'preset'
+  lastAttemptStatus?: 'success' | 'fallback'
+}
+
 export async function requestSharedModelConnectionProbe(providerId: string): Promise<string[]> {
+  return (await requestSharedModelConnectionProbeDetails(providerId)).models
+}
+
+export async function requestSharedModelConnectionProbeDetails(providerId: string): Promise<SharedModelProbeDetails> {
   const result = await window.kunGui.runtimeRequest(
     `/v1/model-connections/${encodeURIComponent(providerId)}/probe`,
     'POST'
@@ -412,11 +425,11 @@ export async function requestSharedModelConnectionProbe(providerId: string): Pro
     }
     throw new Error(message || `Shared model connection probe failed (HTTP ${result.status})`)
   }
-  const value = JSON.parse(result.body) as { ok?: unknown; models?: unknown }
+  const value = JSON.parse(result.body) as { ok?: unknown; models?: unknown; modelProfiles?: Record<string, ModelProviderModelProfileV1>; source?: SharedModelProbeDetails['source']; lastAttemptStatus?: SharedModelProbeDetails['lastAttemptStatus'] }
   if (value.ok !== true || !Array.isArray(value.models)) {
     throw new Error('Shared model connection probe returned an invalid response')
   }
-  return value.models.flatMap((model) => typeof model === 'string' && model.trim() ? [model.trim()] : [])
+  return { models: value.models.flatMap((model) => typeof model === 'string' && model.trim() ? [model.trim()] : []), modelProfiles: value.modelProfiles ?? {}, source: value.source, lastAttemptStatus: value.lastAttemptStatus }
 }
 
 export async function deleteSharedModelConnection(

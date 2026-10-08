@@ -1,3 +1,4 @@
+import { resolveModelMetadata } from '../../kun/src/services/model-metadata-resolver.js'
 import { normalizeRouteEffort } from './app-settings-route-rules'
 import { normalizeExtensionExports, normalizeGatewayMiddleware, projectExecutableModelRoutePools, routePoolExtras } from './app-settings-route-projection'
 import {
@@ -610,7 +611,8 @@ export function modelProviderModelProfile(
 ): ModelProviderModelProfileV1 | undefined {
   const normalized = normalizeModelKey(modelId)
   if (!normalized) return undefined
-  return provider.modelProfiles[normalized]
+  const profile = provider.modelProfiles[normalized]
+  return profile ? resolveModelMetadata(profile) : undefined
 }
 
 export function modelProviderModelProfilesForProvider(
@@ -622,24 +624,25 @@ export function modelProviderModelProfilesForProvider(
   for (const [modelId, profile] of Object.entries(provider.modelProfiles)) {
     const normalized = normalizeModelKey(modelId)
     if (!normalized || !isProviderComposerChatModelId(provider, normalized)) continue
+    const effective = resolveModelMetadata(profile)
     profiles[normalized] = {
-      ...profile,
-      contextWindowTokens: profile.contextWindowTokens ?? DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS
+      ...effective,
+      contextWindowTokens: effective.contextWindowTokens ?? DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS
     }
   }
   return profiles
 }
 
 export function modelSupportsImageInput(
-  profile: Pick<ModelProviderModelProfileV1, 'inputModalities'> | undefined
+  profile: Pick<ModelProviderModelProfileV1, 'inputModalities' | 'metadata' | 'evidence'> | undefined
 ): boolean {
-  return profile?.inputModalities.includes('image') === true
+  return profile ? resolveModelMetadata(profile).inputModalities?.includes('image') === true : false
 }
 
 export function modelReasoningEfforts(
-  profile: Pick<ModelProviderModelProfileV1, 'reasoning'> | undefined
+  profile: Pick<ModelProviderModelProfileV1, 'reasoning' | 'supportsReasoning' | 'metadata' | 'evidence'> | undefined
 ): ModelProviderReasoningCapabilityV1 | undefined {
-  return profile?.reasoning
+  return profile ? resolveModelMetadata(profile).reasoning : undefined
 }
 
 export function listImageGenerationProviderProfiles(settings: AppSettingsV1): ModelProviderProfileV1[] {

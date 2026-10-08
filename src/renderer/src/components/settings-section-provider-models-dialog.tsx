@@ -1,3 +1,7 @@
+import { ProviderModelMetadataPanel } from './provider-model-metadata-panel'
+import { clearModelMetadataOverride, setModelMetadataOverride } from '../../../../kun/src/services/model-metadata-resolver.js'
+import { applyProviderModelForm, chatModelProfile } from './provider-model-editor'
+import { editorStateForExisting } from './settings-section-provider-models-support'
 import { settingsButtonClass } from './settings-button'
 import {
   MODEL_ENDPOINT_FORMATS,
@@ -179,6 +183,30 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                     onChange={(value) => updateForm({ reasoningEnabled: value })}
                   />
 
+                  {effectiveForm?.modelId.trim() ? <ProviderModelMetadataPanel
+                    profile={chatModelProfile(applyProviderModelForm(provider, effectiveForm), effectiveForm.modelId)!}
+                    t={t}
+                    onRestore={(field) => {
+                      const draft = applyProviderModelForm(provider, effectiveForm)
+                      const key = effectiveForm.modelId.trim().toLowerCase()
+                      draft.modelProfiles[key] = clearModelMetadataOverride(draft.modelProfiles[key], field)
+                      const next = editorStateForExisting(draft, 'chat', effectiveForm.modelId)
+                      next.form.originalModelId = editor.form.originalModelId
+                      next.form.clearedOverrides = [...(editor.form.clearedOverrides ?? []), field]
+                      next.form.adoptedSuggestions = editor.form.adoptedSuggestions
+                      setEditor(next)
+                    }}
+                    onAdopt={(field, value, observationId) => {
+                      const draft = applyProviderModelForm(provider, effectiveForm)
+                      const key = effectiveForm.modelId.trim().toLowerCase()
+                      draft.modelProfiles[key] = setModelMetadataOverride(draft.modelProfiles[key], field, value)
+                      const next = editorStateForExisting(draft, 'chat', effectiveForm.modelId)
+                      next.form.originalModelId = editor.form.originalModelId
+                      next.form.clearedOverrides = (editor.form.clearedOverrides ?? []).filter((item) => item !== field)
+                      next.form.adoptedSuggestions = { ...editor.form.adoptedSuggestions, [field]: observationId }
+                      setEditor(next)
+                    }}
+                  /> : null}
                   <AdvancedSettingsDisclosure
                     title={t('providerModelAdvancedTitle')}
                     description={t('providerModelAdvancedDesc')}
@@ -219,6 +247,11 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                         <span className="text-[12px] leading-5 text-ds-faint">{t('providerModelContextHint')}</span>
                       </div>
 
+                      <label className={fieldLabelClass}>
+                        {t('providerConfiguration.metadatamaxInputTokens')}
+                        <input className={textInputClass} value={editor.maxInputText} placeholder="128K" spellCheck={false}
+                          onChange={(event) => { const value = event.target.value; setEditor((previous) => previous ? { ...previous, maxInputText: value } : previous) }} />
+                      </label>
                       <label className={fieldLabelClass}>
                         {t('providerModelMaxOutputLabel')}
                         <input

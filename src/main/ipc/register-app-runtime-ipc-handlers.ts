@@ -69,9 +69,6 @@ import {
 } from '../runtime-provider-quota'
 import { observeProviderQuotasForReminders } from '../services/provider-quota-reminder-service'
 import {
-  fetchModelsDevCatalog
-} from '../models-dev-catalog'
-import {
   verifyTelegramBotToken
 } from '../telegram-runtime'
 import {
@@ -193,7 +190,11 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
       modelsDevCatalogPayloadSchema,
       payload
     )
-    return fetchModelsDevCatalog(request, await store.load())
+    const profile = getModelProviderSettings(await store.load()).providers.find((profile) => profile.id === request.providerId)
+    const response = await runtimeRequest('/v1/model-catalog/public', 'POST', JSON.stringify({ ...request,
+      ...(profile?.catalogSources?.length ? { catalogSources: profile.catalogSources.slice(0, 8) } : {}) }))
+    if (!response.ok) throw new Error(`Kun catalog request failed (HTTP ${response.status}).`)
+    return JSON.parse(response.body)
   })
 
   const externalImportPayloadSchema = z.object({

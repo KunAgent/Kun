@@ -1,3 +1,6 @@
+import type { ModelCapabilityMetadata } from '../contracts/capabilities-core.js'
+import type { DiscoveredModelProfile, DiscoveredModelDetails } from './provider-model-descriptors.js'
+import type { ModelsDevCatalogModel } from '../contracts/public-model-catalog.js'
 import { ProviderVerificationEvidenceSchema, type ProviderVerificationEvidence } from '../contracts/provider-verification-evidence.js'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
@@ -10,14 +13,22 @@ export type ModelCatalogEntry = {
   baseUrl?: string
   endpointFormat?: string
   models: string[]
+  modelProfiles?: Record<string, DiscoveredModelProfile>
+  modelDetails?: Record<string, DiscoveredModelDetails>
+  effectiveProfiles?: Record<string, ModelCapabilityMetadata>
+  catalogProfiles?: Record<string, DiscoveredModelProfile>
+  suggestions?: ModelsDevCatalogModel[]
+  publicCatalogFetchedAt?: string
+  publicCatalogStale?: boolean
+  modelVerification?: Record<string, { model: string; protocol: string; lastSuccessAt?: string; lastFailureAt?: string; reason?: string }>
   identity?: string
   configurationRevision?: number
   startedAt?: string
-  source?: 'provider' | 'manual'
+  source?: 'provider' | 'manual' | 'preset'
   stale?: boolean
   identityChanged?: boolean
   lastAttemptAt?: string
-  lastAttemptStatus?: 'success' | 'failed'
+  lastAttemptStatus?: 'success' | 'failed' | 'fallback'
 }
 
 function catalogPath(dataDir: string, providerId: string): string {
@@ -54,6 +65,9 @@ export async function writeModelCatalog(dataDir: string, providerId: string, ent
     if ((previous.configurationRevision ?? -1) > (safe.configurationRevision ?? -1)) return previous
     if (previous.configurationRevision === safe.configurationRevision &&
         Date.parse(previous.startedAt ?? previous.fetchedAt) > Date.parse(safe.startedAt ?? safe.fetchedAt)) return previous
+    if (previous.identity === safe.identity && previous.modelVerification) {
+      safe.modelVerification = { ...previous.modelVerification, ...safe.modelVerification }
+    }
     return safe
   })
 }
@@ -73,7 +87,17 @@ export async function readModelCatalog(dataDir: string, providerId: string, expe
   } catch { return null }
   const changed = expectedIdentity !== undefined && entry.identity !== expectedIdentity
   return { ...entry, ...(expectedIdentity !== undefined ? {
-    stale: entry.lastAttemptStatus === 'failed' || changed || Date.now() - Date.parse(entry.fetchedAt) > 24 * 60 * 60_000,
+    stale: entry.lastAttemptStatus === 'failed' || entry.lastAttemptStatus === 'fallback' || changed || Date.now() - Date.parse(entry.fetchedAt) > 24 * 60 * 60_000,
     identityChanged: changed
   } : {}) }
+}
+
+/** Merge derived observations into the current catalog without replacing a newer list. */
+export async function patchModelCatalog(dataDir: string, providerId: string, fallback: ModelCatalogEntry,
+  mutate: (current: ModelCatalogEntry) => ModelCatalogEntry): Promise<void> {
+  const file = new AtomicJsonFile(catalogPath(dataDir, providerId), parseEntry, false)
+  await file.update(() => fallback, (current) => {
+    if (current.identity !== fallback.identity || (current.configurationRevision ?? -1) > (fallback.configurationRevision ?? -1)) return current
+    return mutate(current)
+  })
 }

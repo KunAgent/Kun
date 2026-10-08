@@ -33,9 +33,10 @@ function SharedModelConnectionsLifecycle(): null {
     let disposed = false
     let modelCatalogLoaded = false
     let lastAppliedRevision = 0
+    let lastAppliedMetadataRevision = 0
     const stop = subscribeModelConnectionWatch(async (snapshot) => {
       if (disposed) return
-      const changed = !modelCatalogLoaded || snapshot.revision > lastAppliedRevision
+      const changed = !modelCatalogLoaded || snapshot.revision > lastAppliedRevision || (snapshot.metadataRevision ?? 0) > lastAppliedMetadataRevision
       if (!changed) return
       const state = useChatStore.getState()
       await state.loadComposerModels()
@@ -49,6 +50,7 @@ function SharedModelConnectionsLifecycle(): null {
         current.composerRouteExplicitWorkspaceRoot === currentWorkspace))
       )) {
         lastAppliedRevision = snapshot.revision
+        lastAppliedMetadataRevision = snapshot.metadataRevision ?? 0
         modelCatalogLoaded = true
         return
       }
@@ -80,6 +82,7 @@ function SharedModelConnectionsLifecycle(): null {
         }
       }
       lastAppliedRevision = snapshot.revision
+      lastAppliedMetadataRevision = snapshot.metadataRevision ?? 0
       modelCatalogLoaded = true
     })
     return () => {

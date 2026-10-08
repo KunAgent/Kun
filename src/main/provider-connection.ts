@@ -1,3 +1,6 @@
+import type { ModelProviderModelProfileV1 } from '../shared/app-settings'
+import type { DiscoveredModelProfile } from '../../kun/src/services/provider-model-descriptors'
+import { parseProviderModelDescriptor } from '../../kun/src/services/provider-model-descriptors'
 import { resolveElectronSystemProxyUrl } from './electron-system-proxy'
 export { resolveElectronSystemProxyUrl } from './electron-system-proxy'
 import {
@@ -240,12 +243,21 @@ export async function probeModelProvider(
   }
   if (codexHeaders) {
     try {
-      return { ok: true, latencyMs, ...parseCodexModelCatalog(text) }
+      const result = parseCodexModelCatalog(text)
+      return { ok: true, latencyMs, modelIds: result.modelIds, modelProfiles: guiModelProfiles(result.modelProfiles) }
     } catch {
       return { ok: false, message: 'Codex returned an invalid model catalog.' }
     }
   }
-  return { ok: true, latencyMs, modelIds: parseModelIds(text) }
+  const modelIds = parseModelIds(text)
+  let rows: unknown[] = []
+  try { const value = JSON.parse(text); rows = Array.isArray(value?.data) ? value.data : [] } catch { /* Preserve legacy malformed-list behavior. */ }
+  const modelProfiles = Object.fromEntries(rows.flatMap((value) => {
+    const row = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+    return typeof row.id === 'string' && modelIds.includes(row.id.trim()) ? [[row.id.trim(), parseProviderModelDescriptor(row,
+      endpointFormat === 'responses' ? 'openai-responses' : endpointFormat === 'messages' ? 'anthropic-thinking' : 'openai-chat-completions')]] : []
+  }))
+  return { ok: true, latencyMs, modelIds, modelProfiles: guiModelProfiles(modelProfiles) }
 }
 
 function providerProbeFailureMessage(error: unknown, url: string): string {
@@ -371,4 +383,12 @@ async function readBoundedResponseText(
     offset += chunk.byteLength
   }
   return { text: new TextDecoder().decode(bytes), truncated: false }
+}
+
+function guiModelProfiles(profiles: Record<string, DiscoveredModelProfile>): Record<string, ModelProviderModelProfileV1> {
+  return Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, {
+    // Required GUI compatibility fields are operational defaults. Their evidence
+    // remains unknown from the parser, so they never become declared facts.
+    inputModalities: ['text'], outputModalities: ['text'], messageParts: ['text'], supportsToolCalling: true, ...profile
+  }]))
 }

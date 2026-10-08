@@ -504,6 +504,7 @@ export type CoreRuntimeEventJson = {
   providerId?: string
   stepIndex?: number
   contextWindowTokens?: number
+  maxInputTokens?: number
   softThresholdTokens?: number
   hardThresholdTokens?: number
   estimatedInputTokens?: number

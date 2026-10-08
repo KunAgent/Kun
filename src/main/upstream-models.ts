@@ -1,3 +1,4 @@
+import { ModelMetadataStateSchema, ModelMetadataResolutionSchema, ModelCapabilityFactsSchema, ModelReasoningCapabilityMetadata } from '../../kun/src/contracts/capabilities-core.js'
 import { ModelMetadataEvidenceSchema, metadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
 import { ModelCatalogPricing } from '../../kun/src/contracts/capabilities.js'
 import { capabilityFieldKnown } from '../../kun/src/contracts/model-metadata-evidence'
@@ -127,12 +128,20 @@ export function modelListFromSharedConnections(
       const reasoning = sharedReasoningProfile(capability.reasoning)
       const evidence = ModelMetadataEvidenceSchema.safeParse(capability.evidence)
       const pricing = ModelCatalogPricing.safeParse(capability.pricing)
+      const metadata = ModelMetadataStateSchema.safeParse(capability.metadata)
+      const resolution = ModelMetadataResolutionSchema.safeParse(capability.metadataResolution)
+      const conditional = ModelCapabilityFactsSchema.shape.conditionalCapabilities.safeParse(capability.conditionalCapabilities)
       return [[model, {
         inputModalities: inputModalities.length ? inputModalities : ['text'],
         outputModalities: outputModalities.length ? outputModalities : ['text'],
         supportsToolCalling: capability.supportsToolCalling !== false,
         evidence: evidence.success && evidence.data ? evidence.data : metadataEvidence(capability, 'user'),
         ...(pricing.success ? { pricing: pricing.data } : {}),
+        ...(metadata.success ? { metadata: metadata.data } : {}),
+        ...(resolution.success ? { metadataResolution: resolution.data } : {}),
+        ...(conditional.success && conditional.data ? { conditionalCapabilities: conditional.data } : {}),
+        ...(positiveInteger(capability.maxInputTokens) ? { maxInputTokens: positiveInteger(capability.maxInputTokens) } : {}),
+        ...(typeof capability.supportsReasoning === 'boolean' ? { supportsReasoning: capability.supportsReasoning } : {}),
         ...(typeof capability.parallelTools === 'boolean' ? { parallelTools: capability.parallelTools } : {}),
         ...(typeof capability.streaming === 'boolean' ? { streaming: capability.streaming } : {}),
         ...(typeof capability.structuredOutput === 'boolean' ? { structuredOutput: capability.structuredOutput } : {}),
@@ -476,6 +485,7 @@ function sharedReasoningProfile(
     )
   ) return undefined
   return {
+    ...(ModelReasoningCapabilityMetadata.safeParse(reasoning).success ? ModelReasoningCapabilityMetadata.parse(reasoning) : {}),
     supportedEfforts,
     defaultEffort: defaultEffort as NonNullable<ModelProviderModelProfileV1['reasoning']>['defaultEffort'],
     requestProtocol

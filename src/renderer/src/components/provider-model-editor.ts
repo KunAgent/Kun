@@ -1,3 +1,4 @@
+import { migrateModelMetadata, setModelMetadataOverride, clearModelMetadataOverride, adoptModelMetadataSuggestion } from '../../../../kun/src/services/model-metadata-resolver.js'
 import { MODEL_METADATA_FIELDS, metadataEvidence } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import {
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
@@ -18,7 +19,6 @@ import {
 } from '@shared/app-settings'
 import { normalizeModelProviderPricing } from '@shared/app-settings-provider-capabilities'
 import {
-  DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS,
   isComposerChatModelId,
   isImageGenerationModelId,
   isMusicGenerationModelId,
@@ -58,6 +58,9 @@ export type ProviderModelForm = {
   modelId: string
   /** null means "not specified" — Kun falls back to its built-in default. */
   contextWindowTokens: number | null
+  maxInputTokens: number | null
+  clearedOverrides?: (typeof MODEL_METADATA_FIELDS)[number][]
+  adoptedSuggestions?: Partial<Record<(typeof MODEL_METADATA_FIELDS)[number], string>>
   maxOutputTokens: number | null
   /**
    * Parsed pricing inputs. null means "no pricing" — all four inputs were
@@ -96,6 +99,8 @@ export type ProviderModelFormError =
   | { code: 'duplicate'; kind: ProviderModelKind }
   | { code: 'invalidContextWindow' }
   | { code: 'contextWindowTooLarge'; maximum: number }
+  | { code: 'invalidMaxInput' }
+  | { code: 'maxInputTooLarge'; maximum: number }
   | { code: 'invalidMaxOutput' }
   | { code: 'maxOutputTooLarge'; maximum: number }
   | { code: 'invalidPricing' }
@@ -135,7 +140,8 @@ export function newProviderModelForm(
     kind,
     originalModelId: '',
     modelId: '',
-    contextWindowTokens: kind === 'chat' ? DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS : null,
+    contextWindowTokens: null,
+    maxInputTokens: null,
     maxOutputTokens: null,
     pricing: null,
     visionInput: false,
@@ -167,8 +173,9 @@ export function providerModelFormForExisting(
   if (!profile) return { ...base, contextWindowTokens: null, maxOutputTokens: null }
   return {
     ...base,
-    contextWindowTokens: profile.contextWindowTokens ?? null,
-    maxOutputTokens: profile.maxOutputTokens ?? null,
+    contextWindowTokens: profile.metadata?.overrides.contextWindowTokens ?? profile.contextWindowTokens ?? null,
+    maxInputTokens: profile.metadata?.overrides.maxInputTokens ?? profile.maxInputTokens ?? null,
+    maxOutputTokens: profile.metadata?.overrides.maxOutputTokens ?? profile.maxOutputTokens ?? null,
     pricing: profile.pricing
       ? {
           inputUsdPerMillion: profile.pricing.inputUsdPerMillion,
@@ -291,6 +298,11 @@ export function validateProviderModelForm(
     form.contextWindowTokens > MAX_MODEL_CONTEXT_WINDOW_TOKENS
   ) {
     errors.push({ code: 'contextWindowTooLarge', maximum: MAX_MODEL_CONTEXT_WINDOW_TOKENS })
+  }
+  if (form.maxInputTokens !== null && (!Number.isInteger(form.maxInputTokens) || form.maxInputTokens <= 0)) {
+    errors.push({ code: 'invalidMaxInput' })
+  } else if (form.maxInputTokens !== null && form.maxInputTokens > MAX_MODEL_CONTEXT_WINDOW_TOKENS) {
+    errors.push({ code: 'maxInputTooLarge', maximum: MAX_MODEL_CONTEXT_WINDOW_TOKENS })
   }
   if (
     form.maxOutputTokens !== null &&
@@ -544,15 +556,17 @@ function chatProfileFromForm(
     ...(form.contextWindowTokens && form.contextWindowTokens > 0
       ? { contextWindowTokens: form.contextWindowTokens }
       : {}),
+    ...(form.maxInputTokens && form.maxInputTokens > 0 ? { maxInputTokens: form.maxInputTokens } : {}),
     ...(form.maxOutputTokens && form.maxOutputTokens > 0
       ? { maxOutputTokens: form.maxOutputTokens }
       : {}),
     inputModalities: form.visionInput ? ['text', 'image'] : ['text'],
     outputModalities: ['text'],
     supportsToolCalling: form.supportsToolCalling,
+    ...(form.reasoningEnabled !== Boolean(previous?.reasoning) ? { supportsReasoning: form.reasoningEnabled } : previous?.supportsReasoning !== undefined ? { supportsReasoning: previous.supportsReasoning } : {}),
     messageParts: form.visionInput ? ['text', 'image_url'] : ['text'],
     ...(form.reasoningEnabled && form.reasoningEfforts.length > 0
-      ? { reasoning: reasoningCapabilityFromForm(form) }
+      ? { reasoning: { ...previous?.reasoning, ...reasoningCapabilityFromForm(form) } }
       : {}),
     ...(pricing ? { pricing } : {}),
     ...(typeof form.parallelTools === 'boolean' ? { parallelTools: form.parallelTools } : {}),
@@ -563,16 +577,44 @@ function chatProfileFromForm(
     ...(form.responsesMode ? { responsesMode: form.responsesMode } : {}),
     ...(form.wireModelId.trim() && form.wireModelId.trim() !== form.modelId.trim() ? { wireModelId: form.wireModelId.trim() } : {})
   }
-  const evidence = previous?.evidence ?? metadataEvidence({ ...previous }, 'user')
-  const now = new Date().toISOString()
-  const nextEvidence = metadataEvidence({ ...profile }, 'user', now)
-  profile.evidence = { ...evidence }
+  // Compare against the form's initial projection, not effective runtime limits:
+  // editing a name must never promote catalog/default fields to user overrides.
+  let next = migrateModelMetadata(previous ?? {
+    inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true,
+    messageParts: ['text'], evidence: metadataEvidence({}, 'user')
+  }) as ModelProviderModelProfileV1
+  const previousForm = previous
+    ? providerModelFormForExisting(provider as ModelProviderProfileV1, 'chat', form.originalModelId || form.modelId)
+    : newProviderModelForm('chat', provider as ModelProviderProfileV1)
+  const cleared = new Set(form.clearedOverrides ?? [])
+  const fieldChanged = (field: (typeof MODEL_METADATA_FIELDS)[number]): boolean => {
+    if (field === 'inputModalities' || field === 'messageParts') return form.visionInput !== previousForm.visionInput
+    if (field === 'outputModalities') return false
+    if (field === 'supportsReasoning') return form.reasoningEnabled !== previousForm.reasoningEnabled
+    if (field === 'reasoning') return JSON.stringify([form.reasoningEnabled, form.reasoningEfforts, form.reasoningDefaultEffort, form.reasoningProtocol]) !==
+      JSON.stringify([previousForm.reasoningEnabled, previousForm.reasoningEfforts, previousForm.reasoningDefaultEffort, previousForm.reasoningProtocol])
+    if (field === 'pricing') return JSON.stringify(form.pricing) !== JSON.stringify(previousForm.pricing)
+    return JSON.stringify(form[field as keyof ProviderModelForm]) !== JSON.stringify(previousForm[field as keyof ProviderModelForm])
+  }
   for (const field of MODEL_METADATA_FIELDS) {
-    if (JSON.stringify(previous?.[field as keyof ModelProviderModelProfileV1]) !== JSON.stringify(profile[field as keyof ModelProviderModelProfileV1])) {
-      profile.evidence[field] = nextEvidence[field]
+    if (cleared.has(field)) next = clearModelMetadataOverride(next, field)
+    else if (form.adoptedSuggestions?.[field] && !fieldChanged(field)) {
+      next = adoptModelMetadataSuggestion(next, form.adoptedSuggestions[field]!, [field])
+    } else if (fieldChanged(field)) {
+      const value = profile[field as keyof ModelProviderModelProfileV1]
+      const suggestionId = form.adoptedSuggestions?.[field]
+      const suggestion = next.metadata?.observations.find((row) => row.id === suggestionId)
+      next = suggestion && JSON.stringify(suggestion.values[field]) === JSON.stringify(value)
+        ? adoptModelMetadataSuggestion(next, suggestion.id, [field])
+        : value === undefined ? clearModelMetadataOverride(next, field) : setModelMetadataOverride(next, field, value)
     }
   }
-  return profile
+  // Transport fields and aliases remain explicit connection configuration.
+  for (const field of ['aliases', 'endpointFormat', 'responsesMode', 'wireModelId'] as const) {
+    delete next[field]
+    if (profile[field] !== undefined) Object.assign(next, { [field]: profile[field] })
+  }
+  return next
 
 }
 
