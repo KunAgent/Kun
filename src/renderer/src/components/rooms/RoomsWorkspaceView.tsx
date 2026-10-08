@@ -43,6 +43,7 @@ import { RoomPendingSendRow } from './RoomPendingSendRow'
 import { useRoomPendingSends, type RoomPendingAttachment } from './useRoomPendingSends'
 import { roomRespondingMemberIds, roomWaitingMemberIds } from './room-receipt-helpers'
 import { RoomRunInspector } from './RoomRunInspector'
+import { RoomAgentSession } from './RoomAgentSession'
 import { RoomDrawerNavigation, useRoomDrawerNavigation } from './RoomDrawerNavigation'
 import { RoomDrawerTask } from './RoomDrawerTask'
 import { RoomReplyThread } from './RoomReplyThread'
@@ -205,19 +206,24 @@ export function RoomsWorkspaceView({
   const setupPending = agentProfile.data?.agent.setup?.status === 'pending'
   const choiceInputs = privateChat ? direct.data?.userInputs ?? [] : []
   const openRun = (runId: string): void => { drawer.open({ kind: 'run', runId }); panel.openCollaboration() }
+  // A private conversation is one Agent session; its viewer shows every turn, not one run.
+  const openSession = (): void => { drawer.open({ kind: 'session' }); panel.openCollaboration() }
 const topDrawerTarget = drawer.frames.at(-1)?.target
 const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : undefined
+const sessionOpen = topDrawerTarget?.kind === 'session' && panel.state.expanded && panel.state.activeId === ROOM_COLLABORATION_TAB
   const collaborationTitle = topDrawerTarget && topDrawerTarget.kind !== 'section' ? t({
     agent: topDrawerTarget.kind === 'agent' && topDrawerTarget.agentId ? 'agentsProfileAndMemory' : 'agentsCreate',
     handoffs: 'agentsHandoffs', task: 'roomsTasks', reply: 'roomsReplyThreadTitle', run: 'roomsAgentSession',
-    content: 'roomsReplyContentTitle', files: 'directFiles', models: 'directModels', reminders: 'roomsReminders',
+    content: 'roomsReplyContentTitle', session: 'roomsAgentSession', files: 'directFiles', models: 'directModels', reminders: 'roomsReminders',
     settings: 'roomsSettings', directory: 'agentsDirectory', profile: 'roomsMyAvatar'
   }[topDrawerTarget.kind]) : undefined
   const activeRunId = privateChat ? direct.data?.active?.runId : undefined
   const latestRunId = activeRunId ?? (privateChat ? direct.data?.requests[0]?.runId : undefined)
+  const sessionRefreshKey = [direct.data?.active?.id, direct.data?.active?.status, direct.data?.requests[0]?.id,
+    direct.data?.requests[0]?.status, direct.data?.requests[0]?.revision].join(':')
   const toggleSession = (): void => {
-    if (openRunId) drawer.back()
-    else if (latestRunId) openRun(latestRunId)
+    if (sessionOpen) drawer.close()
+    else openSession()
   }
   const openTask = (taskId: string): void => { drawer.open({ kind: 'task', taskId }); panel.openCollaboration() }
   const openMember = (memberId: string, rootRequestId?: string): void => { drawer.open({ kind: 'section', section: 'members', memberId, rootRequestId }); panel.openCollaboration() }
@@ -298,7 +304,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           onFiles={() => { drawer.close(); panel.openTab(BUILTIN_RIGHT_PANEL_IDS.files) }} onReminders={() => drawer.open({ kind: 'reminders' })}
           onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
           onApps={() => setAppsOpen(true)}
-          onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId}
+          onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={sessionOpen} sessionDisabled={false}
           onManageAgents={() => drawer.open({ kind: 'directory' })} embedded onToggleLeftSidebar={onToggleLeftSidebar}
           onInfo={infoBoard.toggle} onRemove={(kind) => removal.request(removalTargetFromRoom(room), kind)} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
           onSidebar={onToggleLeftSidebar}
@@ -384,7 +390,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
                 </div> : null}
                 {showActivity && activity ? <RoomAgentActivity room={room} memberId={activity.memberId} label={activity.label}
                   startedAt={privateChat ? direct.data?.activity?.startedAt : undefined}
-                  onSession={activeRunId ? () => openRun(activeRunId) : undefined} sessionOpen={Boolean(activeRunId) && openRunId === activeRunId} /> : null}
+                  onSession={activeRunId ? openSession : undefined} sessionOpen={sessionOpen} /> : null}
               </>}
               renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)} title={message.body}
                 resolvedAnswer={choiceReplies[message.clientRequestId ?? '']}
@@ -465,7 +471,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             }} />
         })() : undefined}
         runId={openRunId ?? latestRunId} messages={messages} panel={panel}
-        onCollaborationOpen={() => privateChat && latestRunId ? openRun(latestRunId) : drawer.section('members')}
+        onCollaborationOpen={() => privateChat ? openSession() : drawer.section('members')}
         onCollaborationClose={drawer.close}
         onAddReference={(reference) => window.dispatchEvent(new CustomEvent('kun-room-file-reference', {
           detail: { roomId: selectedId, reference, workspace: direct.data?.workspace }
@@ -491,6 +497,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           if (target.kind === 'handoffs') return <AgentHandoffPanel key={key} room={room} messages={messages} topics={topicState.topics}
             active={active} selectedId={target.selectedId} onOpenPair={(id) => { chooseRoom(id) }}
             onSource={chooseRoom} onRun={(roomId, runId) => chooseRoom(roomId, { runId })} />
+          if (target.kind === 'session') return <RoomAgentSession key={key} roomId={room.id} active={active}
+            refreshKey={sessionRefreshKey} onOpenRun={openRun} />
           if (target.kind === 'run') return <RoomRunInspector key={key} roomId={room.id} runId={target.runId} active={active} onOpenRun={openRun} />
           if (target.kind === 'task') return <RoomDrawerTask key={key} roomId={room.id} taskId={target.taskId} tasks={state.tasks}
             onClose={drawer.back} onRun={openRun} onOpenThread={onOpenThread} onUpdated={() => void state.refresh()} />

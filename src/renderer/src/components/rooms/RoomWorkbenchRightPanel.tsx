@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
-import { FileEdit, Folders, Globe2, IdCard, Users } from 'lucide-react'
+import { FileEdit, Folders, Globe2, IdCard, MessagesSquare, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference, RoomMessage } from '@shared/rooms-api'
 import type { ChatBlock } from '../../agent/types'
@@ -68,7 +68,8 @@ export function RoomWorkbenchRightPanel({
   const tabs = panel.state
   const layout = useRoomWorkbenchLayout(tabs.expanded, room?.id ?? null)
   const open = (id: RightPanelContributionId) => {
-    if (id === ROOM_COLLABORATION_TAB && !collaboration) onCollaborationOpen()
+    // A private chat's collaboration tool is its Agent session, whatever page the drawer last showed.
+    if (id === ROOM_COLLABORATION_TAB && (!collaboration || room?.conversationKind === 'user_agent')) onCollaborationOpen()
     panel.openTab(id)
   }
   const close = (id: RightPanelContributionId) => {
@@ -80,8 +81,8 @@ export function RoomWorkbenchRightPanel({
     { id: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
     { id: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowserTool'), icon: Globe2 },
     { id: BUILTIN_RIGHT_PANEL_IDS.files, label: t('rightPanelFiles'), icon: Folders },
-    ...(room?.conversationKind === 'user_agent' ? [] : [{ id: ROOM_COLLABORATION_TAB,
-      label: t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' }), icon: Users }])
+    ...(room?.conversationKind === 'user_agent' ? [{ id: ROOM_COLLABORATION_TAB, label: t('roomsAgentSession'), icon: MessagesSquare }]
+      : [{ id: ROOM_COLLABORATION_TAB, label: t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' }), icon: Users }])
   ]
   const fileTitle = panel.contentTarget ? contentPreviewTitle ?? panel.contentTarget.reference.titleSnapshot
     : panel.fileTarget?.path.replaceAll('\\', '/').split('/').at(-1)
@@ -157,7 +158,7 @@ export function RoomWorkbenchRightPanel({
     <WorkbenchSideRailSurface role="navigation" aria-label={t('rightPanelTabs')} className="rooms-workbench-rail">
       {tools.map(({ id, label, icon: Icon }) => <button key={id} type="button"
         className={sideRailButtonClass(tabs.expanded && tabs.activeId === id)} aria-label={label} data-tooltip={label}
-        data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : id === CONVERSATION_INFO_TAB ? 'info' : undefined}
+        data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : id === CONVERSATION_INFO_TAB ? 'info' : id === ROOM_COLLABORATION_TAB ? 'session' : undefined}
         aria-pressed={tabs.expanded && tabs.activeId === id}
         onClick={() => tabs.expanded && tabs.activeId === id ? panel.collapse() : open(id)}>
         <Icon className="h-4 w-4" strokeWidth={1.75} />

@@ -19,10 +19,11 @@ const room = { id: 'agent-room', conversationKind: 'user_agent', privateWorkspac
   members: [{ participantAgentId: 'agent-a' }] } as Room
 let panel: RoomWorkbenchPanel
 let renderer: ReactTestRenderer
+const onCollaborationOpen = vi.fn()
 function Harness() {
   panel = useRoomWorkbenchPanel(room.id)
   return createElement(RoomWorkbenchRightPanel, { room, messages: [], panel,
-    collaboration: null, onCollaborationOpen: vi.fn(), contentPreview: createElement('div', { 'data-saved-preview': true }),
+    collaboration: null, onCollaborationOpen, contentPreview: createElement('div', { 'data-saved-preview': true }),
     contentPreviewTitle: 'report.md' })
 }
 const shell = () => renderer.root.findByType(WorkbenchRightSidebar)
@@ -31,18 +32,25 @@ beforeEach(() => { vi.stubGlobal('window', Object.assign(new EventTarget(), { in
 afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.unstubAllGlobals() })
 
 describe('private Agent Code sidebar', () => {
-  it('uses the shared Code shell and rail without a generic collaboration tool', async () => {
+  it('uses the shared Code shell and rail with an Agent session tool', async () => {
     await act(async () => { renderer = create(createElement(Harness)) })
     act(() => panel.openTab(BUILTIN_RIGHT_PANEL_IDS.browser))
     expect(shell().props.width).toBe(560)
     expect(shell().props.dividerProps['data-room-workbench-resize']).toBe(true)
     expect(rail().findAllByType('button').map((button) => button.props['aria-label']))
-      .toEqual(['rightPanelChanges', 'rightPanelBrowserTool', 'rightPanelFiles'])
+      .toEqual(['rightPanelChanges', 'rightPanelBrowserTool', 'rightPanelFiles', 'roomsAgentSession'])
     expect(rail().findByProps({ 'data-room-tool': 'browser' }).props.className).toBe(sideRailButtonClass(true))
     expect(renderer.root.findByType(RoomAgentBrowser).props.active).toBe(true)
     act(() => panel.collapse())
     expect(shell().props.visible).toBe(false)
     expect(renderer.root.findByType(RoomAgentBrowser).props.active).toBe(false)
+  })
+  it('opens the whole Agent session from the rail', async () => {
+    onCollaborationOpen.mockClear()
+    await act(async () => { renderer = create(createElement(Harness)) })
+    act(() => rail().findByProps({ 'data-room-tool': 'session' }).props.onClick())
+    expect(onCollaborationOpen).toHaveBeenCalledTimes(1)
+    expect(panel.state.expanded).toBe(true)
   })
   it('renders saved previews as titled file tabs and highlights the selected library item', async () => {
     await act(async () => { renderer = create(createElement(Harness)) })

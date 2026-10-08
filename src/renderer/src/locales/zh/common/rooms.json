@@ -449,5 +449,9 @@
   "roomsRunItem_review": "评审",
   "roomsRunItem_error": "错误",
   "sidebarToggle": "展开或收起侧栏",
-  "roomsExecutionIntent": "消息意图"
+  "roomsExecutionIntent": "消息意图",
+  "roomsAgentSessionEarlier": "加载更早的对话",
+  "roomsAgentSessionEmpty": "还没有对话记录。发一条消息后，这里会显示 Agent 的完整会话。",
+  "roomsAgentSessionNewContext": "新的上下文",
+  "roomsAgentSessionOpenRun": "单独查看"
 }

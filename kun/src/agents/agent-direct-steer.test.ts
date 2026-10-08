@@ -299,3 +299,26 @@ it('Runtime.start admits a second user message into a blocked live model turn', 
     await dispatcher.dispose()
   }
 }, 20_000)
+
+it('runs a message queued behind a stopped reply instead of leaving it parked', async () => {
+  const f = await fixture()
+  const first = await runningReply(f)
+  // An attachment keeps the second message on the queue path behind the running reply.
+  const attached = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'attach', body: 'Look at this', attachmentIds: ['att-1'] })
+  await f.tick(attached.requestId)
+  await f.tick(attached.requestId)
+  const queued = (await f.row(attached.requestId)).value
+  expect(queued.turnId).toBeTruthy()
+  await f.h.turns.interruptTurn({ threadId: first.request.threadId, turnId: first.turn.id })
+  expect((await f.tick(first.request.id)).status).toBe('cancelled')
+  const paused = await f.h.threads.getMetadata(queued.threadId)
+  expect(paused?.queueControl?.reason).toBe('user_stop')
+  expect(await f.h.turns.startNextQueuedTurn(queued.threadId)).toBeNull()
+  // The private conversation has no queue controls; the next tick resumes it.
+  await f.tick(attached.requestId)
+  await f.tick(attached.requestId)
+  const resumed = await f.h.threads.getMetadata(queued.threadId)
+  expect(resumed?.queueControl).toBeUndefined()
+  const started = await f.h.turns.startNextQueuedTurn(queued.threadId)
+  expect(started?.turnId ?? resumed?.turns.find((turn) => turn.id === queued.turnId)?.status === 'running').toBeTruthy()
+})

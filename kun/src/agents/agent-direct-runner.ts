@@ -1,4 +1,5 @@
 import { directCancellationTarget } from './agent-direct-cancellation.js'
+import { resumeStalledPrivateQueue } from './agent-direct-queue.js'
 import { freezeConversationBridge, acknowledgeConversationBridge } from './agent-conversation-history.js'
 import { AGENT_COMMITMENT_TOOLS, AGENT_ARTIFACT_TOOLS, AGENT_HISTORY_TOOLS } from '../contracts/agent-work-tools.js'
 import { settleRoomResultInbox } from '../rooms/room-result-inbox.js'
@@ -221,6 +222,7 @@ export class AgentDirectRunner {
       await this.save(row, { ...request, turnId: turn.id, privateRunId: run.id, status: 'running' }); return
     }
     await observeRecordedRoomTurn(this.deps, thread, turn)
+    await resumeStalledPrivateQueue(this.deps, thread, turn)
     const pendingInputs = this.deps.inputs.pending(thread.id)
     if (pendingInputs.length) await persistDirectChoiceMessages(this.deps.store, request, pendingInputs)
     const finished = !['queued', 'running'].includes(turn.status)

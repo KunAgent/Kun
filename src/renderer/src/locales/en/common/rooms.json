@@ -451,5 +451,9 @@
   "roomsRunItem_review": "Review",
   "roomsRunItem_error": "Error",
   "sidebarToggle": "Toggle sidebar",
-  "roomsExecutionIntent": "Message intent"
+  "roomsExecutionIntent": "Message intent",
+  "roomsAgentSessionEarlier": "Load earlier conversation",
+  "roomsAgentSessionEmpty": "No conversation yet. Send a message and the Agent's full session appears here.",
+  "roomsAgentSessionNewContext": "New context",
+  "roomsAgentSessionOpenRun": "Open alone"
 }
