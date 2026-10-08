@@ -57,3 +57,13 @@ it('replays the real unauthenticated ACP shape and enforces privacy at the actua
   expect(methods).not.toContain('authenticate')
   expect(methods).not.toContain('session/prompt')
 })
+
+it('opens a DeepSeek Harness session without a mode selector: approvals go through the client', async () => {
+  const { DEEPSEEK_HARNESS_DEFINITION } = await import('./deepseek-harness-definition.js')
+  const { applyAcpSessionPermission } = await import('../runtime/acp/acp-session-permissions.js')
+  // dsh-acp 0.2.0-rc.2 reports only model and reasoning options.
+  const session = { sessionId: 's', configOptions: [{ id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'deepseek-official',
+    options: [{ value: 'deepseek-official', name: 'DeepSeek' }] }] } as never
+  await expect(applyAcpSessionPermission({} as never, session, 'default', DEEPSEEK_HARNESS_DEFINITION.acpPermission)).resolves.toBeUndefined()
+  await expect(applyAcpSessionPermission({} as never, session, 'default', undefined)).rejects.toThrow("could not establish permission mode 'default'")
+})

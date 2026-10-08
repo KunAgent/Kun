@@ -41,6 +41,10 @@ export const DEEPSEEK_HARNESS_DEFINITION: HarnessDefinition = {
   },
   credentialModes: ['native-login'],
   permissionModes: [{ id: 'default', label: 'Ask', kunPermissionMode: 'ask-for-approval' }],
+  // dsh-acp 0.2.0-rc.2 publishes no mode selector: every tool approval goes
+  // to the client as session/request_permission (allow once / reject), so
+  // Kun's approval policy is the permission boundary.
+  acpPermission: { requireMode: false },
   modelSource: 'probe',
   staticModels: [],
   capabilities: DEEPSEEK_HARNESS_CAPABILITIES,
