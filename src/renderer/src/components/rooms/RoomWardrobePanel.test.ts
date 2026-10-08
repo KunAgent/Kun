@@ -38,7 +38,10 @@ describe('wardrobe right panel', () => {
   it('shows progress, today, the bottle to open, and locked items without wearing them', async () => {
     await act(async () => { renderer = create(createElement(RoomWardrobePanel)) })
     expect(text()).toContain('roomsWardrobeStatItems')
-    expect(renderer.root.findByProps({ 'data-wardrobe-drop': 'drop-code-t1' })).toBeDefined()
+    // The bottle waits on the shelf; one is not enough for a ten-pull.
+    expect(renderer.root.findByProps({ 'data-wardrobe-shelf': 1 })).toBeDefined()
+    expect(button({ 'data-shelf-open': 'one' }).props.disabled).toBe(false)
+    expect(button({ 'data-shelf-open': 'ten' }).props.disabled).toBe(true)
     act(() => button({ 'data-wardrobe-item': 'headwear/astronaut-helmet' }).props.onClick())
     expect(text()).toContain('roomsWardrobeExchangeHint')
     const trade = renderer.root.findAll((node) => node.type === 'button' && node.props.className === 'rooms-run-primary')[0]!
@@ -59,6 +62,9 @@ describe('wardrobe right panel', () => {
     await act(async () => { renderer = create(createElement(RoomWardrobePanel)) })
     act(() => button({ 'data-wardrobe-tab': 'log' }).props.onClick())
     expect(text()).toContain('Code · Fix login timeout')
+    // A bottle still on the shelf keeps its rarity secret.
+    expect(text()).toContain('roomsShelfOnShelf')
+    expect(text()).not.toContain('"Epic"')
     expect(text()).toContain('Little Kun')
     expect(text()).toContain('roomsWardrobeFeatherGain:5')
   })

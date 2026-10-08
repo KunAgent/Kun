@@ -29,6 +29,10 @@ export const KUN_WARDROBE_RULES = {
   /** Items the user does not own yet weigh this much more than duplicates. */
   unownedWeight: 3,
   duplicateFeathers: { common: 5, rare: 15, epic: 40, legendary: 100 } as Record<KunAvatarRarity, number>,
+  /** Unopened bottles the shelf holds; a full shelf pauses counting. */
+  shelfLimit: 99,
+  /** Bottles opened together in one ten-pull. */
+  tenPull: 10,
   exchangeFeathers: { common: 30, rare: 80, epic: 200, legendary: 500 } as Record<KunAvatarRarity, number>
 } as const
 
@@ -55,6 +59,10 @@ export const KunWardrobeDropSchema = z.object({
   runId: z.string().min(1).max(256),
   messageId: z.string().min(1).max(256).optional(),
   createdAt: z.string(),
+  /** Put on the shelf from the chat card; it no longer asks to be opened there. */
+  stashedAt: z.string().optional(),
+  /** Raised to rare by the ten-pull guarantee when it was opened. */
+  upgraded: z.boolean().optional(),
   openedAt: z.string().optional()
 }).strict()
 export type KunWardrobeDrop = z.infer<typeof KunWardrobeDropSchema>
@@ -133,7 +141,7 @@ export function kunWardrobePartKeys(parts: Partial<KunAvatarParts>): KunWardrobe
 export function kunWardrobeLitCards(wardrobe: KunWardrobe): KunAvatarPresetId[] {
   return KUN_AVATAR_PRESETS.filter((preset) => !kunWardrobeMissingParts(wardrobe, preset.parts).length).map((preset) => preset.id)
 }
-function relight(wardrobe: KunWardrobe): KunWardrobe {
+export function relightKunWardrobe(wardrobe: KunWardrobe): KunWardrobe {
   const lit = kunWardrobeLitCards(wardrobe)
   const roles = [...new Set([...wardrobe.roles, ...lit])]
   return roles.length === wardrobe.roles.length ? wardrobe : { ...wardrobe, roles }
@@ -147,7 +155,7 @@ export function grantKunWardrobeItems(wardrobe: KunWardrobe, keys: Iterable<stri
     if (!items[key]) items[key] = 1
     if (seen) seenKeys.add(key)
   }
-  const granted = relight({ ...wardrobe, items, seen: [...seenKeys] })
+  const granted = relightKunWardrobe({ ...wardrobe, items, seen: [...seenKeys] })
   if (seen) for (const role of granted.roles) if (!wardrobe.roles.includes(role)) seenKeys.add('card/' + role)
   return { ...granted, seen: [...seenKeys] }
 }
@@ -208,6 +216,7 @@ export function rollKunWardrobeDrop(wardrobe: KunWardrobe, context: KunWardrobeR
   const last = wardrobe.pity.lastCountedAt ? Date.parse(wardrobe.pity.lastCountedAt) : null
   if (last !== null && context.now.getTime() - last < rules.minIntervalMs) return { wardrobe, drop: null, counted: false }
   if (daily.drops >= rules.dailyCap) return { wardrobe: { ...wardrobe, daily }, drop: null, counted: false }
+  if (wardrobe.pending.length >= rules.shelfLimit) return { wardrobe: { ...wardrobe, daily }, drop: null, counted: false }
   const random = kunWardrobeRandom(wardrobe.rngState)
   const first = wardrobe.totalDrops === 0
   // The first counted turn of every local day always drops.
@@ -244,34 +253,6 @@ export function rollKunWardrobeDrop(wardrobe: KunWardrobe, context: KunWardrobeR
     pity: { ...counted.pity, sinceEpic: epic ? 0 : wardrobe.pity.sinceEpic + 1 } } }
 }
 
-/** Opening moves the bottle's content into the wardrobe; a whole card also fills in its missing items. */
-export function openKunWardrobeDrop(wardrobe: KunWardrobe, dropId: string, now = new Date()):
-  { wardrobe: KunWardrobe; drop: KunWardrobeDrop; granted: KunWardrobeItemKey[] } {
-  const drop = wardrobe.pending.find((entry) => entry.id === dropId)
-  if (!drop) throw new Error('wardrobe drop not found')
-  const items = { ...wardrobe.items }
-  const seen = new Set(wardrobe.seen)
-  const granted: KunWardrobeItemKey[] = []
-  let feathers = wardrobe.feathers, roles = wardrobe.roles
-  if (drop.kind === 'item' && drop.item) {
-    const key = kunWardrobeItemKey(drop.item.category, drop.item.id)
-    items[key] = (items[key] ?? 0) + 1
-    if (drop.duplicate) feathers += drop.feathers
-    else { granted.push(key); seen.delete(key) }
-  } else if (drop.kind === 'card' && drop.cardId) {
-    const preset = KUN_AVATAR_PRESETS.find((entry) => entry.id === drop.cardId)
-    for (const key of preset ? kunWardrobeMissingParts(wardrobe, preset.parts) : []) {
-      items[key] = 1; granted.push(key); seen.delete(key)
-    }
-    if (!roles.includes(drop.cardId)) roles = [...roles, drop.cardId]
-    seen.delete('card/' + drop.cardId)
-  }
-  const opened = { ...drop, openedAt: now.toISOString() }
-  const history = [opened, ...(wardrobe.history ?? []).filter((entry) => entry.id !== dropId)].slice(0, KUN_WARDROBE_HISTORY_LIMIT)
-  return { drop: opened, granted, wardrobe: relight({ ...wardrobe, items, feathers, roles, seen: [...seen], history,
-    pending: wardrobe.pending.filter((entry) => entry.id !== dropId) }) }
-}
-
 export function markKunWardrobeSeen(wardrobe: KunWardrobe, keys: readonly string[]): KunWardrobe {
   const seen = new Set(wardrobe.seen)
   for (const key of keys) seen.add(key)
@@ -284,7 +265,7 @@ export function exchangeKunWardrobeItem(wardrobe: KunWardrobe, key: KunWardrobeI
   if ((wardrobe.items[key] ?? 0) > 0) throw new Error('wardrobe item already owned')
   const price = KUN_WARDROBE_RULES.exchangeFeathers[kunWardrobeItemRarity(key)]
   if (wardrobe.feathers < price) throw new Error('not enough feathers')
-  return relight({ ...wardrobe, feathers: wardrobe.feathers - price, items: { ...wardrobe.items, [key]: 1 },
+  return relightKunWardrobe({ ...wardrobe, feathers: wardrobe.feathers - price, items: { ...wardrobe.items, [key]: 1 },
     seen: wardrobe.seen.filter((entry) => entry !== key) })
 }
 

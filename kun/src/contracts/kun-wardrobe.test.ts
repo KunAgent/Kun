@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   KUN_WARDROBE_RULES, createKunWardrobe, exchangeKunWardrobeItem, grantKunWardrobeItems, kunWardrobeItems,
   KUN_WARDROBE_HISTORY_LIMIT, KunWardrobeSchema, kunWardrobeAcceptsSource, kunWardrobeLitCards, kunWardrobeLocalDate,
-  kunWardrobeMissingParts, kunWardrobeProgress, openKunWardrobeDrop, rollKunWardrobeDrop, updateKunWardrobeSettings,
+  kunWardrobeMissingParts, kunWardrobeProgress, rollKunWardrobeDrop, updateKunWardrobeSettings,
   type KunWardrobe
 } from './kun-wardrobe.js'
 import { KUN_AVATAR_PRESETS } from './kun-avatar-presets.js'
+import { openKunWardrobeDrop } from './kun-wardrobe-open.js'
 
 const at = (minutes: number) => new Date(Date.UTC(2026, 9, 9, 10, minutes))
 const roll = (wardrobe: KunWardrobe, index: number, now = at(index * 2)) =>
@@ -81,10 +82,12 @@ describe('wardrobe drop rules', () => {
     expect(opened.granted).toEqual([key])
     expect(opened.wardrobe.seen).not.toContain(key)
     expect(opened.drop.openedAt).toBe(at(1).toISOString())
-    const duplicate = { ...opened.wardrobe, pending: [{ ...first.drop!, id: 'drop-dup', duplicate: true, feathers: 15 }] }
+    // Whether a bottle is a duplicate is judged when it is opened, not when it dropped.
+    const duplicate = { ...opened.wardrobe, pending: [{ ...first.drop!, id: 'drop-dup', duplicate: false, feathers: 0 }] }
     const paid = openKunWardrobeDrop(duplicate, 'drop-dup')
     expect(paid.wardrobe.items[key]).toBe(2)
-    expect(paid.wardrobe.feathers).toBe(15)
+    expect(paid.drop).toMatchObject({ duplicate: true, feathers: KUN_WARDROBE_RULES.duplicateFeathers[first.drop!.rarity] })
+    expect(paid.wardrobe.feathers).toBe(KUN_WARDROBE_RULES.duplicateFeathers[first.drop!.rarity])
     const card = { ...paid.wardrobe, pending: [{ ...first.drop!, id: 'drop-card', kind: 'card' as const, item: undefined, cardId: 'astronaut', rarity: 'legendary' as const }] }
     const lit = openKunWardrobeDrop(card, 'drop-card')
     expect(lit.wardrobe.roles).toContain('astronaut')

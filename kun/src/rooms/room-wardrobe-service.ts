@@ -11,16 +11,35 @@ import type { Room } from '../contracts/rooms.js'
 import { KUN_AVATAR_PRESETS } from '../contracts/kun-avatar-presets.js'
 import {
   KUN_WARDROBE_STARTER_PACK, KunWardrobeSchema, createKunWardrobe, exchangeKunWardrobeItem, grantKunWardrobeItems,
-  kunWardrobeAcceptsSource, kunWardrobeMissingParts, kunWardrobePartKeys, markKunWardrobeSeen, openKunWardrobeDrop,
-  rollKunWardrobeDrop, updateKunWardrobeSettings,
+  KUN_WARDROBE_RULES, kunWardrobeAcceptsSource, kunWardrobeLocalDate, kunWardrobeMissingParts, kunWardrobePartKeys,
+  markKunWardrobeSeen, rollKunWardrobeDrop, updateKunWardrobeSettings,
   type KunWardrobe, type KunWardrobeDetail, type KunWardrobeDrop, type KunWardrobeItemKey, type KunWardrobeSettings
 } from '../contracts/kun-wardrobe.js'
+import { openKunWardrobeDrops, stashKunWardrobeDrops } from '../contracts/kun-wardrobe-open.js'
 import { DEFAULT_AGENT_TEMPLATES, DIAGNOSTICIAN_AGENT_TEMPLATE } from '../agents/agent-defaults.js'
 import { RoomStoreConflictError, type RoomStore } from './room-store.js'
 
 const KIND = 'room_wardrobe', ID = 'self', DIRECTORY = 'agent-directory'
 /** Local debugging and smoke runs may treat everything as owned. */
 export const wardrobeUnlockAll = (): boolean => process.env.KUN_WARDROBE_UNLOCK_ALL === '1'
+/** Local debugging and smoke runs may start with bottles already on the shelf (at most 30). */
+export const wardrobeSeedBottles = (): number => {
+  const value = Number.parseInt(process.env.KUN_WARDROBE_SEED_BOTTLES ?? '', 10)
+  return Number.isFinite(value) ? Math.min(30, Math.max(0, value)) : 0
+}
+
+/** Debug only: rolls guaranteed bottles onto the shelf, then leaves today's counters untouched. */
+export function seedWardrobeBottles(wardrobe: KunWardrobe, count: number, now = new Date()): KunWardrobe {
+  let next = wardrobe
+  for (let index = 0; index < count; index++) {
+    const forced = { ...next, daily: { date: 'seed', drops: 0 }, pity: { ...next.pity, sinceDrop: KUN_WARDROBE_RULES.pity, lastCountedAt: null } }
+    const rolled = rollKunWardrobeDrop(forced, { runId: `seed-${index + 1}`, source: 'code', sourceLabel: 'Debug shelf',
+      now: new Date(now.getTime() - (count - index) * 60_000) })
+    next = rolled.wardrobe
+  }
+  return { ...next, pending: next.pending.map((drop) => ({ ...drop, stashedAt: now.toISOString() })),
+    daily: { date: kunWardrobeLocalDate(now), drops: 0 }, pity: { sinceDrop: 0, sinceEpic: 0, lastCountedAt: null } }
+}
 
 export class RoomWardrobeError extends Error {
   constructor(message: string, readonly keys: KunWardrobeItemKey[] = []) { super(message) }
@@ -54,7 +73,8 @@ export async function readRoomWardrobe(store: RoomStore): Promise<KunWardrobeDet
   for (let attempt = 0; attempt < 3; attempt++) {
     const row = await store.get(KIND, ID)
     if (row) return { wardrobe: KunWardrobeSchema.parse(row.value), revision: row.revision }
-    const wardrobe = grantKunWardrobeItems(createKunWardrobe(randomInt(0, 0x7fff_ffff)), await initialGrants(store))
+    const granted = grantKunWardrobeItems(createKunWardrobe(randomInt(0, 0x7fff_ffff)), await initialGrants(store))
+    const wardrobe = wardrobeSeedBottles() ? seedWardrobeBottles(granted, wardrobeSeedBottles()) : granted
     try {
       // Lazy creation is silent: nothing changed from the user's point of view.
       await store.commit({ requestId: 'room-wardrobe:create', checks: [{ kind: KIND, id: ID, expectedRevision: null }],
@@ -118,11 +138,16 @@ async function mutate(store: RoomStore, prefix: string, input: Mutation, fingerp
   return { ...await readRoomWardrobe(store), ...(applied.result as object ?? {}) }
 }
 
-export function openRoomWardrobeDrop(store: RoomStore, input: Mutation & { dropId: string }, fingerprint: string) {
+/** Opens one bottle or a ten-pull; the response lists every opened bottle in order. */
+export function openRoomWardrobeDrops(store: RoomStore, input: Mutation & { dropIds: string[] }, fingerprint: string) {
   return mutate(store, 'wardrobe-open:', input, fingerprint, (wardrobe) => {
-    const opened = openKunWardrobeDrop(wardrobe, input.dropId)
-    return { wardrobe: opened.wardrobe, result: { drop: opened.drop, granted: opened.granted } }
+    const opened = openKunWardrobeDrops(wardrobe, input.dropIds)
+    return { wardrobe: opened.wardrobe, result: { drops: opened.drops, drop: opened.drops[0], granted: opened.granted,
+      feathers: opened.feathers, guaranteed: opened.guaranteed } }
   })
+}
+export function stashRoomWardrobeDrops(store: RoomStore, input: Mutation & { dropIds: string[] }, fingerprint: string) {
+  return mutate(store, 'wardrobe-stash:', input, fingerprint, (wardrobe) => ({ wardrobe: stashKunWardrobeDrops(wardrobe, input.dropIds) }))
 }
 export function markRoomWardrobeSeen(store: RoomStore, input: Mutation & { keys: string[] }, fingerprint: string) {
   return mutate(store, 'wardrobe-seen:', input, fingerprint, (wardrobe) => ({ wardrobe: markKunWardrobeSeen(wardrobe, input.keys) }))

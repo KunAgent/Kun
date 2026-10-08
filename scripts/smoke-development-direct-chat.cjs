@@ -101,6 +101,8 @@ async function main() {
       home, appData, localAppData, temporaryDirectory
     }), { rendererPort, temporaryRoot })
     isolatedEnvironment.NODE_ENV = 'development'
+    // The wardrobe smoke needs a full shelf to exercise a real ten-pull.
+    if (process.argv.includes('--wardrobe-only')) isolatedEnvironment.KUN_WARDROBE_SEED_BOTTLES = '11'
     // Exclude ambient Git hooks, signing and global config from the disposable repository.
     const gitConfig = join(temporaryRoot, 'git-config')
     await writeFile(gitConfig, '')

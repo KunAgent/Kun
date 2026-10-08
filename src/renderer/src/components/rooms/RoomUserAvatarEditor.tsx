@@ -5,8 +5,7 @@ import type { KunWardrobeDrop } from '@shared/rooms-api'
 import { RoomModal } from './RoomModal'
 import { RoomAvatarComposer, editableKunAvatarParts } from './RoomAvatarComposer'
 import { RoomWardrobeProgress } from './RoomWardrobeProgress'
-import { RoomWardrobeReveal } from './RoomWardrobeReveal'
-import { markWardrobeSeen, openWardrobeDrop, useWardrobe, wardrobeGate, wearWardrobeDrop, type WardrobeOpenResult } from './room-wardrobe'
+import { markWardrobeSeen, useWardrobe, wardrobeGate, wearWardrobeDrop } from './room-wardrobe'
 import { roomsRequest, roomRequestId } from './rooms-client'
 import { cacheRoomAvatar } from './room-uploaded-avatar'
 import { acceptRoomUserProfile } from './room-user-profile'
@@ -31,7 +30,6 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
   const mounted = useRef(true), loadSerial = useRef(0)
   const pending = useRef<{ key: string; id: string } | null>(null)
   const wardrobe = useWardrobe()
-  const [reveal, setReveal] = useState<WardrobeOpenResult | null>(null), [opening, setOpening] = useState(false)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   useEffect(() => () => source?.close(), [source])
   // Keep preview and payload identical; the server performs its own bounded normalization.
@@ -77,15 +75,10 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
     finally { if (mounted.current) { setBusy(false); onBusy(false) } }
   }
   const select = (next: RoomAvatarReference | null) => { loadSerial.current++; setSource(null); setAvatar(next); setError('') }
-  const openBottle = async (drop: KunWardrobeDrop) => {
-    setOpening(true); setError('')
-    try { setReveal(await openWardrobeDrop(drop.id)) } catch (cause) { if (mounted.current) setError(String(cause)) }
-    finally { if (mounted.current) setOpening(false) }
-  }
   const wear = (drop: KunWardrobeDrop) => select({ kind: 'composed', version: 1,
     parts: wearWardrobeDrop(editableKunAvatarParts(avatar, 'user-preview', true), drop) })
   return <div className="rooms-user-avatar-form">
-    <RoomWardrobeProgress state={wardrobe} busy={busy || opening} onOpen={(drop) => void openBottle(drop)} />
+    <RoomWardrobeProgress state={wardrobe} busy={busy} onWear={wear} />
     <RoomAvatarComposer id="user-preview" label={t('roomsMyAvatar')} avatar={avatar} user disabled={busy} photo={!!source}
       wardrobe={wardrobeGate(wardrobe)} onSeen={(keys) => void markWardrobeSeen(keys).catch(() => undefined)}
       onChange={select} onUpload={() => file.current?.click()}
@@ -99,7 +92,6 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
     }} />
     <small>{t('roomsAvatarFileHint')}</small>
     {error ? <p role="alert" className="rooms-run-error">{error}</p> : null}
-    {reveal ? <RoomWardrobeReveal result={reveal} onClose={() => setReveal(null)} onWear={() => wear(reveal.drop)} /> : null}
     <div className="rooms-avatar-draft-actions"><button type="button" disabled={busy} onClick={onClose}>{t('roomsCancel')}</button>
       <button type="button" className="rooms-run-primary" disabled={busy} onClick={() => void save()}>{t(busy ? 'roomsLoading' : 'agentsSave')}</button></div>
   </div>

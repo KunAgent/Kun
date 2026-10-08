@@ -4,25 +4,24 @@ import { useTranslation } from 'react-i18next'
 import {
   KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITY_LABELS, KUN_WARDROBE_RULES, kunAvatarRarity,
   kunWardrobeItemRarity, kunWardrobeLocalDate, kunWardrobeProgress, normalizeKunAvatarParts, updateKunAvatarPart,
-  type KunAvatarAccessoryCategory, type KunAvatarParts, type KunWardrobeDrop, type KunWardrobeItemKey, type KunWardrobeSettings,
-  type RoomUserProfileDetail
+  type KunAvatarAccessoryCategory, type KunWardrobeItemKey, type KunWardrobeSettings, type RoomUserProfileDetail
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
-import { editableKunAvatarParts } from './RoomAvatarComposer'
 import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
-import { WardrobeBottleIcon, WardrobeCardBack } from './RoomWardrobeBottle'
-import { RoomWardrobeReveal } from './RoomWardrobeReveal'
+import { WardrobeCardBack } from './RoomWardrobeBottle'
+import { useWardrobeOpener } from './RoomWardrobeOpening'
+import { RoomWardrobeShelf } from './RoomWardrobeShelf'
 import {
   WardrobeCardsSection, WardrobeItemsSection, WardrobeLogSection, WardrobeSettingsSection,
   wardrobeItemCategory, wardrobeItemId, type WardrobeSelection
 } from './RoomWardrobePanelSections'
 import {
-  exchangeWardrobeItem, markWardrobeSeen, openWardrobeDrop, updateWardrobeSettings, useWardrobe, wardrobeSettings,
-  wearWardrobeDrop, type WardrobeOpenResult
+  exchangeWardrobeItem, markWardrobeSeen, updateWardrobeSettings, useWardrobe, wardrobeSettings
 } from './room-wardrobe'
+import { wearDropOnMe, wearOnMe } from './room-wardrobe-wear'
 import { acceptRoomUserProfile, useRoomUserProfile } from './room-user-profile'
-import { roomRequestId, roomsRequest } from './rooms-client'
+import { roomsRequest } from './rooms-client'
 import './room-avatar-composer.css'
 import './room-wardrobe.css'
 import './room-wardrobe-panel.css'
@@ -32,14 +31,6 @@ const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'items', label: 'roomsWardrobeTabItems' }, { id: 'cards', label: 'roomsWardrobeTabCards' },
   { id: 'log', label: 'roomsWardrobeTabLog' }, { id: 'settings', label: 'roomsWardrobeTabSettings' }
 ]
-
-/** Saves a new look as the user's own avatar, against the latest profile revision. */
-async function wearOnMe(change: (parts: KunAvatarParts) => KunAvatarParts): Promise<void> {
-  const current = await roomsRequest<RoomUserProfileDetail>('/v1/rooms/user-profile')
-  const parts = change(editableKunAvatarParts(current.profile.avatar, 'user', true))
-  acceptRoomUserProfile(await roomsRequest<RoomUserProfileDetail>('/v1/rooms/user-profile', 'PUT', {
-    avatar: { kind: 'composed', version: 1, parts }, expectedRevision: current.revision, clientRequestId: roomRequestId() }))
-}
 
 /** The wardrobe in the right panel: progress, today's bottles, the collection and drop settings. */
 export function RoomWardrobePanel({ active = true }: { active?: boolean }): ReactElement {
@@ -51,9 +42,9 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
   const [category, setCategory] = useState<KunAvatarAccessoryCategory | 'all'>('all')
   const [ownedOnly, setOwnedOnly] = useState(false)
   const [selection, setSelection] = useState<WardrobeSelection>(null)
-  const [reveal, setReveal] = useState<WardrobeOpenResult | null>(null)
   const [dressing, setDressing] = useState(false), [busy, setBusy] = useState(false)
   const [error, setError] = useState(''), [notice, setNotice] = useState('')
+  const opener = useWardrobeOpener({ onWear: wearDropOnMe, onDress: () => setDressing(true) })
   useEffect(() => {
     if (!active || profile !== null) return
     void roomsRequest<RoomUserProfileDetail>('/v1/rooms/user-profile').then(acceptRoomUserProfile).catch(() => undefined)
@@ -82,7 +73,6 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
   const today = wardrobe.daily.date === kunWardrobeLocalDate(new Date()) ? wardrobe.daily.drops : 0
   const status = !settings.drops ? t('roomsWardrobeDropsOff') : today >= KUN_WARDROBE_RULES.dailyCap ? t('roomsWardrobeDailyFull')
     : today > 0 ? t('roomsWardrobeFirstDone', { count: progress.untilPity }) : t('roomsWardrobeFirstPending')
-  const openBottle = (drop: KunWardrobeDrop) => run(async () => setReveal(await openWardrobeDrop(drop.id)))
   const saveSettings = (patch: Partial<KunWardrobeSettings>) => run(() => updateWardrobeSettings(patch))
   const sheet = (() => {
     if (selection?.kind === 'item') {
@@ -137,14 +127,7 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
           <span className="rooms-wardrobe-panel-dots" aria-hidden="true">
             {Array.from({ length: KUN_WARDROBE_RULES.dailyCap }, (_, index) => <i key={index} data-on={index < today || undefined} />)}</span></div>
         <p data-tone={today > 0 && settings.drops ? 'done' : 'next'}>{today > 0 && settings.drops ? <Check size={12} aria-hidden="true" /> : null}{status}</p>
-        {wardrobe.pending.length ? <div className="rooms-wardrobe-bottles" role="group" aria-label={t('roomsWardrobePending', { count: wardrobe.pending.length })}>
-          {wardrobe.pending.map((drop) => <button key={drop.id} type="button" className="rooms-wardrobe-bottle rooms-wardrobe-rarity" data-rarity={drop.rarity}
-            disabled={busy} onClick={() => void openBottle(drop)} data-wardrobe-drop={drop.id}>
-            <WardrobeBottleIcon size={28} />
-            <span className="rooms-wardrobe-bottle-text"><strong>{t('roomsWardrobeBottle')}</strong><small>{KUN_AVATAR_RARITY_LABELS[drop.rarity][language]}</small></span>
-            <span className="rooms-wardrobe-bottle-open">{t('roomsWardrobeOpen')}</span>
-          </button>)}
-        </div> : null}
+        <RoomWardrobeShelf wardrobe={wardrobe} busy={busy || opener.opening} onOpenOne={() => opener.openOne()} onOpenTen={opener.openTen} />
       </div>
     </section>
     <nav className="rooms-wardrobe-panel-tabs" aria-label={t('roomsWardrobeTitle')}>
@@ -167,8 +150,7 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
       <span><strong>{sheet.title}</strong><small>{sheet.text}</small></span>
       <button type="button" className="rooms-run-primary" disabled={!sheet.enabled || busy} onClick={() => void sheet.run()}>{sheet.action}</button>
     </div> : null}
-    {reveal ? <RoomWardrobeReveal result={reveal} onClose={() => setReveal(null)} onDress={() => setDressing(true)}
-      onWear={() => void run(() => wearOnMe((parts) => wearWardrobeDrop(parts, reveal.drop)), t('roomsWardrobeWorn'))} /> : null}
+    {opener.overlay}
     {dressing ? <RoomUserAvatarEditor onClose={() => setDressing(false)} /> : null}
   </div>
 }

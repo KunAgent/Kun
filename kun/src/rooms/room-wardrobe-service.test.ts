@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import {
-  assertRoomWardrobeAllows, countRoomWardrobeTurn, markRoomWardrobeSeen, openRoomWardrobeDrop, readRoomWardrobe, updateRoomWardrobeSettings
+  assertRoomWardrobeAllows, countRoomWardrobeTurn, markRoomWardrobeSeen, openRoomWardrobeDrops, readRoomWardrobe, updateRoomWardrobeSettings
 } from './room-wardrobe-service.js'
 import { roomFingerprint } from './room-service.js'
 
@@ -62,15 +62,15 @@ it('opens bottles idempotently with revision checks and tracks seen marks', asyn
   const store = await openStore()
   const drop = (await countRoomWardrobeTurn(store, { roomId: 'room-a', runId: 'run-1', finishedAt: new Date().toISOString() }))!
   const before = await readRoomWardrobe(store)
-  const input = { clientRequestId: 'open-1', expectedRevision: before.revision, dropId: drop.id }
-  const opened = await openRoomWardrobeDrop(store, input, roomFingerprint(input))
+  const input = { clientRequestId: 'open-1', expectedRevision: before.revision, dropIds: [drop.id] }
+  const opened = await openRoomWardrobeDrops(store, input, roomFingerprint(input))
   expect(opened.revision).toBe(before.revision + 1)
   expect(opened.wardrobe.pending).toEqual([])
   const key = `${drop.item!.category}/${drop.item!.id}`
   expect(opened.wardrobe.items[key]).toBeGreaterThanOrEqual(1)
   expect((opened as { drop?: { openedAt?: string } }).drop?.openedAt).toBeTruthy()
-  expect(await openRoomWardrobeDrop(store, input, roomFingerprint(input))).toEqual(opened)
-  await expect(openRoomWardrobeDrop(store, { ...input, clientRequestId: 'open-2' }, roomFingerprint({ ...input, clientRequestId: 'open-2' })))
+  expect(await openRoomWardrobeDrops(store, input, roomFingerprint(input))).toEqual(opened)
+  await expect(openRoomWardrobeDrops(store, { ...input, clientRequestId: 'open-2' }, roomFingerprint({ ...input, clientRequestId: 'open-2' })))
     .rejects.toThrow()
   const seenInput = { clientRequestId: 'seen-1', expectedRevision: opened.revision, keys: [key] }
   const seen = await markRoomWardrobeSeen(store, seenInput, roomFingerprint(seenInput))

@@ -2,21 +2,21 @@
 const assert = require('node:assert/strict')
 
 // Runs only inside smoke-development-direct-chat's isolated Electron + Kun
-// profile with the offline model fixture. The day's first finished Code task
-// drops a bottle; the right-rail wardrobe opens it; settings default on; the
-// studio hides unrevealed role cards; confirming a new Agent look applies it
-// to every icon at once.
+// profile with the offline model fixture and a debug shelf of 11 bottles. The
+// day's first finished Code task drops the 12th; it goes on the shelf; a real
+// ten-pull and a single opening play the stage; settings default on; the
+// studio hides unrevealed role cards; a confirmed Agent look applies at once.
 // node scripts/smoke-development-direct-chat.cjs --wardrobe-only --evidence .cache/kun-wardrobe
 async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagnostic, fixture, workspaceRoot, switchCode, openPrivate }) {
   assert.equal(fixture.snapshot().real, false, 'Wardrobe evidence must use the disposable offline fixture')
   await switchCode()
   await page.evaluate(async () => { const { default: i18n } = await import('/src/i18n.ts'); await i18n.changeLanguage('zh') })
   const before = await request(page, '/v1/rooms/wardrobe')
-  assert.equal(before.wardrobe.pending.length, 0, 'A fresh profile has no bottles')
+  assert.equal(before.wardrobe.pending.length, 11, 'The debug shelf starts with 11 bottles')
+  assert(before.wardrobe.pending.every((drop) => drop.stashedAt), 'Seeded bottles are already on the shelf')
   assert.deepEqual(before.wardrobe.settings, { drops: true, code: true, notice: 'card' }, 'Drops are on by default, Code tasks included')
-  assert.equal(before.wardrobe.items['headwear/astronaut-helmet'], undefined, 'A legendary helmet starts locked')
 
-  // 1. The day's first finished Code task always drops a bottle under the reply.
+  // 1. The day's first finished Code task drops a bottle; the card keeps its rarity secret.
   await poll(() => page.evaluate(async () => {
     const { useChatStore } = await import('/src/store/chat-store.ts')
     return useChatStore.getState().runtimeConnection === 'ready'
@@ -31,42 +31,76 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await page.locator('.ds-composer-textarea').waitFor()
   await page.locator('.ds-composer-textarea').fill('你好')
   await page.locator('.ds-composer-textarea').press('Enter')
-  await poll(async () => (await request(page, '/v1/rooms/wardrobe')).wardrobe.pending.length === 1, 90_000, 'Code task drops a bottle')
-  const dropped = (await request(page, '/v1/rooms/wardrobe')).wardrobe.pending[0]
+  await poll(async () => (await request(page, '/v1/rooms/wardrobe')).wardrobe.pending.length === 12, 90_000, 'Code task drops a bottle')
+  const dropped = (await request(page, '/v1/rooms/wardrobe')).wardrobe.pending.find((drop) => drop.threadId === threadId)
   assert.equal(dropped.source, 'code')
-  assert.equal(dropped.threadId, threadId)
-  assert.equal(dropped.sourceLabel, '修复登录超时')
   const card = page.locator(`.rooms-wardrobe-drop[data-wardrobe-drop="${dropped.id}"]`)
   await card.waitFor({ timeout: 30_000 })
-  await poll(async () => card.locator('.rooms-wardrobe-bottle-icon img').evaluate((image) => image.complete && image.naturalWidth > 0),
-    15_000, 'painted bottle art loads')
-  await page.locator('[data-sidebar-wardrobe="1"]').waitFor()
+  assert.equal(await card.getAttribute('data-rarity'), null, 'The chat card does not hint the rarity')
+  await page.locator('[data-sidebar-wardrobe="12"]').waitFor()
   await capture('wardrobe-code-drop')
 
-  // 2. The right rail has a wardrobe icon with the unopened count; it opens the panel.
+  // 2. "Put on shelf" keeps it unopened and the card goes away.
+  await card.locator('[data-drop-stash]').click()
+  await card.waitFor({ state: 'hidden' })
+  assert((await request(page, '/v1/rooms/wardrobe')).wardrobe.pending.find((drop) => drop.id === dropped.id).stashedAt, 'stashed')
+
+  // 3. The sidebar shelf opens the idle stage; the rail opens the panel with the shelf.
+  await page.locator('[data-sidebar-wardrobe="12"]').click()
+  const stage = page.locator('dialog.kun-gacha')
+  await stage.waitFor()
+  assert.equal(await stage.getAttribute('data-phase'), 'idle')
+  // The app zooms <body>; the stage must still cover the whole window.
+  const cover = await stage.evaluate((node) => { const rect = node.getBoundingClientRect(); return [rect.width, rect.height, innerWidth, innerHeight] })
+  assert(Math.abs(cover[0] - cover[2]) < 2 && Math.abs(cover[1] - cover[3]) < 2, `Stage covers the window: ${cover}`)
+  await capture('wardrobe-stage-idle')
+  await stage.locator('.kun-gacha-close').click()
+  await stage.waitFor({ state: 'detached' })
   const railEntry = page.locator('[data-rail-entry="builtin:right-panel-wardrobe"]')
-  await railEntry.locator('[data-rail-badge="1"]').waitFor()
+  await railEntry.locator('[data-rail-badge="12"]').waitFor()
   await railEntry.click()
   const panel = page.locator('[data-wardrobe-panel="ready"]')
   await panel.waitFor({ timeout: 30_000 })
-  assert.equal(await panel.locator('[data-wardrobe-today="1"]').count(), 1, 'Today shows one bottle')
-  await capture('wardrobe-panel-items')
+  await panel.locator('[data-wardrobe-shelf="12"]').waitFor()
+  await capture('wardrobe-panel-shelf')
 
-  // 3. Opening from the panel reveals the item and records it in the log.
-  await panel.locator(`[data-wardrobe-drop="${dropped.id}"]`).click()
-  const reveal = page.locator('[data-wardrobe-reveal]')
-  await reveal.waitFor()
-  await capture('wardrobe-panel-reveal')
-  const opened = await request(page, '/v1/rooms/wardrobe')
-  assert.equal(opened.wardrobe.pending.length, 0)
-  assert.equal(opened.wardrobe.history[0].id, dropped.id, 'The opened bottle is first in the log')
-  await reveal.getByRole('button', { name: '收进衣橱', exact: true }).click()
-  await reveal.waitFor({ state: 'hidden' })
-  await poll(async () => (await page.locator('[data-sidebar-wardrobe]').count()) === 0, 10_000, 'sidebar entry clears')
+  // 4. A real ten-pull: shake, light, burst, ten flipped cards and a summary.
+  const oldest = (await request(page, '/v1/rooms/wardrobe')).wardrobe.pending.slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, 10).map((drop) => drop.id)
+  await panel.locator('[data-shelf-open="ten"]').click()
+  await stage.waitFor()
+  await poll(async () => (await stage.getAttribute('data-phase')) === 'charge', 10_000, 'bottles light up')
+  await capture('wardrobe-ten-charge')
+  await poll(async () => (await stage.getAttribute('data-phase')) === 'reveal', 10_000, 'cards start flipping')
+  await page.waitForTimeout(700)
+  await capture('wardrobe-ten-reveal')
+  await poll(async () => (await stage.getAttribute('data-phase')) === 'done', 15_000, 'ten-pull finishes')
+  assert.equal(await stage.locator('[data-gacha-card]').count(), 10)
+  await stage.locator('[data-gacha-summary]').waitFor()
+  await poll(async () => stage.locator('[data-gacha-card] img').evaluateAll((images) => images.length >= 10 && images.every((image) => image.complete && image.naturalWidth > 0)),
+    15_000, 'result art loads')
+  await capture('wardrobe-ten-done')
+  const afterTen = await request(page, '/v1/rooms/wardrobe')
+  assert.equal(afterTen.wardrobe.pending.length, 2, 'Ten bottles left the shelf')
+  assert.deepEqual(afterTen.wardrobe.history.slice(0, 10).map((drop) => drop.id).sort(), oldest.slice().sort(), 'The oldest ten were opened')
+  assert(afterTen.wardrobe.history.slice(0, 10).some((drop) => drop.rarity !== 'common'), 'A ten-pull always holds a rare or better')
+  assert.equal(await stage.locator('[data-gacha-again]').isDisabled(), true, 'Two left is not enough for another ten-pull')
+  await stage.locator('[data-gacha-keep]').click()
+  await stage.waitFor({ state: 'detached' })
+
+  // 5. Opening one from the shelf plays the single stage.
+  await panel.locator('[data-shelf-open="one"]').click()
+  await stage.waitFor()
+  await poll(async () => (await stage.getAttribute('data-phase')) === 'done', 10_000, 'single bottle opens')
+  await poll(async () => stage.locator('[data-gacha-card] img').evaluateAll((images) => images.length >= 1 && images.every((image) => image.complete && image.naturalWidth > 0)),
+    15_000, 'single result art loads')
+  await capture('wardrobe-single-done')
+  await stage.locator('[data-gacha-keep]').click()
+  await stage.waitFor({ state: 'detached' })
+  assert.equal((await request(page, '/v1/rooms/wardrobe')).wardrobe.pending.length, 1)
   await panel.locator('[data-wardrobe-tab="log"]').click()
-  await panel.getByText('Code · 修复登录超时', { exact: false }).first().waitFor()
+  await panel.getByText('Debug shelf', { exact: false }).first().waitFor()
 
-  // 4. Settings: both switches start on; switching Code drops off persists.
+  // 6. Settings: both switches start on; switching Code drops off persists.
   await panel.locator('[data-wardrobe-tab="settings"]').click()
   const codeSwitch = panel.locator('[data-wardrobe-setting="code"]')
   assert.equal(await panel.locator('[data-wardrobe-setting="drops"]').getAttribute('aria-checked'), 'true')
@@ -77,7 +111,7 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await codeSwitch.click()
   await poll(async () => (await request(page, '/v1/rooms/wardrobe')).wardrobe.settings.code === true, 10_000, 'Code drops switched back on')
 
-  // 5. Role cards: unrevealed ones show the card back and no name.
+  // 7. Role cards: unrevealed ones show the card back and no name.
   await panel.locator('[data-wardrobe-tab="cards"]').click()
   const lit = (await request(page, '/v1/rooms/wardrobe')).wardrobe.roles.length
   assert.equal(await panel.locator('[data-wardrobe-card="unknown"]').count(), 30 - lit, 'Every unlit card is unknown')
@@ -86,7 +120,7 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
     15_000, 'card back art loads')
   await capture('wardrobe-panel-cards')
 
-  // 6. An Agent turn inside the 60-second window is remembered but not counted.
+  // 8. An Agent turn inside the 60-second window is remembered but not counted.
   await openPrivate('小 Kun')
   const roomId = (await request(page, '/v1/agents/chat-entry')).roomId
   const editor = page.locator('.rooms-composer .rooms-rich-input')
@@ -95,11 +129,11 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await poll(async () => (await request(page, `/v1/rooms/${roomId}/messages?limit=20`)).messages.length >= 2, 60_000, 'Agent reply arrives')
   await poll(async () => (await request(page, `/v1/rooms/${roomId}/direct`)).activity == null, 30_000, 'Agent turn settles')
   const quiet = await request(page, '/v1/rooms/wardrobe')
-  assert.equal(quiet.wardrobe.totalDrops, 1, 'No bottle inside the minimum interval')
+  assert.equal(quiet.wardrobe.totalDrops, 12, 'No bottle inside the minimum interval')
   await page.locator('[data-room-tool="wardrobe"]').click()
   await page.locator('[data-wardrobe-panel="ready"]').waitFor()
 
-  // 7. The Agent studio hides unrevealed cards and applies a confirmed look at once.
+  // 9. The Agent studio hides unrevealed cards and applies a confirmed look at once.
   const agentId = (await request(page, '/v1/agents?limit=20')).agents.find((agent) => agent.name === '小 Kun').id
   const avatarBefore = (await request(page, `/v1/agents/${agentId}`)).agent.avatar
   const row = page.locator('.sidebar-agent-chat-row').filter({ hasText: '小 Kun' }).first()
@@ -125,9 +159,10 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await poll(async () => (await rowHtml()) !== rowBefore, 15_000, 'sidebar conversation row follows the new avatar')
   await capture('wardrobe-agent-avatar-applied')
   const result = { native: true, offline: true, threadId, roomId, drop: dropped, assertions: [
-    'drops default on, Code tasks included; the first finished Code task of the day drops a bottle under its reply',
-    'the Code rail shows a wardrobe icon with the unopened count and opens the wardrobe panel',
-    'opening from the panel reveals the item and records it in the log with its Code task label',
+    'drops default on, Code tasks included; the first finished Code task of the day drops a bottle without hinting its rarity',
+    'put on shelf keeps it unopened; the sidebar shelf opens the idle stage; the rail badge counts the shelf',
+    'a real ten-pull opens the oldest ten through shake, light, burst and flip, with a summary and at least one rare',
+    'opening one from the shelf plays the single stage and records it in the log',
     'settings switches start on and persist changes',
     'unrevealed role cards show the card back without names, in the panel and in the studio',
     'an Agent turn inside the 60s interval does not drop; the Agent rail opens the same panel',

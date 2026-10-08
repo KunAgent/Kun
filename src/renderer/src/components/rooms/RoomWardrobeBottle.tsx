@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import { composedAvatarLayerUrl } from './room-avatar-compositor'
 
 export type WardrobeBottleState = 'sealed' | 'glowing' | 'open'
@@ -10,6 +10,12 @@ export function WardrobeBottleIcon({ size = 28, state = 'glowing' }: { size?: nu
   return <span className="rooms-wardrobe-bottle-icon" style={{ width: size, height: size }} aria-hidden="true">
     {url ? <img src={url} alt="" draggable={false} decoding="async" /> : null}
   </span>
+}
+
+/** The soft halo sprite that lights a bottle in its rarity color while it is being opened. */
+export function WardrobeBottleGlow({ className, style }: { className?: string; style?: CSSProperties }): ReactElement | null {
+  const url = composedAvatarLayerUrl('container/bottle-glow', 512)
+  return url ? <img className={className} style={style} src={url} alt="" aria-hidden="true" draggable={false} decoding="async" /> : null
 }
 
 /** The shared back of every role card that has not been revealed yet. */

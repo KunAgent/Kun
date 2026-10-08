@@ -118,15 +118,16 @@ export function WardrobeLogSection({ wardrobe, language }: { wardrobe: KunWardro
         const title = pending ? t('roomsWardrobeUnopened') : item?.label[language] ?? preset?.label[language] ?? ''
         const status = pending ? t('roomsWardrobePendingStatus') : drop.duplicate ? t('roomsWardrobeFeatherGain', { count: drop.feathers })
           : drop.kind === 'card' ? t('roomsWardrobeLit') : t('roomsWardrobeKept')
-        return <li key={drop.id} className="rooms-wardrobe-rarity" data-rarity={drop.rarity} data-pending={pending || undefined}>
+        return <li key={drop.id} className="rooms-wardrobe-rarity" data-rarity={pending ? undefined : drop.rarity} data-pending={pending || undefined}>
           <span className="rooms-wardrobe-panel-log-art">
             {pending ? <WardrobeBottleIcon size={32} state="sealed" />
               : drop.item ? <RoomAvatarItemArt category={drop.item.category} id={drop.item.id} size={32} />
                 : preset ? <RoomAvatar avatar={{ kind: 'composed', version: 1, parts: preset.parts }} id={`wardrobe-log-${drop.id}`} label="" size={32} user /> : null}
           </span>
           <span className="rooms-wardrobe-panel-log-text">
-            <span><strong>{title}</strong><em>{pending ? t('roomsWardrobeMaybe', { rarity: KUN_AVATAR_RARITY_LABELS[drop.rarity][language] })
-              : drop.kind === 'card' ? t('roomsWardrobeCardKind') : KUN_AVATAR_RARITY_LABELS[drop.rarity][language]}</em></span>
+            <span><strong>{title}</strong><em data-hidden={pending || undefined}>{pending ? t('roomsShelfOnShelf')
+              : drop.kind === 'card' ? t('roomsWardrobeCardKind') : KUN_AVATAR_RARITY_LABELS[drop.rarity][language]}</em>
+              {drop.upgraded ? <em data-tone="pity">{t('roomsGachaPityTag')}</em> : null}</span>
             <small>{source(drop)}</small>
           </span>
           <span className="rooms-wardrobe-panel-log-status" data-tone={pending ? 'wait' : drop.duplicate ? 'feather' : 'done'}>{status}</span>
@@ -167,6 +168,8 @@ export function WardrobeSettingsSection({ settings, busy, onChange }: {
         <li data-tone="rare">{t('roomsWardrobeRulePity', { count: rules.pity })}</li>
         <li>{t('roomsWardrobeRuleCap', { count: rules.dailyCap })}</li>
         <li>{t('roomsWardrobeRuleInterval', { seconds: rules.minIntervalMs / 1000 })}</li>
+        <li data-tone="legendary">{t('roomsWardrobeRuleTenPull', { count: rules.tenPull })}</li>
+        <li>{t('roomsWardrobeRuleShelf', { count: rules.shelfLimit })}</li>
         <li data-tone="epic">{t('roomsWardrobeRuleCard', { rate: Math.round(rules.cardRate * 100) })}</li>
         <li data-tone="legendary">{t('roomsWardrobeRuleFeathers', { common: rules.duplicateFeathers.common, rare: rules.duplicateFeathers.rare,
           epic: rules.duplicateFeathers.epic, legendary: rules.duplicateFeathers.legendary })}</li>

@@ -1,17 +1,21 @@
 import type { ReactElement } from 'react'
 import { Feather, Shirt, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { KUN_AVATAR_RARITY_LABELS, kunWardrobeProgress, type KunWardrobeDrop } from '@shared/rooms-api'
-import { WardrobeBottleIcon } from './RoomWardrobeBottle'
+import { kunWardrobeProgress, type KunWardrobeDrop } from '@shared/rooms-api'
+import { useWardrobeOpener } from './RoomWardrobeOpening'
+import { RoomWardrobeShelf } from './RoomWardrobeShelf'
 import type { WardrobeSnapshot } from './room-wardrobe'
 import './room-wardrobe.css'
 
-/** Collection progress above the dress-up studio, with every unopened bottle ready to pop. */
-export function RoomWardrobeProgress({ state, busy = false, onOpen }: {
-  state: WardrobeSnapshot; busy?: boolean; onOpen: (drop: KunWardrobeDrop) => void
+/**
+ * Collection progress above the dress-up studio, with the bottle shelf.
+ * Opening here puts a new item straight onto the look being edited.
+ */
+export function RoomWardrobeProgress({ state, busy = false, onWear }: {
+  state: WardrobeSnapshot; busy?: boolean; onWear: (drop: KunWardrobeDrop) => void
 }): ReactElement | null {
-  const { t, i18n } = useTranslation('common')
-  const language = i18n.language.startsWith('zh') ? 'zh' : 'en'
+  const { t } = useTranslation('common')
+  const opener = useWardrobeOpener({ onWear })
   if (!state.wardrobe) return null
   const progress = kunWardrobeProgress(state.wardrobe)
   return <section className="rooms-wardrobe-strip" aria-label={t('roomsWardrobeTitle')} data-pending={progress.pending || undefined}>
@@ -21,13 +25,7 @@ export function RoomWardrobeProgress({ state, busy = false, onOpen }: {
       <span><Feather size={14} aria-hidden="true" />{t('roomsWardrobeFeathers', { count: progress.feathers })}</span>
       <span className="rooms-wardrobe-stats-hint">{progress.dailyLeft === 0 ? t('roomsWardrobeDailyFull') : t('roomsWardrobePity', { count: progress.untilPity })}</span>
     </div>
-    {state.wardrobe.pending.length ? <div className="rooms-wardrobe-bottles" role="group" aria-label={t('roomsWardrobePending', { count: progress.pending })}>
-      {state.wardrobe.pending.map((drop) => <button key={drop.id} type="button" className="rooms-wardrobe-bottle rooms-wardrobe-rarity"
-        data-rarity={drop.rarity} disabled={busy} onClick={() => onOpen(drop)} data-wardrobe-drop={drop.id}>
-        <WardrobeBottleIcon size={30} />
-        <span className="rooms-wardrobe-bottle-text"><strong>{t('roomsWardrobeBottle')}</strong><small>{KUN_AVATAR_RARITY_LABELS[drop.rarity][language]}</small></span>
-        <span className="rooms-wardrobe-bottle-open">{t('roomsWardrobeOpen')}</span>
-      </button>)}
-    </div> : <p className="rooms-wardrobe-howto">{t('roomsWardrobeHowTo')}</p>}
+    <RoomWardrobeShelf wardrobe={state.wardrobe} compact busy={busy || opener.opening} onOpenOne={() => opener.openOne()} onOpenTen={opener.openTen} />
+    {opener.overlay}
   </section>
 }

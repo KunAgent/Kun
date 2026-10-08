@@ -10,7 +10,9 @@ import { subscribeRoomEvents } from './room-event-listeners'
 /** One wardrobe per user, shared by every editor, drop card and sidebar entry on screen. */
 export type WardrobeSnapshot = { wardrobe: KunWardrobe | null; revision: number | null; unlockAll: boolean; error: string; loaded: boolean }
 type Detail = KunWardrobeDetail & { unlockAll?: boolean }
-export type WardrobeOpenResult = Detail & { drop: KunWardrobeDrop; granted: KunWardrobeItemKey[] }
+export type WardrobeOpenResult = Detail & {
+  drops: KunWardrobeDrop[]; drop: KunWardrobeDrop; granted: KunWardrobeItemKey[]; feathers: number; guaranteed: boolean
+}
 
 let snapshot: WardrobeSnapshot = { wardrobe: null, revision: null, unlockAll: false, error: '', loaded: false }
 const listeners = new Set<() => void>()
@@ -49,11 +51,21 @@ export function useWardrobe(active = true): WardrobeSnapshot {
 export function wardrobeGate(state: WardrobeSnapshot): KunWardrobe | null {
   return state.unlockAll ? null : state.wardrobe
 }
-export async function openWardrobeDrop(dropId: string): Promise<WardrobeOpenResult> {
+/** Opens one bottle or a ten-pull; the bottles' contents were fixed when they dropped. */
+export async function openWardrobeDrops(dropIds: string[]): Promise<WardrobeOpenResult> {
   const result = await roomsRequest<WardrobeOpenResult>('/v1/rooms/wardrobe/open', 'POST',
-    { dropId, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision })
+    { dropIds, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision })
   acceptWardrobe(result)
   return result
+}
+/** Keeps bottles on the shelf; their chat cards stop asking to be opened. */
+export async function stashWardrobeDrops(dropIds: string[]): Promise<void> {
+  acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/stash', 'POST',
+    { dropIds, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
+}
+/** Bottles waiting on the shelf, oldest first. */
+export function wardrobeShelf(wardrobe: KunWardrobe | null): KunWardrobeDrop[] {
+  return wardrobe ? [...wardrobe.pending].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)) : []
 }
 export async function markWardrobeSeen(keys: string[]): Promise<void> {
   const unseen = keys.filter((key) => snapshot.wardrobe && !snapshot.wardrobe.seen.includes(key))
@@ -72,8 +84,8 @@ export async function updateWardrobeSettings(settings: Partial<KunWardrobeSettin
 export type WardrobeDropScope = { roomId?: string; threadId?: string }
 /** Bottles that washed up in this conversation (roomId) or this Code task (threadId). */
 export function pendingWardrobeDrops(wardrobe: KunWardrobe | null, scope: WardrobeDropScope): KunWardrobeDrop[] {
-  return wardrobe?.pending.filter((drop) => scope.roomId ? drop.roomId === scope.roomId
-    : Boolean(scope.threadId) && drop.threadId === scope.threadId) ?? []
+  return wardrobe?.pending.filter((drop) => !drop.stashedAt && (scope.roomId ? drop.roomId === scope.roomId
+    : Boolean(scope.threadId) && drop.threadId === scope.threadId)) ?? []
 }
 export const wardrobeSettings = (wardrobe: KunWardrobe | null): KunWardrobeSettings =>
   wardrobe?.settings ?? { drops: true, code: true, notice: 'card' }

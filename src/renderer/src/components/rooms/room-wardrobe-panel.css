@@ -83,6 +83,9 @@
 .rooms-wardrobe-panel-log-text strong { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .rooms-wardrobe-panel-log-text em { flex: none; padding: 0 7px; border-radius: 999px; color: var(--avatar-rarity);
   background: color-mix(in srgb, var(--avatar-rarity) 14%, transparent); font-size: 10.5px; font-style: normal; font-weight: 600; line-height: 18px; }
+.rooms-wardrobe-panel-log-text em[data-hidden] { color: var(--ds-text-muted); background: var(--ds-surface-subtle); }
+.rooms-wardrobe-panel-log-text em[data-tone='pity'] { color: #b45309; background: color-mix(in srgb, #f08a24 16%, transparent); }
+.rooms-wardrobe-panel-log > li[data-pending] .rooms-wardrobe-panel-log-art { background: var(--ds-surface-subtle); }
 .rooms-wardrobe-panel-log-text small { overflow: hidden; color: var(--ds-text-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .rooms-wardrobe-panel-log-status { flex: none; color: var(--ds-text-muted); font-size: 11.5px; font-weight: 600; }
 .rooms-wardrobe-panel-log-status[data-tone='wait'] { color: var(--ds-accent); }
