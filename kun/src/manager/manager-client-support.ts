@@ -57,7 +57,7 @@ export async function requestManagerJson(
   path: string,
   options: ManagerRequestOptions
 ): Promise<unknown> {
-  return performManagerRequest(manager, path, options, requireManagerJson)
+  return performManagerRequest(manager, path, options, requireManagerJson, true)
 }
 
 export async function requestManagerResponse(
@@ -65,14 +65,17 @@ export async function requestManagerResponse(
   path: string,
   options: ManagerRequestOptions
 ): Promise<Response> {
-  return performManagerRequest(manager, path, options, async (response) => response)
+  // The caller still reads this body, so its signal stays linked until the
+  // request timeout instead of being released when the headers arrive.
+  return performManagerRequest(manager, path, options, async (response) => response, false)
 }
 
 async function performManagerRequest<T>(
   manager: ServiceManagerConnection,
   path: string,
   options: ManagerRequestOptions,
-  consume: (response: Response) => Promise<T>
+  consume: (response: Response) => Promise<T>,
+  releaseOnSuccess: boolean
 ): Promise<T> {
   const fetchImpl = options.fetch ?? fetch
   const method = (options.method ?? 'GET').toUpperCase()
@@ -80,9 +83,12 @@ async function performManagerRequest<T>(
   // All attempts share the original budget. A cancelled request never retries.
   const request = openManagerRequestSignal(options.signal, options.timeoutMs ?? 5_000)
   try {
-    return await performManagerAttempts(manager, path, method, retrySafe, options, consume, request.signal, fetchImpl)
-  } finally {
+    const result = await performManagerAttempts(manager, path, method, retrySafe, options, consume, request.signal, fetchImpl)
+    if (releaseOnSuccess) request.dispose()
+    return result
+  } catch (error) {
     request.dispose()
+    throw error
   }
 }
 
