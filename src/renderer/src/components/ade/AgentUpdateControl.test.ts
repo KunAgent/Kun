@@ -106,3 +106,17 @@ it('re-checks and explains a changed installation instead of showing the bare mi
     expect(useHarnessUpdateStore.getState().entries['claude-code']?.info?.current.fingerprint).toBe('moved')
   } finally { delete (window as { kunGui?: unknown }).kunGui; await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
 })
+it('shows step progress and opens the installer log while an update runs', async () => {
+  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  const host = document.createElement('div'), root = createRoot(host)
+  const running: HarnessUpdateState = { ...initial, job: { id: 'run', action: 'update', status: 'running', startedAt: new Date().toISOString(),
+    output: 'Current version: 2.1.291\nUpdating to 2.1.295...\n' } }
+  f.request.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify(running) })
+  receiveHarnessUpdate(running)
+  try {
+    await act(async () => root.render(createElement(AgentUpdateControl, { row, settings: defaultKunHarnessSettings(), patch: vi.fn(), t: (key: string) => key })))
+    expect(host.querySelector('[data-agent-update-progress="running"]')).not.toBeNull()
+    expect(host.querySelector('[data-agent-update-step="install"]')?.getAttribute('data-state')).toBe('active')
+    expect(host.querySelector('details')?.open).toBe(true)
+  } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
+})

@@ -86,6 +86,14 @@
       "danger-full-access": "完全访问",
       "build": "构建"
     },
-    "usageReportedByAgent": "由 Agent 上报"
+    "usageReportedByAgent": "由 Agent 上报",
+    "progress": {
+      "wait": "等待此 Agent 完成当前轮次",
+      "install": "下载并安装 {{version}}",
+      "installLocal": "读取本机新版 {{version}}",
+      "verify": "验证新版本能正常启动",
+      "activate": "切换到新版本",
+      "elapsed": "已用 {{time}}"
+    }
   }
 }

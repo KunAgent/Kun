@@ -7,6 +7,7 @@ import { invalidateHarnessModels, loadHarnesses, loadHarnessModels } from '../..
 import { waitForAgentSettings } from './agent-enablement-settings'
 import { useChatStore } from '../../store/chat-store'
 import { AgentSetupHelpButton } from './AgentSetupHelpButton'
+import { AgentUpdateProgress } from './AgentUpdateProgress'
 import { settingsButtonClass } from '../settings-button'
 import { agentCommandPath, withAgentCommandPath } from '@shared/harness-provider-settings'
 
@@ -118,6 +119,8 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
           {state.current.path ? <p className="mt-0.5 break-all font-mono text-[11px] text-ds-faint">{state.current.path}</p> : null}
         </div>
       </div> : null}
+      {job && (updating || (pending && job.status === 'completed')) ? <AgentUpdateProgress job={job} version={state?.latestVersion}
+        activating={pending && Boolean(job.activationPath)} t={t} /> : null}
       {available ? <div className={`${rowClass} my-2 rounded-xl bg-accent-soft`} data-agent-update-available>
         <div className="min-w-0 text-[12px] text-ds-ink">
           {state?.latestVersion ? <p className="font-medium">{t('agentUpdate.latestVersion', { version: state.latestVersion, channel: state.channel })}</p> : null}
@@ -174,7 +177,7 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
           currentVersion: state?.current.version, currentPath: state?.current.path, targetVersion: job?.version ?? state?.latestVersion
         }} /> : null}
       </div> : null}
-      <details className="px-3 py-3 text-[11px] text-ds-muted"><summary className="cursor-pointer">{t('agentUpdate.details')}</summary>
+      <details key={updating ? 'running' : 'idle'} open={updating || undefined} className="px-3 py-3 text-[11px] text-ds-muted"><summary className="cursor-pointer">{t('agentUpdate.details')}</summary>
         <code className="mt-2 block break-all">{state?.current.path}</code>
         {job?.output ? <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap">{job.output}</pre> : null}
       </details>

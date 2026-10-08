@@ -86,6 +86,14 @@
       "danger-full-access": "Full access",
       "build": "Build"
     },
-    "usageReportedByAgent": "Reported by the Agent"
+    "usageReportedByAgent": "Reported by the Agent",
+    "progress": {
+      "wait": "Wait for this Agent's current turn",
+      "install": "Download and install {{version}}",
+      "installLocal": "Read the local version {{version}}",
+      "verify": "Verify the new version starts",
+      "activate": "Switch to the new version",
+      "elapsed": "{{time}} elapsed"
+    }
   }
 }
