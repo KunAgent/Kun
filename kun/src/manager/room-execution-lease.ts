@@ -1,11 +1,15 @@
 import type { RuntimeFlavor } from '../contracts/runtime-flavor.js'
 import { ManagerResourceLeaseClient, type ServiceManagerConnection } from './manager-client.js'
-import type { ManagerResourceFence } from './resource-lease-state.js'
+import { RESOURCE_LEASE_TICK_MS, RESOURCE_LEASE_TTL_MS, type ManagerResourceFence } from './resource-lease-state.js'
 import { RemoteRoomStore } from './remote-room-store.js'
 import { RoomCoordinatorUnavailableError } from '../rooms/room-store.js'
 
 const RESOURCE = 'rooms-coordinator'
-const READINESS_TIMEOUT_MS = 10_000
+/**
+ * A previous holder that died without releasing keeps the lease until its TTL expires, and the
+ * next acquisition attempt lands on a tick. Waiting less than that fails the first send after a restart.
+ */
+const READINESS_TIMEOUT_MS = RESOURCE_LEASE_TTL_MS + RESOURCE_LEASE_TICK_MS + 2_000
 
 /** One canonical room coordinator across production/development Runtime slots. */
 export class RoomExecutionLease {

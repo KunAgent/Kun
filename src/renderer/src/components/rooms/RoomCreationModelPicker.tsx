@@ -5,6 +5,7 @@ import { modelBindingKey } from './agent-client'
 import { roomRequestId, roomsRequest } from './rooms-client'
 import { useChatStore } from '../../store/chat-store'
 import './room-creation-model-picker.css'
+import { isRoomCoordinatorUnavailable } from './room-coordinator-error'
 import { clearCreationModelRequest, readCreationModelRequest, saveCreationModelRequest, type CreationModelRequest } from './creation-model-request'
 
 type ModelRef = NonNullable<AgentIdentity['modelRef']>
@@ -137,7 +138,7 @@ export function RoomCreationModelPicker({ onBack, onClose, onOpen, onBusyChange,
       <small>{t(eligible ? 'directConfigured' : 'directUnavailable')}</small>
     </div> : null}
     <p className="rooms-run-note">{t('directCreationModelVerification')}</p>
-    {error ? <div role="alert"><p>{/room coordinator (lease|ownership)|Conversation service is starting or reconnecting/i.test(error) ? t('directCoordinatorUnavailable') : error}</p></div> : null}
+    {error ? <div role="alert"><p>{isRoomCoordinatorUnavailable(error) ? t('directCoordinatorUnavailable') : error}</p></div> : null}
     {busy ? <p role="status">{t('directPreparingChat')}</p> : null}
     <div className="direct-creation-model-tools">
       <button type="button" disabled={busy || loading} onClick={() => void refresh()}>{t('directCreationModelsRefresh')}</button>

@@ -3,6 +3,7 @@ import { RoomVoiceButton, RoomVoiceStatus, useRoomVoiceInput } from './RoomVoice
 import { RoomPermissionPicker } from './RoomPermissionPicker'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { X } from 'lucide-react'
 import type { Room, RoomTask, SendRoomMessage, RoomContentReference } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
@@ -27,6 +28,7 @@ import { RoomPollCreator } from './RoomPollCreator'
 import './rooms-interactions.css'
 import './rooms-composer.css'
 import { roomComposerFileReference, type RoomFileReferenceDetail } from './room-composer-file-reference'
+import { isRoomCoordinatorUnavailable } from './room-coordinator-error'
 
 type Draft = {
   executionAgentId?: string
@@ -125,6 +127,9 @@ function RoomComposerEditor({
   draftRef.current = draft
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // A failed send stays visible until the user changes what would be re-sent or dismisses it.
+  const draftContentKey = JSON.stringify([draft.body, draft.attachments.map(({ id }) => id), draft.references])
+  useEffect(() => setError(''), [draftContentKey])
   const [pollOpen, setPollOpen] = useState(false)
   const editorRef = useRef<RoomRichInputHandle>(null)
   const voice = useRoomVoiceInput(editorRef, busy || Boolean(room.archivedAt))
@@ -469,8 +474,12 @@ function RoomComposerEditor({
       ) : null}
       {room.archivedAt ? <p className="rooms-run-note">{t('roomsArchiveHint')}</p> : null}
       {error ? (
-        <p role="alert" className="mt-2 text-sm text-red-500">
-          {error} {t('roomsSendRetry')}
+        <p role="alert" className="mt-2 flex items-start gap-1.5 text-sm text-red-500">
+          <span className="min-w-0 flex-1">
+            {isRoomCoordinatorUnavailable(error) ? t('directCoordinatorUnavailable') : error} {t('roomsSendRetry')}
+          </span>
+          <button type="button" className="rooms-notice-dismiss" aria-label={t('roomsDismissNotice')}
+            title={t('roomsDismissNotice')} onClick={() => setError('')}><X size={13} aria-hidden="true" /></button>
         </p>
       ) : null}
     </form>

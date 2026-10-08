@@ -8,6 +8,7 @@ import './room-new-chat-actions.css'
 import { RoomAvatar } from './RoomAvatar'
 import { agentMember, useAgentCatalog, useAgentResource } from './agent-client'
 import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
+import { isRoomCoordinatorUnavailable } from './room-coordinator-error'
 import { RoomNewChatCodingAgents } from './RoomNewChatCodingAgents'
 import { codingRouteKey, ensureCodingAgent, groupLeadId, type CodingAgentEntry, type CodingAgentRoute } from './coding-agent-client'
 
@@ -99,7 +100,7 @@ export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus
       })}>{busy ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> : <Users size={18} aria-hidden="true" />}<span>{t('directStartGroup', { count: selected.length })}</span></button> : null}
       {error || catalog.error || templates.error ? <div className="direct-new-chat-error" role="alert">
         <AlertCircle size={18} aria-hidden="true" /><div>
-          <p>{/room coordinator (lease|ownership)|Conversation service is starting or reconnecting/i.test(error || catalog.error || templates.error)
+          <p>{isRoomCoordinatorUnavailable(error || catalog.error || templates.error)
             ? t('directCoordinatorUnavailable') : error || catalog.error || templates.error}</p>
           <button type="button" disabled={busy} onClick={() => {
             if (error) retry.current?.()

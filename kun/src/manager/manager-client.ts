@@ -31,7 +31,7 @@ import {
 } from './manager-discovery.js'
 import { sameCanonicalPath } from './canonical-path.js'
 import { withRuntimeDataDirAncillaryWriter } from '../server/runtime-data-dir-lease.js'
-import { ManagerResourceLeaseSchema, type ManagerResourceFence } from './resource-lease-state.js'
+import { ManagerResourceLeaseSchema, RESOURCE_LEASE_TICK_MS, type ManagerResourceFence } from './resource-lease-state.js'
 import type { ManagerRequestOptions } from './manager-client-support.js'
 import { terminateSpawnedRuntime } from '../cli/shared-runtime-launch.js'
 import {
@@ -222,7 +222,7 @@ export class ManagerResourceLeaseClient {
 
   private scheduleTick(resource: string, state: ResourceLeaseState): void {
     if (state.timer) clearTimeout(state.timer)
-    state.timer = setTimeout(() => void this.tick(resource), 3_000)
+    state.timer = setTimeout(() => void this.tick(resource), RESOURCE_LEASE_TICK_MS)
     state.timer.unref?.()
   }
 
