@@ -1,4 +1,4 @@
-import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -193,6 +193,28 @@ describe('ModelRequestTraceStore', () => {
     const root = join(dataDir, 'observability', 'trajectory', 'records')
     const sizes = await Promise.all((await readdir(root)).map(async (name) => (await stat(join(root, name))).size))
     expect(sizes.reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(maxTotalBytes)
+  })
+
+  it('bounds legacy and current trace files on the startup pass without reading stale files', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-model-traces-'))
+    cleanup.push(dataDir)
+    const now = Date.parse('2026-03-01T00:00:00.000Z')
+    const legacy = join(dataDir, 'observability', 'model-http')
+    const current = join(dataDir, 'observability', 'trajectory', 'records')
+    await mkdir(legacy, { recursive: true })
+    await mkdir(current, { recursive: true })
+    const line = (id: string) => `${JSON.stringify(record(id, '2026-02-28T00:00:00.000Z'))}\n`
+    const big = join(legacy, `${Buffer.from('thread-1').toString('base64url')}.jsonl`)
+    await writeFile(big, Array.from({ length: 50 }, (_, index) => line(`trace-${index}`)).join(''))
+    const stale = join(current, `${Buffer.from('thread-2').toString('base64url')}.jsonl`)
+    await writeFile(stale, line('old'))
+    await utimes(stale, new Date('2025-12-01T00:00:00.000Z'), new Date('2025-12-01T00:00:00.000Z'))
+    const maxBytesPerThread = Buffer.byteLength(line('trace-49')) * 3
+    const store = new ModelRequestTraceStore(dataDir, { maxBytesPerThread, now: () => now, startupMaintenanceDelayMs: 60_000 })
+    await store.runMaintenance()
+    expect((await stat(big)).size).toBeLessThanOrEqual(maxBytesPerThread)
+    expect((await store.list('thread-1')).records.map((item) => item.id)).toEqual(['trace-49', 'trace-48', 'trace-47'])
+    await expect(stat(stale)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('evicts idle thread tails from an LRU-bounded in-memory cache', async () => {
