@@ -4,7 +4,7 @@ import { unsupported } from '../../contracts/harness-capabilities.js'
 import { ACP_DEFAULT_CAPABILITIES } from './capabilities.js'
 import type { AgentProviderModule, ProviderGatewayConfigInput } from './provider-module.js'
 import { opencodeConfig } from '../gateway-config-templates.js'
-import { explainOpenCodeServiceFailure, openCodeIsolationEnv } from './opencode-service-failure.js'
+import { explainOpenCodeDatabaseFailure, explainOpenCodeServiceFailure, openCodeIsolationEnv } from './opencode-service-failure.js'
 import { authJsonConfigured, openCodeConfigFiles, xdgDataHome } from './support.js'
 
 export const OPENCODE_DEFINITION: HarnessDefinition = {
@@ -80,7 +80,8 @@ export const OPENCODE_MODULE: AgentProviderModule = {
   // has session_v2 but no session table). Only the user may move that file.
   explainFailure: (message, _authRequired, context) => /has no session table/i.test(message)
     ? { detail: 'OpenCode cannot open its database: opencode.db in its data directory (usually ~/.local/share/opencode) was created by OpenCode2 without the session table OpenCode needs. Back it up, move it out of that directory together with its -wal and -shm files, then check again; OpenCode recreates it and OpenCode2 can use the new file.', authRequired: false }
-    : explainOpenCodeServiceFailure({ displayName: 'OpenCode', command: 'opencode', apps: ['opencode'] }, message, context)
+    : explainOpenCodeDatabaseFailure({ displayName: 'OpenCode', command: 'opencode', apps: ['opencode'], other: 'OpenCode2' }, message, context?.env) ??
+      explainOpenCodeServiceFailure({ displayName: 'OpenCode', command: 'opencode', apps: ['opencode'] }, message, context)
 }
 
 /**

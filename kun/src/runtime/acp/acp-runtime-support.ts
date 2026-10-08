@@ -94,6 +94,19 @@ export function mapAcpFailure(
   startup: boolean,
   harnessId?: string
 ): { code: string; message: string } {
+  const mapped = mapAcpFailureCode(error, startup, harnessId)
+  if (mapped.code === 'harness_not_ready' && isAcpAuthenticationRequired(error)) return mapped
+  // The engine may know what a crash or opaque error really means (OpenCode's
+  // shared database, hidden service failures); keep the stable code.
+  const explained = providerModule(harnessId)?.explainFailure?.(mapped.message, false)
+  return explained && !explained.authRequired ? { code: mapped.code, message: explained.detail } : mapped
+}
+
+function mapAcpFailureCode(
+  error: unknown,
+  startup: boolean,
+  harnessId?: string
+): { code: string; message: string } {
   if (error instanceof AcpError) {
     if (isAcpAuthenticationRequired(error)) {
       return {

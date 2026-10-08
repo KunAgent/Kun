@@ -2,7 +2,7 @@ import type { HarnessDefinition } from '../../contracts/harness.js'
 import { ACP_DEFAULT_CAPABILITIES } from './capabilities.js'
 import type { AgentProviderModule } from './provider-module.js'
 import { openCode2CredentialEvidence } from '../opencode2-credentials.js'
-import { explainOpenCodeServiceFailure, openCodeIsolationEnv } from './opencode-service-failure.js'
+import { explainOpenCodeDatabaseFailure, explainOpenCodeServiceFailure, openCodeIsolationEnv } from './opencode-service-failure.js'
 import { openCodeConfigFiles } from './support.js'
 
 export const OPENCODE2_DEFINITION: HarnessDefinition = {
@@ -43,5 +43,6 @@ export const OPENCODE2_MODULE: AgentProviderModule = {
   acp: { isolationEnv: openCodeIsolationEnv },
   // V2 shares OpenCode's data directory, so its log lives under opencode/log.
   explainFailure: (message, _authRequired, context) =>
+    explainOpenCodeDatabaseFailure({ displayName: 'OpenCode2', command: 'opencode2', apps: ['opencode'], other: 'OpenCode' }, message, context?.env) ??
     explainOpenCodeServiceFailure({ displayName: 'OpenCode2', command: 'opencode2', apps: ['opencode'] }, message, context)
 }

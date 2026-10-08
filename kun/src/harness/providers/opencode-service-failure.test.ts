@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  explainOpenCodeServiceFailure, openCodeIsolationEnv, openCodeLogEvidence, summarizeOpenCodeLogLine
+  explainOpenCodeDatabaseFailure, explainOpenCodeServiceFailure, openCodeIsolationEnv, openCodeLogEvidence, summarizeOpenCodeLogLine
 } from './opencode-service-failure.js'
+import { mapAcpFailure } from '../../runtime/acp/acp-runtime-support.js'
+import { AcpError } from '../../runtime/acp/acp-schema.js'
 
 const dirs: string[] = []
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }) })
@@ -75,5 +77,31 @@ describe('OpenCode clean-configuration retry', () => {
       .toContain(`It fails even with a clean configuration: check its network or proxy access (it loads its model catalog online), its database under ${join(data, 'opencode')}, or reinstall it.`)
     expect(explainOpenCodeServiceFailure(engine, 'session/new failed: Internal error: Internal service failure', context)?.detail)
       .not.toContain('clean configuration')
+  })
+})
+
+describe('OpenCode shared database', () => {
+  const crash = 'ACP agent process exited (code 1, signal null): Error: Unexpected error\n\nno such column: project_id'
+  it('explains a schema OpenCode2 changed instead of a bare SQLite error', () => {
+    const env = { HOME: '/home/user' }
+    expect(explainOpenCodeDatabaseFailure({ displayName: 'OpenCode', command: 'opencode', apps: ['opencode'], other: 'OpenCode2' }, crash, env)).toEqual({
+      authRequired: false,
+      detail: 'OpenCode cannot use its database /home/user/.local/share/opencode/opencode.db (no such column: project_id). ' +
+        'OpenCode2 shares this file and changed tables OpenCode still reads. Back up the file, then move it out of that directory together with ' +
+        'its -wal and -shm files; OpenCode creates a new one (old sessions stay in the backup). Running `opencode` once in a terminal shows the same error.' })
+    expect(explainOpenCodeDatabaseFailure({ displayName: 'OpenCode2', command: 'opencode2', apps: ['opencode'], other: 'OpenCode' },
+      'no such table: session_v2', { HOME: '/h', OPENCODE_DB: '/data/oc.db' })?.detail).toMatch(/^OpenCode2 cannot use its database \/data\/oc\.db \(no such table: session_v2\)/)
+    expect(explainOpenCodeDatabaseFailure({ displayName: 'OpenCode', command: 'opencode', apps: ['opencode'], other: 'OpenCode2' }, 'network down')).toBeUndefined()
+  })
+  it('turns a crashed OpenCode turn into that explanation and keeps the error code', () => {
+    const mapped = mapAcpFailure(new AcpError('harness_crashed', crash), false, 'opencode')
+    expect(mapped.code).toBe('harness_crashed')
+    expect(mapped.message).toContain('OpenCode cannot use its database')
+    expect(mapAcpFailure(new AcpError('harness_crashed', crash), false, 'droid')).toMatchObject({ code: 'harness_crashed', message: expect.stringContaining('no such column') })
+  })
+  it('recognises OpenCode 1.18\'s wording of a hidden service failure', () => {
+    const engine = { displayName: 'OpenCode', command: 'opencode', apps: ['opencode'] as const }
+    expect(explainOpenCodeServiceFailure(engine, 'session/new failed: Internal error: OpenCode service failure (data: {"service":"directory"})', undefined)?.detail)
+      .toMatch(/^OpenCode failed inside its own service and hid the cause \("OpenCode service failure"\)\./)
   })
 })

@@ -13,7 +13,10 @@ import { xdgDataHome } from './support.js'
 
 export type OpenCodeEngine = { displayName: string; command: string; apps: readonly string[] }
 
-const SERVICE_FAILURE = /internal service failure/i
+// OpenCode2 says "Internal service failure"; OpenCode 1.18 says "OpenCode service failure".
+const SERVICE_FAILURE = /(?:internal|opencode) service failure/i
+// SQLite errors from a database whose schema another OpenCode version changed.
+const SCHEMA_FAILURE = /no such (?:column|table): [\w.]+|has no session table/i
 const TAIL_BYTES = 256 * 1024
 const MAX_LINES = 4
 const CLIP = 160
@@ -128,7 +131,7 @@ export function explainOpenCodeServiceFailure(
       ? `It fails even with a clean configuration: check its network or proxy access (it loads its model catalog online), its database under ${xdgDataHome(env, env.HOME || env.USERPROFILE || homedir())}/${engine.apps[0]}, or reinstall it.`
       : undefined
   const detail = [
-    `${engine.displayName} failed inside its own service during ${context?.stage ?? 'session/new'} and hid the cause ("Internal service failure").`,
+    `${engine.displayName} failed inside its own service${context ? ` during ${context.stage}` : ''} and hid the cause ("${message.match(SERVICE_FAILURE)?.[0] ?? 'service failure'}").`,
     verdict,
     evidence
       ? `Its log says: ${evidence.lines.join('; ')} (${evidence.file}).`
@@ -136,4 +139,27 @@ export function explainOpenCodeServiceFailure(
     `Run \`${engine.command}\` in a terminal inside any project to see the real error, then check again.`
   ].filter((part): part is string => Boolean(part)).join(' ')
   return { detail, authRequired: false }
+}
+
+/**
+ * OpenCode and OpenCode2 share `opencode.db` in OpenCode's data directory.
+ * Each migrates it for itself: OpenCode2's newer migrations rebuild tables
+ * OpenCode 1 still reads (for example `workspace` without `project_id`), and
+ * a file OpenCode2 created first has no `session` table. Only the user can
+ * decide what happens to that file, so this explains and stops there.
+ */
+export function explainOpenCodeDatabaseFailure(
+  engine: OpenCodeEngine & { other: string },
+  message: string,
+  env: ProviderEnv = process.env
+): ProviderFailure | undefined {
+  const schema = message.match(SCHEMA_FAILURE)?.[0]
+  if (!schema) return undefined
+  const home = env.HOME || env.USERPROFILE || homedir()
+  const database = env.OPENCODE_DB && env.OPENCODE_DB !== ':memory:'
+    ? env.OPENCODE_DB : join(xdgDataHome(env, home), 'opencode', 'opencode.db')
+  return { authRequired: false, detail: `${engine.displayName} cannot use its database ${database} (${schema}). ` +
+    `${engine.other} shares this file and changed tables ${engine.displayName} still reads. ` +
+    `Back up the file, then move it out of that directory together with its -wal and -shm files; ${engine.displayName} creates a new one (old sessions stay in the backup). ` +
+    `Running \`${engine.command}\` once in a terminal shows the same error.` }
 }

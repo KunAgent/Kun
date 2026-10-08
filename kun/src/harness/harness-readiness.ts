@@ -21,6 +21,7 @@ import { harnessProfile, harnessProfileKey, nativeHasKey,
 import { readinessProbeEnvironment } from './harness-readiness-env.js'
 import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { spawnCaptured } from './harness-detector.js'
+import { AGY_MODELS_TIMEOUT_MS, agyModelsHandshake } from './antigravity-readiness-probe.js'
 import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
 import { HarnessReadinessProofFile, type PersistedReadinessProof } from './harness-readiness-store.js'
 
@@ -566,11 +567,9 @@ export class HarnessReadinessService {
       }
       case 'cursor-sdk': return probeCursorSdkReadiness(signal)
       case 'antigravity-cli': {
-        const result = await spawnCaptured(command, ['models'], { timeoutMs: 10_000, signal,
+        const result = await spawnCaptured(command, ['models'], { timeoutMs: AGY_MODELS_TIMEOUT_MS, signal,
           env: { ...nativeAgentNetworkEnv(definition, process.env, env), ...env } })
-        const models = [...new Set(result.stdout.match(/\b[a-z][a-z0-9]*(?:[-.][a-z0-9]+)+\b/gi) ?? [])]
-        return { ok: !result.timedOut && result.exitCode === 0 && models.length > 0, supported: true, models,
-          protocol: 'antigravity-models', detail: 'Local agy models check; no model prompt sent' }
+        return agyModelsHandshake(result)
       }
       default: return { ok: false, supported: false, detail: 'No supported non-inference readiness check for this transport' }
     }
