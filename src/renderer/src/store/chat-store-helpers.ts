@@ -86,6 +86,8 @@ export type ThreadComposerSelection = {
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
   source?: 'user' | 'default'
+  /** Reasoning level picked for this thread's model; an external Agent restores it with the model. */
+  reasoningEffort?: ModelReasoningEffort
 }
 
 export const CLAW_COMPOSER_MODEL_IDS = [...CLAW_MODEL_IDS]
@@ -303,12 +305,18 @@ export function rememberThreadComposerSelection(
   model: string,
   providerId = '',
   source: NonNullable<ThreadComposerSelection['source']> = 'user',
-  harness?: { harnessId?: string; credentialMode?: string; gatewayBinding?: HarnessGatewayBinding }
+  harness?: { harnessId?: string; credentialMode?: string; gatewayBinding?: HarnessGatewayBinding },
+  reasoningEffort?: ModelReasoningEffort
 ): void {
   const thread = threadId.trim()
   const nextModel = model.trim()
   if (!thread || (!nextModel && !harness?.gatewayBinding)) return
   const map = loadThreadComposerSelectionMap()
+  const previous = map[thread]
+  // The level belongs to the model: keep it across same-model updates, drop it on a switch.
+  const sameRoute = previous?.model.trim().toLowerCase() === nextModel.toLowerCase() &&
+    previous.providerId.trim().toLowerCase() === providerId.trim().toLowerCase()
+  const effort = reasoningEffort ?? (sameRoute ? previous?.reasoningEffort : undefined)
   delete map[thread]
   map[thread] = {
     model: nextModel,
@@ -316,8 +324,20 @@ export function rememberThreadComposerSelection(
     ...(harness?.harnessId?.trim() ? { harnessId: harness.harnessId.trim() } : {}),
     ...(harness?.credentialMode?.trim() ? { credentialMode: harness.credentialMode.trim() } : {}),
     ...(harness?.gatewayBinding ? { gatewayBinding: structuredClone(harness.gatewayBinding) } : {}),
+    ...(effort ? { reasoningEffort: effort } : {}),
     source
   }
+  saveThreadComposerSelectionMap(map)
+}
+
+/** Remember the reasoning level picked for the thread's current model. */
+export function rememberThreadComposerReasoning(threadId: string, effort: ModelReasoningEffort): void {
+  const thread = threadId.trim()
+  const existing = thread ? loadThreadComposerSelectionMap()[thread] : undefined
+  if (!existing || !MODEL_REASONING_EFFORTS.includes(effort)) return
+  const map = loadThreadComposerSelectionMap()
+  delete map[thread]
+  map[thread] = { ...existing, reasoningEffort: effort }
   saveThreadComposerSelectionMap(map)
 }
 
@@ -355,6 +375,8 @@ export function normalizeThreadComposerSelectionMap(raw: unknown): Record<string
     const source = value.source === 'user' || value.source === 'default'
       ? value.source
       : undefined
+    const rawEffort = typeof value.reasoningEffort === 'string' ? value.reasoningEffort.trim().toLowerCase() : ''
+    const reasoningEffort = MODEL_REASONING_EFFORTS.find((effort) => effort === rawEffort)
     // Harness-only entries are legal for ADE threads whose model rides the
     // harness's own catalog rather than the provider pick list.
     if (!model && !harnessId) continue
@@ -365,6 +387,7 @@ export function normalizeThreadComposerSelectionMap(raw: unknown): Record<string
       providerId,
       ...(harnessId ? { harnessId } : {}),
       ...(credentialMode ? { credentialMode } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(source ? { source } : {})
     }])
   }

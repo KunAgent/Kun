@@ -23,6 +23,7 @@ import type { ComposerPlanMode } from './chat-store-helpers'
 import {
   composerReasoningEffortForSelection,
   isNativeAgentRoute,
+  rememberThreadComposerReasoning,
   persistComposerIsolation,
   persistComposerMode,
   persistComposerPersonaId,
@@ -319,6 +320,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         state.composerProviderId,
         effort
       )
+      if (state.activeThreadId) rememberThreadComposerReasoning(state.activeThreadId, effort)
       set({ composerReasoningEffort: effort })
     },
 

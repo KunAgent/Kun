@@ -150,6 +150,19 @@ export function composerSelectionForThread(
   return threadComposerModelSelection(state, thread, options)
 }
 
+/** An external Agent thread restores the level last used with its model, like the model itself. */
+function threadRememberedReasoning(
+  stored: ReturnType<typeof readThreadComposerSelection>,
+  harnessId: string,
+  model: string,
+  providerId: string
+): ChatState['composerReasoningEffort'] | undefined {
+  if (!stored?.reasoningEffort || !harnessId.trim() || harnessId === 'kun') return undefined
+  const sameRoute = stored.model.trim().toLowerCase() === model.trim().toLowerCase() &&
+    stored.providerId.trim().toLowerCase() === providerId.trim().toLowerCase()
+  return sameRoute ? stored.reasoningEffort : undefined
+}
+
 export function resolveThreadComposerState(
   state: ChatState,
   thread: ThreadLike | null | undefined,
@@ -170,12 +183,13 @@ export function resolveThreadComposerState(
     ),
     composerModel: model,
     composerProviderId: providerId,
-    composerReasoningEffort: composerReasoningEffortForSelection(
-      state.composerModelGroups,
-      model,
-      providerId,
-      { nativeAgent: isNativeAgentRoute(composerHarnessId, composerCredentialMode) }
-    ),
+    composerReasoningEffort: threadRememberedReasoning(stored, composerHarnessId, model, providerId) ??
+      composerReasoningEffortForSelection(
+        state.composerModelGroups,
+        model,
+        providerId,
+        { nativeAgent: isNativeAgentRoute(composerHarnessId, composerCredentialMode) }
+      ),
     composerHarnessId,
     composerCredentialMode,
     composerGatewayBinding: stored ? stored.gatewayBinding : thread?.executionConfig?.route.gatewayBinding
