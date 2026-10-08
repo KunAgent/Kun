@@ -7,6 +7,7 @@ import type { KunHarnessSettingsV1 } from '@shared/app-settings'
 import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import { useHarnessStore } from '../../store/harness-store'
 import { AgentDetail } from './AgentDetail'
+import { useAgentActivityStore } from './agent-center-activity-store'
 
 const provider = vi.hoisted(() => ({ testHarness: vi.fn() }))
 vi.mock('../../agent/registry', () => ({ getProvider: () => provider }))
@@ -40,7 +41,12 @@ function mount(row: AdeHarnessRow, settings: KunHarnessSettingsV1, extra: Partia
 const enabled = (id = 'claude-code'): KunHarnessSettingsV1 => ({ ...defaultKunHarnessSettings(),
   enabledProfiles: [{ harnessId: id, credentialMode: 'native-login' }] })
 
-beforeEach(() => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); useHarnessStore.setState({ rows: [], models: {}, providerGroups: {} }) })
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useHarnessStore.setState({ rows: [], models: {}, providerGroups: {} })
+  // A check stored by an earlier test (e.g. a trial turn) would outrank a fixture's readiness proof.
+  useAgentActivityStore.setState({ checking: {}, changed: {}, install: {}, lastCheck: {} })
+})
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('AgentDetail', () => {
