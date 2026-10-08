@@ -274,6 +274,7 @@ export type ServerRuntime = {
     /** Codex app-server `model/list` probing (P6-07). */
     codexModels?: CodexModelProbe
     piModels?: import('../../harness/pi-model-probe.js').PiModelProbe
+    antigravityModels?: import('../../harness/antigravity-model-probe.js').AntigravityModelProbe
     installNetwork?: () => import('../../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
     /**
      * Spawn-free read of the freshest probed model list, dispatched by

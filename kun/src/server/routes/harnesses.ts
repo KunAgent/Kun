@@ -281,6 +281,10 @@ export async function listHarnessModels(
         models: providerModels(legacyProviderKindFor(definition.id))
       }, 'provider')
     case 'probe': {
+      if (definition.transport === 'antigravity-cli' && harnesses.antigravityModels) {
+        const catalog = await harnesses.antigravityModels.probeCatalog(definition)
+        return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
+      }
       if (definition.transport === 'pi-rpc' && harnesses.piModels) {
         const models = await harnesses.piModels.probe(definition, request.signal)
         return reply({ harnessId: definition.id, models }, models.length ? cachedModels ? 'cache' : 'native' : 'fallback')

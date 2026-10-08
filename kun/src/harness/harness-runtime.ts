@@ -15,6 +15,7 @@ import { HarnessDetector, spawnCaptured } from './harness-detector.js'
 import { probeHarnessLogin } from './harness-login-probes.js'
 import { AcpModelProbe } from './acp-model-probe.js'
 import { PiModelProbe } from './pi-model-probe.js'
+import { AntigravityModelProbe } from './antigravity-model-probe.js'
 import { CodexModelProbe } from './codex-model-probe.js'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
@@ -38,6 +39,8 @@ export type HarnessRuntimeComposition = {
   /** Codex app-server `model/list` probing (P6-07). */
   codexModels: CodexModelProbe
   piModels: PiModelProbe
+  /** `agy models` for the Antigravity CLI transport. */
+  antigravityModels: AntigravityModelProbe
   updates: HarnessUpdates
   integration(id: string): Promise<HarnessIntegrationInfo | undefined>
   resolveIntegration(request: HarnessIntegrationOpenRequest): Promise<HarnessIntegrationTarget | undefined>
@@ -132,12 +135,14 @@ export function createHarnessComposition(
     resolveSecretEnv: deps.resolveSecretEnv
   })
   const piModels = new PiModelProbe({ binaryPath: (id) => harnessCommandOverride(options().harnesses, id), resolveSecretEnv: deps.resolveSecretEnv })
+  const antigravityModels = new AntigravityModelProbe({ binaryPath: (id) => harnessCommandOverride(options().harnesses, id) ?? binaryEnvOverride(id) })
   const probedModels = (definition: HarnessDefinition): string[] | undefined =>
     definition.transport === 'acp'
       ? acpModels.peek(definition)
       : definition.transport === 'agent-sdk'
         ? agentSdkModels.peek(definition)
         : definition.transport === 'pi-rpc' ? piModels.peek(definition)
+        : definition.transport === 'antigravity-cli' ? antigravityModels.peek(definition)
         : definition.transport === 'codex-app-server'
           ? codexModels.peek(definition)
           : undefined
@@ -146,15 +151,19 @@ export function createHarnessComposition(
     resolveGatewayAliases: deps.resolveGatewayAliases,
     sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal),
     ...(deps.readinessProofStorePath ? { proofStorePath: deps.readinessProofStorePath } : {}),
-    onCatalog: (definition, catalog) => { if (definition.transport === 'acp') acpModels.seed(definition, catalog) } })
+    onCatalog: (definition, catalog) => {
+      if (definition.transport === 'acp') acpModels.seed(definition, catalog)
+      else if (definition.transport === 'antigravity-cli') antigravityModels.seed(definition, catalog)
+    } })
   // Refreshing one Agent must not discard another Agent's catalog.
   const invalidateModels = (id: string): void => {
     const transport = catalog.get(id)?.transport
-    if (!transport) { agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate(); return }
+    if (!transport) { agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate(); antigravityModels.invalidate(); return }
     if (transport === 'acp') acpModels.invalidate(id)
     else if (transport === 'agent-sdk') agentSdkModels.invalidate()
     else if (transport === 'codex-app-server') codexModels.invalidate()
     else if (transport === 'pi-rpc') piModels.invalidate()
+    else if (transport === 'antigravity-cli') antigravityModels.invalidate()
   }
   const updates = new HarnessUpdates({
     definition: (id) => catalog.get(id), detect: (id) => detector.status(id, { force: true }),
@@ -206,6 +215,7 @@ export function createHarnessComposition(
     agentSdkModels,
     codexModels,
     piModels,
+    antigravityModels,
     installNetwork: () => options().nativeAgentNetwork?.installer,
     probedModels,
     tokens: new HarnessTokenService(),

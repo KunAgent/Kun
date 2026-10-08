@@ -19,7 +19,8 @@ export const ANTIGRAVITY_DEFINITION: HarnessDefinition = {
     { id: 'default', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
     { id: 'auto', label: 'Auto', kunPermissionMode: 'full-access' }
   ],
-  modelSource: 'provider',
+  // agy lists the signed-in account's models itself (`agy models`).
+  modelSource: 'probe',
   staticModels: [],
   capabilities: ANTIGRAVITY_CAPABILITIES,
   setup: {

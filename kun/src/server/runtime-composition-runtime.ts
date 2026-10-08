@@ -203,7 +203,8 @@ export function createServerRuntimeComposition(
       probeModels: (definition) => definition.transport === 'acp' ? services.harnesses.acpModels.probe(definition)
         : definition.transport === 'agent-sdk' ? services.harnesses.agentSdkModels.probe(definition)
           : definition.transport === 'codex-app-server' ? services.harnesses.codexModels.probe(definition)
-            : definition.transport === 'pi-rpc' ? services.harnesses.piModels.probe(definition) : Promise.resolve([]),
+            : definition.transport === 'pi-rpc' ? services.harnesses.piModels.probe(definition)
+              : definition.transport === 'antigravity-cli' ? services.harnesses.antigravityModels.probe(definition) : Promise.resolve([]),
       snapshot: () => modelConnections.snapshot(), defaultModel: () => roomComposition.rooms.deps.model() }) })
   return {
     threadService,
