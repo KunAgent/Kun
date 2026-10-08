@@ -2,6 +2,7 @@ import type { HarnessDefinition } from '../../contracts/harness.js'
 import { ACP_DEFAULT_CAPABILITIES } from './capabilities.js'
 import type { AgentProviderModule } from './provider-module.js'
 import { openCode2CredentialEvidence } from '../opencode2-credentials.js'
+import { explainOpenCodeServiceFailure, openCodeIsolationEnv } from './opencode-service-failure.js'
 import { openCodeConfigFiles } from './support.js'
 
 export const OPENCODE2_DEFINITION: HarnessDefinition = {
@@ -38,5 +39,9 @@ export const OPENCODE2_MODULE: AgentProviderModule = {
     fingerprint: (env) => openCode2CredentialEvidence(env).fingerprint
   },
   // Free models need no sign-in; a missing V2 credential is not "signed out".
-  update: { command: 'opencode2', packageName: '@opencode-ai/cli', tag: 'next' }
+  update: { command: 'opencode2', packageName: '@opencode-ai/cli', tag: 'next' },
+  acp: { isolationEnv: openCodeIsolationEnv },
+  // V2 shares OpenCode's data directory, so its log lives under opencode/log.
+  explainFailure: (message, _authRequired, context) =>
+    explainOpenCodeServiceFailure({ displayName: 'OpenCode2', command: 'opencode2', apps: ['opencode'] }, message, context)
 }

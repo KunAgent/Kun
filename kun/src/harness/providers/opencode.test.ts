@@ -70,4 +70,18 @@ describe('CodeMaker fork of OpenCode', () => {
     expect(nativeHarnessCredentialEnv(definition, { CODEMAKER_AUTH_TOKEN: 't', CODEMAKER_AUTH_USER: 'u', OPENAI_API_KEY: 'x' }))
       .toEqual({ CODEMAKER_AUTH_TOKEN: 't', CODEMAKER_AUTH_USER: 'u' })
   })
+
+  it('accepts a login that a build before the directory rename kept in OpenCode\'s data directory', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'codemaker-legacy-')); dirs.push(dir)
+    const env = { HOME: dir, XDG_DATA_HOME: dir, XDG_CONFIG_HOME: dir }
+    const definition = { ...catalog.get('codemaker')!, launch: { command: 'codemaker', args: ['acp'], env } }
+    expect(nativeCredentialFiles(definition)).toEqual([join(dir, 'codemaker', 'auth.json'), join(dir, 'opencode', 'auth.json')])
+    expect(providerModule('codemaker')?.credentials?.profileFiles?.(env, dir)).toEqual([
+      join(dir, 'codemaker', 'opencode.json'), join(dir, 'codemaker', 'opencode.jsonc'),
+      join(dir, 'opencode', 'opencode.json'), join(dir, 'opencode', 'opencode.jsonc')])
+    expect(nativeHasKey(definition, env)).toBe(false)
+    await mkdir(join(dir, 'opencode'), { recursive: true })
+    await writeFile(join(dir, 'opencode', 'auth.json'), JSON.stringify({ codemaker: { type: 'oauth', access: 'a', refresh: 'r', expires: 1 } }))
+    expect(nativeHasKey(definition, env)).toBe(true)
+  })
 })

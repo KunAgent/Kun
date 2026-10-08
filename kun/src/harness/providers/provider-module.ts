@@ -78,8 +78,27 @@ export type ProviderInstallation = {
 
 export type ProviderFailure = { detail: string; authRequired: boolean }
 
+/** Where a handshake failed and what the probe learned around it. */
+export type ProviderFailureContext = {
+  /** The protocol step that failed. */
+  stage: 'launch' | 'initialize' | 'session/new' | 'model' | 'permission'
+  /** Wall-clock start of the probe, for correlating the engine's own logs. */
+  startedAtMs: number
+  /** The process environment the engine ran with (never written anywhere). */
+  env: ProviderEnv
+  /** Outcome of the clean-configuration retry offered by `acp.isolationEnv`. */
+  isolated?: 'passes' | 'fails'
+}
+
 /** ACP session behaviour that differs per engine. */
 export type ProviderAcpHooks = {
+  /**
+   * Variables that start the engine without the user's configuration and
+   * plugins, or undefined when `message` is not a failure the engine hides.
+   * The probe then retries `session/new` with them, so the explanation can
+   * say whether local configuration caused the failure.
+   */
+  isolationEnv?(input: { dir: string; env: ProviderEnv; message: string }): Record<string, string> | undefined
   /** Replaces the generic permission-mode negotiation. */
   applyPermission?(conn: AcpConnection, session: { sessionId: string; configOptions?: AcpConfigOption[] | null;
     modes?: AcpSessionModes | null }, permissionMode: string | undefined): Promise<void>
@@ -129,5 +148,5 @@ export type AgentProviderModule = {
   /** Write the engine's gateway config and return the variables pointing at it. */
   gatewayConfig?(input: ProviderGatewayConfigInput): Record<string, string> | undefined
   /** Explain a known startup or handshake failure in user terms. */
-  explainFailure?(message: string, authRequired: boolean): ProviderFailure | undefined
+  explainFailure?(message: string, authRequired: boolean, context?: ProviderFailureContext): ProviderFailure | undefined
 }

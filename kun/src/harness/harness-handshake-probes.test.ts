@@ -1,6 +1,9 @@
 import { PassThrough } from 'node:stream'
 import { existsSync } from 'node:fs'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { probeAcpHandshake } from './acp-handshake-probe.js'
 import { probeCodexHandshake } from './codex-handshake-probe.js'
 import { probePiHandshake } from './pi-handshake-probe.js'
@@ -273,5 +276,71 @@ describe('Codex explicit model metadata', () => {
     spawn.mockResolvedValue(child.process)
     expect((await probeCodexHandshake(catalog.get('codex')!, 'fixture', { includeModels: true, timeoutMs: 30 })).ok).toBe(false)
     expect(child.stop).toHaveBeenCalledOnce()
+  })
+})
+
+/** An engine whose session/new hides its cause; the clean-configuration retry is recognised by its env. */
+function hiddenFailureFixture(isolated: 'passes' | 'fails', data: Record<string, unknown> = {}) {
+  const spawns: Array<Record<string, string> | undefined> = []
+  const stops: Array<ReturnType<typeof vi.fn>> = []
+  spawn.mockImplementation(async (input) => {
+    const env = (input as { env?: Record<string, string> }).env
+    spawns.push(env)
+    const clean = Boolean(env?.OPENCODE_CONFIG_DIR)
+    const stdin = new PassThrough(), stdout = new PassThrough()
+    const stop = vi.fn(async () => { stdout.end() })
+    stops.push(stop)
+    stdin.on('data', (chunk: Buffer) => {
+      const request = JSON.parse(chunk.toString())
+      if (request.id === undefined) return
+      const response = request.method === 'session/new'
+        ? clean && isolated === 'passes'
+          ? { id: request.id, result: { sessionId: 'clean' } }
+          : { id: request.id, error: { code: -32603, message: 'Internal error: Internal service failure', data } }
+        : { id: request.id, result: { protocolVersion: 1, agentCapabilities: {} } }
+      queueMicrotask(() => stdout.write(JSON.stringify(response) + '\n'))
+    })
+    return { stdin, stdout, exit: new Promise(() => undefined), stop, sanitizedStderrTail: () => '' } as unknown as HarnessProcess
+  })
+  return { spawns, stops }
+}
+
+describe('hidden engine failures', () => {
+  const dirs: string[] = []
+  afterEach(async () => {
+    vi.unstubAllEnvs()
+    for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true })
+  })
+  it.each(['passes', 'fails'] as const)('explains an OpenCode2 "Internal service failure" from its log and a clean-configuration retry that %s', async (isolated) => {
+    const data = await mkdtemp(join(tmpdir(), 'kun-oc2-data-')); dirs.push(data)
+    await mkdir(join(data, 'opencode', 'log'), { recursive: true })
+    const stamp = new Date().toISOString()
+    await writeFile(join(data, 'opencode', 'log', 'opencode.log'), [
+      `timestamp=${stamp} level=INFO run=a message="cli starting"`,
+      `timestamp=${stamp} level=WARN run=a message="failed to load plugin" target=oh-my-openagent cause="Cause([Fail(SchemaError(Missing key))])"`,
+      `timestamp=${stamp} level=INFO run=a message="Sent HTTP response" http.method=GET http.url=/api/model http.status=503`
+    ].join('\n') + '\n')
+    vi.stubEnv('XDG_DATA_HOME', data)
+    const { spawns, stops } = hiddenFailureFixture(isolated)
+    const result = await probeAcpHandshake(catalog.get('opencode2')!, 'fixture', { session: {} })
+    expect(result).toMatchObject({ ok: false, supported: true })
+    expect(result.authRequired).toBeUndefined()
+    expect(result.detail).toContain('OpenCode2 failed inside its own service during session/new')
+    expect(result.detail).toContain(isolated === 'passes' ? 'works with a clean configuration' : 'fails even with a clean configuration')
+    expect(result.detail).toContain('Its log says: WARN failed to load plugin oh-my-openagent: Cause([Fail(SchemaError(Missing key))]); GET /api/model -> 503')
+    expect(spawns).toHaveLength(2)
+    expect(spawns[0]).not.toHaveProperty('OPENCODE_CONFIG_DIR')
+    expect(spawns[1]).toMatchObject({ OPENCODE_CONFIG_CONTENT: '{}', XDG_CONFIG_HOME: expect.stringContaining('kun-acp-isolated-') })
+    expect(spawns[1]!.OPENCODE_CONFIG_DIR).toBe(spawns[1]!.XDG_CONFIG_HOME)
+    expect(existsSync(spawns[1]!.XDG_CONFIG_HOME!)).toBe(false)
+    for (const stop of stops) expect(stop).toHaveBeenCalledOnce()
+  })
+  it('names the failing step and keeps JSON-RPC error data for other engines, without a retry', async () => {
+    const { spawns, stops } = hiddenFailureFixture('passes', { service: 'session', errorName: 'SqliteError' })
+    const result = await probeAcpHandshake(catalog.get('droid')!, 'fixture', { session: {} })
+    expect(result).toMatchObject({ ok: false,
+      detail: 'session/new failed: Internal error: Internal service failure (data: {"service":"session","errorName":"SqliteError"})' })
+    expect(spawns).toHaveLength(1)
+    expect(stops[0]).toHaveBeenCalledOnce()
   })
 })

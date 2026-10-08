@@ -4,6 +4,7 @@ import { unsupported } from '../../contracts/harness-capabilities.js'
 import { ACP_DEFAULT_CAPABILITIES } from './capabilities.js'
 import type { AgentProviderModule, ProviderGatewayConfigInput } from './provider-module.js'
 import { opencodeConfig } from '../gateway-config-templates.js'
+import { explainOpenCodeServiceFailure, openCodeIsolationEnv } from './opencode-service-failure.js'
 import { authJsonConfigured, openCodeConfigFiles, xdgDataHome } from './support.js'
 
 export const OPENCODE_DEFINITION: HarnessDefinition = {
@@ -74,11 +75,12 @@ export const OPENCODE_MODULE: AgentProviderModule = {
   },
   update: { command: 'opencode', packageName: 'opencode-ai' },
   gatewayConfig: openCodeGatewayConfig,
+  acp: { isolationEnv: openCodeIsolationEnv },
   // OpenCode 1 refuses a shared opencode.db that OpenCode2 created first (it
   // has session_v2 but no session table). Only the user may move that file.
-  explainFailure: (message) => /has no session table/i.test(message)
+  explainFailure: (message, _authRequired, context) => /has no session table/i.test(message)
     ? { detail: 'OpenCode cannot open its database: opencode.db in its data directory (usually ~/.local/share/opencode) was created by OpenCode2 without the session table OpenCode needs. Back it up, move it out of that directory together with its -wal and -shm files, then check again; OpenCode recreates it and OpenCode2 can use the new file.', authRequired: false }
-    : undefined
+    : explainOpenCodeServiceFailure({ displayName: 'OpenCode', command: 'opencode', apps: ['opencode'] }, message, context)
 }
 
 /**
@@ -118,6 +120,9 @@ export function codeMakerDefinition(opencode: HarnessDefinition): HarnessDefinit
   }
 }
 
+/** The fork's data/config directory, then OpenCode's for builds before the rename. */
+const CODEMAKER_APPS = ['codemaker', 'opencode'] as const
+
 export const CODEMAKER_MODULE: AgentProviderModule = {
   definition: codeMakerDefinition(OPENCODE_DEFINITION),
   credentials: {
@@ -127,11 +132,16 @@ export const CODEMAKER_MODULE: AgentProviderModule = {
     // CODEMAKER_AUTH_USER only names the account; it is not a credential.
     evidenceEnvKeys: ['CODEMAKER_AUTH_TOKEN', 'CODEMAKER_AUTH_KEY', 'CODEMAKER_API_KEY'],
     pointerEnvKeys: ['OPENCODE_CONFIG_DIR', 'OPENCODE_CONFIG'],
-    files: (env, home) => [join(xdgDataHome(env, home), 'codemaker/auth.json')],
-    profileFiles: (env, home) => openCodeConfigFiles(env, home, 'codemaker'),
+    // Builds that have not renamed the XDG app directory keep their login
+    // in OpenCode's auth.json; the fork's own directory is checked first.
+    files: (env, home) => CODEMAKER_APPS.map((app) => join(xdgDataHome(env, home), app, 'auth.json')),
+    profileFiles: (env, home) => [...new Set(CODEMAKER_APPS.flatMap((app) => openCodeConfigFiles(env, home, app)))],
     // CodeMaker's account login may use its own record type; any stored
     // secret is configured evidence, never verified authentication.
     configured: (context) => authJsonConfigured(context.files(), { anySecret: true })
   },
-  gatewayConfig: openCodeGatewayConfig
+  gatewayConfig: openCodeGatewayConfig,
+  acp: { isolationEnv: openCodeIsolationEnv },
+  explainFailure: (message, _authRequired, context) =>
+    explainOpenCodeServiceFailure({ displayName: 'CodeMaker', command: 'codemaker', apps: CODEMAKER_APPS }, message, context)
 }
