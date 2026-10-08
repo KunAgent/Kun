@@ -372,7 +372,7 @@
   "writePaperSearchAllFailed": "All sources failed — check your network or proxy settings.",
   "writePaperSearchProxyHintLink": "Open proxy settings",
   "writePaperSearchPartialFailure": "Some sources did not respond: {{sources}}",
-  "writePaperSearchKeyboardHint": "Keys: / focus search · ↑↓ move · Enter details · x select · i import · Esc close",
+  "writePaperSearchKeyboardHint": "Keys: / focus search · ↑↓ move · Enter details · x select · Esc close",
   "writePaperSearchSelectHit": "Select",
   "writePaperSearchSelectAll": "Select all",
   "writePaperSearchSelected": "{{count}} selected",

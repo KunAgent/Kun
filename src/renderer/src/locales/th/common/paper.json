@@ -372,7 +372,7 @@
   "writePaperSearchAllFailed": "ทุกแหล่งล้มเหลว — ตรวจสอบเครือข่ายหรือการตั้งค่าพร็อกซี",
   "writePaperSearchProxyHintLink": "เปิดการตั้งค่าพร็อกซี",
   "writePaperSearchPartialFailure": "บางแหล่งไม่ตอบสนอง: {{sources}}",
-  "writePaperSearchKeyboardHint": "คีย์: / โฟกัสค้นหา · ↑↓ เลื่อน · Enter รายละเอียด · x เลือก · i นำเข้า · Esc ปิด",
+  "writePaperSearchKeyboardHint": "คีย์: / โฟกัสค้นหา · ↑↓ เลื่อน · Enter รายละเอียด · x เลือก · Esc ปิด",
   "writePaperSearchSelectHit": "เลือก",
   "writePaperSearchSelectAll": "เลือกทั้งหมด",
   "writePaperSearchSelected": "เลือกแล้ว {{count}}",

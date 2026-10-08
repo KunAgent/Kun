@@ -1,5 +1,5 @@
-/* Paper search page shell shared by the direct and Agent tabs: a scrollable
- * stage column plus a 320px history rail. Below ~980px (container width) the
+/* Paper search page shell shared by the direct and Agent pages: a scrollable
+ * stage column plus a 360px paper-pool rail. Below ~980px (container width) the
  * rail turns into an overlay toggled from the header. */
 
 .surface {
@@ -21,7 +21,7 @@
 }
 
 .body[data-rail='open'] {
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 360px;
 }
 
 .stage {
@@ -39,81 +39,6 @@
   background: var(--paper-surface-rail);
 }
 
-.historyHeader {
-  display: flex;
-  min-height: 40px;
-  align-items: center;
-  gap: 6px;
-  border-bottom: 1px solid var(--paper-surface-divider);
-  padding: 0 8px 0 12px;
-}
-
-.historyList {
-  min-height: 0;
-  flex: 1;
-  overflow-y: auto;
-  padding: 6px;
-}
-
-.historyRow {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  gap: 2px;
-  border-radius: 8px;
-  padding: 6px 8px;
-  text-align: left;
-  transition: background-color 75ms;
-}
-
-.historyRow:hover {
-  background: var(--ds-surface-hover);
-}
-
-.historyRow[data-active='true'] {
-  background: var(--ds-sidebar-row-active);
-}
-
-.historyTitle {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  line-height: 18px;
-  color: var(--ds-text);
-}
-
-.historyTitle > svg {
-  flex-shrink: 0;
-  color: var(--ds-text-faint);
-}
-
-.historyTitle > span {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.historyMeta {
-  min-width: 0;
-  overflow: hidden;
-  padding-left: 20px;
-  font-size: 11px;
-  line-height: 15px;
-  color: var(--ds-text-faint);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.historyEmpty {
-  padding: 14px 10px;
-  font-size: 12px;
-  color: var(--ds-text-faint);
-}
-
 @container (max-width: 980px) {
   .body[data-rail='open'] {
     grid-template-columns: minmax(0, 1fr);
@@ -129,23 +54,7 @@
     inset-block: 44px 0;
     inset-inline-end: 0;
     display: flex;
-    width: min(320px, 85%);
+    width: min(360px, 92%);
     box-shadow: var(--ds-shadow-overlay, 0 18px 48px rgba(20, 47, 95, 0.22));
   }
-}
-
-
-:global([data-theme='dark']) .surface :is(header, .historyHeader) button[aria-pressed='true'] {
-  background: var(--ds-accent-soft);
-  color: var(--ds-text);
-}
-
-.surface [data-paper-research-new] {
-  margin-bottom: 8px;
-  border: 1px solid var(--paper-surface-control-border);
-}
-
-.historyRow:focus-visible {
-  outline: 2px solid var(--ds-focus-ring);
-  outline-offset: 2px;
 }

@@ -372,7 +372,7 @@
   "writePaperSearchAllFailed": "すべてのソースが失敗しました。ネットワークまたはプロキシ設定を確認してください。",
   "writePaperSearchProxyHintLink": "プロキシ設定を開く",
   "writePaperSearchPartialFailure": "一部のソースが応答しませんでした: {{sources}}",
-  "writePaperSearchKeyboardHint": "キー: / 検索にフォーカス · ↑↓ 移動 · Enter 詳細 · x 選択 · i インポート · Esc 閉じる",
+  "writePaperSearchKeyboardHint": "キー: / 検索にフォーカス · ↑↓ 移動 · Enter 詳細 · x 選択 · Esc 閉じる",
   "writePaperSearchSelectHit": "選択",
   "writePaperSearchSelectAll": "すべて選択",
   "writePaperSearchSelected": "{{count}} 件選択中",

@@ -1,25 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { paperViewOwnsKeyEvent } from './paper-view-keys'
-import {
-  BookOpenText,
-  CheckSquare,
-  FileText,
-  Quote,
-  Square
-} from 'lucide-react'
+import { BookOpenText, FileText, GripVertical, Quote } from 'lucide-react'
 import type {
   PaperSearchHit,
   PaperSearchResponse,
   PaperSearchSource
 } from '@shared/paper/paper-search'
-import type { PaperImportHintMeta } from '@shared/paper/paper-types'
 import type { PaperUnitMetaV2 } from '@shared/paper/paper-meta-v2'
 import { generatePaperBibtex } from '@shared/paper/paper-bibtex'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
-import { currentImportParentDir } from '../../../paper/paper-import-target'
-import { newPaperRequestId, usePaperStore } from '../../../write/paper/paper-store'
+import { candidateFromSearchHit, useLibraryIndex } from '../../../paper/paper-import-candidates'
+import { startPaperImportDrag, usePaperImportDrag } from '../../../paper/paper-import-drag'
+import { findImportItem, usePaperImportJobs } from '../../../paper/paper-import-job'
+import type { ImportCandidate } from '../../../paper/paper-import-plan'
+import { selectionHas, usePaperImportSelection, usePaperSelectionRecords } from '../../../paper/paper-import-selection'
 import { useChatStore } from '../../../store/chat-store'
-import { ExpandableAbstract, ImportButton } from './PaperDiscoverParts'
+import { ExpandableAbstract } from './PaperDiscoverParts'
 import { PaperSearchDetailPane } from './PaperSearchDetailPane'
 import {
   applyPaperSearchFilters,
@@ -28,37 +24,21 @@ import {
   PaperSearchSelectionBar,
   type PaperSearchFilters
 } from './PaperSearchFilters'
+import { PaperImportStatus } from '../import/PaperImportStatus'
+import { PaperCheck } from '../import/PaperPickRow'
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string
 type SortKey = 'relevance' | 'citations' | 'year'
 
 const SORTS: SortKey[] = ['relevance', 'citations', 'year']
 
+/** Selection / import scope of the quick-search page. */
+export const QUICK_SEARCH_SCOPE = 'quick'
+
 function sortHits(hits: PaperSearchHit[], key: SortKey): PaperSearchHit[] {
   if (key === 'relevance') return hits
   const value = (hit: PaperSearchHit): number => (key === 'citations' ? hit.citations ?? -1 : hit.year ?? 0)
   return [...hits].sort((a, b) => value(b) - value(a) || b.score - a.score)
-}
-
-/** Import handle in order of reliability: arXiv (PDF always), venue id, DOI. */
-function importInput(hit: PaperSearchHit): string | undefined {
-  return hit.arxivId ?? hit.coolId ?? hit.doi
-}
-
-/** Prefetched card metadata for the import path (plan P3.2). */
-function importMeta(hit: PaperSearchHit): PaperImportHintMeta {
-  return {
-    title: hit.title,
-    authors: hit.authors,
-    abstract: hit.abstract,
-    year: hit.year !== undefined ? String(hit.year) : undefined,
-    venue: hit.venue,
-    doi: hit.doi,
-    arxivId: hit.arxivId,
-    coolId: hit.coolId,
-    pdfUrl: hit.pdfUrl,
-    sourceUrl: hit.url
-  }
 }
 
 /** Loose BibTeX projection of a merged hit (plan P5 export). */
@@ -100,22 +80,26 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 export function PaperSearchResults({
   result,
-  workspaceRoot,
+  topic,
   onRetrySource,
+  onSeedAgent,
   t
 }: {
   result: PaperSearchResponse
-  workspaceRoot: string
+  /** Search text; names the default import folder. */
+  topic: string
   /** Re-run just one failed source and merge its hits back (plan P5 errors). */
   onRetrySource: (source: PaperSearchSource) => void
+  /** Hand the selected hits to a new Agent research as seed papers. */
+  onSeedAgent: (hits: PaperSearchHit[]) => void
   t: Translate
 }): ReactElement {
   const composer = usePaperModeStore((s) => s.composerBridge)
-  const refreshEntries = usePaperModeStore((s) => s.refreshEntries)
+  const index = useLibraryIndex()
+  const records = usePaperSelectionRecords(QUICK_SEARCH_SCOPE)
+  const job = usePaperImportJobs((s) => s.jobs[QUICK_SEARCH_SCOPE])
   const [sort, setSort] = useState<SortKey>('relevance')
   const [filters, setFilters] = useState<PaperSearchFilters>(EMPTY_PAPER_SEARCH_FILTERS)
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
-  const [importing, setImporting] = useState(false)
   const [copied, setCopied] = useState(false)
   const [focusIndex, setFocusIndex] = useState(-1)
   const [detailKey, setDetailKey] = useState<string | null>(null)
@@ -125,6 +109,10 @@ export function PaperSearchResults({
     () => sortHits(applyPaperSearchFilters(result.hits, filters), sort),
     [result.hits, filters, sort]
   )
+  const candidates = useMemo(
+    () => new Map(hits.map((hit) => [hit.key, candidateFromSearchHit(hit, index)])),
+    [hits, index]
+  )
   const sourcesAvailable = useMemo(
     () => [...new Set(result.sources.map((report) => report.source))],
     [result.sources]
@@ -133,61 +121,29 @@ export function PaperSearchResults({
   const failedSources = result.sources.filter((report) => report.error)
 
   useEffect(() => {
-    setSelected(new Set())
+    usePaperImportSelection.getState().clear(QUICK_SEARCH_SCOPE)
     setFocusIndex(-1)
     setDetailKey(null)
   }, [result])
 
   const detailHit = hits.find((hit) => hit.key === detailKey) ?? null
-  const selectedHits = hits.filter((hit) => selected.has(hit.key))
+  const candidateOf = (hit: PaperSearchHit): ImportCandidate => candidates.get(hit.key) ?? candidateFromSearchHit(hit, index)
+  const selectedHits = hits.filter((hit) => selectionHas(records, candidateOf(hit).keys))
+  const selectedCandidates = selectedHits.map(candidateOf)
+  const locked = job?.running === true
 
-  const toggle = useCallback((key: string): void => {
-    setSelected((current) => {
-      const next = new Set(current)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }, [])
+  const toggle = useCallback((hit: PaperSearchHit): void => {
+    const candidate = candidates.get(hit.key)
+    if (candidate) usePaperImportSelection.getState().toggle(QUICK_SEARCH_SCOPE, candidate.keys)
+  }, [candidates])
 
-  const toggleAll = useCallback((): void => {
-    setSelected((current) =>
-      current.size === hits.length ? new Set() : new Set(hits.map((hit) => hit.key))
+  const allState = selectedHits.length === 0 ? 'off' : selectedHits.length === hits.length ? 'on' : 'some'
+  const toggleAll = (): void =>
+    usePaperImportSelection.getState().setMany(
+      QUICK_SEARCH_SCOPE,
+      hits.map((hit) => candidateOf(hit).keys),
+      allState !== 'on'
     )
-  }, [hits])
-
-  const importHits = useCallback(
-    async (targets: PaperSearchHit[]): Promise<void> => {
-      const items = targets
-        .map((hit) => ({ input: importInput(hit), meta: importMeta(hit) }))
-        .filter((item): item is { input: string; meta: PaperImportHintMeta } => Boolean(item.input))
-      if (!items.length || typeof window.kunGui?.paperImportBatch !== 'function') return
-      setImporting(true)
-      try {
-        const outcome = await window.kunGui.paperImportBatch({
-          workspaceRoot,
-          items,
-          parentDir: currentImportParentDir(),
-          requestId: newPaperRequestId()
-        })
-        if (outcome.ok) {
-          const imported = outcome.results.filter((row) => row.ok && !row.reused).length
-          const reused = outcome.results.filter((row) => row.ok && row.reused).length
-          const failed = outcome.results.filter((row) => !row.ok).length
-          usePaperStore.getState().setNotice({
-            tone: failed ? 'error' : 'info',
-            message: t('writePaperReportImportDone', { imported, reused, failed })
-          })
-          refreshEntries()
-        } else {
-          usePaperStore.getState().setNotice({ tone: 'error', message: outcome.message })
-        }
-      } finally {
-        setImporting(false)
-      }
-    },
-    [workspaceRoot, refreshEntries, t]
-  )
 
   const copyBibtex = useCallback(async (): Promise<void> => {
     const text = generatePaperBibtex(selectedHits.map(hitToBibtexMeta))
@@ -205,7 +161,7 @@ export function PaperSearchResults({
   }, [composer, selectedHits, t])
 
   // Keyboard controls (plan P5): arrows move, Enter opens the detail pane,
-  // `x` toggles selection, `i` imports the focused hit, Escape closes detail.
+  // `x` / Space toggles selection, Escape closes detail.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (isEditableTarget(event.target) || !hits.length) return
@@ -215,13 +171,9 @@ export function PaperSearchResults({
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setFocusIndex((current) => {
-          const next =
-            event.key === 'ArrowDown'
-              ? Math.min(current + 1, hits.length - 1)
-              : Math.max(current - 1, 0)
-          return next
-        })
+        setFocusIndex((current) =>
+          event.key === 'ArrowDown' ? Math.min(current + 1, hits.length - 1) : Math.max(current - 1, 0)
+        )
         return
       }
       const focused = focusIndex >= 0 ? hits[focusIndex] : undefined
@@ -233,15 +185,12 @@ export function PaperSearchResults({
         setDetailKey((current) => (current === focused.key ? null : focused.key))
       } else if ((event.key === 'x' || event.key === ' ') && focused) {
         event.preventDefault()
-        toggle(focused.key)
-      } else if ((event.key === 'i' || event.key === 'I') && focused) {
-        event.preventDefault()
-        void importHits([focused])
+        toggle(focused)
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [hits, focusIndex, toggle, importHits])
+  }, [hits, focusIndex, toggle])
 
   useEffect(() => {
     if (focusIndex < 0) return
@@ -251,31 +200,24 @@ export function PaperSearchResults({
   }, [focusIndex])
 
   return (
-    <div className="mt-5" ref={listRef}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-ds-border-muted pb-2.5">
+    <div className="mt-4" ref={listRef}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pb-2.5">
+        {hits.length ? (
+          <PaperCheck state={allState} disabled={locked} onToggle={toggleAll} label={t('writePaperSearchSelectAll')} />
+        ) : null}
         <span className="text-[12.5px] font-medium text-ds-ink">
           {t('writePaperSearchResultCount', { count: hits.length })}
           {hits.length !== result.hits.length
             ? ` ${t('writePaperSearchResultFiltered', { count: result.hits.length })}`
             : ''}
         </span>
-        {hits.length && !selectedHits.length ? (
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-          >
-            <Square className="h-3.5 w-3.5" strokeWidth={1.8} />
-            {t('writePaperSearchSelectAll')}
-          </button>
-        ) : null}
-        <div className="ml-auto flex h-7 items-center rounded-md border border-ds-border-muted bg-ds-subtle p-0.5">
+        <div className="ml-auto flex h-7 items-center rounded-lg bg-ds-subtle p-0.5">
           {SORTS.map((key) => (
             <button
               key={key}
               type="button"
               onClick={() => setSort(key)}
-              className={`inline-flex h-6 items-center rounded px-2 text-[12px] transition ${
+              className={`inline-flex h-6 items-center rounded-md px-2 text-[12px] transition ${
                 sort === key ? 'bg-ds-main font-medium text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'
               }`}
             >
@@ -286,7 +228,7 @@ export function PaperSearchResults({
       </div>
 
       {allFailed ? (
-        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+        <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
           {t('writePaperSearchAllFailed')}{' '}
           <button
             type="button"
@@ -307,38 +249,24 @@ export function PaperSearchResults({
         t={t}
       />
 
-      {selectedHits.length ? (
-        <PaperSearchSelectionBar
-          total={hits.length}
-          selectedCount={selectedHits.length}
-          importing={importing}
-          copied={copied}
-          onSelectAll={toggleAll}
-          onImport={() => void importHits(selectedHits)}
-          onCopyBibtex={() => void copyBibtex()}
-          onSend={sendToAssistant}
-          canSend={Boolean(composer?.setInput)}
-          t={t}
-        />
-      ) : null}
-
-      <div className={`mt-3 flex items-start gap-3 ${detailHit ? '' : ''}`}>
+      <div className="mt-3 flex items-start gap-3">
         {hits.length ? (
-          <ul className="min-w-0 flex-1 space-y-2">
-            {hits.map((hit, index) => (
+          <ul className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-ds-border-muted bg-ds-main">
+            {hits.map((hit, position) => (
               <SearchHitRow
                 key={hit.key}
                 hit={hit}
-                index={index}
-                focused={index === focusIndex}
-                checked={selected.has(hit.key)}
+                index={position}
+                candidate={candidateOf(hit)}
+                importState={findImportItem(job, candidateOf(hit).keys)}
+                focused={position === focusIndex}
+                checked={selectionHas(records, candidateOf(hit).keys)}
+                locked={locked}
                 detailOpen={detailKey === hit.key}
-                onToggle={() => toggle(hit.key)}
-                onFocus={() => setFocusIndex(index)}
-                onOpenDetail={() =>
-                  setDetailKey((current) => (current === hit.key ? null : hit.key))
-                }
-                workspaceRoot={workspaceRoot}
+                onToggle={() => toggle(hit)}
+                onFocus={() => setFocusIndex(position)}
+                onOpenDetail={() => setDetailKey((current) => (current === hit.key ? null : hit.key))}
+                dragCandidates={() => (selectedHits.some((chosen) => chosen.key === hit.key) ? selectedCandidates : [candidateOf(hit)])}
                 t={t}
               />
             ))}
@@ -359,6 +287,21 @@ export function PaperSearchResults({
         </p>
       ) : null}
       <p className="mt-2 text-[10.5px] text-ds-faint">{t('writePaperSearchKeyboardHint')}</p>
+
+      {selectedHits.length ? (
+        <PaperSearchSelectionBar
+          scope={QUICK_SEARCH_SCOPE}
+          candidates={selectedCandidates}
+          topic={topic}
+          copied={copied}
+          onClear={() => usePaperImportSelection.getState().clear(QUICK_SEARCH_SCOPE)}
+          onCopyBibtex={() => void copyBibtex()}
+          onSend={sendToAssistant}
+          canSend={Boolean(composer?.setInput)}
+          onSeedAgent={() => onSeedAgent(selectedHits)}
+          t={t}
+        />
+      ) : null}
     </div>
   )
 }
@@ -382,58 +325,73 @@ function LinkChip({ label, url, icon }: { label: string; url: string; icon?: Rea
 function SearchHitRow({
   hit,
   index,
+  candidate,
+  importState,
   focused,
   checked,
+  locked,
   detailOpen,
   onToggle,
   onFocus,
   onOpenDetail,
-  workspaceRoot,
+  dragCandidates,
   t
 }: {
   hit: PaperSearchHit
   index: number
+  candidate: ImportCandidate
+  importState: ReturnType<typeof findImportItem>
   focused: boolean
   checked: boolean
+  locked: boolean
   detailOpen: boolean
   onToggle: () => void
   onFocus: () => void
   onOpenDetail: () => void
-  workspaceRoot: string
+  /** What a drag from this row carries: the selection, or just this paper. */
+  dragCandidates: () => readonly ImportCandidate[]
   t: Translate
 }): ReactElement {
+  const rowRef = useRef<HTMLLIElement | null>(null)
   const authors = hit.authors.slice(0, 6).join(', ')
   const extraAuthors = hit.authors.length - 6
-  const input = importInput(hit)
   const meta = [hit.year ? String(hit.year) : '', hit.venue ?? ''].filter(Boolean).join(' · ')
   return (
     <li
+      ref={rowRef}
       data-hit-index={index}
       onMouseEnter={onFocus}
-      className={`rounded-lg border px-4 py-3 transition ${
-        focused ? 'border-accent-tint/60 bg-accent-tint/[0.04]' : 'border-ds-border-muted bg-ds-card'
-      } ${detailOpen ? 'border-accent-tint/50' : ''}`}
+      className={`group/hit relative border-t border-ds-border-muted/70 px-4 py-3 transition first:border-t-0 ${
+        checked ? 'bg-[var(--ds-accent-soft)]/50' : focused ? 'bg-ds-hover/60' : ''
+      } ${detailOpen ? 'shadow-[inset_2px_0_0_var(--ds-accent)]' : ''}`}
     >
       <div className="flex items-start gap-3">
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={checked}
-          aria-label={`${t('writePaperSearchSelectHit')}: ${hit.title}`}
-          onClick={onToggle}
-          className="mt-1 shrink-0 text-ds-faint transition hover:text-ds-ink"
+        <span
+          draggable
+          role="presentation"
+          title={t('paperSearchDragHint')}
+          onDragStart={(event) => {
+            if (rowRef.current) event.dataTransfer.setDragImage(rowRef.current, 12, 12)
+            startPaperImportDrag(event, dragCandidates(), QUICK_SEARCH_SCOPE)
+          }}
+          onDragEnd={() => usePaperImportDrag.getState().end()}
+          className="absolute left-0.5 top-3.5 hidden h-5 w-3.5 cursor-grab items-center text-ds-faint group-hover/hit:flex"
         >
-          {checked ? (
-            <CheckSquare className="h-3.5 w-3.5 text-accent" strokeWidth={1.8} />
-          ) : (
-            <Square className="h-3.5 w-3.5" strokeWidth={1.8} />
-          )}
-        </button>
+          <GripVertical className="h-3.5 w-3.5" strokeWidth={1.8} />
+        </span>
+        <span className="mt-1">
+          <PaperCheck
+            state={checked ? 'on' : 'off'}
+            disabled={locked}
+            onToggle={onToggle}
+            label={`${t('writePaperSearchSelectHit')}: ${hit.title}`}
+          />
+        </span>
         <div className="min-w-0 flex-1">
           <button
             type="button"
             onClick={onOpenDetail}
-            className="block w-full text-left text-[13.5px] font-semibold leading-5 text-ds-ink transition hover:text-accent"
+            className="block w-full text-left text-[14px] font-semibold leading-5 text-ds-ink transition hover:text-accent"
           >
             {hit.title}
           </button>
@@ -441,53 +399,52 @@ function SearchHitRow({
             <p className="mt-0.5 truncate text-[12px] text-ds-muted" title={hit.authors.join(', ')}>
               {authors}
               {extraAuthors > 0 ? ` +${extraAuthors}` : ''}
+              {meta ? <span className="text-ds-faint">{` · ${meta}`}</span> : null}
             </p>
+          ) : meta ? (
+            <p className="mt-0.5 truncate text-[11.5px] text-ds-faint" title={meta}>{meta}</p>
           ) : null}
-          {meta ? <p className="mt-0.5 truncate text-[11.5px] text-ds-faint" title={meta}>{meta}</p> : null}
+          {hit.abstract ? <ExpandableAbstract text={hit.abstract} /> : null}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {hit.sources.map((source) => (
+              <span key={source} className="rounded-full bg-ds-subtle px-2 py-px text-[11px] text-ds-muted">
+                {t(`writePaperSearchSource_${source}`)}
+              </span>
+            ))}
+            {typeof hit.citations === 'number' ? (
+              <span className="inline-flex items-center gap-1 text-[11px] tabular-nums text-ds-faint" title={t('writePaperSearchCitations')}>
+                <Quote className="h-3 w-3" strokeWidth={1.8} />
+                {hit.citations}
+              </span>
+            ) : null}
+            <PaperImportStatus scope={QUICK_SEARCH_SCOPE} item={importState} owned={candidate.owned} />
+            <span className="flex-1" />
+            <button
+              type="button"
+              onClick={onOpenDetail}
+              className="rounded-md px-1.5 py-0.5 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+            >
+              {detailOpen ? t('writePaperDetailClose') : t('writePaperDetailOpen')}
+            </button>
+            {hit.arxivId ? (
+              <LinkChip
+                label={`arXiv ${hit.arxivId}`}
+                url={`https://arxiv.org/abs/${hit.arxivId}`}
+                icon={<BookOpenText className="h-3 w-3" strokeWidth={1.8} />}
+              />
+            ) : hit.url ? (
+              <LinkChip
+                label={t('writePaperVenuePaperPage')}
+                url={hit.url}
+                icon={<BookOpenText className="h-3 w-3" strokeWidth={1.8} />}
+              />
+            ) : null}
+            {hit.doi ? <LinkChip label="DOI" url={`https://doi.org/${hit.doi}`} /> : null}
+            {hit.pdfUrl ? (
+              <LinkChip label="PDF" url={hit.pdfUrl} icon={<FileText className="h-3 w-3" strokeWidth={1.8} />} />
+            ) : null}
+          </div>
         </div>
-        {input ? <ImportButton input={input} meta={importMeta(hit)} workspaceRoot={workspaceRoot} t={t} /> : null}
-      </div>
-      {hit.abstract ? <ExpandableAbstract text={hit.abstract} /> : null}
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {typeof hit.citations === 'number' ? (
-          <span
-            className="inline-flex items-center gap-1 text-[11px] tabular-nums text-ds-faint"
-            title={t('writePaperSearchCitations')}
-          >
-            <Quote className="h-3 w-3" strokeWidth={1.8} />
-            {hit.citations}
-          </span>
-        ) : null}
-        {hit.sources.map((source) => (
-          <span key={source} className="rounded bg-ds-subtle px-1.5 py-px text-[10.5px] text-ds-muted">
-            {t(`writePaperSearchSource_${source}`)}
-          </span>
-        ))}
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={onOpenDetail}
-          className="rounded-md px-1.5 py-0.5 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-        >
-          {detailOpen ? t('writePaperDetailClose') : t('writePaperDetailOpen')}
-        </button>
-        {hit.arxivId ? (
-          <LinkChip
-            label={`arXiv ${hit.arxivId}`}
-            url={`https://arxiv.org/abs/${hit.arxivId}`}
-            icon={<BookOpenText className="h-3 w-3" strokeWidth={1.8} />}
-          />
-        ) : hit.url ? (
-          <LinkChip
-            label={t('writePaperVenuePaperPage')}
-            url={hit.url}
-            icon={<BookOpenText className="h-3 w-3" strokeWidth={1.8} />}
-          />
-        ) : null}
-        {hit.doi ? <LinkChip label="DOI" url={`https://doi.org/${hit.doi}`} /> : null}
-        {hit.pdfUrl ? (
-          <LinkChip label="PDF" url={hit.pdfUrl} icon={<FileText className="h-3 w-3" strokeWidth={1.8} />} />
-        ) : null}
       </div>
     </li>
   )

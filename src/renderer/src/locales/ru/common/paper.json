@@ -372,7 +372,7 @@
   "writePaperSearchAllFailed": "Все источники недоступны — проверьте сеть или настройки прокси.",
   "writePaperSearchProxyHintLink": "Открыть настройки прокси",
   "writePaperSearchPartialFailure": "Часть источников не ответила: {{sources}}",
-  "writePaperSearchKeyboardHint": "Клавиши: / фокус на поиске · ↑↓ перемещение · Enter детали · x выбрать · i импорт · Esc закрыть",
+  "writePaperSearchKeyboardHint": "Клавиши: / фокус на поиске · ↑↓ перемещение · Enter детали · x выбрать · Esc закрыть",
   "writePaperSearchSelectHit": "Выбрать",
   "writePaperSearchSelectAll": "Выбрать все",
   "writePaperSearchSelected": "Выбрано: {{count}}",

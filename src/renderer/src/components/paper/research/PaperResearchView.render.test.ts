@@ -14,6 +14,9 @@ vi.mock('../../chat/LazyMessageTimeline', () => ({
   LazyMessageTimeline: (props: { blocks: ChatBlock[] }) =>
     createElement('div', { 'data-testid': 'timeline' }, `blocks:${props.blocks.length}`)
 }))
+vi.mock('../../chat/FloatingComposerModelPicker', () => ({
+  FloatingComposerModelPicker: () => createElement('div', { 'data-testid': 'model-picker' })
+}))
 vi.mock('../../chat/FloatingComposer', () => ({
   FloatingComposer: () => createElement('div', { 'data-testid': 'composer' })
 }))
@@ -97,12 +100,26 @@ describe('PaperResearchView', () => {
     host.remove()
   })
 
-  it('shows the new-research form when no session is selected', async () => {
+  it('shows the single search box and scope pill when no session is selected', async () => {
     await render(assistant())
-    expect(host.querySelector('[data-testid="composer"]')).not.toBeNull()
+    expect(host.querySelector('textarea')).not.toBeNull()
+    expect(host.querySelector('[data-paper-scope-trigger]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="model-picker"]')).not.toBeNull()
     expect(host.textContent).toContain('What should we research today?')
     expect(host.textContent).toContain('Standard')
     expect(host.querySelector('[data-testid="timeline"]')).toBeNull()
+    // The old history rail and per-source chip row are gone.
+    expect(host.textContent).not.toContain('Search history')
+  })
+
+  it('opens the scope settings from the pill', async () => {
+    await render(assistant())
+    const trigger = host.querySelector<HTMLButtonElement>('[data-paper-scope-trigger]')!
+    await act(async () => trigger.click())
+    const menu = host.querySelector('[data-paper-scope-menu]')
+    expect(menu).not.toBeNull()
+    expect(menu?.textContent).toContain('Depth')
+    expect(menu?.textContent).toContain('arXiv')
   })
 
   it('renders the session conversation and its paper pool once the thread is bound', async () => {

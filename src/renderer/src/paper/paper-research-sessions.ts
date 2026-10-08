@@ -87,6 +87,9 @@ export function listResearchSessions(
   return out.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
 }
 
+/** A research session plus the (normalized) library root it lives in. */
+export type AgentHistorySession = ResearchSessionSummary & { libraryRoot: string }
+
 /**
  * All Agent research sessions across every configured library, newest first.
  * Each summary carries its normalized `libraryRoot` so callers can mount the
@@ -96,9 +99,9 @@ export function listResearchSessionsAcrossLibraries(
   libraries: readonly string[],
   threads: readonly NormalizedThread[],
   registry: WriteThreadRegistry = readWriteThreadRegistry()
-): Array<ResearchSessionSummary & { libraryRoot: string }> {
+): AgentHistorySession[] {
   const seen = new Set<string>()
-  const out: Array<ResearchSessionSummary & { libraryRoot: string }> = []
+  const out: AgentHistorySession[] = []
   for (const item of libraries) {
     const root = normalizePath(item)
     if (!root || seen.has(root)) continue

@@ -372,7 +372,7 @@
   "writePaperSearchAllFailed": "所有来源都失败了——请检查网络或代理设置。",
   "writePaperSearchProxyHintLink": "打开代理设置",
   "writePaperSearchPartialFailure": "部分来源没有响应：{{sources}}",
-  "writePaperSearchKeyboardHint": "快捷键：/ 聚焦搜索框 · ↑↓ 移动 · Enter 详情 · x 勾选 · i 导入 · Esc 关闭",
+  "writePaperSearchKeyboardHint": "快捷键：/ 聚焦搜索框 · ↑↓ 移动 · Enter 详情 · x 勾选 · Esc 关闭",
   "writePaperSearchSelectHit": "选择",
   "writePaperSearchSelectAll": "全选",
   "writePaperSearchSelected": "已选 {{count}} 篇",

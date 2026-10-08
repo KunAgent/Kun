@@ -43,13 +43,13 @@
   opacity: 1;
 }
 
-:global([data-theme='dark']) .surface :is([data-paper-scope-trigger], [data-paper-research-example], [data-paper-research-new]) {
+:global([data-theme='dark']) .surface :is([data-paper-scope-trigger]) {
   border-color: var(--paper-surface-control-border);
   background: var(--paper-surface-rail);
   color: var(--ds-text-muted);
 }
 
-:global([data-theme='dark']) .surface :is([data-paper-scope-trigger], [data-paper-research-example], [data-paper-research-new]):hover {
+:global([data-theme='dark']) .surface :is([data-paper-scope-trigger]):hover {
   background: var(--paper-surface-composer);
   color: var(--ds-text);
 }

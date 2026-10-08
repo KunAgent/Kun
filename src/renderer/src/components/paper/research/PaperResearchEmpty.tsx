@@ -2,46 +2,57 @@ import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PaperResearchDraft } from '../../../paper/paper-mode-store'
 import type { PaperResearchRequest } from '../../../paper/paper-research-actions'
+import type { AgentHistorySession } from '../../../paper/paper-research-sessions'
+import type { PaperSearchHistoryEntry } from '../../../paper/paper-search-prefs'
 import { parseSearchYear, readSearchSources, writeSearchSources } from '../../../paper/paper-search-prefs'
-import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
-import { FloatingComposer } from '../../chat/FloatingComposer'
 import type { WriteAssistantStageProps } from '../../write/WriteAssistantStageContext'
-import { PaperResearchScopeChips, type PaperResearchScope } from './PaperResearchScopeChips'
-
-const EXAMPLE_KEYS = ['paperResearchExample1', 'paperResearchExample2', 'paperResearchExample3']
+import { PaperSearchTabs } from '../discover/PaperSearchScope'
+import { PaperResearchComposer } from './PaperResearchComposer'
+import { PaperResearchRecent } from './PaperResearchRecent'
+import { PaperScopePill, type PaperResearchScope } from './PaperResearchScopeChips'
 
 /**
- * "New research" screen, laid out like the Code home: a hero line, the
- * scope chips (depth, sources, years) and the real Work composer. Sending
- * starts a dedicated research conversation with the composer text.
+ * "New research" screen: a hero line, the Agent / quick tabs, one search box
+ * with a single scope pill, and the recent searches underneath. Sending
+ * starts a dedicated research conversation with the box's text.
  */
 export function PaperResearchEmpty({
   assistant,
   draft,
   starting,
-  onStart
+  onStart,
+  onShowDirect,
+  sessions,
+  quickHistory,
+  onOpenSession,
+  onRunQuick
 }: {
   assistant: WriteAssistantStageProps
   draft: PaperResearchDraft | null
   starting: boolean
   onStart: (request: PaperResearchRequest) => void
+  onShowDirect: () => void
+  sessions: readonly AgentHistorySession[]
+  quickHistory: readonly PaperSearchHistoryEntry[]
+  onOpenSession: (session: AgentHistorySession) => void
+  onRunQuick: (entry: PaperSearchHistoryEntry) => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
+  const [text, setText] = useState(draft?.query ?? '')
   const [scope, setScope] = useState<PaperResearchScope>(() => ({
     depth: 'standard',
     sources: draft?.sources.length ? [...draft.sources] : readSearchSources(),
     yearFrom: draft?.yearFrom ? String(draft.yearFrom) : '',
     yearTo: draft?.yearTo ? String(draft.yearTo) : ''
   }))
-  const seededDraft = useRef<PaperResearchDraft | null>(null)
+  const seededDraft = useRef<PaperResearchDraft | null>(draft)
 
-  // A hand-off from direct search pre-fills the composer once.
+  // A hand-off from quick search pre-fills the box once.
   useEffect(() => {
     if (!draft || seededDraft.current === draft) return
     seededDraft.current = draft
-    if (draft.query) assistant.setInput(draft.query)
-  }, [draft, assistant])
+    if (draft.query) setText(draft.query)
+  }, [draft])
 
   const updateScope = (next: PaperResearchScope): void => {
     setScope(next)
@@ -49,7 +60,7 @@ export function PaperResearchEmpty({
   }
 
   const send = (): void => {
-    const query = assistant.input.trim()
+    const query = text.trim()
     if (!query || starting) return
     onStart({
       query,
@@ -62,63 +73,27 @@ export function PaperResearchEmpty({
 
   return (
     <div data-testid="paper-research-empty" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[720px] flex-1 flex-col justify-center px-6 pb-[8vh] pt-10">
-        <div className="text-center">
-          <h1 className="text-[24px] font-medium leading-tight tracking-[-0.025em] text-ds-ink sm:text-[28px]">
-            {t('paperResearchHeroTitle')}
-          </h1>
-          <p className="mx-auto mt-3 max-w-[600px] text-[13px] leading-6 text-ds-muted">{t('paperResearchEmptySub')}</p>
-        </div>
+      <div className="mx-auto flex w-full max-w-[720px] flex-1 flex-col px-6 pb-10 pt-[min(15vh,132px)]">
+        <h1 className="text-center text-[24px] font-medium leading-tight tracking-[-0.025em] text-ds-ink sm:text-[28px]">
+          {t('paperResearchHeroTitle')}
+        </h1>
+        <p className="mx-auto mt-2.5 max-w-[640px] text-balance text-center text-[13px] leading-6 text-ds-muted">{t('paperResearchEmptySub')}</p>
         <div className="mt-7">
-          <div className="mb-1.5 px-1">
-            <PaperResearchScopeChips scope={scope} onChange={updateScope} />
+          <PaperSearchTabs tab="agent" onChange={(tab) => tab === 'direct' && onShowDirect()} />
+          <div className="mt-1.5">
+            <PaperResearchComposer
+              value={text}
+              onChange={setText}
+              onSubmit={send}
+              busy={starting}
+              placeholder={t('paperResearchQuestionPlaceholder')}
+              assistant={assistant}
+              scope={<PaperScopePill scope={scope} onChange={updateScope} />}
+            />
           </div>
-          <FloatingComposer
-            emptyTaskLayout
-            placeholderOverride={t('paperResearchQuestionPlaceholder')}
-            workspaceRootOverride={workspaceRoot}
-            input={assistant.input}
-            setInput={assistant.setInput}
-            mode={assistant.mode}
-            setMode={assistant.setMode}
-            busy={starting}
-            runtimeReady={assistant.runtimeConnection === 'ready'}
-            hasActiveThread={false}
-            composerModel={assistant.composerModel}
-            composerProviderId={assistant.composerProviderId}
-            composerPickList={assistant.composerPickList}
-            composerModelGroups={assistant.composerModelGroups}
-            skillCommands={assistant.skillCommands}
-            disabledSkillIds={assistant.disabledSkillIds}
-            composerReasoningEffort={assistant.composerReasoningEffort}
-            composerFastMode={assistant.composerFastMode}
-            onComposerModelChange={assistant.setComposerModel}
-            onComposerReasoningEffortChange={assistant.setComposerReasoningEffort}
-            onComposerFastModeChange={assistant.setComposerFastMode}
-            modelPickerMode="combobox"
-            modelControlVariant="split"
-            showProviderInModelLabel
-            queuedMessages={[]}
-            onRemoveQueuedMessage={() => undefined}
-            onGuideQueuedMessage={() => undefined}
-            onSend={send}
-            onInterrupt={() => undefined}
-            onConfigureProviders={assistant.onConfigureProviders}
-          />
         </div>
-        <div className="mt-5 flex flex-wrap justify-center gap-1.5">
-          {EXAMPLE_KEYS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              data-paper-research-example
-              disabled={starting}
-              onClick={() => assistant.setInput(t(key))}
-              className="rounded-full border border-ds-border-muted px-3 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
-            >
-              {t(key)}
-            </button>
-          ))}
+        <div className="mt-12">
+          <PaperResearchRecent sessions={sessions} quick={quickHistory} onOpenSession={onOpenSession} onRunQuick={onRunQuick} />
         </div>
       </div>
     </div>

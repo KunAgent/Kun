@@ -56,6 +56,11 @@ export type PaperDiscoverState = {
    * "new research" state starts pre-filled from it.
    */
   researchDraft: PaperResearchDraft | null
+  /**
+   * One-shot request for the quick-search page to run this search on mount
+   * (the home screen's "recent searches" re-run a past quick search).
+   */
+  quickRun: PaperResearchDraft | null
 }
 
 /**
@@ -151,7 +156,8 @@ const emptyDiscover = (): PaperDiscoverState => ({
   searchResult: null,
   searchLoading: false,
   searchError: null,
-  researchDraft: null
+  researchDraft: null,
+  quickRun: null
 })
 
 export const usePaperModeStore = create<PaperModeState>((set) => ({

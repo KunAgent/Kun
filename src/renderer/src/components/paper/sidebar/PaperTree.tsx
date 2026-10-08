@@ -5,6 +5,10 @@ import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { normalizePath } from '../../../write/write-workspace-store-helpers'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { setImportFolder } from '../../../paper/paper-import-target'
+import { freshCountFor, usePaperFreshFolders } from '../../../paper/paper-import-fresh'
+import { isPaperImportDrag, usePaperImportDrag } from '../../../paper/paper-import-drag'
+import { runPaperImport } from '../../../paper/paper-import-job'
+import { planPaperImport } from '../../../paper/paper-import-plan'
 import { usePaperRowMenu } from '../library/use-paper-row-menu'
 import { PaperTreeRow } from './PaperTreeRow'
 import { PaperNewFolderRow } from './PaperNewFolderRow'
@@ -43,8 +47,29 @@ export function PaperTree({
   // clicks hide groups for this filter session only (never persisted).
   const [filterHidden, setFilterHidden] = useState<ReadonlySet<string>>(() => new Set())
   const { host, openMenu } = usePaperRowMenu()
+  const fresh = usePaperFreshFolders((s) => s.byRoot[libraryRoot])
+  const freshVersion = usePaperFreshFolders((s) => s.version)
+  const dragOver = usePaperImportDrag((s) => s.overFolder)
+  const dragCount = usePaperImportDrag((s) => s.candidates.length)
 
   const query = filter.trim().toLowerCase()
+
+  // Folders that just received papers open themselves (and their parents).
+  useEffect(() => {
+    const names = Object.keys(usePaperFreshFolders.getState().byRoot[libraryRoot] ?? {})
+    if (!names.length) return
+    const open = new Set<string>()
+    for (const name of names) {
+      const parts = name.split('/')
+      for (let depth = 1; depth <= parts.length; depth += 1) open.add(parts.slice(0, depth).join('/'))
+    }
+    setCollapsed((current) => {
+      if (![...open].some((name) => current.has(name))) return current
+      const next = new Set([...current].filter((name) => !open.has(name)))
+      writeCollapsedGroups(libraryRoot, next)
+      return next
+    })
+  }, [freshVersion, libraryRoot])
 
   useEffect(() => {
     if (!query) setFilterHidden(new Set())
@@ -102,6 +127,16 @@ export function PaperTree({
     usePaperModeStore.getState().setImportDialogOpen(true)
   }
 
+  const dropOnFolder = (folder: string): void => {
+    const drag = usePaperImportDrag.getState()
+    const candidates = [...drag.candidates]
+    const scope = drag.scope
+    drag.end()
+    if (!candidates.length || libraryRoot !== normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)) return
+    const plan = planPaperImport(candidates, { folder, byGroup: false, owned: 'keep' })
+    void runPaperImport({ scope, plan, folder, t })
+  }
+
   const newFolderRow = creatingFolder && onCreatingFolderDone
     ? <PaperNewFolderRow libraryRoot={libraryRoot} onDone={onCreatingFolderDone} />
     : null
@@ -134,18 +169,54 @@ export function PaperTree({
           <div key={group} className="group/folder relative mt-0.5">
             <button
               type="button"
-              onClick={() => toggle(group)}
+              onClick={() => {
+                usePaperFreshFolders.getState().clear(libraryRoot, group)
+                toggle(group)
+              }}
+              onDragOver={(event) => {
+                if (!isPaperImportDrag(event.dataTransfer)) return
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'copy'
+                usePaperImportDrag.getState().hover(group)
+              }}
+              onDragLeave={() => usePaperImportDrag.getState().hover(null)}
+              onDrop={(event) => {
+                if (!isPaperImportDrag(event.dataTransfer)) return
+                event.preventDefault()
+                dropOnFolder(group)
+              }}
               title={group}
               style={{ paddingLeft: 6 + depth * 14 }}
-              className="flex h-7 w-full items-center gap-1 rounded-md px-1.5 pr-8 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+              className={`flex h-7 w-full items-center gap-1 rounded-md px-1.5 pr-8 text-[11.5px] font-medium transition ${
+                dragOver === group
+                  ? 'border border-dashed border-[var(--ds-accent)] bg-[var(--ds-accent-soft)] text-ds-ink'
+                  : freshCountFor(fresh, group) > 0
+                    ? 'bg-[var(--ds-accent-soft)]/70 text-ds-ink'
+                    : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+              }`}
             >
               <ChevronRight
                 className={`h-3 w-3 shrink-0 transition-transform ${collapsedGroup ? '' : 'rotate-90'}`}
                 strokeWidth={2}
               />
               <span className="min-w-0 flex-1 truncate">{parts[depth]}</span>
-              <span className="shrink-0 text-[10.5px] text-ds-faint group-hover/folder:invisible">{items.length}</span>
+              {freshCountFor(fresh, group) > 0 ? (
+                <span className="shrink-0 rounded-full bg-[var(--ds-accent)] px-1.5 text-[10px] font-semibold leading-[15px] text-white group-hover/folder:invisible">
+                  {t('paperFolderNewCount', { count: freshCountFor(fresh, group) })}
+                </span>
+              ) : (
+                <span className="shrink-0 text-[10.5px] text-ds-faint group-hover/folder:invisible">{items.length}</span>
+              )}
             </button>
+            {dragOver === group ? (
+              <div
+                role="status"
+                style={{ left: 28 + depth * 14 }}
+                className="pointer-events-none absolute top-8 z-20 whitespace-nowrap rounded-lg bg-[#20242d] px-2.5 py-1.5 text-[11.5px] text-white shadow-[0_8px_20px_rgba(15,23,42,0.2)]"
+              >
+                {t('paperDropToFolder', { count: dragCount, folder: parts[depth] })}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => void importInto(group)}

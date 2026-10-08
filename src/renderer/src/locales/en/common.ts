@@ -50,6 +50,7 @@ import workMainline from './common/work-mainline.json'
 import conversationManage from './common/conversation-manage.json'
 import usagePanel from './common/usage-panel.json'
 import conversationExport from './common/conversation-export.json'
+import paperSearch from './common/paper-search.json'
 
 const common = {
   ...agentDispatch,
@@ -109,6 +110,7 @@ const common = {
   ...conversationManage,
   ...usagePanel,
   ...conversationExport,
+  ...paperSearch,
 }
 
 export default common

@@ -26,5 +26,5 @@ export function resetPaperWorkspaceContent(): void {
     infoDrawerOpen: false,
     readerPage: null
   })
-  usePaperModeStore.getState().patchDiscover({ researchDraft: null })
+  usePaperModeStore.getState().patchDiscover({ researchDraft: null, quickRun: null })
 }

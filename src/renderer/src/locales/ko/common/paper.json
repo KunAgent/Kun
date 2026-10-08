@@ -372,7 +372,7 @@
   "writePaperSearchAllFailed": "모든 소스가 실패했습니다 — 네트워크 또는 프록시 설정을 확인하세요.",
   "writePaperSearchProxyHintLink": "프록시 설정 열기",
   "writePaperSearchPartialFailure": "일부 소스가 응답하지 않았습니다: {{sources}}",
-  "writePaperSearchKeyboardHint": "단축키: / 검색 포커스 · ↑↓ 이동 · Enter 상세 · x 선택 · i 가져오기 · Esc 닫기",
+  "writePaperSearchKeyboardHint": "단축키: / 검색 포커스 · ↑↓ 이동 · Enter 상세 · x 선택 · Esc 닫기",
   "writePaperSearchSelectHit": "선택",
   "writePaperSearchSelectAll": "전체 선택",
   "writePaperSearchSelected": "{{count}}개 선택됨",

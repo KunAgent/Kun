@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { usePaperStore } from '../../write/paper/paper-store'
 
 const PAPER_NOTICE_MS = 6000
+/** Notices that offer Undo stay long enough to be used. */
+const PAPER_NOTICE_ACTION_MS = 12000
 
 /**
  * Single renderer for `usePaperStore.notice` on both Work surfaces. Paper
@@ -19,7 +21,7 @@ export function PaperNoticeToast(): ReactElement | null {
     if (!notice) return
     const timer = window.setTimeout(() => {
       if (usePaperStore.getState().notice === notice) usePaperStore.getState().setNotice(null)
-    }, PAPER_NOTICE_MS)
+    }, notice.action ? PAPER_NOTICE_ACTION_MS : PAPER_NOTICE_MS)
     return () => window.clearTimeout(timer)
   }, [notice])
 
@@ -35,6 +37,19 @@ export function PaperNoticeToast(): ReactElement | null {
       className={`ds-no-drag fixed bottom-5 left-1/2 z-50 flex max-w-[min(560px,calc(100vw-32px))] -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-[13px] shadow-[0_14px_32px_rgba(20,47,95,0.12)] ${toneClass}`}
     >
       <span className="min-w-0 flex-1 truncate" title={notice.message}>{notice.message}</span>
+      {notice.secondaryAction ? (
+        <button
+          type="button"
+          data-work-notice-secondary-action
+          onClick={() => {
+            usePaperStore.getState().setNotice(null)
+            notice.secondaryAction?.run()
+          }}
+          className="shrink-0 rounded-full px-2 py-0.5 font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+        >
+          {notice.secondaryAction.label}
+        </button>
+      ) : null}
       {notice.action ? (
         <button
           type="button"

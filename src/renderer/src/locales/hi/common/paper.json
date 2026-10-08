@@ -372,7 +372,7 @@
   "writePaperSearchAllFailed": "सभी स्रोत विफल — नेटवर्क या प्रॉक्सी सेटिंग जाँचें।",
   "writePaperSearchProxyHintLink": "प्रॉक्सी सेटिंग खोलें",
   "writePaperSearchPartialFailure": "कुछ स्रोतों ने जवाब नहीं दिया: {{sources}}",
-  "writePaperSearchKeyboardHint": "कुंजियाँ: / खोज पर फ़ोकस · ↑↓ चलें · Enter विवरण · x चुनें · i इम्पोर्ट · Esc बंद करें",
+  "writePaperSearchKeyboardHint": "कुंजियाँ: / खोज पर फ़ोकस · ↑↓ चलें · Enter विवरण · x चुनें · Esc बंद करें",
   "writePaperSearchSelectHit": "चुनें",
   "writePaperSearchSelectAll": "सभी चुनें",
   "writePaperSearchSelected": "{{count}} चुने गए",
