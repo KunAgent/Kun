@@ -103,7 +103,7 @@ harness 重探测瞬间多出的子进程: `claude` 209 MB + 194 MB,`agy models`
    `documentBackend.read()` 取回完整 306 KB 的 value 再比对 revision,命中缓存也已经传输+解析过一遍。
    main 里有 115 处 `store.load()`,很多在定时器或每个 runtimeRequest 前触发。
    这是 main 每 10 秒收 13-22 MB 的来源,也是 manager 热点里 `crypto hash update` 的来源。
-   设置里 `schedule.tasks` 占 122 KB、`provider` 59 KB,文档本身也过大。
+   设置里 `schedule.tasks` 占 122 KB(实施时核实:内容是用户写的任务 prompt,不是运行历史)、`provider` 59 KB。
 2. renderer `shared-business-storage` 每 1 秒轮询 `shared-client-state:get`(8.5 KB 文档)-> main -> manager。
 3. runtime 空闲循环: rooms runtime idle tick 15 s(拉 room 列表和文档,文档内含 base64 截图),
    `agent-memory-coordinator.tick -> scrubForgotten -> isForgotten` 逐条 RPC,
@@ -172,7 +172,7 @@ usage 索引已全部回填(2529/2529),所以当前空闲流量不是回填造�
   `JsonSettingsStore.loadOnce()` 传入已缓存 revision。manager 侧改为 revision 变更时推送
   (复用现有 SSE/notify 通道)而不是让 renderer 每秒轮询 `shared-client-state`;
   `shared-business-storage` 的 1 s 轮询降为事件驱动 + 15 s 兜底。
-  把 `schedule.tasks` 的运行历史从设置文档拆到独立存储(设置只保留定义)。
+  (原计划拆分 `schedule.tasks` 运行历史;实施时核实这 100 KB 是任务 prompt,条件读取已消除重复传输,不再拆分。)
 - 文件: `kun/src/manager/manager-client.ts`、`kun/src/manager/service-manager-router.ts`(642 行附近)、
   `src/main/settings-store-class.ts`、`src/renderer/src/lib/shared-business-storage.ts`、
   `src/main/schedule-runtime*.ts`。
@@ -321,3 +321,79 @@ Electron-as-Node 进程数 <= 2、无 harness CLI 子进程"的断言,防止回�
 - P1-2 合并 guard 时要保留 Windows 路径(当前 guard 脚本里有 Windows 专用逻辑),并确保 runtime 异常退出时其子进程仍被清理。
 - 以上测量在 2529 个线程、8.6 GB 数据目录的机器上完成;线程少的用户震荡幅度会小一些,
   但 R2(harness 脉冲)、R3(进程底价)、R4(main 急切加载)与数据量无关。
+
+## 8. 实施结果(2026-10-08,分支 `codex/idle-memory-optimization`)
+
+### 8.1 实施中的新发现
+
+- **活动监视器看到的是 footprint,不是 RSS。** 旧版真实 profile 下主进程 footprint 876 MB、manager 651 MB、
+  runtime 389 MB、渲染进程 189 MB,合计约 2.2 GB,与"2-3 GB"一致;RSS 只有约 1.5 GB,因为空闲页被系统压缩。
+  footprint 的大头是 `app-specific tag 16`(Chromium 的 V8 标签,含 V8 沙箱内的 ArrayBuffer 分区):
+  主进程 727 MB、manager 600 MB,而 V8 堆本身只有 100-200 MB。网络读写缓冲区都分配在这个分区里,
+  ELECTRON_RUN_AS_NODE 子进程没有 Chromium 的内存回收任务,高峰后不归还。所以 RPC 流量会直接沉淀成常驻内存,
+  治本方法是减少传输量,而不是调 GC。
+- **rooms 循环永远以 1 秒节奏运行。** 4 个等待"永远不会 idle 的 peer topic"的记忆捕获任务被当作活跃工作,
+  导致运行时每分钟约 4000 次 room/get、2900 次 room/list。
+- **遗忘记忆扫描风暴。** 每次 tick 对每个待处理快照做一次 isForgotten RPC(每次都重读遗忘账本),约 820 次/分。
+- **主进程每个 runtime 请求都做健康探测。** ensureRuntime 每次都探测 /health、/v1/runtime/info 和网关凭据,
+  在扩展泵驱动下各约 200 次/分。
+- **空闲时注册表写入循环。** 凭据读取路径上的"过期事务恢复"即使无事可做也会回写 model-connections.v2.json 并推进修订号,
+  修订号变化又唤醒渲染层重新解析凭据,形成每分钟数次的写入。定时任务/工作流每 30 秒的 tick 也会解析全部凭据。
+- **启动期全量读取线程。** settled-interruption 扫描对每个非归档线程完整拉取 thread record(2000+ 线程约 300 MB)。
+- **启动期的 3 次 config apply 中有 2 次只是更新原生 Agent 网络策略**,却触发整代运行时重建。
+- 观测数据保留策略类早已存在,但生产环境从未启用;它的 trim 会把整个文件读入内存。
+
+### 8.2 各计划项状态
+
+| 计划项 | 状态 | 提交 |
+| --- | --- | --- |
+| P0-1 设置文档条件读取、client-state 缓存、扩展泵空闲拉长 | 完成 | perf(settings): stop re-sending the settings document on every load |
+| P0-2 harness 就绪懒验证 + 持久化 | 完成 | perf(harness): stop re-spawning Agent CLIs to keep readiness fresh |
+| P0-3 apply 去重、MCP/officecli 复用 | 完成 | perf(runtime): stop rebuilding the Runtime for network-only config applies |
+| P0-3 stdio MCP 懒连接 | 完成(目录缓存 + 首次调用才拉起) | perf(mcp): spawn stdio MCP servers on first use |
+| P0-4 RPC 超时信号可清理 | 完成(未下调超时常量,改为请求结束即释放) | perf(manager): release Manager RPC timeout signals when requests settle |
+| P0-5 runtime/info 缓存、rooms 降噪、遗忘扫描节流、启动扫描用元数据 | 完成 | perf(manager)… / perf(rooms): stop the idle room loop from polling the Manager every second |
+| 新增:ensureRuntime 健康窗口 | 完成 | perf(main): reuse a recent healthy Runtime check for back-to-back requests |
+| 新增:注册表空写循环、定时任务 tick 解析凭据 | 完成 | perf(credentials): stop idle credential reads from rewriting the Registry |
+| P1-1 主进程重依赖懒加载 + 门禁脚本 | 完成(electron-updater 除外) | perf(main): load feature-only libraries on first use |
+| P1-1(延伸)kun serve 不加载其他子命令 | 完成 | perf(cli): keep non-serve subcommands out of the kun serve process |
+| P1-2 守护进程合并 | 改为空闲回收:无受管子进程 60 秒后退出 | perf(process): retire idle owned-process guards |
+| P1-2 schedule-mcp 内置化 | 由 stdio MCP 懒连接替代(不改工具契约) | perf(mcp): spawn stdio MCP servers on first use |
+| P1-3 线程列表瘦身 | 部分:列表不再逐行 stat;字段裁剪与去 zod 未做 | perf(threads): stop re-statting every thread file on each list |
+| P1-4 V8 新生代上限 + 内存高水位日志 | 完成 | perf(runtime): cap V8 young generation for Manager, Runtime, and renderers |
+| P2-2 观测数据保留 | 完成(默认启用,尾部读取) | fix(observability): bound model request traces by default |
+| P2-3 空闲内存基线 | 完成(`npm run smoke:idle-memory`) | test(perf): add an idle memory budget smoke |
+| P2-1 读路径绕过 manager | 未做 | — |
+
+### 8.3 对照测量(隔离空 profile,第二次启动后空闲 2 分钟,同一脚本)
+
+| 指标 | 旧版(develop 构建) | 新版 |
+| --- | --- | --- |
+| 设置文档读取 | 212 次/分(全量) | 51 次/分(仅 etag) |
+| /health + /v1/runtime/info | 405 次/分 | 13 次/分 |
+| 扩展泵请求 | 196 次/分 | 34 次/分 |
+| 注册表读/写 | 约 32 读、4 写/分 | 0 |
+| 常驻进程 | 9(含 2 个守护进程和 schedule-mcp) | 7 |
+| 主进程 footprint | 243 → 272 MB,持续增长 | 约 199 MB,平稳 |
+| 进程树 footprint | 762 → 805 MB,持续增长 | 约 645 MB,平稳 |
+
+空 profile 下 rooms、线程、设置文档都很小,真实 profile 的差距更大(旧版 RPC 体量与线程数、设置大小成正比)。
+本次未能在真实 profile 上做打包版对照:机器磁盘仅剩 1-4 GB,打包(约 800 MB 加临时文件)有写满磁盘的风险。
+建议在有空间时执行:
+
+```bash
+npm run dist:mac:arm64
+node scripts/smoke-idle-memory.cjs --idle-seconds 180
+```
+
+再按第 6 节用 `footprint -p <pid>` 对比真实 profile 下各进程的 footprint。
+
+### 8.4 未做或改变做法的项目
+
+- **electron-updater 懒加载**:它参与启动时的待安装更新核对和更新排期,改造需要重构整条更新链路,收益约几 MB,风险不对等。
+- **运行时去掉对 manager 响应的 zod 校验**:manager 可能来自不同构建(跨版本交接),这层校验是安全边界。
+- **线程列表字段裁剪**:空闲时实测没有列表流量,只在启动和维护任务中出现,收益有限。
+- **schedule-mcp 内置为运行时工具**:会改变工具命名契约,并牵涉主进程写入的 MCP 配置和 TUI;stdio 懒连接已消除其常驻进程。
+- **P2-1 读路径绕过 manager**:改变数据所有权模型(manager 的缓存、写队列、租约与 fence),一致性风险高;
+  空闲流量已降一个数量级,建议在有专门设计评审后再做。
+- **线程冷归档、usage 预聚合**:涉及历史数据格式与读取路径,不属于空闲内存问题的必要部分,保留为后续议题。
