@@ -10,6 +10,24 @@ export type ConversationExportLabels = {
   generatedFiles: string
   sources: string
   attachment: string
+  toolCalls?: string
+  reasoning?: string
+}
+
+export type ConversationExportInclude = {
+  attachments: boolean
+  sources: boolean
+  generated: boolean
+  toolCalls: boolean
+  reasoning: boolean
+}
+
+export const DEFAULT_CONVERSATION_EXPORT_INCLUDE: ConversationExportInclude = {
+  attachments: true,
+  sources: true,
+  generated: true,
+  toolCalls: false,
+  reasoning: false
 }
 
 export type ConversationExportDocument = {
@@ -194,6 +212,26 @@ function generatedFileLabel(entry: unknown): string {
   return name ? markdownHeadingText(name) : relativePath ? inlineCode(relativePath) : ''
 }
 
+function turnTrace(annotated: AnnotatedBlock[]): {
+  toolCalls: Map<string, string[]>
+  reasoning: Map<string, string[]>
+} {
+  const toolCalls = new Map<string, string[]>()
+  const reasoning = new Map<string, string[]>()
+  for (const { block, turnKey } of annotated) {
+    if (block.kind === 'tool') {
+      const summary = singleLine(block.summary)
+      if (!summary) continue
+      const mark = block.status === 'error' ? ' (failed)' : ''
+      toolCalls.set(turnKey, [...(toolCalls.get(turnKey) ?? []), `- ${markdownHeadingText(summary)}${mark}`])
+    } else if (block.kind === 'reasoning' && block.text.trim()) {
+      const quoted = block.text.trim().split('\n').map((line) => `> ${line}`.trimEnd()).join('\n')
+      reasoning.set(turnKey, [...(reasoning.get(turnKey) ?? []), quoted])
+    }
+  }
+  return { toolCalls, reasoning }
+}
+
 function turnExtras(annotated: AnnotatedBlock[]): {
   generatedFiles: Map<string, string[]>
   sources: Map<string, SafeSource[]>
@@ -247,7 +285,9 @@ export function buildConversationExportDocument(options: {
   busy: boolean
   currentTurnId?: string | null
   currentTurnUserId?: string | null
+  include?: Partial<ConversationExportInclude>
 }): ConversationExportDocument {
+  const include = { ...DEFAULT_CONVERSATION_EXPORT_INCLUDE, ...options.include }
   const eligible = completedBlocks(options)
   const annotated = annotateBlocks(eligible)
   const completedTurnKeys = new Set(
@@ -262,6 +302,7 @@ export function buildConversationExportDocument(options: {
     }
   }
   const extras = turnExtras(annotated)
+  const trace = turnTrace(annotated)
   const sections: string[] = []
 
   for (const entry of annotated) {
@@ -282,13 +323,19 @@ export function buildConversationExportDocument(options: {
 
     if (block.kind === 'user') {
       const attachments = attachmentLines(block, options.labels)
-      if (attachments.length > 0) section.push(`### ${markdownHeadingText(options.labels.attachments)}\n\n${attachments.join('\n')}`)
+      if (include.attachments && attachments.length > 0) section.push(`### ${markdownHeadingText(options.labels.attachments)}\n\n${attachments.join('\n')}`)
       const references = referencedFileLines(block)
-      if (references.length > 0) section.push(`### ${markdownHeadingText(options.labels.referencedFiles)}\n\n${references.join('\n')}`)
+      if (include.attachments && references.length > 0) section.push(`### ${markdownHeadingText(options.labels.referencedFiles)}\n\n${references.join('\n')}`)
     } else if (lastAssistantIndex.get(turnKey) === entry.index) {
-      const generated = extras.generatedFiles.get(turnKey) ?? []
+      const reasoning = include.reasoning ? trace.reasoning.get(turnKey) ?? [] : []
+      if (reasoning.length > 0) {
+        section.push(`### ${markdownHeadingText(options.labels.reasoning ?? 'Reasoning')}\n\n${reasoning.join('\n>\n')}`)
+      }
+      const toolCalls = include.toolCalls ? trace.toolCalls.get(turnKey) ?? [] : []
+      if (toolCalls.length > 0) section.push(`### ${markdownHeadingText(options.labels.toolCalls ?? 'Tool calls')}\n\n${toolCalls.join('\n')}`)
+      const generated = include.generated ? extras.generatedFiles.get(turnKey) ?? [] : []
       if (generated.length > 0) section.push(`### ${markdownHeadingText(options.labels.generatedFiles)}\n\n${generated.join('\n')}`)
-      const sources = extras.sources.get(turnKey) ?? []
+      const sources = include.sources ? extras.sources.get(turnKey) ?? [] : []
       if (sources.length > 0) {
         const sourceLines = sources.map((source) =>
           source.title ? `- ${markdownHeadingText(source.title)} — <${source.url}>` : `- <${source.url}>`

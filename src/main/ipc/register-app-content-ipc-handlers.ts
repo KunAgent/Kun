@@ -27,6 +27,7 @@ import type {
 import {
   appBadgeCountSchema,
   computerUsePermissionKindSchema,
+  conversationExportBatchPayloadSchema,
   conversationExportPayloadSchema,
   desktopCommandSchema,
   guiUpdateChannelSchema,
@@ -171,6 +172,12 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
   ipcMain.handle('conversation:export', async (_, payload: unknown) =>
     (await loadConversationExportService()).exportConversation(
       parseIpcPayload('conversation:export', conversationExportPayloadSchema, payload),
+      { parentWindow: getMainWindow() }
+    )
+  )
+  ipcMain.handle('conversation:export-batch', async (_, payload: unknown) =>
+    (await loadConversationExportService()).exportConversationBatch(
+      parseIpcPayload('conversation:export-batch', conversationExportBatchPayloadSchema, payload),
       { parentWindow: getMainWindow() }
     )
   )

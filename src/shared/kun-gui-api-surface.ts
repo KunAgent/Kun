@@ -150,6 +150,8 @@ import type {
   WriteRichClipboardResult
 } from './write-export'
 import type {
+  ConversationExportBatchPayload,
+  ConversationExportBatchResult,
   ConversationExportPayload,
   ConversationExportResult
 } from './conversation-export'
@@ -594,6 +596,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   clearWriteInlineCompletionDebugEntries: () => Promise<boolean>
   exportWriteDocument: (payload: WriteExportPayload) => Promise<WriteExportResult>
   exportConversation: (payload: ConversationExportPayload) => Promise<ConversationExportResult>
+  exportConversationBatch: (payload: ConversationExportBatchPayload) => Promise<ConversationExportBatchResult>
   exportMemoryMarkdown: (payload: MemoryMarkdownExportSavePayload) => Promise<MemoryMarkdownExportSaveResult>
   exportDesignPrototype: (payload: DesignExportPayload) => Promise<DesignExportResult>
   copyWriteDocumentAsRichText: (

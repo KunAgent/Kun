@@ -320,6 +320,8 @@ const api = {
   ...writeBridge,
   exportConversation: (payload) =>
     ipcRenderer.invoke('conversation:export', payload),
+  exportConversationBatch: (payload) =>
+    ipcRenderer.invoke('conversation:export-batch', payload),
   exportMemoryMarkdown: (payload) =>
     ipcRenderer.invoke('memory:export-markdown', payload),
   exportDesignPrototype: (payload) =>

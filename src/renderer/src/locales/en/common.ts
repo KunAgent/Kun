@@ -49,6 +49,7 @@ import workSidebar from './common/work-sidebar.json'
 import workMainline from './common/work-mainline.json'
 import conversationManage from './common/conversation-manage.json'
 import usagePanel from './common/usage-panel.json'
+import conversationExport from './common/conversation-export.json'
 
 const common = {
   ...agentDispatch,
@@ -107,6 +108,7 @@ const common = {
   ...workMainline,
   ...conversationManage,
   ...usagePanel,
+  ...conversationExport,
 }
 
 export default common

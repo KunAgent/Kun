@@ -512,6 +512,7 @@
     // Write/design exports + inline tools.
     exportWriteDocument: invokePayload('write:export'),
     exportConversation: invokePayload('conversation:export'),
+    exportConversationBatch: invokePayload('conversation:export-batch'),
     exportMemoryMarkdown: invokePayload('memory:export-markdown'),
     exportDesignPrototype: invokePayload('design:export-prototype'),
     copyWriteDocumentAsRichText: invokePayload('write:copy-rich-text'),
