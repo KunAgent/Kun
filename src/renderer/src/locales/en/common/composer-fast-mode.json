@@ -19,5 +19,11 @@
     "hint": "Provided by the Agent; applies to your next message.",
     "reset": "Reset"
   },
-  "contextCapacityInputLimit": "Input limit {{input}} · Total context {{context}}"
+  "contextCapacityInputLimit": "Input limit {{input}} · Total context {{context}}",
+  "contextCapacityAgentFallback": "Agent",
+  "contextCapacityAgentOverLimit": "Near the limit · {{agent}} compacts",
+  "contextCapacityAgentReported": "{{agent}}'s latest request",
+  "contextCapacityAgentThresholdLabel": "Compacts at ~{{percent}}",
+  "contextCapacityAgentUsed": "Used (reported by {{agent}})",
+  "contextCapacityAgentReportedNote": "Reported by {{agent}}: the context of its latest request. Kun cannot split it into system prompt, tools and messages; cumulative consumption is in the usage bar below."
 }

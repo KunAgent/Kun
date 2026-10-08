@@ -24,6 +24,14 @@ export type ContextCapacity = {
   estimated: true
   /** The SDK owns prior native history but does not report its occupancy. */
   nativeHistoryUnknown: boolean
+  /** The Agent (not Kun) owns this context and compacts it itself. */
+  agentManaged: boolean
+  /** The Agent measured the total itself; there is no category breakdown. */
+  agentReported: boolean
+  /** Whether the soft threshold is a real compaction point for this context. */
+  thresholdKnown: boolean
+  /** Threshold that colors the gauge: the compaction point, else the window. */
+  alertRatio: number
 }
 
 const CATEGORY_ORDER: readonly ContextCategoryKey[] = [
@@ -60,6 +68,13 @@ export function buildContextCapacity(snapshot: RequestContextSnapshot): ContextC
   })
   const usedTokens = categories.reduce((sum, category) => sum + category.tokens, 0)
   const freeTokens = Math.max(0, windowTokens - usedTokens)
+  const agentManaged = snapshot.contextManagement === 'sdk-managed'
+  const agentReported = snapshot.occupancySource === 'agent'
+  const softThresholdRatio = clamp(snapshot.softThresholdTokens / windowTokens, 0, 1)
+  const hardThresholdRatio = clamp(snapshot.hardThresholdTokens / windowTokens, 0, 1)
+  // Kun's own thresholds describe Kun's compaction. An Agent compacts at its
+  // own point, which only an Agent-reported snapshot below the window carries.
+  const thresholdKnown = !agentManaged || (agentReported && softThresholdRatio < hardThresholdRatio)
   return {
     windowTokens,
     totalWindowTokens,
@@ -68,12 +83,14 @@ export function buildContextCapacity(snapshot: RequestContextSnapshot): ContextC
     freeTokens,
     usedRatio: clamp(usedTokens / windowTokens, 0, 1),
     freeRatio: clamp(freeTokens / windowTokens, 0, 1),
-    softThresholdRatio: clamp(snapshot.softThresholdTokens / windowTokens, 0, 1),
-    hardThresholdRatio: clamp(snapshot.hardThresholdTokens / windowTokens, 0, 1),
+    softThresholdRatio,
+    hardThresholdRatio,
     categories,
     estimated: true,
-    nativeHistoryUnknown:
-      snapshot.contextManagement === 'sdk-managed' &&
-      snapshot.nativeHistory === 'unknown'
+    nativeHistoryUnknown: agentManaged && snapshot.nativeHistory === 'unknown',
+    agentManaged,
+    agentReported,
+    thresholdKnown,
+    alertRatio: thresholdKnown ? softThresholdRatio : Math.max(hardThresholdRatio, 1)
   }
 }

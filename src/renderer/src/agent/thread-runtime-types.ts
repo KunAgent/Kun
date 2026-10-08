@@ -58,6 +58,8 @@ export type RequestContextSnapshot = {
   activeSkillIds: string[]
   contextManagement?: 'kun-managed' | 'sdk-managed'
   nativeHistory?: 'known' | 'unknown' | 'none'
+  /** `agent`: the Agent measured its own request; no category breakdown exists. */
+  occupancySource?: 'estimate' | 'agent'
 }
 
 export type DelegatedRuntimeState = {

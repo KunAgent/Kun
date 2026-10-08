@@ -445,7 +445,9 @@ export const ContextSnapshotEvent = RuntimeEventBase.extend({
   toolCount: z.number().int().nonnegative(),
   activeSkillIds: z.array(z.string().min(1)),
   contextManagement: z.enum(['kun-managed', 'sdk-managed']).optional(),
-  nativeHistory: z.enum(['known', 'unknown', 'none']).optional()
+  nativeHistory: z.enum(['known', 'unknown', 'none']).optional(),
+  /** `agent`: the Agent measured its own request; Kun cannot split it, so `breakdown.messages` holds it all. */
+  occupancySource: z.enum(['estimate', 'agent']).optional()
 })
 export type ContextSnapshotEvent = z.infer<typeof ContextSnapshotEvent>
 

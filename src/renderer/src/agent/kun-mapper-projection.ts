@@ -271,11 +271,9 @@ export function contextSnapshotFromCore(event: CoreRuntimeEventJson): RequestCon
     ...(event.contextManagement === 'kun-managed' || event.contextManagement === 'sdk-managed'
       ? { contextManagement: event.contextManagement }
       : {}),
-    ...(event.nativeHistory === 'known' ||
-      event.nativeHistory === 'unknown' ||
-      event.nativeHistory === 'none'
-      ? { nativeHistory: event.nativeHistory }
-      : {})
+    ...(event.nativeHistory === 'known' || event.nativeHistory === 'unknown' || event.nativeHistory === 'none'
+      ? { nativeHistory: event.nativeHistory } : {}),
+    ...(event.occupancySource === 'agent' || event.occupancySource === 'estimate' ? { occupancySource: event.occupancySource } : {})
   }
 }
 

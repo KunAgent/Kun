@@ -433,7 +433,9 @@ export class AcpEventMapper {
         toolCount: this.toolCalls.size,
         activeSkillIds: [],
         contextManagement: 'sdk-managed',
-        nativeHistory: 'known'
+        nativeHistory: 'known',
+        // The Agent's own occupancy; its compaction point is not reported.
+        occupancySource: 'agent'
       })
     }
     return drafts

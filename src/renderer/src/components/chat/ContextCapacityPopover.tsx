@@ -21,12 +21,15 @@ function stateColor(usedRatio: number, thresholdRatio: number): string {
 
 type Props = {
   capacity: ContextCapacity
+  /** Display name of the Agent that owns an Agent-managed context. */
+  agentName?: string
   style?: CSSProperties
 }
 
-export function ContextCapacityPopover({ capacity, style }: Props): ReactElement {
+export function ContextCapacityPopover({ capacity, agentName, style }: Props): ReactElement {
   const { t } = useTranslation()
-  const thresholdRatio = capacity.softThresholdRatio
+  const agent = agentName?.trim() || t('contextCapacityAgentFallback')
+  const thresholdRatio = capacity.alertRatio
   const accent = capacity.nativeHistoryUnknown
     ? 'var(--ds-muted)'
     : stateColor(capacity.usedRatio, thresholdRatio)
@@ -38,14 +41,21 @@ export function ContextCapacityPopover({ capacity, style }: Props): ReactElement
     capacity.categories.find((c) => c.key === key)
   ).filter((c): c is NonNullable<typeof c> => Boolean(c) && (c?.tokens ?? 0) > 0)
 
+  // Kun compacts only its own context; an Agent-managed one is the Agent's call.
   const statusText =
     capacity.nativeHistoryUnknown
       ? t('contextCapacitySdkManagedUnknown')
       : capacity.usedRatio >= thresholdRatio
-      ? t('contextCapacityOverLimit')
+      ? t(capacity.agentManaged ? 'contextCapacityAgentOverLimit' : 'contextCapacityOverLimit', { agent })
       : capacity.usedRatio >= thresholdRatio * 0.85
         ? t('contextCapacityNearLimit')
-        : t('contextCapacityShareNote')
+        : capacity.agentReported
+          ? t('contextCapacityAgentReported', { agent })
+          : t('contextCapacityShareNote')
+  const thresholdLabel = capacity.agentManaged
+    ? t('contextCapacityAgentThresholdLabel', { percent: formatPercent(thresholdRatio), agent })
+    : t('contextCapacityThresholdLabel', { percent: formatPercent(thresholdRatio) })
+  const showThreshold = !capacity.nativeHistoryUnknown && capacity.thresholdKnown
 
   return (
     <div
@@ -84,36 +94,43 @@ export function ContextCapacityPopover({ capacity, style }: Props): ReactElement
           role="img"
           aria-label={t('contextCapacityBarAria', { percent: formatPercent(capacity.usedRatio) })}
         >
-          {visibleSegments.map((segment) => (
-            <span
-              key={segment.key}
-              style={{
-                width: `${segment.ratio * 100}%`,
-                minWidth: segment.key === 'messages' ? undefined : 2,
-                background: CATEGORY_COLORS[segment.key]
-              }}
-            />
-          ))}
+          {capacity.agentReported
+            ? <span style={{ width: `${capacity.usedRatio * 100}%`, background: accent }} data-context-agent-segment />
+            : visibleSegments.map((segment) => (
+              <span
+                key={segment.key}
+                style={{
+                  width: `${segment.ratio * 100}%`,
+                  minWidth: segment.key === 'messages' ? undefined : 2,
+                  background: CATEGORY_COLORS[segment.key]
+                }}
+              />
+            ))}
         </div>
-        <span
+        {showThreshold ? <span
           className="absolute -bottom-1 -top-1 w-px rounded"
           style={{ left: `${thresholdRatio * 100}%`, background: 'var(--ds-text-faint)', opacity: 0.45 }}
-          title={t('contextCapacityThresholdLabel', { percent: formatPercent(thresholdRatio) })}
+          title={thresholdLabel}
           aria-hidden="true"
-        />
+        /> : null}
       </div> : null}
 
-      <div className="mb-2 flex items-center justify-between text-[11px]">
-        <span className="font-medium" style={{ color: accent }}>
+      <div className="mb-2 flex items-center justify-between gap-2 text-[11px]">
+        <span className="min-w-0 truncate font-medium" style={{ color: accent }} title={statusText}>
           {statusText}
         </span>
-        {!capacity.nativeHistoryUnknown ? <span className="text-ds-faint">
-          {t('contextCapacityThresholdLabel', { percent: formatPercent(thresholdRatio) })}
-        </span> : null}
+        {showThreshold ? <span className="shrink-0 whitespace-nowrap text-ds-faint" data-context-threshold-label>{thresholdLabel}</span> : null}
       </div>
 
       <div className="flex flex-col">
-        {CATEGORY_ORDER.map((key) => {
+        {capacity.agentReported ? (
+          <div className="grid grid-cols-[13px_1fr_auto_46px] items-center gap-x-2 py-[3px]" data-context-agent-row>
+            <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: accent }} />
+            <span className="truncate text-[12.5px] text-ds-muted">{t('contextCapacityAgentUsed', { agent })}</span>
+            <span className="text-[12px] tabular-nums text-ds-ink">{formatCompactNumber(capacity.usedTokens)}</span>
+            <span className="text-right text-[12px] tabular-nums text-ds-faint">{formatPercent(capacity.usedRatio)}</span>
+          </div>
+        ) : CATEGORY_ORDER.map((key) => {
           const category = capacity.categories.find((c) => c.key === key)
           if (!category) return null
           return (
@@ -145,13 +162,13 @@ export function ContextCapacityPopover({ capacity, style }: Props): ReactElement
         </div> : null}
       </div>
 
-      {capacity.estimated ? (
-        <p className="mt-2.5 text-[10.5px] leading-snug text-ds-faint">
-          {capacity.nativeHistoryUnknown
-            ? t('contextCapacitySdkManagedEstimate')
+      <p className="mt-2.5 text-[10.5px] leading-snug text-ds-faint">
+        {capacity.nativeHistoryUnknown
+          ? t('contextCapacitySdkManagedEstimate')
+          : capacity.agentReported
+            ? t('contextCapacityAgentReportedNote', { agent })
             : t('contextCapacityEstimatedBreakdown')}
-        </p>
-      ) : null}
+      </p>
     </div>
   )
 }

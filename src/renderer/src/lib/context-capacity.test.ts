@@ -109,4 +109,26 @@ describe('buildContextCapacity', () => {
     expect(cap.nativeHistoryUnknown).toBe(true)
     expect(cap.usedTokens).toBe(60_000)
   })
+
+  it('treats an Agent-reported total as one figure with the Agent\'s own compaction point', () => {
+    // Codex: latest call against its effective window, compaction at 90/95 of it.
+    const cap = buildContextCapacity(snapshot({ contextWindowTokens: 950_000, softThresholdTokens: 900_000, hardThresholdTokens: 950_000,
+      estimatedInputTokens: 107_624, breakdown: { tools: 0, system: 0, skills: 0, messages: 107_624, other: 0 },
+      contextManagement: 'sdk-managed', nativeHistory: 'known', occupancySource: 'agent' }))
+    expect(cap).toMatchObject({ agentManaged: true, agentReported: true, thresholdKnown: true, usedTokens: 107_624 })
+    expect(cap.alertRatio).toBeCloseTo(900_000 / 950_000)
+    expect(cap.usedRatio).toBeCloseTo(0.113, 3)
+  })
+
+  it('shows no compaction point an Agent did not report, and never Kun\'s for an Agent context', () => {
+    // ACP usage_update: occupancy and size only.
+    const acp = buildContextCapacity(snapshot({ softThresholdTokens: 200_000, hardThresholdTokens: 200_000,
+      contextManagement: 'sdk-managed', nativeHistory: 'known', occupancySource: 'agent' }))
+    expect(acp).toMatchObject({ thresholdKnown: false, alertRatio: 1 })
+    // Claude Code: Kun's profile thresholds are not where Claude Code compacts.
+    const sdk = buildContextCapacity(snapshot({ contextManagement: 'sdk-managed', nativeHistory: 'known' }))
+    expect(sdk).toMatchObject({ agentManaged: true, agentReported: false, thresholdKnown: false, alertRatio: 1 })
+    // Kun's own context keeps its compaction threshold.
+    expect(buildContextCapacity(snapshot())).toMatchObject({ agentManaged: false, thresholdKnown: true, alertRatio: 0.75 })
+  })
 })

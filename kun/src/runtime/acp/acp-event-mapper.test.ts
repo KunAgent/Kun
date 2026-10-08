@@ -274,9 +274,11 @@ describe('AcpEventMapper', () => {
       { sessionUpdate: 'usage_update', used: 12_000, size: 200_000 }
     ])
     expect(kinds(drafts)).toEqual(['context_snapshot', 'context_snapshot'])
-    const snapshot = drafts[0] as unknown as { contextWindowTokens: number; estimatedInputTokens: number }
+    const snapshot = drafts[0] as unknown as { contextWindowTokens: number; estimatedInputTokens: number; occupancySource?: string }
     expect(snapshot.contextWindowTokens).toBe(200_000)
     expect(snapshot.estimatedInputTokens).toBe(12_000)
+    // The Agent measured it; the UI must not split it into Kun's categories.
+    expect(snapshot.occupancySource).toBe('agent')
     expect(mapper.observedFacts.sawUsageTelemetry).toBe(true)
     expect(mapper.observedFacts.sawUsageTokens).toBe(false)
   })

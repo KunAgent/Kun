@@ -518,6 +518,7 @@ export type CoreRuntimeEventJson = {
   activeSkillIds?: string[]
   contextManagement?: 'kun-managed' | 'sdk-managed'
   nativeHistory?: 'known' | 'unknown' | 'none'
+  occupancySource?: 'estimate' | 'agent'
   providerKind?: AdeDelegatedTransport
   phase?: 'portable' | 'resumed' | 'rebased' | 'preparing' | 'retrying' | 'succeeded' | 'failed'
   failureSummary?: string

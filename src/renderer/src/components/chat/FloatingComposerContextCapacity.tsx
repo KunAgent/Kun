@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import type { RequestContextSnapshot } from '../../agent/types'
 import type { AppRoute } from '../../store/chat-store-types'
 import { useChatStore } from '../../store/chat-store'
+import { useHarnessStore } from '../../store/harness-store'
 import { formatPercent } from '../../hooks/use-thread-usage'
 import { buildContextCapacity, type ContextCapacity } from '../../lib/context-capacity'
 import { ContextCapacityPopover } from './ContextCapacityPopover'
@@ -129,6 +130,10 @@ export function FloatingComposerContextCapacity({
     selectedModel,
     selectedProviderId
   })
+  // An Agent-managed context is described in that Agent's name.
+  const composerHarnessId = useChatStore((state) => state.composerHarnessId)
+  const agentName = useHarnessStore((state) => capacity?.agentManaged
+    ? state.rows.find((row) => row.definition.id === composerHarnessId)?.definition.displayName : undefined)
   const [open, setOpen] = useState(false)
   const [placement, setPlacement] = useState<ContextCapacityPopoverPlacement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -242,6 +247,7 @@ export function FloatingComposerContextCapacity({
             >
               <ContextCapacityPopover
                 capacity={capacity}
+                agentName={agentName}
                 style={{ width: '100%', maxHeight: 'inherit', overflowY: 'auto' }}
               />
             </div>,
@@ -293,7 +299,7 @@ export function FloatingComposerContextCapacity({
                   cy={RING_SIZE / 2}
                   r={RING_RADIUS}
                   fill="none"
-                  stroke={capacityColor(capacity.usedRatio, capacity.softThresholdRatio)}
+                  stroke={capacityColor(capacity.usedRatio, capacity.alertRatio)}
                   strokeWidth={RING_STROKE}
                   strokeLinecap="round"
                   strokeDasharray={RING_CIRCUMFERENCE}

@@ -19,5 +19,11 @@
     "hint": "由 Agent 提供，下一条消息生效。",
     "reset": "恢复默认"
   },
-  "contextCapacityInputLimit": "输入上限 {{input}} · 总上下文 {{context}}"
+  "contextCapacityInputLimit": "输入上限 {{input}} · 总上下文 {{context}}",
+  "contextCapacityAgentFallback": "Agent",
+  "contextCapacityAgentOverLimit": "接近上限 · {{agent}} 将自行压缩",
+  "contextCapacityAgentReported": "{{agent}} 最近一次请求",
+  "contextCapacityAgentThresholdLabel": "约 {{percent}} 自动压缩",
+  "contextCapacityAgentUsed": "已用（{{agent}} 报告）",
+  "contextCapacityAgentReportedNote": "数值由 {{agent}} 报告，是它最近一次请求的上下文占用。Kun 无法细分其中的系统提示词、工具和消息；累计消耗见下方用量。"
 }

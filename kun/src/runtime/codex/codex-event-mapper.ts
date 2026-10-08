@@ -17,6 +17,7 @@ import {
   makeToolResultItem
 } from '../../domain/item.js'
 import { CODEX_NOTIFICATIONS, type CodexThreadItem } from './codex-protocol.js'
+import { codexContextOccupancy } from './codex-context-occupancy.js'
 
 export type CodexMapperContext = {
   threadId: string
@@ -408,28 +409,25 @@ export class CodexEventMapper {
         }
       }
     ]
-    if (typeof usage?.modelContextWindow === 'number') {
+    // Occupancy is the latest call, never the thread total (consumption).
+    const occupancy = codexContextOccupancy(usage)
+    if (occupancy) {
       drafts.push({
         kind: 'context_snapshot',
         threadId: this.ctx.threadId,
         turnId: this.ctx.turnId,
         model: this.ctx.model ?? 'codex',
         stepIndex: 0,
-        contextWindowTokens: Math.max(1, usage.modelContextWindow),
-        softThresholdTokens: Math.max(1, usage.modelContextWindow),
-        hardThresholdTokens: Math.max(1, usage.modelContextWindow),
-        estimatedInputTokens: usage.total?.totalTokens ?? total,
-        breakdown: {
-          tools: 0,
-          system: 0,
-          skills: 0,
-          messages: usage.total?.totalTokens ?? total,
-          other: 0
-        },
+        contextWindowTokens: occupancy.windowTokens,
+        softThresholdTokens: occupancy.autoCompactTokens,
+        hardThresholdTokens: occupancy.windowTokens,
+        estimatedInputTokens: occupancy.usedTokens,
+        breakdown: { tools: 0, system: 0, skills: 0, messages: occupancy.usedTokens, other: 0 },
         toolCount: this.toolItemIds.size,
         activeSkillIds: [],
         contextManagement: 'sdk-managed',
-        nativeHistory: 'known'
+        nativeHistory: 'known',
+        occupancySource: 'agent'
       })
     }
     return drafts
