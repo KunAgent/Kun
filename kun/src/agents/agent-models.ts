@@ -13,6 +13,10 @@ type AgentModelOption = AgentModelBinding & { label: string; providerLabel: stri
 function liveConnection(provider: { id: string; presetSource?: string }): boolean {
   return !isRetiredOpenCodeFreeConnection(provider)
 }
+/** Compares the exact route; a missing account only matches a missing account. */
+export function sameModelBinding(a?: AgentModelBinding | null, b?: AgentModelBinding | null): boolean {
+  return Boolean(a && b && a.model === b.model && a.providerId === b.providerId && a.accountId === b.accountId)
+}
 export function agentMainModel(deps: RoomRuntimeDeps, member: RoomMember): AgentModelBinding {
   const preset = member.presetSnapshot ?? deps.profiles()[member.presetId]
   const fallback = deps.model()

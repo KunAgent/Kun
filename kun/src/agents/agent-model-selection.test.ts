@@ -165,6 +165,27 @@ it('role-default changes leave the explicit conversation override and accepted r
   expect(await f.store.list('request', { roomId: room.id })).toEqual(before)
 })
 
+it('lets either role model change while the other saved ref has gone stale, but still rejects a newly chosen stale ref', async () => {
+  const f = await fixture(), created = await f.create()
+  const agent = await f.rooms.agents.get(created.agentId)
+  const put = async (clientRequestId: string, modelRef: typeof first | null, fastModelRef: typeof first | null) => {
+    const current = await f.rooms.agents.get(agent.id)
+    return f.call('PUT', '/v1/agents/:agentId/models', { clientRequestId, expectedRevision: current.revision, modelRef, fastModelRef },
+      { agentId: agent.id })
+  }
+  await put('both', first, second)
+  f.snapshot.providers[0].models = ['third']
+  const third = { ...first, model: 'third' }
+  // Both saved refs are stale: each field must still be fixable while the other stays as saved.
+  await put('fast-to-valid', first, third)
+  expect(await f.rooms.agents.get(agent.id)).toMatchObject({ modelRef: first, fastModelRef: third })
+  await put('main-to-valid', third, third)
+  await put('restore-main', null, third)
+  expect((await f.rooms.agents.get(agent.id)).modelRef).toBeUndefined()
+  await expect(put('new-stale-main', second, third)).rejects.toThrow('refresh and choose')
+  await expect(put('new-stale-fast', null, first)).rejects.toThrow('unavailable')
+})
+
 it('keeps a conversation reasoning effort with the model and freezes it into retried requests', async () => {
   const f = await fixture(), created = await f.create()
   const old = (await f.store.list<RoomRequestState>('request', { roomId: created.roomId }))[0]

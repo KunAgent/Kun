@@ -8,7 +8,7 @@ import { AgentExecutorSchema } from '../../contracts/agent-executor.js'
 import { TurnReasoningEffortSchema } from '../../contracts/turn-reasoning.js'
 import { chatEntryState, quickCreateAgent, CHAT_ENTRY_ID, QuickAgentRequest } from '../../agents/agent-chat-entry.js'
 import { startAgentSetupTurn } from '../../agents/agent-setup.js'
-import { agentModelOptions, agentFastModel, assertAgentModel, assertExplicitAgentModel } from '../../agents/agent-models.js'
+import { agentModelOptions, agentFastModel, assertAgentModel, assertExplicitAgentModel, sameModelBinding } from '../../agents/agent-models.js'
 import { updateDirectModel } from '../../agents/agent-direct-model.js'
 import { externalAgentBinding } from '../../agents/agent-external.js'
 import { codingAgentCatalog, prepareCodingAgent, resolveCodingAgentExecutor, saveCodingAgent } from '../../agents/agent-coding-agents.js'
@@ -83,9 +83,12 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
     const input = z.object({ clientRequestId: Id, expectedRevision: z.number().int().nonnegative(),
       modelRef: AgentModelRef.nullable(), fastModelRef: AgentModelRef.nullable() }).strict().parse(await body(request))
     return rooms.exclusive(async () => {
-      if ((await rooms.agents.get(params.agentId)).executor) throw new Error('Choose a model from this coding Agent\'s engine')
-      if (input.modelRef) await assertExplicitAgentModel(rooms.deps, input.modelRef)
-      if (input.fastModelRef) {
+      const current = await rooms.agents.get(params.agentId)
+      if (current.executor) throw new Error('Choose a model from this coding Agent\'s engine')
+      // Only a newly chosen ref is checked: a saved ref whose model has since left its connection must
+      // not block changing (or restoring) the other field, or both stale refs could never be repaired.
+      if (input.modelRef && !sameModelBinding(input.modelRef, current.modelRef)) await assertExplicitAgentModel(rooms.deps, input.modelRef)
+      if (input.fastModelRef && !sameModelBinding(input.fastModelRef, current.fastModelRef)) {
         await assertAgentModel(rooms.deps, input.fastModelRef, true)
         await assertExplicitAgentModel(rooms.deps, input.fastModelRef)
       }

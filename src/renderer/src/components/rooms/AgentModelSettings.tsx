@@ -74,7 +74,7 @@ function ModelEditor({ value, onSaved, onRefresh }: { value: AgentModels; onSave
         void apply(light ? main : next, light ? next : fast)
       }}>
         <option value="">{t('directInherit', { model: modelLabel(inherited) })}</option>
-        {selected && !options.some((item) => modelBindingKey(item) === modelBindingKey(selected)) ? <option value={modelBindingKey(selected)}>{modelLabel(selected)}</option> : null}
+        {selected && !options.some((item) => modelBindingKey(item) === modelBindingKey(selected)) ? <option value={modelBindingKey(selected)}>{modelLabel(selected)}{' · ' + t('directUnavailable')}</option> : null}
         {groups.map((id) => <optgroup key={id ?? ''} label={options.find((item) => item.providerId === id)?.providerLabel ?? id ?? ''}>
           {options.filter((item) => item.providerId === id).map((item) => <option key={modelBindingKey(item)} value={modelBindingKey(item)} disabled={!item.available || light && !item.fastAvailable}>
             {item.model}{item.accountId ? ' · ' + item.accountId : ''}{!item.available ? ' · ' + t('reason' in item && item.reason === 'agent_scope_unsupported' ? 'directScopeUnsupported' : 'directUnavailable') : light && !item.fastAvailable ? ' · ' + t('directNoBackground') : !light && !item.groupAvailable ? ' · ' + t('directPrivateOnly') : ''}
