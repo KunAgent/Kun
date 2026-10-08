@@ -10,9 +10,10 @@ import type { AgentModels } from './AgentModelSettings'
 import { agentPath } from './agent-client'
 import { directModelGroups, directReasoningEffort } from './room-direct-model-groups'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
+import { RoomCodingAgentModelPicker } from './RoomCodingAgentModelPicker'
 import './room-direct-model-picker.css'
 
-type Change = { modelRef?: { providerId: string; accountId?: string; model: string }; reasoningEffort?: ComposerReasoningEffort }
+type Change = { modelRef?: { providerId: string; accountId?: string; model: string }; executorModel?: string; reasoningEffort?: ComposerReasoningEffort }
 
 /**
  * The private chat's "model · effort" pill, the same control as Code's
@@ -98,7 +99,12 @@ export function RoomDirectModelPicker({ room, onSaved, onBusyChange, agentRevisi
   }
   const emptyModelState = groups.length ? undefined : loading && !models ? 'loading' as const : 'unavailable' as const
   return <div className="direct-composer-model-picker" aria-busy={busy || loading} data-room-model-picker>
-    <FloatingComposerModelPicker compact mode="select" composerModel={model} composerProviderId={groupId}
+    {models?.agent?.executor ? <RoomCodingAgentModelPicker agent={models.agent} model={effective?.model}
+      disabled={busy || loading} reasoningEffort={room.privateReasoningEffort}
+      onChange={(executorModel, nextEffort) => void save({ executorModel,
+        ...(room.privateReasoningEffort && nextEffort !== room.privateReasoningEffort ? { reasoningEffort: nextEffort } : {}) })}
+      onReasoningEffortChange={(reasoningEffort) => void save({ reasoningEffort })} />
+      : <FloatingComposerModelPicker compact mode="select" composerModel={model} composerProviderId={groupId}
       composerPickList={groups.flatMap((entry) => entry.modelIds)} composerModelGroups={groups}
       emptyModelState={emptyModelState} canChangeModel={!busy && !loading && Boolean(models)}
       composerReasoningEffort={effort} onComposerModelChange={changeModel} onComposerReasoningEffortChange={changeEffort}
@@ -107,7 +113,7 @@ export function RoomDirectModelPicker({ room, onSaved, onBusyChange, agentRevisi
         {onModels ? <button type="button" onClick={() => { close(); onModels() }}>
           <SlidersHorizontal size={13} aria-hidden="true" />{t('directModelAgentDefaults')}
         </button> : null}
-      </div>} />
+      </div>} />}
     {error ? <div className="direct-composer-model-error" role="alert">
       <span title={error}>{error}</span>
       <button type="button" disabled={busy || loading} aria-label={t('directCreationModelsRefresh')} title={t('directCreationModelsRefresh')}

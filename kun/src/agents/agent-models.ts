@@ -5,8 +5,11 @@ import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import { resolveRoleModel } from '../loop/title-generator.js'
 import { isModelConnectionProfileUsable } from '../contracts/model-connections.js'
 import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
+import { externalAgentBinding } from './agent-external.js'
 
 export type AgentModelBinding = { model: string; providerId?: string; accountId?: string }
+type AgentModelOption = AgentModelBinding & { label: string; providerLabel: string; available: boolean;
+  groupAvailable: boolean; fastAvailable: boolean; reason?: string }
 function liveConnection(provider: { id: string; presetSource?: string }): boolean {
   return !isRetiredOpenCodeFreeConnection(provider)
 }
@@ -21,6 +24,19 @@ export function agentFastModel(deps: RoomRuntimeDeps, member: Pick<RoomMember, '
     mainProviderId: main.providerId, mainAccountId: main.accountId })
 }
 export async function agentModelOptions(deps: RoomRuntimeDeps, agent?: AgentIdentity, roomId?: string) {
+  const room = roomId ? await deps.store.get<import('../contracts/rooms.js').Room>('room', roomId) : undefined
+  const matchesRoom = room?.value.conversationKind === 'user_agent' && room.value.members.some((member) => member.participantAgentId === agent?.id)
+  if (agent?.executor) {
+    const inherited = externalAgentBinding(agent.executor)
+    const override = matchesRoom && room.value.privateExecutorModel
+      ? externalAgentBinding(agent.executor, room.value.privateExecutorModel) : undefined
+    // External engines discover their own catalog through the same harness API as Code.
+    // Never expose Kun's fallback or lightweight models as this Agent's choices.
+    return { options: [] as AgentModelOption[], main: override ?? inherited, fast: undefined,
+      inheritedMain: inherited, inheritedFast: undefined, mainSource: override ? 'room' : 'agent',
+      fastSource: 'main', roomOverride: override, mainAvailable: true, fastAvailable: false,
+      mainVerifiedAt: undefined, fastVerifiedAt: undefined }
+  }
   const snapshot = await deps.modelSnapshot?.()
   const unsupported = new Set(deps.unsupportedProviderIds?.() ?? [])
   const providers = snapshot?.providers.filter(liveConnection) ?? []
@@ -43,8 +59,6 @@ export async function agentModelOptions(deps: RoomRuntimeDeps, agent?: AgentIden
   const complete = (binding: AgentModelBinding | undefined) => binding ? { ...binding, accountId: binding.accountId ?? snapshot?.providers.find((item) => item.id === binding.providerId)?.accountId } : undefined
   const inherited = complete({ model: preset?.model ?? fallback.model, providerId: preset?.providerId ?? fallback.providerId,
     accountId: !preset?.providerId || preset.providerId === fallback.providerId ? fallback.accountId : undefined })!
-  const room = roomId ? await deps.store.get<import('../contracts/rooms.js').Room>('room', roomId) : undefined
-  const matchesRoom = room?.value.conversationKind === 'user_agent' && room.value.members.some((member) => member.participantAgentId === agent?.id)
   const override = matchesRoom ? room?.value.privateModelRef : undefined
   const main = complete(override ?? agent?.modelRef ?? inherited)!
   const fast = complete(agentFastModel(deps, agent ?? {}, main))

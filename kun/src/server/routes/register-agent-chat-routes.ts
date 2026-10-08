@@ -4,6 +4,7 @@ import type { RouteContext } from '../router.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { readJsonBody } from '../read-json-body.js'
 import { AgentModelRef } from '../../contracts/agent-identities.js'
+import { AgentExecutorSchema } from '../../contracts/agent-executor.js'
 import { TurnReasoningEffortSchema } from '../../contracts/turn-reasoning.js'
 import { chatEntryState, quickCreateAgent, CHAT_ENTRY_ID, QuickAgentRequest } from '../../agents/agent-chat-entry.js'
 import { startAgentSetupTurn } from '../../agents/agent-setup.js'
@@ -23,8 +24,9 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
       const member = room.members.find((value) => value.id === room.defaultMemberId)!
       const agent = await runtime.rooms!.agents.active(member.participantAgentId!)
       if (room.privateWorkspace && agent.allowedRepositoryRoots && !agent.allowedRepositoryRoots.includes(room.privateWorkspace)) throw new Error('Project is outside this Agent\'s allowed directories')
-      // An external coding Agent always runs its own pinned engine route.
-      if (agent.executor) return externalAgentBinding(agent.executor)
+      // Accepted requests keep the frozen engine route and conversation model.
+      const executor = member.executor ?? agent.executor
+      if (executor) return externalAgentBinding(executor, room.privateExecutorModel)
       const resolved = await agentModelOptions(runtime.rooms!.deps, agent)
       const main = room.privateModelRef ?? resolved.main
       const fast = room.privateModelRef ? agentFastModel(runtime.rooms!.deps, agent, main) : resolved.fast
@@ -81,6 +83,7 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
     const input = z.object({ clientRequestId: Id, expectedRevision: z.number().int().nonnegative(),
       modelRef: AgentModelRef.nullable(), fastModelRef: AgentModelRef.nullable() }).strict().parse(await body(request))
     return rooms.exclusive(async () => {
+      if ((await rooms.agents.get(params.agentId)).executor) throw new Error('Choose a model from this coding Agent\'s engine')
       if (input.modelRef) await assertExplicitAgentModel(rooms.deps, input.modelRef)
       if (input.fastModelRef) {
         await assertAgentModel(rooms.deps, input.fastModelRef, true)
@@ -92,8 +95,9 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
   })
   add('PUT', '/v1/rooms/:roomId/direct/model', async (rooms, request, { params }) => {
     const input = z.object({ clientRequestId: Id, expectedRevision: z.number().int().nonnegative(),
-      modelRef: AgentModelRef.optional(), reasoningEffort: TurnReasoningEffortSchema.nullable().optional() }).strict()
-      .refine((value) => value.modelRef !== undefined || value.reasoningEffort !== undefined, 'Choose a model or reasoning effort')
+      modelRef: AgentModelRef.optional(), executorModel: AgentExecutorSchema.shape.model.optional(),
+      reasoningEffort: TurnReasoningEffortSchema.nullable().optional() }).strict()
+      .refine((value) => value.modelRef !== undefined || value.executorModel !== undefined || value.reasoningEffort !== undefined, 'Choose a model or reasoning effort')
       .parse(await body(request))
     return rooms.exclusive(async () => ({ room: await updateDirectModel(rooms, params.roomId, input) }))
   })

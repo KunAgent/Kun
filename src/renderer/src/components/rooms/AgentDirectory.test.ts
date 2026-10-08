@@ -44,6 +44,15 @@ describe('unified Agent model management', () => {
     expect(api.models).toHaveBeenLastCalledWith(expect.objectContaining({ agentId: 'a', variant: 'panel' }))
     expect(api.models.mock.lastCall![0]).not.toHaveProperty('room')
   })
+  it('shows a coding Agent own model instead of the inherited Kun provider', async () => {
+    const external = { ...agent, executor: { kind: 'harness', harnessId: 'codex', credentialMode: 'native-login', model: 'gpt-native' } }
+    api.catalog.mockReturnValue({ agents: [external], data: {}, activities: {}, error: '' })
+    api.resource.mockReturnValue({ data: { agent: external, main: binding, options: [{ ...binding, providerLabel: 'API' }], mainAvailable: true }, error: '', refresh: api.refresh })
+    await act(async () => { renderer = create(createElement(AgentDirectory, { onDetails: vi.fn(), onOpen: vi.fn(), onCreate: vi.fn() })) })
+    expect(renderer.root.findByProps({ title: 'codex / gpt-native' }).children.join('')).toBe('gpt-native')
+    expect(renderer.root.findAllByProps({ title: 'API / work / model-a' })).toHaveLength(0)
+    expect(renderer.root.findAllByType('small').some((node) => node.children.includes('Own sign-in'))).toBe(true)
+  })
   it('reports unavailable/error summaries with retry without hiding other Agents', async () => {
     api.resource.mockReturnValue({ data: null, error: 'Model metadata unavailable', refresh: api.refresh })
     await act(async () => { renderer = create(createElement(AgentDirectory, { onDetails: vi.fn(), onOpen: vi.fn(), onCreate: vi.fn() })) })

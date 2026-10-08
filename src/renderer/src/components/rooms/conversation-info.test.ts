@@ -85,6 +85,19 @@ describe('conversation info helpers', () => {
 })
 
 describe('conversation info boards', () => {
+  it('offers coding Agent model settings and displays the private conversation model override', async () => {
+    const onModels = vi.fn()
+    const external = agent({ executor: { kind: 'harness', harnessId: 'codex', credentialMode: 'native-login', model: 'gpt-default' } })
+    const room = { id: 'dm', conversationKind: 'user_agent', members: [member('alpha')], repositories: [] } as unknown as Room
+    await act(async () => root.render(createElement(AgentInfoBoard, { room, agent: external,
+      models: { agent: external, roomOverride: { model: 'gpt-override' }, options: [] } as never,
+      activity: activity(), onEditProfile: vi.fn(), onModels, onNewContext: vi.fn(), onWorkspace: vi.fn(), onRemove: vi.fn() })))
+    expect(host.querySelector('.conversation-info-engine strong')?.textContent).toBe('gpt-override')
+    expect(host.querySelector('.conversation-info-models')).toBeNull()
+    act(() => host.querySelector<HTMLButtonElement>('[data-info-action="models"]')!.click())
+    expect(onModels).toHaveBeenCalledOnce()
+  })
+
   it('shows the private Agent identity, resolved models, workspace and removals', async () => {
     const onRemove = vi.fn(), onModels = vi.fn()
     const room = { id: 'dm', name: 'Alpha', conversationKind: 'user_agent', members: [member('alpha')],

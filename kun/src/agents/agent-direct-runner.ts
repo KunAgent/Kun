@@ -83,7 +83,7 @@ export class AgentDirectRunner {
     }
     if (!request.privateInput) {
       const external = member.executor
-      const main = request.privateModel ?? (external ? externalAgentBinding(external) : agentMainModel(this.deps, member))
+      const main = request.privateModel ?? (external ? externalAgentBinding(external, request.roomSnapshot.privateExecutorModel) : agentMainModel(this.deps, member))
       // An external route is re-validated by harness admission on every turn.
       if (!external) await assertAgentModel(this.deps, main)
       const workspace = request.roomSnapshot.privateWorkspace ?? agentWorkspace(this.deps.dataDir, member.participantAgentId)

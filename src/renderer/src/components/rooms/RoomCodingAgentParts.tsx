@@ -10,23 +10,13 @@ function credentialKey(executor: Executor): string {
     : executor.credentialMode === 'provider' ? 'directCodingAgentViaProvider' : 'directCodingAgentOwnSignIn'
 }
 
-/** Composer slot for a coding Agent chat: its engine route is fixed, so this is a label, not a picker. */
-export function RoomCodingAgentChip({ agent }: { agent: AgentIdentity }): ReactElement {
-  const { t } = useTranslation('common')
-  const executor = agent.executor!
-  return <div className="direct-coding-agent-chip" data-engine={executor.harnessId} title={t('directCodingAgentChipHelp')}>
-    <AgentIcon harnessId={executor.harnessId} size={14} /><strong>{executor.model}</strong>
-    <small>{t(credentialKey(executor))}</small>
-  </div>
-}
-
 /** Info-board card replacing the Kun main/fast model pair. */
-export function CodingAgentEngineCard({ agent }: { agent: AgentIdentity }): ReactElement {
+export function CodingAgentEngineCard({ agent, model }: { agent: AgentIdentity; model?: string }): ReactElement {
   const { t } = useTranslation('common')
   const executor = agent.executor!
   return <div className="conversation-info-engine" data-engine={executor.harnessId}>
     <AgentIcon harnessId={executor.harnessId} size={20} />
-    <span><strong>{executor.model}</strong>
+    <span><strong>{model ?? executor.model}</strong>
       <small>{t(credentialKey(executor))} · {t('directCodingAgentBilledByEngine')}</small></span>
     <p>{t('directCodingAgentChipHelp')}</p>
   </div>

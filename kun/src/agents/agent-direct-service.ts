@@ -108,6 +108,7 @@ export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, r
   const currentRoom = await rooms.service.get(roomId)
   const id = 'request-' + randomUUID(), snapshot = await rooms.agents.freeze({ ...value.roomSnapshot,
     privateModelRef: currentRoom.privateModelRef, privateReasoningEffort: currentRoom.privateReasoningEffort,
+    privateExecutorModel: currentRoom.privateExecutorModel,
     privateExecutionPolicy: currentRoom.privateExecutionPolicy })
   await freezeAgentPermissions(rooms.agents, snapshot)
   const request: RoomRequestState = { privateModel: await rooms.service.directBinding(snapshot), clientSurface: value.clientSurface, imConnectionId: value.imConnectionId, id, roomId, privateProtocol: 'direct-v1', status: 'pending', rootRequestId: id,

@@ -4,6 +4,7 @@ import type { AgentIdentity, AgentModelOptions, AgentModelBinding, Room } from '
 import { RoomModal } from './RoomModal'
 import { agentPath, modelBindingKey, saveAgentModels, useAgentResource } from './agent-client'
 import { useChatStore } from '../../store/chat-store'
+import { CodingAgentModelSettings } from './CodingAgentModelSettings'
 
 export type AgentModels = AgentModelOptions & { agent: AgentIdentity }
 export const modelLabel = (value?: AgentModelBinding) => value?.model ?? '—'
@@ -12,10 +13,12 @@ export function AgentModelSettings({ agentId, room, onClose, onSaved, variant = 
   const { t } = useTranslation('common')
   const resource = useAgentResource<AgentModels>(agentPath(agentId) + '/models')
   const body = <>
-    <p className="rooms-run-note">{t('directRoleDefaultsHelp')}</p>
+    <p className="rooms-run-note">{t(resource.data?.agent.executor ? 'directCodingAgentModelsHelp' : 'directRoleDefaultsHelp')}</p>
     <p className="rooms-run-note">{t('directModelsSaveImmediately')}</p>
     {room?.privateModelRef ? <p className="rooms-run-note">{t('directConversationOverrideNotice')}</p> : null}
-    {resource.data ? <ModelEditor key={agentId} value={resource.data} onRefresh={resource.refresh} onSaved={() => { resource.refresh(); onSaved() }} /> :
+    {resource.data ? resource.data.agent.executor
+      ? <CodingAgentModelSettings key={agentId} agent={resource.data.agent} onRefresh={resource.refresh} onSaved={() => { resource.refresh(); onSaved() }} />
+      : <ModelEditor key={agentId} value={resource.data} onRefresh={resource.refresh} onSaved={() => { resource.refresh(); onSaved() }} /> :
       <p className="rooms-run-note">{t('roomsLoading')}</p>}
     {resource.error ? <p role="alert" className="rooms-run-error">{resource.error}</p> : null}
   </>

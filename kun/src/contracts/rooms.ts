@@ -75,6 +75,8 @@ export const RoomSchema = z.object({
   participantAgentIds: z.array(ParticipantAgentId).max(100).optional(),
   privateExecutionPolicy: RoomExecutionPolicySchema.optional(),
   privateModelRef: AgentModelRef.optional(),
+  /** Model override within the external Agent's fixed engine and credential route. */
+  privateExecutorModel: AgentExecutorSchema.shape.model.optional(),
   /** Reasoning effort for this private conversation's next turns; absent uses the model default. */
   privateReasoningEffort: TurnReasoningEffortSchema.optional(),
   privateWorkspace: z.string().max(4096).optional(),

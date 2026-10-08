@@ -20,7 +20,6 @@ import { useChatStore } from '../../store/chat-store'
 import { RoomSettings, roomButtonClass } from './RoomSettings'
 import { RoomComposer } from './RoomComposer'
 import { RoomDirectModelPicker } from './RoomDirectModelPicker'
-import { RoomCodingAgentChip } from './RoomCodingAgentParts'
 import { RoomHeader } from './RoomHeader'
 import { RoomMemberDetails } from './RoomMemberDetails'
 import { roomsClient } from './rooms-client'
@@ -397,8 +396,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
                 compactControls
                 onVoiceSetup={() => useChatStore.getState().openSettings('speechToText')}
                 modelUpdating={modelUpdating}
-                modelControl={privateChat ? agentModels.data?.agent?.executor ? <RoomCodingAgentChip agent={agentModels.data.agent} />
-                  : <RoomDirectModelPicker key={room.id} room={room} agentRevision={agentModels.data?.agent.revision} onBusyChange={setModelUpdating}
+                modelControl={privateChat ? <RoomDirectModelPicker key={room.id} room={room} agentRevision={agentModels.data?.agent.revision} onBusyChange={setModelUpdating}
                   onModels={() => drawer.open({ kind: 'models' })}
                   onSaved={async () => { agentModels.refresh(); await state.refresh() }} /> : undefined}
               key={room.id + '-composer'}

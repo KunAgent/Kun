@@ -106,7 +106,8 @@
   "directCodingAgentViaGateway": "Kun gateway",
   "directCodingAgentViaProvider": "API connection",
   "directCodingAgentBilledByEngine": "Billed by the Agent",
-  "directCodingAgentChipHelp": "This Agent runs its own engine. To use another model, choose it again from New chat.",
+  "directCodingAgentChipHelp": "This Agent runs its own engine. Choose a model in the composer for future messages in this conversation.",
+  "directCodingAgentModelsHelp": "Choose from this Agent's models. Changes apply to future requests; existing conversation overrides and active requests stay unchanged.",
   "directCodingAgentRole": "Coding Agent",
   "directModelAgentDefaults": "Agent defaults"
 }
