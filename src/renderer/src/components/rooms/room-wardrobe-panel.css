@@ -1,0 +1,129 @@
+/* The wardrobe in the right panel: header, today's bottles, four tabs and an action sheet. */
+.rooms-wardrobe-panel { --wardrobe-well: #eceff4; display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0;
+  color: var(--ds-text); background: var(--ds-surface-app, var(--ds-surface-card)); font-size: 13px; }
+[data-theme='dark'] .rooms-wardrobe-panel { --wardrobe-well: color-mix(in srgb, var(--ds-text) 12%, var(--ds-surface-card)); }
+.rooms-wardrobe-panel button:focus-visible, .rooms-wardrobe-panel input:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.rooms-wardrobe-panel-empty { margin: 0; padding: 24px 16px; color: var(--ds-text-muted); text-align: center; }
+.rooms-wardrobe-panel-head { display: grid; flex: none; gap: 12px; padding: 16px 16px 12px; }
+.rooms-wardrobe-panel-me { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.rooms-wardrobe-panel-me > .rooms-avatar { flex: none; }
+.rooms-wardrobe-panel-me-text { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.rooms-wardrobe-panel-me strong { font-size: 16px; font-weight: 650; }
+.rooms-wardrobe-panel-me small { color: var(--ds-text-muted); font-size: 12px; line-height: 1.45; }
+.rooms-wardrobe-panel-dress { display: inline-flex; flex: none; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px;
+  border: 1px solid var(--ds-border); border-radius: 10px; color: var(--ds-text); background: var(--ds-surface-card); font-size: 13px; font-weight: 600; }
+.rooms-wardrobe-panel-dress:hover { background: var(--ds-surface-hover); }
+.rooms-wardrobe-panel-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rooms-wardrobe-panel-stats > div { --tone: var(--ds-accent); display: grid; gap: 5px; padding: 9px 10px; border-radius: 12px; background: var(--ds-surface-subtle); }
+.rooms-wardrobe-panel-stats > div[data-tone='epic'] { --tone: var(--ds-skill, #7a68e8); }
+.rooms-wardrobe-panel-stats > div[data-tone='legendary'] { --tone: var(--ds-warning, #d97706); }
+.rooms-wardrobe-panel-stats span { display: inline-flex; align-items: center; gap: 4px; color: var(--ds-text-muted); font-size: 11.5px; }
+.rooms-wardrobe-panel-stats strong { font-size: 17px; font-weight: 650; }
+.rooms-wardrobe-panel-stats strong > small { color: var(--ds-text-faint); font-size: 11.5px; font-weight: 400; }
+.rooms-wardrobe-panel-stats i { display: block; height: 4px; overflow: hidden; border-radius: 999px; background: var(--ds-border); }
+.rooms-wardrobe-panel-stats b { display: block; height: 100%; border-radius: 999px; background: var(--tone); }
+.rooms-wardrobe-panel-today { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--ds-border); border-radius: 14px; background: var(--ds-surface-card); }
+.rooms-wardrobe-panel-today > div:first-child { display: flex; align-items: center; gap: 8px; }
+.rooms-wardrobe-panel-today > div:first-child > span:not(.rooms-wardrobe-panel-dots) { color: var(--ds-text-muted); font-size: 12px; }
+.rooms-wardrobe-panel-dots { display: flex; gap: 4px; margin-left: auto; }
+.rooms-wardrobe-panel-dots > i { width: 8px; height: 8px; border-radius: 50%; background: var(--ds-border); }
+.rooms-wardrobe-panel-dots > i[data-on] { background: var(--ds-accent); }
+.rooms-wardrobe-panel-today > p { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--ds-accent); font-size: 12px; }
+.rooms-wardrobe-panel-today > p[data-tone='done'] { color: var(--ds-success, #128a4a); }
+.rooms-wardrobe-panel-tabs { display: grid; flex: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 0 16px;
+  padding: 3px; border-radius: 11px; background: var(--ds-surface-subtle); }
+.rooms-wardrobe-panel-tabs > button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-height: 32px; border-radius: 9px; color: var(--ds-text-muted); font-size: 13px; }
+.rooms-wardrobe-panel-tabs > button[aria-pressed='true'] { color: var(--ds-text); background: var(--ds-surface-card); font-weight: 600; box-shadow: 0 1px 3px #0000001f; }
+.rooms-wardrobe-panel-tabs > button > i { width: 6px; height: 6px; border-radius: 50%; background: var(--ds-danger, #d14343); }
+.rooms-wardrobe-panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 16px; overscroll-behavior: contain; }
+.rooms-wardrobe-panel-section { display: grid; gap: 10px; }
+.rooms-wardrobe-panel-note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--ds-text-muted); font-size: 12px; line-height: 1.5; }
+.rooms-wardrobe-panel-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rooms-wardrobe-panel-filters > button { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 10px;
+  border: 1px solid var(--ds-border); border-radius: 999px; color: var(--ds-text-muted); background: var(--ds-surface-card); font-size: 12px; }
+.rooms-wardrobe-panel-filters > button > span { color: var(--ds-text-faint); font-size: 11px; }
+.rooms-wardrobe-panel-filters > button[aria-pressed='true'] { border-color: var(--ds-accent); color: var(--ds-accent); background: var(--ds-accent-soft); font-weight: 600; }
+.rooms-wardrobe-panel-filters > button[aria-pressed='true'] > span { color: inherit; }
+.rooms-wardrobe-panel-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.rooms-wardrobe-panel-grid[data-columns='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.rooms-wardrobe-panel-tile, .rooms-wardrobe-panel-card { position: relative; display: grid; justify-items: center; align-content: start; gap: 4px; min-width: 0;
+  padding: 8px 3px 7px; border: 1.5px solid transparent; border-radius: 13px; background: var(--ds-surface-subtle); transition: transform .15s ease, border-color .15s ease; }
+.rooms-wardrobe-panel-tile:hover, .rooms-wardrobe-panel-card:hover { transform: translateY(-1px); border-color: var(--ds-border); }
+.rooms-wardrobe-panel-tile[aria-pressed='true'], .rooms-wardrobe-panel-card[aria-pressed='true'] { border-color: var(--ds-accent); background: var(--ds-accent-soft); }
+.rooms-wardrobe-panel-well { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 12px;
+  background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--avatar-rarity) 16%, var(--wardrobe-well)) 0 46%, transparent 76%); }
+.rooms-wardrobe-panel-tile[data-locked] .rooms-wardrobe-panel-well { background: var(--ds-surface-card); }
+.rooms-wardrobe-panel-tile[data-locked] .rooms-avatar-item-art > img { filter: brightness(0) opacity(.18); }
+[data-theme='dark'] .rooms-wardrobe-panel-tile[data-locked] .rooms-avatar-item-art > img { filter: brightness(0) invert(1) opacity(.2); }
+.rooms-wardrobe-panel-name { max-width: 100%; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-wardrobe-panel-tile[data-locked] .rooms-wardrobe-panel-name { color: var(--ds-text-faint); }
+.rooms-wardrobe-panel-lock { position: absolute; top: 6px; right: 6px; color: var(--ds-text-faint); }
+.rooms-wardrobe-panel-tile .rooms-avatar-option-copies { top: 46px; right: 6px; bottom: auto; }
+.rooms-wardrobe-pips { position: absolute; top: 7px; left: 7px; display: flex; gap: 2px; }
+.rooms-wardrobe-pips > span { width: 5px; height: 5px; border-radius: 1px; background: var(--avatar-rarity); transform: rotate(45deg); }
+.rooms-wardrobe-pips[data-dim] > span { background: var(--ds-border); }
+.rooms-wardrobe-panel-card { gap: 5px; padding: 8px 6px 10px; border-radius: 14px; }
+.rooms-wardrobe-panel-card-frame { display: grid; place-items: center; width: 100%; height: 118px; overflow: hidden; border-radius: 11px;
+  background: var(--ds-surface-card); box-shadow: inset 0 0 0 1.5px var(--avatar-rarity); }
+.rooms-wardrobe-panel-card-frame > .rooms-avatar { --rooms-avatar-radius: 10px; }
+.rooms-wardrobe-panel-card[data-hidden] .rooms-wardrobe-panel-card-frame { background: transparent; box-shadow: none; }
+.rooms-wardrobe-panel-card > strong { max-width: 100%; overflow: hidden; font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-wardrobe-panel-card > small { color: var(--avatar-rarity); font-size: 11px; }
+.rooms-wardrobe-panel-card[data-hidden] > strong, .rooms-wardrobe-panel-card[data-hidden] > small { color: var(--ds-text-muted); }
+.rooms-wardrobe-panel-progress { width: 70%; height: 3px; overflow: hidden; border-radius: 999px; background: var(--ds-border); }
+.rooms-wardrobe-panel-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--ds-text-faint); }
+.rooms-wardrobe-panel-log { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.rooms-wardrobe-panel-log > li { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 10px; }
+.rooms-wardrobe-panel-log > li:hover { background: var(--ds-surface-hover); }
+.rooms-wardrobe-panel-log-art { display: grid; flex: none; place-items: center; width: 40px; height: 40px; overflow: hidden; border-radius: 11px;
+  background: color-mix(in srgb, var(--avatar-rarity) 14%, var(--wardrobe-well)); }
+.rooms-wardrobe-panel-log-text { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.rooms-wardrobe-panel-log-text > span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rooms-wardrobe-panel-log-text strong { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-wardrobe-panel-log-text em { flex: none; padding: 0 7px; border-radius: 999px; color: var(--avatar-rarity);
+  background: color-mix(in srgb, var(--avatar-rarity) 14%, transparent); font-size: 10.5px; font-style: normal; font-weight: 600; line-height: 18px; }
+.rooms-wardrobe-panel-log-text small { overflow: hidden; color: var(--ds-text-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-wardrobe-panel-log-status { flex: none; color: var(--ds-text-muted); font-size: 11.5px; font-weight: 600; }
+.rooms-wardrobe-panel-log-status[data-tone='wait'] { color: var(--ds-accent); }
+.rooms-wardrobe-panel-log-status[data-tone='feather'] { color: var(--ds-warning, #d97706); }
+.rooms-wardrobe-panel-settings { gap: 14px; }
+.rooms-wardrobe-panel-switches { display: grid; overflow: hidden; border: 1px solid var(--ds-border); border-radius: 14px; background: var(--ds-surface-card); }
+.rooms-wardrobe-panel-switches > div { display: flex; align-items: center; gap: 14px; padding: 12px 14px; }
+.rooms-wardrobe-panel-switches > div + div { border-top: 1px solid var(--ds-border); }
+.rooms-wardrobe-panel-switches > div > span, .rooms-wardrobe-panel-notice span { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.rooms-wardrobe-panel-switches small, .rooms-wardrobe-panel-notice small { color: var(--ds-text-muted); font-size: 12px; line-height: 1.45; }
+.rooms-wardrobe-switch { position: relative; flex: none; width: 38px; height: 22px; border-radius: 999px; background: var(--ds-border); transition: background .15s ease; }
+.rooms-wardrobe-switch[aria-checked='true'] { background: var(--ds-accent); }
+.rooms-wardrobe-switch > span { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 2px #0004; transition: left .15s ease; }
+.rooms-wardrobe-switch[aria-checked='true'] > span { left: 18px; }
+.rooms-wardrobe-switch:disabled { opacity: .5; }
+.rooms-wardrobe-panel-notice { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.rooms-wardrobe-panel-notice > legend { padding: 0 2px 8px; font-size: 13px; font-weight: 600; }
+.rooms-wardrobe-panel-notice > label { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--ds-border);
+  border-radius: 12px; background: var(--ds-surface-card); cursor: pointer; }
+.rooms-wardrobe-panel-notice > label[data-on] { border-color: var(--ds-accent); background: var(--ds-accent-soft); }
+.rooms-wardrobe-panel-notice input { margin: 2px 0 0; accent-color: var(--ds-accent); }
+.rooms-wardrobe-panel-rules { display: grid; gap: 8px; padding: 12px 14px; border-radius: 14px; background: var(--ds-surface-subtle); }
+.rooms-wardrobe-panel-rules > ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rooms-wardrobe-panel-rules li { --tone: var(--ds-text-faint); position: relative; padding-left: 14px; color: var(--ds-text-muted); font-size: 12px; line-height: 1.5; }
+.rooms-wardrobe-panel-rules li::before { content: ''; position: absolute; top: 7px; left: 1px; width: 5px; height: 5px; border-radius: 1px; background: var(--tone); transform: rotate(45deg); }
+.rooms-wardrobe-panel-rules li[data-tone='rare'] { --tone: var(--ds-accent); }
+.rooms-wardrobe-panel-rules li[data-tone='epic'] { --tone: var(--ds-skill, #7a68e8); }
+.rooms-wardrobe-panel-rules li[data-tone='legendary'] { --tone: var(--ds-warning, #d97706); }
+.rooms-wardrobe-panel-status { flex: none; margin: 0 16px 8px; padding: 6px 10px; border-radius: 10px; color: var(--ds-text); background: var(--ds-surface-subtle); font-size: 12px; }
+.rooms-wardrobe-panel-sheet { display: flex; flex: none; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--ds-border); background: var(--ds-surface-card); }
+.rooms-wardrobe-panel-sheet > span:nth-child(2) { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.rooms-wardrobe-panel-sheet strong { font-size: 13.5px; font-weight: 600; }
+.rooms-wardrobe-panel-sheet small { color: var(--ds-text-muted); font-size: 12px; line-height: 1.45; }
+.rooms-wardrobe-panel-sheet-art { display: grid; flex: none; place-items: center; width: 48px; height: 48px; overflow: hidden; border-radius: 12px;
+  background: color-mix(in srgb, var(--avatar-rarity) 16%, var(--wardrobe-well)); }
+.rooms-wardrobe-panel-sheet[data-locked] .rooms-wardrobe-panel-sheet-art { background: var(--ds-surface-subtle); }
+.rooms-wardrobe-panel-sheet[data-locked] .rooms-avatar-item-art > img { filter: brightness(0) opacity(.18); }
+.rooms-wardrobe-panel-sheet > button { flex: none; min-height: 34px; padding: 0 14px; border: 1px solid var(--ds-accent); border-radius: 10px;
+  color: var(--ds-control-foreground, #fff); background: var(--ds-accent); font-size: 13px; font-weight: 600; }
+.rooms-wardrobe-panel-sheet > button:disabled { border-color: var(--ds-border); color: var(--ds-text-faint); background: var(--ds-surface-subtle); cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .rooms-wardrobe-panel *, .rooms-wardrobe-panel *::before { transition: none !important; }
+}

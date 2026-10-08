@@ -1,7 +1,8 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import {
   KUN_AVATAR_PRESETS, normalizeKunAvatarParts, updateKunAvatarPart,
-  type KunAvatarAccessoryCategory, type KunAvatarParts, type KunWardrobe, type KunWardrobeDetail, type KunWardrobeDrop, type KunWardrobeItemKey
+  type KunAvatarAccessoryCategory, type KunAvatarParts, type KunWardrobe, type KunWardrobeDetail, type KunWardrobeDrop, type KunWardrobeItemKey,
+  type KunWardrobeSettings
 } from '@shared/rooms-api'
 import { roomRequestId, roomsRequest } from './rooms-client'
 import { subscribeRoomEvents } from './room-event-listeners'
@@ -60,9 +61,22 @@ export async function markWardrobeSeen(keys: string[]): Promise<void> {
   acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/seen', 'POST',
     { keys: unseen, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
 }
-export function pendingWardrobeDrops(wardrobe: KunWardrobe | null, roomId: string): KunWardrobeDrop[] {
-  return wardrobe?.pending.filter((drop) => drop.roomId === roomId) ?? []
+export async function exchangeWardrobeItem(key: KunWardrobeItemKey): Promise<void> {
+  acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/exchange', 'POST',
+    { key, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
 }
+export async function updateWardrobeSettings(settings: Partial<KunWardrobeSettings>): Promise<void> {
+  acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/settings', 'POST',
+    { settings, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
+}
+export type WardrobeDropScope = { roomId?: string; threadId?: string }
+/** Bottles that washed up in this conversation (roomId) or this Code task (threadId). */
+export function pendingWardrobeDrops(wardrobe: KunWardrobe | null, scope: WardrobeDropScope): KunWardrobeDrop[] {
+  return wardrobe?.pending.filter((drop) => scope.roomId ? drop.roomId === scope.roomId
+    : Boolean(scope.threadId) && drop.threadId === scope.threadId) ?? []
+}
+export const wardrobeSettings = (wardrobe: KunWardrobe | null): KunWardrobeSettings =>
+  wardrobe?.settings ?? { drops: true, code: true, notice: 'card' }
 /** Puts a freshly opened item on the current look; a card replaces the whole outfit but keeps the backdrop. */
 export function wearWardrobeDrop(parts: KunAvatarParts, drop: KunWardrobeDrop): KunAvatarParts {
   if (drop.kind === 'card' && drop.cardId) {

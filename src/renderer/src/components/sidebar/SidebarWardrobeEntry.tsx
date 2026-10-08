@@ -16,8 +16,8 @@ export function SidebarWardrobeEntry(): ReactElement | null {
     {count ? <button type="button" className="ds-sidebar-wardrobe rooms-wardrobe-rarity" data-rarity={state.wardrobe!.pending[0]!.rarity}
       data-sidebar-wardrobe={count} title={t('roomsWardrobeSidebarHint')} onClick={() => setOpen(true)}>
       <WardrobeBottleIcon size={22} />
-      <span>{t('roomsWardrobeSidebar', { count })}</span>
-      <span>{t('roomsWardrobeOpen')}</span>
+      <span className="ds-sidebar-wardrobe-label">{t('roomsWardrobeSidebar', { count })}</span>
+      <span className="ds-sidebar-wardrobe-open">{t('roomsWardrobeOpen')}</span>
     </button> : null}
     {open ? <RoomUserAvatarEditor onClose={() => setOpen(false)} /> : null}
   </>

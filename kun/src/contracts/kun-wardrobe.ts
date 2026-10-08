@@ -46,13 +46,30 @@ export const KunWardrobeDropSchema = z.object({
   /** Already owned when it dropped; opening it pays feathers instead. */
   duplicate: z.boolean(),
   feathers: z.number().int().nonnegative(),
-  roomId: z.string().min(1).max(256),
+  /** Where the turn ran: an Agent conversation (roomId) or a Code task (threadId). */
+  source: z.enum(['room', 'code']).optional(),
+  roomId: z.string().min(1).max(256).optional(),
+  threadId: z.string().min(1).max(256).optional(),
+  /** The conversation or task title when it dropped, for the drop log. */
+  sourceLabel: z.string().max(120).optional(),
   runId: z.string().min(1).max(256),
   messageId: z.string().min(1).max(256).optional(),
   createdAt: z.string(),
   openedAt: z.string().optional()
 }).strict()
 export type KunWardrobeDrop = z.infer<typeof KunWardrobeDropSchema>
+
+export const KunWardrobeSettingsSchema = z.object({
+  /** Drops from Agent conversations; on by default. */
+  drops: z.boolean().default(true),
+  /** Drops from Code tasks as well; on by default, and only while drops are on. */
+  code: z.boolean().default(true),
+  /** card: a bottle card under the reply; quiet: only the sidebar and wardrobe count. */
+  notice: z.enum(['card', 'quiet']).default('card')
+}).strict()
+export type KunWardrobeSettings = z.infer<typeof KunWardrobeSettingsSchema>
+/** Opened bottles kept for the drop log, newest first. */
+export const KUN_WARDROBE_HISTORY_LIMIT = 50
 
 export const KunWardrobeSchema = z.object({
   version: z.literal(1),
@@ -73,7 +90,9 @@ export const KunWardrobeSchema = z.object({
   daily: z.object({ date: z.string(), drops: z.number().int().nonnegative() }).strict(),
   rngState: z.number().int().nonnegative(),
   totalDrops: z.number().int().nonnegative(),
-  firstDropAt: z.string().nullable()
+  firstDropAt: z.string().nullable(),
+  settings: KunWardrobeSettingsSchema.default({ drops: true, code: true, notice: 'card' }),
+  history: z.array(KunWardrobeDropSchema).max(KUN_WARDROBE_HISTORY_LIMIT).default([])
 }).strict()
 export type KunWardrobe = z.infer<typeof KunWardrobeSchema>
 export type KunWardrobeDetail = { wardrobe: KunWardrobe; revision: number | null }
@@ -172,7 +191,10 @@ function weighted<T>(choices: Array<{ value: T; weight: number }>, roll: number)
   return choices[choices.length - 1]!.value
 }
 
-export type KunWardrobeRollContext = { roomId: string; runId: string; messageId?: string; now: Date }
+export type KunWardrobeRollContext = {
+  runId: string; now: Date; messageId?: string
+  source?: 'room' | 'code'; roomId?: string; threadId?: string; sourceLabel?: string
+}
 export type KunWardrobeRoll = { wardrobe: KunWardrobe; drop: KunWardrobeDrop | null; counted: boolean }
 
 /**
@@ -188,11 +210,17 @@ export function rollKunWardrobeDrop(wardrobe: KunWardrobe, context: KunWardrobeR
   if (daily.drops >= rules.dailyCap) return { wardrobe: { ...wardrobe, daily }, drop: null, counted: false }
   const random = kunWardrobeRandom(wardrobe.rngState)
   const first = wardrobe.totalDrops === 0
-  const dropped = first || wardrobe.pity.sinceDrop + 1 >= rules.pity || random.next() < rules.dropRate
+  // The first counted turn of every local day always drops.
+  const dailyFirst = daily.drops === 0
+  const dropped = first || dailyFirst || wardrobe.pity.sinceDrop + 1 >= rules.pity || random.next() < rules.dropRate
   const counted: KunWardrobe = { ...wardrobe, daily, pity: { ...wardrobe.pity, lastCountedAt: context.now.toISOString(),
     sinceDrop: dropped ? 0 : wardrobe.pity.sinceDrop + 1 } }
   if (!dropped) return { wardrobe: { ...counted, rngState: random.state() }, drop: null, counted: true }
-  const base = { id: 'drop-' + context.runId, duplicate: false, feathers: 0, roomId: context.roomId, runId: context.runId,
+  const label = context.sourceLabel?.trim().slice(0, 120)
+  const base = { id: 'drop-' + context.runId, duplicate: false, feathers: 0, runId: context.runId,
+    source: context.source ?? (context.threadId && !context.roomId ? 'code' as const : 'room' as const),
+    ...(context.roomId ? { roomId: context.roomId } : {}), ...(context.threadId ? { threadId: context.threadId } : {}),
+    ...(label ? { sourceLabel: label } : {}),
     ...(context.messageId ? { messageId: context.messageId } : {}), createdAt: context.now.toISOString() }
   const unlit = KUN_AVATAR_PRESETS.filter((preset) => !wardrobe.roles.includes(preset.id))
   let drop: KunWardrobeDrop
@@ -239,7 +267,8 @@ export function openKunWardrobeDrop(wardrobe: KunWardrobe, dropId: string, now =
     seen.delete('card/' + drop.cardId)
   }
   const opened = { ...drop, openedAt: now.toISOString() }
-  return { drop: opened, granted, wardrobe: relight({ ...wardrobe, items, feathers, roles, seen: [...seen],
+  const history = [opened, ...(wardrobe.history ?? []).filter((entry) => entry.id !== dropId)].slice(0, KUN_WARDROBE_HISTORY_LIMIT)
+  return { drop: opened, granted, wardrobe: relight({ ...wardrobe, items, feathers, roles, seen: [...seen], history,
     pending: wardrobe.pending.filter((entry) => entry.id !== dropId) }) }
 }
 
@@ -257,4 +286,13 @@ export function exchangeKunWardrobeItem(wardrobe: KunWardrobe, key: KunWardrobeI
   if (wardrobe.feathers < price) throw new Error('not enough feathers')
   return relight({ ...wardrobe, feathers: wardrobe.feathers - price, items: { ...wardrobe.items, [key]: 1 },
     seen: wardrobe.seen.filter((entry) => entry !== key) })
+}
+
+export function updateKunWardrobeSettings(wardrobe: KunWardrobe, patch: Partial<KunWardrobeSettings>): KunWardrobe {
+  return { ...wardrobe, settings: KunWardrobeSettingsSchema.parse({ ...wardrobe.settings, ...patch }) }
+}
+/** Whether a finished turn from this source may roll at all. */
+export function kunWardrobeAcceptsSource(wardrobe: KunWardrobe, source: 'room' | 'code'): boolean {
+  const settings = wardrobe.settings ?? { drops: true, code: true, notice: 'card' }
+  return settings.drops && (source === 'room' || settings.code)
 }

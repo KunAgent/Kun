@@ -10,8 +10,10 @@ import type { WardrobeOpenResult } from './room-wardrobe'
 import './room-wardrobe.css'
 
 /** What came out of a bottle: a new item, a duplicate turned into feathers, or a whole role card. */
-export function RoomWardrobeReveal({ result, onClose, onWear }: {
+export function RoomWardrobeReveal({ result, onClose, onWear, onDress }: {
   result: WardrobeOpenResult; onClose: () => void; onWear?: () => void
+  /** Opens the dress-up studio; without it the Agent workspace's own editor is asked to open. */
+  onDress?: () => void
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
   const language = i18n.language.startsWith('zh') ? 'zh' : 'en'
@@ -41,7 +43,7 @@ export function RoomWardrobeReveal({ result, onClose, onWear }: {
       <div className="rooms-avatar-draft-actions rooms-wardrobe-reveal-actions">
         <button type="button" onClick={onClose}>{t('roomsWardrobeKeep')}</button>
         {onWear ? <button type="button" className="rooms-run-primary" onClick={() => { onWear(); onClose() }}>{t('roomsWardrobeWear')}</button>
-          : <button type="button" className="rooms-run-primary" onClick={() => { onClose(); window.dispatchEvent(new Event('kun-room-user-avatar')) }}>{t('roomsWardrobeGoDress')}</button>}
+          : <button type="button" className="rooms-run-primary" onClick={() => { onClose(); if (onDress) onDress(); else window.dispatchEvent(new Event('kun-room-user-avatar')) }}>{t('roomsWardrobeGoDress')}</button>}
       </div>
     </div>
   </RoomModal>

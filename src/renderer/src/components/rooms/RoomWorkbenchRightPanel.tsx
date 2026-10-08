@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
-import { FileEdit, Folders, Globe2, IdCard, MessagesSquare, Users } from 'lucide-react'
+import { FileEdit, Folders, Globe2, IdCard, MessagesSquare, Shirt, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference, RoomMessage } from '@shared/rooms-api'
 import type { ChatBlock } from '../../agent/types'
@@ -17,11 +17,13 @@ import { useRoomRun } from './useRoomRun'
 import { presentRoomRunItems } from './room-run-presentation'
 import { RoomAgentBrowser } from './RoomAgentBrowser'
 import { RoomDirectFiles } from './RoomDirectChat'
+import { useWardrobe } from './room-wardrobe'
 import './rooms-workbench.css'
 
 const WorkspaceFilePreviewPanel = lazy(() => import('../WorkspaceFilePreviewPanel').then((value) => ({ default: value.WorkspaceFilePreviewPanel })))
 const DevBrowserPanel = lazy(() => import('../DevBrowserPanel').then((value) => ({ default: value.DevBrowserPanel })))
 const ChangeInspector = lazy(() => import('../ChangeInspector').then((value) => ({ default: value.ChangeInspector })))
+const RoomWardrobePanel = lazy(() => import('./RoomWardrobePanel').then((value) => ({ default: value.RoomWardrobePanel })))
 
 export type RoomWorkbenchRightPanelProps = {
   room: Room | null
@@ -82,8 +84,10 @@ export function RoomWorkbenchRightPanel({
     { id: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowserTool'), icon: Globe2 },
     { id: BUILTIN_RIGHT_PANEL_IDS.files, label: t('rightPanelFiles'), icon: Folders },
     ...(room?.conversationKind === 'user_agent' ? [{ id: ROOM_COLLABORATION_TAB, label: t('roomsAgentSession'), icon: MessagesSquare }]
-      : [{ id: ROOM_COLLABORATION_TAB, label: t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' }), icon: Users }])
+      : [{ id: ROOM_COLLABORATION_TAB, label: t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' }), icon: Users }]),
+    { id: BUILTIN_RIGHT_PANEL_IDS.wardrobe, label: t('rightPanelWardrobe'), icon: Shirt }
   ]
+  const bottles = useWardrobe().wardrobe?.pending.length ?? 0
   const fileTitle = panel.contentTarget ? contentPreviewTitle ?? panel.contentTarget.reference.titleSnapshot
     : panel.fileTarget?.path.replaceAll('\\', '/').split('/').at(-1)
   const titles = {
@@ -119,7 +123,8 @@ export function RoomWorkbenchRightPanel({
             className="absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden"
             style={!active ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}>
             <Suspense fallback={<div className="grid h-full place-content-center text-xs text-ds-muted">{t('roomsLoading')}</div>}>
-              {id === CONVERSATION_INFO_TAB ? info ?? null : id === ROOM_COLLABORATION_TAB ? collaboration ?? <div className="grid h-full place-content-center p-5 text-center text-xs text-ds-muted">
+              {id === BUILTIN_RIGHT_PANEL_IDS.wardrobe ? <RoomWardrobePanel active={active} />
+                : id === CONVERSATION_INFO_TAB ? info ?? null : id === ROOM_COLLABORATION_TAB ? collaboration ?? <div className="grid h-full place-content-center p-5 text-center text-xs text-ds-muted">
                 <button className="rooms-workbench-empty-action" onClick={onCollaborationOpen}>{titles[ROOM_COLLABORATION_TAB]}</button>
               </div> : id === BUILTIN_RIGHT_PANEL_IDS.files ? <>
                 {room?.conversationKind === 'user_agent' ? <div className="rooms-private-file-tabs" role="group" aria-label={t('directFiles')}>
@@ -157,11 +162,13 @@ export function RoomWorkbenchRightPanel({
     </WorkbenchRightSidebar> : null}
     <WorkbenchSideRailSurface role="navigation" aria-label={t('rightPanelTabs')} className="rooms-workbench-rail">
       {tools.map(({ id, label, icon: Icon }) => <button key={id} type="button"
-        className={sideRailButtonClass(tabs.expanded && tabs.activeId === id)} aria-label={label} data-tooltip={label}
-        data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : id === CONVERSATION_INFO_TAB ? 'info' : id === ROOM_COLLABORATION_TAB ? 'session' : undefined}
+        className={sideRailButtonClass(tabs.expanded && tabs.activeId === id, id === BUILTIN_RIGHT_PANEL_IDS.wardrobe ? 'relative' : undefined)} aria-label={label} data-tooltip={label}
+        data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : id === CONVERSATION_INFO_TAB ? 'info' : id === ROOM_COLLABORATION_TAB ? 'session'
+          : id === BUILTIN_RIGHT_PANEL_IDS.wardrobe ? 'wardrobe' : undefined}
         aria-pressed={tabs.expanded && tabs.activeId === id}
         onClick={() => tabs.expanded && tabs.activeId === id ? panel.collapse() : open(id)}>
         <Icon className="h-4 w-4" strokeWidth={1.75} />
+        {id === BUILTIN_RIGHT_PANEL_IDS.wardrobe && bottles ? <span className="ds-rail-badge absolute right-0.5 top-0.5 grid h-[14px] min-w-[14px] place-items-center rounded-full bg-[var(--ds-danger,#d14343)] px-[3px] text-[9.5px] font-bold leading-none text-white shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)]" data-rail-badge={bottles}>{bottles > 9 ? '9+' : bottles}</span> : null}
       </button>)}
     </WorkbenchSideRailSurface>
   </>

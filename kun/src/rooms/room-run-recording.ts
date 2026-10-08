@@ -139,8 +139,8 @@ export async function observeRecordedRoomTurn(deps: RoomRuntimeDeps, thread: Thr
   if (turn.status === 'completed' && turn.finishedAt && row.value.participantAgentId && !row.value.taskId &&
     !row.value.integrationId && WARDROBE_PHASES.has(row.value.phase)) {
     try {
-      await countRoomWardrobeTurn(deps.store, { roomId: row.value.roomId, runId: id,
-        messageId: row.value.publishedMessageId, finishedAt: turn.finishedAt })
+      await countRoomWardrobeTurn(deps.store, { source: 'room', roomId: row.value.roomId, runId: id,
+        messageId: row.value.publishedMessageId, finishedAt: turn.finishedAt, sourceLabel: row.value.memberLabel })
     } catch (error) {
       console.warn('[kun] wardrobe drop skipped:', error instanceof Error ? error.message : String(error))
     }

@@ -34,6 +34,7 @@ import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
 import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
 import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
+import { CodeWardrobeObserver } from '../rooms/code-wardrobe-observer.js'
 import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/owned-process.js'
 import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
 import { workbenchExecutionControl } from './runtime-workbench-execution.js'
@@ -178,6 +179,8 @@ export function createServerRuntimeComposition(
         backgroundShells: backgroundShellRuntime, executionLeases }) }
   })
   events.addObserver(new RoomNotificationObserver({ threadStore: stores.threadStore, store: roomComposition.rooms.deps.store }))
+  // Code task turns roll wardrobe bottles too; Agent conversation turns are counted by their room runs.
+  events.addObserver(new CodeWardrobeObserver({ threadStore: stores.threadStore, turns: turnService, store: roomComposition.rooms.deps.store }))
   bindAgentCommitmentService(core.threadStore, roomComposition.rooms.commitments)
   bindAgentArtifactLibrary(core.threadStore, roomComposition.rooms.artifactLibrary)
   bindRoomRuleStore(core.threadStore, roomComposition.rooms.service.store)

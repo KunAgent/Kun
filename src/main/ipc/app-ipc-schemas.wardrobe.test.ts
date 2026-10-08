@@ -7,7 +7,8 @@ describe('wardrobe runtime request allowlist', () => {
       { path: '/v1/rooms/wardrobe', method: 'GET' },
       { path: '/v1/rooms/wardrobe/open', method: 'POST', body: '{}' },
       { path: '/v1/rooms/wardrobe/seen', method: 'POST', body: '{}' },
-      { path: '/v1/rooms/wardrobe/exchange', method: 'POST', body: '{}' }
+      { path: '/v1/rooms/wardrobe/exchange', method: 'POST', body: '{}' },
+      { path: '/v1/rooms/wardrobe/settings', method: 'POST', body: '{}' }
     ] as const) {
       expect(runtimeRequestPayloadSchema.parse(payload).path).toBe(payload.path)
     }

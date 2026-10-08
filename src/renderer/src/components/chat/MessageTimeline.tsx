@@ -59,6 +59,7 @@ import { TimelineSurfaceProvider } from './timeline-surface'
 import { useMobileJumpLatest } from './use-mobile-jump-latest'
 import type { MessageTimelineProps } from './message-timeline-props'
 import { useTurnUsageState } from '../../hooks/use-turn-usage'
+import { RoomWardrobeDropCard } from '../rooms/RoomWardrobeDropCard'
 import {
   timelineTurnAllowsRecoveryContinue,
   timelineTurnIsProcessing
@@ -582,6 +583,7 @@ export function MessageTimeline({
           )
         })}
 
+        {activeThreadId && !busy && threadLoadingId !== activeThreadId && !activeThread?.historyRefId ? <RoomWardrobeDropCard threadId={activeThreadId} /> : null}
         {activeThread?.historyRefId && turns.length > 0 && isSourceHistoryTurn(turns[turns.length - 1]!) ? <SourceHistoryBoundary /> : null}
         {forkPointIndex !== undefined &&
         forkPointIndex === turns.length &&

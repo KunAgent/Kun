@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import {
-  assertRoomWardrobeAllows, countRoomWardrobeTurn, markRoomWardrobeSeen, openRoomWardrobeDrop, readRoomWardrobe
+  assertRoomWardrobeAllows, countRoomWardrobeTurn, markRoomWardrobeSeen, openRoomWardrobeDrop, readRoomWardrobe, updateRoomWardrobeSettings
 } from './room-wardrobe-service.js'
 import { roomFingerprint } from './room-service.js'
 
@@ -85,4 +85,23 @@ it('lets saved looks wear only owned items unless everything is unlocked', async
   await expect(assertRoomWardrobeAllows(store, [{ kind: 'builtin', id: 'astronaut' }, null])).resolves.toBeUndefined()
   process.env.KUN_WARDROBE_UNLOCK_ALL = '1'
   await expect(assertRoomWardrobeAllows(store, [locked])).resolves.toBeUndefined()
+})
+
+it('publishes Code task bottles to every window and stops counting once drops are switched off', async () => {
+  const store = await openStore()
+  const drop = await countRoomWardrobeTurn(store, { source: 'code', threadId: 'thread-1', runId: 'code-turn-1', sourceLabel: '修复登录超时', finishedAt: new Date().toISOString() })
+  expect(drop).toMatchObject({ source: 'code', threadId: 'thread-1', sourceLabel: '修复登录超时' })
+  expect((await store.events('*')).find((event) => event.kind === 'wardrobe.dropped')).toMatchObject({
+    roomId: 'agent-directory', payload: { dropId: drop!.id, runId: 'code-turn-1', threadId: 'thread-1' } })
+  const detail = await readRoomWardrobe(store)
+  const input = { clientRequestId: 'settings-1', expectedRevision: detail.revision, settings: { code: false } }
+  const updated = await updateRoomWardrobeSettings(store, input, roomFingerprint(input))
+  expect(updated.wardrobe.settings).toEqual({ drops: true, code: false, notice: 'card' })
+  const later = { finishedAt: new Date(Date.now() + 120_000).toISOString(), now: new Date(Date.now() + 120_000) }
+  expect(await countRoomWardrobeTurn(store, { source: 'code', threadId: 'thread-1', runId: 'code-turn-2', ...later })).toBeNull()
+  expect(await store.getRequest('wardrobe-turn:code-turn-2')).toBeNull()
+  const off = { clientRequestId: 'settings-2', expectedRevision: updated.revision, settings: { drops: false } }
+  await updateRoomWardrobeSettings(store, off, roomFingerprint(off))
+  expect(await countRoomWardrobeTurn(store, { source: 'room', roomId: 'room-a', runId: 'run-9', ...later })).toBeNull()
+  expect((await readRoomWardrobe(store)).wardrobe.totalDrops).toBe(1)
 })

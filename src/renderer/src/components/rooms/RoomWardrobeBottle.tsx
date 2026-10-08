@@ -1,13 +1,21 @@
 import type { ReactElement } from 'react'
+import { composedAvatarLayerUrl } from './room-avatar-compositor'
 
-/** A corked bottle; its glow color comes from the surrounding rarity token. */
-export function WardrobeBottleIcon({ size = 28 }: { size?: number }): ReactElement {
-  return <svg className="rooms-wardrobe-bottle-icon" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-    <path d="M13 3h6v4.2l1.6 1.3c1.5 1.2 2.4 3 2.4 4.9V25a4 4 0 0 1-4 4h-6a4 4 0 0 1-4-4V13.4c0-1.9.9-3.7 2.4-4.9L13 7.2z"
-      fill="var(--wardrobe-glass, #dbe7ff)" stroke="var(--wardrobe-ink, #4b5565)" strokeWidth="1.6" strokeLinejoin="round" />
-    <path d="M12 2.5h8v2.4h-8z" fill="var(--wardrobe-ink, #4b5565)" />
-    <path d="M11.5 17c0-2.2 1.3-3.5 3-4.3" stroke="#ffffffb3" strokeWidth="1.5" strokeLinecap="round" />
-    <circle cx="16" cy="20" r="3.2" fill="var(--avatar-rarity, var(--ds-accent))" opacity=".85" />
-    <circle cx="16" cy="20" r="5.5" fill="var(--avatar-rarity, var(--ds-accent))" opacity=".18" />
-  </svg>
+export type WardrobeBottleState = 'sealed' | 'glowing' | 'open'
+
+/** The painted bottle from the avatar art set; the surrounding rarity token tints its halo. */
+export function WardrobeBottleIcon({ size = 28, state = 'glowing' }: { size?: number; state?: WardrobeBottleState }): ReactElement {
+  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+  const url = composedAvatarLayerUrl(`container/bottle-${state}`, size * dpr <= 96 ? 96 : size * dpr <= 256 ? 256 : 512)
+  return <span className="rooms-wardrobe-bottle-icon" style={{ width: size, height: size }} aria-hidden="true">
+    {url ? <img src={url} alt="" draggable={false} decoding="async" /> : null}
+  </span>
+}
+
+/** The shared back of every role card that has not been revealed yet. */
+export function WardrobeCardBack({ width, height }: { width: number; height: number }): ReactElement {
+  const url = composedAvatarLayerUrl('card/back', width * (typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1) <= 128 ? 128 : 256)
+  return <span className="rooms-wardrobe-card-back" style={{ width, height }} aria-hidden="true">
+    {url ? <img src={url} alt="" draggable={false} decoding="async" /> : null}
+  </span>
 }

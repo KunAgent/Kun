@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   KUN_WARDROBE_RULES, createKunWardrobe, exchangeKunWardrobeItem, grantKunWardrobeItems, kunWardrobeItems,
-  kunWardrobeLitCards, kunWardrobeMissingParts, kunWardrobeProgress, openKunWardrobeDrop, rollKunWardrobeDrop,
+  KUN_WARDROBE_HISTORY_LIMIT, KunWardrobeSchema, kunWardrobeAcceptsSource, kunWardrobeLitCards, kunWardrobeLocalDate,
+  kunWardrobeMissingParts, kunWardrobeProgress, openKunWardrobeDrop, rollKunWardrobeDrop, updateKunWardrobeSettings,
   type KunWardrobe
 } from './kun-wardrobe.js'
 import { KUN_AVATAR_PRESETS } from './kun-avatar-presets.js'
@@ -27,8 +28,8 @@ describe('wardrobe drop rules', () => {
     let drops = 0, longest = 0, dry = 0
     const turns = 20_000
     for (let index = 1; index <= turns; index++) {
-      // Keep every turn countable: fresh day, open interval.
-      const base = { ...wardrobe, daily: { date: '2000-01-01', drops: 0 }, pity: { ...wardrobe.pity, lastCountedAt: null }, pending: [] }
+      // Keep every turn countable, past the day's first guaranteed bottle: open interval, one drop already today.
+      const base = { ...wardrobe, daily: { date: kunWardrobeLocalDate(at(index * 2)), drops: 1 }, pity: { ...wardrobe.pity, lastCountedAt: null }, pending: [] }
       const result = roll(base, index)
       if (result.drop) { drops++; longest = Math.max(longest, dry); dry = 0 } else dry++
       wardrobe = result.wardrobe
@@ -104,5 +105,43 @@ describe('wardrobe drop rules', () => {
     expect(rich.feathers).toBe(100 - KUN_WARDROBE_RULES.exchangeFeathers.rare)
     expect(rich.items['headwear/beret']).toBe(1)
     expect(() => exchangeKunWardrobeItem(rich, 'headwear/beret')).toThrow('already owned')
+  })
+
+  it('drops on the first counted turn of every local day, after the first ever bottle', () => {
+    for (let seed = 0; seed < 40; seed++) {
+      const yesterday = { ...createKunWardrobe(seed), totalDrops: 7, firstDropAt: at(0).toISOString(),
+        daily: { date: '2026-10-08', drops: 3 }, pity: { sinceDrop: 0, sinceEpic: 0, lastCountedAt: null } }
+      const result = roll(yesterday, 1)
+      expect(result.drop).not.toBeNull()
+      expect(result.wardrobe.daily).toEqual({ date: kunWardrobeLocalDate(at(2)), drops: 1 })
+    }
+  })
+
+  it('records where a bottle came from and keeps opened bottles in a bounded log', () => {
+    const code = rollKunWardrobeDrop(createKunWardrobe(4), { runId: 'code-t1', threadId: 'thread-1', sourceLabel: '  修复登录超时  ', now: at(0) })
+    expect(code.drop).toMatchObject({ id: 'drop-code-t1', source: 'code', threadId: 'thread-1', sourceLabel: '修复登录超时' })
+    expect(code.drop).not.toHaveProperty('roomId')
+    const room = rollKunWardrobeDrop(createKunWardrobe(4), { runId: 'run-1', roomId: 'room-1', sourceLabel: '小 Kun', now: at(0) })
+    expect(room.drop).toMatchObject({ source: 'room', roomId: 'room-1', sourceLabel: '小 Kun' })
+    const full = { ...code.wardrobe, history: Array.from({ length: KUN_WARDROBE_HISTORY_LIMIT }, (_, i) => ({ ...code.drop!, id: 'old-' + i })) }
+    const opened = openKunWardrobeDrop(full, 'drop-code-t1', at(1))
+    expect(opened.wardrobe.history).toHaveLength(KUN_WARDROBE_HISTORY_LIMIT)
+    expect(opened.wardrobe.history[0]).toMatchObject({ id: 'drop-code-t1', openedAt: at(1).toISOString() })
+  })
+
+  it('defaults drops on for conversations and Code tasks, and honors switching them off', () => {
+    const legacy = createKunWardrobe(1) as Partial<KunWardrobe>
+    delete legacy.settings; delete legacy.history
+    const parsed = KunWardrobeSchema.parse(legacy)
+    expect(parsed.settings).toEqual({ drops: true, code: true, notice: 'card' })
+    expect(parsed.history).toEqual([])
+    expect(kunWardrobeAcceptsSource(parsed, 'room')).toBe(true)
+    expect(kunWardrobeAcceptsSource(parsed, 'code')).toBe(true)
+    const noCode = updateKunWardrobeSettings(parsed, { code: false })
+    expect(kunWardrobeAcceptsSource(noCode, 'room')).toBe(true)
+    expect(kunWardrobeAcceptsSource(noCode, 'code')).toBe(false)
+    const off = updateKunWardrobeSettings(parsed, { drops: false, notice: 'quiet' })
+    expect(off.settings).toEqual({ drops: false, code: true, notice: 'quiet' })
+    expect(kunWardrobeAcceptsSource(off, 'code')).toBe(false)
   })
 })

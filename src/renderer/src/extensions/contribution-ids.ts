@@ -18,7 +18,8 @@ export const BUILTIN_RIGHT_PANEL_IDS = {
   remote: 'builtin:right-panel-remote',
   review: 'builtin:right-panel-review',
   workers: 'builtin:right-panel-workers',
-  conversationInfo: 'builtin:right-panel-conversation-info'
+  conversationInfo: 'builtin:right-panel-conversation-info',
+  wardrobe: 'builtin:right-panel-wardrobe'
 } as const
 
 export type BuiltinRightPanelId = (typeof BUILTIN_RIGHT_PANEL_IDS)[keyof typeof BUILTIN_RIGHT_PANEL_IDS]
@@ -41,6 +42,7 @@ const LEGACY_RIGHT_PANEL_IDS: Readonly<Record<string, BuiltinRightPanelId>> = {
   subagents: BUILTIN_RIGHT_PANEL_IDS.subagents,
   'mcp-skills': BUILTIN_RIGHT_PANEL_IDS.mcpSkills,
   'provider-quotas': BUILTIN_RIGHT_PANEL_IDS.providerQuotas,
+  wardrobe: BUILTIN_RIGHT_PANEL_IDS.wardrobe,
   'agent-perspective': BUILTIN_RIGHT_PANEL_IDS.agentPerspective,
   graph: BUILTIN_RIGHT_PANEL_IDS.graph,
   remote: BUILTIN_RIGHT_PANEL_IDS.remote

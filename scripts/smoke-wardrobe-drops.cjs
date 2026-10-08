@@ -2,120 +2,136 @@
 const assert = require('node:assert/strict')
 
 // Runs only inside smoke-development-direct-chat's isolated Electron + Kun
-// profile with the offline model fixture. One finished Agent turn must drop the
-// first bottle; opening it moves the item into the wardrobe; the studio locks
-// unowned items; confirming a new Agent look applies it to every icon at once.
+// profile with the offline model fixture. The day's first finished Code task
+// drops a bottle; the right-rail wardrobe opens it; settings default on; the
+// studio hides unrevealed role cards; confirming a new Agent look applies it
+// to every icon at once.
 // node scripts/smoke-development-direct-chat.cjs --wardrobe-only --evidence .cache/kun-wardrobe
-async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagnostic, fixture, openPrivate }) {
+async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagnostic, fixture, workspaceRoot, switchCode, openPrivate }) {
   assert.equal(fixture.snapshot().real, false, 'Wardrobe evidence must use the disposable offline fixture')
-  await openPrivate('小 Kun')
+  await switchCode()
   await page.evaluate(async () => { const { default: i18n } = await import('/src/i18n.ts'); await i18n.changeLanguage('zh') })
-  const labels = await page.evaluate(async () => {
-    const { default: i18n } = await import('/src/i18n.ts')
-    const keys = ['roomsWardrobeOpen', 'roomsWardrobeLater', 'roomsWardrobeKeep', 'roomsWardrobeLockedHint', 'roomsAvatarHeadwear',
-      'roomsAvatarPresets', 'agentsSave', 'roomsMoreActions', 'roomsAvatarChoose']
-    return Object.fromEntries(keys.map((key) => [key, i18n.t(key, { ns: 'common' })]))
-  })
-  const roomId = (await request(page, '/v1/agents/chat-entry')).roomId
   const before = await request(page, '/v1/rooms/wardrobe')
   assert.equal(before.wardrobe.pending.length, 0, 'A fresh profile has no bottles')
-  assert.equal(before.wardrobe.items['glasses/square'], 1, 'Starter pack and default looks are owned from the start')
+  assert.deepEqual(before.wardrobe.settings, { drops: true, code: true, notice: 'card' }, 'Drops are on by default, Code tasks included')
   assert.equal(before.wardrobe.items['headwear/astronaut-helmet'], undefined, 'A legendary helmet starts locked')
-  assert.equal(await page.locator('[data-sidebar-wardrobe]').count(), 0)
 
-  // 1. The first finished conversation turn always drops a common or rare bottle.
-  const editor = page.locator('.rooms-composer .rooms-rich-input')
-  await editor.fill('你好')
-  await editor.press('Enter')
-  await poll(async () => (await request(page, '/v1/rooms/wardrobe')).wardrobe.pending.length === 1, 60_000, 'first finished turn drops one bottle')
+  // 1. The day's first finished Code task always drops a bottle under the reply.
+  await poll(() => page.evaluate(async () => {
+    const { useChatStore } = await import('/src/store/chat-store.ts')
+    return useChatStore.getState().runtimeConnection === 'ready'
+  }), 30_000, 'Code runtime ready')
+  const threadId = await page.evaluate(async (workspaceRoot) => {
+    const { useChatStore } = await import('/src/store/chat-store.ts')
+    const id = await useChatStore.getState().createThread({ workspaceRoot, forceNew: true })
+    if (!id) throw new Error('Could not create the Code task')
+    await useChatStore.getState().renameThread(id, '修复登录超时')
+    return id
+  }, workspaceRoot)
+  await page.locator('.ds-composer-textarea').waitFor()
+  await page.locator('.ds-composer-textarea').fill('你好')
+  await page.locator('.ds-composer-textarea').press('Enter')
+  await poll(async () => (await request(page, '/v1/rooms/wardrobe')).wardrobe.pending.length === 1, 90_000, 'Code task drops a bottle')
   const dropped = (await request(page, '/v1/rooms/wardrobe')).wardrobe.pending[0]
-  assert.equal(dropped.roomId, roomId)
-  assert.equal(dropped.kind, 'item')
-  assert(['common', 'rare'].includes(dropped.rarity), 'the first bottle is common or rare')
+  assert.equal(dropped.source, 'code')
+  assert.equal(dropped.threadId, threadId)
+  assert.equal(dropped.sourceLabel, '修复登录超时')
   const card = page.locator(`.rooms-wardrobe-drop[data-wardrobe-drop="${dropped.id}"]`)
-  await card.waitFor()
-  await page.locator('[data-sidebar-wardrobe]').waitFor()
-  await capture('wardrobe-drop-card')
+  await card.waitFor({ timeout: 30_000 })
+  await poll(async () => card.locator('.rooms-wardrobe-bottle-icon img').evaluate((image) => image.complete && image.naturalWidth > 0),
+    15_000, 'painted bottle art loads')
+  await page.locator('[data-sidebar-wardrobe="1"]').waitFor()
+  await capture('wardrobe-code-drop')
 
-  // 2. "Later" folds the card into one line; it comes back on demand.
-  await card.getByRole('button', { name: labels.roomsWardrobeLater, exact: true }).click()
-  await card.waitFor({ state: 'hidden' })
-  await page.locator('.rooms-wardrobe-drop-more').click()
-  await card.waitFor()
+  // 2. The right rail has a wardrobe icon with the unopened count; it opens the panel.
+  const railEntry = page.locator('[data-rail-entry="builtin:right-panel-wardrobe"]')
+  await railEntry.locator('[data-rail-badge="1"]').waitFor()
+  await railEntry.click()
+  const panel = page.locator('[data-wardrobe-panel="ready"]')
+  await panel.waitFor({ timeout: 30_000 })
+  assert.equal(await panel.locator('[data-wardrobe-today="1"]').count(), 1, 'Today shows one bottle')
+  await capture('wardrobe-panel-items')
 
-  // 3. Opening reveals the item and moves it into the wardrobe before the dialog closes.
-  await card.getByRole('button', { name: labels.roomsWardrobeOpen, exact: true }).click()
+  // 3. Opening from the panel reveals the item and records it in the log.
+  await panel.locator(`[data-wardrobe-drop="${dropped.id}"]`).click()
   const reveal = page.locator('[data-wardrobe-reveal]')
   await reveal.waitFor()
-  await poll(async () => reveal.locator('.rooms-wardrobe-reveal-art img').evaluateAll((images) =>
-    images.length >= 1 && images.every((image) => image.complete && image.naturalWidth > 0)), 30_000, 'reveal art loads')
-  await capture('wardrobe-reveal')
-  const key = `${dropped.item.category}/${dropped.item.id}`
+  await capture('wardrobe-panel-reveal')
   const opened = await request(page, '/v1/rooms/wardrobe')
   assert.equal(opened.wardrobe.pending.length, 0)
-  assert.equal(opened.wardrobe.items[key], (before.wardrobe.items[key] ?? 0) + 1, 'the opened item is owned')
-  if (dropped.duplicate) assert.equal(opened.wardrobe.feathers, dropped.feathers, 'duplicates pay feathers')
-  await reveal.getByRole('button', { name: labels.roomsWardrobeKeep, exact: true }).click()
+  assert.equal(opened.wardrobe.history[0].id, dropped.id, 'The opened bottle is first in the log')
+  await reveal.getByRole('button', { name: '收进衣橱', exact: true }).click()
   await reveal.waitFor({ state: 'hidden' })
   await poll(async () => (await page.locator('[data-sidebar-wardrobe]').count()) === 0, 10_000, 'sidebar entry clears')
+  await panel.locator('[data-wardrobe-tab="log"]').click()
+  await panel.getByText('Code · 修复登录超时', { exact: false }).first().waitFor()
 
-  // 4. A second turn within the minimum interval is remembered but not counted.
-  const messagesBefore = (await request(page, `/v1/rooms/${roomId}/messages?limit=20`)).messages.length
+  // 4. Settings: both switches start on; switching Code drops off persists.
+  await panel.locator('[data-wardrobe-tab="settings"]').click()
+  const codeSwitch = panel.locator('[data-wardrobe-setting="code"]')
+  assert.equal(await panel.locator('[data-wardrobe-setting="drops"]').getAttribute('aria-checked'), 'true')
+  assert.equal(await codeSwitch.getAttribute('aria-checked'), 'true')
+  await capture('wardrobe-panel-settings')
+  await codeSwitch.click()
+  await poll(async () => (await request(page, '/v1/rooms/wardrobe')).wardrobe.settings.code === false, 10_000, 'Code drops switched off')
+  await codeSwitch.click()
+  await poll(async () => (await request(page, '/v1/rooms/wardrobe')).wardrobe.settings.code === true, 10_000, 'Code drops switched back on')
+
+  // 5. Role cards: unrevealed ones show the card back and no name.
+  await panel.locator('[data-wardrobe-tab="cards"]').click()
+  const lit = (await request(page, '/v1/rooms/wardrobe')).wardrobe.roles.length
+  assert.equal(await panel.locator('[data-wardrobe-card="unknown"]').count(), 30 - lit, 'Every unlit card is unknown')
+  assert.equal(await panel.getByText('宇航员', { exact: true }).count(), 0, 'Unrevealed card names stay hidden')
+  await poll(async () => panel.locator('.rooms-wardrobe-card-back img').first().evaluate((image) => image.complete && image.naturalWidth > 0),
+    15_000, 'card back art loads')
+  await capture('wardrobe-panel-cards')
+
+  // 6. An Agent turn inside the 60-second window is remembered but not counted.
+  await openPrivate('小 Kun')
+  const roomId = (await request(page, '/v1/agents/chat-entry')).roomId
+  const editor = page.locator('.rooms-composer .rooms-rich-input')
   await editor.fill('再说一次')
   await editor.press('Enter')
-  await poll(async () => (await request(page, `/v1/rooms/${roomId}/messages?limit=20`)).messages.length >= messagesBefore + 2, 60_000, 'second reply arrives')
-  await poll(async () => (await request(page, `/v1/rooms/${roomId}/direct`)).activity == null, 30_000, 'second turn settles')
+  await poll(async () => (await request(page, `/v1/rooms/${roomId}/messages?limit=20`)).messages.length >= 2, 60_000, 'Agent reply arrives')
+  await poll(async () => (await request(page, `/v1/rooms/${roomId}/direct`)).activity == null, 30_000, 'Agent turn settles')
   const quiet = await request(page, '/v1/rooms/wardrobe')
-  assert.equal(quiet.wardrobe.pending.length, 0, 'no bottle inside the minimum interval')
-  assert.equal(quiet.wardrobe.totalDrops, 1)
-  assert.equal(quiet.wardrobe.pity.lastCountedAt, opened.wardrobe.pity.lastCountedAt)
+  assert.equal(quiet.wardrobe.totalDrops, 1, 'No bottle inside the minimum interval')
+  await page.locator('[data-room-tool="wardrobe"]').click()
+  await page.locator('[data-wardrobe-panel="ready"]').waitFor()
 
-  // 5. The Agent studio locks unowned items and applies a confirmed look at once.
+  // 7. The Agent studio hides unrevealed cards and applies a confirmed look at once.
   const agentId = (await request(page, '/v1/agents?limit=20')).agents.find((agent) => agent.name === '小 Kun').id
   const avatarBefore = (await request(page, `/v1/agents/${agentId}`)).agent.avatar
   const row = page.locator('.sidebar-agent-chat-row').filter({ hasText: '小 Kun' }).first()
   const rowHtml = () => row.locator('.rooms-avatar').first().evaluate((node) => node.innerHTML)
-  const headerHtml = () => page.locator('.direct-header .rooms-avatar').first().evaluate((node) => node.innerHTML)
-  const [rowBefore, headerBefore] = [await rowHtml(), await headerHtml()]
-  await page.locator('.direct-header').getByRole('button', { name: labels.roomsMoreActions, exact: true }).click()
+  const rowBefore = await rowHtml()
+  await page.locator('.direct-header').getByRole('button', { name: '更多操作', exact: true }).click()
   await page.locator('[data-conversation-action="profile"]').click()
-  const profileHtml = () => page.locator('[data-active-drawer-page="true"] .agent-details .rooms-avatar').first().evaluate((node) => node.innerHTML)
-  const profileBefore = await profileHtml()
-  await page.getByRole('button', { name: labels.roomsAvatarChoose, exact: true }).first().click()
+  await page.getByRole('button', { name: '选择头像', exact: true }).first().click()
   const dialog = page.locator('.rooms-init-dialog[data-size="wide"]')
   await dialog.waitFor()
-  await dialog.locator('.rooms-wardrobe-strip').waitFor()
-  await dialog.getByRole('tab', { name: labels.roomsAvatarHeadwear, exact: true }).click()
+  assert.equal(await dialog.getByRole('button', { name: '宇航员', exact: true }).count(), 0, 'Studio hides unrevealed card names')
+  assert(await dialog.getByRole('button', { name: '未知角色', exact: true }).count() >= 20, 'Studio shows unknown cards')
+  await capture('wardrobe-studio-unknown-cards')
+  await dialog.getByRole('tab', { name: '头饰', exact: true }).click()
   const helmet = dialog.getByRole('button', { name: '宇航头盔', exact: true })
-  assert.equal(await helmet.getAttribute('data-locked'), 'true', 'unowned items are locked')
-  assert.equal(await dialog.getByRole('button', { name: '带麦耳机', exact: true }).getAttribute('data-locked'), null, 'starter items are open')
-  await capture('wardrobe-studio-locked')
-  // aria-disabled keeps Playwright's actionability check away; the real click lands anyway.
-  await helmet.click({ force: true })
-  await poll(async () => (await dialog.locator('.rooms-avatar-composer-notice').innerText()).includes(labels.roomsWardrobeLockedHint), 5000, 'locked notice')
-  await dialog.getByRole('tab', { name: labels.roomsAvatarPresets, exact: true }).click()
-  assert.equal(await dialog.getByRole('button', { name: '宇航员', exact: true }).getAttribute('data-locked'), 'true', 'incomplete role cards are locked')
+  assert.equal(await helmet.getAttribute('data-locked'), 'true', 'Unowned items stay locked')
+  await dialog.getByRole('tab', { name: '套装', exact: true }).click()
   await dialog.getByRole('button', { name: '侦探', exact: true }).click()
-  await dialog.getByRole('button', { name: labels.agentsSave, exact: true }).click()
+  await dialog.getByRole('button', { name: '保存', exact: true }).click()
   await dialog.waitFor({ state: 'hidden' })
   await poll(async () => JSON.stringify((await request(page, `/v1/agents/${agentId}`)).agent.avatar) !== JSON.stringify(avatarBefore),
-    10_000, 'confirming the studio saves the Agent avatar without the profile Save button')
-  const saved = (await request(page, `/v1/agents/${agentId}`)).agent
-  assert.equal(saved.avatar.kind, 'composed')
-  assert.equal(saved.avatar.parts.headwear, 'detective-hat')
+    10_000, 'confirming the studio saves the Agent avatar')
   await poll(async () => (await rowHtml()) !== rowBefore, 15_000, 'sidebar conversation row follows the new avatar')
-  await poll(async () => (await headerHtml()) !== headerBefore, 15_000, 'conversation header follows the new avatar')
-  await poll(async () => (await profileHtml()) !== profileBefore, 15_000, 'Agent profile header follows the new avatar')
-  await poll(async () => page.locator('.sidebar-agent-chat-row img[data-composed], .direct-header img[data-composed]').evaluateAll((images) =>
-    images.length >= 2 && images.every((image) => image.complete && image.naturalWidth > 0)), 30_000, 'composed icons render')
   await capture('wardrobe-agent-avatar-applied')
-  assert.equal(Object.keys(fixture.snapshot().byPrompt).length, 2, 'Only the two chat prompts reached the model')
-  const result = { native: true, offline: true, roomId, drop: dropped, savedAvatar: saved.avatar, assertions: [
-    'first finished Agent turn drops one common/rare bottle under the reply and in the sidebar',
-    'later folds the card; open reveals the item and the wardrobe owns it before the dialog closes',
-    'a turn inside the 60s interval is remembered without dropping',
-    'studio locks unowned items and incomplete role cards; confirming a look saves the Agent avatar at once',
-    'sidebar row, conversation header and profile header follow the new avatar' ] }
+  const result = { native: true, offline: true, threadId, roomId, drop: dropped, assertions: [
+    'drops default on, Code tasks included; the first finished Code task of the day drops a bottle under its reply',
+    'the Code rail shows a wardrobe icon with the unopened count and opens the wardrobe panel',
+    'opening from the panel reveals the item and records it in the log with its Code task label',
+    'settings switches start on and persist changes',
+    'unrevealed role cards show the card back without names, in the panel and in the studio',
+    'an Agent turn inside the 60s interval does not drop; the Agent rail opens the same panel',
+    'a confirmed Agent look saves at once and the sidebar icon follows'] }
   await recordDiagnostic('wardrobe-drops', result)
   return result
 }

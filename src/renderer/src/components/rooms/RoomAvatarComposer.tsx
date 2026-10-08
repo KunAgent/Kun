@@ -4,13 +4,14 @@ import { useTranslation } from 'react-i18next'
 import {
   KUN_AVATAR_CATALOG, KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS, KUN_AVATAR_SCENES,
   KUN_AVATAR_RARITIES, KUN_AVATAR_RARITY_LABELS,
-  canonicalKunAvatarKey, kunWardrobeItemKey, kunWardrobeMissingParts, kunWardrobeOwns, normalizeKunAvatarParts, randomKunAvatarParts, updateKunAvatarPart,
+  canonicalKunAvatarKey, kunWardrobeItemKey, kunWardrobeMissingParts, kunWardrobeOwns, kunWardrobePartKeys, normalizeKunAvatarParts, randomKunAvatarParts, updateKunAvatarPart,
   type KunAvatarAccessoryCategory, type KunAvatarCategory, type KunAvatarParts, type KunAvatarRarity, type KunWardrobe, type RoomAvatarReference
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { composedAvatarLayerUrl } from './room-avatar-compositor'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
 import { AVATAR_SLOTS, RoomAvatarStage } from './RoomAvatarStage'
+import { WardrobeCardBack } from './RoomWardrobeBottle'
 import { avatarForIdentity } from './room-avatar-catalog'
 import './room-avatar-composer.css'
 
@@ -27,7 +28,7 @@ const tabs: ReadonlyArray<{ id: EditorCategory; icon: LucideIcon }> = [
 const backgroundColors = ['#f7f5ef', '#eef6ff', '#eaf6ef', '#fbf0f3', '#fff4d6', '#1d2530']
 const isAccessory = (category: EditorCategory): category is KunAvatarAccessoryCategory =>
   AVATAR_SLOTS.some((slot) => slot.id === category)
-type CardExtras = { locked?: boolean; fresh?: boolean; copies?: number; meta?: string }
+type CardExtras = { locked?: boolean; fresh?: boolean; copies?: number; meta?: string; lockedHint?: string }
 
 function composed(parts: KunAvatarParts): RoomAvatarReference {
   return { kind: 'composed', version: 1, parts }
@@ -91,7 +92,7 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
     <button key={key} type="button" className="rooms-avatar-composer-option" disabled={disabled}
       aria-label={text} aria-pressed={selected} data-rarity={details?.rarity} data-locked={extras.locked || undefined}
       aria-disabled={extras.locked || undefined} data-fresh={extras.fresh && !extras.locked ? true : undefined}
-      onClick={extras.locked ? () => { setTrying(null); setNotice(t('roomsWardrobeLockedHint')) } : onClick}
+      onClick={extras.locked ? () => { setTrying(null); setNotice(extras.lockedHint ?? t('roomsWardrobeLockedHint')) } : onClick}
       title={extras.locked ? t('roomsWardrobeLocked') : details ? `${KUN_AVATAR_RARITY_LABELS[details.rarity][language]} · ${details.flavor}` : undefined}
       aria-description={extras.locked ? t('roomsWardrobeLocked') : details ? KUN_AVATAR_RARITY_LABELS[details.rarity][language] : undefined}
       onPointerEnter={look ? () => tryOn(look) : undefined} onPointerLeave={look ? () => tryOn(null) : undefined}>
@@ -123,13 +124,19 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
     if (category === 'preset') {
       return KUN_AVATAR_PRESETS.filter((preset) => !ownedOnly || lit(preset.id)).map((preset) => {
         const open = lit(preset.id)
-        const missing = wardrobe ? kunWardrobeMissingParts(wardrobe, preset.parts).length : 0
+        const total = kunWardrobePartKeys(preset.parts).length
+        const have = wardrobe ? total - kunWardrobeMissingParts(wardrobe, preset.parts).length : total
+        // An unrevealed card keeps its secret: card back, no name, no try-on.
+        if (!open) {
+          return card(preset.id, t('roomsWardrobeUnknownCard'), false, <WardrobeCardBack width={48} height={64} />,
+            () => undefined, undefined, undefined,
+            { locked: true, meta: t('roomsWardrobeCollected', { have, total }), lockedHint: t('roomsWardrobeUnknownCardHint') })
+        }
         return card(preset.id, preset.label[language],
           active && (avatar?.kind === 'builtin' ? avatar.id === preset.id : avatar?.kind === 'composed' &&
             canonicalKunAvatarKey(parts) === canonicalKunAvatarKey(preset.parts)),
           look(preset.parts), () => choose(composed({ ...preset.parts })), preset.parts, undefined,
-          { locked: !open, fresh: open && fresh('card/' + preset.id),
-            meta: !wardrobe ? undefined : open ? t('roomsWardrobeLit') : t('roomsWardrobeMissing', { count: missing }) })
+          { fresh: fresh('card/' + preset.id), meta: wardrobe ? t('roomsWardrobeLit') : undefined })
       })
     }
     if (category === 'color' || category === 'face') {

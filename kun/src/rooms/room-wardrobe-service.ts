@@ -11,8 +11,9 @@ import type { Room } from '../contracts/rooms.js'
 import { KUN_AVATAR_PRESETS } from '../contracts/kun-avatar-presets.js'
 import {
   KUN_WARDROBE_STARTER_PACK, KunWardrobeSchema, createKunWardrobe, exchangeKunWardrobeItem, grantKunWardrobeItems,
-  kunWardrobeMissingParts, kunWardrobePartKeys, markKunWardrobeSeen, openKunWardrobeDrop, rollKunWardrobeDrop,
-  type KunWardrobe, type KunWardrobeDetail, type KunWardrobeDrop, type KunWardrobeItemKey
+  kunWardrobeAcceptsSource, kunWardrobeMissingParts, kunWardrobePartKeys, markKunWardrobeSeen, openKunWardrobeDrop,
+  rollKunWardrobeDrop, updateKunWardrobeSettings,
+  type KunWardrobe, type KunWardrobeDetail, type KunWardrobeDrop, type KunWardrobeItemKey, type KunWardrobeSettings
 } from '../contracts/kun-wardrobe.js'
 import { DEFAULT_AGENT_TEMPLATES, DIAGNOSTICIAN_AGENT_TEMPLATE } from '../agents/agent-defaults.js'
 import { RoomStoreConflictError, type RoomStore } from './room-store.js'
@@ -69,8 +70,12 @@ async function write(store: RoomStore, requestId: string, detail: KunWardrobeDet
     puts: [{ kind: KIND, id: ID, value: KunWardrobeSchema.parse(next) }], events, result })
 }
 
-export type WardrobeTurnContext = { roomId: string; runId: string; messageId?: string; finishedAt?: string; now?: Date }
-/** Counts a finished Agent turn once; stale reconciliations of old turns never drop anything. */
+export type WardrobeTurnContext = {
+  runId: string; messageId?: string; finishedAt?: string; now?: Date
+  /** An Agent conversation turn carries its roomId; a Code task turn carries its threadId. */
+  source?: 'room' | 'code'; roomId?: string; threadId?: string; sourceLabel?: string
+}
+/** Counts a finished Agent or Code turn once; stale reconciliations of old turns never drop anything. */
 export async function countRoomWardrobeTurn(store: RoomStore, context: WardrobeTurnContext): Promise<KunWardrobeDrop | null> {
   const requestId = 'wardrobe-turn:' + context.runId
   if (await store.getRequest(requestId)) return null
@@ -78,10 +83,15 @@ export async function countRoomWardrobeTurn(store: RoomStore, context: WardrobeT
   if (context.finishedAt && now.getTime() - Date.parse(context.finishedAt) > 10 * 60_000) return null
   for (let attempt = 0; ; attempt++) {
     const detail = await readRoomWardrobe(store)
-    const rolled = rollKunWardrobeDrop(detail.wardrobe, { roomId: context.roomId, runId: context.runId, messageId: context.messageId, now })
+    const source = context.source ?? (context.roomId ? 'room' : 'code')
+    // Switched off in the wardrobe settings: the turn is not counted at all.
+    if (!kunWardrobeAcceptsSource(detail.wardrobe, source)) return null
+    const rolled = rollKunWardrobeDrop(detail.wardrobe, { ...context, source, now })
     try {
+      // Code drops have no conversation; they reach every window through the directory namespace.
       await write(store, requestId, detail, rolled.wardrobe, rolled.drop
-        ? [{ roomId: context.roomId, kind: 'wardrobe.dropped', payload: { dropId: rolled.drop.id, runId: context.runId, messageId: context.messageId } }]
+        ? [{ roomId: context.roomId ?? DIRECTORY, kind: 'wardrobe.dropped', payload: { dropId: rolled.drop.id, runId: context.runId,
+          ...(context.messageId ? { messageId: context.messageId } : {}), ...(context.threadId ? { threadId: context.threadId } : {}) } }]
         : [], { dropId: rolled.drop?.id ?? null })
       return rolled.drop
     } catch (error) {
@@ -116,6 +126,9 @@ export function openRoomWardrobeDrop(store: RoomStore, input: Mutation & { dropI
 }
 export function markRoomWardrobeSeen(store: RoomStore, input: Mutation & { keys: string[] }, fingerprint: string) {
   return mutate(store, 'wardrobe-seen:', input, fingerprint, (wardrobe) => ({ wardrobe: markKunWardrobeSeen(wardrobe, input.keys) }))
+}
+export function updateRoomWardrobeSettings(store: RoomStore, input: Mutation & { settings: Partial<KunWardrobeSettings> }, fingerprint: string) {
+  return mutate(store, 'wardrobe-settings:', input, fingerprint, (wardrobe) => ({ wardrobe: updateKunWardrobeSettings(wardrobe, input.settings) }))
 }
 export function exchangeRoomWardrobeItem(store: RoomStore, input: Mutation & { key: KunWardrobeItemKey }, fingerprint: string) {
   return mutate(store, 'wardrobe-exchange:', input, fingerprint, (wardrobe) => ({ wardrobe: exchangeKunWardrobeItem(wardrobe, input.key) }))

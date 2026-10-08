@@ -45,9 +45,14 @@ async function exerciseLayeredAvatarControls({ page, request, poll, capture, rec
   }
   await open()
   assert.equal(await editor.locator('.rooms-avatar-composer-option').count(), 30)
+  // Lit role cards show their look; the rest stay hidden behind the painted card back.
+  const lit = (await request(page, '/v1/rooms/wardrobe')).wardrobe.roles.length
   await poll(async () => editor.locator('.rooms-avatar-composer-option img[data-composed]')
-    .evaluateAll((images) => images.length === 30 && images.every((image) => image.complete && image.naturalWidth > 0)),
-  30_000, 'all 30 actual app preset thumbnails')
+    .evaluateAll((images, count) => images.length === count && images.every((image) => image.complete && image.naturalWidth > 0), lit),
+  30_000, 'lit preset thumbnails')
+  await poll(async () => editor.locator('.rooms-avatar-composer-option .rooms-wardrobe-card-back img')
+    .evaluateAll((images, count) => images.length === count && images.every((image) => image.complete && image.naturalWidth > 0), 30 - lit),
+  30_000, 'unrevealed cards show the card back')
   await capture('avatar-app-presets')
   await editor.getByRole('button', { name: labels.coder, exact: true }).click()
   await tab('roomsAvatarBodyColor').click()
@@ -85,7 +90,7 @@ async function exerciseLayeredAvatarControls({ page, request, poll, capture, rec
   const studio = await exerciseAgentAvatarStudio({ page, request, poll, capture, openPrivate, resize })
   assert.equal(fixture.snapshot().mainCalls, 0, 'Avatar customization must not call a chat model')
   const result = { native: true, offline: true, roomId: room.id, profile: saved, modelCalls: fixture.snapshot().calls,
-    assertions: ['30 bundled preset thumbnails load in the real app', 'draft edits stay local until Save',
+    assertions: ['lit preset thumbnails and unrevealed card backs load in the real app', 'draft edits stay local until Save',
       'Electron/preload/main/Kun persist the selected parts and increment revision',
       'shared profile updates and reopening restores controls', 'Cancel preserves the persisted composition', ...studio] }
   await recordDiagnostic('avatar-app-profile', result)
@@ -106,7 +111,7 @@ async function exerciseAgentAvatarStudio({ page, request, poll, capture, openPri
   const ready = (selector, count) => poll(async () => dialog.locator(selector).evaluateAll((images, expected) =>
     images.length >= expected && images.every((image) => image.complete && image.naturalWidth > 0), count), 30_000, selector)
   await dialog.locator('.rooms-avatar-stage-mirror').waitFor()
-  await ready('.rooms-avatar-composer-option img[data-composed]', 30)
+  await ready('.rooms-avatar-composer-option img[data-composed]', (await request(page, '/v1/rooms/wardrobe')).wardrobe.roles.length)
   await capture('avatar-studio-looks')
   await dialog.getByRole('tab', { name: '头饰', exact: true }).click()
   await ready('.rooms-avatar-composer-option .rooms-avatar-item-art img', 19)
@@ -134,7 +139,7 @@ async function exerciseAgentAvatarStudio({ page, request, poll, capture, openPri
   await dialog.getByRole('button', { name: '取消', exact: true }).click()
   await dialog.waitFor({ state: 'hidden' })
   assert.deepEqual((await request(page, `/v1/agents/${agentId}`)).agent.avatar, before, 'Cancelling the studio keeps the saved avatar')
-  return ['Agent avatar dialog opens as a wide studio with 30 composed looks',
+  return ['Agent avatar dialog opens as a wide studio with every lit role card composed',
     'Hat tab shows 19 isolated item artworks; hovering tries one on the stage; clicking fills its slot',
     'Light, dark and 760px layouts captured; Cancel leaves the Agent avatar unchanged']
 }

@@ -38,7 +38,7 @@ describe('private Agent Code sidebar', () => {
     expect(shell().props.width).toBe(560)
     expect(shell().props.dividerProps['data-room-workbench-resize']).toBe(true)
     expect(rail().findAllByType('button').map((button) => button.props['aria-label']))
-      .toEqual(['rightPanelChanges', 'rightPanelBrowserTool', 'rightPanelFiles', 'roomsAgentSession'])
+      .toEqual(['rightPanelChanges', 'rightPanelBrowserTool', 'rightPanelFiles', 'roomsAgentSession', 'rightPanelWardrobe'])
     expect(rail().findByProps({ 'data-room-tool': 'browser' }).props.className).toBe(sideRailButtonClass(true))
     expect(renderer.root.findByType(RoomAgentBrowser).props.active).toBe(true)
     act(() => panel.collapse())

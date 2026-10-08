@@ -24,6 +24,7 @@ import {
   Radio,
   ScanSearch,
   Shapes,
+  Shirt,
   Users,
   X,
   type LucideIcon
@@ -129,6 +130,7 @@ export function CodeRightPanelTabs({
       icon: Users
     },
     { id: BUILTIN_RIGHT_PANEL_IDS.conversationInfo, label: t('conversationInfoTab'), icon: IdCard },
+    { id: BUILTIN_RIGHT_PANEL_IDS.wardrobe, label: t('rightPanelWardrobe'), icon: Shirt },
   ], [t])
 
   const builtinById = useMemo(

@@ -74,6 +74,9 @@ const McpSkillsPanel = lazy(() =>
 const UsageQuotaPanel = lazy(() =>
   import('./UsageQuotaPanel').then((module) => ({ default: module.UsageQuotaPanel }))
 )
+const RoomWardrobePanel = lazy(() =>
+  import('../rooms/RoomWardrobePanel').then((module) => ({ default: module.RoomWardrobePanel }))
+)
 const RemoteAccessPanel = lazy(() =>
   import('../remote/RemoteAccessPanel').then((module) => ({ default: module.RemoteAccessPanel }))
 )
@@ -373,6 +376,9 @@ function CodeRightPanelWorkspace({
           active={visible && code.state.activeId === id}
         />
       )
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.wardrobe) {
+      return <RoomWardrobePanel active={visible && code.state.activeId === id} />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.graph) {
       return (

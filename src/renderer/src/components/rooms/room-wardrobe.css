@@ -3,8 +3,11 @@
 .rooms-wardrobe-rarity[data-rarity='rare'] { --avatar-rarity: var(--ds-accent); }
 .rooms-wardrobe-rarity[data-rarity='epic'] { --avatar-rarity: var(--ds-skill, #7a68e8); }
 .rooms-wardrobe-rarity[data-rarity='legendary'] { --avatar-rarity: var(--ds-warning, #d97706); }
-.rooms-wardrobe-bottle-icon { flex: none; --wardrobe-glass: color-mix(in srgb, var(--avatar-rarity, var(--ds-accent)) 18%, #ffffff);
-  --wardrobe-ink: color-mix(in srgb, var(--ds-text) 70%, transparent); filter: drop-shadow(0 2px 3px #0002); }
+.rooms-wardrobe-bottle-icon { display: grid; flex: none; place-items: center;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--avatar-rarity, var(--ds-accent)) 55%, transparent)) drop-shadow(0 2px 3px #0002); }
+.rooms-wardrobe-bottle-icon > img, .rooms-wardrobe-card-back > img { display: block; width: 100%; height: 100%; object-fit: contain;
+  pointer-events: none; user-select: none; }
+.rooms-wardrobe-card-back { display: grid; flex: none; place-items: center; filter: drop-shadow(0 3px 6px #0000002e); }
 
 /* Progress strip above the studio */
 .rooms-wardrobe-strip { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--ds-border); border-radius: 14px;
@@ -60,8 +63,8 @@
 .ds-sidebar-wardrobe { display: flex; width: 100%; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; color: var(--ds-text); text-align: left;
   background: color-mix(in srgb, var(--ds-accent) 8%, transparent); font-size: 12.5px; }
 .ds-sidebar-wardrobe:hover { background: color-mix(in srgb, var(--ds-accent) 14%, transparent); }
-.ds-sidebar-wardrobe > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.ds-sidebar-wardrobe > span:last-of-type { color: var(--ds-accent); font-size: 11.5px; font-weight: 600; }
+.ds-sidebar-wardrobe-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ds-sidebar-wardrobe-open { flex: none; color: var(--ds-accent); font-size: 11.5px; font-weight: 600; }
 .ds-sidebar-wardrobe .rooms-wardrobe-bottle-icon { animation: rooms-wardrobe-wobble 1.6s ease infinite; }
 
 @media (max-width: 640px) {
