@@ -8,6 +8,7 @@ import type { WritePaperViewId } from './write-workspace-store-types'
 import { beginWorkSessionTransition, currentWorkSessionId, useWorkSessionStore } from './work-session-store'
 import { readWorkSessionTabs, workSessionTabTarget } from './work-session-tabs'
 import type { WorkSessionEntry } from './work-sessions-model'
+import { workAssistantThreadRoute } from './work-assistant-agent'
 
 /** Mount a space; every space is a folder with its documents, boards and papers. */
 export async function mountWorkSpace(root: string): Promise<boolean> {
@@ -173,8 +174,13 @@ export async function prepareWorkSessionForSend(): Promise<boolean> {
   }
   if (!sessionId) {
     const resource = board ? '' : writeConversationResourcePath(root, write.activeFilePath)
-    sessionId = await chat.createWriteThread(root, resource || undefined) ?? ''
+    const draft = useChatStore.getState()
+    sessionId = await chat.createWriteThread(root, resource || undefined, { route: workAssistantThreadRoute(draft) }) ?? ''
     if (!sessionId) return false
+    // The new session keeps the reasoning level picked on the draft as well.
+    if (useChatStore.getState().activeThreadId === sessionId) {
+      useChatStore.setState({ composerReasoningEffort: draft.composerReasoningEffort })
+    }
     // The space changed while the session was created: the draft stays in
     // the composer instead of landing in, or binding a board of, another space.
     if (useWriteWorkspaceStore.getState().workspaceRoot !== root) return false
@@ -182,6 +188,22 @@ export async function prepareWorkSessionForSend(): Promise<boolean> {
   if (board && board.threadId !== sessionId) {
     return useWriteWorkspaceStore.getState().bindWhiteboardThread(board.id, sessionId)
   }
+  return true
+}
+
+/**
+ * Paper, reader and editor shortcuts ask the Work assistant straight away:
+ * the same session preparation and send as the composer, never a dialog.
+ */
+export async function submitWorkAssistantPrompt(
+  value: string,
+  submit: (value: string) => void
+): Promise<boolean> {
+  const text = value.trim()
+  if (!text) return false
+  useWriteWorkspaceStore.getState().setAssistantOpen(true)
+  if (!(await prepareWorkSessionForSend())) return false
+  submit(text)
   return true
 }
 

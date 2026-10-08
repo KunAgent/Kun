@@ -42,11 +42,11 @@ afterEach(async () => {
   ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false
 })
 
-async function render(surface: 'code' | 'design' = 'code', disabled = false): Promise<HTMLButtonElement> {
+async function render(surface: 'code' | 'design' | 'write' = 'code', disabled = false): Promise<HTMLButtonElement> {
   await act(async () => root.render(createElement(FloatingComposerAgentModePicker, { controls, surface, disabled })))
   return host.querySelector<HTMLButtonElement>('[data-agent-mode-trigger]')!
 }
-async function open(surface: 'code' | 'design' = 'code'): Promise<HTMLButtonElement> {
+async function open(surface: 'code' | 'design' | 'write' = 'code'): Promise<HTMLButtonElement> {
   const trigger = await render(surface)
   await act(async () => trigger.click())
   return trigger
@@ -56,6 +56,18 @@ function choice(id: string): HTMLButtonElement {
 }
 
 describe('Agent and Kun mode picker', () => {
+  it('offers Work as the single Kun mode in Work, with the same external Agents', async () => {
+    const trigger = await open('write')
+    expect(trigger.textContent).toContain('Kun · Work')
+    expect(trigger.getAttribute('data-task-surface')).toBe('write')
+    expect(document.querySelectorAll('[data-agent-mode-group="kun"] [role="menuitemradio"]')).toHaveLength(1)
+    expect(choice('kun-write').getAttribute('aria-checked')).toBe('true')
+    expect(choice('kun-code')).toBeNull()
+    expect(document.querySelectorAll('[data-agent-mode-group="external"] [role="menuitemradio"]')).toHaveLength(2)
+    await act(async () => choice('claude-code').click())
+    expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('claude-code', 'write')
+  })
+
   it('keeps Kun modes together in the original surface position and lists external Agents once', async () => {
     const trigger = await open('design')
     expect(trigger.textContent).toContain('Kun · Design')

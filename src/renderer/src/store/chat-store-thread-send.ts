@@ -179,7 +179,7 @@ import {
   captureCodeDraftComposer,
   captureCodeProjectRouteSnapshot
 } from './chat-store-ade-send-snapshot'
-import { composerSelectionNeedsProvider, resolveDirectSendComposerSelection } from './chat-store-send-composer-selection'
+import { composerSelectionNeedsProvider, resolveDirectSendComposerSelection, sendFollowsComposerAgent } from './chat-store-send-composer-selection'
 import { submitToRuntimeQueue } from './chat-store-thread-send-enqueue'
 import { runtimePromptForSurface } from './chat-store-send-prompt'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
@@ -337,7 +337,7 @@ export async function sendThreadMessage(
     }
     const selectedRoute = resolveDirectSendComposerSelection({
       state: get(), queued, overrides, adeDraft, codeDraftComposer,
-      adeEligible: get().route === 'chat' || get().route === 'ade'
+      adeEligible: sendFollowsComposerAgent(get().route, overrides)
     })
     const orchestration = queued ? queued.orchestration ?? 'direct' : overrides?.orchestration ??
       (mode === 'agent' && get().route === 'chat' && get().graphEnabled ? get().composerOrchestration : 'direct')

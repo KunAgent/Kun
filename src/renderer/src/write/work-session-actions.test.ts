@@ -6,7 +6,8 @@ import {
   nextUntitledDocumentName,
   openWorkSession,
   prepareWorkSessionForSend,
-  startWorkSession
+  startWorkSession,
+  submitWorkAssistantPrompt
 } from './work-session-actions'
 
 const ROOT = '/Users/me/Work'
@@ -46,12 +47,55 @@ describe('Work session actions', () => {
   it('turns a draft into a new session anchored to the open document on the first send', async () => {
     useWriteWorkspaceStore.setState({ activeFilePath: `${ROOT}/README.md` })
     expect(await prepareWorkSessionForSend()).toBe(true)
-    expect(createWriteThread).toHaveBeenCalledWith(ROOT, `${ROOT}/README.md`)
+    expect(createWriteThread).toHaveBeenCalledWith(ROOT, `${ROOT}/README.md`, { route: expect.any(Object) })
   })
 
   it('anchors a session started with nothing open to the space', async () => {
     expect(await prepareWorkSessionForSend()).toBe(true)
-    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined)
+    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined, { route: expect.any(Object) })
+  })
+
+  it('starts the session with the Kun model and reasoning level the draft showed', async () => {
+    useChatStore.setState({ composerHarnessId: '', composerModel: 'deepseek-chat', composerProviderId: 'deepseek',
+      composerModelGroups: [{ providerId: 'deepseek', label: 'DeepSeek', modelIds: ['deepseek-chat'] }],
+      composerReasoningEffort: 'high' })
+    createWriteThread.mockImplementationOnce(async () => {
+      // Selecting a new thread restores its own selection (here: a reset level).
+      useChatStore.setState({ activeThreadId: 'thr_new', composerReasoningEffort: 'auto' })
+      return 'thr_new'
+    })
+    expect(await prepareWorkSessionForSend()).toBe(true)
+    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined,
+      { route: { model: 'deepseek-chat', providerId: 'deepseek' } })
+    expect(useChatStore.getState().composerReasoningEffort).toBe('high')
+  })
+
+  it('pins a new session to the external Agent picked in the composer, like a new Code task', async () => {
+    useChatStore.setState({ composerHarnessId: 'codex', composerCredentialMode: 'native-login',
+      composerModel: 'gpt-5.5-codex', composerProviderId: '' })
+    expect(await prepareWorkSessionForSend()).toBe(true)
+    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined, {
+      route: expect.objectContaining({ harnessId: 'codex', credentialMode: 'native-login', model: 'gpt-5.5-codex', providerId: 'default' })
+    })
+  })
+
+  it('asks the assistant straight away from paper and editor shortcuts', async () => {
+    const submit = vi.fn()
+    const setAssistantOpen = vi.fn()
+    useWriteWorkspaceStore.setState({ setAssistantOpen })
+    expect(await submitWorkAssistantPrompt('  Summarize the paper  ', submit)).toBe(true)
+    expect(setAssistantOpen).toHaveBeenCalledWith(true)
+    expect(createWriteThread).toHaveBeenCalledTimes(1)
+    expect(submit).toHaveBeenCalledWith('Summarize the paper')
+    expect(await submitWorkAssistantPrompt('   ', submit)).toBe(false)
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the text in the composer when no session could be prepared', async () => {
+    const submit = vi.fn()
+    createWriteThread.mockResolvedValueOnce(null as unknown as string)
+    expect(await submitWorkAssistantPrompt('Summarize', submit)).toBe(false)
+    expect(submit).not.toHaveBeenCalled()
   })
 
   it('keeps the current session whatever document is open', async () => {
@@ -96,7 +140,7 @@ describe('Work session actions', () => {
       }
     })
     expect(await prepareWorkSessionForSend()).toBe(true)
-    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined)
+    expect(createWriteThread).toHaveBeenCalledWith(ROOT, undefined, { route: expect.any(Object) })
     expect(bindWhiteboardThread).toHaveBeenCalledWith('board-1', 'thr_new')
   })
 

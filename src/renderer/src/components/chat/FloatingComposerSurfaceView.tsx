@@ -52,7 +52,7 @@ export function FloatingComposerSurfaceView({
     showCodeExecutionControls, showExecutionSettingsPicker, showProviderInModelLabel, showToolbarStartControls,
     showVoiceDictation, showWorkspaceControls, side, stretchModelPicker, t, useWorktreePool,
     taskSurface, taskSurfaceLocked, emptyTaskLayout, onTaskSurfaceChange, onNewRequirement,
-    worktreeBranch
+    agentSwitcher, worktreeBranch
   } = context
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
   const runtimeOffline = useChatStore((state) => state.runtimeConnection === 'offline')
@@ -305,10 +305,10 @@ export function FloatingComposerSurfaceView({
                     >
                       <Plus className="h-5 w-5" strokeWidth={1.8} />
                     </button>
-                    {taskSurface && onTaskSurfaceChange && !taskSurfaceLocked ? (
+                    {agentSwitcher || (taskSurface && onTaskSurfaceChange && !taskSurfaceLocked) ? (
                       adeComposerEnabled && !side && adeComposer ? (
                         <FloatingComposerAgentModePicker
-                          surface={taskSurface}
+                          surface={agentSwitcher ? 'write' : taskSurface}
                           disabled={!canCompose || busy}
                           controls={{
                             contextKey: activeThreadId ?? effectiveWorkspaceRoot,
@@ -320,7 +320,7 @@ export function FloatingComposerSurfaceView({
                             onSelect: (harnessId, surface) => {
                               if (harnessId !== adeComposer.harnessId) adeComposer.selectHarness(harnessId)
                               else if (harnessId === 'kun' && !composerHarnessId) useChatStore.getState().setComposerHarness('kun', '')
-                              if (harnessId !== adeComposer.harnessId || surface !== taskSurface) onTaskSurfaceChange(surface)
+                              if (surface !== 'write' && (harnessId !== adeComposer.harnessId || surface !== taskSurface)) onTaskSurfaceChange?.(surface)
                             },
                             onOpen: adeComposer.refreshRows,
                             onManage: (harnessId, configureProvider) => {

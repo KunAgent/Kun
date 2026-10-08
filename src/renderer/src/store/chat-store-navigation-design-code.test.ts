@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NormalizedThread } from '../agent/types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
+import { readThreadComposerSelection } from './chat-store-helpers'
 import type { BrowserStorageLike } from '../lib/browser-storage'
 import {
   emptyDesignThreadRegistry,
@@ -360,6 +361,32 @@ describe('chat-store navigation workspace selection', () => {
     expect(createThread).toHaveBeenCalledWith(expect.objectContaining({ agentSurface: 'write' }))
     expect(createThread.mock.calls[0]?.[0]).not.toHaveProperty('agentId')
     expect(harness.state.composerAgentId).toBe('')
+  })
+
+  it.each([
+    ['an external Agent', { harnessId: 'codex', credentialMode: 'native-login', model: 'gpt-5.5-codex', providerId: 'default' },
+      { harnessId: 'codex', credentialMode: 'native-login', model: 'gpt-5.5-codex', providerId: 'default' }],
+    ['Kun', { model: 'deepseek-chat', providerId: 'deepseek' }, {}]
+  ] as const)('starts a Work session on the composer choice for %s', async (_label, route, pinned) => {
+    const created = thread({ id: 'thr_write_route', title: 'Write Assistant', workspace: '/Users/zxy/write' })
+    const createThread = vi.fn(async (_request: unknown) => created)
+    registryMock.getProvider.mockReturnValue({ createThread })
+    vi.stubGlobal('window', {
+      localStorage: new MemoryStorage(),
+      kunGui: { workspaceDirectoryExists: vi.fn(async () => true), getSettings: vi.fn(async () => ({})) }
+    })
+    const harness = buildHarness()
+
+    await harness.actions.createWriteThread('/Users/zxy/write', undefined, { route: { ...route } })
+
+    const request = createThread.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(request).toMatchObject({ agentSurface: 'write', ...pinned })
+    if (!('harnessId' in pinned)) expect(request).not.toHaveProperty('harnessId')
+    // Selecting the new session keeps the Agent and model the draft showed.
+    expect(readThreadComposerSelection('thr_write_route')).toMatchObject({
+      model: route.model, providerId: route.providerId, source: 'user',
+      ...('harnessId' in route ? { harnessId: route.harnessId } : {})
+    })
   })
 
   it('openCode keeps a registered legacy Design task active in the shared workbench', async () => {

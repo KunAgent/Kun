@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { Image as ImageIcon, Link2, MessageSquareShare, Pencil, Trash2 } from 'lucide-react'
 import type { TFunction } from 'i18next'
 import type { PaperVisualMark } from '@shared/paper/paper-marks-types'
@@ -8,7 +8,6 @@ import {
   usePaperMarksStore
 } from '../../../paper/paper-marks-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
-import { usePaperReadingRequest } from '../../../paper/paper-reading-request'
 import { paperCitationMarkdown } from '../../../paper/paper-citation-copy'
 import { PaperGutterNoteEditor } from './PaperGutterNoteEditor'
 
@@ -39,6 +38,8 @@ export function PaperVisualMarkCard({
   const cachedImage = usePaperMarksStore((s) => s.visualMarkImages[mark.id])
   const [imageSrc, setImageSrc] = useState<string | null>(cachedImage ?? null)
   const [busy, setBusy] = useState(false)
+  const cardImageRef = useRef<string | null>(null)
+  cardImageRef.current = imageSrc
 
   useEffect(() => {
     if (imageSrc) return
@@ -69,12 +70,18 @@ export function PaperVisualMarkCard({
         page: mark.page,
         comment: mark.comment ?? ''
       })
-      const entry = usePaperModeStore.getState().entries.find((item) => item.unitDir === unitDir)
-      if (entry) {
-        usePaperReadingRequest.getState().open({ workspaceRoot, unitDir, meta: entry.meta,
-          selection: { text: `User image annotation (not original paper text): ${mark.comment || '[no text annotation]'}`, page: mark.page, pdfSha256: mark.pdfSha256 },
-          question: `${prompt}\nOnly my annotation text is included. The image has not been sent; do not infer its contents.` })
-      } else bridge.setInput(`${prompt}\n${t('writePaperReaderRegionNoImage')}`)
+      // The captured region rides along as an image when the model takes
+      // images; otherwise the question says so and goes as text.
+      const dataUrl = cardImageRef.current
+      let attached = false
+      if (dataUrl && bridge.attachImage) {
+        attached = await bridge
+          .attachImage({ dataBase64: dataUrl.split(',')[1] ?? '', name: `paper-region-p${mark.page}.png` })
+          .catch(() => false)
+      }
+      const text = attached ? prompt : `${prompt}\n${t('writePaperReaderRegionNoImage')}`
+      if (bridge.submit) bridge.submit(text)
+      else bridge.setInput(text)
     } finally {
       setBusy(false)
     }
@@ -165,7 +172,7 @@ export function PaperVisualMarkCard({
         onClick={() => void sendToAssistant()}
       >
         <MessageSquareShare className="h-3 w-3" strokeWidth={1.9} />
-        {t('paperReadingImageNoteOnly')}
+        {t('writePaperReaderRegionAsk')}
       </button>
     </div>
   )

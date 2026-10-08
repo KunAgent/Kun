@@ -147,6 +147,8 @@ export type SendMessageOverrides = {
   harnessId?: string
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
+  /** A Work assistant turn: run it on the composer's Agent (Kun or an external Agent), as Code does. */
+  useComposerAgent?: boolean
   modelLabel?: string
   reasoningEffort?: string
   serviceTier?: 'priority'

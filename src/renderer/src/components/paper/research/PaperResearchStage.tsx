@@ -75,6 +75,7 @@ export function PaperResearchStage({
         <div className="shrink-0 px-4 pb-4 pt-2">
           <div className="mx-auto w-full max-w-[760px]">
             <FloatingComposer
+              agentSwitcher
               workspaceRootOverride={workspaceRoot}
               input={assistant.input}
               setInput={assistant.setInput}
@@ -97,6 +98,9 @@ export function PaperResearchStage({
               modelPickerMode="combobox"
               modelControlVariant="split"
               showProviderInModelLabel
+              executionSettings={assistant.executionSettings}
+              executionSettingsApplying={assistant.executionSettingsApplying}
+              onExecutionSettingsChange={assistant.onExecutionSettingsChange}
               queuedMessages={assistant.queuedMessages}
               onRemoveQueuedMessage={assistant.removeQueuedMessage}
               onGuideQueuedMessage={assistant.guideQueuedMessage}

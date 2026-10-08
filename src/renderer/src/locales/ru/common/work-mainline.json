@@ -34,7 +34,7 @@
   "paperLibraryViewLabel": "Вид библиотеки",
   "paperLibraryViewList": "Список",
   "paperRowSessions": "Сессий: {{count}} · открыть последнюю",
-  "paperRowInterpret": "Разобрать…",
+  "paperRowInterpret": "Разобрать",
   "paperBatchAction": "Разобрать ({{count}})",
   "paperBatchTitle": "Разобрать статьи: {{count}}",
   "paperBatchSubtitle": "У каждой статьи будет своя сессия, статьи читаются по очереди в фоне. Результаты открываются из «Сессий» на боковой панели или из строки статьи.",

@@ -3,15 +3,13 @@ import { useShallow } from 'zustand/react/shallow'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { PaperWorkbenchChromeContext, type PaperWorkbenchChrome } from '../../paper/paper-chrome-context'
-import { openBoundedPaperReading } from '../../paper/paper-reading-entry'
 import { usePaperStore } from '../../write/paper/paper-store'
-import { paperUnitDirFromKnownUnits, paperUnitDirForFile } from '../../write/paper/paper-unit'
+import { submitWorkAssistantPrompt } from '../../write/work-session-actions'
 import { WritePdfRendererProvider } from './write-pdf-renderer-context'
 import { PaperPdfReader } from '../paper/reader/PaperPdfReader'
 import { PaperImportDialogHost } from '../paper/PaperImportDialogHost'
 import { PaperMetadataDrawer } from '../paper/sidebar/PaperMetadataDrawer'
 import { PaperTaskRing } from '../paper/PaperTaskRing'
-import { PaperReadingDialogHost } from '../paper/evidence/PaperReadingDialog'
 import { PaperBatchInterpretDialogHost } from '../paper/batch/PaperBatchInterpretDialog'
 
 export type WorkPaperHostProps = {
@@ -26,17 +24,14 @@ export type WorkPaperHostProps = {
   conversationStage: boolean
   /** Assistant panel and rail, right of the editor. */
   rightPanel: ReactNode
-  /**
-   * The editor, given the submit it must use: inside a paper unit a quick-ask
-   * goes through the bounded reading request instead of a generic turn.
-   */
+  /** The editor, given the submit its quick asks use (the Work assistant send). */
   children: (submitPrompt: ((value: string) => void) | undefined) => ReactNode
 }
 
 /**
  * Papers are part of every space: the mounted space is indexed as a library
- * (`<space>/papers`), unit PDFs open in the paper reader, and the import,
- * reading and batch dialogs, the metadata drawer and the task ring are always
+ * (`<space>/papers`), unit PDFs open in the paper reader, and the import
+ * and batch dialogs, the metadata drawer and the task ring are always
  * available. The center stays the ordinary editor groups, so the library,
  * discover pages and readers are tabs next to documents and whiteboards.
  */
@@ -83,17 +78,10 @@ export function WorkPaperHost({
     if (empty && other) closeEditorGroup(empty.id)
   }, [editorLayout, closeEditorGroup])
 
-  // Composer sends from a paper unit go through the bounded reading request,
-  // which scopes the material and asks before anything reaches a provider.
+  // Paper UI asks the Work assistant directly; the open paper travels with
+  // the turn as context, like any document.
   const submitPaperPrompt = useCallback((value: string): void => {
-    if (!onSubmitPrompt) return
-    const workspace = useWriteWorkspaceStore.getState()
-    const papers = usePaperModeStore.getState().entries
-    const dirs = [...papers.map((entry) => entry.unitDir), ...Object.keys(usePaperStore.getState().unitsByDir)]
-    const unit = paperUnitDirFromKnownUnits(workspace.workspaceRoot, workspace.activeFilePath ?? '', dirs)
-    const entry = unit ? papers.find((paper) => paper.unitDir === paperUnitDirForFile(unit, workspace.workspaceRoot)) : undefined
-    if (unit) void openBoundedPaperReading({ workspaceRoot: workspace.workspaceRoot, unitDir: paperUnitDirForFile(unit, workspace.workspaceRoot), meta: entry?.meta, question: value })
-    else onSubmitPrompt(value)
+    if (onSubmitPrompt) void submitWorkAssistantPrompt(value, onSubmitPrompt)
   }, [onSubmitPrompt])
 
   // Deep paper UI (tree rows, reader cards, the info panel, research) submits
@@ -151,7 +139,6 @@ export function WorkPaperHost({
           {workspaceRoot ? <PaperTaskRing /> : null}
         </div>
       </WritePdfRendererProvider>
-      {workspaceRoot ? <PaperReadingDialogHost /> : null}
       {workspaceRoot ? <PaperBatchInterpretDialogHost /> : null}
       {workspaceRoot ? <PaperImportDialogHost workspaceRoot={workspaceRoot} paperReading={paperReading} /> : null}
     </PaperWorkbenchChromeContext.Provider>

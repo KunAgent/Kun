@@ -34,7 +34,7 @@
   "paperLibraryViewLabel": "มุมมองคลังเอกสาร",
   "paperLibraryViewList": "รายการ",
   "paperRowSessions": "{{count}} เซสชัน · เปิดล่าสุด",
-  "paperRowInterpret": "อธิบาย…",
+  "paperRowInterpret": "อธิบาย",
   "paperBatchAction": "อธิบาย ({{count}})",
   "paperBatchTitle": "อธิบาย {{count}} บทความ",
   "paperBatchSubtitle": "แต่ละบทความจะมีเซสชันของตัวเองและถูกอ่านทีละบทความในเบื้องหลัง เปิดผลลัพธ์ได้จากเซสชันในแถบข้างหรือจากแถวของบทความ",

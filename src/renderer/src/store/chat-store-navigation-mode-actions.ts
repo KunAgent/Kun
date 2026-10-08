@@ -54,6 +54,7 @@ import {
   optimisticUserModelLabel,
   readCodeWorkspaceRoots,
   rememberCodeWorkspaceRoots,
+  rememberThreadComposerSelection,
   rememberTurnModel,
   reconcileCodeWorkspaceRoots,
   saveCodeWorkspaceRoots
@@ -438,7 +439,9 @@ export function createNavigationModeActions(
     const endPinTransition = beginWorkSessionTransition()
     try {
       const p = getProvider()
-      const pickedAgentId = get().composerAgentId?.trim() ?? ''
+      const external = options.route?.harnessId && options.route.harnessId !== 'kun' ? options.route : undefined
+      // A Kun persona profile only applies when Kun takes the session.
+      const pickedAgentId = external ? '' : get().composerAgentId?.trim() ?? ''
       const personaProfile = pickedAgentId
         ? (await rendererRuntimeClient.getSettings()).agents?.kun?.subagents?.profiles?.find(
           (profile) => profile.id === pickedAgentId &&
@@ -454,6 +457,14 @@ export function createNavigationModeActions(
         titleAuto: options.title?.trim() ? (options.titleAuto ?? false) : true,
         mode: 'agent',
         agentSurface: 'write',
+        ...(external ? {
+          harnessId: external.harnessId,
+          ...(external.credentialMode ? { credentialMode: external.credentialMode } : {}),
+          ...(external.gatewayBinding ? { gatewayBinding: external.gatewayBinding } : {}),
+          ...(external.model ? { model: external.model } : {}),
+          ...(external.providerId ? { providerId: external.providerId } : {}),
+          ...(external.accountId ? { accountId: external.accountId } : {})
+        } : {}),
         ...(personaProfile?.providerId?.trim()
           ? { providerId: personaProfile.providerId.trim() }
           : {}),
@@ -469,6 +480,14 @@ export function createNavigationModeActions(
         readWriteThreadRegistry(),
         activeFilePath
       ))
+      // The composer's choice becomes the session's, so selecting it below
+      // keeps the Agent and model the draft showed (a persona's model wins).
+      const route = options.route
+      if (route && (route.model || route.gatewayBinding) && !personaProfile?.model?.trim()) {
+        rememberThreadComposerSelection(thread.id, route.model ?? '', route.providerId ?? '', 'user',
+          route.harnessId ? { harnessId: route.harnessId, credentialMode: route.credentialMode,
+            ...(route.gatewayBinding ? { gatewayBinding: route.gatewayBinding } : {}) } : undefined)
+      }
       useWorkSessionStore.getState().select(targetWorkspace, thread.id)
       set((s) => ({
         route: 'write',
@@ -476,8 +495,10 @@ export function createNavigationModeActions(
         threads: s.threads.some((item) => item.id === thread.id) ? s.threads : [thread, ...s.threads],
         error: null
       }))
-      await get().refreshThreads()
+      // Select first, as Code does: a new thread is unlisted until its first
+      // message, and the refresh only keeps it once it is the active one.
       await get().selectThread(thread.id)
+      await get().refreshThreads()
       return thread.id
     } catch (e) {
       set({

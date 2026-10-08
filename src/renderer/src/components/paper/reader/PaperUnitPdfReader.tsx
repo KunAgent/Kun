@@ -16,7 +16,7 @@ import {
 } from '../../../paper/paper-marks-store'
 import { usePaperMarks } from '../../../paper/use-paper-marks'
 import { usePaperPdfFingerprint } from '../../../paper/use-paper-pdf-fingerprint'
-import { usePaperReadingRequest } from '../../../paper/paper-reading-request'
+import { PaperReadingPurposeMenu } from './PaperReadingPurposeMenu'
 import { paperUnitDirForFile, paperUnitSlugFromDir } from '../../../write/paper/paper-unit'
 import { usePaperStore } from '../../../write/paper/paper-store'
 import { rendererRuntimeClient } from '../../../agent/runtime-client'
@@ -112,7 +112,6 @@ export function PaperUnitPdfReader({
     workspaceRoot,
     unitDir: unitRelDir,
     pdfSha256,
-    paper: libraryEntry ? { unitDir: unitRelDir, meta: libraryEntry.meta, pdfSha256 } : undefined,
     onSelectionChange,
     onAutoTranslate: autoTranslateSelection
       ? (sel) => selectionTranslateRef.current(sel)
@@ -533,7 +532,7 @@ export function PaperUnitPdfReader({
       className="write-pdf-viewer relative flex h-full min-h-0 min-w-0 flex-col"
     >
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ds-border-muted px-3 py-1.5">
-        {libraryEntry ? <button type="button" className="rounded px-2 py-1 text-xs text-accent hover:bg-ds-hover" onClick={() => usePaperReadingRequest.getState().open({ workspaceRoot, unitDir: unitRelDir, meta: libraryEntry.meta })}>{t('paperReadingOpen')}</button> : null}
+        {libraryEntry ? <PaperReadingPurposeMenu title={libraryEntry.meta.title} /> : null}
         <button type="button" className="rounded px-2 py-1 text-xs text-ds-muted hover:bg-ds-hover" onClick={() => setDrawerOpen((open) => !open)}>{t('paperEvidenceTitle')}</button>
         <span className="min-w-0 truncate text-[11px] text-ds-faint">{pdfSha256 ? `PDF ${pdfSha256.slice(0, 12)}` : t('paperEvidenceLoadingVersion')}</span>
         {marks.length < allMarks.length ? <span className="text-[11px] text-amber-700 dark:text-amber-300" title={t('paperEvidenceHiddenMarks')}>{t('paperEvidence_legacy-unbound')}</span> : null}

@@ -1,7 +1,7 @@
 import { hasHarnessUpdate, useHarnessUpdateStore } from '../../store/harness-update-store'
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, Code2, History, Loader2, Palette, Settings2 } from 'lucide-react'
+import { Briefcase, Check, ChevronDown, Code2, History, Loader2, Palette, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { AgentIcon } from '../agent-icon'
@@ -21,21 +21,27 @@ export type ComposerAgentModeControls = {
   rows: AdeHarnessRow[]
   loading: boolean
   needsConfirm: (harnessId: string) => boolean
-  onSelect: (harnessId: string, surface: ComposerTaskSurface) => void
+  onSelect: (harnessId: string, surface: AgentModeSurface) => void
   onOpen: () => void
   onManage: (harnessId?: string, configureProvider?: boolean) => void
   onContinueLocalSession?: () => void
 }
 
-type Selection = { harnessId: string; label: string; surface: ComposerTaskSurface }
+/** Kun's surfaces: Code offers Code and Design, Work offers Work. */
+export type AgentModeSurface = ComposerTaskSurface | 'write'
+type Selection = { harnessId: string; label: string; surface: AgentModeSurface }
 const MENU_WIDTH = 288
+const KUN_MODE_LABEL_KEYS: Record<AgentModeSurface, string> = {
+  code: 'taskTypeCode', design: 'taskTypeDesign', write: 'workspaceModeWorkLabel'
+}
+const KUN_MODE_ICONS = { code: Code2, design: Palette, write: Briefcase }
 
 /** Agent identity and Kun's next-turn surface share the original Code/Design entry. */
 export function FloatingComposerAgentModePicker({
   controls, surface, disabled = false
 }: {
   controls: ComposerAgentModeControls
-  surface: ComposerTaskSurface
+  surface: AgentModeSurface
   disabled?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
@@ -52,7 +58,7 @@ export function FloatingComposerAgentModePicker({
   const kunRow = controls.rows.find((row) => row.definition.id === 'kun')
   const externalRows = controls.rows.filter((row) => row.definition.id !== 'kun' && harnessRowAvailable(row))
   const kun = controls.harnessId === 'kun'
-  const surfaceLabel = t(surface === 'design' ? 'taskTypeDesign' : 'taskTypeCode')
+  const surfaceLabel = t(KUN_MODE_LABEL_KEYS[surface])
   const triggerLabel = kun ? `Kun · ${surfaceLabel}` : controls.harnessLabel
 
   const close = useCallback((): void => {
@@ -164,7 +170,7 @@ export function FloatingComposerAgentModePicker({
     buttons[next]?.focus()
   }
   const kunUnavailable = kunRow ? harnessConnectionPresentation(kunRow).code : null
-  const kunModes: ComposerTaskSurface[] = ['code', 'design']
+  const kunModes: AgentModeSurface[] = surface === 'write' ? ['write'] : ['code', 'design']
   const menu = open && !disabled ? (
     <div ref={menuRef} id={menuId} role="menu" aria-label={t('composerAgentMode.title')}
       data-agent-mode-menu data-task-surface-menu data-placement={placement.placement}
@@ -197,9 +203,9 @@ export function FloatingComposerAgentModePicker({
               <AgentIcon harnessId="kun" size={16} /><span>Kun</span>
             </div>
             {kunModes.map((mode) => {
-              const label = t(mode === 'code' ? 'taskTypeCode' : 'taskTypeDesign')
+              const label = t(KUN_MODE_LABEL_KEYS[mode])
               const selected = kun && surface === mode
-              const Icon = mode === 'code' ? Code2 : Palette
+              const Icon = KUN_MODE_ICONS[mode]
               return (
                 <button key={mode} type="button" role="menuitemradio" aria-checked={selected} tabIndex={-1}
                   disabled={Boolean(kunUnavailable)} data-agent-mode-option={`kun-${mode}`} data-harness-id="kun"
@@ -228,7 +234,7 @@ export function FloatingComposerAgentModePicker({
                   <button type="button" role="menuitemradio" aria-checked={selected} tabIndex={-1} disabled={Boolean(code)}
                     data-agent-mode-option={id} data-harness-id={id}
                     title={[reason || row.definition.displayName, harnessRowUnavailableDetail(row)].filter(Boolean).join(' · ')}
-                    onClick={() => select({ harnessId: id, surface: 'code', label: row.definition.displayName })}
+                    onClick={() => select({ harnessId: id, surface: surface === 'write' ? 'write' : 'code', label: row.definition.displayName })}
                     className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition hover:bg-ds-hover focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-55">
                     <AgentIcon harnessId={id} size={16} className="shrink-0" />
                     <span className="min-w-0 flex-1">
@@ -272,7 +278,7 @@ export function FloatingComposerAgentModePicker({
       <div className="ds-composer-task-surface-control ds-no-drag shrink-0">
         <button ref={triggerRef} type="button" disabled={disabled} aria-haspopup="menu" aria-controls={menuId}
           aria-expanded={open} aria-label={`${t('composerAgentMode.title')}: ${triggerLabel}`} title={triggerLabel}
-          data-agent-mode-trigger data-task-surface-trigger data-task-surface={kun ? surface : 'code'} data-composer-agent={controls.harnessId}
+          data-agent-mode-trigger data-task-surface-trigger data-task-surface={kun || surface === 'write' ? surface : 'code'} data-composer-agent={controls.harnessId}
           onClick={() => open ? close() : openAndFocus('selected')}
           onKeyDown={(event) => {
             if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return

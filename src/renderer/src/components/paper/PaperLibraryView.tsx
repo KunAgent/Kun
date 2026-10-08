@@ -37,8 +37,8 @@ import { PaperLibraryToolbar } from './library/PaperLibraryToolbar'
 import { PaperLibraryEmptyState } from './library/PaperLibraryEmptyState'
 import paperSurface from './PaperWorkspaceSurface.module.css'
 import { PaperMatrixWorkspace } from './evidence/PaperMatrixWorkspace'
-import type { PaperMultiTask } from '../../paper/paper-multi-prompt'
-import { usePaperReadingRequest } from '../../paper/paper-reading-request'
+import { buildPaperMultiPrompt, paperMultiOutputPath, type PaperMultiTask } from '../../paper/paper-multi-prompt'
+import { interpretPaperWithAssistant } from '../../write/paper/paper-actions'
 import { usePaperStore } from '../../write/paper/paper-store'
 import type {
   PaperLibraryEntry,
@@ -274,7 +274,7 @@ export function PaperLibraryView({
         await openLibraryEntry(entry, workspaceRoot, t)
         return
       case 'interpret':
-        usePaperReadingRequest.getState().open({ workspaceRoot, unitDir: entry.unitDir, meta: entry.meta })
+        await interpretPaperWithAssistant({ t, workspaceRoot, unitDir: entry.unitDir, meta: entry.meta })
         return
       case 'edit':
         setEditEntry(entry)
@@ -307,7 +307,9 @@ export function PaperLibraryView({
   const runMultiTask = (task: PaperMultiTask): void => {
     const chosen = entries.filter((entry) => selection.has(entry.unitDir))
     if (chosen.length === 0 || !onSubmitPrompt) return
-    usePaperReadingRequest.getState().open({ workspaceRoot, unitDir: chosen[0].unitDir, meta: chosen[0].meta, synthesis: task, papers: chosen.map(({ unitDir, meta }) => ({ unitDir, meta })) })
+    // The assistant reads each paper's files and writes one note under notes/.
+    onSubmitPrompt(buildPaperMultiPrompt({ task, entries: chosen, outputPath: paperMultiOutputPath(task) }))
+    clearSelection()
   }
 
   const allVisibleSelected = visible.length > 0 && visible.every((e) => selection.has(e.unitDir))

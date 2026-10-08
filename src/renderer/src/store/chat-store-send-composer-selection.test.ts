@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatState } from './chat-store-types'
 import { captureAdeDraftSendSnapshot } from './chat-store-ade-send-snapshot'
-import { composerSelectionNeedsProvider, resolveDirectSendComposerSelection } from './chat-store-send-composer-selection'
+import { composerSelectionNeedsProvider, resolveDirectSendComposerSelection, sendFollowsComposerAgent } from './chat-store-send-composer-selection'
 
 function draftState(overrides: Partial<ChatState> = {}): ChatState {
   return {
@@ -125,4 +125,27 @@ describe('ADE first-send composer selection', () => {
       composerProviderId: '', composerAccountId: '' })
   })
 
+})
+
+describe('which sends follow the composer Agent', () => {
+  it('always for Code, only for the Work assistant in Work, never elsewhere', () => {
+    expect(sendFollowsComposerAgent('chat', undefined)).toBe(true)
+    expect(sendFollowsComposerAgent('ade', undefined)).toBe(true)
+    expect(sendFollowsComposerAgent('write', { useComposerAgent: true })).toBe(true)
+    // Work's own Kun flows (batch reading, mobile) keep the native loop.
+    expect(sendFollowsComposerAgent('write', undefined)).toBe(false)
+    expect(sendFollowsComposerAgent('design', { useComposerAgent: true })).toBe(false)
+    expect(sendFollowsComposerAgent('claw', { useComposerAgent: true })).toBe(false)
+  })
+
+  it('takes the external Agent for a Work assistant send and ignores it for other Work sends', () => {
+    const state = draftState({ route: 'write', adeDraftOpen: false, composerHarnessId: 'codex',
+      composerCredentialMode: 'native-login', composerModel: 'gpt-5.5-codex', composerProviderId: '' })
+    const work = resolveDirectSendComposerSelection({ state, queued: undefined, overrides: { useComposerAgent: true },
+      adeEligible: sendFollowsComposerAgent('write', { useComposerAgent: true }), adeDraft: undefined })
+    expect(work).toMatchObject({ composerHarnessId: 'codex', composerCredentialMode: 'native-login' })
+    const other = resolveDirectSendComposerSelection({ state, queued: undefined, overrides: undefined,
+      adeEligible: sendFollowsComposerAgent('write', undefined), adeDraft: undefined })
+    expect(other.composerHarnessId).toBe('')
+  })
 })

@@ -34,7 +34,7 @@
   "paperLibraryViewLabel": "라이브러리 보기",
   "paperLibraryViewList": "목록",
   "paperRowSessions": "세션 {{count}}개 · 최신 열기",
-  "paperRowInterpret": "해설…",
+  "paperRowInterpret": "해설",
   "paperBatchAction": "일괄 해설 ({{count}})",
   "paperBatchTitle": "논문 {{count}}편 일괄 해설",
   "paperBatchSubtitle": "논문마다 세션이 만들어지고 백그라운드에서 한 편씩 읽습니다. 결과는 사이드바의 세션이나 논문 행에서 열 수 있습니다.",

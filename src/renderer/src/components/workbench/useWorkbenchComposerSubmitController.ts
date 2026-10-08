@@ -1,7 +1,6 @@
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
-import { providerIdForComposerModel } from '../../store/chat-store-helpers'
 import { parseClawCommand } from '@shared/claw-commands'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { captureWriteDocumentContext, writeDocumentContextMatches } from '../../write/write-document-context'
@@ -46,6 +45,8 @@ import { restoreWorkbenchWritePrompt } from './workbench-write-prompt-state'
 import { restoreChatComposerSnapshot } from './workbench-chat-prompt-state'
 import { workbenchWriteSourceContext } from './workbench-write-source-reference'
 import { workContextDetached } from '../../write/work-context-store'
+import { workAssistantUsesExternalAgent } from '../../write/work-assistant-agent'
+import { activeWritePaperReference } from '../../write/write-paper-reference'
 import { retrieveWorkbenchWriteContext } from './workbench-write-retrieval'
 import { submitWorkbenchPlanIntent } from './workbench-plan-submit'
 import { buildWorkbenchClawHelpText } from './workbench-claw-help'
@@ -291,15 +292,14 @@ export function useWorkbenchComposerSubmitController({
         (preset) => preset.id === writeState.assistantAgentPresetId
       )
       const agentPersona = activeAgentPreset ? resolveWriteAgentPreset(activeAgentPreset).persona : ''
-      const model = writeState.assistantModel.trim()
-      const providerId =
-        writeState.assistantProviderId.trim() || providerIdForComposerModel(composerModelGroups, model)
+      // The composer's Agent and model run this turn, exactly as in Code.
+      const externalAgent = workAssistantUsesExternalAgent(useChatStore.getState())
       const reasoningEffort = composerReasoningEffortRequestValue(composerReasoningEffort)
       const serviceTier = serviceTierForComposerSelection(
         composerFastMode,
         composerModelGroups,
-        model,
-        providerId
+        composerModel,
+        composerProviderId
       )
       let composerContexts: ReturnType<typeof mergeWriteComposerContexts>
       try {
@@ -318,7 +318,8 @@ export function useWorkbenchComposerSubmitController({
           selections: quotedSelections,
           retrieval,
           officeDocument,
-          query: v
+          query: v,
+          paper: contextDetached ? undefined : activeWritePaperReference({ ...writeState, workspaceRoot: writeWorkspaceRoot })
         })
         const whiteboardReference = whiteboardContexts.filter((context) => (
           context.reference.kind === 'work-reference-whiteboard'
@@ -344,22 +345,23 @@ export function useWorkbenchComposerSubmitController({
         : await readWriteDocumentSha256(writeWorkspaceRoot, writeActiveFilePath)
       const sent = await sendMessage(
         messageText,
-        writeActiveDocument?.kind === 'office' ? 'agent' : composerMode === 'plan' ? 'plan' : 'agent',
+        externalAgent || writeActiveDocument?.kind === 'office' ? 'agent' : composerMode === 'plan' ? 'plan' : 'agent',
         {
+          agentSurface: 'write',
+          useComposerAgent: true,
           ...(!v && documentAttachments.length > 0
             ? { displayText: t('composerFileOnlyDisplay', { count: documentAttachments.length }) }
             : !v && attachmentIds.length > 0
               ? { displayText: t('composerImageOnlyDisplay') }
               : {}),
-          ...(model ? { model } : {}),
-          ...(providerId ? { providerId } : {}),
           ...(reasoningEffort ? { reasoningEffort } : {}),
           ...(serviceTier ? { serviceTier } : {}),
           ...(attachmentIds.length ? { attachmentIds } : {}),
           ...(publicAttachments.length ? { attachments: publicAttachments } : {}),
           ...(composerContexts.length ? { composerContexts } : {}),
           ...(writeSource.fileReference ? { fileReferences: [writeSource.fileReference] } : {}),
-          ...(workWhiteboardAdvertisesCanvasTools(activeWhiteboard) ? { guiDesignCanvas: true } : workWhiteboardAdvertisesExcalidrawTools(activeWhiteboard) ? { guiExcalidrawCanvas: true } : {}),
+          // Canvas tools are Kun's; an external Agent still reads the board snapshot.
+          ...(externalAgent ? {} : workWhiteboardAdvertisesCanvasTools(activeWhiteboard) ? { guiDesignCanvas: true } : workWhiteboardAdvertisesExcalidrawTools(activeWhiteboard) ? { guiExcalidrawCanvas: true } : {}),
           ...(agentPersona ? { persona: agentPersona } : {}),
           writeContext: {
             workspaceRoot: writeWorkspaceRoot,
@@ -390,7 +392,9 @@ export function useWorkbenchComposerSubmitController({
     removeComposerAttachments,
     composerAttachments,
     composerMode,
+    composerModel,
     composerModelGroups,
+    composerProviderId,
     composerFastMode,
     composerReasoningEffort,
     getAttachmentScope,

@@ -3,6 +3,10 @@ import { ArrowUp, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { FloatingComposerModelPicker } from '../../chat/FloatingComposerModelPicker'
 import type { WriteAssistantStageProps } from '../../write/WriteAssistantStageContext'
+import { AgentIcon } from '../../agent-icon'
+import { useChatStore } from '../../../store/chat-store'
+import { useHarnessStore } from '../../../store/harness-store'
+import { workAssistantHarnessId } from '../../../write/work-assistant-agent'
 
 /**
  * The home search box: a plain text area, one scope pill, the model and a
@@ -45,6 +49,11 @@ export function PaperResearchComposer({
   const { t } = useTranslation('common')
   const areaRef = useRef<HTMLTextAreaElement | null>(null)
   const canSend = value.trim().length > 0 && !busy && assistant.runtimeConnection === 'ready'
+  // Research runs on the Work assistant's Agent; an external Agent keeps its
+  // own models, so the box names it instead of offering Kun's.
+  const harnessId = useChatStore(workAssistantHarnessId)
+  const agentName = useHarnessStore((state) =>
+    state.rows.find((row) => row.definition.id === harnessId)?.definition.displayName) ?? harnessId
 
   useEffect(() => {
     const area = areaRef.current
@@ -75,7 +84,13 @@ export function PaperResearchComposer({
       <div className="mt-2.5 flex items-center gap-2">
         <div className="min-w-0 shrink">{scope}</div>
         <span className="flex-1" />
-        <FloatingComposerModelPicker
+        {harnessId !== 'kun' ? (
+          <span className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full border border-ds-border-muted px-2.5 text-[12.5px] font-medium text-ds-muted"
+            data-research-agent={harnessId} title={agentName}>
+            <AgentIcon harnessId={harnessId} size={14} className="shrink-0" />
+            <span className="min-w-0 truncate">{agentName}</span>
+          </span>
+        ) : <FloatingComposerModelPicker
           compact
           mode="combobox"
           composerModel={assistant.composerModel}
@@ -90,7 +105,7 @@ export function PaperResearchComposer({
           onComposerReasoningEffortChange={assistant.setComposerReasoningEffort}
           onComposerFastModeChange={assistant.setComposerFastMode}
           onConfigureProviders={assistant.onConfigureProviders}
-        />
+        />}
         <button
           type="button"
           onClick={onSubmit}

@@ -155,7 +155,7 @@ export function FloatingComposer({
   setInput,
   mode,
   setMode,
-  taskSurface, taskSurfaceLocked = false, emptyTaskLayout = false, designTaskProfile, placeholderOverride,
+  taskSurface, taskSurfaceLocked = false, emptyTaskLayout = false, designTaskProfile, placeholderOverride, agentSwitcher = false,
   autoPlanBuildEnabled = false,
   designProfileLocked = false,
   imageGenerationEnabled, imageGenerationAvailable = false, imageGenerationReason,
@@ -367,7 +367,7 @@ export function FloatingComposer({
   const canPickFileReference = canCompose && fileReferenceEnabled && Boolean(effectiveWorkspaceRoot) && Boolean(onOpenFileReferencePicker)
   const canPickDesignReference = canCompose && fileReferenceEnabled && Boolean(onOpenDesignReferencePicker)
   const adeComposerEnabled = !side &&
-    (route === 'chat' || route === 'ade' || activeThread?.workspaceMode === 'ade')
+    (route === 'chat' || route === 'ade' || agentSwitcher || activeThread?.workspaceMode === 'ade')
   const adeComposer = useAdeComposerControls({
     enabled: adeComposerEnabled === true && runtimeReady,
     activeThreadId, workspaceRoot: effectiveWorkspaceRoot,
@@ -379,7 +379,7 @@ export function FloatingComposer({
   })
   const canPickLocalFileReference = canCompose && fileReferenceEnabled && Boolean(onPickFileReferences)
   const canAddFileReference = canCompose && fileReferenceEnabled && Boolean(effectiveWorkspaceRoot) && Boolean(onAddFileReference)
-  const showIntentToolbar = !compact && route === 'chat', showComposerMenuButton = showIntentToolbar
+  const showIntentToolbar = (!compact && route === 'chat') || agentSwitcher, showComposerMenuButton = showIntentToolbar
   const showCodeExecutionControls = adeComposer.harnessId === 'kun' && codeExecutionControlsAvailable(taskSurface)
   const showPlanMenuOption = showCodeExecutionControls && Boolean(onPlanCommand), canTogglePlanMode = canCompose && showPlanMenuOption
   const showAutoPlanBuildMenuOption = showPlanMenuOption && autoPlanBuildEnabled
@@ -395,10 +395,10 @@ export function FloatingComposer({
   const runningGraphTurn = showCodeExecutionControls && graphEnabled && busy &&
     currentTurnOrchestration === 'graph' && !graphPlanningNeedsCorrection
   const canCreateNewThread = runtimeReady && route !== 'claw' && Boolean(effectiveWorkspaceRoot) && Boolean(onNewCommand)
-  const showGoalMenuOption = showCodeExecutionControls && route !== 'claw', canOpenGoalPanel = canCompose && showGoalMenuOption
+  const showGoalMenuOption = showCodeExecutionControls && route !== 'claw' && route !== 'write', canOpenGoalPanel = canCompose && showGoalMenuOption
   const canRunReview = adeComposer.harnessId === 'kun' && canCompose && route !== 'claw' && Boolean(onReviewCommand)
   const canToggleWorktreeMode = canCompose && !activeThreadId && route !== 'claw' && Boolean(onToggleWorktreeMode)
-  const canOpenComposerMenu = showComposerMenuButton && (canPickFileReference || canPickDesignReference || canPickLocalFileReference || canTogglePlanMode || canToggleAutoPlanBuildMode || showGraphMenuOption || canCreateNewThread || canOpenGoalPanel || canRunReview || route === 'chat' || (canCompose && Boolean(codeAgentPresets && onComposerPersonaChange)))
+  const canOpenComposerMenu = showComposerMenuButton && (canPickFileReference || canPickDesignReference || canPickLocalFileReference || canTogglePlanMode || canToggleAutoPlanBuildMode || showGraphMenuOption || canCreateNewThread || canOpenGoalPanel || canRunReview || canPickAttachment || route === 'chat' || (canCompose && Boolean(codeAgentPresets && onComposerPersonaChange)))
   const showToolbarStartControls = showComposerMenuButton
   const showExecutionSettingsPicker = showIntentToolbar
     && Boolean(executionSettings)
@@ -679,7 +679,7 @@ export function FloatingComposer({
     route, runningGraphTurn, runtimeReady, setActiveThreadGoalStatus, setGoalInputMode, setGoalPanelOpen, setInput, showComposerMenuButton,
     showAutoPlanBuildMenuOption, showCodeExecutionControls, showExecutionSettingsPicker, showGoalFloater, showGoalMenuOption, showGraphMenuOption, showGraphProgress, showPlanMenuOption, showProviderInModelLabel, showTodoProgress, showToolbarStartControls, showUsageHistoryFooter,
     showVoiceDictation, showWorkspaceControls, side, slashCommandMenu, slashQuery, stretchModelPicker, t, threadUsage: displayThreadUsage, primaryActionKind,
-    taskSurface, taskSurfaceLocked, emptyTaskLayout, onTaskSurfaceChange, onNewRequirement, threadUsageState, timingThreadUsage, useWorktreePool, userInput, worktreeBranch
+    taskSurface, taskSurfaceLocked, emptyTaskLayout, onTaskSurfaceChange, onNewRequirement, agentSwitcher, threadUsageState, timingThreadUsage, useWorktreePool, userInput, worktreeBranch
   }
 
   return (

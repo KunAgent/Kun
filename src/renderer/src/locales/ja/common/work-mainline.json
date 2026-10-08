@@ -34,7 +34,7 @@
   "paperLibraryViewLabel": "ライブラリの表示",
   "paperLibraryViewList": "リスト",
   "paperRowSessions": "セッション {{count}} 件 · 最新を開く",
-  "paperRowInterpret": "解説…",
+  "paperRowInterpret": "解説",
   "paperBatchAction": "まとめて解説（{{count}}）",
   "paperBatchTitle": "{{count}} 本の論文をまとめて解説",
   "paperBatchSubtitle": "論文ごとにセッションが作られ、バックグラウンドで 1 本ずつ読みます。結果はサイドバーのセッションか論文の行から開けます。",

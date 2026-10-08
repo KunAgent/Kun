@@ -34,7 +34,7 @@
   "paperLibraryViewLabel": "Library view",
   "paperLibraryViewList": "List",
   "paperRowSessions": "{{count}} sessions · open the latest",
-  "paperRowInterpret": "Interpret…",
+  "paperRowInterpret": "Interpret",
   "paperBatchAction": "Interpret ({{count}})",
   "paperBatchTitle": "Interpret {{count}} papers",
   "paperBatchSubtitle": "Each paper gets its own session and is read one after another in the background. Open the results from Sessions in the sidebar or from the paper's row.",

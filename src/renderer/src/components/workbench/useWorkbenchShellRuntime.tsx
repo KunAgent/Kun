@@ -185,15 +185,20 @@ export function useWorkbenchShellRuntime(context: Context): {
   const researchStageActive = useWriteWorkspaceStore(paperResearchStageActive)
   const rightPanelDockedVisible = rightPanelVisible && !planPanelInOverlay &&
     !(route === 'write' && researchStageActive)
+  // The Work assistant is Code's agent: one Agent/model selection and one
+  // permission setting; only the document context differs.
   const writeAssistantRailProps = {
-    composerModel: writeAssistantModel,
-    composerProviderId: resolvedWriteAssistantProviderId,
-    composerPickList: writeAssistantPickList,
+    composerModel,
+    composerProviderId,
+    composerPickList,
     skillCommands: runtimeSkills,
     disabledSkillIds,
     composerFastMode,
-    setComposerModel: setWriteAssistantModel,
+    setComposerModel,
     setComposerFastMode,
+    executionSettings: composerExecutionSettings,
+    executionSettingsApplying: composerExecutionApplying,
+    onExecutionSettingsChange: updateComposerExecutionSettings,
     onNewConversation: startNewWriteAssistantConversation,
     onPickWorkspace: () => void pickWriteAssistantWorkspace()
   }

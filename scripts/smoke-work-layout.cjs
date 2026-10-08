@@ -274,4 +274,4 @@ async function exerciseWorkLayout({ page, poll, capture, recordDiagnostic, resiz
   return { steps }
 }
 
-module.exports = { exerciseWorkLayout, switchToWork, workSnapshot }
+module.exports = { exerciseWorkLayout, minimalPdf, switchToWork, workSnapshot }

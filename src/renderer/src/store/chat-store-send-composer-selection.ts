@@ -1,4 +1,4 @@
-import type { ChatState, QueuedUserMessage } from './chat-store-types'
+import type { ChatState, QueuedUserMessage, SendMessageOverrides } from './chat-store-types'
 import type { AdeDraftSendSnapshot } from './chat-store-ade-send-snapshot'
 import { activeClawChannel, accountIdForComposerSelection } from './chat-store-helpers'
 import { fallbackComposerProviderIdForSend } from './chat-store-thread-action-helpers'
@@ -39,6 +39,17 @@ export function resolveDirectSendComposerSelection(input: {
     accountIdForComposerSelection(state.composerModelGroups, composerProviderId, composerModel)
   return { composerModel, composerProviderId, composerAccountId,
     composerHarnessId, composerCredentialMode, ...(composerGatewayBinding ? { composerGatewayBinding } : {}) }
+}
+
+/**
+ * Code sends always run on the composer's Agent. A Work send does when the
+ * Work assistant submits it; Work's own Kun flows keep the native loop.
+ */
+export function sendFollowsComposerAgent(
+  route: ChatState['route'],
+  overrides: Pick<SendMessageOverrides, 'useComposerAgent'> | undefined
+): boolean {
+  return route === 'chat' || route === 'ade' || (route === 'write' && overrides?.useComposerAgent === true)
 }
 
 export function composerSelectionNeedsProvider(selection: ReturnType<typeof resolveDirectSendComposerSelection>): boolean {

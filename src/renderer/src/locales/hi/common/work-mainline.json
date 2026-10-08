@@ -34,7 +34,7 @@
   "paperLibraryViewLabel": "लाइब्रेरी दृश्य",
   "paperLibraryViewList": "सूची",
   "paperRowSessions": "{{count}} सत्र · सबसे नया खोलें",
-  "paperRowInterpret": "व्याख्या करें…",
+  "paperRowInterpret": "व्याख्या करें",
   "paperBatchAction": "व्याख्या ({{count}})",
   "paperBatchTitle": "{{count}} शोध-पत्रों की व्याख्या",
   "paperBatchSubtitle": "हर शोध-पत्र का अपना सत्र बनता है और पृष्ठभूमि में एक-एक करके पढ़ा जाता है। परिणाम साइडबार के सत्रों से या शोध-पत्र की पंक्ति से खोलें।",

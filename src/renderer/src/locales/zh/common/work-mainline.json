@@ -34,7 +34,7 @@
   "paperLibraryViewLabel": "文献库视图",
   "paperLibraryViewList": "列表",
   "paperRowSessions": "{{count}} 个会话 · 打开最近的",
-  "paperRowInterpret": "解读…",
+  "paperRowInterpret": "解读",
   "paperBatchAction": "批量解读（{{count}}）",
   "paperBatchTitle": "批量解读 {{count}} 篇论文",
   "paperBatchSubtitle": "每篇论文会在后台建立自己的会话，逐篇按顺序解读；完成后在侧栏「会话」或论文行上打开。",

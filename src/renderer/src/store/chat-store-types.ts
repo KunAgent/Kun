@@ -44,6 +44,18 @@ import type { RemovedCodeWorkspacesRegistry } from '../lib/removed-code-workspac
 
 import type { SettingsRouteSection } from './settings-route-sections'
 export type { SettingsRouteSection }
+/**
+ * The Work assistant composer's choice a new session starts with: an external
+ * Agent is pinned on the thread; Kun's choice is remembered for the composer.
+ */
+export type WorkThreadRoute = {
+  harnessId?: string
+  credentialMode?: string
+  gatewayBinding?: HarnessGatewayBinding
+  model?: string
+  providerId?: string
+  accountId?: string
+}
 import type {
   ClearDesignHistoryOptions,
   ClearDesignHistoryResult,
@@ -396,7 +408,8 @@ export type ChatState = {
   createWriteThread: (
     workspaceRoot?: string,
     activeFilePath?: string,
-    options?: { title?: string; titleAuto?: boolean }
+    /** `route` pins the session to the Work assistant's Agent, like a new Code task. */
+    options?: { title?: string; titleAuto?: boolean; route?: WorkThreadRoute }
   ) => Promise<string | null>
   ensureDesignThreadForWorkspace: (workspaceRoot?: string, docId?: string) => Promise<string | null>
   createDesignThread: (

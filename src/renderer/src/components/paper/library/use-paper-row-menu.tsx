@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { usePaperReadingRequest } from '../../../paper/paper-reading-request'
+import { interpretPaperWithAssistant } from '../../../write/paper/paper-actions'
 import { confirmDialog } from '../../../lib/confirm-dialog'
 import { openLibraryEntry } from '../../../paper/paper-library-actions'
 import { trashPaperUnits } from '../../../paper/paper-unit-ops'
@@ -59,7 +59,7 @@ export function usePaperRowMenu(): {
         await openLibraryEntry(entry, libraryRoot, t)
         return
       case 'interpret':
-        usePaperReadingRequest.getState().open({ workspaceRoot: normalizePath(libraryRoot ?? '') || normalizePath(useWriteWorkspaceStore.getState().workspaceRoot), unitDir: entry.unitDir, meta: entry.meta })
+        await interpretPaperWithAssistant({ t, workspaceRoot: normalizePath(libraryRoot ?? '') || normalizePath(useWriteWorkspaceStore.getState().workspaceRoot), unitDir: entry.unitDir, meta: entry.meta })
         return
       case 'edit':
         setEditEntry({ entry, libraryRoot })

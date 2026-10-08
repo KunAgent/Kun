@@ -98,8 +98,10 @@ export function useAdeComposerControls(input: {
   const setComposerIsolation = useChatStore((state) => state.setComposerIsolation)
   const setComposerExecutionSettings = useChatStore((state) => state.setComposerExecutionSettings)
   const requestAdeThreadWorkspace = useChatStore((state) => state.requestAdeThreadWorkspace)
-  const worktreeGit = useAdeWorktreeGit({ enabled, activeThreadId, workspaceRoot })
-  useCodeProjectDefaults({ enabled, activeThreadId, workspaceRoot })
+  // Projects, worktrees and their default Agent are Code's; Work only switches Agents.
+  const codeProject = useChatStore((state) => state.route !== 'write')
+  const worktreeGit = useAdeWorktreeGit({ enabled: enabled && codeProject, activeThreadId, workspaceRoot })
+  useCodeProjectDefaults({ enabled: enabled && codeProject, activeThreadId, workspaceRoot })
   const providerKind = useChatStore((state) => state.composerModelGroups
     .find((group) => group.providerId === state.composerProviderId)?.kind)
   const harnessId = effectiveHarnessId(composerHarnessId, threadHarnessId, providerKind)

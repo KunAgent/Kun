@@ -14,7 +14,6 @@ import type { CoreRuntimeSkillJson } from '../../agent/kun-contract'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
 import { useChatStore } from '../../store/chat-store'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
-import { openBoundedPaperReading } from '../../paper/paper-reading-entry'
 import { usePaperStore } from '../../write/paper/paper-store'
 import { paperUnitDirForFile, paperUnitDirFromKnownUnits } from '../../write/paper/paper-unit'
 import {
@@ -35,6 +34,7 @@ import { WorkContextChip, type WorkContextDescriptor } from './WorkContextChip'
 import { selectFocusedPresentationView } from '../../write/write-presentation-view-state'
 import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { FloatingComposer } from '../chat/FloatingComposer'
+import type { FloatingComposerProps } from '../chat/floating-composer-policy'
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
 import { SubagentReturnBar } from '../chat/message-timeline-empty'
 import { WriteAssistantSparkleIcon } from './WriteAssistantIcons'
@@ -47,6 +47,8 @@ import type { WritePaperViewId } from '../../write/write-workspace-store-types'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { workSessionDisplayTitle } from '../../write/work-sessions-model'
 import { prepareWorkSessionForSend } from '../../write/work-session-actions'
+import { workAssistantHarnessId } from '../../write/work-assistant-agent'
+import { AgentIcon } from '../agent-icon'
 import './work-stage.css'
 import { WritePresentationViewChip } from './WritePresentationViewChip'
 import { useChildThreadViewer } from './useChildThreadViewer'
@@ -73,6 +75,10 @@ type Props = {
   setComposerModel: (modelId: string, providerId?: string) => void
   setComposerReasoningEffort: (effort: ComposerReasoningEffort) => void
   setComposerFastMode: (enabled: boolean) => void
+  /** Code's permission setting; Work and Code run the same Agent. */
+  executionSettings?: FloatingComposerProps['executionSettings']
+  executionSettingsApplying?: boolean
+  onExecutionSettingsChange?: FloatingComposerProps['onExecutionSettingsChange']
   queuedMessages: QueuedUserMessage[]
   removeQueuedMessage: (id: string) => void
   guideQueuedMessage: (id: string) => void | Promise<unknown>
@@ -127,6 +133,9 @@ export function WriteAssistantPanel({
   setComposerModel,
   setComposerReasoningEffort,
   setComposerFastMode,
+  executionSettings = null,
+  executionSettingsApplying = false,
+  onExecutionSettingsChange,
   queuedMessages,
   removeQueuedMessage,
   guideQueuedMessage,
@@ -176,13 +185,13 @@ export function WriteAssistantPanel({
   const stage = useWorkConversationStage()
   const stageChrome = useContext(WorkStageChromeContext)
   const detachedKey = useWorkContextStore((s) => s.detachedKey)
-  const contextDetached = Boolean(contextKey) && detachedKey === contextKey
   // A removed chip only applies to the item it was removed from.
   useEffect(() => {
     if (detachedKey && detachedKey !== contextKey) useWorkContextStore.getState().attach()
   }, [contextKey, detachedKey])
   const sessionTitle = useChatStore((s) =>
     workSessionDisplayTitle(s.threads.find((thread) => thread.id === s.activeThreadId)?.title))
+  const agentHarnessId = useChatStore(workAssistantHarnessId)
   const paperEntries = usePaperModeStore((s) => s.entries)
   const readerPage = usePaperModeStore((s) => s.readerPage)
   const knownUnits = usePaperStore((s) => s.unitsByDir)
@@ -332,7 +341,10 @@ export function WriteAssistantPanel({
               />
             </div>
           ) : null}
-          <WorkKunAvatar variant={paperContext ? 'researcher' : 'writer'} size={22} />
+          {/* Who answers: Kun, or the external Agent picked in the composer. */}
+          {agentHarnessId === 'kun'
+            ? <WorkKunAvatar variant={paperContext ? 'researcher' : 'writer'} size={22} />
+            : <AgentIcon harnessId={agentHarnessId} size={22} />}
           {/* The header names the current session; the sidebar lists them all. */}
           <span className="write-assistant-session-title ml-2 text-[14px] font-semibold tracking-[-0.01em] text-ds-ink"
             data-placeholder={sessionTitle ? undefined : 'true'} title={sessionTitle || t('workSessionNew')}>
@@ -523,6 +535,7 @@ export function WriteAssistantPanel({
         ) : (
           <FloatingComposer
             variant="compact"
+            agentSwitcher
             workspaceRootOverride={workspaceRoot}
             input={input}
             setInput={setInput}
@@ -547,6 +560,9 @@ export function WriteAssistantPanel({
             showProviderInModelLabel
             // The home invites like Code's; a docked draft keeps the short prompt.
             placeholderOverride={home ? t('workHomeComposerPlaceholder') : activeThreadId ? undefined : t('placeholder')}
+            executionSettings={executionSettings}
+            executionSettingsApplying={executionSettingsApplying}
+            onExecutionSettingsChange={onExecutionSettingsChange}
             queuedMessages={queuedMessages}
             onRemoveQueuedMessage={removeQueuedMessage}
             onGuideQueuedMessage={guideQueuedMessage}
@@ -557,16 +573,9 @@ export function WriteAssistantPanel({
             onPickAttachments={onPickAttachments}
             onPasteClipboardImage={onPasteClipboardImage}
             onRemoveAttachment={onRemoveAttachment}
-            onSend={() => {
-              // Inside a paper the question goes through the bounded reading
-              // request, unless its context chip was removed.
-              if (activeUnitRel && !contextDetached && !viewingChildThread) {
-                void openBoundedPaperReading({ workspaceRoot, unitDir: activeUnitRel, meta: activePaperEntry?.meta, question: input })
-              } else {
-                // A draft or empty home becomes a new session before the turn.
-                void prepareWorkSessionForSend().then((ready) => { if (ready) onSend() })
-              }
-            }}
+            // A draft or empty home becomes a new session before the turn; the
+            // open document or paper travels with it as context, never a dialog.
+            onSend={() => { void prepareWorkSessionForSend().then((ready) => { if (ready) onSend() }) }}
             onInterrupt={onInterrupt}
             onConfigureProviders={onConfigureProviders}
           />
