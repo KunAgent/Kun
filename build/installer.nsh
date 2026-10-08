@@ -60,6 +60,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
 !include "${PROJECT_DIR}\build\installer-automatic-update.nsh"
 !include "${PROJECT_DIR}\build\installer-manual-upgrade.nsh"
 !include "${PROJECT_DIR}\build\installer-process-check.nsh"
+!include "${PROJECT_DIR}\build\installer-pages.nsh"
 
 !macro kunSetEnvironmentFromRegister NAME REGISTER
   # System::Call reparses quoted variable expansions. Copy arbitrary registry
@@ -279,6 +280,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
 !macroend
 
 !macro customHeader
+!insertmacro kunInstallerPageStrings
 !ifndef BUILD_UNINSTALLER
 !insertmacro KunAutomaticUpdateFunctions
 !insertmacro KunManualUpgradeFunctions

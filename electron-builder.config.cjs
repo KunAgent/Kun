@@ -355,8 +355,8 @@ module.exports = {
       height: 430
     },
     contents: [
-      { x: 350, y: 310, type: 'file' },
-      { x: 535, y: 310, type: 'link', path: '/Applications' }
+      { x: 364, y: 284, type: 'file' },
+      { x: 548, y: 284, type: 'link', path: '/Applications' }
     ]
   },
   win: {
@@ -374,7 +374,7 @@ module.exports = {
     oneClick: false,
     installerHeader: './build/installerHeader.bmp',
     installerSidebar: './build/installerSidebar.bmp',
-    uninstallerSidebar: './build/installerSidebar.bmp',
+    uninstallerSidebar: './build/uninstallerSidebar.bmp',
     // The stock assisted directory page appends APP_FILENAME by substring and
     // turns a registered `DeepSeek GUI` location into `DeepSeek GUI\Kun`.
     // installer.nsh adds one MUI directory page with component-aware migration.
