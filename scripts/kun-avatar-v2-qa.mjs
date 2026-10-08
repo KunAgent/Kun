@@ -96,7 +96,7 @@ export async function generateAvatarV2Qa(context, audit) {
       }
       const full = await sharp(backgroundSvg(1024, 1024, '#eceff4')).composite(overlays).png().toBuffer()
       let image = sharp(full)
-      if (size <= 48) {
+      if (shared.kunAvatarFraming(size) === 'face') {
         const [left, top, right, bottom] = manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox
         image = image.extract({ left, top, width: right - left, height: bottom - top })
       }

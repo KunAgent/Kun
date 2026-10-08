@@ -23,7 +23,7 @@ export async function generateAvatarArtQa(context) {
   }
   const avatar = async (parts, size = 128, options = {}) => portrait(
     await compose(manifest, shared, root, shared.normalizeKunAvatarParts(parts), options),
-    size, manifest, size <= 48)
+    size, manifest, shared.kunAvatarFraming(size) === 'face')
   const cells = []
   const silhouettes = []
   for (const category of shared.KUN_AVATAR_ACCESSORY_CATEGORIES) {

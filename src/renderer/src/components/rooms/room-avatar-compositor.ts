@@ -1,8 +1,10 @@
 import {
   canonicalKunAvatarKey,
+  kunAvatarFraming,
   kunAvatarLayerKeys,
   kunAvatarScene,
   normalizeKunAvatarParts,
+  type KunAvatarFraming,
   type KunAvatarParts,
   type KunAvatarRenderOptions
 } from '@shared/rooms-api'
@@ -15,7 +17,7 @@ export interface AvatarRenderRequest {
   key: string
   parts: KunAvatarParts
   pixels: number
-  compact: boolean
+  framing: KunAvatarFraming
   size: number
   effects: boolean
 }
@@ -36,16 +38,16 @@ const assetUrls = import.meta.glob('../../../../asset/img/kun-avatar/**/*.webp',
 
 export const composedAvatarCache = new AvatarCompositionCache()
 
-export function avatarRenderRequest(parts: KunAvatarParts, size: number, dpr: number, effects = false): AvatarRenderRequest {
+export function avatarRenderRequest(parts: KunAvatarParts, size: number, dpr: number, effects = false,
+  framing: KunAvatarFraming = kunAvatarFraming(size)): AvatarRenderRequest {
   const normalized = normalizeKunAvatarParts(parts)
   const pixels = Math.max(1, Math.min(2048, Math.ceil(size * Math.max(1, dpr || 1))))
-  const compact = size <= 48
   const showEffects = effects && size >= 96
   return {
-    key: `${manifest.version}:${canonicalKunAvatarKey(normalized)}:${pixels}:${size}:${showEffects ? 'effects' : 'plain'}`,
+    key: `${manifest.version}:${canonicalKunAvatarKey(normalized)}:${pixels}:${size}:${framing}:${showEffects ? 'effects' : 'plain'}`,
     parts: normalized,
     pixels,
-    compact,
+    framing,
     size,
     effects: showEffects
   }
@@ -58,7 +60,7 @@ export function composedAvatarLayers(parts: KunAvatarParts, options: KunAvatarRe
 export function composedAvatarSourceTier(request: AvatarRenderRequest): 128 | 256 | 512 {
   const crop = manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox
   const cropWidth = crop[2] - crop[0]
-  const required = request.pixels * (request.compact ? manifest.canvas / cropWidth : 1)
+  const required = request.pixels * (request.framing === 'face' ? manifest.canvas / cropWidth : 1)
   return required <= 128 ? 128 : required <= 256 ? 256 : 512
 }
 
@@ -96,7 +98,7 @@ export async function composeAvatar(request: AvatarRenderRequest): Promise<Avata
   return renderAvatarComposition(urls, {
     pixels: request.pixels,
     canvas: manifest.canvas,
-    crop: request.compact ? manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox : undefined,
+    crop: request.framing === 'face' ? manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox : undefined,
     bg: kunAvatarScene(request.parts.bg) ? 'transparent' : request.parts.bg
   })
 }

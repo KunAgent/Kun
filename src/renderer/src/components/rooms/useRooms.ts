@@ -44,6 +44,8 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
   roomsRef.current = rooms
   const messagesRef = useRef(messages)
   messagesRef.current = messages
+  const roomRef = useRef(room)
+  roomRef.current = room
   const listGenerationRef = useRef(0)
   const listScopeRef = useRef('')
   listScopeRef.current = JSON.stringify([archived, search, filter, repositoryRoot, conversationKind])
@@ -220,14 +222,22 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
     const messageIds = new Set<string>()
     const taskIds = new Set<string>()
     const unsubscribe = subscribeRoomEvents((event) => {
-      if (event.roomId !== selectedId) return
-      noteRoomMessageCommitted(event)
-      if (event.kind.startsWith('room.')) pending.add('room')
-      if (event.kind.startsWith('rule.')) pending.add('rules')
-      if (event.kind === 'message.created' || event.kind === 'message.presentation.created') pending.add('messages')
-      if (event.kind === 'message.updated' && event.payload?.id) messageIds.add(event.payload.id)
-      if (event.kind === 'task.created') pending.add('tasks')
-      if (event.kind.startsWith('task.') && event.payload?.id) taskIds.add(event.payload.id)
+      if (event.roomId !== selectedId) {
+        // Agent edits (name, avatar) are announced on the Agent directory, not on each room
+        // that presents that Agent; refresh the members so headers and messages follow at once.
+        const current = roomRef.current
+        if (event.kind !== 'agent.updated' || current?.id !== selectedId ||
+          !current.members.some((member) => member.participantAgentId === event.payload?.id)) return
+        pending.add('room')
+      } else {
+        noteRoomMessageCommitted(event)
+        if (event.kind.startsWith('room.')) pending.add('room')
+        if (event.kind.startsWith('rule.')) pending.add('rules')
+        if (event.kind === 'message.created' || event.kind === 'message.presentation.created') pending.add('messages')
+        if (event.kind === 'message.updated' && event.payload?.id) messageIds.add(event.payload.id)
+        if (event.kind === 'task.created') pending.add('tasks')
+        if (event.kind.startsWith('task.') && event.payload?.id) taskIds.add(event.payload.id)
+      }
       if (!pending.size && !messageIds.size && !taskIds.size) return
       clearTimeout(eventTimer)
       eventTimer = setTimeout(() => {

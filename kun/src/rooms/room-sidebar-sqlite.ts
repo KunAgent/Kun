@@ -2,11 +2,11 @@ import { RoomNotificationPreferenceSchema, roomNotificationsMuted } from '../con
 import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { AgentIdentitySchema } from '../contracts/agent-identities.js'
+import { AgentIdentitySchema, type AgentIdentity } from '../contracts/agent-identities.js'
 import { RoomSidebarQuery, type RoomSidebarEntry, type RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { roomAttentionPredicateSql } from './room-activity-predicates.js'
 import { roomMessagePreview } from './room-message-preview.js'
-import { RoomSchema, type RoomMessage } from '../contracts/rooms.js'
+import { RoomSchema, type RoomMember, type RoomMessage } from '../contracts/rooms.js'
 
 const Cursor = z.object({ scope: z.string(), pinned: z.number().int().min(0).max(1), activitySeq: z.number().int().nonnegative(), id: z.string() }).strict()
 /** One keyset of persisted conversations; the Agent directory is a separate surface. */
@@ -88,20 +88,42 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
       notification_preference: string | null; latest_message: string | null; message_seq: number; read_seq: number; running_count: number; attention_count: number; deleted: number
     }>
   const page = rows.slice(0, limit), last = page.at(-1)
-  return { entries: page.map((row) => {
+  const rooms = page.map((row) => row.room_document ? RoomSchema.parse(JSON.parse(row.room_document)) : undefined)
+  const memberAgents = currentAgentIdentities(db, rooms.flatMap((room, index) => page[index].conversation_kind === 'user_agent' || !room ? []
+    : room.members.flatMap((member) => member.participantAgentId ? [member.participantAgentId] : [])))
+  return { entries: page.map((row, index) => {
     const agent = row.agent_document ? AgentIdentitySchema.parse(JSON.parse(row.agent_document)) : undefined
-    const room = row.room_document ? RoomSchema.parse(JSON.parse(row.room_document)) : undefined
+    const room = rooms[index]
     const preference = row.notification_preference ? RoomNotificationPreferenceSchema.safeParse(JSON.parse(row.notification_preference)) : undefined
     const message = row.latest_message ? JSON.parse(row.latest_message) as RoomMessage : undefined
     return { id: row.stable_id, agentId: row.agent_id ?? undefined, roomId: row.room_id ?? undefined,
       name: row.name, title: row.title, notificationsMuted: preference?.success ? roomNotificationsMuted(preference.data) : false,
       ...(agent?.archivedAt ? { agentArchived: true } : {}),
       avatar: agent?.avatar ?? (row.conversation_kind === 'user_agent' ? undefined : room?.avatar),
-      kind: row.conversation_kind, members: room?.members ?? [],
+      kind: row.conversation_kind, members: room ? presentMembers(room.members, memberAgents) : [],
       activitySeq: row.activity_seq, pinned: Boolean(row.pinned), archived: Boolean(row.archived), deleted: Boolean(row.deleted), latestMessageSeq: row.message_seq, readSeq: row.read_seq,
       runningCount: row.running_count, attentionCount: row.attention_count,
       latestMessage: message ? { id: message.id, authorKind: message.authorKind, authorLabelSnapshot: message.authorLabelSnapshot,
         createdAt: message.createdAt, preview: roomMessagePreview(message.body), attachmentCount: message.attachmentIds.length } : undefined }
   }), ...(rows.length > limit && last ? { nextCursor: Buffer.from(JSON.stringify({ scope, pinned: last.pinned,
     activitySeq: last.activity_seq, id: last.stable_id })).toString('base64url') } : {}) }
+}
+
+/** Group mosaics show each Agent as it is now, like AgentIdentityService.present() does for open rooms. */
+function presentMembers(members: RoomMember[], agents: ReadonlyMap<string, AgentIdentity>): RoomMember[] {
+  return members.map((member) => {
+    const agent = member.participantAgentId ? agents.get(member.participantAgentId) : undefined
+    return agent ? { ...member, displayName: agent.name, avatar: agent.avatar, agentTitle: agent.title } : member
+  })
+}
+
+function currentAgentIdentities(db: DatabaseSync, ids: string[]): Map<string, AgentIdentity> {
+  const unique = [...new Set(ids)], agents = new Map<string, AgentIdentity>()
+  for (let offset = 0; offset < unique.length; offset += 400) {
+    const chunk = unique.slice(offset, offset + 400)
+    const rows = db.prepare(`SELECT id, document FROM room_documents WHERE kind='agent_identity' AND id IN (${chunk.map(() => '?').join(',')})`)
+      .all(...chunk) as Array<{ id: string; document: string }>
+    for (const row of rows) agents.set(row.id, AgentIdentitySchema.parse(JSON.parse(row.document)))
+  }
+  return agents
 }

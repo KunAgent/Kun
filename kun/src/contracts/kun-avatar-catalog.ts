@@ -282,20 +282,31 @@ export function kunAvatarRarity(parts: KunAvatarParts): KunAvatarRarity {
   }, 'common')
 }
 
-export type KunAvatarRenderOptions = { size?: number; effects?: boolean }
+/** Portrait: the whole square picture, as the editor shows it. Face: the compact crop. */
+export type KunAvatarFraming = 'portrait' | 'face'
+export type KunAvatarRenderOptions = { size?: number; effects?: boolean; framing?: KunAvatarFraming }
+
+/** Every avatar is the same square picture; only avatars smaller than 28 CSS px zoom to the face. */
+export const KUN_AVATAR_FACE_FRAMING_BELOW = 28
+export function kunAvatarFraming(size: number): KunAvatarFraming {
+  return size < KUN_AVATAR_FACE_FRAMING_BELOW ? 'face' : 'portrait'
+}
 
 /** Stable layer keys shared with asset QA; size means CSS pixels, independently of DPR. */
 export function kunAvatarLayerKeys(parts: KunAvatarParts, options: KunAvatarRenderOptions = {}): string[] {
   const headwear = KUN_AVATAR_CATALOG.headwear.find((part) => part.id === parts.headwear)
   const outfit = KUN_AVATAR_CATALOG.outfit.find((part) => part.id === parts.outfit)
   const crest = headwear?.crest ?? 'normal'
-  const compact = options.size !== undefined && options.size <= 48
+  const framing = options.framing ?? (options.size === undefined ? 'portrait' : kunAvatarFraming(options.size))
+  // Only the face crop hides props and needs the lowered hats; small portraits keep the whole look.
+  const compact = framing === 'face'
+  const simplified = options.size !== undefined && options.size <= 48
   const small = options.size !== undefined && options.size <= 34
   const scene = kunAvatarScene(parts.bg)
   const rarity = kunAvatarRarity(parts)
   const effects = options.effects && (options.size ?? 0) >= 96 && (rarity === 'epic' || rarity === 'legendary')
   return [
-    scene ? `scene/${scene}${compact ? '.small' : ''}` : '',
+    scene ? `scene/${scene}${simplified ? '.small' : ''}` : '',
     effects ? `fx/${rarity}.back` : '',
     outfit?.hasBack ? `outfit/${outfit.id}.back` : '',
     headwear?.hasBack ? `headwear/${headwear.id}.back` : '',

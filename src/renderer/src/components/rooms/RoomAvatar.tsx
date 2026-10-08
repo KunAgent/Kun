@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import kunGreet from '../../../../asset/img/kun_greet.png'
 import { useRoomUserProfile } from './room-user-profile'
-import type { RoomMember, RoomAvatarReference } from '@shared/rooms-api'
+import { kunAvatarFraming, type KunAvatarFraming, type RoomMember, type RoomAvatarReference } from '@shared/rooms-api'
 import avatarAtlas from '../../../../asset/img/room-avatars/kun-avatar-atlas.png'
 import { avatarForIdentity, ROOM_AVATARS, ROOM_AVATAR_BACKGROUND_SIZE } from './room-avatar-catalog'
 import './rooms-avatars.css'
@@ -48,6 +48,7 @@ export function RoomAvatar({
   id,
   label,
   size = 38,
+  framing,
   onClick
 }: {
   member?: RoomMember
@@ -56,6 +57,8 @@ export function RoomAvatar({
   id?: string
   label: string
   size?: number
+  /** Defaults to the shared rule: the whole square picture, or the face below 28px. */
+  framing?: KunAvatarFraming
   onClick?: () => void
 }) {
   const identity = id ?? member?.id ?? 'kun'
@@ -63,13 +66,14 @@ export function RoomAvatar({
   const isUser = user || identity === 'user'
   const reference = avatar !== undefined ? avatar : isUser ? profileAvatar : member?.avatar
   const uploaded = useRoomUploadedAvatar(reference?.kind === 'uploaded' ? reference.attachmentId : undefined)
-  const composed = useRoomComposedAvatar(reference?.kind === 'composed' ? reference : undefined, size)
+  const view = framing ?? kunAvatarFraming(size)
+  const composed = useRoomComposedAvatar(reference?.kind === 'composed' ? reference : undefined, size, false, view)
   const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(() => new Set())
   const builtinId = reference?.kind === 'builtin' ? reference.id : undefined
   // Coding Agents show their engine mark in a rounded square, never a portrait.
   const engine = reference?.kind === 'harness' ? reference.harnessId : undefined
   const selected = ROOM_AVATARS.find((item) => item.id === builtinId)
-  // List, header and group sizes crop the portrait to the face (rooms-avatars.css).
+  // Every avatar is a rounded square; small ones only drop the name badge (rooms-avatars.css).
   const compact = size <= 48
   const style = {
     '--rooms-avatar-size': `${size / 16}rem`,
@@ -98,6 +102,7 @@ export function RoomAvatar({
       type="button"
       className="rooms-avatar rooms-avatar-button"
       data-compact={compact || undefined}
+      data-framing={view}
       data-engine={engine}
       style={style}
       title={label}
@@ -110,6 +115,7 @@ export function RoomAvatar({
     <span
       className="rooms-avatar"
       data-compact={compact || undefined}
+      data-framing={view}
       data-engine={engine}
       style={style}
       title={label}
@@ -142,6 +148,8 @@ export function RoomAvatarGroup({
   const overflow = active.length > 4 ? active.length - 3 : 0
   const visible = active.slice(0, overflow ? 3 : 4)
   const label = explicitLabel ?? (active.map((member) => member.displayName).join(', ') || 'Kun')
+  // Members render at their tile size, so small tiles use the face crop and the right resolution.
+  const tile = Math.round(size * (visible.length <= 1 ? 1 : visible.length === 2 && !overflow ? 0.66 : 0.5))
   if (avatar) {
     return <RoomAvatar avatar={avatar} id={id} label={label} size={size} onClick={onClick} />
   }
@@ -154,7 +162,7 @@ export function RoomAvatarGroup({
           key={member.id}
           member={member}
           label={member.displayName}
-          size={size}
+          size={tile}
         />
       ))}
       {overflow ? <span className="rooms-avatar-group-more" aria-hidden="true">+{overflow}</span> : null}

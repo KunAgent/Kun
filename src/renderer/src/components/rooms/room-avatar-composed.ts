@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { normalizeKunAvatarParts, type KunComposedAvatarReference } from '@shared/rooms-api'
+import { kunAvatarFraming, normalizeKunAvatarParts, type KunAvatarFraming, type KunComposedAvatarReference } from '@shared/rooms-api'
 import { acquireComposedAvatar, avatarRenderRequest } from './room-avatar-compositor'
 
 function devicePixelRatio(): number {
@@ -33,11 +33,12 @@ function subscribePixelRatio(notify: () => void): () => void {
   }
 }
 
-export function useRoomComposedAvatar(reference: KunComposedAvatarReference | undefined, size: number, effects = false) {
+export function useRoomComposedAvatar(reference: KunComposedAvatarReference | undefined, size: number, effects = false,
+  framing: KunAvatarFraming = kunAvatarFraming(size)) {
   const dpr = useSyncExternalStore(subscribePixelRatio, devicePixelRatio, () => 1)
   const serialized = reference ? JSON.stringify(normalizeKunAvatarParts(reference.parts)) : ''
-  const request = useMemo(() => serialized ? avatarRenderRequest(JSON.parse(serialized), size, dpr, effects) : undefined,
-    [serialized, size, dpr, effects])
+  const request = useMemo(() => serialized ? avatarRenderRequest(JSON.parse(serialized), size, dpr, effects, framing) : undefined,
+    [serialized, size, dpr, effects, framing])
   const [loaded, setLoaded] = useState<{ key: string; url: string }>()
   useEffect(() => {
     if (!request) return

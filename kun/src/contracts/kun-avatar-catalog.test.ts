@@ -7,7 +7,7 @@ import { KunAvatarPartsSchema } from './kun-avatar-schema.js'
 import { KUN_AVATAR_PRESETS, ROOM_BUILTIN_AVATAR_IDS } from './kun-avatar-presets.js'
 import { KUN_AVATAR_CATALOG, KUN_AVATAR_ACCESSORY_CATEGORIES, KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_SCENES, KUN_AVATAR_RARITIES,
   normalizeKunAvatarParts, getKunAvatarConflicts, updateKunAvatarPart, randomKunAvatarParts,
-  canonicalKunAvatarKey, type KunAvatarParts } from './kun-avatar-catalog.js'
+  canonicalKunAvatarKey, kunAvatarFraming, kunAvatarLayerKeys, type KunAvatarParts } from './kun-avatar-catalog.js'
 
 const composed = (parts: Partial<KunAvatarParts> = {}) => ({
   kind: 'composed', version: 1, parts: normalizeKunAvatarParts(parts)
@@ -161,5 +161,19 @@ describe('shared avatar catalog', () => {
         }
       }
     }
+  })
+
+  it('frames avatars as whole portraits from 28px and as faces only below that', () => {
+    expect(kunAvatarFraming(27)).toBe('face')
+    expect(kunAvatarFraming(28)).toBe('portrait')
+    expect(kunAvatarFraming(72)).toBe('portrait')
+    const parts = normalizeKunAvatarParts({ headwear: 'wizard-hat', glasses: 'round', prop: 'book', bg: 'scene:cafe' })
+    const face = kunAvatarLayerKeys(parts, { size: 20 })
+    expect(face).toEqual(expect.arrayContaining(['headwear/wizard-hat.small', 'glasses/round.small', 'scene/cafe.small']))
+    expect(face.some((key) => key.startsWith('prop/') || key.startsWith('wing/'))).toBe(false)
+    const row = kunAvatarLayerKeys(parts, { size: 34 })
+    expect(row).toEqual(expect.arrayContaining(['headwear/wizard-hat', 'glasses/round.small', 'prop/book', 'wing/sky', 'scene/cafe.small']))
+    expect(kunAvatarLayerKeys(parts, { size: 34, framing: 'face' })).toContain('headwear/wizard-hat.small')
+    expect(kunAvatarLayerKeys(parts, { size: 72 })).toEqual(expect.arrayContaining(['glasses/round', 'scene/cafe', 'prop/book']))
   })
 })

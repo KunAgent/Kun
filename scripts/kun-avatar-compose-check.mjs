@@ -288,7 +288,7 @@ export async function generateAvatarQa(manifest, shared, root, output, repo = pr
     const cells = []
     for (const preset of shared.KUN_AVATAR_PRESETS) for (const size of [24, 34, 48, 96]) {
       const image = await portrait(await compose(manifest, shared, root, { ...preset.parts, bg: 'transparent' },
-        { size }), size, manifest, size <= 48)
+        { size }), size, manifest, shared.kunAvatarFraming(size) === 'face')
       const tile = await sharp(backgroundSvg(112, 104, color)).composite([
         { input: image, left: Math.floor((112 - size) / 2), top: Math.floor((104 - size) / 2) }
       ]).png().toBuffer()

@@ -7,15 +7,25 @@
   width: var(--rooms-avatar-size, 2.375rem);
   height: var(--rooms-avatar-size, 2.375rem);
   padding: 0;
-  border: 1px solid
-    color-mix(in srgb, var(--rooms-avatar-tone) 18%, var(--ds-border));
-  border-radius: 0.8rem;
+  border: 0;
+  /* One shape everywhere: a rounded square whose corner scales with the size. */
+  --rooms-avatar-radius: max(5px, calc(var(--rooms-avatar-size, 2.375rem) * 0.26));
+  border-radius: var(--rooms-avatar-radius);
   color: var(--rooms-avatar-tone);
   background: color-mix(
     in srgb,
     var(--rooms-avatar-tone) 10%,
     var(--ds-surface-card)
   );
+}
+/* A hairline inside the square keeps it crisp on a background of the same colour. */
+.rooms-avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ds-text) 10%, transparent);
+  pointer-events: none;
 }
 
 .rooms-avatar-art {
@@ -69,19 +79,14 @@
   width: 100%;
   height: 100%;
   min-height: 0;
-  border: 0;
-  border-radius: 50%;
 }
 .rooms-avatar-group .rooms-avatar-letter {
   display: none;
 }
-.rooms-avatar-group .rooms-avatar-art {
-  border-radius: 50%;
-}
 .rooms-avatar-group-1 {
   grid-template-columns: 1fr;
 }
-/* Two members: overlapping circles on the diagonal. */
+/* Two members: overlapping squares on the diagonal. */
 .rooms-avatar-group-2 {
   display: block;
 }
@@ -91,14 +96,15 @@
   height: 66%;
 }
 .rooms-avatar-group-2 .rooms-avatar:first-child {
-  --rooms-avatar-cut: calc(var(--rooms-avatar-size, 2.75rem) * 0.67);
   top: 0;
   left: 0;
-  /* Cut a 2px gap where the second circle overlaps, on any background. */
-  -webkit-mask: radial-gradient(circle at var(--rooms-avatar-cut) var(--rooms-avatar-cut),
-    transparent calc(var(--rooms-avatar-size, 2.75rem) * 0.33 + 2px), #000 calc(var(--rooms-avatar-size, 2.75rem) * 0.33 + 2.5px));
-  mask: radial-gradient(circle at var(--rooms-avatar-cut) var(--rooms-avatar-cut),
-    transparent calc(var(--rooms-avatar-size, 2.75rem) * 0.33 + 2px), #000 calc(var(--rooms-avatar-size, 2.75rem) * 0.33 + 2.5px));
+  /* Cut a 2px gap where the second square overlaps (it starts at 51.5% of this tile), on any background. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) 0 0 / 100% calc(51.5% - 2px) no-repeat,
+    linear-gradient(#000 0 0) 0 0 / calc(51.5% - 2px) 100% no-repeat;
+  mask:
+    linear-gradient(#000 0 0) 0 0 / 100% calc(51.5% - 2px) no-repeat,
+    linear-gradient(#000 0 0) 0 0 / calc(51.5% - 2px) 100% no-repeat;
 }
 .rooms-avatar-group-2 .rooms-avatar:last-child {
   right: 0;
@@ -112,7 +118,7 @@
 .rooms-avatar-group-more {
   display: grid;
   place-items: center;
-  border-radius: 50%;
+  border-radius: max(4px, calc(var(--rooms-avatar-size, 2.75rem) * 0.13));
   background: var(--ds-surface-hover);
   color: var(--ds-text-muted);
   font-size: calc(var(--rooms-avatar-size, 2.75rem) * 0.22);
@@ -122,8 +128,6 @@
 .ds-sidebar-kun-face {
   --rooms-avatar-size: 1.875rem;
   overflow: hidden;
-  border: 0;
-  border-radius: 50%;
 }
 .ds-sidebar-kun-dot { background: var(--ds-status-dot-muted, var(--ds-text-faint)); }
 .ds-sidebar-kun-status[data-runtime-connection='ready'] .ds-sidebar-kun-dot { background: var(--ds-status-dot-success, #1f9d55); }
@@ -131,31 +135,19 @@
 .ds-sidebar-kun-status[data-runtime-connection='checking'] .ds-sidebar-kun-dot { animation: ds-sidebar-kun-pulse 1.4s ease-in-out infinite; }
 @keyframes ds-sidebar-kun-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .ds-sidebar-kun-status .ds-sidebar-kun-dot { animation: none; } }
-/* Compact avatars: a circle cropped to the face, with a thin identity ring. */
-.rooms-avatar[data-compact] {
+/* Below 28px the picture zooms to the face; the legacy atlas portraits zoom in CSS. */
+.rooms-avatar[data-framing='face'] {
   overflow: hidden;
-  border: 0;
-  border-radius: 50%;
 }
-.rooms-avatar[data-compact] span.rooms-avatar-art,
-.ds-sidebar-kun-face span.rooms-avatar-art {
+.rooms-avatar[data-framing='face'] span.rooms-avatar-art {
   transform: scale(1.25);
   transform-origin: 50% 34%;
 }
 .rooms-avatar[data-compact] .rooms-avatar-letter { display: none; }
-.rooms-avatar[data-compact]::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--rooms-avatar-tone) 45%, transparent);
-  pointer-events: none;
-}
-/* Coding Agents: the engine mark in a rounded square, at every size.
-   Surfaces that crop portraits into circles exclude [data-engine]. */
+/* Coding Agents: the engine mark in the same rounded square. */
 .rooms-avatar[data-engine] {
   border: 1px solid var(--ds-border);
-  border-radius: 28%;
+  border-radius: var(--rooms-avatar-radius);
   color: var(--ds-text);
   background: var(--ds-surface-card);
 }

@@ -228,6 +228,17 @@ it('surfaces a group room avatar without replacing a private agent portrait', as
   expect(entries.find((entry) => entry.agentId === agent.id)?.avatar).toEqual({ kind: 'builtin', id: 'explorer' })
 })
 
+it('shows group members with their current Agent name and avatar after an Agent changes', async () => {
+  const { store, agents, service, a, b } = await fixture()
+  await service.create({ clientRequestId: 'mosaic', name: 'Team', members: [agents.asMember(a), agents.asMember(b)] })
+  const changed = { kind: 'composed', version: 1, parts: { color: 'teal', face: 'happy', headwear: 'beret', bg: '#eaf6ef' } } as const
+  await agents.update(a.id, { clientRequestId: 'dress-alpha', expectedRevision: a.revision, name: 'Alpha Prime', avatar: changed })
+  const group = (await store.sidebarPage({})).entries.find((entry) => entry.kind === 'group')
+  const alpha = group?.members.find((member) => member.participantAgentId === a.id)
+  expect(alpha).toMatchObject({ displayName: 'Alpha Prime', avatar: changed })
+  expect(group?.members.find((member) => member.participantAgentId === b.id)?.displayName).toBe('Beta')
+})
+
 it('includes mute state without changing unread or attention semantics', async () => {
   const { store, service } = await fixture()
   const room = (await service.create({ clientRequestId: 'mute-room', name: 'Quiet room' })).room

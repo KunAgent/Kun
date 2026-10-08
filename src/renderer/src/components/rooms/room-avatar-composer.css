@@ -20,6 +20,7 @@
 .rooms-avatar-stage-mirror > :is(img, .rooms-avatar, .rooms-avatar-preview, canvas) { width: 100%; height: 100%; }
 .rooms-avatar-stage-mirror > img { object-fit: cover; }
 .rooms-avatar-stage-mirror > .rooms-avatar { border: 0; border-radius: 0; --rooms-avatar-size: var(--mirror); }
+.rooms-avatar-stage-mirror > .rooms-avatar::after { content: none; }
 .rooms-avatar-stage-mirror .rooms-avatar-preview > canvas { width: 100%; height: 100%; }
 .rooms-avatar-stage-mirror::after { content: ''; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(135deg, #fff5 0%, transparent 34%); }
@@ -35,7 +36,7 @@
 .rooms-avatar-stage-name { display: flex; align-items: center; justify-content: center; gap: 10px; max-width: 100%; }
 .rooms-avatar-stage-name > strong { overflow: hidden; font-size: 15px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .rooms-avatar-stage-name > span { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 2px 8px 2px 2px;
-  border: 1px solid var(--ds-border); border-radius: 999px; color: var(--ds-text-muted); background: var(--ds-surface-card); font-size: 11px; }
+  border: 1px solid var(--ds-border); border-radius: 10px; color: var(--ds-text-muted); background: var(--ds-surface-card); font-size: 11px; }
 .rooms-avatar-stage-slots { display: grid; grid-template-columns: repeat(4, minmax(0, 52px)); justify-content: center; gap: 10px; }
 .rooms-avatar-slot { position: relative; display: grid; justify-items: center; gap: 4px; min-width: 0; }
 .rooms-avatar-slot > small { max-width: 100%; overflow: hidden; color: var(--ds-text-muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }

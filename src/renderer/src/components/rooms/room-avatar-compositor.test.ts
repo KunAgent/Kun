@@ -8,8 +8,12 @@ describe('layered avatar rendering plan', () => {
     const retina = avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 2)
     expect(full.pixels).toBe(retina.pixels)
     expect(full.key).not.toBe(retina.key)
-    expect(full.compact).toBe(false)
-    expect(retina.compact).toBe(true)
+    expect(full.framing).toBe('portrait')
+    // Conversation rows keep the whole square picture; only tiny avatars zoom to the face.
+    expect(retina.framing).toBe('portrait')
+    expect(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 20, 2).framing).toBe('face')
+    expect(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 34, 2, false, 'face').key)
+      .not.toBe(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 34, 2).key)
     expect(avatarRenderRequest({ ...KUN_AVATAR_DEFAULT_PARTS, bg: '#AABBCC' }, 96, 1).key)
       .toBe(avatarRenderRequest({ ...KUN_AVATAR_DEFAULT_PARTS, bg: '#aabbcc' }, 96, 1).key)
     expect(avatarRenderRequest({ ...KUN_AVATAR_DEFAULT_PARTS, face: 'happy' }, 96, 1).key).not.toBe(full.key)
@@ -29,10 +33,12 @@ describe('layered avatar rendering plan', () => {
     expect(stage.key).not.toBe(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 96, 1).key)
   })
 
-  it('selects sufficiently dense source images for a retina face crop', () => {
+  it('selects sufficiently dense source images for portraits and retina face crops', () => {
     expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 96, 1))).toBe(128)
-    expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 2))).toBe(256)
-    expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 4))).toBe(512)
+    expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 2))).toBe(128)
+    expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 4))).toBe(256)
+    expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 24, 4))).toBe(256)
+    expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 4, false, 'face'))).toBe(512)
     expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 512, 2))).toBe(512)
   })
 
@@ -50,29 +56,33 @@ describe('layered avatar rendering plan', () => {
     }
   })
 
-  it('omits invisible props and gripping wings from compact render requests', () => {
+  it('omits props and gripping wings only where the face crop hides them', () => {
     const parts = { ...KUN_AVATAR_DEFAULT_PARTS, prop: 'book' as const, outfit: 'cardigan' as const }
-    for (const size of [24, 34, 48]) {
+    for (const size of [18, 24, 27]) {
       const layers = composedAvatarLayers(parts, avatarRenderRequest(parts, size, 3))
       expect(layers.some((layer) => layer.startsWith('prop/') || layer.startsWith('wing/'))).toBe(false)
       expect(layers).toContain('outfit/cardigan')
     }
-    expect(composedAvatarLayers(parts, { size: 49 })).toContain('prop/book')
+    for (const size of [28, 34, 48]) {
+      expect(composedAvatarLayers(parts, avatarRenderRequest(parts, size, 3))).toEqual(expect.arrayContaining(['prop/book', 'wing/sky']))
+    }
   })
 
-  it('uses small glasses through 34px and small hats throughout the 48px compact crop', () => {
+  it('uses small glasses through 34px and small hats only in the face crop', () => {
     for (const glasses of KUN_AVATAR_CATALOG.glasses) {
       const parts = { ...KUN_AVATAR_DEFAULT_PARTS, glasses: glasses.id }
       expect(composedAvatarLayers(parts, { size: 34 })).toContain(`glasses/${glasses.id}.small`)
       expect(composedAvatarLayers(parts, { size: 35 })).toContain(`glasses/${glasses.id}`)
     }
     for (const headwear of KUN_AVATAR_CATALOG.headwear) {
-      for (const size of [24, 34, 48]) {
+      for (const size of [18, 24]) {
         const layers = composedAvatarLayers({ ...KUN_AVATAR_DEFAULT_PARTS, headwear: headwear.id }, { size })
         expect(layers).toContain(`headwear/${headwear.id}${KUN_AVATAR_SMALL_HEADWEAR.includes(headwear.id) ? '.small' : ''}`)
       }
-      expect(composedAvatarLayers({ ...KUN_AVATAR_DEFAULT_PARTS, headwear: headwear.id }, { size: 49 }))
-        .toContain(`headwear/${headwear.id}`)
+      for (const size of [34, 48, 49]) {
+        expect(composedAvatarLayers({ ...KUN_AVATAR_DEFAULT_PARTS, headwear: headwear.id }, { size }))
+          .toContain(`headwear/${headwear.id}`)
+      }
     }
   })
 
