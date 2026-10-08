@@ -101,6 +101,8 @@ import { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
 import { createAcpCredentialEnv } from '../runtime/acp/acp-credential-env.js'
 import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
+import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
+import { createSessionConsolidationService } from './runtime-composition-consolidation.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
@@ -349,10 +351,16 @@ export async function createRuntimeServices(
   const pruneUnsentAttachments = async (store: AttachmentStore | undefined): Promise<void> => {
     if (store === attachmentStore) await maintenanceSlices.runAttachmentSlice()
   }
+  let sessionConsolidation!: ReturnType<typeof createSessionConsolidationService>
   const backgroundMaintenance = createRuntimeBackgroundMaintenance({
     pruneAttachments: maintenanceSlices.runAttachmentSlice,
     inspectThreads: maintenanceSlices.runGuardianSlice,
     rebuildEventIndex: maintenanceSlices.runEventIndexSlice,
+    consolidateSessions: async () => {
+      await sessionConsolidation.runOnce()
+      return true
+    },
+    consolidationIntervalMs: core.activeOptions.capabilities?.memory?.consolidation?.scheduleIntervalMs,
     onError: (task, error) => {
       console.warn(`[kun] background ${task} failed:`, error)
     }
@@ -381,6 +389,9 @@ export async function createRuntimeServices(
     }
   })
   await memoryDistillation.ready()
+  sessionConsolidation = createSessionConsolidationService({
+    model, turnService, threadSnapshots, memoryStore, memoryDistillation
+  })
   const officeCliRunner = createConfiguredOfficeCliRunner({
     binaryPath: process.env.KUN_OFFICECLI_BINARY,
     profileDir: join(core.activeOptions.dataDir, 'officecli-profile')
@@ -627,6 +638,7 @@ export async function createRuntimeServices(
     migrationImportService,
     knowledgeBaseService,
     memoryDistillation,
+    sessionConsolidation,
     designCanvasProvider,
     officeCliProviders,
     childToolHost,
