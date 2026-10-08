@@ -16,6 +16,8 @@ import {
   type ComposerReasoningEffort
 } from './floating-composer-model-picker-logic'
 import { ModelCapabilityBadge } from './floating-composer-model-picker-rows'
+import { ComposerProviderModelSections } from './ComposerProviderModelSections'
+import { providerModelSections, providerSectionModelName } from './composer-provider-model-sections'
 
 /** Show the filter only when scanning the list stops being quick. */
 export const COMPOSER_MODEL_FILTER_THRESHOLD = 8
@@ -232,6 +234,35 @@ function ComposerModelList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const renderRow = (group: ComposerModelMenuGroup, id: string, shortName?: string): ReactElement => {
+    const profile = modelProfileForModel(group, id)
+    const selected = composerModelMenuItemSelected({ groupProviderId: group.providerId, selectedProviderId, currentModel, modelId: id })
+    const fullName = group.modelInfo?.[id]?.displayName ?? id
+    const title = shortName ?? fullName
+    return (
+      <button
+        key={`${group.providerId}:${id}`}
+        type="button"
+        role="menuitemradio"
+        aria-checked={selected}
+        data-model-nav
+        title={fullName === id ? id : `${fullName} (${id})`}
+        onClick={() => onPickModel(id, group.providerId === UNGROUPED_MODEL_PROVIDER_ID ? undefined : group.providerId)}
+        className={`flex min-h-[34px] w-full items-center gap-2 rounded-lg px-2.5 text-left outline-none transition focus-visible:bg-ds-hover ${
+          selected ? 'bg-accent-soft text-ds-ink' : 'text-ds-ink hover:bg-ds-hover'
+        }`}
+      >
+        <span className={`min-w-0 flex-1 truncate text-[13px]${selected ? ' font-semibold' : ''}`}>{title}</span>
+        {!profile ? null : modelSupportsImageInput(profile)
+          ? <ModelCapabilityBadge kind="vision" label={t('composerModelVision')} />
+          : <ModelCapabilityBadge kind="text" label={t('composerModelTextOnly')} />}
+        <span className="flex w-4 shrink-0 justify-center">
+          {selected ? <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.4} /> : null}
+        </span>
+      </button>
+    )
+  }
+
   const onListKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
     const items = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[data-model-nav]:not(:disabled)') ?? [])
@@ -298,7 +329,7 @@ function ComposerModelList({
           <p className="px-2.5 py-2 text-[12.5px] font-medium text-ds-faint">{t('composerNoMatchingModels')}</p>
         ) : visibleGroups.map(({ group, modelIds }) => {
           const open = !collapsible || expanded.has(group.providerId)
-          const icon = <ComposerModelSourceIcon presetId={group.presetSource} providerId={group.providerId} className="h-3.5 w-3.5 shrink-0" />
+          const icon = <ComposerModelSourceIcon presetId={group.presetSource} providerId={group.providerId} agentId={group.agentIconId} className="h-3.5 w-3.5 shrink-0" />
           return (
             <div key={group.providerId} role="group" aria-label={group.label} data-model-provider={group.providerId}>
               {groups.length > 1 || group.providerId !== UNGROUPED_MODEL_PROVIDER_ID ? (
@@ -336,33 +367,13 @@ function ComposerModelList({
                   t={t}
                   onPick={(id) => onPickModel(id, group.providerId)}
                 />
-              ) : modelIds.map((id) => {
-                const profile = modelProfileForModel(group, id)
-                const selected = composerModelMenuItemSelected({ groupProviderId: group.providerId, selectedProviderId, currentModel, modelId: id })
-                const title = group.modelInfo?.[id]?.displayName ?? id
-                return (
-                  <button
-                    key={`${group.providerId}:${id}`}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    data-model-nav
-                    title={title === id ? id : `${title} (${id})`}
-                    onClick={() => onPickModel(id, group.providerId === UNGROUPED_MODEL_PROVIDER_ID ? undefined : group.providerId)}
-                    className={`flex min-h-[34px] w-full items-center gap-2 rounded-lg px-2.5 text-left outline-none transition focus-visible:bg-ds-hover ${
-                      selected ? 'bg-accent-soft text-ds-ink' : 'text-ds-ink hover:bg-ds-hover'
-                    }`}
-                  >
-                    <span className={`min-w-0 flex-1 truncate text-[13px]${selected ? ' font-semibold' : ''}`}>{title}</span>
-                    {!profile ? null : modelSupportsImageInput(profile)
-                      ? <ModelCapabilityBadge kind="vision" label={t('composerModelVision')} />
-                      : <ModelCapabilityBadge kind="text" label={t('composerModelTextOnly')} />}
-                    <span className="flex w-4 shrink-0 justify-center">
-                      {selected ? <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.4} /> : null}
-                    </span>
-                  </button>
-                )
-              })}
+              ) : (() => {
+                const sections = providerModelSections(group, modelIds)
+                return sections
+                  ? <ComposerProviderModelSections sections={sections} currentModel={currentModel} filtering={Boolean(query)}
+                    expandAllAt={COMPOSER_MODEL_EXPAND_ALL_THRESHOLD} renderRow={(id) => renderRow(group, id, providerSectionModelName(group, id))} />
+                  : modelIds.map((id) => renderRow(group, id))
+              })()}
             </div>
           )
         })}

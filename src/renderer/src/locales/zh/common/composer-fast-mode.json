@@ -10,7 +10,8 @@
     "auto": "自动",
     "autoHint": "跟随输入框权限档",
     "triggerTitle": "{{agent}} Agent：{{name}}",
-    "ownPermissions": "选定的 Agent 使用它自己的工具权限；只读任务仍使用最严格的模式。"
+    "ownPermissions": "选定的 Agent 使用它自己的工具权限；只读任务仍使用最严格的模式。",
+    "replacedModes": "{{agent}} 自带的 {{modes}} 不在列表里：插件或它的配置替换了它们，这里是 {{agent}} 当前提供的 Agent。"
   },
   "agentSettingsPicker": {
     "title": "设置",

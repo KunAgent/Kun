@@ -23,6 +23,8 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
   const state = entry?.info, job = state?.job
   const updating = harnessUpdateBusy(job)
   const busy = pending || updating
+  // A running check may replace the installation these actions were offered for.
+  const checking = Boolean(entry?.loading)
   useEffect(() => { void checkHarnessUpdate(id, false, true) }, [id])
   useEffect(() => {
     if (!updating) return
@@ -80,12 +82,20 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
   }, [activate, job])
 
   const start = async (action: HarnessUpdateJob['action']): Promise<void> => {
-    if (!state || pending) return
+    if (!state || pending || entry?.loading) return
     setPending(true); setError('')
     try {
       if (latest.current.beforeCheck && !await latest.current.beforeCheck()) throw new Error(t('agentUpdate.saveFailed'))
-      receiveHarnessUpdate(await agentUpdateRequest(id, 'start', { action, expectedFingerprint: state.current.fingerprint }))
-    } catch (cause) { setError(String(cause)) } finally { setPending(false) }
+      // Saving settings can finish a re-check; pin the installation shown now.
+      const shown = useHarnessUpdateStore.getState().entries[id]?.info?.current.fingerprint ?? state.current.fingerprint
+      receiveHarnessUpdate(await agentUpdateRequest(id, 'start', { action, expectedFingerprint: shown }))
+    } catch (cause) {
+      if (/installation changed/i.test(String(cause))) {
+        // Show what is installed now instead of a bare mismatch.
+        await checkHarnessUpdate(id, true).catch(() => undefined)
+        setError(t('agentUpdate.installationChanged'))
+      } else setError(String(cause))
+    } finally { setPending(false) }
   }
   const refreshModels = async (): Promise<void> => { invalidateHarnessModels(id); await loadHarnessModels(id, true) }
   const failure = error || entry?.error || job?.error || state?.error
@@ -119,8 +129,8 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
             <button type="button" className={settingsButtonClass({ variant: 'link', size: 'compact' })} onClick={() => dismissHarnessUpdate(id, true)}>{t('agentUpdate.later')}</button>
             <button type="button" className={settingsButtonClass({ variant: 'link', size: 'compact' })} onClick={() => dismissHarnessUpdate(id)}>{t('agentUpdate.ignore')}</button>
           </> : null}
-          {state?.canUpdate ? <button type="button" className={settingsButtonClass({ variant: 'primary', size: 'compact' })} onClick={() => void start('update')}>{t('agentUpdate.update')}</button> : null}
-          {!state?.canUpdate && state?.candidate ? <button type="button" className={settingsButtonClass({ variant: 'primary', size: 'compact' })} onClick={() => void start('use-local')}>{t('agentUpdate.useLocal')}</button> : null}
+          {state?.canUpdate ? <button type="button" className={settingsButtonClass({ variant: 'primary', size: 'compact' })} disabled={checking} onClick={() => void start('update')}>{t('agentUpdate.update')}</button> : null}
+          {!state?.canUpdate && state?.candidate ? <button type="button" className={settingsButtonClass({ variant: 'primary', size: 'compact' })} disabled={checking} onClick={() => void start('use-local')}>{t('agentUpdate.useLocal')}</button> : null}
         </div>
       </div> : null}
       <div className={rowClass}>
@@ -132,11 +142,11 @@ export function AgentUpdateControl({ row, settings, patch, beforeCheck, t }: {
       </div>
       {!busy && state?.candidate && state.canUpdate ? <div className={rowClass}>
         <span className="text-[13px] font-medium text-ds-ink">{t('agentUpdate.useLocal')}</span>
-        <button type="button" className={small} onClick={() => void start('use-local')}>{t('agentUpdate.useLocal')}</button>
+        <button type="button" className={small} disabled={checking} onClick={() => void start('use-local')}>{t('agentUpdate.useLocal')}</button>
       </div> : null}
       {!busy && state?.canInstallManaged && state.latestVersion && state.current.source !== 'managed' ? <div className={rowClass}>
         <span className="text-[13px] font-medium text-ds-ink">{t('agentUpdate.managed')}</span>
-        <button type="button" className={small} onClick={() => void start('managed')}>{t('agentUpdate.managed')}</button>
+        <button type="button" className={small} disabled={checking} onClick={() => void start('managed')}>{t('agentUpdate.managed')}</button>
       </div> : null}
       {!busy && state?.ownerUpdateRequired ? <div className={rowClass}>
         <span className="text-[13px] font-medium text-ds-ink">{t('agentUpdate.updateOwner')}</span>

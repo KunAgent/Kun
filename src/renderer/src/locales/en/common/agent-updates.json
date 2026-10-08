@@ -66,6 +66,7 @@
     "usageBilledByAgent": "Billed by Agent",
     "usageBilledByAgentTitle": "Token counts are reported by the Agent. It bills through its own account or subscription, so Kun shows no local price.",
     "settingsChanged": "Agent selection changed while updating; check again.",
+    "installationChanged": "The Agent installation changed during the check, so Kun checked again. Review the version and path above, then try once more.",
     "rollback": "Restore previous version",
     "nativePermission": "{{agent}} runs in: {{mode}}",
     "nativePermissionReadOnly": "{{agent}} runs in: {{mode}} (read-only, will not change files)",

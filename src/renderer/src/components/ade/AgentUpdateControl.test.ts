@@ -81,3 +81,28 @@ it('offers 小 Kun with versions, error and installer log when an update fails',
     })
   } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
 })
+it('re-checks and explains a changed installation instead of showing the bare mismatch', async () => {
+  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  const host = document.createElement('div'), root = createRoot(host)
+  const moved: HarnessUpdateState = { ...initial, current: { ...initial.current, fingerprint: 'moved' } }
+  f.request.mockImplementation(async (path: string) => path.endsWith('/start')
+    ? { ok: false, status: 409, body: JSON.stringify({ message: 'Agent installation changed; check updates again' }) }
+    : { ok: true, status: 200, body: JSON.stringify(moved) })
+  receiveHarnessUpdate(initial)
+  // The re-check runs only inside the app shell.
+  Object.assign(window, { kunGui: { runtimeRequest: vi.fn() } })
+  try {
+    await act(async () => root.render(createElement(AgentUpdateControl, { row, settings: defaultKunHarnessSettings(), patch: vi.fn(),
+      beforeCheck: async () => true, t: (key: string) => key })))
+    const managed = () => [...host.querySelectorAll('button')].find((button) => button.textContent === 'agentUpdate.managed')!
+    // A check in flight may replace the installation the action was offered for.
+    await act(async () => useHarnessUpdateStore.setState({ entries: { 'claude-code': { info: initial, loading: true } } }))
+    expect(managed().disabled).toBe(true)
+    await act(async () => useHarnessUpdateStore.setState({ entries: { 'claude-code': { info: initial, loading: false, checkedAt: Date.now() } } }))
+    await act(async () => managed().click())
+    const start = f.request.mock.calls.find(([path]) => path.endsWith('/start'))!
+    expect(JSON.parse(start[2])).toMatchObject({ action: 'managed', expectedFingerprint: 'old' })
+    await vi.waitFor(() => expect(host.querySelector('[role="alert"]')?.textContent).toBe('agentUpdate.installationChanged'))
+    expect(useHarnessUpdateStore.getState().entries['claude-code']?.info?.current.fingerprint).toBe('moved')
+  } finally { delete (window as { kunGui?: unknown }).kunGui; await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
+})

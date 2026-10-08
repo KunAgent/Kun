@@ -17,6 +17,7 @@ import {
   type FloatingMenuPlacement
 } from './floating-composer-model-picker-logic'
 import { ComposerModelSourceIcon } from './ComposerModelSourceIcon'
+import { providerModelSections, providerSectionModelName } from './composer-provider-model-sections'
 
 export type { ComposerReasoningEffort } from './floating-composer-model-picker-logic'
 export {
@@ -159,9 +160,14 @@ export function FloatingComposerModelPicker({
     : needsProviderSetup
     ? t('composerNoProvidersShort')
     : selectedProviderGroup?.modelInfo?.[currentModel]?.displayName ?? fullModelLabel(composerModel, t('autoLabel'))
+  // A provider-qualified catalog ("OpenCode Zen/Big Pickle") shows the model's
+  // own name on the pill; the full name stays in the title.
+  const shortModelLabel = !emptyModelMessage && !needsProviderSetup && selectedProviderGroup &&
+    providerModelSections(selectedProviderGroup, selectedProviderGroup.modelIds)
+    ? providerSectionModelName(selectedProviderGroup, currentModel) : modelLabel
   const visibleModelLabel = showProviderInModelLabel && selectedProviderGroup?.label
-    ? `${selectedProviderGroup.label} · ${modelLabel}`
-    : modelLabel
+    ? `${selectedProviderGroup.label} · ${shortModelLabel}`
+    : shortModelLabel
   const controlsTitle = [
     selectedProviderGroup?.label,
     modelLabel,
@@ -310,6 +316,8 @@ export function FloatingComposerModelPicker({
           <ComposerModelSourceIcon
             presetId={selectedProviderGroup.presetSource}
             providerId={selectedProviderGroup.providerId}
+            agentId={selectedProviderGroup.agentIconId}
+            size={16}
             className="h-4 w-4 shrink-0 text-ds-faint"
           />
         ) : null}

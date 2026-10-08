@@ -83,6 +83,10 @@ export type AdeCredentialGroupLabels = {
   nativeLogin: string
   provider: string
   kunGateway: string
+  /** Name of the Agent's own sign-in, e.g. "Claude Code account". */
+  agentAccount?: (agentName: string) => string
+  /** A Kun provider profile that supplies a native login (its name and preset). */
+  providerName?: (providerId: string) => { label: string; presetSource?: string } | undefined
 }
 
 /**
@@ -114,7 +118,7 @@ export function adeHarnessModelGroups(input: {
     if (mode === 'native-login') {
       for (const profile of readyHarnessProfiles(row).filter((entry) => entry.credentialMode === mode)) groups.push({
         providerId: profile.providerId ? `${credentialGroupKey(mode)}:${profile.providerId}` : credentialGroupKey(mode),
-        label: profile.providerId ? `${labelFor[mode]} · ${profile.providerId}` : labelFor[mode],
+        ...nativeLoginGroupIdentity(row, profile.providerId, labels),
         modelIds: [...models],
         ...(input.modelInfo ? { modelProfiles: harnessModelProfiles(input.modelInfo, row.definition.id === 'devin') } : {}),
         ...(input.modelInfo ? { nativeHarnessId: row.definition.id,
@@ -138,6 +142,22 @@ export function adeHarnessModelGroups(input: {
     }
   }
   return groups
+}
+
+/**
+ * The Agent's own sign-in is named after the Agent and shows its mark; a
+ * native login supplied by a Kun provider profile is named after that
+ * provider, so two native groups never read alike.
+ */
+function nativeLoginGroupIdentity(row: AdeHarnessRow, providerId: string | undefined, labels: AdeCredentialGroupLabels):
+  Pick<ModelProviderModelGroup, 'label' | 'agentIconId' | 'presetSource'> {
+  if (!providerId) {
+    return { label: labels.agentAccount?.(row.definition.displayName) ?? labels.nativeLogin, agentIconId: row.definition.id }
+  }
+  const provider = labels.providerName?.(providerId)
+  return provider
+    ? { label: provider.label, ...(provider.presetSource ? { presetSource: provider.presetSource } : {}) }
+    : { label: `${labels.nativeLogin} · ${providerId}` }
 }
 
 /** Credential mode for a route when the user never picked one explicitly. */

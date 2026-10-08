@@ -65,6 +65,7 @@
     "usageBilledByAgent": "由 Agent 计费",
     "usageBilledByAgentTitle": "Token 数由 Agent 自行上报。它通过自己的账号或订阅计费，因此 Kun 不显示本地价格。",
     "settingsChanged": "更新期间 Agent 路径已被修改，请重新检查。",
+    "installationChanged": "检查期间 Agent 的安装有变化，已重新检查。请确认上面的版本和路径后再点一次。",
     "rollback": "恢复旧版本",
     "modelMissing": "当前模型列表已不包含所选模型，请选择可用模型后再发送。",
     "nativePermission": "{{agent}} 实际模式：{{mode}}",

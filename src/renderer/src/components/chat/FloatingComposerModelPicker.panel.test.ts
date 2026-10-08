@@ -63,6 +63,22 @@ const buttonWithText = (text: string): HTMLButtonElement | undefined =>
   [...document.querySelectorAll<HTMLButtonElement>('[data-composer-model-panel] button')].find((button) => button.textContent?.trim() === text)
 
 describe('composer model and reasoning control', () => {
+  it('groups a provider-qualified Agent catalog by provider and shows short names', async () => {
+    const ids = ['openai/gpt-6-luna', 'openai/gpt-6-sol', 'opencode/big-pickle', 'opencode/exo-free']
+    const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'OpenCode account', nativeHarnessId: 'opencode',
+      agentIconId: 'opencode', modelIds: ids, modelInfo: Object.fromEntries(ids.map((id) => [id, { id,
+        displayName: id.startsWith('openai') ? `OpenAI/${id.slice(7).toUpperCase()}` : `OpenCode Zen/${id.slice(9)}` }])) }
+    const trigger = await renderPicker({ composerModel: 'opencode/big-pickle', composerProviderId: group.providerId, composerModelGroups: [group] })
+    expect(trigger.textContent).toContain('big-pickle')
+    expect(trigger.textContent).not.toContain('OpenCode Zen')
+    expect(trigger.querySelector('[data-model-source-icon="agent-account"] [data-agent-icon="opencode"]')).not.toBeNull()
+    await act(async () => trigger.click())
+    const sections = [...document.querySelectorAll('[data-model-provider-section]')].map((node) => node.getAttribute('aria-label'))
+    expect(sections).toEqual(['OpenAI', 'OpenCode Zen'])
+    expect([...document.querySelectorAll('[role="menuitemradio"]')].map((row) => row.textContent)).toEqual(['GPT-6-LUNA', 'GPT-6-SOL', 'big-pickle', 'exo-free'])
+    expect(document.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('title')).toBe('OpenCode Zen/big-pickle (opencode/big-pickle)')
+  })
+
   it('opens one panel with reasoning segments above the model list', async () => {
     const onReasoning = vi.fn()
     const trigger = await renderPicker({ onComposerReasoningEffortChange: onReasoning })

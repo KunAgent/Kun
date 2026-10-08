@@ -229,6 +229,7 @@
   "adeCredential.nativeLogin": "Native sign-in",
   "adeCredential.provider": "Provider",
   "adeCredential.kunGateway": "Kun gateway",
+  "adeCredential.agentAccount": "{{agent}} account",
   "adeHarnessPicker.title": "Agent",
   "adeHarnessPicker.continueLocalSession": "Continue a local session",
   "adeHarnessPicker.nextTurnHint": "Applies to the next turn. The current turn keeps its Agent.",

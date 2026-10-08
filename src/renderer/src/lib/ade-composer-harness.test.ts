@@ -95,6 +95,23 @@ describe('effectiveHarnessId', () => {
 })
 
 describe('adeHarnessModelGroups', () => {
+  it('names the Agent\'s own sign-in after the Agent and a provider-supplied one after that provider', () => {
+    const base = harnessRow({ credentialModes: ['native-login'] })
+    const row = withHarnessReadiness(base, [{ harnessId: 'claude-code', credentialMode: 'native-login' },
+      { harnessId: 'claude-code', credentialMode: 'native-login', providerId: 'claude-subscription' },
+      { harnessId: 'claude-code', credentialMode: 'native-login', providerId: 'removed-provider' }])
+    const groups = adeHarnessModelGroups({ row, models: ['opus'], hasConfiguredProvider: false, labels: { ...labels,
+      agentAccount: (agent) => `${agent} account`,
+      providerName: (id) => id === 'claude-subscription' ? { label: 'Claude subscription', presetSource: 'anthropic' } : undefined } })
+    expect(groups.map(({ providerId, label, agentIconId, presetSource }) => ({ providerId, label, agentIconId, presetSource }))).toEqual([
+      { providerId: 'ade-cred:native-login', label: 'Claude Code account', agentIconId: 'claude-code', presetSource: undefined },
+      { providerId: 'ade-cred:native-login:claude-subscription', label: 'Claude subscription', agentIconId: undefined, presetSource: 'anthropic' },
+      { providerId: 'ade-cred:native-login:removed-provider', label: 'Native sign-in · removed-provider', agentIconId: undefined, presetSource: undefined }
+    ])
+    // Callers without the hooks keep the plain label.
+    expect(adeHarnessModelGroups({ row, models: ['opus'], hasConfiguredProvider: false, labels })[0]?.label).toBe('Native sign-in')
+  })
+
   const exposable = [
     { providerId: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'] },
     { providerId: 'stepfun', label: 'StepFun', models: ['step-3'] }

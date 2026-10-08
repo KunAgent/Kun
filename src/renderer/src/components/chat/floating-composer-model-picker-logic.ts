@@ -52,6 +52,7 @@ export type ComposerModelMenuGroup = {
   modelIds: string[]
   modelProfiles?: Record<string, ModelProviderModelProfileV1>
   nativeHarnessId?: string
+  agentIconId?: string
   modelInfo?: ModelProviderModelGroup['modelInfo']
 }
 

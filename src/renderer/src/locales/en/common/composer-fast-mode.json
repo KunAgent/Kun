@@ -10,7 +10,8 @@
     "auto": "Auto",
     "autoHint": "Follows the composer permission level",
     "triggerTitle": "{{agent}} Agent: {{name}}",
-    "ownPermissions": "A selected Agent uses its own tool permissions. Read-only tasks still use the strictest mode."
+    "ownPermissions": "A selected Agent uses its own tool permissions. Read-only tasks still use the strictest mode.",
+    "replacedModes": "{{agent}}'s built-in {{modes}} are not listed: a plugin or its configuration replaced them. These are the Agents {{agent}} offers now."
   },
   "agentSettingsPicker": {
     "title": "Settings",

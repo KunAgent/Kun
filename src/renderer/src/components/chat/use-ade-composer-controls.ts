@@ -63,11 +63,18 @@ export function useAdeComposerControls(input: {
     onComposerModelChange
   } = input
   const { t } = useTranslation('common')
+  // Kun's provider profiles name a native login they supply (e.g. a Claude subscription).
+  const kunProviderGroups = useChatStore((state) => state.composerModelGroups)
   const labels = useMemo<AdeCredentialGroupLabels>(() => ({
     nativeLogin: t('adeCredential.nativeLogin'),
     provider: t('adeCredential.provider'),
-    kunGateway: t('adeCredential.kunGateway')
-  }), [t])
+    kunGateway: t('adeCredential.kunGateway'),
+    agentAccount: (agent) => t('adeCredential.agentAccount', { agent }),
+    providerName: (providerId) => {
+      const group = (kunProviderGroups ?? []).find((entry) => entry.providerId === providerId)
+      return group?.label ? { label: group.label, ...(group.presetSource ? { presetSource: group.presetSource } : {}) } : undefined
+    }
+  }), [kunProviderGroups, t])
   const pendingProvider = useRef<{
     harnessId: string; credentialMode: string; threadId: string | null; workspace: string; draft: number
     previous: { providerId: string; model: string }; defaults: { providerId?: string; model?: string } | undefined

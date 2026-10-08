@@ -53,6 +53,11 @@ export function FloatingComposerNativeAgentPicker({ harnessId, threadId, compact
     catalogAgents: catalog?.agents
   })
   const selected = selectedId ? agents.find((agent) => agent.id === selectedId) ?? { id: selectedId } : undefined
+  // OpenCode plugins (e.g. oh-my-openagent) can replace its own build/plan;
+  // the Agent then offers only theirs, which Kun lists as they are.
+  const builtIn = row.definition.permissionModes.map((mode) => mode.id)
+  const replacedModes = agents.length > 0 && builtIn.length > 0 && !builtIn.some((id) => agents.some((agent) => agent.id === id))
+    ? builtIn.join(' / ') : undefined
   const triggerName = selected ? nativeAgentLabel(selected) : t('nativeAgentPicker.auto')
   const title = t('nativeAgentPicker.triggerTitle', { agent: row.definition.displayName, name: triggerName })
 
@@ -110,8 +115,9 @@ export function FloatingComposerNativeAgentPicker({ harnessId, threadId, compact
           </button>
         )
       })}
-      <div className="mt-1 border-t border-ds-border-muted px-2.5 pb-1 pt-2 text-[11px] leading-4 text-ds-faint">
-        {t('nativeAgentPicker.ownPermissions')}
+      <div className="mt-1 space-y-1 border-t border-ds-border-muted px-2.5 pb-1 pt-2 text-[11px] leading-4 text-ds-faint">
+        {replacedModes ? <p data-native-agent-replaced>{t('nativeAgentPicker.replacedModes', { agent: row.definition.displayName, modes: replacedModes })}</p> : null}
+        <p>{t('nativeAgentPicker.ownPermissions')}</p>
       </div>
     </div>
   ) : null

@@ -241,7 +241,8 @@
   "adeCredential": {
     "nativeLogin": "原生登录",
     "provider": "模型来源",
-    "kunGateway": "Kun 网关"
+    "kunGateway": "Kun 网关",
+    "agentAccount": "{{agent}} 账号"
   },
   "adeHarnessPicker": {
     "title": "执行 Agent",

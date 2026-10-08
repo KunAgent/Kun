@@ -4,10 +4,19 @@ import { describe, expect, it } from 'vitest'
 import { ComposerModelSourceIcon } from './ComposerModelSourceIcon'
 
 describe('composer model source identity', () => {
-  it('uses a neutral key for native account models instead of a Kun or Agent logo', () => {
+  it('shows the Agent\'s own mark for its sign-in and a neutral account icon without one', () => {
+    const own = renderToStaticMarkup(createElement(ComposerModelSourceIcon, { providerId: 'ade-cred:native-login', agentId: 'claude-code' }))
+    expect(own).toContain('data-model-source-icon="agent-account"')
+    expect(own).toContain('data-agent-icon')
     const html = renderToStaticMarkup(createElement(ComposerModelSourceIcon, { providerId: 'ade-cred:native-login' }))
     expect(html).toContain('data-model-source-icon="native-login"')
     expect(html).not.toContain('data-provider-icon')
+    expect(html).not.toContain('lucide-key')
+  })
+
+  it('shows the Kun provider that supplies a native login', () => {
+    const html = renderToStaticMarkup(createElement(ComposerModelSourceIcon, { providerId: 'ade-cred:native-login:claude-subscription' }))
+    expect(html).toContain('data-provider-icon="claude"')
     expect(html).not.toContain('data-agent-icon')
   })
 
