@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  beginOwnedProcessShutdown, resumeOwnedProcessAdmission,
-  shutdownOwnedProcesses, spawnOwnedProcess, stopOwnedProcess
+  beginOwnedProcessShutdown, OWNED_PROCESS_GUARD_IDLE_RETIRE_MS, resumeOwnedProcessAdmission,
+  setOwnedProcessGuardIdleRetireMs, shutdownOwnedProcesses, spawnOwnedProcess, stopOwnedProcess
 } from './owned-process.js'
 import { OWNED_PROCESS_GUARD_SOURCE } from './owned-process-guard.js'
 
@@ -133,6 +133,26 @@ describe.skipIf(process.platform === 'win32')('POSIX owned process containment',
     // Only a confirmed owner death brings the supervised group down.
     parent.kill('SIGKILL')
     await waitUntil(() => !alive(message.target) && !alive(message.guard), 8000)
+  })
+
+  it('retires an idle guard once no group remains and starts a fresh one for the next launch', async () => {
+    setOwnedProcessGuardIdleRetireMs(200)
+    try {
+      const first = await spawnOwnedProcess(process.execPath, ['-e', 'setInterval(()=>{},1000)'])
+      fixturePids.add(first.pid!)
+      const idleGuard = guardPid()
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      // A live group keeps its guard.
+      expect(alive(idleGuard)).toBe(true)
+      await stopOwnedProcess(first, { graceMs: 50, timeoutMs: 3000 })
+      await waitUntil(() => !alive(idleGuard), 5000)
+      const second = await spawnOwnedProcess(process.execPath, ['-e', 'setInterval(()=>{},1000)'])
+      fixturePids.add(second.pid!)
+      expect(alive(second.pid!)).toBe(true)
+      expect(guardPid()).not.toBe(idleGuard)
+    } finally {
+      setOwnedProcessGuardIdleRetireMs(OWNED_PROCESS_GUARD_IDLE_RETIRE_MS)
+    }
   })
 
   it('starts a fresh guard for the next launch after the guard process dies', async () => {

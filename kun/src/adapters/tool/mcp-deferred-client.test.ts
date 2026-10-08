@@ -20,7 +20,7 @@ const stdioConfig = (command = 'node') => McpCapabilityConfig.parse({
   search: { enabled: false }
 })
 
-function mockClient(callTool = vi.fn(async () => ({ ok: true }))): McpClientLike & { callTool: typeof callTool } {
+function mockClient(callTool: McpClientLike['callTool'] = vi.fn(async () => ({ ok: true }))): McpClientLike {
   return { listTools: vi.fn(async () => ({ tools: [lookup] })), callTool, close: vi.fn(async () => undefined) }
 }
 
