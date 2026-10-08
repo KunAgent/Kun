@@ -68,6 +68,18 @@ const buttonWithText = (text: string): HTMLButtonElement | undefined =>
   [...document.querySelectorAll<HTMLButtonElement>('[data-composer-model-panel] button')].find((button) => button.textContent?.trim() === text)
 
 describe('composer model and reasoning control', () => {
+  it('offers every reasoning level for an Agent model whose levels were not reported', async () => {
+    // CodeMaker/OpenCode report levels only for the model their probe session selected.
+    const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'CodeMaker account', nativeHarnessId: 'codemaker',
+      modelIds: ['openai/gpt-6.1-sol', 'openai/gpt-6-luna'], modelInfo: { 'openai/gpt-6.1-sol': { id: 'openai/gpt-6.1-sol', displayName: 'GPT 6.1 Sol' },
+        'openai/gpt-6-luna': { id: 'openai/gpt-6-luna', displayName: 'GPT 6 Luna', reasoningEfforts: ['low', 'high'] } } }
+    const trigger = await renderPicker({ composerModel: 'openai/gpt-6.1-sol', composerProviderId: group.providerId, composerModelGroups: [group], composerReasoningEffort: 'auto' })
+    await act(async () => trigger.click())
+    expect([...document.querySelectorAll<HTMLButtonElement>('[role="radiogroup"] [role="radio"]')].map((segment) => segment.textContent))
+      .toEqual(['Off', 'Low', 'Med', 'High', 'Ultra'])
+    expect(document.querySelector('[data-composer-model-panel] button[data-reasoning-effort="auto"]')).not.toBeNull()
+  })
+
   it('groups a provider-qualified Agent catalog by provider and shows short names', async () => {
     const ids = ['openai/gpt-6-luna', 'openai/gpt-6-sol', 'opencode/big-pickle', 'opencode/exo-free']
     const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'OpenCode account', nativeHarnessId: 'opencode',

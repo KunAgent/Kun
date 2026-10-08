@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { FloatingComposerModelPicker } from './FloatingComposerModelPicker'
 import { harnessModelProfiles } from '../../lib/ade-composer-harness'
-import { nativeReasoningChoices } from './floating-composer-model-picker-logic'
+import { agentModelReasoningChoices, nativeReasoningChoices } from './floating-composer-model-picker-logic'
 
 let host: HTMLDivElement
 let root: Root
@@ -61,6 +61,11 @@ describe('Model picker after Agent selection moves to the mode control', () => {
     expect(nativeReasoningChoices({ reasoningEfforts: ['xhigh'] })).toEqual([])
     expect(nativeReasoningChoices({ reasoningEfforts: [] })).toEqual([])
     expect(nativeReasoningChoices({})).toBeUndefined()
+    // Unreported levels (OpenCode reports them only for its probe session's model) offer every level.
+    expect(agentModelReasoningChoices({})).toEqual(['auto', 'off', 'low', 'medium', 'high', 'max'])
+    expect(agentModelReasoningChoices(undefined)).toEqual(['auto', 'off', 'low', 'medium', 'high', 'max'])
+    expect(agentModelReasoningChoices({ reasoningEfforts: [] })).toEqual([])
+    expect(agentModelReasoningChoices({ reasoningEfforts: ['low', 'high'] })).toEqual(['auto', 'low', 'high'])
     const codexGroup = (efforts: string[]) => [{ providerId: 'ade-cred:native-login', label: 'Native sign-in', nativeHarnessId: 'codex',
       modelIds: ['gpt'], modelInfo: { gpt: { id: 'gpt', reasoningEfforts: efforts, defaultReasoningEffort: 'low' } } }]
     const onReasoning = vi.fn()

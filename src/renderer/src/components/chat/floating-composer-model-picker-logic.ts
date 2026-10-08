@@ -538,6 +538,19 @@ export function nativeReasoningChoices(
   return levels.length ? ['auto', ...levels] : []
 }
 
+/**
+ * Levels the composer offers for an Agent's model. A model whose levels the
+ * Agent did not report (OpenCode lists them only for the model its probe
+ * session had selected) offers every level: Kun applies the pick through the
+ * Agent's own reasoning option wherever that model accepts it. A model the
+ * Agent reports without levels offers none.
+ */
+export function agentModelReasoningChoices(
+  model: { reasoningEfforts?: readonly string[] } | undefined
+): ComposerReasoningEffort[] {
+  return nativeReasoningChoices(model) ?? ['auto', ...LEGACY_REASONING_EFFORTS]
+}
+
 export function reasoningOptionsForModel(
   profile: Pick<ModelProviderModelProfileV1, 'reasoning' | 'supportsReasoning' | 'metadata' | 'evidence'> | undefined
 ): Array<{ id: ComposerReasoningEffort; labelKey: string }> {

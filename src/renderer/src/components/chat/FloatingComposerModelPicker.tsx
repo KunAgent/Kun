@@ -10,7 +10,7 @@ import {
   REASONING_OPTIONS,
   buildComposerModelMenuGroups, buildComposerModelOptions, calculateFloatingMenuPlacement,
   currentBodyZoom, fullModelLabel, modelProfileForSelection, modelIdsMatch,
-  nativeReasoningChoices, normalizeComposerReasoningEffort, normalizeComposerReasoningEffortValue,
+  agentModelReasoningChoices, normalizeComposerReasoningEffort, normalizeComposerReasoningEffortValue,
   reasoningLabelKey, reasoningOptionsForModel, shouldShowProviderSetupPrompt,
   type ComposerModelMenuGroup,
   type ComposerReasoningEffort,
@@ -134,8 +134,8 @@ export function FloatingComposerModelPicker({
   const needsProviderSetup = !emptyModelMessage && shouldShowProviderSetupPrompt(providerMenuGroups)
   const nativeHarnessId = selectedProviderGroup?.nativeHarnessId
   const nativeModel = nativeHarnessId ? selectedProviderGroup?.modelInfo?.[currentModel] : undefined
-  // Other Agents list per-model levels with the catalog; offer only those (plus Auto).
-  const nativeChoices = nativeHarnessId && nativeHarnessId !== 'devin' ? nativeReasoningChoices(nativeModel) : undefined
+  // Other Agents list per-model levels with the catalog; offer those (plus Auto), or every level when unreported.
+  const nativeChoices = nativeHarnessId && nativeHarnessId !== 'devin' ? agentModelReasoningChoices(nativeModel) : undefined
   const adapterChoices = nativeChoices !== undefined || (nativeHarnessId === 'devin' && nativeModel?.reasoningEfforts !== undefined) ||
     (!currentModelProfile?.reasoning && currentModelProfile?.supportsReasoning !== false && allowedReasoningEfforts !== undefined)
   const reasoningOptions = (adapterChoices ? REASONING_OPTIONS : reasoningOptionsForModel(currentModelProfile)).filter((option) =>
