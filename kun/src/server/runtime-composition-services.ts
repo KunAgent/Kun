@@ -143,6 +143,7 @@ export async function createRuntimeServices(
   let [mcpProviders, skillRuntime] = await Promise.all([
     buildMcpToolProviders(core.activeOptions.capabilities?.mcp, {
       oauthStorageDir: join(core.activeOptions.dataDir, 'mcp-oauth'),
+      catalogCachePath: join(core.activeOptions.dataDir, 'mcp-catalog-cache.json'),
       ...(oauthEncryptor ? { oauthEncryptor } : {})
     }),
     SkillRuntime.create(skillsConfigForRuntime(core.activeOptions))

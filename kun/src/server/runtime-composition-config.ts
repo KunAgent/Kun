@@ -304,7 +304,7 @@ export function createRuntimeConfigController(
 	      : undefined
 	    const [nextMcpProviders, nextSkillRuntime] = await Promise.all([
 	      reusableMcpProviders(mcpProviders, activeOptions, nextOptions) ?? buildMcpToolProviders(nextOptions.capabilities?.mcp, {
-	        oauthStorageDir: join(activeOptions.dataDir, 'mcp-oauth'),
+	        oauthStorageDir: join(activeOptions.dataDir, 'mcp-oauth'), catalogCachePath: join(activeOptions.dataDir, 'mcp-catalog-cache.json'),
 	        ...(nextOAuthEncryptor ? { oauthEncryptor: nextOAuthEncryptor } : {})
 	      }),
       SkillRuntime.create(skillsConfigForRuntime(nextOptions))
