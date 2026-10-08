@@ -161,6 +161,9 @@ export class AgentIdentityService {
     if (agent.avatar?.kind === 'uploaded') {
       if (!this.validateAvatars) throw new Error('avatar storage unavailable')
       await this.validateAvatars([this.asMember(agent)])
+    } else if (agent.avatar?.kind === 'composed' && this.validateAvatars) {
+      // A composed look may only wear items the user's wardrobe holds.
+      await this.validateAvatars([this.asMember(agent)])
     }
   }
   asMember(agent: AgentIdentity, repositoryIds: string[] = []): RoomMember {

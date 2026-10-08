@@ -257,13 +257,16 @@ export function updateKunAvatarPart<Category extends KunAvatarCategory>(parts: K
   return { parts: next, removed }
 }
 
-export function randomKunAvatarParts(random: () => number = Math.random): KunAvatarParts {
+/** Random looks only reach into the allowed part of the wardrobe when a filter is given. */
+export function randomKunAvatarParts(random: () => number = Math.random,
+  allowed?: (category: KunAvatarAccessoryCategory, id: string) => boolean): KunAvatarParts {
   const pick = <Value>(choices: readonly Value[]): Value =>
     choices[Math.min(choices.length - 1, Math.max(0, Math.floor(random() * choices.length)))]!
   let parts = normalizeKunAvatarParts({ color: pick(KUN_AVATAR_CATALOG.color).id,
     face: pick(KUN_AVATAR_CATALOG.face).id })
   for (const category of KUN_AVATAR_ACCESSORY_CATEGORIES) {
-    const id = pick([undefined, ...KUN_AVATAR_CATALOG[category].map((part) => part.id)])
+    const ids = KUN_AVATAR_CATALOG[category].map((part) => part.id).filter((id) => !allowed || allowed(category, id))
+    const id = pick([undefined, ...ids])
     parts = updateKunAvatarPart(parts, category, id).parts
   }
   return parts

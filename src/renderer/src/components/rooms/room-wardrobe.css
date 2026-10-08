@@ -1,0 +1,74 @@
+/* Wardrobe game layer: progress strip, bottles, the drop card in chat and the reveal. */
+.rooms-wardrobe-rarity[data-rarity='common'] { --avatar-rarity: var(--ds-text-faint); }
+.rooms-wardrobe-rarity[data-rarity='rare'] { --avatar-rarity: var(--ds-accent); }
+.rooms-wardrobe-rarity[data-rarity='epic'] { --avatar-rarity: var(--ds-skill, #7a68e8); }
+.rooms-wardrobe-rarity[data-rarity='legendary'] { --avatar-rarity: var(--ds-warning, #d97706); }
+.rooms-wardrobe-bottle-icon { flex: none; --wardrobe-glass: color-mix(in srgb, var(--avatar-rarity, var(--ds-accent)) 18%, #ffffff);
+  --wardrobe-ink: color-mix(in srgb, var(--ds-text) 70%, transparent); filter: drop-shadow(0 2px 3px #0002); }
+
+/* Progress strip above the studio */
+.rooms-wardrobe-strip { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--ds-border); border-radius: 14px;
+  background: var(--ds-surface-subtle); font-size: 12px; }
+.rooms-wardrobe-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--ds-text); }
+.rooms-wardrobe-stats > span { display: inline-flex; align-items: center; gap: 5px; }
+.rooms-wardrobe-stats > svg, .rooms-wardrobe-stats > span > svg { color: var(--ds-text-muted); }
+.rooms-wardrobe-stats-hint { margin-left: auto; color: var(--ds-text-muted); }
+.rooms-wardrobe-howto { margin: 0; color: var(--ds-text-muted); }
+.rooms-wardrobe-bottles { display: flex; flex-wrap: wrap; gap: 8px; }
+.rooms-wardrobe-bottle { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border: 1px solid color-mix(in srgb, var(--avatar-rarity) 45%, var(--ds-border));
+  border-radius: 999px; background: color-mix(in srgb, var(--avatar-rarity) 10%, var(--ds-surface-card)); color: var(--ds-text); text-align: left;
+  transition: transform .15s ease, box-shadow .15s ease; }
+.rooms-wardrobe-bottle:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px -10px var(--avatar-rarity); }
+.rooms-wardrobe-bottle:hover:not(:disabled) .rooms-wardrobe-bottle-icon { animation: rooms-wardrobe-wobble .6s ease; }
+.rooms-wardrobe-bottle-text { display: grid; line-height: 1.2; }
+.rooms-wardrobe-bottle-text > small { color: var(--avatar-rarity); font-size: 10.5px; font-weight: 600; }
+.rooms-wardrobe-bottle-open { padding: 3px 9px; border-radius: 999px; color: var(--ds-control-foreground, #fff); background: var(--ds-accent); font-size: 11px; font-weight: 600; }
+@keyframes rooms-wardrobe-wobble { 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+
+/* The bottle under an Agent reply */
+.rooms-wardrobe-drop-slot { display: grid; gap: 6px; padding: 4px 16px 8px; }
+.rooms-wardrobe-drop { display: flex; align-items: center; gap: 12px; max-width: 520px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--avatar-rarity) 40%, var(--ds-border));
+  border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--avatar-rarity) 12%, var(--ds-surface-card)), var(--ds-surface-card));
+  box-shadow: 0 10px 24px -20px var(--avatar-rarity); animation: rooms-wardrobe-rise .35s ease-out; }
+.rooms-wardrobe-drop-text { display: grid; flex: 1; min-width: 0; gap: 2px; font-size: 12.5px; line-height: 1.35; }
+.rooms-wardrobe-drop-text > strong { font-size: 13.5px; font-weight: 650; }
+.rooms-wardrobe-drop-text > span { color: var(--ds-text-muted); }
+.rooms-wardrobe-drop-actions { display: flex; flex: none; gap: 6px; }
+.rooms-wardrobe-drop-actions > button { min-height: 32px; padding: 5px 12px; border: 1px solid var(--ds-border); border-radius: 9px; color: var(--ds-text); font-size: 12.5px; }
+.rooms-wardrobe-drop-actions > .rooms-run-primary { border-color: var(--ds-accent); color: var(--ds-control-foreground, #fff); background: var(--ds-accent); }
+.rooms-wardrobe-drop-more { display: inline-flex; align-items: center; gap: 6px; width: max-content; padding: 4px 10px 4px 6px; border: 1px dashed var(--ds-border);
+  border-radius: 999px; color: var(--ds-text-muted); font-size: 12px; }
+.rooms-wardrobe-drop-more:hover { color: var(--ds-text); border-color: var(--ds-accent); }
+@keyframes rooms-wardrobe-rise { from { opacity: 0; transform: translateY(6px); } }
+
+/* Reveal */
+.rooms-wardrobe-reveal { display: grid; justify-items: center; gap: 8px; padding: 8px 4px 0; text-align: center; }
+.rooms-wardrobe-reveal-kicker { margin: 0; padding: 3px 10px; border-radius: 999px; color: var(--avatar-rarity); background: color-mix(in srgb, var(--avatar-rarity) 12%, transparent);
+  font-size: 12px; font-weight: 600; }
+.rooms-wardrobe-reveal-art { display: grid; place-items: center; width: 168px; height: 168px; border-radius: 28px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--avatar-rarity) 28%, var(--ds-surface-card)), var(--ds-surface-subtle));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--avatar-rarity) 35%, var(--ds-border)), 0 20px 40px -24px var(--avatar-rarity); animation: rooms-wardrobe-pop .5s ease-out; }
+.rooms-wardrobe-reveal-art > .rooms-avatar { --rooms-avatar-radius: 22px; }
+.rooms-wardrobe-reveal-name { margin: 4px 0 0; font-size: 17px; font-weight: 650; }
+.rooms-wardrobe-reveal-rarity { display: inline-flex; align-items: center; gap: 5px; margin: 0; color: var(--avatar-rarity); font-size: 12px; font-weight: 600; }
+.rooms-wardrobe-reveal-rarity > span { letter-spacing: -1px; font-size: 10px; }
+.rooms-wardrobe-reveal-flavor { max-width: 320px; margin: 0; color: var(--ds-text-muted); font-size: 13px; line-height: 1.5; }
+.rooms-wardrobe-reveal-actions { width: 100%; margin-top: 8px; }
+@keyframes rooms-wardrobe-pop { 0% { transform: scale(.7); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } }
+
+/* Sidebar entry */
+.ds-sidebar-wardrobe { display: flex; width: 100%; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; color: var(--ds-text); text-align: left;
+  background: color-mix(in srgb, var(--ds-accent) 8%, transparent); font-size: 12.5px; }
+.ds-sidebar-wardrobe:hover { background: color-mix(in srgb, var(--ds-accent) 14%, transparent); }
+.ds-sidebar-wardrobe > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ds-sidebar-wardrobe > span:last-of-type { color: var(--ds-accent); font-size: 11.5px; font-weight: 600; }
+.ds-sidebar-wardrobe .rooms-wardrobe-bottle-icon { animation: rooms-wardrobe-wobble 1.6s ease infinite; }
+
+@media (max-width: 640px) {
+  .rooms-wardrobe-drop { flex-wrap: wrap; }
+  .rooms-wardrobe-drop-actions { width: 100%; justify-content: flex-end; }
+  .rooms-wardrobe-stats-hint { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rooms-wardrobe-drop, .rooms-wardrobe-reveal-art, .rooms-wardrobe-bottle-icon, .ds-sidebar-wardrobe .rooms-wardrobe-bottle-icon { animation: none !important; }
+}

@@ -93,6 +93,19 @@
   overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .rooms-avatar-option-check { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 18px; height: 18px;
   border-radius: 50%; color: #fff; background: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-surface-card); }
+/* Wardrobe ownership: locked items are silhouettes that only preview. */
+.rooms-avatar-option-art { position: relative; }
+.rooms-avatar-composer-option[data-locked] { cursor: not-allowed; }
+.rooms-avatar-composer-option[data-locked] .rooms-avatar-option-art > :is(img, .rooms-avatar, .rooms-avatar-item-art) { filter: brightness(0) opacity(.28); }
+[data-theme='dark'] .rooms-avatar-composer-option[data-locked] .rooms-avatar-option-art > :is(img, .rooms-avatar, .rooms-avatar-item-art) { filter: brightness(0) invert(1) opacity(.32); }
+.rooms-avatar-composer-option[data-locked] .rooms-avatar-option-name, .rooms-avatar-option-meta { color: var(--ds-text-muted); }
+.rooms-avatar-option-meta { font-size: 9.5px; line-height: 1.2; }
+.rooms-avatar-option-lock, .rooms-avatar-option-copies { position: absolute; right: 3px; bottom: 3px; display: grid; place-items: center; min-width: 18px; height: 18px;
+  padding: 0 4px; border-radius: 9px; color: var(--ds-text-muted); background: var(--ds-surface-card); box-shadow: 0 0 0 1px var(--ds-border); font-size: 9.5px; font-weight: 700; }
+.rooms-avatar-option-new { position: absolute; top: 5px; left: 5px; padding: 1px 6px; border-radius: 999px; color: #fff; background: var(--ds-danger, #d14343);
+  font-size: 9px; font-weight: 700; letter-spacing: .02em; box-shadow: 0 0 0 2px var(--ds-surface-card); }
+.rooms-avatar-wardrobe-filter { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: var(--ds-text-muted); font-size: 11px; white-space: nowrap; }
+.rooms-avatar-wardrobe-filter > input { margin: 0; accent-color: var(--ds-accent); }
 .rooms-avatar-item-art { position: relative; display: block; overflow: hidden; }
 .rooms-avatar-item-art > img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
 [data-theme='dark'] .rooms-avatar-composer {

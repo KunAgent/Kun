@@ -3,6 +3,7 @@ import { registerRoomResultInboxRoutes } from './register-room-result-inbox-rout
 import { registerRoomPermissionRoutes } from './register-room-permission-routes.js'
 import { registerAgentChatRoutes } from './register-agent-chat-routes.js'
 import { registerRoomProfileRoutes } from './register-room-profile-routes.js'
+import { registerRoomWardrobeRoutes } from './register-room-wardrobe-routes.js'
 import { registerAgentHandoffRoutes } from './register-agent-handoff-routes.js'
 import { registerAgentIdentityRoutes } from './register-agent-identity-routes.js'
 import { z } from 'zod'
@@ -97,6 +98,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   registerAgentWorkRoutes(add)
   registerRoomResultInboxRoutes(add)
   registerRoomProfileRoutes(add, runtime)
+  registerRoomWardrobeRoutes(add)
   registerAgentIdentityRoutes(add)
   registerAgentHandoffRoutes(add)
   registerRoomEvidenceRoutes(add)

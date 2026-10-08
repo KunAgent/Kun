@@ -11,7 +11,7 @@ async function exerciseLayeredAvatarControls({ page, request, poll, capture, rec
   await switchCode()
   const original = await request(page, '/v1/rooms/user-profile')
   const initialAvatar = { kind: 'composed', version: 1, parts: {
-    color: 'sky', face: 'normal', headwear: 'headphones', outfit: 'cream-scarf', bg: '#f7f5ef'
+    color: 'sky', face: 'normal', headwear: 'headset', outfit: 'blue-scarf', bg: '#f7f5ef'
   } }
   const seeded = await request(page, '/v1/rooms/user-profile', 'PUT', {
     clientRequestId: 'avatar-smoke-seed', expectedRevision: original.revision, avatar: initialAvatar
@@ -111,7 +111,8 @@ async function exerciseAgentAvatarStudio({ page, request, poll, capture, openPri
   await dialog.getByRole('tab', { name: '头饰', exact: true }).click()
   await ready('.rooms-avatar-composer-option .rooms-avatar-item-art img', 19)
   await capture('avatar-studio-hats')
-  const hat = dialog.getByRole('button', { name: '巫师帽', exact: true })
+  // Starter-pack items are always owned; legendary ones stay locked until they drop.
+  const hat = dialog.getByRole('button', { name: '带麦耳机', exact: true })
   await hat.hover()
   await dialog.locator('.rooms-avatar-stage-badge').waitFor()
   await ready('.rooms-avatar-stage-mirror img[data-composed]', 1)
@@ -119,7 +120,7 @@ async function exerciseAgentAvatarStudio({ page, request, poll, capture, openPri
   await hat.click()
   await dialog.locator('.rooms-avatar-slot[data-filled] .rooms-avatar-item-art img').first().waitFor()
   await dialog.getByRole('tab', { name: '衣服', exact: true }).click()
-  await dialog.getByRole('button', { name: '魔法师披风', exact: true }).click()
+  await dialog.getByRole('button', { name: '蓝围巾', exact: true }).click()
   await page.mouse.move(4, 4)
   await poll(async () => (await dialog.locator('.rooms-avatar-stage-badge').count()) === 0, 10_000, 'try-on ends after leaving')
   await capture('avatar-studio-wearing')

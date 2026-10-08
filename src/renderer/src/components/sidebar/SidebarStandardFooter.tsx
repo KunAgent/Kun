@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { SidebarCommandRow, SidebarIconButton } from './SidebarPrimitives'
 import { SidebarFocusModeControl } from './SidebarFocusModeControl'
 import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from './SidebarKunFooter'
+import { SidebarWardrobeEntry } from './SidebarWardrobeEntry'
 
 function useDocumentDarkMode(): boolean {
   const [dark, setDark] = useState(
@@ -46,6 +47,7 @@ export function SidebarStandardFooter({
   const isDarkMode = useDocumentDarkMode()
   return (
     <div className="space-y-1">
+      <SidebarWardrobeEntry />
       {sceneFooter ? (
         <SidebarFocusModeControl enabled={focusModeEnabled} onChange={onFocusModeChange} />
       ) : !focusModeEnabled ? (

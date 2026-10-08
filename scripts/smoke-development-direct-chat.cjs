@@ -14,6 +14,7 @@ const { exerciseRoomApprovals } = require('./smoke-room-approvals.cjs')
 const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
 const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
 const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-controls.cjs')
+const { exerciseWardrobeDrops } = require('./smoke-wardrobe-drops.cjs')
 const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
 const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
 const assert = require('node:assert/strict')
@@ -54,6 +55,8 @@ async function main() {
     'Agent model controls evidence must stay offline')
   assert(!(process.argv.includes('--avatar-only') && process.argv.includes('--real-model')),
     'Layered avatar evidence must stay offline')
+  assert(!(process.argv.includes('--wardrobe-only') && process.argv.includes('--real-model')),
+    'Wardrobe drop evidence must stay offline')
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 180_000)
   const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'rooms-direct-smoke'))
   for (const entry of ['out/main/index.js', 'kun/dist/cli/serve-entry.js']) {
@@ -174,6 +177,7 @@ async function main() {
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
       : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
       : process.argv.includes('--avatar-only') ? exerciseLayeredAvatarControls
+      : process.argv.includes('--wardrobe-only') ? exerciseWardrobeDrops
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
       : process.argv.includes('--work-only') ? exerciseWorkLayout

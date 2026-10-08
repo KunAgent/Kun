@@ -4,6 +4,7 @@ import { AgentModelSettings, type AgentModels } from './AgentModelSettings'
 import { useDirectChat, RoomDirectHeader, RoomDirectProgress, RoomDirectFiles, RoomNoticeDismiss } from './RoomDirectChat'
 import './rooms-direct.css'
 import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
+import { RoomWardrobeDropCard } from './RoomWardrobeDropCard'
 import { useRoomUserProfileSync } from './room-user-profile'
 import './rooms-init-im.css'
 import { AgentHandoffPanel } from './AgentHandoffPanel'
@@ -371,6 +372,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               onJumped={() => setJumpMessageId(null)}
               hideEmpty={Boolean(choiceInputs.length || pendingSends.pending.length || showActivity || direct.data?.approvals.length)}
               afterMessages={<>
+                <RoomWardrobeDropCard roomId={room.id} />
                 {choiceInputs.filter((input) => !messages.some((message) => message.clientRequestId === input.id)).map((input) =>
                   <RoomChoiceCard key={input.id} input={input} resolvedAnswer={choiceReplies[input.id]} setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />)}
                 {setupPending && !choiceInputs.length ? <button type="button" className="direct-choice-skip" onClick={() => void skipSetup()}>{t('directSkipSetup')}</button> : null}
