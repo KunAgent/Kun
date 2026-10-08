@@ -33,6 +33,7 @@
     "check:extension-examples": "node ./scripts/check-extension-examples.mjs",
     "check:file-lines": "node ./scripts/check-file-lines.mjs",
     "check:main-eager-deps": "node ./scripts/check-main-eager-deps.mjs",
+    "smoke:idle-memory": "node ./scripts/smoke-idle-memory.cjs",
     "check:bundled-skills": "node ./scripts/check-bundled-skills.mjs",
     "test:file-lines": "node --test ./scripts/check-file-lines.test.mjs",
     "check:built-preload": "node ./scripts/check-built-preload.cjs",
