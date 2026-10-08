@@ -8,7 +8,7 @@ import type { AppSettingsV1 } from '../../shared/app-settings'
  * connection failure, an unexpected exit, or a different runtime fingerprint;
  * the watchdog keeps probing independently.
  */
-export const ENSURE_RUNTIME_VERIFIED_WINDOW_MS = 5_000
+export const ENSURE_RUNTIME_VERIFIED_WINDOW_MS = 15_000
 
 type VerifiedRuntime = {
   fingerprint: string

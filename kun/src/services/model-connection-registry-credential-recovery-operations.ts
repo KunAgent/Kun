@@ -126,6 +126,15 @@ async recoverExpiredCredentialTransaction(this: ModelConnectionRegistry,
     providerId: string,
     operationToken?: string
   ): Promise<boolean> {
+    // Every Main credential read passes through here. Without a pending
+    // transaction the conditional update below changed nothing yet still wrote
+    // the Registry, bumped its revision, and woke every model-connection
+    // watcher, which re-read credentials and wrote again.
+    const pending = (await this['file'].read(emptyDocument)).credentialTransactions[providerId]
+    if (!pending || (operationToken && pending.operationToken !== operationToken)) {
+      if (operationToken) this['clearPreparedCredentialSecret'](providerId, operationToken)
+      return false
+    }
     let recover = false
     let removedOrphan = false
     let durableTokenMissingOrMismatch = false

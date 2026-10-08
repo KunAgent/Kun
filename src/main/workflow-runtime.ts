@@ -380,10 +380,13 @@ export class WorkflowRuntime {
 
   private async tick(): Promise<void> {
     if (this.stopping) return
-    const settings = await this.loadSettings()
+    // Deciding what is due needs no credentials. Resolving every provider's
+    // registry credentials here re-read (and rewrote) the registry twice per
+    // 30 s tick while idle; execution resolves them when a run starts.
+    const settings = await this.deps.store.load()
     if (!settings.workflow.enabled) return
     await this.ensureNextRuns(settings)
-    const fresh = await this.loadSettings()
+    const fresh = await this.deps.store.load()
     const now = Date.now()
     for (const workflow of fresh.workflow.workflows) {
       if (!workflow.enabled || this.runCoordinator.isRunning(workflow.id)) continue
