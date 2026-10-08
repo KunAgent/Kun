@@ -191,7 +191,7 @@ export function FloatingComposer({
   queuedMessages,
   onRemoveQueuedMessage,
   onRestoreQueuedMessageToComposer,
-  onReorderQueuedMessage,
+  onReorderQueuedMessage, onResumeQueuedMessages,
   onGuideQueuedMessage,
   attachments = EMPTY_ATTACHMENTS,
   attachmentUploadEnabled = false,
@@ -256,6 +256,7 @@ export function FloatingComposer({
   const blocks = useChatStore((s) => s.blocks)
   const resolveUserInput = useChatStore((s) => s.resolveUserInput)
   const storeReorderQueuedMessage = useChatStore((s) => s.reorderQueuedMessage)
+  const storeResumeQueuedMessages = useChatStore((s) => s.resumePausedQueuedMessages)
   const openSettings = useChatStore((s) => s.openSettings)
   const compact = variant !== 'default'
   const side = variant === 'side'
@@ -670,7 +671,7 @@ export function FloatingComposer({
     imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, mode, modelControlVariant, modelPickerMode, onComposerFastModeChange, onComposerModelChange: adeComposer.onModelChange ?? onComposerModelChange, onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange,
     onComposerPersonaChange, codeAgentPresets, composerPersonaId, resolvedCodeAgentPresets,
     onRestoreQueuedMessageToComposer,
-    onReorderQueuedMessage: onReorderQueuedMessage ?? storeReorderQueuedMessage,
+    onReorderQueuedMessage: onReorderQueuedMessage ?? storeReorderQueuedMessage, onResumeQueuedMessages: onResumeQueuedMessages ?? storeResumeQueuedMessages,
     onGuideQueuedMessage, onInterrupt, onOpenGraph, onOpenGraphChild, onPickAttachments, onRemoveAttachment, onRemoveContextChip, onRemoveFileReference,
     onRemoveQueuedMessage, onToggleWorktreeMode, onWorktreeBranchChange, openSettings, orchestration, pendingUserInputBlock, placeholder, primaryActionDisabled,
     primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError, onDismissPromptOptimizationError, promptOptimizationSettings, queuedMessages,

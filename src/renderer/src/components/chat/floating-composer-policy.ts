@@ -229,6 +229,7 @@ export type FloatingComposerProps = {
     position: 'before' | 'after'
   ) => void
   onGuideQueuedMessage?: (id: string) => void | Promise<unknown>
+  onResumeQueuedMessages?: () => void | Promise<unknown>
   attachments?: AttachmentReference[]
   attachmentUploadEnabled?: boolean
   attachmentUploadBusy?: boolean

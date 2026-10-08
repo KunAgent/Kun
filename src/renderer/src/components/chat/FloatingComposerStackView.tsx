@@ -16,7 +16,7 @@ export function FloatingComposerStackView({
     busy, canOpenGoalPanel, canSetGoalPanelDraft, clearActiveThreadGoal, compact, composerMenuOpen,
     currentTurnOrchestration, draft, fileMentions, filteredSlashCommands, goalBannerLabel,
     goalElapsedLabel, goalPanelOpen, goalPanelRef, graphEnabled, highlightedSlashCommand,
-    onReorderQueuedMessage, onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, onRestoreQueuedMessageToComposer, pendingApprovals, pendingUserInputBlock,
+    onReorderQueuedMessage, onResumeQueuedMessages, onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, onRestoreQueuedMessageToComposer, pendingApprovals, pendingUserInputBlock,
     queuedMessages, runtimeReady,
     setActiveThreadGoalStatus, setGoalFromComposerInput, setGoalPanelOpen,
     showGoalFloater, showGoalMenuOption, showGraphProgress, showTodoProgress, slashCommandMenu,
@@ -40,6 +40,7 @@ export function FloatingComposerStackView({
                 }
               : undefined}
             onReorder={onReorderQueuedMessage}
+            onResume={onResumeQueuedMessages}
           />
         )}
         floatingStatuses={(

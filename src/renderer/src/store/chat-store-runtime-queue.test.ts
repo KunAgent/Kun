@@ -173,4 +173,58 @@ describe('runtime queue store actions', () => {
     await expect(actions.resumeQueuedTurns()).resolves.toBe(false)
     expect(provider.resumeQueuedTurns).not.toHaveBeenCalled()
   })
+
+  it('resumePausedQueuedMessages resumes the runtime queue and requeues local paused rows behind it', async () => {
+    const provider = { resumeQueuedTurns: vi.fn(async () => ({ started: true, turnId: 'turn_next' })) }
+    registryMock.getProvider.mockReturnValue(provider)
+    const { actions, state } = buildHarness({
+      queuedMessages: [
+        { id: 'q-1', text: 'parked', clientRequestId: 'r1', deliveryState: 'paused' },
+        { id: 'q-2', text: 'local only', deliveryState: 'paused' },
+        { id: 'q-3', text: 'restoring', deliveryState: 'paused', editIntent: 'restoring' }
+      ]
+    })
+    const sendMessage = vi.fn(async () => true)
+    const recoverActiveTurn = vi.fn(async () => {
+      Object.assign(state, { busy: true, currentTurnId: 'turn_next' })
+      return true
+    })
+    Object.assign(state, actions, { recoverActiveTurn, sendMessage })
+
+    await expect(actions.resumePausedQueuedMessages()).resolves.toBe(true)
+
+    expect(provider.resumeQueuedTurns).toHaveBeenCalledTimes(1)
+    // The local row waits for the resumed turn instead of racing it.
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(state.queuedMessages.map((message) => [message.id, message.deliveryState]))
+      .toEqual([['q-1', 'in_flight'], ['q-2', 'pending'], ['q-3', 'paused']])
+  })
+
+  it('resumePausedQueuedMessages sends local-only paused rows when no runtime turn is parked', async () => {
+    registryMock.getProvider.mockReturnValue({ resumeQueuedTurns: vi.fn() })
+    const { actions, state } = buildHarness({
+      queuedMessages: [{ id: 'q-1', text: 'local only', deliveryState: 'paused' }]
+    })
+    const sendMessage = vi.fn(async () => {
+      Object.assign(state, { busy: true, queuedMessages: [] })
+      return true
+    })
+    Object.assign(state, actions, { sendMessage })
+
+    await expect(actions.resumePausedQueuedMessages()).resolves.toBe(true)
+    expect(sendMessage).toHaveBeenCalledWith('local only', undefined, expect.anything())
+  })
+
+  it('resumePausedQueuedMessages waits for an idle thread and ignores queues with nothing paused', async () => {
+    const provider = { resumeQueuedTurns: vi.fn(async () => ({ started: true })) }
+    registryMock.getProvider.mockReturnValue(provider)
+    const busy = buildHarness({
+      busy: true,
+      queuedMessages: [{ id: 'q-1', text: 'parked', clientRequestId: 'r1', deliveryState: 'paused' }]
+    })
+    await expect(busy.actions.resumePausedQueuedMessages()).resolves.toBe(false)
+    const idle = buildHarness({ queuedMessages: [{ id: 'q-1', text: 'waiting', deliveryState: 'pending' }] })
+    await expect(idle.actions.resumePausedQueuedMessages()).resolves.toBe(false)
+    expect(provider.resumeQueuedTurns).not.toHaveBeenCalled()
+  })
 })

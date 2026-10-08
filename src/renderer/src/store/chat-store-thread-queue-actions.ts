@@ -173,10 +173,14 @@ import {
   type ThreadActionRuntime
 } from './chat-store-thread-actions-support'
 
+function isResumablePausedQueuedMessage(message: QueuedUserMessage): boolean {
+  return message.deliveryState === 'paused' && !message.editIntent && !message.waitForRuntimeAdmission
+}
+
 export function createThreadQueueActions(
   context: StoreActionContext,
   runtime: ThreadActionRuntime
-): Pick<ChatState, 'drainQueuedMessages' | 'removeQueuedMessage' | 'restoreQueuedMessage' | 'reorderQueuedMessage' | 'guideQueuedMessage' | 'resumeQueuedTurns'> {
+): Pick<ChatState, 'drainQueuedMessages' | 'removeQueuedMessage' | 'restoreQueuedMessage' | 'reorderQueuedMessage' | 'guideQueuedMessage' | 'resumeQueuedTurns' | 'resumePausedQueuedMessages'> {
   const { set, get, sseAbortRef } = context
   const cancelRuntimeQueuedTurn = async (threadId: string, message: QueuedUserMessage): Promise<boolean> => {
     const provider = getProvider()
@@ -425,6 +429,34 @@ export function createThreadQueueActions(
     return true
   },
 
+  resumePausedQueuedMessages: async () => {
+    const state = get()
+    const threadId = state.activeThreadId
+    if (!threadId || state.busy || queueMutationPending(threadId)) return false
+    const paused = state.queuedMessages.filter(isResumablePausedQueuedMessage)
+    if (paused.length === 0) return false
+    // Runtime-owned rows resume the durable server queue in order; the head
+    // goes through the retry path so a missing receipt still re-submits.
+    const runtimeHead = paused.find((message) => message.clientRequestId)
+    try {
+      if (runtimeHead && !await get().guideQueuedMessage(runtimeHead.id)) return false
+    } catch (error) {
+      if (get().activeThreadId === threadId) set({ error: describeRuntimeError(error).message })
+      return false
+    }
+    if (get().activeThreadId !== threadId) return true
+    // Local-only rows rejoin the pending queue and drain after the resumed turn.
+    set((current) => ({
+      queuedMessages: current.queuedMessages.map((message) =>
+        isResumablePausedQueuedMessage(message) && !message.clientRequestId
+          ? { ...message, deliveryState: 'pending' as const }
+          : message)
+    }))
+    runtime.persistActiveQueuedMessages()
+    await get().drainQueuedMessages()
+    return true
+  },
+
   guideQueuedMessage: async (id) => {
     if (queueMutationPending(get().activeThreadId) || threadActionSharedState.guidingQueuedMessageIds.has(id)) return false
     const state = get()
@@ -438,9 +470,10 @@ export function createThreadQueueActions(
       if (state.busy) return false
       // Runtime-parked entries (admitted, then paused by an interrupt) resume
       // the server-side queue instead of re-submitting a new turn.
-      if (message.deliveryState === 'paused' && message.clientRequestId) {
-        return get().resumeQueuedTurns()
-      }
+      // A runtime that no longer holds the turn falls through to the receipt
+      // check below, which re-submits under the same client request id.
+      if (message.deliveryState === 'paused' && message.clientRequestId &&
+        await get().resumeQueuedTurns()) return true
       const receipts = message.clientRequestId
         ? await fetchRuntimeQueuedTurnsBestEffort(getProvider(), state.activeThreadId!) : undefined
       const receipt = receipts?.find((row) => row.clientRequestId === message.clientRequestId)

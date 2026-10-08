@@ -557,6 +557,8 @@ export type ChatState = {
   reorderQueuedMessage: (id: string, targetId: string, position: 'before' | 'after') => Promise<void> | void
   /** Resume a runtime queue paused by an interrupt. */
   resumeQueuedTurns: () => Promise<boolean>
+  /** Resume every paused queued message (runtime-owned and local) in order. */
+  resumePausedQueuedMessages: () => Promise<boolean>
   guideQueuedMessage: (id: string) => Promise<boolean>
   attachExtensionComposerContext: (event: ExtensionComposerContextEvent) => void
   removeExtensionComposerContext: (attachmentId: string) => void
