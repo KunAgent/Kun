@@ -228,7 +228,7 @@ type AgentPresentation = {
 - `agent-center-presentation.test.ts`：§4.2 每一行一个用例，外加「出问题时开关保持 on」「用户自己定义的 Agent 不给内置安装命令」「Kun 一直就绪」。
 - `use-agent-enablement.test.ts`：草稿只在检查开始时写入；失败、取消、被新一次检查替换都写回原样；开关关闭的是已保存的连接。
 - `AgentDetail.test.ts`、`AgentCenterRail.test.ts`、`AgentConnectionFields.test.ts`、`AgentEnvTable.test.ts`、`AgentAddDialog.test.ts`、`agent-center-catalog.test.ts`：开关锁定 / 忙 / 开、登出提示条和登录命令、草稿栏、试运行二次确认、证明里带的检查结果、启动命令里敏感值被遮住、环境变量失焦保存与校验、敏感值只存引用、三种添加方式、草稿恢复不含敏感值、折叠与排序。
-- `agent-center-locale.test.ts`：每个 Agent 中心文案在 en / zh 都是字符串（一个键既当标签又当分组会被悄悄变成对象，这个测试和 `i18n-usage.test.ts` 的严格文件清单一起拦住它）。其余五种语言按英文兜底，待翻译。
+- `agent-center-locale.test.ts`：每个 Agent 中心文案在 en / zh 都是字符串（一个键既当标签又当分组会被悄悄变成对象，这个测试和 `i18n-usage.test.ts` 的严格文件清单一起拦住它）。其余五种语言按英文兜底，待翻译。旧文案的删除按「英文键 → 7 种语言同文件」逐一核对：删除前后每个文件的内容都等于旧内容去掉目标键。
 - 冒烟脚本：
   - `smoke-agent-enablement.mjs`（含 `agent-enablement-smoke.test.mjs` 的静态断言）：开关带 `data-agent-enable`，「检查并启用」按钮带 `data-agent-enable-step`；连接方式是 `data-agent-profile-mode-option` 单选卡；已接入的 Agent 改默认模型后先是草稿，点 `data-agent-draft-check` 才保存。
   - `smoke-development-ade-flow.cjs`：添加流程改为两步；命令路径在「启动」标签里失焦保存；原「在终端准备安装」改为接入步骤里的 `data-agent-setup-terminal`。该脚本需要完整开发构建，这次只按选择器更新，没有运行。
@@ -244,7 +244,7 @@ type AgentPresentation = {
 | U3 详情框架 | 头部、开关、更多菜单、提示条、三步接入、连接 / 模型标签、连接草稿、常驻检查结果 | 计划里的模型标签提前到这一步；草稿的写回语义见 §5.2 |
 | U4 启动 / 版本 / 检查历史 | 环境变量表（含敏感值）、实际启动命令预览、版本页重做、`readyProfiles[].readiness` | 契约从计划的 `lastReadiness` 改为复用已有的就绪证明（§6） |
 | U5 添加弹窗 | 两步添加；内置 Agent 不再走弹窗；表单加标签与预览 | 保留「改在终端里安装」和「管理模型供应商」两个入口，避免丢掉一键安装不可用时的退路 |
-| U6 清理 | 删除旧卡片模型和未用的部件，补测试 | 其余五种语言的文案先用英文兜底；`adeSettings.agentState_*` 等不再使用的旧文案未删 |
+| U6 清理 | 删除旧卡片模型和未用的部件，补测试；删除已无引用的旧文案（英文 115 个键，同步从 7 种语言的 JSON 中移除） | 其余五种语言的新增文案先用英文兜底，待翻译 |
 | 复查修复 | 见下 | — |
 
 复查后修复（2026-10-08）：
