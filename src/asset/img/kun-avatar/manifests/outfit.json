@@ -1,0 +1,600 @@
+{
+  "outfit/blue-scarf": {
+    "png": "outfit/blue-scarf.png",
+    "webp": {
+      "128": "128/outfit/blue-scarf.webp",
+      "256": "256/outfit/blue-scarf.webp",
+      "512": "512/outfit/blue-scarf.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 5,
+      "crop": {
+        "left": 660,
+        "top": 850,
+        "width": 594,
+        "height": 404
+      }
+    }
+  },
+  "outfit/black-hoodie": {
+    "png": "outfit/black-hoodie.png",
+    "webp": {
+      "128": "128/outfit/black-hoodie.webp",
+      "256": "256/outfit/black-hoodie.webp",
+      "512": "512/outfit/black-hoodie.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/mint-hoodie": {
+    "png": "outfit/mint-hoodie.png",
+    "webp": {
+      "128": "128/outfit/mint-hoodie.webp",
+      "256": "256/outfit/mint-hoodie.webp",
+      "512": "512/outfit/mint-hoodie.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 1,
+      "crop": {
+        "left": 418,
+        "top": 0,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/cream-shirt": {
+    "png": "outfit/cream-shirt.png",
+    "webp": {
+      "128": "128/outfit/cream-shirt.webp",
+      "256": "256/outfit/cream-shirt.webp",
+      "512": "512/outfit/cream-shirt.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 2,
+      "crop": {
+        "left": 836,
+        "top": 0,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/cardigan": {
+    "png": "outfit/cardigan.png",
+    "webp": {
+      "128": "128/outfit/cardigan.webp",
+      "256": "256/outfit/cardigan.webp",
+      "512": "512/outfit/cardigan.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 3,
+      "crop": {
+        "left": 0,
+        "top": 418,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/lab-coat": {
+    "png": "outfit/lab-coat.png",
+    "webp": {
+      "128": "128/outfit/lab-coat.webp",
+      "256": "256/outfit/lab-coat.webp",
+      "512": "512/outfit/lab-coat.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 4,
+      "crop": {
+        "left": 418,
+        "top": 418,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/security-jacket": {
+    "png": "outfit/security-jacket.png",
+    "webp": {
+      "128": "128/outfit/security-jacket.webp",
+      "256": "256/outfit/security-jacket.webp",
+      "512": "512/outfit/security-jacket.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 5,
+      "crop": {
+        "left": 836,
+        "top": 418,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/red-scarf": {
+    "png": "outfit/red-scarf.png",
+    "webp": {
+      "128": "128/outfit/red-scarf.webp",
+      "256": "256/outfit/red-scarf.webp",
+      "512": "512/outfit/red-scarf.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 6,
+      "crop": {
+        "left": 0,
+        "top": 836,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/cream-scarf": {
+    "png": "outfit/cream-scarf.png",
+    "webp": {
+      "128": "128/outfit/cream-scarf.webp",
+      "256": "256/outfit/cream-scarf.webp",
+      "512": "512/outfit/cream-scarf.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 7,
+      "crop": {
+        "left": 418,
+        "top": 836,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/night-scarf": {
+    "png": "outfit/night-scarf.png",
+    "webp": {
+      "128": "128/outfit/night-scarf.webp",
+      "256": "256/outfit/night-scarf.webp",
+      "512": "512/outfit/night-scarf.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 8,
+      "crop": {
+        "left": 836,
+        "top": 836,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/spacesuit": {
+    "png": "outfit/spacesuit.png",
+    "webp": {
+      "128": "128/outfit/spacesuit.webp",
+      "256": "256/outfit/spacesuit.webp",
+      "512": "512/outfit/spacesuit.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/pilot-jacket": {
+    "png": "outfit/pilot-jacket.png",
+    "webp": {
+      "128": "128/outfit/pilot-jacket.webp",
+      "256": "256/outfit/pilot-jacket.webp",
+      "512": "512/outfit/pilot-jacket.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 1,
+      "crop": {
+        "left": 418,
+        "top": 0,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/sailor-shirt": {
+    "png": "outfit/sailor-shirt.png",
+    "webp": {
+      "128": "128/outfit/sailor-shirt.webp",
+      "256": "256/outfit/sailor-shirt.webp",
+      "512": "512/outfit/sailor-shirt.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 2,
+      "crop": {
+        "left": 836,
+        "top": 0,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/overalls": {
+    "png": "outfit/overalls.png",
+    "webp": {
+      "128": "128/outfit/overalls.webp",
+      "256": "256/outfit/overalls.webp",
+      "512": "512/outfit/overalls.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 3,
+      "crop": {
+        "left": 0,
+        "top": 418,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/chef-coat": {
+    "png": "outfit/chef-coat.png",
+    "webp": {
+      "128": "128/outfit/chef-coat.webp",
+      "256": "256/outfit/chef-coat.webp",
+      "512": "512/outfit/chef-coat.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 4,
+      "crop": {
+        "left": 418,
+        "top": 418,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/nurse-uniform": {
+    "png": "outfit/nurse-uniform.png",
+    "webp": {
+      "128": "128/outfit/nurse-uniform.webp",
+      "256": "256/outfit/nurse-uniform.webp",
+      "512": "512/outfit/nurse-uniform.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 5,
+      "crop": {
+        "left": 836,
+        "top": 418,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/camera-shirt": {
+    "png": "outfit/camera-shirt.png",
+    "webp": {
+      "128": "128/outfit/camera-shirt.webp",
+      "256": "256/outfit/camera-shirt.webp",
+      "512": "512/outfit/camera-shirt.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 6,
+      "crop": {
+        "left": 0,
+        "top": 836,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/sports-vest": {
+    "png": "outfit/sports-vest.png",
+    "webp": {
+      "128": "128/outfit/sports-vest.webp",
+      "256": "256/outfit/sports-vest.webp",
+      "512": "512/outfit/sports-vest.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 7,
+      "crop": {
+        "left": 418,
+        "top": 836,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/storyteller-cape": {
+    "png": "outfit/storyteller-cape.png",
+    "webp": {
+      "128": "128/outfit/storyteller-cape.webp",
+      "256": "256/outfit/storyteller-cape.webp",
+      "512": "512/outfit/storyteller-cape.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 8,
+      "crop": {
+        "left": 836,
+        "top": 836,
+        "width": 418,
+        "height": 418
+      }
+    }
+  },
+  "outfit/wizard-cape": {
+    "png": "outfit/wizard-cape.png",
+    "webp": {
+      "128": "128/outfit/wizard-cape.webp",
+      "256": "256/outfit/wizard-cape.webp",
+      "512": "512/outfit/wizard-cape.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 660,
+        "height": 433
+      }
+    }
+  },
+  "outfit/coffee-apron": {
+    "png": "outfit/coffee-apron.png",
+    "webp": {
+      "128": "128/outfit/coffee-apron.webp",
+      "256": "256/outfit/coffee-apron.webp",
+      "512": "512/outfit/coffee-apron.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 1,
+      "crop": {
+        "left": 660,
+        "top": 0,
+        "width": 594,
+        "height": 433
+      }
+    }
+  },
+  "outfit/tool-apron": {
+    "png": "outfit/tool-apron.png",
+    "webp": {
+      "128": "128/outfit/tool-apron.webp",
+      "256": "256/outfit/tool-apron.webp",
+      "512": "512/outfit/tool-apron.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 2,
+      "crop": {
+        "left": 0,
+        "top": 433,
+        "width": 660,
+        "height": 417
+      }
+    }
+  },
+  "outfit/mailbag": {
+    "png": "outfit/mailbag.png",
+    "webp": {
+      "128": "128/outfit/mailbag.webp",
+      "256": "256/outfit/mailbag.webp",
+      "512": "512/outfit/mailbag.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 3,
+      "crop": {
+        "left": 660,
+        "top": 433,
+        "width": 594,
+        "height": 417
+      }
+    }
+  },
+  "outfit/robe": {
+    "png": "outfit/robe.png",
+    "webp": {
+      "128": "128/outfit/robe.webp",
+      "256": "256/outfit/robe.webp",
+      "512": "512/outfit/robe.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-worn-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 4,
+      "crop": {
+        "left": 0,
+        "top": 850,
+        "width": 660,
+        "height": 404
+      }
+    }
+  },
+  "outfit/storyteller-cape.back": {
+    "png": "outfit/storyteller-cape.back.png",
+    "webp": {
+      "128": "128/outfit/storyteller-cape.back.webp",
+      "256": "256/outfit/storyteller-cape.back.webp",
+      "512": "512/outfit/storyteller-cape.back.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "clothes-c.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 826,
+        "top": 458,
+        "width": 428,
+        "height": 372
+      }
+    }
+  },
+  "outfit/wizard-cape.back": {
+    "png": "outfit/wizard-cape.back.png",
+    "webp": {
+      "128": "128/outfit/wizard-cape.back.webp",
+      "256": "256/outfit/wizard-cape.back.webp",
+      "512": "512/outfit/wizard-cape.back.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "clothes-c.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 830,
+        "width": 439,
+        "height": 424
+      }
+    }
+  }
+}

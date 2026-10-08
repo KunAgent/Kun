@@ -2,11 +2,13 @@ import { useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Ban, Check, PaintBucket, Palette, RotateCcw, Smile, Sparkles, Upload, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
-  KUN_AVATAR_CATALOG, KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS,
+  KUN_AVATAR_CATALOG, KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS, KUN_AVATAR_SCENES,
+  KUN_AVATAR_RARITIES, KUN_AVATAR_RARITY_LABELS,
   canonicalKunAvatarKey, normalizeKunAvatarParts, randomKunAvatarParts, updateKunAvatarPart,
-  type KunAvatarAccessoryCategory, type KunAvatarCategory, type KunAvatarParts, type RoomAvatarReference
+  type KunAvatarAccessoryCategory, type KunAvatarCategory, type KunAvatarParts, type KunAvatarRarity, type RoomAvatarReference
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
+import { composedAvatarLayerUrl } from './room-avatar-compositor'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
 import { AVATAR_SLOTS, RoomAvatarStage } from './RoomAvatarStage'
 import { avatarForIdentity } from './room-avatar-catalog'
@@ -65,12 +67,18 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
     }) : '')
   }
   const tryOn = (next: KunAvatarParts | null) => { if (!disabled) setTrying(next) }
-  const card = (key: string, text: string, selected: boolean, art: ReactNode, onClick: () => void, look?: KunAvatarParts) => (
+  const card = (key: string, text: string, selected: boolean, art: ReactNode, onClick: () => void, look?: KunAvatarParts, details?: { rarity: KunAvatarRarity; flavor: string }) => (
     <button key={key} type="button" className="rooms-avatar-composer-option" disabled={disabled}
-      aria-label={text} aria-pressed={selected} onClick={onClick}
+      aria-label={text} aria-pressed={selected} onClick={onClick} data-rarity={details?.rarity}
+      title={details ? `${KUN_AVATAR_RARITY_LABELS[details.rarity][language]} · ${details.flavor}` : undefined}
+      aria-description={details ? KUN_AVATAR_RARITY_LABELS[details.rarity][language] : undefined}
       onPointerEnter={look ? () => tryOn(look) : undefined} onPointerLeave={look ? () => tryOn(null) : undefined}>
       <span className="rooms-avatar-option-art">{art}</span>
       <span className="rooms-avatar-option-name">{text}</span>
+      {details ? <span className="rooms-avatar-option-rarity">
+        <span aria-hidden="true">{'◆'.repeat(KUN_AVATAR_RARITIES.indexOf(details.rarity) + 1)}</span>
+        {KUN_AVATAR_RARITY_LABELS[details.rarity][language]}
+      </span> : null}
       {selected ? <span className="rooms-avatar-option-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span> : null}
     </button>
   )
@@ -110,9 +118,18 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
         <button type="button" disabled={disabled} className="rooms-avatar-composer-transparent"
           aria-pressed={active && parts.bg === 'transparent'} onClick={() => edit('bg', 'transparent')}>{t('roomsAvatarTransparent')}</button>
         <label className="rooms-avatar-composer-custom-color">{t('roomsAvatarCustomBackground')}
-          <input type="color" disabled={disabled} value={parts.bg === 'transparent' ? '#f7f5ef' : parts.bg}
+          <input type="color" disabled={disabled} value={parts.bg.startsWith('#') ? parts.bg : '#f7f5ef'}
             onChange={(event) => edit('bg', event.target.value)} />
         </label>
+        <div className="rooms-avatar-scene-options">
+          {KUN_AVATAR_SCENES.map((scene) => {
+            const background = `scene:${scene.id}`
+            const next = updateKunAvatarPart(parts, 'bg', background).parts
+            return card(scene.id, scene.label[language], active && parts.bg === background,
+              <img className="rooms-avatar-scene-art" src={composedAvatarLayerUrl(`scene/${scene.id}`, 128)}
+                alt="" draggable={false} loading="lazy" />, () => edit('bg', background), next)
+          })}
+        </div>
       </>
     }
     const slot = category
@@ -122,10 +139,10 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
       {KUN_AVATAR_CATALOG[slot].map((part) => {
         const worn = active && parts[slot] === part.id
         // Clicking what is already worn takes it off, like any wardrobe.
-        const art = slot === 'outfit' ? <RoomAvatarItemArt category={slot} id={part.id} size={88} height={56} mannequin={parts.color} />
-          : <RoomAvatarItemArt category={slot} id={part.id} size={54} />
+        const art = <RoomAvatarItemArt category={slot} id={part.id} size={60} />
         return card(part.id, part.label[language], worn, art,
-          () => edit(slot, worn ? undefined : part.id), updateKunAvatarPart(parts, slot, part.id).parts)
+          () => edit(slot, worn ? undefined : part.id), updateKunAvatarPart(parts, slot, part.id).parts,
+          { rarity: part.rarity, flavor: part.flavor[language] })
       })}
     </>
   }

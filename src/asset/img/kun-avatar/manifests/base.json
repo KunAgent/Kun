@@ -1,0 +1,94 @@
+{
+  "base/sky": {
+    "png": "base/sky.png",
+    "webp": {
+      "128": "128/base/sky.webp",
+      "256": "256/base/sky.webp",
+      "512": "512/base/sky.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "body.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1224
+      }
+    }
+  },
+  "base/teal": {
+    "png": "base/teal.png",
+    "webp": {
+      "128": "128/base/teal.webp",
+      "256": "256/base/teal.webp",
+      "512": "512/base/teal.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 418,
+        "height": 539
+      }
+    }
+  },
+  "base/periwinkle": {
+    "png": "base/periwinkle.png",
+    "webp": {
+      "128": "128/base/periwinkle.webp",
+      "256": "256/base/periwinkle.webp",
+      "512": "512/base/periwinkle.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 418,
+        "top": 0,
+        "width": 418,
+        "height": 539
+      }
+    }
+  },
+  "base/mint": {
+    "png": "base/mint.png",
+    "webp": {
+      "128": "128/base/mint.webp",
+      "256": "256/base/mint.webp",
+      "512": "512/base/mint.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 836,
+        "top": 0,
+        "width": 418,
+        "height": 539
+      }
+    }
+  }
+}

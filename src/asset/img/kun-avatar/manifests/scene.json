@@ -1,0 +1,278 @@
+{
+  "scene/sunset-bay": {
+    "png": "scene/sunset-bay.png",
+    "webp": {
+      "128": "128/scene/sunset-bay.webp",
+      "256": "256/scene/sunset-bay.webp",
+      "512": "512/scene/sunset-bay.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 3,
+        "top": 3,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/sunset-bay.small": {
+    "png": "scene/sunset-bay.small.png",
+    "webp": {
+      "128": "128/scene/sunset-bay.small.webp",
+      "256": "256/scene/sunset-bay.small.webp",
+      "512": "512/scene/sunset-bay.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 3,
+        "top": 3,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/night-study": {
+    "png": "scene/night-study.png",
+    "webp": {
+      "128": "128/scene/night-study.webp",
+      "256": "256/scene/night-study.webp",
+      "512": "512/scene/night-study.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 515,
+        "top": 3,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/night-study.small": {
+    "png": "scene/night-study.small.png",
+    "webp": {
+      "128": "128/scene/night-study.small.webp",
+      "256": "256/scene/night-study.small.webp",
+      "512": "512/scene/night-study.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 515,
+        "top": 3,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/star-deck": {
+    "png": "scene/star-deck.png",
+    "webp": {
+      "128": "128/scene/star-deck.webp",
+      "256": "256/scene/star-deck.webp",
+      "512": "512/scene/star-deck.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 1027,
+        "top": 3,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/star-deck.small": {
+    "png": "scene/star-deck.small.png",
+    "webp": {
+      "128": "128/scene/star-deck.small.webp",
+      "256": "256/scene/star-deck.small.webp",
+      "512": "512/scene/star-deck.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 1027,
+        "top": 3,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/cafe": {
+    "png": "scene/cafe.png",
+    "webp": {
+      "128": "128/scene/cafe.webp",
+      "256": "256/scene/cafe.webp",
+      "512": "512/scene/cafe.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 3,
+        "top": 515,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/cafe.small": {
+    "png": "scene/cafe.small.png",
+    "webp": {
+      "128": "128/scene/cafe.small.webp",
+      "256": "256/scene/cafe.small.webp",
+      "512": "512/scene/cafe.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 3,
+        "top": 515,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/laboratory": {
+    "png": "scene/laboratory.png",
+    "webp": {
+      "128": "128/scene/laboratory.webp",
+      "256": "256/scene/laboratory.webp",
+      "512": "512/scene/laboratory.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 515,
+        "top": 515,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/laboratory.small": {
+    "png": "scene/laboratory.small.png",
+    "webp": {
+      "128": "128/scene/laboratory.small.webp",
+      "256": "256/scene/laboratory.small.webp",
+      "512": "512/scene/laboratory.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 515,
+        "top": 515,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/forest-cabin": {
+    "png": "scene/forest-cabin.png",
+    "webp": {
+      "128": "128/scene/forest-cabin.webp",
+      "256": "256/scene/forest-cabin.webp",
+      "512": "512/scene/forest-cabin.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 1027,
+        "top": 515,
+        "width": 506,
+        "height": 506
+      }
+    }
+  },
+  "scene/forest-cabin.small": {
+    "png": "scene/forest-cabin.small.png",
+    "webp": {
+      "128": "128/scene/forest-cabin.small.webp",
+      "256": "256/scene/forest-cabin.small.webp",
+      "512": "512/scene/forest-cabin.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-scenes.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 1027,
+        "top": 515,
+        "width": 506,
+        "height": 506
+      }
+    }
+  }
+}

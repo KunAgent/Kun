@@ -1,13 +1,45 @@
 #!/usr/bin/env node
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import ts from 'typescript'
+import { assetPath, avatarAssetSpec, detectAvatarEdgeHalo, requiredAvatarAssets,
+  validateAvatarBudget, validateAvatarIconMargins, validateAvatarProvenance,
+  visibleAlphaBounds } from './kun-avatar-art-validation.mjs'
+import { generateAvatarArtQa } from './kun-avatar-art-qa.mjs'
+export { requiredAvatarAssets } from './kun-avatar-art-validation.mjs'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const defaultAssetRoot = resolve(projectRoot, 'src/asset/img/kun-avatar')
-const tiers = [128, 256, 512]
+
+/** Read only the family files declared by the index; never silently overwrite a layer. */
+export async function loadAvatarManifest(root = defaultAssetRoot) {
+  const manifest = JSON.parse(await readFile(resolve(root, 'manifest.json'), 'utf8'))
+  if (manifest.assets || !Array.isArray(manifest.assetManifests) || !manifest.assetManifests.length) {
+    throw new Error('Avatar manifest must declare nonempty assetManifests without inline assets')
+  }
+  const assets = Object.create(null)
+  const seen = new Set()
+  for (const path of manifest.assetManifests) {
+    const file = assetPath(root, path)
+    if (!/^manifests\/[a-z][a-z-]*\.json$/.test(path)) throw new Error(`Invalid avatar family manifest: ${path}`)
+    if (seen.has(path)) throw new Error(`Duplicate avatar family manifest: ${path}`)
+    seen.add(path)
+    const family = JSON.parse(await readFile(file, 'utf8'))
+    if (!family || typeof family !== 'object' || Array.isArray(family) || !Object.keys(family).length) {
+      throw new Error(`Avatar family manifest must contain an asset map: ${path}`)
+    }
+    for (const [key, entry] of Object.entries(family)) {
+      if (Object.hasOwn(assets, key)) throw new Error(`Duplicate avatar asset in family manifests: ${key}`)
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error(`Invalid avatar asset entry: ${key}`)
+      const expected = `manifests/${key.startsWith('icon/') ? key.split('/').slice(0, 2).join('-') : key.split('/')[0]}.json`
+      if (path !== expected) throw new Error(`Avatar asset ${key} belongs in ${expected}, not ${path}`)
+      assets[key] = entry
+    }
+  }
+  return { ...manifest, assets }
+}
 
 /** Load the same pure-data catalog as the application without requiring a Kun build. */
 export async function loadAvatarCatalog(root = projectRoot) {
@@ -19,41 +51,6 @@ export async function loadAvatarCatalog(root = projectRoot) {
   const presetSource = (await readFile(resolve(contracts, 'kun-avatar-presets.ts'), 'utf8'))
     .replace("'./kun-avatar-catalog.js'", JSON.stringify(catalogUrl))
   return { ...await import(catalogUrl), ...await import(moduleUrl(presetSource)) }
-}
-
-export function requiredAvatarAssets(catalog) {
-  const keys = []
-  for (const { id } of catalog.color) keys.push(`base/${id}`, `crest/${id}`, `crest/tucked-${id}`, `wing/${id}`)
-  for (const { id } of catalog.face) keys.push(`face/${id}`)
-  for (const category of ['headwear', 'glasses', 'outfit', 'prop']) {
-    for (const part of catalog[category]) {
-      keys.push(`${category}/${part.id}`)
-      if (part.hasBack) keys.push(`${category}/${part.id}.back`)
-    }
-  }
-  return keys
-}
-
-function assetPath(root, path) {
-  if (typeof path !== 'string' || !path || isAbsolute(path) || path.includes('\\') ||
-    path.split('/').some((segment) => !segment || segment === '.' || segment === '..')) {
-    throw new Error(`Invalid avatar asset path: ${String(path)}`)
-  }
-  const target = resolve(root, path)
-  if (relative(root, target).startsWith(`..${sep}`)) throw new Error(`Avatar asset escapes its directory: ${path}`)
-  return target
-}
-
-async function visibleAlphaBounds(file, threshold) {
-  const { data, info } = await sharp(file).extractChannel('alpha').raw().toBuffer({ resolveWithObject: true })
-  let left = info.width, top = info.height, right = -1, bottom = -1
-  for (let y = 0; y < info.height; y++) for (let x = 0; x < info.width; x++) {
-    if (data[y * info.width + x] < threshold) continue
-    left = Math.min(left, x); top = Math.min(top, y)
-    right = Math.max(right, x); bottom = Math.max(bottom, y)
-  }
-  if (right < left) throw new Error(`No visible pixels at alpha >= ${threshold}: ${file}`)
-  return [left, top, right + 1, bottom + 1]
 }
 
 /** Compare exported registration bounds, not internal contours or anatomical landmarks. */
@@ -105,11 +102,13 @@ export async function validateAvatarManifest(manifest, shared, root = defaultAss
         const entry = manifest.parts.find((item) => item.id === part.id && (item.category ?? item.layer) === category)
         assert(Boolean(entry), `Missing manifest metadata: ${category}/${part.id}`)
         if (!entry) continue
-        for (const field of ['hasBack', 'hidesCrest', 'crest']) {
+        for (const field of ['hasBack', 'hidesCrest', 'crest', 'rarity', 'set']) {
           assert(entry[field] === part[field], `Manifest/catalog mismatch: ${category}/${part.id}.${field}`)
         }
         assert(JSON.stringify(entry.excludes) === JSON.stringify(part.excludes),
           `Manifest/catalog mismatch: ${category}/${part.id}.excludes`)
+        assert(JSON.stringify(entry.flavor) === JSON.stringify(part.flavor),
+          `Manifest/catalog mismatch: ${category}/${part.id}.flavor`)
       }
     }
   }
@@ -119,21 +118,34 @@ export async function validateAvatarManifest(manifest, shared, root = defaultAss
   const seen = new Set()
   for (const key of required) {
     const entry = assets[key]
-    for (const size of [1024, ...tiers]) {
-      const path = size === 1024 ? entry.png : entry.webp?.[size]
+    const spec = avatarAssetSpec(key)
+    assert((entry.canvas ?? 1024) === spec.canvas, `${key}: expected canvas ${spec.canvas}`)
+    for (const [size, format] of [[spec.canvas, 'png'], ...spec.tiers.map((size) => [size, 'webp'])]) {
+      const path = format === 'png' ? entry.png : entry.webp?.[size]
       try {
         const file = assetPath(root, path)
         assert(!seen.has(path), `Layers share a file unexpectedly: ${path}`)
         seen.add(path)
         const [metadata, statistics, info] = await Promise.all([sharp(file).metadata(), sharp(file).stats(), stat(file)])
         assert(metadata.width === size && metadata.height === size, `${path}: expected ${size}x${size}`)
-        assert(metadata.format === (size === 1024 ? 'png' : 'webp'), `${path}: incorrect encoded format`)
-        assert(metadata.hasAlpha && metadata.channels === 4, `${path}: expected RGBA`)
+        assert(metadata.format === format, `${path}: incorrect encoded format`)
         const alpha = metadata.hasAlpha ? statistics.channels.at(-1) : undefined
-        assert(alpha && alpha.min === 0 && alpha.max > 0, `${path}: requires both transparent and visible pixels`)
-        if (size === 1024) pngBytes += info.size
-        else webpBytes += info.size
-        files.push({ key, path, size, bytes: info.size })
+        if (spec.transparent) {
+          assert(metadata.hasAlpha && metadata.channels === 4, `${path}: expected RGBA`)
+          assert(alpha && alpha.min === 0 && alpha.max > 0, `${path}: requires both transparent and visible pixels`)
+        } else {
+          assert(!alpha || alpha.min === 255, `${path}: scene/card art must cover the entire canvas`)
+        }
+        if (format === 'png') {
+          pngBytes += info.size
+          if (key.startsWith('icon/')) await validateAvatarIconMargins(file)
+          if (spec.transparent && !key.startsWith('fx/') && key !== 'container/bottle-glow') {
+            const halo = await detectAvatarEdgeHalo(file)
+            assert(!halo.failed, `${path}: pale alpha edge halo (${halo.palePixels} pixels, ` +
+              `${Math.round(halo.ratio * 100)}% of semitransparent edge)`)
+          }
+        } else webpBytes += info.size
+        files.push({ key, path, size, format, bytes: info.size })
       } catch (error) {
         errors.push(`${key} (${size}): ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -161,10 +173,18 @@ export async function validateAvatarManifest(manifest, shared, root = defaultAss
   for (const preset of shared.KUN_AVATAR_PRESETS) {
     assert(shared.getKunAvatarConflicts(preset.parts).length === 0, `Invalid preset combination: ${preset.id}`)
     for (const key of shared.kunAvatarLayerKeys(preset.parts)) assert(Object.hasOwn(assets, key), `Preset layer missing: ${key}`)
+    for (const size of [24, 34, 48, 96]) {
+      for (const key of shared.kunAvatarLayerKeys(preset.parts, { size, effects: true })) {
+        assert(Object.hasOwn(assets, key), `Preset ${preset.id} at ${size}px references missing layer: ${key}`)
+      }
+    }
   }
   if (errors.length) throw new Error(errors.join('\n'))
   const alignment = await validateAvatarColorAlignment(manifest, shared.KUN_AVATAR_CATALOG.color, root)
-  return { layers: required.length, fileCount: files.length, pngBytes, webpBytes, legalPairs, excludedPairs, alignment, files }
+  const budget = validateAvatarBudget(webpBytes)
+  const provenance = await validateAvatarProvenance(manifest, root)
+  return { layers: required.length, fileCount: files.length, pngBytes, webpBytes,
+    legalPairs, excludedPairs, alignment, budget, provenance, files }
 }
 
 const escapeXml = (value) => String(value).replace(/[<>&"']/g,
@@ -182,12 +202,16 @@ function backgroundSvg(width, height, color) {
     `</pattern></defs><rect width="100%" height="100%" fill="${fill}"/></svg>`)
 }
 
-async function compose(manifest, shared, root, parts) {
-  const layers = shared.kunAvatarLayerKeys(parts).map((key) => ({
-    input: assetPath(root, manifest.assets[key].webp[512]), left: 0, top: 0
-  }))
+async function compose(manifest, shared, root, parts, options = {}) {
+  const tier = options.size <= 48 ? 128 : 512
+  const keys = shared.kunAvatarLayerKeys(parts, options.legacy ? {} : options)
+  const layers = await Promise.all(keys.map(async (key) => ({
+    input: tier === 512 ? assetPath(root, manifest.assets[key].webp[tier])
+      : await sharp(assetPath(root, manifest.assets[key].webp[tier])).resize(512, 512).png().toBuffer(),
+    left: 0, top: 0
+  })))
   return sharp({ create: { width: 512, height: 512, channels: 4,
-    background: parts.bg === 'transparent' ? { r: 0, g: 0, b: 0, alpha: 0 } : parts.bg } })
+    background: parts.bg === 'transparent' || parts.bg.startsWith('scene:') ? { r: 0, g: 0, b: 0, alpha: 0 } : parts.bg } })
     .composite(layers).png().toBuffer()
 }
 
@@ -217,7 +241,6 @@ export async function generateAvatarQa(manifest, shared, root, output, repo = pr
   const atlasRoot = resolve(repo, 'src/asset/img/room-avatars')
   const atlasInfo = JSON.parse(await readFile(resolve(atlasRoot, 'avatars.json'), 'utf8'))
   const comparison = []
-  const presetImages = new Map()
   for (const preset of shared.KUN_AVATAR_PRESETS) {
     const old = atlasInfo.avatars.find((avatar) => avatar.id === preset.id)
     if (!old) throw new Error(`Legacy atlas lacks preset: ${preset.id}`)
@@ -227,7 +250,6 @@ export async function generateAvatarQa(manifest, shared, root, output, repo = pr
       width: atlasInfo.displaySize, height: atlasInfo.displaySize
     }).resize(144, 144).png().toBuffer()
     const composed = await compose(manifest, shared, root, { ...preset.parts, bg: 'transparent' })
-    presetImages.set(preset.id, composed)
     const nextPortrait = await portrait(composed, 144, manifest)
     const pair = await sharp({ create: { width: 288, height: 144, channels: 4, background: '#f7f5ef' } })
       .composite([{ input: oldPortrait, left: 0, top: 0 }, { input: nextPortrait, left: 144, top: 0 }]).png().toBuffer()
@@ -252,10 +274,12 @@ export async function generateAvatarQa(manifest, shared, root, output, repo = pr
       label: `${face.id} / ${color.id}` })
   }
   await writeGrid(resolve(output, 'body-expression-all-colors.png'), expressions, 4, 192, 200)
+  await generateAvatarArtQa({ manifest, shared, root, output, compose, portrait, writeGrid, backgroundSvg })
   for (const [background, color] of [['light', '#f7f5ef'], ['dark', '#142037'], ['transparent', 'transparent']]) {
     const cells = []
     for (const preset of shared.KUN_AVATAR_PRESETS) for (const size of [24, 34, 48, 96]) {
-      const image = await portrait(presetImages.get(preset.id), size, manifest, size <= 48)
+      const image = await portrait(await compose(manifest, shared, root, { ...preset.parts, bg: 'transparent' },
+        { size }), size, manifest, size <= 48)
       const tile = await sharp(backgroundSvg(112, 104, color)).composite([
         { input: image, left: Math.floor((112 - size) / 2), top: Math.floor((104 - size) / 2) }
       ]).png().toBuffer()
@@ -277,7 +301,7 @@ async function main() {
   }
   const outIndex = args.indexOf('--out')
   const output = outIndex < 0 ? resolve(projectRoot, '.cache/kun-avatar-qa') : resolve(args[outIndex + 1])
-  const manifest = JSON.parse(await readFile(resolve(defaultAssetRoot, 'manifest.json'), 'utf8'))
+  const manifest = await loadAvatarManifest()
   const shared = await loadAvatarCatalog()
   const result = await validateAvatarManifest(manifest, shared)
   if (!args.includes('--check-only')) {

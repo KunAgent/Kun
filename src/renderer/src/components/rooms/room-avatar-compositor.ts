@@ -1,29 +1,32 @@
 import {
   canonicalKunAvatarKey,
   kunAvatarLayerKeys,
+  kunAvatarScene,
   normalizeKunAvatarParts,
-  type KunAvatarParts
+  type KunAvatarParts,
+  type KunAvatarRenderOptions
 } from '@shared/rooms-api'
 import rawManifest from '../../../../asset/img/kun-avatar/manifest.json'
 import { AvatarCompositionCache, type AvatarCompositionResource } from './room-avatar-composition-cache'
 import { renderAvatarComposition } from './room-avatar-composition-canvas'
-
-interface AvatarManifest {
-  version: string
-  canvas: number
-  anchors: { faceBox: number[] }
-  assets: Record<string, { webp: Record<string, string> }>
-}
+import { loadAvatarManifest } from './room-avatar-manifest'
 
 export interface AvatarRenderRequest {
   key: string
   parts: KunAvatarParts
   pixels: number
   compact: boolean
+  size: number
+  effects: boolean
 }
 
-const manifest: AvatarManifest = rawManifest
 const assetPrefix = '../../../../asset/img/kun-avatar/'
+const manifestGroups = import.meta.glob('../../../../asset/img/kun-avatar/manifests/*.json', {
+  eager: true, import: 'default'
+}) as Record<string, unknown>
+const manifest = loadAvatarManifest(rawManifest, Object.fromEntries(
+  Object.entries(manifestGroups).map(([path, value]) => [path.slice(assetPrefix.length), value])
+))
 const assetUrls = import.meta.glob('../../../../asset/img/kun-avatar/**/*.webp', {
   eager: true,
   // Even tiny layers stay external: opening the app must not inline every outfit.
@@ -33,20 +36,23 @@ const assetUrls = import.meta.glob('../../../../asset/img/kun-avatar/**/*.webp',
 
 export const composedAvatarCache = new AvatarCompositionCache()
 
-export function avatarRenderRequest(parts: KunAvatarParts, size: number, dpr: number): AvatarRenderRequest {
+export function avatarRenderRequest(parts: KunAvatarParts, size: number, dpr: number, effects = false): AvatarRenderRequest {
   const normalized = normalizeKunAvatarParts(parts)
   const pixels = Math.max(1, Math.min(2048, Math.ceil(size * Math.max(1, dpr || 1))))
   const compact = size <= 48
+  const showEffects = effects && size >= 96
   return {
-    key: `${manifest.version}:${canonicalKunAvatarKey(normalized)}:${pixels}:${compact ? 'face' : 'full'}`,
+    key: `${manifest.version}:${canonicalKunAvatarKey(normalized)}:${pixels}:${size}:${showEffects ? 'effects' : 'plain'}`,
     parts: normalized,
     pixels,
-    compact
+    compact,
+    size,
+    effects: showEffects
   }
 }
 
-export function composedAvatarLayers(parts: KunAvatarParts): string[] {
-  return kunAvatarLayerKeys(parts)
+export function composedAvatarLayers(parts: KunAvatarParts, options: KunAvatarRenderOptions = {}): string[] {
+  return kunAvatarLayerKeys(parts, options)
 }
 
 export function composedAvatarSourceTier(request: AvatarRenderRequest): 128 | 256 | 512 {
@@ -73,14 +79,14 @@ async function composeQueued(request: AvatarRenderRequest, isNeeded: () => boole
 }
 
 /** One bundled layer by manifest key; the wardrobe shows accessories on their own. */
-export function composedAvatarLayerUrl(key: string, tier: 128 | 256 | 512): string | undefined {
+export function composedAvatarLayerUrl(key: string, tier: 96 | 128 | 256 | 512): string | undefined {
   const path = manifest.assets[key]?.webp[String(tier)]
   return path ? assetUrls[`${assetPrefix}${path}`] : undefined
 }
 
 export async function composeAvatar(request: AvatarRenderRequest): Promise<AvatarCompositionResource> {
   const tier = composedAvatarSourceTier(request)
-  const urls = composedAvatarLayers(request.parts).map((key) => {
+  const urls = composedAvatarLayers(request.parts, request).map((key) => {
     const path = manifest.assets[key]?.webp[String(tier)]
     const url = path && assetUrls[`${assetPrefix}${path}`]
     if (!url) throw new Error(`Missing avatar layer: ${key} (${tier})`)
@@ -90,7 +96,7 @@ export async function composeAvatar(request: AvatarRenderRequest): Promise<Avata
     pixels: request.pixels,
     canvas: manifest.canvas,
     crop: request.compact ? manifest.anchors.faceBox : undefined,
-    bg: request.parts.bg
+    bg: kunAvatarScene(request.parts.bg) ? 'transparent' : request.parts.bg
   })
 }
 

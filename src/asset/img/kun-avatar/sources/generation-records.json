@@ -82,6 +82,460 @@
       "height": 1254,
       "sha256": "9dec8ab9bb311844bdbe2ff98d36c06f4d55f6bdcfc5d03c1f2f8b04839dbb4c",
       "promptSummary": "Nine isolated handheld objects without fingers or bodies"
+    },
+    {
+      "file": "polish-icons-clothes-a.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "9405234800717cb89b0eebc221e0e79267f3893ccc1b93c0441904d2a897a0d7",
+      "promptSummary": "Nine complete flat-lay garment icons: charcoal and mint hoodies, cream shirt/cardigan, lab/security coats, red/ivory/moon scarves; original colors and identifiers preserved.",
+      "created": "2026-10-08",
+      "tool": "image_gen.imagegen",
+      "transparentBackground": true,
+      "references": [
+        "clothes-a.png",
+        "../room-avatars/kun-avatar-atlas.png"
+      ]
+    },
+    {
+      "file": "polish-icons-clothes-b.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "5b3ebdce678b12752898a3e765b5347ef7ade70bc24617469d5d58dceaff93e7",
+      "promptSummary": "Nine complete garment icons: spacesuit, pilot, sailor, gardener, chef, nurse, photographer without embedded camera, sport vest, storyteller cape.",
+      "created": "2026-10-08",
+      "tool": "image_gen.imagegen",
+      "transparentBackground": true,
+      "references": [
+        "clothes-b.png",
+        "camera-shirt.png"
+      ]
+    },
+    {
+      "file": "polish-icons-clothes-c.png",
+      "width": 1024,
+      "height": 1536,
+      "sha256": "fa9c3daebfdfd73fd293c149bbebcf5e58f92b2df6350cf58d168964ac61ce65",
+      "promptSummary": "Six complete garment icons: wizard cape, coffee/tool aprons, mailbag, ivory robe, blue scarf.",
+      "created": "2026-10-08",
+      "tool": "image_gen.imagegen",
+      "transparentBackground": true,
+      "references": [
+        "clothes-c.png",
+        "accessories.png"
+      ]
+    },
+    {
+      "file": "polish-faces.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "d96edcffd62ef600581bac5b77ff06a27f379c22b8817b4362b0ae0b63635383",
+      "promptSummary": "Four transparent feature-only expressions: surprised, wink, focused, sleepy; same eyes/beak/blush style, no body.",
+      "created": "2026-10-08",
+      "tool": "image_gen.imagegen",
+      "transparentBackground": true,
+      "references": [
+        "features.png"
+      ]
+    },
+    {
+      "file": "polish-scenes.png",
+      "width": 1536,
+      "height": 1024,
+      "sha256": "e94cdf4638da85d7f8b5c61a87fa83c01db53cfa8ebc3364b34f562a5e17997c",
+      "promptSummary": "Six low-contrast edge-to-edge themed backgrounds: sunset bay, night study, star deck, cafe, laboratory, forest cabin. Bird-free center reserved for avatar.",
+      "created": "2026-10-08",
+      "tool": "image_gen.imagegen",
+      "transparentBackground": false,
+      "references": [
+        "../room-avatars/kun-avatar-atlas.png"
+      ]
+    },
+    {
+      "file": "polish-bottles.png",
+      "width": 1374,
+      "height": 1145,
+      "sha256": "79ced19d0c17f084c707b285ce28d73e037b38d288fe01c1b6223294d24f564f",
+      "promptSummary": "Same illustrated sea-glass message bottle in sealed, glowing, open states; fourth cell independent white glow for UI tinting.",
+      "created": "2026-10-08",
+      "tool": "image_gen.imagegen",
+      "transparentBackground": true,
+      "references": [
+        "../room-avatars/kun-avatar-atlas.png"
+      ]
+    },
+    {
+      "file": "polish-fx.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "1cb552b832eb36d6235167e7cac5e6c3ec28d6d205209ca9911ad3fbbe991e45",
+      "promptSummary": "Sparse transparent purple/gold edge twinkles, two square cells, inner center empty for face visibility.",
+      "created": "2026-10-08",
+      "tool": "image_gen.imagegen",
+      "transparentBackground": true,
+      "references": [
+        "../room-avatars/kun-avatar-atlas.png"
+      ]
+    },
+    {
+      "file": "polish-glasses-small.png",
+      "width": 1536,
+      "height": 1024,
+      "sha256": "3b7d0c851c9ff877e4b5f3e0b59d71476ce017687440b3840ffd2a616d487af6",
+      "promptSummary": "Five front-view 1.5x bold eyeglass frames with no lens glare, transparent lenses; simplified for compact avatar.",
+      "created": "2026-10-08",
+      "tool": "image_gen.imagegen",
+      "transparentBackground": true,
+      "references": [
+        "accessories.png"
+      ]
+    },
+    {
+      "file": "polish-card-back.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "378c34811203839b3e31a61df717d72bfcd34dd82ba741b762eb923081edb3b2",
+      "promptSummary": "Opaque illustrated navy/teal waves and centered message bottle card-back background without frame or text.",
+      "created": "2026-10-08",
+      "tool": "image_gen.imagegen",
+      "transparentBackground": false,
+      "references": [
+        "polish-bottles.png"
+      ]
+    },
+    {
+      "file": "polish-icons-headwear-a.png",
+      "references": [
+        "hats-a.png"
+      ],
+      "prompt": "RECREATE the attached nine Kun hats as NEW INVENTORY OBJECT ART, not a front-facing wearable layer. Keep their colors and distinguishing symbols exactly but CHANGE ALL NINE to strong 3/4 perspective tilted about 30 degrees, slightly from above so inside openings, back surfaces and brim underside are visible. Follow the original dark NAVY painted outlines and polished two-tone cel shading. CRITICAL: smaller objects and enormous transparent gutters: strict3x3 grid on a square sheet, one hat in each equal cell, NO icon more than 66% cell width or height. True transparent RGBA, no background. The prior reference layout is too crowded; distribute smaller icons at centers (one sixth, one half, five sixths of canvas width/height). Row1: red-orange PLAID detective deerstalker with red top bow, twin brims and earflaps, angled to show right side; glossy PURPLE painter beret with purple stem and thick folded inner rim, angled; WHITE hardhat with ridged white crown and brim, turned left to show profile. Row2: bright ORANGE yellow baseball cap facing left at 3/4 with visible open dark interior; BROWN leather pilot helmet with GOLD rim BLUE glass goggles, hanging ear flaps and hollow dark brown lined interior, rotated right; WHITE sailor cap with DEEP BLUE band and GOLD ANCHOR badge, turned left with full rounded cloth top. Row3: GOLD straw hat with BROWN ribbon, woven texture, wide brim at 3/4 with dark underside visible; WHITE chef toque with puffy top and tall curved band, turned slightly right with dark grey interior rim; WHITE nurse cap, TURQUOISE top piping and TURQUOISE HEART badge, turned to the left at 3/4 so folded cap has depth. No birds, humans, faces, bodies, stands, mannequins, extra objects, text, labels, shadows or borders. Do NOT copy flat front view, noticeably change to physical objects with depth and absolutely keep generous clear gutters.",
+      "review": {
+        "status": "visually-reviewed",
+        "checks": [
+          "Source and 160px dark-background extraction checked visually.",
+          "Designs, colors and identifying marks match original worn artwork.",
+          "Complete 3/4 headwear and eyewear; prop angle preserved.",
+          "Alpha bounds measured and proportionally registered to 430px maximum dimension on 512px canvas."
+        ],
+        "corrections": [
+          "First generated attempt retained frontal wearable perspective; regenerated with visible interiors and strong 3/4 angles."
+        ]
+      },
+      "width": 1254,
+      "height": 1254,
+      "sha256": "4ac473f21884bc3e2f3667aab04ebf73d379437d1925ffb7910ff4663ad7b8cf",
+      "exports": [
+        "icon/headwear/detective-hat",
+        "icon/headwear/beret",
+        "icon/headwear/hard-hat",
+        "icon/headwear/baseball-cap",
+        "icon/headwear/pilot-cap",
+        "icon/headwear/sailor-hat",
+        "icon/headwear/straw-hat",
+        "icon/headwear/chef-hat",
+        "icon/headwear/nurse-cap"
+      ]
+    },
+    {
+      "file": "polish-icons-headwear-b.png",
+      "references": [
+        "hats-b.png"
+      ],
+      "prompt": "Create a NEW polished inventory icon sheet re-illustrating the EIGHT headwear items in attached Kun asset reference. This is inventory presentation, so ROTATE ALL items into a distinct 3/4 view slightly from above, with visible rear/interior volume, and use smaller objects to leave enormous empty gutters. Preserve exact design identity, colors, dark navy outlines #0e2f66, hand-painted cel-shading and upper-left highlights of Kun. Square 1536x1536 RGBA with TRUE TRANSPARENT BACKGROUND. Strict 3 columns by 3 rows. One icon centered in each cell, max width and max height 72% of cell. No icon may cross a grid boundary. NO text, labels, background, shadows, bird, face, body, mannequin. Row-major exact order: (1) closed-loop ORANGE fabric sports headband with broad WHITE horizontal stripe, show rear curved band so it is a complete band; (2) RED ribbed knit beanie with CREAM pompom; (3) deep PURPLE cloth pointed HOOD viewed 3/4, complete empty hood with visible DARK PURPLE cloth interior and fabric back, opening framed in violet, single round GOLD clasp at throat (not merely a flat empty outline, no face); (4) INDIGO BLUE floppy wizard hat, crescent YELLOW moon and YELLOW stars, wide BLUE brim; (5) tan BROWN paneled newsboy flat cap; (6) COPPER RED welding goggles with dark BLUE oval lenses and BROWN elastic strap visible behind them; (7) GOLDEN yellow laurel wreath, COMPLETE circular laurel crown viewed 3/4 showing the back crossing branches, preserve golden leaves; (8) WHITE astronaut helmet complete hollow 3D object in 3/4 view, deep BLUE neck band with two WHITE fastening buttons, blue-tinted glass visor and visible dark empty interior/helmet back through glass, no head, full dome silhouette; (9) empty transparent cell. Aim clean appealing icons like the original game art but clear complete physical objects, keep wide margins and do not crop bottom.",
+      "review": {
+        "status": "visually-reviewed",
+        "checks": [
+          "Source and 160px dark-background extraction checked visually.",
+          "Designs, colors and identifying marks match original worn artwork.",
+          "Complete 3/4 headwear and eyewear; prop angle preserved.",
+          "Alpha bounds measured and proportionally registered to 430px maximum dimension on 512px canvas."
+        ],
+        "corrections": [
+          "Custom crop gutters registered to avoid adjacent source-cell fragments."
+        ]
+      },
+      "width": 1254,
+      "height": 1254,
+      "sha256": "42d18a0dffeee66cc9fe173a21e9a6cc7d81601f984aa997c944882b14c48660",
+      "exports": [
+        "icon/headwear/sports-headband",
+        "icon/headwear/beanie",
+        "icon/headwear/hood",
+        "icon/headwear/wizard-hat",
+        "icon/headwear/newsboy-cap",
+        "icon/headwear/welding-goggles",
+        "icon/headwear/laurel",
+        "icon/headwear/astronaut-helmet"
+      ]
+    },
+    {
+      "file": "polish-icons-headwear-c.png",
+      "references": [
+        "accessories.png"
+      ],
+      "prompt": "Re-illustrate JUST the two headphones from top-left and top-center of the attached Kun original accessory sheet into TWO complete standalone inventory item icons. Preserve exact color and painted cel-shaded art style, smooth DARK NAVY thick contour, 2 levels of shadow and small upper-left highlight. TRUE TRANSPARENT BACKGROUND, square 1536x1536 image, STRICT 2 columns x 1 row, centered icon in each half with 14% clear margins. Left: NAVY BLUE call-center HEADSET, brighter cobalt blue outer earcup faces, navy cushioned earcups, blue curved headband, LEFT-FACING microphone boom extending from its right earcup, black rounded capsule microphone. Right: PURPLE over-ear HEADPHONES without microphone, violet headband and lilac-purple earcup faces. Show both in a STRONG 3/4 view slightly from above, at roughly 30 degree yaw so near earcup shows its padded inner cushion, far earcup behind, rear band depth visible, entire solid assembly has convincing volume. These must read as inventory products rather than flat front-facing hoops. No dangling cables. No glasses, scarf, person, bird, body, mannequin, text, labels, ground shadow or opaque background. Exactly two isolated complete objects.",
+      "review": {
+        "status": "visually-reviewed",
+        "checks": [
+          "Source and 160px dark-background extraction checked visually.",
+          "Designs, colors and identifying marks match original worn artwork.",
+          "Complete 3/4 headwear and eyewear; prop angle preserved.",
+          "Alpha bounds measured and proportionally registered to 430px maximum dimension on 512px canvas."
+        ],
+        "corrections": [
+          "Custom crop gutters registered to avoid adjacent source-cell fragments."
+        ]
+      },
+      "width": 1774,
+      "height": 887,
+      "sha256": "27ff49dbf126b1a67a860eea79c8dcb9e634727ce74646c46678275422a7fd20",
+      "exports": [
+        "icon/headwear/headset",
+        "icon/headwear/headphones"
+      ]
+    },
+    {
+      "file": "polish-icons-glasses.png",
+      "references": [
+        "accessories.png"
+      ],
+      "prompt": "Re-illustrate ONLY the five glasses designs in attached Kun accessory reference as complete wearable inventory icons. Match exact frame color/design and hand painted dark navy contours, cel-shading, upper-left highlight; preserve the original product's cute glossy style. True TRANSPARENT BG, square 1536x1536, strict 3x2 grid, each object max72% width of its cell with large gutters. Each pair in clear 3/4 perspective slightly from above, visibly show temples extending backward so they read as complete eyewear (not a flat face overlay). Row-major order: (1) thick DARK NAVY nearly SQUARE spectacles, transparent pale-blue lenses; (2) perfectly ROUND thin GOLD frames and bridge, gold ear-arm tips, transparent clear lenses; (3) PALE CYAN scientific laboratory safety goggles, joined broad wraparound lens with nose recess, dark NAVY fasteners and visible strap behind; (4) DARK NAVY RECTANGULAR spectacles distinct from first pair, shallower wider lens aspect ratio; (5) glossy PURPLE cat-eye spectacles, upswept outer tips, transparent pale lavender lenses; (6) empty transparent cell. All frames and arms complete, clean transparent apertures in lenses with tiny subtle edge highlights. No rainbow speckles, no ghost remnants, no opaque white fill of canvas. NO headphones, scarf, eyes, face, bird, human, mannequin, text, labels, ground shadows or cell borders. Use original reference for details only, rearrange as requested and make genuine 3/4 object viewpoints.",
+      "review": {
+        "status": "visually-reviewed",
+        "checks": [
+          "Source and 160px dark-background extraction checked visually.",
+          "Designs, colors and identifying marks match original worn artwork.",
+          "Complete 3/4 headwear and eyewear; prop angle preserved.",
+          "Alpha bounds measured and proportionally registered to 430px maximum dimension on 512px canvas."
+        ],
+        "corrections": [
+          "Generator arranged 2 columns by 3 rows, captured by recipe grid.",
+          "Cat-eye cell widened from 627px to 700px to preserve complete right temple."
+        ]
+      },
+      "width": 1254,
+      "height": 1254,
+      "sha256": "0d0fe4cf804562b525bed7b6c9c5dd2a374b51c7152cebcec4221518918aa5db",
+      "exports": [
+        "icon/glasses/square",
+        "icon/glasses/round",
+        "icon/glasses/lab",
+        "icon/glasses/rectangular",
+        "icon/glasses/cat-eye"
+      ]
+    },
+    {
+      "file": "polish-icons-props.png",
+      "references": [
+        "props.png"
+      ],
+      "prompt": "Polish and re-illustrate the attached Kun reference into a production inventory icon sheet with EXACTLY these NINE separate complete objects in same angle and same color as reference, no wings/hands. Retain Kun art style: hand painted game artwork, thick dark NAVY contours #0e2f66, crisp two-level cel-shading, small upper-left highlights. True TRANSPARENT background RGBA. Square1536x1536, strict3x3 grid, each object entirely in its own cell with 14% clear margin each edge (maximum72% width or height), no crossing grid lines, no labels/text or ground shadows. Row-major: (1) GOLD rim magnifying glass pale BLUE lens and BROWN wooden handle tilting lower-left; (2) PURPLE tipped paintbrush GOLD ferrule BROWN handle pointing lower-left; (3) upright clear pale BLUE Erlenmeyer flask containing PURPLE potion and bubbles; (4) CREAM feather quill with brown shaft angled lower-left; (5) BROWN leather spiral notebook with GOLD rings on LEFT and CREAM pages, at 3/4 angle; (6) SILVER gray open-end wrench angled head upper-right, handle lower-left; (7) BURGUNDY red hardcover book with GOLD thin rectangular cover border and CREAM page block, angled 3/4; (8) vivid GREEN leaf, stem lower-left and tip upper-right, simple darker green vein; (9) black CHARCOAL photo camera with BLUE circular glass lens and small SILVER top flash. Each must have identical essential details and orientation to the reference, but with even generous spacing and clean alpha edges. No body, no mascot, no extra symbols, no objects cropped.",
+      "review": {
+        "status": "visually-reviewed",
+        "checks": [
+          "Source and 160px dark-background extraction checked visually.",
+          "Designs, colors and identifying marks match original worn artwork.",
+          "Complete 3/4 headwear and eyewear; prop angle preserved.",
+          "Alpha bounds measured and proportionally registered to 430px maximum dimension on 512px canvas."
+        ],
+        "corrections": [
+          "Custom crop gutters registered to avoid adjacent source-cell fragments."
+        ]
+      },
+      "width": 1254,
+      "height": 1254,
+      "sha256": "e74b1c918d3bdc1d199d5dd8e7d361c5a97878e46db8396909e51b156d324721",
+      "exports": [
+        "icon/prop/magnifier",
+        "icon/prop/paintbrush",
+        "icon/prop/flask",
+        "icon/prop/quill",
+        "icon/prop/notebook",
+        "icon/prop/wrench",
+        "icon/prop/book",
+        "icon/prop/leaf",
+        "icon/prop/camera"
+      ]
+    },
+    {
+      "file": "polish-worn-a-draft.png",
+      "references": [
+        "clothes-a.png"
+      ],
+      "prompt": "Polish the ORIGINAL KUN WEARABLE CLOTHING LAYERS in the attached reference. These are front-facing CROPPED UPPER-CHEST / COLLAR overlays for a wide chibi bird, NOT independent full garment inventory icons. Keep original outer shoulder outline, open neckline shape and shallow cropped lower boundary, front-facing symmetric presentation, exact garment colors, symbols, dark NAVY outlines and 2-level painted cel shading with light from upper left. Strengthen graphic feature readability at small size with bolder color divisions, wider stitching, stronger zipper/buttons/pocket edges and distinct collar shapes. NO complete long clothing, no legs, no long sleeves, no bird/body/face/arms, no mannequin, no labels/text, no background, no shadows. All pieces isolated on TRUE TRANSPARENT RGBA. Square canvas, equal cells, one item per cell, empty gutters at least10% cell on all sides. Preserve identity, no unrelated added decorations. Strict 3 columns x3 rows with these NINE items row-major, exact same order as first reference: (1) CHARCOAL BLACK zip hoodie collar/shoulders, much clearer IVORY drawstrings, bright SILVER center zipper and distinct dark pocket seams; (2) MINT pullover hoodie, IVORY strings, bolder turquoise kangaroo-pocket top seam, no zipper; (3) CREAM collared button shirt, clear sharp pointed lapels and TWO BROWN buttons on central placket; (4) IVORY knit cardigan with a strong ribbed V neck and one large brown button, pronounced rib pattern; (5) WHITE lab-coat collar, broad angular white lapels framing NAVY inner shirt and right chest patch pocket with visible BLUE pen; (6) DARK NAVY security jacket with tall stand collar, strong SILVER center zipper, two clear rectangular chest pockets and large BLUE SHIELD badge outlined light blue at viewer right; (7) RED scarf folded collar, short hanging knot/fringe centered slightly right and wider fold shadows; (8) CREAM scarf distinct layered beige folds and thick fringe on short hanging tail; (9) INDIGO BLUE night scarf with a prominent GOLD crescent MOON clasp at viewer right and short hanging fringed tail. Keep all original forms/colors. These remain cropped shoulder pieces just like reference, and should gain stronger purposeful details rather than changing into full clothes.",
+      "review": {
+        "status": "superseded-source-reference",
+        "defects": [
+          "Neighboring shoulder silhouettes touched in the initial generated layout."
+        ],
+        "corrections": [
+          "Used as ImageGen reference for a corrected sheet with wider transparent gutters."
+        ]
+      },
+      "width": 1254,
+      "height": 1254,
+      "sha256": "4182872153278074a005740a6eefb6cda6e8e09c06b2166f872012b148368af5",
+      "exports": [],
+      "registration": "scripts/kun-avatar-worn-recipes.mjs"
+    },
+    {
+      "file": "polish-worn-a.png",
+      "references": [
+        "polish-worn-a-draft.png"
+      ],
+      "prompt": "Perform a precise production sprite sheet layout correction to the attached image: KEEP all NINE drawn clothing pieces, their exact colors, silhouettes, markings, front-view crop, shading and details, but SCALE EACH INDIVIDUAL ITEM DOWN to 65% of its current width AND 65% of its current height. Keep each item's center at the same 3x3 grid cell center. The current sheet has touching shoulders and is unusable; the corrected sheet must have EMPTY TRANSPARENT gutters at least90 pixels wide between every neighboring piece on a 1254px square sheet, plus at least70px outer edges. Each drawn item should now occupy about260px width, never more than300px wide in a418px cell. There must be nine smaller isolated clothing overlays arranged with huge transparent gaps. Do not add or remove any objects, do not add full garments or bodies. Keep front-facing shallow original shapes. Absolutely TRUE transparent background, NO checkerboard, no ground shadows, no text or cell outlines. This edit is only shrinking and spacing the nine items, preserving the existing polished artwork.",
+      "review": {
+        "status": "visually-reviewed",
+        "checks": [
+          "Original collar/shoulder view and color/marks preserved.",
+          "Bolder seams, zipper, drawstrings, pockets and distinctive badges.",
+          "No bird/body or embedded camera in the photographer shirt.",
+          "Registered into exactly the same original garment box."
+        ],
+        "corrections": [
+          "Regenerated with 65% source-cell scale and wider clear gutters to eliminate touching neighboring shoulders."
+        ]
+      },
+      "width": 1254,
+      "height": 1254,
+      "sha256": "1059e1d414d66af431322a650a959128e34d88560a7bf7c67afe956831e5fd78",
+      "exports": [
+        "outfit/black-hoodie",
+        "outfit/mint-hoodie",
+        "outfit/cream-shirt",
+        "outfit/cardigan",
+        "outfit/lab-coat",
+        "outfit/security-jacket",
+        "outfit/red-scarf",
+        "outfit/cream-scarf",
+        "outfit/night-scarf"
+      ],
+      "registration": "scripts/kun-avatar-worn-recipes.mjs"
+    },
+    {
+      "file": "polish-worn-b-draft.png",
+      "references": [
+        "clothes-b.png",
+        "camera-shirt.png"
+      ],
+      "prompt": "Polish the ORIGINAL KUN WEARABLE CLOTHING LAYERS in the attached reference. These are front-facing CROPPED UPPER-CHEST / COLLAR overlays for a wide chibi bird, NOT independent full garment inventory icons. Keep original outer shoulder outline, open neckline shape and shallow cropped lower boundary, front-facing symmetric presentation, exact garment colors, symbols, dark NAVY outlines and 2-level painted cel shading with light from upper left. Strengthen graphic feature readability at small size with bolder color divisions, wider stitching, stronger zipper/buttons/pocket edges and distinct collar shapes. NO complete long clothing, no legs, no long sleeves, no bird/body/face/arms, no mannequin, no labels/text, no background, no shadows. All pieces isolated on TRUE TRANSPARENT RGBA. Square canvas, equal cells, one item per cell, empty gutters at least10% cell on all sides. Preserve identity, no unrelated added decorations. Strict 3 columns x3 rows, NINE items row-major, same order as first reference: (1) WHITE spacesuit shoulder collar, thick NAVY round neck seal with silver rim/two side round fastening joints; clearly separated front control panel with BLUE and GRAY controls; (2) BROWN leather pilot jacket shoulder crop with thick CREAM fur collar, SILVER zipper, two tan-edged pockets; (3) WHITE sailor shirt shoulder crop with wide NAVY collar and TWO WHITE parallel stripes, NAVY neckerchief knot; (4) MINT green collared shirt under BROWN work overalls bib, GOLD buttons at straps and clear GREEN TWO-LEAF sprout patch on front pocket; (5) WHITE chef jacket cropped shoulders with large RED tied neck scarf and double row WHITE/GRAY buttons; (6) TURQUOISE nurse tunic shoulders with V neck, dark NAVY stethoscope and WHITE cross on right pocket; (7) CREAM photographer shirt with BROWN leather harness straps and GOLD rectangular buckles, clear stitching, TWO CREAM center buttons, absolutely NO CAMERA and no embedded lens: use the second attached camera-free shirt reference for correct garment; (8) WHITE sports tank shoulder crop with strong ORANGE neck/arm trim and broad orange side stripes, no number or letters; (9) PURPLE storyteller cape front shoulder crop, GOLD trim and single round GOLD clasp. Keep open dark transparent center of cape. All full lower hems remain cropped close to shoulders exactly like reference. Strengthen identifying features within the shallow collars; no full body clothes.",
+      "review": {
+        "status": "superseded-source-reference",
+        "defects": [
+          "Neighboring shoulder silhouettes touched in the initial generated layout."
+        ],
+        "corrections": [
+          "Used as ImageGen reference for a corrected sheet with wider transparent gutters."
+        ]
+      },
+      "width": 1254,
+      "height": 1254,
+      "sha256": "1a74f162545426d4bf262376d4d69d1cb7a2efcb9728bd0c6d8dfcbd86a7c7d8",
+      "exports": [],
+      "registration": "scripts/kun-avatar-worn-recipes.mjs"
+    },
+    {
+      "file": "polish-worn-b.png",
+      "references": [
+        "polish-worn-b-draft.png"
+      ],
+      "prompt": "Perform a precise production sprite sheet layout correction to the attached image: KEEP all NINE drawn clothing pieces, their exact colors, silhouettes, markings, front-view crop, shading and details, but SCALE EACH INDIVIDUAL ITEM DOWN to 65% of its current width AND 65% of its current height. Keep each item's center at the same 3x3 grid cell center. The current sheet has touching shoulders and is unusable; the corrected sheet must have EMPTY TRANSPARENT gutters at least90 pixels wide between every neighboring piece on a 1254px square sheet, plus at least70px outer edges. Each drawn item should now occupy about260px width, never more than300px wide in a418px cell. There must be nine smaller isolated clothing overlays arranged with huge transparent gaps. Do not add or remove any objects, do not add full garments or bodies. Keep front-facing shallow original shapes. Absolutely TRUE transparent background, NO checkerboard, no ground shadows, no text or cell outlines. This edit is only shrinking and spacing the nine items, preserving the existing polished artwork.",
+      "review": {
+        "status": "visually-reviewed",
+        "checks": [
+          "Original collar/shoulder view and color/marks preserved.",
+          "Bolder seams, zipper, drawstrings, pockets and distinctive badges.",
+          "No bird/body or embedded camera in the photographer shirt.",
+          "Registered into exactly the same original garment box."
+        ],
+        "corrections": [
+          "Regenerated with 65% source-cell scale and wider clear gutters to eliminate touching neighboring shoulders."
+        ]
+      },
+      "width": 1254,
+      "height": 1254,
+      "sha256": "0296de9dfc7be1adf929a8bfb674c3a8b16ca8a6338f350ea76d84b50c9732de",
+      "exports": [
+        "outfit/spacesuit",
+        "outfit/pilot-jacket",
+        "outfit/sailor-shirt",
+        "outfit/overalls",
+        "outfit/chef-coat",
+        "outfit/nurse-uniform",
+        "outfit/camera-shirt",
+        "outfit/sports-vest",
+        "outfit/storyteller-cape"
+      ],
+      "registration": "scripts/kun-avatar-worn-recipes.mjs"
+    },
+    {
+      "file": "polish-worn-c.png",
+      "references": [
+        "clothes-c.png",
+        "accessories.png"
+      ],
+      "prompt": "Polish the ORIGINAL KUN WEARABLE CLOTHING LAYERS in the attached reference. These are front-facing CROPPED UPPER-CHEST / COLLAR overlays for a wide chibi bird, NOT independent full garment inventory icons. Keep original outer shoulder outline, open neckline shape and shallow cropped lower boundary, front-facing symmetric presentation, exact garment colors, symbols, dark NAVY outlines and 2-level painted cel shading with light from upper left. Strengthen graphic feature readability at small size with bolder color divisions, wider stitching, stronger zipper/buttons/pocket edges and distinct collar shapes. NO complete long clothing, no legs, no long sleeves, no bird/body/face/arms, no mannequin, no labels/text, no background, no shadows. All pieces isolated on TRUE TRANSPARENT RGBA. Square canvas, equal cells, one item per cell, empty gutters at least10% cell on all sides. Preserve identity, no unrelated added decorations. Exactly SIX FRONT wearable pieces in strict2 columns x3 rows. Ignore all back pieces in reference one. Row-major: (1) INDIGO BLUE wizard cape FRONT short shoulder crop with folded high collar, central GOLD five-point STAR clasp, scattered GOLD stars, and one very subtle gold stitched highlight line along the outer upper fold for a magical fabric finish. Cape center remains open/transparent, not solid closed; (2) caramel BROWN coffee apron upper bib with TWO straps/GOLD fasteners, large clear CREAM steaming coffee CUP silhouette centered on front pocket, only upper bib crop; (3) DARK BROWN tool apron upper bib crop with TWO straps/brass fasteners and large tool pockets containing YELLOW pencil, BLUE pencil, RED screwdriver; (4) BLUE cross-body messenger MAILBAG in original angled view, broad diagonal BLUE strap with one GOLD rectangular buckle and BLUE bag with GOLD square clasp, retain exactly original shape; (5) CREAM / IVORY draped classical ROBE shoulder crop with folded fabric sweep and one GOLD round clasp at viewer right, clearer warm beige fold shadows and subtle cream satin highlight on upper drape; (6) bright COBALT BLUE plain scarf matching the second accessory reference's blue scarf exactly, chunky wrap neck collar with short right-side tail and blue fringe, NO moon or other symbol. Do not render back capes, helmets or hoods. These are cropped wearable layers, not complete hanging garments, no hanger or bird. Keep all shapes shallow, front-facing, source style, open transparent necks and empty spaces where original cape openings are.",
+      "review": {
+        "status": "visually-reviewed",
+        "checks": [
+          "Original collar/shoulder view and color/marks preserved.",
+          "Bolder seams, zipper, drawstrings, pockets and distinctive badges.",
+          "No bird/body or embedded camera in the photographer shirt.",
+          "Registered into exactly the same original garment box."
+        ],
+        "corrections": [
+          "Custom source cell bounds protect the broad wizard cape and robe."
+        ]
+      },
+      "width": 1254,
+      "height": 1254,
+      "sha256": "0af870f8330deb1fe81ce52ec4fd6f7db8c65b0664793de0cc458095361724f2",
+      "exports": [
+        "outfit/wizard-cape",
+        "outfit/coffee-apron",
+        "outfit/tool-apron",
+        "outfit/mailbag",
+        "outfit/robe",
+        "outfit/blue-scarf"
+      ],
+      "registration": "scripts/kun-avatar-worn-recipes.mjs"
+    },
+    {
+      "file": "polish-icons-clothes-c-refined.png",
+      "references": [
+        "polish-icons-clothes-c.png"
+      ],
+      "prompt": "Carefully edit this Kun clothing inventory sheet. Preserve the SAME SIX illustrated objects, art style, exact colors, markings, silhouettes, proportions, and row-major arrangement in 2 columns x3 rows on a 1024x1536 portrait canvas. ONLY make these production corrections: (1) On the IVORY DRAPED ROBE in BOTTOM LEFT, REMOVE the thin GOLD stripe running around its LOWER HEM. Make that hem plain ivory fabric with the same natural beige fold shadows as the rest of the robe. KEEP its original ROUND GOLD CLASP on the upper-right shoulder unchanged. There must be no other gold embroidery on the robe. (2) Remove ALL diffuse colored glows, shadows, dark backdrop and haze around ALL six objects, producing TRUE TRANSPARENT pixels around them, clean edges and no opaque background. (3) Ensure the MIDDLE LEFT brown TOOL APRON and BOTTOM LEFT robe are spatially separated: leave at least 70px of fully transparent gutter between the bottom of that tool apron and the top of the robe; within its cell, shift the robe down a few pixels or shrink it uniformly a little if required, never crop garment edges. All six should fit fully in their own equally spaced rectangular cells, no touching. Top-left indigo wizard cape with GOLD star clasp and yellow star pattern unchanged. Top-right brown coffee apron with CREAM steaming cup mark unchanged. Middle-left dark brown tool apron with gold strap buttons and yellow/blue pencils and red screwdriver unchanged. Middle-right blue messenger bag with gold buckle/clasp unchanged. Bottom-right cobalt blue fringed scarf unchanged. Do not add any ornaments, no text/labels, no bird/body, no mannequin/hanger, no frames, no ground shadow. Preserve drawn painted linework, no vector redesign.",
+      "review": {
+        "status": "visually-reviewed",
+        "checks": [
+          "Ivory robe extra golden hem removed; original round gold shoulder clasp preserved.",
+          "All six identifying garment colors and marks preserved.",
+          "Flattened on ivory background and inspected: clean transparent gutters, no glow in rendered output.",
+          "Source display glow is hidden RGB under alpha zero, not visible backdrop."
+        ],
+        "integrationNotes": [
+          "Only icon/outfit/robe uses this refinement; the other five published icons retain the original source.",
+          "Robe sourceCrop is {left:0,top:1000,width:512,height:536}; measured alpha >=16 bounds are [50,1017,440,455].",
+          "The original polish-icons-clothes-c.png remains the exact reference source."
+        ]
+      },
+      "width": 1024,
+      "height": 1536,
+      "sha256": "e81a44c85b63e5f194e6e5358f89da1321e842853783dc4004a1a6d55fe22c3c",
+      "exports": [
+        "icon/outfit/robe"
+      ]
     }
-  ]
+  ],
+  "polish": {
+    "created": "2026-10-08",
+    "registration": [
+      "scripts/kun-avatar-polish-recipes.mjs",
+      "scripts/kun-avatar-accessory-icon-recipes.mjs",
+      "scripts/kun-avatar-worn-recipes.mjs"
+    ],
+    "sceneSmall": "Same source painted pixels reduced to12x12 color fields then resized; no redrawing.",
+    "humanReview": "Pending: user style confirmation and specialist retouching; generated sources and visual QA preserved."
+  }
 }

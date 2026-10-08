@@ -2,10 +2,11 @@ import { createElement, useState, type ReactElement, type ReactNode } from 'reac
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS, getKunAvatarConflicts,
+  KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS, KUN_AVATAR_CATALOG, KUN_AVATAR_SCENES, getKunAvatarConflicts,
   type RoomAvatarReference
 } from '@shared/rooms-api'
 import { RoomAvatarComposer, editableKunAvatarParts } from './RoomAvatarComposer'
+import { avatarItemLayers } from './RoomAvatarItemArt'
 import { RoomAvatarPicker } from './RoomAvatarPicker'
 import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
 
@@ -105,6 +106,38 @@ describe('layered avatar editor drafts', () => {
     expect(onChange).not.toHaveBeenCalled()
     await act(async () => { button('agentsSave').props.onClick() })
     expect(onChange).toHaveBeenCalledWith(undefined)
+  })
+
+  it('previews and saves illustrated scenes while preserving the outfit and valid custom color control', async () => {
+    await mount(createElement(ComposerHarness, { initial: { kind: 'composed', version: 1,
+      parts: { ...KUN_AVATAR_DEFAULT_PARTS, outfit: 'red-scarf' } } }))
+    changeCategory('bg')
+    for (const scene of KUN_AVATAR_SCENES) expect(button(scene.label.en)).toBeDefined()
+    act(() => button('Sunset bay').props.onPointerEnter())
+    expect(preview()).toMatchObject({ parts: { bg: '#f7f5ef' } })
+    click('Sunset bay')
+    expect(preview()).toMatchObject({ parts: { bg: 'scene:sunset-bay', outfit: 'red-scarf' } })
+    expect(renderer.root.findByProps({ type: 'color' }).props.value).toBe('#f7f5ef')
+    click('roomsAvatarTransparent')
+    expect(preview()).toMatchObject({ parts: { bg: 'transparent', outfit: 'red-scarf' } })
+  })
+
+  it('shows all six registered expression choices', async () => {
+    await mount(createElement(ComposerHarness, { initial: { kind: 'composed', version: 1, parts: KUN_AVATAR_DEFAULT_PARTS } }))
+    changeCategory('face')
+    for (const face of KUN_AVATAR_CATALOG.face) {
+      click(face.label.en)
+      expect(preview()).toMatchObject({ parts: { face: face.id } })
+    }
+  })
+
+  it('uses dedicated inventory icons including whole clothes, never body layers', () => {
+    for (const category of ['headwear', 'glasses', 'outfit', 'prop'] as const) {
+      for (const part of KUN_AVATAR_CATALOG[category]) {
+        expect(avatarItemLayers(category, part.id)).toEqual([`icon/${category}/${part.id}`])
+      }
+    }
+    expect(avatarItemLayers('outfit', 'unknown')).toEqual([])
   })
 
   it('supports transparent and custom backgrounds without changing accessories', async () => {

@@ -1,0 +1,190 @@
+{
+  "glasses/square": {
+    "png": "glasses/square.png",
+    "webp": {
+      "128": "128/glasses/square.webp",
+      "256": "256/glasses/square.webp",
+      "512": "512/glasses/square.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "accessories.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 2
+    }
+  },
+  "glasses/round": {
+    "png": "glasses/round.png",
+    "webp": {
+      "128": "128/glasses/round.webp",
+      "256": "256/glasses/round.webp",
+      "512": "512/glasses/round.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "accessories.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 470,
+        "width": 418,
+        "height": 340
+      }
+    }
+  },
+  "glasses/lab": {
+    "png": "glasses/lab.png",
+    "webp": {
+      "128": "128/glasses/lab.webp",
+      "256": "256/glasses/lab.webp",
+      "512": "512/glasses/lab.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "accessories.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 418,
+        "top": 470,
+        "width": 418,
+        "height": 340
+      }
+    }
+  },
+  "glasses/rectangular": {
+    "png": "glasses/rectangular.png",
+    "webp": {
+      "128": "128/glasses/rectangular.webp",
+      "256": "256/glasses/rectangular.webp",
+      "512": "512/glasses/rectangular.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "accessories.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 836,
+        "top": 470,
+        "width": 418,
+        "height": 340
+      }
+    }
+  },
+  "glasses/cat-eye": {
+    "png": "glasses/cat-eye.png",
+    "webp": {
+      "128": "128/glasses/cat-eye.webp",
+      "256": "256/glasses/cat-eye.webp",
+      "512": "512/glasses/cat-eye.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "accessories.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 6
+    }
+  },
+  "glasses/square.small": {
+    "png": "glasses/square.small.png",
+    "webp": {
+      "128": "128/glasses/square.small.webp",
+      "256": "256/glasses/square.small.webp",
+      "512": "512/glasses/square.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-glasses-small.png",
+      "grid": [
+        3,
+        2
+      ],
+      "cell": 0
+    }
+  },
+  "glasses/round.small": {
+    "png": "glasses/round.small.png",
+    "webp": {
+      "128": "128/glasses/round.small.webp",
+      "256": "256/glasses/round.small.webp",
+      "512": "512/glasses/round.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-glasses-small.png",
+      "grid": [
+        3,
+        2
+      ],
+      "cell": 1
+    }
+  },
+  "glasses/lab.small": {
+    "png": "glasses/lab.small.png",
+    "webp": {
+      "128": "128/glasses/lab.small.webp",
+      "256": "256/glasses/lab.small.webp",
+      "512": "512/glasses/lab.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-glasses-small.png",
+      "grid": [
+        3,
+        2
+      ],
+      "cell": 2
+    }
+  },
+  "glasses/rectangular.small": {
+    "png": "glasses/rectangular.small.png",
+    "webp": {
+      "128": "128/glasses/rectangular.small.webp",
+      "256": "256/glasses/rectangular.small.webp",
+      "512": "512/glasses/rectangular.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-glasses-small.png",
+      "grid": [
+        3,
+        2
+      ],
+      "cell": 3
+    }
+  },
+  "glasses/cat-eye.small": {
+    "png": "glasses/cat-eye.small.png",
+    "webp": {
+      "128": "128/glasses/cat-eye.small.webp",
+      "256": "256/glasses/cat-eye.small.webp",
+      "512": "512/glasses/cat-eye.small.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-glasses-small.png",
+      "grid": [
+        3,
+        2
+      ],
+      "cell": 4
+    }
+  }
+}

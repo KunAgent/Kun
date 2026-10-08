@@ -1,0 +1,70 @@
+{
+  "container/bottle-sealed": {
+    "png": "container/bottle-sealed.png",
+    "webp": {
+      "96": "96/container/bottle-sealed.webp",
+      "256": "256/container/bottle-sealed.webp",
+      "512": "512/container/bottle-sealed.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-bottles.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 0
+    }
+  },
+  "container/bottle-glowing": {
+    "png": "container/bottle-glowing.png",
+    "webp": {
+      "96": "96/container/bottle-glowing.webp",
+      "256": "256/container/bottle-glowing.webp",
+      "512": "512/container/bottle-glowing.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-bottles.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 1
+    }
+  },
+  "container/bottle-open": {
+    "png": "container/bottle-open.png",
+    "webp": {
+      "96": "96/container/bottle-open.webp",
+      "256": "256/container/bottle-open.webp",
+      "512": "512/container/bottle-open.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-bottles.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 2
+    }
+  },
+  "container/bottle-glow": {
+    "png": "container/bottle-glow.png",
+    "webp": {
+      "96": "96/container/bottle-glow.webp",
+      "256": "256/container/bottle-glow.webp",
+      "512": "512/container/bottle-glow.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-bottles.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 3
+    }
+  }
+}

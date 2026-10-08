@@ -1,0 +1,36 @@
+{
+  "fx/epic": {
+    "png": "fx/epic.png",
+    "webp": {
+      "128": "128/fx/epic.webp",
+      "256": "256/fx/epic.webp",
+      "512": "512/fx/epic.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-fx.png",
+      "grid": [
+        2,
+        1
+      ],
+      "cell": 0
+    }
+  },
+  "fx/legendary": {
+    "png": "fx/legendary.png",
+    "webp": {
+      "128": "128/fx/legendary.webp",
+      "256": "256/fx/legendary.webp",
+      "512": "512/fx/legendary.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-fx.png",
+      "grid": [
+        2,
+        1
+      ],
+      "cell": 1
+    }
+  }
+}

@@ -33,11 +33,11 @@ function subscribePixelRatio(notify: () => void): () => void {
   }
 }
 
-export function useRoomComposedAvatar(reference: KunComposedAvatarReference | undefined, size: number) {
+export function useRoomComposedAvatar(reference: KunComposedAvatarReference | undefined, size: number, effects = false) {
   const dpr = useSyncExternalStore(subscribePixelRatio, devicePixelRatio, () => 1)
   const serialized = reference ? JSON.stringify(normalizeKunAvatarParts(reference.parts)) : ''
-  const request = useMemo(() => serialized ? avatarRenderRequest(JSON.parse(serialized), size, dpr) : undefined,
-    [serialized, size, dpr])
+  const request = useMemo(() => serialized ? avatarRenderRequest(JSON.parse(serialized), size, dpr, effects) : undefined,
+    [serialized, size, dpr, effects])
   const [loaded, setLoaded] = useState<{ key: string; url: string }>()
   useEffect(() => {
     if (!request) return

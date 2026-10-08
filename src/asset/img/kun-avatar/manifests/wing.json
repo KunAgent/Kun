@@ -1,0 +1,88 @@
+{
+  "wing/sky": {
+    "png": "wing/sky.png",
+    "webp": {
+      "128": "128/wing/sky.webp",
+      "256": "256/wing/sky.webp",
+      "512": "512/wing/sky.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "features.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 3
+    }
+  },
+  "wing/teal": {
+    "png": "wing/teal.png",
+    "webp": {
+      "128": "128/wing/teal.webp",
+      "256": "256/wing/teal.webp",
+      "512": "512/wing/teal.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 920,
+        "width": 418,
+        "height": 334
+      }
+    }
+  },
+  "wing/periwinkle": {
+    "png": "wing/periwinkle.png",
+    "webp": {
+      "128": "128/wing/periwinkle.webp",
+      "256": "256/wing/periwinkle.webp",
+      "512": "512/wing/periwinkle.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 418,
+        "top": 920,
+        "width": 418,
+        "height": 334
+      }
+    }
+  },
+  "wing/mint": {
+    "png": "wing/mint.png",
+    "webp": {
+      "128": "128/wing/mint.webp",
+      "256": "256/wing/mint.webp",
+      "512": "512/wing/mint.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 836,
+        "top": 920,
+        "width": 418,
+        "height": 334
+      }
+    }
+  }
+}

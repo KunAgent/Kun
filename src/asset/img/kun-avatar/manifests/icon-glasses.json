@@ -1,0 +1,112 @@
+{
+  "icon/glasses/square": {
+    "png": "icon/glasses/square.png",
+    "webp": {
+      "128": "128/icon/glasses/square.webp",
+      "256": "256/icon/glasses/square.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-glasses.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 627,
+        "height": 430
+      }
+    }
+  },
+  "icon/glasses/round": {
+    "png": "icon/glasses/round.png",
+    "webp": {
+      "128": "128/icon/glasses/round.webp",
+      "256": "256/icon/glasses/round.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-glasses.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 1,
+      "crop": {
+        "left": 627,
+        "top": 0,
+        "width": 627,
+        "height": 430
+      }
+    }
+  },
+  "icon/glasses/lab": {
+    "png": "icon/glasses/lab.png",
+    "webp": {
+      "128": "128/icon/glasses/lab.webp",
+      "256": "256/icon/glasses/lab.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-glasses.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 2,
+      "crop": {
+        "left": 0,
+        "top": 430,
+        "width": 627,
+        "height": 420
+      }
+    }
+  },
+  "icon/glasses/rectangular": {
+    "png": "icon/glasses/rectangular.png",
+    "webp": {
+      "128": "128/icon/glasses/rectangular.webp",
+      "256": "256/icon/glasses/rectangular.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-glasses.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 3,
+      "crop": {
+        "left": 627,
+        "top": 430,
+        "width": 627,
+        "height": 420
+      }
+    }
+  },
+  "icon/glasses/cat-eye": {
+    "png": "icon/glasses/cat-eye.png",
+    "webp": {
+      "128": "128/icon/glasses/cat-eye.webp",
+      "256": "256/icon/glasses/cat-eye.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-glasses.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 4,
+      "crop": {
+        "left": 0,
+        "top": 850,
+        "width": 700,
+        "height": 404
+      }
+    }
+  }
+}

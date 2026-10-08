@@ -5,7 +5,7 @@ import { RoomMemberSchema } from './rooms.js'
 import { RoomUserProfileSchema } from './room-onboarding.js'
 import { KunAvatarPartsSchema } from './kun-avatar-schema.js'
 import { KUN_AVATAR_PRESETS, ROOM_BUILTIN_AVATAR_IDS } from './kun-avatar-presets.js'
-import { KUN_AVATAR_CATALOG, KUN_AVATAR_ACCESSORY_CATEGORIES, KUN_AVATAR_DEFAULT_PARTS,
+import { KUN_AVATAR_CATALOG, KUN_AVATAR_ACCESSORY_CATEGORIES, KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_SCENES, KUN_AVATAR_RARITIES,
   normalizeKunAvatarParts, getKunAvatarConflicts, updateKunAvatarPart, randomKunAvatarParts,
   canonicalKunAvatarKey, type KunAvatarParts } from './kun-avatar-catalog.js'
 
@@ -47,7 +47,7 @@ describe('composed avatar contracts', () => {
       { ...composed(), version: 2 }, { ...composed(), extra: true },
       { ...composed(), parts: { ...KUN_AVATAR_DEFAULT_PARTS, unknown: true } },
       { ...composed(), parts: { ...KUN_AVATAR_DEFAULT_PARTS, color: 'red' } },
-      { ...composed(), parts: { ...KUN_AVATAR_DEFAULT_PARTS, face: 'wink' } },
+      { ...composed(), parts: { ...KUN_AVATAR_DEFAULT_PARTS, face: 'unknown-expression' } },
       { ...composed(), parts: { ...KUN_AVATAR_DEFAULT_PARTS, headwear: 'square' } },
       { ...composed(), parts: { ...KUN_AVATAR_DEFAULT_PARTS, glasses: 'headset' } },
       { ...composed(), parts: { ...KUN_AVATAR_DEFAULT_PARTS, outfit: 'book' } },
@@ -55,6 +55,16 @@ describe('composed avatar contracts', () => {
       ...['red', '#fff', '#aabbccdd', 'url(file:///tmp/avatar.png)', ''].map((bg) => composed({ bg }))
     ]
     for (const avatar of invalid) expect(RoomAvatarReferenceSchema.safeParse(avatar).success).toBe(false)
+  })
+
+  it('persists every new expression and scene through existing avatar contracts', () => {
+    for (const face of KUN_AVATAR_CATALOG.face) for (const scene of KUN_AVATAR_SCENES) {
+      const avatar = composed({ face: face.id, bg: `scene:${scene.id}`, prop: 'book' })
+      expect(RoomUserProfileSchema.parse({ avatar }).avatar).toEqual(avatar)
+      expect(UpdateAgentRequest.parse({ clientRequestId: 'scene', expectedRevision: 0, avatar }).avatar).toEqual(avatar)
+    }
+    expect(KunAvatarPartsSchema.safeParse({ ...KUN_AVATAR_DEFAULT_PARTS, bg: 'scene:unknown' }).success).toBe(false)
+    expect(KunAvatarPartsSchema.safeParse({ ...KUN_AVATAR_DEFAULT_PARTS, bg: 'scene:../sunset-bay' }).success).toBe(false)
   })
 
   it('rejects helmet/glasses conflicts, including every preset eye accessory', () => {
@@ -70,7 +80,7 @@ describe('composed avatar contracts', () => {
 describe('shared avatar catalog', () => {
   it('covers all required parts and the 30 stable role IDs with valid complete presets', () => {
     expect(Object.fromEntries(Object.entries(KUN_AVATAR_CATALOG).map(([category, parts]) =>
-      [category, parts.length]))).toEqual({ color: 4, face: 2, headwear: 19, glasses: 5, outfit: 24, prop: 9 })
+      [category, parts.length]))).toEqual({ color: 4, face: 6, headwear: 19, glasses: 5, outfit: 24, prop: 9 })
     for (const entries of Object.values(KUN_AVATAR_CATALOG)) {
       expect(new Set(entries.map((part) => part.id)).size).toBe(entries.length)
       for (const entry of entries) {
@@ -83,6 +93,25 @@ describe('shared avatar catalog', () => {
     for (const category of KUN_AVATAR_ACCESSORY_CATEGORIES) {
       const represented = new Set(KUN_AVATAR_PRESETS.map((preset) => preset.parts[category]))
       for (const part of KUN_AVATAR_CATALOG[category]) expect(represented.has(part.id)).toBe(true)
+    }
+  })
+
+  it('describes every collectible and assigns all role cards to an existing scene', () => {
+    const equipment = KUN_AVATAR_ACCESSORY_CATEGORIES.flatMap((category) => [...KUN_AVATAR_CATALOG[category]])
+    expect(equipment).toHaveLength(57)
+    expect(Object.fromEntries(KUN_AVATAR_RARITIES.map((rarity) =>
+      [rarity, equipment.filter((part) => part.rarity === rarity).length])))
+      .toEqual({ common: 16, rare: 22, epic: 13, legendary: 6 })
+    expect(equipment.filter((part) => part.rarity === 'legendary').map((part) => part.id))
+      .toEqual(['astronaut-helmet', 'wizard-hat', 'laurel', 'spacesuit', 'storyteller-cape', 'wizard-cape'])
+    for (const part of equipment) {
+      expect(KUN_AVATAR_RARITIES).toContain(part.rarity)
+      expect(ROOM_BUILTIN_AVATAR_IDS).toContain(part.set)
+      expect(part.flavor.zh).toBeTruthy()
+      expect(part.flavor.en).toBeTruthy()
+    }
+    for (const preset of KUN_AVATAR_PRESETS) {
+      expect(KUN_AVATAR_SCENES.some(({ id }) => id === preset.cardScene)).toBe(true)
     }
   })
 

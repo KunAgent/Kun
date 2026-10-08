@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS } from '@shared/rooms-api'
+import { KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_SMALL_HEADWEAR } from '@shared/rooms-api'
 import { avatarRenderRequest, composedAvatarLayers, composedAvatarSourceTier } from './room-avatar-compositor'
 
 describe('layered avatar rendering plan', () => {
@@ -13,6 +13,20 @@ describe('layered avatar rendering plan', () => {
     expect(avatarRenderRequest({ ...KUN_AVATAR_DEFAULT_PARTS, bg: '#AABBCC' }, 96, 1).key)
       .toBe(avatarRenderRequest({ ...KUN_AVATAR_DEFAULT_PARTS, bg: '#aabbcc' }, 96, 1).key)
     expect(avatarRenderRequest({ ...KUN_AVATAR_DEFAULT_PARTS, face: 'happy' }, 96, 1).key).not.toBe(full.key)
+  })
+
+  it('separates compact variants and stage effects when CSS sizes share the same physical pixels', () => {
+    const small = avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 24, 2)
+    const compact = avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 1)
+    expect(small.pixels).toBe(compact.pixels)
+    expect(small.key).not.toBe(compact.key)
+    const stage = avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 96, 1, true)
+    const gallery = avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 64, 1.5, true)
+    expect(stage.pixels).toBe(gallery.pixels)
+    expect(stage.key).not.toBe(gallery.key)
+    expect(stage.effects).toBe(true)
+    expect(gallery.effects).toBe(false)
+    expect(stage.key).not.toBe(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 96, 1).key)
   })
 
   it('selects sufficiently dense source images for a retina face crop', () => {
@@ -34,6 +48,40 @@ describe('layered avatar rendering plan', () => {
       if (parts.glasses) expect(layers.indexOf(`glasses/${parts.glasses}`)).toBeGreaterThan(face)
       if (parts.prop) expect(layers.slice(-2)).toEqual([`prop/${parts.prop}`, `wing/${parts.color}`])
     }
+  })
+
+  it('omits invisible props and gripping wings from compact render requests', () => {
+    const parts = { ...KUN_AVATAR_DEFAULT_PARTS, prop: 'book' as const, outfit: 'cardigan' as const }
+    for (const size of [24, 34, 48]) {
+      const layers = composedAvatarLayers(parts, avatarRenderRequest(parts, size, 3))
+      expect(layers.some((layer) => layer.startsWith('prop/') || layer.startsWith('wing/'))).toBe(false)
+      expect(layers).toContain('outfit/cardigan')
+    }
+    expect(composedAvatarLayers(parts, { size: 49 })).toContain('prop/book')
+  })
+
+  it('uses registered small glasses and hats only through 34 CSS pixels', () => {
+    for (const glasses of KUN_AVATAR_CATALOG.glasses) {
+      const parts = { ...KUN_AVATAR_DEFAULT_PARTS, glasses: glasses.id }
+      expect(composedAvatarLayers(parts, { size: 34 })).toContain(`glasses/${glasses.id}.small`)
+      expect(composedAvatarLayers(parts, { size: 35 })).toContain(`glasses/${glasses.id}`)
+    }
+    for (const headwear of KUN_AVATAR_CATALOG.headwear) {
+      const layers = composedAvatarLayers({ ...KUN_AVATAR_DEFAULT_PARTS, headwear: headwear.id }, { size: 24 })
+      expect(layers).toContain(`headwear/${headwear.id}${KUN_AVATAR_SMALL_HEADWEAR.includes(headwear.id) ? '.small' : ''}`)
+    }
+  })
+
+  it('places simplified scenes below the bird and shows only the highest rarity effect on stages', () => {
+    const parts = { ...KUN_AVATAR_DEFAULT_PARTS, bg: 'scene:star-deck',
+      headwear: 'hood' as const, outfit: 'wizard-cape' as const }
+    expect(composedAvatarLayers(parts, { size: 48 })[0]).toBe('scene/star-deck.small')
+    expect(composedAvatarLayers(parts, { size: 96 })[0]).toBe('scene/star-deck')
+    expect(composedAvatarLayers(parts, { size: 96 }).some((key) => key.startsWith('fx/'))).toBe(false)
+    expect(composedAvatarLayers(parts, { size: 95, effects: true }).some((key) => key.startsWith('fx/'))).toBe(false)
+    expect(composedAvatarLayers(parts, { size: 96, effects: true }).at(-1)).toBe('fx/legendary')
+    expect(composedAvatarLayers({ ...parts, outfit: undefined }, { size: 96, effects: true }).at(-1)).toBe('fx/epic')
+    expect(composedAvatarLayers(KUN_AVATAR_DEFAULT_PARTS, { size: 96, effects: true }).some((key) => key.startsWith('fx/'))).toBe(false)
   })
 
   it('splits rear layers and respects hidden or tucked crests', () => {

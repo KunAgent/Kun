@@ -1,0 +1,398 @@
+{
+  "icon/outfit/black-hoodie": {
+    "png": "icon/outfit/black-hoodie.png",
+    "webp": {
+      "128": "128/icon/outfit/black-hoodie.webp",
+      "256": "256/icon/outfit/black-hoodie.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 0
+    }
+  },
+  "icon/outfit/mint-hoodie": {
+    "png": "icon/outfit/mint-hoodie.png",
+    "webp": {
+      "128": "128/icon/outfit/mint-hoodie.webp",
+      "256": "256/icon/outfit/mint-hoodie.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 1
+    }
+  },
+  "icon/outfit/cream-shirt": {
+    "png": "icon/outfit/cream-shirt.png",
+    "webp": {
+      "128": "128/icon/outfit/cream-shirt.webp",
+      "256": "256/icon/outfit/cream-shirt.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 2
+    }
+  },
+  "icon/outfit/cardigan": {
+    "png": "icon/outfit/cardigan.png",
+    "webp": {
+      "128": "128/icon/outfit/cardigan.webp",
+      "256": "256/icon/outfit/cardigan.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 3
+    }
+  },
+  "icon/outfit/lab-coat": {
+    "png": "icon/outfit/lab-coat.png",
+    "webp": {
+      "128": "128/icon/outfit/lab-coat.webp",
+      "256": "256/icon/outfit/lab-coat.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 4
+    }
+  },
+  "icon/outfit/security-jacket": {
+    "png": "icon/outfit/security-jacket.png",
+    "webp": {
+      "128": "128/icon/outfit/security-jacket.webp",
+      "256": "256/icon/outfit/security-jacket.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 5
+    }
+  },
+  "icon/outfit/red-scarf": {
+    "png": "icon/outfit/red-scarf.png",
+    "webp": {
+      "128": "128/icon/outfit/red-scarf.webp",
+      "256": "256/icon/outfit/red-scarf.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 6
+    }
+  },
+  "icon/outfit/cream-scarf": {
+    "png": "icon/outfit/cream-scarf.png",
+    "webp": {
+      "128": "128/icon/outfit/cream-scarf.webp",
+      "256": "256/icon/outfit/cream-scarf.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 7
+    }
+  },
+  "icon/outfit/night-scarf": {
+    "png": "icon/outfit/night-scarf.png",
+    "webp": {
+      "128": "128/icon/outfit/night-scarf.webp",
+      "256": "256/icon/outfit/night-scarf.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 8
+    }
+  },
+  "icon/outfit/spacesuit": {
+    "png": "icon/outfit/spacesuit.png",
+    "webp": {
+      "128": "128/icon/outfit/spacesuit.webp",
+      "256": "256/icon/outfit/spacesuit.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 0
+    }
+  },
+  "icon/outfit/pilot-jacket": {
+    "png": "icon/outfit/pilot-jacket.png",
+    "webp": {
+      "128": "128/icon/outfit/pilot-jacket.webp",
+      "256": "256/icon/outfit/pilot-jacket.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 1
+    }
+  },
+  "icon/outfit/sailor-shirt": {
+    "png": "icon/outfit/sailor-shirt.png",
+    "webp": {
+      "128": "128/icon/outfit/sailor-shirt.webp",
+      "256": "256/icon/outfit/sailor-shirt.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 2
+    }
+  },
+  "icon/outfit/overalls": {
+    "png": "icon/outfit/overalls.png",
+    "webp": {
+      "128": "128/icon/outfit/overalls.webp",
+      "256": "256/icon/outfit/overalls.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 3
+    }
+  },
+  "icon/outfit/chef-coat": {
+    "png": "icon/outfit/chef-coat.png",
+    "webp": {
+      "128": "128/icon/outfit/chef-coat.webp",
+      "256": "256/icon/outfit/chef-coat.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 4
+    }
+  },
+  "icon/outfit/nurse-uniform": {
+    "png": "icon/outfit/nurse-uniform.png",
+    "webp": {
+      "128": "128/icon/outfit/nurse-uniform.webp",
+      "256": "256/icon/outfit/nurse-uniform.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 5
+    }
+  },
+  "icon/outfit/camera-shirt": {
+    "png": "icon/outfit/camera-shirt.png",
+    "webp": {
+      "128": "128/icon/outfit/camera-shirt.webp",
+      "256": "256/icon/outfit/camera-shirt.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 6
+    }
+  },
+  "icon/outfit/sports-vest": {
+    "png": "icon/outfit/sports-vest.png",
+    "webp": {
+      "128": "128/icon/outfit/sports-vest.webp",
+      "256": "256/icon/outfit/sports-vest.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 7
+    }
+  },
+  "icon/outfit/storyteller-cape": {
+    "png": "icon/outfit/storyteller-cape.png",
+    "webp": {
+      "128": "128/icon/outfit/storyteller-cape.webp",
+      "256": "256/icon/outfit/storyteller-cape.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 8
+    }
+  },
+  "icon/outfit/wizard-cape": {
+    "png": "icon/outfit/wizard-cape.png",
+    "webp": {
+      "128": "128/icon/outfit/wizard-cape.webp",
+      "256": "256/icon/outfit/wizard-cape.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 0
+    }
+  },
+  "icon/outfit/coffee-apron": {
+    "png": "icon/outfit/coffee-apron.png",
+    "webp": {
+      "128": "128/icon/outfit/coffee-apron.webp",
+      "256": "256/icon/outfit/coffee-apron.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 1
+    }
+  },
+  "icon/outfit/tool-apron": {
+    "png": "icon/outfit/tool-apron.png",
+    "webp": {
+      "128": "128/icon/outfit/tool-apron.webp",
+      "256": "256/icon/outfit/tool-apron.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 2,
+      "crop": {
+        "left": 0,
+        "top": 512,
+        "width": 512,
+        "height": 486
+      }
+    }
+  },
+  "icon/outfit/mailbag": {
+    "png": "icon/outfit/mailbag.png",
+    "webp": {
+      "128": "128/icon/outfit/mailbag.webp",
+      "256": "256/icon/outfit/mailbag.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 3
+    }
+  },
+  "icon/outfit/robe": {
+    "png": "icon/outfit/robe.png",
+    "webp": {
+      "128": "128/icon/outfit/robe.webp",
+      "256": "256/icon/outfit/robe.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-c-refined.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 4,
+      "crop": {
+        "left": 0,
+        "top": 1000,
+        "width": 512,
+        "height": 536
+      }
+    }
+  },
+  "icon/outfit/blue-scarf": {
+    "png": "icon/outfit/blue-scarf.png",
+    "webp": {
+      "128": "128/icon/outfit/blue-scarf.webp",
+      "256": "256/icon/outfit/blue-scarf.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-clothes-c.png",
+      "grid": [
+        2,
+        3
+      ],
+      "cell": 5
+    }
+  }
+}

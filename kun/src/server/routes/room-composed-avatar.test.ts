@@ -32,7 +32,7 @@ it('roundtrips composed avatars in the existing profile route, preserving receip
   const get = () => handlers.get('GET/v1/rooms/user-profile')!(rooms,
     new Request('http://kun.local/v1/rooms/user-profile'))
   const avatar = { kind: 'composed', version: 1,
-    parts: normalizeKunAvatarParts({ color: 'mint', face: 'happy', headwear: 'beret', prop: 'paintbrush' }) }
+    parts: normalizeKunAvatarParts({ color: 'mint', face: 'surprised', headwear: 'beret', prop: 'paintbrush', bg: 'scene:sunset-bay' }) }
   const request = { clientRequestId: 'composed', expectedRevision: null, avatar }
   expect(await put(request)).toEqual({ profile: { avatar }, revision: 0 })
   expect(await put(request)).toEqual(await get())
@@ -67,7 +67,7 @@ it('persists Agent, group and member compositions through their current services
   const service = new RoomService(store, () => undefined)
   const members = defaultRoomMembers([]).map((member) => ({ ...member, avatar }))
   const { room } = await service.create({ clientRequestId: 'create-avatar-group', name: 'Avatar group', avatar, members })
-  const changed = { ...avatar, parts: normalizeKunAvatarParts({ color: 'mint', face: 'happy', prop: 'leaf' }) }
+  const changed = { ...avatar, parts: normalizeKunAvatarParts({ color: 'mint', face: 'sleepy', prop: 'leaf', bg: 'scene:night-study' }) }
   await agents.update(agent.id, { clientRequestId: 'update-avatar-agent', expectedRevision: 0, avatar: changed })
   await service.update(room.id, { clientRequestId: 'update-avatar-group', expectedRevision: 0, avatar: changed,
     members: members.map((member) => ({ ...member, avatar: changed })) })

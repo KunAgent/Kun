@@ -6,6 +6,7 @@ import { extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, _electron } from 'playwright-core'
 import { build, createServer, normalizePath } from 'vite'
+import { loadAvatarCatalog } from './kun-avatar-compose-check.mjs'
 
 // Actual avatar components, shared profile store and CSS; only the HTTP/preload
 // boundary is replaced. No runtime, external network or user data is touched.
@@ -15,6 +16,7 @@ import { build, createServer, normalizePath } from 'vite'
 // this component fixture is distinct from a full --workbench-only app smoke.
 // --serve keeps the development fixture open for manual inspection.
 const repository = fileURLToPath(new URL('../', import.meta.url))
+const catalog = await loadAvatarCatalog(repository)
 const temporary = await mkdtemp(join(tmpdir(), 'kun-layered-avatar-'))
 const evidence = resolve(process.env.KUN_AVATAR_EVIDENCE ?? join(repository, '.cache/kun-avatar-ui'))
 const fixtureId = normalizePath(join(repository, '__kun_avatar_fixture.tsx'))
@@ -52,6 +54,7 @@ try {
       await waitForOptions(30)
       await assertGeometry(mobile ? 'mobile-panel' : 'desktop-dialog')
       await capture(`${mobile ? 'mobile-fallback' : 'desktop'}-${theme}-presets`)
+      await checkArtPanels(`${mobile ? 'mobile-fallback' : 'desktop'}-${theme}`)
       await editAndSave()
       await show({ mode: mobile ? 'panel' : 'modal' })
       await waitForOptions(30)
@@ -220,11 +223,12 @@ async function assertGeometry(label) {
     const composer = document.querySelector('.rooms-avatar-composer')
     const { x, width } = composer.getBoundingClientRect()
     return { x, width, viewport: innerWidth, documentWidth: document.documentElement.scrollWidth,
-      buttons: [...composer.querySelectorAll('button')].map((button) => button.getBoundingClientRect().height),
+      buttons: [...composer.querySelectorAll('[role="tab"], .rooms-avatar-composer-option, .rooms-avatar-slot-open')]
+        .map((button) => button.getBoundingClientRect().height),
       options: [...composer.querySelectorAll('.rooms-avatar-composer-option')].map((button) => {
         const bounds = button.getBoundingClientRect()
-        const art = button.querySelector('.rooms-avatar').getBoundingClientRect()
-        const label = button.querySelector(':scope > span:last-of-type').getBoundingClientRect()
+        const art = button.querySelector('.rooms-avatar-option-art').getBoundingClientRect()
+        const label = button.querySelector('.rooms-avatar-option-name').getBoundingClientRect()
         return { top: bounds.top, bottom: bounds.bottom, artTop: art.top, artBottom: art.bottom,
           labelTop: label.top, labelBottom: label.bottom }
       }) }
@@ -238,12 +242,14 @@ async function assertGeometry(label) {
 }
 async function editAndSave() {
   const before = await snapshot()
+  await page.locator('[data-avatar-tab="preset"]').click()
+  await waitForOptions(catalog.KUN_AVATAR_PRESETS.length)
   await page.getByRole('button', { name: 'Coordinator', exact: true }).click()
-  await page.getByRole('combobox', { name: 'Customize avatar', exact: true }).selectOption('color')
-  await waitForOptions(4)
+  await page.locator('[data-avatar-tab="color"]').click()
+  await waitForOptions(catalog.KUN_AVATAR_CATALOG.color.length)
   await page.locator('.rooms-avatar-composer-option').nth(1).click()
-  await page.getByRole('combobox', { name: 'Customize avatar', exact: true }).selectOption('face')
-  await waitForOptions(2)
+  await page.locator('[data-avatar-tab="face"]').click()
+  await waitForOptions(catalog.KUN_AVATAR_CATALOG.face.length)
   await page.locator('.rooms-avatar-composer-option').nth(1).click()
   await waitForImages('.rooms-avatar-composer-preview img[data-composed]', 1)
   await page.getByRole('button', { name: 'Save', exact: true }).click()
@@ -254,6 +260,24 @@ async function editAndSave() {
   assert.equal(after.profile.profile.avatar.parts.color, 'teal')
   assert.equal(after.profile.profile.avatar.parts.face, 'happy')
   assert.equal(after.profile.revision, before.profile.revision + 1)
+}
+async function checkArtPanels(label) {
+  const before = await snapshot()
+  for (const category of catalog.KUN_AVATAR_ACCESSORY_CATEGORIES) {
+    await page.locator(`[data-avatar-tab="${category}"]`).click()
+    const selector = '.rooms-avatar-composer-option .rooms-avatar-item-art img'
+    await waitForImages(selector, catalog.KUN_AVATAR_CATALOG[category].length)
+    const sources = await page.locator(selector).evaluateAll((images) => images.map((image) => image.currentSrc))
+    assert(sources.every((source) => source.includes(`/icon/${category}/`)), 'wardrobe must load independent item art')
+    if (category === 'outfit') await capture(`${label}-outfit-icons`)
+  }
+  await page.locator('[data-avatar-tab="bg"]').click()
+  await waitForImages('.rooms-avatar-scene-art', catalog.KUN_AVATAR_SCENES.length)
+  await page.getByRole('button', { name: catalog.KUN_AVATAR_SCENES[1].label.en, exact: true }).click()
+  await page.mouse.move(4, 4)
+  await waitForImages('.rooms-avatar-composer-preview img[data-composed]', 1)
+  await capture(`${label}-scene-preview`)
+  assert.deepEqual((await snapshot()).profile, before.profile, 'scene try-on must remain local until Save')
 }
 async function checkAgentPicker() {
   await show({ mode: 'agent' })

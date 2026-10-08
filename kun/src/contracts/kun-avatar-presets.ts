@@ -1,4 +1,4 @@
-import { normalizeKunAvatarParts, type KunAvatarParts } from './kun-avatar-catalog.js'
+import { normalizeKunAvatarParts, type KunAvatarParts, type KunAvatarScene } from './kun-avatar-catalog.js'
 
 export const ROOM_BUILTIN_AVATAR_IDS = ['coordinator', 'coder', 'reviewer', 'detective', 'designer', 'architect',
   'scientist', 'security', 'writer', 'researcher', 'data', 'operations', 'astronaut', 'pilot', 'navigator',
@@ -6,8 +6,19 @@ export const ROOM_BUILTIN_AVATAR_IDS = ['coordinator', 'coder', 'reviewer', 'det
   'magician', 'night-thinker', 'barista', 'maker', 'courier', 'strategist'] as const
 export type KunAvatarPresetId = (typeof ROOM_BUILTIN_AVATAR_IDS)[number]
 
+/** Card art reuses scene backgrounds; existing avatar backgrounds stay unchanged. */
+export const KUN_AVATAR_CARD_SCENES: Record<KunAvatarPresetId, KunAvatarScene> = {
+  coordinator: 'cafe', coder: 'night-study', reviewer: 'night-study', detective: 'night-study',
+  designer: 'cafe', architect: 'laboratory', scientist: 'laboratory', security: 'laboratory',
+  writer: 'night-study', researcher: 'night-study', data: 'laboratory', operations: 'laboratory',
+  astronaut: 'star-deck', pilot: 'star-deck', navigator: 'sunset-bay', librarian: 'night-study',
+  musician: 'cafe', gardener: 'forest-cabin', chef: 'cafe', medic: 'laboratory', photographer: 'sunset-bay',
+  athlete: 'sunset-bay', explorer: 'forest-cabin', storyteller: 'forest-cabin', magician: 'star-deck',
+  'night-thinker': 'night-study', barista: 'cafe', maker: 'laboratory', courier: 'sunset-bay', strategist: 'star-deck'
+}
+
 function preset(id: KunAvatarPresetId, zh: string, en: string, parts: Partial<KunAvatarParts>) {
-  return { id, label: { zh, en }, parts: normalizeKunAvatarParts(parts) }
+  return { id, label: { zh, en }, cardScene: KUN_AVATAR_CARD_SCENES[id], parts: normalizeKunAvatarParts(parts) }
 }
 
 export const KUN_AVATAR_PRESETS = [
