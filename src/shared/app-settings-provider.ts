@@ -38,6 +38,7 @@ export {
   normalizeModelProviderSettings,
   normalizeModelRoutePools,
   projectExecutableModelRoutePools,
+  projectRuntimeModelRoutePools,
   resolveModelProviderApiKey,
   resolveModelProviderBaseUrl,
   resolveModelProviderProxyUrl,

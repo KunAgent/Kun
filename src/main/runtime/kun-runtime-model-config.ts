@@ -1,7 +1,7 @@
 import {
   defaultKunTokenEconomySettings,
   getModelProviderSettings,
-  projectExecutableModelRoutePools,
+  projectRuntimeModelRoutePools,
   projectFailoverGroupsForRuntime,
   resolveKunRuntimeSettings,
   resolveModelProviderPresetSource,
@@ -151,7 +151,7 @@ function modelCapabilitiesForProviderConfig(
 
 export function routePoolsConfigForRuntime(settings: AppSettingsV1) {
   const providerSettings = getModelProviderSettings(settings)
-  return projectExecutableModelRoutePools(providerSettings)
+  return projectRuntimeModelRoutePools(providerSettings)
 }
 
 export function providerFailoverConfigForRuntime(settings: AppSettingsV1) {

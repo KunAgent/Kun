@@ -327,7 +327,7 @@ export function normalizeModelRoutePools(
   return out
 }
 
-export { projectExecutableModelRoutePools, resolveModelRouteTargetReference } from './app-settings-route-projection'
+export { projectExecutableModelRoutePools, projectRuntimeModelRoutePools, resolveModelRouteTargetReference } from './app-settings-route-projection'
 
 export function getModelProviderSettings(settings: AppSettingsV1): ModelProviderSettingsV1 {
   return normalizeModelProviderSettings((settings as { provider?: ModelProviderSettingsPatchV1 }).provider)
