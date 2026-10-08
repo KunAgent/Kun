@@ -25,12 +25,12 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-bottles.png",
+      "file": "v2-bottle-glowing.png",
       "grid": [
-        2,
-        2
+        1,
+        1
       ],
-      "cell": 1
+      "cell": 0
     }
   },
   "container/bottle-open": {

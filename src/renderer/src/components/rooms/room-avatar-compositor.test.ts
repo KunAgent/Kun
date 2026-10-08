@@ -32,7 +32,7 @@ describe('layered avatar rendering plan', () => {
   it('selects sufficiently dense source images for a retina face crop', () => {
     expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 96, 1))).toBe(128)
     expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 2))).toBe(256)
-    expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 3))).toBe(512)
+    expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 48, 4))).toBe(512)
     expect(composedAvatarSourceTier(avatarRenderRequest(KUN_AVATAR_DEFAULT_PARTS, 512, 2))).toBe(512)
   })
 
@@ -60,15 +60,19 @@ describe('layered avatar rendering plan', () => {
     expect(composedAvatarLayers(parts, { size: 49 })).toContain('prop/book')
   })
 
-  it('uses registered small glasses and hats only through 34 CSS pixels', () => {
+  it('uses small glasses through 34px and small hats throughout the 48px compact crop', () => {
     for (const glasses of KUN_AVATAR_CATALOG.glasses) {
       const parts = { ...KUN_AVATAR_DEFAULT_PARTS, glasses: glasses.id }
       expect(composedAvatarLayers(parts, { size: 34 })).toContain(`glasses/${glasses.id}.small`)
       expect(composedAvatarLayers(parts, { size: 35 })).toContain(`glasses/${glasses.id}`)
     }
     for (const headwear of KUN_AVATAR_CATALOG.headwear) {
-      const layers = composedAvatarLayers({ ...KUN_AVATAR_DEFAULT_PARTS, headwear: headwear.id }, { size: 24 })
-      expect(layers).toContain(`headwear/${headwear.id}${KUN_AVATAR_SMALL_HEADWEAR.includes(headwear.id) ? '.small' : ''}`)
+      for (const size of [24, 34, 48]) {
+        const layers = composedAvatarLayers({ ...KUN_AVATAR_DEFAULT_PARTS, headwear: headwear.id }, { size })
+        expect(layers).toContain(`headwear/${headwear.id}${KUN_AVATAR_SMALL_HEADWEAR.includes(headwear.id) ? '.small' : ''}`)
+      }
+      expect(composedAvatarLayers({ ...KUN_AVATAR_DEFAULT_PARTS, headwear: headwear.id }, { size: 49 }))
+        .toContain(`headwear/${headwear.id}`)
     }
   })
 
@@ -79,7 +83,9 @@ describe('layered avatar rendering plan', () => {
     expect(composedAvatarLayers(parts, { size: 96 })[0]).toBe('scene/star-deck')
     expect(composedAvatarLayers(parts, { size: 96 }).some((key) => key.startsWith('fx/'))).toBe(false)
     expect(composedAvatarLayers(parts, { size: 95, effects: true }).some((key) => key.startsWith('fx/'))).toBe(false)
-    expect(composedAvatarLayers(parts, { size: 96, effects: true }).at(-1)).toBe('fx/legendary')
+    const effects = composedAvatarLayers(parts, { size: 96, effects: true })
+    expect(effects.slice(0, 4)).toEqual(['scene/star-deck', 'fx/legendary.back', 'outfit/wizard-cape.back', 'headwear/hood.back'])
+    expect(effects.at(-1)).toBe('fx/legendary')
     expect(composedAvatarLayers({ ...parts, outfit: undefined }, { size: 96, effects: true }).at(-1)).toBe('fx/epic')
     expect(composedAvatarLayers(KUN_AVATAR_DEFAULT_PARTS, { size: 96, effects: true }).some((key) => key.startsWith('fx/'))).toBe(false)
   })

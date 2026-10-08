@@ -42,10 +42,10 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-faces.png",
+      "file": "v2-faces.png",
       "grid": [
-        2,
-        2
+        3,
+        1
       ],
       "cell": 0
     }
@@ -76,12 +76,12 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-faces.png",
+      "file": "v2-faces.png",
       "grid": [
-        2,
-        2
+        3,
+        1
       ],
-      "cell": 2
+      "cell": 1
     }
   },
   "face/sleepy": {
@@ -93,12 +93,12 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-faces.png",
+      "file": "v2-faces.png",
       "grid": [
-        2,
-        2
+        3,
+        1
       ],
-      "cell": 3
+      "cell": 2
     }
   }
 }

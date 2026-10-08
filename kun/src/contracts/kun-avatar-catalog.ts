@@ -296,13 +296,14 @@ export function kunAvatarLayerKeys(parts: KunAvatarParts, options: KunAvatarRend
   const effects = options.effects && (options.size ?? 0) >= 96 && (rarity === 'epic' || rarity === 'legendary')
   return [
     scene ? `scene/${scene}${compact ? '.small' : ''}` : '',
+    effects ? `fx/${rarity}.back` : '',
     outfit?.hasBack ? `outfit/${outfit.id}.back` : '',
     headwear?.hasBack ? `headwear/${headwear.id}.back` : '',
     crest === 'hidden' ? '' : `crest/${crest === 'tucked' ? 'tucked-' : ''}${parts.color}`,
     `base/${parts.color}`, `face/${parts.face}`,
     parts.outfit ? `outfit/${parts.outfit}` : '',
     parts.glasses ? `glasses/${parts.glasses}${small ? '.small' : ''}` : '',
-    parts.headwear ? `headwear/${parts.headwear}${small && KUN_AVATAR_SMALL_HEADWEAR.includes(parts.headwear) ? '.small' : ''}` : '',
+    parts.headwear ? `headwear/${parts.headwear}${compact && KUN_AVATAR_SMALL_HEADWEAR.includes(parts.headwear) ? '.small' : ''}` : '',
     !compact && parts.prop ? `prop/${parts.prop}` : '',
     !compact && parts.prop ? `wing/${parts.color}` : '',
     effects ? `fx/${rarity}` : ''

@@ -61,9 +61,8 @@ export async function generateAvatarArtQa(context) {
   const effects = []
   for (const rarity of ['epic', 'legendary']) for (const color of shared.KUN_AVATAR_CATALOG.color) {
     for (const bg of ['#f7f5ef', '#1d2530', '#d9edf7', '#f5dcdb', '#ddedd7', '#e9dffa']) {
-      const body = await avatar({ color: color.id, bg })
-      const overlay = await image(`fx/${rarity}`, 128)
-      effects.push({ image: await sharp(body).composite([{ input: overlay }]).png().toBuffer(),
+      const headwear = rarity === 'epic' ? 'detective-hat' : 'wizard-hat'
+      effects.push({ image: await avatar({ color: color.id, headwear, bg }, 128, { size: 128, effects: true }),
         label: `${rarity} / ${color.id} / ${bg}` })
     }
   }

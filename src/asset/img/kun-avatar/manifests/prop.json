@@ -8,17 +8,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "props.png",
+      "file": "v2-material-epic-tools.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 0,
+        "left": 512,
         "top": 0,
-        "width": 418,
-        "height": 451
+        "width": 512,
+        "height": 512
       }
     }
   },
@@ -54,17 +54,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "props.png",
+      "file": "v2-material-epic-tools.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 836,
+        "left": 1024,
         "top": 0,
-        "width": 418,
-        "height": 451
+        "width": 512,
+        "height": 512
       }
     }
   },
@@ -77,17 +77,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "props.png",
+      "file": "v2-outline-quill-refined.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 0,
-        "top": 451,
-        "width": 418,
-        "height": 388
+        "left": 60,
+        "top": 76,
+        "width": 934,
+        "height": 1364
       }
     }
   },

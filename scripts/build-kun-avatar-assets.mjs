@@ -6,11 +6,17 @@ import { avatarRecipes } from './kun-avatar-asset-recipes.mjs'
 import { polishRecipes } from './kun-avatar-polish-recipes.mjs'
 import { accessoryIconRecipes } from './kun-avatar-accessory-icon-recipes.mjs'
 import { wornRecipes } from './kun-avatar-worn-recipes.mjs'
+import { v2Recipes } from './kun-avatar-v2-recipes.mjs'
+import { v2PerspectiveRecipes } from './kun-avatar-v2-perspective-recipes.mjs'
+import { v2OutlineRecipes } from './kun-avatar-v2-outline-recipes.mjs'
+import { v2MaterialRecipes } from './kun-avatar-v2-material-recipes.mjs'
+import { v2ClothingRecipes } from './kun-avatar-v2-clothing-recipes.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const directory = resolve(root, 'src/asset/img/kun-avatar')
-const manifest = { schemaVersion: 1, version: '2', canvas: 1024,
-  anchors: { faceBox: [232, 300, 792, 860], eyeLineY: 584, beak: [512, 666] }, assetManifests: [] }
+const manifest = { schemaVersion: 1, version: '3', canvas: 1024,
+  anchors: { faceBox: [232, 300, 792, 860], compactFaceBox: [200, 236, 824, 860],
+    eyeLineY: 584, beak: [512, 666] }, assetManifests: [] }
 const families = new Map()
 
 /** Crop a generated sheet cell to its visible ink, then register it to the common canvas.
@@ -34,24 +40,44 @@ async function extractSprite(source, columns, rows, index, sourceCrop, trim = tr
   return sharp(cell.data, { raw: cell.info }).extract({ left: x0, top: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 }).png().toBuffer()
 }
 
-const recipes = new Map([...avatarRecipes, ...polishRecipes, ...accessoryIconRecipes, ...wornRecipes]
+const recipes = new Map([...avatarRecipes, ...polishRecipes, ...accessoryIconRecipes, ...wornRecipes,
+  ...v2Recipes, ...v2PerspectiveRecipes, ...v2OutlineRecipes, ...v2MaterialRecipes, ...v2ClothingRecipes]
   .map((recipe) => [recipe.key, recipe]))
+// Inventory optical sizes are category-specific, independent of generated source resolution.
+for (const recipe of recipes.values()) if (recipe.key.startsWith('icon/')) {
+  const category = recipe.key.split('/')[1]
+  const maximum = Math.round(512 * (category === 'glasses' ? 0.76 : category === 'prop' ? 0.80 : 0.84))
+  const [, , width, height] = recipe.box, scale = maximum / Math.max(width, height)
+  const w = Math.round(width * scale), h = Math.round(height * scale)
+  recipe.box = [Math.round((512 - w) / 2), Math.round((512 - h) / 2), w, h]
+}
+
+async function registeredFragment(recipe) {
+  const { source, grid = [1, 1], cell = 0, sourceCrop } = recipe
+  let sprite = await extractSprite(source, ...grid, cell, sourceCrop, recipe.trim)
+  if (recipe.simplify) sprite = await sharp(sprite).resize(recipe.simplify, recipe.simplify).png().toBuffer()
+  const [left, top, width, height] = recipe.box
+  let input = await sharp(sprite).resize(width, height,
+    { fit: recipe.fit ?? 'fill', background: '#00000000' }).png().toBuffer()
+  if (recipe.opacity != null) {
+    const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+    for (let index = 3; index < data.length; index += 4) data[index] = Math.round(data[index] * recipe.opacity)
+    input = await sharp(data, { raw: info }).png().toBuffer()
+  }
+  return { input, left, top }
+}
 for (const recipe of recipes.values()) {
-  const { key, source, grid = [1, 1], cell = 0, box, sourceCrop } = recipe
+  const { key, source, grid = [1, 1], cell = 0, sourceCrop } = recipe
   try { await readFile(resolve(directory, 'sources', source)) } catch (error) {
     if (process.argv.includes('--partial') && error.code === 'ENOENT') continue
     throw error
   }
-  let sprite = await extractSprite(source, ...grid, cell, sourceCrop, recipe.trim)
-  // Low-resolution color fields are an export of the painted scene, not synthetic scenery.
-  if (recipe.simplify) sprite = await sharp(sprite).resize(recipe.simplify, recipe.simplify).png().toBuffer()
-  const [left, top, width, height] = box
-  const resized = await sharp(sprite).resize(width, height,
-    { fit: recipe.fit ?? 'fill', background: '#00000000' }).png().toBuffer()
+  const fragments = await Promise.all((recipe.fragments ?? [recipe])
+    .map((fragment) => registeredFragment({ ...recipe, ...fragment })))
   const png = `${key}.png`, webp = {}
   const canvas = recipe.canvas ?? 1024
   const composed = await sharp({ create: { width: canvas, height: canvas, channels: 4, background: '#00000000' } })
-    .composite([{ input: resized, left, top }]).png().toBuffer()
+    .composite(fragments).png().toBuffer()
   await mkdir(dirname(resolve(directory, png)), { recursive: true })
   await writeFile(resolve(directory, png), composed)
   for (const size of recipe.tiers ?? [128, 256, 512]) {
@@ -63,7 +89,9 @@ for (const recipe of recipes.values()) {
   const family = key.startsWith('icon/') ? key.split('/').slice(0, 2).join('-') : key.split('/')[0]
   if (!families.has(family)) families.set(family, {})
   families.get(family)[key] = { png, webp, canvas,
-    source: { file: source, grid, cell, ...(sourceCrop ? { crop: sourceCrop } : {}) } }
+    source: { file: source, grid, cell, ...(sourceCrop ? { crop: sourceCrop } : {}),
+      ...(recipe.fragments ? { fragments: recipe.fragments } : {}),
+      ...(recipe.opacity != null ? { opacity: recipe.opacity } : {}) } }
 }
 await mkdir(resolve(directory, 'manifests'), { recursive: true })
 for (const [family, assets] of families) {

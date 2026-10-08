@@ -8,6 +8,8 @@ import { assetPath, avatarAssetSpec, detectAvatarEdgeHalo, requiredAvatarAssets,
   validateAvatarBudget, validateAvatarIconMargins, validateAvatarProvenance,
   visibleAlphaBounds } from './kun-avatar-art-validation.mjs'
 import { generateAvatarArtQa } from './kun-avatar-art-qa.mjs'
+import { auditAvatarArt } from './kun-avatar-art-audit.mjs'
+import { generateAvatarV2Qa } from './kun-avatar-v2-qa.mjs'
 export { requiredAvatarAssets } from './kun-avatar-art-validation.mjs'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -89,6 +91,11 @@ export async function validateAvatarManifest(manifest, shared, root = defaultAss
   assert(Array.isArray(box) && box.length === 4 && box.every(Number.isInteger) &&
     box[0] >= 0 && box[1] >= 0 && box[2] <= 1024 && box[3] <= 1024 && box[2] > box[0] && box[3] > box[1],
   'manifest.anchors.faceBox must be a nonempty pixel box inside the 1024 canvas')
+  const compactBox = manifest.anchors?.compactFaceBox
+  if (compactBox !== undefined) assert(Array.isArray(compactBox) && compactBox.length === 4 && compactBox.every(Number.isInteger) &&
+    compactBox[0] >= 0 && compactBox[1] >= 0 && compactBox[2] <= 1024 && compactBox[3] <= 1024 &&
+    compactBox[2] > compactBox[0] && compactBox[3] > compactBox[1],
+  'manifest.anchors.compactFaceBox must be a nonempty pixel box inside the 1024 canvas')
   assert(Number.isFinite(manifest.anchors?.eyeLineY), 'manifest.anchors.eyeLineY is required')
   assert(Array.isArray(manifest.anchors?.beak) && manifest.anchors.beak.length === 2 &&
     manifest.anchors.beak.every(Number.isFinite), 'manifest.anchors.beak is required')
@@ -218,7 +225,8 @@ async function compose(manifest, shared, root, parts, options = {}) {
 async function portrait(image, size, manifest, compact = false) {
   let source = sharp(image)
   if (compact) {
-    const [left, top, right, bottom] = manifest.anchors.faceBox.map((number) => Math.round(number / 2))
+    const [left, top, right, bottom] = (manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox)
+      .map((number) => Math.round(number / 2))
     source = source.extract({ left, top, width: right - left, height: bottom - top })
   }
   return source.resize(size, size).png().toBuffer()
@@ -236,7 +244,7 @@ async function writeGrid(path, cells, columns, width, height) {
     channels: 4, background: '#eef0f5' } }).composite(overlays).png().toFile(path)
 }
 
-export async function generateAvatarQa(manifest, shared, root, output, repo = projectRoot) {
+export async function generateAvatarQa(manifest, shared, root, output, repo = projectRoot, audit) {
   await mkdir(output, { recursive: true })
   const atlasRoot = resolve(repo, 'src/asset/img/room-avatars')
   const atlasInfo = JSON.parse(await readFile(resolve(atlasRoot, 'avatars.json'), 'utf8'))
@@ -275,6 +283,7 @@ export async function generateAvatarQa(manifest, shared, root, output, repo = pr
   }
   await writeGrid(resolve(output, 'body-expression-all-colors.png'), expressions, 4, 192, 200)
   await generateAvatarArtQa({ manifest, shared, root, output, compose, portrait, writeGrid, backgroundSvg })
+  if (audit) await generateAvatarV2Qa({ manifest, shared, root, output, compose, portrait, writeGrid, backgroundSvg }, audit)
   for (const [background, color] of [['light', '#f7f5ef'], ['dark', '#142037'], ['transparent', 'transparent']]) {
     const cells = []
     for (const preset of shared.KUN_AVATAR_PRESETS) for (const size of [24, 34, 48, 96]) {
@@ -291,7 +300,7 @@ export async function generateAvatarQa(manifest, shared, root, output, repo = pr
 
 async function main() {
   const args = process.argv.slice(2)
-  const allowed = new Set(['--check-only', '--out'])
+  const allowed = new Set(['--check-only', '--out', '--v2-strict'])
   for (let index = 0; index < args.length; index++) {
     if (!allowed.has(args[index])) throw new Error(`Unknown argument: ${args[index]}`)
     if (args[index] === '--out') {
@@ -304,8 +313,11 @@ async function main() {
   const manifest = await loadAvatarManifest()
   const shared = await loadAvatarCatalog()
   const result = await validateAvatarManifest(manifest, shared)
+  const audit = await auditAvatarArt(manifest, shared, defaultAssetRoot)
+  await mkdir(output, { recursive: true })
+  await writeFile(resolve(output, 'v2-audit.json'), JSON.stringify(audit, null, 2) + '\n')
   if (!args.includes('--check-only')) {
-    await generateAvatarQa(manifest, shared, defaultAssetRoot, output)
+    await generateAvatarQa(manifest, shared, defaultAssetRoot, output, projectRoot, audit)
     await writeFile(resolve(output, 'report.json'), JSON.stringify({ ...result, manifestVersion: manifest.version }, null, 2) + '\n')
   }
   console.log(`Kun avatars: ${result.layers} layers / ${result.fileCount} files; ` +
@@ -314,6 +326,13 @@ async function main() {
     `application WebP ${(result.webpBytes / 1048576).toFixed(2)} MiB.`)
   console.log(`Color registration alpha bounds: maximum ${result.alignment.maxDisplacementPixels}px displacement ` +
     `(alpha >= ${result.alignment.alphaThreshold}; allowed ${result.alignment.tolerancePixels}px).`)
+  console.log(`V2 art audit: ${audit.failures.length} blockers, ${audit.warnings.length} warnings, ` +
+    `${audit.pending.length} awaiting user A/B; ${resolve(output, 'v2-audit.json')}`)
+  if (audit.failures.length) {
+    console.log('V2 blockers by metric: ' + [...new Set(audit.failures.map((item) => item.code))]
+      .map((code) => `${code}=${audit.failures.filter((item) => item.code === code).length}`).join(', '))
+    if (args.includes('--v2-strict')) process.exitCode = 1
+  }
   if (!args.includes('--check-only')) console.log(`Visual QA: ${output}`)
 }
 

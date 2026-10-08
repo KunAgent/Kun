@@ -1,12 +1,18 @@
 {
   "schemaVersion": 1,
-  "version": "2",
+  "version": "3",
   "canvas": 1024,
   "anchors": {
     "faceBox": [
       232,
       300,
       792,
+      860
+    ],
+    "compactFaceBox": [
+      200,
+      236,
+      824,
       860
     ],
     "eyeLineY": 584,

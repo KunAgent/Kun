@@ -56,7 +56,8 @@ export function composedAvatarLayers(parts: KunAvatarParts, options: KunAvatarRe
 }
 
 export function composedAvatarSourceTier(request: AvatarRenderRequest): 128 | 256 | 512 {
-  const cropWidth = manifest.anchors.faceBox[2] - manifest.anchors.faceBox[0]
+  const crop = manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox
+  const cropWidth = crop[2] - crop[0]
   const required = request.pixels * (request.compact ? manifest.canvas / cropWidth : 1)
   return required <= 128 ? 128 : required <= 256 ? 256 : 512
 }
@@ -95,7 +96,7 @@ export async function composeAvatar(request: AvatarRenderRequest): Promise<Avata
   return renderAvatarComposition(urls, {
     pixels: request.pixels,
     canvas: manifest.canvas,
-    crop: request.compact ? manifest.anchors.faceBox : undefined,
+    crop: request.compact ? manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox : undefined,
     bg: kunAvatarScene(request.parts.bg) ? 'transparent' : request.parts.bg
   })
 }

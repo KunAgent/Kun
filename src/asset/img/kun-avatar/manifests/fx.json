@@ -8,12 +8,194 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-fx.png",
+      "file": "v2-fx-stars.png",
       "grid": [
-        2,
+        1,
         1
       ],
-      "cell": 0
+      "cell": 0,
+      "fragments": [
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            72,
+            90,
+            154,
+            154
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            798,
+            110,
+            154,
+            154
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            804,
+            697,
+            154,
+            154
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            450,
+            75,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            85,
+            340,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            78,
+            620,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            820,
+            460,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            175,
+            882,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            320,
+            204,
+            82,
+            82
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            645,
+            204,
+            82,
+            82
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            824,
+            302,
+            82,
+            82
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 222,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            720,
+            914,
+            82,
+            82
+          ],
+          "trim": false
+        }
+      ]
     }
   },
   "fx/legendary": {
@@ -25,12 +207,230 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-fx.png",
+      "file": "v2-fx-stars.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "fragments": [
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            72,
+            90,
+            154,
+            154
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            798,
+            110,
+            154,
+            154
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            804,
+            697,
+            154,
+            154
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            450,
+            75,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            85,
+            340,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            78,
+            620,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            820,
+            460,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            175,
+            882,
+            118,
+            118
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            320,
+            204,
+            82,
+            82
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            645,
+            204,
+            82,
+            82
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            824,
+            302,
+            82,
+            82
+          ],
+          "trim": false
+        },
+        {
+          "sourceCrop": {
+            "left": 1109,
+            "top": 26,
+            "width": 222,
+            "height": 222
+          },
+          "box": [
+            720,
+            914,
+            82,
+            82
+          ],
+          "trim": false
+        }
+      ]
+    }
+  },
+  "fx/epic.back": {
+    "png": "fx/epic.back.png",
+    "webp": {
+      "128": "128/fx/epic.back.webp",
+      "256": "256/fx/epic.back.webp",
+      "512": "512/fx/epic.back.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "v2-fx-back.png",
       "grid": [
         2,
         1
       ],
-      "cell": 1
+      "cell": 0,
+      "opacity": 0.45
+    }
+  },
+  "fx/legendary.back": {
+    "png": "fx/legendary.back.png",
+    "webp": {
+      "128": "128/fx/legendary.back.webp",
+      "256": "256/fx/legendary.back.webp",
+      "512": "512/fx/legendary.back.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "v2-fx-back.png",
+      "grid": [
+        2,
+        1
+      ],
+      "cell": 1,
+      "opacity": 0.45
     }
   }
 }

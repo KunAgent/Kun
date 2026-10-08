@@ -42,7 +42,7 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "hats-a.png",
+      "file": "v2-material-epic-hats-refined.png",
       "grid": [
         1,
         1
@@ -51,8 +51,8 @@
       "crop": {
         "left": 0,
         "top": 0,
-        "width": 439,
-        "height": 453
+        "width": 443,
+        "height": 443
       }
     }
   },
@@ -65,17 +65,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "hats-a.png",
+      "file": "v2-outline-repairs.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 439,
-        "top": 0,
-        "width": 385,
-        "height": 453
+        "left": 40,
+        "top": 221,
+        "width": 748,
+        "height": 285
       }
     }
   },
@@ -134,17 +134,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "hats-a.png",
+      "file": "v2-material-epic-hats-refined.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 439,
-        "top": 453,
-        "width": 385,
-        "height": 378
+        "left": 443,
+        "top": 0,
+        "width": 444,
+        "height": 443
       }
     }
   },
@@ -295,17 +295,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "hats-b.png",
+      "file": "v2-material-epic-hats-refined.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 836,
+        "left": 887,
         "top": 0,
-        "width": 418,
-        "height": 459
+        "width": 443,
+        "height": 443
       }
     }
   },
@@ -318,17 +318,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "hats-b.png",
+      "file": "v2-material-legendary-refined.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 0,
-        "top": 459,
-        "width": 418,
-        "height": 353
+        "left": 512,
+        "top": 0,
+        "width": 512,
+        "height": 512
       }
     }
   },
@@ -364,17 +364,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "hats-b.png",
+      "file": "v2-material-epic-hats-refined.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 836,
-        "top": 459,
-        "width": 418,
-        "height": 353
+        "left": 1330,
+        "top": 0,
+        "width": 444,
+        "height": 443
       }
     }
   },
@@ -387,17 +387,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "hats-b.png",
+      "file": "v2-material-legendary-refined.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 0,
-        "top": 812,
-        "width": 418,
-        "height": 442
+        "left": 1024,
+        "top": 0,
+        "width": 512,
+        "height": 512
       }
     }
   },
@@ -410,17 +410,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "hats-b.png",
+      "file": "v2-material-legendary-refined.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 418,
-        "top": 812,
-        "width": 418,
-        "height": 442
+        "left": 0,
+        "top": 0,
+        "width": 512,
+        "height": 512
       }
     }
   },

@@ -51,17 +51,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-glasses.png",
+      "file": "v2-material-epic-tools.png",
       "grid": [
-        2,
-        3
+        1,
+        1
       ],
-      "cell": 2,
+      "cell": 0,
       "crop": {
         "left": 0,
-        "top": 430,
-        "width": 627,
-        "height": 420
+        "top": 512,
+        "width": 512,
+        "height": 512
       }
     }
   },

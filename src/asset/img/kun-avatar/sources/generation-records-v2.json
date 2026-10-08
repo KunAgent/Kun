@@ -1,0 +1,87 @@
+{
+  "created": "2026-10-08",
+  "registration": "scripts/kun-avatar-v2-recipes.mjs",
+  "sources": [
+    {
+      "file": "v2-faces.png",
+      "width": 2079,
+      "height": 756,
+      "sha256": "f817a7232e098f7e770ef373ae471678a2c2ea7f433866ea4b24b489ca4d304e",
+      "tool": "image_gen.imagegen",
+      "promptSummary": "Three expressions without detached brows: surprised wide eyes/upward small pupils/open round beak; focused lowered lids/larger pupils/closed beak; sleepy half lids/down-left pupils/pale blush. Original Kun ink and shading preserved.",
+      "references": [
+        "features.png",
+        "polish-faces.png"
+      ]
+    },
+    {
+      "file": "v2-fx-stars.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "0a665d11f19391bc6be5417459cb34fbb23721f7320c6e2c442a5d15b9be6b3d",
+      "tool": "image_gen.imagegen",
+      "promptSummary": "Two purple/gold foreground star sprite groups, three sizes, white cores and saturated colored halos. Spatially register generated glyphs outside protected face box.",
+      "references": [
+        "polish-fx.png"
+      ]
+    },
+    {
+      "file": "v2-fx-back.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "d622fbc37cbce5cff5147d37f03915cd9d26c7e743d7bb5cd594a7a2340bbb84",
+      "tool": "image_gen.imagegen",
+      "promptSummary": "Purple and gold diffuse backlight disks, separately exported with maximum alpha0.45, behind the body. No typography or foreground marks.",
+      "references": []
+    },
+    {
+      "file": "v2-scenes.png",
+      "width": 1536,
+      "height": 1024,
+      "sha256": "c5b5375eb68d78100b44ecc484c002d5d62c94b35d5417bb06ca5b7039eca757",
+      "tool": "image_gen.imagegen",
+      "promptSummary": "Four existing themed backgrounds: calmer sunset bay and forest clearing, brighter quiet slate-blue wall/night sea in study and star deck. Outer edge atmosphere retained.",
+      "references": [
+        "polish-scenes.png"
+      ]
+    },
+    {
+      "file": "v2-bottle-glowing.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "671dbbced550a952cb1a215f00a9ef945e2af0f2fc7843e163823d1700c188ef",
+      "tool": "image_gen.imagegen",
+      "promptSummary": "Same message-bottle silhouette with pale cyan illuminated glass, self-luminous paper and two short neck rays, true alpha.",
+      "references": [
+        "polish-bottles.png"
+      ]
+    },
+    {
+      "file": "v2-scenes-small.png",
+      "width": 1536,
+      "height": 1024,
+      "sha256": "a1add86c7c3c1fe3c02eecd88d1e7ee045888cbaa42a3b194afe9010ac0e94e5",
+      "tool": "image_gen.imagegen",
+      "promptSummary": "Six miniature scene variants with broad quiet central color fields and reduced edge-only theme hints, matching the six existing backgrounds.",
+      "references": [
+        "v2-scenes.png",
+        "polish-scenes.png"
+      ]
+    },
+    {
+      "file": "v2-scenes-small-refined.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "6d0de153437d0a75d7b87f440799f1c9ca2b808bb7203e021d5fdfd5f87e1f0f",
+      "tool": "image_gen.imagegen",
+      "promptSummary": "Refine sunset/cafe miniature backgrounds: quiet broad central color fields, scene identity retained only along edges; no high-frequency markings behind the face.",
+      "references": [
+        "v2-scenes-small.png"
+      ],
+      "exports": [
+        "scene/sunset-bay.small",
+        "scene/cafe.small"
+      ]
+    }
+  ]
+}

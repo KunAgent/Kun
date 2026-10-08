@@ -8,17 +8,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 3,
-        "top": 3,
-        "width": 506,
-        "height": 506
+        "left": 2,
+        "top": 2,
+        "width": 764,
+        "height": 508
       }
     }
   },
@@ -31,17 +31,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes-small-refined.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 3,
-        "top": 3,
-        "width": 506,
-        "height": 506
+        "left": 2,
+        "top": 2,
+        "width": 883,
+        "height": 883
       }
     }
   },
@@ -54,17 +54,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 515,
-        "top": 3,
-        "width": 506,
-        "height": 506
+        "left": 770,
+        "top": 2,
+        "width": 764,
+        "height": 508
       }
     }
   },
@@ -77,17 +77,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes-small.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 515,
-        "top": 3,
-        "width": 506,
-        "height": 506
+        "left": 514,
+        "top": 2,
+        "width": 508,
+        "height": 508
       }
     }
   },
@@ -100,17 +100,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 1027,
-        "top": 3,
-        "width": 506,
-        "height": 506
+        "left": 2,
+        "top": 514,
+        "width": 764,
+        "height": 508
       }
     }
   },
@@ -123,17 +123,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes-small.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 1027,
-        "top": 3,
-        "width": 506,
-        "height": 506
+        "left": 1026,
+        "top": 2,
+        "width": 508,
+        "height": 508
       }
     }
   },
@@ -169,17 +169,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes-small-refined.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 3,
-        "top": 515,
-        "width": 506,
-        "height": 506
+        "left": 889,
+        "top": 2,
+        "width": 883,
+        "height": 883
       }
     }
   },
@@ -215,17 +215,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes-small.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 515,
-        "top": 515,
-        "width": 506,
-        "height": 506
+        "left": 514,
+        "top": 514,
+        "width": 508,
+        "height": 508
       }
     }
   },
@@ -238,17 +238,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 1027,
-        "top": 515,
-        "width": 506,
-        "height": 506
+        "left": 770,
+        "top": 514,
+        "width": 764,
+        "height": 508
       }
     }
   },
@@ -261,17 +261,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-scenes.png",
+      "file": "v2-scenes-small.png",
       "grid": [
         1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 1027,
-        "top": 515,
-        "width": 506,
-        "height": 506
+        "left": 1026,
+        "top": 514,
+        "width": 508,
+        "height": 508
       }
     }
   }

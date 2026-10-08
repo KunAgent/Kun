@@ -8,6 +8,17 @@ const icon = { png: 'icon/outfit/cardigan.png', webp: { 128: '128/icon/outfit/ca
 const groups = { 'manifests/base.json': { 'base/sky': base }, 'manifests/icon-outfit.json': { 'icon/outfit/cardigan': icon } }
 
 describe('bundled avatar manifest families', () => {
+  it('accepts a separate small crop without moving the canonical face protection box', () => {
+    const result = loadAvatarManifest({ ...index, anchors: { ...index.anchors, compactFaceBox: [200, 236, 824, 860] } }, groups)
+    expect(result.anchors.faceBox).toEqual([232, 300, 792, 860])
+    expect(result.anchors.compactFaceBox).toEqual([200, 236, 824, 860])
+  })
+
+  it.each([[200, 236, 190, 860], [200, -10, 824, 860], [200, 236, 1200, 860], [200, 236, 824, 800]])('rejects invalid small crops: %s', (...compactFaceBox) => {
+    expect(() => loadAvatarManifest({ ...index, anchors: { ...index.anchors, compactFaceBox } }, groups))
+      .toThrow('Invalid compact avatar face box')
+  })
+
   it('loads only the families declared by the index, including independent icon entries', () => {
     const result = loadAvatarManifest(index, { ...groups, 'manifests/unused.json': { 'unused/item': base } })
     expect(result.assets).toEqual({ 'base/sky': base, 'icon/outfit/cardigan': icon })

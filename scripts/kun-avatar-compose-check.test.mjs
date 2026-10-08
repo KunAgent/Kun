@@ -1,7 +1,7 @@
 import { after, before, test } from 'node:test'
 import { createHash } from 'node:crypto'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import sharp from 'sharp'
@@ -51,21 +51,21 @@ after(async () => { if (root) await rm(root, { recursive: true, force: true }) }
 
 test('catalog requires all wearing layers, independent icons and polish families', () => {
   const keys = requiredAvatarAssets(catalog.KUN_AVATAR_CATALOG)
-  assert.equal(keys.length, 168)
-  assert.equal(new Set(keys).size, 168)
+  assert.equal(keys.length, 170)
+  assert.equal(new Set(keys).size, 170)
   for (const key of ['headwear/hood.back', 'headwear/astronaut-helmet.back',
     'outfit/storyteller-cape.back', 'outfit/wizard-cape.back', 'crest/tucked-mint', 'wing/periwinkle',
     'icon/headwear/headset', 'icon/outfit/black-hoodie', 'icon/prop/camera', 'glasses/square.small',
     'headwear/wizard-hat.small', 'face/surprised', 'face/sleepy', 'face/wink', 'face/focused',
-    'scene/sunset-bay.small', 'container/bottle-glow', 'fx/legendary', 'card/back']) {
+    'scene/sunset-bay.small', 'container/bottle-glow', 'fx/epic.back', 'fx/legendary.back', 'fx/legendary', 'card/back']) {
     assert.ok(keys.includes(key), key)
   }
 })
 
 test('validates actual encoded dimensions, transparency and publication sizes', async () => {
   const result = await validateAvatarManifest(manifest, shared, root)
-  assert.equal(result.layers, 24)
-  assert.equal(result.fileCount, 96)
+  assert.equal(result.layers, 26)
+  assert.equal(result.fileCount, 104)
   assert.ok(result.pngBytes > 0)
   assert.ok(result.webpBytes > 0)
   assert.equal(result.alignment.maxDisplacementPixels, 0)
@@ -78,6 +78,9 @@ test('rejects missing catalog entries, out-of-bounds anchors and unsafe filename
   const anchor = structuredClone(manifest)
   anchor.anchors.faceBox[2] = 1025
   await assert.rejects(validateAvatarManifest(anchor, shared, root), /faceBox/)
+  const compact = structuredClone(manifest)
+  compact.anchors.compactFaceBox = [200, 236, 824, 1200]
+  await assert.rejects(validateAvatarManifest(compact, shared, root), /compactFaceBox/)
   const unsafe = structuredClone(manifest)
   unsafe.assets['base/sky'].png = '../outside.png'
   await assert.rejects(validateAvatarManifest(unsafe, shared, root), /Invalid avatar asset path/)
@@ -164,6 +167,21 @@ test('enforces the measured baseline plus 2.5MiB publication budget', () => {
   const limit = AVATAR_WEBP_BASELINE_BYTES + AVATAR_WEBP_ADDED_BUDGET_BYTES
   assert.equal(validateAvatarBudget(limit).maximumBytes, limit)
   assert.throws(() => validateAvatarBudget(limit + 1), /budget exceeded/)
+})
+
+test('resolves immutable generation record batches and rejects duplicate names or traversal', async () => {
+  const separate = join(root, 'record-batches'), sources = join(separate, 'sources')
+  await mkdir(sources, { recursive: true })
+  const existing = JSON.parse(await readFile(join(root, 'sources/generation-records.json'), 'utf8'))
+  await writeFile(join(sources, 'test.png'), await readFile(join(root, 'sources/test.png')))
+  await writeFile(join(sources, 'generation-records-v2.json'), JSON.stringify(existing))
+  const index = { sources: [{ file: 'unused-reference.png' }], sourceManifests: ['generation-records-v2.json'] }
+  await writeFile(join(sources, 'generation-records.json'), JSON.stringify(index))
+  assert.deepEqual((await validateAvatarProvenance(manifest, separate)).verifiedSources, ['test.png'])
+  await writeFile(join(sources, 'generation-records.json'), JSON.stringify({ ...index, sources: existing.sources }))
+  await assert.rejects(validateAvatarProvenance(manifest, separate), /Duplicate generation source filename/)
+  await writeFile(join(sources, 'generation-records.json'), JSON.stringify({ ...index, sourceManifests: ['../outside.json'] }))
+  await assert.rejects(validateAvatarProvenance(manifest, separate), /Invalid generation record manifest/)
 })
 
 test('rejects uncentered icons while permitting a naturally slender centered object', async () => {

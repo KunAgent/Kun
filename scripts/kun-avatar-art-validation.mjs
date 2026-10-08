@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import sharp from 'sharp'
+export { AVATAR_FACEBOX_CANDIDATES, alphaMask, cropCoverage, darkEdgeRowWidth, detailDensity,
+  distanceTransform, effectCoverage, eyebrowPixels, featherHue, lowContrastRatio, outlineDistanceWidth,
+  quantizedColorCount, rasterDifference, readAvatarPixels, silhouetteIou } from './kun-avatar-art-metrics.mjs'
 
 export const AVATAR_WEBP_BASELINE_BYTES = 2065734
 export const AVATAR_WEBP_ADDED_BUDGET_BYTES = 2.5 * 1048576
@@ -39,7 +42,7 @@ export function requiredAvatarAssets(catalog) {
     }
   }
   for (const id of AVATAR_SCENES) keys.push(`scene/${id}`, `scene/${id}.small`)
-  keys.push('fx/epic', 'fx/legendary', 'card/back')
+  keys.push('fx/epic', 'fx/epic.back', 'fx/legendary', 'fx/legendary.back', 'card/back')
   for (const state of ['sealed', 'glowing', 'open', 'glow']) keys.push(`container/bottle-${state}`)
   return keys
 }
@@ -103,8 +106,21 @@ export function validateAvatarBudget(webpBytes) {
 export async function validateAvatarProvenance(manifest, root) {
   const records = JSON.parse(await readFile(resolve(root, 'sources/generation-records.json'), 'utf8'))
   if (!Array.isArray(records.sources) || !records.sources.length) throw new Error('Generation source records are required')
+  const recordGroups = [records]
+  const recordFiles = new Set()
+  for (const path of records.sourceManifests ?? []) {
+    if (typeof path !== 'string' || !/^generation-records-[a-z0-9-]+\.json$/.test(path) || recordFiles.has(path)) {
+      throw new Error(`Invalid generation record manifest: ${String(path)}`)
+    }
+    recordFiles.add(path)
+    const group = JSON.parse(await readFile(assetPath(resolve(root, 'sources'), path), 'utf8'))
+    if (!Array.isArray(group.sources) || !group.sources.length || group.sourceManifests) {
+      throw new Error(`Invalid generation record group: ${path}`)
+    }
+    recordGroups.push(group)
+  }
   const sources = new Map()
-  for (const source of records.sources) {
+  for (const source of recordGroups.flatMap((group) => group.sources)) {
     assetPath(resolve(root, 'sources'), source?.file)
     if (sources.has(source.file)) throw new Error(`Duplicate generation source filename: ${source.file}`)
     sources.set(source.file, source)

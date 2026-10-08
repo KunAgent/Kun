@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
-import { Dices, Glasses, GraduationCap, Shirt, Sparkles, WandSparkles, X, type LucideIcon } from 'lucide-react'
+import { Dices, Glasses, GraduationCap, Shirt, WandSparkles, X, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   KUN_AVATAR_CATALOG, KUN_AVATAR_RARITY_LABELS, canonicalKunAvatarKey,
@@ -50,9 +50,6 @@ export function RoomAvatarStage({ id, label, user, avatar, parts, trying, active
   const chatAvatar: RoomAvatarReference | null | undefined = trying ? { kind: 'composed', version: 1, parts: trying } : avatar
   return <section className="rooms-avatar-stage" aria-label={label}>
     <div className="rooms-avatar-stage-spot" data-pop={pop % 2} data-popped={pop > 0 || undefined}>
-      <Sparkles className="rooms-avatar-stage-sparkle" data-sparkle="1" size={18} aria-hidden="true" />
-      <Sparkles className="rooms-avatar-stage-sparkle" data-sparkle="2" size={13} aria-hidden="true" />
-      <Sparkles className="rooms-avatar-stage-sparkle" data-sparkle="3" size={15} aria-hidden="true" />
       <div className="rooms-avatar-composer-preview rooms-avatar-stage-mirror"
         data-transparent={composed && shownParts.bg === 'transparent' || undefined}>
         {content}

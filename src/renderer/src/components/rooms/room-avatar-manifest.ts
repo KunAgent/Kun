@@ -6,7 +6,7 @@ export interface AvatarAssetEntry {
 export interface AvatarManifest {
   version: string
   canvas: number
-  anchors: { faceBox: number[] }
+  anchors: { faceBox: number[]; compactFaceBox?: number[] }
   assets: Record<string, AvatarAssetEntry>
 }
 
@@ -21,6 +21,14 @@ export function loadAvatarManifest(index: unknown, groups: Record<string, unknow
     !index.anchors.faceBox.every((value) => typeof value === 'number' && Number.isFinite(value)) ||
     !Array.isArray(index.assetManifests) || !index.assetManifests.length) {
     throw new Error('Invalid avatar manifest index')
+  }
+  const compactFaceBox = index.anchors.compactFaceBox
+  if (compactFaceBox !== undefined && (!Array.isArray(compactFaceBox) || compactFaceBox.length !== 4 ||
+    !compactFaceBox.every((value) => typeof value === 'number' && Number.isFinite(value)) ||
+    compactFaceBox[0] < 0 || compactFaceBox[1] < 0 || compactFaceBox[2] > index.canvas ||
+    compactFaceBox[3] > index.canvas || compactFaceBox[2] <= compactFaceBox[0] || compactFaceBox[3] <= compactFaceBox[1] ||
+    compactFaceBox[2] - compactFaceBox[0] !== compactFaceBox[3] - compactFaceBox[1])) {
+    throw new Error('Invalid compact avatar face box')
   }
   const assets: Record<string, AvatarAssetEntry> = Object.create(null)
   const loaded = new Set<string>()
@@ -42,5 +50,6 @@ export function loadAvatarManifest(index: unknown, groups: Record<string, unknow
       assets[key] = { png: entry.png, webp: entry.webp as Record<string, string> }
     }
   }
-  return { version: index.version, canvas: index.canvas, anchors: { faceBox: index.anchors.faceBox as number[] }, assets }
+  return { version: index.version, canvas: index.canvas, anchors: { faceBox: index.anchors.faceBox as number[],
+    ...(compactFaceBox ? { compactFaceBox: compactFaceBox as number[] } : {}) }, assets }
 }

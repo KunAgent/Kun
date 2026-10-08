@@ -7,17 +7,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-a.png",
+      "file": "v2-material-epic-hats-refined.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
       "cell": 0,
       "crop": {
         "left": 0,
-        "top": 0,
-        "width": 450,
-        "height": 450
+        "top": 443,
+        "width": 443,
+        "height": 444
       }
     }
   },
@@ -95,17 +95,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-a.png",
+      "file": "v2-material-epic-hats-refined.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
-      "cell": 4,
+      "cell": 0,
       "crop": {
-        "left": 450,
-        "top": 450,
-        "width": 385,
-        "height": 385
+        "left": 443,
+        "top": 443,
+        "width": 444,
+        "height": 444
       }
     }
   },
@@ -117,17 +117,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-a.png",
+      "file": "v2-icons-clothes-hats.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
-      "cell": 5,
+      "cell": 0,
       "crop": {
-        "left": 835,
-        "top": 450,
-        "width": 419,
-        "height": 385
+        "left": 78,
+        "top": 228,
+        "width": 798,
+        "height": 480
       }
     }
   },
@@ -161,17 +161,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-a.png",
+      "file": "v2-perspective-icons.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
-      "cell": 7,
+      "cell": 0,
       "crop": {
-        "left": 450,
-        "top": 835,
-        "width": 385,
-        "height": 419
+        "left": 808,
+        "top": 75,
+        "width": 580,
+        "height": 552
       }
     }
   },
@@ -183,17 +183,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-a.png",
+      "file": "v2-icons-clothes-hats.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
-      "cell": 8,
+      "cell": 0,
       "crop": {
-        "left": 835,
-        "top": 835,
-        "width": 419,
-        "height": 419
+        "left": 987,
+        "top": 265,
+        "width": 711,
+        "height": 434
       }
     }
   },
@@ -249,17 +249,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-b.png",
+      "file": "v2-material-epic-hats-refined.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
-      "cell": 2,
+      "cell": 0,
       "crop": {
-        "left": 835,
-        "top": 0,
-        "width": 419,
-        "height": 450
+        "left": 887,
+        "top": 443,
+        "width": 443,
+        "height": 444
       }
     }
   },
@@ -271,17 +271,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-b.png",
+      "file": "v2-material-legendary-refined.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
-      "cell": 3,
+      "cell": 0,
       "crop": {
-        "left": 0,
-        "top": 450,
-        "width": 450,
-        "height": 385
+        "left": 512,
+        "top": 512,
+        "width": 512,
+        "height": 512
       }
     }
   },
@@ -315,17 +315,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-b.png",
+      "file": "v2-material-epic-hats-refined.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
-      "cell": 5,
+      "cell": 0,
       "crop": {
-        "left": 835,
-        "top": 450,
-        "width": 419,
-        "height": 385
+        "left": 1330,
+        "top": 443,
+        "width": 444,
+        "height": 444
       }
     }
   },
@@ -337,17 +337,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-b.png",
+      "file": "v2-material-legendary-refined.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
-      "cell": 6,
+      "cell": 0,
       "crop": {
-        "left": 0,
-        "top": 835,
-        "width": 450,
-        "height": 419
+        "left": 1024,
+        "top": 512,
+        "width": 512,
+        "height": 512
       }
     }
   },
@@ -359,17 +359,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-b.png",
+      "file": "v2-material-legendary-refined.png",
       "grid": [
-        3,
-        3
+        1,
+        1
       ],
-      "cell": 7,
+      "cell": 0,
       "crop": {
-        "left": 450,
-        "top": 835,
-        "width": 385,
-        "height": 419
+        "left": 0,
+        "top": 512,
+        "width": 512,
+        "height": 512
       }
     }
   },
@@ -381,17 +381,17 @@
     },
     "canvas": 512,
     "source": {
-      "file": "polish-icons-headwear-c.png",
+      "file": "v2-perspective-icons.png",
       "grid": [
-        2,
+        1,
         1
       ],
       "cell": 0,
       "crop": {
-        "left": 0,
-        "top": 0,
-        "width": 887,
-        "height": 887
+        "left": 67,
+        "top": 55,
+        "width": 605,
+        "height": 585
       }
     }
   },
