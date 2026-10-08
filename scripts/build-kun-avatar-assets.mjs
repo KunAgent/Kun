@@ -11,10 +11,12 @@ import { v2PerspectiveRecipes } from './kun-avatar-v2-perspective-recipes.mjs'
 import { v2OutlineRecipes } from './kun-avatar-v2-outline-recipes.mjs'
 import { v2MaterialRecipes } from './kun-avatar-v2-material-recipes.mjs'
 import { v2ClothingRecipes } from './kun-avatar-v2-clothing-recipes.mjs'
+import { alignedHoodieRecipes, registerOutfits } from './kun-avatar-outfit-registration.mjs'
+import { outfitBustRecipes } from './kun-avatar-outfit-bust-recipes.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const directory = resolve(root, 'src/asset/img/kun-avatar')
-const manifest = { schemaVersion: 1, version: '3', canvas: 1024,
+const manifest = { schemaVersion: 1, version: '4', canvas: 1024,
   anchors: { faceBox: [232, 300, 792, 860], compactFaceBox: [200, 236, 824, 860],
     eyeLineY: 584, beak: [512, 666] }, assetManifests: [] }
 const families = new Map()
@@ -43,6 +45,7 @@ async function extractSprite(source, columns, rows, index, sourceCrop, trim = tr
 const recipes = new Map([...avatarRecipes, ...polishRecipes, ...accessoryIconRecipes, ...wornRecipes,
   ...v2Recipes, ...v2PerspectiveRecipes, ...v2OutlineRecipes, ...v2MaterialRecipes, ...v2ClothingRecipes]
   .map((recipe) => [recipe.key, recipe]))
+registerOutfits(recipes, [...alignedHoodieRecipes, ...outfitBustRecipes])
 // Inventory optical sizes are category-specific, independent of generated source resolution.
 for (const recipe of recipes.values()) if (recipe.key.startsWith('icon/')) {
   const category = recipe.key.split('/')[1]
@@ -56,6 +59,20 @@ async function registeredFragment(recipe) {
   const { source, grid = [1, 1], cell = 0, sourceCrop } = recipe
   let sprite = await extractSprite(source, ...grid, cell, sourceCrop, recipe.trim)
   if (recipe.simplify) sprite = await sharp(sprite).resize(recipe.simplify, recipe.simplify).png().toBuffer()
+  if (recipe.registration) {
+    const { left, top, width } = recipe.registration
+    const canvas = recipe.canvas ?? 1024
+    // One scale for both axes. Crop overflowing cloth; never fit the whole garment
+    // into the short visible chest window or its seams and hardware get flattened.
+    const resized = await sharp(sprite).resize({ width }).png().toBuffer()
+    const metadata = await sharp(resized).metadata()
+    const x = Math.max(0, -left), y = Math.max(0, -top)
+    const visibleWidth = Math.min(metadata.width, canvas - left) - x
+    const visibleHeight = Math.min(metadata.height, canvas - top) - y
+    if (visibleWidth <= 0 || visibleHeight <= 0) throw new Error(`Outfit misses canvas: ${recipe.key}`)
+    const input = await sharp(resized).extract({ left: x, top: y, width: visibleWidth, height: visibleHeight }).png().toBuffer()
+    return { input, left: Math.max(0, left), top: Math.max(0, top) }
+  }
   const [left, top, width, height] = recipe.box
   let input = await sharp(sprite).resize(width, height,
     { fit: recipe.fit ?? 'fill', background: '#00000000' }).png().toBuffer()
@@ -89,7 +106,9 @@ for (const recipe of recipes.values()) {
   const family = key.startsWith('icon/') ? key.split('/').slice(0, 2).join('-') : key.split('/')[0]
   if (!families.has(family)) families.set(family, {})
   families.get(family)[key] = { png, webp, canvas,
-    source: { file: source, grid, cell, ...(sourceCrop ? { crop: sourceCrop } : {}),
+    source: { file: source, ...(recipe.registration && sourceCrop ? { crop: sourceCrop }
+      : { grid, cell, ...(sourceCrop ? { crop: sourceCrop } : {}) }),
+      ...(recipe.registration ? { registration: recipe.registration } : {}),
       ...(recipe.fragments ? { fragments: recipe.fragments } : {}),
       ...(recipe.opacity != null ? { opacity: recipe.opacity } : {}) } }
 }

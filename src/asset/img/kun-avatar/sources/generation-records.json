@@ -543,6 +543,7 @@
     "generation-records-v2-perspective.json",
     "generation-records-v2-outline.json",
     "generation-records-v2-material.json",
-    "generation-records-v2-clothing.json"
+    "generation-records-v2-clothing.json",
+    "generation-records-alignment.json"
   ]
 }

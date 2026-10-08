@@ -1,0 +1,143 @@
+{
+  "created": "2026-10-09",
+  "sources": [
+    {
+      "file": "alignment-hoodie-prototype.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "246b51cbd428f4f8164e0030fb7687a337e0be856f75725612def509a88a01f3",
+      "tool": "image_gen.imagegen",
+      "promptSummary": "Wide cropped charcoal hoodie bust fitted against the locked sky body. Natural shoulder and collar proportions, ivory drawstrings, silver zip, no bottom hem; clothing pixels only on true alpha.",
+      "references": [
+        "body.png",
+        "polish-worn-a.png"
+      ]
+    },
+    {
+      "file": "alignment-mint-hoodie.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "2c1e672b7265fb4c591bc61e66b22c7f3838bae1f5a4f664b7b582b0de6c7c98",
+      "tool": "image_gen.imagegen",
+      "promptSummary": "Matching mint pullover variant of the broad hoodie bust, same shoulder shape, ivory drawstrings, no zipper, pouch pocket continuing off the canvas.",
+      "references": [
+        "alignment-hoodie-prototype.png",
+        "polish-worn-a.png"
+      ]
+    },
+    {
+      "outputs": [
+        "outfit/lab-coat",
+        "outfit/nurse-uniform"
+      ],
+      "generator": "image_gen.imagegen",
+      "generatedOn": "2026-10-09",
+      "prompt": "Create one transparent game clothing sprite sheet containing EXACTLY TWO broad shoulder upper-chest clothing overlays, two separate rows. THIS IS AN ART REPAIR, not inventory icons. Reference 1 is the locked round bird body fitting template. Reference 2 is the approved black hoodie CLOTHING ONLY overlay showing the needed shape. Reference 3 supplies clothing design/style, not proportions. The output must contain CLOTHING ONLY, no bird, face, head, wings, hands, mannequins, text, letters, background, shadow floor, checkerboard or backdrop. Real transparent alpha background. Two full-width broad bust overlays centered one above the other, no overlap. Each should have width about 1300 pixels and visible height about 360 pixels in a landscape 1536 x 1024 canvas, transparent gaps between rows. Each is an avatar chest CROPPED just below the upper chest, not a whole garment, no hem, not a miniature rounded icon. The lower edge is a perfectly straight horizontal crop with fabric continuing below. Neck opening a broad low U, transparent to show the underlying bird, broad shoulders slope down gently at sides. Preserve natural shape of lapels and collar, no vertical squashing. Worn by a very round, broad bird: the chest is wide and low, shoulder width about 3.2 times visible chest height. Same front view/camera/soft cel painted style as references with dark navy tidy outlines; upper edge never beyond y=180 of each 500px row; all important identifiers in upper 240px of cloth. TOP ROW: ivory-white scientist lab coat, natural softly folded lapels, dark desaturated blue undershirt below opening, small blue capped pen and a pale blue rectangular name badge together high on wearer's left chest (image right). No text on badge. Brushed pale silver pen clip, subtle fabric seams, few soft folds; identifier badge must be compact and near upper chest, not bottom. BOTTOM ROW: teal cyan nurse scrub upper chest, wide shallow V neck with transparent gap above, modest dark teal collar piping. A navy and pale silver stethoscope draped compactly high around neck: earpiece tubing along shoulders, short curved tube and silver circular diaphragm on image right upper chest. One small soft white cross on a chest pocket. No giant collar, no oversized hollow sleeves; no whole T shirt silhouette. Make both broad bust overlays fit the same shape as the hoodie reference, with loose clothing continuing straight beyond their bottom crop.",
+      "transparentBackground": true,
+      "references": [
+        {
+          "file": "base/sky.png",
+          "sha256": "5ac698c514a234c191dc7c46a3931c74c7fb1208b971cecd071f1c6e2ed88c55"
+        },
+        {
+          "file": "sources/alignment-hoodie-prototype.png",
+          "sha256": "246b51cbd428f4f8164e0030fb7687a337e0be856f75725612def509a88a01f3"
+        },
+        {
+          "file": "sources/v2-worn-materials-a.png",
+          "sha256": "8f5563360378138660d7f64753803a663e67b317d1b3abb6c8510e0f7ea730f5"
+        },
+        {
+          "file": "sources/v2-worn-materials-b.png",
+          "sha256": "1a7d2379604cff6d0fc375b3c1341d8d889c67838d897b90b8dc5d61553d28d5"
+        }
+      ],
+      "sha256": "2ca686456ba4ac81fcc087cd827bb2a6c529f0e85019b70831e88635684abaa9",
+      "file": "alignment-bust-clinical.png",
+      "width": 1536,
+      "height": 1024
+    },
+    {
+      "outputs": [
+        "outfit/security-jacket"
+      ],
+      "generator": "image_gen.imagegen",
+      "generatedOn": "2026-10-09",
+      "prompt": "Create a transparent game CLOTHING overlay sprite sheet containing EXACTLY TWO broad shoulder upper-chest clothing pieces, in TWO SEPARATE ROWS. Reference 1 is the locked broad round bird body fitting template; reference 2 is the approved hoodie clothing-only overlay, giving the appropriate avatar bust framing; references 3 and 4 show existing outfit material/style only, do not copy their complete miniature garment shapes. NO bird, face, head, wings, hands, mannequin, letters, background, floor, drop shadow, halo or checkerboard; true transparent alpha background. Landscape canvas 1536 x 1024. Each row contains ONE extremely broad shoulders upper-chest overlay, centered across 1400px and about 365px visible height, no overlap, transparent gap between rows. This is the CROPPED UPPER CHEST of clothes worn by a very round bird: shoulder width about 3.5 times visible chest height. BOTTOM EDGE perfectly flat horizontal cut with cloth CONTINUING DOWN beyond the frame: absolutely no hem, no bottom rim, no closed rounded miniature garment. Broad, naturally sloping shoulders, wide shallow neckline opening with true transparency so bird neck shows through. All identifiers compact and high on chest. Consistent front camera, calm high quality soft cel painted game art, gentle material shading, dark navy tidy outlines, no glow. TOP ROW: dark navy security jacket upper chest. Raised SHORT collar softly curves down from upper shoulders into central zipper, with a transparent wide opening above collar, NOT a turtleneck across face. Subtle woven seams and ribbed collar texture. A small compact cyan enamel SHIELD insignia with pale metallic bezel high on image-right chest, a simple flat patch pocket on image-left chest, small silver zipper. Keep shield fully visible in top 250px of clothing; do not make it huge. BOTTOM ROW: classic white sailor shirt broad upper chest. Navy sailor collar with two parallel white woven stripes running gently from shoulders down into central necktie knot. The space above/inside neck opening is transparent, no opaque interior disk. A compact navy knot and two short neat ribbon tails sit HIGH on upper chest, complete and visible before bottom crop. A tiny striped white-and-blue undershirt triangle below neck opening. Subtle white fabric folds only, no extra medals or trims. Both overlays must fit the same round avatar body shape as the hoodie, preserving NATURAL unsquashed drawn folds, NOT whole costume miniatures.",
+      "transparentBackground": true,
+      "references": [
+        {
+          "file": "base/sky.png",
+          "sha256": "5ac698c514a234c191dc7c46a3931c74c7fb1208b971cecd071f1c6e2ed88c55"
+        },
+        {
+          "file": "sources/alignment-hoodie-prototype.png",
+          "sha256": "246b51cbd428f4f8164e0030fb7687a337e0be856f75725612def509a88a01f3"
+        },
+        {
+          "file": "sources/v2-worn-materials-a.png",
+          "sha256": "8f5563360378138660d7f64753803a663e67b317d1b3abb6c8510e0f7ea730f5"
+        },
+        {
+          "file": "sources/v2-worn-materials-b.png",
+          "sha256": "1a7d2379604cff6d0fc375b3c1341d8d889c67838d897b90b8dc5d61553d28d5"
+        }
+      ],
+      "sha256": "641825d7d24ee5a567e920f23c1af3f18e3d54a185530c0fac201ebe45bd9911",
+      "file": "alignment-bust-uniform.png",
+      "width": 1536,
+      "height": 1024
+    },
+    {
+      "outputs": [
+        "outfit/spacesuit",
+        "outfit/coffee-apron"
+      ],
+      "generator": "image_gen.imagegen",
+      "generatedOn": "2026-10-09",
+      "prompt": "Create a true transparent game CLOTHING-only overlay sprite sheet containing EXACTLY TWO broad upper-chest clothing pieces in TWO SEPARATE ROWS. Reference 1 is the locked broad round bird body for fitting; reference 2 is the approved hoodie clothing-only bust framing. References 3 and 4 only give existing design/style/color; do not copy complete miniature garment shapes. No bird, face, head, body, wings, hands, mannequin, lettering, backgrounds, floor, drop shadows, halos or checkerboard. TRUE transparent alpha above and around clothing AND inside neck opening. Landscape 1536 x 1024 canvas; each sprite is centered across about 1400px and about 370px visible height, with clear transparent gap between rows. Cropped upper chest of garments worn by a very round bird; shoulder width about 3.5 times visible cloth height. Straight horizontal flat lower cut: fabric continues past the bottom crop, no bottom hem or bottom outline, no miniature complete closed costume silhouette. Broad naturally sloped shoulders, LOW collars, natural unsquashed details. All small identifiers sit HIGH on chest, not near crop. Calm soft cel-painted glossy game illustration with tidy dark navy outlines matching references, restrained material shading. TOP ROW: white astronaut spacesuit broad upper chest, tiny light gray fabric seams, short pale silver metal collar ring with brushed metal gray rim and small pale silver screws. ESSENTIAL: broad low U-shaped collar OPENING MUST BE TRANSPARENT EMPTY, not solid gray disk or opaque lining. The ring only wraps the edges; the actual bird neck will show through its empty transparent center. Compact white chest control panel immediately below the neck on center chest, containing a small desaturated gray-blue rectangle, one tiny blue circular light and one tiny blue horizontal light, gray hardware lip, no text. Collar ring must not look like a floating helmet bowl; keep it shallow enough for a bird whose chin is just above. BOTTOM ROW: coffee brown canvas apron broad upper chest, two natural shoulder straps, modest round brass strap rivets, softly stitched seams. An ivory cream casual shirt is visible under straps at shoulders. Central upper chest apron pocket is shallow and high, with ONE ivory simple coffee cup logo with two short steam curls, small clean recognizable cup. Full cup stays visible in upper 250 pixels of clothing. Broad U empty transparent neck opening between straps above the shirt collar. Neither sprite has sleeves ending, no waistband, no complete apron hem. Cloth continues beyond flat bottom edge.",
+      "transparentBackground": true,
+      "references": [
+        {
+          "file": "base/sky.png",
+          "sha256": "5ac698c514a234c191dc7c46a3931c74c7fb1208b971cecd071f1c6e2ed88c55"
+        },
+        {
+          "file": "sources/alignment-hoodie-prototype.png",
+          "sha256": "246b51cbd428f4f8164e0030fb7687a337e0be856f75725612def509a88a01f3"
+        },
+        {
+          "file": "sources/v2-worn-materials-b.png",
+          "sha256": "1a7d2379604cff6d0fc375b3c1341d8d889c67838d897b90b8dc5d61553d28d5"
+        },
+        {
+          "file": "sources/v2-worn-materials-c.png",
+          "sha256": "78e31f4357a606c7343e0b6e318091e8c9481a020e9433958cfb349518538cbf"
+        }
+      ],
+      "sha256": "7c55b3023772f21f9fbe46a8fa8141b3800d03bcd5e9f6f7f255a754bf779dcf",
+      "file": "alignment-bust-special.png",
+      "width": 1536,
+      "height": 1024
+    },
+    {
+      "outputs": [
+        "outfit/sailor-shirt"
+      ],
+      "generator": "image_gen.imagegen",
+      "generatedOn": "2026-10-09",
+      "prompt": "Repair ONLY the lower edge of the BOTTOM sailor-shirt sprite in this transparent two-row clothing asset. Keep the top security jacket EXACTLY unchanged. Keep the sailor collar, neck opening, body shape, colors, linework, ribbons, shading and all upper pixels visually identical. CURRENT DEFECT: the dark navy tie tips extend BELOW the straight white-shirt bottom cut, causing the underlying avatar's blue body to show below the hem. Fix by extending the white shirt fabric about 30 pixels farther DOWN across its full existing shoulder/chest width, with the same natural side seam continuation and absolutely FLAT horizontal lower crop. Thus both complete ribbon tips sit at least 12px ABOVE the new flat white shirt bottom. There is no hem: the garment continues beyond a straight crop. Keep the entire repaired bottom sprite inside the 1536x1024 canvas, with new straight bottom at y=1014 and transparent 10px margin below. Do NOT vertically squash or stretch any existing details, do NOT redraw or move the tie, do NOT add navy outline under the bottom crop. Preserve transparent alpha around BOTH sprites and above/inside both neck openings. No backdrop, no shadow, no glow, no characters. This is a precise sprite cut-edge repair, all other art remains the same.",
+      "transparentBackground": true,
+      "references": [
+        {
+          "file": "sources/alignment-bust-uniform.png",
+          "sha256": "641825d7d24ee5a567e920f23c1af3f18e3d54a185530c0fac201ebe45bd9911"
+        }
+      ],
+      "sha256": "cc1a04cd5251327ce70d52260a2b33258c82d4e778376d7df1688b2198ea1c5c",
+      "file": "alignment-bust-sailor-repaired.png",
+      "width": 1536,
+      "height": 1024
+    }
+  ]
+}

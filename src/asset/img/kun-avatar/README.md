@@ -42,6 +42,28 @@ clothing front layers without changing their original placement boxes. Drawstrin
 zips, pockets and identifying emblems remain visible inside the original collar area.
 All reconstruction and export work is local; no generation runs in the product.
 
+### Garment alignment correction (2026-10-09)
+
+The old fixed 212/218px clothing boxes distorted every front garment: vertical
+scale was only 35-43% of horizontal scale. Historical recipes remain as source
+records, but final registration now comes from `kun-avatar-outfit-registration.mjs`
+and `kun-avatar-outfit-bust-recipes.mjs`. Only left/top/width are authored; height
+follows source aspect and overflowing fabric is clipped to the portrait canvas.
+Two rear capes follow the same rule. Each garment has its own neckline position.
+
+Both hoodies, lab coat, security jacket, spacesuit, sailor shirt, nurse uniform
+and coffee apron use new broad chest artwork. Identifying details remain in the
+visible bust without squeezing an entire miniature garment into a collar strip.
+The body, faces and inventory icons are unchanged. Published asset version 4
+invalidates cached compositions so saved looks receive the corrected artwork.
+
+`kun-avatar-outfit-alignment-check.mjs` independently reconstructs all 24 front
+and 2 rear layers from their source and `source.registration`, checks visible
+PNG color/alpha and all 78 WebP alpha exports, and protects the beak in front
+layers. It runs as part of the normal asset/build gate. Tests include a matching
+silhouette with internally flattened details and fractional resize rounding;
+dimensions and body-bound checks alone could not catch these defects.
+
 The second command checks all files and writes visual contact sheets to
 `.cache/kun-avatar-qa/`. Review all 30 presets, every accessory on all four body
 colors, and compact sizes on light, dark and checker backgrounds after changing

@@ -10,6 +10,7 @@ import { assetPath, avatarAssetSpec, detectAvatarEdgeHalo, requiredAvatarAssets,
 import { generateAvatarArtQa } from './kun-avatar-art-qa.mjs'
 import { auditAvatarArt } from './kun-avatar-art-audit.mjs'
 import { generateAvatarV2Qa } from './kun-avatar-v2-qa.mjs'
+import { validateAvatarOutfitAlignment } from './kun-avatar-outfit-alignment-check.mjs'
 export { requiredAvatarAssets } from './kun-avatar-art-validation.mjs'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -188,10 +189,11 @@ export async function validateAvatarManifest(manifest, shared, root = defaultAss
   }
   if (errors.length) throw new Error(errors.join('\n'))
   const alignment = await validateAvatarColorAlignment(manifest, shared.KUN_AVATAR_CATALOG.color, root)
+  const outfitAlignment = await validateAvatarOutfitAlignment(manifest, shared.KUN_AVATAR_CATALOG.outfit, root)
   const budget = validateAvatarBudget(webpBytes)
   const provenance = await validateAvatarProvenance(manifest, root)
   return { layers: required.length, fileCount: files.length, pngBytes, webpBytes,
-    legalPairs, excludedPairs, alignment, budget, provenance, files }
+    legalPairs, excludedPairs, alignment, outfitAlignment, budget, provenance, files }
 }
 
 const escapeXml = (value) => String(value).replace(/[<>&"']/g,
@@ -326,6 +328,8 @@ async function main() {
     `application WebP ${(result.webpBytes / 1048576).toFixed(2)} MiB.`)
   console.log(`Color registration alpha bounds: maximum ${result.alignment.maxDisplacementPixels}px displacement ` +
     `(alpha >= ${result.alignment.alphaThreshold}; allowed ${result.alignment.tolerancePixels}px).`)
+  console.log(`Outfit registration: ${result.outfitAlignment.garments} garments / ${result.outfitAlignment.layers} layers ` +
+    'preserve source aspect; front layers leave the beak clear.')
   console.log(`V2 art audit: ${audit.failures.length} blockers, ${audit.warnings.length} warnings, ` +
     `${audit.pending.length} awaiting user A/B; ${resolve(output, 'v2-audit.json')}`)
   if (audit.failures.length) {

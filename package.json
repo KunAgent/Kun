@@ -109,7 +109,7 @@
     "mac:unquarantine": "bash ./scripts/mac-unquarantine.sh",
     "generate:avatar-assets": "node scripts/build-kun-avatar-assets.mjs",
     "check:avatar-assets": "node scripts/kun-avatar-compose-check.mjs --check-only",
-    "test:avatar-assets": "node --test scripts/kun-avatar-compose-check.test.mjs scripts/kun-avatar-art-metrics.test.mjs scripts/kun-avatar-feather-mapping.test.mjs",
+    "test:avatar-assets": "node --test scripts/kun-avatar-compose-check.test.mjs scripts/kun-avatar-art-metrics.test.mjs scripts/kun-avatar-feather-mapping.test.mjs scripts/kun-avatar-outfit-alignment-check.test.mjs",
     "smoke:avatar": "node scripts/smoke-kun-avatar.mjs",
     "check:avatar-art-v2": "node scripts/kun-avatar-compose-check.mjs --check-only --v2-strict"
   },
