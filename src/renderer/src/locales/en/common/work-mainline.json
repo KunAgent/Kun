@@ -62,5 +62,6 @@
   "paperImportSummary": "{{added}} added, {{existing}} already there, {{failed}} failed",
   "paperImportInterpretAll": "Interpret these {{count}}",
   "paperImportBrowse": "Show in the library",
-  "paperImportDone": "Done"
+  "paperImportDone": "Done",
+  "workComposerMentionPlaceholder": "Ask the assistant · type @ to reference a file"
 }

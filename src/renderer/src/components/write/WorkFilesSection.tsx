@@ -126,6 +126,7 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
         />
         <WriteFileTree
           rootDirectory={root}
+          dragReferenceRoot={workspaceRoot}
           entriesByDir={visibleEntries}
           expandedDirs={expandedDirs}
           loadingDirs={loadingDirs}

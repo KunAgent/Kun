@@ -116,3 +116,29 @@ describe('WriteFileTree reveal action', () => {
     expect(onSelectFile).toHaveBeenCalledWith(codeEntry.path)
   })
 })
+
+describe('WriteFileTree drag to the assistant', () => {
+  it('drags a row as an @ reference relative to the space', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal('window', { kunGui: { platform: 'darwin' } })
+    const notes: WorkspaceEntry = { name: 'meeting.md', path: '/space/notes/meeting.md', type: 'file', ext: '.md' }
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(WriteFileTree, {
+        rootDirectory: '/space/notes', dragReferenceRoot: '/space',
+        entriesByDir: { '/space/notes': [notes] }, expandedDirs: new Set<string>(), loadingDirs: {},
+        selectedFilePath: null, error: null, onToggleDir: noop, onSelectFile: noop, onRevealEntry: noop,
+        onRefresh: noop, showHeader: false, showRootLabel: false
+      }))
+    })
+    const row = renderer.root.find((node) => node.type === 'div' && node.props.draggable === true)
+    const data = new Map<string, string>()
+    await act(async () => row.props.onDragStart({ dataTransfer: { setData: (type: string, value: string) => data.set(type, value), effectAllowed: '' } }))
+    expect(data.get('text/plain')).toBe('@notes/meeting.md ')
+    expect(JSON.parse(data.get('application/x-kun-file-reference') ?? '{}')).toMatchObject({
+      path: '/space/notes/meeting.md', relativePath: 'notes/meeting.md', name: 'meeting.md', type: 'file', workspaceRoot: '/space'
+    })
+    await act(async () => renderer.unmount())
+    vi.unstubAllGlobals()
+  })
+})

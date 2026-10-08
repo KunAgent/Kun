@@ -62,5 +62,6 @@
   "paperImportSummary": "เพิ่ม {{added}} มีอยู่แล้ว {{existing}} ล้มเหลว {{failed}}",
   "paperImportInterpretAll": "อธิบาย {{count}} บทความนี้",
   "paperImportBrowse": "ดูในคลังเอกสาร",
-  "paperImportDone": "เสร็จสิ้น"
+  "paperImportDone": "เสร็จสิ้น",
+  "workComposerMentionPlaceholder": "ถามผู้ช่วย · พิมพ์ @ เพื่ออ้างอิงไฟล์"
 }

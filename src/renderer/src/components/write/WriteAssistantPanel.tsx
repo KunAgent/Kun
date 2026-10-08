@@ -52,6 +52,7 @@ import { AgentIcon } from '../agent-icon'
 import './work-stage.css'
 import { WritePresentationViewChip } from './WritePresentationViewChip'
 import { useChildThreadViewer } from './useChildThreadViewer'
+import { useWorkComposerReferenceProps } from './use-work-composer-references'
 
 type Props = {
   input: string
@@ -256,6 +257,7 @@ export function WriteAssistantPanel({
   }, [activeFilePath, activeThreadId, activeUnitRel, activeWhiteboard, contextKey, libraryTotal, paperContextLabel,
     paperView, readerPage, researchActive, t, threadCount, workspaceRoot])
   const presentationView = useWriteWorkspaceStore(selectFocusedPresentationView)
+  const referenceProps = useWorkComposerReferenceProps(workspaceRoot)
   const {
     childThreadId,
     childBlocks,
@@ -536,6 +538,7 @@ export function WriteAssistantPanel({
           <FloatingComposer
             variant="compact"
             agentSwitcher
+            {...referenceProps}
             workspaceRootOverride={workspaceRoot}
             input={input}
             setInput={setInput}
@@ -559,7 +562,7 @@ export function WriteAssistantPanel({
             modelControlVariant="split"
             showProviderInModelLabel
             // The home invites like Code's; a docked draft keeps the short prompt.
-            placeholderOverride={home ? t('workHomeComposerPlaceholder') : activeThreadId ? undefined : t('placeholder')}
+            placeholderOverride={home ? t('workHomeComposerPlaceholder') : t('workComposerMentionPlaceholder')}
             executionSettings={executionSettings}
             executionSettingsApplying={executionSettingsApplying}
             onExecutionSettingsChange={onExecutionSettingsChange}

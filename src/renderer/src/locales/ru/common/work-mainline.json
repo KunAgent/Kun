@@ -62,5 +62,6 @@
   "paperImportSummary": "Добавлено {{added}}, уже было {{existing}}, ошибок {{failed}}",
   "paperImportInterpretAll": "Разобрать эти {{count}}",
   "paperImportBrowse": "Показать в библиотеке",
-  "paperImportDone": "Готово"
+  "paperImportDone": "Готово",
+  "workComposerMentionPlaceholder": "Спросите ассистента · @ — сослаться на файл"
 }

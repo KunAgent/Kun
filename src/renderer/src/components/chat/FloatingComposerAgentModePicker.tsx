@@ -287,7 +287,11 @@ export function FloatingComposerAgentModePicker({
           }}
           className="inline-flex h-8 max-w-[180px] items-center gap-1.5 rounded-full border border-ds-border-muted bg-ds-card px-2.5 text-[13px] font-medium text-ds-ink transition-colors hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-55">
           <AgentIcon harnessId={controls.harnessId} size={14} className="shrink-0" />
-          <span className="ds-composer-task-surface-label min-w-0 truncate">{triggerLabel}</span>
+          {/* Name and Kun surface are separate so a narrow composer can drop the surface, then both. */}
+          <span className="ds-composer-task-surface-label min-w-0 truncate">
+            <span className="ds-composer-agent-name">{kun ? 'Kun' : controls.harnessLabel}</span>
+            {kun ? <span className="ds-composer-agent-surface"> · {surfaceLabel}</span> : null}
+          </span>
           <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-ds-faint transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={1.8} aria-hidden />
         </button>
       </div>

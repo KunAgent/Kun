@@ -17,7 +17,7 @@ export function FloatingComposerStackView({
     currentTurnOrchestration, draft, fileMentions, filteredSlashCommands, goalBannerLabel,
     goalElapsedLabel, goalPanelOpen, goalPanelRef, graphEnabled, highlightedSlashCommand,
     onReorderQueuedMessage, onResumeQueuedMessages, onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, onRestoreQueuedMessageToComposer, pendingApprovals, pendingUserInputBlock,
-    queuedMessages, runtimeReady,
+    queuedMessages, route, runtimeReady,
     setActiveThreadGoalStatus, setGoalFromComposerInput, setGoalPanelOpen,
     showGoalFloater, showGoalMenuOption, showGraphProgress, showTodoProgress, slashCommandMenu,
     slashQuery, t, userInput
@@ -164,6 +164,7 @@ export function FloatingComposerStackView({
             selectedIndex={fileMentions.selectedIndex}
             highlighted={fileMentions.highlighted}
             hasMountedKnowledgeBases={fileMentions.hasMountedKnowledgeBases}
+            knowledgeBaseHint={route !== 'write'}
             onSelect={fileMentions.applySuggestion}
           />
         ) : null}

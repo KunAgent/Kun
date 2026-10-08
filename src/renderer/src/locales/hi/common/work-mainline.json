@@ -62,5 +62,6 @@
   "paperImportSummary": "{{added}} जोड़े, {{existing}} पहले से थे, {{failed}} विफल",
   "paperImportInterpretAll": "इन {{count}} की व्याख्या करें",
   "paperImportBrowse": "लाइब्रेरी में दिखाएँ",
-  "paperImportDone": "हो गया"
+  "paperImportDone": "हो गया",
+  "workComposerMentionPlaceholder": "सहायक से पूछें · फ़ाइल जोड़ने के लिए @ लिखें"
 }

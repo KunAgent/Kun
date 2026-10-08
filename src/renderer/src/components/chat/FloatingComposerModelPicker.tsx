@@ -167,9 +167,8 @@ export function FloatingComposerModelPicker({
   const shortModelLabel = !emptyModelMessage && !needsProviderSetup && selectedProviderGroup &&
     providerModelSections(selectedProviderGroup, selectedProviderGroup.modelIds)
     ? providerSectionModelName(selectedProviderGroup, currentModel) : modelLabel
-  const visibleModelLabel = showProviderInModelLabel && selectedProviderGroup?.label
-    ? `${selectedProviderGroup.label} · ${shortModelLabel}`
-    : shortModelLabel
+  // The provider is its own span so a narrow composer can drop it and keep the model.
+  const providerLabel = showProviderInModelLabel ? selectedProviderGroup?.label ?? '' : ''
   const controlsTitle = [
     selectedProviderGroup?.label,
     modelLabel,
@@ -320,10 +319,13 @@ export function FloatingComposerModelPicker({
             providerId={selectedProviderGroup.providerId}
             agentId={selectedProviderGroup.agentIconId}
             size={16}
-            className="h-4 w-4 shrink-0 text-ds-faint"
+            className="ds-composer-model-trigger-source h-4 w-4 shrink-0 text-ds-faint"
           />
         ) : null}
-        <span className="ds-composer-model-trigger-model">{visibleModelLabel}</span>
+        {providerLabel ? (
+          <span className="ds-composer-model-trigger-provider">{providerLabel}<span aria-hidden="true"> · </span></span>
+        ) : null}
+        <span className="ds-composer-model-trigger-model">{shortModelLabel}</span>
         {reasoningEnabled ? (
           <>
             <span className="ds-composer-model-trigger-dot" aria-hidden="true" />

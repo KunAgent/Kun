@@ -114,6 +114,30 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+describe('FloatingComposerActionMenu file references', () => {
+  it('offers only the file sources the surface supports (Work has no file panel)', async () => {
+    installMenuGlobals()
+    const labels = async (overrides: Record<string, unknown>): Promise<string[]> => {
+      let renderer: ReturnType<typeof createRenderer>
+      await act(async () => {
+        renderer = createRenderer(createElement(FloatingComposerActionMenu, {
+          context: menuContext({ fileReferenceEnabled: true, canPickLocalFileReference: true, ...overrides })
+        }))
+      })
+      const text = renderer!.root.findAllByProps({ role: 'menuitem' })
+        .map((item) => item.findAllByType('span').map((span) => span.props.children).join(''))
+      await act(async () => renderer!.unmount())
+      return text
+    }
+    const work = await labels({})
+    expect(work).toContain('composerAddLocalFiles')
+    expect(work).not.toContain('composerBrowseWorkspaceFiles')
+    expect(work).not.toContain('composerBrowseDesignDocs')
+    const code = await labels({ onOpenFileReferencePicker: vi.fn(), onOpenDesignReferencePicker: vi.fn() })
+    expect(code).toEqual(expect.arrayContaining(['composerAddLocalFiles', 'composerBrowseWorkspaceFiles', 'composerBrowseDesignDocs']))
+  })
+})
+
 describe('FloatingComposerActionMenu persona controls', () => {
   it('renders the gated Automatic mode as a mutually exclusive composer intent', async () => {
     installMenuGlobals()

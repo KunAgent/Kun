@@ -158,7 +158,8 @@ export function FloatingComposerActionMenu({
     handleLocalFileReferenceMenuClick, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, mode, onComposerPersonaChange,
     onPickAttachments, openSettings, orchestration, resolvedCodeAgentPresets,
     setComposerMenuOpen, showAutoPlanBuildMenuOption, showGoalMenuOption, showGraphMenuOption, showPlanMenuOption, t,
-    collaborationAvailable, collaborationEnabled, collaborationBusy, collaborationError, toggleCollaboration
+    collaborationAvailable, collaborationEnabled, collaborationBusy, collaborationError, toggleCollaboration,
+    onOpenFileReferencePicker, onOpenDesignReferencePicker
   } = context
   const [personaOpen, setPersonaOpen] = useState(false)
   const [style, setStyle] = useState<CSSProperties>({ visibility: 'hidden' })
@@ -304,14 +305,19 @@ export function FloatingComposerActionMenu({
             <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
             <span className="min-w-0 flex-1 truncate">{t('composerAddLocalFiles')}</span>
           </button>
-          <button role="menuitem" tabIndex={-1} type="button" disabled={!canPickFileReference} onClick={handleFileReferenceMenuClick} className={rowClass}>
-            <Paperclip className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-            <span className="min-w-0 flex-1 truncate">{t('composerBrowseWorkspaceFiles')}</span>
-          </button>
-          <button role="menuitem" tabIndex={-1} type="button" disabled={!canPickDesignReference} onClick={handleDesignReferenceMenuClick} className={rowClass}>
-            <Folder className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-            <span className="min-w-0 flex-1 truncate">{t('composerBrowseDesignDocs')}</span>
-          </button>
+          {/* Surfaces without a file panel (Work) reference files with @ and the picker above. */}
+          {onOpenFileReferencePicker ? (
+            <button role="menuitem" tabIndex={-1} type="button" disabled={!canPickFileReference} onClick={handleFileReferenceMenuClick} className={rowClass}>
+              <Paperclip className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+              <span className="min-w-0 flex-1 truncate">{t('composerBrowseWorkspaceFiles')}</span>
+            </button>
+          ) : null}
+          {onOpenDesignReferencePicker ? (
+            <button role="menuitem" tabIndex={-1} type="button" disabled={!canPickDesignReference} onClick={handleDesignReferenceMenuClick} className={rowClass}>
+              <Folder className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+              <span className="min-w-0 flex-1 truncate">{t('composerBrowseDesignDocs')}</span>
+            </button>
+          ) : null}
         </>
       ) : null}
       {attachmentUploadEnabled ? (

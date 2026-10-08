@@ -40,15 +40,32 @@
 
 删除：`PaperReadingDialog`、`PaperSynthesisDialog`、`paper-reading-entry`、`usePaperReadingRequest` 及只服务于它们的文案。`paper-reading-request.ts` 只保留目的列表和批量解读的说明文本。
 
-## 4 主要文件
+## 4 窄输入框与 @ 引用（2026-10-09 第二轮）
+
+**窄输入框**（Code 与 Work 共用，`styles/base-shell/composer-toolbar-layout.css`，按输入框自身宽度的容器查询）：
+
+| 宽度 | 变化 |
+| --- | --- |
+| ≤700px | 权限、计划等模式徽标只留图标 |
+| ≤640px | 工具栏可换行；模型 pill 去掉供应商名，只留模型名；模型按「剩余宽度」伸缩，并保留一个最小宽度（当前可见的图标/档位 + 约 4rem 模型名），放不下时整组动作换到第二行，而不是把模型名挤没 |
+| ≤520px | 上下文用量、Kun 自定义 Agent 收起（原规则） |
+| ≤440px | Agent 去掉「· Work / · Code」；模型来源图标、默认推理档位（自适应）收起，显式档位（高/低…）保留 |
+| ≤380px | Agent 只留图标（名称在 aria-label/tooltip）；「＋」缩到 2rem |
+| ≤300px | 推理档位全部收起（在模型面板里） |
+
+Work 默认宽度（右栏 384px）为单行「＋ · Agent · 权限 · 模型 ▾ · 发送」，模型名完整；最窄右栏两行。语音/优化开启时动作组可再换一行，不隐藏任何已开启的按钮。`scripts/smoke-composer-scaled-controls.mjs` 的 Work 段在 240–640px × 中英文 × 自适应/高档位 × 有无语音优化下逐一断言：不重叠、不裁切、模型名至少约 9 个字符可见、≤2 行（语音优化且 <320px 时 ≤3 行）、默认宽度单行。
+
+**@ 引用文件**：Work 输入框与 Code 一样支持输入 `@` 选择当前空间里的文件或目录、从左侧「文件」树拖入、「＋ → 添加本地文件」。引用随空间（`write/work-composer-references.ts`），发送时像 Code 一样把文件内容（有上限）带进本轮并作为 `fileReferences` 传给 Agent，气泡显示用户原话；发送失败时文本和引用一并恢复。Work 的 `@` 菜单不显示 Code 项目的知识库提示，「＋」菜单不显示 Work 没有的「浏览工作区文件 / 设计文档」。
+
+## 5 主要文件
 
 - 选择与发送：`store/chat-store-send-composer-selection.ts`（`sendFollowsComposerAgent`）、`store/chat-store-thread-send.ts`、`components/workbench/useWorkbenchComposerSubmitController.ts`、`write/work-assistant-agent.ts`、`write/work-session-actions.ts`（`submitWorkAssistantPrompt`）、`store/chat-store-navigation-mode-actions.ts`（`createWriteThread` 的 `route`）。
 - 输入框：`chat/FloatingComposer.tsx`、`chat/FloatingComposerSurfaceView.tsx`、`chat/FloatingComposerAgentModePicker.tsx`、`chat/floating-composer-policy.ts`。
 - Work 面板：`write/WriteAssistantPanel.tsx`、`workbench/useWorkbenchShellRuntime.tsx`、`workbench/useWorkbenchComposerCapabilities.ts`、`paper/research/PaperResearchStage.tsx`、`PaperResearchComposer.tsx`。
+- 窄布局与 @：`styles/base-shell/composer-toolbar-layout.css`、`components/workbench/workbench-write-send.ts`（Work 发送）、`write/work-composer-references.ts`、`components/write/use-work-composer-references.ts`、`WriteFileTree.tsx`（拖入引用）、`FloatingComposerFileMentionMenu.tsx`。
 - 论文：`write/write-paper-reference.ts`、`write/write-turn-reference-context.ts`、`paper/paper-assistant-ask.ts`、`components/paper/reader/PaperReadingPurposeMenu.tsx`、`use-paper-selection.ts`、`PaperVisualMarkCard.tsx`、`write/paper/paper-actions.ts`、`PaperLibraryView.tsx`、`use-paper-row-menu.tsx`、`WorkPaperHost.tsx`。
 
-## 5 未做 / 后续
+## 6 未做 / 后续
 
-- Work 输入框的 `@` 文件引用（Code 的文件引用控制器绑定 Code 工作区，Work 目前依靠当前文档上下文）。
 - 移动端 Work 助手与 SDD 助手仍使用 Work 专属模型（`assistantModel`）。
 - 批量解读仍是有界单次请求（`paperContext`），未改成 Agent 回合。

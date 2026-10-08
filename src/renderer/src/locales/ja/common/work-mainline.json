@@ -62,5 +62,6 @@
   "paperImportSummary": "追加 {{added}}、既存 {{existing}}、失敗 {{failed}}",
   "paperImportInterpretAll": "この {{count}} 本をまとめて解説",
   "paperImportBrowse": "ライブラリで表示",
-  "paperImportDone": "完了"
+  "paperImportDone": "完了",
+  "workComposerMentionPlaceholder": "アシスタントに質問 · @ でファイルを参照"
 }

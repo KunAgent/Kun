@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react'
+import type { DragEvent as ReactDragEvent, ReactElement, ReactNode } from 'react'
 import { ChevronDown, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, FolderSearch, GraduationCap, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
@@ -15,6 +15,8 @@ import {
   SidebarTreeRow
 } from '../sidebar/SidebarPrimitives'
 import { WorkFileTypeIcon, workFileKindForName } from './WorkFileTypeIcon'
+import { chatFileTreeEntryReference } from '../chat/chat-file-tree-helpers'
+import { COMPOSER_FILE_REFERENCE_DRAG_MIME, formatComposerFileMentionToken } from '../../lib/composer-file-references'
 
 type Props = {
   rootDirectory: string
@@ -42,6 +44,8 @@ type Props = {
   activityForPath?: (path: string, isDirectory: boolean) => SidebarActivity
   /** Inside a scrolling sidebar body: no own height or scroll container. */
   embedded?: boolean
+  /** Rows drag into the assistant composer as references relative to this space root. */
+  dragReferenceRoot?: string
 }
 
 function normalizePath(value: string): string {
@@ -131,9 +135,17 @@ export function WriteFileTree({
   showHeader = true,
   showRootLabel = true,
   activityForPath = () => 'idle',
-  embedded = false
+  embedded = false,
+  dragReferenceRoot
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const startReferenceDrag = (event: ReactDragEvent<HTMLElement>, entry: WorkspaceEntry): void => {
+    if (!dragReferenceRoot) return
+    const reference = chatFileTreeEntryReference(entry, dragReferenceRoot)
+    event.dataTransfer.effectAllowed = 'copy'
+    event.dataTransfer.setData('text/plain', `${formatComposerFileMentionToken(reference.relativePath, reference.type === 'directory')} `)
+    event.dataTransfer.setData(COMPOSER_FILE_REFERENCE_DRAG_MIME, JSON.stringify(reference))
+  }
   const hasRootSnapshot = Object.prototype.hasOwnProperty.call(entriesByDir, rootDirectory)
   const rootEntries = (entriesByDir[rootDirectory] ?? []).filter(isWriteDocument)
 
@@ -151,6 +163,8 @@ export function WriteFileTree({
         <div key={entry.path}>
           <SidebarTreeRow
             active={selected}
+            draggable={Boolean(dragReferenceRoot)}
+            onDragStart={(event) => startReferenceDrag(event, entry)}
             onClick={() => (isDirectory ? onToggleDir(entry.path) : onSelectFile(entry.path))}
             className="min-h-[30px]"
             buttonClassName="items-center gap-1.5 py-1.5 pr-2"

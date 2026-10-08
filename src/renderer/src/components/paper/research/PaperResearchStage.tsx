@@ -7,6 +7,7 @@ import { PaperToolPoolContext } from '../../chat/paper-tool-process'
 import type { WriteAssistantStageProps } from '../../write/WriteAssistantStageContext'
 import { useChildThreadViewer } from '../../write/useChildThreadViewer'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
+import { useWorkComposerReferenceProps } from '../../write/use-work-composer-references'
 
 /**
  * Center-stage research conversation: the Work assistant's own thread,
@@ -23,6 +24,7 @@ export function PaperResearchStage({
   const { t } = useTranslation('common')
   const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const child = useChildThreadViewer(assistant.activeThreadId ?? '')
+  const referenceProps = useWorkComposerReferenceProps(workspaceRoot)
   const timeline = child.viewingChildThread ? (
     <>
       <div className="flex shrink-0 items-center gap-2 border-b border-ds-border-muted px-4 py-2 text-[12.5px]">
@@ -76,6 +78,7 @@ export function PaperResearchStage({
           <div className="mx-auto w-full max-w-[760px]">
             <FloatingComposer
               agentSwitcher
+              {...referenceProps}
               workspaceRootOverride={workspaceRoot}
               input={assistant.input}
               setInput={assistant.setInput}

@@ -32,10 +32,43 @@ Object.assign(window, { kunGui: {
   },
   runtimeRequest: async () => ({ ok: true, status: 200, body: '{}' })
 } })
+// `?variant=work`: the Work assistant composer (compact, Agent switcher, @ references).
+const workVariant = new URLSearchParams(location.search).get('variant') === 'work'
 useHarnessStore.setState({ rowsLoadedAt: Date.now() })
-useChatStore.setState({ route: 'chat', workspaceRoot: '/fixture/workspace',
+useChatStore.setState({ route: workVariant ? 'write' : 'chat', workspaceRoot: '/fixture/workspace',
   activeThreadId: null, composerHarnessId: 'kun', composerModelCatalogStatus: 'ready',
   blocks: [{ id: 'fixture-user', kind: 'user', text: 'Previous message' }] })
+
+const workModelGroups = [{ providerId: 'deepseek', label: 'DeepSeek', presetSource: 'deepseek', modelIds: ['deepseek-v4-pro'],
+  modelProfiles: { 'deepseek-v4-pro': { inputModalities: ['text' as const], outputModalities: ['text' as const],
+    supportsToolCalling: true, messageParts: ['text' as const],
+    reasoning: { supportedEfforts: ['auto' as const, 'high' as const], defaultEffort: 'auto' as const, requestProtocol: 'none' as const } } } }]
+
+function WorkFixture() {
+  const [input, setInput] = useState('Summarize @notes/meeting.md for the quarterly plan')
+  const [effort, setEffort] = useState<'auto' | 'high'>('auto')
+  Object.assign(window, { composerFixtureEffort: setEffort })
+  return <main className="ds-chat-stage" style={{ width: '100%', paddingTop: 48 }}>
+    <FloatingComposer
+      variant="compact" agentSwitcher fileReferenceEnabled
+      fileReferences={[{ path: '/fixture/workspace/notes/meeting.md', relativePath: 'notes/meeting.md', name: 'meeting.md',
+        type: 'file', workspaceRoot: '/fixture/workspace' }]}
+      onAddFileReference={() => undefined} onRemoveFileReference={() => undefined} onPickFileReferences={() => undefined}
+      workspaceRootOverride="/fixture/workspace" activeThreadIdOverride={null}
+      input={input} setInput={setInput} mode="agent" setMode={() => undefined}
+      busy={false} runtimeReady hasActiveThread
+      queuedMessages={[]} onRemoveQueuedMessage={() => undefined}
+      composerModel="deepseek-v4-pro" composerProviderId="deepseek" composerPickList={['deepseek-v4-pro']}
+      composerModelGroups={workModelGroups} composerReasoningEffort={effort}
+      onComposerReasoningEffortChange={(next) => setEffort(next === 'high' ? 'high' : 'auto')}
+      modelPickerMode="combobox" modelControlVariant="split" showProviderInModelLabel
+      onComposerModelChange={() => undefined}
+      executionSettings={{ approvalPolicy: 'on-request', sandboxMode: 'workspace-write', approvalReviewer: 'user' }}
+      onExecutionSettingsChange={() => undefined}
+      onSend={() => { calls.sent.push(input) }} onInterrupt={() => undefined}
+    />
+  </main>
+}
 
 function Fixture() {
   const [input, setInput] = useState('Explain the proposed change')
@@ -65,4 +98,4 @@ Object.assign(window, { composerFixture: {
   }
 } })
 await i18n.changeLanguage(new URLSearchParams(location.search).get('language') || 'en')
-createRoot(document.getElementById('root')!).render(<Fixture />)
+createRoot(document.getElementById('root')!).render(workVariant ? <WorkFixture /> : <Fixture />)

@@ -62,5 +62,6 @@
   "paperImportSummary": "新增 {{added}} 篇，{{existing}} 篇已存在，{{failed}} 篇失败",
   "paperImportInterpretAll": "批量解读这 {{count}} 篇",
   "paperImportBrowse": "在文献库查看",
-  "paperImportDone": "完成"
+  "paperImportDone": "完成",
+  "workComposerMentionPlaceholder": "向助手提问，输入 @ 引用文件"
 }

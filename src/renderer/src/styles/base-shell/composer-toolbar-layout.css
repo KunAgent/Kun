@@ -1,0 +1,195 @@
+/*
+ * Composer toolbar layout (Code, Work, side composers). One row while
+ * everything fits. As the composer narrows, words give way in this order so
+ * the model and the Agent stay legible: the provider name, the Kun surface
+ * ("· Work") with the model's source icon and the default reasoning level,
+ * then the Agent name (its icon stays). The action group wraps onto its own row only when even the compact
+ * controls cannot share one; enabled actions are never hidden. Queries use
+ * the composer's own width (layout px), not the window's.
+ */
+.ds-floating-composer {
+  container-type: inline-size;
+}
+
+.ds-composer-toolbar {
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.ds-composer-toolbar-start {
+  flex: 0 1 auto;
+  max-width: min(42%, 22rem);
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.ds-composer-toolbar-start::-webkit-scrollbar {
+  display: none;
+}
+
+.ds-composer-toolbar-actions {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ds-composer-model-picker {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.ds-composer-toolbar-actions .ds-composer-model-picker {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* In a cramped pill the provider gives way before the model name. */
+.ds-composer-model-trigger-provider {
+  flex: 0 4 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-git-branch-picker {
+  max-width: 100%;
+}
+
+@container (max-width: 700px) {
+  .ds-composer-mode-badge {
+    gap: 0;
+    padding-inline: 0;
+    width: 2rem;
+  }
+
+  .ds-composer-mode-label,
+  .ds-composer-permission-label,
+  .ds-composer-permission-chevron {
+    display: none;
+  }
+
+  .ds-floating-composer
+    .ds-composer-toolbar
+    .ds-composer-permission-control
+    .ds-composer-permission-button {
+    border-radius: 9999px;
+    gap: 0;
+    height: 2rem;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0;
+    width: 2rem;
+  }
+}
+
+@container (max-width: 640px) {
+  /* Controls and actions share a row; the actions move below only when the
+     row cannot also hold a legible model name. */
+  .ds-composer-toolbar {
+    flex-wrap: wrap;
+    column-gap: 0.375rem;
+    row-gap: 0.375rem;
+  }
+
+  .ds-composer-toolbar > .ds-composer-toolbar-start {
+    max-width: 100%;
+  }
+
+  /* On a row of their own, extra actions (voice, optimize) still wrap below
+     the model rather than squeeze it. */
+  .ds-composer-toolbar > .ds-composer-toolbar-actions {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    justify-content: flex-end;
+  }
+
+  /* Sized by the row, not its label: it fills what is left, and its minimum
+     (the chrome still shown at this width + ~4rem of model name) decides when
+     the group wraps instead of squeezing the name. */
+  .ds-composer-toolbar-actions .ds-composer-model-picker {
+    --ds-composer-model-min: 7.75rem;
+    contain: inline-size;
+    flex: 1 1 var(--ds-composer-model-min);
+    justify-content: flex-end;
+    max-width: none;
+    min-width: var(--ds-composer-model-min);
+  }
+
+  .ds-composer-toolbar-actions .ds-composer-model-picker:has(.ds-composer-model-trigger-effort) {
+    --ds-composer-model-min: 11rem;
+  }
+
+  .ds-composer-model-trigger-provider,
+  .ds-composer-intent-detail {
+    display: none;
+  }
+
+  .ds-git-branch-picker {
+    flex: 1 1 180px;
+  }
+}
+
+@container (max-width: 520px) {
+  .ds-composer-context-control,
+  .ds-composer-agent-picker {
+    display: none;
+  }
+}
+
+@container (max-width: 440px) {
+  .ds-composer-agent-surface {
+    display: none;
+  }
+
+  /* The default level is implied; a chosen level stays visible. */
+  .ds-composer-model-trigger[data-reasoning-effort='auto'] .ds-composer-model-trigger-dot,
+  .ds-composer-model-trigger[data-reasoning-effort='auto'] .ds-composer-model-trigger-effort {
+    display: none;
+  }
+
+  /* The model name outranks its source icon (it carries an inline display). */
+  .ds-composer-model-trigger .ds-composer-model-trigger-source {
+    display: none !important;
+  }
+
+  .ds-composer-toolbar-actions .ds-composer-model-picker,
+  .ds-composer-toolbar-actions .ds-composer-model-picker:has([data-reasoning-effort='auto']) {
+    --ds-composer-model-min: 6.5rem;
+  }
+
+  .ds-composer-toolbar-actions .ds-composer-model-picker:has([data-reasoning-effort]:not([data-reasoning-effort='auto'])) {
+    --ds-composer-model-min: 9.5rem;
+  }
+}
+
+@container (max-width: 380px) {
+  .ds-composer-task-surface-label,
+  .ds-composer-intent-label {
+    display: none;
+  }
+
+  .ds-composer-task-surface-control > button {
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+  }
+
+  .ds-composer-toolbar .ds-composer-menu-button {
+    height: 2rem;
+    width: 2rem;
+  }
+}
+
+@container (max-width: 300px) {
+  .ds-composer-model-trigger-dot,
+  .ds-composer-model-trigger-effort {
+    display: none;
+  }
+
+  .ds-composer-toolbar-actions .ds-composer-model-picker:has([data-reasoning-effort]:not([data-reasoning-effort='auto'])) {
+    --ds-composer-model-min: 6.5rem;
+  }
+}

@@ -62,5 +62,6 @@
   "paperImportSummary": "추가 {{added}}, 기존 {{existing}}, 실패 {{failed}}",
   "paperImportInterpretAll": "이 {{count}}편 일괄 해설",
   "paperImportBrowse": "라이브러리에서 보기",
-  "paperImportDone": "완료"
+  "paperImportDone": "완료",
+  "workComposerMentionPlaceholder": "어시스턴트에게 질문 · @로 파일 참조"
 }

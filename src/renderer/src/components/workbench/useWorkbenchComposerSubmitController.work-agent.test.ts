@@ -16,6 +16,7 @@ import { useChatStore } from '../../store/chat-store'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { clearWriteWorkspaceSaveQueueForTests } from '../../write/write-save-coordinator'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { useWorkComposerReferences } from '../../write/work-composer-references'
 import { useWorkbenchComposerSubmitController } from './useWorkbenchComposerSubmitController'
 import {
   activateTextFile,
@@ -123,5 +124,40 @@ describe('Work assistant turns run on the composer Agent', () => {
     await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce())
     const contexts = (sendMessage.mock.calls[0]?.[2]?.composerContexts ?? []) as ComposerContextAttachment[]
     expect(contexts.some((context) => context.reference.kind === 'work-reference-paper')).toBe(false)
+  })
+
+  it('sends @-referenced files with the turn, shows the typed text and consumes them', async () => {
+    const readWorkspaceFile = vi.fn(async () => ({ ok: true as const, content: '# Meeting\n- Ship the Work sidebar', truncated: false }))
+    vi.stubGlobal('window', { kunGui: { readWorkspaceFile } })
+    useWorkComposerReferences.setState({ spaceRoot: '/tmp/write', references: [{ path: '/tmp/write/notes/meeting.md',
+      relativePath: 'notes/meeting.md', name: 'meeting.md', type: 'file', workspaceRoot: '/tmp/write' }] })
+    const { sendMessage, controller } = useSendController()
+
+    controller.sendWritePrompt('Summarize @notes/meeting.md')
+
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce())
+    const [text, , overrides] = sendMessage.mock.calls[0]!
+    expect(text).toContain('<workspace_file path="notes/meeting.md">')
+    expect(text).toContain('Ship the Work sidebar')
+    expect(overrides).toMatchObject({ displayText: 'Summarize @notes/meeting.md' })
+    expect(overrides?.fileReferences?.map((reference) => reference.relativePath)).toEqual(['draft.md', 'notes/meeting.md'])
+    expect(useWorkComposerReferences.getState().references).toEqual([])
+  })
+
+  it('keeps the prompt and its references when a referenced file cannot be read', async () => {
+    vi.stubGlobal('window', { kunGui: { readWorkspaceFile: vi.fn(async () => ({ ok: false as const, message: 'permission denied' })) } })
+    const reference = { path: '/tmp/write/secret.md', relativePath: 'secret.md', name: 'secret.md', type: 'file' as const, workspaceRoot: '/tmp/write' }
+    useWorkComposerReferences.setState({ spaceRoot: '/tmp/write', references: [reference] })
+    const setError = vi.fn()
+    const setInput = vi.fn()
+    const { sendMessage, controller } = useSendController({ setError, setInput })
+
+    controller.sendWritePrompt('Check @secret.md')
+
+    await vi.waitFor(() => expect(setError).toHaveBeenCalledWith('composerFileReadFailed'))
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(useWorkComposerReferences.getState().references).toEqual([reference])
+    const restore = setInput.mock.calls.find(([value]) => typeof value === 'function')?.[0]
+    expect(restore('')).toBe('Check @secret.md')
   })
 })

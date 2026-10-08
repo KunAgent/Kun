@@ -40,7 +40,8 @@ async function chatState(page) {
       threadWorkspace: thread?.workspace ?? null,
       users: users.map((block) => ({
         text: block.text,
-        contexts: (block.meta?.composerContexts ?? []).map((context) => context.reference)
+        contexts: (block.meta?.composerContexts ?? []).map((context) => context.reference),
+        files: (block.meta?.fileReferences ?? []).map((reference) => reference.relativePath)
       }))
     }
   })
@@ -77,7 +78,9 @@ async function exerciseWorkAssistantAgent({ page, poll, capture, recordDiagnosti
   // The composer is Code's: the Agent menu offers "Kun · Work" and other Agents.
   const trigger = panel.locator('[data-agent-mode-trigger]').first()
   await trigger.waitFor({ timeout: 30_000 })
-  steps.trigger = { label: await trigger.innerText(), surface: await trigger.getAttribute('data-task-surface') }
+  // A narrow rail shows the Agent's icon; its name stays in the accessible label.
+  steps.trigger = { label: await trigger.getAttribute('aria-label'), visible: await trigger.innerText(),
+    surface: await trigger.getAttribute('data-task-surface') }
   assert.match(steps.trigger.label, /Kun · Work/)
   assert.equal(steps.trigger.surface, 'write')
   await page.waitForTimeout(800)
@@ -173,6 +176,42 @@ async function exerciseWorkAssistantAgent({ page, poll, capture, recordDiagnosti
   assert.ok(steps.purposeTurn.users.at(-1).text.includes(PAPER_TITLE), 'the purpose prompt names the paper')
   await page.waitForTimeout(800)
   await capture('work-agent-05-purpose-reply')
+
+  // @ references work as in Code: type @, pick a file of the space, send.
+  const mentionInput = panel.locator('textarea').first()
+  await mentionInput.fill('对照 @paper.md')
+  const mentionOption = page.locator(`button:has-text("${PAPER_DIR}/paper.md")`).first()
+  await mentionOption.waitFor({ timeout: 20_000 })
+  await page.waitForTimeout(300)
+  await capture('work-agent-06-mention-menu')
+  await mentionOption.click()
+  await panel.getByText(`${PAPER_DIR}/paper.md`, { exact: true }).first().waitFor({ timeout: 10_000 })
+  steps.mentionDraft = await mentionInput.inputValue()
+  assert.ok(steps.mentionDraft.includes(`@${PAPER_DIR}/paper.md`), `mention token inserted: ${steps.mentionDraft}`)
+  await capture('work-agent-07-mention-chip')
+  const mentionSend = panel.locator('.ds-composer-primary-action').first()
+  await poll(async () => mentionSend.isEnabled(), 30_000, 'composer ready to send the mention')
+  await mentionSend.click()
+  await poll(async () => {
+    const state = await chatState(page)
+    return state.users.length >= 3 && !state.busy && state.latestTurnStatus === 'completed'
+  }, 90_000, 'mention turn answered')
+  steps.mentionTurn = (await chatState(page)).users.at(-1)
+  assert.ok(steps.mentionTurn.files.includes(`${PAPER_DIR}/paper.md`), `@ file sent with the turn: ${JSON.stringify(steps.mentionTurn)}`)
+  assert.ok(steps.mentionTurn.text.includes(`@${PAPER_DIR}/paper.md`), 'the bubble keeps what was typed')
+
+  // The narrowest rail keeps every control readable (one or two toolbar rows).
+  const rightPanel = page.locator('[data-workbench-right-panel]')
+  const handle = await rightPanel.locator('xpath=preceding-sibling::div[@role="separator"][1]').boundingBox()
+  const before = await rightPanel.boundingBox()
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handle.x + before.width - 240, handle.y + handle.height / 2, { steps: 10 })
+  await page.mouse.up()
+  await page.waitForTimeout(800)
+  steps.narrowPanel = { before: before.width, after: (await rightPanel.boundingBox()).width }
+  assert.ok(steps.narrowPanel.after < before.width, `panel narrowed: ${JSON.stringify(steps.narrowPanel)}`)
+  await capture('work-agent-08-narrow-panel')
   await recordDiagnostic('work-assistant-agent', { steps })
   return { steps }
 }
