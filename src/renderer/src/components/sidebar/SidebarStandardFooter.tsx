@@ -53,7 +53,7 @@ export function SidebarStandardFooter({
           <KunAccountControl />
         </div>
       ) : null}
-      {sceneFooter || focusModeEnabled ? <KunAccountControl /> : null}
+      {sceneFooter || focusModeEnabled ? <KunAccountControl variant="row" /> : null}
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
           <SidebarCommandRow

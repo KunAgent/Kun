@@ -18,6 +18,8 @@ export type KunAccountState = Readonly<{
 export interface KunAccountApi {
   getState(): Promise<KunAccountState>
   login(): Promise<KunAccountState>
+  /** Opens the pending sign-in page again; it reuses the same request. */
+  reopenLogin(): Promise<KunAccountState>
   cancelLogin(): Promise<KunAccountState>
   refresh(): Promise<KunAccountState>
   logout(): Promise<KunAccountState>
@@ -28,5 +30,5 @@ export interface KunAccountApi {
 export const KUN_ACCOUNT_CHANNELS = {
   state: 'kun-account:state', get: 'kun-account:get', login: 'kun-account:login',
   cancel: 'kun-account:cancel', refresh: 'kun-account:refresh', logout: 'kun-account:logout',
-  manage: 'kun-account:manage'
+  manage: 'kun-account:manage', reopen: 'kun-account:reopen'
 } as const

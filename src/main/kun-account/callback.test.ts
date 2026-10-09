@@ -23,6 +23,25 @@ describe('desktop OAuth loopback callback', () => {
     } finally { callback.close() }
   })
 
+  it('renders a self-contained result page in the browser language', async () => {
+    const callback = await listenForAccountCode('s', new AbortController().signal, 0)
+    const url = `http://127.0.0.1:${callback.port}/auth/callback`
+    try {
+      const failed = await fetch(`${url}?state=wrong&code=x`, { headers: { 'Accept-Language': 'zh-CN,zh;q=0.9' } })
+      expect(await failed.text()).toContain('这次登录没有完成')
+      const ok = await fetch(`${url}?state=s&code=private-code`, { headers: { 'Accept-Language': 'en-US,en;q=0.9' } })
+      const body = await ok.text()
+      expect(body).toContain('Sign-in confirmed')
+      expect(body).toContain('href="kun://account"')
+      expect(body).toMatch(/<img src="data:image\/webp;base64,/)
+      expect(body).not.toContain('private-code')
+      const policy = ok.headers.get('content-security-policy') ?? ''
+      expect(policy).toContain('img-src data:')
+      expect(policy).not.toMatch(/https?:/)
+      expect(await callback.code).toBe('private-code')
+    } finally { callback.close() }
+  })
+
   it('requires the correct host, method and path', async () => {
     const callback = await listenForAccountCode('s', new AbortController().signal, 0)
     const base = `http://127.0.0.1:${callback.port}`

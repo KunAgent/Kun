@@ -30,7 +30,7 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null)
     return service
   }
   for (const [channel, action] of [
-    [channels.get, 'getState'], [channels.login, 'login'], [channels.cancel, 'cancelLogin'],
+    [channels.get, 'getState'], [channels.login, 'login'], [channels.reopen, 'reopenLogin'], [channels.cancel, 'cancelLogin'],
     [channels.refresh, 'refresh'], [channels.logout, 'logout']
   ] as const) {
     ipcMain.handle(channel, (event) => { assertTrustedWorkbenchSender(event, getMainWindow); return account()[action]() })

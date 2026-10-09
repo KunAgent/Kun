@@ -27,6 +27,7 @@ import usagePanel from './common/usage-panel.json'
 import conversationExport from './common/conversation-export.json'
 import paperSearch from './common/paper-search.json'
 import wardrobePage from './common/wardrobe-page.json'
+import kunAccount from './common/kun-account.json'
 
 const common = {
   ...agentUpdates,
@@ -57,6 +58,7 @@ const common = {
   ...conversationExport,
   ...paperSearch,
   ...wardrobePage,
+  ...kunAccount,
 }
 
 export default common

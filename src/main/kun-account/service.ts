@@ -27,6 +27,8 @@ export class KunAccountService {
   private signingOut?: Promise<KunAccountState>
   private persistence = Promise.resolve()
   private pending?: AbortController
+  // The page for the pending request, so a closed browser tab can be reopened.
+  private authorizationUrl?: string
   private timer?: ReturnType<typeof setTimeout>
   private disposed = false
   private readonly now: () => number
@@ -134,6 +136,7 @@ export class KunAccountService {
     clearTimeout(this.timer)
     const controller = new AbortController()
     this.pending = controller
+    this.authorizationUrl = undefined
     this.publish('authorizing', null)
     let callback: AccountCallback | undefined
     try {
@@ -148,6 +151,7 @@ export class KunAccountService {
       const url = new URL('/auth/start', KUN_ACCOUNT_ISSUER)
       url.search = new URLSearchParams({ client_id: this.deps.clientId, redirect_uri: KUN_ACCOUNT_REDIRECT,
         response_type: 'code', scope: 'openid email profile', state, code_challenge: challenge, code_challenge_method: 'S256' }).toString()
+      this.authorizationUrl = url.href
       await this.deps.openBrowser(url.href)
       this.active(epoch)
       void this.completeLogin(callback, verifier, epoch, controller)
@@ -180,6 +184,14 @@ export class KunAccountService {
       if (this.pending === controller) this.pending = undefined
       await this.failure(error, epoch)
     } finally { callback.close() }
+  }
+  /** Shows the pending sign-in page again. Same PKCE request, same listener. */
+  async reopenLogin(): Promise<KunAccountState> {
+    const url = this.authorizationUrl
+    if (!this.pending || !url || this.disposed) return this.state
+    // A browser that fails to open leaves the original page usable.
+    await this.deps.openBrowser(url).catch(() => {})
+    return this.state
   }
   async cancelLogin(): Promise<KunAccountState> {
     if (!this.pending) return this.state

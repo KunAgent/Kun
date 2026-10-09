@@ -19,6 +19,7 @@ vi.mock('../kun-account/service', () => ({ KunAccountService: class {
   constructor(deps: unknown) { mocks.create(deps) }
   getState = mocks.get
   login = mocks.get
+  reopenLogin = mocks.get
   refresh = mocks.get
   cancelLogin = mocks.get
   logout = mocks.get
@@ -32,7 +33,7 @@ describe('Kun account IPC boundary', () => {
     registerKunAccountIpc(() => null)
     expect(mocks.create).not.toHaveBeenCalled()
     mocks.assertTrusted.mockImplementation(() => { throw new Error('untrusted') })
-    for (const channel of [channels.get, channels.login, channels.cancel, channels.refresh, channels.logout, channels.manage]) {
+    for (const channel of [channels.get, channels.login, channels.reopen, channels.cancel, channels.refresh, channels.logout, channels.manage]) {
       await expect(Promise.resolve().then(() => mocks.handlers.get(channel)!({}))).rejects.toThrow('untrusted')
     }
     expect(mocks.create).not.toHaveBeenCalled()

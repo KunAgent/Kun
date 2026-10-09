@@ -49,6 +49,22 @@ describe('Kun account desktop service', () => {
     expect(f.deps.focus).toHaveBeenCalledOnce()
   })
 
+  it('reopens the same pending sign-in page without starting another request', async () => {
+    const f = fixture()
+    await f.service.reopenLogin()
+    expect(f.deps.openBrowser).not.toHaveBeenCalled()
+    await f.service.login()
+    const first = vi.mocked(f.deps.openBrowser).mock.calls[0][0]
+    vi.mocked(f.deps.openBrowser).mockRejectedValueOnce(new Error('no browser'))
+    await expect(f.service.reopenLogin()).resolves.toMatchObject({ status: 'authorizing' })
+    await f.service.reopenLogin()
+    expect(vi.mocked(f.deps.openBrowser).mock.calls.map(([url]) => url)).toEqual([first, first, first])
+    expect(f.deps.listen).toHaveBeenCalledOnce()
+    await f.service.cancelLogin()
+    await f.service.reopenLogin()
+    expect(f.deps.openBrowser).toHaveBeenCalledTimes(3)
+  })
+
   it('cancellation prevents a late callback from exchanging a code', async () => {
     const f = fixture()
     await f.service.login(); await f.service.cancelLogin()

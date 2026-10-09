@@ -4,6 +4,7 @@ import { KUN_ACCOUNT_CHANNELS as channels, type KunAccountApi, type KunAccountSt
 export const kunAccountApi: KunAccountApi = {
   getState: () => ipcRenderer.invoke(channels.get),
   login: () => ipcRenderer.invoke(channels.login),
+  reopenLogin: () => ipcRenderer.invoke(channels.reopen),
   cancelLogin: () => ipcRenderer.invoke(channels.cancel),
   refresh: () => ipcRenderer.invoke(channels.refresh),
   logout: () => ipcRenderer.invoke(channels.logout),

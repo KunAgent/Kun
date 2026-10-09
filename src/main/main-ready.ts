@@ -49,6 +49,7 @@ import { registerShellIpc } from './main-ready-ipc'
 import { registerMainIpc } from './main-ready-ipc-full'
 import { revealMainWindow, syncTray } from './main-tray'
 import { resolveLogDirectory } from './main-paths'
+import { isKunAccountReturnLink } from './kun-account/config'
 import { showStartupFailureWindow } from './startup-failure-window'
 import { sanitizeStartupFailureMessage } from './startup-failure-content'
 import {
@@ -122,6 +123,12 @@ export function startMainApp(): Promise<void> {
     }
   }
   const onImportLink = (raw: string): void => {
+    // "Back to Kun" on the account sign-in result page: macOS will not let a
+    // background app take focus, so the browser hands it back explicitly.
+    if (isKunAccountReturnLink(raw)) {
+      activation.requestReveal()
+      return
+    }
     const staged = stageProviderImportLink(raw)
     if (!staged.ok) {
       logWarn('provider-import-link', 'Rejected kun:// import link.', { message: staged.message })

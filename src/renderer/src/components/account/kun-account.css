@@ -1,0 +1,646 @@
+/* Kun account: the sidebar entry and the panel that follows the browser sign-in. */
+
+.kun-account-entry,
+.kun-account-panel {
+  --kun-account-sky: linear-gradient(180deg, #e4f0ff 0%, #eeecff 52%, #fdf4e8 100%);
+  --kun-account-glow-a: rgba(133, 193, 241, 0.7);
+  --kun-account-glow-b: rgba(255, 212, 165, 0.62);
+  --kun-account-chip: rgba(255, 255, 255, 0.8);
+  --kun-account-chip-ink: #4f6087;
+  --kun-account-star: transparent;
+  --kun-account-primary: color-mix(in srgb, var(--ds-accent) 86%, #000000);
+  --kun-account-primary-ink: #ffffff;
+  --kun-account-primary-glow: color-mix(in srgb, var(--ds-accent) 26%, transparent);
+  --kun-account-ok: #17834a;
+  --kun-account-ok-soft: #e8f6ee;
+  --kun-account-warn: #a2520a;
+  --kun-account-warn-soft: #fff3e2;
+  --kun-account-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --kun-account-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-theme='dark'] .kun-account-entry,
+[data-theme='dark'] .kun-account-panel {
+  --kun-account-sky: linear-gradient(180deg, #111a2f 0%, #161a35 55%, #1d1a2a 100%);
+  --kun-account-glow-a: rgba(52, 104, 190, 0.55);
+  --kun-account-glow-b: rgba(96, 78, 190, 0.45);
+  --kun-account-chip: rgba(255, 255, 255, 0.08);
+  --kun-account-chip-ink: #a3b3d6;
+  --kun-account-star: #dfe8ff;
+  --kun-account-primary: var(--ds-accent);
+  --kun-account-primary-ink: #0d1424;
+  --kun-account-primary-glow: color-mix(in srgb, var(--ds-accent) 20%, transparent);
+  --kun-account-ok: #5fd68f;
+  --kun-account-ok-soft: rgba(74, 222, 128, 0.14);
+  --kun-account-warn: #f4b061;
+  --kun-account-warn-soft: rgba(245, 158, 11, 0.16);
+}
+
+/* Entry: same 30px row height as Kun's card, never truncating a name. */
+.kun-account-entry {
+  position: relative;
+  display: inline-flex;
+  height: 30px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--ds-border);
+  border-radius: 9px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  outline: none;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.kun-account-entry:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ds-accent) 40%, var(--ds-border));
+  color: color-mix(in srgb, var(--ds-accent) 82%, var(--ds-text));
+}
+
+.kun-account-entry:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 30%, transparent);
+}
+
+.kun-account-entry[data-entry='busy'] {
+  border-color: color-mix(in srgb, var(--ds-accent) 38%, var(--ds-border));
+  background: color-mix(in srgb, var(--ds-accent) 10%, var(--ds-surface-card));
+  color: color-mix(in srgb, var(--ds-accent) 82%, var(--ds-text));
+}
+
+.kun-account-entry[data-entry='avatar'],
+.kun-account-entry[data-entry='loading'] {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.kun-account-entry[data-variant='row'] {
+  width: 100%;
+  height: 36px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 12px;
+  border-color: transparent;
+  border-radius: 9999px;
+  background: transparent;
+  font-size: 13px;
+}
+
+.kun-account-entry[data-variant='row']:hover:not(:disabled) {
+  background: var(--ds-sidebar-row-hover);
+}
+
+.kun-account-entry-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kun-account-avatar {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(140deg, #7d97ff, #4e67db);
+  box-shadow: 0 0 0 2px var(--ds-bg-sidebar), 0 0 0 3px color-mix(in srgb, var(--ds-accent) 34%, transparent);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.kun-account-entry[data-variant='row'] .kun-account-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+
+.kun-account-avatar.is-large {
+  width: 40px;
+  height: 40px;
+  box-shadow: none;
+  font-size: 16px;
+}
+
+.kun-account-skeleton {
+  width: 58px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, var(--ds-surface-hover), var(--ds-surface-card), var(--ds-surface-hover));
+  background-size: 200% 100%;
+  animation: kun-account-shimmer 1.4s ease-in-out infinite;
+}
+
+.kun-account-spinner {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--ds-accent) 30%, transparent);
+  border-top-color: var(--ds-accent);
+  animation: kun-account-spin 0.8s linear infinite;
+}
+
+.kun-account-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e5534b;
+  box-shadow: 0 0 0 2px var(--ds-bg-sidebar);
+}
+
+.kun-account-entry[data-badge='warning'] .kun-account-badge {
+  background: #f59e0b;
+}
+
+/* Panel */
+.kun-account-panel {
+  position: fixed;
+  z-index: 250;
+  overflow: auto;
+  border: 1px solid var(--ds-border);
+  border-radius: 16px;
+  background: var(--ds-surface-elevated);
+  box-shadow: var(--ds-shadow-overlay), 0 2px 6px rgba(32, 55, 90, 0.06);
+  color: var(--ds-text);
+  animation: kun-account-pop 0.22s var(--kun-account-ease) both;
+}
+
+.kun-account-view {
+  animation: kun-account-fade 0.18s ease both;
+}
+
+.kun-account-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--kun-account-chip-ink);
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.kun-account-panel:hover .kun-account-close,
+.kun-account-close:focus-visible {
+  opacity: 1;
+}
+
+.kun-account-close:hover {
+  background: var(--kun-account-chip);
+}
+
+.kun-account-panel[data-view='menu'] .kun-account-close {
+  color: var(--ds-text-faint);
+}
+
+.kun-account-sky {
+  position: relative;
+  height: 92px;
+  overflow: hidden;
+  background: var(--kun-account-sky);
+}
+
+.kun-account-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(26px);
+  pointer-events: none;
+}
+
+.kun-account-glow.is-a {
+  left: -30px;
+  top: -50px;
+  width: 130px;
+  height: 130px;
+  background: var(--kun-account-glow-a);
+}
+
+.kun-account-glow.is-b {
+  right: 64px;
+  bottom: -40px;
+  width: 120px;
+  height: 100px;
+  background: var(--kun-account-glow-b);
+}
+
+.kun-account-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--kun-account-star);
+}
+
+.kun-account-star.is-a { left: 42%; top: 24%; }
+.kun-account-star.is-b { left: 58%; top: 62%; width: 3px; height: 3px; }
+.kun-account-star.is-c { left: 26%; top: 72%; }
+
+.kun-account-chip {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border-radius: 9999px;
+  background: var(--kun-account-chip);
+  color: var(--kun-account-chip-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.kun-account-chip[data-tone='ok'] {
+  color: var(--kun-account-ok);
+}
+
+.kun-account-live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ds-accent);
+  animation: kun-account-pulse 1.6s ease-in-out infinite;
+}
+
+.kun-account-art {
+  position: absolute;
+  right: 16px;
+  bottom: -8px;
+  width: 98px;
+  user-select: none;
+  animation: kun-account-hop 0.52s var(--kun-account-spring) both;
+}
+
+.kun-account-sky[data-art='sleep'] .kun-account-art {
+  bottom: -2px;
+  width: 104px;
+}
+
+.kun-account-body {
+  padding: 14px 16px 16px;
+}
+
+.kun-account-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--ds-text);
+}
+
+.kun-account-text {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ds-text-muted);
+}
+
+.kun-account-steps {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kun-account-steps li {
+  display: flex;
+  height: 30px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ds-text-muted);
+}
+
+.kun-account-step-dot {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--ds-border-strong);
+  border-radius: 50%;
+}
+
+.kun-account-steps li[data-step='done'] .kun-account-step-dot {
+  border-color: var(--kun-account-ok);
+  background: var(--kun-account-ok);
+  color: #ffffff;
+}
+
+.kun-account-steps li[data-step='current'] {
+  font-weight: 600;
+  color: var(--ds-text);
+}
+
+.kun-account-steps li[data-step='current'] .kun-account-step-dot {
+  border-color: var(--ds-accent);
+  animation: kun-account-pulse 1.6s ease-in-out infinite;
+}
+
+.kun-account-steps li[data-step='current'] .kun-account-step-dot i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ds-accent);
+}
+
+.kun-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.kun-account-button {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--kun-account-primary);
+  box-shadow: 0 8px 18px var(--kun-account-primary-glow);
+  color: var(--kun-account-primary-ink);
+  font-size: 13px;
+  font-weight: 600;
+  transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+
+.kun-account-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.kun-account-button:disabled {
+  opacity: 0.55;
+}
+
+.kun-account-button.is-grow {
+  flex: 1;
+}
+
+.kun-account-button.is-ghost {
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface-card);
+  box-shadow: none;
+  color: var(--ds-text);
+}
+
+.kun-account-button.is-quiet {
+  padding: 0 10px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ds-text-muted);
+}
+
+.kun-account-button.is-ghost:hover:not(:disabled),
+.kun-account-button.is-quiet:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+  transform: none;
+}
+
+.kun-account-button:focus-visible,
+.kun-account-row:focus-visible,
+.kun-account-close:focus-visible,
+.kun-account-warning button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ds-accent) 60%, transparent);
+  outline-offset: 1px;
+}
+
+.kun-account-hint {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--ds-text-faint);
+}
+
+.kun-account-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--kun-account-ok);
+}
+
+.kun-account-drain {
+  height: 3px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ds-accent) 14%, transparent);
+}
+
+.kun-account-drain i {
+  display: block;
+  height: 100%;
+  background: var(--ds-accent);
+  transform-origin: left;
+  animation: kun-account-drain 2.4s linear both;
+}
+
+.kun-account-panel:hover .kun-account-drain i {
+  animation-play-state: paused;
+}
+
+.kun-account-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 40px 12px 16px;
+}
+
+.kun-account-who-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.kun-account-who-text strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kun-account-who-text span {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ds-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kun-account-pill {
+  display: inline-flex;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 9999px;
+  background: var(--kun-account-ok-soft);
+  color: var(--kun-account-ok);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.kun-account-warning,
+.kun-account-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.kun-account-warning {
+  background: var(--kun-account-warn-soft);
+  color: var(--kun-account-warn);
+}
+
+.kun-account-warning span {
+  flex: 1;
+}
+
+.kun-account-warning button {
+  flex: none;
+  border-radius: 6px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.kun-account-note {
+  background: color-mix(in srgb, var(--ds-accent) 10%, transparent);
+  color: color-mix(in srgb, var(--ds-accent) 80%, var(--ds-text));
+}
+
+.kun-account-rows {
+  display: flex;
+  flex-direction: column;
+  padding: 0 6px 6px;
+}
+
+.kun-account-row {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  color: var(--ds-text-muted);
+  font-size: 13px;
+  text-align: left;
+}
+
+.kun-account-row:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.kun-account-row:disabled {
+  opacity: 0.55;
+}
+
+.kun-account-row > span {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.kun-account-row small {
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--ds-text-faint);
+}
+
+.kun-account-separator {
+  height: 1px;
+  margin: 4px 10px;
+  background: var(--ds-border);
+}
+
+.kun-account-footnote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--ds-border);
+  font-size: 11.5px;
+  color: var(--ds-text-faint);
+}
+
+@keyframes kun-account-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes kun-account-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes kun-account-hop {
+  0% { opacity: 0; transform: translateY(10px) scale(0.94); }
+  60% { opacity: 1; transform: translateY(-4px) scale(1.02); }
+  100% { transform: none; }
+}
+
+@keyframes kun-account-drain {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@keyframes kun-account-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ds-accent) 35%, transparent); }
+  50% { box-shadow: 0 0 0 5px transparent; }
+}
+
+@keyframes kun-account-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes kun-account-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-account-panel,
+  .kun-account-art,
+  .kun-account-live,
+  .kun-account-steps li[data-step='current'] .kun-account-step-dot,
+  .kun-account-skeleton {
+    animation: none;
+  }
+
+  .kun-account-view {
+    animation-duration: 0.01s;
+  }
+
+  .kun-account-button:hover:not(:disabled) {
+    transform: none;
+  }
+}
