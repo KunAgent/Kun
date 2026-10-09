@@ -1,7 +1,7 @@
 import { capabilityFieldKnown } from '../../../../../kun/src/contracts/model-metadata-evidence.js'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode, type RefObject } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode, type RefObject } from 'react'
 import type { TFunction } from 'i18next'
-import { Check, ChevronRight, Search, Settings2, Sparkles, Zap } from 'lucide-react'
+import { Check, ChevronRight, Search, Settings2, Zap } from 'lucide-react'
 import { modelSupportsImageInput } from '@shared/app-settings-provider-core'
 import type { ComposerFastModeState } from './composer-fast-mode'
 import { ComposerModelSourceIcon } from './ComposerModelSourceIcon'
@@ -27,14 +27,9 @@ export const COMPOSER_MODEL_EXPAND_ALL_THRESHOLD = 12
 
 export type ComposerReasoningOption = { id: ComposerReasoningEffort; labelKey: string }
 
-/** Intensity levels shown as segments; adaptive is a separate switch. */
+/** Intensity levels shown as segments; Auto is the leading segment, ahead of these. */
 export function composerReasoningLevels(options: readonly ComposerReasoningOption[]): ComposerReasoningEffort[] {
   return orderComposerReasoningRailEfforts(options.map((option) => option.id)).filter((effort) => effort !== 'auto')
-}
-
-/** Level chosen when the user turns adaptive reasoning off. */
-export function composerReasoningLevelAfterAuto(levels: readonly ComposerReasoningEffort[]): ComposerReasoningEffort | undefined {
-  return levels.includes('high') ? 'high' : levels[levels.length - 1]
 }
 
 /** Providers expanded when the panel opens: all of them for short lists, otherwise the current one. */
@@ -106,12 +101,13 @@ function ComposerReasoningSection({
   const levels = useMemo(() => composerReasoningLevels(reasoningOptions), [reasoningOptions])
   const autoSupported = reasoningOptions.some((option) => option.id === 'auto')
   const autoActive = currentReasoning === 'auto'
+  const rail = useMemo(() => (autoSupported ? (['auto', ...levels] as ComposerReasoningEffort[]) : levels), [autoSupported, levels])
   const labelFor = (effort: ComposerReasoningEffort): string =>
     t(reasoningOptions.find((option) => option.id === effort)?.labelKey ?? 'composerReasoningMax')
-  const focusIndex = Math.max(0, levels.indexOf(currentReasoning))
+  const focusIndex = Math.max(0, rail.indexOf(currentReasoning))
   const onSegmentsKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (locked) return
-    const next = composerReasoningEffortForRailKey(levels, autoActive ? levels[focusIndex]! : currentReasoning, event.key)
+    const next = composerReasoningEffortForRailKey(rail, currentReasoning, event.key)
     if (!next) return
     event.preventDefault()
     onReasoningChange?.(next)
@@ -131,78 +127,61 @@ function ComposerReasoningSection({
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-[12.5px] font-semibold text-ds-ink">{t('composerReasoning')}</span>
             <span className="text-[11.5px] text-ds-faint" aria-hidden="true">
-              {t('composerReasoningFaster')} ↔ {t('composerReasoningSmarter')}
+              {autoActive ? t('composerReasoningAutoHint') : `${t('composerReasoningFaster')} ↔ ${t('composerReasoningSmarter')}`}
             </span>
           </div>
-          {levels.length > 0 ? (
+          {rail.length > 0 ? (
             <div
               role="radiogroup"
               aria-label={t('composerReasoning')}
               aria-disabled={locked || undefined}
               onKeyDown={onSegmentsKeyDown}
-              className="ds-composer-reasoning-segments mt-2.5"
+              className={`ds-composer-reasoning-segments mt-2.5${autoActive ? ' is-auto-mode' : ''}`}
             >
-              {levels.map((effort, index) => {
-                const checked = !autoActive && effort === currentReasoning
+              {rail.map((effort, index) => {
+                const checked = effort === currentReasoning
+                const isAuto = effort === 'auto'
                 return (
-                  <button
-                    key={effort}
-                    type="button"
-                    role="radio"
-                    aria-checked={checked}
-                    tabIndex={index === focusIndex ? 0 : -1}
-                    disabled={locked}
-                    data-reasoning-effort={effort}
-                    onClick={() => {
-                      if (!checked) onReasoningChange?.(effort)
-                    }}
-                    className={`ds-composer-reasoning-segment${checked ? ' is-checked' : ''}${checked && effort === 'max' ? ' is-maximum' : ''}`}
-                  >
-                    {labelFor(effort)}
-                  </button>
+                  <Fragment key={effort}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={checked}
+                      tabIndex={index === focusIndex ? 0 : -1}
+                      disabled={locked}
+                      data-reasoning-effort={effort}
+                      title={isAuto ? t('composerReasoningAutoHint') : undefined}
+                      onClick={() => {
+                        if (!checked) onReasoningChange?.(effort)
+                      }}
+                      className={`ds-composer-reasoning-segment${isAuto ? ' is-auto' : ''}${checked ? ' is-checked' : ''}${checked && effort === 'max' ? ' is-maximum' : ''}`}
+                    >
+                      {labelFor(effort)}
+                    </button>
+                    {isAuto && rail.length > 1 ? <span className="ds-composer-reasoning-divider" aria-hidden="true" /> : null}
+                  </Fragment>
                 )
               })}
             </div>
           ) : null}
         </>
       ) : null}
-      {(reasoningEnabled && autoSupported) || fastModeState !== 'hidden' ? (
+      {fastModeState !== 'hidden' ? (
         <div className={`flex flex-wrap items-center gap-2${reasoningEnabled ? ' mt-2.5' : ''}`}>
-          {reasoningEnabled && autoSupported ? (
-            <button
-              type="button"
-              aria-pressed={autoActive}
-              disabled={locked}
-              data-reasoning-effort="auto"
-              onClick={() => {
-                if (!autoActive) onReasoningChange?.('auto')
-                else {
-                  const next = composerReasoningLevelAfterAuto(levels)
-                  if (next) onReasoningChange?.(next)
-                }
-              }}
-              className={`ds-composer-panel-toggle${autoActive ? ' is-on' : ''}`}
-            >
-              <Sparkles className="h-3 w-3 shrink-0" strokeWidth={2} />
-              {labelFor('auto')}
-            </button>
-          ) : null}
-          {fastModeState !== 'hidden' ? (
-            <button
-              type="button"
-              aria-pressed={fastActive}
-              aria-disabled={fastDisabled}
-              aria-label={fastLabel}
-              title={fastSupported ? `${fastLabel} — ${t('composerFastModeHint')}` : fastLabel}
-              onClick={() => {
-                if (!fastDisabled) onFastModeToggle?.()
-              }}
-              className={`ds-composer-panel-toggle is-fast${fastActive ? ' is-on' : ''}${fastDisabled ? ' is-unavailable' : ''}`}
-            >
-              <Zap className={`h-3 w-3 shrink-0${fastActive ? ' fill-current' : ''}`} strokeWidth={2} />
-              {t('composerFastModeLabel')}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            aria-pressed={fastActive}
+            aria-disabled={fastDisabled}
+            aria-label={fastLabel}
+            title={fastSupported ? `${fastLabel} — ${t('composerFastModeHint')}` : fastLabel}
+            onClick={() => {
+              if (!fastDisabled) onFastModeToggle?.()
+            }}
+            className={`ds-composer-panel-toggle is-fast${fastActive ? ' is-on' : ''}${fastDisabled ? ' is-unavailable' : ''}`}
+          >
+            <Zap className={`h-3 w-3 shrink-0${fastActive ? ' fill-current' : ''}`} strokeWidth={2} />
+            {t('composerFastModeLabel')}
+          </button>
         </div>
       ) : null}
     </div>

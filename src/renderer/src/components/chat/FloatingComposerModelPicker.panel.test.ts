@@ -6,7 +6,6 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import i18n from '../../i18n'
 import { FloatingComposerModelPicker } from './FloatingComposerModelPicker'
 import {
-  composerReasoningLevelAfterAuto,
   composerReasoningLevels,
   initialExpandedModelGroups
 } from './floating-composer-model-panel'
@@ -76,8 +75,8 @@ describe('composer model and reasoning control', () => {
     const trigger = await renderPicker({ composerModel: 'openai/gpt-6.1-sol', composerProviderId: group.providerId, composerModelGroups: [group], composerReasoningEffort: 'auto' })
     await act(async () => trigger.click())
     expect([...document.querySelectorAll<HTMLButtonElement>('[role="radiogroup"] [role="radio"]')].map((segment) => segment.textContent))
-      .toEqual(['Off', 'Low', 'Med', 'High', 'Ultra'])
-    expect(document.querySelector('[data-composer-model-panel] button[data-reasoning-effort="auto"]')).not.toBeNull()
+      .toEqual(['Auto', 'Off', 'Low', 'Med', 'High', 'Ultra'])
+    expect(document.querySelector('[data-composer-model-panel] button[data-reasoning-effort="auto"][aria-checked="true"]')).not.toBeNull()
   })
 
   it('groups a provider-qualified Agent catalog by provider and shows short names', async () => {
@@ -122,21 +121,35 @@ describe('composer model and reasoning control', () => {
     expect(onReasoning).toHaveBeenLastCalledWith('max')
   })
 
-  it('keeps adaptive reasoning as its own switch', async () => {
+  it('leads the reasoning rail with Auto, left of the levels', async () => {
     const onReasoning = vi.fn()
     const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'Native sign-in', nativeHarnessId: 'codex',
       modelIds: ['gpt'], modelInfo: { gpt: { id: 'gpt', reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'low' } } }
     const trigger = await renderPicker({ composerModel: 'gpt', composerProviderId: group.providerId, composerModelGroups: [group],
       composerReasoningEffort: 'auto', onComposerReasoningEffortChange: onReasoning })
-    expect(trigger.textContent).toContain('Adaptive')
+    expect(trigger.textContent).toContain('Auto')
     await act(async () => trigger.click())
-    const auto = document.querySelector<HTMLButtonElement>('[data-composer-model-panel] button[data-reasoning-effort="auto"]')!
-    expect(auto.getAttribute('aria-pressed')).toBe('true')
-    expect(document.querySelector('[role="radio"][aria-checked="true"]')).toBeNull()
-    await act(async () => auto.click())
+    const segments = [...document.querySelectorAll<HTMLButtonElement>('[data-composer-model-panel] [role="radiogroup"] [role="radio"]')]
+    expect(segments.map((segment) => segment.textContent)).toEqual(['Auto', 'Low', 'Med', 'High'])
+    expect(segments.filter((segment) => segment.getAttribute('aria-checked') === 'true').map((segment) => segment.dataset.reasoningEffort)).toEqual(['auto'])
+    // Auto is already selected, so it does not fire again; picking a level leaves Auto.
+    await act(async () => segments[0]!.click())
+    expect(onReasoning).not.toHaveBeenCalled()
+    await act(async () => segments[3]!.click())
     expect(onReasoning).toHaveBeenLastCalledWith('high')
     expect(composerReasoningLevels([{ id: 'auto', labelKey: '' }, { id: 'max', labelKey: '' }, { id: 'off', labelKey: '' }])).toEqual(['off', 'max'])
-    expect(composerReasoningLevelAfterAuto(['low', 'medium'])).toBe('medium')
+  })
+
+  it('walks between Auto and the levels with arrow keys', async () => {
+    const onReasoning = vi.fn()
+    const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'Native sign-in', nativeHarnessId: 'codex',
+      modelIds: ['gpt'], modelInfo: { gpt: { id: 'gpt', reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'low' } } }
+    const trigger = await renderPicker({ composerModel: 'gpt', composerProviderId: group.providerId, composerModelGroups: [group],
+      composerReasoningEffort: 'low', onComposerReasoningEffortChange: onReasoning })
+    await act(async () => trigger.click())
+    const radios = document.querySelector<HTMLElement>('[data-composer-model-panel] [role="radiogroup"]')!
+    await act(async () => radios.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
+    expect(onReasoning).toHaveBeenLastCalledWith('auto')
   })
 
   it('shows Fast on the trigger and toggles it inside the panel', async () => {

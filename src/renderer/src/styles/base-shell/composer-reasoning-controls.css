@@ -310,6 +310,25 @@
   transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
+/* Auto leads the rail as a mode, not a level: a plain label, an accent ring when selected, a hairline before the levels. */
+.ds-composer-reasoning-segment.is-auto {
+  flex: 0 0 auto;
+  padding: 0 12px;
+}
+
+.ds-composer-reasoning-divider {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  margin: 0 3px;
+  background: var(--ds-border);
+}
+
+/* While Auto decides, the levels step back to faint text but stay one click away. */
+.ds-composer-reasoning-segments.is-auto-mode .ds-composer-reasoning-segment:not(.is-auto) {
+  color: var(--ds-text-faint);
+}
+
 .ds-composer-reasoning-segment:not(:disabled):not(.is-checked):hover {
   color: var(--ds-text);
   background: var(--ds-surface-hover);
@@ -328,6 +347,11 @@
 
 .ds-composer-reasoning-segment.is-checked.is-maximum {
   color: var(--ds-accent);
+}
+
+.ds-composer-reasoning-segment.is-auto.is-checked {
+  color: var(--ds-accent);
+  box-shadow: 0 1px 2px rgba(20, 30, 50, 0.12), 0 0 0 1px color-mix(in srgb, var(--ds-accent) 38%, transparent);
 }
 
 .ds-composer-reasoning-segment:disabled {
@@ -385,6 +409,10 @@
 [data-theme='dark'] .ds-composer-reasoning-segment.is-checked {
   background: var(--ds-surface-hover);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--ds-border);
+}
+
+[data-theme='dark'] .ds-composer-reasoning-segment.is-auto.is-checked {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px color-mix(in srgb, var(--ds-accent) 45%, transparent);
 }
 
 @keyframes ds-composer-model-panel-in {

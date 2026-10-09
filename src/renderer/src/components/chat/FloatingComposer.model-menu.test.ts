@@ -299,7 +299,6 @@ describe('FloatingComposer model controls', () => {
     )
 
     expect(html).toContain('Auto')
-    expect(html).toContain('Adaptive')
   })
 
   it('renders model and reasoning as one trigger', () => {
