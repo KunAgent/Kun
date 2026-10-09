@@ -1,16 +1,5 @@
 {
-  "marketSourceFilterLabel": "ソース",
-  "marketSourceAll": "すべて",
-  "marketSourceKun": "Kun",
-  "marketRefresh": "マーケットのカタログを更新",
-  "marketSyncing": "同期中…",
-  "marketSyncedAt": "{{time}} に同期",
-  "marketOfflineCache": "{{source}} に接続できません。{{time}} にキャッシュした一覧を表示しています。",
-  "marketLoadFailed": "{{source}} を読み込めませんでした: {{message}}",
-  "marketSectionTitle": "{{source}} から",
-  "marketNeedsKeys": "{{keys}} が必要",
   "marketSkillInstalled": "{{source}} から {{name}} をインストールしました: {{path}}",
   "marketSkillInstallFailed": "{{name}} をインストールできませんでした: {{message}}",
-  "marketMcpPlanFailed": "{{name}} を準備できませんでした: {{message}}",
-  "marketMcpNeedsKeys": "{{name}} を追加しました。使用前に MCP 設定で {{keys}} を入力してください。"
+  "marketMcpPlanFailed": "{{name}} を準備できませんでした: {{message}}"
 }

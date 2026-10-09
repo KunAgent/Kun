@@ -1,23 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { SkillListItem } from '@shared/kun-gui-api'
-import type { MarketCatalogResult, MarketSourceInfo } from '@shared/market/market-types'
+import type {
+  MarketCatalogResult,
+  MarketMcpEntry,
+  MarketMcpInstallPlan,
+  MarketSourceInfo,
+  MarketTaxon
+} from '@shared/market/market-types'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
 import { RECOMMENDED_ITEMS } from './plugin-marketplace-catalog'
+import { GUI_SCHEDULE_MCP_SERVER_ID, type MarketplaceItem } from './plugin-marketplace-config'
 import {
-  GUI_SCHEDULE_MCP_SERVER_ID,
-  type MarketplaceItem,
-  type Notice
-} from './plugin-marketplace-config'
-import {
-  groupMarketItemsBySource,
   marketItemsFromCatalogs,
   marketLanguage,
-  marketPlanPermissions,
   marketSourceLabel,
-  matchesMarketSource,
-  mcpConfigFromMarketPlan,
-  type MarketItemSection,
-  type MarketSourceFilter
+  pickMarketText
 } from './plugin-marketplace-market'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
@@ -50,29 +46,34 @@ function marketApi(): Window['kunGui'] | null {
   return typeof window.kunGui?.marketListSources === 'function' ? window.kunGui : null
 }
 
+function mergeTaxa(lists: readonly MarketTaxon[][]): MarketTaxon[] {
+  const seen = new Map<string, MarketTaxon>()
+  for (const list of lists) for (const taxon of list) if (!seen.has(taxon.id)) seen.set(taxon.id, taxon)
+  return [...seen.values()]
+}
+
 /**
  * Remote market catalogs for the plugin marketplace. The main process owns
  * fetching and the disk cache; this hook paints the cache immediately, then
- * revalidates, and turns catalog entries into marketplace cards.
+ * revalidates, and exposes cards, taxonomies and install actions.
  */
-export function useMarketCatalogs(input: {
-  t: Translate
-  language: string
-  discoveredSkills: readonly SkillListItem[]
-}) {
-  const { t, discoveredSkills } = input
+export function useMarketCatalogs(input: { t: Translate; language: string }) {
+  const { t } = input
   const language = marketLanguage(input.language)
   const [sources, setSources] = useState<MarketSourceInfo[]>([])
   const [results, setResults] = useState<Record<string, SyncedCatalog>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [syncing, setSyncing] = useState(false)
-  const [sourceFilter, setSourceFilter] = useState<MarketSourceFilter>('all')
+  const [loaded, setLoaded] = useState(false)
   const [mcpOrigins, setMcpOrigins] = useState<Record<string, string>>(() => loadMcpOrigins())
   const mounted = useRef(true)
 
   const load = useCallback(async (mode: 'auto' | 'refresh'): Promise<void> => {
     const api = marketApi()
-    if (!api) return
+    if (!api) {
+      setLoaded(true)
+      return
+    }
     setSyncing(true)
     try {
       const list = await api.marketListSources()
@@ -101,7 +102,10 @@ export function useMarketCatalogs(input: {
     } catch (error) {
       if (mounted.current) setErrors((prev) => ({ ...prev, '*': error instanceof Error ? error.message : String(error) }))
     } finally {
-      if (mounted.current) setSyncing(false)
+      if (mounted.current) {
+        setSyncing(false)
+        setLoaded(true)
+      }
     }
   }, [])
 
@@ -118,45 +122,29 @@ export function useMarketCatalogs(input: {
     [language, sources]
   )
 
-  const sourceOptions = useMemo(
-    () => sources.map((source) => ({ id: source.id, label: marketSourceLabel(source, language) })),
-    [language, sources]
+  const synced = useMemo(
+    () => sources.flatMap((source) => results[source.id] ? [{ source, catalog: results[source.id]!.catalog }] : []),
+    [results, sources]
   )
 
   const catalogItems = useMemo(
-    () => marketItemsFromCatalogs(
-      sources.flatMap((source) => results[source.id] ? [{ source, catalog: results[source.id]!.catalog }] : []),
-      {
-        language,
-        t,
-        reservedIds: {
-          skill: new Set(RECOMMENDED_ITEMS.filter((item) => item.kind === 'skill').map((item) => item.id)),
-          mcp: new Set([
-            GUI_SCHEDULE_MCP_SERVER_ID,
-            ...RECOMMENDED_ITEMS.filter((item) => item.kind === 'mcp').map((item) => item.id)
-          ])
-        }
+    () => marketItemsFromCatalogs(synced, {
+      language,
+      reservedIds: {
+        skill: new Set(RECOMMENDED_ITEMS.filter((item) => item.kind === 'skill').map((item) => item.id)),
+        mcp: new Set([
+          GUI_SCHEDULE_MCP_SERVER_ID,
+          ...RECOMMENDED_ITEMS.filter((item) => item.kind === 'mcp').map((item) => item.id)
+        ])
       }
-    ),
-    [language, results, sources, t]
+    }),
+    [language, synced]
   )
 
-  const skillOrigins = useMemo(
-    () => new Map(discoveredSkills.flatMap((skill) => skill.market ? [[skill.id, skill.market] as const] : [])),
-    [discoveredSkills]
-  )
-
-  /** Tags an installed (discovered) skill/MCP card with the market it came from. */
-  const attribute = useCallback((item: MarketplaceItem): MarketplaceItem => {
-    if (item.market) return item
-    const origin = item.kind === 'skill'
-      ? skillOrigins.get(item.id)
-      : mcpOrigins[item.id] ? { sourceId: mcpOrigins[item.id] as string, version: undefined } : undefined
-    const label = origin ? sourceLabels.get(origin.sourceId) : undefined
-    return origin && label
-      ? { ...item, market: { sourceId: origin.sourceId, sourceLabel: label, ...(origin.version ? { version: origin.version } : {}) } }
-      : item
-  }, [mcpOrigins, skillOrigins, sourceLabels])
+  const taxa = useMemo(() => ({
+    mcp: mergeTaxa(synced.map(({ catalog }) => catalog.mcpCategories)),
+    skill: mergeTaxa(synced.map(({ catalog }) => catalog.skillTags))
+  }), [synced])
 
   const statuses = useMemo<MarketSyncStatus[]>(() => sources.map((source) => {
     const result = results[source.id]
@@ -169,73 +157,84 @@ export function useMarketCatalogs(input: {
     }
   }), [errors, language, results, sources])
 
-  const split = useCallback((items: readonly MarketplaceItem[]): { plain: MarketplaceItem[]; sections: MarketItemSection[] } => ({
-    plain: items.filter((item) => !item.market),
-    sections: groupMarketItemsBySource(items.filter((item) => item.market), sources, language)
-  }), [language, sources])
+  /** The catalog entry an installed MCP server came from, when Kun remembers its market. */
+  const mcpOrigin = useCallback((serverId: string): {
+    sourceId: string
+    label: string
+    entry?: MarketMcpEntry
+  } | undefined => {
+    const sourceId = mcpOrigins[serverId]
+    const label = sourceId ? sourceLabels.get(sourceId) : undefined
+    if (!sourceId || !label) return undefined
+    const entry = results[sourceId]?.catalog.mcpServers.find((server) => server.id === serverId)
+    return { sourceId, label, ...(entry ? { entry } : {}) }
+  }, [mcpOrigins, results, sourceLabels])
 
-  const matchesSource = useCallback(
-    (item: MarketplaceItem) => matchesMarketSource(item, sourceFilter),
-    [sourceFilter]
-  )
+  const mcpOriginInfo = useCallback((serverId: string) => {
+    const origin = mcpOrigin(serverId)
+    if (!origin) return undefined
+    return {
+      sourceId: origin.sourceId,
+      label: origin.label,
+      requiredEnvKeys: origin.entry?.requiredEnvKeys ?? [],
+      ...(origin.entry ? {
+        title: pickMarketText(origin.entry.name, language),
+        description: pickMarketText(origin.entry.description, language)
+      } : {})
+    }
+  }, [language, mcpOrigin])
 
-  const installSkill = useCallback(async (item: MarketplaceItem, rootPath: string): Promise<Notice & { installed: boolean }> => {
+  const latestSkillVersion = useCallback((sourceId: string, skillId: string): string | undefined =>
+    results[sourceId]?.catalog.skills.find((skill) => skill.id === skillId)?.version,
+  [results])
+
+  const installSkill = useCallback(async (
+    item: Pick<MarketplaceItem, 'id' | 'title' | 'market'>,
+    rootPath: string,
+    overwrite = false
+  ): Promise<{ ok: true; path: string } | { ok: false; message: string }> => {
     const api = marketApi()
-    if (!api || !item.market) return { tone: 'error', message: t('pluginActionFailed'), installed: false }
-    const result = await api.marketInstallSkill({ sourceId: item.market.sourceId, skillId: item.id, rootPath })
+    if (!api || !item.market) return { ok: false, message: t('pluginActionFailed') }
+    const result = await api.marketInstallSkill({ sourceId: item.market.sourceId, skillId: item.id, rootPath, overwrite })
     return result.ok
-      ? {
-          tone: 'success',
-          message: t('marketSkillInstalled', { name: item.title ?? item.id, source: item.market.sourceLabel, path: result.path }),
-          installed: true
-        }
-      : { tone: 'error', message: t('marketSkillInstallFailed', { name: item.title ?? item.id, message: result.message }), installed: false }
+      ? { ok: true, path: result.path }
+      : { ok: false, message: t('marketSkillInstallFailed', { name: item.title ?? item.id, message: result.message }) }
   }, [t])
 
-  /** Resolves a catalog MCP card into an installable one with a pinned config. */
-  const planMcpItem = useCallback(async (item: MarketplaceItem): Promise<MarketplaceItem> => {
+  /** Asks the main process to resolve and pin the server's version. */
+  const planMcp = useCallback(async (item: Pick<MarketplaceItem, 'id' | 'title' | 'market'>): Promise<MarketMcpInstallPlan> => {
     const api = marketApi()
     if (!api || !item.market) throw new Error(t('pluginActionFailed'))
     const result = await api.marketPlanMcpInstall({ sourceId: item.market.sourceId, serverId: item.id })
     if (!result.ok) throw new Error(t('marketMcpPlanFailed', { name: item.title ?? item.id, message: result.message }))
-    const { plan } = result
-    return {
-      ...item,
-      mcpConfig: () => mcpConfigFromMarketPlan(plan),
-      supplyChain: {
-        source: plan.transport === 'stdio' ? 'mcp' : 'remote-mcp',
-        permissions: marketPlanPermissions(plan),
-        ...(plan.transport === 'stdio' && plan.pinned ? { packageName: plan.pinned.packageName, version: plan.pinned.version } : {})
-      }
-    }
+    return result.plan
   }, [t])
 
-  /** Remembers where an MCP server came from and returns a follow-up notice when it needs keys. */
-  const afterMcpInstall = useCallback((item: MarketplaceItem): Notice | null => {
-    if (!item.market) return null
-    const requiredKeys = item.market.requiredEnvKeys ?? []
-    const next = { ...mcpOrigins, [item.id]: item.market.sourceId }
-    setMcpOrigins(next)
-    writeBrowserStorageItem(MCP_ORIGIN_STORAGE_KEY, JSON.stringify(next))
-    return requiredKeys.length > 0
-      ? { tone: 'info', message: t('marketMcpNeedsKeys', { name: item.title ?? item.id, keys: requiredKeys.join(', ') }) }
-      : null
-  }, [mcpOrigins, t])
+  const setMcpOrigin = useCallback((serverId: string, sourceId: string | null): void => {
+    setMcpOrigins((prev) => {
+      const next = { ...prev }
+      if (sourceId) next[serverId] = sourceId
+      else delete next[serverId]
+      writeBrowserStorageItem(MCP_ORIGIN_STORAGE_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
 
   return {
-    sourceOptions,
-    sourceFilter,
-    setSourceFilter,
+    sources,
+    sourceLabels,
     syncing,
+    loaded,
     statuses,
     refresh: () => load('refresh'),
     catalogItems,
-    attribute,
-    split,
-    matchesSource,
+    taxa,
+    language,
+    mcpOriginInfo,
+    latestSkillVersion,
     installSkill,
-    planMcpItem,
-    afterMcpInstall
+    planMcp,
+    setMcpOrigin
   }
 }
 

@@ -35,14 +35,22 @@ export type MarketplaceItem = {
   skillInstructions?: string
   /** Set on items that come from (or were installed from) a remote market. */
   market?: MarketItemInfo
+  /** Category ids (market taxonomy) used by the discover rail. */
+  categories?: string[]
 }
 
 export type MarketItemInfo = {
   sourceId: string
   sourceLabel: string
   version?: string
-  /** MCP servers: environment variables the user still has to fill in. */
+  /** MCP servers: environment variables the server needs. */
   requiredEnvKeys?: string[]
+  optionalEnvKeys?: string[]
+  /** How the market launches it (`npx -y pkg@latest` or a URL), before pinning. */
+  launch?: string
+  author?: string
+  originLabel?: string
+  originUrl?: string
 }
 
 export type JsonRecord = Record<string, unknown>

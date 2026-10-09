@@ -13,8 +13,6 @@ import {
   type SupplyChainPermission
 } from './plugin-marketplace-config'
 
-type Translate = (key: string, values?: Record<string, unknown>) => string
-
 export type MarketLanguage = 'zh' | 'en'
 
 /** Markets publish zh and en copy; every other UI language reads the English text. */
@@ -30,10 +28,8 @@ export function marketSourceLabel(source: MarketSourceInfo, language: MarketLang
   return pickMarketText(source.label, language) || source.id
 }
 
-function skillDetail(entry: MarketSkillEntry): string {
-  return [entry.origin?.author, entry.origin?.from, entry.version ? `v${entry.version}` : '']
-    .filter(Boolean)
-    .join(' · ')
+function originLabel(entry: MarketSkillEntry): string {
+  return [entry.origin?.author, entry.origin?.from].filter(Boolean).join(' · ')
 }
 
 export function marketSkillItem(
@@ -41,24 +37,27 @@ export function marketSkillItem(
   source: MarketSourceInfo,
   language: MarketLanguage
 ): MarketplaceItem {
-  const detail = skillDetail(entry)
+  const origin = originLabel(entry)
   return {
     id: entry.id,
     kind: 'skill',
     title: pickMarketText(entry.name, language) || entry.id,
     description: pickMarketText(entry.description, language),
-    ...(detail ? { detail } : {}),
     group: 'recommended',
+    categories: entry.tags,
     supplyChain: { source: 'skill', permissions: ['file', 'command'] },
     market: {
       sourceId: source.id,
       sourceLabel: marketSourceLabel(source, language),
-      ...(entry.version ? { version: entry.version } : {})
+      ...(entry.version ? { version: entry.version } : {}),
+      ...(entry.origin?.author ? { author: entry.origin.author } : {}),
+      ...(origin ? { originLabel: origin } : {}),
+      ...(entry.origin?.url?.startsWith('https://') ? { originUrl: entry.origin.url } : {})
     }
   }
 }
 
-function mcpPermissions(entry: MarketMcpEntry): SupplyChainPermission[] {
+function mcpPermissions(entry: { transport: 'stdio' | 'remote'; requiredEnvKeys: readonly string[] }): SupplyChainPermission[] {
   return [
     ...(entry.transport === 'stdio' ? (['command'] as const) : []),
     'network',
@@ -69,23 +68,22 @@ function mcpPermissions(entry: MarketMcpEntry): SupplyChainPermission[] {
 export function marketMcpItem(
   entry: MarketMcpEntry,
   source: MarketSourceInfo,
-  language: MarketLanguage,
-  t: Translate
+  language: MarketLanguage
 ): MarketplaceItem {
   return {
     id: entry.id,
     kind: 'mcp',
     title: pickMarketText(entry.name, language) || entry.id,
     description: pickMarketText(entry.description, language),
-    ...(entry.requiredEnvKeys.length > 0
-      ? { detail: t('marketNeedsKeys', { keys: entry.requiredEnvKeys.join(', ') }) }
-      : {}),
     group: 'recommended',
+    categories: entry.category ? [entry.category] : [],
     supplyChain: { source: entry.transport === 'stdio' ? 'mcp' : 'remote-mcp', permissions: mcpPermissions(entry) },
     market: {
       sourceId: source.id,
       sourceLabel: marketSourceLabel(source, language),
-      ...(entry.requiredEnvKeys.length > 0 ? { requiredEnvKeys: entry.requiredEnvKeys } : {})
+      requiredEnvKeys: entry.requiredEnvKeys,
+      optionalEnvKeys: entry.optionalEnvKeys,
+      launch: entry.transport === 'stdio' ? [entry.command, ...entry.args].join(' ') : entry.url
     }
   }
 }
@@ -96,7 +94,7 @@ export function marketMcpItem(
  */
 export function marketItemsFromCatalogs(
   catalogs: ReadonlyArray<{ source: MarketSourceInfo; catalog: MarketCatalog }>,
-  options: { language: MarketLanguage; t: Translate; reservedIds: { skill: ReadonlySet<string>; mcp: ReadonlySet<string> } }
+  options: { language: MarketLanguage; reservedIds: { skill: ReadonlySet<string>; mcp: ReadonlySet<string> } }
 ): MarketplaceItem[] {
   const items: MarketplaceItem[] = []
   for (const { source, catalog } of catalogs) {
@@ -106,7 +104,7 @@ export function marketItemsFromCatalogs(
     }
     for (const entry of catalog.mcpServers) {
       if (options.reservedIds.mcp.has(entry.id)) continue
-      items.push(marketMcpItem(entry, source, options.language, options.t))
+      items.push(marketMcpItem(entry, source, options.language))
     }
   }
   return items
@@ -121,30 +119,10 @@ export function mcpConfigFromMarketPlan(plan: MarketMcpInstallPlan): Record<stri
 }
 
 export function marketPlanPermissions(plan: MarketMcpInstallPlan): SupplyChainPermission[] {
-  return [
-    ...(plan.transport === 'stdio' ? (['command'] as const) : []),
-    'network',
-    ...(plan.requiredEnvKeys.length > 0 ? (['secret'] as const) : [])
-  ]
+  return mcpPermissions(plan)
 }
 
-export type MarketItemSection = { sourceId: string; label: string; items: MarketplaceItem[] }
-
-/** Groups market cards by source, keeping the sources' registration order. */
-export function groupMarketItemsBySource(
-  items: readonly MarketplaceItem[],
-  sources: readonly MarketSourceInfo[],
-  language: MarketLanguage
-): MarketItemSection[] {
-  return sources
-    .map((source) => ({
-      sourceId: source.id,
-      label: marketSourceLabel(source, language),
-      items: items.filter((item) => item.market?.sourceId === source.id)
-    }))
-    .filter((section) => section.items.length > 0)
-}
-
+/** `all`: every card · `builtin`: Kun's own picks · otherwise a market source id. */
 export type MarketSourceFilter = 'all' | 'builtin' | string
 
 export function matchesMarketSource(

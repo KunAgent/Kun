@@ -31,9 +31,36 @@ renderer (use-market-catalogs) -> preload (market-api) -> main (register-app-mar
   `market:install-skill`, `market:plan-mcp-install`. They are desktop only and
   deliberately not in the Remote allowlist; the Remote web build simply shows no
   market chips.
-- Renderer: `use-market-catalogs.ts` (state), `plugin-marketplace-market.ts`
-  (catalog -> cards), `PluginMarketplaceSourceBar.tsx` (source chips, refresh,
-  sync status).
+- Renderer: `use-market-catalogs.ts` (catalogs, taxonomies, install actions)
+  and `plugin-marketplace-market.ts` (catalog -> cards). The page itself is
+  described below.
+
+## Plugins page
+
+`PluginMarketplaceView.tsx` keeps state and wiring; the UI lives in
+`src/renderer/src/components/plugins/`:
+
+- `PluginsPage` (header, MCP / Skill tabs, layout) and `PluginsRail`
+  (Installed, then Discover sources and categories, plus the market sync
+  state). Under 820 px of content width the rail folds into a segmented control,
+  a source / location select and scrolling category chips.
+- Discover: `PluginDiscover` cards with pagination (9 MCP / 12 skills per page,
+  8 on narrow windows) and `PluginDetailDrawer` for the full description,
+  required keys, permissions, launch command and provenance.
+- `McpConfigSheet` is the one form for adding and editing an MCP server:
+  required keys first (secret-looking names masked), other env vars, launch
+  command and timeout, or URL and headers for remote servers. With required
+  keys missing it saves the server with `enabled: false`; Installed lists it
+  under "Needs attention" until they are filled in.
+- Installed: `PluginsInstalledMcp` (runtime summary, status filter, one status
+  per row, toggle, configure, copy JSON, delete with confirmation) and
+  `PluginsInstalledSkills` (grouped by location, enable toggle, open folder,
+  per-skill and bulk update for market skills with a newer catalog version).
+- Pure helpers: `mcp-server-form.ts` (read / write / remove one server in the
+  Kun config, missing-key detection), `plugin-installed.ts`, `plugin-discover.ts`,
+  `plugin-taxonomy.ts`, `plugin-pagination.ts`.
+- Kun's own picks carry `categories` in `RECOMMENDED_ITEMS` so they share the
+  market taxonomy. Strings live in `locales/*/common/plugins-page.json`.
 
 ## Catalog caching
 

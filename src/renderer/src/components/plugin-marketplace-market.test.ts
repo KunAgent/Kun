@@ -7,7 +7,6 @@ import {
   type MarketplaceItem
 } from './plugin-marketplace-config'
 import {
-  groupMarketItemsBySource,
   marketItemsFromCatalogs,
   marketLanguage,
   matchesMarketSource,
@@ -16,13 +15,12 @@ import {
 } from './plugin-marketplace-market'
 
 const SOURCE: MarketSourceInfo = { id: 'youdao', label: { en: 'Youdao Market', zh: '有道市场' } }
-const OTHER: MarketSourceInfo = { id: 'other', label: { en: 'Other Market' } }
 
 const CATALOG: MarketCatalog = {
   sourceId: 'youdao',
   fetchedAt: 1,
-  skillTags: [],
-  mcpCategories: [],
+  skillTags: [{ id: 'utility', name: { en: 'Productivity', zh: '效率工具' } }],
+  mcpCategories: [{ id: 'search', name: { en: 'Search', zh: '搜索' } }],
   skills: [
     {
       sourceId: 'youdao',
@@ -30,9 +28,9 @@ const CATALOG: MarketCatalog = {
       name: { en: 'HR Recruitment', zh: '招聘助手' },
       description: { en: 'Screen resumes', zh: '筛选简历' },
       version: '1.2.5',
-      tags: [],
+      tags: ['utility'],
       downloadUrl: 'https://cdn.example.test/hr.zip',
-      origin: { author: 'LobsterAI', from: 'youdao' }
+      origin: { author: 'LobsterAI', from: 'youdao', url: 'https://github.com/example/hr' }
     },
     { sourceId: 'youdao', id: 'code-review', name: { en: 'Code Review' }, description: {}, tags: [], downloadUrl: 'https://cdn.example.test/cr.zip' }
   ],
@@ -42,11 +40,12 @@ const CATALOG: MarketCatalog = {
       id: 'tavily',
       name: { en: 'Tavily', zh: 'Tavily 搜索' },
       description: { en: 'Web search', zh: '网页搜索' },
+      category: 'search',
       transport: 'stdio',
       command: 'npx',
       args: ['-y', 'tavily-mcp@latest'],
       requiredEnvKeys: ['TAVILY_API_KEY'],
-      optionalEnvKeys: []
+      optionalEnvKeys: ['TAVILY_REGION']
     },
     {
       sourceId: 'youdao',
@@ -62,40 +61,57 @@ const CATALOG: MarketCatalog = {
   ]
 }
 
-const t = (key: string, values?: Record<string, unknown>): string =>
-  values ? `${key}:${JSON.stringify(values)}` : key
-
 describe('market item conversion', () => {
   const reservedIds = { skill: new Set(['code-review']), mcp: new Set(['github']) }
 
-  it('labels every card with its market and localizes copy', () => {
-    const zh = marketItemsFromCatalogs([{ source: SOURCE, catalog: CATALOG }], { language: 'zh', t, reservedIds })
+  it('labels every card with its market, localizes copy and keeps provenance', () => {
+    const zh = marketItemsFromCatalogs([{ source: SOURCE, catalog: CATALOG }], { language: 'zh', reservedIds })
     const hr = zh.find((item) => item.id === 'hr-recruitment')
     expect(hr).toMatchObject({
       kind: 'skill',
       title: '招聘助手',
       description: '筛选简历',
-      detail: 'LobsterAI · youdao · v1.2.5',
       group: 'recommended',
-      market: { sourceId: 'youdao', sourceLabel: '有道市场', version: '1.2.5' }
+      categories: ['utility'],
+      market: {
+        sourceId: 'youdao',
+        sourceLabel: '有道市场',
+        version: '1.2.5',
+        author: 'LobsterAI',
+        originLabel: 'LobsterAI · youdao',
+        originUrl: 'https://github.com/example/hr'
+      }
     })
-    const en = marketItemsFromCatalogs([{ source: SOURCE, catalog: CATALOG }], { language: 'en', t, reservedIds })
+    const en = marketItemsFromCatalogs([{ source: SOURCE, catalog: CATALOG }], { language: 'en', reservedIds })
     expect(en.find((item) => item.id === 'hr-recruitment')?.market?.sourceLabel).toBe('Youdao Market')
   })
 
   it('skips ids Kun already ships so a market never duplicates a built-in card', () => {
-    const items = marketItemsFromCatalogs([{ source: SOURCE, catalog: CATALOG }], { language: 'en', t, reservedIds })
+    const items = marketItemsFromCatalogs([{ source: SOURCE, catalog: CATALOG }], { language: 'en', reservedIds })
     expect(items.map((item) => `${item.kind}:${item.id}`)).toEqual(['skill:hr-recruitment', 'mcp:tavily'])
   })
 
-  it('flags MCP servers that need keys and exposes the secret permission', () => {
-    const tavily = marketItemsFromCatalogs([{ source: SOURCE, catalog: CATALOG }], { language: 'en', t, reservedIds })
+  it('carries what the detail drawer and config sheet need for MCP servers', () => {
+    const tavily = marketItemsFromCatalogs([{ source: SOURCE, catalog: CATALOG }], { language: 'en', reservedIds })
       .find((item) => item.id === 'tavily')
     expect(tavily?.supplyChain?.permissions).toEqual(['command', 'network', 'secret'])
-    expect(tavily?.market?.requiredEnvKeys).toEqual(['TAVILY_API_KEY'])
-    expect(tavily?.detail).toContain('TAVILY_API_KEY')
-    // The command is only known after the main process pins the version.
+    expect(tavily?.categories).toEqual(['search'])
+    expect(tavily?.market).toMatchObject({
+      requiredEnvKeys: ['TAVILY_API_KEY'],
+      optionalEnvKeys: ['TAVILY_REGION'],
+      launch: 'npx -y tavily-mcp@latest'
+    })
+    // The command is only written after the main process pins the version.
     expect(tavily?.mcpConfig).toBeUndefined()
+  })
+
+  it('ignores non-https origin links', () => {
+    const catalog: MarketCatalog = {
+      ...CATALOG,
+      skills: [{ ...CATALOG.skills[0]!, origin: { author: 'x', url: 'http://example.com' } }]
+    }
+    const [item] = marketItemsFromCatalogs([{ source: SOURCE, catalog }], { language: 'en', reservedIds })
+    expect(item?.market?.originUrl).toBeUndefined()
   })
 
   it('gives the same id from two markets distinct card keys', () => {
@@ -109,7 +125,7 @@ describe('market item conversion', () => {
 describe('market filters', () => {
   const items = marketItemsFromCatalogs(
     [{ source: SOURCE, catalog: CATALOG }],
-    { language: 'en', t, reservedIds: { skill: new Set(), mcp: new Set() } }
+    { language: 'en', reservedIds: { skill: new Set(), mcp: new Set() } }
   )
 
   it('splits cards by source filter', () => {
@@ -120,13 +136,6 @@ describe('market filters', () => {
     const market = items[0] as MarketplaceItem
     expect(matchesMarketSource(market, 'builtin')).toBe(false)
     expect(matchesMarketSource(market, 'youdao')).toBe(true)
-  })
-
-  it('groups cards per source in registration order and drops empty sources', () => {
-    const sections = groupMarketItemsBySource(items, [OTHER, SOURCE], 'zh')
-    expect(sections.map((section) => [section.sourceId, section.label, section.items.length])).toEqual([
-      ['youdao', '有道市场', 4]
-    ])
   })
 
   it('picks the right language with fallbacks', () => {

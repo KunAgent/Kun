@@ -1,16 +1,5 @@
 {
-  "marketSourceFilterLabel": "स्रोत",
-  "marketSourceAll": "सभी",
-  "marketSourceKun": "Kun",
-  "marketRefresh": "मार्केट कैटलॉग रीफ़्रेश करें",
-  "marketSyncing": "सिंक हो रहा है…",
-  "marketSyncedAt": "{{time}} को सिंक किया गया",
-  "marketOfflineCache": "{{source}} तक नहीं पहुँचा जा सका। {{time}} को कैश की गई सूची दिखाई जा रही है।",
-  "marketLoadFailed": "{{source}} लोड नहीं हो सका: {{message}}",
-  "marketSectionTitle": "{{source}} से",
-  "marketNeedsKeys": "{{keys}} आवश्यक है",
   "marketSkillInstalled": "{{source}} से {{name}} इंस्टॉल किया गया: {{path}}",
   "marketSkillInstallFailed": "{{name}} इंस्टॉल नहीं हो सका: {{message}}",
-  "marketMcpPlanFailed": "{{name}} तैयार नहीं हो सका: {{message}}",
-  "marketMcpNeedsKeys": "{{name}} जोड़ा गया। उपयोग से पहले MCP कॉन्फ़िग में {{keys}} भरें।"
+  "marketMcpPlanFailed": "{{name}} तैयार नहीं हो सका: {{message}}"
 }
