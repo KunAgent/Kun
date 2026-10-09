@@ -30,6 +30,8 @@ import {
 import { acpSessionSettings } from './acp-session-settings.js'
 import { boundedCommands, boundedConfigOptions } from './acp-session-state-bounds.js'
 import type { HarnessSessionSetting } from '../../contracts/harness-session-settings.js'
+import type { ExternalSubagentSource } from '../../contracts/external-subagent.js'
+import { AcpSubagentTracker } from './acp-subagent-tracker.js'
 
 export type AcpEventMapperContext = {
   threadId: string
@@ -44,6 +46,8 @@ export type AcpEventMapperContext = {
   /** Model id for usage/context drafts. */
   model?: string
   debug?: AcpDebugLog
+  /** Agents whose tool calls can spawn subagents (acp-subagent-tracker). */
+  subagents?: { source: ExternalSubagentSource; mirrorSteps: boolean }
 }
 
 type ToolCallPhase = 'seen' | 'started' | 'finished'
@@ -77,8 +81,19 @@ export class AcpEventMapper {
     sawUsageTokens: false
   }
 
+  /** Subagent cards of this turn; undefined for Agents without subagents. */
+  readonly subagents?: AcpSubagentTracker
+
   constructor(private readonly ctx: AcpEventMapperContext) {
     this.messages = new AcpTextSegments(ctx)
+    if (ctx.subagents) {
+      this.subagents = new AcpSubagentTracker({ threadId: ctx.threadId, turnId: ctx.turnId, ...ctx.subagents,
+        ...(ctx.nowIso ? { nowIso: ctx.nowIso } : {}) })
+    }
+  }
+
+  private withSubagents(drafts: RuntimeEventDraft[]): RuntimeEventDraft[] {
+    return this.subagents ? this.subagents.decorate(drafts) : drafts
   }
 
   get observedFacts(): AcpObservedFacts {
@@ -86,6 +101,10 @@ export class AcpEventMapper {
   }
 
   apply(update: SessionUpdate | { sessionUpdate: string }): RuntimeEventDraft[] {
+    return this.withSubagents(this.applyUpdate(update))
+  }
+
+  private applyUpdate(update: SessionUpdate | { sessionUpdate: string }): RuntimeEventDraft[] {
     // The passthrough union member (`sessionUpdate: string`) defeats
     // discriminated narrowing, so each case casts to its validated variant.
     switch (update.sessionUpdate) {
@@ -141,6 +160,10 @@ export class AcpEventMapper {
    * that never reached a terminal status.
    */
   flush(): RuntimeEventDraft[] {
+    return this.withSubagents(this.flushTurn())
+  }
+
+  private flushTurn(): RuntimeEventDraft[] {
     const drafts = this.messages.flush()
     for (const [callId, state] of this.toolCalls) {
       if (state.phase === 'finished') continue

@@ -43,6 +43,8 @@ import { nativeAgentsFromAcpModes } from '../../contracts/harness-native-agents.
 import { acpSessionModeSelector } from './acp-session-modes.js'
 import { AcpDraftEmitter } from './acp-turn-emitter.js'
 import { maybeExternalSubagentRouting } from '../external-subagent-routing.js'
+import { acpSubagentSource } from './acp-subagent-source.js'
+import { openCodeDatabasePath, startOpenCodeChildSessions } from './opencode-child-sessions.js'
 import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
 import type { AcpSpawnFn } from './acp-process.js'
 import {
@@ -209,7 +211,10 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     })
     if (!lease) return signal.aborted ? 'aborted' : 'failed'
     const conn = lease.connection
+    const subagentSource = acpSubagentSource(definition.id)
+    const childSessionDb = openCodeDatabasePath(definition.id, { ...process.env, ...definition.launch?.env })
     const mapper = new AcpEventMapper({
+      ...(subagentSource ? { subagents: { source: subagentSource, mirrorSteps: Boolean(childSessionDb) } } : {}),
       threadId,
       turnId,
       harnessId: definition.id,
@@ -305,6 +310,12 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       await this.failFromAcpError(threadId, turnId, error, true, definition.id)
       return 'failed'
     }
+    // A subagent's own steps live in the Agent's session store, not on ACP.
+    const childSessions = childSessionDb && mapper.subagents ? startOpenCodeChildSessions({
+      dbPath: childSessionDb, acpSessionId: session.sessionId, tracker: mapper.subagents,
+      emit: (drafts) => { emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream) },
+      debug: (summary) => this.deps.debug?.({ direction: 'note', summary })
+    }) : undefined
     // Protocol errors on this session's traffic fail the turn (§9).
     const unsubscribeSessionErrors = conn.subscribeSession(session.sessionId, {
       onUpdate: () => undefined,
@@ -487,6 +498,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       promptSettled = true
       this.host.terminals.flushForTurn(turnId)
       acceptEvidence = false
+      await childSessions?.stop()
       await emitQueue
       const parsed = AcpPromptResultSchema.safeParse(raw)
       if (!parsed.success) {
@@ -544,6 +556,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         conn.rpc.notify(ACP_AGENT_METHODS.sessionCancel, { sessionId: session.sessionId })
         this.pool.markUnhealthy(poolKey)
       }
+      await childSessions?.stop().catch(() => undefined)
       await emitQueue.catch(() => undefined)
       await emitter.emitAll(mapper.flush()).catch(() => undefined)
       await finishAcpTrace(trace, { kind: 'error', error })
@@ -568,6 +581,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       return 'failed'
     } finally {
       acceptEvidence = false
+      void childSessions?.stop().catch(() => undefined)
       if (cancelTimer) clearTimeout(cancelTimer)
       signal.removeEventListener('abort', onAbort)
       unsubscribeSessionErrors()
