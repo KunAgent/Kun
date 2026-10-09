@@ -109,5 +109,13 @@
   "directCodingAgentChipHelp": "This Agent runs its own engine. Choose a model in the composer for future messages in this conversation.",
   "directCodingAgentModelsHelp": "Choose from this Agent's models. Changes apply to future requests; existing conversation overrides and active requests stay unchanged.",
   "directCodingAgentRole": "Coding Agent",
-  "directModelAgentDefaults": "Agent defaults"
+  "directModelAgentDefaults": "Agent defaults",
+  "directFollowDefault": "Follow default",
+  "directInheritCurrent": "Currently {{model}}",
+  "directUnavailableSection": "Unavailable",
+  "directNoMatchingModels": "No models match “{{query}}”",
+  "directClearSearch": "Clear search",
+  "directKeysMove": "Move",
+  "directKeysPick": "Select",
+  "directKeysClose": "Close"
 }

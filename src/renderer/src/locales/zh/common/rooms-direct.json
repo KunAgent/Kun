@@ -109,5 +109,13 @@
   "directCodingAgentChipHelp": "该 Agent 使用自己的引擎运行。可在输入框中切换模型，对当前对话的后续消息生效。",
   "directCodingAgentModelsHelp": "从该 Agent 的模型列表中选择。修改对后续请求生效，现有对话的模型覆盖和正在执行的请求保持不变。",
   "directCodingAgentRole": "编程 Agent",
-  "directModelAgentDefaults": "Agent 默认模型"
+  "directModelAgentDefaults": "Agent 默认模型",
+  "directFollowDefault": "跟随默认",
+  "directInheritCurrent": "当前为 {{model}}",
+  "directUnavailableSection": "暂不可用",
+  "directNoMatchingModels": "没有匹配“{{query}}”的模型",
+  "directClearSearch": "清除搜索",
+  "directKeysMove": "选择",
+  "directKeysPick": "确认",
+  "directKeysClose": "关闭"
 }
