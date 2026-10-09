@@ -375,6 +375,7 @@
   "roomsTopicDetails": "成员与响应额度",
   "roomsAttentionMembers": "{{count}} 位成员需要处理",
   "roomsRoomActivity": "房间活动",
+  "roomsAttachmentSummary_other": "{{count}} 个附件",
   "roomsViewRun": "查看本次运行",
   "roomsAgentSession": "Agent 会话",
   "roomsViewAgentSession": "查看 Agent 会话",
