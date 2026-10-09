@@ -87,7 +87,10 @@ export function UsageTrendChart({
   const indexAt = (event: { clientX: number; currentTarget: HTMLDivElement }): number | null => {
     if (!slot) return null
     const box = event.currentTarget.getBoundingClientRect()
-    const index = Math.floor((event.clientX - box.left) / slot)
+    if (box.width <= 0) return null
+    // The pointer and the box are in zoomed viewport pixels while `slot` is in
+    // layout pixels (body carries a CSS zoom), so map by fraction of the plot.
+    const index = Math.floor(((event.clientX - box.left) / box.width) * count)
     return index >= 0 && index < count ? index : null
   }
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
