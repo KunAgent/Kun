@@ -8,7 +8,7 @@
  * calls) into Kun tool_call/tool_result items.
  */
 import type { TurnItem } from '../../contracts/items.js'
-import type { ThreadTodoList } from '../../contracts/threads.js'
+import { delegatedPlanTodoList } from '../delegated-plan-todos.js'
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 import {
   makeAssistantReasoningItem,
@@ -343,28 +343,24 @@ export class CodexEventMapper {
   // -- plan / usage ------------------------------------------------------------------
 
   private planUpdated(params: Record<string, unknown>): RuntimeEventDraft {
-    const now = this.ctx.nowIso?.() ?? new Date().toISOString()
     const entries = Array.isArray(params.plan) ? params.plan : []
-    const todos: ThreadTodoList = {
+    const todos = delegatedPlanTodoList({
       threadId: this.ctx.threadId,
-      items: entries.map((entry, index) => {
+      idPrefix: 'codex_plan',
+      entries: entries.map((entry) => {
         const e = entry as { step?: unknown; status?: unknown }
         return {
-          id: `codex_plan_${index}`,
-          content:
-            typeof e.step === 'string' ? e.step.slice(0, 1_000) : '',
+          content: typeof e.step === 'string' ? e.step : '',
           status:
             e.status === 'inProgress'
               ? 'in_progress'
               : e.status === 'completed'
                 ? 'completed'
-                : 'pending',
-          createdAt: now,
-          updatedAt: now
+                : 'pending'
         }
       }),
-      updatedAt: now
-    }
+      now: this.ctx.nowIso?.() ?? new Date().toISOString()
+    })
     return {
       kind: 'todos_updated',
       threadId: this.ctx.threadId,

@@ -255,9 +255,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         return
       }
       timing.observe(drafts)
-      // A mirror of Agent controls never fails the turn; everything else does.
-      emitQueue = emitQueue.then(() => emitTolerantSessionState(drafts, (draft) => emitter.emit(draft), (error) =>
-        this.deps.debug?.({ direction: 'note', summary: `harness_session_state dropped: ${String(error).slice(0, 300)}` }))).catch(failStream)
+      // A mirror of Agent controls or plan never fails the turn; everything else does.
+      emitQueue = emitQueue.then(() => emitTolerantSessionState(drafts, (draft) => emitter.emit(draft), (error, kind) =>
+        this.deps.debug?.({ direction: 'note', summary: `${kind} dropped: ${String(error).slice(0, 300)}` }))).catch(failStream)
     }
 
     let kunToolsServers: import('./acp-schema.js').McpServer[] = []

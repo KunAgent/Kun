@@ -61,6 +61,10 @@ describe('ACP session state within the event bounds', () => {
     ], emit, dropped)
     expect(dropped).toHaveBeenCalledOnce()
     expect(recordedKinds).toEqual(['heartbeat'])
+    // A plan mirror the recorder rejects is dropped too.
+    await emitTolerantSessionState([{ kind: 'todos_updated', threadId: 'thr' } as RuntimeEventDraft],
+      async () => { throw new Error('at most one todo can be in_progress') }, dropped)
+    expect(dropped).toHaveBeenLastCalledWith(expect.any(Error), 'todos_updated')
     // Every other event still fails the turn.
     await expect(emitTolerantSessionState([{ kind: 'heartbeat', threadId: 'thr' } as RuntimeEventDraft],
       async () => { throw new Error('disk full') }, dropped)).rejects.toThrow('disk full')

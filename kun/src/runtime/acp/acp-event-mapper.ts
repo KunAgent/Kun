@@ -12,7 +12,7 @@ import type { DelegatedTerminalPresentation } from '../../contracts/delegated-to
  */
 import { AcpTextSegments } from './acp-text-segments.js'
 import type { TurnItem } from '../../contracts/items.js'
-import type { ThreadTodoList } from '../../contracts/threads.js'
+import { delegatedPlanTodoList } from '../delegated-plan-todos.js'
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
@@ -368,23 +368,20 @@ export class AcpEventMapper {
   private mapPlan(
     update: Extract<SessionUpdate, { sessionUpdate: 'plan' }>
   ): RuntimeEventDraft {
-    const now = this.nowIso()
-    const todos: ThreadTodoList = {
+    const todos = delegatedPlanTodoList({
       threadId: this.ctx.threadId,
-      items: (update.entries ?? []).map((entry, index) => ({
-        id: `acp_plan_${index}`,
-        content: entry.content.slice(0, 1_000),
+      idPrefix: 'acp_plan',
+      entries: (update.entries ?? []).map((entry) => ({
+        content: entry.content,
         status:
           entry.status === 'in_progress'
             ? 'in_progress'
             : entry.status === 'completed'
               ? 'completed'
-              : 'pending',
-        createdAt: now,
-        updatedAt: now
+              : 'pending'
       })),
-      updatedAt: now
-    }
+      now: this.nowIso()
+    })
     return {
       kind: 'todos_updated',
       threadId: this.ctx.threadId,

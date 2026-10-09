@@ -54,18 +54,21 @@ export function boundedCommands(commands: ReadonlyArray<{ name: string; descript
     }))
 }
 
+/** Drafts that only mirror Agent-side state: its controls and its plan. */
+const MIRROR_DRAFT_KINDS: ReadonlySet<string> = new Set(['harness_session_state', 'todos_updated'])
+
 /**
- * Emit mapped drafts in order. A session-state draft the recorder still
- * rejects is dropped with a note: a mirror of Agent controls must never
- * fail the turn. Any other failure propagates.
+ * Emit mapped drafts in order. A mirror draft the recorder still rejects is
+ * dropped with a note: a mirror of Agent state must never fail the turn. Any
+ * other failure propagates.
  */
 export async function emitTolerantSessionState(
   drafts: readonly RuntimeEventDraft[],
   emit: (draft: RuntimeEventDraft) => Promise<void>,
-  onDropped: (error: unknown) => void
+  onDropped: (error: unknown, kind: string) => void
 ): Promise<void> {
   for (const draft of drafts) {
-    if (draft.kind !== 'harness_session_state') { await emit(draft); continue }
-    try { await emit(draft) } catch (error) { onDropped(error) }
+    if (!MIRROR_DRAFT_KINDS.has(draft.kind)) { await emit(draft); continue }
+    try { await emit(draft) } catch (error) { onDropped(error, draft.kind) }
   }
 }
