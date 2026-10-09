@@ -187,7 +187,7 @@ app.on('window-all-closed', () => app.quit())
   await page.locator('[data-agent-enablement="devin"]').waitFor()
   await enable().click(); await state('ready')
   for (const theme of ['light', 'dark']) {
-    await page.evaluate(async theme => { await window.agentEnablementFixture.language('zh'); window.agentEnablementFixture.theme(theme) }, theme)
+    await setLanguageAndTheme('zh', theme)
     await panel().locator('[data-agent-profile-model]').click()
     const menu = page.locator('[data-agent-settings-model-menu]')
     await menu.locator('[data-devin-model="swe-2-high"]').waitFor()
@@ -220,10 +220,7 @@ app.on('window-all-closed', () => app.quit())
   await page.locator('[data-agent-enablement="deepseek-harness"]').waitFor()
 
   for (const language of ['en', 'zh']) for (const theme of ['light', 'dark']) {
-    await page.evaluate(async ({ language, theme }) => {
-      await window.agentEnablementFixture.language(language)
-      window.agentEnablementFixture.theme(theme)
-    }, { language, theme })
+    await setLanguageAndTheme(language, theme)
     for (const width of [900, 1280]) for (const zoom of [1, 1.5, 2]) {
       await electron.evaluate(({ BrowserWindow }, { width, zoom }) => {
         const window = BrowserWindow.getAllWindows()[0]
@@ -315,6 +312,14 @@ async function customModel(model) {
 async function state(value) { await page.waitForFunction(value => document.querySelector('[data-agent-enablement]')?.getAttribute('data-agent-enablement-state') === value, value) }
 async function snapshot() { return page.evaluate(() => window.agentEnablementFixture.snapshot()) }
 async function settled() { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))) }
+async function setLanguageAndTheme(language, theme) {
+  await page.evaluate(({ language, theme }) => {
+    void window.agentEnablementFixture.language(language)
+    window.agentEnablementFixture.theme(theme)
+  }, { language, theme })
+  await page.waitForFunction(language => document.documentElement.lang === language, language)
+  await settled()
+}
 async function reset() { await page.evaluate(() => window.agentEnablementFixture.reset()); await state('disabled'); await settled() }
 async function pendingCheck() {
   const previous = (await snapshot()).calls.tests

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { act } from 'react'
+import type { Root } from 'react-dom/client'
 import { afterAll, expect, it, vi } from 'vitest'
 
 // Native hit targets and zoom are measured by the Electron runner; this only
@@ -10,7 +12,11 @@ Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => (
 HTMLElement.prototype.scrollTo = () => undefined
 HTMLElement.prototype.scrollIntoView = () => undefined
 document.body.innerHTML = '<div id="root"></div>'
-afterAll(() => vi.unstubAllGlobals())
+let root: Root | undefined
+afterAll(async () => {
+  await act(async () => root?.unmount())
+  vi.unstubAllGlobals()
+})
 
 async function chooseCustomModel(value: string): Promise<void> {
   document.querySelector<HTMLButtonElement>('[data-agent-profile-model]')!.click()
@@ -26,7 +32,7 @@ async function chooseCustomModel(value: string): Promise<void> {
 }
 
 it('runs the real settings check, composer gate and late-result cancellation with no real account', async () => {
-  await import('./AgentEnablementSmokeFixture')
+  root = (await import('./AgentEnablementSmokeFixture')).fixtureRoot
   const fixture = (window as unknown as { agentEnablementFixture: {
     reset(): Promise<void>; setOutcome(value: 'success' | 'failure' | 'pending'): void; resolvePending(ok: boolean): void
     close(): void; reopen(): void; restart(): void; setNavigationBusy(busy: boolean): void
@@ -77,7 +83,7 @@ it('runs the real settings check, composer gate and late-result cancellation wit
 }, 60_000)
 
 it('applies the saved theme through SettingsView and retains it after saves and reopening', async () => {
-  await import('./AgentEnablementSmokeFixture')
+  root = (await import('./AgentEnablementSmokeFixture')).fixtureRoot
   const fixture = (window as unknown as { agentEnablementFixture: {
     reset(): Promise<void>; theme(value: 'light' | 'dark'): void; close(): void; reopen(): void
     snapshot(): { defaults: Record<string, { model?: string }> }

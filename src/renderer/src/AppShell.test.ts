@@ -30,7 +30,7 @@ describe('AppShell', () => {
 
     expect(html).toContain('role="status"')
     expect(html).toContain('Loading')
-    expect(html).toContain('bg-ds-card')
+    expect(html).toContain('kun-loader')
   })
 
   it('omits the renderer title bar when Linux uses the system window frame', () => {

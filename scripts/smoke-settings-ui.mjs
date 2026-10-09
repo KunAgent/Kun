@@ -113,9 +113,10 @@ app.on('window-all-closed', () => app.quit())
   const categories = await page.locator('[data-settings-category]').evaluateAll(elements =>
     elements.map(element => element.getAttribute('data-settings-category')))
   report.categories = categories
-  assert.equal(new Set(categories).size, nativePlatform === 'win32' ? 22 : 21,
+  const retiredBaselineEntry = phase === 'before' && categories.includes('integrations')
+  assert.equal(new Set(categories).size, (nativePlatform === 'win32' ? 22 : 21) + Number(retiredBaselineEntry),
     'Every destination, including fixture extension settings and Windows-only storage, must be present')
-  assert(!categories.includes('integrations'), 'Retired integrations must not appear in settings navigation')
+  if (phase === 'after') assert(!categories.includes('integrations'), 'Retired integrations must not appear in settings navigation')
   const sizes = [{ name: 'wide', width: 1440, height: 1000 }, { name: 'small', width: 900, height: 720 }]
   const configurations = []
   for (const theme of ['light', 'dark']) for (const size of sizes) for (const zoom of [1.25, 1.5, 2]) {
@@ -215,7 +216,10 @@ async function openCategory(category) {
   const compact = page.locator('.ds-settings-compact-navigation select')
   if (await compact.isVisible()) await compact.selectOption(category)
   else await page.locator(`[data-settings-category="${category}"]`).click()
-  await page.locator(`[data-settings-category-view="${category}"]`).waitFor()
+  // Record the retired, empty baseline page; the final navigation must exclude it.
+  await page.locator(`[data-settings-category-view="${category}"]`).waitFor({
+    state: phase === 'before' && category === 'integrations' ? 'attached' : 'visible'
+  })
   await settled()
 }
 async function capture(category, panel, config) {

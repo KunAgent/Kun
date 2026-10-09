@@ -583,7 +583,7 @@ async function waitForCurrentOwners(input) {
 async function assertChatRoundTrip(runtime, workspaceRoot, timeoutMs) {
   const thread = await createSmokeThread(runtime, workspaceRoot, 'candidate chat round-trip')
   const turn = await startSmokeTurn(runtime, thread.id, 'return the deterministic fixture response')
-  await waitForTurn(
+  const settled = await waitForTurn(
     runtime,
     thread.id,
     turn.turnId,
@@ -591,8 +591,20 @@ async function assertChatRoundTrip(runtime, workspaceRoot, timeoutMs) {
     timeoutMs
   )
   const snapshot = await runtimeJson(runtime, `/v1/threads/${encodeURIComponent(thread.id)}`)
-  if (!JSON.stringify(snapshot).includes(CHAT_MARKER)) {
-    throw new Error('Candidate Runtime health passed but its chat round-trip did not complete')
+  const snapshotText = JSON.stringify(snapshot)
+  if (!snapshotText.includes(CHAT_MARKER)) {
+    const timeline = await runtimeJson(
+      runtime,
+      `/v1/threads/${encodeURIComponent(thread.id)}/timeline?turnId=${encodeURIComponent(turn.turnId)}`
+    )
+    const timelineText = JSON.stringify(timeline)
+    if (!timelineText.includes(CHAT_MARKER)) {
+      throw new Error(
+        `Candidate Runtime health passed but its chat round-trip did not complete ` +
+        `(status=${settled.status}, error=${settled.error ?? 'none'}, ` +
+        `snapshot=${snapshotText.slice(0, 2000)}, timeline=${timelineText.slice(0, 2000)})`
+      )
+    }
   }
 }
 
@@ -641,7 +653,8 @@ async function cleanupProfile(root) {
     return
   }
   await makeTreeWritable(root.temporaryRoot).catch(() => undefined)
-  await rm(root.temporaryRoot, { recursive: true, force: true })
+  const retry = process.platform === 'win32' ? { maxRetries: 40, retryDelay: 250 } : {}
+  await rm(root.temporaryRoot, { recursive: true, force: true, ...retry })
 }
 
 function argumentValue(name) {

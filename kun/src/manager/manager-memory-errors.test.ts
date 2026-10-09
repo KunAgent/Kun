@@ -85,7 +85,8 @@ describe('structured Manager memory errors', () => {
   it('returns retryable 503 for an incomplete Agent erase instead of success or generic 500', async () => {
     const router = new Router()
     registerRoomRoutes(router, { runtimeToken: 'synthetic-runtime-token', insecure: false,
-      rooms: { deps: {}, service: { setDirectModelResolver: vi.fn(), setMemberAvatarValidator: vi.fn(), setContentReferenceValidator: vi.fn() },
+      rooms: { deps: {}, agents: { setExecutorValidator: vi.fn() },
+        service: { setDirectModelResolver: vi.fn(), setMemberAvatarValidator: vi.fn(), setContentReferenceValidator: vi.fn() },
         exclusive: (operation: () => Promise<unknown>) => operation(),
         agentMemory: { edit: async () => { throw new MemoryErasureIncompleteError() } } }
     } as unknown as ServerRuntime)
