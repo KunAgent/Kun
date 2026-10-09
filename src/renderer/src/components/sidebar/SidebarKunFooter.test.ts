@@ -4,7 +4,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatStore } from '../../store/chat-store'
 import { useUiPluginStore } from '../../store/ui-plugin-store'
+import { acceptRoomUserProfile, useRoomUserProfile } from '../rooms/room-user-profile'
 import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from './SidebarKunFooter'
+
+const roomsRequest = vi.hoisted(() => vi.fn())
+vi.mock('../rooms/rooms-client', () => ({ roomsRequest }))
 
 vi.mock('react-i18next', async (importOriginal) => ({
   ...await importOriginal<typeof import('react-i18next')>(),
@@ -24,6 +28,9 @@ describe('Sidebar Kun footer', () => {
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
+    roomsRequest.mockReset()
+    roomsRequest.mockRejectedValue(new Error('offline'))
+    useRoomUserProfile.setState({ profile: { avatar: null }, revision: null })
   })
 
   afterEach(async () => {
@@ -44,6 +51,16 @@ describe('Sidebar Kun footer', () => {
     expect(button.textContent).toContain('sidebarKunStatusOffline')
     await act(async () => button.click())
     expect(onOpen).toHaveBeenCalledOnce()
+  })
+
+  it('shows the avatar the user dresses and follows every change to it', async () => {
+    roomsRequest.mockResolvedValue({ profile: { avatar: { kind: 'builtin', id: 'explorer' } }, revision: 2 })
+    await act(async () => root.render(createElement(SidebarKunStatus, { onOpen: vi.fn() })))
+    const face = () => container.querySelector('.ds-sidebar-kun-face [data-avatar-id]')?.getAttribute('data-avatar-id')
+    expect(roomsRequest).toHaveBeenCalledWith('/v1/rooms/user-profile', 'GET', undefined, expect.any(AbortSignal))
+    expect(face()).toBe('explorer')
+    await act(async () => acceptRoomUserProfile({ profile: { avatar: { kind: 'builtin', id: 'designer' } }, revision: 3 }))
+    expect(face()).toBe('designer')
   })
 
   it('keeps Focus mode a switch with an icon-only control', async () => {

@@ -3,7 +3,8 @@ import { Focus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
 import { useUiPluginStore } from '../../store/ui-plugin-store'
-import { RoomAvatarPortrait } from '../rooms/RoomAvatar'
+import { RoomAvatar } from '../rooms/RoomAvatar'
+import { useRoomUserProfileSync } from '../rooms/room-user-profile'
 
 /**
  * Theme packs with their own sidebar scene chrome style the original
@@ -25,10 +26,12 @@ const STATUS_KEYS = {
   offline: 'sidebarKunStatusOffline'
 } as const
 
-/** Kun as a small companion: its face and what the runtime is doing. */
+/** Kun as a small companion: the user's own dressed-up look and what the runtime is doing. */
 export function SidebarKunStatus({ onOpen }: { onOpen: () => void }): ReactElement {
   const { t } = useTranslation('common')
   const connection = useChatStore((state) => state.runtimeConnection)
+  // The face is the avatar the user dresses in the wardrobe, so it follows every change.
+  useRoomUserProfileSync()
   const label = t(STATUS_KEYS[connection] ?? STATUS_KEYS.checking)
   return (
     <button
@@ -40,8 +43,8 @@ export function SidebarKunStatus({ onOpen }: { onOpen: () => void }): ReactEleme
       aria-label={`Kun · ${label}. ${t('sidebarKunStatusOpen')}`}
       className="ds-sidebar-kun-status group flex w-full items-center gap-2.5 rounded-[10px] px-2 py-1.5 text-left outline-none transition hover:bg-[var(--ds-sidebar-row-hover)] focus-visible:ring-2 focus-visible:ring-accent-tint/25"
     >
-      <span className="ds-sidebar-kun-face rooms-avatar" aria-hidden="true">
-        <RoomAvatarPortrait index={0} />
+      <span className="ds-sidebar-kun-face" aria-hidden="true">
+        <RoomAvatar user id="user" label="" size={30} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] font-semibold leading-4 text-ds-ink">Kun</span>

@@ -126,8 +126,8 @@
   line-height: 1;
 }
 .ds-sidebar-kun-face {
-  --rooms-avatar-size: 1.875rem;
-  overflow: hidden;
+  display: grid;
+  flex: none;
 }
 .ds-sidebar-kun-dot { background: var(--ds-status-dot-muted, var(--ds-text-faint)); }
 .ds-sidebar-kun-status[data-runtime-connection='ready'] .ds-sidebar-kun-dot { background: var(--ds-status-dot-success, #1f9d55); }

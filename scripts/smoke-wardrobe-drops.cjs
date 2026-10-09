@@ -133,6 +133,20 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await page.locator('[data-room-tool="wardrobe"]').click()
   await page.locator('[data-wardrobe-panel="ready"]').waitFor()
 
+  // 8b. Dressing my own avatar in the wardrobe updates the sidebar Kun face at once.
+  const footerFace = page.locator('.ds-sidebar-kun-status .ds-sidebar-kun-face')
+  const faceHtml = () => footerFace.evaluate((node) => node.innerHTML)
+  const faceBefore = await faceHtml()
+  await page.locator('[data-wardrobe-panel="ready"] [data-wardrobe-dress]').click()
+  const mine = page.locator('.rooms-init-dialog[data-size="wide"][aria-label="我的头像"]')
+  await mine.waitFor()
+  await mine.getByRole('tab', { name: '套装', exact: true }).click()
+  await mine.getByRole('button', { name: '侦探', exact: true }).click()
+  await mine.getByRole('button', { name: '保存', exact: true }).click()
+  await mine.waitFor({ state: 'hidden' })
+  await poll(async () => (await faceHtml()) !== faceBefore, 15_000, 'sidebar Kun face follows my avatar')
+  await capture('wardrobe-my-avatar-footer')
+
   // 9. The Agent studio hides unrevealed cards and applies a confirmed look at once.
   const agentId = (await request(page, '/v1/agents?limit=20')).agents.find((agent) => agent.name === '小 Kun').id
   const avatarBefore = (await request(page, `/v1/agents/${agentId}`)).agent.avatar
@@ -166,6 +180,7 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
     'settings switches start on and persist changes',
     'unrevealed role cards show the card back without names, in the panel and in the studio',
     'an Agent turn inside the 60s interval does not drop; the Agent rail opens the same panel',
+    'dressing my own avatar updates the sidebar Kun face at once',
     'a confirmed Agent look saves at once and the sidebar icon follows'] }
   await recordDiagnostic('wardrobe-drops', result)
   return result
