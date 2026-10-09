@@ -1,5 +1,5 @@
 import type { RoomUserProfileDetail } from '@shared/rooms-api'
-import { acceptRoomUserProfile, useRoomUserProfile } from '../rooms/room-user-profile'
+import { acceptRoomUserProfile, saveRoomUserProfile, useRoomUserProfile } from '../rooms/room-user-profile'
 import { roomRequestId, roomsRequest } from '../rooms/rooms-client'
 import type { WardrobeAvatar } from './wardrobe-page-model'
 
@@ -20,8 +20,7 @@ export function createWardrobeLookSaver({ onIdle, onError }: { onIdle: () => voi
   }
   const put = async (avatar: WardrobeAvatar) => {
     const revision = useRoomUserProfile.getState().revision ?? (await load()).revision
-    acceptRoomUserProfile(await roomsRequest<RoomUserProfileDetail>(PROFILE, 'PUT', {
-      avatar, expectedRevision: revision, clientRequestId: roomRequestId() }))
+    await saveRoomUserProfile({ avatar, expectedRevision: revision, clientRequestId: roomRequestId() })
   }
   const drain = async () => {
     running = true

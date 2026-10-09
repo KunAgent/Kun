@@ -251,3 +251,25 @@ type KunWardrobe = {
 瓶架入口：衣橱面板“今天”卡片下方的瓶架（10 格进度、开 1 个、十连开）、换装弹窗顶部进度条、侧栏底部“瓶架 N”（外圈是攒向十连的进度，点开是舞台的待开状态）、右侧栏衣橱图标角标。原来的开瓶揭晓对话框已移除。
 
 检查：kun 新增 `kun-wardrobe-open.test.ts`（十连顺序与记录、全普通保底、开瓶时判重、收进瓶架、瓶架满停计数、调试预放）；渲染器新增 `RoomWardrobeOpening.test.ts`（十连阶段推进与汇总、跳过与保底、开瓶请求取最旧 10 个、穿上、待开状态与瓶架文案）；Electron 冒烟 `--wardrobe-only` 用 11 个预放瓶子跑真实十连与单抽，并断言舞台铺满窗口。
+
+## 12. 账号衣橱（2026-10-10）
+
+衣橱改为跟 Kun 账号走：装扮、角色卡、羽毛、漂流瓶都由 Kunserve 结算（后端设计见 kunserve `docs/account-economy.zh-CN.md`），桌面端、官网和账号中心显示同一个形象。设计稿：https://claude.ai/artifact/Dmh79mCa3keiz27PJ7bQk2
+
+运行时的三种模式（`kun/src/rooms/room-wardrobe-mode.ts`，状态存在 `room_wardrobe_account`）：
+
+- `account`：登录后，`room_wardrobe` 只是账号快照的镜像。本地开瓶、收起、已读、设置、兑换的路由返回 409 `wardrobe_account_mode`。完成的轮次不在本地掷骰，而是排进队列（最多 50 条，按 runId 去重），并发出 `wardrobe.activity` 事件。
+- `guest`：未登录时只有起始四件装备，对话不掉落。自己的形象只能穿起始装备；Agent 的形象还可以保留默认 Agent 身上的装备。第一次运行新版本时，本地攒下的装扮、瓶子和羽毛会一次性清空，形象上不再拥有的装备被摘下。
+- `local`：设置 `KUN_WARDROBE_LOCAL=1`、`KUN_WARDROBE_UNLOCK_ALL=1` 或 `KUN_WARDROBE_SEED_BOTTLES` 后，保留原来的本地玩法（调试和冒烟测试用）。
+
+主进程（`src/main/kun-account/wardrobe-sync.ts`）持有令牌：
+
+- 登录后拉取 `GET /api/wardrobe`，通过 `POST /v1/rooms/wardrobe/account/attach` 写进镜像，并穿上账号形象。账号还没有形象时，把本机已穿的形象推上去。
+- 消费活动队列：逐条上报 `POST /api/wardrobe/activity`，再用 `.../activity/ack` 带最新快照回写。新掉落的瓶子照旧在原对话或 Code 任务里发 `wardrobe.dropped`。
+- 退出登录时调用 `.../detach`，回到未登录衣橱。
+- 渲染层收到 `wardrobe.activity` 后调用 `kunAccount.wardrobe.sync()`；主进程另外每 3 分钟兜底一次。
+- 这些路由只给主进程用，不在渲染层白名单里。
+
+渲染层：`room-wardrobe.ts` 按快照里的 `mode` 分流，`account` 走 `window.kunGui.kunAccount.wardrobe`，返回值里的镜像直接替换快照，失败抛出带规则码的 `WardrobeAccountError`。保存自己的头像统一经过 `saveRoomUserProfile`，组合形象会同步成账号头像。衣橱页新增「商店」（羽毛换瓶子、兑换未知装备说明）和「邀请」（邀请码、链接、文案、进度、填写好友邀请码）两个标签。未登录时，瓶架换成登录卡片，商店和邀请标签加锁，未知装备显示「登录后收集」。侧栏账号入口和账号弹层的头像改为组合形象。
+
+工具脚本：`scripts/export-kun-wardrobe-catalog.mjs` 导出目录 JSON，供 Kunserve 生成种子迁移；`scripts/export-kun-avatar-site-kit.mjs` 把头像目录和 256px 图层复制进官网，用于网页换装。

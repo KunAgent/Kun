@@ -42,6 +42,8 @@ import { registerRoomImConnectionRoutes } from './register-room-im-connection-ro
 import { registerRoomAppConnectionRoutes } from './register-room-app-connection-routes.js'
 import { registerWorkbenchLinkRoutes } from './register-workbench-link-routes.js'
 import type { RoomWorkspace } from '../../rooms/room-runtime-types.js'
+import { RoomWardrobeError } from '../../rooms/room-wardrobe-service.js'
+import { RoomWardrobeAccountError } from '../../rooms/room-wardrobe-account.js'
 
 const PageSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -75,6 +77,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
       return result instanceof Response ? result : jsonResponse(result)
     } catch (error) {
       if (error instanceof RoomBodyError) return error.response
+      if (error instanceof RoomWardrobeError || error instanceof RoomWardrobeAccountError) return ERRORS.conflict(error.message)
       if (error instanceof z.ZodError) return ERRORS.validation('invalid room request', error.issues)
       if (error instanceof MemoryNotFoundError) return ERRORS.notFound(error.message)
       if (error instanceof MemoryErasureIncompleteError) return ERRORS.unavailable(error.message)

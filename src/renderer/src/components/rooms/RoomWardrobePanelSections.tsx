@@ -9,6 +9,7 @@ import {
 import { RoomAvatar } from './RoomAvatar'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
 import { WardrobeBottleIcon, WardrobeCardBack, WardrobeUnknownItem } from './RoomWardrobeBottle'
+import { wardrobeDropSource } from './room-wardrobe-source'
 
 export type WardrobeSelection = { kind: 'item'; key: string } | { kind: 'card'; id: string } | null
 type Language = 'zh' | 'en'
@@ -114,8 +115,7 @@ function when(value: string, language: Language): string {
 export function WardrobeLogSection({ wardrobe, language }: { wardrobe: KunWardrobe; language: Language }): ReactElement {
   const { t } = useTranslation('common')
   const source = (drop: KunWardrobeDrop) => {
-    const label = drop.sourceLabel ?? t(drop.source === 'code' ? 'roomsWardrobeSourceCodeTask' : 'roomsWardrobeSourceChat')
-    return `${drop.source === 'code' ? 'Code · ' : ''}${label} · ${when(drop.openedAt ?? drop.createdAt, language)}`
+    return `${wardrobeDropSource(t, drop)} · ${when(drop.openedAt ?? drop.createdAt, language)}`
   }
   const rows = [...wardrobe.pending.map((drop) => ({ drop, pending: true })), ...(wardrobe.history ?? []).map((drop) => ({ drop, pending: false }))]
   if (!rows.length) return <p className="rooms-wardrobe-panel-empty">{t('roomsWardrobeLogEmpty')}</p>

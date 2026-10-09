@@ -4,17 +4,25 @@ import {
   type KunAvatarAccessoryCategory, type KunAvatarParts, type KunWardrobe, type KunWardrobeDetail, type KunWardrobeDrop, type KunWardrobeItemKey,
   type KunWardrobeSettings
 } from '@shared/rooms-api'
+import type { KunAccountWardrobeApi, KunEconomyFailure, KunEconomyResult } from '@shared/kun-account-economy'
 import { roomRequestId, roomsRequest } from './rooms-client'
 import { subscribeRoomEvents } from './room-event-listeners'
 
+/**
+ * Who owns the wardrobe: `account` is the signed-in Kun account (the runtime row is its mirror and
+ * changes go to the account), `guest` is signed out (starter pack, no drops), `local` is a debug run.
+ */
+export type WardrobeMode = 'account' | 'guest' | 'local'
 /** One wardrobe per user, shared by every editor, drop card and sidebar entry on screen. */
-export type WardrobeSnapshot = { wardrobe: KunWardrobe | null; revision: number | null; unlockAll: boolean; error: string; loaded: boolean }
-type Detail = KunWardrobeDetail & { unlockAll?: boolean }
+export type WardrobeSnapshot = {
+  wardrobe: KunWardrobe | null; revision: number | null; unlockAll: boolean; mode: WardrobeMode; error: string; loaded: boolean
+}
+type Detail = KunWardrobeDetail & { unlockAll?: boolean; mode?: WardrobeMode }
 export type WardrobeOpenResult = Detail & {
   drops: KunWardrobeDrop[]; drop: KunWardrobeDrop; granted: KunWardrobeItemKey[]; feathers: number; guaranteed: boolean
 }
 
-let snapshot: WardrobeSnapshot = { wardrobe: null, revision: null, unlockAll: false, error: '', loaded: false }
+let snapshot: WardrobeSnapshot = { wardrobe: null, revision: null, unlockAll: false, mode: 'guest', error: '', loaded: false }
 const listeners = new Set<() => void>()
 let inflight: Promise<void> | null = null
 function publish(next: Partial<WardrobeSnapshot>) {
@@ -22,7 +30,29 @@ function publish(next: Partial<WardrobeSnapshot>) {
   listeners.forEach((listener) => listener())
 }
 export function acceptWardrobe(detail: Detail) {
-  publish({ wardrobe: detail.wardrobe, revision: detail.revision, unlockAll: Boolean(detail.unlockAll), error: '', loaded: true })
+  publish({ wardrobe: detail.wardrobe, revision: detail.revision, unlockAll: Boolean(detail.unlockAll ?? snapshot.unlockAll),
+    mode: detail.mode ?? snapshot.mode, error: '', loaded: true })
+}
+
+/** A refusal from the Kun account; `code` is a Kunserve rule code such as `not_enough_feathers`. */
+export class WardrobeAccountError extends Error {
+  constructor(readonly code: KunEconomyFailure) { super(code); this.name = 'WardrobeAccountError' }
+}
+const accountWardrobe = (): KunAccountWardrobeApi | undefined => typeof window === 'undefined' ? undefined : window.kunGui?.kunAccount?.wardrobe
+/** Unwraps an account answer; a wardrobe in it is the new mirror. */
+export async function accountResult<T>(call: (api: KunAccountWardrobeApi) => Promise<KunEconomyResult<T>>): Promise<T> {
+  const api = accountWardrobe()
+  if (!api) throw new WardrobeAccountError('anonymous')
+  const result = await call(api)
+  if (!result.ok) throw new WardrobeAccountError(result.code)
+  const value = result.value as T & Partial<Detail>
+  if (value && typeof value === 'object' && value.wardrobe && typeof value.revision === 'number') acceptWardrobe(value as Detail)
+  return result.value
+}
+const signedIn = () => snapshot.mode === 'account'
+/** Reports finished turns to the account; the runtime queued them and announced it. */
+export function syncAccountWardrobe(): void {
+  void accountWardrobe()?.sync().catch(() => undefined)
 }
 export function refreshWardrobe(): Promise<void> {
   if (inflight) return inflight
@@ -40,6 +70,7 @@ export function useWardrobe(active = true): WardrobeSnapshot {
     let timer: ReturnType<typeof setTimeout> | undefined
     const off = subscribeRoomEvents((event) => {
       if (!event.kind.startsWith('wardrobe.')) return
+      if (event.kind === 'wardrobe.activity') syncAccountWardrobe()
       clearTimeout(timer)
       timer = setTimeout(() => { void refreshWardrobe() }, 150)
     })
@@ -53,6 +84,7 @@ export function wardrobeGate(state: WardrobeSnapshot): KunWardrobe | null {
 }
 /** Opens one bottle or a ten-pull; the bottles' contents were fixed when they dropped. */
 export async function openWardrobeDrops(dropIds: string[]): Promise<WardrobeOpenResult> {
+  if (signedIn()) return accountResult((api) => api.open(dropIds))
   const result = await roomsRequest<WardrobeOpenResult>('/v1/rooms/wardrobe/open', 'POST',
     { dropIds, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision })
   acceptWardrobe(result)
@@ -60,6 +92,7 @@ export async function openWardrobeDrops(dropIds: string[]): Promise<WardrobeOpen
 }
 /** Keeps bottles on the shelf; their chat cards stop asking to be opened. */
 export async function stashWardrobeDrops(dropIds: string[]): Promise<void> {
+  if (signedIn()) { await accountResult((api) => api.stash(dropIds)); return }
   acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/stash', 'POST',
     { dropIds, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
 }
@@ -70,14 +103,17 @@ export function wardrobeShelf(wardrobe: KunWardrobe | null): KunWardrobeDrop[] {
 export async function markWardrobeSeen(keys: string[]): Promise<void> {
   const unseen = keys.filter((key) => snapshot.wardrobe && !snapshot.wardrobe.seen.includes(key))
   if (!unseen.length) return
+  if (signedIn()) { await accountResult((api) => api.seen(unseen)); return }
   acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/seen', 'POST',
     { keys: unseen, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
 }
 export async function exchangeWardrobeItem(key: KunWardrobeItemKey): Promise<void> {
+  if (signedIn()) { await accountResult((api) => api.exchange(key)); return }
   acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/exchange', 'POST',
     { key, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
 }
 export async function updateWardrobeSettings(settings: Partial<KunWardrobeSettings>): Promise<void> {
+  if (signedIn()) { await accountResult((api) => api.settings(settings)); return }
   acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/settings', 'POST',
     { settings, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
 }
@@ -89,6 +125,10 @@ export function pendingWardrobeDrops(wardrobe: KunWardrobe | null, scope: Wardro
 }
 export const wardrobeSettings = (wardrobe: KunWardrobe | null): KunWardrobeSettings =>
   wardrobe?.settings ?? { drops: true, code: true, notice: 'card' }
+/** Signed in, a composed look saved as the user's avatar also becomes the account avatar. */
+export function syncAccountLook(parts: KunAvatarParts): void {
+  if (signedIn()) void accountWardrobe()?.setLook(parts).catch(() => undefined)
+}
 /** Puts a freshly opened item on the current look; a card replaces the whole outfit but keeps the backdrop. */
 export function wearWardrobeDrop(parts: KunAvatarParts, drop: KunWardrobeDrop): KunAvatarParts {
   if (drop.kind === 'card' && drop.cardId) {

@@ -44,7 +44,7 @@ describe('wardrobe page', () => {
       return { wardrobe, revision: 5 }
     })
     useRoomUserProfile.setState({ profile: { avatar: null }, revision: null })
-    acceptWardrobe({ wardrobe, revision: 4 })
+    acceptWardrobe({ wardrobe, revision: 4, mode: 'account' })
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -106,5 +106,25 @@ describe('wardrobe page', () => {
     await act(async () => $('[data-wardrobe-restore]')!.click())
     await vi.waitFor(() => expect(puts()).toHaveLength(1))
     expect(puts()[0]).toMatchObject({ avatar: null })
+  })
+
+  it('says the wardrobe is synced to the account and offers the shop and invitations', () => {
+    expect($('[data-wardrobe-mode]')?.dataset.wardrobeMode).toBe('account')
+    expect($$('[data-wardrobe-tab]').map((tab) => tab.dataset.wardrobeTab)).toEqual(['items', 'cards', 'look', 'log', 'shop', 'invite'])
+  })
+
+  it('signed out, swaps the shelf for sign-in, locks the shop, and keeps unknown items out of reach', async () => {
+    await act(async () => acceptWardrobe({ wardrobe: { ...wardrobe, pending: [] }, revision: 6, mode: 'guest' }))
+    expect($('[data-wardrobe-shelf]')).toBeNull()
+    expect($('[data-wardrobe-guest]')).not.toBeNull()
+    expect($('[data-wardrobe-feathers]')).toBeNull()
+    expect($('[data-wardrobe-settings]')).toBeNull()
+    await act(async () => $('[data-wardrobe-tab="shop"]')!.click())
+    expect($('[data-wardrobe-locked="shop"]')).not.toBeNull()
+    await act(async () => $('[data-wardrobe-tab="items"]')!.click())
+    await act(async () => $$('[data-wardrobe-item="unknown"]')[0]!.click())
+    const sheet = $('[data-wardrobe-sheet]')!
+    expect(sheet.textContent).toContain('wardrobeAccountGuestItemHint')
+    expect(sheet.querySelector<HTMLButtonElement>('.kun-wardrobe-sheet-action')?.disabled).toBe(true)
   })
 })

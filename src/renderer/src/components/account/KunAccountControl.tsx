@@ -5,8 +5,9 @@ import { useTranslation } from 'react-i18next'
 import { bodyZoom } from '../../lib/body-zoom'
 import { useKunAccount, type KunAccountAction } from './useKunAccount'
 import { KunAccountPanel, KunAccountPanelClose } from './KunAccountPanel'
-import { kunAccountBadge, kunAccountEntry, kunAccountInitial, kunAccountPanelPlacement, kunAccountView } from './kun-account-view'
+import { kunAccountBadge, kunAccountEntry, kunAccountPanelPlacement, kunAccountView } from './kun-account-view'
 import './kun-account.css'
+import { KunAccountAvatar } from './KunAccountAvatar'
 
 const WELCOME_MS = 2400
 
@@ -118,7 +119,7 @@ export function KunAccountControl({ variant = 'chip' }: { variant?: 'chip' | 'ro
     : entry === 'busy' ? t('kunAccountSigningIn') : t('kunAccountSignInLabel')
   const content = entry === 'avatar' && user ? (
     <>
-      <span className="kun-account-avatar" aria-hidden="true">{kunAccountInitial(user)}</span>
+      <KunAccountAvatar user={user} size={variant === 'row' ? 24 : 30} />
       {variant === 'row' ? <span className="kun-account-entry-text">{user.name}</span> : null}
     </>
   ) : entry === 'busy' ? (

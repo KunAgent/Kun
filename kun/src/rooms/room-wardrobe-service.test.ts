@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,8 +9,11 @@ import {
 import { roomFingerprint } from './room-service.js'
 
 const resources: Array<{ dir: string; store: SqliteRoomStore }> = []
+// These cover the local game kept for debug runs; signed-in and signed-out wardrobes are in room-wardrobe-account.test.ts.
+beforeEach(() => { process.env.KUN_WARDROBE_LOCAL = '1' })
 afterEach(async () => {
   delete process.env.KUN_WARDROBE_UNLOCK_ALL
+  delete process.env.KUN_WARDROBE_LOCAL
   for (const { dir, store } of resources.splice(0)) { await store.close(); await rm(dir, { recursive: true, force: true }) }
 })
 async function openStore() {

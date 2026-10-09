@@ -128,6 +128,18 @@ export class KunAccountService {
     return this.syncing
   }
   async refresh(): Promise<KunAccountState> { await this.getState(); return this.sync(true) }
+  /** A valid access token for Kunserve APIs, or null when signed out; `force` rotates it first. */
+  async accessToken(force = false): Promise<string | null> {
+    await this.getState()
+    if (this.pending || !this.tokens || this.disposed) return null
+    const epoch = this.generation
+    try { return (await this.validTokens(force, epoch))?.accessToken ?? null }
+    catch (error) { await this.failure(error, epoch); throw error }
+  }
+  /** An API refused even a freshly rotated token: the session ended elsewhere. */
+  async expire(): Promise<void> {
+    if (this.tokens) await this.failure(new AccountError('expired'), this.generation)
+  }
   async login(): Promise<KunAccountState> {
     await this.getState()
     if (this.signingOut) await this.signingOut

@@ -9,6 +9,7 @@ import {
 import { RoomAvatar } from '../rooms/RoomAvatar'
 import { RoomAvatarItemArt } from '../rooms/RoomAvatarItemArt'
 import { WardrobeCardBack, WardrobeUnknownItem } from '../rooms/RoomWardrobeBottle'
+import { wardrobeDropSource } from '../rooms/room-wardrobe-source'
 import { wardrobeOwns, type WardrobeSelection } from './wardrobe-page-model'
 import { WARDROBE_SLOT_LABELS } from './WardrobeStage'
 
@@ -23,8 +24,8 @@ function when(value: string, language: Language): string {
 }
 
 /** The selected item or role card: what it is, where it came from, and the one thing to do with it. */
-export function WardrobeInspector({ selection, wardrobe, unlockAll, parts, dressed, language, busy, onWearItem, onExchange, onWearSet, onClose }: {
-  selection: WardrobeSelection; wardrobe: KunWardrobe; unlockAll: boolean; parts: KunAvatarParts; dressed: boolean; language: Language; busy: boolean
+export function WardrobeInspector({ selection, wardrobe, unlockAll, guest = false, parts, dressed, language, busy, onWearItem, onExchange, onWearSet, onClose }: {
+  selection: WardrobeSelection; wardrobe: KunWardrobe; unlockAll: boolean; guest?: boolean; parts: KunAvatarParts; dressed: boolean; language: Language; busy: boolean
   onWearItem: (category: KunAvatarAccessoryCategory, id: string, worn: boolean) => void; onExchange: (key: string) => void
   onWearSet: (presetId: string) => void; onClose: () => void
 }): ReactElement | null {
@@ -39,14 +40,18 @@ export function WardrobeInspector({ selection, wardrobe, unlockAll, parts, dress
       if (copies > 0) {
         const worn = dressed && parts[category] === id
         const drop = (wardrobe.history ?? []).find((entry) => entry.item && kunWardrobeItemKey(entry.item.category, entry.item.id) === selection.key)
-        const from = drop ? t('wardrobePageFrom', { source: `${drop.source === 'code' ? 'Code · ' : ''}${drop.sourceLabel
-          ?? t(drop.source === 'code' ? 'roomsWardrobeSourceCodeTask' : 'roomsWardrobeSourceChat')} · ${when(drop.openedAt ?? drop.createdAt, language)}` })
+        const from = drop ? t('wardrobePageFrom', { source: `${wardrobeDropSource(t, drop)} · ${when(drop.openedAt ?? drop.createdAt, language)}` })
           : KUN_WARDROBE_STARTER_PACK.includes(selection.key as never) ? t('wardrobePageStarter') : ''
         sheet = { rarity: part.rarity, art: <RoomAvatarItemArt category={category} id={id} size={48} />, title: part.label[language], chip: rarity,
           fresh: !unlockAll && !wardrobe.seen.includes(selection.key), text: part.flavor[language],
           meta: [from, copies > 1 ? t('wardrobePageCopies', { n: copies }) : ''].filter(Boolean).join(' · '),
           action: t(worn ? 'wardrobePageTakeOff' : 'wardrobePageWear'), primary: !worn, enabled: true, locked: false,
           run: () => onWearItem(category, id, worn) }
+      } else if (guest) {
+        // Signed out there are no feathers and no bottles: collecting starts with a Kun account.
+        sheet = { rarity: part.rarity, art: <WardrobeUnknownItem size={42} />, title: t('roomsWardrobeUnknownItem'), chip: rarity,
+          text: t('wardrobeAccountGuestItemHint'), meta: t('wardrobePageSecret'), action: t('wardrobeAccountGuestLocked'),
+          primary: false, enabled: false, locked: true, run: () => undefined }
       } else {
         const price = KUN_WARDROBE_RULES.exchangeFeathers[part.rarity]
         // Until it is found the item keeps its secret here too; trading feathers reveals it.

@@ -8,7 +8,7 @@ import { RoomWardrobeProgress } from './RoomWardrobeProgress'
 import { markWardrobeSeen, useWardrobe, wardrobeGate, wearWardrobeDrop } from './room-wardrobe'
 import { roomsRequest, roomRequestId } from './rooms-client'
 import { cacheRoomAvatar } from './room-uploaded-avatar'
-import { acceptRoomUserProfile } from './room-user-profile'
+import { saveRoomUserProfile } from './room-user-profile'
 import { useAgentResource } from './agent-client'
 
 export function RoomUserAvatarEditor({ onClose, variant = 'modal' }: { onClose: () => void; variant?: 'modal' | 'panel' }) {
@@ -67,9 +67,7 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
       }
       const key = JSON.stringify(selected)
       if (pending.current?.key !== key) pending.current = { key, id: roomRequestId() }
-      const saved = await roomsRequest<RoomUserProfileDetail>('/v1/rooms/user-profile', 'PUT', {
-        avatar: selected, expectedRevision: original.revision, clientRequestId: pending.current.id })
-      acceptRoomUserProfile(saved)
+      await saveRoomUserProfile({ avatar: selected, expectedRevision: original.revision, clientRequestId: pending.current.id })
       if (mounted.current) onClose()
     } catch (cause) { if (mounted.current) setError(String(cause)) }
     finally { if (mounted.current) { setBusy(false); onBusy(false) } }

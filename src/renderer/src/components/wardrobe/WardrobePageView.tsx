@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { Dices, Feather, RotateCcw, Settings2, Upload, X } from 'lucide-react'
+import { Dices, Feather, Lock, RotateCcw, Settings2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, kunWardrobeProgress, normalizeKunAvatarParts, randomKunAvatarParts,
@@ -8,7 +8,9 @@ import {
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { WardrobeLogSection, WardrobeSettingsSection } from '../rooms/RoomWardrobePanelSections'
 import { useWardrobeOpener } from '../rooms/RoomWardrobeOpening'
-import { exchangeWardrobeItem, markWardrobeSeen, updateWardrobeSettings, useWardrobe, wardrobeSettings } from '../rooms/room-wardrobe'
+import {
+  WardrobeAccountError, exchangeWardrobeItem, markWardrobeSeen, updateWardrobeSettings, useWardrobe, wardrobeSettings
+} from '../rooms/room-wardrobe'
 import { wearDropOnMe } from '../rooms/room-wardrobe-wear'
 import { useRoomUserProfile, useRoomUserProfileSync } from '../rooms/room-user-profile'
 import { createWardrobeLookSaver } from './wardrobe-look-saver'
@@ -21,15 +23,23 @@ import { WardrobeInspector } from './WardrobeInspector'
 import { WardrobeLookPanel } from './WardrobeLookPanel'
 import { WardrobePhotoDialog, readWardrobePhoto } from './WardrobePhotoDialog'
 import { WardrobeShelfCard } from './WardrobeShelfCard'
+import { WardrobeGuestCard, WardrobeLockedPanel } from './WardrobeGuest'
+import { WardrobeInvitePanel } from './WardrobeInvitePanel'
+import { WardrobeShopPanel } from './WardrobeShopPanel'
+import { wardrobeErrorText } from './wardrobe-account'
 import { WARDROBE_SLOT_LABELS, WardrobeStage } from './WardrobeStage'
 import '../rooms/room-avatar-composer.css'
 import '../rooms/room-wardrobe.css'
 import '../rooms/room-wardrobe-panel.css'
 import '../rooms/room-wardrobe-holo.css'
 import './wardrobe-page.css'
+import './wardrobe-account.css'
 
-type Tab = 'items' | 'cards' | 'look' | 'log'
-const TAB_LABELS = { items: 'wardrobePageTabItems', cards: 'wardrobePageTabCards', look: 'wardrobePageTabLook', log: 'wardrobePageTabLog' } as const
+type Tab = 'items' | 'cards' | 'look' | 'log' | 'shop' | 'invite'
+const TAB_LABELS = { items: 'wardrobePageTabItems', cards: 'wardrobePageTabCards', look: 'wardrobePageTabLook', log: 'wardrobePageTabLog',
+  shop: 'wardrobeAccountTabShop', invite: 'wardrobeAccountTabInvite' } as const
+/** Shop and invitations belong to the Kun account; a debug run's local game has neither. */
+const ACCOUNT_TABS: Tab[] = ['shop', 'invite']
 type Toast = { text: string; undo?: { avatar: WardrobeAvatar }; error?: boolean }
 
 /**
@@ -67,6 +77,8 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
   const opener = useWardrobeOpener({ onWear: wearDropOnMe, onDress: () => setTab('items') })
   const wardrobe = state.wardrobe
   const unlockAll = state.unlockAll
+  const guest = state.mode === 'guest'
+  const tabs: Tab[] = ['items', 'cards', 'look', 'log', ...(state.mode === 'local' ? [] : ACCOUNT_TABS)]
 
   useEffect(() => { title.current?.focus({ preventScroll: true }) }, [])
   useEffect(() => {
@@ -121,7 +133,9 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
   }
   const run = async (work: () => Promise<void>, done?: string) => {
     setBusy(true)
-    try { await work(); if (done) setToast({ text: done }) } catch (cause) { setToast({ text: String(cause), error: true }) } finally { setBusy(false) }
+    try { await work(); if (done) setToast({ text: done }) } catch (cause) {
+      setToast({ text: cause instanceof WardrobeAccountError ? wardrobeErrorText(t, cause) : String(cause), error: true })
+    } finally { setBusy(false) }
   }
   const choosePhoto = async (selected: File) => {
     try { setPhoto(await readWardrobePhoto(selected)) } catch { setToast({ text: t('roomsAvatarInvalidFile'), error: true }) }
@@ -130,7 +144,7 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
   const cards = wardrobeRoleCards(wardrobe, unlockAll)
   const counts: Record<Tab, string> = {
     items: progress ? `${unlockAll ? progress.totalItems : progress.ownedItems}/${progress.totalItems}` : '',
-    cards: `${cards.filter((card) => card.lit).length}/${cards.length}`, look: '', log: ''
+    cards: `${cards.filter((card) => card.lit).length}/${cards.length}`, look: '', log: '', shop: '', invite: ''
   }
   return <div className="kun-wardrobe ds-drag flex h-full min-h-0 flex-col bg-ds-main" data-wardrobe-page>
     <div className="ds-stage-inset shrink-0">
@@ -140,14 +154,16 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
             <SidebarTitlebarToggleButton onClick={onToggleLeftSidebar}
               title={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')} ariaLabel={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')} />
             <h1 ref={title} tabIndex={-1}>{t('roomsWardrobeMine')}</h1>
-            <span className="kun-wardrobe-head-hint">{t('roomsWardrobeMineHint')}</span>
+            {state.mode === 'local' ? <span className="kun-wardrobe-head-hint">{t('roomsWardrobeMineHint')}</span>
+              : <span className="kun-wardrobe-account-chip" data-mode={state.mode} data-wardrobe-mode={state.mode}>
+                <i aria-hidden="true" />{t(guest ? 'wardrobeAccountGuestChip' : 'wardrobeAccountSynced')}</span>}
           </div>
           <div className="kun-wardrobe-head-actions ds-no-drag">
-            {wardrobe ? <span className="kun-wardrobe-feathers" title={t('wardrobePageFeathersHint')} data-wardrobe-feathers={wardrobe.feathers}>
+            {wardrobe && !guest ? <span className="kun-wardrobe-feathers" title={t('wardrobePageFeathersHint')} data-wardrobe-feathers={wardrobe.feathers}>
               <Feather size={14} strokeWidth={2} aria-hidden="true" />{t('wardrobePageFeathers', { n: wardrobe.feathers })}</span> : null}
-            <button type="button" ref={gear} className="kun-wardrobe-head-icon" aria-label={t('wardrobePageDropSettings')} title={t('wardrobePageDropSettings')}
+            {guest ? null : <button type="button" ref={gear} className="kun-wardrobe-head-icon" aria-label={t('wardrobePageDropSettings')} title={t('wardrobePageDropSettings')}
               aria-expanded={settingsOpen} aria-pressed={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)} data-wardrobe-settings>
-              <Settings2 size={16} strokeWidth={1.8} aria-hidden="true" /></button>
+              <Settings2 size={16} strokeWidth={1.8} aria-hidden="true" /></button>}
             {settingsOpen && wardrobe ? <div ref={popover} className="kun-wardrobe-popover" role="dialog" aria-label={t('wardrobePageDropSettings')}>
               <div className="kun-wardrobe-popover-head"><strong>{t('wardrobePageDropSettings')}</strong>
                 <button type="button" onClick={() => setSettingsOpen(false)} aria-label={t('wardrobePageClose')}><X size={15} aria-hidden="true" /></button></div>
@@ -179,12 +195,14 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
           <button type="button" onClick={() => file.current?.click()} data-wardrobe-upload>
             <Upload size={15} strokeWidth={1.8} aria-hidden="true" />{t('roomsAvatarUpload')}</button>
         </div>
-        <WardrobeShelfCard wardrobe={wardrobe} busy={opener.opening} onOpenOne={() => opener.openOne()} onOpenTen={opener.openTen} />
+        {guest ? <WardrobeGuestCard />
+          : <WardrobeShelfCard wardrobe={wardrobe} busy={opener.opening} onOpenOne={() => opener.openOne()} onOpenTen={opener.openTen} />}
       </div>
       <section className="kun-wardrobe-collection" aria-label={t('roomsWardrobeTitle')}>
         <nav className="kun-wardrobe-tabs" aria-label={t('roomsWardrobeTitle')}>
-          {(['items', 'cards', 'look', 'log'] as const).map((id) => <button key={id} type="button" aria-pressed={tab === id} data-wardrobe-tab={id}
+          {tabs.map((id) => <button key={id} type="button" aria-pressed={tab === id} data-wardrobe-tab={id}
             onClick={() => { setTab(id); setSelection(null); setTrying(null) }}>
+            {guest && ACCOUNT_TABS.includes(id) ? <Lock size={13} strokeWidth={2} aria-hidden="true" /> : null}
             {t(TAB_LABELS[id])}{counts[id] ? <span>{counts[id]}</span> : null}
             {id === 'items' && tab !== 'items' && wardrobeUnseen(wardrobe, 'items').length ? <i aria-hidden="true" /> : null}
           </button>)}
@@ -200,8 +218,12 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
             selection={selection} onFilter={(value) => { setCardFilter(value); setSelection(null) }} onSelect={setSelection} />
             : tab === 'look' ? <WardrobeLookPanel parts={parts} dressed={dressed} language={language}
               onPick={(next, name) => choose(composedAvatar(next), t('wardrobePageToastLook', { name }))} onTry={setTrying} onEndTry={() => setTrying(null)} />
-              : <div className="kun-wardrobe-scroll kun-wardrobe-log"><WardrobeLogSection wardrobe={wardrobe} language={language} /></div>}
-        {tab === 'items' || tab === 'cards' ? <WardrobeInspector selection={selection} wardrobe={wardrobe} unlockAll={unlockAll} parts={parts}
+              : tab === 'log' ? <div className="kun-wardrobe-scroll kun-wardrobe-log"><WardrobeLogSection wardrobe={wardrobe} language={language} /></div>
+                : guest ? <WardrobeLockedPanel kind={tab === 'shop' ? 'shop' : 'invite'} />
+                  : tab === 'shop' ? <WardrobeShopPanel wardrobe={wardrobe} language={language} onBought={(text) => setToast({ text })}
+                    onBrowse={() => { setTab('items'); setOwnedOnly(false); setSelection(null) }} />
+                    : <WardrobeInvitePanel language={language} onClaimed={(text) => setToast({ text })} />}
+        {tab === 'items' || tab === 'cards' ? <WardrobeInspector selection={selection} wardrobe={wardrobe} unlockAll={unlockAll} guest={guest} parts={parts}
           dressed={dressed} language={language} busy={busy} onWearItem={wearItem} onClose={() => setSelection(null)}
           onExchange={(key) => {
             const [slot, id] = key.split('/') as [KunAvatarAccessoryCategory, string]

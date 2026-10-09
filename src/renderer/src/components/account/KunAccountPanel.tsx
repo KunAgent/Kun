@@ -9,7 +9,8 @@ import sleepArt from '../../../../asset/img/kun-account/sleep.webp'
 import headsetArt from '../../../../asset/img/kun-account/headset.webp'
 import wrenchArt from '../../../../asset/img/kun-account/wrench.webp'
 import type { KunAccountAction } from './useKunAccount'
-import { kunAccountErrorCopy, kunAccountInitial, type KunAccountArt, type KunAccountView } from './kun-account-view'
+import { kunAccountErrorCopy, type KunAccountArt, type KunAccountView } from './kun-account-view'
+import { KunAccountAvatar } from './KunAccountAvatar'
 
 /** Painted Kun poses; the art is never redrawn as vectors. */
 const ART: Record<KunAccountArt, string> = {
@@ -90,7 +91,7 @@ export function KunAccountPanel(props: KunAccountPanelProps): ReactElement {
     return (
       <div className="kun-account-view" key="menu">
         <div className="kun-account-who">
-          <span className="kun-account-avatar is-large" aria-hidden="true">{kunAccountInitial(user)}</span>
+          <KunAccountAvatar user={user} size={40} large />
           <span className="kun-account-who-text">
             <strong id={titleId}>{user.name}</strong>
             <span>{user.email}</span>

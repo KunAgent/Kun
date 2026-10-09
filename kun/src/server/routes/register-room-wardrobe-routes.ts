@@ -5,6 +5,9 @@ import {
   exchangeRoomWardrobeItem, markRoomWardrobeSeen, openRoomWardrobeDrops, readRoomWardrobe, stashRoomWardrobeDrops,
   updateRoomWardrobeSettings, wardrobeUnlockAll
 } from '../../rooms/room-wardrobe-service.js'
+import {
+  AckWardrobeActivityRequest, AttachWardrobeRequest, ackWardrobeActivity, attachAccountWardrobe, detachAccountWardrobe, listWardrobeActivity
+} from '../../rooms/room-wardrobe-account.js'
 import { readJsonBody } from '../read-json-body.js'
 
 type Add = (method: string, path: string, handler: (rooms: RoomRuntime, request: Request) => Promise<unknown>) => void
@@ -46,6 +49,21 @@ export function registerRoomWardrobeRoutes(add: Add) {
     if (!raw.ok) return raw.response
     const input = SettingsRequest.parse(raw.value)
     return rooms.exclusive(() => updateRoomWardrobeSettings(rooms.service.store, input, roomFingerprint(input)))
+  })
+  // Main process only (not in the renderer allowlist): keeps the mirror in step with the Kun account.
+  add('POST', '/v1/rooms/wardrobe/account/attach', async (rooms, request) => {
+    const raw = await readJsonBody(request)
+    if (!raw.ok) return raw.response
+    const input = AttachWardrobeRequest.parse(raw.value)
+    return rooms.exclusive(() => attachAccountWardrobe(rooms.service.store, input))
+  })
+  add('POST', '/v1/rooms/wardrobe/account/detach', async (rooms) => rooms.exclusive(() => detachAccountWardrobe(rooms.service.store)))
+  add('GET', '/v1/rooms/wardrobe/account/activity', async (rooms) => listWardrobeActivity(rooms.service.store))
+  add('POST', '/v1/rooms/wardrobe/account/activity/ack', async (rooms, request) => {
+    const raw = await readJsonBody(request)
+    if (!raw.ok) return raw.response
+    const input = AckWardrobeActivityRequest.parse(raw.value)
+    return rooms.exclusive(() => ackWardrobeActivity(rooms.service.store, input))
   })
   add('POST', '/v1/rooms/wardrobe/exchange', async (rooms, request) => {
     const raw = await readJsonBody(request)

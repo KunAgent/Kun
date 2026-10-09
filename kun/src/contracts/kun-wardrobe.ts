@@ -41,6 +41,8 @@ export const KUN_WARDROBE_STARTER_PACK: readonly KunWardrobeItemKey[] =
   ['headwear/headset', 'glasses/square', 'outfit/blue-scarf', 'prop/notebook']
 
 const Rarity = z.enum(['common', 'rare', 'epic', 'legendary'])
+export const KUN_WARDROBE_DROP_SOURCES = ['room', 'code', 'welcome', 'invite', 'shop', 'campaign'] as const
+export type KunWardrobeDropSource = typeof KUN_WARDROBE_DROP_SOURCES[number]
 export const KunWardrobeDropSchema = z.object({
   id: z.string().min(1).max(128),
   kind: z.enum(['item', 'card']),
@@ -50,8 +52,11 @@ export const KunWardrobeDropSchema = z.object({
   /** Already owned when it dropped; opening it pays feathers instead. */
   duplicate: z.boolean(),
   feathers: z.number().int().nonnegative(),
-  /** Where the turn ran: an Agent conversation (roomId) or a Code task (threadId). */
-  source: z.enum(['room', 'code']).optional(),
+  /**
+   * Where the bottle came from: an Agent conversation (roomId), a Code task (threadId), or, for a
+   * Kun account, the welcome gift, an invitation, the feather shop or a campaign.
+   */
+  source: z.enum(KUN_WARDROBE_DROP_SOURCES).optional(),
   roomId: z.string().min(1).max(256).optional(),
   threadId: z.string().min(1).max(256).optional(),
   /** The conversation or task title when it dropped, for the drop log. */

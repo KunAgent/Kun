@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +9,12 @@ import { CodeWardrobeObserver, codeWardrobeThread } from './code-wardrobe-observ
 import { readRoomWardrobe } from './room-wardrobe-service.js'
 
 const resources: Array<{ dir: string; store: SqliteRoomStore }> = []
-afterEach(async () => { for (const { dir, store } of resources.splice(0)) { await store.close(); await rm(dir, { recursive: true, force: true }) } })
+// The local game (debug runs) rolls Code drops on this machine; accounts queue the turn instead.
+beforeEach(() => { process.env.KUN_WARDROBE_LOCAL = '1' })
+afterEach(async () => {
+  delete process.env.KUN_WARDROBE_LOCAL
+  for (const { dir, store } of resources.splice(0)) { await store.close(); await rm(dir, { recursive: true, force: true }) }
+})
 
 const thread = (patch: Partial<ThreadRecord> = {}) => ({ id: 'thread-1', title: '修复登录超时', ...patch }) as ThreadRecord
 const turn = (patch: Partial<Turn> = {}) => ({ id: 'turn-1', threadId: 'thread-1', status: 'completed', finishedAt: new Date().toISOString(), ...patch }) as Turn

@@ -1,12 +1,26 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
-import type { RoomUserProfileDetail } from '@shared/rooms-api'
+import type { RoomAvatarReference, RoomUserProfileDetail } from '@shared/rooms-api'
 import { roomsRequest } from './rooms-client'
 import { subscribeRoomEvents } from './room-event-listeners'
+import { syncAccountLook } from './room-wardrobe'
 
 export const useRoomUserProfile = create<RoomUserProfileDetail>(() => ({ profile: { avatar: null }, revision: null }))
 export function acceptRoomUserProfile(detail: RoomUserProfileDetail) {
   useRoomUserProfile.setState((previous) => (previous.revision ?? -1) <= (detail.revision ?? -1) ? detail : previous)
+}
+
+/**
+ * Saves the user's own avatar. Signed in, a composed look also becomes the Kun account avatar, so
+ * the website and every device show it too; a photo stays on this machine.
+ */
+export async function saveRoomUserProfile(input: {
+  avatar: RoomAvatarReference | null; expectedRevision: number | null; clientRequestId: string
+}): Promise<RoomUserProfileDetail> {
+  const detail = await roomsRequest<RoomUserProfileDetail>('/v1/rooms/user-profile', 'PUT', input)
+  acceptRoomUserProfile(detail)
+  if (input.avatar?.kind === 'composed') syncAccountLook(input.avatar.parts)
+  return detail
 }
 
 function startRoomUserProfileSync(): () => void {

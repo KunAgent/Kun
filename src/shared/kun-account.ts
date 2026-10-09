@@ -1,3 +1,5 @@
+import type { KunAccountWardrobeApi } from './kun-account-economy'
+
 export type KunAccountError = 'network' | 'configuration' | 'expired' | 'cancelled' | 'timeout'
   | 'port_busy' | 'secure_storage' | 'service' | 'unavailable'
 
@@ -25,6 +27,8 @@ export interface KunAccountApi {
   logout(): Promise<KunAccountState>
   openAccountCenter(): Promise<void>
   onState(handler: (state: KunAccountState) => void): () => void
+  /** The account's wardrobe, feather shop and invitations. */
+  wardrobe: KunAccountWardrobeApi
 }
 
 export const KUN_ACCOUNT_CHANNELS = {

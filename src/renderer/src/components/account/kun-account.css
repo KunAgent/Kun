@@ -121,6 +121,13 @@
   font-size: 11px;
 }
 
+/* The dressed-up Kun as the account avatar: a rounded square like every other identity face. */
+.kun-account-avatar[data-look] {
+  overflow: hidden;
+  border-radius: 30%;
+  background: var(--ds-surface-subtle);
+}
+
 .kun-account-avatar.is-large {
   width: 40px;
   height: 40px;
