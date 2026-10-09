@@ -5,6 +5,20 @@ import type { RoomStoreCommit } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
 import { roomFingerprint } from './room-service.js'
 
+/**
+ * Peer coordination only decides whether a human message becomes task work;
+ * a discussion or answer verdict is discarded. Without a repository nothing
+ * can be dispatched (an execution plan could only ask for one), so an
+ * auto-intent message opens the floor at once instead of after a full
+ * coordinator turn. An explicit execute request still gets the coordinator.
+ */
+export function peerCoordinationNeeded(request: Pick<RoomRequestState, 'collaborationProtocol' | 'message' | 'roomSnapshot'>): boolean {
+  if (request.collaborationProtocol !== 'peer') return true
+  if (request.message.executionIntent === 'discussion') return false
+  return request.message.executionIntent === 'execute' || Boolean(request.message.taskId) ||
+    request.roomSnapshot.repositories.length > 0
+}
+
 /** The initiating persisted human message is the authority, never a peer response or model summary. */
 export async function peerRoomDispatchChecks(deps: RoomRuntimeDeps, request: RoomRequestState) {
   const rootId = request.rootRequestId ?? request.id

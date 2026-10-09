@@ -38,10 +38,13 @@ describe('Code conversation list helpers', () => {
     useRoomActivityCounts.setState({ counts: {} })
     publishRoomActivityCounts([entry('a', { runningCount: 1 }), entry('b', { roomId: undefined, attentionCount: 3 })])
     const first = useRoomActivityCounts.getState().counts
-    expect(first).toEqual({ 'room-a': { runningCount: 1, attentionCount: 0 } })
+    expect(first).toEqual({ 'room-a': { runningCount: 1, taskRunningCount: 0, attentionCount: 0 } })
     publishRoomActivityCounts([entry('a', { runningCount: 1 })])
     expect(useRoomActivityCounts.getState().counts).toBe(first)
     publishRoomActivityCounts([entry('a', { attentionCount: 2 })])
-    expect(useRoomActivityCounts.getState().counts['room-a']).toEqual({ runningCount: 0, attentionCount: 2 })
+    expect(useRoomActivityCounts.getState().counts['room-a']).toEqual({ runningCount: 0, taskRunningCount: 0, attentionCount: 2 })
+    // Discussion runs never count as tasks; only execution work does.
+    publishRoomActivityCounts([entry('a', { runningCount: 2, taskRunningCount: 1 })])
+    expect(useRoomActivityCounts.getState().counts['room-a']).toEqual({ runningCount: 2, taskRunningCount: 1, attentionCount: 0 })
   })
 })

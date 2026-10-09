@@ -23,7 +23,7 @@ import { prepareRoomAgreements, roomBundleRules } from './room-rule-compression.
 import { RoomRuleSchema } from '../contracts/rooms-product.js'
 import { settleRoomRequestStop } from './room-request-actions.js'
 import { preserveRoomDiscussions, roomDiscussionContext } from './room-discussion-evidence.js'
-import { admitPeerRoomAmendment, peerRoomDispatchChecks, pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
+import { admitPeerRoomAmendment, peerCoordinationNeeded, peerRoomDispatchChecks, pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 
 export class RoomRequestRunner {
   constructor(private readonly deps: RoomRuntimeDeps, private readonly service: RoomService) {}
@@ -56,7 +56,7 @@ export class RoomRequestRunner {
         return this.save(row, request)
       }
     }
-    if (request.collaborationProtocol === 'peer' && request.message.executionIntent === 'discussion') {
+    if (!peerCoordinationNeeded(request)) {
       return this.save(row, { ...request, peerCoordinationDone: true, status: 'completed' })
     }
     const coordinator = room.members.find((member) => member.id === room.defaultMemberId)!

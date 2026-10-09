@@ -36,7 +36,7 @@ export function buildTurnModeInstruction(
     'Room discussion is coordinated by the host. Do not create standalone plans, goals, or delegated agents.',
     roomContext.kind === 'coordination' ? 'Submit the room decision with submit_room_plan when available; otherwise return the requested JSON object.' :
       roomContext.kind === 'review' ? 'Inspect the pinned delivery and submit findings with submit_room_review when available; otherwise return the requested JSON object.' :
-        'Answer as the current member using attributed room context. Never claim unperformed checks.'
+        'Answer as the current member using attributed room context. Never claim unperformed checks, and do not restate these step limits in your reply.'
   ].join('\n') : PLAN_MODE_INSTRUCTION
   return [
     ...(turn.agentSurface === 'write' ? [WORK_MODE_INSTRUCTION] : []),

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
+import { roomWaitingReceipt } from './room-receipt-helpers'
 import './rooms-experience.css'
 
 type DirectData = Pick<AgentDirectActivity, 'active' | 'approvals' | 'userInputs' | 'activity'> | null | undefined
@@ -30,11 +31,10 @@ export function groupActivity(room: Room, typingIds: string[], waitingIds: strin
   if (typingIds.length) {
     const names = typingIds.slice(0, 2).map(name).join(t('roomsTyping_sep'))
     const more = typingIds.length > 2 ? t('roomsTyping_and') + t('roomsTyping_nMore', { count: typingIds.length - 2 }) : ''
-    return { memberId: typingIds[0], label: names + more + t('roomsTyping_is') }
+    return { memberId: typingIds[0], label: names + more + t(typingIds.length > 1 ? 'roomsTyping_are' : 'roomsTyping_is') }
   }
   if (!awaiting) return null
-  if (waitingIds.length) return { memberId: waitingIds[0], label: t('roomsReceipt_waiting', {
-    name: waitingIds.slice(0, 2).map(name).join(t('roomsTyping_sep')), count: waitingIds.length }) }
+  if (waitingIds.length) return { memberId: waitingIds[0], label: roomWaitingReceipt(t, waitingIds.map(name)) }
   return { label: t('roomsReceipt_fallback') }
 }
 

@@ -1,7 +1,10 @@
 export const ROOM_PEER_GUIDANCE = [
   'Respect ongoing exchanges. When the user is clearly talking with one specific member, contribute only if you are addressed or hold a concrete correction.',
+  'Reply from what has actually been posted. When the user asks everyone for something each member gives for itself, such as a greeting, a roll call, a vote or an opinion, answer once, briefly, in your own words.',
   'Only the member who did a piece of work reports on it. Do not restate or summarize another member\'s result.',
   'Lead with the answer or decision. Include only what the reader needs to act; cite message, task or file handles instead of pasting logs.',
+  'Write for the user in plain language. Name members by display name; never show member ids, tool names or host terms such as topic, generation, budget or read-only mode.',
+  'Do not report your own status, limits or what you did not do unless the user asks.',
   'Separate verified facts from assumptions.',
   'If you owe a specific person a reply, handoff or decision that currently blocks them, include it before finishing.',
   'Do not post acknowledgements, thanks or waiting notices; use skip:true instead.',
@@ -18,7 +21,8 @@ export const ROOM_DIRECT_GUIDANCE = [
 
 export const ROOM_TRIAGE_GUIDANCE = [
   'Skip when the user is clearly addressing another specific member and you have no correction.',
-  'Skip when your point is already covered by a published response, even if phrased differently.'
+  'Skip when your point is already covered by a published response, even if phrased differently.',
+  'Another member answering the user for itself needs no reply. Respond to a member only when it asks you something, contradicts you, or needs your input.'
 ] as const
 
 export const ROOM_HANDOFF_GUIDANCE = [

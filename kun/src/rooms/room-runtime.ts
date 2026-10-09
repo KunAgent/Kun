@@ -32,7 +32,7 @@ import { bindRoomPeerStore } from './room-peer-tools.js'
 import { bindImMessageService } from './room-im-message-tool.js'
 import { roomPeerTopicPage, roomPeerMetricPage, stopRoomPeerTopic, deliverRoomPeerTaskProgress } from './room-peer-api.js'
 import { roomDiscussionBusy, roomRequestDiscussionTarget, cancelSupersededRoomRequest } from './room-discussion-scheduler.js'
-import { pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
+import { peerCoordinationNeeded, pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 import { isRoomRouteReason, roomRouteMessage } from './room-router.js'
 import { bindRoomContinuationDispatcher } from './room-continuation-dispatch.js'
 import { enqueuePrivateContinuation } from './room-continuation-service.js'
@@ -258,7 +258,7 @@ export class RoomRuntime {
           if (row.value.cancellationRequested) await this.peers.state.stop(topic.id)
         }
         const target = roomRequestDiscussionTarget(row.value)
-        const directPeerDiscussion = row.value.collaborationProtocol === 'peer' && row.value.message.executionIntent === 'discussion'
+        const directPeerDiscussion = !peerCoordinationNeeded(row.value)
         if (target && !target.turnId && !target.admissionAttempted && !row.value.cancellationRequested && !directPeerDiscussion) {
           if (row.value.roomSnapshot.conversationKind === 'user_agent' && !(await this.agents.features()).identities) return
           const key = row.value.roomId + ':' + target.memberId

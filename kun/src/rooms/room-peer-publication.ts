@@ -1,7 +1,7 @@
 import { attachRoomRunPublication, roomRunId } from './room-run-recording.js'
 import { RoomMessageSchema, type Room, type RoomMessage } from '../contracts/rooms.js'
 import type { RoomStoreCommit } from './room-store.js'
-import { appendPeerInbox, peerId, peerInboxRows, peerMessageRecipients } from './room-peer-inbox.js'
+import { appendPeerInbox, peerId, peerInboxRows, peerMessageRecipients, peerParallelAnswers } from './room-peer-inbox.js'
 import { peerFingerprint, retryPeerConflict, type RoomPeerStore } from './room-peer-state.js'
 import type { RoomPeerPublishInput, RoomPeerPublishResult, RoomPeerRequestInput, RoomPeerInboxItem } from './room-peer-types.js'
 import { appendRoomReplyChecks, prepareRoomReplyContext } from './room-replies.js'
@@ -71,7 +71,15 @@ export async function publishPeerMessage(peer: RoomPeerStore, input: RoomPeerPub
       await peer.skip(input.rootRequestId, input.memberId, input.activationClientRequestId, 'duplicate')
       return { status: 'duplicate', message: message?.value }
     }
-    if (activation.basePublicationRevision !== topic.value.publicationRevision) return { status: 'stale' }
+    if (activation.basePublicationRevision !== topic.value.publicationRevision) {
+      const siblings = await peerParallelAnswers(peer.store, topic.value, input.memberId,
+        activation.seenThroughSeq, input.replyToMessageId)
+      if (!siblings) return { status: 'stale' }
+      if (siblings.includes(input.body.trim())) {
+        await peer.skip(input.rootRequestId, input.memberId, input.activationClientRequestId, 'duplicate')
+        return { status: 'duplicate' }
+      }
+    }
     const now = new Date().toISOString()
     const message = RoomMessageSchema.parse({ id: peerId('message', input.clientRequestId),
       roomId: topic.value.roomId, rootRequestId: input.rootRequestId, sourceRequestId: topic.value.requestId,

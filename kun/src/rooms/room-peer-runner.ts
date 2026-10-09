@@ -6,14 +6,16 @@ import type { Room, RoomMember } from '../contracts/rooms.js'
 import type { Turn } from '../contracts/turns.js'
 import type { RoomRuntimeDeps, RoomRequestState } from './room-runtime-types.js'
 import type { RoomStoredDocument } from './room-store.js'
-import type { RoomPeerInboxItem, RoomPeerMemberState, RoomPeerTopic, RoomPeerUpdates } from './room-peer-types.js'
+import { ROOM_PEER_CONCURRENCY, type RoomPeerInboxItem, type RoomPeerMemberState, type RoomPeerTopic,
+  type RoomPeerUpdates } from './room-peer-types.js'
 import { RoomPeerStore } from './room-peer-state.js'
-import { peerId } from './room-peer-inbox.js'
+import { peerId, peerOpenFloor } from './room-peer-inbox.js'
 import { prepareRoomPeerContext, type RoomPeerTurnContext } from './room-peer-context.js'
 import { ensureRoomThread, enqueueRoomTurn, observeRoomTurn } from './room-execution.js'
 import { resolveRoomRepository } from './room-router.js'
 import { roomDiscussionWorkspace } from './room-context.js'
 import { roomPeerTriage, RoomPeerTriageError, type RoomPeerTriageResult } from './room-peer-triage.js'
+import { peerCoordinationNeeded } from './room-peer-dispatch-guard.js'
 import { RoomPeerMessageInput } from './room-peer-tools.js'
 import { stopRoomTaskTurn } from './room-task-activity.js'
 import { withdrawRunProposals } from './room-proposals.js'
@@ -50,7 +52,7 @@ export class RoomPeerRunner {
       if (!['active', 'idle'].includes(topic.value.status) || !await this.state.current(topic)) continue
       if (topic.value.roomSnapshot.conversationKind === 'user_agent' && this.deps.agentDirectory && !(await this.deps.agentDirectory.features()).identities) continue
       const request = await this.deps.store.get<RoomRequestState>('request', topic.value.requestId)
-      if (!request || ['failed', 'needs_input'].includes(request.value.status) || request.value.message.executionIntent !== 'discussion' && !request.value.peerCoordinationDone) continue
+      if (!request || ['failed', 'needs_input'].includes(request.value.status) || peerCoordinationNeeded(request.value) && !request.value.peerCoordinationDone) continue
       for (const member of await this.state.members(topic.id)) {
         if (member.value.activation || member.value.state === 'recovery_required' ||
           member.value.state === 'failed' && (!member.value.retryAt || Date.parse(member.value.retryAt) > Date.now()) ||
@@ -59,13 +61,9 @@ export class RoomPeerRunner {
         if (!actor?.participantAgentId || !actor.enabled || actor.removedAt) continue
         const updates = await this.state.readUpdates(topic.id, member.value.memberId)
         if (!updates?.items.length || !await this.direct(updates, request.value) && topic.value.triageCount >= 128) continue
-        this.deps.discussionFairness.waiting(actor.participantAgentId, this.userDirected(updates, request.value) ? 'user' : 'peer')
+        this.deps.discussionFairness.waiting(actor.participantAgentId, await this.userDirected(updates, request.value) ? 'user' : 'peer')
       }
     }
-  }
-  private userDirected(updates: RoomPeerUpdates, request: RoomRequestState): boolean {
-    const addressed = request.message.mentionMemberIds.length ? request.message.mentionMemberIds : [request.roomSnapshot.defaultMemberId]
-    return addressed.includes(updates.member.value.memberId) && updates.items.some((item) => item.value.sourceId === request.sourceMessageId)
   }
   /** Returns whether any topic still holds live or deferred work for the next pass. */
   async tick(externalBusy: ReadonlySet<string> = new Set()): Promise<boolean> {
@@ -103,7 +101,7 @@ export class RoomPeerRunner {
       const topic = await this.state.topic(original.id)
       if (!topic || !['active', 'idle'].includes(topic.value.status) || !await this.state.current(topic)) continue
       const request = await this.deps.store.get<RoomRequestState>('request', topic.value.requestId)
-      if (!request || request.value.message.executionIntent !== 'discussion' && !request.value.peerCoordinationDone) continue
+      if (!request || peerCoordinationNeeded(request.value) && !request.value.peerCoordinationDone) continue
       if (['needs_input', 'failed'].includes(request.value.status)) {
         await updatePeerTopicStatus(this.state, topic.id, 'paused', 'coordination_needs_attention')
         continue
@@ -130,17 +128,18 @@ export class RoomPeerRunner {
           continue
         }
         const agent = await discussionAgentLane(this.deps, topic.value.roomId, member.value.memberId, topic.value.roomSnapshot)
-        if (member.value.activation || busy.has(key) || Boolean(agent && busy.has(agent)) || (roomCounts.get(topic.value.roomId) ?? 0) >= 2) continue
+        if (member.value.activation || busy.has(key) || Boolean(agent && busy.has(agent)) ||
+          (roomCounts.get(topic.value.roomId) ?? 0) >= ROOM_PEER_CONCURRENCY.activeMembersPerRoom) continue
         if (member.value.state === 'recovery_required') continue
         if (member.value.state === 'failed' && (!member.value.retryAt || Date.parse(member.value.retryAt) > Date.now())) continue
         const updates = await this.state.readUpdates(topic.id, member.value.memberId)
         if (!updates?.items.length) continue
         const direct = await this.direct(updates, request.value)
         const actorId = topic.value.roomSnapshot.members.find((value) => value.id === member.value.memberId)?.participantAgentId
-        const priority = this.userDirected(updates, request.value) ? 'user' : 'peer'
+        const priority = await this.userDirected(updates, request.value) ? 'user' : 'peer'
         if (actorId && this.deps.discussionFairness && !this.deps.discussionFairness.canStart(actorId, priority)) continue
         if (!direct && Date.parse(updates.items[0].value.createdAt) + (this.options.debounceMs ?? 2500) > Date.now()) continue
-        if (!direct && this.triages.size >= 2) continue
+        if (!direct && this.triages.size >= ROOM_PEER_CONCURRENCY.participationChecks) continue
         try {
           const active = await this.begin(updates, direct ? 'respond' : 'triage')
           if (!active?.value.activation) continue
@@ -175,13 +174,18 @@ export class RoomPeerRunner {
   }
 
   private async direct(updates: RoomPeerUpdates, request: RoomRequestState): Promise<boolean> {
-    for (const item of updates.items) {
-      if (item.value.sourceKind === 'invitation') return true
-      if (item.value.sourceId !== request.sourceMessageId) continue
-      const addressed = request.message.mentionMemberIds.length ? request.message.mentionMemberIds : [request.roomSnapshot.defaultMemberId]
-      if (addressed.includes(updates.member.value.memberId)) return true
-    }
-    return false
+    if (updates.items.some((item) => item.value.sourceKind === 'invitation')) return true
+    return this.userDirected(updates, request)
+  }
+
+  /** The user's message asks this member to answer: a structured mention, the
+   *  default responder, or a whole-group message that did not become task work. */
+  private async userDirected(updates: RoomPeerUpdates, request: RoomRequestState): Promise<boolean> {
+    if (!updates.items.some((item) => item.value.sourceId === request.sourceMessageId)) return false
+    const memberId = updates.member.value.memberId
+    if (request.message.mentionMemberIds.length) return request.message.mentionMemberIds.includes(memberId)
+    if (memberId === request.roomSnapshot.defaultMemberId) return true
+    return peerOpenFloor(request.message) && !await this.deps.store.getRequest('plan-' + request.id)
   }
 
   private async begin(updates: RoomPeerUpdates, phase: 'triage' | 'respond') {

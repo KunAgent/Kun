@@ -17,7 +17,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
-async function fixture(intent: 'discussion' | 'auto' = 'discussion') {
+async function fixture(intent: 'discussion' | 'auto' | 'execute' = 'discussion') {
   const directory = await mkdtemp(join(tmpdir(), 'kun-peer-api-'))
   const store = new SqliteRoomStore({ path: join(directory, 'rooms.sqlite') })
   const h = makeHarness(makeFakeModel([]))
@@ -41,26 +41,43 @@ async function fixture(intent: 'discussion' | 'auto' = 'discussion') {
 }
 
 describe('peer topic API and Runtime admission', () => {
-  it('admits one native member turn for explicit discussion without a second coordinator loop', async () => {
+  it('admits one native turn per member for a whole-group discussion without a coordinator loop', async () => {
     const f = await fixture()
     const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn')
     await f.tick()
     await f.tick()
     expect(f.room.collaborationMode).toBe('peer')
     expect((await f.request()).value).toMatchObject({ status: 'completed', peerCoordinationDone: true })
-    expect(enqueue).toHaveBeenCalledTimes(1)
-    const id = enqueue.mock.calls[0][0].threadId
-    expect((await f.h.threads.getMetadata(id))?.roomContext).toMatchObject({
-      kind: 'discussion', collaborationProtocol: 'peer', rootRequestId: f.sent.requestId
-    })
+    const members = f.room.members.filter((member) => member.enabled && !member.removedAt)
+    expect(enqueue).toHaveBeenCalledTimes(members.length)
+    const contexts = await Promise.all(enqueue.mock.calls.map(async ([input]) => (await f.h.threads.getMetadata(input.threadId))?.roomContext))
+    expect(contexts.map((context) => context?.memberId).sort()).toEqual(members.map((member) => member.id).sort())
+    for (const context of contexts) {
+      expect(context).toMatchObject({ kind: 'discussion', collaborationProtocol: 'peer', rootRequestId: f.sent.requestId })
+    }
     expect(await f.h.threads.getMetadata((await f.request()).value.threadId)).toBeNull()
     expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
-    const active = (await f.runtime.peerTopics(f.room.id, 50)).topics[0].members.find((member) => member.memberId === f.room.defaultMemberId)!
-    expect(active.currentRunId).toBe(roomRunId(f.room.id, enqueue.mock.calls[0][0].request.clientRequestId!))
+    const topic = (await f.runtime.peerTopics(f.room.id, 50)).topics[0]
+    expect(topic.triageCount).toBe(0)
+    const active = topic.members.find((member) => member.memberId === f.room.defaultMemberId)!
+    const call = enqueue.mock.calls[contexts.findIndex((context) => context?.memberId === f.room.defaultMemberId)]
+    expect(active.currentRunId).toBe(roomRunId(f.room.id, call[0].request.clientRequestId!))
+  })
+
+  it('opens the floor without a coordinator turn when an auto request has no repository to dispatch to', async () => {
+    const f = await fixture('auto')
+    const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn')
+    await f.tick()
+    await f.tick()
+    expect((await f.request()).value).toMatchObject({ status: 'completed', peerCoordinationDone: true })
+    expect((await f.request()).value.turnId).toBeUndefined()
+    expect(await f.h.threads.getMetadata((await f.request()).value.threadId)).toBeNull()
+    expect(await f.store.list('room_run', { roomId: f.room.id, phase: 'coordination' })).toHaveLength(0)
+    expect(enqueue).toHaveBeenCalledTimes(f.room.members.filter((member) => member.enabled && !member.removedAt).length)
   })
 
   it('persists and replays stop before signalling the original coordinator', async () => {
-    const f = await fixture('auto')
+    const f = await fixture('execute')
     await f.tick()
     const original = await f.request()
     expect(original.value.turnId).toBeDefined()
@@ -100,7 +117,7 @@ describe('peer topic API and Runtime admission', () => {
   })
 
   it('does not abandon an admitted old coordinator when new user input supersedes its request', async () => {
-    const f = await fixture('auto')
+    const f = await fixture('execute')
     await f.tick()
     const old = await f.request()
     expect(old.value.turnId).toBeDefined()

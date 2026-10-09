@@ -13,7 +13,6 @@ function roomPeerModelFixture() {
   let release
   const gate = new Promise((resolve) => { release = resolve })
   const state = { peerResponseRequests: 0, peerTriageRequests: 0, peerSubmissions: 0 }
-  let first = true
   return {
     release,
     snapshot: () => ({ ...state }),
@@ -26,7 +25,9 @@ function roomPeerModelFixture() {
       if (!prompt.includes('Participate as this Kun room member')) return null
       state.peerResponseRequests++
       assert(body.tools?.some((entry) => entry.function?.name === 'send_room_message'), 'Peer response did not advertise its scoped publication tool')
-      if (first) { first = false; await gate }
+      // A whole-group message starts every member at once; hold the first topic's
+      // answers until the smoke has stopped it, so none may publish late.
+      if (prompt.includes('ROOM_PEER_SMOKE_FIRST')) await gate
       if (called('send_room_message')) return { content: 'The complete contribution has been staged.' }
       state.peerSubmissions++
       const message = prompt.includes('ROOM_PEER_SMOKE_NEW') ? NEW_BODY :
@@ -94,7 +95,8 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize,
   const drawer = page.getByRole('region', { name: 'Room details', exact: true })
   await drawer.locator('summary').filter({ hasText: 'Members and response budgets' }).click()
   await drawer.getByText(/^Responding(?: ·|$)/).waitFor()
-  await drawer.getByText('31 / 32', { exact: true }).waitFor()
+  // Every member of the team answers a whole-group message directly.
+  await drawer.getByText((32 - room.members.length) + ' / 32', { exact: true }).waitFor()
   await capture('peer-desktop-responding')
   const liveRun = await viewRunningRoomRun({ page, request, roomId: room.id, poll, capture })
   await resize(760, 780)

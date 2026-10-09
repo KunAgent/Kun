@@ -45,7 +45,9 @@ async function fixture() {
   let reply = (call: Call): Reply => ({ body: call.memberId + ' concrete finding' })
   let triage = (_memberId: string): 'skip' | 'respond' => 'skip'
   let malformedTriage = false
+  let rounds = 0
   const model: ModelClient = { provider: 'fake', model: 'fake', async *stream(request): AsyncIterable<ModelStreamChunk> {
+    rounds++
     const step = (steps.get(request.turnId) ?? 0) + 1
     steps.set(request.turnId, step)
     if (step > 1) {
@@ -116,15 +118,60 @@ async function fixture() {
   }
   const messages = async (rootId: string) => (await store.list<RoomMessage>('message', { rootRequestId: rootId, order: 'asc' }))
     .filter((row) => row.value.authorKind === 'member').map((row) => row.value)
-  return { store, h, service, room, runner, calls, triages, send, pump, messages,
+  return { store, h, service, room, runner, calls, triages, send, pump, messages, rounds: () => rounds,
     reply: (handler: typeof reply) => { reply = handler }, triage: (handler: typeof triage) => { triage = handler },
     malformedTriage: () => { malformedTriage = true } }
 }
 
 describe('peer store, queue and AgentLoop integration', () => {
-  it('answers the user directly through the default member while other members triage and silently consume skips', async () => {
+  it('answers a whole-group message through every member directly, replying to the user', async () => {
     const f = await fixture()
-    const request = await f.send('default')
+    const request = await f.send('everyone', { body: 'Everyone, report in' })
+    await f.pump(async () => expect((await f.runner.state.topic(request.id))?.value.status).toBe('idle'))
+    const members = f.room.members.filter((member) => member.enabled && !member.removedAt).map((member) => member.id).sort()
+    const answers = await f.messages(request.id)
+    expect(answers.map((message) => message.authorMemberId).sort()).toEqual(members)
+    expect(answers.every((message) => message.replyToMessageId === request.sourceMessageId)).toBe(true)
+    expect(f.calls.map((call) => call.memberId).sort()).toEqual(members)
+    // The accepted reply ends each turn; no extra model round is spent on discarded prose.
+    expect(f.rounds()).toBe(members.length)
+    // A participation check may follow peers' answers, never the user's own message.
+    for (const entry of f.triages) {
+      const input = entry.request.history.find((item) => item.kind === 'user_message')
+      const pending = (JSON.parse(input?.kind === 'user_message' ? input.text : '{}') as
+        { updates?: { pendingUpdates?: Array<{ sourceId: string }> } }).updates?.pendingUpdates ?? []
+      expect(pending.map((update) => update.sourceId)).not.toContain(request.sourceMessageId)
+    }
+  })
+
+  it('starts every member of a whole-group message in parallel', async () => {
+    const f = await fixture(), hold = gate()
+    f.reply((call) => ({ body: call.memberId + ' is here', wait: hold.promise }))
+    const request = await f.send('parallel', { body: 'Everyone, report in' })
+    const members = f.room.members.filter((member) => member.enabled && !member.removedAt).map((member) => member.id).sort()
+    await f.pump(() => expect(f.calls.map((call) => call.memberId).sort()).toEqual(members))
+    expect(await f.messages(request.id)).toHaveLength(0)
+    hold.release()
+    await f.pump(async () => expect((await f.runner.state.topic(request.id))?.value.status).toBe('idle'))
+    expect(new Set((await f.messages(request.id)).map((message) => message.authorMemberId)).size).toBe(members.length)
+  })
+
+  it('replies to the user even when a peer answer is pending in the same batch', async () => {
+    const f = await fixture()
+    const request = await f.send('late-member', { body: 'Everyone, report in' })
+    const busy = new Set([f.room.id + ':developer'])
+    await f.pump(async () => expect((await f.messages(request.id)).map((message) => message.authorMemberId).sort())
+      .toEqual(f.room.members.filter((member) => member.id !== 'developer').map((member) => member.id).sort()), busy)
+    await f.pump(async () => expect((await f.messages(request.id)).some((message) => message.authorMemberId === 'developer')).toBe(true))
+    const late = (await f.messages(request.id)).find((message) => message.authorMemberId === 'developer')!
+    expect(late.replyToMessageId).toBe(request.sourceMessageId)
+    const call = f.calls.find((entry) => entry.memberId === 'developer')!
+    expect(JSON.stringify(call.request.history)).toContain('coordinator concrete finding')
+  })
+
+  it('answers a mentioned member directly while other members triage and silently consume skips', async () => {
+    const f = await fixture()
+    const request = await f.send('default', { mentions: [f.room.defaultMemberId] })
     await f.pump(async () => expect((await f.runner.state.topic(request.id))?.value.status).toBe('idle'))
     expect((await f.messages(request.id)).map((message) => message.authorMemberId)).toEqual([f.room.defaultMemberId])
     expect(f.calls).toHaveLength(1)
@@ -159,7 +206,7 @@ describe('peer store, queue and AgentLoop integration', () => {
     f.reply((call) => call.memberId === f.room.defaultMemberId
       ? { body: 'Review the cancellation contract.', inviteMemberIds: ['reviewer'], partial: 'Unfinished private draft', wait: hold.promise }
       : { body: 'The reviewer adds a concrete missing cancellation edge case.' })
-    const request = await f.send('invite')
+    const request = await f.send('invite', { mentions: [f.room.defaultMemberId] })
     await f.pump(() => expect(f.calls).toHaveLength(1))
     for (let i = 0; i < 3; i++) await f.runner.tick()
     expect(await f.messages(request.id)).toHaveLength(0)
@@ -192,7 +239,7 @@ describe('peer store, queue and AgentLoop integration', () => {
   it('treats an explicit member skip as consumption without publishing its final prose', async () => {
     const f = await fixture()
     f.reply(() => ({ skip: true }))
-    const request = await f.send('skip')
+    const request = await f.send('skip', { mentions: [f.room.defaultMemberId] })
     await f.pump(async () => expect((await f.runner.state.topic(request.id))?.value.status).toBe('idle'))
     expect(await f.messages(request.id)).toHaveLength(0)
     expect(f.calls).toHaveLength(1)
@@ -204,7 +251,7 @@ describe('peer store, queue and AgentLoop integration', () => {
     f.triage((memberId) => memberId === 'developer' ? 'respond' : 'skip')
     f.reply((call) => call.memberId === f.room.defaultMemberId ? { skip: true, wait: hold.promise }
       : { body: 'Developer has new evidence about cancellation.' })
-    const request = await f.send('positive-triage')
+    const request = await f.send('positive-triage', { mentions: [f.room.defaultMemberId] })
     await f.pump(async () => expect((await f.messages(request.id)).map((message) => message.authorMemberId)).toEqual(['developer']))
     hold.release()
     await f.pump(async () => expect((await f.runner.state.topic(request.id))?.value.status).toBe('idle'))
@@ -218,7 +265,7 @@ describe('peer store, queue and AgentLoop integration', () => {
     const f = await fixture()
     f.reply(() => ({ skip: true }))
     f.triage((memberId) => { if (memberId === 'developer') throw new Error('Participation provider unavailable'); return 'skip' })
-    const request = await f.send('failed-triage')
+    const request = await f.send('failed-triage', { mentions: [f.room.defaultMemberId] })
     await f.pump(async () => expect((await f.runner.state.member(request.id, 'developer'))?.value.handledInboxSeq).toBeGreaterThan(0))
     const state = (await f.runner.state.member(request.id, 'developer'))!.value
     expect(state.state).toBe('idle')
@@ -237,7 +284,7 @@ describe('peer store, queue and AgentLoop integration', () => {
     const f = await fixture()
     f.reply(() => ({ skip: true }))
     f.malformedTriage()
-    const request = await f.send('failed-triage-usage')
+    const request = await f.send('failed-triage-usage', { mentions: [f.room.defaultMemberId] })
     await f.pump(async () => expect((await f.runner.state.member(request.id, 'developer'))?.value.handledInboxSeq).toBeGreaterThan(0))
     const metrics = await f.store.list<{ memberId: string; phase: string; outcome: string; model?: string;
       usage?: { totalTokens: number } }>('peer_metric', { rootRequestId: request.id })
@@ -272,7 +319,7 @@ describe('peer store, queue and AgentLoop integration', () => {
   it('stops a running response before publication and ignores later task activity until a new user topic', async () => {
     const f = await fixture(), hold = gate()
     f.reply(() => ({ body: 'Late response must not appear', wait: hold.promise }))
-    const request = await f.send('stop')
+    const request = await f.send('stop', { mentions: [f.room.defaultMemberId] })
     await f.pump(() => expect(f.calls).toHaveLength(1))
     await f.runner.state.stop(request.id)
     await f.pump(async () => expect((await f.runner.state.topic(request.id))?.value.status).toBe('stopped'))
@@ -282,18 +329,18 @@ describe('peer store, queue and AgentLoop integration', () => {
     expect(f.calls).toHaveLength(1)
     expect(await f.messages(request.id)).toHaveLength(0)
     f.reply(() => ({ body: 'New user topic response' }))
-    const next = await f.send('after-stop')
+    const next = await f.send('after-stop', { mentions: [f.room.defaultMemberId] })
     await f.pump(async () => expect(await f.messages(next.id)).toHaveLength(1))
     expect(await f.messages(request.id)).toHaveLength(0)
   })
 
   it('lets another topic wait for its occupied member without invalidating or mixing the original draft', async () => {
     const f = await fixture(), hold = gate()
-    const old = await f.send('old-topic')
+    const old = await f.send('old-topic', { mentions: [f.room.defaultMemberId] })
     f.reply((call) => ({ body: call.rootId === old.id ? 'Old topic answer' : 'New topic answer',
       ...(call.rootId === old.id ? { wait: hold.promise } : {}) }))
     await f.pump(() => expect(f.calls).toHaveLength(1))
-    const next = await f.send('new-topic')
+    const next = await f.send('new-topic', { mentions: [f.room.defaultMemberId] })
     for (let i = 0; i < 3; i++) await f.runner.tick()
     expect(f.calls[0].request.abortSignal?.aborted).toBe(false)
     expect(await f.messages(next.id)).toHaveLength(0)
@@ -308,9 +355,9 @@ describe('peer store, queue and AgentLoop integration', () => {
     const f = await fixture(), hold = gate()
     f.reply((call) => call.attempt === 1 ? { body: 'Old requirement draft', wait: hold.promise }
       : { body: 'Response to the updated requirement' })
-    const old = await f.send('original-requirement')
+    const old = await f.send('original-requirement', { mentions: [f.room.defaultMemberId] })
     await f.pump(() => expect(f.calls).toHaveLength(1))
-    await f.send('continued-requirement', { rootRequestId: old.id, body: 'Continue this topic with updated requirements' })
+    await f.send('continued-requirement', { rootRequestId: old.id, body: 'Continue this topic with updated requirements', mentions: [f.room.defaultMemberId] })
     await f.pump(async () => expect(await f.messages(old.id)).toHaveLength(1))
     hold.release()
     expect((await f.runner.state.topic(old.id))?.value.generation).toBe(2)
@@ -322,7 +369,8 @@ describe('peer store, queue and AgentLoop integration', () => {
   it('continues another room when the first room member is occupied by execution', async () => {
     const f = await fixture()
     const secondRoom = (await f.service.create({ clientRequestId: 'second-room', name: 'Other room', collaborationMode: 'peer' })).room
-    const first = await f.send('busy-room'), second = await f.send('free-room', { room: secondRoom })
+    const first = await f.send('busy-room', { mentions: [f.room.defaultMemberId] })
+    const second = await f.send('free-room', { room: secondRoom, mentions: [secondRoom.defaultMemberId] })
     const busy = new Set([f.room.id + ':' + f.room.defaultMemberId])
     await f.pump(async () => expect(await f.messages(second.id)).toHaveLength(1), busy)
     expect(await f.messages(first.id)).toHaveLength(0)

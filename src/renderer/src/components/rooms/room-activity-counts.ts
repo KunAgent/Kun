@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import type { RoomSidebarEntry } from '@shared/rooms-api'
 
-export type RoomActivityCounts = { runningCount: number; attentionCount: number }
+/** runningCount includes live discussion runs; taskRunningCount is execution work only. */
+export type RoomActivityCounts = { runningCount: number; taskRunningCount: number; attentionCount: number }
 
 /**
  * Host-computed running and attention counts from the Code conversation list.
@@ -17,8 +18,10 @@ export function publishRoomActivityCounts(entries: RoomSidebarEntry[]): void {
   for (const entry of entries) {
     if (!entry.roomId) continue
     const previous = current[entry.roomId]
-    if (previous?.runningCount === entry.runningCount && previous.attentionCount === entry.attentionCount) continue
-    next[entry.roomId] = { runningCount: entry.runningCount, attentionCount: entry.attentionCount }
+    const taskRunningCount = entry.taskRunningCount ?? 0
+    if (previous?.runningCount === entry.runningCount && previous.taskRunningCount === taskRunningCount &&
+      previous.attentionCount === entry.attentionCount) continue
+    next[entry.roomId] = { runningCount: entry.runningCount, taskRunningCount, attentionCount: entry.attentionCount }
     changed = true
   }
   if (changed) useRoomActivityCounts.setState({ counts: next })

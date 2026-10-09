@@ -131,9 +131,21 @@ it('retains queued work and integration attention, excluding cancelled integrati
   ] })
   const entry = (await store.sidebarPage({ attentionOnly: true })).entries[0]
   expect(entry.roomId).toBe(room.id); expect(entry.attentionCount).toBe(1); expect(entry.runningCount).toBe(1)
+  expect(entry.taskRunningCount).toBe(1)
   await store.commit({ requestId: 'cancelled-integration', checks: [{ kind: 'integration', id: 'integration', expectedRevision: 0 }],
     puts: [{ kind: 'integration', id: 'integration', roomId: room.id, value: { taskId: 'done', status: 'failed', cancelRequested: true } }] })
   expect((await store.sidebarPage({ attentionOnly: true })).entries).toEqual([])
+})
+it('counts a live group discussion as running work but never as a task', async () => {
+  const { store, agents, service, a, b } = await fixture()
+  const group = (await service.create({ clientRequestId: 'discussing', name: 'Discussing team',
+    members: [agents.asMember(a), agents.asMember(b)] })).room
+  await store.commit({ requestId: 'participation-check', checks: [{ kind: 'room_run', id: 'run-triage', expectedRevision: null }],
+    puts: [{ kind: 'room_run', id: 'run-triage', roomId: group.id, value: { id: 'run-triage', roomId: group.id,
+      memberId: group.defaultMemberId, memberLabel: 'Alpha', phase: 'triage', attempt: 1, clientRequestId: 'check-1',
+      input: '', attachmentIds: [], status: 'running', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } }] })
+  const entry = (await store.sidebarPage({ kind: 'group' })).entries.find((value) => value.roomId === group.id)!
+  expect(entry).toMatchObject({ runningCount: 1, taskRunningCount: 0 })
 })
 it('shows only the latest private request as needing attention', async () => {
   const { store, agents, service, a } = await fixture()

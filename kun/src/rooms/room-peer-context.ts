@@ -98,8 +98,11 @@ export async function prepareRoomPeerContext(deps: RoomRuntimeDeps, updates: Roo
       reference
     })
   }
+  // The user is the audience: when their message is pending, answer it even if
+  // a peer's reply arrived in the same batch, instead of replying to the peer.
+  const fromUser = reference.updates.filter((item) => item.kind !== 'task' && !item.authorMemberId)
   const displayReply = reference.updates.some((item) => item.kind === 'task') ? { checks: [] } :
-    await uniqueRoomReplyTrigger(deps.store, topic.roomId, reference.updates.map((item) => item.sourceId))
+    await uniqueRoomReplyTrigger(deps.store, topic.roomId, (fromUser.length ? fromUser : reference.updates).map((item) => item.sourceId))
   if ('replyToMessageId' in displayReply) {
     result.replyToMessageId = displayReply.replyToMessageId
     result.displayThreadRootId = displayReply.displayThreadRootId

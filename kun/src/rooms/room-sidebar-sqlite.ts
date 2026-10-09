@@ -70,7 +70,11 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
           (r.kind='integration' AND r.status IN ('preparing','validating')))) OR
         (r.kind='room_run' AND r.status IN ('queued','running','recovery_required') AND (
           (e.agent_id IS NOT NULL AND json_extract(r.document,'$.participantAgentId')=e.agent_id) OR
-          (e.agent_id IS NULL AND r.room_id=e.room_id AND json_extract(r.document,'$.phase') IN ('discussion','triage','conversation'))))) AS running_count
+          (e.agent_id IS NULL AND r.room_id=e.room_id AND json_extract(r.document,'$.phase') IN ('discussion','triage','conversation'))))) AS running_count,
+      (SELECT COUNT(DISTINCT 'task:' || COALESCE(r.task_id,json_extract(r.document,'$.taskId'),r.id))
+        FROM room_documents r WHERE r.room_id=e.room_id AND
+        ((r.kind='task' AND r.status IN ('queued','running','waiting_dependency','stopping')) OR
+          (r.kind='integration' AND r.status IN ('preparing','validating')))) AS task_running_count
     FROM entries e
   ), ordered AS (
     SELECT s.*, CASE WHEN s.message_seq>0 THEN s.message_seq ELSE s.created_seq END AS activity_seq,
@@ -85,7 +89,7 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
     ...(cursor ? [cursor.pinned, cursor.activitySeq, cursor.id] : []), limit + 1) as Array<{
       stable_id: string; agent_document: string | null; agent_id: string | null; room_document: string | null; room_id: string | null
       conversation_kind: RoomSidebarEntry['kind']; name: string; title: string; archived: number; pinned: number; activity_seq: number
-      notification_preference: string | null; latest_message: string | null; message_seq: number; read_seq: number; running_count: number; attention_count: number; deleted: number
+      notification_preference: string | null; latest_message: string | null; message_seq: number; read_seq: number; running_count: number; task_running_count: number; attention_count: number; deleted: number
     }>
   const page = rows.slice(0, limit), last = page.at(-1)
   const rooms = page.map((row) => row.room_document ? RoomSchema.parse(JSON.parse(row.room_document)) : undefined)
@@ -102,7 +106,7 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
       avatar: agent?.avatar ?? (row.conversation_kind === 'user_agent' ? undefined : room?.avatar),
       kind: row.conversation_kind, members: room ? presentMembers(room.members, memberAgents) : [],
       activitySeq: row.activity_seq, pinned: Boolean(row.pinned), archived: Boolean(row.archived), deleted: Boolean(row.deleted), latestMessageSeq: row.message_seq, readSeq: row.read_seq,
-      runningCount: row.running_count, attentionCount: row.attention_count,
+      runningCount: row.running_count, taskRunningCount: row.task_running_count, attentionCount: row.attention_count,
       latestMessage: message ? { id: message.id, authorKind: message.authorKind, authorLabelSnapshot: message.authorLabelSnapshot,
         createdAt: message.createdAt, preview: roomMessagePreview(message.body), attachmentCount: message.attachmentIds.length } : undefined }
   }), ...(rows.length > limit && last ? { nextCursor: Buffer.from(JSON.stringify({ scope, pinned: last.pinned,
