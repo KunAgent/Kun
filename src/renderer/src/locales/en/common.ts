@@ -30,7 +30,6 @@ import agentsGraph from './common/agents-graph.json'
 import codePersonas from './common/code-personas.json'
 import workWhiteboard from './common/work-whiteboard.json'
 import sidebar from './common/sidebar.json'
-import kun3d from './common/kun-3d.json'
 import i18nReview from './common/i18n-review.json'
 import commandPalette from './common/command-palette.json'
 import composerPanels from './common/composer-panels.json'
@@ -118,7 +117,6 @@ const common = {
   ...conversationExport,
   ...paperSearch,
   ...wardrobePage,
-  ...kun3d,
 }
 
 export default common

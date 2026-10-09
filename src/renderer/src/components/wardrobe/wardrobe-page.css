@@ -17,11 +17,10 @@
   color: #b45309; background: color-mix(in srgb, var(--ds-warning, #d97706) 14%, transparent); font-size: 12.5px; font-weight: 600; white-space: nowrap;
   font-variant-numeric: tabular-nums; }
 [data-theme='dark'] .kun-wardrobe-feathers { color: #f5bd6e; }
-.kun-wardrobe-head-button, .kun-wardrobe-head-icon { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px;
+.kun-wardrobe-head-icon { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px;
   border: 1px solid var(--ds-border); border-radius: 9px; color: var(--ds-text); background: var(--ds-surface-card); font-size: 12.5px; white-space: nowrap; }
-.kun-wardrobe-head-button { padding: 0 12px; }
 .kun-wardrobe-head-icon { width: 32px; color: var(--ds-text-muted); }
-.kun-wardrobe-head-button:hover, .kun-wardrobe-head-icon:hover { background: var(--ds-surface-hover); }
+.kun-wardrobe-head-icon:hover { background: var(--ds-surface-hover); }
 .kun-wardrobe-head-icon[aria-pressed='true'] { border-color: var(--ds-accent); color: var(--ds-accent); background: var(--ds-accent-soft); }
 .kun-wardrobe-popover { position: absolute; top: calc(100% + 12px); right: 0; z-index: 30; display: grid; gap: 12px; width: 360px;
   max-height: min(640px, 72vh); overflow-y: auto; padding: 14px; border-radius: 16px; background: var(--ds-surface-card);

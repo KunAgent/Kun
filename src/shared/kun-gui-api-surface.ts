@@ -1,4 +1,3 @@
-import type { Kun3dAssetsBridge } from './kun-3d-assets'
 import type {
   AppSettingsPatch,
   AppSettingsV1,
@@ -472,8 +471,6 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   openKunProjectConfigDir: (workspaceRoot: string) => Promise<PathOpenResult>
   getGitBranches: (workspaceRoot: string) => Promise<GitBranchesResult>
   getWorkspaceCreationTimes: (workspaceRoots: string[]) => Promise<WorkspaceCreationTimeEntry[]>
-  /** The 3D asset space in `~/.kun/3d-assets`; desktop only. */
-  kun3dAssets?: Kun3dAssetsBridge
   switchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
   createAndSwitchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
   createGitCheckpoint: (params: {

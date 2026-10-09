@@ -1,5 +1,5 @@
-import { Suspense, lazy, useEffect, useRef, useState, type ReactElement } from 'react'
-import { Box, Dices, Feather, RotateCcw, Settings2, Upload, X } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { Dices, Feather, RotateCcw, Settings2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, kunWardrobeProgress, normalizeKunAvatarParts, randomKunAvatarParts,
@@ -28,8 +28,6 @@ import '../rooms/room-wardrobe-panel.css'
 import '../rooms/room-wardrobe-holo.css'
 import './wardrobe-page.css'
 
-// The 3D showcase carries the WebGL renderer, so it loads only when opened.
-const Kun3dShowcase = lazy(() => import('../kun3d/Kun3dShowcase'))
 type Tab = 'items' | 'cards' | 'look' | 'log'
 const TAB_LABELS = { items: 'wardrobePageTabItems', cards: 'wardrobePageTabCards', look: 'wardrobePageTabLook', log: 'wardrobePageTabLog' } as const
 type Toast = { text: string; undo?: { avatar: WardrobeAvatar }; error?: boolean }
@@ -59,7 +57,6 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
   const [toast, setToast] = useState<Toast | null>(null)
   const [busy, setBusy] = useState(false)
   const [photo, setPhoto] = useState<ImageBitmap | null>(null)
-  const [showcase, setShowcase] = useState(false)
   const title = useRef<HTMLHeadingElement>(null), popover = useRef<HTMLDivElement>(null), gear = useRef<HTMLButtonElement>(null)
   const file = useRef<HTMLInputElement>(null)
   const failed = useRef(''); failed.current = t('wardrobePageSaveFailed')
@@ -135,7 +132,6 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
     items: progress ? `${unlockAll ? progress.totalItems : progress.ownedItems}/${progress.totalItems}` : '',
     cards: `${cards.filter((card) => card.lit).length}/${cards.length}`, look: '', log: ''
   }
-  const kun3d = typeof window !== 'undefined' && Boolean(window.kunGui?.kun3dAssets)
   return <div className="kun-wardrobe ds-drag flex h-full min-h-0 flex-col bg-ds-main" data-wardrobe-page>
     <div className="ds-stage-inset shrink-0">
       <header className="ds-topbar-surface relative z-10 mt-3 flex min-h-[46px] w-full items-stretch overflow-visible rounded-[24px]">
@@ -149,8 +145,6 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
           <div className="kun-wardrobe-head-actions ds-no-drag">
             {wardrobe ? <span className="kun-wardrobe-feathers" title={t('wardrobePageFeathersHint')} data-wardrobe-feathers={wardrobe.feathers}>
               <Feather size={14} strokeWidth={2} aria-hidden="true" />{t('wardrobePageFeathers', { n: wardrobe.feathers })}</span> : null}
-            {kun3d ? <button type="button" className="kun-wardrobe-head-button" onClick={() => setShowcase(true)} title={t('kun3dOpenHint')} data-wardrobe-3d>
-              <Box size={15} strokeWidth={1.8} aria-hidden="true" />{t('kun3dOpen')}</button> : null}
             <button type="button" ref={gear} className="kun-wardrobe-head-icon" aria-label={t('wardrobePageDropSettings')} title={t('wardrobePageDropSettings')}
               aria-expanded={settingsOpen} aria-pressed={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)} data-wardrobe-settings>
               <Settings2 size={16} strokeWidth={1.8} aria-hidden="true" /></button>
@@ -226,6 +220,5 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
     {photo ? <WardrobePhotoDialog source={photo} onClose={() => setPhoto(null)}
       onDone={(uploaded) => { setPhoto(null); choose(uploaded, t('wardrobePageToastPhoto')) }} /> : null}
     {opener.overlay}
-    {showcase ? <Suspense fallback={null}><Kun3dShowcase onClose={() => setShowcase(false)} /></Suspense> : null}
   </div>
 }
