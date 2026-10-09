@@ -33,10 +33,24 @@ Object.assign(window, { kunGui: {
   runtimeRequest: async () => ({ ok: true, status: 200, body: '{}' })
 } })
 // `?variant=work`: the Work assistant composer (compact, Agent switcher, @ references).
-const workVariant = new URLSearchParams(location.search).get('variant') === 'work'
-useHarnessStore.setState({ rowsLoadedAt: Date.now() })
+// `?variant=agent`: Code with a third-party Agent (its pill, permission, model + effort).
+const variantName = new URLSearchParams(location.search).get('variant')
+const workVariant = variantName === 'work'
+const agentVariant = variantName === 'agent'
+const agentRows = agentVariant ? [['kun', 'Kun', 'native-loop'], ['deepseek-harness', 'DeepSeek Harness', 'acp']].map(([id, displayName, transport]) => {
+  const profile = { harnessId: id, credentialMode: 'native-login' as const }
+  return {
+    definition: { id, displayName, transport, credentialModes: id === 'kun' ? ['provider'] : ['native-login'], permissionModes: [],
+      modelSource: 'static', staticModels: ['deepseek-v41-flash'], builtin: true, availability: 'active' },
+    status: { harnessId: id, installed: 'yes', version: '1.0.0', ready: 'yes', login: 'not-required', checkedAt: new Date().toISOString() },
+    enabled: true, enabledProfiles: [profile], readyProfiles: [{ ...profile, expiresAt: new Date(Date.now() + 86_400_000).toISOString() }]
+  }
+}) : []
+useHarnessStore.setState({ rowsLoadedAt: Date.now(), ...(agentVariant ? { rows: agentRows as never,
+  models: { 'deepseek-harness': { models: ['deepseek-v41-flash'], loading: false, loadedAt: Date.now(),
+    modelInfo: [{ id: 'deepseek-v41-flash', displayName: 'DeepSeek-V41-Flash', reasoningEfforts: ['low', 'high', 'max'], defaultReasoningEffort: 'high' }] } } } : {}) })
 useChatStore.setState({ route: workVariant ? 'write' : 'chat', workspaceRoot: '/fixture/workspace',
-  activeThreadId: null, composerHarnessId: 'kun', composerModelCatalogStatus: 'ready',
+  activeThreadId: null, composerHarnessId: agentVariant ? 'deepseek-harness' : 'kun', composerModelCatalogStatus: 'ready',
   blocks: [{ id: 'fixture-user', kind: 'user', text: 'Previous message' }] })
 
 const workModelGroups = [{ providerId: 'deepseek', label: 'DeepSeek', presetSource: 'deepseek', modelIds: ['deepseek-v4-pro'],
@@ -72,14 +86,20 @@ function WorkFixture() {
 
 function Fixture() {
   const [input, setInput] = useState('Explain the proposed change')
-  const [mode, setMode] = useState<'plan' | 'agent' | 'auto'>('plan')
+  const [mode, setMode] = useState<'plan' | 'agent' | 'auto'>(agentVariant ? 'agent' : 'plan')
+  const [effort, setEffort] = useState<'auto' | 'high'>('high')
+  Object.assign(window, { composerFixtureEffort: setEffort })
+  const model = agentVariant ? 'deepseek-v41-flash' : 'deepseek-chat-with-a-long-model-name'
   return <main className="ds-chat-stage" style={{ width: '100%', paddingTop: 48 }}>
     <FloatingComposer
       workspaceRootOverride="/fixture/workspace" activeThreadIdOverride={null}
       input={input} setInput={setInput} mode={mode} setMode={setMode}
       busy={false} runtimeReady hasActiveThread taskSurface="code"
       queuedMessages={[]} onRemoveQueuedMessage={() => undefined}
-      composerModel="deepseek-chat-with-a-long-model-name" composerPickList={['deepseek-chat-with-a-long-model-name']}
+      composerModel={model} composerPickList={[model]}
+      {...(agentVariant ? { onTaskSurfaceChange: () => undefined,
+        composerReasoningEffort: effort, onComposerReasoningEffortChange: (next: string) => setEffort(next === 'high' ? 'high' : 'auto'),
+        modelPickerMode: 'combobox' as const, modelControlVariant: 'split' as const } : {})}
       onComposerModelChange={() => undefined}
       executionSettings={{ approvalPolicy: 'on-request', sandboxMode: 'workspace-write', approvalReviewer: 'user' }}
       onExecutionSettingsChange={() => undefined} onPlanCommand={() => undefined}

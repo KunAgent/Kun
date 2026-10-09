@@ -17,7 +17,7 @@
 一句话：**Work 助手就是 Code 的 Agent，只是每轮带上当前空间里打开的东西。**
 
 - **同一个选择**：Work 输入框读写 Code 的 `composerModel / composerProviderId / composerHarnessId / composerCredentialMode / composerGatewayBinding`、推理强度和权限（`composerExecutionSettings`）。每个会话仍按线程记住自己的选择，和 Code 一样。
-- **同一个输入框**：`FloatingComposer` 新增 `agentSwitcher`，在 Work 助手面板和论文检索舞台打开 Code 的工具栏：`＋`（图片/文件）、Agent 菜单、权限、模型·推理。窄面板沿用 Code 输入框已有的容器查询（<640px 时工具栏分两行，权限收成图标）。
+- **同一个输入框**：`FloatingComposer` 新增 `agentSwitcher`，在 Work 助手面板和论文检索舞台打开 Code 的工具栏：`＋`（图片/文件）、Agent 菜单、权限、模型·推理。窄面板沿用 Code 输入框已有的容器查询（工具栏始终一行，放不下时逐级收起文字，权限收成图标）。
 - **Agent 菜单**：`FloatingComposerAgentModePicker` 支持 `write` 表面：Kun 分组只有一项「Kun · Work」，其他 Agent 列表、就绪状态、切换确认与 Code 完全相同。
 - **同一条发送路径**：`sendWritePrompt` 不再覆盖模型，改为 `sendMessage(…, { agentSurface: 'write', useComposerAgent: true, … })`；`sendFollowsComposerAgent(route, overrides)` 让 Work 助手的发送采用输入框的 Agent。Work 自己的 Kun 流程（批量解读、移动端）不带该标记，仍走 Kun。
 - **工作目录**：会话线程的 `workspace` 就是当前空间（`createWriteThread(space)`）。从助手发送新建的会话会像 Code 新任务一样钉住所选外部 Agent（`workAssistantThreadRoute`）；Kun 会话保持原来的默认值。
@@ -42,18 +42,22 @@
 
 ## 4 窄输入框与 @ 引用（2026-10-09 第二轮）
 
-**窄输入框**（Code 与 Work 共用，`styles/base-shell/composer-toolbar-layout.css`，按输入框自身宽度的容器查询）：
+**窄输入框**（Code 与 Work 共用，`styles/base-shell/composer-toolbar-layout.css` + `components/chat/composer-toolbar-fit.ts`）：工具栏在任何宽度都是**一行**。`composer-toolbar-fit.ts` 在工具栏尺寸或内容变化时量一遍：放不下就给 `.ds-composer-toolbar` 依次加 `data-fit-1…7`（累计），CSS 逐级收起文字，永远不隐藏已开启的动作按钮。层级按实际内容量出来（Agent 名长短、有无语音/优化、计划徽标），不是写死宽度。
 
-| 宽度 | 变化 |
+| 层级 | 收起 |
 | --- | --- |
-| ≤700px | 权限、计划等模式徽标只留图标 |
-| ≤640px | 工具栏可换行；模型 pill 去掉供应商名，只留模型名；模型按「剩余宽度」伸缩，并保留一个最小宽度（当前可见的图标/档位 + 约 4rem 模型名），放不下时整组动作换到第二行，而不是把模型名挤没 |
-| ≤520px | 上下文用量、Kun 自定义 Agent 收起（原规则） |
-| ≤440px | Agent 去掉「· Work / · Code」；模型来源图标、默认推理档位（自适应）收起，显式档位（高/低…）保留 |
-| ≤380px | Agent 只留图标（名称在 aria-label/tooltip）；「＋」缩到 2rem |
-| ≤300px | 推理档位全部收起（在模型面板里） |
+| 0 | 全量；模型名放不下时自动省略号，可见 <72px 就进入下一级 |
+| 1 | 上下文用量、Kun 自定义 Agent、Agent 的「· Work / · Code」 |
+| 2 | Agent 名称（图标 + 箭头留着，名称在 aria-label/tooltip） |
+| 3 | 模型名（来源图标 + 档位 + 箭头留着；无来源图标时用 CPU 图标顶替） |
+| 4 | 推理档位 |
+| 5 | 下拉箭头，间距收紧到 2px |
+| 6 | 「＋」、语音、优化、发送缩到 2rem |
+| 7 | 仅当 6 级仍放不下（约 <250px 且语音优化都开）：动作组换到第二行，宁可换行也不裁掉按钮 |
 
-Work 默认宽度（右栏 384px）为单行「＋ · Agent · 权限 · 模型 ▾ · 发送」，模型名完整；最窄右栏两行。语音/优化开启时动作组可再换一行，不隐藏任何已开启的按钮。`scripts/smoke-composer-scaled-controls.mjs` 的 Work 段在 240–640px × 中英文 × 自适应/高档位 × 有无语音优化下逐一断言：不重叠、不裁切、模型名至少约 9 个字符可见、≤2 行（语音优化且 <320px 时 ≤3 行）、默认宽度单行。
+容器查询仍负责与放不下无关的部分：≤700px 权限、计划等模式徽标只留图标；≤640px 模型 pill 去掉供应商名。
+
+Work 默认宽度（右栏 384px）为单行「＋ · Agent · 权限 · 模型 ▾ · 发送」。`scripts/smoke-composer-scaled-controls.mjs` 的 Work 段（240–640px）与 Agent 段（第三方 Agent，内容宽 240–640px）× 中英文 × 自适应/高档位 × 有无语音优化下逐一断言：不重叠、不裁切、模型名完整/至少约 9 个字符/整体收起、一行（仅内容宽 <220px 且语音优化都开时允许第 7 级换行）。
 
 **@ 引用文件**：Work 输入框与 Code 一样支持输入 `@` 选择当前空间里的文件或目录、从左侧「文件」树拖入、「＋ → 添加本地文件」。引用随空间（`write/work-composer-references.ts`），发送时像 Code 一样把文件内容（有上限）带进本轮并作为 `fileReferences` 传给 Agent，气泡显示用户原话；发送失败时文本和引用一并恢复。Work 的 `@` 菜单不显示 Code 项目的知识库提示，「＋」菜单不显示 Work 没有的「浏览工作区文件 / 设计文档」。
 

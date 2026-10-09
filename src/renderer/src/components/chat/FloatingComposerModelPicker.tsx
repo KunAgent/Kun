@@ -1,7 +1,7 @@
 import { AgentModelCatalogFooter } from '../ade/AgentModelCatalogFooter'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertCircle, ChevronDown, Zap } from 'lucide-react'
+import { AlertCircle, ChevronDown, Cpu, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { composerFastModeState, type ComposerFastModeState } from './composer-fast-mode'
@@ -321,7 +321,9 @@ export function FloatingComposerModelPicker({
             size={16}
             className="ds-composer-model-trigger-source h-4 w-4 shrink-0 text-ds-faint"
           />
-        ) : null}
+        ) : (
+          <Cpu className="ds-composer-model-trigger-glyph h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+        )}
         {providerLabel ? (
           <span className="ds-composer-model-trigger-provider">{providerLabel}<span aria-hidden="true"> · </span></span>
         ) : null}

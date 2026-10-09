@@ -292,7 +292,7 @@ export function FloatingComposerAgentModePicker({
             <span className="ds-composer-agent-name">{kun ? 'Kun' : controls.harnessLabel}</span>
             {kun ? <span className="ds-composer-agent-surface"> · {surfaceLabel}</span> : null}
           </span>
-          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-ds-faint transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={1.8} aria-hidden />
+          <ChevronDown className={`ds-composer-agent-chevron h-3.5 w-3.5 shrink-0 text-ds-faint transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={1.8} aria-hidden />
         </button>
       </div>
       {menu && typeof document !== 'undefined' ? createPortal(menu, document.body) : null}

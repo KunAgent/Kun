@@ -19,6 +19,7 @@ import { AdeWorktreeStartPicker } from './AdeWorktreeStartPicker'
 import { FloatingComposerAgentModePicker } from './FloatingComposerAgentModePicker'
 import { FloatingComposerNativeAgentPicker } from './FloatingComposerNativeAgentPicker'
 import { FloatingComposerAgentSettings } from './FloatingComposerAgentSettings'
+import { composerToolbarFitRef } from './composer-toolbar-fit'
 
 export function FloatingComposerSurfaceView({
   context
@@ -281,6 +282,7 @@ export function FloatingComposerSurfaceView({
             />
           ) : null}
           {runtimeReady ? <div
+            ref={composerToolbarFitRef}
             className={`ds-composer-toolbar flex min-h-9 min-w-0 items-center gap-2 ${
               showToolbarStartControls ? 'justify-between' : 'justify-end'
             }`}
