@@ -9,7 +9,7 @@ import {
 import { RoomAvatar } from './RoomAvatar'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
 import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
-import { WardrobeCardBack } from './RoomWardrobeBottle'
+import { WardrobeCardBack, WardrobeUnknownItem } from './RoomWardrobeBottle'
 import { useWardrobeOpener } from './RoomWardrobeOpening'
 import { RoomWardrobeShelf } from './RoomWardrobeShelf'
 import {
@@ -82,8 +82,10 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
       if (!part) return null
       const owned = (wardrobe.items[key] ?? 0) > 0
       const price = KUN_WARDROBE_RULES.exchangeFeathers[kunWardrobeItemRarity(key)]
-      return { art: <RoomAvatarItemArt category={category} id={id} size={40} />, locked: !owned, rarity: part.rarity,
-        title: `${part.label[language]} · ${KUN_AVATAR_RARITY_LABELS[part.rarity][language]}`,
+      // Until it is found the sheet keeps the item a secret too; trading feathers reveals it.
+      return { art: owned ? <RoomAvatarItemArt category={category} id={id} size={40} /> : <WardrobeUnknownItem size={40} />,
+        locked: !owned, rarity: part.rarity,
+        title: `${owned ? part.label[language] : t('roomsWardrobeUnknownItem')} · ${KUN_AVATAR_RARITY_LABELS[part.rarity][language]}`,
         text: owned ? part.flavor[language] : t('roomsWardrobeExchangeHint', { price, missing: Math.max(0, price - wardrobe.feathers) }),
         action: owned ? t('roomsWardrobeWearOnMe') : t('roomsWardrobeExchange'),
         enabled: owned || wardrobe.feathers >= price,

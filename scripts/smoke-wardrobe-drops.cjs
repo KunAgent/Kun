@@ -62,6 +62,8 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   const panel = page.locator('[data-wardrobe-panel="ready"]')
   await panel.waitFor({ timeout: 30_000 })
   await panel.locator('[data-wardrobe-shelf="12"]').waitFor()
+  assert(await panel.locator('[data-wardrobe-item="unknown"]').count() > 30, 'Unowned items show as unknown')
+  assert.equal(await panel.getByText('宇航头盔', { exact: true }).count(), 0, 'Unowned item names stay hidden')
   await capture('wardrobe-panel-shelf')
 
   // 4. A real ten-pull: shake, light, burst, ten flipped cards and a summary.
@@ -162,8 +164,10 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   assert(await dialog.getByRole('button', { name: '未知角色', exact: true }).count() >= 20, 'Studio shows unknown cards')
   await capture('wardrobe-studio-unknown-cards')
   await dialog.getByRole('tab', { name: '头饰', exact: true }).click()
-  const helmet = dialog.getByRole('button', { name: '宇航头盔', exact: true })
-  assert.equal(await helmet.getAttribute('data-locked'), 'true', 'Unowned items stay locked')
+  assert.equal(await dialog.getByRole('button', { name: '宇航头盔', exact: true }).count(), 0, 'Studio hides unowned item names')
+  const unknownItems = dialog.getByRole('button', { name: '未知装备', exact: true })
+  assert(await unknownItems.count() >= 5, 'Studio shows unowned items as unknown')
+  assert.equal(await unknownItems.first().getAttribute('data-locked'), 'true', 'Unknown items stay locked')
   await dialog.getByRole('tab', { name: '套装', exact: true }).click()
   await dialog.getByRole('button', { name: '侦探', exact: true }).click()
   await dialog.getByRole('button', { name: '保存', exact: true }).click()
@@ -179,6 +183,7 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
     'opening one from the shelf plays the single stage and records it in the log',
     'settings switches start on and persist changes',
     'unrevealed role cards show the card back without names, in the panel and in the studio',
+    'unowned items show as unknown, with no art or name, in the panel and in the studio',
     'an Agent turn inside the 60s interval does not drop; the Agent rail opens the same panel',
     'dressing my own avatar updates the sidebar Kun face at once',
     'a confirmed Agent look saves at once and the sidebar icon follows'] }

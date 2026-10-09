@@ -96,8 +96,6 @@
 /* Wardrobe ownership: locked items are silhouettes that only preview. */
 .rooms-avatar-option-art { position: relative; }
 .rooms-avatar-composer-option[data-locked] { cursor: not-allowed; }
-.rooms-avatar-composer-option[data-locked] .rooms-avatar-option-art > :is(img, .rooms-avatar, .rooms-avatar-item-art) { filter: brightness(0) opacity(.28); }
-[data-theme='dark'] .rooms-avatar-composer-option[data-locked] .rooms-avatar-option-art > :is(img, .rooms-avatar, .rooms-avatar-item-art) { filter: brightness(0) invert(1) opacity(.32); }
 .rooms-avatar-composer-option[data-locked] .rooms-avatar-option-name, .rooms-avatar-option-meta { color: var(--ds-text-muted); }
 .rooms-avatar-option-meta { font-size: 9.5px; line-height: 1.2; }
 .rooms-avatar-option-lock, .rooms-avatar-option-copies { position: absolute; right: 3px; bottom: 3px; display: grid; place-items: center; min-width: 18px; height: 18px;

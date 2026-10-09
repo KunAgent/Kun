@@ -25,3 +25,9 @@ export function WardrobeCardBack({ width, height }: { width: number; height: num
     {url ? <img src={url} alt="" draggable={false} decoding="async" /> : null}
   </span>
 }
+
+/** An item the user has not found yet: no art and no name, only a question mark. */
+export function WardrobeUnknownItem({ size }: { size: number }): ReactElement {
+  return <span className="rooms-wardrobe-unknown-item" style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
+    aria-hidden="true">?</span>
+}

@@ -8,6 +8,8 @@
 .rooms-wardrobe-bottle-icon > img, .rooms-wardrobe-card-back > img { display: block; width: 100%; height: 100%; object-fit: contain;
   pointer-events: none; user-select: none; }
 .rooms-wardrobe-card-back { display: grid; flex: none; place-items: center; filter: drop-shadow(0 3px 6px #0000002e); }
+.rooms-wardrobe-unknown-item { display: grid; flex: none; place-items: center; box-sizing: border-box; border: 1.5px dashed var(--ds-border);
+  border-radius: 28%; color: var(--ds-text-faint); background: var(--ds-surface-subtle); font-weight: 700; line-height: 1; user-select: none; }
 
 /* Progress strip above the studio */
 .rooms-wardrobe-strip { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--ds-border); border-radius: 14px;

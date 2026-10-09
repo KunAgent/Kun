@@ -70,6 +70,8 @@
   "roomsWardrobeFirstToday": "First of the day",
   "roomsWardrobeUnknownCard": "Unknown role",
   "roomsWardrobeUnknownCardHint": "This card is still hidden. Keep chatting with Agents or finishing Code tasks; collect its items or find it in a bottle to reveal it.",
+  "roomsWardrobeUnknownItem": "Unknown item",
+  "roomsWardrobeUnknownItemHint": "You have not found this item yet. Chats and Code tasks drop items at random; you will see what it is once you find it.",
   "roomsWardrobeCollected": "{{have}}/{{total}} collected",
   "roomsWardrobeAll": "All",
   "roomsWardrobeCardsHint": "Collect every item of a set to reveal and light its card; a bottle can also hold a whole card.",

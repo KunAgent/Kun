@@ -29,16 +29,18 @@ function Harness({ wardrobe, onSeen }: { wardrobe: KunWardrobe | null; onSeen?: 
 }
 
 describe('wardrobe-gated dress-up studio', () => {
-  it('locks unowned items as silhouettes that preview but never get worn', async () => {
+  it('shows unowned items as unknown: no name, no try-on, never worn', async () => {
     await mount(createElement(Harness, { wardrobe: starter }))
     changeCategory('headwear')
     expect(option('Headset').props['data-locked']).toBeUndefined()
-    const helmet = option('Space helmet')
-    expect(helmet.props['data-locked']).toBe(true)
-    expect(helmet.props['aria-disabled']).toBe(true)
-    act(() => helmet.props.onClick())
+    expect(option('Space helmet')).toBeUndefined()
+    const unknown = options().filter((node) => node.props['aria-label'] === 'roomsWardrobeUnknownItem')
+    expect(unknown.length).toBeGreaterThan(10)
+    expect(unknown.every((node) => node.props['data-locked'] === true && node.props['aria-disabled'] === true
+      && node.props.onPointerEnter === undefined)).toBe(true)
+    act(() => unknown[0]!.props.onClick())
     expect(preview()).toMatchObject({ parts: KUN_AVATAR_DEFAULT_PARTS })
-    expect(renderer.root.findByProps({ role: 'status' }).children.join('')).toBe('roomsWardrobeLockedHint')
+    expect(renderer.root.findByProps({ role: 'status' }).children.join('')).toBe('roomsWardrobeUnknownItemHint')
     act(() => option('Headset').props.onClick())
     expect(preview()).toMatchObject({ parts: { headwear: 'headset' } })
   })

@@ -35,15 +35,23 @@ beforeEach(() => {
 afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.unstubAllGlobals() })
 
 describe('wardrobe right panel', () => {
-  it('shows progress, today, the bottle to open, and locked items without wearing them', async () => {
+  it('shows progress, today, the bottle to open, and unknown items without names or art', async () => {
     await act(async () => { renderer = create(createElement(RoomWardrobePanel)) })
     expect(text()).toContain('roomsWardrobeStatItems')
     // The bottle waits on the shelf; one is not enough for a ten-pull.
     expect(renderer.root.findByProps({ 'data-wardrobe-shelf': 1 })).toBeDefined()
     expect(button({ 'data-shelf-open': 'one' }).props.disabled).toBe(false)
     expect(button({ 'data-shelf-open': 'ten' }).props.disabled).toBe(true)
-    act(() => button({ 'data-wardrobe-item': 'headwear/astronaut-helmet' }).props.onClick())
+    // Items not found yet stay unknown, in the grid and in the sheet: no art and no name.
+    const unknown = renderer.root.findAll((node) => node.type === 'button' && node.props['data-wardrobe-item'] === 'unknown')
+    expect(unknown.length).toBeGreaterThan(40)
+    expect(unknown.every((node) => node.props['aria-label'] === 'roomsWardrobeUnknownItem，roomsWardrobeLocked')).toBe(true)
+    expect(button({ 'data-wardrobe-item': 'glasses/square' })).toBeDefined()
+    expect(text()).not.toContain('Space helmet')
+    act(() => unknown[0]!.props.onClick())
     expect(text()).toContain('roomsWardrobeExchangeHint')
+    expect(text()).toContain('roomsWardrobeUnknownItem')
+    expect(text()).not.toContain('Space helmet')
     const trade = renderer.root.findAll((node) => node.type === 'button' && node.props.className === 'rooms-run-primary')[0]!
     expect(trade.props.disabled).toBe(true)
   })

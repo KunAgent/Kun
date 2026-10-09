@@ -70,6 +70,8 @@
   "roomsWardrobeFirstToday": "今天的第一个",
   "roomsWardrobeUnknownCard": "未知角色",
   "roomsWardrobeUnknownCardHint": "这张卡还没揭晓。继续和 Agent 聊天、做 Code 任务，集齐它的装备或直接掉落后就能看到。",
+  "roomsWardrobeUnknownItem": "未知装备",
+  "roomsWardrobeUnknownItemHint": "还没捡到这件装备。和 Agent 聊天、做 Code 任务时会随机掉落，捡到后才能看到它是什么。",
   "roomsWardrobeCollected": "已集 {{have}}/{{total}} 件",
   "roomsWardrobeAll": "全部",
   "roomsWardrobeCardsHint": "集齐一套的全部装备就会揭晓并点亮；也有小概率直接从漂流瓶里掉出来。",

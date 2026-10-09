@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Check, Lock } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITIES, KUN_AVATAR_RARITY_LABELS, KUN_WARDROBE_RULES,
@@ -8,7 +8,7 @@ import {
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
-import { WardrobeBottleIcon, WardrobeCardBack } from './RoomWardrobeBottle'
+import { WardrobeBottleIcon, WardrobeCardBack, WardrobeUnknownItem } from './RoomWardrobeBottle'
 
 export type WardrobeSelection = { kind: 'item'; key: string } | { kind: 'card'; id: string } | null
 type Language = 'zh' | 'en'
@@ -46,14 +46,24 @@ export function WardrobeItemsSection({ wardrobe, language, category, ownedOnly, 
         const owned = copies(item.key) > 0
         const part = KUN_AVATAR_CATALOG[item.category].find((entry) => entry.id === item.id)!
         const on = selection?.kind === 'item' && selection.key === item.key
+        // An item not found yet keeps its secret: no art, no name, only how rare it is.
+        if (!owned) {
+          return <button key={item.key} type="button" className="rooms-wardrobe-panel-tile rooms-wardrobe-rarity" data-rarity={item.rarity}
+            data-locked aria-pressed={on} data-wardrobe-item="unknown"
+            aria-label={`${t('roomsWardrobeUnknownItem')}，${t('roomsWardrobeLocked')}`}
+            onClick={() => onSelect(on ? null : { kind: 'item', key: item.key })}>
+            <span className="rooms-wardrobe-panel-well"><WardrobeUnknownItem size={44} /></span>
+            <Pips rarity={item.rarity} dim />
+            <span className="rooms-wardrobe-panel-name">{t('roomsWardrobeUnknownItem')}</span>
+          </button>
+        }
         return <button key={item.key} type="button" className="rooms-wardrobe-panel-tile rooms-wardrobe-rarity" data-rarity={item.rarity}
-          data-locked={!owned || undefined} aria-pressed={on} data-wardrobe-item={item.key}
-          aria-label={`${part.label[language]}，${owned ? KUN_AVATAR_RARITY_LABELS[item.rarity][language] : t('roomsWardrobeLocked')}`}
+          aria-pressed={on} data-wardrobe-item={item.key}
+          aria-label={`${part.label[language]}，${KUN_AVATAR_RARITY_LABELS[item.rarity][language]}`}
           onClick={() => onSelect(on ? null : { kind: 'item', key: item.key })}>
           <span className="rooms-wardrobe-panel-well"><RoomAvatarItemArt category={item.category} id={item.id} size={50} /></span>
-          <Pips rarity={item.rarity} dim={!owned} />
-          {owned && !wardrobe.seen.includes(item.key) ? <span className="rooms-avatar-option-new">{t('roomsWardrobeNew')}</span> : null}
-          {!owned ? <span className="rooms-wardrobe-panel-lock" aria-hidden="true"><Lock size={10} strokeWidth={2.6} /></span> : null}
+          <Pips rarity={item.rarity} />
+          {!wardrobe.seen.includes(item.key) ? <span className="rooms-avatar-option-new">{t('roomsWardrobeNew')}</span> : null}
           {copies(item.key) > 1 ? <span className="rooms-avatar-option-copies" aria-hidden="true">{t('roomsWardrobeCount', { count: copies(item.key) })}</span> : null}
           <span className="rooms-wardrobe-panel-name">{part.label[language]}</span>
         </button>

@@ -11,7 +11,7 @@ import { RoomAvatar } from './RoomAvatar'
 import { composedAvatarLayerUrl } from './room-avatar-compositor'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
 import { AVATAR_SLOTS, RoomAvatarStage } from './RoomAvatarStage'
-import { WardrobeCardBack } from './RoomWardrobeBottle'
+import { WardrobeCardBack, WardrobeUnknownItem } from './RoomWardrobeBottle'
 import { avatarForIdentity } from './room-avatar-catalog'
 import './room-avatar-composer.css'
 
@@ -178,12 +178,17 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
       {KUN_AVATAR_CATALOG[slot].filter((part) => !ownedOnly || owns(slot, part.id)).map((part) => {
         const worn = active && parts[slot] === part.id
         const owned = owns(slot, part.id), key = kunWardrobeItemKey(slot, part.id)
+        // An item not found yet keeps its secret: no art, no name, no try-on.
+        if (!owned) {
+          return card(part.id, t('roomsWardrobeUnknownItem'), false, <WardrobeUnknownItem size={48} />, () => undefined, undefined, undefined,
+            { locked: true, meta: t('roomsWardrobeLocked'), lockedHint: t('roomsWardrobeUnknownItemHint') })
+        }
         // Clicking what is already worn takes it off, like any wardrobe.
         const art = <RoomAvatarItemArt category={slot} id={part.id} size={60} />
         return card(part.id, part.label[language], worn, art,
           () => edit(slot, worn ? undefined : part.id), updateKunAvatarPart(parts, slot, part.id).parts,
           { rarity: part.rarity, flavor: part.flavor[language] },
-          { locked: !owned, fresh: owned && fresh(key), copies: wardrobe?.items[key] })
+          { fresh: fresh(key), copies: wardrobe?.items[key] })
       })}
     </>
   }
