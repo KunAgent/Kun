@@ -16,7 +16,7 @@ import { outfitBustRecipes } from './kun-avatar-outfit-bust-recipes.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const directory = resolve(root, 'src/asset/img/kun-avatar')
-const manifest = { schemaVersion: 1, version: '4', canvas: 1024,
+const manifest = { schemaVersion: 1, version: '5', canvas: 1024,
   anchors: { faceBox: [232, 300, 792, 860], compactFaceBox: [200, 236, 824, 860],
     eyeLineY: 584, beak: [512, 666] }, assetManifests: [] }
 const families = new Map()

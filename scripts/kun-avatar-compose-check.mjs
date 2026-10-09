@@ -214,11 +214,16 @@ function backgroundSvg(width, height, color) {
 async function compose(manifest, shared, root, parts, options = {}) {
   const tier = options.size <= 48 ? 128 : 512
   const keys = shared.kunAvatarLayerKeys(parts, options.legacy ? {} : options)
-  const layers = await Promise.all(keys.map(async (key) => ({
-    input: tier === 512 ? assetPath(root, manifest.assets[key].webp[tier])
-      : await sharp(assetPath(root, manifest.assets[key].webp[tier])).resize(512, 512).png().toBuffer(),
-    left: 0, top: 0
-  })))
+  const bodyClip = shared.kunAvatarBodyClip(parts)
+  const layers = await Promise.all(keys.map(async (key) => {
+    let input = await sharp(assetPath(root, manifest.assets[key].webp[tier])).resize(512, 512).png().toBuffer()
+    if (bodyClip && key === `base/${parts.color}`) {
+      const points = bodyClip.map(([x, y]) => `${x / 2},${y / 2}`).join(' ')
+      const mask = Buffer.from(`<svg width="512" height="512"><polygon points="${points}" fill="white"/></svg>`)
+      input = await sharp(input).composite([{ input: mask, blend: 'dest-in' }]).png().toBuffer()
+    }
+    return { input, left: 0, top: 0 }
+  }))
   return sharp({ create: { width: 512, height: 512, channels: 4,
     background: parts.bg === 'transparent' || parts.bg.startsWith('scene:') ? { r: 0, g: 0, b: 0, alpha: 0 } : parts.bg } })
     .composite(layers).png().toBuffer()

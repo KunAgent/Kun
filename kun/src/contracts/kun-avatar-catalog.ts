@@ -289,6 +289,25 @@ export function kunAvatarRarity(parts: KunAvatarParts): KunAvatarRarity {
 export type KunAvatarFraming = 'portrait' | 'face'
 export type KunAvatarRenderOptions = { size?: number; effects?: boolean; framing?: KunAvatarFraming }
 
+// The base painting includes resting wings. Sleeved garments paint their own
+// shoulders; keeping both silhouettes leaves blue wedges above their seams.
+const SLEEVED_OUTFITS: readonly KunAvatarOutfit[] = [
+  'black-hoodie', 'mint-hoodie', 'cream-shirt', 'cardigan', 'lab-coat', 'security-jacket',
+  'spacesuit', 'pilot-jacket', 'sailor-shirt', 'overalls', 'chef-coat', 'nurse-uniform',
+  'camera-shirt', 'storyteller-cape', 'wizard-cape', 'coffee-apron', 'robe'
+]
+const CLOTHED_BODY_CLIP = [
+  [0, 0], [1024, 0], [1024, 772], [842, 772], [824, 790], [784, 806],
+  [768, 818], [768, 1024], [256, 1024], [256, 818], [240, 806],
+  [200, 790], [182, 772], [0, 772]
+] as const
+
+/** Only clips the body layer, before the face, garment and gripping wing.
+ * Points use the common 1024px canvas, including when rendering a face crop. */
+export function kunAvatarBodyClip(parts: KunAvatarParts): readonly (readonly [number, number])[] | undefined {
+  return parts.outfit && SLEEVED_OUTFITS.includes(parts.outfit) ? CLOTHED_BODY_CLIP : undefined
+}
+
 /** Every avatar is the same square picture; only avatars smaller than 28 CSS px zoom to the face. */
 export const KUN_AVATAR_FACE_FRAMING_BELOW = 28
 export function kunAvatarFraming(size: number): KunAvatarFraming {

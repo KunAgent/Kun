@@ -1,5 +1,6 @@
 import {
   canonicalKunAvatarKey,
+  kunAvatarBodyClip,
   kunAvatarFraming,
   kunAvatarLayerKeys,
   kunAvatarScene,
@@ -89,16 +90,19 @@ export function composedAvatarLayerUrl(key: string, tier: 96 | 128 | 256 | 512):
 
 export async function composeAvatar(request: AvatarRenderRequest): Promise<AvatarCompositionResource> {
   const tier = composedAvatarSourceTier(request)
-  const urls = composedAvatarLayers(request.parts, request).map((key) => {
+  const keys = composedAvatarLayers(request.parts, request)
+  const urls = keys.map((key) => {
     const path = manifest.assets[key]?.webp[String(tier)]
     const url = path && assetUrls[`${assetPrefix}${path}`]
     if (!url) throw new Error(`Missing avatar layer: ${key} (${tier})`)
     return url
   })
+  const bodyClip = kunAvatarBodyClip(request.parts)
   return renderAvatarComposition(urls, {
     pixels: request.pixels,
     canvas: manifest.canvas,
     crop: request.framing === 'face' ? manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox : undefined,
+    layerClips: bodyClip ? { [keys.indexOf(`base/${request.parts.color}`)]: bodyClip } : undefined,
     bg: kunAvatarScene(request.parts.bg) ? 'transparent' : request.parts.bg
   })
 }

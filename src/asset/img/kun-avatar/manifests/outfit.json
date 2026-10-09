@@ -75,16 +75,16 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-worn-a.png",
+      "file": "composition-bust-shirts.png",
       "crop": {
-        "left": 836,
+        "left": 0,
         "top": 0,
-        "width": 418,
-        "height": 418
+        "width": 1254,
+        "height": 412
       },
       "registration": {
         "left": 12,
-        "top": 720,
+        "top": 758,
         "width": 1000
       }
     }
@@ -98,17 +98,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-worn-a.png",
+      "file": "composition-bust-shirts.png",
       "crop": {
         "left": 0,
-        "top": 418,
-        "width": 418,
-        "height": 418
+        "top": 430,
+        "width": 1254,
+        "height": 372
       },
       "registration": {
-        "left": 2,
-        "top": 720,
-        "width": 1020
+        "left": 12,
+        "top": 756,
+        "width": 1000
       }
     }
   },
@@ -259,17 +259,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "v2-worn-materials-b.png",
+      "file": "composition-bust-shirts.png",
       "crop": {
-        "left": 418,
-        "top": 0,
-        "width": 418,
-        "height": 418
+        "left": 0,
+        "top": 820,
+        "width": 1254,
+        "height": 377
       },
       "registration": {
-        "left": -28,
-        "top": 760,
-        "width": 1080
+        "left": 0,
+        "top": 752,
+        "width": 1024
       }
     }
   },
@@ -305,17 +305,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-worn-b.png",
+      "file": "composition-bust-workwear.png",
       "crop": {
         "left": 0,
-        "top": 418,
-        "width": 418,
-        "height": 418
+        "top": 836,
+        "width": 1254,
+        "height": 378
       },
       "registration": {
-        "left": -28,
-        "top": 760,
-        "width": 1080
+        "left": 12,
+        "top": 748,
+        "width": 1000
       }
     }
   },
@@ -328,17 +328,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-worn-b.png",
+      "file": "composition-bust-workwear.png",
       "crop": {
-        "left": 418,
-        "top": 418,
-        "width": 418,
-        "height": 418
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 414
       },
       "registration": {
-        "left": -28,
-        "top": 760,
-        "width": 1080
+        "left": 12,
+        "top": 744,
+        "width": 1000
       }
     }
   },
@@ -374,17 +374,17 @@
     },
     "canvas": 1024,
     "source": {
-      "file": "polish-worn-b.png",
+      "file": "composition-bust-workwear.png",
       "crop": {
         "left": 0,
-        "top": 836,
-        "width": 418,
-        "height": 418
+        "top": 440,
+        "width": 1254,
+        "height": 377
       },
       "registration": {
-        "left": -28,
-        "top": 760,
-        "width": 1080
+        "left": 12,
+        "top": 746,
+        "width": 1000
       }
     }
   },
