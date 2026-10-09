@@ -5,6 +5,7 @@ import type { HarnessUpdateRecipe } from '../harness-update-recipes.js'
 import type { HarnessLoginProbeDeps } from '../harness-login-probes.js'
 import type { AcpConnection } from '../../runtime/acp/acp-connection.js'
 import type { AcpConfigOption, AcpSessionModes } from '../../runtime/acp/acp-schema.js'
+import type { AcpUsage } from '../../runtime/acp/acp-usage-types.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 
 export type ProviderEnv = Record<string, string | undefined>
@@ -119,6 +120,12 @@ export type AcpSessionUsageSource = {
 export type ProviderAcpHooks = {
   /** Usage from the engine's session log when the protocol carries none. */
   readonly sessionUsage?: AcpSessionUsageSource
+  /**
+   * Usage the engine puts in the `session/prompt` result's `_meta` instead of the
+   * standard `usage` field. Returns it in ACP's own shape (`inputTokens` includes
+   * cache reads), or undefined when `meta` holds no usage.
+   */
+  promptResultUsage?(meta: Record<string, unknown>): AcpUsage | undefined
   /**
    * Variables that start the engine without the user's configuration and
    * plugins, or undefined when `message` is not a failure the engine hides.

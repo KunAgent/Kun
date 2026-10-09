@@ -84,7 +84,7 @@ import type { AcpRuntimeDeps } from './acp-runtime-deps.js'
 import { acpSessionSettings } from './acp-session-settings.js'
 import { emitTolerantSessionState } from './acp-session-state-bounds.js'
 import { harnessTurnTiming } from '../harness-turn-timing.js'
-import { beginAcpSessionUsage, collectAcpSessionUsage } from './acp-session-usage.js'
+import { acpPromptResultUsage, beginAcpSessionUsage, collectAcpSessionUsage } from './acp-session-usage.js'
 
 export class AcpRuntime implements DelegatedTurnRuntime {
   private readonly pool: AcpConnectionPool
@@ -494,7 +494,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           'session/prompt response is missing required fields'
         )
       }
-      const resultDrafts = mapper.applyPromptResult(parsed.data.usage)
+      const resultDrafts = mapper.applyPromptResult(acpPromptResultUsage(definition.id, parsed.data))
       timing.observe(resultDrafts)
       await emitter.emitAll(resultDrafts)
       await emitter.emitAll(await collectAcpSessionUsage(sessionUsage, mapper.observedFacts, { threadId, turnId, harnessId: definition.id, ...(model ? { model } : {}) }))

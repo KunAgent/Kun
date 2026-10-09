@@ -1,6 +1,7 @@
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 import { providerModule } from '../../harness/providers/registry.js'
 import type { AcpSessionUsageInput, AcpSessionUsageSource } from '../../harness/providers/provider-module.js'
+import type { AcpUsage } from './acp-usage-types.js'
 
 export type AcpSessionUsageRun = {
   source: AcpSessionUsageSource
@@ -49,5 +50,19 @@ export async function collectAcpSessionUsage(
     })
   } catch {
     return []
+  }
+}
+
+/** The prompt result's usage: the standard field, else what the engine keeps in `_meta`. */
+export function acpPromptResultUsage(
+  harnessId: string,
+  result: { usage?: AcpUsage | null; _meta?: Record<string, unknown> | null }
+): AcpUsage | null | undefined {
+  if (result.usage) return result.usage
+  if (!result._meta) return undefined
+  try {
+    return providerModule(harnessId)?.acp?.promptResultUsage?.(result._meta)
+  } catch {
+    return undefined
   }
 }

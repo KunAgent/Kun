@@ -93,6 +93,10 @@ installations. Third-party settings are not rewritten automatically.
   installer both provide it) and treats `qoder` only as an alias that is skipped
   when it points at the IDE. Every fallback (launch, login hint, update) uses
   `qodercli`/`qoderclicn`, never the bare IDE-colliding name.
+- Grok Build reports a turn's usage in the `session/prompt` result's `_meta.usage`
+  (not the standard `usage` field); Kun reads it through the provider's
+  `acp.promptResultUsage` hook. Its cost figure is list value on a subscription
+  login, so only token counts are recorded.
 - Droid bootstrap discovery reads publisher package metadata where available;
   it does not execute a self-updating version probe.
 - fx Keychain login is identified with its prompt-free status command. It is
