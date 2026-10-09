@@ -34,6 +34,9 @@ const AgentChatStage = lazy(() =>
 const AgentChatPickerHost = lazy(() =>
   import('../rooms/AgentChatPickerHost').then((module) => ({ default: module.AgentChatPickerHost }))
 )
+const WardrobePageView = lazy(() =>
+  import('../wardrobe/WardrobePageView').then((module) => ({ default: module.WardrobePageView }))
+)
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
     default: module.ExtensionManagementCenter
@@ -185,6 +188,10 @@ export function WorkbenchStageRouter({
               onToggleLeftSidebar={onToggleLeftSidebar}
               onOpenThread={onOpenThread}
             />
+          </Suspense>
+        ) : normalizedRoute === 'wardrobe' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <WardrobePageView leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} />
           </Suspense>
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>

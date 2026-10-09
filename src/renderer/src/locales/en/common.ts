@@ -54,6 +54,7 @@ import conversationManage from './common/conversation-manage.json'
 import usagePanel from './common/usage-panel.json'
 import conversationExport from './common/conversation-export.json'
 import paperSearch from './common/paper-search.json'
+import wardrobePage from './common/wardrobe-page.json'
 
 const common = {
   ...agentDispatch,
@@ -116,6 +117,7 @@ const common = {
   ...usagePanel,
   ...conversationExport,
   ...paperSearch,
+  ...wardrobePage,
   ...kun3d,
 }
 

@@ -8,7 +8,6 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'en
   t: (key: string, values?: Record<string, unknown>) => values ? `${key}:${Object.values(values).join(',')}` : key }) }))
 vi.mock('./RoomAvatar', () => ({ RoomAvatar: (props: { avatar?: RoomAvatarReference; label: string }) =>
   createElement('span', { 'data-avatar': props.avatar, 'aria-label': props.label }) }))
-vi.mock('./RoomUserAvatarEditor', () => ({ RoomUserAvatarEditor: () => createElement('div', { 'data-editor': true }) }))
 vi.mock('./RoomModal', () => ({ RoomModal: ({ children }: { children: ReactNode }) => createElement('div', { role: 'dialog' }, children) }))
 vi.mock('./rooms-client', () => ({ roomsRequest: mocks.request, roomRequestId: () => 'request-id' }))
 vi.mock('./room-user-profile', () => ({ acceptRoomUserProfile: vi.fn(),

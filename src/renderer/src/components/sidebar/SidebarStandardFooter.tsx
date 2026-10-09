@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { SidebarCommandRow, SidebarIconButton } from './SidebarPrimitives'
 import { SidebarFocusModeControl } from './SidebarFocusModeControl'
 import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from './SidebarKunFooter'
-import { SidebarWardrobeEntry } from './SidebarWardrobeEntry'
 
 function useDocumentDarkMode(): boolean {
   const [dark, setDark] = useState(
@@ -21,16 +20,15 @@ function useDocumentDarkMode(): boolean {
 }
 
 /**
- * Footer shared by the Code and Work sidebars: Kun's status, then Settings
- * beside the focus, phone and theme switches. Theme packs with their own
- * sidebar scene keep the original Focus pill instead of the status row.
+ * Footer shared by the Code and Work sidebars: Kun's status card (it opens the
+ * wardrobe page), then Settings beside the focus, phone and theme switches.
+ * Theme packs with their own sidebar scene keep the original Focus pill instead.
  */
 export function SidebarStandardFooter({
   focusModeEnabled,
   connectPhoneSidebarOpen,
   onFocusModeChange,
   onOpenSettings,
-  onOpenAgentSettings,
   onToggleConnectPhone,
   onToggleTheme
 }: {
@@ -38,7 +36,6 @@ export function SidebarStandardFooter({
   connectPhoneSidebarOpen: boolean
   onFocusModeChange: (enabled: boolean) => void
   onOpenSettings: () => void
-  onOpenAgentSettings: () => void
   onToggleConnectPhone: () => void
   onToggleTheme?: () => void
 }): ReactElement {
@@ -47,12 +44,11 @@ export function SidebarStandardFooter({
   const isDarkMode = useDocumentDarkMode()
   return (
     <div className="space-y-1">
-      <SidebarWardrobeEntry />
       {sceneFooter ? (
         <SidebarFocusModeControl enabled={focusModeEnabled} onChange={onFocusModeChange} />
       ) : !focusModeEnabled ? (
         <div className="border-b border-[var(--ds-sidebar-divider)] pb-1">
-          <SidebarKunStatus onOpen={onOpenAgentSettings} />
+          <SidebarKunStatus />
         </div>
       ) : null}
       <div className="flex items-center gap-1">

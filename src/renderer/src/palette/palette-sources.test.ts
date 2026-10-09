@@ -181,9 +181,10 @@ describe('collectPaletteSources', () => {
       .map((entry) => entry.activation.kind === 'route' ? entry.activation.route : null)
       .filter((route): route is AppRoute => Boolean(route))
     expect(routes.sort()).toEqual([
-      'board', 'chat', 'claw', 'design', 'extensions', 'plugins', 'schedule', 'settings', 'workflow', 'write'
+      'board', 'chat', 'claw', 'design', 'extensions', 'plugins', 'schedule', 'settings', 'wardrobe', 'workflow', 'write'
     ])
     expect(entries.find((entry) => entry.id === 'route:workflow')?.title).toBe('workflowCreate')
+    expect(entries.find((entry) => entry.id === 'route:wardrobe')?.title).toBe('roomsWardrobeMine')
   })
 
   it('hides the board route while the Laboratory project board switch is off', () => {

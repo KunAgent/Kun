@@ -8,7 +8,6 @@ import {
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
-import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
 import { WardrobeCardBack, WardrobeUnknownItem } from './RoomWardrobeBottle'
 import { useWardrobeOpener } from './RoomWardrobeOpening'
 import { RoomWardrobeShelf } from './RoomWardrobeShelf'
@@ -29,6 +28,8 @@ import './room-wardrobe-panel.css'
 type Tab = 'items' | 'cards' | 'log' | 'settings'
 // The 3D showcase carries the WebGL renderer, so it loads only when opened.
 const Kun3dShowcase = lazy(() => import('../kun3d/Kun3dShowcase'))
+// The page route pulls in the chat store; load it on demand so the panel stays light.
+const openWardrobePage = () => { void import('../wardrobe/wardrobe-route').then((route) => route.openWardrobePage()) }
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'items', label: 'roomsWardrobeTabItems' }, { id: 'cards', label: 'roomsWardrobeTabCards' },
   { id: 'log', label: 'roomsWardrobeTabLog' }, { id: 'settings', label: 'roomsWardrobeTabSettings' }
@@ -44,9 +45,9 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
   const [category, setCategory] = useState<KunAvatarAccessoryCategory | 'all'>('all')
   const [ownedOnly, setOwnedOnly] = useState(false)
   const [selection, setSelection] = useState<WardrobeSelection>(null)
-  const [dressing, setDressing] = useState(false), [busy, setBusy] = useState(false), [showcase, setShowcase] = useState(false)
+  const [busy, setBusy] = useState(false), [showcase, setShowcase] = useState(false)
   const [error, setError] = useState(''), [notice, setNotice] = useState('')
-  const opener = useWardrobeOpener({ onWear: wearDropOnMe, onDress: () => setDressing(true) })
+  const opener = useWardrobeOpener({ onWear: wearDropOnMe, onDress: openWardrobePage })
   useEffect(() => {
     if (!active || profile !== null) return
     void roomsRequest<RoomUserProfileDetail>('/v1/rooms/user-profile').then(acceptRoomUserProfile).catch(() => undefined)
@@ -115,7 +116,7 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
         <span className="rooms-wardrobe-panel-me-text"><strong>{t('roomsWardrobeMine')}</strong><small>{t('roomsWardrobeMineHint')}</small></span>
         {typeof window !== 'undefined' && window.kunGui?.kun3dAssets ? <button type="button" className="rooms-wardrobe-panel-dress"
           onClick={() => setShowcase(true)} title={t('kun3dOpenHint')} data-wardrobe-3d><Box size={15} aria-hidden="true" />{t('kun3dOpen')}</button> : null}
-        <button type="button" className="rooms-wardrobe-panel-dress" onClick={() => setDressing(true)} data-wardrobe-dress>
+        <button type="button" className="rooms-wardrobe-panel-dress" onClick={openWardrobePage} data-wardrobe-dress>
           <Shirt size={15} aria-hidden="true" />{t('roomsWardrobeDress')}</button>
       </div>
       <div className="rooms-wardrobe-panel-stats">
@@ -157,7 +158,6 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
       <button type="button" className="rooms-run-primary" disabled={!sheet.enabled || busy} onClick={() => void sheet.run()}>{sheet.action}</button>
     </div> : null}
     {opener.overlay}
-    {dressing ? <RoomUserAvatarEditor onClose={() => setDressing(false)} /> : null}
     {showcase ? <Suspense fallback={null}><Kun3dShowcase onClose={() => setShowcase(false)} /></Suspense> : null}
   </div>
 }

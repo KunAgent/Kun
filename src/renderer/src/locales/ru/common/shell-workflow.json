@@ -657,7 +657,7 @@
   "sidebarKunStatusReady": "Готов",
   "sidebarKunStatusStarting": "Запуск…",
   "sidebarKunStatusOffline": "Нет подключения",
-  "sidebarKunStatusOpen": "Открыть настройки Kun",
+  "sidebarKunStatusOpen": "Открыть мой гардероб",
   "mobileCodeSegmentTasks": "Задачи",
   "mobileCodeSegmentChats": "Беседы"
 }

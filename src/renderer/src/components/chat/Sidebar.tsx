@@ -174,7 +174,6 @@ export function Sidebar({
           connectPhoneSidebarOpen={connectPhoneSidebarOpen}
           onFocusModeChange={onFocusModeChange}
           onOpenSettings={() => onOpenSettings('general')}
-          onOpenAgentSettings={() => onOpenSettings('agents')}
           onToggleConnectPhone={onToggleConnectPhone}
           onToggleTheme={onToggleTheme}
         />

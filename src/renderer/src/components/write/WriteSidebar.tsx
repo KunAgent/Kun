@@ -72,7 +72,6 @@ export function WriteSidebar({
             connectPhoneSidebarOpen={connectPhoneSidebarOpen}
             onFocusModeChange={onFocusModeChange}
             onOpenSettings={() => onOpenSettings('write')}
-            onOpenAgentSettings={() => onOpenSettings('agents')}
             onToggleConnectPhone={onToggleConnectPhone}
             onToggleTheme={onToggleTheme}
           />

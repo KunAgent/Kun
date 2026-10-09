@@ -9,6 +9,7 @@ import { ExtensionViewOutlet } from '../../extensions/ControlledContributionSurf
 import { normalizeWorkbenchRoute } from './workbench-route'
 import { workbenchDividerClassName } from './workbench-divider'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { useWardrobeRoute } from '../wardrobe/wardrobe-route'
 
 type CodeSidebarProps = ComponentProps<typeof Sidebar>
 
@@ -114,8 +115,11 @@ export function WorkbenchLeftSidebar({
 }: WorkbenchLeftSidebarProps): ReactElement | null {
   const { t } = useTranslation('common')
   const remoteMobile = useRemoteMobileLayout()
+  // The wardrobe page keeps the sidebar of the mode it was opened from.
+  const wardrobeFromWork = useWardrobeRoute((state) => state.returnRoute === 'write')
   if (collapsed) return null
   const normalizedRoute = normalizeWorkbenchRoute(route)
+  const wardrobe = normalizedRoute === 'wardrobe'
   // On a phone the sidebar is an overlay drawer: navigation actions and the
   // backdrop both collapse it again (onBackdropClose toggles collapsed state).
   const close = (): void => { onBackdropClose?.() }
@@ -135,7 +139,7 @@ export function WorkbenchLeftSidebar({
           workspaceRoot={workspaceRoot}
           onClose={wrapCloseOpt(onCloseExtensionView)}
         />
-      ) : normalizedRoute === 'write' ? (
+      ) : normalizedRoute === 'write' || (wardrobe && wardrobeFromWork) ? (
         <Suspense fallback={<SidebarFallback />}>
           <WriteSidebar
             activeView="write"
@@ -152,7 +156,7 @@ export function WorkbenchLeftSidebar({
       ) : (
         <Sidebar
           threads={codeThreads}
-          activeThreadId={route === 'agent-chat' ? null : activeThreadId}
+          activeThreadId={route === 'agent-chat' || wardrobe ? null : activeThreadId}
           activeView={sidebarView === 'ade' ? 'chat' : sidebarView}
           connectPhoneSidebarOpen={connectPhoneSidebarOpen}
           connectPhoneInitialTarget={connectPhoneInitialTarget}

@@ -657,7 +657,7 @@
   "sidebarKunStatusReady": "준비됨",
   "sidebarKunStatusStarting": "시작 중…",
   "sidebarKunStatusOffline": "연결되지 않음",
-  "sidebarKunStatusOpen": "Kun 설정 열기",
+  "sidebarKunStatusOpen": "내 옷장 열기",
   "mobileCodeSegmentTasks": "작업",
   "mobileCodeSegmentChats": "대화"
 }

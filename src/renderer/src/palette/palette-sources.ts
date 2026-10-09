@@ -26,6 +26,7 @@ import {
   Search,
   SearchCode,
   Settings,
+  Shirt,
   Smartphone,
   Sparkles,
   Target,
@@ -109,7 +110,8 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   board: 'projectBoardNav',
   schedule: 'schedule',
   workflow: 'workflowCreate',
-  ade: 'workspaceModeAdeLabel'
+  ade: 'workspaceModeAdeLabel',
+  wardrobe: 'roomsWardrobeMine'
 }
 
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
@@ -125,7 +127,8 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   board: Columns3,
   schedule: Clock3,
   workflow: Workflow,
-  ade: Network
+  ade: Network,
+  wardrobe: Shirt
 }
 
 /**

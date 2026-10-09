@@ -657,7 +657,7 @@
   "sidebarKunStatusReady": "พร้อมใช้งาน",
   "sidebarKunStatusStarting": "กำลังเริ่ม…",
   "sidebarKunStatusOffline": "ไม่ได้เชื่อมต่อ",
-  "sidebarKunStatusOpen": "เปิดการตั้งค่า Kun",
+  "sidebarKunStatusOpen": "เปิดตู้เสื้อผ้าของฉัน",
   "mobileCodeSegmentTasks": "งาน",
   "mobileCodeSegmentChats": "บทสนทนา"
 }

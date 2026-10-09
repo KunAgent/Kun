@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatStore } from '../../store/chat-store'
 import { useUiPluginStore } from '../../store/ui-plugin-store'
 import { acceptRoomUserProfile, useRoomUserProfile } from '../rooms/room-user-profile'
+import { acceptWardrobe } from '../rooms/room-wardrobe'
+import { useWardrobeRoute } from '../wardrobe/wardrobe-route'
+import { createKunWardrobe, type KunWardrobeDrop } from '@shared/rooms-api'
 import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from './SidebarKunFooter'
 
 const roomsRequest = vi.hoisted(() => vi.fn())
@@ -39,7 +42,7 @@ describe('Sidebar Kun footer', () => {
     setReactActEnvironment(false)
   })
 
-  it('shows the runtime state beside the Kun face and opens Kun settings', async () => {
+  it('shows the runtime state beside the Kun face and calls a custom open handler', async () => {
     const onOpen = vi.fn()
     useChatStore.setState({ runtimeConnection: 'ready' })
     await act(async () => root.render(createElement(SidebarKunStatus, { onOpen })))
@@ -51,6 +54,37 @@ describe('Sidebar Kun footer', () => {
     expect(button.textContent).toContain('sidebarKunStatusOffline')
     await act(async () => button.click())
     expect(onOpen).toHaveBeenCalledOnce()
+  })
+
+  it('opens the wardrobe page, shows it selected, and goes back on a second click', async () => {
+    useChatStore.setState({ route: 'write' })
+    useWardrobeRoute.setState({ returnRoute: 'chat' })
+    await act(async () => root.render(createElement(SidebarKunStatus)))
+    const button = container.querySelector<HTMLButtonElement>('.ds-sidebar-kun-status')!
+    expect(button.title).toBe('sidebarKunStatusOpen')
+    await act(async () => button.click())
+    expect(useChatStore.getState().route).toBe('wardrobe')
+    expect(button.dataset.active).toBe('true')
+    expect(button.getAttribute('aria-current')).toBe('page')
+    await act(async () => button.click())
+    expect(useChatStore.getState().route).toBe('write')
+    expect(button.dataset.active).toBeUndefined()
+  })
+
+  it('carries the bottles waiting on the shelf, gold once a ten-pull is ready', async () => {
+    const drop = (index: number): KunWardrobeDrop => ({ id: `drop-${index}`, kind: 'item', rarity: 'common', item: { category: 'prop', id: 'book' },
+      duplicate: false, feathers: 0, runId: `run-${index}`, createdAt: new Date(2026, 9, 10, 9, index).toISOString() })
+    const wardrobe = createKunWardrobe(1)
+    await act(async () => acceptWardrobe({ wardrobe: { ...wardrobe, pending: [1, 2, 3].map(drop) }, revision: 1 }))
+    await act(async () => root.render(createElement(SidebarKunStatus)))
+    const badge = () => container.querySelector<HTMLElement>('[data-sidebar-bottles]')
+    expect(badge()?.dataset.sidebarBottles).toBe('3')
+    expect(badge()?.dataset.ready).toBeUndefined()
+    await act(async () => acceptWardrobe({ wardrobe: { ...wardrobe, pending: Array.from({ length: 11 }, (_, index) => drop(index)) }, revision: 2 }))
+    expect(badge()?.dataset.ready).toBe('true')
+    expect(badge()?.textContent).toContain('wardrobePageBadgeReady')
+    await act(async () => acceptWardrobe({ wardrobe, revision: 3 }))
+    expect(badge()).toBeNull()
   })
 
   it('shows the avatar the user dresses and follows every change to it', async () => {

@@ -1,5 +1,6 @@
 'use strict'
 const assert = require('node:assert/strict')
+const { exerciseWardrobePage } = require('./smoke-wardrobe-page.cjs')
 
 // Runs only inside smoke-development-direct-chat's isolated Electron + Kun
 // profile with the offline model fixture and a debug shelf of 11 bottles. The
@@ -37,7 +38,7 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   const card = page.locator(`.rooms-wardrobe-drop[data-wardrobe-drop="${dropped.id}"]`)
   await card.waitFor({ timeout: 30_000 })
   assert.equal(await card.getAttribute('data-rarity'), null, 'The chat card does not hint the rarity')
-  await page.locator('[data-sidebar-wardrobe="12"]').waitFor()
+  await page.locator('[data-sidebar-bottles="12"][data-ready]').waitFor()
   await capture('wardrobe-code-drop')
 
   // 2. "Put on shelf" keeps it unopened and the card goes away.
@@ -45,19 +46,9 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await card.waitFor({ state: 'hidden' })
   assert((await request(page, '/v1/rooms/wardrobe')).wardrobe.pending.find((drop) => drop.id === dropped.id).stashedAt, 'stashed')
 
-  // 3. The sidebar shelf opens the idle stage; the rail opens the panel with the shelf.
-  await page.locator('[data-sidebar-wardrobe="12"]').click()
+  // 3. The sidebar avatar card opens the wardrobe page (and goes back); the rail opens the panel with the shelf.
+  await exerciseWardrobePage({ page, request, poll, capture, stage: 'shelf' })
   const stage = page.locator('dialog.kun-gacha')
-  await stage.waitFor()
-  assert.equal(await stage.getAttribute('data-phase'), 'idle')
-  // The app zooms <body>; the stage must still cover the whole window.
-  const cover = await stage.evaluate((node) => { const rect = node.getBoundingClientRect(); return [rect.width, rect.height, innerWidth, innerHeight] })
-  assert(Math.abs(cover[0] - cover[2]) < 2 && Math.abs(cover[1] - cover[3]) < 2, `Stage covers the window: ${cover}`)
-  const title = await stage.locator('.kun-gacha-title').boundingBox()
-  assert(title && title.x >= 88, `The stage title stays clear of the traffic lights: ${JSON.stringify(title)}`)
-  await capture('wardrobe-stage-idle')
-  await stage.locator('.kun-gacha-close').click()
-  await stage.waitFor({ state: 'detached' })
   const railEntry = page.locator('[data-rail-entry="builtin:right-panel-wardrobe"]')
   await railEntry.locator('[data-rail-badge="12"]').waitFor()
   await railEntry.click()
@@ -73,6 +64,11 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await panel.locator('[data-shelf-open="ten"]').click()
   await stage.waitFor()
   await poll(async () => (await stage.getAttribute('data-phase')) === 'charge', 10_000, 'bottles light up')
+  // The app zooms <body>; the stage must still cover the whole window.
+  const cover = await stage.evaluate((node) => { const rect = node.getBoundingClientRect(); return [rect.width, rect.height, innerWidth, innerHeight] })
+  assert(Math.abs(cover[0] - cover[2]) < 2 && Math.abs(cover[1] - cover[3]) < 2, `Stage covers the window: ${cover}`)
+  const title = await stage.locator('.kun-gacha-title').boundingBox()
+  assert(title && title.x >= 88, `The stage title stays clear of the traffic lights: ${JSON.stringify(title)}`)
   await capture('wardrobe-ten-charge')
   await poll(async () => (await stage.getAttribute('data-phase')) === 'reveal', 10_000, 'cards are dealt')
   await poll(async () => (await stage.getAttribute('data-phase')) === 'table', 10_000, 'cards wait face down')
@@ -155,22 +151,8 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await page.locator('[data-room-tool="wardrobe"]').click()
   await page.locator('[data-wardrobe-panel="ready"]').waitFor()
 
-  // 8b. Dressing my own avatar in the wardrobe updates the sidebar Kun face at once.
-  const footerFace = page.locator('.ds-sidebar-kun-status .ds-sidebar-kun-face')
-  const faceHtml = () => footerFace.evaluate((node) => node.innerHTML)
-  const faceBefore = await faceHtml()
-  await page.locator('[data-wardrobe-panel="ready"] [data-wardrobe-dress]').click()
-  const mine = page.locator('.rooms-init-dialog[data-size="wide"][aria-label="我的头像"]')
-  await mine.waitFor()
-  const tenButton = await mine.locator('.rooms-wardrobe-strip [data-shelf-open="ten"]').boundingBox()
-  assert(tenButton && tenButton.height < 40, `The strip's ten-pull button stays on one line: ${JSON.stringify(tenButton)}`)
-  await capture('wardrobe-my-avatar-strip')
-  await mine.getByRole('tab', { name: '套装', exact: true }).click()
-  await mine.getByRole('button', { name: '侦探', exact: true }).click()
-  await mine.getByRole('button', { name: '保存', exact: true }).click()
-  await mine.waitFor({ state: 'hidden' })
-  await poll(async () => (await faceHtml()) !== faceBefore, 15_000, 'sidebar Kun face follows my avatar')
-  await capture('wardrobe-my-avatar-footer')
+  // 8b. The panel's dress button opens the page; wearing a set there updates the sidebar Kun face at once.
+  await exerciseWardrobePage({ page, request, poll, capture, stage: 'dress' })
 
   // 9. The Agent studio hides unrevealed cards and applies a confirmed look at once.
   const agentId = (await request(page, '/v1/agents?limit=20')).agents.find((agent) => agent.name === '小 Kun').id
@@ -201,7 +183,7 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await capture('wardrobe-agent-avatar-applied')
   const result = { native: true, offline: true, threadId, roomId, drop: dropped, assertions: [
     'drops default on, Code tasks included; the first finished Code task of the day drops a bottle without hinting its rarity',
-    'put on shelf keeps it unopened; the sidebar shelf opens the idle stage; the rail badge counts the shelf',
+    'put on shelf keeps it unopened; the sidebar avatar card counts the shelf and opens the wardrobe page; the rail badge counts the shelf',
     'a real ten-pull deals ten face-down flash cards; one click flips one, flip all turns the rest, a flipped card opens up close',
     'the stage title is centered clear of the window traffic lights',
     'opening one from the shelf plays the single stage and records it in the log',
@@ -209,7 +191,7 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
     'unrevealed role cards show the card back without names, in the panel and in the studio',
     'unowned items show as unknown, with no art or name, in the panel and in the studio',
     'an Agent turn inside the 60s interval does not drop; the Agent rail opens the same panel',
-    'dressing my own avatar updates the sidebar Kun face at once',
+    'the wardrobe page tries items on when hovered, wears with a click, can undo, and its look syncs to the sidebar Kun face at once',
     'a confirmed Agent look saves at once and the sidebar icon follows'] }
   await recordDiagnostic('wardrobe-drops', result)
   return result
