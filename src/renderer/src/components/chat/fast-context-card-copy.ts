@@ -22,6 +22,8 @@ function readDetailString(detail: string | undefined, key: string): string | und
 }
 
 export function isFastContextToolBlock(block: ToolBlock): boolean {
+  // Another Agent's `explore` subagent is not Kun's repository explorer.
+  if (block.meta?.externalSubagent) return false
   const toolName = typeof block.meta?.toolName === 'string' ? block.meta.toolName.trim() : ''
   if (toolName === 'fast_context' || toolName === 'explore_agent') return true
   if (readDetailString(block.detail, 'profile') === 'explore') return true

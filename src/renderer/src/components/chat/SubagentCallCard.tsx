@@ -4,7 +4,6 @@ import { Check, ChevronDown, ChevronRight, Eye, Hourglass, Loader2, RotateCcw } 
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { BUILTIN_AGENT_CATALOG_BY_ID } from '../../../../../kun/src/delegation/builtin-agent-catalog'
-import { AgentKun } from '../subagents/AgentKun'
 import {
   SubagentLiveAvatar as AvatarDisc,
   SubagentLivenessLane as LaneHairline,
@@ -22,6 +21,8 @@ import {
   splitTaskLine
 } from './fast-context-card-copy'
 import {
+  ExternalSubagentAvatar,
+  SwarmClusterAvatar,
   ExternalSubagentNotice,
   externalAgentIdentity,
   externalPoseId,
@@ -123,7 +124,7 @@ export function SubagentCallCard({
   // Keep the task label and the selected agent identity separate. The runtime
   // snapshot is authoritative for custom/generated roles; built-ins may use a
   // localized catalog label without consulting mutable profile settings.
-  const taskText = block.kind === 'tool' ? splitTaskLine(block as ToolBlock) : undefined
+  const taskText = block.kind === 'tool' && !external ? splitTaskLine(block as ToolBlock) : undefined
   const exploreCatalog = BUILTIN_AGENT_CATALOG_BY_ID.explore
   const recordedAgentName = child.childProfileName || detail.profileName || detail.generatedAgentName
   const localizedBuiltinName =
@@ -286,7 +287,8 @@ export function SubagentCallCard({
         }`} data-subagent-header
       >
         <span className="ds-subagent-focus-decoration contents">
-          <AvatarDisc poseId={poseId} status={status} hue={hue} compact={compact} animate={animate} />
+          {external ? <ExternalSubagentAvatar view={external} compact={compact} running={animate} />
+            : <AvatarDisc poseId={poseId} status={status} hue={hue} compact={compact} animate={animate} />}
         </span>
         <div className="min-w-0 flex-1" data-subagent-title>
           <div className="flex min-w-0 items-center gap-2">
@@ -575,12 +577,8 @@ export function SubagentGroup({
     )
   }
 
-  const clusterPoses = sorted.slice(0, 5).map((b) => {
-    const c = readChildMeta(b)
-    const d = parseDelegateDetail(b.kind === 'tool' ? (b as ToolBlock).detail : undefined)
-    return c.childProfile || d.profile || c.childLabel || c.childId || 'custom'
-  })
-  const overflow = sorted.length - clusterPoses.length
+  const clusterBlocks = sorted.slice(0, 5)
+  const overflow = sorted.length - clusterBlocks.length
 
   const summaryParts: string[] = []
   if (running > 0) summaryParts.push(t('subagentSwarmRunning', { count: running }))
@@ -609,18 +607,7 @@ export function SubagentGroup({
           ) : null}
         </span>
         <span className="ds-subagent-focus-decoration flex shrink-0">
-          {clusterPoses.map((pose, i) => (
-            <span
-              key={`${pose}-${i}`}
-              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-ds-card"
-              style={{
-                marginLeft: i === 0 ? 0 : -8,
-                background: 'radial-gradient(circle at 50% 36%,#fff,#eef4fb)'
-              }}
-            >
-              <AgentKun id={pose} className="h-5 w-5" />
-            </span>
-          ))}
+          {clusterBlocks.map((b, i) => <SwarmClusterAvatar key={b.id} block={b} index={i} />)}
           {overflow > 0 ? (
             <span
               className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-ds-card bg-ds-card-muted text-[9px] font-semibold text-ds-muted"

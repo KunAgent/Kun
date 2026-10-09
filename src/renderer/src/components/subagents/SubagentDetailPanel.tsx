@@ -9,6 +9,7 @@ import { mergeKunRuntimeSettings } from '@shared/app-settings-kun-merge'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { emitRendererSettingsChanged } from '../../lib/keyboard-shortcut-settings'
 import { SubagentPanelHeader, SubagentSettingsEditor } from './SubagentSettingsEditor'
+import { ConversationSubagentList } from './ConversationSubagentList'
 
 type Props = {
   className?: string
@@ -78,6 +79,7 @@ export function SubagentDetailPanel({ className, onCollapse }: Props): ReactElem
   return (
     <div className={`ds-no-drag flex h-full min-h-0 flex-col overflow-hidden bg-ds-sidebar ${className ?? ''}`}>
       <SubagentPanelHeader onCollapse={onCollapse} />
+      <ConversationSubagentList />
       {error ? (
         <div role="alert" className="mx-3 mt-3 flex items-start gap-2 rounded-lg border border-red-300/70 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-800 dark:border-red-700/60 dark:bg-red-950/30 dark:text-red-200">
           <span className="min-w-0 flex-1 break-words">{error}</span>
