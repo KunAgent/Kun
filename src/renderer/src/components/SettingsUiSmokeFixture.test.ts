@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { act } from 'react'
+import type { Root } from 'react-dom/client'
 import { afterAll, expect, it, vi } from 'vitest'
 
 // A contract/render check only. Native geometry, accessible names, focus and
@@ -14,7 +16,11 @@ HTMLElement.prototype.scrollIntoView = () => undefined
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 document.body.innerHTML = '<div id="root"></div>'
 
-afterAll(() => vi.unstubAllGlobals())
+let root: Root | undefined
+afterAll(async () => {
+  await act(async () => root?.unmount())
+  vi.unstubAllGlobals()
+})
 
 async function waitUntil(test: () => boolean): Promise<void> {
   await vi.waitFor(() => expect(test(), `${errors.join('\n')}\n${document.body.textContent?.slice(0, 3000)}`).toBe(true), { timeout: 20_000, interval: 20 })
@@ -25,7 +31,7 @@ async function settled(): Promise<void> {
 }
 
 it('renders all real SettingsView destinations and every discovered nested tab offline', async () => {
-  await import('./SettingsUiSmokeFixture')
+  root = (await import('./SettingsUiSmokeFixture')).fixtureRoot
   await waitUntil(() => !!document.querySelector('[data-settings-category-view="general"]'))
   const categories = [...document.querySelectorAll<HTMLButtonElement>('[data-settings-category]')]
     .map(element => element.dataset.settingsCategory!)

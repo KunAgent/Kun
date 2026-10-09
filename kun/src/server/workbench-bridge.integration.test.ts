@@ -9,7 +9,7 @@ import { startServiceManager } from '../manager/service-manager.js'
 import { startKunServe } from './runtime-factory.js'
 import { heartbeatRuntimeWithManager } from '../manager/manager-client.js'
 import type { RoomMessage } from '../contracts/rooms.js'
-import type { WorkbenchLink } from '../contracts/workbench-links.js'
+import type { WorkbenchLink, WorkbenchLinkEntry } from '../contracts/workbench-links.js'
 import type { ThreadSummary } from '../contracts/threads.js'
 
 const exec = promisify(execFile)
@@ -125,6 +125,16 @@ async function boot(root: string, model: { baseUrl: string }) {
   return { api }
 }
 
+async function waitForDispatchProposal(api: Awaited<ReturnType<typeof boot>>['api'], path: string) {
+  // The card is published before dispatch binding advances its revision.
+  return vi.waitFor(async () => {
+    const { link } = await api<{ link: WorkbenchLinkEntry }>(path)
+    expect(link.status).toBe('awaiting_confirmation')
+    expect(link.dispatchIntentId).toBeTruthy()
+    return link
+  }, { timeout: 40000, interval: 300 })
+}
+
 async function gitProject(root: string): Promise<string> {
   const project = join(root, 'project')
   await exec('git', ['init', '-b', 'develop', project])
@@ -157,7 +167,7 @@ describe('Bot to Code hand-off through the real managed Runtime', () => {
       expect(card).toBeTruthy()
     }, { timeout: 40000, interval: 300 })
     const linkPath = `/v1/rooms/${entry.roomId}/workbench-links/${card.workbenchLinkId}`
-    const proposed = (await api<{ link: WorkbenchLink & { revision: number } }>(linkPath)).link
+    const proposed = await waitForDispatchProposal(api, linkPath)
     expect(proposed).toMatchObject({ kind: 'code_task', status: 'awaiting_confirmation', request: { title: 'Create the smoke file', report: 'final' } })
     expect(model.seen.workbenchToolsAdvertised).toContain('create_code_task') // the first step may already hand work over
     await expect(readFile(join(project, 'bridge-smoke.txt'))).rejects.toThrow()
@@ -242,7 +252,7 @@ describe('Bot to Code hand-off through the real managed Runtime', () => {
       expect(card).toBeTruthy()
     }, { timeout: 40000, interval: 300 })
     const path = `/v1/rooms/${entry.roomId}/workbench-links/${card.workbenchLinkId}`
-    const proposed = (await api<{ link: WorkbenchLink & { revision: number } }>(path)).link
+    const proposed = await waitForDispatchProposal(api, path)
     await api(`${path}/confirm`, { clientRequestId: 'accept-auto', expectedRevision: proposed.revision })
     await vi.waitFor(async () => {
       const current = (await api<{ link: WorkbenchLink }>(path)).link

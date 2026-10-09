@@ -17,6 +17,23 @@ function RoomsFallbackHarness() {
   return null
 }
 
+async function traverseHistory(direction: 'back' | 'forward', search: string, events = 1) {
+  // A rejected traversal emits a second popstate when the original entry is restored.
+  const onPopState = vi.fn()
+  window.addEventListener('popstate', onPopState)
+  try {
+    await act(async () => {
+      window.history[direction]()
+      await vi.waitFor(() => {
+        expect(onPopState).toHaveBeenCalledTimes(events)
+        expect(window.location.search).toBe(search)
+      })
+    })
+  } finally {
+    window.removeEventListener('popstate', onPopState)
+  }
+}
+
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   window.history.replaceState({ existing: true }, '', '/')
@@ -61,16 +78,10 @@ describe('mobile navigation lifecycle', () => {
     act(() => root.render(createElement(Harness)))
     act(() => navigation.navigate({ mode: 'code', kind: 'home' }))
     guardRef.current = vi.fn(async () => false)
-    await act(async () => {
-      window.history.back()
-      await new Promise((resolve) => setTimeout(resolve, 30))
-    })
+    await traverseHistory('back', '?mode=code&mobile=home', 2)
     expect(navigation.page).toEqual({ mode: 'code', kind: 'home' })
     guardRef.current = vi.fn(async () => true)
-    await act(async () => {
-      window.history.back()
-      await new Promise((resolve) => setTimeout(resolve, 30))
-    })
+    await traverseHistory('back', '?mode=work&mobile=resource&resource=doc&view=edit')
     expect(navigation.page).toEqual({ mode: 'work', kind: 'resource', resourceKey: 'doc', view: 'edit' })
   })
   it('restores the current page when a leave guard throws', async () => {
@@ -78,10 +89,7 @@ describe('mobile navigation lifecycle', () => {
     act(() => root.render(createElement(Harness)))
     act(() => navigation.navigate({ mode: 'code', kind: 'home' }))
     guardRef.current = () => { throw new Error('save failed') }
-    await act(async () => {
-      window.history.back()
-      await new Promise((resolve) => setTimeout(resolve, 30))
-    })
+    await traverseHistory('back', '?mode=code&mobile=home', 2)
     expect(navigation.page).toEqual({ mode: 'code', kind: 'home' })
     expect(window.location.search).toBe('?mode=code&mobile=home')
   })
@@ -90,23 +98,14 @@ describe('mobile navigation lifecycle', () => {
     guardRef.current = () => true
     act(() => root.render(createElement(Harness)))
     act(() => navigation.navigate({ mode: 'code', kind: 'home' }))
-    await act(async () => {
-      window.history.back()
-      await new Promise((resolve) => setTimeout(resolve, 30))
-    })
+    await traverseHistory('back', '?mode=work&mobile=resource&resource=doc&view=edit')
     expect(navigation.page).toEqual({ mode: 'work', kind: 'resource', resourceKey: 'doc', view: 'edit' })
     guardRef.current = () => false
-    await act(async () => {
-      window.history.forward()
-      await new Promise((resolve) => setTimeout(resolve, 30))
-    })
+    await traverseHistory('forward', '?mode=work&mobile=resource&resource=doc&view=edit', 2)
     expect(navigation.page).toEqual({ mode: 'work', kind: 'resource', resourceKey: 'doc', view: 'edit' })
     expect(window.location.search).toContain('mobile=resource')
     guardRef.current = () => true
-    await act(async () => {
-      window.history.forward()
-      await new Promise((resolve) => setTimeout(resolve, 30))
-    })
+    await traverseHistory('forward', '?mode=code&mobile=home')
     expect(navigation.page).toEqual({ mode: 'code', kind: 'home' })
   })
   it('canonicalizes invalid targets consistently with refresh', () => {

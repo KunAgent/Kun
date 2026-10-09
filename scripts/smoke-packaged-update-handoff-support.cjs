@@ -100,6 +100,15 @@ function buildSmokeSettings({ dataDir, port, runtimeToken, workspaceRoot, baseUr
   return {
     version: 1,
     workspaceRoot,
+    provider: {
+      providers: [{
+        id: 'deepseek',
+        models: [MODEL_NAME],
+        modelProfiles: {
+          [MODEL_NAME]: { contextWindowTokens: 64_000 }
+        }
+      }]
+    },
     agents: {
       kun: {
         dataDir,

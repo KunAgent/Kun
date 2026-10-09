@@ -93,7 +93,8 @@ Object.assign(window, { settingsFixture: {
     ]
   }
 } })
-createRoot(document.getElementById('root')!).render(
+export const fixtureRoot = createRoot(document.getElementById('root')!)
+fixtureRoot.render(
   <ExtensionSettingsServiceProvider service={service}>
     <div style={{ width: '100%', height: '100%', minWidth: 0 }}><SettingsView /></div>
     <aside aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0 }}>

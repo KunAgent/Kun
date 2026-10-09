@@ -275,10 +275,12 @@ describe('restart continuation and queued model history', () => {
     await h.turns.pauseQueuedTurns('thread-test', 'restart_recovery', a.turnId)
     await h.turns.finishTurn({ threadId: 'thread-test', turnId: a.turnId, status: 'failed', code: 'orphaned_after_restart' })
     expect(await h.loop.resumeInterruptedTurns([{ threadId: 'thread-test', turnId: a.turnId }])).toBe(1)
-    await vi.waitFor(() => expect(h.seen).toHaveLength(2))
+    // Wait for the durable outcome, including Manager I/O and lease release.
+    await vi.waitFor(async () => expect((await h.threadStore.get('thread-test'))?.turns
+      .find((turn) => turn.id === b.turnId)?.status).toBe('completed'), { timeout: 10000 })
+    expect(h.seen).toHaveLength(2)
     expect(h.seen[0]).toContain('Continue the task that was interrupted')
     expect(h.seen[1]).toBe('B')
     expect(latestExecutedTurn(await h.threadStore.get('thread-test'))?.id).toBe(b.turnId)
-    await vi.waitFor(async () => expect((await h.threadStore.get('thread-test'))?.turns.find((turn) => turn.id === b.turnId)?.status).toBe('completed'))
-  })
+  }, 20000)
 })

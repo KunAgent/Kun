@@ -31,7 +31,7 @@ const stores: TaskWorkspaceStore[] = []
 
 afterEach(async () => {
   await Promise.all(stores.splice(0).map((store) => store.flush()))
-  while (roots.length) await rm(roots.pop()!, { recursive: true, force: true })
+  while (roots.length) await rm(roots.pop()!, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 async function git(cwd: string, args: string[]): Promise<void> {
@@ -45,6 +45,7 @@ async function gitOutput(cwd: string, args: string[]): Promise<string> {
 async function initRepo(dir: string, files: Record<string, string>): Promise<string> {
   await mkdir(dir, { recursive: true })
   await git(dir, ['init', '-b', 'main'])
+  await git(dir, ['config', 'core.autocrlf', 'false'])
   await git(dir, ['config', 'user.email', 'twi-test@example.test'])
   await git(dir, ['config', 'user.name', 'TW Integration'])
   for (const [name, content] of Object.entries(files)) {

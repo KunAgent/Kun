@@ -36,7 +36,7 @@ describe('room SDK execution boundary', () => {
     const h = makeHarness(model, { sdkRuntime })
     const thread = await h.threads.create({ title: 'Room', workspace: '/tmp', model: 'test', mode: 'agent' }, {
       relation: 'side', roomContext: { roomId: 'room', memberId: 'member', participantAgentId: 'agent',
-        kind: 'conversation', blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: [] }
+        kind: 'execution', blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: [] }
     })
     const turn = await h.turns.startTurn({ threadId: thread.id, request: { prompt: 'Work' } })
     await h.loop.runTurn(thread.id, turn.turnId)

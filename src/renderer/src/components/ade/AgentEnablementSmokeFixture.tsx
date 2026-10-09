@@ -67,7 +67,10 @@ Object.assign(window, { agentEnablementFixture: {
     if (!busy) { for (const resolve of navigationWaiters) resolve(); navigationWaiters.clear() }
   },
   reopen(): void { opened = true; useHarnessStore.setState({ settingsHarnessId: 'pi' }); refresh() },
-  language: (language: string) => i18n.changeLanguage(language),
+  async language(language: string): Promise<void> {
+    await i18n.changeLanguage(language)
+    document.documentElement.lang = language
+  },
   theme(theme: 'light' | 'dark'): void {
     // Use the saved host state and its renderer settings event. SettingsView
     // applies data-theme itself, including after later saves and remounts.
@@ -88,4 +91,5 @@ function Fixture() {
   </main>
 }
 useHarnessStore.setState({ rows: runtime.rows(), rowsLoadedAt: Date.now(), settingsHarnessId: 'pi' })
-createRoot(document.getElementById('root')!).render(<Fixture />)
+export const fixtureRoot = createRoot(document.getElementById('root')!)
+fixtureRoot.render(<Fixture />)

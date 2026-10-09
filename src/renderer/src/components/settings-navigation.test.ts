@@ -46,7 +46,9 @@ describe('settings navigation model', () => {
     expect(mac).not.toContain('extensions')
     expect(windows).toContain('storage')
     expect(windows).toContain('extensions')
-    expect(windows).toHaveLength(23)
+    expect(windows).toHaveLength(22)
+    expect(mac).not.toContain('integrations')
+    expect(windows).not.toContain('integrations')
   })
 
   it('matches short names, full names, groups and descriptions case-insensitively', () => {
@@ -129,7 +131,8 @@ describe('settings sidebar search', () => {
       .props.onChange({ target: { value: 'zzz-unmatched' } }))
     expect(renderer.root.findByProps({ role: 'status' }).findByType('span').children).toEqual(['settingsSearchEmpty'])
     // The compact picker always keeps every destination reachable.
-    expect(renderer.root.findByType('select').findAllByType('option').length).toBeGreaterThan(20)
+    expect(renderer.root.findByType('select').findAllByType('option').map((option) => option.props.value))
+      .toEqual(categories(visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin' })))
   })
 })
 

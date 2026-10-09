@@ -13,7 +13,6 @@ import {
   Mic,
   Palette,
   PenLine,
-  Plug,
   Puzzle,
   Server,
   Settings,
@@ -85,7 +84,6 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
     items: [
       { category: 'general', labelKey: 'general', icon: Settings, tone: 'slate' },
       { category: 'providers', labelKey: 'providers', icon: Server, tone: 'blue' },
-      { category: 'integrations', labelKey: 'integrations', icon: Plug, tone: 'green' },
       { category: 'extensions', labelKey: 'extensions', icon: Puzzle, tone: 'violet', extensionOnly: true }
     ]
   },
