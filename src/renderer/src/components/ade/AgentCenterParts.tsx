@@ -1,6 +1,7 @@
-import type { ReactElement, ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { AgentTone } from './agent-center-presentation'
+import { formatAgentUpdateElapsed } from './AgentUpdateProgress'
 
 /**
  * Shared Agent Center chrome: status dots, badges and the first-load skeleton,
@@ -73,4 +74,78 @@ export function AgentCatalogSkeleton({ label }: { label: string }): ReactElement
       </div>
     </div>
   )
+}
+
+/** Time since `since`, ticking once a second; used wherever work in flight is reported. */
+export function AgentElapsed({ since, className = '' }: { since: number; className?: string }): ReactElement {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1_000)
+    return () => clearInterval(timer)
+  }, [])
+  return <span data-agent-elapsed className={`font-mono tabular-nums ${className}`}>{formatAgentUpdateElapsed(now - since)}</span>
+}
+
+/**
+ * One block of an Agent page: a heading row and one bordered group of rows.
+ * This is the only box inside the workspace (docs/ade/18 §10.2).
+ */
+export function AgentSection({ title, description, action, children, bare = false, ...data }: {
+  title?: string
+  description?: ReactNode
+  action?: ReactNode
+  children: ReactNode
+  /** Content draws its own surface (e.g. a code block). */
+  bare?: boolean
+} & Record<`data-${string}`, string | boolean | undefined>): ReactElement {
+  return <section className="min-w-0 space-y-2.5" {...data}>
+    {title || action ? <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+      <div className="min-w-0">
+        {title ? <h3 className="text-[13.5px] font-semibold leading-5 text-ds-ink">{title}</h3> : null}
+        {description ? <p className="mt-0.5 text-[12px] leading-[1.5] text-ds-muted">{description}</p> : null}
+      </div>
+      {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
+    </div> : null}
+    {bare ? children : <div className="ds-agent-group min-w-0 divide-y divide-ds-border-muted overflow-hidden rounded-xl border border-ds-border-muted bg-ds-card px-1">{children}</div>}
+  </section>
+}
+
+export type AgentTabItem<T extends string> = { id: T; label: string; count?: number; dot?: 'accent' | 'warning'; dotLabel?: string }
+
+/**
+ * Underline tabs that span the detail column; ids match `SettingsTabPanel`
+ * (`<baseId>-tab-<id>` / `<baseId>-panel-<id>`).
+ */
+export function AgentTabs<T extends string>({ baseId, ariaLabel, items, value, onChange }: {
+  baseId: string
+  ariaLabel: string
+  items: Array<AgentTabItem<T>>
+  value: T
+  onChange: (id: T) => void
+}): ReactElement {
+  const refs = useRef<Array<HTMLButtonElement | null>>([])
+  const keyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
+    const next = event.key === 'ArrowRight' ? (index + 1) % items.length : event.key === 'ArrowLeft' ? (index - 1 + items.length) % items.length
+      : event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : null
+    if (next === null) return
+    event.preventDefault()
+    onChange(items[next]!.id)
+    refs.current[next]?.focus()
+  }
+  return <div role="tablist" aria-label={ariaLabel} aria-orientation="horizontal" data-agent-tabs
+    className="flex min-w-0 items-end gap-6 overflow-x-auto border-b border-ds-border-muted">
+    {items.map((item, index) => {
+      const active = item.id === value
+      return <button key={item.id} ref={(node) => { refs.current[index] = node }} type="button" role="tab"
+        id={`${baseId}-tab-${item.id}`} aria-selected={active} aria-controls={`${baseId}-panel-${item.id}`} tabIndex={active ? 0 : -1}
+        onClick={() => onChange(item.id)} onKeyDown={(event) => keyDown(event, index)} data-agent-tab={item.id}
+        className={`-mb-px flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-px text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-tint/40 ${active
+          ? 'border-ds-ink font-semibold text-ds-ink' : 'border-transparent text-ds-muted hover:text-ds-ink'}`}>
+        {item.label}
+        {item.count ? <span className="text-[11px] font-normal tabular-nums text-ds-faint">{item.count}</span> : null}
+        {item.dot ? <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${item.dot === 'warning' ? 'bg-[var(--ds-warning)]' : 'bg-accent'}`} /> : null}
+        {item.dot && item.dotLabel ? <span className="sr-only">{item.dotLabel}</span> : null}
+      </button>
+    })}
+  </div>
 }

@@ -12,6 +12,8 @@ type ActivityState = {
   changed: Record<string, true>
   install: Record<string, AgentInstallObservation>
   lastCheck: Record<string, LastCheck>
+  /** The Agent whose page is on screen; its floating cards stay quiet. */
+  viewing?: string
 }
 
 export const useAgentActivityStore = create<ActivityState>(() => ({ checking: {}, changed: {}, install: {}, lastCheck: {} }))
@@ -29,7 +31,8 @@ export function setAgentFlag(kind: 'checking' | 'changed', id: string, on: boole
 export function setAgentInstall(id: string, observation: AgentInstallObservation | undefined): void {
   useAgentActivityStore.setState((state) => {
     const current = state.install[id]
-    if (current?.status === observation?.status && current?.action === observation?.action) return state
+    if (current?.status === observation?.status && current?.action === observation?.action &&
+      current?.startedAt === observation?.startedAt && current?.lastLine === observation?.lastLine) return state
     const next = { ...state.install }
     if (observation) next[id] = observation
     else delete next[id]
@@ -39,4 +42,8 @@ export function setAgentInstall(id: string, observation: AgentInstallObservation
 
 export function setAgentLastCheck(id: string, check: LastCheck): void {
   useAgentActivityStore.setState((state) => ({ lastCheck: { ...state.lastCheck, [id]: check } }))
+}
+
+export function setAgentViewing(id: string | undefined): void {
+  useAgentActivityStore.setState((state) => state.viewing === id ? state : { viewing: id })
 }

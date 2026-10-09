@@ -25,7 +25,11 @@ const dynamic = [
   ...STATES.flatMap((state) => state === 'notInstalled'
     ? ['install', 'docs', 'none'].flatMap((variant) => [`agentCenter.state.${state}.list_${variant}`, `agentCenter.state.${state}.status_${variant}`])
     : [`agentCenter.state.${state}.list`, `agentCenter.state.${state}.status`]),
-  'agentCenter.state.ready.statusModels', 'agentCenter.state.needsRecheck.statusChanged'
+  'agentCenter.state.ready.statusModels', 'agentCenter.state.needsRecheck.statusChanged',
+  ...['starting', 'waiting', 'running', 'verifying', 'switching'].map((phase) => `agentCenter.activity.step.${phase}`),
+  ...['update', 'rollback'].flatMap((kind) => ['list', 'status', 'done', 'failed', 'running', 'runningPlain', 'doneDetail', 'failedDetail']
+    .map((key) => `agentCenter.activity.${kind}.${key}`)),
+  ...['ok', 'failed', 'never'].map((outcome) => `agentCenter.check.${outcome}`)
 ]
 
 const sourceKeys = (): string[] => {

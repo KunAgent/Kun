@@ -94,7 +94,16 @@
       "installLocal": "读取本机新版 {{version}}",
       "verify": "验证新版本能正常启动",
       "activate": "切换到新版本",
-      "elapsed": "已用 {{time}}"
-    }
+      "elapsed": "已用 {{time}}",
+      "waitHint": "进行中的对话不会被打断",
+      "verifyHint": "启动一次握手，不发送提示词",
+      "activateHint": "保存命令路径并重新检查连接"
+    },
+    "upToDate": "已是最新版本",
+    "newVersion": "新版本 {{version}} 可以更新",
+    "newLocal": "本机有更新的版本 {{version}}",
+    "updateTo": "更新到 {{version}}",
+    "starting": "正在开始…",
+    "retained": "上一个版本仍保留，可以回滚。"
   }
 }

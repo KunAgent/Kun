@@ -69,6 +69,8 @@ export const HARNESS_MODEL_RETRY_DELAYS_MS = [5_000, 15_000, 45_000] as const
 type HarnessStoreState = {
   /** One-shot deep link from an Agent repair action into its settings detail. */
   settingsHarnessId?: string
+  /** Tab the deep link opens on (e.g. Version from an update notice). */
+  settingsHarnessTab?: 'connection' | 'models' | 'launch' | 'version'
   rows: AdeHarnessRow[]
   /**
    * Timestamp of the last successful list response (P4-02): replaced the

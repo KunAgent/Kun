@@ -36,7 +36,11 @@ native session binding; account, workspace, route and history checks still apply
 ## Discovery and user interface
 
 The desktop caches successful release checks for 24 hours and unavailable checks
-for 5 minutes. Users can check manually, defer a notice or ignore the advertised
+for 5 minutes. The renderer's background update runner, not the Version tab,
+polls a started job and performs the settings switch after `ready`, so leaving
+the tab, the Agent or Settings never strands an Agent in maintenance; progress
+and the result are shown in the Agent list, a banner on every tab, and a
+floating card outside Settings. Users can check manually, defer a notice or ignore the advertised
 version. The Agent settings card shows source, version, update progress and
 installation details. Native model menus show catalog provenance and refresh
 controls. A refreshed catalog never silently replaces the user's selected model.

@@ -12,6 +12,7 @@ import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-
 import { createInitialWorkbenchPreparer } from './initial-workbench-preparation'
 import { DataMigrationActivityIndicator } from './components/DataMigrationActivityIndicator'
 import { SpeakDownloadToast } from './components/SpeakDownloadToast'
+import { AgentActivityToasts } from './components/ade/AgentActivityToasts'
 import { useRoomEvents } from './components/rooms/useRoomEvents'
 import { useWorkbenchDirectorySync } from './components/rooms/workbench-bridge-actions'
 import { WorkbenchFlash } from './components/rooms/workbench-flash'
@@ -199,6 +200,7 @@ export default function AppShell(): React.ReactElement {
           </Suspense>
         </div>
         <SpeakDownloadToast />
+        {surface === 'desktop' ? <AgentActivityToasts /> : null}
         <WorkbenchFlash />
         {initialSetupOpen ? (
           surface === 'mobile' ? (

@@ -3,7 +3,8 @@
     "title": "Third-party Agents",
     "summary": {
       "connected": "{{count}} connected",
-      "attention": "{{count}} to fix"
+      "attention": "{{count}} to fix",
+      "updating": "{{count}} updating"
     },
     "refreshAll": "Re-detect all Agents",
     "description": "Connect Codex, Claude Code, OpenCode and other Agents to your chats. Once connected and checked, they show up when you start a chat or add a group member.",
@@ -247,6 +248,80 @@
     "login": {
       "title": "Sign-in",
       "desc": "{{name}} uses its own account. If it is not signed in yet, or you want another account, sign in once in a terminal; Kun detects it again when the terminal closes."
-    }
+    },
+    "activity": {
+      "step": {
+        "starting": "Starting",
+        "waiting": "Waiting for the current turn",
+        "running": "Installing",
+        "verifying": "Verifying the new version",
+        "switching": "Switching to the new version"
+      },
+      "update": {
+        "list": "Updating · {{step}}",
+        "status": "Updating · new messages wait in the queue",
+        "done": "Updated to {{version}}",
+        "failed": "Update did not finish",
+        "running": "Updating to {{version}}",
+        "runningPlain": "Updating",
+        "doneDetail": "Took {{time}} · new chats use the new version",
+        "failedDetail": "{{name}} still runs the previous version and works as before"
+      },
+      "rollback": {
+        "list": "Rolling back · {{step}}",
+        "status": "Rolling back · new messages wait in the queue",
+        "done": "Rolled back to {{version}}",
+        "failed": "Rollback did not finish",
+        "running": "Rolling back to {{version}}",
+        "runningPlain": "Rolling back",
+        "doneDetail": "Took {{time}}",
+        "failedDetail": "{{name}} still runs the current version"
+      },
+      "view": "View progress",
+      "cancel": "Cancel update",
+      "retry": "Retry",
+      "rollbackTo": "Roll back to {{version}}",
+      "rollbackPlain": "Roll back to the previous version",
+      "close": "Dismiss",
+      "leaveHint": "You can leave this page: the update keeps running and Kun tells you when it finishes or fails.",
+      "checking": "Checking {{name}}",
+      "installLeaveHint": "You can leave this page: Kun tells you when it is installed."
+    },
+    "toast": {
+      "region": "Agent background tasks",
+      "updating": "Updating {{name}}",
+      "rollingBack": "Rolling back {{name}}",
+      "updated": "{{name}} updated to {{version}}",
+      "rolledBack": "{{name}} rolled back to {{version}}",
+      "updatedDetail": "Took {{time}} · new chats use the new version",
+      "updateFailed": "{{name}} update did not finish",
+      "updateFailedDetail": "The previous version still works",
+      "installing": "Installing {{name}}",
+      "installed": "{{name}} is installed",
+      "installedDetail": "Next: choose a connection and run the check",
+      "installFailed": "{{name}} install did not finish",
+      "view": "View",
+      "connect": "Set up",
+      "hide": "Hide",
+      "close": "Close"
+    },
+    "header": {
+      "updatePill": "New version {{version}}",
+      "updateFailedPill": "Update did not finish"
+    },
+    "check": {
+      "ok": "Connection works",
+      "failed": "Check did not pass",
+      "never": "Not checked yet",
+      "passed": "{{count}} passed",
+      "issues": "{{count}} need attention",
+      "unverified": "account and quota are only confirmed by a real chat",
+      "at": "checked {{time}}",
+      "free": "Handshake only: no prompt is sent and no quota is used.",
+      "trialAsk": "Want to confirm a real chat works?"
+    },
+    "onlyMode": "{{name}} supports only this one",
+    "tagline": "Checked Agents appear in new chats and group members",
+    "addAgent": "Add Agent"
   }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
-import { MoreHorizontal } from 'lucide-react'
+import { ArrowUp, LoaderCircle, MoreHorizontal } from 'lucide-react'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { AgentIcon } from '../agent-icon'
 import { useComposerPickerPopover } from '../chat/use-composer-picker-popover'
@@ -60,9 +60,11 @@ function AgentMoreMenu({ label, actions }: { label: string; actions: AgentMenuAc
 
 /**
  * Identity, one status line, the "use in chats" switch and the overflow menu.
- * Everything it shows comes from the Agent's presentation.
+ * Everything it shows comes from the Agent's presentation; work in flight
+ * replaces the status line, and a newer version shows as a pill that opens
+ * the Version tab.
  */
-export function AgentDetailHeader({ row, presentation, isDefault, version, baseName, onSwitch, menu, t }: {
+export function AgentDetailHeader({ row, presentation, isDefault, version, baseName, onSwitch, onOpenVersion, menu, t }: {
   row: AdeHarnessRow
   presentation: AgentPresentation
   isDefault: boolean
@@ -70,6 +72,7 @@ export function AgentDetailHeader({ row, presentation, isDefault, version, baseN
   /** Display name of the engine a derived Agent is based on. */
   baseName?: string
   onSwitch: () => void
+  onOpenVersion?: () => void
   menu: AgentMenuAction[]
   t: T
 }): ReactElement {
@@ -77,15 +80,18 @@ export function AgentDetailHeader({ row, presentation, isDefault, version, baseN
   const switchLabel = t('agentCenter.useInChats')
   const on = presentation.switch === 'on' || presentation.switch === 'busy'
   const disabled = presentation.switch === 'locked' || presentation.switch === 'busy'
-  return <header className="flex min-w-0 flex-wrap items-start gap-3.5" data-agent-detail-header>
-    <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-ds-border-muted bg-ds-subtle text-ds-ink">
-      <AgentIcon harnessId={definition.id} size={24} />
+  const activity = presentation.activity
+  const running = activity?.tone === 'running' && activity.status
+  const updateFailed = activity?.kind === 'update' && activity.tone === 'warning'
+  return <header className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-3" data-agent-detail-header>
+    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-ds-border-muted bg-ds-subtle text-ds-ink">
+      <AgentIcon harnessId={definition.id} size={22} />
     </span>
     <div className="min-w-0 flex-1 basis-56">
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-        <h3 className="min-w-0 break-words text-[17px] font-semibold leading-6 text-ds-ink">{definition.displayName}</h3>
-        {version ? <AgentBadge mono>{version}</AgentBadge> : null}
-        <AgentBadge>{t(TRANSPORT_LABEL_KEY[definition.transport] ?? 'adeAgentTransport.acp')}</AgentBadge>
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+        <h3 className="min-w-0 break-words text-[18px] font-semibold leading-6 text-ds-ink">{definition.displayName}</h3>
+        {version ? <span className="font-mono text-[12px] text-ds-muted" data-agent-header-version>{version}</span> : null}
+        <span className="text-[12px] text-ds-faint">{t(TRANSPORT_LABEL_KEY[definition.transport] ?? 'adeAgentTransport.acp')}</span>
         {definition.derivedFrom ? <AgentBadge>{t('agentCenter.source.derived', { base: baseName ?? definition.derivedFrom })}</AgentBadge> : null}
         {definition.extension ? <AgentBadge>{t('agentIntegrations.fromExtension', { name: definition.extension.name ?? definition.extension.id })}</AgentBadge> : null}
         {definition.availability === 'preview' ? <AgentBadge tone="warning">{t('agentEnablement.preview')}</AgentBadge> : null}
@@ -93,11 +99,17 @@ export function AgentDetailHeader({ row, presentation, isDefault, version, baseN
       </div>
       <p role="status" aria-live="polite" data-agent-status={presentation.state}
         className="mt-1 flex min-w-0 items-center gap-1.5 text-[12.5px] leading-5 text-ds-muted">
-        <AgentStatusDot tone={presentation.tone} />
-        <span className="min-w-0 break-words">{agentLineText(t, presentation.statusLine)}</span>
+        {running ? <LoaderCircle aria-hidden className="h-3 w-3 shrink-0 animate-spin text-accent" /> : <AgentStatusDot tone={presentation.tone} />}
+        <span className="min-w-0 break-words">{agentLineText(t, running || presentation.statusLine)}</span>
       </p>
     </div>
     <div className="ml-auto flex shrink-0 items-center gap-3">
+      {onOpenVersion && (presentation.updateVersion || updateFailed) ? <button type="button" onClick={onOpenVersion} data-agent-header-update
+        className={`inline-flex h-[26px] items-center gap-1 rounded-full px-2.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/40 ${updateFailed
+          ? 'bg-[var(--ds-warning-soft)] text-ds-status-warning' : 'bg-accent-soft text-accent hover:bg-accent-tint/15'}`}>
+        {updateFailed ? null : <ArrowUp aria-hidden className="h-3 w-3" strokeWidth={2.4} />}
+        {updateFailed ? t('agentCenter.header.updateFailedPill') : t('agentCenter.header.updatePill', { version: presentation.updateVersion })}
+      </button> : null}
       <span className="flex items-center gap-2 text-[12.5px] text-ds-muted">
         <span id={`agent-switch-${definition.id}`}>{switchLabel}</span>
         <button type="button" role="switch" aria-checked={on} aria-labelledby={`agent-switch-${definition.id}`}

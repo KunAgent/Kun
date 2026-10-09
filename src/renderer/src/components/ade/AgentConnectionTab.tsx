@@ -2,7 +2,8 @@ import type { ReactElement } from 'react'
 import type { AdeHarnessReadiness, AdeHarnessRow, AdeHarnessTestResult } from '@shared/ade-harnesses'
 import type { KunHarnessDefaultsEntryV1, KunHarnessEnabledProfileV1, KunHarnessSettingsV1 } from '@shared/app-settings'
 import { permissionFollowsKunLevel } from '../../lib/harness-native-permission'
-import { SettingRow, SettingsCard } from '../settings-controls'
+import { SettingRow } from '../settings-controls'
+import { AgentSection } from './AgentCenterParts'
 import { AgentConnectionFields } from './AgentConnectionFields'
 import { AgentDiagnosticsCard } from './AgentDiagnosticsCard'
 import { AgentDraftBar } from './AgentDraftBar'
@@ -37,8 +38,8 @@ export function AgentConnectionTab({ row, settings, entry, profile, dirty, check
   tSettings: T
 }): ReactElement {
   const { definition } = row
-  return <div className="space-y-4" data-agent-enablement-fields={definition.id}>
-    <SettingsCard title={t('agentCenter.connection.title')} description={t('agentCenter.connection.desc', { name: definition.displayName })}>
+  return <div className="space-y-7" data-agent-enablement-fields={definition.id}>
+    <AgentSection title={t('agentCenter.connection.title')} description={t('agentCenter.connection.desc', { name: definition.displayName })}>
       <AgentConnectionFields row={row} value={entry} profile={profile} modelsEnabled onChange={onChange} />
       {profile.credentialMode === 'native-login' ? <AgentLoginRow row={row} platform={platform} onSetupCommand={onSetupCommand} t={t} /> : null}
       {definition.permissionModes.length ? permissionFollowsKunLevel(definition.transport)
@@ -51,7 +52,7 @@ export function AgentConnectionTab({ row, settings, entry, profile, dirty, check
             options={[{ value: '', label: tSettings('adeSettings.harnessPermissionModeDefault') },
               ...definition.permissionModes.map((mode) => ({ value: mode.id, label: mode.label }))]} />} /> : null}
       <AgentDraftBar dirty={dirty} busy={busy} onDiscard={onDiscard} onRecheck={onRecheck} t={t} />
-    </SettingsCard>
+    </AgentSection>
     <AgentDiagnosticsCard harnessId={definition.id} readiness={readiness} error={error} errorDetail={errorDetail}
       checking={checking} busy={busy} onRecheck={onRecheck} onTrial={onTrial} reportText={reportText} issue={issue} t={t} />
   </div>

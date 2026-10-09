@@ -94,7 +94,16 @@
       "installLocal": "Read the local version {{version}}",
       "verify": "Verify the new version starts",
       "activate": "Switch to the new version",
-      "elapsed": "{{time}} elapsed"
-    }
+      "elapsed": "{{time}} elapsed",
+      "waitHint": "running chats are not interrupted",
+      "verifyHint": "one handshake, no prompt is sent",
+      "activateHint": "saves the command path and re-checks the connection"
+    },
+    "upToDate": "Up to date",
+    "newVersion": "Version {{version}} is available",
+    "newLocal": "A newer local version {{version}} was found",
+    "updateTo": "Update to {{version}}",
+    "starting": "Starting…",
+    "retained": "The previous version is kept for rollback."
   }
 }

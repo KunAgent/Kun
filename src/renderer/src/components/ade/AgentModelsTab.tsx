@@ -3,7 +3,7 @@ import { LoaderCircle, RefreshCw, Search } from 'lucide-react'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { KunHarnessDefaultsEntryV1, KunHarnessEnabledProfileV1 } from '@shared/app-settings'
 import { loadHarnessModels, loadHarnessProviderGroups, useHarnessStore } from '../../store/harness-store'
-import { SettingsCard } from '../settings-controls'
+import { AgentSection } from './AgentCenterParts'
 import { settingsButtonClass } from '../settings-button'
 import { AgentDraftBar } from './AgentDraftBar'
 
@@ -48,7 +48,7 @@ export function AgentModelsTab({ row, entry, profile, dirty, busy, onChange, onD
   const loadedAt = native ? nativeModels?.catalogStatus?.fetchedAt : undefined
 
   const rowClass = 'flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2'
-  return <SettingsCard title={t('agentCenter.models.title')}
+  return <AgentSection title={t('agentCenter.models.title')}
     description={loadedAt ? t('agentCenter.models.updated', { source: t(native ? 'agentCenter.models.fromAgent' : 'agentCenter.models.fromProvider'), time: new Date(loadedAt).toLocaleTimeString() })
       : t(native ? 'agentCenter.models.fromAgent' : 'agentCenter.models.fromProvider')}
     action={<div className="flex shrink-0 items-center gap-2">
@@ -99,5 +99,5 @@ export function AgentModelsTab({ row, entry, profile, dirty, busy, onChange, onD
         <button type="submit" disabled={!custom.trim()} className={settingsButtonClass({ size: 'compact' })}>{t('agentEnablement.useModel')}</button>
       </span>
     </form>
-  </SettingsCard>
+  </AgentSection>
 }

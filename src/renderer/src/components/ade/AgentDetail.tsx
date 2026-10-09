@@ -1,13 +1,15 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { LoaderCircle } from 'lucide-react'
 import type { AdeHarnessRow, AdeHarnessTestResult } from '@shared/ade-harnesses'
 import type { KunHarnessDefaultsEntryV1, KunHarnessSettingsV1 } from '@shared/app-settings'
 import { harnessProfileKey } from '@shared/harness-enablement'
 import { useHarnessStore } from '../../store/harness-store'
 import { useChatStore } from '../../store/chat-store'
-import { SettingsSubTabs, SettingsTabPanel } from '../settings-controls'
+import { SettingsTabPanel } from '../settings-controls'
 import { settingsButtonClass } from '../settings-button'
 import { useHarnessUpdateStore, hasHarnessUpdate } from '../../store/harness-update-store'
+import { useAgentUpdateRunner } from '../../store/harness-update-runner'
+import { AgentActivityBanner } from './AgentActivityBanner'
+import { AgentTabs, type AgentTabItem } from './AgentCenterParts'
 import { AgentConnectionTab } from './AgentConnectionTab'
 import { AgentDeleteConfirm } from './AgentDeleteConfirm'
 import { AgentDetailHeader, type AgentMenuAction } from './AgentDetailHeader'
@@ -24,7 +26,8 @@ import type { AgentSetupIssue } from './agent-setup-help'
 import { useAgentEnablement } from './use-agent-enablement'
 
 type T = (key: string, options?: Record<string, unknown>) => string
-type TabId = 'connection' | 'models' | 'launch' | 'version'
+export type AgentTabId = 'connection' | 'models' | 'launch' | 'version'
+type TabId = AgentTabId
 
 /**
  * One Agent's page (docs/ade/18 §3.3-3.5): the header with its switch, the one
@@ -32,8 +35,10 @@ type TabId = 'connection' | 'models' | 'launch' | 'version'
  * four management tabs. Enablement, drafts and checks live in one hook here, so
  * the switch, the steps and the tabs can never disagree.
  */
-export function AgentDetail({ row, settings, probing, platform, t, tSettings, onPatchHarness, beforeEnableCheck, onProbe, onRemoveUser, onExportUser, onSetBinaryPath, onSetLaunchPatch, onSetPermissionMode, onSetupCommand, onTest, baseName }: {
+export function AgentDetail({ row, settings, probing, platform, t, tSettings, requestedTab, onPatchHarness, beforeEnableCheck, onProbe, onRemoveUser, onExportUser, onSetBinaryPath, onSetLaunchPatch, onSetPermissionMode, onSetupCommand, onTest, baseName }: {
   row: AdeHarnessRow
+  /** A deep link (e.g. from an update notice) asking for one tab; `at` makes repeats distinct. */
+  requestedTab?: { tab: TabId; at: number }
   settings: KunHarnessSettingsV1
   probing: boolean
   platform: string
@@ -63,7 +68,10 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, on
     onCommitted: () => setDraft({}) })
   const install = useAgentActivityStore((state) => state.install[id])
   const modelCount = useHarnessStore((state) => state.models[id]?.models.length)
-  const updateAvailable = useHarnessUpdateStore(() => hasHarnessUpdate(id))
+  const updateInfo = useHarnessUpdateStore((state) => state.entries[id]?.info)
+  const updateVersion = useHarnessUpdateStore(() => hasHarnessUpdate(id)) ? updateInfo?.latestVersion ?? updateInfo?.candidate?.version : undefined
+  const update = useAgentUpdateRunner((state) => state.items[id])
+  useEffect(() => { if (requestedTab) setTab(requestedTab.tab) }, [requestedTab])
   useEffect(() => {
     setAgentFlag('checking', id, gate.checking)
     return () => setAgentFlag('checking', id, false)
@@ -86,7 +94,7 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, on
     : undefined
   // A check running now hides the old result; otherwise the newest one for this connection shows.
   const shown = gate.checking ? undefined : live ?? newestCheck(profileKey, storedCheck, proof ? checkFromProof(proof, profileKey) : undefined)
-  const presentation = agentPresentationFor(row, settings, { platform, modelCount, checking: gate.checking, changed: gate.dirty, install })
+  const presentation = agentPresentationFor(row, settings, { platform, modelCount, checking: gate.checking, changed: gate.dirty, install, update, updateVersion })
   const entry: KunHarnessDefaultsEntryV1 = { ...settings.defaults[id], ...draft }
   const readiness = shown?.readiness
   const shownError = shown?.error ?? ''
@@ -155,25 +163,25 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, on
 
   const stateAttribute = gate.checking ? 'checking' : gate.error ? 'failed'
     : presentation.state === 'ready' ? 'ready' : gate.savedEnabled ? 'needs-check' : 'disabled'
-  const tabs: Array<{ id: TabId; label: string; dot?: boolean; dotLabel?: string }> = [
+  const versionDot = presentation.activity?.kind === 'update' ? presentation.activity.tone === 'warning' ? 'warning' as const
+    : presentation.activity.tone === 'running' ? 'accent' as const : undefined : updateVersion ? 'accent' as const : undefined
+  const tabs: Array<AgentTabItem<TabId>> = [
     { id: 'connection', label: t('agentCenter.tabs.connection') },
-    { id: 'models', label: modelCount ? t('agentCenter.tabs.modelsCount', { count: modelCount }) : t('agentCenter.tabs.models') },
+    { id: 'models', label: t('agentCenter.tabs.models'), ...(modelCount ? { count: modelCount } : {}) },
     { id: 'launch', label: t('agentCenter.tabs.launch') },
-    { id: 'version', label: t('agentCenter.tabs.version'), dot: updateAvailable, dotLabel: t('agentCenter.tabs.updateAvailable') }
+    { id: 'version', label: t('agentCenter.tabs.version'), ...(versionDot ? { dot: versionDot, dotLabel: t('agentCenter.tabs.updateAvailable') } : {}) }
   ]
 
-  return <div className="space-y-4" data-agent-card={id} data-agent-enablement={id} data-agent-enablement-state={stateAttribute}>
+  return <div className="space-y-5" data-agent-card={id} data-agent-enablement={id} data-agent-enablement-state={stateAttribute}>
     <AgentDetailHeader row={row} presentation={presentation} isDefault={settings.defaultHarnessId === id}
-      version={status.version} baseName={baseName} onSwitch={toggle} menu={menu} t={t} />
+      version={status.version} baseName={baseName} onSwitch={toggle} menu={menu} t={t}
+      onOpenVersion={presentation.mode === 'manage' ? () => setTab('version') : undefined} />
 
-    {gate.checking ? <div role="status" aria-live="polite" data-agent-check-progress
-      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ds-border-muted bg-ds-subtle px-4 py-2.5 text-[12.5px] text-ds-muted">
-      <span className="flex items-center gap-2"><LoaderCircle aria-hidden size={14} className="animate-spin" />{t(`agentEnablement.phases.${gate.phase}`)}</span>
-      <button type="button" onClick={gate.cancel} data-agent-enable-cancel className={settingsButtonClass({ size: 'compact' })}>{t('agentEnablement.cancel')}</button>
-    </div> : null}
+    <AgentActivityBanner row={row} tab={presentation.mode === 'manage' ? tab : 'version'} checking={gate.checking} checkPhase={gate.phase}
+      onCancelCheck={gate.cancel} onViewVersion={() => setTab('version')} t={t} />
 
     {showNotice && nextShown ? <div role="status" data-agent-notice={noticeState}
-      className="flex flex-wrap items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--ds-warning)_30%,transparent)] bg-[var(--ds-warning-soft)] px-4 py-3">
+      className="flex flex-wrap items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--ds-warning)_28%,transparent)] bg-[var(--ds-warning-soft)] px-4 py-3">
       <div className="min-w-0 flex-1 basis-60">
         <div className="text-[13px] font-semibold text-ds-ink">{t(`agentCenter.notice.${noticeState}.title`, { name: definition.displayName })}</div>
         <div className="mt-0.5 text-[12px] leading-[1.5] text-ds-muted">{t(`agentCenter.notice.${noticeState}.body`, {
@@ -188,11 +196,11 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, on
     {presentation.mode === 'setup' ? <>
       <AgentSetupSteps row={row} presentation={presentation} settings={settings} entry={entry} profile={gate.profile}
         modelsEnabled={gate.savedEnabled} checking={gate.checking} platform={platform} onSetupCommand={onSetupCommand} onConnectionChange={change} onEnable={() => void gate.enable()}
-        onPatchHarness={onPatchHarness} onSetBinaryPath={onSetBinaryPath} beforeEnableCheck={beforeEnableCheck} t={t} tSettings={tSettings} />
+        onSetBinaryPath={onSetBinaryPath} t={t} tSettings={tSettings} />
       {shown ? <AgentDiagnosticsCard harnessId={id} readiness={readiness} error={shownError} errorDetail={shownDetail}
         checking={gate.checking} busy={busy} onRecheck={() => void gate.enable()} reportText={reportText} issue={issue} t={t} /> : null}
     </> : <>
-      <SettingsSubTabs<TabId> baseId={`agent-${id}`} ariaLabel={t('agentCenter.tabs.label', { name: definition.displayName })}
+      <AgentTabs<TabId> baseId={`agent-${id}`} ariaLabel={t('agentCenter.tabs.label', { name: definition.displayName })}
         items={tabs} value={tab} onChange={setTab} />
       <SettingsTabPanel baseId={`agent-${id}`} tabId="connection" active={tab === 'connection'}>
         <AgentConnectionTab row={row} settings={settings} entry={entry} profile={gate.profile} dirty={gate.dirty} checking={gate.checking} busy={busy}
@@ -210,8 +218,7 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, on
           onSetBinaryPath={onSetBinaryPath} onSetLaunchPatch={onSetLaunchPatch} t={t} tSettings={tSettings} /> : null}
       </SettingsTabPanel>
       <SettingsTabPanel baseId={`agent-${id}`} tabId="version" active={tab === 'version'}>
-        {tab === 'version' ? <AgentVersionTab row={row} settings={settings} onPatchHarness={onPatchHarness}
-          beforeEnableCheck={beforeEnableCheck} t={t} /> : null}
+        {tab === 'version' ? <AgentVersionTab row={row} t={t} /> : null}
       </SettingsTabPanel>
     </>}
     {confirmDelete && onRemoveUser ? <AgentDeleteConfirm name={definition.displayName} t={t}

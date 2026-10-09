@@ -37,6 +37,7 @@ import {
   workbenchContextForRoute
 } from '../extensions/use-contributions'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
+import { registerAgentUpdateSettingsFlush } from '../store/harness-update-runner'
 import {
   compactHomePathForSettingsDisplay,
   compactHomePathListForSettingsDisplay,
@@ -286,6 +287,9 @@ export function SettingsView(): ReactElement {
     setSaveStatus, setSaveError, setSaveIssue, saveTimer, statusTimer, draftVersion, pendingSnapshotRef,
     persistedSettingsRef, flushOnUnmountRef, settingsPlatform, settingsHomeDir
   })
+  const flushRef = useRef(flushPendingSave); flushRef.current = flushPendingSave
+  // A background Agent update writes its new command path only after this view's pending edits are saved.
+  useEffect(() => registerAgentUpdateSettingsFlush(() => flushRef.current(true)), [])
   const guardedGoBack = (): void => {
     cancelAgentEnablementChecks()
     if (hasPendingSettingsDraft()) {

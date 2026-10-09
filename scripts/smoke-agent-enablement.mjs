@@ -167,15 +167,18 @@ app.on('window-all-closed', () => app.quit())
   await reset()
   await pendingCheck()
   await page.evaluate(() => window.agentEnablementFixture.selectAgent('deepseek-harness'))
-  await page.locator('[data-agent-enablement="deepseek-harness"]').waitFor()
+  await page.locator('[data-agent-detail-slot="deepseek-harness"]:not([hidden]) [data-agent-enablement]').waitFor()
+  // The check keeps running on Pi's hidden page and the list says so.
+  assert.equal(await page.locator('[data-agent-list-id="pi"]').getAttribute('data-agent-state'), 'checking')
   await page.evaluate(() => window.agentEnablementFixture.resolvePending(true))
+  await page.locator('[data-agent-detail-slot="pi"]').waitFor({ state: 'detached' })
   await settled()
-  assert.equal((await snapshot()).enabledProfiles.length, 0)
-  report.assertions.push('Switching agents rejects a late response for the previous agent')
+  assert.deepEqual((await snapshot()).enabledProfiles.map((profile) => profile.harnessId), ['pi'])
+  report.assertions.push('Switching agents keeps a running check, which finishes for the agent it started on')
   await page.evaluate(() => window.agentEnablementFixture.setOutcome('success'))
   await enable().click()
   await state('ready')
-  assert.deepEqual((await menuIds()).sort(), ['deepseek-harness', 'kun'])
+  assert.deepEqual((await menuIds()).sort(), ['deepseek-harness', 'kun', 'pi'])
   await page.locator('[data-agent-readiness-result]').waitFor()
   assert.match(await page.locator('[data-agent-readiness-result]').innerText(), /not verified|unverified|not tested/i)
   await screenshot('deepseek-enabled-auth-unverified')
@@ -307,7 +310,8 @@ app.on('window-all-closed', () => app.quit())
   await server?.close()
   await rm(temporary, { recursive: true, force: true })
 }
-function panel() { return page.locator('[data-agent-enablement]') }
+// A check started on another Agent keeps its page mounted but hidden; drive the one on screen.
+function panel() { return page.locator('[data-agent-detail-slot]:not([hidden]) [data-agent-enablement]') }
 function enable() { return panel().locator('[data-agent-enable]') }
 async function customModel(model) {
   await panel().locator('[data-agent-profile-model]').click()
@@ -315,7 +319,7 @@ async function customModel(model) {
   await page.locator('[data-agent-custom-model-input]').fill(model)
   await page.locator('[data-agent-custom-model-apply]').click()
 }
-async function state(value) { await page.waitForFunction(value => document.querySelector('[data-agent-enablement]')?.getAttribute('data-agent-enablement-state') === value, value) }
+async function state(value) { await page.waitForFunction(value => document.querySelector('[data-agent-detail-slot]:not([hidden]) [data-agent-enablement]')?.getAttribute('data-agent-enablement-state') === value, value) }
 async function snapshot() { return page.evaluate(() => window.agentEnablementFixture.snapshot()) }
 async function settled() { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))) }
 async function reset() { await page.evaluate(() => window.agentEnablementFixture.reset()); await state('disabled'); await settled() }

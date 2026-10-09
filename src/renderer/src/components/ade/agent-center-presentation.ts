@@ -4,6 +4,7 @@ import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-e
 import { harnessRowUnavailableCode } from '../../store/harness-store'
 import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { setupInstallCommand, setupLoginCommand } from './agent-center-actions'
+import { AGENT_UPDATE_RUNNING, type AgentUpdateItem } from '../../store/harness-update-item'
 
 /**
  * The one place that decides what the Agent list and detail say about an
@@ -36,6 +37,10 @@ export type AgentNextAction =
 export type AgentInstallObservation = {
   status: 'running' | 'verifying' | 'failed' | 'cancelled' | 'completed'
   action?: 'install' | 'adapter'
+  /** Epoch ms the job started, for the elapsed time in the list and cards. */
+  startedAt?: number
+  /** Last installer output line, without colour codes. */
+  lastLine?: string
 }
 
 export type AgentPresentationContext = {
@@ -50,6 +55,21 @@ export type AgentPresentationContext = {
   credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
   defaultModel?: string
   modelCount?: number
+  /** The background update for this Agent, running or just finished. */
+  update?: AgentUpdateItem
+  /** A newer version the user has not dismissed. */
+  updateVersion?: string
+}
+
+/** Work in flight (or just finished) that the list row and header report instead of the plain state. */
+export type AgentActivity = {
+  kind: 'update' | 'install'
+  tone: AgentTone
+  line: AgentLine
+  /** Header status while it runs; finished work leaves the header to the state. */
+  status?: AgentLine
+  /** Epoch ms the work started; running lines append the elapsed time. */
+  since?: number
 }
 
 export type AgentPresentation = {
@@ -63,6 +83,8 @@ export type AgentPresentation = {
   mode: 'setup' | 'manage'
   /** The single primary action for this state. */
   next: AgentNextAction | null
+  activity?: AgentActivity
+  updateVersion?: string
 }
 
 const MODE_KEY = {
@@ -173,7 +195,23 @@ export function agentPresentation(row: AdeHarnessRow, ctx: AgentPresentationCont
       ...(ctx.modelCount ? { count: ctx.modelCount } : {}) },
     install: installKind, changed: ctx.changed, counted: Boolean(ctx.modelCount)
   })
-  return { state, group, tone: TONE[state], listLine: text.list, statusLine: text.status, switch: sw, mode, next }
+  const activity = updateActivity(ctx.update) ?? (state === 'installing'
+    ? { kind: 'install' as const, tone: 'running' as const, line: text.list, ...(ctx.install?.startedAt ? { since: ctx.install.startedAt } : {}) }
+    : undefined)
+  return { state, group, tone: TONE[state], listLine: text.list, statusLine: text.status, switch: sw, mode, next,
+    ...(activity ? { activity } : {}), ...(ctx.updateVersion && !activity ? { updateVersion: ctx.updateVersion } : {}) }
+}
+
+function updateActivity(update: AgentUpdateItem | undefined): AgentActivity | undefined {
+  if (!update) return undefined
+  const base = update.action === 'rollback' ? 'agentCenter.activity.rollback' : 'agentCenter.activity.update'
+  if (AGENT_UPDATE_RUNNING.has(update.phase)) {
+    return { kind: 'update', tone: 'running', since: update.startedAt,
+      line: { key: `${base}.list`, params: { stepKey: `agentCenter.activity.step.${update.phase}` } },
+      status: { key: `${base}.status` } }
+  }
+  if (update.phase === 'completed') return { kind: 'update', tone: 'success', line: { key: `${base}.done`, params: { version: update.version ?? '' } } }
+  return { kind: 'update', tone: 'warning', line: { key: `${base}.failed` } }
 }
 
 /**
@@ -187,6 +225,8 @@ export function agentPresentationFor(row: AdeHarnessRow, settings: KunHarnessSet
   checking?: boolean
   changed?: boolean
   install?: AgentInstallObservation
+  update?: AgentUpdateItem
+  updateVersion?: string
 }): AgentPresentation {
   const profile = selectedHarnessProfile(row, settings)
   const id = row.definition.id
@@ -195,6 +235,7 @@ export function agentPresentationFor(row: AdeHarnessRow, settings: KunHarnessSet
     platform: extras.platform, credentialMode: profile.credentialMode, defaultModel: settings.defaults[id]?.model,
     ...(extras.modelCount ? { modelCount: extras.modelCount } : {}),
     ...(extras.checking ? { checking: true } : {}), ...(extras.changed ? { changed: true } : {}),
-    ...(extras.install ? { install: extras.install } : {})
+    ...(extras.install ? { install: extras.install } : {}),
+    ...(extras.update ? { update: extras.update } : {}), ...(extras.updateVersion ? { updateVersion: extras.updateVersion } : {})
   })
 }

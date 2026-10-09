@@ -3,7 +3,8 @@
     "title": "第三方 Agent",
     "summary": {
       "connected": "{{count}} 个已接入",
-      "attention": "{{count}} 个待处理"
+      "attention": "{{count}} 个待处理",
+      "updating": "{{count}} 个正在更新"
     },
     "refreshAll": "重新检测全部 Agent",
     "description": "把 Codex、Claude Code、OpenCode 等 Agent 接入你的对话。接入并通过检查后，它们会出现在新建对话和群聊成员里。",
@@ -247,6 +248,80 @@
     "login": {
       "title": "账号登录",
       "desc": "{{name}} 使用它自己的账号。还没登录或想换账号时，在终端里登录一次；终端关闭后 Kun 会重新检测。"
-    }
+    },
+    "activity": {
+      "step": {
+        "starting": "正在开始",
+        "waiting": "等当前这一轮结束",
+        "running": "下载并安装",
+        "verifying": "验证新版本",
+        "switching": "切换到新版本"
+      },
+      "update": {
+        "list": "更新中 · {{step}}",
+        "status": "正在更新，新消息会排队",
+        "done": "已更新到 {{version}}",
+        "failed": "更新没有完成",
+        "running": "正在更新到 {{version}}",
+        "runningPlain": "正在更新",
+        "doneDetail": "用时 {{time}} · 新的对话会用新版本",
+        "failedDetail": "{{name}} 仍在用原来的版本，可以照常使用"
+      },
+      "rollback": {
+        "list": "回滚中 · {{step}}",
+        "status": "正在回滚，新消息会排队",
+        "done": "已回滚到 {{version}}",
+        "failed": "回滚没有完成",
+        "running": "正在回滚到 {{version}}",
+        "runningPlain": "正在回滚",
+        "doneDetail": "用时 {{time}}",
+        "failedDetail": "{{name}} 仍在用当前版本"
+      },
+      "view": "查看进度",
+      "cancel": "取消更新",
+      "retry": "重试",
+      "rollbackTo": "回滚到 {{version}}",
+      "rollbackPlain": "回滚到上一个版本",
+      "close": "关闭提示",
+      "leaveHint": "可以离开这个页面：更新在后台继续，完成或失败都会提示你。",
+      "checking": "正在检查 {{name}}",
+      "installLeaveHint": "可以离开这个页面：装好后会提示你。"
+    },
+    "toast": {
+      "region": "Agent 后台任务",
+      "updating": "{{name}} 正在更新",
+      "rollingBack": "{{name}} 正在回滚",
+      "updated": "{{name}} 已更新到 {{version}}",
+      "rolledBack": "{{name}} 已回滚到 {{version}}",
+      "updatedDetail": "用时 {{time}} · 新对话会用新版本",
+      "updateFailed": "{{name}} 更新没有完成",
+      "updateFailedDetail": "仍在用原来的版本，可以照常使用",
+      "installing": "{{name}} 正在安装",
+      "installed": "{{name}} 安装好了",
+      "installedDetail": "下一步：选连接方式并检查",
+      "installFailed": "{{name}} 安装没有完成",
+      "view": "查看",
+      "connect": "去接入",
+      "hide": "收起",
+      "close": "关闭"
+    },
+    "header": {
+      "updatePill": "新版本 {{version}}",
+      "updateFailedPill": "更新没有完成"
+    },
+    "check": {
+      "ok": "连接正常",
+      "failed": "检查没有通过",
+      "never": "还没有检查过",
+      "passed": "{{count}} 项通过",
+      "issues": "{{count}} 项需要处理",
+      "unverified": "账号和额度要在真实对话里才能确认",
+      "at": "{{time}} 检查",
+      "free": "只做握手，不发送提示词，不消耗额度。",
+      "trialAsk": "想确认真实对话能跑通？"
+    },
+    "onlyMode": "{{name}} 只支持这一种",
+    "tagline": "检查通过后出现在新建对话和群聊成员里",
+    "addAgent": "添加 Agent"
   }
 }

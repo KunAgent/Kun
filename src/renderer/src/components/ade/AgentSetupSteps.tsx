@@ -15,21 +15,23 @@ import type { AgentPresentation } from './agent-center-presentation'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
-function Step({ index, done, active, title, description, children }: {
+function Step({ index, done, active, last = false, title, description, children }: {
   index: number
   done: boolean
   active: boolean
+  last?: boolean
   title: string
   description?: ReactNode
   children?: ReactNode
 }): ReactElement {
   return <li data-agent-step={index} data-done={done || undefined} aria-current={active ? 'step' : undefined}
-    className={`grid grid-cols-[28px_minmax(0,1fr)] gap-3.5 px-5 py-4 ${active || done ? '' : 'opacity-60'}`}>
-    <span className={`mt-0.5 grid h-[26px] w-[26px] place-items-center rounded-full text-[12px] font-bold ${done ? 'bg-ds-success-soft text-ds-status-success' : active ? 'bg-control text-control-foreground' : 'bg-ds-subtle text-ds-muted'}`}>
+    className={`relative grid grid-cols-[28px_minmax(0,1fr)] gap-x-3.5 ${last ? '' : 'pb-6'} ${active || done ? '' : 'opacity-55'}`}>
+    {last ? null : <span aria-hidden className="absolute bottom-1 left-[13px] top-[32px] w-0.5 rounded bg-ds-border-muted" />}
+    <span className={`relative grid h-7 w-7 place-items-center rounded-full text-[12px] font-bold ${done ? 'bg-ds-success-soft text-ds-status-success' : active ? 'bg-control text-control-foreground' : 'bg-ds-subtle text-ds-muted'}`}>
       {done ? <Check aria-hidden size={14} strokeWidth={2.8} /> : index}
     </span>
-    <div className="min-w-0">
-      <h4 className="text-[13.5px] font-semibold text-ds-ink">{title}</h4>
+    <div className="min-w-0 pt-1">
+      <h4 className="text-[13.5px] font-semibold leading-5 text-ds-ink">{title}</h4>
       {description ? <div className="mt-1 text-[12px] leading-[1.5] text-ds-muted">{description}</div> : null}
       {children}
     </div>
@@ -41,7 +43,7 @@ function Step({ index, done, active, title, description, children }: {
  * reaches its models, then check and turn it on. The check is the same action
  * as the switch in the header.
  */
-export function AgentSetupSteps({ row, presentation, settings, entry, profile, modelsEnabled, checking, platform, onConnectionChange, onEnable, onPatchHarness, onSetBinaryPath, onSetupCommand, beforeEnableCheck, t, tSettings }: {
+export function AgentSetupSteps({ row, presentation, settings, entry, profile, modelsEnabled, checking, platform, onConnectionChange, onEnable, onSetBinaryPath, onSetupCommand, t, tSettings }: {
   row: AdeHarnessRow
   presentation: AgentPresentation
   settings: KunHarnessSettingsV1
@@ -52,11 +54,9 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
   platform: string
   onConnectionChange: (patch: Partial<KunHarnessDefaultsEntryV1>) => void
   onEnable: () => void
-  onPatchHarness: (patch: Partial<KunHarnessSettingsV1>) => void
   onSetBinaryPath: (path: string) => void
   /** Hands a reviewed command to a Kun terminal tab; the user runs it. */
   onSetupCommand?: (harnessId: string, command: string, title: string) => void
-  beforeEnableCheck?: () => Promise<boolean>
   t: T
   tSettings: T
 }): ReactElement {
@@ -78,12 +78,12 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
     <p className="mt-1.5 text-[11px] text-ds-faint">{tSettings('adeSettings.harnessCommandPathDesc')}</p>
   </div>
 
-  return <section className="ds-settings-card rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card" data-agent-setup={definition.id}>
-    <div className="px-5 pb-1 pt-4">
-      <h3 className="text-[15px] font-semibold text-ds-ink">{t('agentCenter.setup.title', { name })}</h3>
+  return <section className="space-y-5" data-agent-setup={definition.id}>
+    <div>
+      <h3 className="text-[14px] font-semibold leading-5 text-ds-ink">{t('agentCenter.setup.title', { name })}</h3>
       <p className="mt-1 text-[12px] text-ds-muted">{t('agentCenter.setup.subtitle', { name })}</p>
     </div>
-    <ol className="divide-y divide-ds-border-muted">
+    <ol>
       <Step index={1} done={installed && !versionLow} active={!installed || versionLow} title={t('agentCenter.setup.install')}
         description={detecting ? t('agentCenter.state.detecting.status')
           : versionLow ? t('agentCenter.state.versionLow.status')
@@ -91,7 +91,7 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
               : installed
                 ? t(status.version ? 'agentCenter.setup.installedVersion' : 'agentCenter.setup.installed', { name, version: status.version ?? '', path: status.resolvedCommand ?? '' })
                 : t(installable ? 'agentCenter.setup.missingInstall' : 'agentCenter.setup.missing')}>
-        {versionLow ? <div className="mt-3"><AgentUpdateControl row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} t={t} /></div> : null}
+        {versionLow ? <div className="mt-3"><AgentUpdateControl row={row} t={t} /></div> : null}
         {!installed && !detecting && installable ? <AgentInstallControl harnessId={definition.id} action={presentation.state === 'adapterMissing' ? 'adapter' : 'install'}
           needed={status.installed !== 'yes' || status.versionSupported === false || presentation.state === 'adapterMissing'} t={t} /> : null}
         <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
@@ -111,13 +111,13 @@ export function AgentSetupSteps({ row, presentation, settings, entry, profile, m
       </Step>
       <Step index={2} done={false} active={installed} title={t('agentCenter.setup.connection')}
         description={t('agentCenter.setup.connectionDesc', { name })}>
-        <div className="-mx-3 mt-2" data-agent-enablement-fields={definition.id}>
+        <div className="ds-agent-group mt-3 divide-y divide-ds-border-muted overflow-hidden rounded-xl border border-ds-border-muted bg-ds-card px-1" data-agent-enablement-fields={definition.id}>
           <AgentConnectionFields row={row} value={entry} profile={profile} modelsEnabled={modelsEnabled} onChange={onConnectionChange} />
           {profile.credentialMode === 'native-login' && installed
             ? <AgentLoginRow row={row} platform={platform} onSetupCommand={onSetupCommand} t={t} /> : null}
         </div>
       </Step>
-      <Step index={3} done={false} active={installed} title={t('agentCenter.setup.check')} description={t(definition.transport === 'terminal' ? 'agentIntegrations.terminalExplanation' : 'agentCenter.setup.checkDesc')}>
+      <Step index={3} done={false} active={installed} last title={t('agentCenter.setup.check')} description={t(definition.transport === 'terminal' ? 'agentIntegrations.terminalExplanation' : 'agentCenter.setup.checkDesc')}>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button type="button" data-agent-enable-step disabled={locked || checking} aria-busy={checking} onClick={onEnable}
             className={settingsButtonClass({ variant: 'primary' })}>{t('agentEnablement.enable')}</button>

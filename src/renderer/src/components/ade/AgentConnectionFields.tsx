@@ -53,30 +53,40 @@ export function AgentConnectionFields({ row, value, profile, modelsEnabled, onCh
     if (mode !== profile.credentialMode) onChange({ credentialMode: mode, providerId: undefined, gatewayBinding: undefined, model: undefined })
   }
 
+  const modes = row.definition.credentialModes
+  const modeLabel = (mode: AdeHarnessCredentialMode): ReactElement => <>{MODE_ICON[mode]}{t(`adeCredential.${MODE_KEY[mode]}`)}</>
+
   return <>
-    <div className="px-3 pb-1 pt-3.5">
-      <div id={`agent-mode-${id}`} className="mb-2 text-[13px] font-medium text-ds-ink">{t('agentEnablement.profile')}</div>
-      <div role="radiogroup" aria-labelledby={`agent-mode-${id}`} data-agent-profile-mode
-        className="grid gap-2 sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
-        {row.definition.credentialModes.map((mode) => {
-          const selected = mode === profile.credentialMode
-          return <button key={mode} type="button" role="radio" aria-checked={selected} data-agent-profile-mode-option={mode}
-            onClick={() => selectMode(mode)}
-            className={`flex min-h-11 flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/40 ${selected ? 'border-[var(--ds-control)] bg-ds-card shadow-[0_0_0_1px_var(--ds-control)]' : 'border-ds-border bg-ds-subtle hover:border-[var(--ds-border-strong)] hover:bg-ds-hover'}`}>
-            <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ds-ink">
-              {MODE_ICON[mode]}{t(`adeCredential.${MODE_KEY[mode]}`)}
-            </span>
-            <span className="text-[11.5px] leading-[1.45] text-ds-muted">{t(`agentCenter.modeDesc.${MODE_KEY[mode]}`)}</span>
-          </button>
-        })}
-      </div>
+    <div className="px-3 py-3.5" data-agent-mode-block>
+      {modes.length === 1 ? <div role="radiogroup" aria-label={t('agentEnablement.profile')} data-agent-profile-mode
+        className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
+        <div role="radio" aria-checked="true" aria-label={t(`adeCredential.${MODE_KEY[modes[0]!]}`)} data-agent-profile-mode-option={modes[0]} className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[13px] font-medium text-ds-ink">{modeLabel(modes[0]!)}</div>
+          <p className="mt-0.5 text-[12px] leading-[1.45] text-ds-muted">{t(`agentCenter.modeDesc.${MODE_KEY[modes[0]!]}`)}</p>
+        </div>
+        <span className="text-[12px] text-ds-faint">{t('agentCenter.onlyMode', { name: row.definition.displayName })}</span>
+      </div> : <>
+        <div role="radiogroup" aria-label={t('agentEnablement.profile')} data-agent-profile-mode
+          className="inline-flex max-w-full flex-wrap gap-0.5 rounded-[10px] bg-ds-subtle p-[3px]">
+          {modes.map((mode) => {
+            const selected = mode === profile.credentialMode
+            return <button key={mode} type="button" role="radio" aria-checked={selected} data-agent-profile-mode-option={mode}
+              onClick={() => selectMode(mode)}
+              className={`inline-flex h-[30px] items-center gap-1.5 rounded-lg px-3 text-[12.5px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/40 ${selected
+                ? 'bg-ds-card font-semibold text-ds-ink shadow-[0_1px_2px_rgba(20,24,40,0.08),0_0_0_1px_var(--ds-border)]' : 'text-ds-muted hover:text-ds-ink'}`}>
+              {modeLabel(mode)}
+            </button>
+          })}
+        </div>
+        <p className="mt-2 text-[12px] leading-[1.45] text-ds-muted" data-agent-mode-desc>{t(`agentCenter.modeDesc.${MODE_KEY[profile.credentialMode]}`)}</p>
+      </>}
     </div>
     {native && nativeAccounts.length > 0 ? <SettingRow title={t('agentEnablement.nativeAccount')} control={<AgentSettingsSelect
       marker="data-agent-profile-provider" label={t('agentEnablement.nativeAccount')} value={profile.providerId ?? ''}
       onChange={(next) => onChange({ providerId: next || undefined, model: undefined })}
       options={[{ value: '', label: t('agentEnablement.systemAccount'), icon: <UserRound size={15} /> },
         ...nativeAccounts.map((account) => ({ value: account.providerId, label: account.label, icon: <UserRound size={15} /> }))]} />} /> : null}
-    {!native ? <SettingRow title={t('agentEnablement.provider')} control={<AgentSettingsSelect
+    {!native ? <SettingRow title={t('agentEnablement.provider')} control={<div className="flex w-full flex-col items-end gap-1.5"><AgentSettingsSelect
       marker="data-agent-profile-provider" label={t('agentEnablement.provider')}
       value={profile.gatewayBinding ? `@alias:${profile.gatewayBinding.main.routeId}` : profile.providerId ?? ''}
       onChange={(next) => {
@@ -86,10 +96,9 @@ export function AgentConnectionFields({ row, value, profile, modelsEnabled, onCh
       }}
       options={[{ value: '', label: t('agentEnablement.chooseProvider') },
         ...(profile.credentialMode === 'kun-gateway' ? groups?.aliasGroups ?? [] : []).map((alias) => ({ value: `@alias:${alias.routeId}`, label: `${t('agentEnablement.alias')} · ${alias.label}`, icon: <Network size={15} /> })),
-        ...(groups?.groups ?? []).map((group) => ({ value: group.providerId, label: group.label, icon: <KeyRound size={15} /> }))]} />} /> : null}
-    {!native ? <div className="px-3 pb-2"><button type="button" data-agent-manage-providers
-      onClick={() => useChatStore.getState().openSettings('providers')}
-      className="text-[12px] font-medium text-accent hover:underline">{t('agentCenter.connection.manageProviders')}</button></div> : null}
+        ...(groups?.groups ?? []).map((group) => ({ value: group.providerId, label: group.label, icon: <KeyRound size={15} /> }))]} />
+      <button type="button" data-agent-manage-providers onClick={() => useChatStore.getState().openSettings('providers')}
+        className="text-[12px] font-medium text-accent hover:underline">{t('agentCenter.connection.manageProviders')}</button></div>} /> : null}
     {profile.gatewayBinding ? <div className="px-3 pb-3"><AgentAliasSettings binding={profile.gatewayBinding} aliases={groups?.aliasGroups ?? []}
       supportsSmall={Boolean(row.definition.gateway?.env.smallModel)} change={(gatewayBinding) => onChange({ gatewayBinding })} /></div> : null}
     {terminal && native ? <p className="px-3 py-3.5 text-[12px] text-ds-muted" data-agent-terminal-model-hint>{t('agentIntegrations.terminalModelManaged')}</p>

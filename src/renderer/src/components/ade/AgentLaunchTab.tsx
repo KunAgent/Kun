@@ -3,7 +3,8 @@ import { Check, Copy } from 'lucide-react'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { KunHarnessSecretEnvEntryV1, KunHarnessSettingsV1 } from '@shared/app-settings'
 import { agentCommandPath, agentExtraArgs } from '@shared/harness-provider-settings'
-import { SettingRow, SettingsCard } from '../settings-controls'
+import { SettingRow } from '../settings-controls'
+import { AgentSection } from './AgentCenterParts'
 import { settingsButtonClass } from '../settings-button'
 import { useChatStore } from '../../store/chat-store'
 import { AgentCommandPathField } from './AgentCommandPathField'
@@ -43,20 +44,20 @@ export function AgentLaunchTab({ row, settings, probing, onProbe, onSetBinaryPat
     void navigator.clipboard?.writeText(preview).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2_000) }).catch(() => undefined)
   }
   if (definition.extension) {
-    return <SettingsCard title={t('agentCenter.launch.title')}>
+    return <AgentSection title={t('agentCenter.launch.title')}>
       <div className="space-y-2 px-3 py-3.5 text-[12.5px] text-ds-muted" data-agent-launch-readonly>
         <p>{t('agentCenter.launch.managedByExtension', { name: definition.extension.name ?? definition.extension.id })}</p>
         <button type="button" onClick={() => useChatStore.getState().openSettings('extensions')} className="font-medium text-accent hover:underline">{t('agentCenter.launch.openExtensions')}</button>
         {preview ? <p className="break-all font-mono text-[12px]">{preview}</p> : null}
       </div>
-    </SettingsCard>
+    </AgentSection>
   }
   const commitArgs = (): void => {
     const values = args.trim() ? args.trim().split(/\s+/) : []
     if (values.join(' ') !== storedArgs) onSetLaunchPatch?.({ args: values })
   }
-  return <div className="space-y-4" data-agent-launch={definition.id}>
-    <SettingsCard title={t('agentCenter.launch.title')} description={t('agentCenter.launch.desc', { name: definition.displayName })}>
+  return <div className="space-y-7" data-agent-launch={definition.id}>
+    <AgentSection title={t('agentCenter.launch.title')} description={t('agentCenter.launch.desc', { name: definition.displayName })}>
       <SettingRow wideControl title={tSettings('adeSettings.harnessCommandPath')} description={status.resolvedCommand
         ? t('agentCenter.launch.detected', { path: status.resolvedCommand }) : tSettings('adeSettings.harnessCommandPathDesc')}
       control={<AgentCommandPathField value={agentCommandPath(settings.providers, definition.id) ?? ''}
@@ -74,13 +75,13 @@ export function AgentLaunchTab({ row, settings, probing, onProbe, onSetBinaryPat
           <span data-agent-network-source={status.networkSource} className="text-ds-muted">{t(`adeAgentNetwork.${status.networkSource}`)}</span>
           <button type="button" disabled={probing} aria-busy={probing} onClick={onProbe} className={settingsButtonClass({ size: 'compact' })}>{t('adeAgentAction.retry')}</button>
         </div>} /> : null}
-    </SettingsCard>
-    {preview ? <SettingsCard title={t('agentCenter.launch.previewTitle')} description={t('agentCenter.launch.previewDesc', { name: definition.displayName })}
+    </AgentSection>
+    {preview ? <AgentSection title={t('agentCenter.launch.previewTitle')} description={t('agentCenter.launch.previewDesc', { name: definition.displayName })}
       action={<button type="button" onClick={copy} data-agent-launch-copy className={settingsButtonClass({ size: 'compact' })}>
         {copied ? <Check aria-hidden className="h-3.5 w-3.5" strokeWidth={2} /> : <Copy aria-hidden className="h-3.5 w-3.5" strokeWidth={2} />}
         {copied ? t('adeAgentCopied') : t('agentCenter.launch.copy')}
       </button>}>
       <pre data-agent-launch-preview className="mx-3 my-3 whitespace-pre-wrap break-all rounded-xl bg-ds-subtle px-3.5 py-3 font-mono text-[12px] leading-[1.7] text-ds-ink">{preview}</pre>
-    </SettingsCard> : null}
+    </AgentSection> : null}
   </div>
 }
