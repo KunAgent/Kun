@@ -5,10 +5,10 @@ import { BUILTIN_GITHUB_MCP_SERVER_ID } from '@shared/github-mcp'
 import {
   PERMISSION_LABELS,
   isAllowedDocsUrl,
+  itemKey,
   mcpServerConfigFromText,
   mcpServerEnabledFromConfig,
   normalizeSkillId,
-  storageKey,
   type MarketplaceItem,
   type PluginKind
 } from './plugin-marketplace-config'
@@ -194,9 +194,9 @@ export function PluginSection({
       ) : (
         <div className="grid gap-x-14 md:grid-cols-2">
           {items.map((item) => {
-            const itemKey = storageKey(item.kind, item.id)
+            const cardKey = itemKey(item)
             const installed = isInstalled(item)
-            const busy = busyId === itemKey
+            const busy = busyId === cardKey
             const normalizedSkillId = normalizeSkillId(item.id)
             const skillDisabled = item.kind === 'skill' && disabledSkillIds.includes(normalizedSkillId)
             const canToggleSkill = item.kind === 'skill' && item.group === 'personal' && onToggleSkillEnabled
@@ -209,7 +209,7 @@ export function PluginSection({
               item.systemManaged === true && item.id === BUILTIN_GITHUB_MCP_SERVER_ID
             return (
               <div
-                key={itemKey}
+                key={cardKey}
                 className="flex min-h-[92px] items-center gap-5 border-b border-ds-border-muted py-5"
               >
                 <div className="min-w-0 flex-1">
@@ -222,6 +222,14 @@ export function PluginSection({
                         className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold ${marketplaceSourceTone(item.statusTone)}`}
                       >
                         {item.sourceLabel}
+                      </span>
+                    ) : null}
+                    {item.market ? (
+                      <span
+                        className="shrink-0 rounded-md bg-violet-500/15 px-2 py-0.5 text-[11px] font-semibold text-violet-700 dark:text-violet-200"
+                        title={item.market.version ? `v${item.market.version}` : undefined}
+                      >
+                        {item.market.sourceLabel}
                       </span>
                     ) : null}
                     {skillDisabled ? (

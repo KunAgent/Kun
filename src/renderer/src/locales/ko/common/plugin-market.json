@@ -1,0 +1,16 @@
+{
+  "marketSourceFilterLabel": "출처",
+  "marketSourceAll": "전체",
+  "marketSourceKun": "Kun",
+  "marketRefresh": "마켓 카탈로그 새로고침",
+  "marketSyncing": "동기화 중…",
+  "marketSyncedAt": "{{time}}에 동기화됨",
+  "marketOfflineCache": "{{source}}에 연결할 수 없습니다. {{time}}에 캐시된 목록을 표시합니다.",
+  "marketLoadFailed": "{{source}}을(를) 불러오지 못했습니다: {{message}}",
+  "marketSectionTitle": "{{source}} 제공",
+  "marketNeedsKeys": "{{keys}} 필요",
+  "marketSkillInstalled": "{{source}}에서 {{name}}을(를) 설치했습니다: {{path}}",
+  "marketSkillInstallFailed": "{{name}}을(를) 설치하지 못했습니다: {{message}}",
+  "marketMcpPlanFailed": "{{name}}을(를) 준비하지 못했습니다: {{message}}",
+  "marketMcpNeedsKeys": "{{name}}을(를) 추가했습니다. 사용하기 전에 MCP 설정에서 {{keys}}을(를) 입력하세요."
+}

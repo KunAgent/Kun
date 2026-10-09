@@ -1,0 +1,16 @@
+{
+  "marketSourceFilterLabel": "来源",
+  "marketSourceAll": "全部",
+  "marketSourceKun": "Kun",
+  "marketRefresh": "刷新市场目录",
+  "marketSyncing": "同步中…",
+  "marketSyncedAt": "已同步 {{time}}",
+  "marketOfflineCache": "无法连接 {{source}}，正在显示 {{time}} 缓存的列表。",
+  "marketLoadFailed": "无法加载 {{source}}：{{message}}",
+  "marketSectionTitle": "来自{{source}}",
+  "marketNeedsKeys": "需要 {{keys}}",
+  "marketSkillInstalled": "已从{{source}}安装 {{name}}：{{path}}",
+  "marketSkillInstallFailed": "安装 {{name}} 失败：{{message}}",
+  "marketMcpPlanFailed": "无法准备 {{name}}：{{message}}",
+  "marketMcpNeedsKeys": "已添加 {{name}}。使用前请在 MCP 配置中填写 {{keys}}。"
+}

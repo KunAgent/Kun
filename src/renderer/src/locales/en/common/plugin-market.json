@@ -1,0 +1,16 @@
+{
+  "marketSourceFilterLabel": "Source",
+  "marketSourceAll": "All",
+  "marketSourceKun": "Kun",
+  "marketRefresh": "Refresh market catalogs",
+  "marketSyncing": "Syncing…",
+  "marketSyncedAt": "Synced {{time}}",
+  "marketOfflineCache": "{{source}} is unreachable. Showing the list cached on {{time}}.",
+  "marketLoadFailed": "Couldn't load {{source}}: {{message}}",
+  "marketSectionTitle": "From {{source}}",
+  "marketNeedsKeys": "Needs {{keys}}",
+  "marketSkillInstalled": "Installed {{name}} from {{source}}: {{path}}",
+  "marketSkillInstallFailed": "Couldn't install {{name}}: {{message}}",
+  "marketMcpPlanFailed": "Couldn't prepare {{name}}: {{message}}",
+  "marketMcpNeedsKeys": "Added {{name}}. Fill in {{keys}} in the MCP config before using it."
+}

@@ -1,0 +1,16 @@
+{
+  "marketSourceFilterLabel": "แหล่งที่มา",
+  "marketSourceAll": "ทั้งหมด",
+  "marketSourceKun": "Kun",
+  "marketRefresh": "รีเฟรชแคตตาล็อกตลาด",
+  "marketSyncing": "กำลังซิงก์…",
+  "marketSyncedAt": "ซิงก์เมื่อ {{time}}",
+  "marketOfflineCache": "เชื่อมต่อ {{source}} ไม่ได้ กำลังแสดงรายการที่แคชไว้เมื่อ {{time}}",
+  "marketLoadFailed": "โหลด {{source}} ไม่สำเร็จ: {{message}}",
+  "marketSectionTitle": "จาก {{source}}",
+  "marketNeedsKeys": "ต้องใช้ {{keys}}",
+  "marketSkillInstalled": "ติดตั้ง {{name}} จาก {{source}} แล้ว: {{path}}",
+  "marketSkillInstallFailed": "ติดตั้ง {{name}} ไม่สำเร็จ: {{message}}",
+  "marketMcpPlanFailed": "เตรียม {{name}} ไม่สำเร็จ: {{message}}",
+  "marketMcpNeedsKeys": "เพิ่ม {{name}} แล้ว กรุณากรอก {{keys}} ในการตั้งค่า MCP ก่อนใช้งาน"
+}

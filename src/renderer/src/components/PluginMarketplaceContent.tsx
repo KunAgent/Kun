@@ -30,6 +30,9 @@ import {
   GitHubSkillImportPanel,
   McpRuntimeOverlayPanel
 } from './PluginMarketplaceRuntimePanels'
+import { PluginMarketplaceSourceBar } from './PluginMarketplaceSourceBar'
+import type { MarketItemSection } from './plugin-marketplace-market'
+import type { MarketCatalogsState } from './use-market-catalogs'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
 
@@ -80,6 +83,8 @@ type PluginMarketplaceContentProps = {
   githubImportBusy: boolean
   githubImportSummary: { count: number; names: string[] } | null
   addFromGitHub: () => Promise<void>
+  market: MarketCatalogsState
+  marketSections: MarketItemSection[]
   notice: MarketplaceNotice | null
   oauthPreviewItem: MarketplaceItem | null
   setOauthPreviewItem: Dispatch<SetStateAction<MarketplaceItem | null>>
@@ -143,6 +148,8 @@ export function PluginMarketplaceContent({
   githubImportBusy,
   githubImportSummary,
   addFromGitHub,
+  market,
+  marketSections,
   notice,
   oauthPreviewItem,
   setOauthPreviewItem,
@@ -158,6 +165,8 @@ export function PluginMarketplaceContent({
   mcpToggleBusyId,
   toggleMcpEnabled
 }: PluginMarketplaceContentProps): ReactElement {
+  // A selected market source narrows the page to that market's cards.
+  const showKunSections = market.sourceFilter === 'all' || market.sourceFilter === 'builtin'
   return (
     <div className="ds-drag flex h-full min-h-0 flex-col bg-ds-main">
       <div className="ds-stage-inset shrink-0">
@@ -255,6 +264,16 @@ export function PluginMarketplaceContent({
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ds-faint" />
           </label>
         </div>
+
+        <PluginMarketplaceSourceBar
+          sources={market.sourceOptions}
+          filter={market.sourceFilter}
+          onFilter={market.setSourceFilter}
+          syncing={market.syncing}
+          statuses={market.statuses}
+          onRefresh={() => void market.refresh()}
+          t={t}
+        />
 
         {activeKind === 'skill' ? (
           <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-center">
@@ -356,7 +375,7 @@ export function PluginMarketplaceContent({
           />
         ) : null}
 
-        {activeKind === 'mcp' ? (
+        {activeKind === 'mcp' && showKunSections ? (
           <PluginSection
             title={t('pluginBuiltIn')}
             emptyText={t('pluginNoResults')}
@@ -374,21 +393,37 @@ export function PluginMarketplaceContent({
           />
         ) : null}
 
-        <PluginSection
-          title={t('pluginRecommended')}
-          emptyText={t('pluginNoResults')}
-          items={recommendedItems}
-          busyId={busyId}
-          isInstalled={isInstalled}
-          onAdd={addItem}
-          disabledSkillIds={disabledSkillIds}
-          skillToggleBusyId={skillToggleBusyId}
-          onToggleSkillEnabled={toggleSkillEnabled}
-          mcpConfigText={mcpConfigText}
-          mcpToggleBusyId={mcpToggleBusyId}
-          onToggleMcpEnabled={toggleMcpEnabled}
-          t={t}
-        />
+        {showKunSections ? (
+          <PluginSection
+            title={t('pluginRecommended')}
+            emptyText={t('pluginNoResults')}
+            items={recommendedItems}
+            busyId={busyId}
+            isInstalled={isInstalled}
+            onAdd={addItem}
+            disabledSkillIds={disabledSkillIds}
+            skillToggleBusyId={skillToggleBusyId}
+            onToggleSkillEnabled={toggleSkillEnabled}
+            mcpConfigText={mcpConfigText}
+            mcpToggleBusyId={mcpToggleBusyId}
+            onToggleMcpEnabled={toggleMcpEnabled}
+            t={t}
+          />
+        ) : null}
+
+        {marketSections.map((section) => (
+          <PluginSection
+            key={section.sourceId}
+            title={t('marketSectionTitle', { source: section.label })}
+            emptyText={t('pluginNoResults')}
+            items={section.items}
+            busyId={busyId}
+            isInstalled={isInstalled}
+            onAdd={addItem}
+            mcpConfigText={mcpConfigText}
+            t={t}
+          />
+        ))}
 
         <PluginSection
           title={t('pluginPersonal')}

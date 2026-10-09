@@ -39,6 +39,8 @@ export {
   skillRootShortLabel
 } from './plugin-marketplace-catalog'
 import { GitHubMcpAuthorizationDialog } from './GitHubMcpAuthorizationDialog'
+import { useGitHubSkillImport } from './use-github-skill-import'
+import { useMarketCatalogs } from './use-market-catalogs'
 import { useGitHubMcpAuthorization, type GitHubMcpRuntimeCheck } from './use-github-mcp-authorization'
 import { PluginMarketplaceContent } from './PluginMarketplaceContent'
 import { runtimeOverlayErrorMessage } from './PluginMarketplaceRuntimePanels'
@@ -50,6 +52,7 @@ import {
   buildSkillContent,
   customMcpConfigFragment,
   GUI_SCHEDULE_MCP_SERVER_ID,
+  itemKey,
   loadInstalledPlugins,
   mcpConfigHasServer,
   mcpConfigHasServers,
@@ -70,7 +73,7 @@ import {
 } from './plugin-marketplace-config'
 
 export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSidebar }: Props): ReactElement {
-  const { t } = useTranslation('common')
+  const { t, i18n } = useTranslation('common')
   const workspaceRoot = normalizeWorkspaceRoot(useChatStore((s) => s.workspaceRoot))
   const [activeKind, setActiveKind] = useState<PluginKind>('mcp')
   const [query, setQuery] = useState('')
@@ -79,13 +82,6 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
   const [busyId, setBusyId] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
-  const [githubImportOpen, setGithubImportOpen] = useState(false)
-  const [githubImportUrl, setGithubImportUrl] = useState('')
-  const [githubImportBusy, setGithubImportBusy] = useState(false)
-  const [githubImportSummary, setGithubImportSummary] = useState<{
-    count: number
-    names: string[]
-  } | null>(null)
   const [customName, setCustomName] = useState('')
   const [customDescription, setCustomDescription] = useState('')
   const [customCommand, setCustomCommand] = useState('')
@@ -260,12 +256,20 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
     }
   }, [activeKind])
 
+  const github = useGitHubSkillImport({
+    t,
+    skillRootPath: selectedSkillRoot?.path,
+    setNotice,
+    refreshSkills: () => Promise.all([refreshSkillList(), refreshSkillRoots()])
+  })
+  const market = useMarketCatalogs({ t, language: i18n.language, discoveredSkills })
+  const resetGithubImport = github.reset
+
   useEffect(() => {
     setNotice(null)
     setCustomOpen(false)
-    setGithubImportOpen(false)
-    setGithubImportSummary(null)
-  }, [activeKind])
+    resetGithubImport()
+  }, [activeKind, resetGithubImport])
 
   const markInstalled = (key: string): void => {
     setInstalled((prev) => {
@@ -283,8 +287,8 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
     () => skillMarketplaceItemsFromDiscoveredSkills(discoveredSkills, {
       project: t('pluginSkillSourceProject'),
       global: t('pluginSkillSourceGlobal')
-    }),
-    [discoveredSkills, t]
+    }).map(market.attribute),
+    [discoveredSkills, market.attribute, t]
   )
   const mcpRuntimeLabels = useMemo(() => ({
     configured: t('pluginMcpSourceConfigured'),
@@ -305,8 +309,8 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
       mcpConfigText,
       toolDiagnostics,
       mcpRuntimeLabels
-    ).filter((item) => !isSystemManagedMcpServerId(item.id, mcpConfigText, toolDiagnostics)),
-    [mcpConfigText, mcpRuntimeLabels, toolDiagnostics]
+    ).filter((item) => !isSystemManagedMcpServerId(item.id, mcpConfigText, toolDiagnostics)).map(market.attribute),
+    [market.attribute, mcpConfigText, mcpRuntimeLabels, toolDiagnostics]
   )
   const discoveredMcpIds = useMemo(
     () => new Set(discoveredMcpItems.map((item) => item.id)),
@@ -322,9 +326,9 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
   )
   const marketplaceItems = useMemo(
     () => activeKind === 'skill'
-      ? [...catalogItems, ...discoveredSkillItems]
-      : [...catalogItems, ...discoveredMcpItems],
-    [activeKind, catalogItems, discoveredMcpItems, discoveredSkillItems]
+      ? [...catalogItems, ...discoveredSkillItems, ...market.catalogItems]
+      : [...catalogItems, ...discoveredMcpItems, ...market.catalogItems],
+    [activeKind, catalogItems, discoveredMcpItems, discoveredSkillItems, market.catalogItems]
   )
 
   const isInstalled = useCallback((item: Pick<MarketplaceItem, 'kind' | 'id'> & Partial<Pick<MarketplaceItem, 'group' | 'serverIds'>>): boolean => {
@@ -342,6 +346,7 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
   const visibleItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
     return marketplaceItems.filter((item) => item.kind === activeKind)
+      .filter(market.matchesSource)
       .filter((item) => {
         const title = itemTitle(item, t).toLowerCase()
         const description = itemDescription(item, t).toLowerCase()
@@ -357,10 +362,12 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
         if (filter === 'installed') return isInstalled(item)
         return true
       })
-  }, [activeKind, filter, isInstalled, marketplaceItems, query, t])
+  }, [activeKind, filter, isInstalled, market.matchesSource, marketplaceItems, query, t])
 
   const builtInItems = visibleItems.filter((item) => item.systemManaged)
-  const recommendedItems = visibleItems.filter((item) => !item.systemManaged && !isInstalled(item))
+  const { plain: recommendedItems, sections: marketSections } = market.split(
+    visibleItems.filter((item) => !item.systemManaged && !isInstalled(item))
+  )
   const personalItems = visibleItems.filter((item) =>
     item.group === 'personal' ||
     (!item.systemManaged && isInstalled(item) && !discoveredSkillIds.has(item.id) && !discoveredMcpIds.has(item.id))
@@ -411,11 +418,13 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
       setOauthPreviewItem(item)
       return
     }
-    setBusyId(storageKey(item.kind, item.id))
+    setBusyId(itemKey(item))
     setNotice(null)
     try {
       if (item.kind === 'mcp') {
-        await installMcpItem(item)
+        await installMcpItem(item.market ? await market.planMcpItem(item) : item)
+        const followUp = market.afterMcpInstall(item)
+        if (followUp) setNotice(followUp)
         return
       }
 
@@ -424,6 +433,15 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
         return
       }
       if (item.group === 'personal') return
+      if (item.market) {
+        const outcome = await market.installSkill(item, selectedSkillRoot.path)
+        setNotice(outcome)
+        if (outcome.installed) {
+          markInstalled(storageKey('skill', item.id))
+          await Promise.all([refreshSkillList(), refreshSkillRoots()])
+        }
+        return
+      }
       const title = itemTitle(item, t)
       const description = itemDescription(item, t)
       const content = buildSkillContent(
@@ -576,38 +594,6 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
     }
   }
 
-  const addFromGitHub = async (): Promise<void> => {
-    if (!selectedSkillRoot?.path) {
-      setNotice({ tone: 'error', message: t('pluginSkillRootMissing') })
-      return
-    }
-    const trimmedUrl = githubImportUrl.trim()
-    if (!trimmedUrl) {
-      setNotice({ tone: 'error', message: t('pluginGithubImportUrlRequired') })
-      return
-    }
-    setGithubImportBusy(true)
-    setNotice(null)
-    setGithubImportSummary(null)
-    try {
-      const result = await window.kunGui.importSkillsFromGitHub(selectedSkillRoot.path, trimmedUrl)
-      if (!result.ok) {
-        throw new Error(result.message)
-      }
-      await Promise.all([refreshSkillList(), refreshSkillRoots()])
-      setGithubImportSummary({
-        count: result.count,
-        names: result.names
-      })
-      setNotice({ tone: 'success', message: t('pluginGithubImportSuccess', { count: result.count }) })
-      setGithubImportUrl('')
-    } catch (error) {
-      setNotice({ tone: 'error', message: error instanceof Error ? error.message : String(error) })
-    } finally {
-      setGithubImportBusy(false)
-    }
-  }
-
   return (
     <>
       <PluginMarketplaceContent
@@ -622,8 +608,8 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
       setFilter={setFilter}
       customOpen={customOpen}
       setCustomOpen={setCustomOpen}
-      githubImportOpen={githubImportOpen}
-      setGithubImportOpen={setGithubImportOpen}
+      githubImportOpen={github.open}
+      setGithubImportOpen={github.setOpen}
       selectedSkillRoot={selectedSkillRoot}
       skillRootOptions={skillRootOptions}
       setSkillRootId={setSkillRootId}
@@ -652,11 +638,13 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
       setCustomSkillBody={setCustomSkillBody}
       busyId={busyId}
       addCustom={addCustom}
-      githubImportUrl={githubImportUrl}
-      setGithubImportUrl={setGithubImportUrl}
-      githubImportBusy={githubImportBusy}
-      githubImportSummary={githubImportSummary}
-      addFromGitHub={addFromGitHub}
+      githubImportUrl={github.url}
+      setGithubImportUrl={github.setUrl}
+      githubImportBusy={github.busy}
+      githubImportSummary={github.summary}
+      addFromGitHub={github.importSkills}
+      market={market}
+      marketSections={marketSections}
       notice={notice}
       oauthPreviewItem={oauthPreviewItem}
       setOauthPreviewItem={setOauthPreviewItem}

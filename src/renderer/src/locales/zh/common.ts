@@ -16,6 +16,7 @@ import roomsWorkbench from './common/rooms-workbench.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
 import phoneComposer from './common/phone-composer.json'
+import pluginMarket from './common/plugin-market.json'
 import composerFastMode from './common/composer-fast-mode.json'
 import commandsSdd from './common/commands-sdd.json'
 import providerErrors from './common/provider-errors.json'
@@ -76,6 +77,7 @@ const common = {
   ...shellWorkflow,
   ...workflowConnect,
   ...phoneComposer,
+  ...pluginMarket,
   ...composerFastMode,
   ...commandsSdd,
   ...executionTasks,

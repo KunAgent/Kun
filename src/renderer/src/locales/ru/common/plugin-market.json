@@ -1,0 +1,16 @@
+{
+  "marketSourceFilterLabel": "Источник",
+  "marketSourceAll": "Все",
+  "marketSourceKun": "Kun",
+  "marketRefresh": "Обновить каталоги маркетов",
+  "marketSyncing": "Синхронизация…",
+  "marketSyncedAt": "Синхронизировано {{time}}",
+  "marketOfflineCache": "{{source}} недоступен. Показан список из кэша от {{time}}.",
+  "marketLoadFailed": "Не удалось загрузить {{source}}: {{message}}",
+  "marketSectionTitle": "Из {{source}}",
+  "marketNeedsKeys": "Требуется {{keys}}",
+  "marketSkillInstalled": "{{name}} установлен из {{source}}: {{path}}",
+  "marketSkillInstallFailed": "Не удалось установить {{name}}: {{message}}",
+  "marketMcpPlanFailed": "Не удалось подготовить {{name}}: {{message}}",
+  "marketMcpNeedsKeys": "{{name}} добавлен. Перед использованием укажите {{keys}} в конфигурации MCP."
+}

@@ -256,6 +256,8 @@ export type SkillListItem = {
   scope: 'project' | 'global'
   builtin?: boolean
   legacy: boolean
+  /** Set when the skill was installed from a remote market. */
+  market?: { sourceId: string; version?: string }
 }
 export type SkillListResult = { ok: true; skills: SkillListItem[]; validationErrors: Array<{ root: string; message: string }> }
   | { ok: false; message: string }
