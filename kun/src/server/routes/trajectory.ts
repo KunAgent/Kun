@@ -65,11 +65,14 @@ async function serviceFor(runtime: ServerRuntime, threadId: string): Promise<
   | { value: TrajectoryQueryService }
   | { error: JsonResponse }
 > {
-  if (!await runtime.threadService.get(threadId)) {
+  const thread = await runtime.threadService.get(threadId)
+  if (!thread) {
     return { error: ERRORS.notFound(`thread not found: ${threadId}`) }
   }
   if (!runtime.llmDebug) {
     return { error: ERRORS.unavailable('trajectory recorder is unavailable') }
   }
-  return { value: new TrajectoryQueryService(runtime.llmDebug, runtime.sessionStore) }
+  return {
+    value: new TrajectoryQueryService(runtime.llmDebug, runtime.sessionStore, async () => thread.turns)
+  }
 }

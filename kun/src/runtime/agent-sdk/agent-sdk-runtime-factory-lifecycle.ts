@@ -104,6 +104,7 @@ import {
 } from '../delegated-graph-turn-policy.js'
 
 import { maybeExternalSubagentRouting } from '../external-subagent-routing.js'
+import { DelegatedItemTimes } from '../delegated-item-times.js'
 import type { AgentSdkRuntimeFactoryDeps } from './agent-sdk-runtime-factory-contracts.js'
 import type { AgentSdkFactoryContext } from './agent-sdk-runtime-factory-context.js'
 
@@ -119,6 +120,7 @@ export function createAgentSdkLifecycleRuntimeDeps(
   // Claude Code subagents are mirrored into hidden side threads (sdk-subagent-router).
   const subagents = maybeExternalSubagentRouting(deps)
   const applyParentItem = (threadId: string, item: TurnItem) => deps.turns.applyItem(threadId, item)
+  const itemTimes = new DelegatedItemTimes()
   return {
     readiness: deps.readiness,
     async recordEvent(draft): Promise<void> {
@@ -127,12 +129,13 @@ export function createAgentSdkLifecycleRuntimeDeps(
     },
 
     async applyItem(threadId, item): Promise<void> {
-      if (subagents) await subagents.applyItem(threadId, item, applyParentItem)
-      else await applyParentItem(threadId, item)
+      const stamped = itemTimes.stamp(item)
+      if (subagents) await subagents.applyItem(threadId, stamped, applyParentItem)
+      else await applyParentItem(threadId, stamped)
     },
 
     async applyAssistantDelta(threadId, item, deltaText, deltaOffset): Promise<void> {
-      await deps.turns.applyAssistantDelta(threadId, item, deltaText, deltaOffset)
+      await deps.turns.applyAssistantDelta(threadId, itemTimes.stamp(item), deltaText, deltaOffset)
     },
 
     async finishTurn(threadId, turnId, status, error, code): Promise<TurnRunOutcome> {

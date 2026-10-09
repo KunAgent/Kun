@@ -71,7 +71,13 @@ export const trajectoryRequestRecordSchema = recordBaseSchema.extend({
   previousPromptFingerprint: z.string().optional(),
   systemBlobId: z.string().optional(),
   toolsBlobId: z.string().optional(),
-  configBlobId: z.string().optional()
+  configBlobId: z.string().optional(),
+  /** `agent`: a third-party Agent's call rebuilt from its output and usage. */
+  origin: z.enum(['kun', 'agent']).optional(),
+  harnessId: z.string().optional(),
+  harnessLabel: z.string().optional(),
+  usageAttribution: z.enum(['call', 'aggregate', 'included', 'unreported']).optional(),
+  usageSteps: z.number().int().positive().optional()
 })
 
 export const trajectoryToolRecordSchema = recordBaseSchema.extend({

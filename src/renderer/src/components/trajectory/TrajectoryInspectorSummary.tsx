@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import type { ReactElement, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { TrajectoryDetailSection } from '../../agent/trajectory'
+import type { TrajectoryDetailSection, TrajectoryRequestRecord } from '../../agent/trajectory'
 import type { HarnessCell, HarnessRequestBoundary } from './trajectory-harness-model'
 import { trajectorySourceTypeLabel } from './trajectory-source-label'
 import styles from './TrajectoryInspector.module.css'
@@ -44,7 +44,9 @@ export function TrajectoryInspectorSummary({
         ) : null}
         {request ? <SummaryRow label={t('trajectoryDetailProvider')}>{request.request.provider}</SummaryRow> : null}
         {request ? <SummaryRow label={t('trajectoryDetailModel')}>{request.request.model}</SummaryRow> : null}
-        {request ? <SummaryRow label={t('trajectoryDetailAttempt')}>{request.request.attempt}</SummaryRow> : null}
+        {request?.request.origin === 'agent' && request.request.harnessId ? (
+          <SummaryRow label={t('trajectoryDetailAgent')}>{request.request.harnessLabel ?? request.request.harnessId}</SummaryRow>
+        ) : request ? <SummaryRow label={t('trajectoryDetailAttempt')}>{request.request.attempt}</SummaryRow> : null}
         {cell?.record.kind === 'tool' || cell?.record.kind === 'subtool' ? (
           <>
             <SummaryRow label={t('trajectoryDetailTool')}>{cell.record.toolName}</SummaryRow>
@@ -73,6 +75,7 @@ export function TrajectoryInspectorSummary({
           <SummaryRow label={t('trajectoryDetailError')}><span className={styles.summaryError}>{cell.record.errorMessage}</span></SummaryRow>
         ) : null}
       </dl>
+      {requestRecord?.origin === 'agent' ? <AgentUsageNote request={requestRecord} /> : null}
       <div className={styles.summarySections}>
         {request ? (
           <>
@@ -112,6 +115,23 @@ export function TrajectoryInspectorSummary({
         ) : null}
       </div>
     </div>
+  )
+}
+
+/** Kun rebuilt this call from an Agent's output; say how its usage was reported. */
+function AgentUsageNote({ request }: { request: TrajectoryRequestRecord }): ReactElement {
+  const { t } = useTranslation('common')
+  const note = request.usageAttribution === 'aggregate'
+    ? t('trajectoryAgentUsageAggregate', { steps: request.usageSteps ?? 1 })
+    : request.usageAttribution === 'included'
+      ? t('trajectoryAgentUsageIncluded')
+      : request.usageAttribution === 'unreported'
+        ? t('trajectoryAgentUsageUnreported')
+        : null
+  return (
+    <p className={styles.summaryNote} data-trajectory-agent-note="">
+      {t('trajectoryAgentRequestHint')}{note ? ` ${note}` : ''}
+    </p>
   )
 }
 

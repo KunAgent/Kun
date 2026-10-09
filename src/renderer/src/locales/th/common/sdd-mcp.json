@@ -492,6 +492,11 @@
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
   "trajectoryDetailError": "Error",
+  "trajectoryDetailAgent": "เอเจนต์",
+  "trajectoryAgentRequestHint": "ดำเนินการโดยเอเจนต์ภายนอก: Kun สร้างการเรียกโมเดลนี้ขึ้นใหม่จากผลลัพธ์ของเอเจนต์ และมองไม่เห็นคำขอฉบับเต็ม",
+  "trajectoryAgentUsageAggregate": "เอเจนต์รายงานการใช้งานเป็นรายรอบ ตัวเลขนี้คือผลรวมของการเรียกโมเดล {{steps}} ครั้ง",
+  "trajectoryAgentUsageIncluded": "เอเจนต์รายงานการใช้งานเป็นรายรอบ การเรียกนี้ถูกรวมไว้ในยอดรวมของการเรียกถัดไป",
+  "trajectoryAgentUsageUnreported": "เอเจนต์ไม่ได้รายงานการใช้งานของการเรียกนี้",
   "providerQuotaResetReminder": "{{label}} ยังเหลือ {{percent}}% และจะรีเซ็ตในอีกประมาณ {{hours}} ชม.",
   "providerQuotaReminderTitle": "{{provider}}: โควตาจะรีเซ็ตเร็ว ๆ นี้"
 }

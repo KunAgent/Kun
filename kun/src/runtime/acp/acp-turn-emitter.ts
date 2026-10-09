@@ -17,6 +17,7 @@ import {
 } from '../../domain/item.js'
 import { isExternalSubagentThreadId } from '../../contracts/external-subagent.js'
 import type { ExternalSubagentRouting } from '../external-subagent-routing.js'
+import { DelegatedItemTimes } from '../delegated-item-times.js'
 
 export type AcpDraftEmitterDeps = {
   turns: Pick<
@@ -35,6 +36,7 @@ export class AcpDraftEmitter {
   private readonly textAccums = new Map<string, string>()
   private readonly reasoningAccums = new Map<string, string>()
   private readonly materializedItems = new Set<string>()
+  private readonly itemTimes = new DelegatedItemTimes()
 
   constructor(
     private readonly deps: AcpDraftEmitterDeps,
@@ -52,15 +54,17 @@ export class AcpDraftEmitter {
     for (const draft of drafts) await this.emit(draft)
   }
 
-  async emit(draft: RuntimeEventDraft): Promise<void> {
-    if (draft.kind === 'usage' && this.options.gatewayMetered) return
-    const item = 'item' in draft ? (draft.item as TurnItem | undefined) : undefined
-    if (this.deps.subagents && isExternalSubagentThreadId(draft.threadId)) {
+  async emit(input: RuntimeEventDraft): Promise<void> {
+    if (input.kind === 'usage' && this.options.gatewayMetered) return
+    if (this.deps.subagents && isExternalSubagentThreadId(input.threadId)) {
       // A subagent's own step: persisted on its side thread, never this turn.
-      if (item) await this.deps.subagents.store.apply(draft)
-      else await this.deps.subagents.store.record(draft)
+      if ('item' in input && input.item) await this.deps.subagents.store.apply(input)
+      else await this.deps.subagents.store.record(input)
       return
     }
+    const drafted = 'item' in input ? (input.item as TurnItem | undefined) : undefined
+    const item = drafted ? this.itemTimes.stamp(drafted) : undefined
+    const draft = item ? { ...input, item } as RuntimeEventDraft : input
     switch (draft.kind) {
       case 'assistant_text_delta':
       case 'assistant_reasoning_delta': {

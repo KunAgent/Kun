@@ -492,6 +492,11 @@
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
   "trajectoryDetailError": "Error",
+  "trajectoryDetailAgent": "एजेंट",
+  "trajectoryAgentRequestHint": "तृतीय-पक्ष एजेंट द्वारा चलाया गया: Kun ने एजेंट के आउटपुट से यह मॉडल कॉल फिर से बनाया है और पूरा अनुरोध नहीं देख सकता।",
+  "trajectoryAgentUsageAggregate": "एजेंट हर टर्न का उपयोग एक साथ बताता है; यह {{steps}} मॉडल कॉल का कुल है।",
+  "trajectoryAgentUsageIncluded": "एजेंट हर टर्न का उपयोग एक साथ बताता है; यह कॉल बाद के किसी कॉल के कुल में शामिल है।",
+  "trajectoryAgentUsageUnreported": "एजेंट ने इस कॉल का उपयोग नहीं बताया।",
   "providerQuotaResetReminder": "{{label}} का {{percent}}% बचा है और लगभग {{hours}} घंटे में रीसेट होगा।",
   "providerQuotaReminderTitle": "{{provider}}: सीमा जल्द रीसेट होगी"
 }

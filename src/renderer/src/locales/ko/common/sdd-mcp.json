@@ -492,6 +492,11 @@
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
   "trajectoryDetailError": "Error",
+  "trajectoryDetailAgent": "에이전트",
+  "trajectoryAgentRequestHint": "서드파티 에이전트가 실행함: Kun이 에이전트의 출력으로 이 모델 호출을 재구성했으며 전체 요청은 볼 수 없습니다.",
+  "trajectoryAgentUsageAggregate": "이 에이전트는 사용량을 턴 단위로 보고합니다. 이 값은 모델 호출 {{steps}}회의 합계입니다.",
+  "trajectoryAgentUsageIncluded": "이 에이전트는 사용량을 턴 단위로 보고합니다. 이 호출은 이후 호출의 합계에 포함되어 있습니다.",
+  "trajectoryAgentUsageUnreported": "이 에이전트는 이 호출의 사용량을 보고하지 않았습니다.",
   "providerQuotaResetReminder": "{{label}}의 {{percent}}%가 남아 있으며 약 {{hours}}시간 후 재설정됩니다.",
   "providerQuotaReminderTitle": "{{provider}}: 곧 사용량이 초기화됩니다"
 }

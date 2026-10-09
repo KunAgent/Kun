@@ -500,6 +500,11 @@
   "trajectoryDetailOutputTokens": "输出 Token",
   "trajectoryDetailReasoningTokens": "推理 Token",
   "trajectoryDetailError": "错误",
+  "trajectoryDetailAgent": "Agent",
+  "trajectoryAgentRequestHint": "由第三方 Agent 执行：Kun 根据 Agent 返回的输出重建了这次模型调用，看不到完整请求内容。",
+  "trajectoryAgentUsageAggregate": "该 Agent 按轮上报用量，这里是 {{steps}} 次模型调用的合计。",
+  "trajectoryAgentUsageIncluded": "该 Agent 按轮上报用量，这次调用计入了后面一次调用的合计。",
+  "trajectoryAgentUsageUnreported": "该 Agent 没有上报这次调用的用量。",
   "providerQuotaResetReminder": "{{label}} 还有 {{percent}}% 未用，约 {{hours}} 小时后重置。",
   "providerQuotaReminderTitle": "{{provider}}：额度即将重置"
 }
