@@ -18,8 +18,16 @@ import {
   firstUsefulLine,
   isBareSubagentToolName,
   isFastContextToolBlock,
-  resolveFastContextTaskTitle
+  resolveFastContextTaskTitle,
+  splitTaskLine
 } from './fast-context-card-copy'
+import {
+  ExternalSubagentNotice,
+  externalAgentIdentity,
+  externalPoseId,
+  mergeExternalDetail,
+  readExternalSubagentView
+} from './subagent-external-card'
 import {
   formatChildActivityLabel,
   readChildActivityFromBlock
@@ -81,16 +89,17 @@ export function SubagentCallCard({
   const onScreen = useOnScreen(ref)
 
   const child = readChildMeta(block)
+  const external = readExternalSubagentView(block)
   const detail = useMemo(
-    () => parseDelegateDetail(block.kind === 'tool' ? (block as ToolBlock).detail : undefined),
-    [block]
+    () => mergeExternalDetail(parseDelegateDetail(block.kind === 'tool' ? (block as ToolBlock).detail : undefined), external),
+    [block, external]
   )
   const evidencePack = useMemo(
     () => parseFastContextEvidencePack(block.kind === 'tool' ? (block as ToolBlock).detail : undefined),
     [block]
   )
   const activity = useMemo(() => readChildActivityFromBlock(block), [block])
-  const status = resolveStatus(block, child, detail)
+  const status = external?.status === 'awaiting' ? 'awaiting-permission' : resolveStatus(block, child, detail)
   const detached = child.detached === true || detail.detached === true
   const resultRef = child.resultRef ?? detail.resultRef
   const resultExternalized = Boolean(resultRef)
@@ -106,7 +115,8 @@ export function SubagentCallCard({
   // result-JSON `profile` only arrives after the child completes.
   const profileId = child.childProfile || detail.profile || (isFastContext ? 'explore' : undefined)
   // Pose key: profile → childLabel → block toolName → 'custom'.
-  const poseId = profileId || (isFastContext ? 'explore' : undefined) || child.childLabel || child.childId || 'custom'
+  const poseId = external ? externalPoseId(external)
+    : profileId || (isFastContext ? 'explore' : undefined) || child.childLabel || child.childId || 'custom'
   const isKnownPose = KNOWN_POSE_IDS.has(poseId)
   const hue = isKnownPose ? null : hashHue(poseId)
 
@@ -135,7 +145,7 @@ export function SubagentCallCard({
       profileId?.trim() ||
       t('subagentNotRecorded', { defaultValue: 'Not recorded' })
     )
-  const agentIdentity = isFastContext
+  const agentIdentity = external ? externalAgentIdentity(external) : isFastContext
     ? agentName
     : (profileId && agentName !== profileId ? `${agentName} (${profileId})` : agentName)
   const model = (child.childModel || detail.model || '').trim() || undefined
@@ -317,6 +327,7 @@ export function SubagentCallCard({
               {taskLine}
             </span>
           ) : null}
+          <ExternalSubagentNotice view={external} t={t} />
           {hasBody && !expanded ? (
             <span className="mt-0.5 block text-[11.5px] font-semibold text-accent">
               {t('exploreExpandConclusion', { defaultValue: 'Show conclusion' })}
@@ -354,7 +365,7 @@ export function SubagentCallCard({
           ) : null}
           <SubagentStopControl
             childId={childId}
-            active={status === 'queued' || status === 'running' || status === 'awaiting-permission'}
+            active={!external && (status === 'queued' || status === 'running' || status === 'awaiting-permission')}
             t={t}
           />
           {childId ? (
@@ -495,21 +506,6 @@ export function SubagentCallCard({
       ) : null}
     </section>
   )
-}
-
-/** Best-effort task one-liner from a generic delegate/explore summary string. */
-function splitTaskLine(block: ToolBlock): string | undefined {
-  const detail = parseDelegateDetail(block.detail)
-  if (detail.title?.trim()) return detail.title.trim()
-  const raw = block.summary?.trim()
-  if (!raw) return undefined
-  const stripped = raw
-    .replace(/^(delegate_task|fast_context|explore_agent|generate_subagent)\s*:\s*/i, '')
-    .trim()
-  if (!stripped || stripped.length > 160) return undefined
-  // Bare tool name (no task text yet, e.g. while running) — nothing useful.
-  if (/^(delegate_task|fast_context|explore_agent|generate_subagent)$/i.test(stripped)) return undefined
-  return stripped
 }
 
 /**

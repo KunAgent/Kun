@@ -13,6 +13,7 @@ import { resolveChatWelcomeTitle, type ClawImChannelV1 } from '@shared/app-setti
 import { useChatWelcomeMessageSetting } from '../../lib/chat-welcome-message-settings'
 import { KunStateFigure } from './AnimatedWorkLogo'
 import { AdeReadinessCard } from '../ade/AdeReadinessCard'
+import { ExternalSubagentReturnBar } from './ExternalSubagentReturnBar'
 /**
  * Empty / hero states rendered by `MessageTimeline` when there is no
  * turn content yet. Lifted out of the timeline component so the main
@@ -393,14 +394,20 @@ export function ThreadForkBanner({ parentTitle }: { parentTitle: string }): Reac
 export function SubagentReturnBar({
   parentTitle,
   onBack,
-  variant = 'subagent'
+  variant = 'subagent',
+  agentName
 }: {
   parentTitle: string
   onBack: () => void
   /** Explore child sessions get stronger "process / back to main" copy. */
-  variant?: 'explore' | 'subagent'
+  variant?: 'explore' | 'subagent' | 'external'
+  /** The external Agent that ran this subagent (variant `external`). */
+  agentName?: string
 }): ReactElement {
   const { t } = useTranslation('common')
+  if (variant === 'external' && agentName) {
+    return <ExternalSubagentReturnBar parentTitle={parentTitle} onBack={onBack} agentName={agentName} />
+  }
   const isExplore = variant === 'explore'
   return (
     <button

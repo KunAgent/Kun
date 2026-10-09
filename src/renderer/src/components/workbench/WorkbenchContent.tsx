@@ -2,6 +2,7 @@ import { useEffect, type ReactElement } from 'react'
 import { WorkbenchLeftSidebar } from './WorkbenchLeftSidebar'
 import { WorkbenchStageRouter } from './WorkbenchStageRouter'
 import { WriteAssistantStageContext } from '../write/WriteAssistantStageContext'
+import { EXTERNAL_SUBAGENT_SOURCE_LABELS, externalSubagentSourceForThread } from '../../agent/external-subagent'
 import { AgentBrowserFloatingPreview } from '../AgentBrowserFloatingPreview'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import {
@@ -52,6 +53,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
   } = context
   const normalizedRoute = normalizeWorkbenchRoute(route)
   const activeConversationThread = threads.find((thread: any) => thread.id === activeThreadId)
+  const externalSource = activeThreadRelation === 'side' ? externalSubagentSourceForThread(activeThreadId) : undefined
   const reviewEnabled = useReviewStore((s) =>
     activeThreadId ? Boolean(s.bindings[activeThreadId]) : false)
   // 12 §6.1: the Workers rail button appears while worker rows exist under
@@ -216,10 +218,12 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
               parentThreadId: activeThreadParentId
             }),
             returnBarVariant: (
-              activeConversationThread?.agentId === 'explore'
+              externalSource ? 'external'
+                : activeConversationThread?.agentId === 'explore'
                 ? 'explore'
                 : 'subagent'
-            ) as 'explore' | 'subagent',
+            ) as 'explore' | 'subagent' | 'external',
+            ...(externalSource ? { returnBarAgentName: EXTERNAL_SUBAGENT_SOURCE_LABELS[externalSource] } : {}),
             graphChildContext,
             composerProps: chatComposerProps,
             conversationDropWorkspaceRoot: activeSkillWorkspace,

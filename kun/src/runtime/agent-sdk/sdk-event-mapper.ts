@@ -25,6 +25,7 @@ import { sdkCostIncrement } from './sdk-session-cost.js'
 import { SdkContextOccupancyTracker, type SdkContextOccupancy } from './sdk-context-occupancy.js'
 import { redactBrowserUseActionForPersistence } from '../../contracts/browser-use.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
+import type { TurnItem } from '../../contracts/items.js'
 import { DEFAULT_MODEL_STREAM_LIMITS } from '../../adapters/model/model-stream-resource-budget.js'
 import {
   makeAssistantTextItem,
@@ -33,6 +34,7 @@ import {
   makeToolResultItem
 } from '../../domain/item.js'
 import { takeSdkToolResultMeta } from './sdk-tool-result-meta.js'
+import { SdkSubagentRouter } from './sdk-subagent-router.js'
 import type {
   SdkApiMessage,
   SdkContentBlock,
@@ -55,6 +57,8 @@ export interface SdkEventMapperContext {
   streamLimits?: Partial<SdkStreamResourceLimits>
   /** Whether the query producing the next result resumed an existing session. */
   resumedQuery?: () => boolean
+  /** Child mappers set false: a subagent's own messages never spawn routers. */
+  subagents?: false
 }
 
 export interface SdkTurnFinal {
@@ -176,9 +180,13 @@ export class SdkEventMapper {
   private final?: SdkTurnFinal
   private readonly budget: SdkStreamResourceBudget
   private readonly occupancy = new SdkContextOccupancyTracker()
+  private readonly subagents?: SdkSubagentRouter
 
   constructor(private readonly ctx: SdkEventMapperContext) {
     this.budget = new SdkStreamResourceBudget(normalizeSdkStreamLimits(ctx.streamLimits))
+    if (ctx.subagents !== false) this.subagents = new SdkSubagentRouter({ threadId: ctx.threadId, turnId: ctx.turnId,
+      createChildMapper: (threadId, turnId, model) => new SdkEventMapper({ threadId, turnId, nextId: ctx.nextId,
+        subagents: false, streamLimits: ctx.streamLimits, ...(model ? { model } : {}) }) })
   }
 
   /** SDK session id captured from the `system/init` message (for resume). */
@@ -212,6 +220,8 @@ export class SdkEventMapper {
   map(message: SdkMessage): RuntimeEventDraft[] {
     this.budget.addEvent(message, this.toolNames.size)
     this.occupancy.observe(message)
+    const routed = this.subagents?.route(message)
+    if (routed) return routed
     switch (message.type) {
       case 'system':
         if ((message as { subtype?: string }).subtype === 'init') {
@@ -419,7 +429,7 @@ export class SdkEventMapper {
     this.toolNames.set(block.id, block.name)
     this.toolReadyCount += 1
     const toolKind = toolKindFor(block.name)
-    const callItem = makeToolCallItem({
+    const rawCallItem = makeToolCallItem({
       id: itemId,
       turnId: this.ctx.turnId,
       threadId: this.ctx.threadId,
@@ -431,6 +441,7 @@ export class SdkEventMapper {
         : block.input ?? {},
       status: 'running'
     })
+    const callItem = this.subagents ? this.subagents.decorateCall(rawCallItem, block) : rawCallItem
     return [
       {
         kind: 'item_created',
@@ -471,7 +482,7 @@ export class SdkEventMapper {
       threadId: this.ctx.threadId,
       turnId: this.ctx.turnId,
       itemId,
-      item: makeToolResultItem({
+      item: this.decorateResult(makeToolResultItem({
         id: itemId,
         turnId: this.ctx.turnId,
         threadId: this.ctx.threadId,
@@ -482,8 +493,12 @@ export class SdkEventMapper {
         isError: block.is_error === true,
         status: block.is_error === true ? 'failed' : 'completed',
         ...(meta ? { meta } : {})
-      })
+      }))
     }
+  }
+
+  private decorateResult(item: TurnItem): TurnItem {
+    return this.subagents ? this.subagents.decorateResult(item) : item
   }
 }
 

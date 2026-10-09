@@ -103,6 +103,7 @@ import {
   parkDelegatedGraphTurnAfterRecovery
 } from '../delegated-graph-turn-policy.js'
 
+import { externalSubagentRouting } from '../external-subagent-routing.js'
 import type { AgentSdkRuntimeFactoryDeps } from './agent-sdk-runtime-factory-contracts.js'
 import type { AgentSdkFactoryContext } from './agent-sdk-runtime-factory-context.js'
 
@@ -115,14 +116,17 @@ export function createAgentSdkLifecycleRuntimeDeps(
   'handlesProvider' | 'loadTurnContext' | 'executeKunTool' | 'decideToolApproval'
 > {
   const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, handoffBriefDigestsByTurn, skillTurnKey, nowIso, toolBridge, resolveImages } = context
+  // Claude Code subagents are mirrored into hidden side threads (sdk-subagent-router).
+  const subagents = externalSubagentRouting(deps)
+  const applyParentItem = (threadId: string, item: TurnItem) => deps.turns.applyItem(threadId, item)
   return {
     readiness: deps.readiness,
     async recordEvent(draft): Promise<void> {
-      await deps.events.record(draft)
+      await subagents.recordEvent(draft, async (parent) => { await deps.events.record(parent) })
     },
 
     async applyItem(threadId, item): Promise<void> {
-      await deps.turns.applyItem(threadId, item)
+      await subagents.applyItem(threadId, item, applyParentItem)
     },
 
     async applyAssistantDelta(threadId, item, deltaText, deltaOffset): Promise<void> {
@@ -132,6 +136,7 @@ export function createAgentSdkLifecycleRuntimeDeps(
     async finishTurn(threadId, turnId, status, error, code): Promise<TurnRunOutcome> {
       const key = skillTurnKey(threadId, turnId)
       try {
+        await subagents.settleTurn(threadId, turnId, applyParentItem)
         let outcome: TurnRunOutcome = status
         if (status === 'completed') {
           const graphCompletion = await parkDelegatedGraphTurnAfterRecovery(

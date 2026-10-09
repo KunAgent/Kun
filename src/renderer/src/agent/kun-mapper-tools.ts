@@ -1,4 +1,5 @@
 import { acpToolPresentation } from './acp-tool-presentation'
+import { externalSubagentChildMeta, readExternalSubagentMeta } from './external-subagent'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -344,6 +345,11 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     ...(item.cancelRequestedAt ? { cancelRequestedAt: item.cancelRequestedAt } : {})
   }
   applyRuntimeDisclosureMeta(meta, item, child)
+  const externalSubagent = readExternalSubagentMeta(item.meta)
+  if (externalSubagent) {
+    meta.externalSubagent = externalSubagent
+    if (!meta.child) meta.child = externalSubagentChildMeta(externalSubagent, item)
+  }
   const sources = extractToolSources(item)
   if (sources) meta.sources = sources
   const attachments = extractToolAttachments(item)
