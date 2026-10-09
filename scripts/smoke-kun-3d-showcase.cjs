@@ -23,12 +23,8 @@ async function exerciseKun3dShowcase({ page, poll, capture, recordDiagnostic, sw
   assert.equal(listed.ok, true, 'The asset folder is readable')
   const root = listed.root
   assert(root.includes('kun-rooms-desktop-smoke'), `The asset folder is inside the isolated home: ${root}`)
-  await mkdir(join(root, 'headwear', 'pilot-cap'), { recursive: true })
-  await writeFile(join(root, 'headwear', 'pilot-cap.glb'), capGlb())
-  // The front view drawn on the three-view template: the widest side spans 80% of the square.
-  await writeFile(join(root, 'headwear', 'pilot-cap', 'front.png'), capFrontDrawing({ size: 256 }))
 
-  // 1. The wardrobe panel opens the showcase, which lists the file by its wardrobe name.
+  // 1. The wardrobe panel opens the showcase; an empty folder shows one quiet empty stage.
   await switchCode()
   await page.evaluate(async () => { const { default: i18n } = await import('/src/i18n.ts'); await i18n.changeLanguage('zh') })
   await page.locator('[data-rail-entry="builtin:right-panel-wardrobe"]').click()
@@ -37,10 +33,30 @@ async function exerciseKun3dShowcase({ page, poll, capture, recordDiagnostic, sw
   await panel.locator('[data-wardrobe-3d]').click()
   const showcase = page.locator('dialog.kun3d')
   await showcase.waitFor()
+  await showcase.locator('[data-kun3d-empty]').waitFor({ timeout: 15_000 })
+  assert.equal(await showcase.locator('[data-kun3d-empty]').innerText(), '暂无资源')
+  assert.equal(await showcase.locator('.kun3d-library, .kun3d-toolbar, .kun3d-info').count(), 0, 'Empty folder shows no side panels')
+  // macOS traffic lights sit at window points x 31..~95, y 22..~36: the header is centred on them and the title starts after them.
+  const head = await showcase.evaluate((dialog) => {
+    const bar = dialog.querySelector('.kun3d-head').getBoundingClientRect()
+    return { height: bar.height, title: dialog.querySelector('.kun3d-head-title').getBoundingClientRect().left }
+  })
+  if (process.platform === 'darwin') {
+    assert(Math.abs(head.height - 56) < 1.5, `Header is 56 window points tall: ${head.height}`)
+    assert(head.title >= 100, `Title clears the traffic lights: ${head.title}`)
+  }
+  await capture('kun3d-empty')
+
+  await mkdir(join(root, 'headwear', 'pilot-cap'), { recursive: true })
+  await writeFile(join(root, 'headwear', 'pilot-cap.glb'), capGlb())
+  // The front view drawn on the three-view template: the widest side spans 80% of the square.
+  await writeFile(join(root, 'headwear', 'pilot-cap', 'front.png'), capFrontDrawing({ size: 256 }))
   const entry = showcase.locator('[data-kun3d-entry="headwear/pilot-cap.glb"]')
   await entry.waitFor({ timeout: 15_000 })
   assert.match(await entry.innerText(), /飞行帽/)
   assert.equal(await showcase.locator('[data-kun3d-entry]').count(), 1, 'Only real models are listed')
+  assert.equal(await showcase.getAttribute('data-kun3d-layout'), 'library')
+  await capture('kun3d-library')
 
   // 2. Selecting it renders through WebGL with its embedded texture and reports the numbers.
   await entry.click()
@@ -72,6 +88,7 @@ async function exerciseKun3dShowcase({ page, poll, capture, recordDiagnostic, sw
   await page.keyboard.press('Escape')
   await showcase.waitFor({ state: 'detached' })
   const result = { root, assertions: [
+    'an empty asset folder shows only "暂无资源", with the header clear of the macOS traffic lights',
     'the wardrobe panel opens a full-window 3D showcase that lists ~/.kun/3d-assets by wardrobe name',
     'a binary glTF with an embedded PNG texture renders through WebGL and reports triangles, clips and budget',
     'views, toon shading and the front three-view overlay work',

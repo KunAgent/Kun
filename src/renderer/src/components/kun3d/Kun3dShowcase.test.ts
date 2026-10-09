@@ -50,12 +50,17 @@ describe('3D showcase', () => {
     await flush()
     const item = button('[data-kun3d-entry="headwear/pilot-cap.glb"]')
     expect(item.textContent).toContain('Pilot cap')
-    expect(document.body.textContent).toContain('/home/me/.kun/3d-assets')
+    expect(button('[data-kun3d-open-folder]').title).toBe('/home/me/.kun/3d-assets')
+    // Nothing open yet: no toolbar and no model panel, only the list and a hint.
+    expect(document.querySelector('.kun3d')!.getAttribute('data-kun3d-layout')).toBe('library')
+    expect(document.querySelector('.kun3d-toolbar, .kun3d-info')).toBeNull()
     await act(async () => item.click())
     await flush()
     expect(bridge.read).toHaveBeenCalledWith('headwear/pilot-cap.glb')
     expect(viewer.load.mock.calls[0]![0]).toBeInstanceOf(ArrayBuffer)
     expect(document.querySelector('.kun3d')!.getAttribute('data-kun3d-state')).toBe('ready')
+    expect(document.querySelector('.kun3d')!.getAttribute('data-kun3d-layout')).toBe('model')
+    expect(document.querySelector('.kun3d-info-head')!.textContent).toBe('Pilot capheadwear/pilot-cap.glb')
     const triangles = document.querySelector('[data-kun3d-check="triangles"]')!
     expect(triangles.hasAttribute('data-ok')).toBe(false)
     expect(triangles.textContent).toContain('2,400')
@@ -69,11 +74,13 @@ describe('3D showcase', () => {
     expect(document.querySelector('.kun3d-overlay')).toBeNull()
   })
 
-  it('shows how to add assets when the folder is empty', async () => {
+  it('says there is nothing yet when the folder is empty', async () => {
     bridge.list.mockResolvedValue({ ok: true, root: '/home/me/.kun/3d-assets', entries: [], truncated: false })
     await act(async () => root.render(createElement(Kun3dShowcase, { onClose: vi.fn() })))
     await flush()
-    expect(document.querySelector('[data-kun3d-empty]')!.textContent).toContain('tripo generate multiview')
+    expect(document.querySelector('.kun3d')!.getAttribute('data-kun3d-layout')).toBe('empty')
+    expect(document.querySelector('[data-kun3d-empty]')!.textContent).toBe('kun3dEmpty')
+    expect(document.querySelector('.kun3d-library, .kun3d-toolbar, .kun3d-info')).toBeNull()
     await act(async () => button('[data-kun3d-open-folder]').click())
     expect(bridge.openFolder).toHaveBeenCalled()
   })

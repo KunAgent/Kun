@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
-import { FolderOpen, RefreshCw, X } from 'lucide-react'
+import { Box, FolderOpen, LoaderCircle, MousePointerClick, RefreshCw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Kun3dAssetEntry, Kun3dAssetsBridge, Kun3dReferenceView } from '@shared/kun-3d-assets'
-import { KUN_3D_LIGHTINGS, KUN_3D_SHADINGS, KUN_3D_VIEWS, Kun3dViewer, type Kun3dLighting, type Kun3dShading, type Kun3dView } from './kun-3d-viewer'
+import { Kun3dViewer, type Kun3dLighting, type Kun3dShading, type Kun3dView } from './kun-3d-viewer'
 import { checkKun3dBudget, type Kun3dModelStats } from './kun-3d-stats'
+import { kun3dCatalogLabel } from './kun-3d-catalog'
 import { Kun3dInfoPanel, Kun3dLibrary, type Kun3dDropped } from './Kun3dPanels'
+import { Kun3dToolbar } from './Kun3dToolbar'
 import './kun-3d-showcase.css'
 
 type Status = 'empty' | 'loading' | 'ready' | 'error'
@@ -127,50 +129,50 @@ export default function Kun3dShowcase({ onClose }: { onClose: () => void }): Rea
     pickDropped(next)
   }
   const checks = useMemo(() => stats ? checkKun3dBudget(entry?.category ?? 'other', entry?.id ?? '', stats, bytes) : [], [stats, entry, bytes])
-  const name = selected === 'drop' ? dropped?.name ?? '' : entry?.key ?? ''
-  const folder = entry ? `${entry.category}/${entry.id}` : null
-  const segment = <T extends string>(values: readonly T[], value: T, label: (item: T) => string, choose: (item: T) => void, attr: string) =>
-    <div className="kun3d-segment" role="radiogroup">{values.map((item) => <button key={item} type="button" role="radio"
-      aria-checked={value === item} onClick={() => choose(item)} {...{ [attr]: item }}>{label(item)}</button>)}</div>
+  // With nothing to list the whole body is one quiet empty stage; the side panels only appear once a model is open.
+  const empty = !entries.length && !dropped
+  const open = selected !== null && !empty
+  const title = selected === 'drop' ? dropped?.name ?? '' : entry ? kun3dCatalogLabel(entry.category, entry.id, language) ?? entry.id : ''
+  const detail = selected === 'drop' ? t('kun3dTempHint') : entry?.key ?? ''
+  const note = !webgl ? { alert: true, text: t('kun3dNoWebgl') }
+    : status === 'loading' ? { alert: false, text: t('kun3dLoading') }
+    : status === 'error' ? { alert: true, text: error }
+    : listError ? { alert: true, text: t('kun3dErrorList', { message: listError }) } : null
 
   return createPortal(<dialog ref={dialog} className="kun3d" aria-label={t('kun3dTitle')} data-kun3d-state={status}
+    data-kun3d-layout={empty ? 'empty' : open ? 'model' : 'library'}
     onCancel={(event) => { event.preventDefault(); onClose() }} onDragOver={(event) => { event.preventDefault(); setDragging(true) }}
     onDragLeave={(event) => { if (event.currentTarget === event.target) setDragging(false) }} onDrop={(event) => void onDrop(event)}>
     <header className="kun3d-head">
-      <strong>{t('kun3dTitle')}</strong>
-      {root ? <span className="kun3d-path" title={root}>{root}</span> : null}
+      <span className="kun3d-head-title"><Box size={16} aria-hidden="true" /><strong>{t('kun3dTitle')}</strong>
+        {entries.length ? <span className="kun3d-count">{t('kun3dCount', { count: entries.length })}</span> : null}</span>
       <span className="kun3d-head-actions">
-        <button type="button" onClick={() => void refresh()} title={t('kun3dRefresh')} aria-label={t('kun3dRefresh')}><RefreshCw size={15} /></button>
-        <button type="button" onClick={() => void bridge()?.openFolder()} data-kun3d-open-folder><FolderOpen size={15} />{t('kun3dOpenFolder')}</button>
-        <button type="button" className="kun3d-close" onClick={onClose} aria-label={t('kun3dClose')}><X size={18} /></button>
+        <button type="button" className="kun3d-head-icon" onClick={() => void refresh()} title={t('kun3dRefresh')} aria-label={t('kun3dRefresh')}><RefreshCw size={15} /></button>
+        <button type="button" onClick={() => void bridge()?.openFolder()} title={root || undefined} data-kun3d-open-folder><FolderOpen size={15} />{t('kun3dOpenFolder')}</button>
+        <span className="kun3d-head-divider" aria-hidden="true" />
+        <button type="button" className="kun3d-head-icon" onClick={onClose} title={t('kun3dClose')} aria-label={t('kun3dClose')}><X size={17} /></button>
       </span>
     </header>
     <div className="kun3d-body">
-      <Kun3dLibrary entries={entries} dropped={dropped} selected={selected} query={query} language={language} onQuery={setQuery}
-        onPick={pick} onPickDropped={() => pickDropped()} onOpenFolder={() => void bridge()?.openFolder()} />
+      {empty ? null : <Kun3dLibrary entries={entries} dropped={dropped} selected={selected} query={query} language={language} onQuery={setQuery}
+        onPick={pick} onPickDropped={() => pickDropped()} />}
       <main className="kun3d-stage">
         <div ref={host} className="kun3d-canvas-host" data-shading={shading} />
         {compare && references[compare] ? <img className="kun3d-overlay" src={references[compare]} alt="" style={{ opacity }} /> : null}
-        {status !== 'ready' ? <div className="kun3d-stage-note" role={status === 'error' || !webgl ? 'alert' : 'status'}>
-          {!webgl ? t('kun3dNoWebgl') : status === 'loading' ? t('kun3dLoading') : status === 'error' ? error
-            : listError ? t('kun3dErrorList', { message: listError }) : t('kun3dPickHint')}
+        {note ? <div className="kun3d-stage-note" role={note.alert ? 'alert' : 'status'}>
+          {status === 'loading' && webgl ? <LoaderCircle size={16} className="kun3d-spin" aria-hidden="true" /> : null}{note.text}
+        </div> : empty ? <div className="kun3d-placeholder" data-kun3d-empty>
+          <span aria-hidden="true"><Box size={26} strokeWidth={1.6} /></span><strong>{t('kun3dEmpty')}</strong>
+        </div> : !open ? <div className="kun3d-placeholder" role="status">
+          <span aria-hidden="true"><MousePointerClick size={24} strokeWidth={1.6} /></span><strong>{t('kun3dPickHint')}</strong>
         </div> : null}
         {dragging ? <div className="kun3d-drop">{t('kun3dDropHint')}</div> : null}
-        <div className="kun3d-toolbar" data-disabled={status !== 'ready' || undefined}>
-          <span><small>{t('kun3dView')}</small>{segment(KUN_3D_VIEWS, view, (item) => t(`kun3dView_${item}`), chooseView, 'data-kun3d-view')}</span>
-          <span><small>{t('kun3dShading')}</small>{segment(KUN_3D_SHADINGS, shading, (item) => t(`kun3dShading_${item}`), setShading, 'data-kun3d-shading')}</span>
-          <span><small>{t('kun3dLighting')}</small>{segment(KUN_3D_LIGHTINGS, lighting, (item) => t(`kun3dLighting_${item}`), setLighting, 'data-kun3d-lighting')}</span>
-          <label className="kun3d-toggle"><input type="checkbox" checked={autoRotate} onChange={(event) => setAutoRotate(event.target.checked)} />{t('kun3dAutoRotate')}</label>
-          <label className="kun3d-toggle"><input type="checkbox" checked={grid} onChange={(event) => setGrid(event.target.checked)} />{t('kun3dGrid')}</label>
-          {stats?.animations.length ? <label className="kun3d-toggle">{t('kun3dAnimation')}
-            <select value={animation} onChange={(event) => setAnimation(event.target.value)}>
-              <option value="">{t('kun3dAnimationNone')}</option>
-              {stats.animations.map((clip) => <option key={clip} value={clip}>{clip}</option>)}
-            </select></label> : null}
-        </div>
+        {open ? <Kun3dToolbar disabled={status !== 'ready'} view={view} shading={shading} lighting={lighting} autoRotate={autoRotate} grid={grid}
+          animations={stats?.animations ?? []} animation={animation} onView={chooseView} onShading={setShading} onLighting={setLighting}
+          onAutoRotate={setAutoRotate} onGrid={setGrid} onAnimation={setAnimation} /> : null}
       </main>
-      <Kun3dInfoPanel name={name} bytes={bytes} stats={stats} checks={checks} references={references} folder={folder}
-        compare={compare} opacity={opacity} onCompare={chooseCompare} onOpacity={setOpacity} />
+      {open ? <Kun3dInfoPanel title={title} detail={detail} bytes={bytes} stats={stats} checks={checks} references={references}
+        compare={compare} opacity={opacity} onCompare={chooseCompare} onOpacity={setOpacity} /> : null}
     </div>
   </dialog>, document.body)
 }
