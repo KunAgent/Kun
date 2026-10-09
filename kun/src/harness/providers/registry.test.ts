@@ -37,7 +37,7 @@ describe('provider module registry', () => {
     const ids = PROVIDER_MODULES.map((module) => module.definition.id)
     expect(new Set(ids).size).toBe(ids.length)
     expect(BUILTIN_HARNESSES.map((definition) => definition.id)).toEqual(ids)
-    expect(ids.slice(0, 12)).toEqual(['deepseek-harness', 'kun', 'claude-code', 'cursor', 'antigravity', 'gemini-cli',
+    expect(ids.slice(0, 11)).toEqual(['deepseek-harness', 'kun', 'claude-code', 'cursor', 'antigravity',
       'codex', 'pi', 'opencode', 'codemaker', 'opencode2', 'devin'])
     for (const id of ids) expect(providerModule(id)?.definition.id).toBe(id)
     expect(providerModule('custom-agent')).toBeUndefined()

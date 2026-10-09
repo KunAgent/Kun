@@ -120,14 +120,14 @@ describe('Code harness discovery and validation', () => {
     h.disabled.push('claude-code')
     h.statuses.get('opencode')!.installed = 'no'
     const definitions = h.catalog.list()
-    vi.spyOn(h.catalog, 'list').mockReturnValue(definitions.map((definition) => definition.id === 'gemini-cli'
+    vi.spyOn(h.catalog, 'list').mockReturnValue(definitions.map((definition) => definition.id === 'devin'
       ? { ...definition, availability: 'retired' as const } : definition))
     const { agents } = await h.service.list()
     expect(agents.find((agent) => agent.harnessId === 'codex')).toMatchObject({ available: true,
       models: expect.arrayContaining([h.native]), executionModes: ['direct'], orchestration: ['direct'] })
     expect(agents.find((agent) => agent.harnessId === 'claude-code')).toBeUndefined()
     expect(agents.find((agent) => agent.harnessId === 'opencode')?.available).toBe(false)
-    expect(agents.find((agent) => agent.harnessId === 'gemini-cli')).toBeUndefined()
+    expect(agents.find((agent) => agent.harnessId === 'devin')).toBeUndefined()
     expect(agents.find((agent) => agent.harnessId === 'kun')?.models).toEqual([
       { harnessId: 'kun', credentialMode: 'provider', providerId: 'p1', accountId: 'account-1', model: 'test-model' }
     ])

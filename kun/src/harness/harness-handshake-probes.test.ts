@@ -29,13 +29,6 @@ it('classifies an actual ACP auth_required response as login required without au
   expect(child.requests.map((request) => request.method)).toEqual(['initialize', 'session/new'])
   expect(child.stop).toHaveBeenCalledOnce()
 })
-it('reports an upstream-retired client instead of asking the user to sign in', async () => {
-  const child = fixture({ authRequired: true, authMessage: 'This client is no longer supported for Gemini Code Assist for individuals.' })
-  spawn.mockResolvedValue(child.process)
-  const result = await probeAcpHandshake(catalog.get('gemini-cli')!, 'fixture', { session: {} })
-  expect(result).toMatchObject({ ok: false, detail: expect.stringContaining('no longer supports this client') })
-  expect(result.authRequired).toBeUndefined()
-})
 it.each(['launch', 'initialize'])('explains the OpenCode database written by OpenCode2 when the %s fails', async (stage) => {
   const crash = 'Error: Unexpected error Database is not empty and has no session table'
   if (stage === 'launch') spawn.mockRejectedValue(new Error(`ACP agent process exited (code 1, signal null): ${crash}`))

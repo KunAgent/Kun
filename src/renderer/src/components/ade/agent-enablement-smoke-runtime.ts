@@ -27,14 +27,14 @@ const devinModels: NonNullable<AdeHarnessModels['modelInfo']> = [
 const fixtureRows: AdeHarnessRow[] = [
   ['kun', 'Kun', 'native-loop'], ['pi', 'Pi', 'pi-rpc'],
   ['deepseek-harness', 'DeepSeek Harness', 'acp'], ['claude-code', 'Claude Code', 'agent-sdk'],
-  ['gemini-cli', 'Gemini CLI', 'acp'], ['devin', 'Devin', 'acp']
+  ['retired-agent', 'Retired Agent', 'acp'], ['devin', 'Devin', 'acp']
 ].map(([id, displayName, transport]) => ({
   definition: { id, displayName, transport: transport as AdeHarnessRow['definition']['transport'],
     credentialModes: id === 'kun' ? ['provider'] : id === 'deepseek-harness' || id === 'devin' ? ['native-login'] : ['native-login', 'kun-gateway'],
     permissionModes: id === 'devin' ? [{ id: 'normal', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
       { id: 'bypass', label: 'Full access', kunPermissionMode: 'full-access' }] : [],
     modelSource: id === 'devin' ? 'probe' : 'static', staticModels: id === 'devin' ? [] : ['fixture-model'], builtin: true,
-    availability: id === 'deepseek-harness' ? 'preview' : id === 'gemini-cli' ? 'retired' : 'active' },
+    availability: id === 'deepseek-harness' ? 'preview' : id === 'retired-agent' ? 'retired' : 'active' },
   status: { harnessId: id, installed: 'yes', version: id === 'deepseek-harness' ? '0.2.0-rc.2' : '1.0.0',
     ready: 'yes', login: id === 'kun' ? 'not-required' : 'unknown', checkedAt: new Date().toISOString() }
 }))

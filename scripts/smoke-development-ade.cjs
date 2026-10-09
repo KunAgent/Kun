@@ -150,7 +150,7 @@ async function main() {
     const stubDir = join(temporaryRoot, 'stubs')
     const claudeStub = await writeVersionStub(stubDir, 'claude', '2.1.0')
     const claudeStubUpdated = await writeVersionStub(stubDir, 'claude-alt', '2.2.0')
-    const oldGeminiStub = await writeVersionStub(stubDir, 'gemini-old', '0.0.1')
+    const oldClineStub = await writeVersionStub(stubDir, 'cline-old', '0.0.1')
     const acpStub = await writeAcpStub(stubDir, 'smoke-acp')
     const devinStub = roomsHarnessOnly ? await writeRoomsHarnessStub(stubDir, releaseFile) : devinModelsOnly ? await writeDevinModelStub(stubDir) : await writeDevinAcpStub(stubDir)
     const devinInstallTarget = installOnly ? await writeInstallerFixture(stubDir, devinStub) : undefined
@@ -183,7 +183,7 @@ async function main() {
         'claude-code': claudeStub,
         devin: devinInstallTarget ?? devinStub,
         // Force one repair path regardless of host-global CLI installations.
-        'gemini-cli': oldGeminiStub
+        cline: oldClineStub
       },
       custom: [{ id: 'smoke-acp', displayName: 'Smoke ACP', command: acpStub, args: [], env: {} }],
       // P4-13: a configured terminal-only agent — the node binary always

@@ -107,7 +107,7 @@ function makeFixture(options: FixtureOptions = {}) {
   const tokens = new HarnessTokenService()
   const token = tokens.issue({
     threadId: thread.id,
-    harnessId: 'gemini-cli',
+    harnessId: 'devin',
     credentialIdentity: 'cred:test',
     scopes: ['kun-tools']
   })
@@ -158,7 +158,7 @@ describe('kun tools MCP route', () => {
     expect((await post(runtime, rpc('ping'), 'kgw_deadbeef.badsig')).status).toBe(401)
     const gatewayOnly = tokens.issue({
       threadId: 'thread_1',
-      harnessId: 'gemini-cli',
+      harnessId: 'devin',
       credentialIdentity: 'cred:test',
       scopes: ['gateway']
     })
@@ -389,7 +389,7 @@ describe('kgw token guard', () => {
     const tokens = new HarnessTokenService()
     const toolsToken = tokens.issue({
       threadId: 'thread_1',
-      harnessId: 'gemini-cli',
+      harnessId: 'devin',
       credentialIdentity: 'cred:test',
       scopes: ['kun-tools']
     })
@@ -406,7 +406,7 @@ describe('kgw token guard', () => {
     // Gateway-scoped grants reach only the gateway surface.
     const gatewayToken = tokens.issue({
       threadId: 'thread_1',
-      harnessId: 'gemini-cli',
+      harnessId: 'devin',
       credentialIdentity: 'cred:test',
       scopes: ['gateway']
     })
@@ -422,7 +422,7 @@ describe('kgw token guard', () => {
 it('rejects a prior-turn MCP grant even while another turn is running', async () => {
   const execute = vi.fn()
   const f = makeFixture({ execute })
-  const token = f.tokens.issue({ threadId: f.thread.id, harnessId: 'gemini-cli',
+  const token = f.tokens.issue({ threadId: f.thread.id, harnessId: 'devin',
     credentialIdentity: 'native-session', scopes: ['kun-tools'], turnId: 'previous-turn' })
   const response = await post(f.runtime, rpc('tools/call', { name: 'memory_search', arguments: {} }), token)
   expect((await response.json()).result.isError).toBe(true)

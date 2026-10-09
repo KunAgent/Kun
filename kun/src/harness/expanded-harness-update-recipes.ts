@@ -12,7 +12,7 @@ export const EXPANDED_HARNESS_UPDATE_RECIPES: Readonly<Record<string, HarnessUpd
   mimocode: { command: 'mimo', packageName: '@mimo-ai/cli' },
   kimi: { command: 'kimi', packageName: '@moonshot-ai/kimi-code' },
   droid: { command: 'droid', packageName: 'droid' },
-  qoder: { command: 'qoder', packageName: '@qoder-ai/qodercli' },
-  'qoder-cn': { command: 'qodercn', packageName: '@qodercn-ai/qoderclicn' },
+  qoder: { command: 'qodercli', packageName: '@qoder-ai/qodercli' },
+  'qoder-cn': { command: 'qoderclicn', packageName: '@qodercn-ai/qoderclicn' },
   atomcode: { command: 'atomcode', packageName: '@atomgit.com/atomcode', cask: 'atomcode' }
 }

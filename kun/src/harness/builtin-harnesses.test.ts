@@ -66,9 +66,6 @@ describe('BUILTIN_HARNESSES', () => {
   it('setup snapshots pin the commands the terminal prefill shows', () => {
     const byId = new Map(BUILTIN_HARNESSES.map((def) => [def.id, def]))
     expect(byId.get('claude-code')?.setup?.login).toMatchObject({ command: 'claude' })
-    expect(byId.get('gemini-cli')?.setup?.login).toMatchObject({
-      command: 'gemini', args: []
-    })
     expect(byId.get('codex')?.setup).toMatchObject({
       login: { command: 'codex', args: ['login'] }
     })

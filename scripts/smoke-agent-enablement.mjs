@@ -78,7 +78,7 @@ app.on('window-all-closed', () => app.quit())
   await panel().waitFor({ timeout: 90_000 })
   await reset()
   assert.deepEqual(await menuIds(), ['kun'])
-  report.assertions.push('Disabled external agents and retired Gemini are absent from the composer')
+  report.assertions.push('Disabled external agents and retired Agents are absent from the composer')
   await screenshot('disabled')
   await screenshotMenu('disabled-composer-menu')
 

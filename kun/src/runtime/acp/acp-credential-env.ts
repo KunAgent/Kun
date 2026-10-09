@@ -20,8 +20,6 @@ import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../../cont
  * - Pi (`pi --mode rpc`): a generated `PI_CODING_AGENT_DIR/models.json`
  *   declares only the `kun` openai-completions provider; `apiKey` is pi's
  *   `$NAME` env interpolation so the grant token stays env-only (P6-11).
- * - Gemini CLI is deferred: its gateway protocol is google-specific and Kun
- *   has no matching entry point yet.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

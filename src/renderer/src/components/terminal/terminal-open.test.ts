@@ -122,10 +122,10 @@ describe('terminal-open request channel', () => {
       { id: 'main', index: 1, target: { kind: 'local', cwd: '/repo' } }
     ])
     act(() => {
-      openTerminalWithSetup({ cwd: '/repo', prefill: 'gemini auth', probeHarnessId: 'gemini-cli' })
+      openTerminalWithSetup({ cwd: '/repo', prefill: 'devin auth', probeHarnessId: 'devin' })
     })
     expect(state.tabs).toHaveLength(2)
-    expect(state.tabs[1].prefill).toBe('gemini auth')
+    expect(state.tabs[1].prefill).toBe('devin auth')
     act(() => renderer.unmount())
   })
 

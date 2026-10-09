@@ -53,7 +53,7 @@ function makeMapper(debugSink?: string[]): {
   const mapper = new AcpEventMapper({
     threadId: 'thread_1',
     turnId: 'turn_1',
-    harnessId: 'gemini-cli',
+    harnessId: 'devin',
     model: 'fake-model-1',
     nextId: (prefix) => `${prefix}_${++n}`,
     nowIso: () => '2026-01-01T00:00:00.000Z',

@@ -22,10 +22,10 @@ describe('explicit exact agent profile enablement', () => {
     expect(normalizeEnabledProfiles([{ ...native, providerId: 'account-a' }])).toEqual([{ ...native, providerId: 'account-a' }])
   })
   it('keeps explicit Gemini profiles while ignoring malformed profiles and preserving saved defaults', () => {
-    expect(normalizeEnabledProfiles([{ ...native, harnessId: 'gemini-cli' }, { ...native, harnessId: 'kun' },
-      { ...native, credentialMode: 'unknown' }, native, native])).toEqual([{ ...native, harnessId: 'gemini-cli' }, native])
-    const settings = normalizeKunHarnessSettings({ defaults: { 'gemini-cli': { model: 'old' } }, enabledProfiles: [{ ...native, harnessId: 'gemini-cli' }] })
-    expect(settings.defaults['gemini-cli']?.model).toBe('old')
+    expect(normalizeEnabledProfiles([{ ...native, harnessId: 'devin' }, { ...native, harnessId: 'kun' },
+      { ...native, credentialMode: 'unknown' }, native, native])).toEqual([{ ...native, harnessId: 'devin' }, native])
+    const settings = normalizeKunHarnessSettings({ defaults: { 'devin': { model: 'old' } }, enabledProfiles: [{ ...native, harnessId: 'devin' }] })
+    expect(settings.defaults['devin']?.model).toBe('old')
   })
   it('requires opt-in and a current exact proof, not installed/signed-in/unknown statuses', () => {
     const current = row()

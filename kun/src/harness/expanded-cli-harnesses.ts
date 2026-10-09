@@ -124,14 +124,16 @@ const ACP_CLI_SPECS: CliSpec[] = [
     permissions: [ask('plan', 'Plan'), ask('act', 'Act')]
   },
   {
-    id: 'qoder', name: 'Qoder CLI', command: 'qoder', aliases: ['qodercli'], args: ['--acp'],
+    // `qoder` is also the desktop IDE's shell launcher; only `qodercli` is unambiguous, so it
+    // owns every fallback (launch, login, install hint) and `qoder` stays a guarded alias.
+    id: 'qoder', name: 'Qoder CLI', command: 'qodercli', aliases: ['qoder'], args: ['--acp'],
     rejectApplicationLauncher: true,
     config: ['.qoder/settings.json'], docs: 'https://docs.qoder.com/cli/acp',
     install: unixInstaller('https://qoder.com/install'), loginArgs: ['login'],
     permissions: [ask(), full('bypass_permissions', 'Bypass permissions')]
   },
   {
-    id: 'qoder-cn', name: 'Qoder CN CLI', command: 'qodercn', aliases: ['qoderclicn'], args: ['--acp'],
+    id: 'qoder-cn', name: 'Qoder CN CLI', command: 'qoderclicn', aliases: ['qodercn'], args: ['--acp'],
     rejectApplicationLauncher: true,
     config: ['.qoder-cn/settings.json'], docs: 'https://docs.qoder.cn/cli/acp',
     install: npm('@qodercn-ai/qoderclicn'),

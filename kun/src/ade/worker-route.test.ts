@@ -104,13 +104,13 @@ describe('resolveWorkerRoute', () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       probedModels: (def: HarnessDefinition) =>
-        def.id === 'gemini-cli' ? ['gemini-3-pro-preview'] : undefined,
-      agent: { harnessId: 'gemini-cli', model: 'gemini-3-pro-preview' }
+        def.id === 'devin' ? ['gemini-3-pro-preview'] : undefined,
+      agent: { harnessId: 'devin', model: 'gemini-3-pro-preview' }
     })
     expect('error' in resolved).toBe(false)
     if ('error' in resolved) return
     expect(resolved.route).toMatchObject({
-      harnessId: 'gemini-cli',
+      harnessId: 'devin',
       credentialMode: 'native-login',
       model: 'gemini-3-pro-preview'
     })
@@ -120,7 +120,7 @@ describe('resolveWorkerRoute', () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       probedModels: () => ['gemini-3-pro-preview'],
-      agent: { harnessId: 'gemini-cli', model: 'made-up-model' }
+      agent: { harnessId: 'devin', model: 'made-up-model' }
     })
     expect(resolved).toMatchObject({ error: expect.stringContaining('made-up-model') })
   })
@@ -254,7 +254,7 @@ describe('resolveWorkerRoute', () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       harnessDefaults: () => ({ credentialMode: 'kun-gateway' }),
-      agent: { harnessId: 'gemini-cli' }
+      agent: { harnessId: 'devin' }
     })
     expect(resolved).toMatchObject({
       error: expect.stringContaining('credentialMode kun-gateway is not supported')
@@ -265,7 +265,7 @@ describe('resolveWorkerRoute', () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       providerPool,
-      agent: { harnessId: 'gemini-cli', credentialMode: 'kun-gateway', model: 'kun/deepseek/deepseek-chat' }
+      agent: { harnessId: 'devin', credentialMode: 'kun-gateway', model: 'kun/deepseek/deepseek-chat' }
     })
     expect(resolved).toMatchObject({
       error: expect.stringContaining('credentialMode kun-gateway is not supported')

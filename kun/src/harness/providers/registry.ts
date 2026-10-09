@@ -7,7 +7,6 @@ import { CURSOR_MODULE } from './cursor.js'
 import { DEEPSEEK_HARNESS_MODULE } from './deepseek-harness.js'
 import { DEVIN_MODULE } from './devin.js'
 import { EXPANDED_CLI_MODULES } from './expanded-cli.js'
-import { GEMINI_CLI_MODULE } from './gemini-cli.js'
 import { KUN_MODULE } from './kun.js'
 import { CODEMAKER_MODULE, OPENCODE_MODULE } from './opencode.js'
 import { OPENCODE2_MODULE } from './opencode2.js'
@@ -21,7 +20,6 @@ export const PROVIDER_MODULES: readonly AgentProviderModule[] = [
   CLAUDE_CODE_MODULE,
   CURSOR_MODULE,
   ANTIGRAVITY_MODULE,
-  GEMINI_CLI_MODULE,
   CODEX_MODULE,
   PI_MODULE,
   OPENCODE_MODULE,

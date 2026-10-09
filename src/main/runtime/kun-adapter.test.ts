@@ -139,7 +139,7 @@ describe('runtimeRequestViaHost', () => {
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates/check', 'POST')).toBe(60_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates/activate', 'POST')).toBe(90_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates', 'GET', 25_000)).toBe(25_000)
-    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/gemini-cli/probe', 'POST')).toBe(90_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/devin/probe', 'POST')).toBe(90_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/probe-definition', 'POST')).toBe(90_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/test', 'POST')).toBe(420_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/test', 'GET')).toBe(15_000)

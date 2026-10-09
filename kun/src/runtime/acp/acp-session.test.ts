@@ -96,7 +96,7 @@ function makeCtx(overrides: Partial<AcpSessionRequest> = {}): AcpSessionRequest 
     threadId: 'thread_1',
     turnId: 'turn_1',
     workspacePath: '/tmp/work',
-    harnessId: 'gemini-cli',
+    harnessId: 'fixture-agent',
     model: 'fake-model-2',
     items: [],
     ...overrides
@@ -405,7 +405,7 @@ describe('AcpConnectionPool', () => {
     const { conn } = await startFixture('basic-chat.json')
     let factoryCalls = 0
     const pool = new AcpConnectionPool({ idleReleaseMs: 5_000 })
-    const key = 'gemini-cli:cred-1'
+    const key = 'fixture-agent:cred-1'
     const leaseA = await pool.acquire(key, async () => {
       factoryCalls += 1
       return conn
@@ -424,7 +424,7 @@ describe('AcpConnectionPool', () => {
   test('process exit evicts the entry and fires onExit', async () => {
     const { conn } = await startFixture('basic-chat.json')
     const pool = new AcpConnectionPool({ idleReleaseMs: 5_000 })
-    const key = 'gemini-cli:cred-1'
+    const key = 'fixture-agent:cred-1'
     const lease = await pool.acquire(key, async () => conn)
     const exits: Array<{ code: number | null }> = []
     pool.onExit(key, (exit) => exits.push(exit))
@@ -459,7 +459,7 @@ describe('AcpConnectionPool', () => {
     const before = await coordinator.store.load('thread_1')
     expect(before?.nativeSessionId).toBe('sess-basic')
 
-    await manager.handleConnectionExit(conn, 'gemini-cli')
+    await manager.handleConnectionExit(conn, 'fixture-agent')
 
     const after = await coordinator.store.load('thread_1')
     expect(after?.nativeSessionId).toBe('sess-basic')
@@ -467,7 +467,7 @@ describe('AcpConnectionPool', () => {
       threadId: 'thread_1',
       route: {
         providerKind: 'acp',
-        providerId: 'gemini-cli',
+        providerId: 'fixture-agent',
         credentialIdentity: conn.identity,
         workspace: '/tmp/work',
         model: 'default',

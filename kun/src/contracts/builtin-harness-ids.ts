@@ -4,7 +4,6 @@ export const BUILTIN_HARNESS_IDS = [
   'claude-code',
   'cursor',
   'antigravity',
-  'gemini-cli',
   'codex',
   'opencode',
   'opencode2',

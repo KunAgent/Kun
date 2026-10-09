@@ -21,8 +21,8 @@ const NOW = '2026-09-28T00:00:00.000Z'
 const catalog = {
   get: (id: string) => BUILTIN_HARNESSES.find((def) => def.id === id),
   list: () => BUILTIN_HARNESSES,
-  isDisabled: (id: string) => id === 'gemini-cli',
-  isProfileEnabled: (route: Pick<HarnessRoute, 'harnessId'>) => route.harnessId !== 'gemini-cli'
+  isDisabled: (id: string) => id === 'devin',
+  isProfileEnabled: (route: Pick<HarnessRoute, 'harnessId'>) => route.harnessId !== 'devin'
 }
 
 function readyStatus(harnessId: string): HarnessStatus {
@@ -105,7 +105,7 @@ describe('listHarnessesForManager', () => {
     const opencode = out.agents.find((entry) => entry.harnessId === 'opencode')!
     // No static list and no probe cache: no model entries.
     expect(opencode.models).toEqual([])
-    expect(out.agents.find((entry) => entry.harnessId === 'gemini-cli')).toBeUndefined()
+    expect(out.agents.find((entry) => entry.harnessId === 'devin')).toBeUndefined()
   })
 
   it('caps each group at 8 models and reports the overflow', async () => {

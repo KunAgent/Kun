@@ -14,21 +14,21 @@ function row(id: string, transport: AdeHarnessTransport = 'acp'): AdeHarnessRow 
 
 describe('Agent Center catalog', () => {
   it('keeps the complete active catalog and honors the saved order without mutating server rows', () => {
-    const entries = [row('z-agent'), row('gemini-cli'), row('a-agent'), row('old')]
+    const entries = [row('z-agent'), row('cline'), row('a-agent'), row('old')]
     entries[3].definition.availability = 'retired'
-    const ordered = orderedAgentCatalog(entries, ['z-agent', 'gemini-cli'])
-    expect(ordered.map((entry) => entry.definition.id)).toEqual(['z-agent', 'gemini-cli', 'a-agent'])
-    expect(entries.map((entry) => entry.definition.id)).toEqual(['z-agent', 'gemini-cli', 'a-agent', 'old'])
+    const ordered = orderedAgentCatalog(entries, ['z-agent', 'cline'])
+    expect(ordered.map((entry) => entry.definition.id)).toEqual(['z-agent', 'cline', 'a-agent'])
+    expect(entries.map((entry) => entry.definition.id)).toEqual(['z-agent', 'cline', 'a-agent', 'old'])
   })
 
   it('lists only chat Agents and searches names or ids case-insensitively', () => {
-    const entries = [row('kun', 'native-loop'), row('aider', 'terminal'), row('editor', 'application'), row('gemini-cli')]
+    const entries = [row('kun', 'native-loop'), row('aider', 'terminal'), row('editor', 'application'), row('cline')]
     expect(entries.map(agentIntegrationKind)).toEqual(['chat', 'terminal', 'application', 'chat'])
     const chat = orderedAgentCatalog(entries, [])
-    expect(chat.map((entry) => entry.definition.id)).toEqual(['gemini-cli', 'kun'])
+    expect(chat.map((entry) => entry.definition.id)).toEqual(['cline', 'kun'])
     expect(filterAgentCatalog(chat, ' EDIT ')).toEqual([])
-    expect(filterAgentCatalog(chat, 'GEMINI').map((entry) => entry.definition.id)).toEqual(['gemini-cli'])
-    expect(filterAgentCatalog(chat, '').map((entry) => entry.definition.id)).toEqual(['gemini-cli', 'kun'])
+    expect(filterAgentCatalog(chat, 'CLINE').map((entry) => entry.definition.id)).toEqual(['cline'])
+    expect(filterAgentCatalog(chat, '').map((entry) => entry.definition.id)).toEqual(['cline', 'kun'])
   })
 })
 

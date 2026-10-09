@@ -1,6 +1,6 @@
 # Supported Agent integrations
 
-The curated product inventory covers 43 coding-agent products. Kun, OpenCode2 and
+The curated product inventory covers 42 coding-agent products. Kun, OpenCode2 and
 the dedicated Cursor CLI entry remain additional integrations. All delegated
 conversation turns enter the same Kun runtime; interactive-only CLIs use its
 owned terminal workflow. Applications retain their native client interface.
@@ -12,7 +12,6 @@ owned terminal workflow. Applications retain their native client interface.
 | Claude Code | `claude-code` | Conversation |
 | Claude Desktop | `claude-desktop` | Application / configuration |
 | Codex | `codex` | Conversation |
-| Gemini CLI | `gemini-cli` | Conversation |
 | Antigravity CLI | `antigravity` | Conversation |
 | OpenCode | `opencode` | Conversation |
 | CodeMaker | `codemaker` | Conversation |
@@ -79,7 +78,9 @@ installations. Third-party settings are not rewritten automatically.
 
 ## Protocol differences
 
-- Gemini CLI uses its supported ACP flag and is again available for new work.
+- Gemini CLI is no longer a built-in Agent: Google blocks its ACP sessions for
+  individual accounts. Stale `gemini-cli` ids in saved settings are ignored. The
+  Gemini CLI OAuth *model provider* is a separate feature and is unchanged.
 - Kimi Code requires the maintained 2.x client; retired CLI credentials are not
   silently treated as the new account.
 - MiniMax selects its permission configuration separately from interaction modes.
@@ -87,7 +88,11 @@ installations. Third-party settings are not rewritten automatically.
   second thread cannot replace another active session or process-wide permission
   selection. Follow-up turns reuse the native session within that connection.
 - Cursor CLI validates the resolved executable identity; a similarly named Grok
-  alias is not dispatched as Cursor. Desktop Qoder launchers are not ACP servers.
+  alias is not dispatched as Cursor. `qoder` is also the Qoder desktop IDE's shell
+  launcher, so Qoder resolves `qodercli` first (the npm package and the official
+  installer both provide it) and treats `qoder` only as an alias that is skipped
+  when it points at the IDE. Every fallback (launch, login hint, update) uses
+  `qodercli`/`qoderclicn`, never the bare IDE-colliding name.
 - Droid bootstrap discovery reads publisher package metadata where available;
   it does not execute a self-updating version probe.
 - fx Keychain login is identified with its prompt-free status command. It is

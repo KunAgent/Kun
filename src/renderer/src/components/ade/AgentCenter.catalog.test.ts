@@ -8,7 +8,7 @@ vi.mock('../settings-icon-tile', () => ({ SettingsIconTile: () => null }))
 vi.mock('../../store/chat-store', () => ({ useChatStore: { getState: () => ({ openSettings: vi.fn() }) } }))
 vi.mock('./AgentSettingsSelect', () => ({ AgentSettingsSelect: () => null }))
 const f = vi.hoisted(() => ({ rows: Array.from({ length: 43 }, (_, index) => {
-  const id = index === 0 ? 'kun' : index === 2 ? 'gemini-cli' : `agent-${index}`
+  const id = index === 0 ? 'kun' : index === 2 ? 'cline' : `agent-${index}`
   return { definition: { id, displayName: id, transport: index === 0 ? 'native-loop' : index % 3 === 0 ? 'application' : index % 3 === 1 ? 'terminal' : 'acp',
     credentialModes: ['native-login'], permissionModes: [], modelSource: 'static', staticModels: [], builtin: true },
   status: { harnessId: id, installed: 'yes', login: 'unknown', checkedAt: '' } }
@@ -42,7 +42,7 @@ it('groups chat Agents by next step, leaves Kun to the default picker, and keeps
     expect(ids()).not.toContain('kun')
     expect(ids()).not.toContain('agent-3')
     expect(ids()).not.toContain('agent-7')
-    expect(ids()).toContain('gemini-cli')
+    expect(ids()).toContain('cline')
     expect([...container.querySelectorAll('[data-agent-group]')].map((element) => element.getAttribute('data-agent-group'))).toEqual(['available'])
     expect(container.querySelector('[data-agent-default-select]')).not.toBeNull()
     expect(container.querySelector('[data-agent-center-summary]')?.textContent).toBe('agentCenter.summary.connected')
@@ -51,10 +51,10 @@ it('groups chat Agents by next step, leaves Kun to the default picker, and keeps
     expect(container.querySelector('[data-agent-card]')?.getAttribute('data-agent-card')).toBe('agent-11')
     const search = container.querySelector<HTMLInputElement>('[data-agent-catalog-search]')!
     await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, 'gemini')
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, 'cline')
       search.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    expect(ids()).toEqual(['gemini-cli'])
-    expect(container.querySelector('[data-agent-card]')?.getAttribute('data-agent-card')).toBe('gemini-cli')
+    expect(ids()).toEqual(['cline'])
+    expect(container.querySelector('[data-agent-card]')?.getAttribute('data-agent-card')).toBe('cline')
   } finally { await act(async () => root.unmount()); vi.unstubAllGlobals() }
 })

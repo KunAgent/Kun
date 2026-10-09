@@ -40,8 +40,8 @@ describe('Agent installation plans', () => {
   it('reports missing prerequisites and recognizes Windows npm.cmd', async () => {
     expect(await harnessInstallPlan(definition, 'install', 'linux', async () => undefined))
       .toMatchObject({ available: false, missingCommand: 'bash' })
-    const gemini = new HarnessCatalog().get('gemini-cli')!
-    expect(await harnessInstallPlan(gemini, 'install', 'win32', async (cmd) =>
+    const npmAgent = new HarnessCatalog().get('cline')!
+    expect(await harnessInstallPlan(npmAgent, 'install', 'win32', async (cmd) =>
       ['powershell.exe', 'npm.cmd'].includes(cmd) ? cmd : undefined)).toMatchObject({ available: true })
   })
   it('finds new user installs without replacing explicit PATH precedence', () => {

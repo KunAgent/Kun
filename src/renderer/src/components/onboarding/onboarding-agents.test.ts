@@ -76,19 +76,19 @@ describe('onboarding agents', () => {
   })
 
   it('sorts installed Agents best first and suggests popular missing ones', () => {
-    const enabled = settings({ enabledProfiles: [{ harnessId: 'gemini-cli', credentialMode: 'native-login' }] })
+    const enabled = settings({ enabledProfiles: [{ harnessId: 'opencode', credentialMode: 'native-login' }] })
     const lists = onboardingAgentLists([
       row('zzz-agent'),
       row('devin', { status: { login: 'signed-out' } }),
-      withHarnessReadiness(row('gemini-cli', { name: 'Gemini CLI' })),
+      withHarnessReadiness(row('opencode', { name: 'OpenCode' })),
       row('codex'),
       row('claude-code', { status: { installed: 'no' } }),
       row('obscure', { status: { installed: 'no' } })
     ], enabled)
-    expect(lists.installed.map((entry) => entry.definition.id)).toEqual(['gemini-cli', 'codex', 'zzz-agent', 'devin'])
+    expect(lists.installed.map((entry) => entry.definition.id)).toEqual(['opencode', 'codex', 'zzz-agent', 'devin'])
     expect(lists.suggestions.map((entry) => entry.definition.id)).toEqual(['claude-code'])
-    expect(onboardingConnectedAgentNames([withHarnessReadiness(row('gemini-cli', { name: 'Gemini CLI' }))], enabled))
-      .toEqual(['Gemini CLI'])
+    expect(onboardingConnectedAgentNames([withHarnessReadiness(row('opencode', { name: 'OpenCode' }))], enabled))
+      .toEqual(['OpenCode'])
   })
 
   it('runs one readiness check at a time in arrival order', () => {

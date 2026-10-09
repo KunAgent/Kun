@@ -11,7 +11,7 @@ const byId = new Map(expanded.map((definition) => [definition.id, definition]))
 
 // Fixed product coverage is checked independently of other repositories and their current files.
 const SOURCE_TO_HARNESS = {
-  claude: 'claude-code', 'claude-desktop': 'claude-desktop', codex: 'codex', gemini: 'gemini-cli',
+  claude: 'claude-code', 'claude-desktop': 'claude-desktop', codex: 'codex',
   agy: 'antigravity', opencode: 'opencode', openchamber: 'openchamber', mimocode: 'mimocode',
   pi: 'pi', aside: 'aside', omo: 'omo', goose: 'goose', cursor: 'cursor',
   'cursor-local': 'cursor-local', zed: 'zed', vscode: 'vscode', air: 'air', copilot: 'copilot',
@@ -23,11 +23,11 @@ const SOURCE_TO_HARNESS = {
 } as const
 
 describe('expanded Agent catalog', () => {
-  it('covers the fixed 43 products and separately exposes the Cursor CLI', () => {
+  it('covers the fixed 42 products and separately exposes the Cursor CLI', () => {
     const all = new Set(BUILTIN_HARNESSES.map((definition) => definition.id))
     expect(all.size).toBe(BUILTIN_HARNESSES.length)
-    expect(Object.keys(SOURCE_TO_HARNESS)).toHaveLength(43)
-    expect(new Set(Object.values(SOURCE_TO_HARNESS)).size).toBe(43)
+    expect(Object.keys(SOURCE_TO_HARNESS)).toHaveLength(42)
+    expect(new Set(Object.values(SOURCE_TO_HARNESS)).size).toBe(42)
     for (const id of Object.values(SOURCE_TO_HARNESS)) expect(all.has(id), id).toBe(true)
     expect(byId.get('cursor-cli')?.transport).toBe('acp')
     expect(expanded).toHaveLength(35)
@@ -53,7 +53,7 @@ describe('expanded Agent catalog', () => {
       hermes: ['hermes', 'acp'], kimi: ['kimi', 'acp'], 'minimax-code': ['mcode', 'acp'],
       droid: ['droid', 'exec', '--output-format', 'acp'],
       cline: ['cline', '--acp', '--auto-approve', 'false'],
-      qoder: ['qoder', '--acp'], 'qoder-cn': ['qodercn', '--acp'], grok: ['grok', 'agent', 'stdio']
+      qoder: ['qodercli', '--acp'], 'qoder-cn': ['qoderclicn', '--acp'], grok: ['grok', 'agent', 'stdio']
     }
     const acpIds = expanded.filter((definition) => definition.transport === 'acp').map((definition) => definition.id)
     expect(acpIds.sort()).toEqual(Object.keys(expected).sort())
