@@ -183,7 +183,10 @@ export class CodexSession implements HarnessSession {
       CODEX_NOTIFICATIONS.itemCompleted,
       CODEX_NOTIFICATIONS.turnPlanUpdated,
       CODEX_NOTIFICATIONS.threadTokenUsageUpdated,
-      CODEX_NOTIFICATIONS.turnDiffUpdated
+      CODEX_NOTIFICATIONS.turnDiffUpdated,
+      // Only spawned subagents' turns map to anything (codex-subagent-tracker).
+      CODEX_NOTIFICATIONS.turnStarted,
+      CODEX_NOTIFICATIONS.turnCompleted
     ]) {
       subscribe(method)
     }

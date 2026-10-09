@@ -63,3 +63,42 @@ export function externalSubagentRouting(deps: {
     }
   }
 }
+
+/** Routing when the runtime has durable stores; test doubles without them get none. */
+export function maybeExternalSubagentRouting(deps: {
+  threadStore?: ThreadStore
+  sessionStore?: SessionStore
+  events?: { record(draft: RuntimeEventDraft): Promise<unknown> }
+}): ExternalSubagentRouting | undefined {
+  const { threadStore, sessionStore, events } = deps
+  if (!threadStore || typeof threadStore !== 'object' || !sessionStore || !events) return undefined
+  return externalSubagentRouting({ threadStore, sessionStore, events })
+}
+
+type FinishingTurns = {
+  applyItem(threadId: string, item: TurnItem): Promise<void>
+  finishTurn(input: { threadId: string; turnId: string }): Promise<unknown>
+}
+
+/**
+ * The same turn service, except that finishing a turn first settles its
+ * subagents that never reported back. Every harness ends turns through
+ * `finishTurn`, so no individual exit path can leave a card spinning.
+ */
+export function withExternalSubagentSettlement<T extends FinishingTurns>(turns: T, routing: ExternalSubagentRouting): T {
+  return new Proxy(turns, {
+    get(target, property) {
+      if (property === 'finishTurn') {
+        return async (input: Parameters<T['finishTurn']>[0]) => {
+          await routing.settleTurn(input.threadId, input.turnId, (threadId, item) => target.applyItem(threadId, item))
+            .catch((error: unknown) => {
+              console.warn(`[kun] external subagent settlement failed turn=${input.turnId}: ${error instanceof Error ? error.message : String(error)}`)
+            })
+          return target.finishTurn(input)
+        }
+      }
+      const value = Reflect.get(target, property, target) as unknown
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+    }
+  })
+}

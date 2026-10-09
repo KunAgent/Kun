@@ -22,6 +22,7 @@ import {
 } from '../session/session-turn-runtime.js'
 import type { UsageService } from '../services/usage-service.js'
 import { HARNESS_USAGE_MODES, withHarnessUsageLedger } from '../runtime/harness-usage-ledger.js'
+import { maybeExternalSubagentRouting, withExternalSubagentSettlement } from '../runtime/external-subagent-routing.js'
 
 /**
  * Shared transport map assembly used by the main runtime and by child/delegated
@@ -48,13 +49,18 @@ export function buildHarnessRuntimes(input: {
     input.usage
       ? { ...deps, events: withHarnessUsageLedger(deps.events as never, { usage: input.usage, mode: HARNESS_USAGE_MODES[transport], ...(harnessId ? { harnessId } : {}) }) }
       : deps
+  // Subagents an Agent never reported back on are settled when its turn ends.
+  const settled = <T extends AcpRuntimeDeps | SessionTurnRuntimeDeps>(deps: T): T => {
+    const routing = maybeExternalSubagentRouting(deps)
+    return routing ? { ...deps, turns: withExternalSubagentSettlement(deps.turns, routing) } : deps
+  }
   const map: Partial<Record<HarnessTransport, DelegatedTurnRuntime>> = {}
   if (input.agentSdk) map['agent-sdk'] = createAgentSdkRuntime(ledger('agent-sdk', input.agentSdk, 'claude-code'))
   if (input.antigravity) map['antigravity-cli'] = new AntigravityCliRuntime(ledger('antigravity-cli', input.antigravity, 'antigravity'))
   if (input.cursor) map['cursor-sdk'] = createCursorSdkRuntime(ledger('cursor-sdk', input.cursor, 'cursor'))
-  if (input.acp) map.acp = new AcpRuntime(ledger('acp', input.acp))
+  if (input.acp) map.acp = new AcpRuntime(ledger('acp', settled(input.acp)))
   if (input.codexAppServer) {
-    map['codex-app-server'] = new SessionTurnRuntime(ledger('codex-app-server', input.codexAppServer, 'codex'))
+    map['codex-app-server'] = new SessionTurnRuntime(ledger('codex-app-server', settled(input.codexAppServer), 'codex'))
   }
   if (input.piRpc) {
     map['pi-rpc'] = new SessionTurnRuntime(ledger('pi-rpc', input.piRpc, 'pi'))

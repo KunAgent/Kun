@@ -52,6 +52,7 @@ import type {
 } from '../runtime/delegated-turn-runtime.js'
 import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 import { AcpDraftEmitter } from '../runtime/acp/acp-turn-emitter.js'
+import { maybeExternalSubagentRouting } from '../runtime/external-subagent-routing.js'
 
 import { HarnessAgentPool } from './harness-pool.js'
 import {
@@ -251,7 +252,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     }
 
     const emitter = new AcpDraftEmitter(
-      { turns: this.deps.turns, events: this.deps.events },
+      { turns: this.deps.turns, events: this.deps.events, subagents: maybeExternalSubagentRouting(this.deps) },
       threadId,
       turnId,
       // Only a kun-gateway route is metered by the loopback gateway; a native login

@@ -42,6 +42,7 @@ import { AcpEventMapper } from './acp-event-mapper.js'
 import { nativeAgentsFromAcpModes } from '../../contracts/harness-native-agents.js'
 import { acpSessionModeSelector } from './acp-session-modes.js'
 import { AcpDraftEmitter } from './acp-turn-emitter.js'
+import { maybeExternalSubagentRouting } from '../external-subagent-routing.js'
 import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
 import type { AcpSpawnFn } from './acp-process.js'
 import {
@@ -219,7 +220,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       debug: this.deps.debug
     })
     const emitter = new AcpDraftEmitter(
-      { turns: this.deps.turns, events: this.deps.events },
+      { turns: this.deps.turns, events: this.deps.events, subagents: maybeExternalSubagentRouting(this.deps) },
       threadId,
       turnId,
       // Only a kun-gateway route is metered call by call by the loopback gateway; a

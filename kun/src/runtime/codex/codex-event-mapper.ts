@@ -18,6 +18,7 @@ import {
 } from '../../domain/item.js'
 import { CODEX_NOTIFICATIONS, type CodexThreadItem } from './codex-protocol.js'
 import { codexContextOccupancy } from './codex-context-occupancy.js'
+import { CodexSubagentTracker } from './codex-subagent-tracker.js'
 
 export type CodexMapperContext = {
   threadId: string
@@ -26,6 +27,8 @@ export type CodexMapperContext = {
   codexThreadId: string
   model?: string
   nowIso?: () => string
+  /** Child mappers set false: a spawned agent's own items never spawn trackers. */
+  subagents?: false
 }
 
 type ItemRecord = Record<string, unknown>
@@ -48,8 +51,19 @@ export class CodexEventMapper {
   /** Thread total at the last counted report; a repeat carries no new usage. */
   private lastCountedTotalTokens?: number
   private readonly toolItemIds = new Map<string, string>()
+  private readonly subagents?: CodexSubagentTracker
 
-  constructor(private readonly ctx: CodexMapperContext) {}
+  constructor(private readonly ctx: CodexMapperContext) {
+    if (ctx.subagents !== false) {
+      this.subagents = new CodexSubagentTracker({
+        threadId: ctx.threadId,
+        turnId: ctx.turnId,
+        kunItemId: (id) => this.kunItemId(id),
+        createChildMapper: (threadId, turnId, codexThreadId, model) =>
+          new CodexEventMapper({ threadId, turnId, codexThreadId, subagents: false, ...(model ? { model } : {}) })
+      })
+    }
+  }
 
   /** codex itemId → Kun timeline item id (stable, namespaced). */
   kunItemId(codexItemId: string): string {
@@ -70,7 +84,8 @@ export class CodexEventMapper {
       typeof p.threadId === 'string' &&
       p.threadId !== this.ctx.codexThreadId
     ) {
-      return []
+      // A spawned subagent's thread goes to its side thread; others are dropped.
+      return this.subagents?.routeForeign(method, p) ?? []
     }
     switch (method) {
       case CODEX_NOTIFICATIONS.agentMessageDelta:
@@ -139,6 +154,8 @@ export class CodexEventMapper {
   // -- item lifecycle -------------------------------------------------------------
 
   private itemStarted(item: CodexThreadItem): RuntimeEventDraft[] {
+    const subagent = item?.id ? this.subagents?.handleItem('started', item) : undefined
+    if (subagent) return subagent
     if (!item?.id || !TOOL_ITEM_KINDS.has(item.type)) return []
     const kunId = this.kunItemId(item.id)
     this.toolItemIds.set(item.id, kunId)
@@ -154,6 +171,8 @@ export class CodexEventMapper {
 
   private itemCompleted(item: CodexThreadItem): RuntimeEventDraft[] {
     if (!item?.id) return []
+    const subagent = this.subagents?.handleItem('completed', item)
+    if (subagent) return subagent
     const record = item as ItemRecord
     if (TOOL_ITEM_KINDS.has(item.type)) {
       const kunId = this.toolItemIds.get(item.id) ?? this.kunItemId(item.id)

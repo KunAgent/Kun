@@ -15,6 +15,8 @@ import {
   makeAssistantReasoningItem,
   makeAssistantTextItem
 } from '../../domain/item.js'
+import { isExternalSubagentThreadId } from '../../contracts/external-subagent.js'
+import type { ExternalSubagentRouting } from '../external-subagent-routing.js'
 
 export type AcpDraftEmitterDeps = {
   turns: Pick<
@@ -22,6 +24,8 @@ export type AcpDraftEmitterDeps = {
     'applyItem' | 'applyAssistantDelta' | 'updateItem'
   >
   events: Pick<RuntimeEventRecorder, 'record'>
+  /** Mirrors external subagents into their side threads (external-subagent-store). */
+  subagents?: ExternalSubagentRouting
 }
 
 export class AcpDraftEmitter {
@@ -51,6 +55,12 @@ export class AcpDraftEmitter {
   async emit(draft: RuntimeEventDraft): Promise<void> {
     if (draft.kind === 'usage' && this.options.gatewayMetered) return
     const item = 'item' in draft ? (draft.item as TurnItem | undefined) : undefined
+    if (this.deps.subagents && isExternalSubagentThreadId(draft.threadId)) {
+      // A subagent's own step: persisted on its side thread, never this turn.
+      if (item) await this.deps.subagents.store.apply(draft)
+      else await this.deps.subagents.store.record(draft)
+      return
+    }
     switch (draft.kind) {
       case 'assistant_text_delta':
       case 'assistant_reasoning_delta': {
@@ -99,6 +109,7 @@ export class AcpDraftEmitter {
         if (item) {
           await this.deps.turns.applyItem(this.threadId, item)
           this.materializedItems.add(item.id)
+          await this.deps.subagents?.store.syncParentItem(item)
           return
         }
         await this.deps.events.record(draft)
@@ -108,6 +119,7 @@ export class AcpDraftEmitter {
         if (item) {
           await this.deps.turns.applyItem(this.threadId, item)
           this.materializedItems.add(item.id)
+          await this.deps.subagents?.store.syncParentItem(item)
         }
         await this.deps.events.record(draft)
         return
@@ -119,6 +131,7 @@ export class AcpDraftEmitter {
             // create): append it so the timeline never loses the call.
             await this.deps.turns.applyItem(this.threadId, item)
           }
+          await this.deps.subagents?.store.syncParentItem(item)
           return
         }
         await this.deps.events.record(draft)

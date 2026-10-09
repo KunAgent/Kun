@@ -19,7 +19,7 @@ const agentCall = (input: Record<string, unknown>): SdkMessage => ({
   message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_agent', name: 'Agent', input }] }
 } as SdkMessage)
 
-const itemOf = (draft: { item?: unknown }) => draft.item as TurnItem
+const itemOf = (draft: unknown) => (draft as { item: TurnItem }).item
 
 describe('Claude Code subagents', () => {
   const childThreadId = externalSubagentThreadId('th_1', 'toolu_agent')
