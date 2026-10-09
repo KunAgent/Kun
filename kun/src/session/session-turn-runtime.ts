@@ -254,8 +254,9 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       { turns: this.deps.turns, events: this.deps.events },
       threadId,
       turnId,
-      // credentialEnv is non-empty only for kun-gateway routes (native login is {}).
-      { gatewayMetered: Object.keys(ctx.credentialEnv).length > 0 }
+      // Only a kun-gateway route is metered by the loopback gateway; a native login
+      // (which may carry its own API key in the environment) reports its own usage.
+      { gatewayMetered: ctx.credentialMode === 'kun-gateway' }
     )
     const approveCore = makeDelegatedAwaitApproval(
       {

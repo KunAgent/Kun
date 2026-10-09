@@ -84,6 +84,7 @@ import type { AcpRuntimeDeps } from './acp-runtime-deps.js'
 import { acpSessionSettings } from './acp-session-settings.js'
 import { emitTolerantSessionState } from './acp-session-state-bounds.js'
 import { harnessTurnTiming } from '../harness-turn-timing.js'
+import { beginAcpSessionUsage, collectAcpSessionUsage } from './acp-session-usage.js'
 
 export class AcpRuntime implements DelegatedTurnRuntime {
   private readonly pool: AcpConnectionPool
@@ -166,6 +167,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       sandboxMode,
       approvalReviewer,
       credentialIdentity,
+      credentialMode,
       credentialEnv,
       secretEnv,
       poolKey: basePoolKey,
@@ -220,8 +222,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       { turns: this.deps.turns, events: this.deps.events },
       threadId,
       turnId,
-      // credentialEnv is non-empty only for kun-gateway routes (native login is {}).
-      { gatewayMetered: Object.keys(credentialEnv).length > 0 }
+      // Only a kun-gateway route is metered call by call by the loopback gateway; a
+      // native login (which may carry its own API key in the environment) reports its own usage.
+      { gatewayMetered: credentialMode === 'kun-gateway' }
     )
     const timing = harnessTurnTiming(threadId, turnId)
     let emitQueue: Promise<void> = Promise.resolve()
@@ -471,6 +474,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       await this.deps.readiness?.validateTurn(threadId, turnId, signal)
       signal.throwIfAborted()
       if (streamError) throw streamError
+      const sessionUsage = await beginAcpSessionUsage(definition.id, {
+        sessionId: session.sessionId, workspace, env: { ...process.env, ...definition.launch?.env }
+      })
       timing.requestStarted()
       const raw = await Promise.race([conn.rpc.request(
         ACP_AGENT_METHODS.sessionPrompt,
@@ -491,6 +497,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       const resultDrafts = mapper.applyPromptResult(parsed.data.usage)
       timing.observe(resultDrafts)
       await emitter.emitAll(resultDrafts)
+      await emitter.emitAll(await collectAcpSessionUsage(sessionUsage, mapper.observedFacts, { threadId, turnId, harnessId: definition.id, ...(model ? { model } : {}) }))
       await emitter.emitAll(mapper.flush())
       if (streamError) throw streamError
       await commitAcpSession(

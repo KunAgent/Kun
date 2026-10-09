@@ -5,6 +5,7 @@ import type { HarnessUpdateRecipe } from '../harness-update-recipes.js'
 import type { HarnessLoginProbeDeps } from '../harness-login-probes.js'
 import type { AcpConnection } from '../../runtime/acp/acp-connection.js'
 import type { AcpConfigOption, AcpSessionModes } from '../../runtime/acp/acp-schema.js'
+import type { UsageSnapshot } from '../../contracts/usage.js'
 
 export type ProviderEnv = Record<string, string | undefined>
 export type HarnessLoginState = HarnessStatus['login']
@@ -90,8 +91,34 @@ export type ProviderFailureContext = {
   isolated?: 'passes' | 'fails'
 }
 
+export type AcpSessionUsageInput = {
+  sessionId: string
+  workspace: string
+  /** Launch environment (never the credentials); only locates the engine's own files. */
+  env: ProviderEnv
+}
+
+/** One model call of a turn, read from the engine's own session log. */
+export type AcpSessionUsageSample = {
+  model?: string
+  /** Tokens plus the call's own `requestTtftMs` / `requestGenerationMs` when the log has them. */
+  usage: UsageSnapshot
+}
+
+/**
+ * An engine that reports no usage over ACP but keeps every model call, with its
+ * own stream timing, in a local session log. `begin` marks where the turn's
+ * records will start; `collect` returns the calls made since that mark.
+ */
+export type AcpSessionUsageSource = {
+  begin(input: AcpSessionUsageInput): Promise<unknown>
+  collect(mark: unknown, input: AcpSessionUsageInput): Promise<AcpSessionUsageSample[]>
+}
+
 /** ACP session behaviour that differs per engine. */
 export type ProviderAcpHooks = {
+  /** Usage from the engine's session log when the protocol carries none. */
+  readonly sessionUsage?: AcpSessionUsageSource
   /**
    * Variables that start the engine without the user's configuration and
    * plugins, or undefined when `message` is not a failure the engine hides.

@@ -40,6 +40,7 @@ folds the fields like any other usage.
 | Codex app-server, Pi RPC | before `session.runTurn` | `KunTimelineTurnSink.emit` |
 | Claude Agent SDK | `system/init` message (CLI ready to call the model) | `mapper.map(message)` loop via `observeSdkMessage` |
 | Cursor SDK | before `agent.send` | `consumeCursorMessage`, final usage drafts |
+| DeepSeek Harness (ACP) | n/a | n/a: ACP carries neither usage nor a stream; read from the session log (below) |
 | Antigravity CLI | `init` / the `user_input` step of `--output-format stream-json` | each `step_update` line as the process prints it: `agent_response` `text_delta` pieces, `tool` steps |
 
 `kun-gateway` routes are timed by the loopback gateway itself: every upstream
@@ -74,3 +75,31 @@ in `json` mode and its usage was discarded, so an Antigravity thread showed
 "no usage". The CLI says how many output tokens were hidden thinking, so the
 streamed answer's token count is capped at `output - thinking`. A CLI that
 prints a single JSON object is still read (one fragment, usage, no timing).
+
+## DeepSeek Harness
+
+dsh-acp 0.2.0-rc.2 sends a prompt result of just `{ stopReason }` and delivers
+each model call's reply in one piece, so neither tokens nor timing can come from
+ACP. It does keep every model call in its own session log,
+`<DSH_HOME>/sessions/<workspace>/<session id>/session.v4.jsonl.zstd`: a series of
+appended zstd frames of JSONL records. Each `assistant/message` has exact `usage`
+(uncached input, output, cache read/write) and the provider stream's chunk times
+(`block-start`, `*-chunks` with `time0` and gaps, a final `usage` chunk), and each
+`step/start` marks when the call began.
+
+The ACP provider hook `sessionUsage` (`deepseek-harness-usage.ts`) marks the log's
+size before `session/prompt`, then, once the prompt settles (the writer flushes
+within milliseconds; the reader waits up to 1.5 s for the turn's `turn/end`), splits
+the new bytes into frames, decodes them one by one (Node's one-shot zstd stops
+after the first frame) and records one usage event per model call: tokens, TTFT
+(step start to the stream's first block) and generation time (first block to the
+usage chunk), the same definitions a native call gets. An Agent that does report
+usage over ACP keeps its own report.
+
+## Which usage Kun records
+
+A turn's own usage report is dropped only when the route is `kun-gateway`, because
+the loopback gateway meters those calls itself. It used to be dropped whenever
+the turn had any credential environment, which also swallowed native logins that
+carry their API key in the environment (DeepSeek Harness reads its key from
+`~/.dsh` and passes it as `DEEPSEEK_API_KEY`).

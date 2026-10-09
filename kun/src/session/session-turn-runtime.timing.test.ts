@@ -29,7 +29,7 @@ const delta = (): RuntimeEventDraft => {
   return draft
 }
 
-it('measures a Codex / Pi turn from the prompt reaching the session to what the notifications show on arrival', async () => {
+async function runTurn(ctxOverrides: Record<string, unknown> = {}) {
   let clock = 0
   offset = 0
   setHarnessTimingClock(() => clock)
@@ -62,7 +62,7 @@ it('measures a Codex / Pi turn from the prompt reaching the session to what the 
   vi.mocked(resolveSessionTurnContext).mockResolvedValueOnce({
     ok: true,
     ctx: { definition, thread: { id: 'thread' }, turn: { id: 'turn-1' }, workspace: '/repo', poolKey: 'codex:native',
-      credentialEnv: {}, secretEnv: {}, credentialIdentity: 'account', model: 'gpt', items,
+      credentialEnv: {}, secretEnv: {}, credentialIdentity: 'account', model: 'gpt', items, ...ctxOverrides,
       userItem: { text: 'hi' }, instructionBlocks: [], redactedRequestValues: [] } as unknown as SessionTurnContext
   })
   const finishTurn = vi.fn(async (_args: unknown) => undefined)
@@ -77,11 +77,21 @@ it('measures a Codex / Pi turn from the prompt reaching the session to what the 
   } as unknown as SessionTurnRuntimeDeps)
 
   expect(await runtime.runTurn('thread', 'turn-1', new AbortController().signal)).toBe('completed')
+  return recorded.find((draft) => draft.kind === 'usage')
+}
 
-  const usage = recorded.find((draft) => draft.kind === 'usage')
+it('measures a Codex / Pi turn from the prompt reaching the session to what the notifications show on arrival', async () => {
+  const usage = await runTurn()
   expect(usage && usage.kind === 'usage' && usage.usage).toMatchObject({
     requestTtftMs: 1_000, // prompt handed over at 0, first delta at 1000
     requestGenerationMs: 900, // 9 more deltas, 100 ms apart
     requestGenerationTokens: 90
   })
+})
+
+it('records the usage of a native login that has an API key in its environment, but not of a kun-gateway route', async () => {
+  // A non-empty credential env is not a gateway route: only the gateway meters those calls itself.
+  expect(await runTurn({ credentialMode: 'native-login', credentialEnv: { OPENAI_API_KEY: 'native-key' } })).toBeDefined()
+  offset = 0
+  expect(await runTurn({ credentialMode: 'kun-gateway', credentialEnv: { KUN_GATEWAY_TOKEN: 'grant' } })).toBeUndefined()
 })
