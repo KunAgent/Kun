@@ -5,6 +5,7 @@ import { AtomicJsonFile } from '../extensions/atomic-json.js'
 import { metadataEvidence, MODEL_METADATA_FIELDS } from '../contracts/model-metadata-evidence.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import { catalogBinding } from './provider-catalog-operations.js'
+import { withoutOAuthRefresh } from './oauth-refresh-scope.js'
 import { readModelCatalog } from './model-catalog-store.js'
 import { migrateModelMetadata, resolveModelMetadata, withModelObservation } from './model-metadata-resolver.js'
 import { RegistryDocumentSchema, emptyDocument, type ModelConnectionRegistry, type RegistryDocument, type StoredProfile } from './model-connection-registry-core.js'
@@ -32,7 +33,9 @@ export async function resolveRegistryProfileMetadata(registry: ModelConnectionRe
     if (!allowCatalog) throw new Error('Pending credential change')
     const previous = await readModelCatalog(registry['options'].dataDir, profile.id)
     if (!previous) throw new Error('No account observations yet')
-    const bound = await catalogBinding(registry, profile.id)
+    // Metadata reads use the stored credential; refreshing a third-party token
+    // here would put its auth server on the application startup path.
+    const bound = await withoutOAuthRefresh(() => catalogBinding(registry, profile.id))
     identity = bound.identity
     catalog = await readModelCatalog(registry['options'].dataDir, profile.id, identity)
     if (catalog?.identityChanged) catalog = null
