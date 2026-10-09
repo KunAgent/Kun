@@ -1,0 +1,93 @@
+/* The 3D showcase: asset list, a WebGL stage with its toolbar, and model numbers. */
+/* The app zooms <body>; stretching with inset (not 100vw/100vh) keeps the dialog covering the whole window. */
+.kun3d { position: fixed; inset: 0; display: flex; flex-direction: column; width: auto; max-width: none; height: auto; max-height: none;
+  margin: 0; padding: 0; overflow: hidden; border: 0; color: var(--ds-text); background: var(--ds-surface-app, var(--ds-surface-card)); font-size: 13px; }
+.kun3d::backdrop { background: transparent; }
+.kun3d button:focus-visible, .kun3d input:focus-visible, .kun3d select:focus-visible { outline: 2px solid var(--ds-focus-ring, var(--ds-accent)); outline-offset: 2px; }
+/* The left 88px stays clear for the window's traffic lights. */
+.kun3d-head { display: flex; flex: none; align-items: center; gap: 12px; height: 52px; padding: 0 16px 0 88px; border-bottom: 1px solid var(--ds-border); }
+.kun3d-head > strong { font-size: 15px; font-weight: 650; }
+.kun3d-path { min-width: 0; overflow: hidden; padding: 2px 9px; border-radius: 999px; color: var(--ds-text-muted); background: var(--ds-surface-subtle);
+  font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.kun3d-head-actions { display: flex; gap: 8px; margin-left: auto; }
+.kun3d-head-actions > button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 1px solid var(--ds-border);
+  border-radius: 9px; color: var(--ds-text); background: var(--ds-surface-card); font-size: 12.5px; white-space: nowrap; }
+.kun3d-head-actions > button:hover { background: var(--ds-surface-hover); }
+.kun3d-head-actions > .kun3d-close { width: 32px; justify-content: center; padding: 0; border-color: transparent; background: transparent; }
+.kun3d-body { display: grid; flex: 1; grid-template-columns: 248px minmax(0, 1fr) 288px; min-height: 0; }
+
+.kun3d-library { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 12px; border-right: 1px solid var(--ds-border); }
+.kun3d-search { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--ds-border); border-radius: 9px;
+  color: var(--ds-text-muted); background: var(--ds-surface-card); }
+.kun3d-search > input { flex: 1; min-width: 0; border: 0; color: var(--ds-text); background: transparent; font-size: 12.5px; outline: none; }
+.kun3d-library-list { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.kun3d-library-list h3, .kun3d-info h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; color: var(--ds-text-muted); font-size: 11.5px; font-weight: 600; }
+.kun3d-library-list h3 > span { padding: 0 6px; border-radius: 999px; background: var(--ds-surface-subtle); font-weight: 500; }
+.kun3d-entry { position: relative; display: grid; width: 100%; gap: 2px; padding: 7px 9px; border: 1.5px solid transparent; border-radius: 10px; color: var(--ds-text);
+  background: transparent; text-align: left; }
+.kun3d-entry:hover { background: var(--ds-surface-hover); }
+.kun3d-entry[aria-pressed='true'] { border-color: var(--ds-accent); background: var(--ds-accent-soft); }
+.kun3d-entry > strong { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.kun3d-entry > small { overflow: hidden; color: var(--ds-text-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.kun3d-entry-refs { position: absolute; top: 8px; right: 8px; min-width: 16px; height: 16px; border-radius: 999px; color: var(--ds-accent);
+  background: var(--ds-accent-soft); font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; }
+.kun3d-empty { display: grid; gap: 10px; padding: 14px; border: 1.5px dashed var(--ds-border); border-radius: 12px; }
+.kun3d-empty > strong { font-size: 13.5px; font-weight: 650; }
+.kun3d-empty > ol { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--ds-text-muted); font-size: 12px; line-height: 1.5; }
+.kun3d-empty > code { display: block; padding: 8px; overflow-wrap: anywhere; border-radius: 8px; color: var(--ds-text); background: var(--ds-surface-subtle);
+  font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5; }
+.kun3d-empty > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; border: 0; border-radius: 9px;
+  color: var(--ds-control-foreground, #fff); background: var(--ds-accent); font-size: 12.5px; font-weight: 600; }
+.kun3d-empty > small { color: var(--ds-text-muted); font-size: 11.5px; }
+
+.kun3d-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden;
+  background: radial-gradient(70% 70% at 50% 42%, #f7f8fb, #dfe4ec); }
+[data-theme='dark'] .kun3d-stage { background: radial-gradient(70% 70% at 50% 42%, #3a3d44, #1d1f24); }
+.kun3d-canvas-host { position: absolute; inset: 0 0 64px; }
+.kun3d-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.kun3d-canvas:active { cursor: grabbing; }
+.kun3d-overlay { position: absolute; inset: 0 0 64px; width: 100%; height: calc(100% - 64px); object-fit: contain; pointer-events: none; mix-blend-mode: multiply; }
+[data-theme='dark'] .kun3d-overlay { mix-blend-mode: normal; }
+.kun3d-stage-note { position: absolute; top: 45%; left: 50%; max-width: 70%; padding: 10px 16px; border-radius: 12px; color: var(--ds-text-muted);
+  background: color-mix(in srgb, var(--ds-surface-card) 86%, transparent); text-align: center; transform: translate(-50%, -50%); }
+.kun3d-stage-note[role='alert'] { color: var(--ds-danger, #c0392b); }
+.kun3d-drop { position: absolute; inset: 12px; display: grid; place-items: center; border: 2px dashed var(--ds-accent); border-radius: 18px;
+  color: var(--ds-accent); background: color-mix(in srgb, var(--ds-accent) 8%, transparent); font-size: 15px; font-weight: 650; pointer-events: none; }
+.kun3d-toolbar { position: absolute; right: 0; bottom: 0; left: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: 64px;
+  padding: 10px 14px; box-sizing: border-box; border-top: 1px solid var(--ds-border); background: var(--ds-surface-card); }
+.kun3d-toolbar[data-disabled] { opacity: .55; pointer-events: none; }
+.kun3d-toolbar > span { display: inline-flex; align-items: center; gap: 6px; }
+.kun3d-toolbar small { color: var(--ds-text-muted); font-size: 11.5px; }
+.kun3d-segment { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--ds-surface-subtle); }
+.kun3d-segment > button { min-height: 26px; padding: 0 9px; border: 0; border-radius: 7px; color: var(--ds-text-muted); background: transparent;
+  font-size: 12px; white-space: nowrap; }
+.kun3d-segment > button[aria-checked='true'] { color: var(--ds-text); background: var(--ds-surface-card); font-weight: 600; box-shadow: 0 1px 3px #0000001f; }
+.kun3d-toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--ds-text); font-size: 12px; white-space: nowrap; }
+.kun3d-toggle input { margin: 0; accent-color: var(--ds-accent); }
+.kun3d-toggle select { min-height: 26px; border: 1px solid var(--ds-border); border-radius: 7px; color: var(--ds-text); background: var(--ds-surface-card); font-size: 12px; }
+
+.kun3d-info { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; padding: 14px; border-left: 1px solid var(--ds-border); }
+.kun3d-info small { color: var(--ds-text-muted); font-size: 11.5px; line-height: 1.5; }
+.kun3d-stats { display: grid; gap: 4px; margin: 0; }
+.kun3d-stats > div { display: flex; justify-content: space-between; gap: 10px; }
+.kun3d-stats dt { flex: none; color: var(--ds-text-muted); font-size: 12px; }
+.kun3d-stats dd { min-width: 0; margin: 0; overflow: hidden; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.kun3d-checks { display: grid; gap: 4px; margin: 0 0 6px; padding: 0; list-style: none; }
+.kun3d-checks > li { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 8px; color: #b45309;
+  background: color-mix(in srgb, #f0a23f 14%, transparent); font-size: 12px; }
+.kun3d-checks > li[data-ok] { color: var(--ds-success, #1f7a45); background: color-mix(in srgb, var(--ds-success, #1f9d55) 10%, transparent); }
+.kun3d-checks > li > span { flex: 1; min-width: 0; }
+.kun3d-checks > li > b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.kun3d-refs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 6px; }
+.kun3d-refs > button { display: grid; gap: 3px; padding: 4px; border: 1.5px solid var(--ds-border); border-radius: 9px; color: var(--ds-text-muted);
+  background: var(--ds-surface-card); font-size: 11px; }
+.kun3d-refs > button[aria-pressed='true'] { border-color: var(--ds-accent); color: var(--ds-accent); }
+.kun3d-refs > button:disabled { cursor: default; }
+.kun3d-refs img { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 6px; background: #fff; }
+.kun3d-opacity { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px; }
+.kun3d-opacity > input { flex: 1; accent-color: var(--ds-accent); }
+
+@media (max-width: 980px) {
+  .kun3d-body { grid-template-columns: 200px minmax(0, 1fr); }
+  .kun3d-info { display: none; }
+}

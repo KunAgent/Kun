@@ -10,6 +10,7 @@ import { createStorageRelocationWorkbenchApi } from './storage-relocation-workbe
 import { createGitHubMcpAuthorizationPreloadApi } from './github-mcp-authorization'
 import { createDataMigrationPreloadApi } from './data-migration'
 import { getWorkspaceCreationTimes } from './workspace-creation-times'
+import { kun3dAssets } from './kun-3d-assets'
 import { runtimeRequestPreloadApi } from './runtime-request'
 import { quotaReminderPreloadApi } from './quota-reminder-bridge'
 import { worktreePreloadApi } from './worktree-bridge'
@@ -240,6 +241,7 @@ const api = {
   getGitBranches: (workspaceRoot) =>
     ipcRenderer.invoke('git:branches', workspaceRoot),
   getWorkspaceCreationTimes,
+  kun3dAssets,
   switchGitBranch: (workspaceRoot, branch) =>
     ipcRenderer.invoke('git:switch-branch', { workspaceRoot, branch }),
   createAndSwitchGitBranch: (workspaceRoot, branch) =>

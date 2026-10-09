@@ -15,6 +15,7 @@ const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation }
 const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
 const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-controls.cjs')
 const { exerciseWardrobeDrops } = require('./smoke-wardrobe-drops.cjs')
+const { exerciseKun3dShowcase } = require('./smoke-kun-3d-showcase.cjs')
 const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
 const { exerciseWorkAssistantAgent } = require('./smoke-work-assistant-agent.cjs')
 const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
@@ -181,6 +182,7 @@ async function main() {
       : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
       : process.argv.includes('--avatar-only') ? exerciseLayeredAvatarControls
       : process.argv.includes('--wardrobe-only') ? exerciseWardrobeDrops
+      : process.argv.includes('--kun3d-only') ? exerciseKun3dShowcase
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
       : process.argv.includes('--work-only') ? exerciseWorkLayout

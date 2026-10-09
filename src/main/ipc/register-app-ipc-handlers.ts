@@ -7,6 +7,7 @@ import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import { registerAppContentIpcHandlers } from './register-app-content-ipc-handlers'
 import { registerAppFileIpcHandlers } from './register-app-file-ipc-handlers'
 import { registerAppGitIpcHandlers } from './register-app-git-ipc-handlers'
+import { registerAppKun3dIpcHandlers } from './register-app-kun-3d-ipc-handlers'
 import { registerAppKunConfigIpcHandlers } from './register-app-kun-config-ipc-handlers'
 import { registerAppMarketIpcHandlers } from './register-app-market-ipc-handlers'
 import { registerAppPaperIpcHandlers } from './register-app-paper-ipc-handlers'
@@ -53,4 +54,5 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   registerAppPaperReaderIpcHandlers(options)
   registerAppPaperEvidenceIpcHandlers(options)
   registerAppContentIpcHandlers(options)
+  registerAppKun3dIpcHandlers()
 }
