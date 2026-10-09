@@ -347,11 +347,8 @@ export class DelegatedSessionCoordinator {
       ...(nativeSessionId ? { nativeSessionId } : {}),
       synchronizedInstructionDigest: input.preparation.instructionDigest,
       synchronizedHistoryDigest: delegatedHistoryDigest(committed),
-      // The prefix check counts the post-filter item stream the runtimes feed
-      // into prepare(); runtime_context_source items never reach that stream.
-      priorItemCount: committed.filter(
-        (item) => item.kind !== 'runtime_context_source'
-      ).length,
+      // The prefix check counts the same identity stream the digest hashes.
+      priorItemCount: delegatedHistoryItems(committed).length,
       lastCommittedTurnId: input.lastCommittedTurnId,
       ...(input.handoffBriefDigest
         ? { handoffBriefDigest: input.handoffBriefDigest }
@@ -378,12 +375,13 @@ export class DelegatedSessionCoordinator {
     candidate: ParkedSession,
     priorItems: readonly TurnItem[]
   ): boolean {
+    const history = delegatedHistoryItems(priorItems)
     if (
       candidate.priorItemCount === undefined ||
-      priorItems.length < candidate.priorItemCount
+      history.length < candidate.priorItemCount
     ) return false
     return (
-      delegatedHistoryDigest(priorItems.slice(0, candidate.priorItemCount)) ===
+      delegatedHistoryDigest(history.slice(0, candidate.priorItemCount)) ===
       candidate.synchronizedHistoryDigest
     )
   }
@@ -456,10 +454,18 @@ export class DelegatedSessionCoordinator {
   }
 }
 
+/**
+ * Items that make up a delegated session's history identity. Error records are
+ * Kun-side notices the Agent never sees, and a failed turn appends its record
+ * after the session commit; counting it would discard every native session
+ * that survives a failed turn.
+ */
+function delegatedHistoryItems(items: readonly TurnItem[]): TurnItem[] {
+  return items.filter((item) => item.kind !== 'runtime_context_source' && item.kind !== 'error')
+}
+
 export function delegatedHistoryDigest(items: readonly TurnItem[]): string {
-  const effective = effectiveHistoryAfterLatestCompaction(
-    items.filter((item) => item.kind !== 'runtime_context_source')
-  )
+  const effective = effectiveHistoryAfterLatestCompaction(delegatedHistoryItems(items))
   return sha256(stableStringify(effective.map(digestItem)))
 }
 

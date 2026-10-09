@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import type { TurnItem } from '../contracts/items.js'
-import { makeAssistantTextItem, makeUserInputItem, makeUserItem } from '../domain/item.js'
+import { makeAssistantTextItem, makeErrorItem, makeUserInputItem, makeUserItem } from '../domain/item.js'
 import { DelegatedSessionCoordinator, FileDelegatedSessionBindingStore, delegatedCapabilityFingerprint,
   priorItemsForDelegatedTurn, type DelegatedProviderKind } from './delegated-session-binding.js'
 import { buildTurnHandoff, recordHandoffInjected } from '../handoff/turn-handoff.js'
@@ -97,4 +97,22 @@ it('labels a same-Agent session restart with the Agent name on both sides', () =
   ], preparation: { threadId: 'thread', generation: 2, resumed: false, priorHistoryDigest: 'digest', route: nativeRoute,
     rebaseReason: 'native_state_unavailable', rebasedFrom: { providerKind: 'acp', providerId: 'devin', model: 'swe-2-high' } } })
   expect(handoff?.event).toMatchObject({ reason: 'rebase', from: { harnessName: 'Devin' }, to: { harnessName: 'Devin' } })
+})
+
+it('resumes the same native session after a failed turn appends its error record', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kun-continuation-failed-'))
+  try {
+    const coordinator = new DelegatedSessionCoordinator(new FileDelegatedSessionBindingStore(root))
+    const first = await coordinator.prepare({ threadId: 'thread', route: nativeRoute, priorItems: [] })
+    const items = [
+      makeUserItem({ id: 'user-1', threadId: 'thread', turnId: 'turn-1', text: 'Implement the plan' }),
+      makeAssistantTextItem({ id: 'reply-1', threadId: 'thread', turnId: 'turn-1', text: 'Anchoring on cwd:', status: 'completed' })
+    ]
+    // The runtime commits before finishTurn('failed') appends the error item.
+    await coordinator.commit({ preparation: first, committedItems: items, lastCommittedTurnId: 'turn-1', nativeSessionId: 'leaf-season' })
+    const afterFailure = [...items, makeErrorItem({ id: 'item_turn-1_error', threadId: 'thread', turnId: 'turn-1', message: 'stream closed' })]
+    const second = await coordinator.prepare({ threadId: 'thread', route: nativeRoute, priorItems: afterFailure })
+    expect(second).toMatchObject({ resumed: true, nativeSessionId: 'leaf-season' })
+    expect(buildTurnHandoff({ preparation: second, currentTurnId: 'turn-2', items: afterFailure })).toBeNull()
+  } finally { await rm(root, { recursive: true, force: true }) }
 })
