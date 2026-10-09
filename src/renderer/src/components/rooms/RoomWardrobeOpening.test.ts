@@ -10,6 +10,7 @@ vi.mock('./RoomAvatar', () => ({ RoomAvatar: (props: { avatar?: RoomAvatarRefere
 vi.mock('./rooms-client', () => ({ roomsRequest: mocks.request, roomRequestId: () => 'request-id' }))
 
 import { RoomWardrobeOpening, useWardrobeOpener } from './RoomWardrobeOpening'
+import { wardrobeFlipOrder } from './RoomWardrobeTenPull'
 import { RoomWardrobeShelf } from './RoomWardrobeShelf'
 import { acceptWardrobe, type WardrobeOpenResult } from './room-wardrobe'
 
@@ -31,10 +32,14 @@ beforeEach(() => { vi.clearAllMocks(); vi.useFakeTimers(); vi.stubGlobal('IS_REA
 afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.useRealTimers(); vi.unstubAllGlobals() })
 
 describe('bottle opening stage', () => {
-  it('runs a ten-pull from shaking bottles to flipped cards and a summary', async () => {
+  it('deals a ten-pull face down, flips one, then flips the rest rarest last into a summary', async () => {
     await act(async () => { renderer = create(createElement(RoomWardrobeOpening, { mode: 'ten', result: result(ten), error: '', shelfCount: 3,
       onClose: vi.fn(), onOpenOne: vi.fn(), onOpenTen: vi.fn() })) })
     const phase = () => node({ className: 'kun-gacha' })!.props['data-phase']
+    const faces = () => renderer.root.findAll((item) => typeof item.type === 'string' && item.props['data-gacha-face'] !== undefined)
+      .map((item) => item.props['data-gacha-face'])
+    const card = (id: string) => renderer.root.findAll((item) => item.type === 'button' && item.props.className === 'kun-holo-card' &&
+      item.parent?.props['data-gacha-card'] === id)[0]!
     expect(phase()).toBe('shake')
     // Rarity stays hidden while the bottles shake.
     expect(node({ className: 'kun-gacha' })!.props['data-top-rarity']).toBeUndefined()
@@ -42,12 +47,40 @@ describe('bottle opening stage', () => {
     expect(node({ className: 'kun-gacha' })!.props['data-top-rarity']).toBe('legendary')
     await advance(900); expect(phase()).toBe('burst')
     await advance(450); expect(phase()).toBe('reveal')
-    expect(renderer.root.findAll((item) => item.props['data-gacha-card'] !== undefined && typeof item.type === 'string')).toHaveLength(10)
-    await advance(10 * 140 + 550); expect(phase()).toBe('done')
+    expect(faces()).toEqual(Array(10).fill('down'))
+    await advance(10 * 80 + 550); expect(phase()).toBe('table')
+    // Rare-or-better backs glow; the close button works while the cards wait.
+    expect(node({ 'data-gacha-card': 'drop-3' })!.props['data-hint']).toBe(true)
+    expect(node({ 'data-gacha-card': 'drop-1' })!.props['data-hint']).toBeUndefined()
+    expect(node({ className: 'kun-gacha-close' })!.props.disabled).toBe(false)
+    act(() => card('drop-1').props.onClick())
+    expect(faces().filter((face) => face === 'up')).toHaveLength(1)
+    expect(text()).toContain('roomsGachaFlipLeft:9')
+    act(() => node({ 'data-gacha-flip-all': true })!.props.onClick())
+    await advance(220 * 8); expect(faces().filter((face) => face === 'up')).toHaveLength(9)
+    expect(node({ 'data-gacha-card': 'drop-3' })!.props['data-gacha-face']).toBe('down')
+    await advance(700)
+    expect(node({ className: 'kun-gacha' })!.props['data-flash']).toBe(true)
+    await advance(450); expect(phase()).toBe('done')
     expect(text()).toContain('roomsGachaLegendary:Wizard hat')
     expect(text()).toContain('roomsGachaSumDuplicate:1,5')
     expect(text()).toContain('roomsGachaSumCards:1')
     expect(node({ 'data-gacha-again': true })!.props.disabled).toBe(true)
+    // A flipped card opens up close; arrows step through the others and Escape closes it first.
+    act(() => card('drop-3').props.onClick())
+    expect(node({ 'data-gacha-viewer': true })!.props['data-rarity']).toBe('legendary')
+    act(() => node({ 'data-gacha-viewer': true })!.props.onKeyDown({ key: 'ArrowRight' }))
+    expect(node({ 'data-gacha-viewer': true })!.props['data-rarity']).toBe('common')
+    const cancel = { preventDefault: vi.fn() }
+    act(() => node({ className: 'kun-gacha' })!.props.onCancel(cancel))
+    expect(node({ 'data-gacha-viewer': true })).toBeUndefined()
+  })
+
+  it('flips the rarest card last and holds it a little longer', () => {
+    const order = wardrobeFlipOrder(ten, new Set([0]))
+    expect(order.map((step) => step.index)).toEqual([1, 3, 4, 5, 6, 8, 9, 7, 2])
+    expect(order.at(-1)).toEqual({ index: 2, at: 220 * 8 + 700, flash: true })
+    expect(wardrobeFlipOrder(ten.map((drop) => ({ ...drop, rarity: 'common' as const })), new Set()).every((step) => !step.flash)).toBe(true)
   })
 
   it('skips straight to the result and shows the guarantee', async () => {

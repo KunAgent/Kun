@@ -171,5 +171,13 @@
   "roomsGachaSumCards": "点亮角色卡 {{count}}",
   "roomsGachaSumPity": "十连保底：最后一个升级为稀有",
   "roomsWardrobeRuleTenPull": "一次开 {{count}} 个，至少一个稀有或以上",
-  "roomsWardrobeRuleShelf": "瓶架最多 {{count}} 个，满了暂停计数"
+  "roomsWardrobeRuleShelf": "瓶架最多 {{count}} 个，满了暂停计数",
+  "roomsGachaFaceDown": "翻开这张卡",
+  "roomsGachaFlipAll": "全部翻开",
+  "roomsGachaFlipLeft": "还剩 {{count}} 张",
+  "roomsGachaTableHint": "发光的卡背是稀有或更好的，点一张翻开",
+  "roomsGachaTiltHint": "移动鼠标看光泽 · 点卡片翻面",
+  "roomsGachaViewHint": "点任意一张卡放大看闪光",
+  "roomsGachaPrev": "上一张",
+  "roomsGachaNext": "下一张"
 }

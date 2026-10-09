@@ -11,13 +11,58 @@
 .rooms-wardrobe-unknown-item { display: grid; flex: none; place-items: center; box-sizing: border-box; border: 1.5px dashed var(--ds-border);
   border-radius: 28%; color: var(--ds-text-faint); background: var(--ds-surface-subtle); font-weight: 700; line-height: 1; user-select: none; }
 
-/* Progress strip above the studio */
-.rooms-wardrobe-strip { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--ds-border); border-radius: 14px;
-  background: var(--ds-surface-subtle); font-size: 12px; }
-.rooms-wardrobe-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--ds-text); }
-.rooms-wardrobe-stats > span { display: inline-flex; align-items: center; gap: 5px; }
-.rooms-wardrobe-stats > svg, .rooms-wardrobe-stats > span > svg { color: var(--ds-text-muted); }
-.rooms-wardrobe-stats-hint { margin-left: auto; color: var(--ds-text-muted); }
+/* Strip above the studio: the shelf leads, collection numbers sit in the footer. Buttons never wrap. */
+.rooms-wardrobe-strip { container-type: inline-size; display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--ds-border); border-radius: 14px;
+  background: var(--ds-surface-card); font-size: 12px; }
+.rooms-wardrobe-strip[data-ready] { border-color: color-mix(in srgb, #f0a23f 45%, var(--ds-border));
+  background: linear-gradient(90deg, color-mix(in srgb, #f0a23f 9%, var(--ds-surface-card)), var(--ds-surface-card) 60%); }
+.rooms-wardrobe-strip-main { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.rooms-wardrobe-strip-bottle { position: relative; display: grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: 12px;
+  background: color-mix(in srgb, #f0a23f 16%, var(--ds-surface-card)); }
+.rooms-wardrobe-strip-bottle[data-empty] { background: var(--ds-surface-subtle); filter: grayscale(1); opacity: .7; }
+.rooms-wardrobe-strip-bottle > b { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; box-sizing: border-box; padding: 0 5px;
+  border: 2px solid var(--ds-surface-card); border-radius: 999px; color: #fff; background: var(--ds-text-muted); font-size: 10.5px; font-weight: 700;
+  line-height: 14px; text-align: center; }
+.rooms-wardrobe-strip[data-ready] .rooms-wardrobe-strip-bottle > b { background: #f08a24; }
+.rooms-wardrobe-strip[data-ready] .rooms-wardrobe-strip-bottle .rooms-wardrobe-bottle-icon { animation: rooms-wardrobe-wobble 1.6s ease infinite; }
+.rooms-wardrobe-strip-text { display: grid; flex: 1 1 150px; gap: 2px; min-width: 0; }
+.rooms-wardrobe-strip-text > strong { font-size: 13.5px; font-weight: 650; }
+.rooms-wardrobe-strip-text > span { overflow: hidden; color: var(--ds-text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.rooms-wardrobe-strip[data-ready] .rooms-wardrobe-strip-text > span { color: #b45309; font-weight: 600; }
+[data-theme='dark'] .rooms-wardrobe-strip[data-ready] .rooms-wardrobe-strip-text > span { color: #f5bd6e; }
+.rooms-wardrobe-strip[data-full] .rooms-wardrobe-strip-text > span { color: var(--ds-danger, #c0392b); }
+.rooms-wardrobe-strip-slots { display: flex; flex: 1 1 210px; align-items: center; gap: 4px; min-width: 0; }
+.rooms-wardrobe-strip-slots > span { display: grid; flex: 1 1 0; place-items: center; min-width: 0; height: 26px; box-sizing: border-box;
+  border: 1.5px dashed var(--ds-border); border-radius: 7px; }
+.rooms-wardrobe-strip-slots > span[data-filled] { border: 0; background: color-mix(in srgb, #f0a23f 16%, var(--ds-surface-card)); }
+.rooms-wardrobe-strip[data-ready] .rooms-wardrobe-strip-slots > span[data-filled] { background: linear-gradient(180deg, #fff1d6, #ffd89a);
+  box-shadow: inset 0 0 0 1px rgb(240 138 36 / .35); }
+[data-theme='dark'] .rooms-wardrobe-strip[data-ready] .rooms-wardrobe-strip-slots > span[data-filled] { background: color-mix(in srgb, #f0a23f 30%, var(--ds-surface-card)); }
+.rooms-wardrobe-strip-slots > i { flex: none; height: 26px; padding: 0 8px; border-radius: 7px; color: #b45309; background: color-mix(in srgb, #f0a23f 16%, var(--ds-surface-card));
+  font-style: normal; font-weight: 650; line-height: 26px; }
+.rooms-wardrobe-strip-actions { display: flex; flex: none; gap: 8px; }
+.rooms-wardrobe-strip-actions > button { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 14px;
+  border: 1px solid var(--ds-border); border-radius: 10px; color: var(--ds-text); background: var(--ds-surface-card); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.rooms-wardrobe-strip-actions > button:disabled { color: var(--ds-text-faint); background: var(--ds-surface-subtle); cursor: not-allowed; }
+.rooms-wardrobe-strip-actions > .rooms-wardrobe-shelf-ten { padding-right: 10px; }
+.rooms-wardrobe-strip-actions small { padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, currentColor 12%, transparent); font-size: 11px; font-weight: 600; }
+.rooms-wardrobe-strip-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding-top: 10px; border-top: 1px solid var(--ds-border);
+  color: var(--ds-text-muted); }
+.rooms-wardrobe-strip-foot > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.rooms-wardrobe-strip-foot b { color: var(--ds-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.rooms-wardrobe-strip-foot i { display: block; width: 44px; height: 4px; overflow: hidden; border-radius: 999px; background: var(--ds-border); }
+.rooms-wardrobe-strip-foot i > span { display: block; height: 100%; border-radius: inherit; background: var(--ds-accent); }
+.rooms-wardrobe-strip-foot > [data-tone='epic'] i > span { background: var(--ds-skill, #7a68e8); }
+.rooms-wardrobe-strip-hint { min-width: 0; margin-left: auto; }
+.rooms-wardrobe-strip-hint > span { overflow: hidden; text-overflow: ellipsis; }
+.rooms-wardrobe-strip-hint[data-tone='warm'] > span { color: #b45309; }
+.rooms-wardrobe-strip-hint > em { flex: none; padding: 1px 8px; border-radius: 999px; background: var(--ds-surface-subtle); font-size: 11px; font-style: normal;
+  font-variant-numeric: tabular-nums; }
+@container (max-width: 600px) {
+  .rooms-wardrobe-strip-slots, .rooms-wardrobe-strip-actions { flex: 1 1 100%; }
+  .rooms-wardrobe-strip-actions > button { flex: 1 1 0; }
+  .rooms-wardrobe-strip-hint { flex: 1 1 100%; margin-left: 0; }
+}
 @keyframes rooms-wardrobe-wobble { 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
 
 /* The bottle under an Agent reply */
@@ -42,8 +87,6 @@
 .rooms-wardrobe-shelf-slots > span { display: grid; place-items: center; height: 28px; border: 1.5px dashed var(--ds-border); border-radius: 7px; }
 .rooms-wardrobe-shelf-slots > span[data-filled] { border: 0; background: var(--ds-accent-soft); }
 .rooms-wardrobe-shelf[data-ready] .rooms-wardrobe-shelf-slots > span[data-filled] { background: color-mix(in srgb, #f5a33a 18%, var(--ds-surface-card)); }
-.rooms-wardrobe-shelf-meter { display: block; height: 4px; overflow: hidden; border-radius: 999px; background: var(--ds-border); }
-.rooms-wardrobe-shelf-meter > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ffcf6a, #f08a24); }
 .rooms-wardrobe-shelf-actions { display: flex; gap: 8px; }
 .rooms-wardrobe-shelf-actions > button { display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: 6px; min-height: 34px;
   border: 1px solid var(--ds-border); border-radius: 10px; color: var(--ds-text); background: var(--ds-surface-card); font-size: 13px; font-weight: 600; }
@@ -51,9 +94,6 @@
 .rooms-wardrobe-shelf-ten:not(:disabled) { border-color: transparent !important; color: #2a1600 !important; background: linear-gradient(135deg, #ffcf6a, #f08a24) !important;
   box-shadow: 0 6px 18px -10px #f08a24; }
 .rooms-wardrobe-shelf-actions small { padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, currentColor 12%, transparent); font-size: 11px; font-weight: 600; }
-.rooms-wardrobe-shelf[data-compact] { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-.rooms-wardrobe-shelf[data-compact] .rooms-wardrobe-shelf-meter { grid-column: 1; }
-.rooms-wardrobe-shelf[data-compact] .rooms-wardrobe-shelf-actions { grid-row: 1 / span 2; grid-column: 2; }
 .rooms-wardrobe-drop-meter { display: block; width: 180px; max-width: 100%; height: 4px; margin-top: 3px; overflow: hidden; border-radius: 999px; background: var(--ds-border); }
 .rooms-wardrobe-drop-meter > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ffcf6a, #f08a24); }
 
@@ -71,7 +111,6 @@
 @media (max-width: 640px) {
   .rooms-wardrobe-drop { flex-wrap: wrap; }
   .rooms-wardrobe-drop-actions { width: 100%; justify-content: flex-end; }
-  .rooms-wardrobe-stats-hint { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .rooms-wardrobe-drop, .rooms-wardrobe-bottle-icon, .ds-sidebar-wardrobe .rooms-wardrobe-bottle-icon { animation: none !important; }

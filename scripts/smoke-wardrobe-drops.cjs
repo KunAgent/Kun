@@ -53,6 +53,8 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   // The app zooms <body>; the stage must still cover the whole window.
   const cover = await stage.evaluate((node) => { const rect = node.getBoundingClientRect(); return [rect.width, rect.height, innerWidth, innerHeight] })
   assert(Math.abs(cover[0] - cover[2]) < 2 && Math.abs(cover[1] - cover[3]) < 2, `Stage covers the window: ${cover}`)
+  const title = await stage.locator('.kun-gacha-title').boundingBox()
+  assert(title && title.x >= 88, `The stage title stays clear of the traffic lights: ${JSON.stringify(title)}`)
   await capture('wardrobe-stage-idle')
   await stage.locator('.kun-gacha-close').click()
   await stage.waitFor({ state: 'detached' })
@@ -72,15 +74,28 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await stage.waitFor()
   await poll(async () => (await stage.getAttribute('data-phase')) === 'charge', 10_000, 'bottles light up')
   await capture('wardrobe-ten-charge')
-  await poll(async () => (await stage.getAttribute('data-phase')) === 'reveal', 10_000, 'cards start flipping')
-  await page.waitForTimeout(700)
-  await capture('wardrobe-ten-reveal')
+  await poll(async () => (await stage.getAttribute('data-phase')) === 'reveal', 10_000, 'cards are dealt')
+  await poll(async () => (await stage.getAttribute('data-phase')) === 'table', 10_000, 'cards wait face down')
+  assert.equal(await stage.locator('[data-gacha-face="down"]').count(), 10, 'All ten land face down')
+  await capture('wardrobe-ten-table')
+  await stage.locator('[data-gacha-card] .kun-holo-card').first().click()
+  assert.equal(await stage.locator('[data-gacha-face="up"]').count(), 1, 'One click flips one card')
+  await stage.locator('[data-gacha-flip-all]').click()
   await poll(async () => (await stage.getAttribute('data-phase')) === 'done', 15_000, 'ten-pull finishes')
   assert.equal(await stage.locator('[data-gacha-card]').count(), 10)
+  assert.equal(await stage.locator('[data-gacha-face="up"]').count(), 10, 'Flip all turns every card')
   await stage.locator('[data-gacha-summary]').waitFor()
   await poll(async () => stage.locator('[data-gacha-card] img').evaluateAll((images) => images.length >= 10 && images.every((image) => image.complete && image.naturalWidth > 0)),
     15_000, 'result art loads')
   await capture('wardrobe-ten-done')
+  // A flipped card opens up close; Escape closes the viewer before the stage.
+  await stage.locator('[data-gacha-card] .kun-holo-card').nth(2).click()
+  await stage.locator('[data-gacha-viewer]').waitFor()
+  await page.mouse.move(700, 300)
+  await page.waitForTimeout(400)
+  await capture('wardrobe-card-viewer')
+  await page.keyboard.press('Escape')
+  await stage.locator('[data-gacha-viewer]').waitFor({ state: 'detached' })
   const afterTen = await request(page, '/v1/rooms/wardrobe')
   assert.equal(afterTen.wardrobe.pending.length, 2, 'Ten bottles left the shelf')
   assert.deepEqual(afterTen.wardrobe.history.slice(0, 10).map((drop) => drop.id).sort(), oldest.slice().sort(), 'The oldest ten were opened')
@@ -95,6 +110,11 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await poll(async () => (await stage.getAttribute('data-phase')) === 'done', 10_000, 'single bottle opens')
   await poll(async () => stage.locator('[data-gacha-card] img').evaluateAll((images) => images.length >= 1 && images.every((image) => image.complete && image.naturalWidth > 0)),
     15_000, 'single result art loads')
+  await page.waitForTimeout(800)
+  const single = stage.locator('[data-gacha-card]')
+  const box = await single.boundingBox()
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.3)
+  await page.waitForTimeout(300)
   await capture('wardrobe-single-done')
   await stage.locator('[data-gacha-keep]').click()
   await stage.waitFor({ state: 'detached' })
@@ -142,6 +162,9 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   await page.locator('[data-wardrobe-panel="ready"] [data-wardrobe-dress]').click()
   const mine = page.locator('.rooms-init-dialog[data-size="wide"][aria-label="我的头像"]')
   await mine.waitFor()
+  const tenButton = await mine.locator('.rooms-wardrobe-strip [data-shelf-open="ten"]').boundingBox()
+  assert(tenButton && tenButton.height < 40, `The strip's ten-pull button stays on one line: ${JSON.stringify(tenButton)}`)
+  await capture('wardrobe-my-avatar-strip')
   await mine.getByRole('tab', { name: '套装', exact: true }).click()
   await mine.getByRole('button', { name: '侦探', exact: true }).click()
   await mine.getByRole('button', { name: '保存', exact: true }).click()
@@ -179,7 +202,8 @@ async function exerciseWardrobeDrops({ page, request, poll, capture, recordDiagn
   const result = { native: true, offline: true, threadId, roomId, drop: dropped, assertions: [
     'drops default on, Code tasks included; the first finished Code task of the day drops a bottle without hinting its rarity',
     'put on shelf keeps it unopened; the sidebar shelf opens the idle stage; the rail badge counts the shelf',
-    'a real ten-pull opens the oldest ten through shake, light, burst and flip, with a summary and at least one rare',
+    'a real ten-pull deals ten face-down flash cards; one click flips one, flip all turns the rest, a flipped card opens up close',
+    'the stage title is centered clear of the window traffic lights',
     'opening one from the shelf plays the single stage and records it in the log',
     'settings switches start on and persist changes',
     'unrevealed role cards show the card back without names, in the panel and in the studio',

@@ -19,22 +19,22 @@ export function wardrobeShelfStatus(wardrobe: KunWardrobe, t: (key: string, valu
 }
 
 /** Unopened bottles waiting on a ten-slot shelf, with "open one" and the ten-pull. */
-export function RoomWardrobeShelf({ wardrobe, busy = false, compact = false, onOpenOne, onOpenTen }: {
-  wardrobe: KunWardrobe; busy?: boolean; compact?: boolean; onOpenOne: () => void; onOpenTen: () => void
+export function RoomWardrobeShelf({ wardrobe, busy = false, onOpenOne, onOpenTen }: {
+  wardrobe: KunWardrobe; busy?: boolean; onOpenOne: () => void; onOpenTen: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const count = wardrobeShelf(wardrobe).length
   const ready = count >= TEN
-  return <section className="rooms-wardrobe-shelf" data-compact={compact || undefined} data-ready={ready || undefined}
+  return <section className="rooms-wardrobe-shelf" data-ready={ready || undefined}
     data-wardrobe-shelf={count} aria-label={t('roomsShelfTitle')}>
     <div className="rooms-wardrobe-shelf-head">
       <strong>{t('roomsShelfTitle')}</strong>
       <span>{wardrobeShelfStatus(wardrobe, t)}</span>
     </div>
-    {!compact ? <div className="rooms-wardrobe-shelf-slots" aria-hidden="true">
+    <div className="rooms-wardrobe-shelf-slots" aria-hidden="true">
       {Array.from({ length: TEN }, (_, index) => <span key={index} data-filled={index < count || undefined}>
         {index < count ? <WardrobeBottleIcon size={22} state="sealed" /> : null}</span>)}
-    </div> : <span className="rooms-wardrobe-shelf-meter" aria-hidden="true"><span style={{ width: `${Math.min(100, count / TEN * 100)}%` }} /></span>}
+    </div>
     <div className="rooms-wardrobe-shelf-actions">
       <button type="button" disabled={busy || !count} onClick={onOpenOne} data-shelf-open="one">{t('roomsGachaOpenOne')}</button>
       <button type="button" className="rooms-wardrobe-shelf-ten" disabled={busy || !ready} onClick={onOpenTen} data-shelf-open="ten">

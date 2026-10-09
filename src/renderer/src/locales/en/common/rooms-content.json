@@ -171,5 +171,13 @@
   "roomsGachaSumCards": "{{count}} role cards lit",
   "roomsGachaSumPity": "Guarantee: the last one became rare",
   "roomsWardrobeRuleTenPull": "Opening {{count}} together gives at least one rare or better",
-  "roomsWardrobeRuleShelf": "The shelf holds {{count}}; a full shelf pauses counting"
+  "roomsWardrobeRuleShelf": "The shelf holds {{count}}; a full shelf pauses counting",
+  "roomsGachaFaceDown": "Flip this card",
+  "roomsGachaFlipAll": "Flip all",
+  "roomsGachaFlipLeft": "{{count}} left",
+  "roomsGachaTableHint": "Glowing backs are rare or better. Click one to flip it.",
+  "roomsGachaTiltHint": "Move the pointer to catch the light · click to flip",
+  "roomsGachaViewHint": "Click any card to see it up close",
+  "roomsGachaPrev": "Previous",
+  "roomsGachaNext": "Next"
 }
