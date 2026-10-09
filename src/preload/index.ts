@@ -18,6 +18,7 @@ import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
 import { marketApi } from './market-api'
+import { kunAccountApi } from './kun-account'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -39,6 +40,7 @@ const desktopTitleBarMode = normalizeDesktopTitleBarMode(
 )
 
 const api = {
+  kunAccount: kunAccountApi,
   platform: process.platform,
   desktopTitleBarMode,
   homeDir: homeDirFromArgs,

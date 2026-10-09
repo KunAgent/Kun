@@ -20,8 +20,10 @@ import { registerAppUiPluginIpcHandlers } from './register-app-ui-plugin-ipc-han
 import { registerAppWorkspaceIpcHandlers } from './register-app-workspace-ipc-handlers'
 import { configureRuntimeModelExecutor } from '../services/runtime-model-requests'
 import { registerAgentIntegrationIpcHandlers } from './register-agent-integration-ipc-handlers'
+import { registerKunAccountIpc } from './register-kun-account-ipc'
 
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
+  registerKunAccountIpc(options.getMainWindow)
   configureRuntimeModelExecutor(async (input) => {
     const response = await options.runtimeRequest('/v1/model-requests', 'POST', JSON.stringify(input), undefined,
       { signal: AbortSignal.timeout((input.timeoutMs ?? 30_000) + 5_000), priority: 'background' })

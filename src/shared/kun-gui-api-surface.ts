@@ -250,6 +250,8 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
   import('./ade-collaboration-settings').AdeCollaborationSettingsBridge & import('./ade-project-defaults').AdeProjectDefaultsBridge & {
   platform: string
+  /** Native Kun account, unavailable in the remote browser client. */
+  kunAccount?: import('./kun-account').KunAccountApi
   /** True only in the browser Remote build served by the Remote gateway. */
   isRemoteWeb?: boolean
   /** Immutable mode selected before the BrowserWindow and renderer are created. */

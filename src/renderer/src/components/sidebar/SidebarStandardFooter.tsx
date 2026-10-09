@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { SidebarCommandRow, SidebarIconButton } from './SidebarPrimitives'
 import { SidebarFocusModeControl } from './SidebarFocusModeControl'
 import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from './SidebarKunFooter'
+import { KunAccountControl } from '../account/KunAccountControl'
 
 function useDocumentDarkMode(): boolean {
   const [dark, setDark] = useState(
@@ -47,10 +48,12 @@ export function SidebarStandardFooter({
       {sceneFooter ? (
         <SidebarFocusModeControl enabled={focusModeEnabled} onChange={onFocusModeChange} />
       ) : !focusModeEnabled ? (
-        <div className="border-b border-[var(--ds-sidebar-divider)] pb-1">
-          <SidebarKunStatus />
+        <div className="flex items-center gap-1 border-b border-[var(--ds-sidebar-divider)] pb-1">
+          <div className="min-w-0 flex-1"><SidebarKunStatus /></div>
+          <KunAccountControl />
         </div>
       ) : null}
+      {sceneFooter || focusModeEnabled ? <KunAccountControl /> : null}
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
           <SidebarCommandRow
