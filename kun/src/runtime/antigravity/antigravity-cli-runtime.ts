@@ -1,5 +1,6 @@
 import { sessionInstructions } from '../../session/session-instructions.js'
 import { parseAntigravityResult } from './antigravity-result.js'
+import { AntigravityTurnStream, persistAntigravityText } from './antigravity-turn-stream.js'
 import type { spawn } from 'node:child_process'
 import type { HarnessRoute } from '../../contracts/harness.js'
 import type { ServeProviderConfig } from '../../config/kun-config.js'
@@ -9,7 +10,6 @@ import type {
 } from '../../contracts/turns.js'
 import { goalContextTexts } from '../../contracts/items.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
-import { makeAssistantTextItem } from '../../domain/item.js'
 import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   filterGoalContextsForGoalKey,
@@ -135,7 +135,7 @@ export function buildAntigravityArgs(input: {
   const args = [
     '--print',
     prompt,
-    '--output-format', 'json',
+    '--output-format', 'stream-json',
     ...(input.nativeSessionId ? ['--conversation', input.nativeSessionId] : []),
     ...(input.model === 'default' ? [] : ['--model', normalizeAntigravityModel(input.model)]),
     '--effort', normalizeAntigravityEffort(input.effort),
@@ -449,6 +449,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       }
     })
 
+    const stream = new AntigravityTurnStream(this.deps, threadId, turnId)
     try {
       const credential = provider?.credentialSourceId
         ? await this.deps.resolveCredentialSource?.(provider.credentialSourceId)
@@ -462,7 +463,8 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
         signal,
         validateLaunch: () => this.deps.readiness?.validateTurn(threadId, turnId, signal) ?? Promise.resolve(),
         timeoutMs: limits.maxWallTimeMs,
-        spawnFn: this.deps.spawnFn
+        spawnFn: this.deps.spawnFn,
+        onStdoutLine: stream.onLine
       })
       if (signal.aborted) {
         await finishAntigravityTrace(trace, {
@@ -473,10 +475,12 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
         await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
         return 'aborted'
       }
-      const { text, conversationId } = parseAntigravityResult(output, preparation?.resumed ? preparation.nativeSessionId : undefined)
+      const { text, conversationId, usage } = parseAntigravityResult(output, preparation?.resumed ? preparation.nativeSessionId : undefined)
       await finishAntigravityTrace(trace, { kind: 'completed', text })
       trace = undefined
-      await this.persistAssistantText(threadId, turnId, text)
+      await stream.finish(text)
+      const usageDraft = stream.usageDraft(usage, model, resolvedProviderId)
+      if (usageDraft) await this.deps.events.record(usageDraft)
       const suspension = await this.deps.turns.suspendGraphLeadTurn?.({ threadId, turnId })
       const outcome: TurnRunOutcome =
         suspension === 'suspended' ||
@@ -509,6 +513,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
     } catch (error) {
       await finishAntigravityTrace(trace, { kind: 'error', error })
       trace = undefined
+      await stream.settle()
       if (signal.aborted) {
         await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
         return 'aborted'
@@ -526,36 +531,8 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
     }
   }
 
-  private async persistAssistantText(
-    threadId: string,
-    turnId: string,
-    text: string
-  ): Promise<void> {
-    const itemId = this.deps.ids.next('item_assistant')
-    const createdAt = new Date().toISOString()
-    const runningItem = makeAssistantTextItem({
-      id: itemId,
-      threadId,
-      turnId,
-      text,
-      status: 'running',
-      createdAt
-    })
-    // `agy --print` returns one complete fragment. Persist that cumulative
-    // canonical snapshot before exposing the fragment at UTF-16 offset zero,
-    // then publish the final authoritative item as before.
-    await this.deps.turns.applyAssistantDelta(threadId, runningItem, text, 0)
-    await this.deps.turns.applyItem(
-      threadId,
-      makeAssistantTextItem({
-        id: itemId,
-        threadId,
-        turnId,
-        text,
-        status: 'completed',
-        createdAt
-      })
-    )
+  private persistAssistantText(threadId: string, turnId: string, text: string): Promise<void> {
+    return persistAntigravityText(this.deps, threadId, turnId, text)
   }
 }
 

@@ -40,7 +40,7 @@ folds the fields like any other usage.
 | Codex app-server, Pi RPC | before `session.runTurn` | `KunTimelineTurnSink.emit` |
 | Claude Agent SDK | `system/init` message (CLI ready to call the model) | `mapper.map(message)` loop via `observeSdkMessage` |
 | Cursor SDK | before `agent.send` | `consumeCursorMessage`, final usage drafts |
-| Antigravity CLI | n/a | n/a: replies are not streamed, so no timing |
+| Antigravity CLI | `init` / the `user_input` step of `--output-format stream-json` | each `step_update` line as the process prints it: `agent_response` `text_delta` pieces, `tool` steps |
 
 `kun-gateway` routes are timed by the loopback gateway itself: every upstream
 call a harness routes through it goes through `timeModelStream` in
@@ -54,9 +54,23 @@ native-login turns.
 
 Replays of real streams live in the test suite (arrival times from the capture):
 
+- Antigravity `agy` 1.3.1, Chinese answer after 2070 hidden thinking tokens: TTFT 21.6 s, 103 tok/s over the 235 visible tokens the CLI itself reports.
+
 - Claude haiku, English: 156 tok/s measured vs 174 server-side (-10%), TTFT 2.2 s from `init`.
 - Claude haiku, Chinese with 518 hidden thinking tokens: 210 vs 228 tok/s (-8%), TTFT 5.1 s (the silent thinking is the wait for a first token).
 - OpenCode 1.18.35 free reasoning model over ACP: 67.5 tok/s vs 67.5 reported, TTFT 28.6 s.
 
 The estimate is conservative (it tends to read a little low), and an Agent that
 reports no usage gets no timing at all because its drafts are not recorded.
+
+## Antigravity
+
+`agy --print` is run with `--output-format stream-json`: one JSON event per
+line. The reply is shown as its `text_delta` pieces arrive (a short answer may
+arrive as a single piece), and the final `result` event carries the turn's
+`usage` (input, output, thinking, cache-read tokens, summed over its model
+steps) which Kun records like any other Agent's usage. Before this the CLI ran
+in `json` mode and its usage was discarded, so an Antigravity thread showed
+"no usage". The CLI says how many output tokens were hidden thinking, so the
+streamed answer's token count is capped at `output - thinking`. A CLI that
+prints a single JSON object is still read (one fragment, usage, no timing).

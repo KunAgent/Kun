@@ -74,16 +74,14 @@ export class HarnessTurnTiming {
       switch (draft.kind) {
         case 'assistant_text_delta':
         case 'assistant_reasoning_delta':
-          this.delta(deltaText(draft))
+          this.text(deltaText(draft))
           break
         case 'tool_call_ready':
         case 'tool_call_started':
-          this.closeBurst()
-          this.armedAt = null
+          this.toolStarted()
           break
         case 'tool_call_finished':
-          this.closeBurst()
-          this.armedAt = this.now()
+          this.toolFinished()
           break
         case 'usage':
           this.stamp(draft)
@@ -94,7 +92,20 @@ export class HarnessTurnTiming {
     }
   }
 
-  private delta(text: string): void {
+  /** A model call produced a tool call (or a tool began): the stream pauses and this call has no clean first token. */
+  toolStarted(): void {
+    this.closeBurst()
+    this.armedAt = null
+  }
+
+  /** A tool finished: the next model call starts now. */
+  toolFinished(): void {
+    this.closeBurst()
+    this.armedAt = this.now()
+  }
+
+  /** Streamed text or reasoning arrived. */
+  text(text: string): void {
     if (!text) return
     const at = this.now()
     if (this.armedAt !== null) {

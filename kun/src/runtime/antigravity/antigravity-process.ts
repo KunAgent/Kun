@@ -17,6 +17,8 @@ type AntigravityProcessInput = {
   validateLaunch?: () => Promise<unknown>
   timeoutMs: number
   spawnFn?: typeof spawn
+  /** Called with each complete stdout line the moment it arrives (`stream-json` events). */
+  onStdoutLine?: (line: string) => void
 }
 
 export async function runAntigravityProcess(input: AntigravityProcessInput): Promise<string> {
@@ -57,6 +59,17 @@ async function runAntigravityProcessOnce(input: AntigravityProcessInput): Promis
     let stdout = ''
     let stderr = ''
     let stdoutBytes = 0
+    let lineBuffer = ''
+    const emitLines = (text: string, final = false): void => {
+      if (!input.onStdoutLine) return
+      const lines = `${lineBuffer}${text}`.split('\n')
+      lineBuffer = final ? '' : lines.pop() ?? ''
+      for (const line of lines) {
+        const complete = line.endsWith('\r') ? line.slice(0, -1) : line
+        // An observer failing must never end the CLI turn.
+        if (complete) try { input.onStdoutLine(complete) } catch { /* ignored */ }
+      }
+    }
     const stdoutDecoder = new StringDecoder('utf8')
     const stderrDecoder = new StringDecoder('utf8')
     let settled = false
@@ -91,7 +104,9 @@ async function runAntigravityProcessOnce(input: AntigravityProcessInput): Promis
         done(new Error('Antigravity CLI response exceeded the output limit'))
         return
       }
-      stdout += stdoutDecoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      const text = stdoutDecoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      stdout += text
+      emitLines(text)
     })
     child.stderr?.on('data', (chunk: Buffer | string) => {
       if (settled) return
@@ -102,7 +117,9 @@ async function runAntigravityProcessOnce(input: AntigravityProcessInput): Promis
     child.on('exit', (code) => {
       if (!input.spawnFn) void stopOwnedProcess(child, { graceMs: 0 }).catch(() => undefined)
       if (settled) return
-      stdout += stdoutDecoder.end()
+      const tail = stdoutDecoder.end()
+      stdout += tail
+      emitLines(tail, true)
       stderr = `${stderr}${stderrDecoder.end()}`.slice(-MAX_STDERR_BYTES)
       if (input.signal.aborted) {
         done(new Error('Antigravity CLI turn was aborted'))
