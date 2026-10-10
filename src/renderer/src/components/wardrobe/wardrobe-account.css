@@ -126,3 +126,7 @@
   .kun-wardrobe-invite-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kun-wardrobe-account-chip { display: none; }
 }
+
+.kun-wardrobe-invite-copy-message { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 0;
+  color: var(--ds-text-muted); font-size: 12px; background: transparent; border: 0; cursor: pointer; }
+.kun-wardrobe-invite-copy-message:hover { color: var(--ds-accent); }

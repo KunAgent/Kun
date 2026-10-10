@@ -56,6 +56,7 @@ import paperSearch from './common/paper-search.json'
 import wardrobePage from './common/wardrobe-page.json'
 import kunAccount from './common/kun-account.json'
 import wardrobeAccount from './common/wardrobe-account.json'
+import wardrobeShare from './common/wardrobe-share.json'
 
 const common = {
   ...agentDispatch,
@@ -121,6 +122,7 @@ const common = {
   ...wardrobePage,
   ...kunAccount,
   ...wardrobeAccount,
+  ...wardrobeShare,
 }
 
 export default common

@@ -46,7 +46,12 @@ export type KunInviteSummary = {
   claimUntil: string | null
 }
 
+export type KunSharePosterSavePayload = { dataBase64: string; fileName: string }
+export type KunSharePosterSaveResult = { status: 'cancelled' } | { status: 'saved'; path: string }
+
 export interface KunAccountWardrobeApi {
+  revealSharePoster(): Promise<void>
+  saveSharePoster(payload: KunSharePosterSavePayload): Promise<KunSharePosterSaveResult>
   /** Reports finished turns to the account and refreshes the mirror; harmless when signed out. */
   sync(): Promise<KunEconomyResult<null>>
   open(dropIds: string[]): Promise<KunEconomyResult<KunAccountOpenResult>>
@@ -63,6 +68,7 @@ export interface KunAccountWardrobeApi {
 }
 
 export const KUN_ACCOUNT_WARDROBE_CHANNELS = {
+  saveSharePoster: 'kun-account:share:save', revealSharePoster: 'kun-account:share:reveal',
   sync: 'kun-account:wardrobe:sync', open: 'kun-account:wardrobe:open', stash: 'kun-account:wardrobe:stash',
   seen: 'kun-account:wardrobe:seen', settings: 'kun-account:wardrobe:settings', exchange: 'kun-account:wardrobe:exchange',
   setLook: 'kun-account:wardrobe:look', shop: 'kun-account:shop', purchase: 'kun-account:shop:purchase',

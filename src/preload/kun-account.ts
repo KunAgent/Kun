@@ -16,6 +16,8 @@ export const kunAccountApi: KunAccountApi = {
     return () => ipcRenderer.removeListener(channels.state, listener)
   },
   wardrobe: {
+    revealSharePoster: () => ipcRenderer.invoke(wardrobe.revealSharePoster),
+    saveSharePoster: (payload) => ipcRenderer.invoke(wardrobe.saveSharePoster, payload),
     sync: () => ipcRenderer.invoke(wardrobe.sync),
     open: (dropIds) => ipcRenderer.invoke(wardrobe.open, dropIds),
     stash: (dropIds) => ipcRenderer.invoke(wardrobe.stash, dropIds),

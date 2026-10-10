@@ -3,6 +3,7 @@ import { KUN_ACCOUNT_CHANNELS as channels } from '../../shared/kun-account'
 import { KUN_ACCOUNT_WARDROBE_CHANNELS as wardrobeChannels } from '../../shared/kun-account-economy'
 
 const mocks = vi.hoisted(() => ({
+  save: vi.fn(), write: vi.fn(), reveal: vi.fn(),
   handlers: new Map<string, (...args: unknown[]) => unknown>(), trusted: true,
   assertTrusted: vi.fn(), open: vi.fn(), once: vi.fn(), create: vi.fn(), get: vi.fn(async () => ({ status: 'anonymous', user: null, error: null })),
   accountChanged: vi.fn(), change: vi.fn(async () => ({ ok: true, value: {} })), read: vi.fn(async () => ({ ok: true, value: {} }))
@@ -10,8 +11,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/account-test', once: mocks.once },
   ipcMain: { handle: (name: string, handler: (...args: unknown[]) => unknown) => mocks.handlers.set(name, handler) },
-  net: { fetch: vi.fn() }, safeStorage: {}, shell: { openExternal: mocks.open }
+  net: { fetch: vi.fn() }, safeStorage: {}, shell: { openExternal: mocks.open, showItemInFolder: mocks.reveal }, dialog: { showSaveDialog: mocks.save }
 }))
+vi.mock('node:fs/promises', async (original) => ({ ...await original<typeof import('node:fs/promises')>(), writeFile: mocks.write }))
 vi.mock('./app-ipc-handler-utils', () => ({
   assertTrustedWorkbenchSender: mocks.assertTrusted,
   trustedWorkbenchSenderIsCurrent: () => mocks.trusted,
@@ -89,4 +91,24 @@ describe('Kun account IPC boundary', () => {
     expect(mocks.change).toHaveBeenCalledTimes(1)
     expect(mocks.read).toHaveBeenCalledTimes(1)
   })
+  it('saves validated PNG bytes only to the native dialog selection and reveals the saved path', async () => {
+    registerKunAccountIpc(() => null, runtime)
+    const input = { dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', fileName: 'Kun-Invite-K7QM4XPA.png' }
+    mocks.save.mockResolvedValueOnce({ canceled: true })
+    expect(await mocks.handlers.get(wardrobeChannels.saveSharePoster)!({}, input)).toEqual({ status: 'cancelled' })
+    expect(mocks.write).not.toHaveBeenCalled()
+    mocks.save.mockResolvedValueOnce({ canceled: false, filePath: '/chosen/poster.png' })
+    expect(await mocks.handlers.get(wardrobeChannels.saveSharePoster)!({}, input)).toEqual({ status: 'saved', path: '/chosen/poster.png' })
+    expect(mocks.save).toHaveBeenCalledWith({ defaultPath: '/tmp/account-test/Kun-Invite-K7QM4XPA.png', filters: [{ name: 'PNG', extensions: ['png'] }] })
+    expect(mocks.write).toHaveBeenCalledWith('/chosen/poster.png', Buffer.from(input.dataBase64, 'base64'))
+    await mocks.handlers.get(wardrobeChannels.revealSharePoster)!({}, '/attacker/path')
+    expect(mocks.reveal).toHaveBeenCalledWith('/chosen/poster.png')
+    expect(mocks.create).not.toHaveBeenCalled()
+  })
+  it('rejects a malformed poster before opening a file dialog', async () => {
+    registerKunAccountIpc(() => null, runtime)
+    await expect(mocks.handlers.get(wardrobeChannels.saveSharePoster)!({}, { fileName: '../x.png', dataBase64: 'bad' })).rejects.toThrow()
+    expect(mocks.save).not.toHaveBeenCalled()
+  })
+
 })

@@ -222,7 +222,7 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
                 : guest ? <WardrobeLockedPanel kind={tab === 'shop' ? 'shop' : 'invite'} />
                   : tab === 'shop' ? <WardrobeShopPanel wardrobe={wardrobe} language={language} onBought={(text) => setToast({ text })}
                     onBrowse={() => { setTab('items'); setOwnedOnly(false); setSelection(null) }} />
-                    : <WardrobeInvitePanel language={language} onClaimed={(text) => setToast({ text })} />}
+                    : <WardrobeInvitePanel look={wardrobeLook(profileAvatar).parts} language={language} onClaimed={(text) => setToast({ text })} />}
         {tab === 'items' || tab === 'cards' ? <WardrobeInspector selection={selection} wardrobe={wardrobe} unlockAll={unlockAll} guest={guest} parts={parts}
           dressed={dressed} language={language} busy={busy} onWearItem={wearItem} onClose={() => setSelection(null)}
           onExchange={(key) => {

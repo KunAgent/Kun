@@ -1,4 +1,6 @@
-import { app, ipcMain, net, safeStorage, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { writeFile } from 'node:fs/promises'
+import { validateSharePosterSave } from '../kun-account/share-poster-save'
+import { app, dialog, ipcMain, net, safeStorage, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import { KUN_ACCOUNT_CHANNELS as channels } from '../../shared/kun-account'
 import { KUN_ACCOUNT_WARDROBE_CHANNELS as wardrobeChannels, type KunInviteSummary } from '../../shared/kun-account-economy'
@@ -73,6 +75,21 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
 
   const handle = (channel: string, run: (input: unknown) => Promise<unknown>) =>
     ipcMain.handle(channel, (event: IpcMainInvokeEvent, input: unknown) => { assertTrustedWorkbenchSender(event, getMainWindow); return run(input) })
+  let savedPosterPath: string | undefined
+  handle(wardrobeChannels.revealSharePoster, async () => {
+    if (savedPosterPath) shell.showItemInFolder(savedPosterPath)
+  })
+  handle(wardrobeChannels.saveSharePoster, async (input) => {
+    const { bytes, fileName } = validateSharePosterSave(input)
+    const parent = getMainWindow()
+    const options = { defaultPath: join(app.getPath('downloads'), fileName), filters: [{ name: 'PNG', extensions: ['png'] }] }
+    if (parent) revealDialogParent(parent)
+    const result = parent ? await dialog.showSaveDialog(parent, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return { status: 'cancelled' }
+    await writeFile(result.filePath, bytes)
+    savedPosterPath = result.filePath
+    return { status: 'saved', path: result.filePath }
+  })
   handle(wardrobeChannels.sync, () => sync().sync())
   handle(wardrobeChannels.open, (input) => { const list = ids(input, 10); return sync().change((economy) => economy.open(list)) })
   handle(wardrobeChannels.stash, (input) => { const list = ids(input, 200); return sync().change((economy) => economy.stash(list)) })

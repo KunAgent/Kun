@@ -1,5 +1,8 @@
+import type { KunAvatarParts } from '@shared/rooms-api'
+import { WardrobeSharePoster } from './WardrobeSharePoster'
+import { posterQrContent } from './share-poster/share-poster-model'
 import { useState, type FormEvent, type ReactElement } from 'react'
-import { Check, Copy, Link2, MessageSquare } from 'lucide-react'
+import { Check, Copy, Link2, ImagePlus, MessageSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { KunInviteSummary, KunReferral } from '@shared/kun-account-economy'
 import { WardrobeBottleIcon } from '../rooms/RoomWardrobeBottle'
@@ -13,14 +16,17 @@ function day(value: string, language: 'zh' | 'en'): string {
 }
 
 /** The account's invite code and link, how the invitations went, and the code a new account may still enter. */
-export function WardrobeInvitePanel({ language, onClaimed }: { language: 'zh' | 'en'; onClaimed: (text: string) => void }): ReactElement {
+export function WardrobeInvitePanel({ language, onClaimed, look }: { look: KunAvatarParts; language: 'zh' | 'en'; onClaimed: (text: string) => void }): ReactElement {
   const { t } = useTranslation('common')
   const invites = useAccountRead((api) => api.invites(), true)
+  const [shareOpen, setShareOpen] = useState(false)
   const [copied, setCopied] = useState<Copied>(null)
   const [code, setCode] = useState('')
   const [claiming, setClaiming] = useState(false)
   const [failure, setFailure] = useState('')
   const summary = invites.value
+  let validInvite = false
+  try { validInvite = Boolean(summary && posterQrContent(summary.code, summary.link)) } catch { /* Retry the account read. */ }
   const inviterBottles = summary?.rewards.inviter.bottles ?? 3
   const inviteeBottles = summary?.rewards.invitee.bottles ?? 2
 
@@ -53,6 +59,7 @@ export function WardrobeInvitePanel({ language, onClaimed }: { language: 'zh' | 
   const left = summary.claimUntil ? Math.max(0, Math.ceil((Date.parse(summary.claimUntil) - Date.now()) / 86_400_000)) : 0
   const message = t('wardrobeInviteMessage', { link: summary.link, code: formatInviteCode(summary.code), n: inviteeBottles })
   return <div className="kun-wardrobe-scroll kun-wardrobe-invite" data-wardrobe-invite>
+    {shareOpen ? <WardrobeSharePoster look={look} code={summary.code} link={summary.link} onClose={() => setShareOpen(false)} onRetry={() => void invites.reload()} /> : null}
     <section className="kun-wardrobe-invite-hero">
       <span className="kun-wardrobe-invite-chip">{t('wardrobeInviteChip')}</span>
       <strong>{t('wardrobeInviteTitle', { n: inviterBottles })}</strong>
@@ -67,13 +74,14 @@ export function WardrobeInvitePanel({ language, onClaimed }: { language: 'zh' | 
         <button type="button" data-primary onClick={() => void copy('link', summary.link)} data-wardrobe-invite-link>
           {copied === 'link' ? <Check size={15} aria-hidden="true" /> : <Link2 size={15} aria-hidden="true" />}
           {copied === 'link' ? t('wardrobeInviteCopied') : t('wardrobeInviteCopyLink')}</button>
-        <button type="button" onClick={() => void copy('message', message)}>
-          {copied === 'message' ? <Check size={15} aria-hidden="true" /> : <MessageSquare size={15} aria-hidden="true" />}
-          {copied === 'message' ? t('wardrobeInviteCopied') : t('wardrobeInviteCopyMessage')}</button>
+        <button type="button" disabled={!validInvite || Boolean(invites.error)} onClick={() => setShareOpen(true)}>
+          <ImagePlus size={15} aria-hidden="true" />{t('wardrobeShare.title')}</button>
       </div>
+      {!validInvite || invites.error ? <p role="alert">{t('wardrobeShare.missing')} <button type="button" onClick={() => void invites.reload()}>{t('wardrobeShare.retry')}</button></p> : null}
       <small className="kun-wardrobe-invite-url">{summary.link.replace(/^https:\/\//, '')}</small>
     </section>
     <section className="kun-wardrobe-invite-card">
+
       <strong>{t('wardrobeInviteProgress')}</strong>
       <div className="kun-wardrobe-invite-stats">
         <span><b>{summary.invited}</b><small>{t('wardrobeInviteStatInvited')}</small></span>
@@ -88,6 +96,9 @@ export function WardrobeInvitePanel({ language, onClaimed }: { language: 'zh' | 
           <em>{status(referral)}</em>
         </li>)}
       </ul> : <p className="kun-wardrobe-shop-note">{t('wardrobeInviteNone')}</p>}
+      <button type="button" className="kun-wardrobe-invite-copy-message" onClick={() => void copy('message', message)}>
+          {copied === 'message' ? <Check size={15} aria-hidden="true" /> : <MessageSquare size={15} aria-hidden="true" />}
+          {copied === 'message' ? t('wardrobeInviteCopied') : t('wardrobeInviteCopyMessage')}</button>
     </section>
     {summary.canClaim ? <form className="kun-wardrobe-invite-card" onSubmit={(event) => void claim(event)} data-wardrobe-invite-claim>
       <strong>{t('wardrobeInviteClaimTitle')}</strong>
