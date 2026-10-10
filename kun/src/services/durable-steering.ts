@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { TurnService } from './turn-service-core.js'
 import { TurnConflictError } from './turn-service-core.js'
-import type { Turn } from '../contracts/turns.js'
+import type { SteeringEntry, Turn } from '../contracts/turns.js'
 import { makeUserItem } from '../domain/item.js'
 import { finishTurn } from '../domain/turn.js'
 import { validateAndBindImageSteeringAttachments } from '../loop/turn-steering-attachments.js'
@@ -86,8 +86,12 @@ export async function admitDurableSteering(service: TurnService, input: DurableS
   } finally { release() }
 }
 
-/** Replaying a receipt uses the same item id; session stores upsert by id. */
-export async function flushDurableSteering(service: TurnService, threadId: string, turnId: string): Promise<void> {
+/**
+ * Replaying a receipt uses the same item id; session stores upsert by id.
+ * Returns the guidance this call delivered, in admission order.
+ */
+export async function flushDurableSteering(service: TurnService, threadId: string, turnId: string): Promise<SteeringEntry[]> {
+  const delivered: SteeringEntry[] = []
   await service['withQueueDataMutation'](threadId, async () => {
     const thread = await service['deps'].threadStore.get(threadId)
     const turn = thread?.turns.find((entry) => entry.id === turnId)
@@ -98,6 +102,8 @@ export async function flushDurableSteering(service: TurnService, threadId: strin
         displayText: entry.displayText, attachmentIds: entry.attachmentIds }), createdAt: entry.createdAt }
       await service['deps'].sessionStore.appendItem(threadId, item)
       await service['deps'].events.record({ kind: 'item_created', threadId, turnId, itemId: item.id, item })
+      delivered.push({ text: entry.text, ...(entry.displayText ? { displayText: entry.displayText } : {}),
+        ...(entry.attachmentIds?.length ? { attachmentIds: [...entry.attachmentIds] } : {}) })
     }
     if (turn.steeringDeliveries?.some((entry) => !entry.delivered)) {
       const deliveredIds = new Set(turn.steeringDeliveries.filter((entry) => !entry.delivered).map((entry) => entry.itemId))
@@ -114,4 +120,5 @@ export async function flushDurableSteering(service: TurnService, threadId: strin
     }
     service['deps'].steering.clearDurablePending(turnId)
   })
+  return delivered
 }

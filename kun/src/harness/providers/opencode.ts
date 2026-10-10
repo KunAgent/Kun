@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import type { HarnessDefinition } from '../../contracts/harness.js'
-import { unsupported } from '../../contracts/harness-capabilities.js'
+import { SUPPORTED, unsupported } from '../../contracts/harness-capabilities.js'
 import { ACP_DEFAULT_CAPABILITIES } from './capabilities.js'
 import type { AgentProviderModule, ProviderGatewayConfigInput } from './provider-module.js'
 import { opencodeConfig } from '../gateway-config-templates.js'
@@ -23,7 +23,12 @@ export const OPENCODE_DEFINITION: HarnessDefinition = {
   nativeAgents: 'session-modes',
   staticModels: [],
   historySource: 'opencode',
-  capabilities: ACP_DEFAULT_CAPABILITIES,
+  // A prompt sent mid-run joins the running loop (SessionPrompt.loop ->
+  // Runner.ensureRunning), which picks the new user message up at its next step.
+  capabilities: {
+    ...ACP_DEFAULT_CAPABILITIES,
+    statuses: { ...ACP_DEFAULT_CAPABILITIES.statuses, sameTurnSteer: SUPPORTED }
+  },
   // Generated opencode.json pins a single `kun` provider selected via
   // OPENCODE_CONFIG (verified against opencode 1.1.47, P3-10).
   gateway: {
@@ -75,7 +80,7 @@ export const OPENCODE_MODULE: AgentProviderModule = {
   },
   update: { command: 'opencode', packageName: 'opencode-ai' },
   gatewayConfig: openCodeGatewayConfig,
-  acp: { isolationEnv: openCodeIsolationEnv },
+  acp: { isolationEnv: openCodeIsolationEnv, liveSteering: true },
   // OpenCode 1 refuses a shared opencode.db that OpenCode2 created first (it
   // has session_v2 but no session table). Only the user may move that file.
   explainFailure: (message, _authRequired, context) => /has no session table/i.test(message)
@@ -142,7 +147,7 @@ export const CODEMAKER_MODULE: AgentProviderModule = {
     configured: (context) => authJsonConfigured(context.files(), { anySecret: true })
   },
   gatewayConfig: openCodeGatewayConfig,
-  acp: { isolationEnv: openCodeIsolationEnv },
+  acp: { isolationEnv: openCodeIsolationEnv, liveSteering: true },
   explainFailure: (message, _authRequired, context) =>
     explainOpenCodeServiceFailure({ displayName: 'CodeMaker', command: 'codemaker', apps: CODEMAKER_APPS }, message, context)
 }

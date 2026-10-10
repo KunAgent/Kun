@@ -140,6 +140,13 @@ export type ProviderAcpHooks = {
   modelCategory?(value: string): NonNullable<HarnessModelInfo['category']>
   /** Report a known-empty reasoning list when no thought_level option exists. */
   readonly emptyEffortsWithoutThoughtLevel?: boolean
+  /**
+   * A `session/prompt` sent while another is running joins that run: the
+   * engine records the new user message and answers it before the run ends,
+   * and both requests resolve together. Kun then delivers composer guidance
+   * mid-turn instead of holding it for the next turn.
+   */
+  readonly liveSteering?: boolean
 }
 
 export type ProviderGatewayConfigInput = {

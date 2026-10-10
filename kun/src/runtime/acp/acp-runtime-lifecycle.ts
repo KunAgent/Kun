@@ -306,9 +306,13 @@ export async function recordAcpDelegatedRuntime(
     initResult: AcpInitializeResult | undefined
     session: AcpSessionFacts
     sandbox: 'host' | 'native' | 'none'
+    liveSteering?: boolean
   }
 ): Promise<void> {
-  const reported = capabilitiesFromAcp(input.initResult, input.session, { sandbox: input.sandbox })
+  const reported = capabilitiesFromAcp(input.initResult, input.session, {
+    sandbox: input.sandbox,
+    ...(input.liveSteering ? { liveSteering: true } : {})
+  })
   const capabilitiesV2 = input.declaredCapabilities ? intersectCapabilities(input.declaredCapabilities, reported) : reported
   await events.record({
     kind: 'delegated_runtime',
@@ -323,6 +327,7 @@ export async function recordAcpDelegatedRuntime(
       : {}),
     capabilities: {
       ...acpLegacyCapabilities(),
+      liveSteering: capabilitiesV2.statuses.sameTurnSteer.supported === true,
       // Legacy bag mirrors v2 honesty: only a delivered descriptor counts.
       kunTools:
         input.session.kunToolsDescriptor === 'http' ||

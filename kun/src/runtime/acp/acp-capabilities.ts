@@ -46,7 +46,7 @@ function hasConfigCategory(
 export function capabilitiesFromAcp(
   initResult: AcpInitializeResult | undefined,
   session: AcpSessionFacts,
-  facts: { sandbox: 'host' | 'native' | 'none' }
+  facts: { sandbox: 'host' | 'native' | 'none'; liveSteering?: boolean }
 ): HarnessCapabilities {
   const agent = initResult?.agentCapabilities
   const statuses: HarnessCapabilityStatuses = {
@@ -56,7 +56,9 @@ export function capabilitiesFromAcp(
     structuredStreaming: SUPPORTED,
     reasoningStream: SUPPORTED,
     abort: SUPPORTED,
-    sameTurnSteer: unsupported('upstream'),
+    // ACP has no steer method; an engine whose concurrent session/prompt joins
+    // the running loop (ProviderAcpHooks.liveSteering) is steered that way.
+    sameTurnSteer: facts.liveSteering ? SUPPORTED : unsupported('upstream'),
     switchModelMidSession: hasConfigCategory(session.configOptions, 'model')
       ? SUPPORTED
       : unsupported('upstream'),

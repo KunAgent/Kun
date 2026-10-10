@@ -88,6 +88,7 @@ import { acpSessionSettings } from './acp-session-settings.js'
 import { emitTolerantSessionState } from './acp-session-state-bounds.js'
 import { harnessTurnTiming } from '../harness-turn-timing.js'
 import { acpPromptResultUsage, beginAcpSessionUsage, collectAcpSessionUsage } from './acp-session-usage.js'
+import { acpLiveSteeringEnabled, startAcpTurnCompanions, type AcpTurnCompanions } from './acp-turn-companions.js'
 
 export class AcpRuntime implements DelegatedTurnRuntime {
   private readonly pool: AcpConnectionPool
@@ -347,6 +348,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       preparation,
       initResult: conn.initResult,
       declaredCapabilities: definition.capabilities,
+      liveSteering: acpLiveSteeringEnabled(definition.id),
       session: {
         configOptions: session.configOptions,
         modes: session.modes,
@@ -468,6 +470,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     })
 
     let promptSettled = false
+    let companions: AcpTurnCompanions | undefined
     let cancelTimer: ReturnType<typeof setTimeout> | undefined
     const onAbort = (): void => {
       this.host.cancelPendingPermissions(session.sessionId)
@@ -489,12 +492,31 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       const sessionUsage = await beginAcpSessionUsage(definition.id, {
         sessionId: session.sessionId, workspace, env: { ...process.env, ...definition.launch?.env }
       })
+      const sendPrompt = (blocks: typeof prompt) => conn.rpc.request(
+        ACP_AGENT_METHODS.sessionPrompt, { sessionId: session.sessionId, prompt: blocks }, { timeoutMs: limits.maxWallTimeMs })
+      companions = startAcpTurnCompanions({
+        harnessId: definition.id, threadId, turnId, model: model ?? 'default', acpSessionId: session.sessionId,
+        ...(childSessionDb ? { sessionDbPath: childSessionDb } : {}),
+        gatewayMetered: credentialMode === 'kun-gateway', turns: this.deps.turns,
+        emitLive: (drafts) => {
+          mapper.observedFacts.sawUsageTokens = true
+          timing.observe(drafts)
+          emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
+        },
+        sendGuidance: async (entries) => sendPrompt(buildAcpPromptBlocks({
+          instructionBlocks: [], userText: entries.map((entry) => entry.text).join('\n\n'),
+          images: await resolveAcpImages(this.deps.attachmentStore, threadId, workspace,
+            entries.flatMap((entry) => entry.attachmentIds ?? []), imageCapable),
+          attachmentPaths: [], imageCapable, fileReferences: [], workspacePath: workspace
+        })),
+        debug: (summary) => this.deps.debug?.({ direction: 'note', summary })
+      })
       timing.requestStarted()
-      const raw = await Promise.race([conn.rpc.request(
-        ACP_AGENT_METHODS.sessionPrompt,
-        { sessionId: session.sessionId, prompt },
-        { timeoutMs: limits.maxWallTimeMs }
-      ), streamFailure])
+      const raw = await Promise.race([sendPrompt(prompt), streamFailure])
+      const stopReason = AcpPromptResultSchema.safeParse(raw).data?.stopReason
+      await Promise.race([companions.afterPrompt({
+        followUp: !signal.aborted && stopReason !== 'cancelled' && stopReason !== 'refusal'
+      }), streamFailure])
       promptSettled = true
       this.host.terminals.flushForTurn(turnId)
       acceptEvidence = false
@@ -507,7 +529,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           'session/prompt response is missing required fields'
         )
       }
-      const resultDrafts = mapper.applyPromptResult(acpPromptResultUsage(definition.id, parsed.data))
+      const resultDrafts = companions.settleUsage(acpPromptResultUsage(definition.id, parsed.data),
+        (usage) => mapper.applyPromptResult(usage))
       timing.observe(resultDrafts)
       await emitter.emitAll(resultDrafts)
       await emitter.emitAll(await collectAcpSessionUsage(sessionUsage, mapper.observedFacts, { threadId, turnId, harnessId: definition.id, ...(model ? { model } : {}) }))
@@ -558,6 +581,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       }
       await childSessions?.stop().catch(() => undefined)
       await emitQueue.catch(() => undefined)
+      if (companions) await emitter.emitAll(await companions.abandon()).catch(() => undefined)
       await emitter.emitAll(mapper.flush()).catch(() => undefined)
       await finishAcpTrace(trace, { kind: 'error', error })
       trace = undefined
@@ -582,6 +606,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     } finally {
       acceptEvidence = false
       void childSessions?.stop().catch(() => undefined)
+      companions?.stop()
       if (cancelTimer) clearTimeout(cancelTimer)
       signal.removeEventListener('abort', onAbort)
       unsubscribeSessionErrors()

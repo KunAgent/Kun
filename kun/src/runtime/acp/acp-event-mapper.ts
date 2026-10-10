@@ -460,17 +460,25 @@ export class AcpEventMapper {
     cachedWriteTokens?: number | null
   } | null | undefined): RuntimeEventDraft[] {
     if (!usage) return []
-    const prompt = Math.max(0, Math.trunc(usage.inputTokens ?? 0))
+    const input = Math.max(0, Math.trunc(usage.inputTokens ?? 0))
     const completion = Math.max(0, Math.trunc(usage.outputTokens ?? 0))
     const total = Math.max(
       0,
-      Math.trunc(usage.totalTokens ?? prompt + completion)
+      Math.trunc(usage.totalTokens ?? input + completion)
     )
-    if (prompt + completion + total <= 0) return []
+    if (input + completion + total <= 0) return []
     this.facts.sawUsageTokens = true
-    // ACP inputTokens includes cache reads (total = input + output), so the
-    // miss side is the remainder; never report more hits than input.
-    const cachedRead = usage.cachedReadTokens ? Math.min(prompt, Math.trunc(usage.cachedReadTokens)) : 0
+    // ACP leaves open whether inputTokens counts cache reads. Most engines do
+    // (total = input + output); OpenCode does not (total adds thought, cache
+    // reads and writes on top). Reads larger than the input, or a total that
+    // already adds them, mean the input is only the uncached part.
+    const reads = Math.max(0, Math.trunc(usage.cachedReadTokens ?? 0))
+    const writes = Math.max(0, Math.trunc(usage.cachedWriteTokens ?? 0))
+    const thought = Math.max(0, Math.trunc(usage.thoughtTokens ?? 0))
+    const inputExcludesCache = reads > 0 && (reads > input || total >= input + completion + thought + reads)
+    const prompt = inputExcludesCache ? input + reads + writes : input
+    // The miss side is the remainder; never report more hits than input.
+    const cachedRead = reads ? Math.min(prompt, reads) : 0
     const snapshot: UsageSnapshot = {
       promptTokens: prompt,
       completionTokens: completion,

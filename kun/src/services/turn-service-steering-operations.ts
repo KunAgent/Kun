@@ -1,4 +1,5 @@
 import { admitDurableSteering, flushDurableSteering } from './durable-steering.js'
+import { openDelegatedSteering, type DelegatedSteering } from './delegated-steering.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -218,6 +219,10 @@ endGraphSteeringResume(this: TurnService, turnId: string): void {
 
 hasGraphSteeringResume(this: TurnService, turnId: string): boolean {
     return (this['graphSteeringResumeFences'].get(turnId) ?? 0) > 0
+  },
+
+openDelegatedSteering(this: TurnService, threadId: string, turnId: string): DelegatedSteering {
+    return openDelegatedSteering(this, threadId, turnId)
   },
 
 async steeringQueue(this: TurnService, input: { threadId: string; turnId: string }): Promise<SteeringEntry[]> {
