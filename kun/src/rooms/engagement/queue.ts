@@ -19,12 +19,12 @@ export async function readQueue(store: RoomStore) {
   const row = await store.get(KIND, 'self')
   return { revision: row?.revision ?? null, state: row ? Queue.parse(row.value) : { actor: null, leaseUntil: 0, entries: [] } as EngagementQueue }
 }
-export async function updateQueue<T>(store: RoomStore, change: (state: EngagementQueue) => { state: EngagementQueue; result: T; notify?: boolean }): Promise<T> {
+export async function updateQueue<T>(store: RoomStore, change: (state: EngagementQueue) => { state: EngagementQueue; result: T; notify?: boolean }, requestId?: string): Promise<T> {
   for (let attempt=0; ; attempt++) {
     const row = await readQueue(store), changed=change(row.state)
     if (changed.state===row.state && !changed.notify) return changed.result
     try {
-      await store.commit({ requestId: 'engagement:'+randomUUID(), checks: [{kind:KIND,id:'self',expectedRevision:row.revision}],
+      await store.commit({ requestId: requestId ?? 'engagement:'+randomUUID(), checks: [{kind:KIND,id:'self',expectedRevision:row.revision}],
         puts:[{kind:KIND,id:'self',value:changed.state}],
         events:changed.notify ? [{roomId:'agent-directory',kind:'wardrobe.activity',payload:{}}] : [] })
       return changed.result
@@ -38,14 +38,20 @@ export async function beginActivity(store: RoomStore, context: ActivityContext, 
   // Event replay/recovery cannot retrospectively create a start ticket.
   const age=Date.now()-Date.parse(startedAt)
   if (!Number.isFinite(age) || age>30_000 || age < -30_000) return
+  const requestId='engagement-start:'+keyFor(context.runId)
+  if(await store.getRequest(requestId)) return
   const clean=Context.parse({...context,sourceLabel:context.sourceLabel?.slice(0,120)})
   await updateQueue(store,state=> {
     if (!state.actor || state.leaseUntil<Date.now() || state.entries.some(e=>e.key===keyFor(context.runId))) return {state,result:null}
     const entries=state.entries.filter(e=>Date.now()-Date.parse(e.startedAt)<48*3600_000)
-    if (entries.length>=256) return {state,result:null}
+    if (entries.length>=256) {
+      const oldestDone=entries.findIndex(e=>e.phase==='done')
+      if(oldestDone<0) return {state,result:null}
+      entries.splice(oldestDone,1)
+    }
     entries.push({...clean,key:keyFor(context.runId),serverRunId:keyFor(context.runId),actor:state.actor,startedAt,phase:'pending'})
     return {state:{...state,entries},result:null,notify:true}
-  })
+  },requestId)
 }
 export async function finishActivity(store: RoomStore, runId: string, status: z.infer<typeof Status>, messageId?: string) {
   await updateQueue(store,state=> {

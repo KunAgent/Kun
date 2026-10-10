@@ -3,7 +3,7 @@ import {mkdtemp,rm} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {SqliteRoomStore} from '../room-store-sqlite.js'
-import {beginActivity,finishActivity,claimIssue,readQueue,setActor,saveTicket} from './queue.js'
+import {beginActivity,finishActivity,claimIssue,readQueue,setActor,saveTicket,updateQueue,keyFor} from './queue.js'
 import {applyReceipt} from './receipt.js'
 import {readRoomWardrobe} from '../room-wardrobe-service.js'
 const resources:Array<{store:SqliteRoomStore;dir:string}>=[]
@@ -33,4 +33,15 @@ it('applies guest receipt and progress atomically once, without minting any asse
 it('does not replay historical starts and caps the local outbox without moving identity',async()=>{
  const s=await store();await setActor(s,guest);await beginActivity(s,{runId:'old',source:'code'},new Date(Date.now()-60000).toISOString())
  expect((await readQueue(s)).state.entries).toHaveLength(0)
+})
+
+it('compacts completed entries while retaining durable start deduplication',async()=>{
+ const s=await store();await setActor(s,guest)
+ await beginActivity(s,{runId:'first',source:'code'},now())
+ await updateQueue(s,state=>({state:{...state,entries:Array.from({length:256},(_,i)=>({actor:guest,runId:i?'r'+i:'first',key:keyFor(i?'r'+i:'first'),serverRunId:keyFor(i?'r'+i:'first'),source:'code',startedAt:now(),phase:'done'}))},result:null}))
+ await beginActivity(s,{runId:'new',source:'code'},now())
+ let entries=(await readQueue(s)).state.entries
+ expect(entries).toHaveLength(256);expect(entries.some(e=>e.runId==='new')).toBe(true);expect(entries.some(e=>e.runId==='first')).toBe(false)
+ await beginActivity(s,{runId:'first',source:'code'},now())
+ entries=(await readQueue(s)).state.entries;expect(entries.some(e=>e.runId==='first')).toBe(false)
 })
