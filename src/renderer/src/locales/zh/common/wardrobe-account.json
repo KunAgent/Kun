@@ -1,13 +1,13 @@
 {
   "wardrobeAccountSynced": "已同步到 Kun 账号",
-  "wardrobeAccountGuestChip": "未登录 · 只能使用默认装扮",
-  "wardrobeAccountGuestTitle": "登录后开始收集装扮",
-  "wardrobeAccountGuestBody": "漂流瓶、羽毛和全部装扮都存在 Kun 账号里。首次登录先送 1 个漂流瓶。",
+  "wardrobeAccountGuestChip": "未登录 · 登录后解锁换装",
+  "wardrobeAccountGuestTitle": "登录，开启 Kun 换装与收集",
+  "wardrobeAccountGuestBody": "登录后，在对话和任务中有机会掉落漂流瓶，抽取装备和角色卡。未登录时展示的是体验提示，不会发放可开启的瓶子。",
   "wardrobeAccountSignIn": "登录 Kun 账号",
   "wardrobeAccountSigningIn": "在浏览器里完成登录…",
   "wardrobeAccountInviteHint": "有好友的邀请码？登录后在「邀请」里填写，多得 2 个漂流瓶。",
   "wardrobeAccountGuestLocked": "登录后收集",
-  "wardrobeAccountGuestItemHint": "未登录只能使用默认装扮。登录 Kun 账号后，使用 Kun 就会漂来装着新装扮的漂流瓶。",
+  "wardrobeAccountGuestItemHint": "登录 Kun 账号后才能换装。登录后有机会掉落漂流瓶，抽取装备和角色卡。",
   "wardrobeAccountTabShop": "商店",
   "wardrobeAccountTabInvite": "邀请",
   "wardrobeAccountLockedShopTitle": "羽毛商店需要 Kun 账号",
@@ -84,5 +84,8 @@
   "roomsWardrobeSourceWelcome": "新人礼物",
   "roomsWardrobeSourceInvite": "邀请奖励",
   "roomsWardrobeSourceShop": "羽毛商店",
-  "roomsWardrobeSourceCampaign": "活动"
+  "roomsWardrobeSourceCampaign": "活动",
+  "wardrobeGuestDropTitle": "让每次创作都有惊喜",
+  "wardrobeGuestDropBody": "登录后，有机会掉落漂流瓶，抽取装备和角色卡。当前是体验提示，登录后开始正式收集。",
+  "wardrobeGuestDropDismiss": "暂不登录"
 }

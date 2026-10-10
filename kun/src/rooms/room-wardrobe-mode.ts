@@ -1,7 +1,7 @@
 /**
  * Who owns the wardrobe on this machine. A signed-in Kun account owns it on the server and the
- * local row is only its mirror; without an account only the starter pack is available and turns
- * drop nothing. Debug runs keep the original local game.
+ * local row is only its mirror; without an account only the default look is available and turns
+ * can produce login invitations. Debug runs keep the original local game.
  */
 import { z } from 'zod'
 import type { RoomStore } from './room-store.js'
@@ -26,6 +26,7 @@ export const WardrobeAccountStateSchema = z.object({
   mode: z.enum(['guest', 'account']),
   userId: z.string().min(1).max(64).optional(),
   attachedAt: z.string().optional(),
+  guestHints: z.array(z.object({ id: z.string().max(280), createdAt: z.string(), roomId: z.string().optional(), threadId: z.string().optional() }).strict()).max(20).optional(),
   activity: z.array(WardrobeActivitySchema).max(WARDROBE_ACTIVITY_LIMIT).default([])
 }).strict()
 export type WardrobeAccountState = z.infer<typeof WardrobeAccountStateSchema>

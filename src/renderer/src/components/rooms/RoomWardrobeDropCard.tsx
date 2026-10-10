@@ -1,3 +1,4 @@
+import { RoomWardrobeGuestDrop } from './RoomWardrobeGuestDrop'
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { KUN_WARDROBE_RULES, kunWardrobeLocalDate } from '@shared/rooms-api'
@@ -24,6 +25,7 @@ export function RoomWardrobeDropCard(scope: WardrobeDropScope): ReactElement | n
   const shown = pending[0]
   // "Quiet" keeps the conversation clean; the rail icon and sidebar still count the bottles.
   const quiet = wardrobeSettings(state.wardrobe).notice === 'quiet'
+  if (state.mode === 'guest') return quiet ? null : <RoomWardrobeGuestDrop hints={state.guestHints ?? []} scope={scope} />
   if ((!shown || quiet) && !opener.overlay && !dressing) return null
   const shelf = state.wardrobe?.pending.length ?? 0
   const daily = state.wardrobe?.daily

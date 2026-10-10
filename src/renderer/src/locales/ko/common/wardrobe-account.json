@@ -84,5 +84,8 @@
   "roomsWardrobeSourceWelcome": "환영 선물",
   "roomsWardrobeSourceInvite": "초대 보상",
   "roomsWardrobeSourceShop": "깃털 상점",
-  "roomsWardrobeSourceCampaign": "이벤트"
+  "roomsWardrobeSourceCampaign": "이벤트",
+  "wardrobeGuestDropTitle": "A little surprise after creating",
+  "wardrobeGuestDropBody": "Sign in for a chance to earn bottles and draw outfits or character cards. This is a preview; collecting starts after sign-in.",
+  "wardrobeGuestDropDismiss": "Not now"
 }

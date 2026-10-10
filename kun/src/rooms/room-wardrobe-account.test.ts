@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import {
-  assertRoomWardrobeAllows, countRoomWardrobeTurn, defaultAgentWardrobeKeys, markRoomWardrobeSeen, readRoomWardrobe
+  assertRoomWardrobeAllows, countRoomWardrobeTurn, markRoomWardrobeSeen, readRoomWardrobe
 } from './room-wardrobe-service.js'
 import {
   accountAvatar, ackWardrobeActivity, attachAccountWardrobe, detachAccountWardrobe, listWardrobeActivity
@@ -45,24 +45,29 @@ it('turns a locally collected wardrobe into the signed-out starter wardrobe once
   ] })
   const detail = await readRoomWardrobe(store)
   expect(detail.mode).toBe('guest')
-  expect(Object.keys(detail.wardrobe.items).sort()).toEqual(['glasses/square', 'headwear/headset', 'outfit/blue-scarf', 'prop/notebook'])
+  expect(detail.wardrobe.items).toEqual({})
   expect([detail.wardrobe.pending, detail.wardrobe.feathers, detail.wardrobe.settings.notice]).toEqual([[], 0, 'quiet'])
   // The beret is taken off; the starter glasses, face and color stay.
-  expect(await profile(store)).toEqual(composed({ glasses: 'square', face: 'wink' }))
+  expect(await profile(store)).toEqual(composed({ face: 'wink' }))
   expect((await readRoomWardrobe(store)).revision).toBe(detail.revision)
 })
 
-it('drops nothing while signed out and lets the signed-out look wear only the starter pack', async () => {
+it('shows a guest drop hint without granting rewards and denies guest appearance changes', async () => {
   const store = await openStore()
-  expect(await countRoomWardrobeTurn(store, { roomId: 'room-a', runId: 'run-1', finishedAt: now() })).toBeNull()
-  expect((await readRoomWardrobe(store)).wardrobe.pending).toEqual([])
-  await expect(assertRoomWardrobeAllows(store, [composed({ headwear: 'headset' })], { self: true })).resolves.toBeUndefined()
-  await expect(assertRoomWardrobeAllows(store, [composed({ headwear: 'beret' })], { self: true })).rejects.toThrow('avatar_item_locked')
-  // Agents may keep what the default Agents wear, the user's own look may not.
-  const [templateKey] = [...defaultAgentWardrobeKeys()].filter((key) => !KUN_WARDROBE_STARTER_PACK.includes(key))
-  const [category, id] = templateKey!.split('/')
-  await expect(assertRoomWardrobeAllows(store, [composed({ [category!]: id! })])).resolves.toBeUndefined()
-  await expect(assertRoomWardrobeAllows(store, [composed({ [category!]: id! })], { self: true })).rejects.toThrow('avatar_item_locked')
+  const context = { roomId: 'room-a', runId: 'guest-turn', finishedAt: now() }
+  expect(await countRoomWardrobeTurn(store, context)).toBeNull()
+  await countRoomWardrobeTurn(store, context)
+  const guest = await readRoomWardrobe(store)
+  expect(guest.wardrobe.pending).toEqual([])
+  expect(guest.wardrobe.items).toEqual({})
+  expect(guest.wardrobe.roles).toEqual([])
+  expect(guest.wardrobe.feathers).toBe(0)
+  expect(guest.guestHints).toHaveLength(1)
+  expect((await store.events('*')).filter(e => e.kind === 'wardrobe.guest_hint')).toHaveLength(1)
+  await expect(assertRoomWardrobeAllows(store, [composed({ headwear: 'headset' })], { self: true })).rejects.toThrow('wardrobe_login_required')
+  await expect(assertRoomWardrobeAllows(store, [composed({})], { self: true })).rejects.toThrow('wardrobe_login_required')
+  await expect(assertRoomWardrobeAllows(store, [null], { self: true })).rejects.toThrow('wardrobe_login_required')
+  await expect(assertRoomWardrobeAllows(store, [composed({ headwear: 'beret' })])).rejects.toThrow('wardrobe_login_required')
 })
 
 it('mirrors the account, wears its look, queues turns and refuses local changes', async () => {

@@ -134,14 +134,14 @@ export class AgentIdentityService {
       (old.executor && agentExecutorRouteKey(old.executor) !== agentExecutorRouteKey(agent.executor!))) {
       throw new RoomStoreConflictError('an Agent\'s engine route cannot change; only a coding Agent\'s model can')
     }
-    await this.validate(normalizeExternalAgent(agent), old.executor)
+    await this.validate(normalizeExternalAgent(agent), old.executor, old.avatar)
     const saved = await this.store.commit({ requestId: key, fingerprint: hash,
       checks: [{ kind: 'agent_identity', id, expectedRevision }],
       puts: [{ kind: 'agent_identity', id, value: agent }], result: { agent },
       events: [{ roomId: namespace, kind: 'agent.updated', payload: { id } }] })
     return saved.result as { agent: AgentIdentity }
   }
-  private async validate(agent: AgentIdentity, previousExecutor?: AgentExecutor) {
+  private async validate(agent: AgentIdentity, previousExecutor?: AgentExecutor, previousAvatar?: AgentIdentity['avatar']) {
     if (agent.allowedRepositoryRoots) {
       const repositories = await Promise.all(agent.allowedRepositoryRoots.map((root) => observeRoomRepository(root)))
       agent.allowedRepositoryRoots = [...new Set(repositories.map((repo) => repo.root))]
@@ -158,6 +158,7 @@ export class AgentIdentityService {
       if (!this.executorValidator) throw new RoomStoreConflictError('coding Agents are unavailable')
       agent.executor = await this.executorValidator(agent.executor)
     }
+    if (JSON.stringify(agent.avatar) === JSON.stringify(previousAvatar)) return
     if (agent.avatar?.kind === 'uploaded') {
       if (!this.validateAvatars) throw new Error('avatar storage unavailable')
       await this.validateAvatars([this.asMember(agent)])

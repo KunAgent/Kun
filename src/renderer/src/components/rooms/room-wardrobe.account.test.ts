@@ -45,7 +45,8 @@ describe('wardrobe changes by owner', () => {
 
   it('makes a saved composed look the account avatar only while signed in', async () => {
     acceptWardrobe({ wardrobe: mirror, revision: 1, mode: 'guest' })
-    await saveRoomUserProfile({ avatar: { kind: 'composed', version: 1, parts }, expectedRevision: 1, clientRequestId: 'a' })
+    await expect(saveRoomUserProfile({ avatar: { kind: 'composed', version: 1, parts }, expectedRevision: 1, clientRequestId: 'a' })).rejects.toThrow('anonymous')
+    expect(mocks.request).not.toHaveBeenCalled()
     expect(api.setLook).not.toHaveBeenCalled()
     acceptWardrobe({ wardrobe: mirror, revision: 1, mode: 'account' })
     await saveRoomUserProfile({ avatar: { kind: 'composed', version: 1, parts }, expectedRevision: 2, clientRequestId: 'b' })

@@ -1,3 +1,5 @@
+import type { ArtAccountAccess } from '../art-assets/account-access'
+import type { KunAccountState } from '../../shared/kun-account'
 import { writeFile } from 'node:fs/promises'
 import { validateSharePosterSave } from '../kun-account/share-poster-save'
 import { app, dialog, ipcMain, net, safeStorage, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
@@ -29,7 +31,8 @@ const object = <T>(value: unknown): T => {
   return value as T
 }
 
-export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null, runtimeRequest: RuntimeCall): void {
+export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null, runtimeRequest: RuntimeCall): ArtAccountAccess {
+  const listeners = new Set<(state: KunAccountState) => void>()
   // Created lazily: startup never prompts for the OS credential store.
   let service: KunAccountService | undefined
   let wardrobe: AccountWardrobeSync | undefined
@@ -51,6 +54,7 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
       listen: listenForAccountCode,
       openBrowser: (url) => shell.openExternal(url),
       changed: (state) => {
+        for (const listener of listeners) listener(state)
         wardrobe?.accountChanged(state)
         const window = getMainWindow()
         if (window && !window.isDestroyed() && !window.webContents.isDestroyed() &&
@@ -119,4 +123,9 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
     if (result.ok && result.value.invitedBy?.status === 'rewarded') await sync().refresh()
     return result
   })
+  return {
+    getState: () => account().getState(), accessToken: force => account().accessToken(force), expire: () => account().expire(),
+    onState: listener => { listeners.add(listener); return () => { listeners.delete(listener) } }
+  }
+
 }

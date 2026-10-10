@@ -221,12 +221,14 @@ export class KunAccountService {
       const epoch = ++this.generation
       clearTimeout(this.timer)
       try {
-        const tokens = await this.validTokens(false, epoch)
-        if (tokens) await this.deps.transport.logout(tokens.accessToken)
+        const accessToken = this.tokens?.accessToken
         this.active(epoch)
         await this.serialize(() => this.deps.storage.clear())
         this.tokens = null
-        return this.publish('anonymous', null)
+        this.publish('anonymous', null)
+        // Local logout must revoke local access even when the network is unavailable.
+        if (accessToken) await this.deps.transport.logout(accessToken).catch(() => undefined)
+        return this.state
       } catch (error) { return this.failure(error, epoch) }
     })().finally(() => { this.signingOut = undefined })
     return this.signingOut

@@ -1,3 +1,4 @@
+import { useWardrobe } from './room-wardrobe'
 import { useState, type CSSProperties } from 'react'
 import kunGreet from '../../../../asset/img/kun_greet.png'
 import { useRoomUserProfile } from './room-user-profile'
@@ -64,7 +65,8 @@ export function RoomAvatar({
   const identity = id ?? member?.id ?? 'kun'
   const profileAvatar = useRoomUserProfile((state) => state.profile.avatar)
   const isUser = user || identity === 'user'
-  const reference = avatar !== undefined ? avatar : isUser ? profileAvatar : member?.avatar
+  const wardrobeAccess = useWardrobe(false)
+  const reference = isUser && wardrobeAccess.mode === 'guest' ? null : avatar !== undefined ? avatar : isUser ? profileAvatar : member?.avatar
   const uploaded = useRoomUploadedAvatar(reference?.kind === 'uploaded' ? reference.attachmentId : undefined)
   const view = framing ?? kunAvatarFraming(size)
   const composed = useRoomComposedAvatar(reference?.kind === 'composed' ? reference : undefined, size, false, view)

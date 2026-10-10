@@ -1,7 +1,8 @@
+import { countGuestWardrobeTurn } from './room-wardrobe-guest.js'
 /**
  * Persists the user's wardrobe in the room store. Signed in, it is the mirror of the Kun account's
- * wardrobe and finished turns are queued for the account to roll; signed out, only the starter pack
- * is available and nothing drops; debug runs keep the local drop rules. Every write is a single
+ * wardrobe and finished turns are queued for the account to roll; signed out, only the default look
+ * is available and drops are login invitations; debug runs keep the local drop rules. Every write is a single
  * commit, so SSE consumers see a change only after it exists on disk.
  */
 import { randomInt } from 'node:crypto'
@@ -10,7 +11,7 @@ import type { RoomAvatarReference } from '../contracts/room-content.js'
 import type { RoomUserProfile } from '../contracts/room-onboarding.js'
 import type { Room } from '../contracts/rooms.js'
 import { KUN_AVATAR_PRESETS } from '../contracts/kun-avatar-presets.js'
-import type { KunAvatarAccessoryCategory } from '../contracts/kun-avatar-catalog.js'
+import { canonicalKunAvatarKey, type KunAvatarAccessoryCategory } from '../contracts/kun-avatar-catalog.js'
 import {
   KUN_WARDROBE_STARTER_PACK, KunWardrobeSchema, createKunWardrobe, exchangeKunWardrobeItem, grantKunWardrobeItems,
   KUN_WARDROBE_RULES, kunWardrobeAcceptsSource, kunWardrobeLocalDate, kunWardrobeMissingParts, kunWardrobePartKeys,
@@ -71,9 +72,9 @@ async function initialGrants(store: RoomStore): Promise<Set<KunWardrobeItemKey>>
   return keys
 }
 
-/** Signed out: the starter pack only. Settings and "seen" marks survive a reset. */
+/** Signed out: no collectible ownership. Settings and "seen" marks survive a reset. */
 export function guestWardrobe(previous?: KunWardrobe | null): KunWardrobe {
-  const fresh = grantKunWardrobeItems(createKunWardrobe(randomInt(0, 0x7fff_ffff)), KUN_WARDROBE_STARTER_PACK)
+  const fresh = createKunWardrobe(randomInt(0, 0x7fff_ffff))
   return previous ? { ...fresh, settings: previous.settings, seen: [...new Set([...fresh.seen, ...previous.seen])] } : fresh
 }
 
@@ -116,11 +117,16 @@ async function prepareWardrobeMode(store: RoomStore): Promise<WardrobeMode> {
   throw new Error('wardrobe unavailable')
 }
 
-export async function readRoomWardrobe(store: RoomStore): Promise<KunWardrobeDetail & { revision: number; mode: WardrobeMode }> {
+export async function readRoomWardrobe(store: RoomStore): Promise<KunWardrobeDetail & { revision: number; mode: WardrobeMode; guestHints: { id: string; createdAt: string; roomId?: string; threadId?: string }[] }> {
   const mode = await prepareWardrobeMode(store)
   for (let attempt = 0; attempt < 3; attempt++) {
     const row = await store.get(KIND, ID)
-    if (row) return { wardrobe: KunWardrobeSchema.parse(row.value), revision: row.revision, mode }
+    if (row) {
+      const stored = KunWardrobeSchema.parse(row.value)
+      const wardrobe = mode === 'guest' ? { ...stored, items: {}, roles: [], pending: [], feathers: 0, history: [] } : stored
+      const guestHints = mode === 'guest' ? (await readWardrobeAccountState(store)).state?.guestHints ?? [] : []
+      return { wardrobe, revision: row.revision, mode, guestHints }
+    }
     let wardrobe = guestWardrobe()
     if (mode === 'local') {
       const granted = grantKunWardrobeItems(createKunWardrobe(randomInt(0, 0x7fff_ffff)), await initialGrants(store))
@@ -148,7 +154,7 @@ export type WardrobeTurnContext = {
 }
 /**
  * Counts a finished Agent or Code turn once; stale reconciliations of old turns never drop anything.
- * Signed out nothing drops; signed in the turn is queued for the account, which decides the drop.
+ * Signed out only login hints drop; signed in the turn is queued for the account, which decides the drop.
  */
 export async function countRoomWardrobeTurn(store: RoomStore, context: WardrobeTurnContext): Promise<KunWardrobeDrop | null> {
   const requestId = 'wardrobe-turn:' + context.runId
@@ -157,7 +163,11 @@ export async function countRoomWardrobeTurn(store: RoomStore, context: WardrobeT
   if (context.finishedAt && now.getTime() - Date.parse(context.finishedAt) > 10 * 60_000) return null
   for (let attempt = 0; ; attempt++) {
     const detail = await readRoomWardrobe(store)
-    if (detail.mode === 'guest') return null
+    if (detail.mode === 'guest') {
+      if (await countGuestWardrobeTurn(store, requestId, detail, context, now)) return null
+      if (attempt >= 4) return null
+      continue
+    }
     const source = context.source ?? (context.roomId ? 'room' : 'code')
     // Switched off in the wardrobe settings: the turn is not counted at all.
     if (!kunWardrobeAcceptsSource(detail.wardrobe, source)) return null
@@ -183,14 +193,15 @@ type Mutation = { clientRequestId: string; expectedRevision: number | null }
 async function mutate(store: RoomStore, prefix: string, input: Mutation, fingerprint: string,
   apply: (wardrobe: KunWardrobe) => { wardrobe: KunWardrobe; result?: unknown }) {
   const requestId = prefix + input.clientRequestId
+  const detail = await readRoomWardrobe(store)
+  // Authenticate before idempotency replay as well as before a new mutation.
+  if (detail.mode === 'guest' && !['wardrobe-seen:', 'wardrobe-settings:'].includes(prefix)) throw new RoomWardrobeError('wardrobe_login_required')
+  if (detail.mode === 'account') throw new RoomWardrobeError('wardrobe_account_mode')
   const previous = await store.getRequest(requestId)
   if (previous) {
     if (previous.fingerprint !== fingerprint) throw new RoomStoreConflictError('wardrobe request changed')
     return { ...await readRoomWardrobe(store), ...(previous.result as object) }
   }
-  const detail = await readRoomWardrobe(store)
-  // A signed-in wardrobe changes on the server; the mirror is replaced from there.
-  if (detail.mode === 'account') throw new RoomWardrobeError('wardrobe_account_mode')
   if (input.expectedRevision !== null && input.expectedRevision !== detail.revision) {
     throw new RoomStoreConflictError('wardrobe changed', detail.revision)
   }
@@ -233,8 +244,18 @@ export function defaultAgentWardrobeKeys(): Set<KunWardrobeItemKey> {
 export async function assertRoomWardrobeAllows(store: RoomStore, avatars: Array<RoomAvatarReference | null | undefined>,
   options: { self?: boolean } = {}): Promise<void> {
   const composed = avatars.filter((avatar) => avatar?.kind === 'composed')
-  if (!composed.length || wardrobeUnlockAll()) return
+  if (wardrobeUnlockAll()) return
   const { wardrobe, mode } = await readRoomWardrobe(store)
+  if (mode === 'guest') {
+    const defaults = [...DEFAULT_AGENT_TEMPLATES, DIAGNOSTICIAN_AGENT_TEMPLATE].flatMap(template => {
+      const avatar = template.avatar as RoomAvatarReference | undefined
+      return avatar?.kind === 'composed' ? [canonicalKunAvatarKey(avatar.parts)] : []
+    })
+    if (options.self || composed.some(avatar => avatar?.kind === 'composed' && !defaults.includes(canonicalKunAvatarKey(avatar.parts)))) {
+      throw new RoomWardrobeError('wardrobe_login_required')
+    }
+  }
+  if (!composed.length) return
   const extra = mode === 'local' || options.self ? new Set<string>() : defaultAgentWardrobeKeys()
   const missing = [...new Set(composed.flatMap((avatar) => avatar?.kind === 'composed' ? kunWardrobeMissingParts(wardrobe, avatar.parts) : []))]
     .filter((key) => !extra.has(key))

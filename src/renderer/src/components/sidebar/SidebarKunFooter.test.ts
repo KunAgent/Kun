@@ -34,6 +34,7 @@ describe('Sidebar Kun footer', () => {
     roomsRequest.mockReset()
     roomsRequest.mockRejectedValue(new Error('offline'))
     useRoomUserProfile.setState({ profile: { avatar: null }, revision: null })
+    acceptWardrobe({ wardrobe: createKunWardrobe(1), revision: 1, mode: 'account' })
   })
 
   afterEach(async () => {
@@ -126,4 +127,12 @@ describe('Sidebar Kun footer', () => {
     expect(scene).toBe(false)
     await act(async () => useUiPluginStore.setState({ uiMode: 'default', activeRuntime: null }))
   })
+  it('shows the default Kun while signed out even when an old profile look is cached', async () => {
+    acceptWardrobe({ wardrobe: createKunWardrobe(1), revision: 2, mode: 'guest' })
+    roomsRequest.mockResolvedValue({ profile: { avatar: { kind: 'builtin', id: 'designer' } }, revision: 3 })
+    await act(async () => root.render(createElement(SidebarKunStatus)))
+    expect(container.querySelector('.ds-sidebar-kun-face [data-avatar-id]')).toBeNull()
+    expect(container.querySelector('[data-sidebar-bottles]')).toBeNull()
+  })
+
 })

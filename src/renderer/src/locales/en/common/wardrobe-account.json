@@ -1,13 +1,13 @@
 {
   "wardrobeAccountSynced": "Synced to your Kun account",
-  "wardrobeAccountGuestChip": "Signed out · default outfit only",
-  "wardrobeAccountGuestTitle": "Sign in to start collecting",
-  "wardrobeAccountGuestBody": "Bottles, feathers and every outfit live in your Kun account. Your first sign-in comes with 1 bottle.",
+  "wardrobeAccountGuestChip": "Sign in to customize",
+  "wardrobeAccountGuestTitle": "Sign in to dress up and collect",
+  "wardrobeAccountGuestBody": "After signing in, conversations and tasks can drop bottles with outfits or character cards. Guest drops are previews, not bottles you can open.",
   "wardrobeAccountSignIn": "Sign in to Kun",
   "wardrobeAccountSigningIn": "Finish signing in in your browser…",
   "wardrobeAccountInviteHint": "Got a friend's invite code? Enter it under Invite after signing in for 2 extra bottles.",
   "wardrobeAccountGuestLocked": "Sign in to collect",
-  "wardrobeAccountGuestItemHint": "Signed out, Kun wears the default outfit only. With a Kun account, using Kun washes up bottles with new outfits inside.",
+  "wardrobeAccountGuestItemHint": "Sign in to change your look and earn chances to collect outfits and character cards.",
   "wardrobeAccountTabShop": "Shop",
   "wardrobeAccountTabInvite": "Invite",
   "wardrobeAccountLockedShopTitle": "The feather shop needs a Kun account",
@@ -84,5 +84,8 @@
   "roomsWardrobeSourceWelcome": "Welcome gift",
   "roomsWardrobeSourceInvite": "Invitation reward",
   "roomsWardrobeSourceShop": "Feather shop",
-  "roomsWardrobeSourceCampaign": "Event"
+  "roomsWardrobeSourceCampaign": "Event",
+  "wardrobeGuestDropTitle": "A little surprise after creating",
+  "wardrobeGuestDropBody": "Sign in for a chance to earn bottles and draw outfits or character cards. This is a preview; collecting starts after sign-in.",
+  "wardrobeGuestDropDismiss": "Not now"
 }

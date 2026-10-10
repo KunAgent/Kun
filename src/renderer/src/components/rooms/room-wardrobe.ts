@@ -1,3 +1,4 @@
+import { hasKunAccountSession } from '@shared/kun-account'
 import { useEffect, useSyncExternalStore } from 'react'
 import {
   KUN_AVATAR_PRESETS, normalizeKunAvatarParts, updateKunAvatarPart,
@@ -10,14 +11,16 @@ import { subscribeRoomEvents } from './room-event-listeners'
 
 /**
  * Who owns the wardrobe: `account` is the signed-in Kun account (the runtime row is its mirror and
- * changes go to the account), `guest` is signed out (starter pack, no drops), `local` is a debug run.
+ * changes go to the account), `guest` is signed out (default look, login hints), `local` is a debug run.
  */
 export type WardrobeMode = 'account' | 'guest' | 'local'
 /** One wardrobe per user, shared by every editor, drop card and sidebar entry on screen. */
+export type GuestWardrobeHint = { id: string; createdAt: string; roomId?: string; threadId?: string }
 export type WardrobeSnapshot = {
+  guestHints?: GuestWardrobeHint[];
   wardrobe: KunWardrobe | null; revision: number | null; unlockAll: boolean; mode: WardrobeMode; error: string; loaded: boolean
 }
-type Detail = KunWardrobeDetail & { unlockAll?: boolean; mode?: WardrobeMode }
+type Detail = KunWardrobeDetail & { guestHints?: GuestWardrobeHint[]; unlockAll?: boolean; mode?: WardrobeMode }
 export type WardrobeOpenResult = Detail & {
   drops: KunWardrobeDrop[]; drop: KunWardrobeDrop; granted: KunWardrobeItemKey[]; feathers: number; guaranteed: boolean
 }
@@ -25,13 +28,16 @@ export type WardrobeOpenResult = Detail & {
 let snapshot: WardrobeSnapshot = { wardrobe: null, revision: null, unlockAll: false, mode: 'guest', error: '', loaded: false }
 const listeners = new Set<() => void>()
 let inflight: Promise<void> | null = null
+let accountKnownAnonymous: boolean | undefined
 function publish(next: Partial<WardrobeSnapshot>) {
   snapshot = { ...snapshot, ...next }
   listeners.forEach((listener) => listener())
 }
 export function acceptWardrobe(detail: Detail) {
-  publish({ wardrobe: detail.wardrobe, revision: detail.revision, unlockAll: Boolean(detail.unlockAll ?? snapshot.unlockAll),
-    mode: detail.mode ?? snapshot.mode, error: '', loaded: true })
+  const mode = detail.mode === 'local' ? 'local' : accountKnownAnonymous ? 'guest' : detail.mode ?? snapshot.mode
+  const wardrobe = mode === 'guest' ? { ...detail.wardrobe, items: {}, pending: [], roles: [], feathers: 0, history: [] } : detail.wardrobe
+  publish({ wardrobe, revision: detail.revision, unlockAll: mode === 'guest' ? false : Boolean(detail.unlockAll ?? snapshot.unlockAll),
+    guestHints: mode === 'guest' ? detail.guestHints ?? [] : [], mode, error: '', loaded: true })
 }
 
 /** A refusal from the Kun account; `code` is a Kunserve rule code such as `not_enough_feathers`. */
@@ -50,6 +56,12 @@ export async function accountResult<T>(call: (api: KunAccountWardrobeApi) => Pro
   return result.value
 }
 const signedIn = () => snapshot.mode === 'account'
+export const canChangeKunAppearance = () => snapshot.mode !== 'guest'
+export function requireKunAppearanceLogin(): boolean {
+  if (canChangeKunAppearance()) return true
+  void window.kunGui?.kunAccount?.login().catch(() => undefined)
+  return false
+}
 /** Reports finished turns to the account; the runtime queued them and announced it. */
 export function syncAccountWardrobe(): void {
   void accountWardrobe()?.sync().catch(() => undefined)
@@ -68,13 +80,20 @@ export function useWardrobe(active = true): WardrobeSnapshot {
     if (!active || typeof window === 'undefined' || !window.kunGui) return
     void refreshWardrobe()
     let timer: ReturnType<typeof setTimeout> | undefined
+    const accountChanged = (account: import('@shared/kun-account').KunAccountState) => {
+      accountKnownAnonymous = !hasKunAccountSession(account)
+      if (accountKnownAnonymous && snapshot.mode !== 'local') publish({ mode: 'guest', unlockAll: false, guestHints: [], wardrobe: snapshot.wardrobe ? { ...snapshot.wardrobe, items: {}, pending: [], roles: [], feathers: 0, history: [] } : null })
+      if (account.status === 'authenticated') void refreshWardrobe()
+    }
+    const offAccount = window.kunGui?.kunAccount?.onState?.(accountChanged)
+    void window.kunGui?.kunAccount?.getState?.().then(accountChanged).catch(() => undefined)
     const off = subscribeRoomEvents((event) => {
       if (!event.kind.startsWith('wardrobe.')) return
       if (event.kind === 'wardrobe.activity') syncAccountWardrobe()
       clearTimeout(timer)
       timer = setTimeout(() => { void refreshWardrobe() }, 150)
     })
-    return () => { clearTimeout(timer); off() }
+    return () => { clearTimeout(timer); off(); offAccount?.() }
   }, [active])
   return state
 }

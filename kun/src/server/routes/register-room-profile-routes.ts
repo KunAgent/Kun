@@ -30,6 +30,7 @@ export function registerRoomProfileRoutes(add: Add, runtime: ServerRuntime) {
     const input = UpdateRoomUserProfile.parse(raw.value)
     return rooms.exclusive(async () => {
       const store = rooms.service.store, requestId = 'room-user-profile:' + input.clientRequestId, fingerprint = roomFingerprint(input)
+      await assertRoomWardrobeAllows(store, [input.avatar], { self: true })
       const previous = await store.getRequest(requestId)
       if (previous) {
         if (previous.fingerprint !== fingerprint) throw new RoomStoreConflictError('profile request changed')
@@ -37,7 +38,6 @@ export function registerRoomProfileRoutes(add: Add, runtime: ServerRuntime) {
       }
       // The user's own look is the account avatar: only what this wardrobe owns.
       await validateRoomAvatarReferences(store, runtime.attachmentStore, [input.avatar])
-      await assertRoomWardrobeAllows(store, [input.avatar], { self: true })
       await store.commit({ requestId, fingerprint,
         checks: [{ kind: 'room_user_profile', id: 'self', expectedRevision: input.expectedRevision }],
         puts: [{ kind: 'room_user_profile', id: 'self', value: { avatar: input.avatar } }],

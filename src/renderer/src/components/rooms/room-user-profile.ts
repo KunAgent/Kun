@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import type { RoomAvatarReference, RoomUserProfileDetail } from '@shared/rooms-api'
 import { roomsRequest } from './rooms-client'
 import { subscribeRoomEvents } from './room-event-listeners'
-import { syncAccountLook } from './room-wardrobe'
+import { syncAccountLook, canChangeKunAppearance, WardrobeAccountError } from './room-wardrobe'
 
 export const useRoomUserProfile = create<RoomUserProfileDetail>(() => ({ profile: { avatar: null }, revision: null }))
 export function acceptRoomUserProfile(detail: RoomUserProfileDetail) {
@@ -17,6 +17,7 @@ export function acceptRoomUserProfile(detail: RoomUserProfileDetail) {
 export async function saveRoomUserProfile(input: {
   avatar: RoomAvatarReference | null; expectedRevision: number | null; clientRequestId: string
 }): Promise<RoomUserProfileDetail> {
+  if (!canChangeKunAppearance()) throw new WardrobeAccountError('anonymous')
   const detail = await roomsRequest<RoomUserProfileDetail>('/v1/rooms/user-profile', 'PUT', input)
   acceptRoomUserProfile(detail)
   if (input.avatar?.kind === 'composed') syncAccountLook(input.avatar.parts)

@@ -1,3 +1,4 @@
+import { signInToKun } from './wardrobe-account'
 import { useState } from 'react'
 import './wardrobe-art-updates.css'
 import { useArtState } from '../rooms/art-asset-store'
@@ -8,6 +9,7 @@ export function WardrobeArtUpdates({ language }: { language: 'zh' | 'en' }) {
   const zh = language === 'zh'
   const run = async (kind: 'check' | 'rollback') => { setBusy(true); try { await api[kind]() } finally { setBusy(false) } }
   const downloading = state.phase === 'checking' || state.phase === 'downloading'
+  if (state.phase === 'signed_out') return <div className="kun-art-updates ds-no-drag"><span>{zh ? '登录后解锁装扮与资源更新' : 'Sign in to unlock outfits and artwork updates'}</span><button type="button" onClick={signInToKun}>{zh ? '登录 Kun' : 'Sign in to Kun'}</button></div>
   return <div className="kun-art-updates ds-no-drag">
     <span role="status" aria-live="polite">{state.phase === 'downloading'
       ? `${zh ? '正在更新美术资源' : 'Updating artwork'} ${state.completed}/${state.total}`

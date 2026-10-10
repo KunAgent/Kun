@@ -36,3 +36,9 @@ export const KUN_ACCOUNT_CHANNELS = {
   cancel: 'kun-account:cancel', refresh: 'kun-account:refresh', logout: 'kun-account:logout',
   manage: 'kun-account:manage', reopen: 'kun-account:reopen'
 } as const
+
+/** A transient network outage keeps an already verified account signed in locally. */
+export function hasKunAccountSession(state: KunAccountState): boolean {
+  return Boolean(state.user) && (state.status === 'authenticated' ||
+    (state.status === 'error' && (state.error === 'network' || state.error === 'service')))
+}

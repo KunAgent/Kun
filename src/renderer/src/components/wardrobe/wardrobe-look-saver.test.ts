@@ -1,6 +1,7 @@
+import { acceptWardrobe } from '../rooms/room-wardrobe'
 /** @vitest-environment jsdom */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RoomAvatarReference } from '@shared/rooms-api'
+import { createKunWardrobe, type RoomAvatarReference } from '@shared/rooms-api'
 
 const mocks = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('../rooms/rooms-client', () => ({ roomsRequest: mocks.request, roomRequestId: () => 'request-id' }))
@@ -16,6 +17,7 @@ const echo = async (_path: string, method?: string, body?: { avatar: RoomAvatarR
 describe('wardrobe look saver', () => {
   beforeEach(() => {
     mocks.request.mockReset()
+    acceptWardrobe({ wardrobe: createKunWardrobe(1), revision: 1, mode: 'account' })
     useRoomUserProfile.setState({ profile: { avatar: null }, revision: 1 })
   })
 

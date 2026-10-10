@@ -136,4 +136,14 @@ describe('Kun account desktop service', () => {
     expect(f.deps.transport.exchange).toHaveBeenLastCalledWith({ grant_type: 'refresh_token', refresh_token: 'rotated-refresh' }, 'rotated-refresh')
     expect(f.service.snapshot().status).toBe('authenticated')
   })
+  it('clears the local login even if the upstream logout is offline', async () => {
+    const f = fixture(tokens)
+    await f.service.getState()
+    vi.mocked(f.deps.transport.logout).mockRejectedValueOnce(new AccountError('network'))
+    await f.service.logout()
+    expect(f.stored()).toBeNull()
+    expect(f.service.snapshot().status).toBe('anonymous')
+    expect(await f.service.accessToken()).toBeNull()
+  })
+
 })

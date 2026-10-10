@@ -127,4 +127,19 @@ describe('wardrobe page', () => {
     expect(sheet.textContent).toContain('wardrobeAccountGuestItemHint')
     expect(sheet.querySelector<HTMLButtonElement>('.kun-wardrobe-sheet-action')?.disabled).toBe(true)
   })
+  it('guides guests to sign in for randomize, reset and photo without saving any appearance', async () => {
+    const login = vi.fn(async () => ({}))
+    Object.defineProperty(window, 'kunGui', { configurable: true, value: { kunAccount: { login } } })
+    await act(async () => acceptWardrobe({ wardrobe, revision: 5, mode: 'guest' }))
+    expect($('[data-wardrobe-guest]')).not.toBeNull()
+    const before = puts().length
+    for (const selector of ['[data-wardrobe-random]', '[data-wardrobe-restore]', '[data-wardrobe-upload]']) {
+      await act(async () => $<HTMLButtonElement>(selector)!.click())
+    }
+    expect(login).toHaveBeenCalledTimes(3)
+    expect(puts()).toHaveLength(before)
+    expect($('[data-wardrobe-shelf]')).toBeNull()
+    Object.defineProperty(window, 'kunGui', { configurable: true, value: undefined })
+  })
+
 })

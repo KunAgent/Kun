@@ -84,5 +84,8 @@
   "roomsWardrobeSourceWelcome": "स्वागत उपहार",
   "roomsWardrobeSourceInvite": "आमंत्रण इनाम",
   "roomsWardrobeSourceShop": "पंखों की दुकान",
-  "roomsWardrobeSourceCampaign": "इवेंट"
+  "roomsWardrobeSourceCampaign": "इवेंट",
+  "wardrobeGuestDropTitle": "A little surprise after creating",
+  "wardrobeGuestDropBody": "Sign in for a chance to earn bottles and draw outfits or character cards. This is a preview; collecting starts after sign-in.",
+  "wardrobeGuestDropDismiss": "Not now"
 }

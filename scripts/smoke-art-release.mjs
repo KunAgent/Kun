@@ -6,6 +6,8 @@ import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
+const accessToken = process.env.KUN_ART_ACCESS_TOKEN
+if (!accessToken) throw new Error('Set KUN_ART_ACCESS_TOKEN to an application access token; artwork downloads require sign-in.')
 const temp = await mkdtemp(join(tmpdir(), 'kun-art-smoke-'))
 try {
   const modulePath = join(temp, 'service.mjs')
@@ -17,7 +19,7 @@ try {
     fetch: (url, options) => {
       if (offline) throw new Error('offline test')
       if (url.includes('/objects/')) downloads++
-      return fetch(url, options)
+      return fetch(url, { ...options, headers: { ...options.headers, Authorization: `Bearer ${accessToken}` }, credentials: 'omit', cache: 'no-store' })
     },
     failed: code => console.log('failure:', code),
     activate: async manifest => installArtCatalog(manifest?.catalog ?? null),

@@ -24,10 +24,10 @@ import { registerAgentIntegrationIpcHandlers } from './register-agent-integratio
 import { registerKunAccountIpc } from './register-kun-account-ipc'
 
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
-  registerKunAccountIpc(options.getMainWindow, (path, method, body) =>
+  const accountAccess = registerKunAccountIpc(options.getMainWindow, (path, method, body) =>
     options.runtimeRequest(path, method, body, undefined, { priority: 'background' }))
   registerKunArtIpc(options.getMainWindow, (path, method, body) =>
-    options.runtimeRequest(path, method, body, undefined, { priority: 'background' }))
+    options.runtimeRequest(path, method, body, undefined, { priority: 'background' }), accountAccess)
   configureRuntimeModelExecutor(async (input) => {
     const response = await options.runtimeRequest('/v1/model-requests', 'POST', JSON.stringify(input), undefined,
       { signal: AbortSignal.timeout((input.timeoutMs ?? 30_000) + 5_000), priority: 'background' })

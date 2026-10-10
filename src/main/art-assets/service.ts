@@ -161,5 +161,9 @@ export class ArtAssetService {
       throw error
     }
   }
+  async stop(): Promise<void> {
+    this.dispose()
+    await Promise.allSettled([this.initialized, this.running, this.rolling])
+  }
   dispose(): void { this.disposed = true; this.abort.abort() }
 }

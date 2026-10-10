@@ -11,7 +11,7 @@ import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { WardrobeLogSection, WardrobeSettingsSection } from '../rooms/RoomWardrobePanelSections'
 import { useWardrobeOpener } from '../rooms/RoomWardrobeOpening'
 import {
-  WardrobeAccountError, exchangeWardrobeItem, markWardrobeSeen, updateWardrobeSettings, useWardrobe, wardrobeSettings
+  requireKunAppearanceLogin, WardrobeAccountError, exchangeWardrobeItem, markWardrobeSeen, updateWardrobeSettings, useWardrobe, wardrobeSettings
 } from '../rooms/room-wardrobe'
 import { wearDropOnMe } from '../rooms/room-wardrobe-wear'
 import { useRoomUserProfile, useRoomUserProfileSync } from '../rooms/room-user-profile'
@@ -58,7 +58,7 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
   useRoomUserProfileSync()
   const profileAvatar = useRoomUserProfile((value) => value.profile.avatar)
   const [optimistic, setOptimistic] = useState<{ avatar: WardrobeAvatar } | null>(null)
-  const avatar = optimistic ? optimistic.avatar : profileAvatar
+  const avatar = state.mode === 'guest' ? null : optimistic ? optimistic.avatar : profileAvatar
   const { parts, dressed } = wardrobeLook(avatar)
   const [tab, setTab] = useState<Tab>('items')
   const [category, setCategory] = useState<WardrobeCategory>('all')
@@ -83,6 +83,7 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
   const guest = state.mode === 'guest'
   const tabs: Tab[] = ['items', 'cards', 'look', 'log', ...(state.mode === 'local' ? [] : ACCOUNT_TABS)]
 
+  useEffect(() => { if (guest) { setOptimistic(null); setTrying(null); setPhoto(null); setToast(null) } }, [guest])
   useEffect(() => { title.current?.focus({ preventScroll: true }) }, [])
   useEffect(() => {
     if (!toast) return
@@ -110,12 +111,14 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
   }, [settingsOpen])
 
   const choose = (next: WardrobeAvatar, text: string) => {
+    if (!requireKunAppearanceLogin()) return
     setToast({ text, undo: { avatar } })
     setOptimistic({ avatar: next })
     setTrying(null)
     saver.save(next)
   }
   const undo = (previous: WardrobeAvatar) => {
+    if (!requireKunAppearanceLogin()) return
     setToast(null)
     setOptimistic({ avatar: previous })
     saver.save(previous)
@@ -141,6 +144,7 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
     } finally { setBusy(false) }
   }
   const choosePhoto = async (selected: File) => {
+    if (!requireKunAppearanceLogin()) return
     try { setPhoto(await readWardrobePhoto(selected)) } catch { setToast({ text: t('roomsAvatarInvalidFile'), error: true }) }
   }
   const progress = wardrobe ? kunWardrobeProgress(wardrobe) : null
@@ -196,7 +200,7 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
           <button type="button" onClick={randomize} data-wardrobe-random><Dices size={15} strokeWidth={1.8} aria-hidden="true" />{t('roomsAvatarRandom')}</button>
           <button type="button" onClick={() => choose(null, t('wardrobePageToastRestore'))} data-wardrobe-restore>
             <RotateCcw size={15} strokeWidth={1.8} aria-hidden="true" />{t('wardrobePageRestore')}</button>
-          <button type="button" onClick={() => file.current?.click()} data-wardrobe-upload>
+          <button type="button" onClick={() => { if (requireKunAppearanceLogin()) file.current?.click() }} data-wardrobe-upload>
             <Upload size={15} strokeWidth={1.8} aria-hidden="true" />{t('roomsAvatarUpload')}</button>
         </div>
         {guest ? <WardrobeGuestCard />
@@ -216,12 +220,12 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
         </nav>
         {tab === 'items' ? <WardrobeItemsSection wardrobe={wardrobe} unlockAll={unlockAll} parts={parts} dressed={dressed} language={language}
           category={category} ownedOnly={ownedOnly} selection={selection} onCategory={(value) => { setCategory(value); setSelection(null) }}
-          onSelect={setSelection} onWear={wearTile} onTry={(tile) => setTrying(toggleWardrobeItem(parts, tile.category, tile.id, false).parts)}
+          onSelect={setSelection} onWear={wearTile} onTry={(tile) => { if (!guest) setTrying(toggleWardrobeItem(parts, tile.category, tile.id, false).parts) }}
           onEndTry={() => setTrying(null)} />
           : tab === 'cards' ? <WardrobeCardsSection wardrobe={wardrobe} unlockAll={unlockAll} language={language} filter={cardFilter}
             selection={selection} onFilter={(value) => { setCardFilter(value); setSelection(null) }} onSelect={setSelection} />
             : tab === 'look' ? <WardrobeLookPanel parts={parts} dressed={dressed} language={language}
-              onPick={(next, name) => choose(composedAvatar(next), t('wardrobePageToastLook', { name }))} onTry={setTrying} onEndTry={() => setTrying(null)} />
+              onPick={(next, name) => choose(composedAvatar(next), t('wardrobePageToastLook', { name }))} onTry={(next) => { if (!guest) setTrying(next) }} onEndTry={() => setTrying(null)} />
               : tab === 'log' ? <div className="kun-wardrobe-scroll kun-wardrobe-log"><WardrobeLogSection wardrobe={wardrobe} language={language} /></div>
                 : guest ? <WardrobeLockedPanel kind={tab === 'shop' ? 'shop' : 'invite'} />
                   : tab === 'shop' ? <WardrobeShopPanel wardrobe={wardrobe} language={language} onBought={(text) => setToast({ text })}

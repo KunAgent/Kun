@@ -1,3 +1,5 @@
+import { ArtAccountSession } from '../art-assets/account-session'
+import { authenticatedArtFetch, type ArtAccountAccess } from '../art-assets/account-access'
 import { bindArtResourceReader } from '../art-assets/protocol'
 import { app, BrowserWindow, ipcMain, net } from 'electron'
 import { join } from 'node:path'
@@ -7,25 +9,28 @@ import { ArtAssetService } from '../art-assets/service'
 import { ArtStorage } from '../art-assets/storage'
 import { assertTrustedWorkbenchSender, trustedWorkbenchSenderIsCurrent } from './app-ipc-handler-utils'
 import type { RuntimeCall } from '../kun-account/wardrobe-sync'
-export function registerKunArtIpc(getMainWindow: () => BrowserWindow | null, runtime: RuntimeCall): void {
+export function registerKunArtIpc(getMainWindow: () => BrowserWindow | null, runtime: RuntimeCall, account: ArtAccountAccess): void {
   let last: ArtState | undefined
-  const service = new ArtAssetService({
-    storage: new ArtStorage(join(app.getPath('userData'), 'art-assets')),
-    failed: code => console.warn(`[kun-art] ${code}`),
-    fetch: (url, options) => net.fetch(url, options), appVersion: app.getVersion(),
-    activate: async (manifest) => {
-      const result = await runtime('/v1/rooms/wardrobe/art-catalog', 'POST', JSON.stringify({ catalog: manifest?.catalog ?? null }))
-      if (!result.ok) throw new Error('runtime_catalog_unavailable')
-    },
-    changed: (state) => {
-      if (last && last.phase === state.phase && last.manifest === state.manifest && state.completed % 16 !== 0 && state.completed !== state.total) return
-      last = state
-      const window = getMainWindow()
-      for (const target of BrowserWindow.getAllWindows()) {
-        if (!target.isDestroyed() && !target.webContents.isDestroyed() &&
-            trustedWorkbenchSenderIsCurrent({ sender: target.webContents, senderFrame: target.webContents.mainFrame }, window)) target.webContents.send(channels.state, state)
-      }
+  const publish = (state: ArtState) => {
+    if (last && last.phase === state.phase && last.manifest === state.manifest && state.completed % 16 !== 0 && state.completed !== state.total) return
+    last = state
+    const window = getMainWindow()
+    for (const target of BrowserWindow.getAllWindows()) {
+      if (!target.isDestroyed() && !target.webContents.isDestroyed() &&
+          trustedWorkbenchSenderIsCurrent({ sender: target.webContents, senderFrame: target.webContents.mainFrame }, window)) target.webContents.send(channels.state, state)
     }
+  }
+  const activate = async (manifest: ArtState['manifest']) => {
+    const result = await runtime('/v1/rooms/wardrobe/art-catalog', 'POST', JSON.stringify({ catalog: manifest?.catalog ?? null }))
+    if (!result.ok) throw new Error('runtime_catalog_unavailable')
+  }
+  const service = new ArtAccountSession({ account, changed: publish, reset: () => activate(null),
+    create: (changed, current) => new ArtAssetService({
+      storage: new ArtStorage(join(app.getPath('userData'), 'art-assets')),
+      failed: code => console.warn(`[kun-art] ${code}`),
+      fetch: authenticatedArtFetch(account, (input, options) => net.fetch(String(input), options), current),
+      appVersion: app.getVersion(), activate, changed
+    })
   })
   const run = (channel: string, action: () => Promise<ArtState>) => ipcMain.handle(channel, event => {
     assertTrustedWorkbenchSender(event, getMainWindow); return action()

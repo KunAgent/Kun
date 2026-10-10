@@ -1,3 +1,5 @@
+import { useWardrobe, requireKunAppearanceLogin } from './room-wardrobe'
+import { WardrobeGuestCard } from '../wardrobe/WardrobeGuest'
 import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Ban, Check, Lock, PaintBucket, Palette, RotateCcw, Smile, Sparkles, Upload, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -56,6 +58,7 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
   onSeen?: (keys: string[]) => void
 }) {
   const { t, i18n } = useTranslation('common')
+  const access = useWardrobe(false)
   const base = useId()
   const [category, setCategory] = useState<EditorCategory>('preset')
   const [notice, setNotice] = useState('')
@@ -67,8 +70,9 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
   const owns = (slot: KunAvatarAccessoryCategory, partId: string) => !wardrobe || kunWardrobeOwns(wardrobe, slot, partId)
   const lit = (presetId: string) => !wardrobe || wardrobe.roles.includes(presetId)
   const fresh = (key: string) => Boolean(wardrobe) && !wardrobe!.seen.includes(key)
-  const choose = (next: RoomAvatarReference | null) => { setTrying(null); setNotice(''); onChange(next) }
+  const choose = (next: RoomAvatarReference | null) => { if (!requireKunAppearanceLogin()) return; setTrying(null); setNotice(''); onChange(next) }
   const edit = (slot: KunAvatarCategory, value: string | undefined) => {
+    if (!requireKunAppearanceLogin()) return
     const result = updateKunAvatarPart(parts, slot, value)
     setTrying(null)
     onChange(composed(result.parts))
@@ -198,6 +202,7 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
   const owned = wardrobe && isAccessory(category) ? KUN_AVATAR_CATALOG[category].filter((part) => owns(category, part.id)).length
     : wardrobe && category === 'preset' ? KUN_AVATAR_PRESETS.filter((preset) => lit(preset.id)).length : null
   const random = () => choose(composed(randomKunAvatarParts(Math.random, wardrobe ? (slot, partId) => kunWardrobeOwns(wardrobe, slot, partId) : undefined)))
+  if (access.mode === 'guest') return <WardrobeGuestCard />
   return <div className="rooms-avatar-composer">
     <div className="rooms-avatar-studio">
       <RoomAvatarStage id={id} label={label} user={user} avatar={avatar} parts={parts} trying={trying} active={active}

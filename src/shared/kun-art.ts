@@ -1,7 +1,7 @@
 import type { ArtManifest } from '../../kun/src/contracts/kun-art-types'
 export type { ArtManifest, ArtFile } from '../../kun/src/contracts/kun-art-types'
 export type ArtState = {
-  phase: 'bundled' | 'checking' | 'downloading' | 'ready' | 'error'
+  phase: 'signed_out' | 'bundled' | 'checking' | 'downloading' | 'ready' | 'error'
   manifest: ArtManifest | null
   completed: number
   total: number

@@ -5,7 +5,7 @@ import type { KunWardrobeDrop } from '@shared/rooms-api'
 import { RoomModal } from './RoomModal'
 import { RoomAvatarComposer, editableKunAvatarParts } from './RoomAvatarComposer'
 import { RoomWardrobeProgress } from './RoomWardrobeProgress'
-import { markWardrobeSeen, useWardrobe, wardrobeGate, wearWardrobeDrop } from './room-wardrobe'
+import { markWardrobeSeen, requireKunAppearanceLogin, useWardrobe, wardrobeGate, wearWardrobeDrop } from './room-wardrobe'
 import { roomsRequest, roomRequestId } from './rooms-client'
 import { cacheRoomAvatar } from './room-uploaded-avatar'
 import { saveRoomUserProfile } from './room-user-profile'
@@ -54,7 +54,7 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
     finally { if (mounted.current && serial === loadSerial.current) { setBusy(false); onBusy(false) } }
   }
   const save = async () => {
-    if (busy) return
+    if (!requireKunAppearanceLogin() || busy) return
     setBusy(true); onBusy(true); setError('')
     try {
       let selected: RoomAvatarReference | null = avatar

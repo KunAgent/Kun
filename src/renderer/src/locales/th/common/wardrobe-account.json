@@ -84,5 +84,8 @@
   "roomsWardrobeSourceWelcome": "ของขวัญต้อนรับ",
   "roomsWardrobeSourceInvite": "รางวัลการเชิญ",
   "roomsWardrobeSourceShop": "ร้านขนนก",
-  "roomsWardrobeSourceCampaign": "กิจกรรม"
+  "roomsWardrobeSourceCampaign": "กิจกรรม",
+  "wardrobeGuestDropTitle": "A little surprise after creating",
+  "wardrobeGuestDropBody": "Sign in for a chance to earn bottles and draw outfits or character cards. This is a preview; collecting starts after sign-in.",
+  "wardrobeGuestDropDismiss": "Not now"
 }

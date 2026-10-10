@@ -84,5 +84,8 @@
   "roomsWardrobeSourceWelcome": "初回ギフト",
   "roomsWardrobeSourceInvite": "招待報酬",
   "roomsWardrobeSourceShop": "羽根ショップ",
-  "roomsWardrobeSourceCampaign": "イベント"
+  "roomsWardrobeSourceCampaign": "イベント",
+  "wardrobeGuestDropTitle": "A little surprise after creating",
+  "wardrobeGuestDropBody": "Sign in for a chance to earn bottles and draw outfits or character cards. This is a preview; collecting starts after sign-in.",
+  "wardrobeGuestDropDismiss": "Not now"
 }
