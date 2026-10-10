@@ -18,6 +18,7 @@ const { exerciseWardrobeDrops } = require('./smoke-wardrobe-drops.cjs')
 const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
 const { exerciseWorkAssistantAgent } = require('./smoke-work-assistant-agent.cjs')
 const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
+const { exerciseWhatsNew } = require('./smoke-whats-new.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -103,6 +104,8 @@ async function main() {
     isolatedEnvironment.NODE_ENV = 'development'
     // The wardrobe smoke needs a full shelf to exercise a real ten-pull.
     if (process.argv.includes('--wardrobe-only')) isolatedEnvironment.KUN_WARDROBE_SEED_BOTTLES = '11'
+    // Development builds fake an upgrade from this version to show the post-update dialog.
+    if (process.argv.includes('--whats-new-only')) isolatedEnvironment.KUN_RELEASE_NOTICE_FROM = argumentValue('--whats-new-from') ?? '0.3.8'
     // Exclude ambient Git hooks, signing and global config from the disposable repository.
     const gitConfig = join(temporaryRoot, 'git-config')
     await writeFile(gitConfig, '')
@@ -175,6 +178,7 @@ async function main() {
     await resize(electronApplication, 1360, 900)
     await page.locator(onboarding ? '[data-onboarding-step]' : '[data-workspace-mode-trigger]').first().waitFor({ timeout: timeoutMs })
     const exercise = onboarding ? exerciseOnboarding
+      : process.argv.includes('--whats-new-only') ? exerciseWhatsNew
       : process.argv.includes('--agent-models-only') ? exerciseAgentModelControls
       : process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage

@@ -24,6 +24,7 @@ import type {
   GuiUpdateInfo,
   GuiUpdateInstallResult
 } from '../../shared/gui-update'
+import type { ReleaseNotice } from '../../shared/release-notice'
 import {
   appBadgeCountSchema,
   computerUsePermissionKindSchema,
@@ -452,6 +453,20 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
   ipcMain.handle('gui:update-install', async (): Promise<GuiUpdateInstallResult> => {
     const module = await loadGuiUpdaterModule()
     return module.installGuiUpdate()
+  })
+  ipcMain.handle('gui:release-notice', async (_, request: unknown): Promise<ReleaseNotice | null> => {
+    const parsed = parseIpcPayload(
+      'gui:release-notice',
+      z.object({ current: z.boolean().optional() }).strict().optional(),
+      request ?? undefined
+    )
+    const { readReleaseNotice } = await import('../gui-updater-release-notes')
+    return readReleaseNotice(parsed ?? {})
+  })
+  ipcMain.handle('gui:release-notice-ack', async (_, version: unknown): Promise<void> => {
+    const parsed = parseIpcPayload('gui:release-notice-ack', z.string().trim().min(1).max(64), version)
+    const { acknowledgeReleaseNotice } = await import('../gui-updater-release-notes')
+    await acknowledgeReleaseNotice(parsed)
   })
 
   ipcMain.handle('log:error', async (_, payload: unknown) => {

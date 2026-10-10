@@ -498,6 +498,8 @@ const api = {
   downloadGuiUpdate: (channel) =>
     ipcRenderer.invoke('gui:update-download', channel),
   installGuiUpdate: () => ipcRenderer.invoke('gui:update-install'),
+  getReleaseNotice: (request) => ipcRenderer.invoke('gui:release-notice', request),
+  acknowledgeReleaseNotice: (version) => ipcRenderer.invoke('gui:release-notice-ack', version),
   onGuiUpdateState: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,

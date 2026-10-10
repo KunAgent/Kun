@@ -45,6 +45,7 @@ import type {
   GuiUpdateInstallResult,
   GuiUpdateState
 } from './gui-update'
+import type { ReleaseNotice, ReleaseNoticeRequest } from './release-notice'
 import type {
   BrowserUseControlInput,
   BrowserUseDecisionInput,
@@ -664,6 +665,9 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   downloadGuiUpdate: (channel?: GuiUpdateChannel) => Promise<GuiUpdateDownloadResult>
   installGuiUpdate: () => Promise<GuiUpdateInstallResult>
   onGuiUpdateState: (handler: (payload: GuiUpdateState) => void) => () => void
+  /** The post-update "what's new" notice that is due, or the running version's with `current`. */
+  getReleaseNotice: (request?: ReleaseNoticeRequest) => Promise<ReleaseNotice | null>
+  acknowledgeReleaseNotice: (version: string) => Promise<void>
   onProviderMutationFlushRequest: (handler: ProviderMutationFlushRequestHandler) => () => void
   logError: (category: string, message: string, detail?: unknown) => Promise<void>
   getLogPath: () => Promise<string>

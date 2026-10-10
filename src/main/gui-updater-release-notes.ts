@@ -1,6 +1,5 @@
-import { app, BrowserWindow, dialog, shell } from 'electron'
-import type { MessageBoxOptions } from 'electron'
-import type { AppLocale } from '../shared/app-locales'
+import { app } from 'electron'
+import type { ReleaseNotice, ReleaseNoticeRequest } from '../shared/release-notice'
 import {
   changelogUrl,
   DEVELOPMENT_APP_FLAVOR,
@@ -9,46 +8,65 @@ import {
   writeGuiVersionState
 } from './gui-updater-support'
 
-export async function showGuiUpdateReleaseNotes(
-  getMainWindow: (() => BrowserWindow | null) | null,
-  getSelectedLocale: (() => AppLocale | Promise<AppLocale>) | null
-): Promise<void> {
-  if (DEVELOPMENT_APP_FLAVOR || !app.isPackaged) return
-  const currentVersion = app.getVersion().trim()
-  const state = await readGuiVersionState()
-  if (!state.lastSeenVersion) {
-    await writeGuiVersionState({ ...state, lastSeenVersion: currentVersion })
-    return
-  }
-  if (state.lastSeenVersion === currentVersion || !isVersionGreater(currentVersion, state.lastSeenVersion)) return
-  const pendingUpdate = state.pendingUpdate?.version === currentVersion ? state.pendingUpdate : undefined
-  await writeGuiVersionState({ lastSeenVersion: currentVersion })
-  const isZh = await selectedLocale(getSelectedLocale) === 'zh'
-  const options: MessageBoxOptions = {
-    type: 'info',
-    title: isZh ? 'Kun 已更新' : 'Kun updated',
-    message: isZh ? `已更新到 Kun ${currentVersion}` : `Kun has been updated to ${currentVersion}`,
-    detail: pendingUpdate?.releaseNotes ?? (isZh
-      ? '此版本的完整更新内容可在 Kun 更新日志中查看。'
-      : 'See the Kun changelog for the complete release notes.'),
-    buttons: isZh ? ['查看更新日志', '稍后'] : ['View changelog', 'Later'],
-    defaultId: 0,
-    cancelId: 1,
-    noLink: true
-  }
-  const window = getMainWindow?.()
-  const result = window && !window.isDestroyed()
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options)
-  if (result.response === 0) await shell.openExternal(changelogUrl(currentVersion))
+/**
+ * Development builds never record versions. `KUN_RELEASE_NOTICE_FROM=<version>`
+ * fakes an upgrade from that version so the dialog can be exercised locally.
+ */
+function developmentNoticeFrom(): string | null {
+  const from = process.env.KUN_RELEASE_NOTICE_FROM?.trim()
+  return from ? from : null
 }
 
-async function selectedLocale(
-  getSelectedLocale: (() => AppLocale | Promise<AppLocale>) | null
-): Promise<'en' | 'zh'> {
-  try {
-    return (await getSelectedLocale?.()) === 'zh' ? 'zh' : 'en'
-  } catch {
-    return app.getLocale().toLowerCase().startsWith('zh') ? 'zh' : 'en'
+function tracksVersions(): boolean {
+  return !DEVELOPMENT_APP_FLAVOR && app.isPackaged
+}
+
+/**
+ * Runs once at startup. A fresh install only records its version, so the
+ * first launch never shows a "what's new" notice.
+ */
+export async function recordFirstLaunchVersion(): Promise<void> {
+  if (!tracksVersions()) return
+  const state = await readGuiVersionState()
+  if (state.lastSeenVersion) return
+  await writeGuiVersionState({ ...state, lastSeenVersion: app.getVersion().trim() })
+}
+
+/**
+ * The notice the renderer should show, or null. It stays due until the
+ * renderer acknowledges it, so a crash before the dialog appears does not
+ * lose it.
+ */
+export async function readReleaseNotice(request: ReleaseNoticeRequest = {}): Promise<ReleaseNotice | null> {
+  const version = app.getVersion().trim()
+  if (request.current) return { version, changelogUrl: changelogUrl(version) }
+  if (!tracksVersions()) {
+    const from = developmentNoticeFrom()
+    return from ? { version, previousVersion: from, changelogUrl: changelogUrl(version) } : null
   }
+  const state = await readGuiVersionState()
+  if (!state.lastSeenVersion) {
+    await writeGuiVersionState({ ...state, lastSeenVersion: version })
+    return null
+  }
+  if (state.lastSeenVersion === version || !isVersionGreater(version, state.lastSeenVersion)) return null
+  const pendingUpdate = state.pendingUpdate?.version === version ? state.pendingUpdate : undefined
+  return {
+    version,
+    previousVersion: state.lastSeenVersion,
+    ...(pendingUpdate?.releaseNotes ? { releaseNotes: pendingUpdate.releaseNotes } : {}),
+    changelogUrl: changelogUrl(version)
+  }
+}
+
+/** Marks the running version as seen; later launches stay quiet until the next update. */
+export async function acknowledgeReleaseNotice(version: string): Promise<void> {
+  if (!tracksVersions()) return
+  const current = app.getVersion().trim()
+  if (version.trim() !== current) return
+  const state = await readGuiVersionState()
+  if (state.lastSeenVersion === current && !state.pendingUpdate) return
+  const next = { ...state, lastSeenVersion: current }
+  if (next.pendingUpdate && !isVersionGreater(next.pendingUpdate.version, current)) delete next.pendingUpdate
+  await writeGuiVersionState(next)
 }
