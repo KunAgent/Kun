@@ -178,6 +178,12 @@ export interface HarnessSession {
   ): Promise<HarnessTurnResult>
   /** Interrupt the in-flight turn; resolves when the protocol acked. */
   interrupt(): Promise<void>
+  /**
+   * Deliver user guidance into the run in flight. Waits for a run that is
+   * still starting and rejects when none is running, so a late guidance is
+   * never queued on an idle engine. Absent when the engine cannot take it.
+   */
+  steer?(text: string): Promise<void>
   /** Detach per-turn resources; the pooled connection stays alive. */
   detach(): void
 }

@@ -417,6 +417,72 @@ describe('CodexSession', () => {
     expect(result.status).toBe('failed')
     expect(result.code).toBe('harness_crashed')
   })
+
+  it('steers a turn that is still starting once turn/start is acked, with turn/steer', async () => {
+    const { writes, emit, session } = setup()
+    const { sink } = makeSink()
+    const run = session.runTurn(turnInput(), sink, new AbortController().signal)
+    // The guidance arrives before the turn id is known: it waits for the ack.
+    const steered = session.steer('also allow 5-1')
+    await new Promise((r) => setImmediate(r))
+    expect(writes.map((w) => (w as { method: string }).method)).toEqual(['turn/start'])
+    respondToLast(writes, emit, { turn: { id: 'cx-turn-1', status: 'inProgress', items: [] } })
+    await new Promise((r) => setImmediate(r))
+    const steerReq = writes.at(-1) as { method: string; params: Record<string, unknown> }
+    expect(steerReq.method).toBe('turn/steer')
+    expect(steerReq.params).toMatchObject({
+      threadId: 'cx-thread-1',
+      expectedTurnId: 'cx-turn-1',
+      input: [{ type: 'text', text: 'also allow 5-1' }]
+    })
+    respondToLast(writes, emit, { turnId: 'cx-turn-1' })
+    await steered
+    emit({ method: 'turn/completed', params: COMPLETED_TURN })
+    await run
+  })
+
+  it('rejects a steer when no turn is running or the turn already ended', async () => {
+    const { writes, emit, session } = setup()
+    const { sink } = makeSink()
+    await expect(session.steer('nobody home')).rejects.toThrow('no active codex turn')
+    const run = startTurn(session, sink, emit, writes)
+    emit({ method: 'turn/completed', params: COMPLETED_TURN })
+    await run
+    await expect(session.steer('too late')).rejects.toThrow('no active codex turn')
+    expect(writes.some((w) => (w as { method: string }).method === 'turn/steer')).toBe(false)
+  })
+
+  it('fails a steer waiting on a turn that never started', async () => {
+    const { writes, emit, session } = setup()
+    const { sink } = makeSink()
+    const run = session.runTurn(turnInput(), sink, new AbortController().signal)
+    const steered = session.steer('early')
+    const assertion = expect(steered).rejects.toThrow('no active codex turn')
+    const frame = writes.at(-1) as { id: number }
+    emit({ id: frame.id, error: { code: -32000, message: 'no such thread' } })
+    await expect(run).rejects.toBeDefined()
+    await assertion
+  })
+
+  it('a follow-up run in the same Kun turn uses its own client message id and turn id', async () => {
+    const { writes, emit, session } = setup()
+    const { sink, drafts } = makeSink()
+    const first = startTurn(session, sink, emit, writes)
+    emit({ method: 'turn/completed', params: COMPLETED_TURN })
+    await first
+    const second = session.runTurn(turnInput({ userText: 'one more thing' }), sink, new AbortController().signal)
+    const startReq = writes.at(-1) as { method: string; params: Record<string, unknown> }
+    expect(startReq.method).toBe('turn/start')
+    expect(startReq.params.clientUserMessageId).toBe('kun-turn-1:2')
+    respondToLast(writes, emit, { turn: { id: 'cx-turn-2', status: 'inProgress', items: [] } })
+    await new Promise((r) => setImmediate(r))
+    // Only the follow-up run's mapper hears this.
+    emit({ method: 'item/agentMessage/delta', params: { threadId: 'cx-thread-1', itemId: 'it2', delta: 'ok' } })
+    await new Promise((r) => setImmediate(r))
+    expect(drafts).toHaveLength(1)
+    emit({ method: 'turn/completed', params: { threadId: 'cx-thread-1', turn: { id: 'cx-turn-2', status: 'completed', items: [] } } })
+    expect(await second).toEqual({ status: 'completed' })
+  })
 })
 
 // ---- CodexAgent ---------------------------------------------------------------

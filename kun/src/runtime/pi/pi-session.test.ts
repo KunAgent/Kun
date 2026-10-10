@@ -420,6 +420,73 @@ describe('PiSession', () => {
     expect(result.code).toBe('harness_crashed')
   })
 
+  it('sends steer only while a run is in flight, after the prompt was acked', async () => {
+    const { writes, emit, session } = setup()
+    const { sink } = makeSink()
+    await expect(session.steer('nothing is running')).rejects.toThrow('no active pi run')
+    const run = session.runTurn(turnInput(), sink, new AbortController().signal)
+    await new Promise((r) => setImmediate(r))
+    // Guidance before the prompt ack waits: pi would only queue it on an idle agent.
+    const steered = session.steer('also allow 5-1')
+    await new Promise((r) => setImmediate(r))
+    expect(writes.map((w) => (w as { type: string }).type)).toEqual(['prompt'])
+    respondToCommand(writes, emit, 'prompt', { disposition: 'started' })
+    await new Promise((r) => setImmediate(r))
+    const steerReq = writes.at(-1) as { type: string; message: string }
+    expect(steerReq).toMatchObject({ type: 'steer', message: 'also allow 5-1' })
+    respondToCommand(writes, emit, 'steer', {})
+    await steered
+    emit({ type: 'agent_settled' })
+    await run
+    // After agent_settled a steer would queue on the idle agent for the next prompt.
+    await expect(session.steer('too late')).rejects.toThrow('no active pi run')
+    expect(writes.filter((w) => (w as { type: string }).type === 'steer')).toHaveLength(1)
+  })
+
+  it('rejects a steer once the run settled, even before runTurn returns to its caller', async () => {
+    const { writes, emit, session } = setup()
+    const { sink } = makeSink()
+    const run = startRun(session, sink, writes, emit)
+    emit({ type: 'agent_settled' })
+    await expect(session.steer('late')).rejects.toThrow('pi run ended')
+    await run
+    expect(writes.some((w) => (w as { type: string }).type === 'steer')).toBe(false)
+  })
+
+  it('fails a steer waiting on a prompt that no run followed', async () => {
+    const { writes, emit, session } = setup()
+    const { sink } = makeSink()
+    const run = session.runTurn(turnInput(), sink, new AbortController().signal)
+    await new Promise((r) => setImmediate(r))
+    const steered = session.steer('early')
+    const assertion = expect(steered).rejects.toThrow('handled without a run')
+    respondToCommand(writes, emit, 'prompt', { disposition: 'handled' })
+    expect(await run).toEqual({ status: 'completed' })
+    await assertion
+  })
+
+  it('namespaces item ids of a follow-up run so they do not overwrite the first', async () => {
+    const { writes, emit, session } = setup()
+    const { sink, drafts } = makeSink()
+    const text = (delta: string) => emit({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta }
+    })
+    const first = startRun(session, sink, writes, emit)
+    text('first')
+    await new Promise((r) => setImmediate(r))
+    emit({ type: 'agent_settled' })
+    await first
+    const second = startRun(session, sink, writes, emit, { userText: 'one more thing' })
+    text('second')
+    await new Promise((r) => setImmediate(r))
+    emit({ type: 'agent_settled' })
+    await second
+    const ids = drafts.map((d) => (d as { item?: { id?: string } }).item?.id)
+    expect(ids).toEqual(['pi_msg_0', 'r2_pi_msg_0'])
+    expect((drafts[1] as { deltaOffset: number }).deltaOffset).toBe(0)
+  })
+
   it('writes bypass mode for full-access turns', async () => {
     const { writes, emit, session, permissionWrites } = setup()
     const { sink } = makeSink()

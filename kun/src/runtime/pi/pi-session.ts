@@ -49,6 +49,9 @@ export class PiSession implements HarnessSession {
     | ((mode: PiBridgePermissionMode) => void)
     | undefined
   private readonly disposers: (() => void)[] = []
+  /** The run in flight: `steer` waits for `ready`, and fails once `ended`. */
+  private run: { ready: Promise<void>; ended: boolean } | undefined
+  private runs = 0
   private detached = false
 
   constructor(
@@ -73,10 +76,13 @@ export class PiSession implements HarnessSession {
     // Per-turn permission file write — the bridge re-reads it per tool_call.
     this.writePermissionMode?.(piBridgeMode(input))
 
+    // A follow-up run inside one Kun turn restarts pi's content indexes.
+    const run = ++this.runs
     const mapper = new PiEventMapper({
       threadId: this.input.threadId,
       turnId: this.input.turnId,
-      model: input.model
+      model: input.model,
+      ...(run > 1 ? { idPrefix: `r${run}_` } : {})
     })
 
     const unsubs: (() => void)[] = []
@@ -105,6 +111,16 @@ export class PiSession implements HarnessSession {
 
     const settled = this.waitForSettled()
     this.disposers.push(settled.dispose)
+    let markReady!: () => void
+    let markFailed!: (error: unknown) => void
+    const state = {
+      ended: false,
+      ready: new Promise<void>((resolve, reject) => { markReady = resolve; markFailed = reject })
+    }
+    state.ready.catch(() => undefined)
+    this.run = state
+    // `agent_settled` ends the run: a steer after it would only queue on an idle agent.
+    void settled.promise.then(() => { state.ended = true })
 
     const onAbort = (): void => {
       void this.interrupt().catch((error) =>
@@ -117,6 +133,8 @@ export class PiSession implements HarnessSession {
     }
     if (signal.aborted) {
       settled.dispose()
+      state.ended = true
+      this.run = undefined
       return { status: 'cancelled' }
     }
     signal.addEventListener('abort', onAbort, { once: true })
@@ -130,8 +148,11 @@ export class PiSession implements HarnessSession {
       // 'handled' means an input handler consumed the prompt — no agent run,
       // no agent_settled; the turn is already complete.
       if (disposition === 'handled') {
+        state.ended = true
+        markFailed(new HarnessTransportError('harness_not_ready', 'pi prompt was handled without a run'))
         return { status: 'completed' }
       }
+      markReady()
       return await settled.promise
     } catch (error) {
       if (signal.aborted) return { status: 'cancelled' }
@@ -141,6 +162,12 @@ export class PiSession implements HarnessSession {
       throw error
     } finally {
       signal.removeEventListener('abort', onAbort)
+      state.ended = true
+      markFailed(new HarnessTransportError('harness_not_ready', 'pi run ended'))
+      if (this.run === state) this.run = undefined
+      // A follow-up run of this turn must not feed this run's mapper too.
+      unsubs.forEach((unsubscribe) => unsubscribe())
+      settled.dispose()
     }
   }
 
@@ -149,8 +176,16 @@ export class PiSession implements HarnessSession {
     await this.client.abort()
   }
 
-  /** Mid-turn user message (`steer` — delivered after the current tool batch). */
+  /**
+   * Mid-turn user message (`steer` — delivered after the current tool batch).
+   * Pi queues a steer sent to an idle agent for its next prompt, so it is only
+   * sent while a run is in flight.
+   */
   async steer(text: string): Promise<void> {
+    const run = this.run
+    if (!run) throw new HarnessTransportError('harness_not_ready', 'no active pi run to steer')
+    await run.ready
+    if (run.ended) throw new HarnessTransportError('harness_not_ready', 'pi run ended before the steer was sent')
     await this.client.steer(escapePiSlashCommand(text))
   }
 

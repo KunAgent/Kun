@@ -70,6 +70,7 @@ import {
   type DelegatedTrace
 } from './delegated-trace.js'
 import { KunTimelineTurnSink } from './turn-sink.js'
+import { followUpTurnInput, SessionLiveSteering } from './session-live-steering.js'
 import { harnessTurnTiming } from '../runtime/harness-turn-timing.js'
 import {
   HarnessTransportError,
@@ -328,6 +329,16 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       capabilities: this.deps.capabilities
     })
 
+    // An engine that takes input mid-run gets the composer's guidance; the
+    // loop sealed steering before this turn was handed over.
+    const live = this.deps.capabilitiesV2.statuses?.sameTurnSteer?.supported === true &&
+      typeof session.steer === 'function' && typeof this.deps.turns.openDelegatedSteering === 'function'
+      ? new SessionLiveSteering({
+          steering: this.deps.turns.openDelegatedSteering(threadId, turnId),
+          steer: (text) => session.steer!(text),
+          diagnostic: (summary) => this.debug(summary)
+        })
+      : undefined
     let interruptTimer: ReturnType<typeof setTimeout> | undefined
     const onAbort = (): void => {
       void session.interrupt().catch(() => undefined)
@@ -342,7 +353,18 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     try {
       await validateLaunch()
       harnessTurnTiming(threadId, turnId).requestStarted()
-      const result = await session.runTurn(input, sink, signal)
+      live?.begin()
+      let result = await session.runTurn(input, sink, signal)
+      // Guidance the engine never received (the run ended first) is answered
+      // by a follow-up run of the same turn; admission closes once drained.
+      while (live) {
+        const late = await live.end()
+        if (late.length && result.status === 'completed' && !signal.aborted) {
+          harnessTurnTiming(threadId, turnId).requestStarted()
+          live.begin()
+          result = await session.runTurn(followUpTurnInput(input, late), sink, signal)
+        } else if (live.sealIfEmpty()) break
+      }
       await sink.flush()
       await finishDelegatedTrace(
         trace,
@@ -404,6 +426,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       await this.failFromError(threadId, turnId, error, false)
       return 'failed'
     } finally {
+      live?.dispose()
       if (interruptTimer) clearTimeout(interruptTimer)
       signal.removeEventListener('abort', onAbort)
       session.detach()

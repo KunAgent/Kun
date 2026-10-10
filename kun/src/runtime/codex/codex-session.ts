@@ -48,6 +48,9 @@ export class CodexSession implements HarnessSession {
   private readonly router: CodexRequestRouter
   private readonly disposers: (() => void)[] = []
   private activeCodexTurnId: string | undefined
+  /** Settles when the run in flight has a Codex turn id, or fails to start. */
+  private turnStarted: Promise<string> | undefined
+  private runs = 0
   private detached = false
 
   constructor(
@@ -76,6 +79,11 @@ export class CodexSession implements HarnessSession {
       model: input.model
     })
 
+    // A follow-up run inside one Kun turn must not match the previous run's id.
+    this.activeCodexTurnId = undefined
+    let started!: { resolve(id: string): void; reject(error: unknown): void }
+    this.turnStarted = new Promise<string>((resolve, reject) => { started = { resolve, reject } })
+    this.turnStarted.catch(() => undefined)
     // Notifications are filtered by codex threadId inside the mapper.
     const unsubscribe = this.subscribeNotifications(mapper, sink)
     const turnDone = this.waitForTurnCompletion(sink)
@@ -83,6 +91,7 @@ export class CodexSession implements HarnessSession {
 
     const wireInput = toCodexUserInput(input)
     let turn: CodexTurn
+    const run = ++this.runs
     try {
       turn = await this.client.turnStart({
         threadId: this.providerSessionId,
@@ -95,14 +104,17 @@ export class CodexSession implements HarnessSession {
           input.sandboxMode,
           input.workspacePath
         ),
-        clientUserMessageId: this.input.turnId
+        clientUserMessageId: run === 1 ? this.input.turnId : `${this.input.turnId}:${run}`
       })
     } catch (error) {
       unsubscribe()
+      started.reject(error)
+      this.turnStarted = undefined
       if (signal.aborted) return { status: 'cancelled' }
       throw error
     }
     this.activeCodexTurnId = turn.id
+    started.resolve(turn.id)
 
     const onAbort = (): void => {
       void this.interrupt().catch((error) =>
@@ -121,6 +133,11 @@ export class CodexSession implements HarnessSession {
       return result
     } finally {
       signal.removeEventListener('abort', onAbort)
+      // A guidance sent from here on must fail, not target a finished turn.
+      this.activeCodexTurnId = undefined
+      this.turnStarted = undefined
+      // A follow-up run of this turn must not feed this run's mapper too.
+      unsubscribe()
     }
   }
 
@@ -135,11 +152,11 @@ export class CodexSession implements HarnessSession {
   }
 
   /**
-   * Mid-turn user message (`turn/steer`). The shared runtime does not yet
-   * deliver mid-turn input to sessions; this is ready for when it does.
+   * Mid-turn user message (`turn/steer`). Waits for a turn that is still
+   * starting; rejects when none is running.
    */
   async steer(text: string): Promise<void> {
-    const turnId = this.activeCodexTurnId
+    const turnId = this.activeCodexTurnId ?? await this.turnStarted?.catch(() => undefined)
     if (!turnId) {
       throw new HarnessTransportError(
         'harness_not_ready',

@@ -23,6 +23,8 @@ export type PiMapperContext = {
   turnId: string
   model?: string
   nowIso?: () => string
+  /** Namespaces item ids of a later run inside the same Kun turn. */
+  idPrefix?: string
 }
 
 type ItemRecord = Record<string, unknown>
@@ -37,11 +39,11 @@ export class PiEventMapper {
 
   /** pi contentIndex → Kun timeline item id (stable, namespaced). */
   kunTextItemId(contentIndex: number): string {
-    return `pi_msg_${contentIndex}`
+    return `${this.ctx.idPrefix ?? ''}pi_msg_${contentIndex}`
   }
 
   kunReasoningItemId(contentIndex: number): string {
-    return `pi_think_${contentIndex}`
+    return `${this.ctx.idPrefix ?? ''}pi_think_${contentIndex}`
   }
 
   /** Returns drafts for one pi event; [] when it carries nothing mappable. */
