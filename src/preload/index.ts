@@ -1,3 +1,4 @@
+import { kunArtApi } from './kun-art'
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { KunGuiApi } from '../shared/kun-gui-api'
 import { providerBridge } from './provider-bridge'
@@ -41,6 +42,7 @@ const desktopTitleBarMode = normalizeDesktopTitleBarMode(
 
 const api = {
   kunAccount: kunAccountApi,
+  kunArt: kunArtApi,
   platform: process.platform,
   desktopTitleBarMode,
   homeDir: homeDirFromArgs,

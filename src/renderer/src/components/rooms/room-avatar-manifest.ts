@@ -1,5 +1,5 @@
 export interface AvatarAssetEntry {
-  png: string
+  png?: string
   webp: Record<string, string>
 }
 

@@ -1,3 +1,4 @@
+import type { ArtPartsCatalog } from './kun-art-types.js'
 /** Pure avatar metadata shared by the runtime and renderer; never imports image files. */
 export type KunAvatarLabel = { zh: string; en: string }
 export type KunAvatarRarity = 'common' | 'rare' | 'epic' | 'legendary'
@@ -83,7 +84,7 @@ function accessory<const Id extends keyof typeof equipment>(id: Id, zh: string, 
     hasBack: options.hasBack ?? false, excludes: options.excludes ?? [] }
 }
 
-export const KUN_AVATAR_CATALOG = {
+export const KUN_AVATAR_CATALOG: ArtPartsCatalog = {
   color: [
     { id: 'sky', label: { zh: '天空蓝', en: 'Sky' }, hex: '#95cbf6' },
     { id: 'teal', label: { zh: '薄荷青', en: 'Teal' }, hex: '#7cdadb' },
@@ -164,18 +165,18 @@ export const KUN_AVATAR_CATALOG = {
     accessory('leaf', '树叶', 'Leaf'),
     accessory('camera', '相机', 'Camera')
   ]
-} as const
+}
 
-export const KUN_AVATAR_SCENES = [
+export const KUN_AVATAR_SCENES: { id: string; label: KunAvatarLabel }[] = [
   { id: 'sunset-bay', label: { zh: '海湾日落', en: 'Sunset bay' } },
   { id: 'night-study', label: { zh: '深夜书房', en: 'Night study' } },
   { id: 'star-deck', label: { zh: '星空甲板', en: 'Star deck' } },
   { id: 'cafe', label: { zh: '咖啡馆', en: 'Cafe' } },
   { id: 'laboratory', label: { zh: '实验室', en: 'Laboratory' } },
   { id: 'forest-cabin', label: { zh: '林间小屋', en: 'Forest cabin' } }
-] as const
+]
 export type KunAvatarScene = (typeof KUN_AVATAR_SCENES)[number]['id']
-export const KUN_AVATAR_SMALL_HEADWEAR: readonly string[] = ['wizard-hat', 'beanie', 'headphones', 'hard-hat']
+export const KUN_AVATAR_SMALL_HEADWEAR: string[] = ['wizard-hat', 'beanie', 'headphones', 'hard-hat']
 export const KUN_AVATAR_RARITIES: readonly KunAvatarRarity[] = ['common', 'rare', 'epic', 'legendary']
 export const KUN_AVATAR_RARITY_LABELS: Record<KunAvatarRarity, KunAvatarLabel> = {
   common: { zh: '普通', en: 'Common' }, rare: { zh: '稀有', en: 'Rare' },
@@ -291,7 +292,7 @@ export type KunAvatarRenderOptions = { size?: number; effects?: boolean; framing
 
 // The base painting includes resting wings. Sleeved garments paint their own
 // shoulders; keeping both silhouettes leaves blue wedges above their seams.
-const SLEEVED_OUTFITS: readonly KunAvatarOutfit[] = [
+export const SLEEVED_OUTFITS: KunAvatarOutfit[] = [
   'black-hoodie', 'mint-hoodie', 'cream-shirt', 'cardigan', 'lab-coat', 'security-jacket',
   'spacesuit', 'pilot-jacket', 'sailor-shirt', 'overalls', 'chef-coat', 'nurse-uniform',
   'camera-shirt', 'storyteller-cape', 'wizard-cape', 'coffee-apron', 'robe'

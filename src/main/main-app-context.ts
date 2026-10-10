@@ -2,7 +2,6 @@ import {
   app,
   BrowserWindow,
   Menu,
-  protocol,
   Tray
 } from 'electron'
 import {
@@ -110,9 +109,6 @@ import {
   type TelegramRuntime
 } from './telegram-runtime'
 import {
-  registerKunExtensionPlatformSchemesAsPrivileged
-} from './extensions/extension-media-protocol'
-import {
   ExtensionViewSessionRegistry
 } from './extensions/extension-view-sessions'
 import {
@@ -146,7 +142,6 @@ export function developmentRendererUrl(): string | undefined {
   return devServerHintUrl(app.isPackaged)
 }
 
-registerKunExtensionPlatformSchemesAsPrivileged(protocol)
 export const startupTraceEnabled =
   process.env.KUN_STARTUP_TRACE === '1' || process.env.DEEPSEEK_GUI_STARTUP_TRACE === '1'
 export const startupTraceStart = Date.now()

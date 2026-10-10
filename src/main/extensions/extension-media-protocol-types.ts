@@ -1,3 +1,4 @@
+import { KUN_MEDIA_PRIVILEGED_SCHEME } from '../privileged-schemes'
 import { createHash, randomBytes } from 'node:crypto'
 import type { ReadStream } from 'node:fs'
 import { open, realpath, stat, type FileHandle } from 'node:fs/promises'
@@ -116,28 +117,20 @@ export class ExtensionMediaProtocolError extends Error {
   }
 }
 
-export const KUN_MEDIA_PRIVILEGED_SCHEME = {
-  scheme: KUN_MEDIA_SCHEME,
-  privileges: {
-    standard: true,
-    secure: true,
-    supportFetchAPI: true,
-    corsEnabled: false,
-    bypassCSP: false,
-    stream: true
-  }
-} as const
+export { KUN_MEDIA_PRIVILEGED_SCHEME } from '../privileged-schemes'
 
 export function registerKunMediaSchemeAsPrivileged(protocol: SchemeRegistrar): void {
   protocol.registerSchemesAsPrivileged([KUN_MEDIA_PRIVILEGED_SCHEME])
 }
 
 /** Electron permits privileged-scheme registration only once before app ready. */
-export function registerKunExtensionPlatformSchemesAsPrivileged(protocol: SchemeRegistrar): void {
+export function registerKunExtensionPlatformSchemesAsPrivileged(protocol: SchemeRegistrar,
+  additional: Parameters<SchemeRegistrar['registerSchemesAsPrivileged']>[0] = []): void {
   protocol.registerSchemesAsPrivileged([
     KUN_EXTENSION_PRIVILEGED_SCHEME,
     KUN_MEDIA_PRIVILEGED_SCHEME,
-    KUN_WORKSPACE_PREVIEW_PRIVILEGED_SCHEME
+    KUN_WORKSPACE_PREVIEW_PRIVILEGED_SCHEME,
+    ...additional
   ])
 }
 

@@ -1,4 +1,5 @@
-import { app, dialog, type BrowserWindow } from 'electron'
+import { registerArtProtocol } from './art-assets/protocol'
+import { app, dialog, protocol, type BrowserWindow } from 'electron'
 import { shouldStartHidden } from './desktop-behavior'
 import { disposeProxyAgents } from './proxy-fetch'
 import { maybePromptCliInstall } from './cli-install-service'
@@ -227,6 +228,7 @@ export function startMainApp(): Promise<void> {
 
   return app.whenReady().then(async () => {
     traceStartup('app.whenReady:start')
+    registerArtProtocol(protocol)
     if (!gotSingleInstanceLock) {
       await explainConflictingDesktopInstance()
       return

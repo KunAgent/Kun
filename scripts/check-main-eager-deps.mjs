@@ -50,7 +50,7 @@ const result = await build({
   logLevel: 'silent',
   packages: 'external',
   external: ['electron'],
-  loader: { '.node': 'empty', '.png': 'empty', '.svg': 'empty', '.html': 'text', '.md': 'text' },
+  loader: { '.node': 'empty', '.png': 'empty', '.webp': 'empty', '.svg': 'empty', '.html': 'text', '.md': 'text' },
   alias: { '@shared': resolve(root, 'src/shared') }
 })
 

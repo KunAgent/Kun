@@ -1,10 +1,11 @@
+import type { ArtPreset } from './kun-art-types.js'
 import { normalizeKunAvatarParts, type KunAvatarParts, type KunAvatarScene } from './kun-avatar-catalog.js'
 
 export const ROOM_BUILTIN_AVATAR_IDS = ['coordinator', 'coder', 'reviewer', 'detective', 'designer', 'architect',
   'scientist', 'security', 'writer', 'researcher', 'data', 'operations', 'astronaut', 'pilot', 'navigator',
   'librarian', 'musician', 'gardener', 'chef', 'medic', 'photographer', 'athlete', 'explorer', 'storyteller',
   'magician', 'night-thinker', 'barista', 'maker', 'courier', 'strategist'] as const
-export type KunAvatarPresetId = (typeof ROOM_BUILTIN_AVATAR_IDS)[number]
+export type KunAvatarPresetId = string
 
 /** Card art reuses scene backgrounds; existing avatar backgrounds stay unchanged. */
 export const KUN_AVATAR_CARD_SCENES: Record<KunAvatarPresetId, KunAvatarScene> = {
@@ -21,7 +22,7 @@ function preset(id: KunAvatarPresetId, zh: string, en: string, parts: Partial<Ku
   return { id, label: { zh, en }, cardScene: KUN_AVATAR_CARD_SCENES[id], parts: normalizeKunAvatarParts(parts) }
 }
 
-export const KUN_AVATAR_PRESETS = [
+export const KUN_AVATAR_PRESETS: ArtPreset[] = [
   preset('coordinator', '协调员', 'Coordinator', { headwear: 'headset' }),
   preset('coder', '程序员', 'Coder', { color: 'teal', glasses: 'square', outfit: 'black-hoodie' }),
   preset('reviewer', '评审员', 'Reviewer', { color: 'periwinkle', glasses: 'round', outfit: 'cream-shirt' }),
@@ -52,4 +53,4 @@ export const KUN_AVATAR_PRESETS = [
   preset('maker', '创客', 'Maker', { color: 'periwinkle', headwear: 'welding-goggles', outfit: 'tool-apron' }),
   preset('courier', '信使', 'Courier', { headwear: 'baseball-cap', outfit: 'mailbag' }),
   preset('strategist', '策略师', 'Strategist', { color: 'mint', headwear: 'laurel', outfit: 'robe' })
-] as const
+]

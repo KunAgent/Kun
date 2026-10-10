@@ -1,3 +1,4 @@
+import { installArtCatalog } from '../../contracts/kun-art-catalog.js'
 import { z } from 'zod'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import { roomFingerprint } from '../../rooms/room-service.js'
@@ -24,6 +25,12 @@ const ExchangeRequest = z.object({ ...Mutation, key: z.string().regex(/^(headwea
 
 /** The wardrobe is one row per user; drops are produced by finished Agent and Code turns, never by these routes. */
 export function registerRoomWardrobeRoutes(add: Add) {
+  add('POST', '/v1/rooms/wardrobe/art-catalog', async (rooms, request) => {
+    const raw = await readJsonBody(request)
+    if (!raw.ok) return raw.response
+    const input = z.object({ catalog: z.unknown() }).strict().parse(raw.value)
+    return rooms.exclusive(async () => { installArtCatalog(input.catalog); return { ok: true } })
+  })
   add('GET', '/v1/rooms/wardrobe', async (rooms) => ({ ...await readRoomWardrobe(rooms.service.store), unlockAll: wardrobeUnlockAll() }))
   add('POST', '/v1/rooms/wardrobe/open', async (rooms, request) => {
     const raw = await readJsonBody(request)

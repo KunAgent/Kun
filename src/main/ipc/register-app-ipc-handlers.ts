@@ -1,3 +1,4 @@
+import { registerKunArtIpc } from './register-kun-art-ipc'
 import { ipcMain } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -24,6 +25,8 @@ import { registerKunAccountIpc } from './register-kun-account-ipc'
 
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   registerKunAccountIpc(options.getMainWindow, (path, method, body) =>
+    options.runtimeRequest(path, method, body, undefined, { priority: 'background' }))
+  registerKunArtIpc(options.getMainWindow, (path, method, body) =>
     options.runtimeRequest(path, method, body, undefined, { priority: 'background' }))
   configureRuntimeModelExecutor(async (input) => {
     const response = await options.runtimeRequest('/v1/model-requests', 'POST', JSON.stringify(input), undefined,

@@ -16,6 +16,7 @@ async function decodeLayer(url: string): Promise<DecodedLayer> {
   }
   const image = new Image()
   image.decoding = 'async'
+  if (url.startsWith('kun-asset:')) image.crossOrigin = 'anonymous'
   await new Promise<void>((resolve, reject) => {
     image.onload = () => resolve()
     image.onerror = () => { image.removeAttribute('src'); reject(new Error('Avatar layer could not decode')) }

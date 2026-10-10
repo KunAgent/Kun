@@ -2,6 +2,7 @@
 // 后面的 store 模块在 import 阶段就会读这些键。
 import './lib/legacy-local-storage-migration'
 import React from 'react'
+import { startArtUpdates } from './components/rooms/art-asset-store'
 import ReactDOM from 'react-dom/client'
 import '@xyflow/react/dist/style.css'
 import './index.css'
@@ -36,6 +37,7 @@ document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode
   ?? resolveDesktopTitleBarMode(window.kunGui?.platform ?? 'unknown', false)
 if (window.kunGui?.isRemoteWeb === true) document.documentElement.dataset.remoteWeb = 'true'
+startArtUpdates()
 initializeStartupTheme(window.kunGui?.getSettings)
 applyCursorSpotlight(true)
 installCursorSpotlightTracking()

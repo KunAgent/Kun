@@ -76,3 +76,6 @@ docs/R2_RELEASE.md
 
 ### Jetbrain
 .idea/
+
+# Generated signed art releases (private key is stored outside this repository)
+.art-release/

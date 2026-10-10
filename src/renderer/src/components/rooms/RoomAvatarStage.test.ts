@@ -16,7 +16,7 @@ afterEach(() => { act(() => renderer?.unmount()); renderer = undefined; vi.unstu
 describe('wardrobe stage art', () => {
   it('renders a legacy builtin with stage effects without changing the persisted avatar', () => {
     const preset = KUN_AVATAR_PRESETS.find(({ id }) => id === 'magician')!
-    const avatar = { kind: 'builtin' as const, id: preset.id }
+    const avatar = { kind: 'builtin' as const, id: 'magician' as const }
     act(() => { renderer = create(createElement(RoomAvatarStage, {
       id: 'agent', label: 'Agent', user: false, avatar, parts: preset.parts, trying: null, active: true,
       notice: '', disabled: false, language: 'en', onSlot: vi.fn(), onRemove: vi.fn(), onRandom: vi.fn()

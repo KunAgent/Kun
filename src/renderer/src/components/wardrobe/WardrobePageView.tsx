@@ -1,3 +1,5 @@
+import { useArtRevision } from '../rooms/art-asset-store'
+import { WardrobeArtUpdates } from './WardrobeArtUpdates'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { Dices, Feather, Lock, RotateCcw, Settings2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -49,6 +51,7 @@ type Toast = { text: string; undo?: { avatar: WardrobeAvatar }; error?: boolean 
 export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: {
   leftSidebarCollapsed: boolean; onToggleLeftSidebar: () => void
 }): ReactElement {
+  useArtRevision()
   const { t, i18n } = useTranslation('common')
   const language = i18n.language.startsWith('zh') ? 'zh' : 'en'
   const state = useWardrobe()
@@ -174,6 +177,7 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
         </div>
       </header>
     </div>
+    <WardrobeArtUpdates language={language} />
     {!wardrobe ? <p className={state.error ? 'kun-wardrobe-empty rooms-run-error' : 'kun-wardrobe-empty'} role={state.error ? 'alert' : undefined}>
       {state.error || t('roomsLoading')}</p> : <main className="kun-wardrobe-body ds-no-drag">
       <div className="kun-wardrobe-side">
