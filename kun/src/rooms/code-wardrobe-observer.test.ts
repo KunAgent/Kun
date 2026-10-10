@@ -1,3 +1,4 @@
+import {setActor,readQueue} from './engagement/queue.js'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -37,11 +38,15 @@ it('counts only Code tasks the user started', () => {
   expect(codeWardrobeThread(null)).toBe(false)
 })
 
-it('drops a bottle for a finished Code task turn, labelled with the task title', async () => {
-  const { store, observer } = await observe({ 'thread-1': thread() }, { 'turn-1': turn() })
-  await observer.count('thread-1', 'turn-1')
-  const { wardrobe } = await readRoomWardrobe(store)
-  expect(wardrobe.pending).toEqual([expect.objectContaining({ id: 'drop-code-turn-1', source: 'code', threadId: 'thread-1', sourceLabel: '修复登录超时' })])
+it('records lifecycle facts without generating rewards and keeps titles local', async () => {
+  const running=turn({status:'running',startedAt:new Date().toISOString()})
+  const {store,observer}=await observe({'thread-1':thread()},{'turn-1':running})
+  await setActor(store,'g:00000000-0000-4000-8000-000000000001')
+  await observer.count('thread-1','turn-1','turn_started')
+  running.status='completed'
+  await observer.count('thread-1','turn-1','turn_completed')
+  expect((await readQueue(store)).state.entries).toEqual([expect.objectContaining({status:'completed',source:'code',sourceLabel:'修复登录超时'})])
+  expect((await readRoomWardrobe(store)).wardrobe.pending).toEqual([])
 })
 
 it('ignores background continuations, failed turns and Agent conversation threads', async () => {

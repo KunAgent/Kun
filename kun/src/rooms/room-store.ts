@@ -13,7 +13,7 @@ export const RoomDocumentKindSchema = z.enum([
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
   'request_input', 'rule_bundle', 'rule_compression',
-  'room_run', 'room_poll', 'room_reactions', 'room_preference', 'room_avatar', 'room_user_profile', 'room_wardrobe', 'room_wardrobe_account',
+  'room_engagement', 'room_run', 'room_poll', 'room_reactions', 'room_preference', 'room_avatar', 'room_user_profile', 'room_wardrobe', 'room_wardrobe_account',
   'room_proposal', 'room_reminder', 'room_reminder_budget', 'workbench_link',
   'peer_topic', 'peer_inbox', 'peer_member', 'peer_publication', 'peer_metric', 'peer_cursor'
 ])

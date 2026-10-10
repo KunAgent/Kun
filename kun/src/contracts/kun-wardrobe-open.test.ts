@@ -1,7 +1,8 @@
+import { KUN_WARDROBE_RULES, grantKunWardrobeItems, rollKunWardrobeDrop } from '../test-support/wardrobe-simulator.js'
+import {seedWardrobeBottles} from '../test-support/wardrobe-seed.js'
 import { describe, expect, it } from 'vitest'
-import { KUN_WARDROBE_RULES, createKunWardrobe, grantKunWardrobeItems, kunWardrobeItems, rollKunWardrobeDrop, type KunWardrobe, type KunWardrobeDrop } from './kun-wardrobe.js'
-import { kunWardrobeShelf, openKunWardrobeDrops, stashKunWardrobeDrops } from './kun-wardrobe-open.js'
-import { seedWardrobeBottles } from '../rooms/room-wardrobe-service.js'
+import { createKunWardrobe, kunWardrobeItems, type KunWardrobe, type KunWardrobeDrop } from './kun-wardrobe.js'
+import { kunWardrobeShelf, openKunWardrobeDrops, stashKunWardrobeDrops } from '../test-support/wardrobe-open-simulator.js'
 
 const at = (minutes: number) => new Date(Date.UTC(2026, 9, 9, 10, minutes))
 const bottle = (id: string, patch: Partial<KunWardrobeDrop> = {}): KunWardrobeDrop => ({ id, kind: 'item', rarity: 'common',

@@ -1,8 +1,9 @@
+import { useWardrobe } from './room-wardrobe'
 import type { ReactElement } from 'react'
 import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
-  KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITIES, KUN_AVATAR_RARITY_LABELS, KUN_WARDROBE_RULES,
+  KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITIES, KUN_AVATAR_RARITY_LABELS, kunWardrobeRules,
   kunAvatarRarity, kunWardrobeItemKey, kunWardrobeItems, kunWardrobeMissingParts, kunWardrobePartKeys,
   type KunAvatarAccessoryCategory, type KunAvatarParts, type KunWardrobe, type KunWardrobeDrop, type KunWardrobeSettings
 } from '@shared/rooms-api'
@@ -151,7 +152,7 @@ export function WardrobeSettingsSection({ settings, busy, onChange }: {
   settings: KunWardrobeSettings; busy: boolean; onChange: (patch: Partial<KunWardrobeSettings>) => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const rules = KUN_WARDROBE_RULES
+  const rules = kunWardrobeRules(useWardrobe().wardrobe)
   const toggle = (key: 'drops' | 'code', value: boolean, disabled = false) =>
     <button type="button" role="switch" aria-checked={value} disabled={busy || disabled} className="rooms-wardrobe-switch"
       data-wardrobe-setting={key} aria-label={t(key === 'drops' ? 'roomsWardrobeSettingDrops' : 'roomsWardrobeSettingCode')}

@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import { ChevronRight, Focus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { KUN_WARDROBE_RULES } from '@shared/rooms-api'
+import { kunWardrobeRules } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
 import { useUiPluginStore } from '../../store/ui-plugin-store'
 import { RoomAvatar } from '../rooms/RoomAvatar'
@@ -43,8 +43,9 @@ export function SidebarKunStatus({ onOpen = toggleWardrobePage }: { onOpen?: () 
   const active = useChatStore((state) => state.route === 'wardrobe')
   // The face is the avatar the user dresses in the wardrobe, so it follows every change.
   useRoomUserProfileSync()
-  const bottles = wardrobeShelf(useWardrobe().wardrobe).length
-  const ready = bottles >= KUN_WARDROBE_RULES.tenPull
+  const wardrobe = useWardrobe().wardrobe
+  const bottles = wardrobeShelf(wardrobe).length
+  const ready = Boolean(wardrobe?.progress?.tenPull) && bottles >= kunWardrobeRules(wardrobe).tenPull
   const label = t(STATUS_KEYS[connection] ?? STATUS_KEYS.checking)
   const shelf = bottles ? t(ready ? 'wardrobePageBadgeReadyHint' : 'wardrobePageBadgeHint', { n: bottles }) : ''
   return (

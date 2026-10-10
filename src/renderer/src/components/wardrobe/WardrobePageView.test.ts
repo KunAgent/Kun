@@ -1,9 +1,10 @@
 /** @vitest-environment jsdom */
+import { grantKunWardrobeItems } from '../../../../../kun/src/test-support/wardrobe-simulator'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  KUN_AVATAR_PRESETS, createKunWardrobe, grantKunWardrobeItems, type KunWardrobe, type KunWardrobeDrop, type RoomAvatarReference
+  KUN_AVATAR_PRESETS, createKunWardrobe, type KunWardrobe, type KunWardrobeDrop, type RoomAvatarReference
 } from '@shared/rooms-api'
 
 const mocks = vi.hoisted(() => ({ request: vi.fn() }))

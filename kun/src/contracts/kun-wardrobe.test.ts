@@ -1,12 +1,8 @@
+import { KUN_WARDROBE_RULES, exchangeKunWardrobeItem, grantKunWardrobeItems, rollKunWardrobeDrop } from '../test-support/wardrobe-simulator.js'
 import { describe, expect, it } from 'vitest'
-import {
-  KUN_WARDROBE_RULES, createKunWardrobe, exchangeKunWardrobeItem, grantKunWardrobeItems, kunWardrobeItems,
-  KUN_WARDROBE_HISTORY_LIMIT, KunWardrobeSchema, kunWardrobeAcceptsSource, kunWardrobeLitCards, kunWardrobeLocalDate,
-  kunWardrobeMissingParts, kunWardrobeProgress, rollKunWardrobeDrop, updateKunWardrobeSettings,
-  type KunWardrobe
-} from './kun-wardrobe.js'
+import { createKunWardrobe, kunWardrobeItems, KUN_WARDROBE_HISTORY_LIMIT, KunWardrobeSchema, kunWardrobeAcceptsSource, kunWardrobeLitCards, kunWardrobeLocalDate, kunWardrobeMissingParts, kunWardrobeProgress, updateKunWardrobeSettings, type KunWardrobe } from './kun-wardrobe.js'
 import { KUN_AVATAR_PRESETS } from './kun-avatar-presets.js'
-import { openKunWardrobeDrop } from './kun-wardrobe-open.js'
+import { openKunWardrobeDrop } from '../test-support/wardrobe-open-simulator.js'
 
 const at = (minutes: number) => new Date(Date.UTC(2026, 9, 9, 10, minutes))
 const roll = (wardrobe: KunWardrobe, index: number, now = at(index * 2)) =>

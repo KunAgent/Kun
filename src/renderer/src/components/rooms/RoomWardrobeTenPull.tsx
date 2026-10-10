@@ -1,7 +1,8 @@
+import { useWardrobe } from './room-wardrobe'
 import type { CSSProperties, ReactElement } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { KUN_AVATAR_RARITIES, KUN_WARDROBE_RULES, type KunAvatarRarity, type KunWardrobeDrop } from '@shared/rooms-api'
+import { KUN_AVATAR_RARITIES, kunWardrobeRules, type KunAvatarRarity, type KunWardrobeDrop } from '@shared/rooms-api'
 import { WardrobeBottleGlow, WardrobeBottleIcon } from './RoomWardrobeBottle'
 import { WardrobeResultCard, wardrobeDropDetails } from './RoomWardrobeResultCard'
 
@@ -30,7 +31,8 @@ export function WardrobeTenGrid({ drops, phase, lit, open, language, onCard }: {
 }): ReactElement {
   const dealt = phase === 'reveal' || phase === 'table' || phase === 'done'
   const waiting = phase === 'table' || phase === 'done'
-  const slots = drops.length ? drops : Array.from({ length: KUN_WARDROBE_RULES.tenPull }, () => undefined)
+  const size = kunWardrobeRules(useWardrobe().wardrobe).tenPull
+  const slots = drops.length ? drops : Array.from({ length: size }, () => undefined)
   return <div className="kun-gacha-grid">
     {slots.map((drop, index) => {
       const faceUp = open.has(index)

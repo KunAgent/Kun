@@ -1,3 +1,5 @@
+import { EngagementSync } from '../engagement/service'
+import { guestStorage } from '../engagement/guest-storage'
 import type { ArtAccountAccess } from '../art-assets/account-access'
 import type { KunAccountState } from '../../shared/kun-account'
 import { writeFile } from 'node:fs/promises'
@@ -36,6 +38,7 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
   // Created lazily: startup never prompts for the OS credential store.
   let service: KunAccountService | undefined
   let wardrobe: AccountWardrobeSync | undefined
+  let engagement: EngagementSync | undefined
   function account(): KunAccountService {
     if (service) return service
     wardrobe = new AccountWardrobeSync({
@@ -62,7 +65,14 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
       },
       focus: () => { const window = getMainWindow(); if (window && !window.isDestroyed()) revealDialogParent(window) }
     })
-    app.once('before-quit', () => { service?.dispose(); wardrobe?.dispose() })
+    engagement = new EngagementSync({ account: {
+      getState: () => account().getState(), accessToken: force => account().accessToken(force), expire: () => account().expire(),
+      onState: listener => { listeners.add(listener); return () => { listeners.delete(listener) } }
+    }, runtime: runtimeRequest, fetch: (url, options) => net.fetch(url instanceof URL ? url.href : String(url), options),
+      storage: guestStorage(join(app.getPath('userData'), 'kun-account', 'engagement-guest.v1.json')),
+      log: code => console.warn('[kun-engagement]', code) })
+    engagement.start()
+    app.once('before-quit', () => { service?.dispose(); wardrobe?.dispose(); engagement?.dispose() })
     return service
   }
   const sync = (): AccountWardrobeSync => { account(); return wardrobe! }
@@ -94,7 +104,7 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
     savedPosterPath = result.filePath
     return { status: 'saved', path: result.filePath }
   })
-  handle(wardrobeChannels.sync, () => sync().sync())
+  handle(wardrobeChannels.sync, async () => { account(); await engagement?.sync(); return sync().sync() })
   handle(wardrobeChannels.open, (input) => { const list = ids(input, 10); return sync().change((economy) => economy.open(list)) })
   handle(wardrobeChannels.stash, (input) => { const list = ids(input, 200); return sync().change((economy) => economy.stash(list)) })
   handle(wardrobeChannels.seen, (input) => { const list = ids(input, 300); return sync().change((economy) => economy.seen(list)) })

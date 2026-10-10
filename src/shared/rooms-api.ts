@@ -2,7 +2,6 @@
 // bundling runtime implementation code in the renderer.
 export * from '../../kun/src/contracts/kun-avatar-catalog'
 export * from '../../kun/src/contracts/kun-wardrobe'
-export * from '../../kun/src/contracts/kun-wardrobe-open'
 export { KUN_AVATAR_PRESETS, KUN_AVATAR_CARD_SCENES, ROOM_BUILTIN_AVATAR_IDS } from '../../kun/src/contracts/kun-avatar-presets'
 export type { KunAvatarPresetId } from '../../kun/src/contracts/kun-avatar-presets'
 export type { RoomContentReference, RoomAvatarReference, RoomContentResult,

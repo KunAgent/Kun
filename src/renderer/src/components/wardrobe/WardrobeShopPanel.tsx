@@ -1,7 +1,7 @@
 import { useState, type ReactElement } from 'react'
 import { Feather } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { KUN_AVATAR_RARITY_LABELS, KUN_WARDROBE_RULES, type KunAvatarRarity, type KunWardrobe } from '@shared/rooms-api'
+import { KUN_AVATAR_RARITY_LABELS, kunWardrobeRules, type KunAvatarRarity, type KunWardrobe } from '@shared/rooms-api'
 import type { KunShopOffer } from '@shared/kun-account-economy'
 import { WardrobeBottleIcon } from '../rooms/RoomWardrobeBottle'
 import { accountResult } from '../rooms/room-wardrobe'
@@ -18,7 +18,7 @@ export function WardrobeShopPanel({ wardrobe, language, onBought, onBrowse }: {
   const [buying, setBuying] = useState<string | null>(null)
   const [failure, setFailure] = useState('')
   const feathers = shop.value?.feathers ?? wardrobe.feathers
-  const shelf = shop.value?.shelf ?? { pending: wardrobe.pending.length, limit: KUN_WARDROBE_RULES.shelfLimit }
+  const shelf = shop.value?.shelf ?? { pending: wardrobe.pending.length, limit: kunWardrobeRules(wardrobe).shelfLimit }
 
   const buy = async (offer: KunShopOffer) => {
     setBuying(offer.id)
@@ -75,10 +75,10 @@ export function WardrobeShopPanel({ wardrobe, language, onBought, onBrowse }: {
       <span><strong>{t('wardrobeShopExchangeTitle')}</strong><small>{t('wardrobeShopExchangeBody')}</small></span>
       <span className="kun-wardrobe-shop-prices">
         {RARITIES.map((rarity) => <span key={rarity} className="rooms-wardrobe-rarity" data-rarity={rarity}>
-          <em>{KUN_AVATAR_RARITY_LABELS[rarity][language]}</em><b>{KUN_WARDROBE_RULES.exchangeFeathers[rarity]}</b></span>)}
+          <em>{KUN_AVATAR_RARITY_LABELS[rarity][language]}</em><b>{kunWardrobeRules(wardrobe).exchangeFeathers[rarity]}</b></span>)}
       </span>
       <button type="button" onClick={onBrowse}>{t('wardrobeShopBrowse')}</button>
     </section>
-    <p className="kun-wardrobe-shop-note">{t('wardrobeShopWhere', { values: RARITIES.map((rarity) => KUN_WARDROBE_RULES.duplicateFeathers[rarity]).join(' / ') })}</p>
+    <p className="kun-wardrobe-shop-note">{t('wardrobeShopWhere', { values: RARITIES.map((rarity) => kunWardrobeRules(wardrobe).duplicateFeathers[rarity]).join(' / ') })}</p>
   </div>
 }

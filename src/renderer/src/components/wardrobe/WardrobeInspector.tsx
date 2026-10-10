@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
-  KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITY_LABELS, KUN_WARDROBE_STARTER_PACK, KUN_WARDROBE_RULES, kunAvatarRarity,
+  KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITY_LABELS, KUN_WARDROBE_STARTER_PACK, kunWardrobeRules, kunAvatarRarity,
   kunWardrobeItemKey, kunWardrobeMissingParts, kunWardrobePartKeys,
   type KunAvatarAccessoryCategory, type KunAvatarParts, type KunAvatarRarity, type KunWardrobe
 } from '@shared/rooms-api'
@@ -53,11 +53,11 @@ export function WardrobeInspector({ selection, wardrobe, unlockAll, guest = fals
           text: t('wardrobeAccountGuestItemHint'), meta: t('wardrobePageSecret'), action: t('wardrobeAccountGuestLocked'),
           primary: false, enabled: false, locked: true, run: () => undefined }
       } else {
-        const price = KUN_WARDROBE_RULES.exchangeFeathers[part.rarity]
+        const price = kunWardrobeRules(wardrobe).exchangeFeathers[part.rarity]
         // Until it is found the item keeps its secret here too; trading feathers reveals it.
         sheet = { rarity: part.rarity, art: <WardrobeUnknownItem size={42} />, title: t('roomsWardrobeUnknownItem'), chip: rarity,
           text: t('roomsWardrobeExchangeHint', { price, missing: Math.max(0, price - wardrobe.feathers) }), meta: t('wardrobePageSecret'),
-          action: `${t('roomsWardrobeExchange')} · ${price}`, primary: true, enabled: wardrobe.feathers >= price, locked: true,
+          action: `${t('roomsWardrobeExchange')} · ${price}`, primary: true, enabled: Boolean(wardrobe.progress) && wardrobe.feathers >= price, locked: true,
           run: () => onExchange(selection.key) }
       }
     }

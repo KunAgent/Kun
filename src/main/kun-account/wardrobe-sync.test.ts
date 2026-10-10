@@ -32,7 +32,7 @@ describe('account wardrobe mirror', () => {
     sync.accountChanged(signedIn())
     sync.accountChanged(signedIn())
     await settled()
-    expect(runtimeCalls[0]).toEqual(['/v1/rooms/wardrobe/account/attach', 'POST', { userId: 'user-1', wardrobe: { feathers: 1 }, look: { color: 'mint' } }])
+    expect(runtimeCalls[0]).toEqual(['/v1/rooms/wardrobe/account/attach', 'POST', { userId: 'user-1', serverRevision: 3, wardrobe: { feathers: 1 }, look: { color: 'mint' } }])
     expect(runtimeCalls.filter(([path]) => path.endsWith('/attach'))).toHaveLength(1)
     sync.accountChanged({ ...signedIn(), status: 'error', error: 'network' })
     sync.accountChanged(signedOut)
@@ -52,19 +52,11 @@ describe('account wardrobe mirror', () => {
     sync.dispose()
   })
 
-  it('reports queued turns, acknowledges refusals, keeps the rest during an outage', async () => {
-    const activity = vi.fn()
-      .mockResolvedValueOnce({ counted: true, drop: { id: 'drop-1' }, ...snapshot() })
-      .mockRejectedValueOnce(new EconomyError('activity_invalid'))
-      .mockRejectedValueOnce(new EconomyError('network'))
-    const { sync, runtimeCalls, settled } = setup({ economy: { activity }, activity: [
-      { runId: 'run-1', source: 'room', roomId: 'room-a', messageId: 'm' }, { runId: 'run-2', source: 'code', threadId: 't' },
-      { runId: 'run-3', source: 'room' }] })
-    sync.accountChanged(signedIn())
-    await settled()
-    expect(activity.mock.calls[0]![0]).toEqual({ runId: 'run-1', source: 'room', context: { roomId: 'room-a', messageId: 'm' } })
-    const ack = runtimeCalls.find(([path]) => path.endsWith('/ack'))!
-    expect(ack[2]).toEqual({ userId: 'user-1', runIds: ['run-1', 'run-2'], drops: [{ runId: 'run-1', dropId: 'drop-1' }], wardrobe: { feathers: 1 } })
+  it('never submits legacy activities without start tickets', async () => {
+    const activity=vi.fn(),{sync,settled,runtimeCalls}=setup({economy:{activity},activity:[{runId:'old',source:'code'}]})
+    sync.accountChanged(signedIn());await settled()
+    expect(activity).not.toHaveBeenCalled()
+    expect(runtimeCalls.some(([p])=>p.endsWith('/activity'))).toBe(false)
     sync.dispose()
   })
 

@@ -1,3 +1,4 @@
+import { registerEngagementRoutes } from './register-engagement-routes.js'
 import { installArtCatalog } from '../../contracts/kun-art-catalog.js'
 import { z } from 'zod'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
@@ -7,7 +8,7 @@ import {
   updateRoomWardrobeSettings, wardrobeUnlockAll
 } from '../../rooms/room-wardrobe-service.js'
 import {
-  AckWardrobeActivityRequest, AttachWardrobeRequest, ackWardrobeActivity, attachAccountWardrobe, detachAccountWardrobe, listWardrobeActivity
+  AttachWardrobeRequest, attachAccountWardrobe, detachAccountWardrobe
 } from '../../rooms/room-wardrobe-account.js'
 import { readJsonBody } from '../read-json-body.js'
 
@@ -25,6 +26,7 @@ const ExchangeRequest = z.object({ ...Mutation, key: z.string().regex(/^(headwea
 
 /** The wardrobe is one row per user; drops are produced by finished Agent and Code turns, never by these routes. */
 export function registerRoomWardrobeRoutes(add: Add) {
+  registerEngagementRoutes(add)
   add('POST', '/v1/rooms/wardrobe/art-catalog', async (rooms, request) => {
     const raw = await readJsonBody(request)
     if (!raw.ok) return raw.response
@@ -65,13 +67,6 @@ export function registerRoomWardrobeRoutes(add: Add) {
     return rooms.exclusive(() => attachAccountWardrobe(rooms.service.store, input))
   })
   add('POST', '/v1/rooms/wardrobe/account/detach', async (rooms) => rooms.exclusive(() => detachAccountWardrobe(rooms.service.store)))
-  add('GET', '/v1/rooms/wardrobe/account/activity', async (rooms) => listWardrobeActivity(rooms.service.store))
-  add('POST', '/v1/rooms/wardrobe/account/activity/ack', async (rooms, request) => {
-    const raw = await readJsonBody(request)
-    if (!raw.ok) return raw.response
-    const input = AckWardrobeActivityRequest.parse(raw.value)
-    return rooms.exclusive(() => ackWardrobeActivity(rooms.service.store, input))
-  })
   add('POST', '/v1/rooms/wardrobe/exchange', async (rooms, request) => {
     const raw = await readJsonBody(request)
     if (!raw.ok) return raw.response

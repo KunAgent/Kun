@@ -1,3 +1,4 @@
+import { readQueue } from './engagement/queue.js'
 /**
  * The main process keeps the local wardrobe in step with the Kun account: attach replaces it with
  * the account's snapshot (and wears the account look), detach returns to the signed-out wardrobe,
@@ -19,14 +20,8 @@ export class RoomWardrobeAccountError extends Error {}
 
 const UserId = z.string().min(1).max(64)
 export const AttachWardrobeRequest = z.object({
-  userId: UserId, wardrobe: z.record(z.string(), z.unknown()), look: z.record(z.string(), z.unknown()).nullable().optional()
+  userId: UserId, serverRevision: z.number().optional(), wardrobe: z.record(z.string(), z.unknown()), look: z.record(z.string(), z.unknown()).nullable().optional()
 }).strict()
-export const AckWardrobeActivityRequest = z.object({
-  userId: UserId, wardrobe: z.record(z.string(), z.unknown()),
-  runIds: z.array(z.string().min(1).max(256)).max(50),
-  drops: z.array(z.object({ runId: z.string().min(1).max(256), dropId: z.string().min(1).max(128) }).strict()).max(50)
-}).strict()
-
 const trimDrop = (drop: unknown): unknown => {
   if (!drop || typeof drop !== 'object') return drop
   const value = drop as Record<string, unknown>
@@ -54,13 +49,14 @@ type Event = { roomId: string; kind: string; payload: unknown }
 /** One commit for the mirror, the account state (built from the state current at commit time) and the look. */
 async function replace(store: RoomStore, input: {
   wardrobe: KunWardrobe; avatar?: RoomAvatarReference | null
-  build(current: WardrobeAccountState | null): { state: WardrobeAccountState; events?: Event[] }
+  build(current: WardrobeAccountState | null): { state: WardrobeAccountState; events?: Event[]; skip?:boolean }
 }) {
   for (let attempt = 0; attempt < 5; attempt++) {
     const [wardrobeRow, accountRow, profile] = await Promise.all([store.get(WARDROBE_KIND, WARDROBE_ID),
       readWardrobeAccountState(store), store.get<RoomUserProfile>('room_user_profile', WARDROBE_ID)])
     const avatar = input.avatar && !same(profile?.value.avatar, input.avatar) ? input.avatar : null
     const built = input.build(accountRow.state)
+    if (built.skip) return readRoomWardrobe(store)
     try {
       await store.commit({ requestId: 'wardrobe-account:' + randomUUID(), checks: [
         { kind: WARDROBE_KIND, id: WARDROBE_ID, expectedRevision: wardrobeRow?.revision ?? null },
@@ -89,12 +85,20 @@ function assertAccountMirror(): void {
 export async function attachAccountWardrobe(store: RoomStore, input: z.infer<typeof AttachWardrobeRequest>) {
   assertAccountMirror()
   await readRoomWardrobe(store)
+  const snapshot = mirrorWardrobe(input.wardrobe)
+  const entries=(await readQueue(store)).state.entries.filter(e=>e.actor==='u:'+input.userId)
+  for(const drop of [...snapshot.pending,...snapshot.history]) {
+    const entry=entries.find(e=>e.serverRunId===drop.runId)
+    if(entry?.receiptReason && entry.receiptResetAt) drop.activityReceipt={reason:entry.receiptReason,resetAt:entry.receiptResetAt}
+    if(entry) for(const key of ['roomId','threadId','messageId','sourceLabel'] as const) if(entry[key]) drop[key]=entry[key]
+  }
   return replace(store, {
-    wardrobe: mirrorWardrobe(input.wardrobe), avatar: accountAvatar(input.look),
+    wardrobe: snapshot, avatar: accountAvatar(input.look),
     build: (current) => {
       const sameUser = current?.mode === 'account' && current.userId === input.userId
-      return { state: { mode: 'account', userId: input.userId,
-        attachedAt: sameUser && current.attachedAt ? current.attachedAt : new Date().toISOString(), activity: sameUser ? current.activity : [] } }
+      if (sameUser && (current.serverRevision??0)>(input.serverRevision??0)) return {state:current,skip:true}
+      return { state: { mode: 'account', userId: input.userId, serverRevision:input.serverRevision,
+        attachedAt: sameUser && current.attachedAt ? current.attachedAt : new Date().toISOString(), activity: [] } }
     }
   })
 }
@@ -107,30 +111,4 @@ export async function detachAccountWardrobe(store: RoomStore) {
   const wardrobe = guestWardrobe(detail.wardrobe)
   const profile = await store.get<RoomUserProfile>('room_user_profile', WARDROBE_ID)
   return replace(store, { wardrobe, avatar: strippedLook(profile?.value.avatar, wardrobe), build: () => ({ state: { mode: 'guest', activity: [] } }) })
-}
-
-export async function listWardrobeActivity(store: RoomStore) {
-  const { state } = await readWardrobeAccountState(store)
-  return state?.mode === 'account' ? { userId: state.userId ?? null, activity: state.activity } : { userId: null, activity: [] }
-}
-
-/**
- * Removes reported turns and stores the snapshot that followed them. Each new drop is announced in
- * the conversation or Code task it came from, exactly as a local drop was.
- */
-export async function ackWardrobeActivity(store: RoomStore, input: z.infer<typeof AckWardrobeActivityRequest>) {
-  assertAccountMirror()
-  const done = new Set(input.runIds)
-  return replace(store, { wardrobe: mirrorWardrobe(input.wardrobe), build: (current) => {
-    // A different account signed in meanwhile; its own sync reports its own turns.
-    if (current?.mode !== 'account' || current.userId !== input.userId) throw new RoomWardrobeAccountError('wardrobe_account_changed')
-    const queued = new Map(current.activity.map((entry) => [entry.runId, entry]))
-    const events = input.drops.flatMap(({ runId, dropId }) => {
-      const turn = queued.get(runId)
-      if (!turn) return []
-      return [{ roomId: turn.roomId ?? WARDROBE_DIRECTORY, kind: 'wardrobe.dropped', payload: { dropId, runId,
-        ...(turn.messageId ? { messageId: turn.messageId } : {}), ...(turn.threadId ? { threadId: turn.threadId } : {}) } }]
-    })
-    return { state: { ...current, activity: current.activity.filter((entry) => !done.has(entry.runId)) }, events }
-  } })
 }

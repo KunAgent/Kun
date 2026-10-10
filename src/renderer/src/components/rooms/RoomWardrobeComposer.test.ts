@@ -1,11 +1,12 @@
+import { grantKunWardrobeItems } from '../../../../../kun/src/test-support/wardrobe-simulator'
 import { createElement, useState, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS, createKunWardrobe, grantKunWardrobeItems, type KunWardrobe, type RoomAvatarReference
+  KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS, createKunWardrobe, type KunWardrobe, type RoomAvatarReference
 } from '@shared/rooms-api'
 import { RoomAvatarComposer } from './RoomAvatarComposer'
-import { wearWardrobeDrop } from './room-wardrobe'
+import { wearWardrobeDrop,acceptWardrobe } from './room-wardrobe'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'en' },
   t: (key: string, values?: Record<string, unknown>) => values ? `${key}:${Object.values(values).join(',')}` : key }) }))
@@ -19,7 +20,7 @@ const option = (label: string) => options().find((node) => node.props['aria-labe
 const preview = () => renderer.root.findByType(RoomAvatarComposer).props.avatar as RoomAvatarReference | null | undefined
 const changeCategory = (category: string) => act(() => renderer.root.findByProps({ 'data-avatar-tab': category }).props.onClick())
 async function mount(node: ReactElement) { await act(async () => { renderer = create(node) }) }
-beforeEach(() => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true) })
+beforeEach(() => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);acceptWardrobe({wardrobe:starter,revision:1,mode:'account'}) })
 afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.unstubAllGlobals() })
 
 const starter: KunWardrobe = grantKunWardrobeItems(createKunWardrobe(1), ['glasses/square', 'outfit/black-hoodie', 'headwear/headset'])

@@ -1,4 +1,5 @@
 {
+  "roomsWardrobeResetAt": "Daily quota resets at {{time}}",
   "roomsContent": "Content",
   "roomsContentUnavailable": "Content is unavailable or no longer belongs to this room.",
   "roomsContentRetry": "Retry",

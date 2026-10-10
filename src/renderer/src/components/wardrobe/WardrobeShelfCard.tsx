@@ -1,24 +1,24 @@
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { KUN_WARDROBE_RULES, kunWardrobeLocalDate, kunWardrobeProgress, type KunWardrobe } from '@shared/rooms-api'
+import { kunWardrobeRules, kunWardrobeProgress, type KunWardrobe } from '@shared/rooms-api'
 import { WardrobeBottleIcon } from '../rooms/RoomWardrobeBottle'
 import { wardrobeShelfStatus } from '../rooms/RoomWardrobeShelf'
 import { wardrobeSettings, wardrobeShelf } from '../rooms/room-wardrobe'
 
-const TEN = KUN_WARDROBE_RULES.tenPull
 
 /** Unopened bottles standing on two planks of five, today's drops, and the two ways to open them. */
 export function WardrobeShelfCard({ wardrobe, busy, onOpenOne, onOpenTen }: {
   wardrobe: KunWardrobe; busy: boolean; onOpenOne: () => void; onOpenTen: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
+  const TEN = kunWardrobeRules(wardrobe).tenPull
   const count = wardrobeShelf(wardrobe).length
-  const ready = count >= TEN
+  const ready = TEN > 0 && count >= TEN
   const progress = kunWardrobeProgress(wardrobe)
   const settings = wardrobeSettings(wardrobe)
-  const cap = KUN_WARDROBE_RULES.dailyCap
-  const today = wardrobe.daily.date === kunWardrobeLocalDate(new Date()) ? wardrobe.daily.drops : 0
-  const next = !settings.drops ? t('roomsWardrobeDropsOff') : today >= cap ? t('roomsWardrobeDailyFull')
+  const cap = kunWardrobeRules(wardrobe).dailyCap
+  const today = wardrobe.progress?.dailyDrops ?? 0
+  const next = !wardrobe.progress ? t('roomsLoading') : !settings.drops ? t('roomsWardrobeDropsOff') : today >= cap ? t('roomsWardrobeDailyFull')
     : today > 0 ? t('roomsWardrobeFirstDone', { count: progress.untilPity }) : t('roomsWardrobeFirstPending')
   return <section className="kun-wardrobe-shelf" data-ready={ready || undefined} data-wardrobe-shelf={count} aria-label={t('roomsShelfTitle')}>
     <div className="kun-wardrobe-shelf-head">
@@ -27,7 +27,7 @@ export function WardrobeShelfCard({ wardrobe, busy, onOpenOne, onOpenTen }: {
         <span><strong>{t('roomsShelfTitle')}</strong><b>{count}</b></span>
         <small>{wardrobeShelfStatus(wardrobe, t)}</small>
       </span>
-      <span className="kun-wardrobe-today" title={t('roomsWardrobeTodayCount', { count: today, cap })}>
+      <span className="kun-wardrobe-today" title={wardrobe.progress ? t('roomsWardrobeResetAt', { time:new Date(wardrobe.progress.resetAt).toLocaleString(undefined,{timeZone:wardrobe.progress.timeZone}) }) : t('roomsLoading')}>
         {t('roomsWardrobeToday')} {today} / {cap}
         <span aria-hidden="true">{Array.from({ length: cap }, (_, index) => <i key={index} data-on={index < today || undefined} />)}</span>
       </span>

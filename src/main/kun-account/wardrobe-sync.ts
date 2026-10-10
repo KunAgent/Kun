@@ -4,9 +4,7 @@ import { EconomyError, economyErrorCode, type EconomyClient, type EconomyJson } 
 
 export type RuntimeCall = (path: string, method?: string, body?: string) => Promise<{ ok: boolean; status: number; body: string }>
 type Mirror = { wardrobe: unknown; revision: number; mode: 'account' }
-type Activity = { runId: string; source: 'room' | 'code'; roomId?: string; threadId?: string; messageId?: string; sourceLabel?: string }
 
-const LOCAL = new Set(['anonymous', 'expired', 'network', 'service', 'runtime'])
 const ACCOUNT_PATH = '/v1/rooms/wardrobe/account'
 
 /**
@@ -81,7 +79,7 @@ export class AccountWardrobeSync {
   private async mirror(snapshot: EconomyJson, withLook: boolean): Promise<Mirror> {
     if (!this.userId) throw new EconomyError('anonymous')
     return await this.runtime(`${ACCOUNT_PATH}/attach`, 'POST', {
-      userId: this.userId, wardrobe: snapshot.wardrobe, ...(withLook ? { look: snapshot.look ?? null } : {}) }) as Mirror
+      userId: this.userId, wardrobe: snapshot.progress ? { ...(snapshot.wardrobe as object),progress:snapshot.progress } : snapshot.wardrobe, serverRevision: snapshot.revision, ...(withLook ? { look: snapshot.look ?? null } : {}) }) as Mirror
   }
 
   private async attach(): Promise<void> {
@@ -93,7 +91,6 @@ export class AccountWardrobeSync {
     this.attached = true
     // A first sign-in keeps the look already worn on this machine, as far as the account owns it.
     if (!snapshot.look) await this.pushLocalLook().catch(() => undefined)
-    await this.drain()
   }
 
   private async pushLocalLook(): Promise<void> {
@@ -103,30 +100,13 @@ export class AccountWardrobeSync {
     await this.mirror(await this.deps.economy.setLook(avatar.parts as never), false)
   }
 
-  /** Reports queued turns in order; a rule refusal drops that turn, an outage keeps the rest for later. */
-  private async drain(): Promise<void> {
-    const userId = this.userId
+  /** Old queues have no start tickets and are deliberately never submitted. */
+  private async drain(): Promise<void> { await this.refreshSnapshot() }
+  private async refreshSnapshot(): Promise<void> {
+    const userId=this.userId
     if (!userId || !this.attached) return
-    const listed = await this.runtime(`${ACCOUNT_PATH}/activity`) as { userId: string | null; activity: Activity[] }
-    if (listed.userId !== userId || !listed.activity.length) return
-    const runIds: string[] = [], drops: Array<{ runId: string; dropId: string }> = []
-    let last: EconomyJson | null = null
-    for (const entry of listed.activity) {
-      const context = Object.fromEntries((['roomId', 'threadId', 'messageId', 'sourceLabel'] as const)
-        .flatMap((key) => entry[key] ? [[key, entry[key]!]] : []))
-      try {
-        last = await this.deps.economy.activity({ runId: entry.runId, source: entry.source, context })
-        runIds.push(entry.runId)
-        const drop = last.counted ? (last.drop as { id?: string } | null) : null
-        if (drop?.id) drops.push({ runId: entry.runId, dropId: drop.id })
-      } catch (error) {
-        if (LOCAL.has(economyErrorCode(error))) break
-        runIds.push(entry.runId)
-      }
-    }
-    if (!runIds.length || this.userId !== userId) return
-    const snapshot = last ?? await this.deps.economy.wardrobe()
-    await this.runtime(`${ACCOUNT_PATH}/activity/ack`, 'POST', { userId, runIds, drops, wardrobe: snapshot.wardrobe })
+    const snapshot=await this.deps.economy.wardrobe()
+    if (this.userId===userId) await this.mirror(snapshot, false)
   }
 
   /** The renderer saw a queued turn; one report at a time is enough. */
@@ -134,7 +114,7 @@ export class AccountWardrobeSync {
     if (!this.userId) return Promise.resolve({ ok: true, value: null })
     if (this.draining) return Promise.resolve({ ok: true, value: null })
     this.draining = true
-    return this.run(() => this.attached ? this.drain() : this.attach())
+    return this.run(() => this.attached ? Promise.resolve() : this.attach())
       .then(() => ({ ok: true as const, value: null }), (error) => ({ ok: false as const, code: economyErrorCode(error) }))
       .finally(() => { this.draining = false })
   }
@@ -143,7 +123,9 @@ export class AccountWardrobeSync {
   change<T>(work: (economy: EconomyClient) => Promise<EconomyJson>, options: { look?: boolean } = {}): Promise<KunEconomyResult<T>> {
     return this.run(async () => {
       if (!this.userId) throw new EconomyError('anonymous')
+      const userId=this.userId
       const result = await work(this.deps.economy)
+      if (this.userId!==userId) throw new EconomyError('anonymous')
       if (!result.wardrobe) return { ok: true as const, value: result as T }
       const mirror = await this.mirror(result, Boolean(options.look))
       const { wardrobe: _wardrobe, look: _look, revision: _revision, catalogVersion: _catalog, ...rest } = result

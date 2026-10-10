@@ -1,5 +1,6 @@
+import { grantKunWardrobeItems } from '../../../../../kun/src/test-support/wardrobe-simulator'
 import { describe, expect, it } from 'vitest'
-import { KUN_AVATAR_PRESETS, KUN_AVATAR_RARITIES, createKunWardrobe, grantKunWardrobeItems } from '@shared/rooms-api'
+import { KUN_AVATAR_PRESETS, KUN_AVATAR_RARITIES, createKunWardrobe } from '@shared/rooms-api'
 import { toggleWardrobeItem, wardrobeCategoryCounts, wardrobeRoleCards, wardrobeTiles, wardrobeUnseen } from './wardrobe-page-model'
 
 const wardrobe = grantKunWardrobeItems(createKunWardrobe(1), ['glasses/square', 'headwear/pilot-cap', 'outfit/black-hoodie'])

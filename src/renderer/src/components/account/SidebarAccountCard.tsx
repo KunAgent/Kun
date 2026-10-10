@@ -2,7 +2,7 @@ import type { ReactElement, Ref } from 'react'
 import { ChevronsUpDown, LogIn } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { KunAccountState } from '@shared/kun-account'
-import { KUN_WARDROBE_RULES, kunWardrobeItems } from '@shared/rooms-api'
+import { kunWardrobeRules, kunWardrobeItems } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
 import { RoomAvatar } from '../rooms/RoomAvatar'
 import { WardrobeBottleIcon } from '../rooms/RoomWardrobeBottle'
@@ -32,7 +32,7 @@ export function useAccountWardrobeSummary() {
   const bottles = wardrobeShelf(wardrobe).length
   const items = kunWardrobeItems()
   const owned = wardrobe ? (unlockAll ? items.length : items.filter((item) => (wardrobe.items[item.key] ?? 0) > 0).length) : null
-  return { loaded: Boolean(wardrobe), bottles, ready: bottles >= KUN_WARDROBE_RULES.tenPull, feathers: wardrobe?.feathers ?? null, owned, mode }
+  return { loaded: Boolean(wardrobe), bottles, ready: Boolean(wardrobe?.progress?.tenPull) && bottles >= kunWardrobeRules(wardrobe).tenPull, feathers: wardrobe?.feathers ?? null, owned, mode }
 }
 
 /** Bottles waiting on the shelf, gold once a ten-pull is ready. */

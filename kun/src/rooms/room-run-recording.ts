@@ -11,7 +11,7 @@ import { RoomStoreConflictError } from './room-store.js'
 import { captureRoomTurnUsageBaseline, readRoomTurnUsage } from './room-run-usage.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
 import { roomRunSegmentMessageId } from './room-run-segments.js'
-import { countRoomWardrobeTurn } from './room-wardrobe-service.js'
+import { beginActivity, finishActivity } from './engagement/queue.js'
 
 export const roomRunId = (roomId: string, clientRequestId: string, triage = false): string =>
   'run-' + createHash('sha256').update(JSON.stringify([roomId, clientRequestId, triage])).digest('hex').slice(0, 40)
@@ -135,15 +135,14 @@ export async function observeRecordedRoomTurn(deps: RoomRuntimeDeps, thread: Thr
     } else if (!row.value.usage) patch.usageStatus = accounting.usageStatus
   }
   await updateRoomRun(deps.store, id, patch)
-  // A finished conversation turn may drop a wardrobe bottle; tasks, memory jobs and IM runs never do.
-  if (turn.status === 'completed' && turn.finishedAt && row.value.participantAgentId && !row.value.taskId &&
-    !row.value.integrationId && WARDROBE_PHASES.has(row.value.phase)) {
+  if (row.value.participantAgentId && !row.value.taskId && !row.value.integrationId &&
+    WARDROBE_PHASES.has(row.value.phase) && !turn.messageSource) {
     try {
-      await countRoomWardrobeTurn(deps.store, { source: 'room', roomId: row.value.roomId, runId: id,
-        messageId: row.value.publishedMessageId, finishedAt: turn.finishedAt, sourceLabel: row.value.memberLabel })
-    } catch (error) {
-      console.warn('[kun] wardrobe drop skipped:', error instanceof Error ? error.message : String(error))
-    }
+      if (turn.status === 'running') await beginActivity(deps.store, {source:'room',roomId:row.value.roomId,runId:id,
+        sourceLabel:row.value.memberLabel}, turn.startedAt ?? new Date().toISOString())
+      else if (['completed','failed','aborted'].includes(turn.status)) await finishActivity(deps.store,id,
+        turn.status === 'aborted' ? 'cancelled' : turn.status as 'completed'|'failed', row.value.publishedMessageId)
+    } catch { console.warn('[kun] engagement lifecycle unavailable') }
   }
 }
 const WARDROBE_PHASES = new Set<RoomRunRecord['phase']>(['conversation', 'discussion', 'coordination'])

@@ -7,7 +7,7 @@ import {
   assertRoomWardrobeAllows, countRoomWardrobeTurn, markRoomWardrobeSeen, readRoomWardrobe
 } from './room-wardrobe-service.js'
 import {
-  accountAvatar, ackWardrobeActivity, attachAccountWardrobe, detachAccountWardrobe, listWardrobeActivity
+  accountAvatar, attachAccountWardrobe, detachAccountWardrobe
 } from './room-wardrobe-account.js'
 import { roomFingerprint } from './room-service.js'
 import { KUN_WARDROBE_STARTER_PACK } from '../contracts/kun-wardrobe.js'
@@ -52,7 +52,7 @@ it('turns a locally collected wardrobe into the signed-out starter wardrobe once
   expect((await readRoomWardrobe(store)).revision).toBe(detail.revision)
 })
 
-it('shows a guest drop hint without granting rewards and denies guest appearance changes', async () => {
+it('does not generate a guest hint without a server receipt and denies guest appearance changes', async () => {
   const store = await openStore()
   const context = { roomId: 'room-a', runId: 'guest-turn', finishedAt: now() }
   expect(await countRoomWardrobeTurn(store, context)).toBeNull()
@@ -62,8 +62,8 @@ it('shows a guest drop hint without granting rewards and denies guest appearance
   expect(guest.wardrobe.items).toEqual({})
   expect(guest.wardrobe.roles).toEqual([])
   expect(guest.wardrobe.feathers).toBe(0)
-  expect(guest.guestHints).toHaveLength(1)
-  expect((await store.events('*')).filter(e => e.kind === 'wardrobe.guest_hint')).toHaveLength(1)
+  expect(guest.guestHints).toHaveLength(0)
+  expect((await store.events('*')).filter(e => e.kind === 'wardrobe.guest_hint')).toHaveLength(0)
   await expect(assertRoomWardrobeAllows(store, [composed({ headwear: 'headset' })], { self: true })).rejects.toThrow('wardrobe_login_required')
   await expect(assertRoomWardrobeAllows(store, [composed({})], { self: true })).rejects.toThrow('wardrobe_login_required')
   await expect(assertRoomWardrobeAllows(store, [null], { self: true })).rejects.toThrow('wardrobe_login_required')
@@ -86,24 +86,7 @@ it('mirrors the account, wears its look, queues turns and refuses local changes'
   expect(await countRoomWardrobeTurn(store, context)).toBeNull()
   expect(await countRoomWardrobeTurn(store, context)).toBeNull()
   await countRoomWardrobeTurn(store, { source: 'code', threadId: 'thread-1', runId: 'code-turn-1', finishedAt: now() })
-  const queued = await listWardrobeActivity(store)
-  expect(queued.userId).toBe('user-1')
-  expect(queued.activity.map((entry) => [entry.runId, entry.source, entry.roomId ?? entry.threadId])).toEqual([
-    ['run-1', 'room', 'room-a'], ['code-turn-1', 'code', 'thread-1']])
-  expect((await store.events('*')).filter((event) => event.kind === 'wardrobe.activity')).toHaveLength(2)
-
-  // The account dropped a bottle for run-1; a turn queued meanwhile stays queued.
-  await countRoomWardrobeTurn(store, { roomId: 'room-b', runId: 'run-3', finishedAt: now() })
-  const dropped = { id: 'c0ffee00-0000-4000-8000-000000000003', kind: 'item', rarity: 'common', item: { category: 'prop', id: 'camera' },
-    duplicate: false, feathers: 0, source: 'room', roomId: 'room-a', messageId: 'msg-1', runId: 'run-1', createdAt: now() }
-  const acked = await ackWardrobeActivity(store, { userId: 'user-1', runIds: ['run-1', 'code-turn-1'],
-    drops: [{ runId: 'run-1', dropId: dropped.id }], wardrobe: serverWardrobe({ pending: [dropped] }) })
-  expect(acked.wardrobe.pending.map((drop) => drop.id)).toEqual([dropped.id])
-  expect((await listWardrobeActivity(store)).activity.map((entry) => entry.runId)).toEqual(['run-3'])
-  expect((await store.events('*')).filter((event) => event.kind === 'wardrobe.dropped')).toEqual([expect.objectContaining({
-    roomId: 'room-a', payload: { dropId: dropped.id, runId: 'run-1', messageId: 'msg-1' } })])
-  await expect(ackWardrobeActivity(store, { userId: 'user-2', runIds: ['run-3'], drops: [], wardrobe: serverWardrobe() }))
-    .rejects.toThrow('wardrobe_account_changed')
+  expect((await readRoomWardrobe(store)).wardrobe.pending).toHaveLength(2)
 })
 
 it('starts a different account with an empty queue and signs out to the starter wardrobe', async () => {
@@ -111,15 +94,12 @@ it('starts a different account with an empty queue and signs out to the starter 
   await attachAccountWardrobe(store, { userId: 'user-1', wardrobe: serverWardrobe(), look: null })
   await countRoomWardrobeTurn(store, { roomId: 'room-a', runId: 'run-1', finishedAt: now() })
   await attachAccountWardrobe(store, { userId: 'user-1', wardrobe: serverWardrobe(), look: null })
-  expect((await listWardrobeActivity(store)).activity).toHaveLength(1)
   await attachAccountWardrobe(store, { userId: 'user-2', wardrobe: serverWardrobe(), look: { color: 'sky', face: 'happy', headwear: 'beret', bg: '#f7f5ef' } })
-  expect((await listWardrobeActivity(store)).activity).toEqual([])
 
   const guest = await detachAccountWardrobe(store)
   expect(guest.mode).toBe('guest')
   expect(guest.wardrobe.items['headwear/beret']).toBeUndefined()
   expect(await profile(store)).toEqual(composed({ face: 'happy' }))
-  expect(await listWardrobeActivity(store)).toEqual({ userId: null, activity: [] })
   expect((await detachAccountWardrobe(store)).revision).toBe(guest.revision)
 })
 
@@ -127,4 +107,11 @@ it('ignores account looks it cannot read', () => {
   expect(accountAvatar(null)).toBeNull()
   expect(accountAvatar({ color: 'sky', face: 'normal', headwear: 'not-a-hat' })).toBeNull()
   expect(accountAvatar({ color: 'sky', face: 'normal', prop: null })).toEqual(composed({ bg: expect.any(String) as unknown as string }))
+})
+
+it('refuses an older inventory snapshot after a newer revision has been mirrored', async () => {
+  const store=await openStore()
+  await attachAccountWardrobe(store,{userId:'user-1',serverRevision:9,wardrobe:serverWardrobe({feathers:50})})
+  await attachAccountWardrobe(store,{userId:'user-1',serverRevision:8,wardrobe:serverWardrobe({feathers:99})})
+  expect((await readRoomWardrobe(store)).wardrobe.feathers).toBe(50)
 })

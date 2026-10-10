@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { KUN_AVATAR_RARITIES, KUN_WARDROBE_RULES, type KunAvatarRarity, type KunWardrobeDrop } from '@shared/rooms-api'
+import { KUN_AVATAR_RARITIES, kunWardrobeRules, type KunAvatarRarity, type KunWardrobeDrop } from '@shared/rooms-api'
 import { WardrobeBottleGlow, WardrobeBottleIcon } from './RoomWardrobeBottle'
 import { WardrobeResultCard, wardrobeDropDetails } from './RoomWardrobeResultCard'
 import { WardrobeCardViewer, WardrobeTenGrid, wardrobeFlipOrder } from './RoomWardrobeTenPull'
@@ -13,7 +13,6 @@ import './room-wardrobe-opening.css'
 type Mode = 'idle' | 'single' | 'ten'
 /** A ten-pull deals its cards face down (`reveal`), waits on the table to be flipped (`table`), then sums up (`done`). */
 type Phase = 'idle' | 'shake' | 'charge' | 'burst' | 'reveal' | 'table' | 'done'
-const TEN = KUN_WARDROBE_RULES.tenPull
 const rank = (rarity: KunAvatarRarity) => KUN_AVATAR_RARITIES.indexOf(rarity)
 const prefersStill = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 const SPARKS: Record<KunAvatarRarity, number> = { common: 0, rare: 6, epic: 12, legendary: 20 }
@@ -36,9 +35,10 @@ export function useWardrobeOpener(options: WardrobeOpenerOptions = {}) {
   const serial = useRef(0)
   const [session, setSession] = useState<{ key: number; mode: Mode; result: WardrobeOpenResult | null; error: string } | null>(null)
   const start = useCallback(async (mode: 'single' | 'ten', dropId?: string) => {
+    const TEN = kunWardrobeRules(latest.current).tenPull
     const shelf = wardrobeShelf(latest.current)
     const ids = mode === 'ten' ? shelf.slice(0, TEN).map((drop) => drop.id) : [dropId ?? shelf[0]?.id].filter((id): id is string => Boolean(id))
-    if (!ids.length || (mode === 'ten' && ids.length < TEN)) return
+    if (!ids.length || (mode === 'ten' && (!TEN || ids.length < TEN))) return
     const key = ++serial.current
     setSession({ key, mode, result: null, error: '' })
     try {
@@ -64,6 +64,7 @@ export function RoomWardrobeOpening({ mode, result, error, shelfCount, onClose, 
   onClose: () => void; onOpenOne: () => void; onOpenTen: () => void
   onWear?: (drop: KunWardrobeDrop) => void | Promise<void>; onDress?: () => void
 }): ReactElement {
+  const TEN = kunWardrobeRules(useWardrobe().wardrobe).tenPull
   const { t, i18n } = useTranslation('common')
   const language = i18n.language.startsWith('zh') ? 'zh' : 'en'
   const dialog = useRef<HTMLDialogElement>(null)
@@ -200,7 +201,7 @@ export function RoomWardrobeOpening({ mode, result, error, shelfCount, onClose, 
     <footer className="kun-gacha-actions">
       {phase === 'idle' ? <>
         <button type="button" className="kun-gacha-secondary" disabled={!shelfCount} onClick={onOpenOne} data-gacha-open="one">{t('roomsGachaOpenOne')}</button>
-        <button type="button" className="kun-gacha-gold" disabled={shelfCount < TEN} onClick={onOpenTen} data-gacha-open="ten">
+        <button type="button" className="kun-gacha-gold" disabled={!TEN || shelfCount < TEN} onClick={onOpenTen} data-gacha-open="ten">
           {t('roomsGachaOpenTen')}<small>{shelfCount < TEN ? t('roomsGachaShort', { count: TEN - shelfCount }) : t('roomsGachaTenPromiseShort')}</small></button>
       </> : null}
       {phase === 'table' ? <button type="button" className="kun-gacha-light" onClick={flipAll} data-gacha-flip-all>
@@ -214,7 +215,7 @@ export function RoomWardrobeOpening({ mode, result, error, shelfCount, onClose, 
       {phase === 'done' && mode === 'ten' ? <>
         <button type="button" className="kun-gacha-primary" onClick={onClose} data-gacha-keep>{t('roomsGachaKeepAll')}</button>
         {onDress ? <button type="button" className="kun-gacha-secondary" onClick={onDress}>{t('roomsWardrobeGoDress')}</button> : null}
-        <button type="button" className="kun-gacha-gold" disabled={shelfCount < TEN} onClick={onOpenTen} data-gacha-again>
+        <button type="button" className="kun-gacha-gold" disabled={!TEN || shelfCount < TEN} onClick={onOpenTen} data-gacha-again>
           {t('roomsGachaAgainTen')}{shelfCount < TEN ? <small>{t('roomsGachaShort', { count: TEN - shelfCount })}</small> : null}</button>
       </> : null}
       {error ? <button type="button" className="kun-gacha-secondary" onClick={onClose}>{t('roomsClose')}</button> : null}

@@ -1,13 +1,14 @@
+import { KUN_WARDROBE_RULES,kunWardrobeRandom,relightKunWardrobe } from './wardrobe-simulator.js'
 /**
  * Opening bottles from the shelf, one at a time or as a ten-pull. A bottle's
  * content was fixed when it dropped; only two things are decided at opening:
  * whether it is a duplicate by now, and the ten-pull guarantee.
  */
-import { KUN_AVATAR_PRESETS } from './kun-avatar-presets.js'
+import { KUN_AVATAR_PRESETS } from '../contracts/kun-avatar-presets.js'
 import {
-  KUN_WARDROBE_HISTORY_LIMIT, KUN_WARDROBE_RULES, kunWardrobeItemKey, kunWardrobeItems, kunWardrobeMissingParts,
-  kunWardrobeRandom, relightKunWardrobe, type KunWardrobe, type KunWardrobeDrop, type KunWardrobeItemKey
-} from './kun-wardrobe.js'
+  KUN_WARDROBE_HISTORY_LIMIT, kunWardrobeItemKey, kunWardrobeItems, kunWardrobeMissingParts,
+  type KunWardrobe, type KunWardrobeDrop, type KunWardrobeItemKey
+} from '../contracts/kun-wardrobe.js'
 
 export type KunWardrobeOpenResult = {
   wardrobe: KunWardrobe

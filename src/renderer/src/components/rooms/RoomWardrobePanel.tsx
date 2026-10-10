@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactElement } from 'react'
 import { Check, Feather, Shirt, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
-  KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITY_LABELS, KUN_WARDROBE_RULES, kunAvatarRarity,
-  kunWardrobeItemRarity, kunWardrobeLocalDate, kunWardrobeProgress, normalizeKunAvatarParts, updateKunAvatarPart,
+  KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITY_LABELS, kunWardrobeRules, kunAvatarRarity,
+  kunWardrobeItemRarity, kunWardrobeProgress, normalizeKunAvatarParts, updateKunAvatarPart,
   type KunAvatarAccessoryCategory, type KunWardrobeItemKey, type KunWardrobeSettings, type RoomUserProfileDetail
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -71,8 +71,8 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
   }
   const progress = kunWardrobeProgress(wardrobe)
   const settings = wardrobeSettings(wardrobe)
-  const today = wardrobe.daily.date === kunWardrobeLocalDate(new Date()) ? wardrobe.daily.drops : 0
-  const status = !settings.drops ? t('roomsWardrobeDropsOff') : today >= KUN_WARDROBE_RULES.dailyCap ? t('roomsWardrobeDailyFull')
+  const today = wardrobe.progress?.dailyDrops ?? 0
+  const status = !wardrobe.progress ? t('roomsLoading') : !settings.drops ? t('roomsWardrobeDropsOff') : today >= kunWardrobeRules(wardrobe).dailyCap ? t('roomsWardrobeDailyFull')
     : today > 0 ? t('roomsWardrobeFirstDone', { count: progress.untilPity }) : t('roomsWardrobeFirstPending')
   const saveSettings = (patch: Partial<KunWardrobeSettings>) => run(() => updateWardrobeSettings(patch))
   const sheet = (() => {
@@ -82,14 +82,14 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
       const part = KUN_AVATAR_CATALOG[category].find((entry) => entry.id === id)
       if (!part) return null
       const owned = (wardrobe.items[key] ?? 0) > 0
-      const price = KUN_WARDROBE_RULES.exchangeFeathers[kunWardrobeItemRarity(key)]
+      const price = kunWardrobeRules(wardrobe).exchangeFeathers[kunWardrobeItemRarity(key)]
       // Until it is found the sheet keeps the item a secret too; trading feathers reveals it.
       return { art: owned ? <RoomAvatarItemArt category={category} id={id} size={40} /> : <WardrobeUnknownItem size={40} />,
         locked: !owned, rarity: part.rarity,
         title: `${owned ? part.label[language] : t('roomsWardrobeUnknownItem')} · ${KUN_AVATAR_RARITY_LABELS[part.rarity][language]}`,
         text: owned ? part.flavor[language] : t('roomsWardrobeExchangeHint', { price, missing: Math.max(0, price - wardrobe.feathers) }),
         action: owned ? t('roomsWardrobeWearOnMe') : t('roomsWardrobeExchange'),
-        enabled: owned || wardrobe.feathers >= price,
+        enabled: owned || Boolean(wardrobe.progress) && wardrobe.feathers >= price,
         run: owned ? () => run(() => wearOnMe((parts) => updateKunAvatarPart(parts, category, id as never).parts), t('roomsWardrobeWorn'))
           : () => run(() => exchangeWardrobeItem(key), t('roomsWardrobeExchanged', { item: part.label[language] })) }
     }
@@ -125,10 +125,10 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
             <i aria-hidden="true"><b style={{ width: `${Math.min(100, Math.round(stat.total ? stat.value / stat.total * 100 : stat.value / 80 * 100))}%` }} /></i>
           </div>)}
       </div>
-      <div className="rooms-wardrobe-panel-today" data-wardrobe-today={today}>
-        <div><strong>{t('roomsWardrobeToday')}</strong><span>{t('roomsWardrobeTodayCount', { count: today, cap: KUN_WARDROBE_RULES.dailyCap })}</span>
+      <div title={wardrobe.progress ? t('roomsWardrobeResetAt',{time:new Date(wardrobe.progress.resetAt).toLocaleString(undefined,{timeZone:wardrobe.progress.timeZone})}) : undefined} className="rooms-wardrobe-panel-today" data-wardrobe-today={today}>
+        <div><strong>{t('roomsWardrobeToday')}</strong><span>{t('roomsWardrobeTodayCount', { count: today, cap: kunWardrobeRules(wardrobe).dailyCap })}</span>
           <span className="rooms-wardrobe-panel-dots" aria-hidden="true">
-            {Array.from({ length: KUN_WARDROBE_RULES.dailyCap }, (_, index) => <i key={index} data-on={index < today || undefined} />)}</span></div>
+            {Array.from({ length: kunWardrobeRules(wardrobe).dailyCap }, (_, index) => <i key={index} data-on={index < today || undefined} />)}</span></div>
         <p data-tone={today > 0 && settings.drops ? 'done' : 'next'}>{today > 0 && settings.drops ? <Check size={12} aria-hidden="true" /> : null}{status}</p>
         <RoomWardrobeShelf wardrobe={wardrobe} busy={busy || opener.opening} onOpenOne={() => opener.openOne()} onOpenTen={opener.openTen} />
       </div>

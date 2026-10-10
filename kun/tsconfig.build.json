@@ -5,13 +5,16 @@
     "outDir": "./dist",
     "rootDir": "./src"
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*"
+  ],
   "exclude": [
     "dist",
     "node_modules",
     "tests",
     "**/*.test.ts",
     "**/*.bench.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "src/test-support/**"
   ]
 }

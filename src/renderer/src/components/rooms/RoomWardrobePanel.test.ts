@@ -1,9 +1,11 @@
+import {serverPolicy} from '../../../../../kun/src/test-support/server-policy'
+import { grantKunWardrobeItems } from '../../../../../kun/src/test-support/wardrobe-simulator'
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { KUN_AVATAR_PRESETS, createKunWardrobe, grantKunWardrobeItems, type KunWardrobe, type RoomAvatarReference } from '@shared/rooms-api'
+import { KUN_AVATAR_PRESETS, createKunWardrobe, type KunWardrobe, type RoomAvatarReference } from '@shared/rooms-api'
 
-const mocks = vi.hoisted(() => ({ request: vi.fn() }))
+const mocks = vi.hoisted(() => ({ request: vi.fn(), settings: vi.fn() }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'en' },
   t: (key: string, values?: Record<string, unknown>) => values ? `${key}:${Object.values(values).join(',')}` : key }) }))
 vi.mock('./RoomAvatar', () => ({ RoomAvatar: (props: { avatar?: RoomAvatarReference; label: string }) =>
@@ -18,6 +20,7 @@ import { acceptWardrobe } from './room-wardrobe'
 
 let renderer: ReactTestRenderer
 const wardrobe: KunWardrobe = {
+  progress:serverPolicy(),
   ...grantKunWardrobeItems(createKunWardrobe(1), ['glasses/square', 'outfit/black-hoodie']),
   pending: [{ id: 'drop-code-t1', kind: 'item', rarity: 'epic', item: { category: 'headwear', id: 'pilot-cap' }, duplicate: false, feathers: 0,
     source: 'code', threadId: 'thread-1', sourceLabel: 'Fix login timeout', runId: 'code-t1', createdAt: new Date().toISOString() }],
@@ -29,7 +32,9 @@ const button = (props: Record<string, unknown>) => renderer.root.findAll((node) 
 const text = () => JSON.stringify(renderer.toJSON())
 beforeEach(() => {
   vi.clearAllMocks(); vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  acceptWardrobe({ wardrobe, revision: 4 })
+  mocks.request.mockResolvedValue({wardrobe,revision:4,mode:'account'})
+  vi.stubGlobal('window',{kunGui:{kunAccount:{wardrobe:{settings:mocks.settings}}}})
+  acceptWardrobe({ wardrobe, revision: 4,mode:'account' })
 })
 afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.unstubAllGlobals() })
 
@@ -77,14 +82,13 @@ describe('wardrobe right panel', () => {
   })
 
   it('starts with both drop switches on and saves a change', async () => {
-    mocks.request.mockResolvedValue({ wardrobe: { ...wardrobe, settings: { drops: true, code: false, notice: 'card' } }, revision: 5 })
+    mocks.settings.mockResolvedValue({ok:true,value:{mode:'account', wardrobe: { ...wardrobe, settings: { drops: true, code: false, notice: 'card' } }, revision: 5 }})
     await act(async () => { renderer = create(createElement(RoomWardrobePanel)) })
     act(() => button({ 'data-wardrobe-tab': 'settings' }).props.onClick())
     expect(button({ 'data-wardrobe-setting': 'drops' }).props['aria-checked']).toBe(true)
     expect(button({ 'data-wardrobe-setting': 'code' }).props['aria-checked']).toBe(true)
     await act(async () => { button({ 'data-wardrobe-setting': 'code' }).props.onClick() })
-    expect(mocks.request).toHaveBeenCalledWith('/v1/rooms/wardrobe/settings', 'POST',
-      { settings: { code: false }, clientRequestId: 'request-id', expectedRevision: 4 })
+    expect(mocks.settings).toHaveBeenCalledWith({ code: false })
     expect(button({ 'data-wardrobe-setting': 'code' }).props['aria-checked']).toBe(false)
   })
 })

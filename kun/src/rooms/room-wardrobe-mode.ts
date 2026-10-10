@@ -26,6 +26,7 @@ export const WardrobeAccountStateSchema = z.object({
   mode: z.enum(['guest', 'account']),
   userId: z.string().min(1).max(64).optional(),
   attachedAt: z.string().optional(),
+  serverRevision: z.number().optional(),
   guestHints: z.array(z.object({ id: z.string().max(280), createdAt: z.string(), roomId: z.string().optional(), threadId: z.string().optional() }).strict()).max(20).optional(),
   activity: z.array(WardrobeActivitySchema).max(WARDROBE_ACTIVITY_LIMIT).default([])
 }).strict()
@@ -33,16 +34,10 @@ export type WardrobeAccountState = z.infer<typeof WardrobeAccountStateSchema>
 
 export type WardrobeMode = 'local' | 'guest' | 'account'
 
-/** Local debugging and smoke runs may treat everything as owned. */
-export const wardrobeUnlockAll = (): boolean => process.env.KUN_WARDROBE_UNLOCK_ALL === '1'
-/** Local debugging and smoke runs may start with bottles already on the shelf (at most 30). */
-export const wardrobeSeedBottles = (): number => {
-  const value = Number.parseInt(process.env.KUN_WARDROBE_SEED_BOTTLES ?? '', 10)
-  return Number.isFinite(value) ? Math.min(30, Math.max(0, value)) : 0
-}
-/** Any debug switch (or KUN_WARDROBE_LOCAL=1) keeps the pre-account local game: local drops, local opening. */
-export const wardrobeLocalDebug = (): boolean =>
-  process.env.KUN_WARDROBE_LOCAL === '1' || wardrobeUnlockAll() || wardrobeSeedBottles() > 0
+/** Production always uses account authority. Environment flags cannot unlock or mint assets. */
+export const wardrobeUnlockAll = (): boolean => false
+export const wardrobeSeedBottles = (): number => 0
+export const wardrobeLocalDebug = (): boolean => false
 
 export async function readWardrobeAccountState(store: RoomStore): Promise<{ state: WardrobeAccountState | null; revision: number | null }> {
   const row = await store.get(WARDROBE_ACCOUNT_KIND, WARDROBE_ACCOUNT_ID)

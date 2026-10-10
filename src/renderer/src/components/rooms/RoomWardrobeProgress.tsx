@@ -1,14 +1,13 @@
 import type { ReactElement } from 'react'
 import { Feather, Shirt, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { KUN_WARDROBE_RULES, kunWardrobeLocalDate, kunWardrobeProgress, type KunWardrobeDrop } from '@shared/rooms-api'
+import { kunWardrobeRules, kunWardrobeProgress, type KunWardrobeDrop } from '@shared/rooms-api'
 import { WardrobeBottleIcon } from './RoomWardrobeBottle'
 import { useWardrobeOpener } from './RoomWardrobeOpening'
 import { wardrobeShelfStatus } from './RoomWardrobeShelf'
 import { wardrobeShelf, type WardrobeSnapshot } from './room-wardrobe'
 import './room-wardrobe.css'
 
-const TEN = KUN_WARDROBE_RULES.tenPull
 const percent = (value: number, total: number) => `${Math.min(100, Math.round(total ? value / total * 100 : 0))}%`
 
 /**
@@ -23,10 +22,11 @@ export function RoomWardrobeProgress({ state, busy = false, onWear }: {
   const wardrobe = state.wardrobe
   if (!wardrobe) return null
   const progress = kunWardrobeProgress(wardrobe)
+  const TEN = kunWardrobeRules(wardrobe).tenPull
   const count = wardrobeShelf(wardrobe).length
-  const ready = count >= TEN
-  const full = count >= KUN_WARDROBE_RULES.shelfLimit
-  const today = wardrobe.daily.date === kunWardrobeLocalDate(new Date()) ? wardrobe.daily.drops : 0
+  const ready = TEN > 0 && count >= TEN
+  const full = Boolean(wardrobe.progress) && count >= kunWardrobeRules(wardrobe).shelfLimit
+  const today = wardrobe.progress?.dailyDrops ?? 0
   const disabled = busy || opener.opening
   return <section className="rooms-wardrobe-strip" aria-label={t('roomsWardrobeTitle')} data-ready={ready || undefined} data-full={full || undefined}
     data-pending={progress.pending || undefined} data-wardrobe-shelf={count}>
@@ -55,7 +55,7 @@ export function RoomWardrobeProgress({ state, busy = false, onWear }: {
       <span><Feather size={14} aria-hidden="true" />{t('roomsWardrobeStatFeathers')}<b>{progress.feathers}</b></span>
       <span className="rooms-wardrobe-strip-hint" data-tone={progress.dailyLeft === 0 || full ? 'warm' : undefined}>
         <span>{progress.dailyLeft === 0 ? t('roomsWardrobeDailyFull') : t('roomsWardrobePity', { count: progress.untilPity })}</span>
-        <em>{t('roomsWardrobeToday')} {today} / {KUN_WARDROBE_RULES.dailyCap}</em>
+        <em>{t('roomsWardrobeToday')} {today} / {kunWardrobeRules(wardrobe).dailyCap}</em>
       </span>
     </div>
     {opener.overlay}
