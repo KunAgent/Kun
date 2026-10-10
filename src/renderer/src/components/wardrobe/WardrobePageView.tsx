@@ -61,7 +61,7 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar, on
   const profileAvatar = useRoomUserProfile((value) => value.profile.avatar)
   const [optimistic, setOptimistic] = useState<{ avatar: WardrobeAvatar } | null>(null)
   const avatar = state.mode === 'guest' ? null : optimistic ? optimistic.avatar : profileAvatar
-  const { parts, dressed } = wardrobeLook(avatar)
+  const { parts, dressed, isDefault } = wardrobeLook(avatar)
   const tabRequest = useWardrobeTabRequest((value) => value.request)
   const [tab, setTab] = useState<Tab>(() => tabRequest?.tab ?? 'items')
   const [category, setCategory] = useState<WardrobeCategory>('all')
@@ -244,7 +244,7 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar, on
           onEndTry={() => setTrying(null)} />
           : tab === 'cards' ? <WardrobeCardsSection wardrobe={wardrobe} unlockAll={unlockAll} language={language} filter={cardFilter}
             selection={selection} onFilter={(value) => { setCardFilter(value); setSelection(null) }} onSelect={setSelection} />
-            : tab === 'look' ? <WardrobeLookPanel parts={parts} dressed={dressed} language={language}
+            : tab === 'look' ? <WardrobeLookPanel parts={parts} dressed={dressed} isDefault={isDefault} language={language}
               onPick={(next, name) => choose(composedAvatar(next), t('wardrobePageToastLook', { name }))} onTry={(next) => { if (!guest) setTrying(next) }} onEndTry={() => setTrying(null)} />
               : tab === 'log' ? <div className="kun-wardrobe-scroll kun-wardrobe-log"><WardrobeLogSection wardrobe={wardrobe} language={language} /></div>
                 : guest ? <WardrobeLockedPanel kind={tab === 'shop' ? 'shop' : 'invite'} />

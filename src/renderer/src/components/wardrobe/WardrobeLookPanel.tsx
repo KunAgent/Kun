@@ -12,8 +12,8 @@ const BACKGROUND_COLORS = ['#f7f5ef', '#eef6ff', '#eaf6ef', '#fbf0f3', '#fff4d6'
 const Tick = () => <span className="kun-wardrobe-tick" aria-hidden="true"><Check size={10} strokeWidth={3.4} /></span>
 
 /** Color, expression and backdrop: never collected, always free to change. Hover previews on the stage. */
-export function WardrobeLookPanel({ parts, dressed, language, onPick, onTry, onEndTry }: {
-  parts: KunAvatarParts; dressed: boolean; language: 'zh' | 'en'
+export function WardrobeLookPanel({ parts, dressed, isDefault = false, language, onPick, onTry, onEndTry }: {
+  parts: KunAvatarParts; dressed: boolean; isDefault?: boolean; language: 'zh' | 'en'
   onPick: (next: KunAvatarParts, name: string) => void; onTry: (next: KunAvatarParts) => void; onEndTry: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
@@ -26,6 +26,8 @@ export function WardrobeLookPanel({ parts, dressed, language, onPick, onTry, onE
   const portrait = (look: KunAvatarParts, size: number, framing?: 'face') =>
     <RoomAvatar avatar={composedAvatar(look)} id={`wardrobe-look-${canonicalKunAvatarKey(look)}-${size}`} label="" size={size} framing={framing} user />
   const bg = dressed ? parts.bg : ''
+  // The restored little Kun is sky blue with the default face: those two read as chosen, the backdrop stays unset.
+  const shaped = dressed || isDefault
   // The stage follows the pointer: headings, gaps and blank panel space hand it back to what is actually worn.
   const endOffTile = (event: ReactPointerEvent<HTMLElement>) => { if (!(event.target as Element).closest('[data-wardrobe-look]')) onEndTry() }
   return <div className="kun-wardrobe-look" onPointerLeave={onEndTry} onPointerOver={endOffTile}>
@@ -34,7 +36,7 @@ export function WardrobeLookPanel({ parts, dressed, language, onPick, onTry, onE
       <div className="kun-wardrobe-look-grid">
         {KUN_AVATAR_CATALOG.color.map((color) => {
           const look = next('color', color.id)
-          return tile(`color-${color.id}`, color.label[language], dressed && parts.color === color.id, portrait(look, 72), look)
+          return tile(`color-${color.id}`, color.label[language], shaped && parts.color === color.id, portrait(look, 72), look)
         })}
       </div>
     </section>
@@ -43,7 +45,7 @@ export function WardrobeLookPanel({ parts, dressed, language, onPick, onTry, onE
       <div className="kun-wardrobe-look-grid">
         {KUN_AVATAR_CATALOG.face.map((face) => {
           const look = next('face', face.id)
-          return tile(`face-${face.id}`, face.label[language], dressed && parts.face === face.id, portrait(look, 60, 'face'), look)
+          return tile(`face-${face.id}`, face.label[language], shaped && parts.face === face.id, portrait(look, 60, 'face'), look)
         })}
       </div>
     </section>

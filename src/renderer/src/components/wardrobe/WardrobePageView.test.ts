@@ -123,6 +123,17 @@ describe('wardrobe page', () => {
     expect(puts()[0]).toMatchObject({ avatar: null })
   })
 
+  it('shows the restored little Kun as sky blue with the default expression chosen', async () => {
+    await act(async () => $('[data-wardrobe-tab="look"]')!.click())
+    await act(async () => $('[data-wardrobe-restore]')!.click())
+    await vi.waitFor(() => expect(puts()).toHaveLength(1))
+    await vi.waitFor(() => expect($('[data-wardrobe-look="color-sky"]')?.getAttribute('aria-pressed')).toBe('true'))
+    expect($('[data-wardrobe-look="face-normal"]')?.getAttribute('aria-pressed')).toBe('true')
+    expect($('[data-wardrobe-look="color-teal"]')?.getAttribute('aria-pressed')).toBe('false')
+    expect($('[data-wardrobe-look="face-happy"]')?.getAttribute('aria-pressed')).toBe('false')
+    expect($$('.kun-wardrobe-swatch').filter((swatch) => swatch.getAttribute('aria-pressed') === 'true')).toHaveLength(0)
+  })
+
   it('says the wardrobe is synced to the account and offers the shop and invitations', () => {
     expect($('[data-wardrobe-mode]')?.dataset.wardrobeMode).toBe('account')
     expect($$('[data-wardrobe-tab]').map((tab) => tab.dataset.wardrobeTab)).toEqual(['items', 'cards', 'look', 'log', 'shop', 'invite'])

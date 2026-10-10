@@ -13,9 +13,17 @@ export type WardrobeSelection = { kind: 'item'; key: string } | { kind: 'card'; 
 export const WARDROBE_SLOTS: readonly KunAvatarAccessoryCategory[] = ['headwear', 'glasses', 'outfit', 'prop']
 const rank = (rarity: KunAvatarRarity) => KUN_AVATAR_RARITIES.indexOf(rarity)
 
-/** The look on stage: composed and builtin avatars are dressed parts; a photo or the default greeting is not. */
-export function wardrobeLook(avatar: WardrobeAvatar): { parts: KunAvatarParts; dressed: boolean } {
-  return { parts: editableKunAvatarParts(avatar, 'user', true), dressed: avatar?.kind === 'composed' || avatar?.kind === 'builtin' }
+/**
+ * The look on stage: composed and builtin avatars are dressed parts; a photo or the default greeting is not.
+ * `isDefault` marks the restored little Kun, whose body is the sky-blue, default-expression look the free
+ * pickers should show as chosen even though nothing is worn.
+ */
+export function wardrobeLook(avatar: WardrobeAvatar): { parts: KunAvatarParts; dressed: boolean; isDefault: boolean } {
+  return {
+    parts: editableKunAvatarParts(avatar, 'user', true),
+    dressed: avatar?.kind === 'composed' || avatar?.kind === 'builtin',
+    isDefault: !avatar
+  }
 }
 
 export function composedAvatar(parts: KunAvatarParts): KunComposedAvatarReference {
