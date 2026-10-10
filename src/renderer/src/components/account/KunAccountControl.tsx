@@ -21,7 +21,7 @@ export function kunAccountAvailable(): boolean {
 /**
  * The sidebar's Kun account: the footer card is the account, and its menu holds the wardrobe,
  * the shop, invitations and the account itself. The same panel follows the browser sign-in live.
- * `compact` is the one-line form for Focus mode and theme packs with their own sidebar scene.
+ * `compact` is the one-line form for theme packs with their own sidebar scene.
  */
 export function KunAccountControl({ variant = 'card' }: { variant?: 'card' | 'compact' }): ReactElement | null {
   const { state, busy, welcome, notice, dismissWelcome, run, api } = useKunAccount()

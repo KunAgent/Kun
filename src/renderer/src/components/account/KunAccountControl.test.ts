@@ -8,6 +8,7 @@ import { useChatStore } from '../../store/chat-store'
 import { acceptWardrobe } from '../rooms/room-wardrobe'
 import { useWardrobeRoute } from '../wardrobe/wardrobe-route'
 import { useWardrobeTabRequest } from '../wardrobe/wardrobe-tab-request'
+import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
 import { KunAccountControl } from './KunAccountControl'
 
 const roomsRequest = vi.hoisted(() => vi.fn())
@@ -192,6 +193,20 @@ describe('sidebar Kun account card', () => {
     expect(container.querySelector('.kun-account-card-login')).toBeNull()
     await act(async () => entry().click())
     expect(panel()?.dataset.view).toBe('guest')
+  })
+
+  it('keeps the full card in the sidebar footer whether Focus mode is on or off', async () => {
+    const footer = (focusModeEnabled: boolean) => createElement(SidebarStandardFooter, {
+      focusModeEnabled, connectPhoneSidebarOpen: false, onFocusModeChange: vi.fn(), onOpenSettings: vi.fn(), onToggleConnectPhone: vi.fn()
+    })
+    await act(async () => root.render(footer(false)))
+    const before = card()
+    expect(before.dataset.variant).toBe('card')
+    await act(async () => root.render(footer(true)))
+    expect(container.querySelectorAll('[data-kun-account-card]')).toHaveLength(1)
+    expect(card()).toBe(before)
+    expect(card().dataset.variant).toBe('card')
+    expect(container.querySelector('.kun-account-card-login')).not.toBeNull()
   })
 
   it('stays out of the remote browser client', async () => {

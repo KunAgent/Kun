@@ -23,8 +23,8 @@ function useDocumentDarkMode(): boolean {
 /**
  * Footer shared by the Code and Work sidebars: the Kun account card (its menu
  * holds the wardrobe), then Settings beside the focus, phone and theme switches.
- * Focus mode and theme packs with their own sidebar scene use the one-line card;
- * the remote browser client, which has no account, keeps Kun's status card.
+ * Focus mode never changes the card. Theme packs with their own sidebar scene use
+ * the one-line card; the remote browser client, which has no account, keeps Kun's status card.
  */
 export function SidebarStandardFooter({
   focusModeEnabled,
@@ -48,13 +48,15 @@ export function SidebarStandardFooter({
   return (
     <div className="space-y-1">
       {sceneFooter ? (
-        <SidebarFocusModeControl enabled={focusModeEnabled} onChange={onFocusModeChange} />
-      ) : !focusModeEnabled ? (
+        <>
+          <SidebarFocusModeControl enabled={focusModeEnabled} onChange={onFocusModeChange} />
+          {account ? <KunAccountControl variant="compact" /> : null}
+        </>
+      ) : (
         <div className="border-b border-[var(--ds-sidebar-divider)] pb-1">
           {account ? <KunAccountControl /> : <SidebarKunStatus />}
         </div>
-      ) : null}
-      {account && (sceneFooter || focusModeEnabled) ? <KunAccountControl variant="compact" /> : null}
+      )}
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
           <SidebarCommandRow
