@@ -1,49 +1,61 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
-import { LogIn } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { bodyZoom } from '../../lib/body-zoom'
+import { openWardrobePage } from '../wardrobe/wardrobe-route'
+import type { WardrobeTabRequest } from '../wardrobe/wardrobe-tab-request'
 import { useKunAccount, type KunAccountAction } from './useKunAccount'
 import { KunAccountPanel, KunAccountPanelClose } from './KunAccountPanel'
-import { kunAccountBadge, kunAccountEntry, kunAccountPanelPlacement, kunAccountView } from './kun-account-view'
+import { KunAccountGuestMenu, KunAccountMenu } from './KunAccountMenu'
+import { SidebarAccountCard } from './SidebarAccountCard'
+import { kunAccountPanelPlacement, kunAccountView } from './kun-account-view'
 import './kun-account.css'
-import { KunAccountAvatar } from './KunAccountAvatar'
+import './kun-account-card.css'
 
 const WELCOME_MS = 2400
 
+/** The desktop app has the account bridge; the remote browser client does not. */
+export function kunAccountAvailable(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.kunGui?.kunAccount) && !window.kunGui?.isRemoteWeb
+}
+
 /**
- * The sidebar's Kun account entry: "Sign in" beside Kun's card, the account
- * initial once signed in, and a panel that follows the browser sign-in live.
- * `row` is the full-width form used when the footer has no Kun card.
+ * The sidebar's Kun account: the footer card is the account, and its menu holds the wardrobe,
+ * the shop, invitations and the account itself. The same panel follows the browser sign-in live.
+ * `compact` is the one-line form for Focus mode and theme packs with their own sidebar scene.
  */
-export function KunAccountControl({ variant = 'chip' }: { variant?: 'chip' | 'row' }): ReactElement | null {
-  const { t } = useTranslation('common')
+export function KunAccountControl({ variant = 'card' }: { variant?: 'card' | 'compact' }): ReactElement | null {
   const { state, busy, welcome, notice, dismissWelcome, run, api } = useKunAccount()
   const [open, setOpen] = useState(false)
+  // Set while the panel was opened by a failed sign-in; it explains the failure once.
+  const [failure, setFailure] = useState(false)
   const [reopened, setReopened] = useState(false)
   const [refreshed, setRefreshed] = useState(false)
   const [manageFailed, setManageFailed] = useState(false)
   const [placement, setPlacement] = useState<CSSProperties>({})
   const [hovered, setHovered] = useState(false)
+  const card = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   // Only an open the user asked for moves focus; a sign-in finishing never does.
   const focusOnOpen = useRef(false)
   const panelId = useId()
   const titleId = useId()
-  const view = kunAccountView(state, welcome)
-  const entry = kunAccountEntry(state)
-  const badge = kunAccountBadge(state)
+  const view = kunAccountView(state, welcome, failure)
   const visible = open && view !== 'none'
 
   const close = useCallback((refocus = true) => {
     setOpen(false)
+    setFailure(false)
     dismissWelcome()
     if (refocus) trigger.current?.focus()
   }, [dismissWelcome])
 
   // A finished or failed browser sign-in opens the panel without taking focus.
-  useEffect(() => { if (notice) setOpen(true) }, [notice])
+  useEffect(() => {
+    if (!notice) return
+    setOpen(true)
+    setFailure(notice.kind === 'failure')
+  }, [notice])
   useEffect(() => { if (view !== 'waiting') setReopened(false) }, [view])
   useEffect(() => { if (!open) { setRefreshed(false); setManageFailed(false) } }, [open])
 
@@ -56,7 +68,7 @@ export function KunAccountControl({ variant = 'chip' }: { variant?: 'chip' | 'ro
   useLayoutEffect(() => {
     if (!visible) return
     const place = () => {
-      const rect = trigger.current?.getBoundingClientRect()
+      const rect = card.current?.getBoundingClientRect()
       if (!rect) return
       const next = kunAccountPanelPlacement({ anchor: rect, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, scale: bodyZoom() })
       setPlacement({ left: next.left, bottom: next.bottom, width: next.width, maxHeight: next.maxHeight })
@@ -79,9 +91,9 @@ export function KunAccountControl({ variant = 'chip' }: { variant?: 'chip' | 'ro
     if (!visible) return
     const outside = (event: PointerEvent) => {
       const target = event.target as Node
-      if (!panel.current?.contains(target) && !trigger.current?.contains(target)) close(false)
+      if (!panel.current?.contains(target) && !card.current?.contains(target)) close(false)
     }
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); close() } }
+    const escape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); close() } }
     document.addEventListener('pointerdown', outside)
     document.addEventListener('keydown', escape)
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape) }
@@ -92,65 +104,56 @@ export function KunAccountControl({ variant = 'chip' }: { variant?: 'chip' | 'ro
   const act = (action: KunAccountAction) => {
     if (action === 'reopenLogin') setReopened(true)
     if (action === 'refresh') setRefreshed(false)
+    if (action === 'login') setFailure(false)
     void run(action).then(() => {
       if (action === 'refresh') setRefreshed(true)
-      // The pressed row is gone; hand focus back to the entry.
+      // The pressed row is gone; hand focus back to the card.
       if (action === 'logout' || action === 'cancelLogin') close()
     })
   }
-  const onEntry = () => {
-    focusOnOpen.current = !open
-    if (entry === 'login') {
-      setOpen(true)
-      act('login')
-      return
-    }
-    if (open) close(false)
-    else setOpen(true)
+  const toggle = () => {
+    if (open) { close(false); return }
+    focusOnOpen.current = true
+    setFailure(false)
+    setOpen(true)
+  }
+  const login = () => {
+    focusOnOpen.current = true
+    setOpen(true)
+    act('login')
   }
   const manage = () => {
     setManageFailed(false)
     void api.openAccountCenter().then(() => close(false), () => setManageFailed(true))
   }
-
-  const user = state.user
-  const label = entry === 'avatar' && user
-    ? t('kunAccountOpenMenu', { name: user.name })
-    : entry === 'busy' ? t('kunAccountSigningIn') : t('kunAccountSignInLabel')
-  const content = entry === 'avatar' && user ? (
-    <>
-      <KunAccountAvatar user={user} size={variant === 'row' ? 24 : 30} />
-      {variant === 'row' ? <span className="kun-account-entry-text">{user.name}</span> : null}
-    </>
-  ) : entry === 'busy' ? (
-    <><span className="kun-account-spinner" aria-hidden="true" /><span className="kun-account-entry-text">{t('kunAccountSigningIn')}</span></>
-  ) : entry === 'loading' ? (
-    <span className="kun-account-skeleton" aria-hidden="true" />
-  ) : (
-    <><LogIn size={14} aria-hidden="true" /><span className="kun-account-entry-text">{variant === 'row' ? t('kunAccountSignInLabel') : t('kunAccountSignIn')}</span></>
-  )
+  const navigate = (tab: WardrobeTabRequest) => {
+    close(false)
+    openWardrobePage(tab)
+  }
+  // Up and down walk the menu's buttons, wrapping at either end.
+  const walk = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    const buttons = [...(panel.current?.querySelectorAll<HTMLButtonElement>('.kun-account-view button:not(:disabled)') ?? [])]
+    if (!buttons.length) return
+    event.preventDefault()
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
+    const step = event.key === 'ArrowDown' ? 1 : -1
+    buttons[(index + step + buttons.length) % buttons.length]?.focus()
+  }
+  const platform = window.kunGui?.platform ?? ''
 
   return (
     <>
-      <button
-        ref={trigger}
-        type="button"
-        className="kun-account-entry"
-        data-kun-account-login
-        data-entry={entry}
-        data-variant={variant}
-        data-badge={badge === 'none' ? undefined : badge}
-        aria-label={label}
-        title={user ? `${user.name} · ${user.email}` : label}
-        aria-haspopup="dialog"
-        aria-expanded={visible}
-        aria-controls={visible ? panelId : undefined}
-        disabled={entry === 'loading'}
-        onClick={onEntry}
-      >
-        {content}
-        {badge === 'none' ? null : <i className="kun-account-badge" aria-hidden="true" />}
-      </button>
+      <SidebarAccountCard
+        variant={variant}
+        state={state}
+        open={visible}
+        panelId={panelId}
+        cardRef={card}
+        triggerRef={trigger}
+        onToggle={toggle}
+        onLogin={login}
+      />
       {visible ? createPortal(
         <div
           ref={panel}
@@ -160,23 +163,25 @@ export function KunAccountControl({ variant = 'chip' }: { variant?: 'chip' | 'ro
           className="kun-account-panel"
           data-view={view}
           style={placement}
+          onKeyDown={walk}
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
         >
-          <KunAccountPanelClose onClose={() => close()} />
-          <KunAccountPanel
-            view={view}
-            state={state}
-            busy={busy}
-            platform={window.kunGui?.platform ?? ''}
-            reopened={reopened}
-            refreshed={refreshed}
-            manageFailed={manageFailed}
-            titleId={titleId}
-            onAction={act}
-            onManage={manage}
-            onClose={() => close()}
-          />
+          {view === 'menu' ? (
+            <KunAccountMenu state={state} busy={busy} titleId={titleId} platform={platform} refreshed={refreshed} manageFailed={manageFailed}
+              onAction={act} onNavigate={navigate} onManage={manage} />
+          ) : view === 'guest' ? (
+            <>
+              <KunAccountPanelClose onClose={() => close()} />
+              <KunAccountGuestMenu state={state} busy={busy} titleId={titleId} platform={platform} onAction={act} onNavigate={navigate} />
+            </>
+          ) : (
+            <>
+              <KunAccountPanelClose onClose={() => close()} />
+              <KunAccountPanel view={view} state={state} busy={busy} platform={platform} reopened={reopened} titleId={titleId}
+                onAction={act} onClose={() => close()} />
+            </>
+          )}
         </div>,
         document.body
       ) : null}

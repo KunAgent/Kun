@@ -1,11 +1,12 @@
 'use strict'
 const assert = require('node:assert/strict')
 
-// Part of smoke-wardrobe-drops: the full-page wardrobe opened from the sidebar avatar card.
+// Part of smoke-wardrobe-drops: the full-page wardrobe opened from the sidebar account card's menu.
 // `shelf` runs on a Code task with 12 bottles waiting; `dress` runs from an Agent chat whose
 // right rail shows the wardrobe panel.
 async function exerciseWardrobePage({ page, request, poll, capture, stage }) {
-  const card = page.locator('.ds-sidebar-kun-status')
+  const card = page.locator('[data-kun-account-card]')
+  const close = page.locator('[data-wardrobe-page] [data-wardrobe-close]')
   const view = page.locator('[data-wardrobe-page]')
   const profile = async () => (await request(page, '/v1/rooms/user-profile')).profile.avatar
   const imagesLoaded = (selector) => page.locator(selector).evaluateAll((images) =>
@@ -14,7 +15,7 @@ async function exerciseWardrobePage({ page, request, poll, capture, stage }) {
   if (stage === 'dress') {
     await page.locator('[data-wardrobe-panel="ready"] [data-wardrobe-dress]').click()
     await view.waitFor({ timeout: 30_000 })
-    const face = page.locator('.ds-sidebar-kun-status .ds-sidebar-kun-face')
+    const face = page.locator('[data-kun-account-card] .kun-account-card-face')
     const faceBefore = await face.evaluate((node) => node.innerHTML)
     await view.locator('[data-wardrobe-tab="cards"]').click()
     const lit = view.locator('[data-wardrobe-card="detective"]')
@@ -23,17 +24,18 @@ async function exerciseWardrobePage({ page, request, poll, capture, stage }) {
     await poll(async () => (await face.evaluate((node) => node.innerHTML)) !== faceBefore, 15_000, 'sidebar Kun face follows the set worn on the page')
     await poll(async () => (await profile())?.kind === 'composed', 10_000, 'the set is saved as my avatar')
     await capture('wardrobe-page-set-worn')
-    await card.click()
+    await close.click()
     await view.waitFor({ state: 'detached' })
     await page.locator('.rooms-composer').waitFor()
     return
   }
 
-  // Open from the avatar card: the page takes the stage and the card shows it is selected.
-  assert.equal(await card.getAttribute('title'), '打开我的衣橱')
-  await card.click()
+  // Open from the account card's menu: the page takes the stage and the card shows it is selected.
+  await card.locator('[data-kun-account-login]').click()
+  await page.locator('.kun-account-panel [data-kun-account-nav="items"]').click()
   await view.waitFor({ timeout: 30_000 })
-  assert.equal(await card.getAttribute('aria-current'), 'page')
+  await page.locator('.kun-account-panel').waitFor({ state: 'detached' })
+  assert.equal(await card.getAttribute('data-active'), 'true')
   await view.locator('[data-wardrobe-shelf="12"]').waitFor()
   assert.equal(await view.locator('[data-shelf-open="ten"]').isDisabled(), false, 'Twelve bottles allow a ten-pull')
   const ten = await view.locator('[data-shelf-open="ten"]').boundingBox()
@@ -89,10 +91,10 @@ async function exerciseWardrobePage({ page, request, poll, capture, stage }) {
   await capture('wardrobe-page-dark')
   await page.locator('button[title="切换到浅色主题"]').first().click()
 
-  // A second click on the card goes back to the Code task.
-  await card.click()
+  // The page's close button goes back to the Code task.
+  await close.click()
   await view.waitFor({ state: 'detached' })
-  assert.equal(await card.getAttribute('aria-current'), null)
+  assert.equal(await card.getAttribute('data-active'), null)
   await page.locator('.ds-composer-textarea').waitFor()
 }
 

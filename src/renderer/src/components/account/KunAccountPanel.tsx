@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react'
-import { ArrowUpRight, Check, LoaderCircle, LockKeyhole, LogOut, RefreshCw, X } from 'lucide-react'
+import { ArrowUpRight, Check, LoaderCircle, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { KunAccountState } from '@shared/kun-account'
 import laptopArt from '../../../../asset/img/kun-account/laptop.webp'
@@ -10,7 +10,6 @@ import headsetArt from '../../../../asset/img/kun-account/headset.webp'
 import wrenchArt from '../../../../asset/img/kun-account/wrench.webp'
 import type { KunAccountAction } from './useKunAccount'
 import { kunAccountErrorCopy, type KunAccountArt, type KunAccountView } from './kun-account-view'
-import { KunAccountAvatar } from './KunAccountAvatar'
 
 /** Painted Kun poses; the art is never redrawn as vectors. */
 const ART: Record<KunAccountArt, string> = {
@@ -18,20 +17,18 @@ const ART: Record<KunAccountArt, string> = {
 }
 
 export type KunAccountPanelProps = {
-  view: Exclude<KunAccountView, 'none'>
+  view: Extract<KunAccountView, 'waiting' | 'welcome' | 'error'>
   state: KunAccountState
   busy: KunAccountAction | null
   platform: string
   reopened: boolean
-  refreshed: boolean
-  manageFailed: boolean
   titleId: string
   onAction: (action: KunAccountAction) => void
-  onManage: () => void
   onClose: () => void
 }
 
-function Sky({ art, chip, tone }: { art: KunAccountArt; chip?: ReactNode; tone?: 'live' | 'ok' }): ReactElement {
+/** The painted sky above the sign-in views and the guest menu. */
+export function KunAccountSky({ art, chip, tone }: { art: KunAccountArt; chip?: ReactNode; tone?: 'live' | 'ok' }): ReactElement {
   return (
     <div className="kun-account-sky" data-art={art} aria-hidden="true">
       <span className="kun-account-glow is-a" />
@@ -50,7 +47,7 @@ export function KunAccountPanel(props: KunAccountPanelProps): ReactElement {
   if (view === 'waiting') {
     return (
       <div className="kun-account-view" key="waiting">
-        <Sky art="laptop" tone="live" chip={<><i className="kun-account-live" />{t('kunAccountWaitingChip')}</>} />
+        <KunAccountSky art="laptop" tone="live" chip={<><i className="kun-account-live" />{t('kunAccountWaitingChip')}</>} />
         <div className="kun-account-body">
           <h2 id={titleId} className="kun-account-title">{t('kunAccountWaitingTitle')}</h2>
           <p className="kun-account-text">{t('kunAccountWaitingBody')}</p>
@@ -74,7 +71,7 @@ export function KunAccountPanel(props: KunAccountPanelProps): ReactElement {
   if (view === 'welcome' && user) {
     return (
       <div className="kun-account-view" key="welcome" role="status" aria-live="polite">
-        <Sky art="cheer" tone="ok" chip={<><Check size={12} strokeWidth={2.6} aria-hidden="true" />{t('kunAccountSignedIn')}</>} />
+        <KunAccountSky art="cheer" tone="ok" chip={<><Check size={12} strokeWidth={2.6} aria-hidden="true" />{t('kunAccountSignedIn')}</>} />
         <div className="kun-account-body">
           <h2 id={titleId} className="kun-account-title">{t('kunAccountWelcomeTitle', { name: user.name })}</h2>
           <p className="kun-account-text">{t('kunAccountWelcomeBody', { email: user.email })}</p>
@@ -86,53 +83,11 @@ export function KunAccountPanel(props: KunAccountPanelProps): ReactElement {
       </div>
     )
   }
-  if (view === 'menu' && user) {
-    const signingOut = busy === 'logout'
-    return (
-      <div className="kun-account-view" key="menu">
-        <div className="kun-account-who">
-          <KunAccountAvatar user={user} size={40} large />
-          <span className="kun-account-who-text">
-            <strong id={titleId}>{user.name}</strong>
-            <span>{user.email}</span>
-          </span>
-          {state.error ? null : <span className="kun-account-pill">{t('kunAccountSignedIn')}</span>}
-        </div>
-        {state.error ? (
-          <div className="kun-account-warning" role="alert">
-            <span>{t('kunAccountSyncWarning')}</span>
-            <button type="button" disabled={busy !== null} onClick={() => onAction('refresh')}>{t('kunAccountRetry')}</button>
-          </div>
-        ) : null}
-        {props.refreshed && !state.error ? <p className="kun-account-note" role="status">{t('kunAccountRefreshed')}</p> : null}
-        {props.manageFailed ? <p className="kun-account-warning" role="alert"><span>{t('kunAccountManageFailed')}</span></p> : null}
-        <div className="kun-account-rows" role="group" aria-label={t('kunAccountLabel')}>
-          <button type="button" className="kun-account-row" disabled={signingOut} onClick={props.onManage}>
-            <ArrowUpRight size={16} aria-hidden="true" />
-            <span>{t('kunAccountManage')}<small>{t('kunAccountManageHint')}</small></span>
-          </button>
-          <button type="button" className="kun-account-row" disabled={busy !== null} onClick={() => onAction('refresh')}>
-            {busy === 'refresh' ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={16} aria-hidden="true" />}
-            <span>{t('kunAccountRefresh')}</span>
-          </button>
-          <span className="kun-account-separator" />
-          <button type="button" className="kun-account-row" disabled={busy !== null} onClick={() => onAction('logout')}>
-            {signingOut ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <LogOut size={16} aria-hidden="true" />}
-            <span>{signingOut ? t('kunAccountSigningOut') : t('kunAccountSignOut')}{signingOut ? null : <small>{t('kunAccountSignOutHint')}</small>}</span>
-          </button>
-        </div>
-        <p className="kun-account-footnote">
-          <LockKeyhole size={13} aria-hidden="true" />
-          {props.platform === 'darwin' ? t('kunAccountKeychainNote') : t('kunAccountCredentialNote')}
-        </p>
-      </div>
-    )
-  }
   const copy = kunAccountErrorCopy(state.error ?? 'service', props.platform)
   const primary = copy.action === 'dismiss' ? t('kunAccountGotIt') : copy.action === 'login' ? t('kunAccountSignInAgain') : t('kunAccountRetry')
   return (
     <div className="kun-account-view" key={`error-${state.error ?? 'service'}`}>
-      <Sky art={copy.art} />
+      <KunAccountSky art={copy.art} />
       <div className="kun-account-body">
         <h2 id={titleId} className="kun-account-title">{t(copy.title)}</h2>
         <p className="kun-account-text">{t(copy.body)}</p>
@@ -152,7 +107,7 @@ export function KunAccountPanel(props: KunAccountPanelProps): ReactElement {
   )
 }
 
-/** The close affordance shared by every view. */
+/** The close affordance shared by the sign-in views. */
 export function KunAccountPanelClose({ onClose }: { onClose: () => void }): ReactElement {
   const { t } = useTranslation('common')
   return (

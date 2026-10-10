@@ -6,6 +6,7 @@ import { WriteSideRail } from '../write/WriteSideRail'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
 import { useAgentChatPicker } from '../rooms/agent-chat-picker'
+import { closeWardrobePage } from '../wardrobe/wardrobe-route'
 
 const PluginMarketplaceView = lazy(() =>
   import('../PluginMarketplaceView').then((module) => ({ default: module.PluginMarketplaceView }))
@@ -191,7 +192,7 @@ export function WorkbenchStageRouter({
           </Suspense>
         ) : normalizedRoute === 'wardrobe' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
-            <WardrobePageView leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} />
+            <WardrobePageView leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} onClose={closeWardrobePage} />
           </Suspense>
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>

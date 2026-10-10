@@ -33,8 +33,9 @@ const STATUS_KEYS = {
 
 /**
  * Kun as a small companion: the user's own dressed-up look and what the runtime is doing.
- * It opens the wardrobe page (a second click goes back), and carries the count of bottles
- * waiting on the shelf.
+ * The desktop app shows the account card instead; this stays for the remote browser client,
+ * which has no account. It opens the wardrobe page (a second click goes back) and carries
+ * the count of bottles waiting on the shelf.
  */
 export function SidebarKunStatus({ onOpen = toggleWardrobePage }: { onOpen?: () => void }): ReactElement {
   const { t } = useTranslation('common')

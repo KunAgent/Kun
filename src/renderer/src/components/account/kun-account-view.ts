@@ -1,30 +1,45 @@
-import type { KunAccountError, KunAccountState, KunAccountUser } from '@shared/kun-account'
+import type { KunAccountError, KunAccountState } from '@shared/kun-account'
 
 /** What the account panel shows for a given redacted state. */
-export type KunAccountView = 'none' | 'waiting' | 'welcome' | 'menu' | 'error'
-export type KunAccountEntry = 'loading' | 'login' | 'busy' | 'avatar'
+export type KunAccountView = 'none' | 'waiting' | 'welcome' | 'menu' | 'guest' | 'error'
 /** Red asks the user to sign in again; amber means the profile could not sync. */
 export type KunAccountBadge = 'none' | 'attention' | 'warning'
 export type KunAccountArt = 'laptop' | 'cheer' | 'greet' | 'sleep' | 'headset' | 'wrench'
 export type KunAccountErrorAction = 'retry' | 'login' | 'dismiss'
 
-export function kunAccountView(state: KunAccountState, welcome: boolean): KunAccountView {
+/**
+ * A failed sign-in explains itself once, in the panel it pops open (`failure`). Opened from the
+ * card afterwards, a signed-out account shows the guest menu, which offers sign-in again.
+ */
+export function kunAccountView(state: KunAccountState, welcome: boolean, failure = false): KunAccountView {
   if (state.status === 'authorizing') return 'waiting'
   if (state.user) return welcome ? 'welcome' : 'menu'
-  if (state.error && state.error !== 'unavailable') return 'error'
-  return 'none'
-}
-
-export function kunAccountEntry(state: KunAccountState): KunAccountEntry {
-  if (state.status === 'loading') return 'loading'
-  if (state.status === 'authorizing') return 'busy'
-  return state.user ? 'avatar' : 'login'
+  if (state.status === 'loading') return 'none'
+  if (failure && state.error && state.error !== 'unavailable') return 'error'
+  return 'guest'
 }
 
 export function kunAccountBadge(state: KunAccountState): KunAccountBadge {
   if (!state.error || state.error === 'unavailable') return 'none'
   if (state.user) return 'warning'
   return state.error === 'cancelled' ? 'none' : 'attention'
+}
+
+export type KunAccountCardTone = 'plain' | 'live' | 'warn' | 'bad'
+/** The card's two lines; a null title or hint means the account's own name or email. */
+export type KunAccountCardCopy = { title: string | null; hint: string | null; tone: KunAccountCardTone }
+
+/** Second-line priority: signing in, then an expired or failed sign-in, then a sync warning, then the email. */
+export function kunAccountCardCopy(state: KunAccountState): KunAccountCardCopy {
+  if (state.status === 'authorizing') return { title: 'kunAccountSigningIn', hint: 'kunAccountCardWaitingHint', tone: 'live' }
+  if (state.user) {
+    return state.error && state.error !== 'unavailable'
+      ? { title: null, hint: 'kunAccountCardSyncHint', tone: 'warn' }
+      : { title: null, hint: null, tone: 'plain' }
+  }
+  if (state.error === 'expired') return { title: 'kunAccountCardExpired', hint: 'kunAccountCardExpiredHint', tone: 'bad' }
+  if (kunAccountBadge(state) === 'attention') return { title: 'kunAccountCardSignedOut', hint: 'kunAccountCardFailedHint', tone: 'bad' }
+  return { title: 'kunAccountCardSignedOut', hint: 'kunAccountCardSignedOutHint', tone: 'plain' }
 }
 
 type ErrorCopy = { title: string; body: string; action: KunAccountErrorAction; art: KunAccountArt }
@@ -45,23 +60,17 @@ export function kunAccountErrorCopy(error: KunAccountError, platform: string): E
   }
 }
 
-/** The first visible character of the display name, for the avatar disc. */
-export function kunAccountInitial(user: Pick<KunAccountUser, 'name' | 'email'> | null): string {
-  const source = (user?.name || user?.email || 'K').trim() || 'K'
-  return (Array.from(source)[0] ?? 'K').toUpperCase()
-}
-
-export const KUN_ACCOUNT_PANEL_WIDTH = 312
+export const KUN_ACCOUNT_PANEL_WIDTH = 296
 const MARGIN = 12
 const GAP = 8
 
 /**
- * Opens above the entry, right edges aligned, clamped into the window.
+ * Opens above the account card, left edges aligned, clamped into the window.
  * Rects arrive in zoomed viewport pixels; results are layout pixels for a
  * fixed element under the zoomed body.
  */
 export function kunAccountPanelPlacement({ anchor, viewportWidth, viewportHeight, scale = 1 }: {
-  anchor: Pick<DOMRect, 'top' | 'right'>
+  anchor: Pick<DOMRect, 'top' | 'left'>
   viewportWidth: number
   viewportHeight: number
   scale?: number
@@ -70,7 +79,7 @@ export function kunAccountPanelPlacement({ anchor, viewportWidth, viewportHeight
   const vw = viewportWidth / zoom
   const vh = viewportHeight / zoom
   const width = Math.max(0, Math.min(KUN_ACCOUNT_PANEL_WIDTH, vw - MARGIN * 2))
-  const left = Math.min(Math.max(anchor.right / zoom - width, MARGIN), Math.max(MARGIN, vw - MARGIN - width))
+  const left = Math.min(Math.max(anchor.left / zoom, MARGIN), Math.max(MARGIN, vw - MARGIN - width))
   const top = anchor.top / zoom
   return { left, bottom: Math.max(MARGIN, vh - top + GAP), width, maxHeight: Math.max(160, top - GAP - MARGIN) }
 }

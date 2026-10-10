@@ -17,6 +17,7 @@ vi.mock('../rooms/rooms-client', () => ({ roomsRequest: mocks.request, roomReque
 import { acceptWardrobe } from '../rooms/room-wardrobe'
 import { useRoomUserProfile } from '../rooms/room-user-profile'
 import { WardrobePageView } from './WardrobePageView'
+import { requestWardrobeTab } from './wardrobe-tab-request'
 
 const parts = { color: 'sky', face: 'normal', bg: '#eef6ff', headwear: 'baseball-cap' }
 const bottle = (index: number): KunWardrobeDrop => ({ id: `drop-${index}`, kind: 'item', rarity: 'common', item: { category: 'prop', id: 'book' },
@@ -111,6 +112,27 @@ describe('wardrobe page', () => {
   it('says the wardrobe is synced to the account and offers the shop and invitations', () => {
     expect($('[data-wardrobe-mode]')?.dataset.wardrobeMode).toBe('account')
     expect($$('[data-wardrobe-tab]').map((tab) => tab.dataset.wardrobeTab)).toEqual(['items', 'cards', 'look', 'log', 'shop', 'invite'])
+  })
+
+  it('closes from its own header button once the host hands it a way back', async () => {
+    expect($('[data-wardrobe-close]')).toBeNull()
+    const onClose = vi.fn()
+    await act(async () => root.render(createElement(WardrobePageView, { leftSidebarCollapsed: false, onToggleLeftSidebar: vi.fn(), onClose })))
+    expect($('[data-wardrobe-close]')?.getAttribute('aria-label')).toBe('wardrobePageLeave')
+    await act(async () => $('[data-wardrobe-close]')!.click())
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('switches to the tab the account menu asks for, also while the page is open', async () => {
+    const pressed = () => $$('[data-wardrobe-tab]').find((tab) => tab.getAttribute('aria-pressed') === 'true')?.dataset.wardrobeTab
+    expect(pressed()).toBe('items')
+    await act(async () => requestWardrobeTab('invite'))
+    expect(pressed()).toBe('invite')
+    await act(async () => $('[data-wardrobe-tab="cards"]')!.click())
+    await act(async () => requestWardrobeTab('invite'))
+    expect(pressed()).toBe('invite')
+    await act(async () => requestWardrobeTab(undefined))
+    expect(pressed()).toBe('invite')
   })
 
   it('signed out, swaps the shelf for sign-in, locks the shop, and keeps unknown items out of reach', async () => {

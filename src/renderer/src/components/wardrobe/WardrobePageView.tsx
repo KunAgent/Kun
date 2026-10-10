@@ -30,6 +30,7 @@ import { WardrobeInvitePanel } from './WardrobeInvitePanel'
 import { WardrobeShopPanel } from './WardrobeShopPanel'
 import { wardrobeErrorText } from './wardrobe-account'
 import { WARDROBE_SLOT_LABELS, WardrobeStage } from './WardrobeStage'
+import { useWardrobeTabRequest } from './wardrobe-tab-request'
 import '../rooms/room-avatar-composer.css'
 import '../rooms/room-wardrobe.css'
 import '../rooms/room-wardrobe-panel.css'
@@ -48,8 +49,10 @@ type Toast = { text: string; undo?: { avatar: WardrobeAvatar }; error?: boolean 
  * My wardrobe as a full page: the fitting room and the bottle shelf on the left, the collection
  * on the right. Wearing applies at once and syncs to every conversation; the toast can undo it.
  */
-export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: {
+export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar, onClose }: {
   leftSidebarCollapsed: boolean; onToggleLeftSidebar: () => void
+  /** Leaves the page for where the user came from; the account menu no longer toggles it. */
+  onClose?: () => void
 }): ReactElement {
   useArtRevision()
   const { t, i18n } = useTranslation('common')
@@ -60,7 +63,8 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
   const [optimistic, setOptimistic] = useState<{ avatar: WardrobeAvatar } | null>(null)
   const avatar = state.mode === 'guest' ? null : optimistic ? optimistic.avatar : profileAvatar
   const { parts, dressed } = wardrobeLook(avatar)
-  const [tab, setTab] = useState<Tab>('items')
+  const tabRequest = useWardrobeTabRequest((value) => value.request)
+  const [tab, setTab] = useState<Tab>(() => tabRequest?.tab ?? 'items')
   const [category, setCategory] = useState<WardrobeCategory>('all')
   const [ownedOnly, setOwnedOnly] = useState(false)
   const [cardFilter, setCardFilter] = useState<WardrobeCardFilter>('all')
@@ -84,6 +88,15 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
   const tabs: Tab[] = ['items', 'cards', 'look', 'log', ...(state.mode === 'local' ? [] : ACCOUNT_TABS)]
 
   useEffect(() => { if (guest) { setOptimistic(null); setTrying(null); setPhoto(null); setToast(null) } }, [guest])
+  // The account menu can ask for a tab while the page is already open; a tab this mode lacks falls back to items.
+  const requestedTab = tabRequest?.tab
+  const requestSerial = tabRequest?.serial
+  useEffect(() => {
+    if (!requestedTab) return
+    setTab(tabs.includes(requestedTab) ? requestedTab : 'items')
+    setSelection(null)
+    setTrying(null)
+  }, [requestSerial]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { title.current?.focus({ preventScroll: true }) }, [])
   useEffect(() => {
     if (!toast) return
@@ -171,6 +184,8 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar }: 
             {guest ? null : <button type="button" ref={gear} className="kun-wardrobe-head-icon" aria-label={t('wardrobePageDropSettings')} title={t('wardrobePageDropSettings')}
               aria-expanded={settingsOpen} aria-pressed={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)} data-wardrobe-settings>
               <Settings2 size={16} strokeWidth={1.8} aria-hidden="true" /></button>}
+            {onClose ? <button type="button" className="kun-wardrobe-head-icon" aria-label={t('wardrobePageLeave')} title={t('wardrobePageLeave')}
+              onClick={onClose} data-wardrobe-close><X size={16} strokeWidth={1.8} aria-hidden="true" /></button> : null}
             {settingsOpen && wardrobe ? <div ref={popover} className="kun-wardrobe-popover" role="dialog" aria-label={t('wardrobePageDropSettings')}>
               <div className="kun-wardrobe-popover-head"><strong>{t('wardrobePageDropSettings')}</strong>
                 <button type="button" onClick={() => setSettingsOpen(false)} aria-label={t('wardrobePageClose')}><X size={15} aria-hidden="true" /></button></div>
