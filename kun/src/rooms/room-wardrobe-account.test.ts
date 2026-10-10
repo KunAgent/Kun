@@ -11,6 +11,7 @@ import {
 } from './room-wardrobe-account.js'
 import { roomFingerprint } from './room-service.js'
 import { KUN_WARDROBE_STARTER_PACK } from '../contracts/kun-wardrobe.js'
+import type { RoomAvatarReference } from '../contracts/room-content.js'
 
 const resources: Array<{ dir: string; store: SqliteRoomStore }> = []
 afterEach(async () => { for (const { dir, store } of resources.splice(0)) { await store.close(); await rm(dir, { recursive: true, force: true }) } })
@@ -19,7 +20,8 @@ async function openStore() {
   resources.push({ dir, store })
   return store
 }
-const composed = (parts: Record<string, string>) => ({ kind: 'composed' as const, version: 1 as const, parts: { color: 'sky', face: 'normal', bg: '#f7f5ef', ...parts } })
+// Test looks use plain strings; the schema narrows them when a look is saved.
+const composed = (parts: Record<string, string>) => ({ kind: 'composed', version: 1, parts: { color: 'sky', face: 'normal', bg: '#f7f5ef', ...parts } }) as unknown as RoomAvatarReference
 const profile = async (store: SqliteRoomStore) => (await store.get<{ avatar: unknown }>('room_user_profile', 'self'))?.value.avatar
 const now = () => new Date().toISOString()
 
