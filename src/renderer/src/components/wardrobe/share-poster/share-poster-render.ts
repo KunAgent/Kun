@@ -10,6 +10,9 @@ const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Mic
 export async function loadPosterImage(url: string): Promise<HTMLImageElement> {
   const image = new Image()
   image.decoding = 'async'
+  // Hot-updated art has its own origin. Request CORS before src so the canvas
+  // remains exportable, matching the wardrobe avatar compositor.
+  if (url.startsWith('kun-asset:')) image.crossOrigin = 'anonymous'
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => { image.src = ''; reject(new Error('image-timeout')) }, 15000)
     image.onload = () => { clearTimeout(timeout); resolve() }
