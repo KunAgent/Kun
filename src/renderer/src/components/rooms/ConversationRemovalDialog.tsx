@@ -60,7 +60,7 @@ export function ConversationRemovalDialog({ target, removal, busy, error, onCanc
       <div className="conversation-removal-identity">
         {group ? <RoomAvatarGroup members={target.members} avatar={target.avatar} id={target.roomId} label={target.name} size={40} />
           : <RoomAvatar avatar={target.avatar} id={target.agentId ?? target.roomId} label={target.name} size={40} />}
-        <span><strong>{target.name}</strong><small>{subtitle}</small></span>
+        <span className="conversation-removal-identity-text"><strong>{target.name}</strong><small>{subtitle}</small></span>
       </div>
       <ul className="conversation-removal-points">
         {points.map(({ key, icon: Icon, text }) => <li key={key}><Icon size={15} aria-hidden="true" /><span>{text}</span></li>)}

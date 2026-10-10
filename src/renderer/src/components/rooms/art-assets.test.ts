@@ -6,9 +6,9 @@ const canvas = vi.hoisted(() => vi.fn(async () => ({ url: 'blob:test', bytes: 1,
 vi.mock('./room-avatar-composition-canvas', () => ({ renderAvatarComposition: canvas }))
 let data: Awaited<ReturnType<typeof fixture>>
 beforeAll(async () => { data = await fixture() })
-afterEach(() => { receiveArtState({ phase: 'bundled', manifest: null, completed: 0, total: 0, rollbackAvailable: false, held: false }); canvas.mockClear() })
+afterEach(() => { receiveArtState({ phase: 'bundled', manifest: null, completed: 0, total: 0 }); canvas.mockClear() })
 const apply = (releaseId: string) => receiveArtState({ phase: 'ready', manifest: { ...structuredClone(data.manifest), releaseId },
-  completed: 453, total: 453, rollbackAvailable: true, held: false })
+  completed: 453, total: 453 })
 describe('art renderer version boundary', () => {
   it('keeps an in-flight composition on its original release during hot activation', async () => {
     apply('one')
@@ -22,7 +22,7 @@ describe('art renderer version boundary', () => {
   })
   it('restores bundled image URLs after rollback to the installation resources', () => {
     apply('one')
-    receiveArtState({ phase: 'bundled', manifest: null, completed: 0, total: 0, rollbackAvailable: false, held: true })
+    receiveArtState({ phase: 'bundled', manifest: null, completed: 0, total: 0 })
     expect(composedAvatarLayerUrl('base/sky', 128)).not.toMatch(/^kun-asset:/)
   })
 })

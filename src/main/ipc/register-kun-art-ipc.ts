@@ -32,18 +32,15 @@ export function registerKunArtIpc(getMainWindow: () => BrowserWindow | null, run
       appVersion: app.getVersion(), activate, changed
     })
   })
-  const run = (channel: string, action: () => Promise<ArtState>) => ipcMain.handle(channel, event => {
-    assertTrustedWorkbenchSender(event, getMainWindow); return action()
-  })
-  run(channels.get, () => service.getState())
-  run(channels.check, () => service.check(true))
-  run(channels.rollback, () => service.rollback())
+  ipcMain.handle(channels.get, event => { assertTrustedWorkbenchSender(event, getMainWindow); return service.getState() })
   bindArtResourceReader(url => service.resource(url))
   let stopped = false
   let timer: ReturnType<typeof setTimeout>
+  // The server is asked once per local day, on the first run after launch or midnight; a tick that finds the day
+  // already answered only reads a date, and a failed day is retried on the next tick.
   const tick = async () => {
-    const state = await service.check()
-    if (!stopped) { timer = setTimeout(() => { void tick() }, state.phase === 'error' ? 60_000 : 30 * 60_000); timer.unref() }
+    await service.checkIfDue()
+    if (!stopped) { timer = setTimeout(() => { void tick() }, 30 * 60_000); timer.unref() }
   }
   timer = setTimeout(() => { void tick() }, 10_000)
   timer.unref()

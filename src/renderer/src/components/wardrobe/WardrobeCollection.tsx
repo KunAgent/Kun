@@ -39,7 +39,8 @@ export function WardrobeItemsSection({ wardrobe, unlockAll, parts, dressed, lang
       })}
     </div>
     <div className="kun-wardrobe-scroll">
-      <div className="kun-wardrobe-grid" onPointerLeave={onEndTry}>
+      <div className="kun-wardrobe-grid" onPointerLeave={onEndTry}
+        onPointerOver={(event) => { if (!(event.target as Element).closest('[data-wardrobe-item]')) onEndTry() }}>
         {tiles.map((tile) => {
           const on = selection?.kind === 'item' && selection.key === tile.key
           const rarity = KUN_AVATAR_RARITY_LABELS[tile.rarity][language]

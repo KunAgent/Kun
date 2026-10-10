@@ -23,7 +23,8 @@
   padding: 10px 12px;
 }
 .conversation-removal-identity .rooms-avatar-letter { display: none; }
-.conversation-removal-identity > span { display: flex; min-width: 0; flex-direction: column; }
+/* Class, not `> span`: the avatar group is a span too, and must keep its own grid. */
+.conversation-removal-identity-text { display: flex; min-width: 0; flex-direction: column; }
 .conversation-removal-identity strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-removal-identity small { overflow: hidden; color: var(--ds-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-removal-points { display: grid; gap: 9px; margin: 16px 2px 4px; }

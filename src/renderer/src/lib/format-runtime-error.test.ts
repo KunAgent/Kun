@@ -9,6 +9,7 @@ describe('format runtime error', () => {
 
   it.each([
     ['policy_denied', "Devin did not advertise the requested permission mode 'normal'.", 'permission'],
+    ['policy_denied', "The Agent could not establish permission mode 'build' (it offers 'Sisyphus', 'Atlas'). Select a supported permission mode or pick one of its Agents in the composer and retry; no prompt was sent.", 'nativeAgent'],
     ['agent_error', 'Agent launch has no current readiness proof', 'changed'],
     ['agent_error', 'Failed to authenticate. API Error: 403 Request not allowed', 'authentication'],
     ['agent_error', "The model requires a newer version of Codex. Please upgrade to the latest app or CLI.", 'update']

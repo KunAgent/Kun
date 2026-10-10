@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { ArtManifest } from '../../shared/kun-art'
 import { verifyEnvelope, verifyFile } from './verification'
-export type ArtPointer = { active: string | null; previous: string | null; rejected: string[]; held: boolean }
-const empty = (): ArtPointer => ({ active: null, previous: null, rejected: [], held: false })
+export type ArtPointer = { active: string | null; previous: string | null }
+const empty = (): ArtPointer => ({ active: null, previous: null })
 const id = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(value)
 export class ArtStorage {
   constructor(readonly root: string, private readonly publicKey?: string) {}
@@ -15,9 +15,9 @@ export class ArtStorage {
   async pointer(): Promise<ArtPointer> {
     try {
       const p = JSON.parse(await readFile(join(this.root, 'active.json'), 'utf8'))
-      if (!(p.active === null || id(p.active)) || !(p.previous === null || id(p.previous)) || !Array.isArray(p.rejected) ||
-          p.rejected.length > 100 || !p.rejected.every(id) || typeof p.held !== 'boolean') return empty()
-      return p as ArtPointer
+      // Older files also carry rollback bookkeeping that nothing reads any more.
+      if (!(p.active === null || id(p.active)) || !(p.previous === null || id(p.previous))) return empty()
+      return { active: p.active, previous: p.previous }
     } catch { return empty() }
   }
   async atomic(path: string, bytes: Uint8Array): Promise<void> {
@@ -30,6 +30,16 @@ export class ArtStorage {
   }
   async savePointer(pointer: ArtPointer): Promise<void> {
     await this.atomic(join(this.root, 'active.json'), Buffer.from(JSON.stringify(pointer)))
+  }
+  /** The local calendar day of the last update check that got an answer, or null. */
+  async checkedDay(): Promise<string | null> {
+    try {
+      const value = JSON.parse(await readFile(join(this.root, 'checked.json'), 'utf8'))
+      return typeof value.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.day) ? value.day : null
+    } catch { return null }
+  }
+  async saveCheckedDay(day: string): Promise<void> {
+    await this.atomic(join(this.root, 'checked.json'), Buffer.from(JSON.stringify({ day })))
   }
   filePath(hash: string): string {
     if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('invalid_hash')

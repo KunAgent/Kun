@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { COMPOSER_TOOLBAR_FIT_LEVELS, fitComposerToolbar } from './composer-toolbar-fit'
 
@@ -63,5 +65,15 @@ describe('fitComposerToolbar', () => {
     toolbar.setAttribute('data-fit-2', '')
     expect(fitComposerToolbar(toolbar)).toBe(0)
     expect(toolbar.hasAttribute('data-fit-2')).toBe(true)
+  })
+})
+
+describe('composer toolbar layout css', () => {
+  it('keeps the native Agent picker when level 1 drops secondary chrome', () => {
+    // OpenCode plugins can replace build/plan, so a picked Agent is the only way to
+    // send from a cramped composer (Work); only the sub-agent picker is chrome.
+    const css = readFileSync(resolve(process.cwd(), 'src/renderer/src/styles/base-shell/composer-toolbar-layout.css'), 'utf8')
+    const level1 = /\.ds-composer-toolbar\[data-fit-1\][^{]*\{[^}]*display: none;/.exec(css)?.[0] ?? ''
+    expect(level1).toContain('.ds-composer-agent-picker:not([data-native-agent-picker])')
   })
 })

@@ -2,7 +2,7 @@ import { hasKunAccountSession, type KunAccountState } from '../../shared/kun-acc
 import type { ArtState } from '../../shared/kun-art'
 import type { ArtAccountAccess } from './account-access'
 import type { ArtAssetService } from './service'
-export const signedOutArt = (): ArtState => ({ phase: 'signed_out', manifest: null, completed: 0, total: 0, rollbackAvailable: false, held: false })
+export const signedOutArt = (): ArtState => ({ phase: 'signed_out', manifest: null, completed: 0, total: 0 })
 /** A session change immediately fences old downloads, callbacks and local protocol reads. */
 export class ArtAccountSession {
   private identity: string | null = null
@@ -43,8 +43,7 @@ export class ArtAccountSession {
     return this.active
   }
   async getState(): Promise<ArtState> { return (await this.service())?.getState() ?? signedOutArt() }
-  async check(manual = false): Promise<ArtState> { return (await this.service())?.check(manual) ?? signedOutArt() }
-  async rollback(): Promise<ArtState> { return (await this.service())?.rollback() ?? signedOutArt() }
+  async checkIfDue(): Promise<ArtState> { return (await this.service())?.checkIfDue() ?? signedOutArt() }
   async resource(url: string): Promise<Uint8Array> {
     const service = await this.service(), epoch = this.epoch
     if (!service) throw new Error('login_required')

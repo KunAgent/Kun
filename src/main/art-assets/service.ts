@@ -3,16 +3,17 @@ import { ArtStorage, type ArtPointer } from './storage'
 import { compatible, hash, verifyEnvelope, verifyFile } from './verification'
 const ISSUER = 'https://api-kun-server.com'
 type Fetcher = (url: string, options: RequestInit) => Promise<Response>
+/** Local calendar day, e.g. 2026-10-10: the unit of "once a day". */
+export const localDay = (date: Date): string => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 export class ArtAssetService {
-  private state: ArtState = { phase: 'bundled', manifest: null, completed: 0, total: 0, rollbackAvailable: false, held: false }
-  private pointer: ArtPointer = { active: null, previous: null, rejected: [], held: false }
+  private state: ArtState = { phase: 'bundled', manifest: null, completed: 0, total: 0 }
+  private pointer: ArtPointer = { active: null, previous: null }
   private previous: ArtManifest | null = null
   private initialized?: Promise<void>
   private running?: Promise<ArtState>
   private rolling?: Promise<ArtState>
   private abort = new AbortController()
   private disposed = false
-  private etag?: string
   constructor(private readonly deps: {
     storage: ArtStorage; fetch: Fetcher; appVersion: string; publicKey?: string
     changed(state: ArtState): void
@@ -20,8 +21,7 @@ export class ArtAssetService {
     activate(manifest: ArtManifest | null): Promise<void>
   }) {}
   private emit(patch: Partial<ArtState> = {}): void {
-    const next = { ...this.state, ...patch }
-    this.state = { ...next, rollbackAvailable: Boolean(next.manifest), held: this.pointer.held }
+    this.state = { ...this.state, ...patch }
     if (!this.disposed) this.deps.changed(this.state)
   }
   async getState(): Promise<ArtState> {
@@ -38,7 +38,6 @@ export class ArtAssetService {
     if (active && !compatible(active, this.deps.appVersion)) active = null
     if (this.previous && !compatible(this.previous, this.deps.appVersion)) this.previous = null
     if (!active && this.pointer.active) {
-      this.pointer.rejected = [...new Set([...this.pointer.rejected, this.pointer.active])].slice(-100)
       active = this.previous; this.previous = null
       this.pointer.active = active?.releaseId ?? null; this.pointer.previous = null
       await this.deps.storage.savePointer(this.pointer)
@@ -47,10 +46,19 @@ export class ArtAssetService {
     await this.deps.activate(active).catch(() => undefined)
     this.emit({ manifest: active, phase: active ? 'ready' : 'bundled' })
   }
-  async check(manual = false): Promise<ArtState> {
+  /** Asks for an update at most once per local day; a failed attempt does not use up the day. */
+  async checkIfDue(now = new Date()): Promise<ArtState> {
+    await this.getState()
+    if (await this.deps.storage.checkedDay() === localDay(now)) return this.state
+    return this.check(now)
+  }
+  async check(now = new Date()): Promise<ArtState> {
     if (this.rolling) return this.rolling
     if (this.running) return this.running
-    this.running = this.update(manual).catch((error: unknown) => {
+    this.running = this.update().then(async state => {
+      await this.deps.storage.saveCheckedDay(localDay(now)).catch(() => undefined)
+      return state
+    }, (error: unknown) => {
       const code = error instanceof Error && /^[a-z_]{1,64}$/.test(error.message) ? error.message : 'update_failed'
       this.deps.failed?.(code)
       this.emit({ phase: 'error', error: '资源更新暂不可用，继续使用已有资源。' }); return this.state
@@ -71,13 +79,11 @@ export class ArtAssetService {
     } finally { await reader.cancel().catch(() => undefined) }
     return Buffer.concat(chunks)
   }
-  private async update(manual: boolean): Promise<ArtState> {
+  private async update(): Promise<ArtState> {
     await this.getState()
-    if (this.pointer.held && !manual) return this.state
     this.emit({ phase: 'checking', error: undefined, completed: 0, total: 0 })
     const query = new URLSearchParams({ channel: 'stable', appVersion: this.deps.appVersion, schemaVersion: '1' })
-    const response = await this.deps.fetch(`${ISSUER}/api/assets/releases/latest?${query}`, { headers: this.etag && !manual ? { 'If-None-Match': this.etag } : {}, redirect: 'error', signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(15_000)]) })
-    if (response.status === 304) { await this.deps.activate(this.state.manifest); this.emit({ phase: this.state.manifest ? 'ready' : 'bundled' }); return this.state }
+    const response = await this.deps.fetch(`${ISSUER}/api/assets/releases/latest?${query}`, { redirect: 'error', signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(15_000)]) })
     if (response.status === 204) { this.emit({ phase: this.state.manifest ? 'ready' : 'bundled' }); return this.state }
     if (!response.ok) throw new Error('check_failed')
     // Bound the descriptor independently of server-provided headers.
@@ -88,10 +94,8 @@ export class ArtAssetService {
     const descriptor = JSON.parse(Buffer.concat(chunks).toString('utf8'))
     if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(descriptor.releaseId) || !/^[a-f0-9]{64}$/.test(descriptor.sha256) ||
         !Number.isSafeInteger(descriptor.size) || descriptor.size < 1 || descriptor.size > 2 * 1024 * 1024) throw new Error('invalid_descriptor')
-    if (this.pointer.rejected.includes(descriptor.releaseId) && !manual) { this.emit({ phase: this.state.manifest ? 'ready' : 'bundled' }); return this.state }
     if (descriptor.releaseId === this.state.manifest?.releaseId) {
       await this.deps.activate(this.state.manifest)
-      if (manual) { this.pointer.held = false; await this.deps.storage.savePointer(this.pointer) }
       this.emit({ phase: 'ready' }); return this.state
     }
     const envelope = await this.get(`${ISSUER}/art/releases/${descriptor.releaseId}.json`, descriptor.size)
@@ -120,11 +124,9 @@ export class ArtAssetService {
     // Runtime accepts the complete catalog before renderers see this version.
     await this.deps.activate(manifest)
     const old = this.state.manifest
-    const pointer = { active: manifest.releaseId, previous: old?.releaseId ?? null,
-      rejected: this.pointer.rejected.filter(id => id !== manifest.releaseId), held: false }
+    const pointer = { active: manifest.releaseId, previous: old?.releaseId ?? null }
     try { await this.deps.storage.savePointer(pointer) } catch (error) { await this.deps.activate(old).catch(() => undefined); throw error }
     this.previous = old; this.pointer = pointer
-    this.etag = `"${descriptor.sha256}"`
     this.emit({ phase: 'ready', manifest, error: undefined })
     // Keep current + previous; old render requests use a frozen manifest until the UI switches.
     return this.state
@@ -139,11 +141,9 @@ export class ArtAssetService {
     const current = this.state.manifest
     if (this.previous) { try { this.previous = await this.deps.storage.load(this.previous.releaseId) } catch { this.previous = null } }
     await this.deps.activate(this.previous)
-    const pointer = { active: this.previous?.releaseId ?? null, previous: null,
-      rejected: [...new Set([...this.pointer.rejected, ...(current ? [current.releaseId] : [])])].slice(-100), held: true }
+    const pointer = { active: this.previous?.releaseId ?? null, previous: null }
     try { await this.deps.storage.savePointer(pointer) } catch (error) { await this.deps.activate(current).catch(() => undefined); throw error }
     this.pointer = pointer
-    this.etag = undefined
     this.emit({ phase: this.previous ? 'ready' : 'bundled', manifest: this.previous, error: undefined })
     this.previous = null
     return this.state

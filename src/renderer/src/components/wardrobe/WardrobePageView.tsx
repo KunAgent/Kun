@@ -1,5 +1,4 @@
 import { useArtRevision } from '../rooms/art-asset-store'
-import { WardrobeArtUpdates } from './WardrobeArtUpdates'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { Dices, Feather, Lock, RotateCcw, Settings2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -88,6 +87,13 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar, on
   const tabs: Tab[] = ['items', 'cards', 'look', 'log', ...(state.mode === 'local' ? [] : ACCOUNT_TABS)]
 
   useEffect(() => { if (guest) { setOptimistic(null); setTrying(null); setPhoto(null); setToast(null) } }, [guest])
+  // A preview must never outlive the pointer: losing window focus (screenshots, app switching) ends it too.
+  useEffect(() => {
+    if (!trying) return
+    const stop = () => setTrying(null)
+    window.addEventListener('blur', stop)
+    return () => window.removeEventListener('blur', stop)
+  }, [trying])
   // The account menu can ask for a tab while the page is already open; a tab this mode lacks falls back to items.
   const requestedTab = tabRequest?.tab
   const requestSerial = tabRequest?.serial
@@ -196,7 +202,6 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar, on
         </div>
       </header>
     </div>
-    <WardrobeArtUpdates language={language} />
     {!wardrobe ? <p className={state.error ? 'kun-wardrobe-empty rooms-run-error' : 'kun-wardrobe-empty'} role={state.error ? 'alert' : undefined}>
       {state.error || t('roomsLoading')}</p> : <main className="kun-wardrobe-body ds-no-drag">
       <div className="kun-wardrobe-side">

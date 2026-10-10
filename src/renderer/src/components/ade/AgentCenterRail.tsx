@@ -87,7 +87,9 @@ export function AgentCenterRail({ groups, selectedId, defaultId, search, expande
     setTarget(null)
   }
 
-  return <div className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-ds-border-muted bg-[color-mix(in_srgb,var(--ds-surface-subtle)_55%,var(--ds-surface-card))] lg:border-b-0 lg:border-r" data-agent-catalog-rail-column>
+  // The column's tint and divider live on its wrapper, which spans the full row; this box is
+  // capped to the viewport so the list below can scroll instead of running off the window.
+  return <div className="ds-agent-rail flex min-h-0 min-w-0 flex-1 flex-col" data-agent-catalog-rail-column>
     <div className="px-3 pb-1 pt-3" data-agent-catalog-toolbar>
       <div className="relative">
         <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ds-faint" />
@@ -102,7 +104,7 @@ export function AgentCenterRail({ groups, selectedId, defaultId, search, expande
       </div>
     </div>
     <div role="listbox" aria-label={t('agentCenter.title')} aria-orientation="vertical" data-agent-catalog-rail
-      className="flex max-h-72 min-w-0 flex-col overflow-y-auto overscroll-contain px-2 pb-2 lg:max-h-none">
+      className="flex max-h-72 min-h-0 min-w-0 flex-col overflow-y-auto px-2 pb-2 lg:max-h-none lg:flex-1">
       {groups.map((group) => {
         const label = t(`agentCenter.group.${group.id}`)
         return <div key={group.id} role="group" aria-label={label} data-agent-group={group.id} className="flex flex-col gap-0.5">

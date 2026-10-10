@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   childFolder,
+  childFolderNames,
   importGroupLabels,
   planPaperImport,
   plannedFolderRows,
   plannedImportCount,
+  proposedImportFolder,
   sanitizeFolderSegment,
   suggestTopicFolder,
   type ImportCandidate
@@ -88,5 +90,23 @@ describe('paper import planning', () => {
       { folder: 'topic/A', count: 2 },
       { folder: 'topic/B', count: 1 }
     ])
+  })
+
+  it('lists the folders directly inside a parent, ancestors included', () => {
+    const groups = ['qa/round1', 'nlp', 'qa/round2/x']
+    expect(childFolderNames(groups, '')).toEqual(['nlp', 'qa'])
+    expect(childFolderNames(groups, 'qa')).toEqual(['round1', 'round2'])
+    expect(childFolderNames(groups, 'nlp')).toEqual([])
+  })
+
+  it('proposes the remembered folder, with a topic subfolder when asked', () => {
+    const groups = ['qa/round1', 'agents']
+    expect(proposedImportFolder({ parent: 'qa', topicFolder: true }, 'tool use', groups)).toBe('qa/tool use')
+    expect(proposedImportFolder({ parent: 'qa', topicFolder: false }, 'tool use', groups)).toBe('qa')
+    // A folder that no longer exists falls back to the papers dir.
+    expect(proposedImportFolder({ parent: 'gone', topicFolder: false }, 'tool use', groups)).toBe('')
+    // The topic name avoids a sibling that already exists.
+    expect(proposedImportFolder({ parent: 'qa', topicFolder: true }, 'round1', groups)).toBe('qa/round1 2')
+    expect(proposedImportFolder({ parent: '', topicFolder: true }, '  ', groups)).toBe('')
   })
 })

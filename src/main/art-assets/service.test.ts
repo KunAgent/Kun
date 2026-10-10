@@ -53,7 +53,7 @@ describe('signed art releases', () => {
   })
   it('downloads, switches atomically, restores offline and serves only declared files', async () => {
     const h = await harness(), state = await h.service.check()
-    expect(state.phase).toBe('ready'); expect(state.manifest?.releaseId).toBe('test-v1'); expect(state.rollbackAvailable).toBe(true)
+    expect(state.phase).toBe('ready'); expect(state.manifest?.releaseId).toBe('test-v1')
     const path = Object.keys(data.manifest.files)[0]
     expect((await h.service.resource(`kun-asset://test-v1/${path}`)).length).toBe(data.manifest.files[path].size)
     await expect(h.service.resource('kun-asset://test-v1/../../secret')).rejects.toThrow()
@@ -74,9 +74,9 @@ describe('signed art releases', () => {
     expect(KUN_AVATAR_CATALOG.glasses.some(x => x.id === 'new-glasses')).toBe(true)
     expect(KunAvatarPartsSchema.safeParse({ color: 'sky', face: 'normal', glasses: 'new-glasses' }).success).toBe(true)
     expect((await h.service.rollback()).manifest?.releaseId).toBe('test-v1')
-    expect((await h.service.check()).manifest?.releaseId).toBe('test-v1')
-    expect((await new ArtAssetService(h.options).getState()).held).toBe(true)
-    expect((await h.service.check(true)).manifest?.releaseId).toBe('test-v2')
+    expect((await new ArtAssetService(h.options).getState()).manifest?.releaseId).toBe('test-v1')
+    // Nothing pauses updates after a fallback: the next check brings the release back.
+    expect((await h.service.check()).manifest?.releaseId).toBe('test-v2')
   })
   it('keeps bundled art when a download is corrupt and never writes an active pointer', async () => {
     const h = await harness(); h.corrupt()
@@ -95,7 +95,7 @@ describe('signed art releases', () => {
     await writeFile(join(h.root, 'manifests/test-v2.json'), '{}'); h.offline()
     const next = new ArtAssetService(h.options)
     expect((await next.getState()).manifest?.releaseId).toBe('test-v1')
-    expect((await h.storage.pointer()).rejected).toContain('test-v2')
+    expect((await h.storage.pointer()).active).toBe('test-v1')
   })
   it('rejects corrupted cached files at startup and falls back to bundled art', async () => {
     const h = await harness(); await h.service.check()
@@ -129,7 +129,27 @@ describe('signed art releases', () => {
     await expect(h.service.resource(`kun-asset://test-v1/${path}`)).rejects.toThrow()
     await h.service.rollback()
     expect((await h.service.getState()).manifest).toBeNull()
-    expect((await h.storage.pointer()).held).toBe(true)
+    expect((await h.storage.pointer()).active).toBeNull()
+  })
+  it('asks for updates once per local day', async () => {
+    const h = await harness(), original = h.options.fetch; let asks = 0
+    h.options.fetch = async url => { if (url.includes('/latest?')) asks++; return original(url) }
+    expect((await h.service.checkIfDue(new Date(2026, 9, 10, 8))).manifest?.releaseId).toBe('test-v1')
+    await h.service.checkIfDue(new Date(2026, 9, 10, 23, 59)); await new ArtAssetService(h.options).checkIfDue(new Date(2026, 9, 10, 12))
+    expect(asks).toBe(1); expect(await h.storage.checkedDay()).toBe('2026-10-10')
+    await h.service.checkIfDue(new Date(2026, 9, 11, 0, 1)); expect(asks).toBe(2)
+  })
+  it('does not use up the day on a failed check', async () => {
+    const h = await harness(), day = new Date(2026, 9, 10, 8); h.offline()
+    expect((await h.service.checkIfDue(day)).phase).toBe('error'); expect(await h.storage.checkedDay()).toBeNull()
+    expect((await h.service.checkIfDue(day)).phase).toBe('error')
+  })
+  it('keeps reading an older pointer file that still carries rollback bookkeeping', async () => {
+    const h = await harness(); await h.service.check()
+    const pointer = JSON.parse(await readFile(join(h.root, 'active.json'), 'utf8'))
+    await writeFile(join(h.root, 'active.json'), JSON.stringify({ ...pointer, rejected: ['old-release'], held: true }))
+    expect(await h.storage.pointer()).toEqual({ active: 'test-v1', previous: null })
+    expect((await new ArtAssetService(h.options).getState()).manifest?.releaseId).toBe('test-v1')
   })
   it('does not activate a release after shutdown cancels its downloads', async () => {
     const h = await harness(), original = h.options.fetch

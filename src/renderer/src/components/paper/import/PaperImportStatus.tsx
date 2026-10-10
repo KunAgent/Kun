@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import { AlertCircle, Check, FolderInput, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { importFolderLabel } from '../../../paper/paper-import-target'
+import { folderDisplayPath } from '../../../paper/paper-import-target'
 import { backfillPaperPdf, type ImportItemState } from '../../../paper/paper-import-job'
 import type { ImportOwned } from '../../../paper/paper-import-plan'
 
@@ -23,7 +23,7 @@ export function PaperImportStatus({
   const root = t('paperImportFolderRoot')
   const base = 'inline-flex min-w-0 items-center gap-1 text-[11.5px]'
   if (item) {
-    const where = importFolderLabel(item.folder, root)
+    const where = folderDisplayPath(item.folder, root)
     switch (item.status) {
       case 'queued':
         return <span className={`${base} text-ds-faint`}>{t('paperImportStatus_queued')}</span>
@@ -83,7 +83,7 @@ export function PaperImportStatus({
     return (
       <span className={`${base} text-emerald-700 dark:text-emerald-300`}>
         <Check className="h-3 w-3 shrink-0" strokeWidth={2.4} />
-        <span className="truncate">{t('paperImportOwnedIn', { folder: importFolderLabel(owned.group, root) })}</span>
+        <span className="truncate">{t('paperImportOwnedIn', { folder: folderDisplayPath(owned.group, root) })}</span>
       </span>
     )
   }

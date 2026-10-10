@@ -86,6 +86,19 @@ describe('wardrobe page', () => {
     expect(puts()[1]).toMatchObject({ avatar: { parts: { headwear: 'baseball-cap' } } })
   })
 
+  it('previews a backdrop on hover and hands the stage back once the pointer is off every tile', async () => {
+    await act(async () => $('[data-wardrobe-tab="look"]')!.click())
+    const over = (element: Element) => act(async () => element.dispatchEvent(new MouseEvent('pointerover', { bubbles: true })))
+    await over($('[data-wardrobe-look="scene-sunset-bay"]')!)
+    expect(container.textContent).toContain('wardrobePageTryBadge')
+    await over($('.kun-wardrobe-look header')!)
+    expect(container.textContent).not.toContain('wardrobePageTryBadge')
+    await over($('[data-wardrobe-look="bg-transparent"]')!)
+    expect(container.textContent).toContain('wardrobePageTryBadge')
+    await act(async () => window.dispatchEvent(new Event('blur')))
+    expect(container.textContent).not.toContain('wardrobePageTryBadge')
+  })
+
   it('keeps an unknown item secret in the detail bar and offers the feather trade', async () => {
     await act(async () => $$('[data-wardrobe-item="unknown"]')[0]!.click())
     const sheet = $('[data-wardrobe-sheet]')!

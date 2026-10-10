@@ -268,7 +268,7 @@ export function AgentCenter({
                   label: `${row.definition.displayName} · ${agentLineText(t, presentation.activity?.line ?? presentation.listLine)}`,
                   icon: <AgentIcon harnessId={row.definition.id} size={15} /> }))} />
             </div>
-            <div className="hidden min-h-0 min-w-0 lg:flex lg:flex-col">
+            <div className="hidden min-h-0 min-w-0 border-ds-border-muted bg-[color-mix(in_srgb,var(--ds-surface-subtle)_55%,var(--ds-surface-card))] lg:flex lg:flex-col lg:border-r">
               <AgentCenterRail groups={groups} selectedId={selectedRow?.definition.id} defaultId={settings.defaultHarnessId}
                 search={search} expanded={expanded} onSearch={setSearch} onToggleExpanded={() => setExpanded((value) => !value)}
                 onSelect={setSelectedId}

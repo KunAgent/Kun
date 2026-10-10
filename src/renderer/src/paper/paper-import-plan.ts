@@ -1,5 +1,7 @@
 import type { PaperImportHintMeta } from '@shared/paper/paper-types'
-import { normalizePaperFolderInput } from './paper-import-target'
+import { expandFolderPaths } from './paper-folder-tree'
+import { joinPaperFolder, normalizePaperFolderInput } from './paper-import-target'
+import type { ImportSheetPrefs } from './paper-import-sheet-prefs'
 
 /**
  * Pure planning for "import these papers": which folder each paper goes to,
@@ -82,6 +84,29 @@ export function suggestTopicFolder(topic: string, existing: readonly string[]): 
     if (!taken.has(candidate.toLowerCase())) return candidate
   }
   return base
+}
+
+/** Names of the folders directly inside `parent` ('' = the papers dir). */
+export function childFolderNames(groups: readonly string[], parent: string): string[] {
+  const prefix = parent ? `${parent}/` : ''
+  return expandFolderPaths(groups)
+    .filter((folder) => folder.startsWith(prefix) && !folder.slice(prefix.length).includes('/'))
+    .map((folder) => folder.slice(prefix.length))
+}
+
+/**
+ * The folder the import sheet proposes: the remembered parent (if it still
+ * exists), plus a topic-named subfolder when the user asked for one.
+ */
+export function proposedImportFolder(
+  prefs: Pick<ImportSheetPrefs, 'parent' | 'topicFolder'>,
+  topic: string,
+  groups: readonly string[]
+): string {
+  const parent = expandFolderPaths(groups).includes(prefs.parent) ? prefs.parent : ''
+  if (!prefs.topicFolder) return parent
+  const name = suggestTopicFolder(topic, childFolderNames(groups, parent))
+  return (name && joinPaperFolder(parent, name)) || parent
 }
 
 /** Distinct, non-empty group labels in first-seen order. */

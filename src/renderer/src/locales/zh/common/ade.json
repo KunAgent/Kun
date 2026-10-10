@@ -1,6 +1,7 @@
 {
   "agentRuntimeError": {
     "permission": "此 Agent 不支持当前权限模式。请前往「Agent 接入」检查权限配置后重试。",
+    "nativeAgent": "此 Agent 的默认权限模式（build/plan）已被其插件替换。请在输入框的 Agent 选择器（人形图标）里选一个 Agent 后重试。",
     "changed": "Agent 配置已变化。请前往「Agent 接入」重新检查并启用后重试。",
     "setup": "此 Agent 尚未就绪。请在「Agent 接入」完成配置与就绪检查。",
     "authentication": "Agent 认证未通过。请检查原生账号的登录状态和网络连接后重试。",

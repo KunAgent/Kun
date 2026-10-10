@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactElement, ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -26,7 +26,9 @@ export function WardrobeLookPanel({ parts, dressed, language, onPick, onTry, onE
   const portrait = (look: KunAvatarParts, size: number, framing?: 'face') =>
     <RoomAvatar avatar={composedAvatar(look)} id={`wardrobe-look-${canonicalKunAvatarKey(look)}-${size}`} label="" size={size} framing={framing} user />
   const bg = dressed ? parts.bg : ''
-  return <div className="kun-wardrobe-look" onPointerLeave={onEndTry}>
+  // The stage follows the pointer: headings, gaps and blank panel space hand it back to what is actually worn.
+  const endOffTile = (event: ReactPointerEvent<HTMLElement>) => { if (!(event.target as Element).closest('[data-wardrobe-look]')) onEndTry() }
+  return <div className="kun-wardrobe-look" onPointerLeave={onEndTry} onPointerOver={endOffTile}>
     <section>
       <header><strong>{t('roomsAvatarBodyColor')}</strong><span>{t('wardrobePageLookFree')}</span></header>
       <div className="kun-wardrobe-look-grid">
@@ -50,13 +52,13 @@ export function WardrobeLookPanel({ parts, dressed, language, onPick, onTry, onE
       <div className="kun-wardrobe-swatches">
         {BACKGROUND_COLORS.map((color) => {
           const look = next('bg', color)
-          return <button key={color} type="button" className="kun-wardrobe-swatch" style={{ background: color }} aria-pressed={bg === color}
+          return <button key={color} type="button" className="kun-wardrobe-swatch" style={{ background: color }} aria-pressed={bg === color} data-wardrobe-look={`bg-${color}`}
             aria-label={t('roomsAvatarBackgroundColor', { color })} data-dark={color === '#1d2530' || undefined}
             onPointerEnter={() => onTry(look)} onClick={() => onPick(look, color)}>
             {bg === color ? <Check size={16} strokeWidth={3} aria-hidden="true" /> : null}
           </button>
         })}
-        <button type="button" className="kun-wardrobe-swatch kun-wardrobe-swatch-clear" aria-pressed={bg === 'transparent'}
+        <button type="button" className="kun-wardrobe-swatch kun-wardrobe-swatch-clear" aria-pressed={bg === 'transparent'} data-wardrobe-look="bg-transparent"
           onPointerEnter={() => onTry(next('bg', 'transparent'))} onClick={() => onPick(next('bg', 'transparent'), t('roomsAvatarTransparent'))}>
           {t('roomsAvatarTransparent')}</button>
         <label className="kun-wardrobe-swatch-custom">{t('roomsAvatarCustomBackground')}

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { ArtManifest, ArtState } from '@shared/kun-art'
 import { installArtCatalog } from '../../../../../kun/src/contracts/kun-art-catalog'
-let state: ArtState = { phase: 'bundled', manifest: null, completed: 0, total: 0, rollbackAvailable: false, held: false }
+let state: ArtState = { phase: 'bundled', manifest: null, completed: 0, total: 0 }
 const listeners = new Set<() => void>()
 let started = false
 export function activeArtManifest(): ArtManifest | null { return state.manifest }

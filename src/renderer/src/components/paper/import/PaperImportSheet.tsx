@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { Folder, FolderPlus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { importFolderLabel, normalizePaperFolderInput, setImportFolder } from '../../../paper/paper-import-target'
+import { expandFolderPaths } from '../../../paper/paper-folder-tree'
+import { folderDisplayPath, importFolderLabel, joinPaperFolder, setImportFolder } from '../../../paper/paper-import-target'
 import { runPaperImport } from '../../../paper/paper-import-job'
 import {
+  childFolderNames,
   importGroupLabels,
   planPaperImport,
   plannedFolderRows,
@@ -14,7 +16,7 @@ import {
 } from '../../../paper/paper-import-plan'
 import { readImportSheetPrefs, writeImportSheetPrefs } from '../../../paper/paper-import-sheet-prefs'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
-import { PaperImportFolderList } from './PaperImportFolderList'
+import { PaperFolderTree, usePaperLibraryLocation } from './PaperFolderTree'
 
 function Check({ on, onChange, label }: { on: boolean; onChange: (value: boolean) => void; label: string }): ReactElement {
   return (
@@ -30,41 +32,11 @@ function Check({ on, onChange, label }: { on: boolean; onChange: (value: boolean
   )
 }
 
-function Radio({
-  on,
-  onSelect,
-  head,
-  children
-}: {
-  on: boolean
-  onSelect: () => void
-  head: ReactNode
-  children: ReactNode
-}): ReactElement {
-  return (
-    <div
-      className={`mx-2 mt-1 rounded-xl border px-3 py-2.5 transition ${
-        on ? 'border-[var(--ds-accent)]/40 bg-[var(--ds-accent-soft)]/60' : 'border-transparent hover:bg-ds-hover'
-      }`}
-    >
-      <button type="button" role="radio" aria-checked={on} onClick={onSelect} className="flex w-full items-center gap-2.5 text-left">
-        <span
-          aria-hidden="true"
-          className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border-[1.5px] ${on ? 'border-[var(--ds-accent)]' : 'border-ds-border-strong'}`}
-        >
-          {on ? <span className="h-2 w-2 rounded-full bg-[var(--ds-accent)]" /> : null}
-        </span>
-        {head}
-      </button>
-      {on ? <div className="pl-[26px]">{children}</div> : null}
-    </div>
-  )
-}
-
 /**
- * The one place a paper import is configured. Default: a new folder named
- * after the search topic (optionally one subfolder per recommended group);
- * or an existing folder. Already-owned papers stay put unless moved.
+ * The one place a paper import is configured: pick where in the library the
+ * papers go (a folder tree), optionally add a new folder there (named after
+ * the search topic by default), and optionally one subfolder per recommended
+ * group. Already-owned papers stay put unless moved.
  */
 export function PaperImportSheet({
   scope,
@@ -79,20 +51,26 @@ export function PaperImportSheet({
 }): ReactElement {
   const { t } = useTranslation('common')
   const groups = usePaperModeStore((s) => s.groups)
+  const { papersDir } = usePaperLibraryLocation()
   const prefs = useMemo(readImportSheetPrefs, [])
-  const suggested = useMemo(() => suggestTopicFolder(topic, groups), [topic, groups])
-  const [mode, setMode] = useState<'new' | 'existing'>(prefs.mode)
+  const known = useMemo(() => new Set(expandFolderPaths(groups)), [groups])
+  const [parent, setParent] = useState(known.has(prefs.parent) ? prefs.parent : '')
+  const suggested = useMemo(
+    () => (prefs.topicFolder ? suggestTopicFolder(topic, childFolderNames(groups, parent)) : ''),
+    // The suggestion is made once, for the folder the sheet opens on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
   const [name, setName] = useState(suggested)
-  const [existing, setExisting] = useState(groups.includes(prefs.existing) ? prefs.existing : '')
   const [byGroup, setByGroup] = useState(prefs.byGroup)
   const [owned, setOwned] = useState<'keep' | 'move'>(prefs.owned)
-  const nameRef = useRef<HTMLInputElement | null>(null)
 
   const labels = useMemo(() => importGroupLabels(candidates), [candidates])
   const ownedCount = candidates.filter((candidate) => candidate.owned).length
-  const parsed = mode === 'new' ? normalizePaperFolderInput(name) : existing
-  const nameInvalid = mode === 'new' && (parsed === null || parsed === '')
-  const folder = parsed ?? ''
+  const joined = joinPaperFolder(parent, name)
+  const nameInvalid = joined === null
+  const folder = joined ?? parent
+  const isNewFolder = joined !== null && joined !== '' && !known.has(joined)
   const plan = useMemo(
     () => planPaperImport(candidates, { folder, byGroup: byGroup && labels.length >= 2, owned }),
     [candidates, folder, byGroup, labels.length, owned]
@@ -101,9 +79,6 @@ export function PaperImportSheet({
   const rows = plannedFolderRows(plan, folder)
   const canConfirm = !nameInvalid && count > 0
 
-  useEffect(() => {
-    if (mode === 'new') nameRef.current?.select()
-  }, [mode])
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
@@ -114,13 +89,13 @@ export function PaperImportSheet({
 
   const confirm = (): void => {
     if (!canConfirm) return
-    writeImportSheetPrefs({ mode, existing: mode === 'existing' ? existing : prefs.existing, byGroup, owned })
+    writeImportSheetPrefs({ parent, topicFolder: name.trim() !== '', byGroup, owned })
     setImportFolder(folder)
     void runPaperImport({ scope, plan, folder, t })
     onClose()
   }
 
-  const folderName = importFolderLabel(folder, t('paperImportFolderRoot'))
+  const folderName = folderDisplayPath(folder, t('paperImportFolderRoot'))
   const summary = plan.batches.length > 1 || (plan.batches[0] && plan.batches[0].folder !== folder)
     ? t('paperImportSheetSummaryGroups', { count, folder: folderName, groups: Math.max(plan.batches.length, 1) })
     : t('paperImportSheetSummary', { count, folder: folderName })
@@ -150,47 +125,35 @@ export function PaperImportSheet({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-          <p className="px-4 pb-1 pt-2 text-[11.5px] font-medium text-ds-faint">{t('paperImportSheetWhere')}</p>
-          <div role="radiogroup" aria-label={t('paperImportSheetWhere')}>
-            <Radio
-              on={mode === 'new'}
-              onSelect={() => setMode('new')}
-              head={<span className="text-[13px] font-medium text-ds-ink">{t('paperImportSheetNew')}</span>}
+          <p className="px-4 pb-1.5 pt-2 text-[11.5px] font-medium text-ds-faint">{t('paperImportSheetWhere')}</p>
+          <div className="mx-4">
+            <PaperFolderTree value={parent} onChange={setParent} maxHeight={200} />
+          </div>
+          <div className="mx-4 mt-2">
+            <label
+              className={`flex h-8 items-center gap-1.5 rounded-lg border bg-ds-main px-2.5 ${
+                nameInvalid ? 'border-red-400' : 'border-ds-border-muted focus-within:border-[var(--ds-accent)]'
+              }`}
             >
-              <div className="mt-2">
-                <label className={`flex h-8 items-center gap-1.5 rounded-lg border bg-ds-main px-2.5 ${nameInvalid ? 'border-red-400' : 'border-ds-border-muted focus-within:border-[var(--ds-accent)]'}`}>
-                  <FolderPlus className="h-3.5 w-3.5 shrink-0 text-[var(--ds-accent)]" strokeWidth={1.8} />
-                  <input
-                    ref={nameRef}
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.nativeEvent.isComposing) confirm()
-                    }}
-                    placeholder={t('paperImportFolderNewPlaceholder')}
-                    aria-label={t('paperImportSheetNew')}
-                    className="min-w-0 flex-1 bg-transparent text-[13px] text-ds-ink outline-none focus-visible:outline-none placeholder:text-ds-faint"
-                  />
-                </label>
-                <p className={`mt-1 text-[11.5px] ${nameInvalid ? 'text-red-600 dark:text-red-300' : 'text-ds-faint'}`}>
-                  {nameInvalid ? t('paperImportFolderInvalid') : suggested && name === suggested ? t('paperImportSheetNewHint') : ' '}
-                </p>
-              </div>
-            </Radio>
-            <Radio
-              on={mode === 'existing'}
-              onSelect={() => setMode('existing')}
-              head={(
-                <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                  <span className="text-[13px] font-medium text-ds-ink">{t('paperImportSheetExisting')}</span>
-                  {mode !== 'existing' && existing ? (
-                    <span className="min-w-0 truncate text-[11.5px] text-ds-faint">{existing}</span>
-                  ) : null}
-                </span>
-              )}
-            >
-              <PaperImportFolderList value={existing} onChange={setExisting} />
-            </Radio>
+              <FolderPlus className="h-3.5 w-3.5 shrink-0 text-[var(--ds-accent)]" strokeWidth={1.8} />
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.nativeEvent.isComposing) confirm()
+                }}
+                placeholder={t('paperImportSheetSubfolderPlaceholder')}
+                aria-label={t('paperImportSheetNew')}
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-ds-ink outline-none focus-visible:outline-none placeholder:text-ds-faint"
+              />
+            </label>
+            <p className={`mt-1 break-all text-[11.5px] ${nameInvalid ? 'text-red-600 dark:text-red-300' : 'text-ds-faint'}`}>
+              {nameInvalid
+                ? t('paperImportFolderInvalid')
+                : t(isNewFolder ? 'paperImportSheetDestinationNew' : 'paperImportSheetDestination', {
+                    path: [papersDir, folder].filter(Boolean).join('/')
+                  })}
+            </p>
           </div>
 
           {labels.length >= 2 ? (

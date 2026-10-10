@@ -1,9 +1,9 @@
 import { useMemo, useState, type ReactElement } from 'react'
 import { ChevronDown, Download, Loader2, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { importFolderLabel } from '../../../paper/paper-import-target'
+import { folderDisplayPath } from '../../../paper/paper-import-target'
 import { cancelPaperImport, importJobCounts, usePaperImportJobs } from '../../../paper/paper-import-job'
-import { suggestTopicFolder, type ImportCandidate } from '../../../paper/paper-import-plan'
+import { proposedImportFolder, type ImportCandidate } from '../../../paper/paper-import-plan'
 import { readImportSheetPrefs } from '../../../paper/paper-import-sheet-prefs'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { PaperImportSheet } from './PaperImportSheet'
@@ -34,9 +34,7 @@ export function PaperImportAction({
   const job = usePaperImportJobs((s) => s.jobs[scope])
   const fresh = candidates.filter((candidate) => !candidate.owned)
   const destination = useMemo(() => {
-    const prefs = readImportSheetPrefs()
-    if (prefs.mode === 'existing') return importFolderLabel(prefs.existing, t('paperImportFolderRoot'))
-    return suggestTopicFolder(topic, groups) || t('paperImportFolderRoot')
+    return folderDisplayPath(proposedImportFolder(readImportSheetPrefs(), topic, groups), t('paperImportFolderRoot'))
     // The sheet writes prefs when it closes; `open` re-reads them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topic, groups, open, t])

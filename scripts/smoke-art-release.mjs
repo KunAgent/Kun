@@ -36,8 +36,8 @@ try {
   const path = Object.keys(state.manifest.files)[0]
   assert.ok((await restart.resource(`kun-asset://${state.manifest.releaseId}/${path}`)).length > 0)
   assert.equal((await restart.check()).manifest.releaseId, state.manifest.releaseId)
-  const rollback = await restart.rollback(); assert.equal(rollback.manifest, null); assert.equal(rollback.held, true)
-  assert.equal((await new ArtAssetService(options).getState()).held, true)
+  const rollback = await restart.rollback(); assert.equal(rollback.manifest, null)
+  assert.equal((await new ArtAssetService(options).getState()).manifest, null)
   console.log(JSON.stringify({ ok: true, releaseId: state.manifest.releaseId, downloaded: count, unchangedDownloads: 0,
     signedFilesVerified: Object.keys(state.manifest.files).length, offlineRestore: true, rollback: true }))
   service.dispose(); restart.dispose()

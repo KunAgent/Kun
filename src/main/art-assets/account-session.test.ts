@@ -8,16 +8,16 @@ it('gates cached resources, cancels old work and ignores late callbacks across l
   let state: KunAccountState = { status: 'anonymous', user: null, error: null }
   let listener!: (state: KunAccountState) => void
   const account = { getState: async () => state, onState: (fn: typeof listener) => { listener = fn; return () => {} } } as ArtAccountAccess
-  const ready: ArtState = { phase: 'ready', manifest: null, completed: 0, total: 0, held: false, rollbackAvailable: true }
+  const ready: ArtState = { phase: 'ready', manifest: null, completed: 0, total: 0 }
   const services: { dispose: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; changed: (state: ArtState) => void }[] = []
   const published = vi.fn(), reset = vi.fn(async () => {})
   const create = vi.fn((changed: (state: ArtState) => void) => {
     const service = { dispose: vi.fn(), stop: vi.fn(async () => {}), changed,
-      getState: async () => ready, check: vi.fn(async () => ready), rollback: async () => ready, resource: async () => new Uint8Array([1]) }
+      getState: async () => ready, check: vi.fn(async () => ready), checkIfDue: async () => ready, resource: async () => new Uint8Array([1]) }
     services.push(service); return service as unknown as ArtAssetService
   })
   const session = new ArtAccountSession({ account, create, changed: published, reset })
-  expect((await session.check()).phase).toBe('signed_out'); expect(create).not.toHaveBeenCalled()
+  expect((await session.checkIfDue()).phase).toBe('signed_out'); expect(create).not.toHaveBeenCalled()
   await expect(session.resource('kun-asset://one/path')).rejects.toThrow('login_required')
   state = { status: 'authenticated', user: { id: 'a', name: 'A', email: 'a@example.test', avatarUrl: null }, error: null }; listener(state)
   expect((await session.getState()).phase).toBe('ready')
