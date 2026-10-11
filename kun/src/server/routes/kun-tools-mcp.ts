@@ -1,3 +1,4 @@
+import { projectAnthropicToolInputSchema } from '../../adapters/model/anthropic-tool-schema-projection.js'
 import { KUN_VERSION } from '../../version.js'
 import type { HarnessTokenGrant } from '../../harness/harness-token-service.js'
 import { mapKunResultToSdkContent } from '../../runtime/agent-sdk/sdk-tool-bridge.js'
@@ -79,7 +80,8 @@ function mcpToolList(
     tools: tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      inputSchema: tool.inputSchema
+      // Downstream gateways (Anthropic-format) reject top-level oneOf/anyOf/allOf.
+      inputSchema: projectAnthropicToolInputSchema(tool.inputSchema)
     }))
   }
 }
