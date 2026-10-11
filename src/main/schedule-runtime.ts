@@ -56,6 +56,7 @@ import {
   scheduledThreadTitle
 } from './schedule-runtime-queue'
 import { boundThreadTasksForStatus } from './schedule-runtime-status'
+import { describeLocalListenError } from './local-listen-error'
 
 export {
   hasTaskDependencyCycle,
@@ -416,9 +417,7 @@ export class ScheduleRuntime {
       void this.handleInternalRequest(req, res)
     })
     server.on('error', (error) => {
-      this.deps.logError('schedule-server', 'Schedule internal server failed', {
-        message: error instanceof Error ? error.message : String(error)
-      })
+      this.deps.logError('schedule-server', 'Schedule internal server failed', describeLocalListenError(error, internal.port, 'Settings > Schedule'))
       if (this.server === server) {
         this.closeInternalServer()
       }
