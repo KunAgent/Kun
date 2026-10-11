@@ -59,6 +59,8 @@ test('stable release reruns quality gates on the merge commit before preparation
   assert.equal(quality['timeout-minutes'], 45)
   assert.equal(normalizedExpression(quality.if), normalizedExpression(prepare.if))
   assert.deepEqual(prepare.needs, ['quality'])
+  assert.equal(stepByName(quality, 'Typecheck').env.NODE_OPTIONS,
+    stepByName(readWorkflow('pr-checks.yml').jobs.quality, 'Typecheck').env.NODE_OPTIONS)
 
   const checkout = stepByName(quality, 'Check out merge commit')
   assert.equal(checkout.uses, 'actions/checkout@v4')
