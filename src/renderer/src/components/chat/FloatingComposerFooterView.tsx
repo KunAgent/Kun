@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { summarizeThreadMoney, type MoneySummaryItem } from '../../hooks/use-thread-usage'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
+import { CodeTourReplayButton } from '../code-tour/CodeTourReplayButton'
 
 type AnimatedCacheValueState = {
   current: string
@@ -224,6 +225,7 @@ export function FloatingComposerFooterView({
             )}
           </FloatingComposerUsageHistory>
         ) : null}
+        {context.emptyTaskLayout && context.taskSurface === 'code' ? <CodeTourReplayButton /> : null}
       </div>
       {footerHint ? (
         <div className="ds-composer-footer-hint">

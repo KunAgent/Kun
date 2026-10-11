@@ -19,6 +19,7 @@ const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
 const { exerciseWorkAssistantAgent } = require('./smoke-work-assistant-agent.cjs')
 const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
 const { exerciseWhatsNew } = require('./smoke-whats-new.cjs')
+const { exerciseCodeTour } = require('./smoke-code-tour.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -179,6 +180,7 @@ async function main() {
     await page.locator(onboarding ? '[data-onboarding-step]' : '[data-workspace-mode-trigger]').first().waitFor({ timeout: timeoutMs })
     const exercise = onboarding ? exerciseOnboarding
       : process.argv.includes('--whats-new-only') ? exerciseWhatsNew
+      : process.argv.includes('--code-tour-only') ? exerciseCodeTour
       : process.argv.includes('--agent-models-only') ? exerciseAgentModelControls
       : process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
