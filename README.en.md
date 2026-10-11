@@ -65,7 +65,7 @@ Also included: a plugin and skill marketplace (MCP / Skills), reminders and sche
 <table>
   <tr>
     <td align="center"><img src="./docs/assets/readme/code-mode-overview.webp" alt="Code view: projects, task entry, and composer"><br><b>Code</b> · projects, tasks, and changes</td>
-    <td align="center"><img src="./docs/assets/readme/work-mode-overview.webp" alt="Work view: file tree, documents, and the Work assistant"><br><b>Work</b> · sources, documents, and papers</td>
+    <td align="center"><img src="./docs/assets/readme/work-mode-overview.en.webp" alt="Work view: file tree, documents, and the Work assistant"><br><b>Work</b> · sources, documents, and papers</td>
   </tr>
 </table>
 
