@@ -13,7 +13,6 @@ import { bridgedToolModelName, type BridgeableTool } from './sdk-tool-bridge.js'
 import { itemOf } from './agent-sdk-runtime-items.js'
 import {
   attributeSdkContext,
-  rebaseContextProfile,
   type SdkContextOccupancy
 } from './sdk-context-occupancy.js'
 import type { SdkRuntimeDeps, SdkTurnContext, TurnStatus } from './agent-sdk-runtime-contracts.js'
@@ -281,7 +280,7 @@ export async function recordAgentSdkContextSnapshot(input: {
     providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
     stepIndex: 0,
     ...(live?.contextWindowTokens
-      ? rebaseContextProfile(ctx.contextProfile, live.contextWindowTokens)
+      ? { contextWindowTokens: live.contextWindowTokens, softThresholdTokens: live.contextWindowTokens, hardThresholdTokens: live.contextWindowTokens }
       : ctx.contextProfile),
     estimatedInputTokens: live ? live.usedTokens : tools + system + skills + messages + other,
     breakdown: live
@@ -290,6 +289,8 @@ export async function recordAgentSdkContextSnapshot(input: {
     toolCount: input.selectedKunTools.length,
     activeSkillIds: [...(ctx.activeSkillIds ?? [])],
     contextManagement: 'sdk-managed',
+    contextWindowKnown: Boolean(live?.contextWindowTokens),
+    occupancySource: live ? 'agent' : 'estimate',
     nativeHistory: live ? 'known' : input.resumed ? 'unknown' : 'none'
   })
 }

@@ -41,6 +41,15 @@ export async function queryComposerSubscriptionQuota(query: ComposerSubscription
     // Legacy single-engine defaults predate preset metadata. Their SDK kind
     // and OAuth credential still identify the exact official account route.
     if (profile?.kind === 'agent-sdk' && !profile.presetId) profile = { ...profile, presetId: 'claude-subscription' }
+    // A configured SDK route without an explicit/protected credential uses
+    // the local Claude login, exactly as the turn factory does. A missing
+    // managed credential must never fall through to another account.
+    if (native && query.harnessId === 'claude-code' && profile?.configured !== false &&
+      profile && officialSubscriptionProfile(profile) && !profile.apiKey.trim() && !profile.credentialSourceId) {
+      const ambient = await deps.native('claude-code')
+      if (ambient) profile = { ...ambient, id: profile.id, name: profile.name, accountId: profile.accountId,
+        proxyUrl: profile.proxyUrl || ambient.proxyUrl }
+    }
     if (profile && (profile.presetId || profile.id) === 'codex') {
       const stored = parseStoredCodexOAuthCredentials(profile.apiKey)
       if (stored) {

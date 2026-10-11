@@ -16,6 +16,7 @@ export const ContextSnapshotEvent = RuntimeEventBase.extend({
   providerId: z.string().min(1).optional(),
   stepIndex: z.number().int().nonnegative(),
   contextWindowTokens: z.number().int().positive(),
+  contextWindowKnown: z.boolean().optional(),
   maxInputTokens: z.number().int().positive().optional(),
   softThresholdTokens: z.number().int().positive(),
   hardThresholdTokens: z.number().int().positive(),

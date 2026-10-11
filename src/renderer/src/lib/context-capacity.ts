@@ -24,6 +24,8 @@ export type ContextCapacity = {
   estimated: true
   /** The SDK owns prior native history but does not report its occupancy. */
   nativeHistoryUnknown: boolean
+  /** A provider estimate must not masquerade as an Agent-reported limit. */
+  windowUnknown?: boolean
   /** The Agent (not Kun) owns this context and compacts it itself. */
   agentManaged: boolean
   /** The Agent measured the total itself; there is no category breakdown. */
@@ -87,6 +89,8 @@ export function buildContextCapacity(snapshot: RequestContextSnapshot): ContextC
     hardThresholdRatio,
     categories,
     estimated: true,
+    windowUnknown: agentManaged && (snapshot.contextWindowKnown === false ||
+      (snapshot.contextWindowKnown === undefined && snapshot.nativeHistory !== 'known' && !agentReported)),
     nativeHistoryUnknown: agentManaged && snapshot.nativeHistory === 'unknown',
     agentManaged,
     agentReported,

@@ -25,7 +25,8 @@
   line-height: 1.45;
 }
 
-.ds-composer-capacity-popup .ds-context-capacity + .ds-composer-subscription {
+.ds-composer-capacity-popup .ds-context-capacity + .ds-composer-subscription,
+.ds-composer-capacity-popup [data-context-capacity-empty] + .ds-composer-subscription {
   border-top: 1px solid var(--ds-border-muted);
 }
 

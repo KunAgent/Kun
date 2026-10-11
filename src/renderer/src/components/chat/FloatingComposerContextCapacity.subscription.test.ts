@@ -52,19 +52,55 @@ describe('composer context and subscription popup', () => {
   }
   const open = async (): Promise<void> => { await act(async () => host.querySelector<HTMLButtonElement>('button')!.click()) }
 
+  it('never paints a guessed 32k capacity as exhausted while the SDK has not reported its window', async () => {
+    state.chat.lastContextSnapshot = { ...snapshot, contextWindowTokens: 32_000, contextWindowKnown: false,
+      estimatedInputTokens: 40_600, nativeHistory: 'none', occupancySource: 'estimate',
+      breakdown: { tools: 33_500, system: 1_600, skills: 5_480, messages: 20, other: 0 } }
+    state.quota.result = quota
+    await render(); await open()
+    const popup = document.querySelector('[data-context-capacity-popover]')!
+    expect(popup.textContent).toContain('Waiting for Agent context capacity')
+    expect(popup.textContent).not.toContain('32.0k')
+    expect(popup.querySelector('[data-context-capacity-empty]')).toBeNull()
+    expect(popup.querySelector('[data-composer-subscription-quota]')).not.toBeNull()
+    expect(popup.querySelector('[data-context-threshold-label]')).toBeNull()
+    expect(popup.querySelector('.ds-context-capacity')!.textContent).not.toContain('100%')
+  })
+
+  it('combines restored native context without a provider id with the explicit default selection and quota', async () => {
+    state.chat.lastContextSnapshot = { ...snapshot, providerId: undefined }
+    state.quota.result = quota
+    await render(); await open()
+    const popup = document.querySelector('[data-context-capacity-popover]')!
+    expect(host.querySelectorAll('button')).toHaveLength(1)
+    expect(popup.querySelector('.ds-context-capacity')).not.toBeNull()
+    expect(popup.querySelector('[data-context-capacity-empty]')).toBeNull()
+    expect(popup.querySelector('[data-composer-subscription-quota]')).not.toBeNull()
+  })
+
+  it('keeps the shared entry outside the optional toolbar hiding rule even without a quota response', async () => {
+    state.chat.lastContextSnapshot = snapshot
+    await render()
+    expect(host.querySelector('[data-composer-capacity-trigger="context"]')).not.toBeNull()
+    expect(host.querySelector('.ds-composer-context-control')).toBeNull()
+    expect(host.querySelector('.ds-composer-subscription-control')).not.toBeNull()
+  })
+
   it('shows no placeholder when neither source has useful data', async () => {
     await render(); expect(host.childElementCount).toBe(0)
     state.quota.result = { ...quota, entry: { ...quota.entry!, status: 'missing_credentials' } }
     await render(); expect(host.childElementCount).toBe(0)
   })
 
-  it('offers an honest quota-only trigger without a fake context ring or token count', async () => {
+  it('keeps one combined popup with pending context when only quota is available', async () => {
     state.quota.result = quota
     await render()
     expect(host.querySelector('[data-composer-capacity-trigger="subscription"]')).not.toBeNull()
     await open()
     const popup = document.querySelector('[data-context-capacity-popover]')!
-    expect(popup.querySelector('.ds-context-capacity')).toBeNull()
+    expect(popup.querySelector('[data-context-capacity-empty]')).not.toBeNull()
+    expect(popup.textContent).toContain('No context statistics reported')
+    expect(host.querySelectorAll('button')).toHaveLength(1)
     expect(popup.textContent).toContain('0% left')
     expect(popup.textContent).toContain('86% left')
     expect(popup.textContent).toContain('Weekly')

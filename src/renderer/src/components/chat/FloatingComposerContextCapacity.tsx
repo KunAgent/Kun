@@ -266,7 +266,8 @@ export function FloatingComposerContextCapacity({
         visibility: 'hidden'
       }
   const percent = capacity ? formatPercent(capacity.usedRatio) : ''
-  const ariaLabel = !capacity ? t('subscriptionQuota.open') : capacity.nativeHistoryUnknown
+  const ariaLabel = !capacity ? t('subscriptionQuota.contextAndQuota') : capacity.windowUnknown
+    ? t('contextCapacityWindowPending') : capacity.nativeHistoryUnknown
     ? t('contextCapacitySdkManagedChipAria', { tokens: capacity.usedTokens })
     : t('contextCapacityChipAria', { percent })
 
@@ -280,7 +281,7 @@ export function FloatingComposerContextCapacity({
               style={popoverStyle}
               data-context-capacity-popover
               role="dialog"
-              aria-label={t(quotaTriggerVisible ? capacity ? 'subscriptionQuota.contextAndQuota' : 'subscriptionQuota.title' : 'contextCapacityTitle')}
+              aria-label={t(quotaTriggerVisible ? 'subscriptionQuota.contextAndQuota' : 'contextCapacityTitle')}
               onMouseEnter={cancelClose}
               onMouseLeave={closePreviewSoon}
               onFocusCapture={cancelClose}
@@ -289,6 +290,10 @@ export function FloatingComposerContextCapacity({
                 closePreviewSoon()
               }}
             >
+              {!capacity ? <section className="ds-composer-subscription" data-context-capacity-empty>
+                <div className="ds-composer-subscription-header"><h3>{t('contextCapacityTitle')}</h3></div>
+                <p className="ds-composer-subscription-updated">{t('subscriptionQuota.contextPending')}</p>
+              </section> : null}
               {capacity ? <ContextCapacityPopover
                 capacity={capacity}
                 agentName={agentName}
@@ -304,7 +309,7 @@ export function FloatingComposerContextCapacity({
             document.body
           )
         : null}
-      <div className={`${quotaTriggerVisible ? 'ds-composer-subscription-control' : 'ds-composer-context-control'} relative shrink-0`} ref={rootRef}>
+      <div className="ds-composer-subscription-control relative shrink-0" ref={rootRef}>
         <button
           ref={buttonRef}
           type="button"
@@ -313,7 +318,7 @@ export function FloatingComposerContextCapacity({
           onBlur={closePreviewSoon}
           onMouseEnter={openPreview}
           onMouseLeave={closePreviewSoon}
-          className={capacity ? 'ds-composer-context ds-no-drag inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30' : 'ds-composer-subscription-trigger ds-no-drag'}
+          className="ds-composer-context ds-no-drag inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
           aria-label={ariaLabel}
           aria-expanded={open}
           aria-haspopup="dialog"
@@ -324,7 +329,7 @@ export function FloatingComposerContextCapacity({
             viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
             aria-hidden="true"
           >
-            {capacity.nativeHistoryUnknown ? (
+            {capacity.nativeHistoryUnknown || capacity.windowUnknown ? (
               <circle
                 cx={RING_SIZE / 2}
                 cy={RING_SIZE / 2}
@@ -358,7 +363,7 @@ export function FloatingComposerContextCapacity({
                 />
               </>
             )}
-          </svg> : <><Gauge size={15} aria-hidden="true" /><span className="ds-composer-subscription-trigger-label">{t('subscriptionQuota.button')}</span></>}
+          </svg> : <Gauge size={15} aria-hidden="true" />}
         </button>
       </div>
     </>
@@ -408,7 +413,6 @@ export function requestContextSnapshotMatchesSelection(
   if (selectedModel && selectedModel !== 'auto' && selectedModel !== snapshotModel) return false
   const selectedProvider = normalizedSelection(selection.providerId)
   const snapshotProvider = normalizedSelection(snapshot.providerId)
-  return selectedProvider
-    ? selectedProvider === snapshotProvider
-    : !snapshotProvider || snapshotProvider === 'default'
+  return (selectedProvider === 'default' ? '' : selectedProvider) ===
+    (snapshotProvider === 'default' ? '' : snapshotProvider)
 }

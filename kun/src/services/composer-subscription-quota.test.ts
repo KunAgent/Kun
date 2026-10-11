@@ -38,13 +38,25 @@ describe('composer scoped subscription quota', () => {
     expect(ambient).toHaveBeenCalled()
   })
 
-  it('keeps a named Claude profile distinct from ambient and never falls back when it is missing', async () => {
+  it('never falls back to ambient when a named Claude profile has a missing protected credential', async () => {
     const ambient = vi.fn(async () => claude('native:claude-code'))
-    const service = new ProviderQuotaService({ loadSource: async () => ({ profiles: [claude('first'), claude('selected', '')] }), fetcher: async () => quotaResponse() })
+    const service = new ProviderQuotaService({ loadSource: async () => ({ profiles: [claude('first'), { ...claude('selected', ''), credentialSourceId: 'protected:selected' }] }), fetcher: async () => quotaResponse() })
     const result = await service.subscription({ harnessId: 'claude-code', credentialMode: 'native-login', providerId: 'selected' }, ambient)
     expect(result.entry).toMatchObject({ providerId: 'selected', status: 'missing_credentials', metrics: [] })
     expect(ambient).not.toHaveBeenCalled()
     expect((await service.subscription({ harnessId: 'codex', credentialMode: 'native-login', providerId: 'selected' }, ambient)).entry).toBeNull()
+  })
+
+  it('follows an unbound named Claude SDK route to the same native login used for its turn', async () => {
+    const ambient = vi.fn(async () => claude('native:claude-code', 'sk-ant-oat01-system'))
+    const fetcher = vi.fn<ProviderQuotaFetch>(async () => quotaResponse())
+    const selected = { ...claude('claude-subscription', ''), configured: true }
+    const service = new ProviderQuotaService({ loadSource: async () => ({ profiles: [selected] }), fetcher })
+    const result = await service.subscription({ harnessId: 'claude-code', credentialMode: 'native-login', providerId: selected.id }, ambient)
+    expect(result.entry).toMatchObject({ providerId: selected.id, status: 'available', metrics: [{ usedPercent: 30 }] })
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get('Authorization')).toBe('Bearer sk-ant-oat01-system')
+    expect(ambient).toHaveBeenCalledTimes(2)
+    expect((await service.subscription({ harnessId: 'claude-code', credentialMode: 'native-login', providerId: selected.id, accountId: 'other' }, ambient)).entry).toBeNull()
   })
 
   it.each([

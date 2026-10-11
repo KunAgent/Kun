@@ -100,12 +100,16 @@ describe('AgentSdkRuntime context snapshots', () => {
     const [estimate, live] = snapshots
     expect(estimate.contextWindowTokens).toBe(32_000)
     expect(estimate.nativeHistory).toBe('none')
+    expect(estimate.contextWindowKnown).toBe(false)
+    expect(estimate.occupancySource).toBe('estimate')
 
     expect(live).toMatchObject({
       model: 'claude-haiku-4-5',
       contextWindowTokens: 200_000,
-      softThresholdTokens: 150_000,
-      hardThresholdTokens: 170_000,
+      softThresholdTokens: 200_000,
+      hardThresholdTokens: 200_000,
+      contextWindowKnown: true,
+      occupancySource: 'agent',
       estimatedInputTokens: 38_032,
       contextManagement: 'sdk-managed',
       nativeHistory: 'known'
@@ -129,5 +133,7 @@ describe('AgentSdkRuntime context snapshots', () => {
     const live = snapshots.at(-1)!
     expect(live.estimatedInputTokens).toBe(38_032)
     expect(live.contextWindowTokens).toBe(32_000)
+    expect(live.contextWindowKnown).toBe(false)
+    expect(live.occupancySource).toBe('agent')
   })
 })

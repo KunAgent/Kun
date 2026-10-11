@@ -43,3 +43,18 @@ describe('composer subscription evidence', () => {
     expect(composerSubscriptionSelection({ ...input, harnessId: 'kun' })).toBeUndefined()
   })
 })
+
+
+it('labels a one-week window without a stray numeric scope', () => {
+  expect(composerQuotaWindowLabel({ id: 'primary', label: '1 week', unit: 'percent', usedPercent: 37, windowSeconds: 604800 },
+    key => key === 'subscriptionQuota.weekly' ? 'Weekly' : key)).toBe('Weekly')
+})
+
+it('shows the Claude global weekly limit only once when the provider returns both formats', () => {
+  const windows = composerQuotaWindows({ providerId: 'claude', providerName: 'Claude', presetId: 'claude-subscription', status: 'available', metrics: [
+    { id: 'seven-day', label: '7-day usage', unit: 'percent', usedPercent: 66, windowSeconds: 604800 },
+    { id: 'limit-1', label: 'weekly_all', unit: 'percent', usedPercent: 66 }
+  ] })
+  expect(windows).toHaveLength(1)
+  expect(windows[0].remainingPercent).toBe(34)
+})

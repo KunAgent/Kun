@@ -30,8 +30,9 @@ type Props = {
 export function ContextCapacityPopover({ capacity, agentName, style, embedded = false }: Props): ReactElement {
   const { t } = useTranslation()
   const agent = agentName?.trim() || t('contextCapacityAgentFallback')
+  const occupancyUnknown = capacity.nativeHistoryUnknown || capacity.windowUnknown
   const thresholdRatio = capacity.alertRatio
-  const accent = capacity.nativeHistoryUnknown
+  const accent = occupancyUnknown
     ? 'var(--ds-muted)'
     : stateColor(capacity.usedRatio, thresholdRatio)
 
@@ -44,7 +45,9 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
 
   // Kun compacts only its own context; an Agent-managed one is the Agent's call.
   const statusText =
-    capacity.nativeHistoryUnknown
+    capacity.windowUnknown
+      ? t('contextCapacityWindowPending')
+      : occupancyUnknown
       ? t('contextCapacitySdkManagedUnknown')
       : capacity.usedRatio >= thresholdRatio
       ? t(capacity.agentManaged ? 'contextCapacityAgentOverLimit' : 'contextCapacityOverLimit', { agent })
@@ -56,7 +59,7 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
   const thresholdLabel = capacity.agentManaged
     ? t('contextCapacityAgentThresholdLabel', { percent: formatPercent(thresholdRatio), agent })
     : t('contextCapacityThresholdLabel', { percent: formatPercent(thresholdRatio) })
-  const showThreshold = !capacity.nativeHistoryUnknown && capacity.thresholdKnown
+  const showThreshold = !occupancyUnknown && capacity.thresholdKnown
 
   return (
     <div
@@ -71,8 +74,8 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
           <span className="font-medium" style={{ color: accent }}>
             {formatCompactNumber(capacity.usedTokens)}
           </span>
-          {capacity.nativeHistoryUnknown
-            ? ` ${t('contextCapacitySentTokens')}`
+          {occupancyUnknown
+            ? ` ${t(capacity.agentReported ? 'contextCapacityReportedTokens' : 'contextCapacitySentTokens')}`
             : (
                 <>
                   {' / '}
@@ -88,7 +91,7 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
 
       {capacity.maxInputTokens ? <p className="mt-1 text-[11px] text-ds-faint">{t('contextCapacityInputLimit', { input: formatCompactNumber(capacity.maxInputTokens), context: formatCompactNumber(capacity.totalWindowTokens) })}</p> : null}
 
-      {!capacity.nativeHistoryUnknown ? <div className="relative mb-1.5 mt-3">
+      {!occupancyUnknown ? <div className="relative mb-1.5 mt-3">
         <div
           className="flex h-2 overflow-hidden rounded-full"
           style={{ background: 'var(--ds-surface-subtle)' }}
@@ -129,7 +132,7 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
             <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: accent }} />
             <span className="truncate text-[12.5px] text-ds-muted">{t('contextCapacityAgentUsed', { agent })}</span>
             <span className="text-[12px] tabular-nums text-ds-ink">{formatCompactNumber(capacity.usedTokens)}</span>
-            <span className="text-right text-[12px] tabular-nums text-ds-faint">{formatPercent(capacity.usedRatio)}</span>
+            <span className="text-right text-[12px] tabular-nums text-ds-faint">{occupancyUnknown ? '—' : formatPercent(capacity.usedRatio)}</span>
           </div>
         ) : CATEGORY_ORDER.map((key) => {
           const category = capacity.categories.find((c) => c.key === key)
@@ -145,13 +148,13 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
                 {formatCompactNumber(category.tokens)}
               </span>
               <span className="text-right text-[12px] tabular-nums text-ds-faint">
-                {capacity.nativeHistoryUnknown ? '—' : formatPercent(category.ratio)}
+                {occupancyUnknown ? '—' : formatPercent(category.ratio)}
               </span>
             </div>
           )
         })}
 
-        {!capacity.nativeHistoryUnknown ? <div className="mt-1 grid grid-cols-[13px_1fr_auto_46px] items-center gap-x-2 border-t border-ds-border-muted pt-1.5">
+        {!occupancyUnknown ? <div className="mt-1 grid grid-cols-[13px_1fr_auto_46px] items-center gap-x-2 border-t border-ds-border-muted pt-1.5">
           <span className="h-[8px] w-[8px] rounded-[3px] border border-ds-faint" />
           <span className="truncate text-[12.5px] text-ds-faint">{t('contextCapacityCat_free')}</span>
           <span className="text-[12px] tabular-nums text-ds-faint">
@@ -164,7 +167,9 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
       </div>
 
       <p className="mt-2.5 text-[10.5px] leading-snug text-ds-faint">
-        {capacity.nativeHistoryUnknown
+        {capacity.windowUnknown
+          ? `${capacity.agentReported ? '' : t('contextCapacityEstimatedBreakdown') + ' '}${t('contextCapacityWindowPendingNote')}`
+          : occupancyUnknown
           ? t('contextCapacitySdkManagedEstimate')
           : capacity.agentReported
             ? t('contextCapacityAgentReportedNote', { agent })

@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { LifecycleFencedSessionStore, ThreadLifecycleFence } from '../../services/thread-lifecycle-fence.js'
 import { InMemorySessionStore } from '../../adapters/in-memory-session-store.js'
 import { createThreadRecord } from '../../domain/thread.js'
 import type { ThreadService } from '../../services/thread-service.js'
@@ -17,7 +18,7 @@ const event: ContextSnapshotEvent = { kind: 'context_snapshot', seq: 1, threadId
 function setup() {
   const thread = createThreadRecord({ id: 'thread', title: 'test', workspace: '/tmp', model: 'codex' })
   const service = { get: async () => thread } as unknown as ThreadService
-  const store = new InMemorySessionStore()
+  const store = new LifecycleFencedSessionStore(new InMemorySessionStore(), new ThreadLifecycleFence())
   return { service, store }
 }
 describe('context snapshot hydration', () => {

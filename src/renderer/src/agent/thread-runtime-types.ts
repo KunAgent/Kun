@@ -43,6 +43,7 @@ export type RequestContextSnapshot = {
   providerId?: string
   stepIndex: number
   contextWindowTokens: number
+  contextWindowKnown?: boolean
   maxInputTokens?: number
   softThresholdTokens: number
   hardThresholdTokens: number

@@ -237,6 +237,7 @@ export class LifecycleFencedSessionStore implements SessionStore {
   ) => AsyncIterable<RuntimeEvent>
   readonly loadUsageRecords?: (options?: { threadId?: string }) => Promise<SessionUsageRecord[]>
   readonly aggregateUsage?: SessionStore['aggregateUsage']
+  readonly loadLatestContextSnapshot?: SessionStore['loadLatestContextSnapshot']
   readonly loadLatestUsageSnapshots?: (options?: { threadIds?: string[] }) => Promise<SessionLatestUsageSnapshot[]>
   readonly compactItems?: SessionStore['compactItems']
   readonly scheduleItemHistoryCompaction?: SessionStore['scheduleItemHistoryCompaction']
@@ -275,6 +276,9 @@ export class LifecycleFencedSessionStore implements SessionStore {
     }
     if (raw.aggregateUsage) {
       this.aggregateUsage = (query, liveRecords) => raw.aggregateUsage!(query, liveRecords)
+    }
+    if (raw.loadLatestContextSnapshot) {
+      this.loadLatestContextSnapshot = (threadId, maxSeq) => raw.loadLatestContextSnapshot!(threadId, maxSeq)
     }
     if (raw.loadLatestUsageSnapshots) {
       this.loadLatestUsageSnapshots = (options) => raw.loadLatestUsageSnapshots!(options)

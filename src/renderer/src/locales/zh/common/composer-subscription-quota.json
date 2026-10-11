@@ -1,7 +1,9 @@
 {
   "subscriptionQuota": {
     "checking": "正在确认当前账户额度…",
-    "windowHours": "{{count}} 小时", "windowMinutes": "{{count}} 分钟", "windowDays": "{{count}} 天",
+    "windowHours": "{{count}} 小时",
+    "windowMinutes": "{{count}} 分钟",
+    "windowDays": "{{count}} 天",
     "title": "订阅额度",
     "button": "额度",
     "open": "查看订阅额度",
@@ -10,6 +12,10 @@
     "windowRemaining": "{{window}}剩余额度",
     "weekly": "每周",
     "refresh": "刷新订阅额度",
-    "updated": "更新于 {{time}}"
-  }
+    "updated": "更新于 {{time}}",
+    "contextPending": "尚未收到此会话的上下文统计"
+  },
+  "contextCapacityWindowPending": "等待 Agent 上报上下文容量",
+  "contextCapacityWindowPendingNote": "尚未收到 Agent 的上下文容量，暂不计算占用比例和剩余容量。",
+  "contextCapacityReportedTokens": "已用 token"
 }
