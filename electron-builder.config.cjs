@@ -395,6 +395,11 @@ module.exports = {
     category: 'Development',
     icon: './src/asset/img/kun.png',
     maintainer: 'Kun Contributors <1736101137@qq.com>',
+    // Electron derives the window's WM_CLASS / Wayland app_id from package.json
+    // `desktopName`. afterPack renames the real binary to `<exe>.electron-bin`, which
+    // is what the window would otherwise be called, so the .desktop entry has to be
+    // named after desktopName for the dock to match windows with their icon.
+    syncDesktopName: true,
     // AppImage covers generic Linux; deb covers Debian-family installers such as
     // openKylin / Ubuntu that expect apt/software-store packages.
     target: [
@@ -409,8 +414,16 @@ module.exports = {
   appImage: {
     executableArgs: ['--disable-setuid-sandbox', '--no-first-run']
   },
+  deb: {
+    // Ubuntu 24.04+ denies unprivileged user namespaces, which Chromium's sandbox
+    // needs, to any program without an AppArmor profile that grants them. The stock
+    // profile only covers the launcher script; this one covers the renamed binary too.
+    appArmorProfile: 'build/linux-apparmor-profile.tpl'
+  },
   extraMetadata: {
     ...(releaseAppVersion ? { version: releaseAppVersion } : {}),
+    // Keeps a development build's dock entry apart from the production one.
+    ...(developmentFlavor ? { desktopName: 'kun-gui-dv.desktop' } : {}),
     kunAppFlavor: appFlavor,
     updateChannel,
     buildHints: {
