@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { bodyZoom } from '../../lib/body-zoom'
+import { useChatStore } from '../../store/chat-store'
 import { openWardrobePage } from '../wardrobe/wardrobe-route'
 import type { WardrobeTabRequest } from '../wardrobe/wardrobe-tab-request'
 import { useKunAccount, type KunAccountAction } from './useKunAccount'
@@ -52,7 +53,8 @@ export function KunAccountControl({ variant = 'card' }: { variant?: 'card' | 'co
 
   // A finished or failed browser sign-in opens the panel without taking focus.
   useEffect(() => {
-    if (!notice) return
+    // The first-run guide shows its own sign-in result; do not pop over it.
+    if (!notice || useChatStore.getState().initialSetupOpen) return
     setOpen(true)
     setFailure(notice.kind === 'failure')
   }, [notice])

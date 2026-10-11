@@ -15,6 +15,7 @@
       "model": { "title": "Connect a model", "detail": "Pick a service, add a key" },
       "permission": { "title": "How Kun works", "detail": "How much Kun does on its own" },
       "agents": { "title": "Bring your Agents", "detail": "Connect coding Agents on this computer" },
+      "account": { "title": "Sign in", "detail": "Optional · sync your wardrobe" },
       "ready": { "title": "All set", "detail": "Start using Kun" }
     },
     "bubble": {
@@ -30,6 +31,9 @@
       "agents": "I found a few old friends on your computer. Shall we bring them along?",
       "agentsMany": "The more the merrier. We'll get things done faster together!",
       "agentsEmpty": "No teammates yet. You can bring them in any time.",
+      "account": "Sign in and the outfits you pick for me follow you to any computer.",
+      "accountWaiting": "Waiting for good news from your browser...",
+      "accountSignedIn": "Welcome, {{name}}! Your wardrobe goes wherever you do now.",
       "ready": "All set! Call me whenever you need me."
     },
     "welcome": {
@@ -186,6 +190,26 @@
         "ready": "Installed, ready"
       }
     },
+    "account": {
+      "title": "Sign in to your Kun account (optional)",
+      "titleSignedIn": "You're signed in",
+      "subtitle": "Everything in Kun works without an account. Signing in keeps your wardrobe, bottles and invite rewards with you, even on another computer.",
+      "cardTitle": "Kun account",
+      "cardSignedOut": "Not signed in · email code, no password needed",
+      "benefits": "With an account",
+      "benefitsSignedIn": "Turned on for you",
+      "benefitsHint": "Synced across your computers",
+      "benefit": {
+        "wardrobe": { "title": "My wardrobe", "body": "Kun's outfits and the items you collect are saved to your account" },
+        "bottles": { "title": "Bottles and feathers", "body": "Bottles dropped in chats are kept on your account; duplicates turn into feathers" },
+        "invite": { "title": "Invite friends", "body": "When a friend signs up, you both get bottles" }
+      },
+      "optionalNote": "Models, Agents and conversations stay on this computer; the account never reads them. You can also sign in later from the account card at the bottom left.",
+      "signedInNote": "Your sign-in is stored encrypted on this computer. Manage or sign out later from the account card at the bottom left.",
+      "unavailable": "Sign-in isn't available here. Skip for now and sign in from the desktop app's account card later.",
+      "footHint": "Sign-in opens in your browser",
+      "skipNext": "Skip sign-in, continue"
+    },
     "ready": {
       "title": "You're all set. Let's go!",
       "subtitle": "Here is what you chose. Click any row to change it, or adjust it later in Settings.",
@@ -195,6 +219,8 @@
       "permission": "Permissions",
       "agents": "Agents",
       "agentsNone": "Just Kun for now (add more any time)",
+      "account": "Account",
+      "accountNone": "Not signed in (optional)",
       "appearance": "Look",
       "listSeparator": ", ",
       "tipSwitchTitle": "Switch Agents",

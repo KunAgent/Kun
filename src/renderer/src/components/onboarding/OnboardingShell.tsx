@@ -6,6 +6,7 @@ import kunGreetUrl from '../../../../asset/img/kun_greet.png'
 import kunWrenchUrl from '../../../../asset/img/kun_wrench.png'
 import kunHeadsetUrl from '../../../../asset/img/kun_headset.png'
 import kunSearchUrl from '../../../../asset/img/kun_search.png'
+import kunLaptopUrl from '../../../../asset/img/kun_laptop.png'
 import kunCheerUrl from '../../../../asset/img/kun_cheer.png'
 import {
   ONBOARDING_STEPS,
@@ -21,6 +22,7 @@ const MASCOTS: Readonly<Record<OnboardingStep, { src: string; width: number; sha
   model: { src: kunWrenchUrl, width: 196, shadowBottom: 24 },
   permission: { src: kunHeadsetUrl, width: 196, shadowBottom: 22 },
   agents: { src: kunSearchUrl, width: 196, shadowBottom: 22 },
+  account: { src: kunLaptopUrl, width: 200, shadowBottom: 20 },
   ready: { src: kunCheerUrl, width: 206, shadowBottom: 20 }
 }
 

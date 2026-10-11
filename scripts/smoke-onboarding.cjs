@@ -111,12 +111,18 @@ async function exerciseOnboarding({ page, application, capture, recordDiagnostic
     nodes.map((node) => ({ id: node.getAttribute('data-onboarding-agent'), state: node.getAttribute('data-state') })))
 
   await primary()
+  await step('account')
+  await settle(1200)
+  await capture('onboarding-06-account')
+  const account = await page.locator('[data-onboarding-account]').getAttribute('data-onboarding-account')
+
+  await primary()
   await step('ready')
   await settle(1400)
-  await capture('onboarding-06-ready')
+  await capture('onboarding-07-ready')
   const summary = await page.locator('[data-onboarding-summary]').allInnerTexts()
-  await recordDiagnostic('onboarding', { agents, summary, prompt })
-  return { agents, summary, prompt }
+  await recordDiagnostic('onboarding', { agents, account, summary, prompt })
+  return { agents, account, summary, prompt }
 }
 
 module.exports = { exerciseOnboarding }

@@ -15,6 +15,7 @@
       "model": { "title": "连接模型", "detail": "选择服务，填好 Key" },
       "permission": { "title": "工作方式", "detail": "Kun 的自主程度" },
       "agents": { "title": "引入 Agent", "detail": "连接本机的编程 Agent" },
+      "account": { "title": "登录账号", "detail": "可选 · 同步衣橱" },
       "ready": { "title": "准备就绪", "detail": "开始使用" }
     },
     "bubble": {
@@ -30,6 +31,9 @@
       "agents": "我在你电脑上找到了几位老朋友，叫上它们一起吧？",
       "agentsMany": "人越来越多啦，一起干活更快！",
       "agentsEmpty": "暂时没找到伙伴，以后随时可以叫上它们。",
+      "account": "登录后，你给我换的衣服到哪台电脑都在～",
+      "accountWaiting": "我在等浏览器那边的好消息…",
+      "accountSignedIn": "欢迎你，{{name}}！以后衣橱就跟着你走啦。",
       "ready": "全部就绪！有事随时叫我。"
     },
     "welcome": {
@@ -186,6 +190,26 @@
         "ready": "已安装，可连接"
       }
     },
+    "account": {
+      "title": "登录 Kun 账号（可选）",
+      "titleSignedIn": "账号已登录",
+      "subtitle": "不登录也能使用 Kun 的全部功能。登录后，衣橱、漂流瓶和邀请奖励会跟着账号走，换一台电脑也不会丢。",
+      "cardTitle": "Kun 账号",
+      "cardSignedOut": "未登录 · 用邮箱验证码登录，不用设密码",
+      "benefits": "登录后可以",
+      "benefitsSignedIn": "已为你开启",
+      "benefitsHint": "跟着账号，多台电脑同步",
+      "benefit": {
+        "wardrobe": { "title": "我的衣橱", "body": "给 Kun 换的装扮和收集的装备保存在账号里" },
+        "bottles": { "title": "漂流瓶与羽毛", "body": "对话里掉落的漂流瓶记在账号上，重复装备可换羽毛" },
+        "invite": { "title": "邀请好友", "body": "好友注册后，你们都能得到漂流瓶" }
+      },
+      "optionalNote": "模型、Agent 和对话都只在这台电脑上，账号不会读取它们。之后也可以在左下角的账号卡片随时登录。",
+      "signedInNote": "登录信息加密保存在这台电脑上。之后可以在左下角的账号卡片管理或退出。",
+      "unavailable": "当前环境无法登录账号，可以先跳过，之后在桌面版左下角登录。",
+      "footHint": "登录在浏览器里完成",
+      "skipNext": "暂不登录，继续"
+    },
     "ready": {
       "title": "一切就绪，开工吧！",
       "subtitle": "这是你刚才的选择。点任意一行可以回去修改，之后也都能在「设置」里调整。",
@@ -195,6 +219,8 @@
       "permission": "工作方式",
       "agents": "Agent",
       "agentsNone": "目前只有 Kun（之后随时可以添加）",
+      "account": "账号",
+      "accountNone": "未登录（可选）",
       "appearance": "语言与外观",
       "listSeparator": "、",
       "tipSwitchTitle": "切换 Agent",

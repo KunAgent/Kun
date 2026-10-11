@@ -1,4 +1,4 @@
-export const ONBOARDING_STEPS = ['welcome', 'model', 'permission', 'agents', 'ready'] as const
+export const ONBOARDING_STEPS = ['welcome', 'model', 'permission', 'agents', 'account', 'ready'] as const
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number]
 export type OnboardingDirection = 'forward' | 'backward'
