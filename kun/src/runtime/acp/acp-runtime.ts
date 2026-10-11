@@ -25,7 +25,7 @@ import type {
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
 import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
-import { resolveSessionTurnContext } from '../../session/session-turn-context.js'
+import { resolveSessionTurnContext, type SessionTurnContext } from '../../session/session-turn-context.js'
 
 import {
   buildHistoryTranscript,
@@ -88,7 +88,8 @@ import { acpSessionSettings } from './acp-session-settings.js'
 import { emitTolerantSessionState } from './acp-session-state-bounds.js'
 import { harnessTurnTiming } from '../harness-turn-timing.js'
 import { acpPromptResultUsage, beginAcpSessionUsage, collectAcpSessionUsage } from './acp-session-usage.js'
-import { acpLiveSteeringEnabled, startAcpTurnCompanions, type AcpTurnCompanions } from './acp-turn-companions.js'
+import { acpLiveSteeringEnabled, openAcpGuidance, startAcpTurnCompanions, type AcpTurnCompanions } from './acp-turn-companions.js'
+import type { AcpLiveSteering } from './acp-live-steering.js'
 
 export class AcpRuntime implements DelegatedTurnRuntime {
   private readonly pool: AcpConnectionPool
@@ -155,6 +156,26 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       resolveCredentialContext: resolveAcpCredentialContext
     })
     if (!resolved.ok) return resolved.outcome
+    // The loop sealed steering before handing the turn over. Reopen it now so
+    // guidance sent while the Agent starts up waits for the run.
+    const guidance = openAcpGuidance(this.deps.turns, {
+      harnessId: resolved.ctx.definition.id, threadId, turnId,
+      debug: (summary) => this.deps.debug?.({ direction: 'note', summary })
+    })
+    try {
+      return await this.runResolvedTurn(threadId, turnId, signal, resolved.ctx, guidance)
+    } finally {
+      await guidance?.finish({ followUp: false }).catch(() => undefined)
+    }
+  }
+
+  private async runResolvedTurn(
+    threadId: string,
+    turnId: string,
+    signal: AbortSignal,
+    ctx: SessionTurnContext,
+    guidance: AcpLiveSteering | undefined
+  ): Promise<TurnRunOutcome> {
     const {
       thread,
       turn,
@@ -178,7 +199,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       limits,
       intent,
       redactedRequestValues
-    } = resolved.ctx
+    } = ctx
     const command = this.deps.readiness?.commandForTurn(threadId, turnId) ?? this.deps.binaryPath?.(definition.id) ?? definition.launch?.command
     // Single-session ACP servers can continue one thread, but must never host
     // another thread's active session on the same connection.
@@ -186,7 +207,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       ? `${basePoolKey}:thread:${JSON.stringify([threadId, workspace])}` : basePoolKey
     const poolKey = `${scopedPoolKey}:executable:${harnessExecutableIdentity(command)}`
     await this.pool.retireIdlePrefix?.(`${scopedPoolKey}:executable:`, poolKey)
-    let items = resolved.ctx.items
+    let items = ctx.items
 
     const lease = await acquireAcpConnection(this.deps, this.pool, this.host, this.sessions, {
       poolKey,
@@ -287,7 +308,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           harnessId: definition.id,
           model,
           permissionModeId,
-          ...(resolved.ctx.nativeAgentId ? { nativeAgentId: resolved.ctx.nativeAgentId } : {}),
+          ...(ctx.nativeAgentId ? { nativeAgentId: ctx.nativeAgentId } : {}),
           acpPermission: definition.acpPermission,
           reasoningEffort: turn.reasoningEffort,
           ...(turn.harnessSettings ? { harnessSettings: turn.harnessSettings } : {}),
@@ -491,7 +512,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       companions = startAcpTurnCompanions({
         harnessId: definition.id, threadId, turnId, model: model ?? 'default', acpSessionId: session.sessionId,
         ...(childSessionDb ? { sessionDbPath: childSessionDb } : {}),
-        gatewayMetered: credentialMode === 'kun-gateway', turns: this.deps.turns,
+        gatewayMetered: credentialMode === 'kun-gateway', ...(guidance ? { guidance } : {}),
         emitLive: (drafts) => {
           mapper.observedFacts.sawUsageTokens = true
           timing.observe(drafts)
@@ -503,6 +524,14 @@ export class AcpRuntime implements DelegatedTurnRuntime {
             entries.flatMap((entry) => entry.attachmentIds ?? []), imageCapable),
           attachmentPaths: [], imageCapable, fileReferences: [], workspacePath: workspace
         })),
+        beforeFollowUp: () => {
+          // The previous prompt settled; its answer gets its own item.
+          const drafts = mapper.closeSegment()
+          timing.requestStarted()
+          emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
+          return emitQueue
+        },
+        canFollowUp: () => !signal.aborted && !streamError,
         debug: (summary) => this.deps.debug?.({ direction: 'note', summary })
       })
       timing.requestStarted()

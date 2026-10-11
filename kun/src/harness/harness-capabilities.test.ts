@@ -81,6 +81,15 @@ describe('intersectCapabilities', () => {
     expect(result.facts.compactionOwner).toBe('harness')
   })
 
+  it('keeps deferred guidance over live and omits an undeclared steering fact', () => {
+    const live: HarnessCapabilities = { statuses: base.statuses, facts: { ...base.facts, steering: 'live' } }
+    const deferred: HarnessCapabilities = { statuses: base.statuses, facts: { ...base.facts, steering: 'deferred' } }
+    expect(intersectCapabilities(base, live).facts.steering).toBe('live')
+    expect(intersectCapabilities(live, deferred).facts.steering).toBe('deferred')
+    expect(intersectCapabilities(base, base).facts).not.toHaveProperty('steering')
+    expect(HarnessCapabilitiesSchema.parse(intersectCapabilities(base, deferred)).facts.steering).toBe('deferred')
+  })
+
   it('weakestSandbox and weakestUsage orderings', () => {
     expect(weakestSandbox(['host', 'native', 'none'])).toBe('none')
     expect(weakestSandbox(['host', 'native'])).toBe('native')

@@ -164,6 +164,14 @@ export class AcpEventMapper {
     return this.withSubagents(this.flushTurn())
   }
 
+  /**
+   * A prompt settled and a follow-up prompt of the same turn comes next:
+   * complete the open text/thought segment so its answer starts a new item.
+   */
+  closeSegment(): RuntimeEventDraft[] {
+    return this.withSubagents(this.messages.flush())
+  }
+
   private flushTurn(): RuntimeEventDraft[] {
     const drafts = this.messages.flush()
     for (const [callId, state] of this.toolCalls) {

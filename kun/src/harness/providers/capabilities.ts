@@ -107,7 +107,10 @@ export const ACP_DEFAULT_CAPABILITIES: HarnessCapabilities = {
     ...allSupportedStatuses(),
     fork: up('acp session/fork is not widely implemented'),
     rewind: up('acp session/rewind is not widely implemented'),
-    sameTurnSteer: up('acp session/prompt does not steer an in-flight turn'),
+    // Guidance joins the run where a concurrent session/prompt does
+    // (ProviderAcpHooks.liveSteering); every other engine answers it right
+    // after its current prompt, in the same Kun turn.
+    sameTurnSteer: { supported: true },
     switchModelMidSession: todo(),
     nativeContextTelemetry: todo(),
     nativeCommands: { supported: true },

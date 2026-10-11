@@ -610,4 +610,15 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
     expect(header?.getAttribute('aria-expanded')).toBe('false')
     expect(container.querySelectorAll('[data-queued-message-id]')).toHaveLength(0)
   })
+
+  it('describes deferred guidance and disables guiding a turn that cannot take it', async () => {
+    await render({ messages: [message('a', 'commit when done')], guidanceTarget: 'deferred' })
+    expect(action('guide').disabled).toBe(false)
+    expect(action('guide').title).toBe('guideQueuedMessageDeferredHint')
+    await render({ guidanceTarget: 'unsupported' })
+    expect(action('guide').disabled).toBe(true)
+    expect(action('guide').title).toBe('guideQueuedMessageUnsupported')
+    await render({ guidanceTarget: 'turn' })
+    expect(action('guide').title).toBe('guideQueuedMessageHint')
+  })
 })

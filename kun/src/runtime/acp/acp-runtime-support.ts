@@ -68,7 +68,8 @@ export function acpLegacyCapabilities(): DelegatedRuntimeCapabilities {
     structuredStreaming: true,
     kunTools: true,
     externalApproval: true,
-    liveSteering: false,
+    // Every ACP turn takes guidance, live or deferred (acp-live-steering.ts).
+    liveSteering: true,
     nativeContextTelemetry: false,
     fork: false
   }

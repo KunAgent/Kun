@@ -1,7 +1,8 @@
 /**
  * Derive HarnessCapabilities v2 from the ACP `initialize` result plus facts
- * observed on a session. ACP gives no fork/rewind/steer
- * methods, so those stay upstream-unsupported; sandbox facts come from the
+ * observed on a session. ACP gives no fork/rewind methods, so those stay
+ * upstream-unsupported; guidance is delivered live or deferred (see
+ * acp-live-steering.ts); sandbox facts come from the
  * harness catalog declaration since fs/terminal mediation is Kun-provided but
  * never guaranteed to be exercised by the agent.
  */
@@ -57,8 +58,9 @@ export function capabilitiesFromAcp(
     reasoningStream: SUPPORTED,
     abort: SUPPORTED,
     // ACP has no steer method; an engine whose concurrent session/prompt joins
-    // the running loop (ProviderAcpHooks.liveSteering) is steered that way.
-    sameTurnSteer: facts.liveSteering ? SUPPORTED : unsupported('upstream'),
+    // the running loop (ProviderAcpHooks.liveSteering) is steered that way,
+    // every other one gets guidance as a follow-up prompt in the same turn.
+    sameTurnSteer: SUPPORTED,
     switchModelMidSession: hasConfigCategory(session.configOptions, 'model')
       ? SUPPORTED
       : unsupported('upstream'),
@@ -110,7 +112,8 @@ export function capabilitiesFromAcp(
     facts: {
       sandbox: facts.sandbox,
       usageReporting: session.sawUsageTokens ? 'exact' : 'none',
-      compactionOwner: 'harness'
+      compactionOwner: 'harness',
+      steering: facts.liveSteering ? 'live' : 'deferred'
     }
   }
 }

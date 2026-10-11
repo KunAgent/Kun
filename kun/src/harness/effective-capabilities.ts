@@ -27,6 +27,14 @@ export function weakestUsage(
   )
 }
 
+/** Deferred guidance wins over live; a layer that does not declare it abstains. */
+export function weakestSteering(
+  values: readonly HarnessCapabilities['facts']['steering'][]
+): HarnessCapabilities['facts']['steering'] {
+  if (values.includes('deferred')) return 'deferred'
+  return values.includes('live') ? 'live' : undefined
+}
+
 /**
  * Intersect capability layers; the first layer reporting a capability as
  * unsupported wins so the tooltip states the most fundamental restriction.
@@ -38,12 +46,14 @@ export function intersectCapabilities(...layers: HarnessCapabilities[]): Harness
       supported: true
     }
   }
+  const steering = weakestSteering(layers.map((l) => l.facts.steering))
   return {
     statuses,
     facts: {
       sandbox: weakestSandbox(layers.map((l) => l.facts.sandbox)),
       usageReporting: weakestUsage(layers.map((l) => l.facts.usageReporting)),
-      compactionOwner: layers[layers.length - 1]!.facts.compactionOwner
+      compactionOwner: layers[layers.length - 1]!.facts.compactionOwner,
+      ...(steering ? { steering } : {})
     }
   }
 }

@@ -92,7 +92,8 @@ type QueueDragState = {
 type Props = {
   messages: QueuedComposerMessage[]
   running?: boolean
-  guidanceTarget?: 'turn' | 'graph'
+  /** turn/graph: guidance joins the run; deferred: after its current step; unsupported: next turn only. */
+  guidanceTarget?: 'turn' | 'graph' | 'deferred' | 'unsupported'
   onRemove: (id: string) => void
   onGuide?: (id: string) => void | Promise<unknown>
   onRestoreToComposer?: (id: string) => boolean | void | Promise<boolean | void>
@@ -362,6 +363,7 @@ export function FloatingComposerQueuedMessages({
               ? !running && !message.waitForRuntimeAdmission
               : (
                 running &&
+                guidanceTarget !== 'unsupported' &&
                 message.guidanceEligible !== false &&
                 canGuideQueuedComposerMessage(message)
               ))))
@@ -383,11 +385,15 @@ export function FloatingComposerQueuedMessages({
                   : t('queuedMessageRetry')
                 : !running
                   ? t('guideQueuedMessageNoActiveTurn')
+                  : guidanceTarget === 'unsupported'
+                    ? t('guideQueuedMessageUnsupported')
                   : message.guidanceEligible === false || !canGuideQueuedComposerMessage(message)
                     ? t('guideQueuedMessageTextOnly')
                 : guidanceTarget === 'graph'
                   ? t('guideQueuedMessageGraphHint')
-                  : t('guideQueuedMessageHint')
+                  : guidanceTarget === 'deferred'
+                    ? t('guideQueuedMessageDeferredHint')
+                    : t('guideQueuedMessageHint')
             // The paused banner owns resuming; idle rows have nothing to steer.
             const guideHidden = (paused && showPausedBanner) || (!failed && !paused && !running && !message.steeringRequest)
             const restoreLabel = canRestore

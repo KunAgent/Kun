@@ -660,6 +660,10 @@ export function createThreadQueueActions(
       if (/steering_target_(inactive|closed|missing)|steering_source_not_queued|turn is not active|turn is no longer accepting steering/.test(messageText)) {
         threadActionSharedState.guidingQueuedMessageIds.delete(id)
         await get().recoverActiveTurn({ forceTimeline: true })
+        // Still running yet closed to guidance: say so instead of failing silently.
+        const after = get()
+        if (/steering_target_closed|no longer accepting steering/.test(messageText) && after.activeThreadId === guidanceThreadId &&
+          after.busy && after.currentTurnId === guidanceTurnId) set({ error: i18n.t('common:guideQueuedMessageNotAccepting') })
         return false
       }
       set({

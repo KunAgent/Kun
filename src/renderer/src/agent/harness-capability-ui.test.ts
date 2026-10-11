@@ -10,6 +10,7 @@ import {
   canFork,
   canRewind,
   canSteer,
+  steerDelivery,
   canSwitchModelMidSession,
   capabilityReason,
   contextTelemetryKnown,
@@ -100,6 +101,14 @@ describe('harness capability degrade contract', () => {
   ] as const)('%s unsupported degrades its affordance', (key, fn) => {
     expect(fn(runtime(unsupported(key)))).toBe(false)
     expect(fn(runtime(allSupported))).toBe(true)
+  })
+
+  it('steerDelivery reads the steering fact behind a supported steer', () => {
+    expect(steerDelivery(null)).toBe('live')
+    expect(steerDelivery(runtime(allSupported))).toBe('live')
+    expect(steerDelivery(runtime({ ...allSupported, facts: { ...allSupported.facts, steering: 'deferred' } })))
+      .toBe('deferred')
+    expect(steerDelivery(runtime(unsupported('sameTurnSteer')))).toBe('unsupported')
   })
 
   it('usageReporting fact of none hides usage', () => {

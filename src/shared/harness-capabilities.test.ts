@@ -55,4 +55,13 @@ describe('shared harness capabilities', () => {
       message: 'x'
     })
   })
+
+  it('intersectCapabilities keeps deferred guidance over live, like the kun side', () => {
+    const base = FIXTURES.cases[0]!.base
+    const live: HarnessCapabilities = { statuses: base.statuses, facts: { ...base.facts, steering: 'live' } }
+    const deferred: HarnessCapabilities = { statuses: base.statuses, facts: { ...base.facts, steering: 'deferred' } }
+    expect(intersectCapabilities(base, live).facts.steering).toBe('live')
+    expect(intersectCapabilities(live, deferred).facts.steering).toBe('deferred')
+    expect(intersectCapabilities(base, base).facts).not.toHaveProperty('steering')
+  })
 })

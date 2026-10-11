@@ -1,0 +1,136 @@
+{
+  "sessionId": "sess-deferred-steering",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": true,
+      "promptCapabilities": {
+        "image": true,
+        "embeddedContext": true
+      },
+      "mcpCapabilities": {
+        "http": true
+      }
+    },
+    "authMethods": [],
+    "agentInfo": {
+      "name": "fake-acp-agent",
+      "version": "0.0.1"
+    }
+  },
+  "newSession": {
+    "modes": {
+      "currentModeId": "ask",
+      "availableModes": [
+        {
+          "id": "ask",
+          "name": "Ask"
+        },
+        {
+          "id": "auto",
+          "name": "Auto"
+        }
+      ]
+    },
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "fake-model-1",
+        "options": [
+          {
+            "value": "fake-model-1",
+            "name": "Fake Model 1"
+          },
+          {
+            "value": "fake-model-2",
+            "name": "Fake Model 2"
+          }
+        ]
+      },
+      {
+        "id": "thought",
+        "name": "Thinking",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "medium",
+        "options": [
+          {
+            "value": "low",
+            "name": "Low"
+          },
+          {
+            "value": "medium",
+            "name": "Medium"
+          },
+          {
+            "value": "high",
+            "name": "High"
+          }
+        ]
+      }
+    ]
+  },
+  "turns": [
+    {
+      "promptIncludes": "hello agent",
+      "steps": [
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "Working "
+            }
+          }
+        },
+        {
+          "sleep": 400
+        },
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "done"
+            }
+          }
+        }
+      ],
+      "response": {
+        "stopReason": "end_turn",
+        "usage": {
+          "totalTokens": 1200,
+          "inputTokens": 1000,
+          "outputTokens": 200,
+          "cachedReadTokens": 600
+        }
+      }
+    },
+    {
+      "promptIncludes": "commit when done",
+      "steps": [
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "Committed."
+            }
+          }
+        }
+      ],
+      "response": {
+        "stopReason": "end_turn",
+        "usage": {
+          "totalTokens": 1350,
+          "inputTokens": 1300,
+          "outputTokens": 50,
+          "cachedReadTokens": 1200
+        }
+      }
+    }
+  ]
+}

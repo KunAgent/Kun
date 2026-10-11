@@ -1,5 +1,7 @@
 import type { ReactElement } from 'react'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
+import { steerDelivery } from '../../agent/harness-capability-ui'
+import { useChatStore } from '../../store/chat-store'
 
 export function FloatingComposerStackView({
   context
@@ -22,6 +24,12 @@ export function FloatingComposerStackView({
     showGoalFloater, showGoalMenuOption, showGraphProgress, showTodoProgress, slashCommandMenu,
     slashQuery, t, userInput
   } = context
+  // Only the running turn's own runtime report says how guidance reaches it.
+  const steering = useChatStore((s) => {
+    const runtime = s.lastDelegatedRuntimeState
+    return runtime && runtime.threadId === activeThreadId && runtime.turnId === s.currentTurnId
+      ? steerDelivery(runtime) : 'live'
+  })
   return (
     <>
       <FloatingComposerAboveInputStack
@@ -29,7 +37,7 @@ export function FloatingComposerStackView({
           <FloatingComposerQueuedMessages
             messages={queuedMessages}
             running={busy}
-            guidanceTarget={currentTurnOrchestration === 'graph' ? 'graph' : 'turn'}
+            guidanceTarget={currentTurnOrchestration === 'graph' ? 'graph' : steering === 'live' ? 'turn' : steering}
             onRemove={onRemoveQueuedMessage}
             onGuide={onGuideQueuedMessage}
             onRestoreToComposer={onRestoreQueuedMessageToComposer

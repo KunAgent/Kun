@@ -48,6 +48,8 @@ export type HarnessCapabilities = {
     sandbox: 'host' | 'native' | 'none'
     usageReporting: 'exact' | 'estimated' | 'none'
     compactionOwner: 'kun' | 'harness' | 'none'
+    /** live: guidance joins the run in flight; deferred: answered after the current prompt, same turn. */
+    steering?: 'live' | 'deferred'
   }
 }
 
@@ -83,6 +85,13 @@ export function weakestUsage(
   )
 }
 
+export function weakestSteering(
+  values: readonly HarnessCapabilities['facts']['steering'][]
+): HarnessCapabilities['facts']['steering'] {
+  if (values.includes('deferred')) return 'deferred'
+  return values.includes('live') ? 'live' : undefined
+}
+
 export function intersectCapabilities(...layers: HarnessCapabilities[]): HarnessCapabilities {
   const statuses = {} as Record<HarnessCapabilityKey, CapabilityStatus>
   for (const key of HARNESS_CAPABILITY_KEYS) {
@@ -90,12 +99,14 @@ export function intersectCapabilities(...layers: HarnessCapabilities[]): Harness
       supported: true
     }
   }
+  const steering = weakestSteering(layers.map((l) => l.facts.steering))
   return {
     statuses,
     facts: {
       sandbox: weakestSandbox(layers.map((l) => l.facts.sandbox)),
       usageReporting: weakestUsage(layers.map((l) => l.facts.usageReporting)),
-      compactionOwner: layers[layers.length - 1]!.facts.compactionOwner
+      compactionOwner: layers[layers.length - 1]!.facts.compactionOwner,
+      ...(steering ? { steering } : {})
     }
   }
 }

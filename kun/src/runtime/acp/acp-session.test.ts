@@ -525,13 +525,17 @@ describe('capabilitiesFromAcp', () => {
     expect(caps.statuses.switchModelMidSession.supported).toBe(true)
     expect(caps.statuses.effort.supported).toBe(true)
     expect(caps.statuses.nativeCommands.supported).toBe(true)
-    expect(caps.statuses.sameTurnSteer.supported).toBe(false)
+    // Guidance always reaches an ACP turn; without the live hook it waits
+    // for the current prompt to finish.
+    expect(caps.statuses.sameTurnSteer.supported).toBe(true)
     expect(caps.statuses.fork.supported).toBe(false)
     expect(caps.facts).toEqual({
       sandbox: 'native',
       usageReporting: 'exact',
-      compactionOwner: 'harness'
+      compactionOwner: 'harness',
+      steering: 'deferred'
     })
+    expect(capabilitiesFromAcp(init, {}, { sandbox: 'native', liveSteering: true }).facts.steering).toBe('live')
   })
 
   test('kunTools follows the delivered descriptor, never a bare claim', () => {

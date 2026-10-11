@@ -73,22 +73,79 @@ describe('AcpRuntime live guidance', () => {
     })
     expect(h.recorded.find((event) => event.kind === 'delegated_runtime')).toMatchObject({
       capabilities: { liveSteering: true },
-      capabilitiesV2: { statuses: { sameTurnSteer: { supported: true } } }
+      capabilitiesV2: { statuses: { sameTurnSteer: { supported: true } }, facts: { steering: 'live' } }
     })
   })
 
-  test('an engine without the hook keeps steering closed', async () => {
+  test('an engine without the hook answers guidance after its current prompt, in the same turn', async () => {
     hook.live = false
     const steer = guidance()
-    const h = await makeHarness('live-steering.json', {
-      turns: steer.turns, definition: { capabilities: OPENCODE_DEFINITION.capabilities }
+    let admitted = false
+    const h = await makeHarness('deferred-steering.json', {
+      turns: steer.turns,
+      onDelta: () => {
+        if (admitted) return
+        admitted = true
+        steer.admit('commit when done')
+      }
     })
     expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
-    expect(steer.opened).toEqual([])
-    expect(h.requests('session/prompt')).toHaveLength(1)
+    expect(steer.opened).toEqual(['thread_1/turn_1'])
+    expect(steer.state.sealed).toBe(true)
+
+    const prompts = h.requests('session/prompt')
+    expect(prompts).toHaveLength(2)
+    expect(JSON.stringify(prompts[1]?.params?.prompt)).toContain('commit when done')
+    expect(JSON.stringify(prompts[1]?.params?.prompt)).not.toContain('hello agent')
+    // Never concurrent: the follow-up goes out once the main prompt answered.
+    const journal = h.journal() as Array<{ dir: string; frame?: { method?: string; params?: unknown; result?: { stopReason?: string } } }>
+    const mainAnswered = journal.findIndex((entry) => entry.dir === 'out' && entry.frame?.result?.stopReason === 'end_turn')
+    const followUpSent = journal.findIndex((entry) => entry.dir === 'in' &&
+      entry.frame?.method === 'session/prompt' && JSON.stringify(entry.frame.params).includes('commit when done'))
+    expect(mainAnswered).toBeGreaterThan(-1)
+    expect(followUpSent).toBeGreaterThan(mainAnswered)
+
+    // The follow-up's answer is an item of its own, after the main text.
+    const texts = h.applied.flatMap((item) => item.kind === 'assistant_text' ? [item.text] : [])
+    expect(texts).toEqual(['Working done', 'Committed.'])
+    // Each prompt is a run of its own: both are booked.
+    expect(h.recorded.filter((event) => event.kind === 'usage')).toHaveLength(2)
     expect(h.recorded.find((event) => event.kind === 'delegated_runtime')).toMatchObject({
-      capabilities: { liveSteering: false },
-      capabilitiesV2: { statuses: { sameTurnSteer: { supported: false } } }
+      capabilities: { liveSteering: true },
+      capabilitiesV2: { statuses: { sameTurnSteer: { supported: true } }, facts: { steering: 'deferred' } }
     })
+  })
+
+  test('guidance sent while the Agent starts up is kept for the run', async () => {
+    hook.live = false
+    const steer = guidance()
+    // Admitted after the loop handed the turn over, before the session exists.
+    steer.admit('commit when done')
+    const h = await makeHarness('deferred-steering.json', { turns: steer.turns })
+    expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
+    const prompts = h.requests('session/prompt')
+    expect(prompts).toHaveLength(2)
+    expect(JSON.stringify(prompts[0]?.params?.prompt)).not.toContain('commit when done')
+    expect(JSON.stringify(prompts[1]?.params?.prompt)).toContain('commit when done')
+    expect(steer.state.sealed).toBe(true)
+  })
+
+  test('a stopped turn keeps waiting guidance without sending it', async () => {
+    hook.live = false
+    const steer = guidance()
+    const controller = new AbortController()
+    let admitted = false
+    const h = await makeHarness('deferred-steering.json', {
+      turns: steer.turns,
+      onDelta: () => {
+        if (admitted) return
+        admitted = true
+        steer.admit('commit when done')
+        controller.abort()
+      }
+    })
+    expect(await h.runtime.runTurn('thread_1', 'turn_1', controller.signal)).toBe('aborted')
+    expect(h.requests('session/prompt')).toHaveLength(1)
+    expect(steer.state.sealed).toBe(true)
   })
 })

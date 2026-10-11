@@ -51,6 +51,16 @@ export function canSteer(runtime: RuntimeCaps): boolean {
   return caps.statuses.sameTurnSteer.supported === true
 }
 
+/**
+ * How the composer's guidance reaches a running turn: `live` joins the run in
+ * flight, `deferred` is answered right after the Agent's current step within
+ * the same turn, `unsupported` waits in the queue for the next turn.
+ */
+export function steerDelivery(runtime: RuntimeCaps): 'live' | 'deferred' | 'unsupported' {
+  if (!canSteer(runtime)) return 'unsupported'
+  return capsOf(runtime)?.facts.steering === 'deferred' ? 'deferred' : 'live'
+}
+
 /** Stop button. An unadmitted abort-unsupported harness should not reach here. */
 export function canAbort(runtime: RuntimeCaps): boolean {
   return available(runtime, 'abort')
