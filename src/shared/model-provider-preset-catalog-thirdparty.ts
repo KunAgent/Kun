@@ -18,6 +18,7 @@ import {
 export const MODEL_PROVIDER_PRESETS_THIRDPARTY: ModelProviderPreset[] = [
   {
     id: 'openai-api',
+    endpoints: { chat_completions: 'https://api.openai.com/v1', responses: 'https://api.openai.com/v1' },
     name: 'OpenAI API',
     origin: 'vendor',
     note: 'Pay-as-you-go OpenAI platform key',
@@ -30,6 +31,7 @@ export const MODEL_PROVIDER_PRESETS_THIRDPARTY: ModelProviderPreset[] = [
   },
   {
     id: 'anthropic-api',
+    headerHints: ['anthropic-workspace-id'],
     name: 'Anthropic API',
     origin: 'vendor',
     note: 'Pay-as-you-go Anthropic Console key',
@@ -54,6 +56,7 @@ export const MODEL_PROVIDER_PRESETS_THIRDPARTY: ModelProviderPreset[] = [
   },
   {
     id: 'xai-api',
+    endpoints: { chat_completions: 'https://api.x.ai/v1', responses: 'https://api.x.ai/v1', messages: 'https://api.x.ai' },
     name: 'xAI API',
     origin: 'vendor',
     note: 'Pay-as-you-go xAI key (separate from Grok subscription)',
@@ -81,6 +84,7 @@ export const MODEL_PROVIDER_PRESETS_THIRDPARTY: ModelProviderPreset[] = [
   },
   {
     id: 'groq-api',
+    endpoints: { chat_completions: 'https://api.groq.com/openai/v1', responses: 'https://api.groq.com/openai/v1' },
     name: 'Groq API',
     origin: 'vendor',
     note: 'Low-latency inference, pay-as-you-go',
@@ -122,6 +126,8 @@ export const MODEL_PROVIDER_PRESETS_THIRDPARTY: ModelProviderPreset[] = [
   },
   {
     id: 'openrouter',
+    balance: 'openrouter',
+    endpoints: { chat_completions: 'https://openrouter.ai/api/v1', responses: 'https://openrouter.ai/api/v1', messages: 'https://openrouter.ai/api' },
     name: 'OpenRouter',
     origin: 'relay',
     note: 'Many vendors behind one key',
@@ -134,6 +140,7 @@ export const MODEL_PROVIDER_PRESETS_THIRDPARTY: ModelProviderPreset[] = [
   },
   {
     id: 'siliconflow',
+    balance: 'siliconflow',
     name: 'SiliconFlow',
     origin: 'relay',
     subscriptionRegion: 'china',
@@ -147,6 +154,8 @@ export const MODEL_PROVIDER_PRESETS_THIRDPARTY: ModelProviderPreset[] = [
   },
   {
     id: 'aihubmix',
+    balance: 'aihubmix',
+    endpoints: { chat_completions: 'https://aihubmix.com/v1', messages: 'https://aihubmix.com' },
     name: 'AiHubMix',
     origin: 'relay',
     subscriptionRegion: 'china',

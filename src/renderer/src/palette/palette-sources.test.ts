@@ -166,6 +166,7 @@ describe('collectPaletteSources', () => {
       .filter((section): section is SettingsRouteSection => Boolean(section))
     expect(sections).toContain('general')
     expect(sections).toContain('providers')
+    expect(sections).not.toContain('integrations')
     expect(sections).toContain('shortcuts')
     expect(sections).toContain('dataMigration')
     for (const entry of entries.filter((candidate) => candidate.source === 'settings')) {
@@ -180,9 +181,10 @@ describe('collectPaletteSources', () => {
       .map((entry) => entry.activation.kind === 'route' ? entry.activation.route : null)
       .filter((route): route is AppRoute => Boolean(route))
     expect(routes.sort()).toEqual([
-      'board', 'chat', 'claw', 'design', 'extensions', 'plugins', 'rooms', 'schedule', 'settings', 'workflow', 'write'
+      'board', 'chat', 'claw', 'design', 'extensions', 'plugins', 'schedule', 'settings', 'wardrobe', 'workflow', 'write'
     ])
     expect(entries.find((entry) => entry.id === 'route:workflow')?.title).toBe('workflowCreate')
+    expect(entries.find((entry) => entry.id === 'route:wardrobe')?.title).toBe('roomsWardrobeMine')
   })
 
   it('hides the board route while the Laboratory project board switch is off', () => {

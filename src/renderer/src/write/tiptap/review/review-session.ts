@@ -1,5 +1,5 @@
 /**
- * Review session orchestration (implementation §6.3–§6.6).
+ * Review session orchestration.
  *
  * Owns the lifecycle of one rich diff review on a Tiptap `Editor`:
  * `begin` parses original + next markdown with the work codec, swaps the
@@ -179,6 +179,20 @@ export class WriteReviewSession {
     this.afterResolve()
   }
 
+  /** Plain-text before/after of each pending chunk for the review panel. */
+  chunkSummaries(): Array<{ id: string; kind: 'added' | 'removed' | 'modified'; before: string; after: string }> {
+    const { doc } = this.editor.state
+    const chunks = writeReviewPluginKey.getState(this.editor.state)?.chunks ?? []
+    return chunks.map((chunk) => ({
+      id: chunk.id,
+      kind: chunk.kind,
+      before: chunk.original.map((node) => node.textContent).join('\n'),
+      after: chunk.kind === 'removed'
+        ? ''
+        : doc.textBetween(chunk.from, Math.min(chunk.to, doc.content.size), '\n')
+    }))
+  }
+
   /** Position of chunk `index` for prev/next navigation. */
   chunkPos(index: number): number | null {
     const chunks = writeReviewPluginKey.getState(this.editor.state)?.chunks ?? []
@@ -270,7 +284,7 @@ export class WriteReviewSession {
   /**
    * Swap the document to `nodes` via the minimal top-level replacement, so
    * unchanged blocks keep their live nodes — cursor, scroll position, and
-   * undo history survive entering/leaving the review (§6.3).
+   * undo history survive entering/leaving the review.
    */
   private swapToTopNodes(nodes: PMNode[]): void {
     const target = this.editor.schema.topNodeType.create(null, Fragment.from(nodes))

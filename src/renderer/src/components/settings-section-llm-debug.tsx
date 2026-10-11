@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -9,10 +10,12 @@ import {
   ExternalLink,
   History,
   RefreshCw,
+  ScrollText,
   SlidersHorizontal,
   X
 } from 'lucide-react'
 import type { KunRuntimeSettingsPatchV1, KunRuntimeSettingsV1 } from '@shared/app-settings'
+import { LocalLogSettingsCard } from './settings-section-general-desktop'
 import {
   SettingsCard,
   SettingsTabPanel,
@@ -50,7 +53,7 @@ export type LlmDebugRound = {
 
 type Translate = (key: string, options?: Record<string, unknown>) => string
 type DetailTab = 'overview' | 'request' | 'response'
-type LlmDebugPageTab = 'capture' | 'records'
+type LlmDebugPageTab = 'records' | 'capture' | 'logs'
 
 const PAGE_SIZE = 5
 const detailTabs: DetailTab[] = ['overview', 'request', 'response']
@@ -200,13 +203,12 @@ function RequestRow({
             </div>
           </dl>
           <div className="mt-3 flex justify-end">
-            <button
+            <button className={settingsButtonClass()}
               type="button"
               onClick={(event) => {
                 event.stopPropagation()
                 onOpenDetail()
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/[0.06] px-3 py-2 text-[11.5px] font-semibold text-accent transition hover:border-accent/45 hover:bg-accent/10"
             >
               {t('llmDebugViewDetails')}
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -329,7 +331,7 @@ function DetailPanel({
           type="button"
           aria-label={t('close')}
           onClick={onClose}
-          className="rounded-lg p-1.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+          className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
         >
           <X className="h-4 w-4" strokeWidth={1.8} />
         </button>
@@ -370,10 +372,9 @@ function DetailPanel({
       <footer className="flex items-center justify-between gap-3 border-t border-ds-border-muted px-5 py-3.5">
         <span>
           {activeTab === 'request' ? (
-            <button
+            <button className={settingsButtonClass()}
               type="button"
               onClick={onCopy}
-              className="inline-flex items-center gap-2 rounded-xl border border-ds-border bg-ds-main/50 px-3 py-2 text-[11.5px] font-medium text-ds-muted transition hover:border-accent/25 hover:text-accent"
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
               {copied ? t('llmDebugCopied') : t('llmDebugCopyJson')}
@@ -383,7 +384,7 @@ function DetailPanel({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-xl bg-accent px-5 py-2 text-[11.5px] font-semibold text-white shadow-sm shadow-accent/20 transition hover:bg-accent/90"
+          className={settingsButtonClass({ variant: 'primary' })}
         >
           {t('done')}
         </button>
@@ -496,7 +497,7 @@ export function LlmDebugRequestBrowser({
               aria-label={t('previousPage')}
               disabled={page === 0}
               onClick={() => changePage(page - 1)}
-              className="rounded-lg border border-ds-border p-1.5 text-ds-faint transition hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-35"
+              className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
@@ -521,7 +522,7 @@ export function LlmDebugRequestBrowser({
               aria-label={t('nextPage')}
               disabled={page === pageCount - 1}
               onClick={() => changePage(page + 1)}
-              className="rounded-lg border border-ds-border p-1.5 text-ds-faint transition hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-35"
+              className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
@@ -549,7 +550,7 @@ export function LlmDebugRequestBrowser({
 }
 
 export function LlmDebugSettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
-  const { t, kun, updateKun } = ctx as {
+  const { t, kun, updateKun } = ctx as Record<string, any> & {
     t: Translate
     kun: KunRuntimeSettingsV1
     updateKun: (patch: KunRuntimeSettingsPatchV1) => void
@@ -557,10 +558,11 @@ export function LlmDebugSettingsSection({ ctx }: { ctx: Record<string, any> }): 
   const [rounds, setRounds] = useState<LlmDebugRound[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activePageTab, setActivePageTab] = useState<LlmDebugPageTab>('capture')
+  const [activePageTab, setActivePageTab] = useState<LlmDebugPageTab>('records')
   const pageTabs = [
+    { id: 'records', label: t('llmDebugRecords'), icon: History },
     { id: 'capture', label: t('llmDebugCaptureSettings'), icon: SlidersHorizontal },
-    { id: 'records', label: t('llmDebugRecords'), icon: History }
+    { id: 'logs', label: t('logTitle'), icon: ScrollText }
   ] as const
 
   const load = useCallback(async (): Promise<void> => {
@@ -631,13 +633,13 @@ export function LlmDebugSettingsSection({ ctx }: { ctx: Record<string, any> }): 
             <h2 className="text-[14px] font-semibold text-ds-ink">{t('sectionLlmDebug')}</h2>
             <p className="mt-0.5 text-[11.5px] leading-5 text-ds-faint">{t('llmDebugDesc')}</p>
           </div>
-          <button
+          <button aria-busy={Boolean(loading)}
             type="button"
             aria-label={t('refresh')}
             title={t('refresh')}
             disabled={loading}
             onClick={() => void load()}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-ds-border bg-ds-main/55 text-ds-muted transition hover:border-accent/25 hover:text-accent disabled:opacity-60"
+              className={settingsButtonClass({ variant: 'ghost', size: 'icon', className: 'shrink-0' })}
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.8} />
           </button>
@@ -656,6 +658,10 @@ export function LlmDebugSettingsSection({ ctx }: { ctx: Record<string, any> }): 
         ) : (
           <LlmDebugRequestBrowser rounds={rounds} t={t} />
         )}
+      </SettingsTabPanel>
+
+      <SettingsTabPanel baseId="llm-debug-settings" tabId="logs" active={activePageTab === 'logs'}>
+        <LocalLogSettingsCard view={ctx} />
       </SettingsTabPanel>
     </div>
   )

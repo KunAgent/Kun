@@ -34,7 +34,8 @@ describe('SQLite usage backfill chunks', () => {
         );
         CREATE TABLE usage_events (
           thread_id TEXT NOT NULL, seq INTEGER NOT NULL, timestamp TEXT NOT NULL,
-          turn_id TEXT, model TEXT, provider_id TEXT, usage_json TEXT NOT NULL,
+          turn_id TEXT, model TEXT, provider_id TEXT, source TEXT, harness_id TEXT,
+          usage_json TEXT NOT NULL,
           PRIMARY KEY(thread_id, seq)
         );
         INSERT INTO threads (id) VALUES ('thread_1');

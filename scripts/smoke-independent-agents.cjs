@@ -2,7 +2,6 @@
 const assert = require('node:assert/strict')
 
 const MARK = 'INDEPENDENT_AGENT_SMOKE'
-const INPUT = 'Discuss a question or describe the work to do…'
 const textParts = (messages) => messages.flatMap((message) => typeof message.content === 'string'
   ? [message.content] : (message.content ?? []).flatMap((part) => part.text ? [part.text] : []))
 function objects(messages) {
@@ -46,28 +45,37 @@ function independentAgentModelFixture() {
   } }
 }
 
-async function exerciseIndependentAgents({ page, request, poll, capture, fixture, resize }) {
+async function exerciseIndependentAgents({ page, request, poll, capture, fixture, resize, openConversation }) {
   const screenshots = [], assertions = []
   const shot = async (name) => { await capture('agents-' + name); screenshots.push(name) }
-  const panel = () => page.getByRole('dialog', { name: 'Room details', exact: true })
+  const panel = () => page.getByRole('region', { name: 'Room details', exact: true })
   const active = () => panel().locator('[data-active-drawer-page="true"]')
   const composer = () => page.locator('[data-rooms-workspace] > section').first().locator(':scope > .rooms-composer')
-  const sections = page.locator('.rooms-im-sidebar')
+  const input = () => composer().locator('.rooms-rich-input')
+  const sections = page.locator('.sidebar-agent-chats')
   const count = () => Object.values(fixture.snapshot()).reduce((sum, value) => sum + (typeof value === 'number' ? value : 0), 0)
   const close = async () => { if (await panel().count()) await panel().getByRole('button', { name: 'Close', exact: true }).click() }
-  const send = async (body) => {
-    await composer().getByLabel('Automatic intent', { exact: true }).selectOption('discussion')
-    await composer().getByRole('textbox', { name: INPUT, exact: true }).fill(body)
-    await composer().getByRole('button', { name: 'Send', exact: true }).click()
-    await poll(() => composer().getByRole('textbox', { name: INPUT, exact: true }).innerText().then((value) => value.trim() === ''), 10000, 'private send acknowledged')
+  const headerAction = async (name) => {
+    await page.locator('.rooms-header').getByRole('button', { name: 'More actions', exact: true }).click()
+    await page.getByRole('button', { name, exact: true }).click()
   }
-  const quiet = async (ids, roomId) => {
+  const send = async (body) => {
+    // Groups choose a message intent; private chats have none.
+    const intent = composer().getByLabel('Message intent', { exact: true })
+    if (await intent.count()) await intent.selectOption('discussion')
+    await input().fill(body)
+    await composer().getByRole('button', { name: 'Send', exact: true }).click()
+    await poll(() => input().innerText().then((value) => value.trim() === ''), 10000, 'send acknowledged')
+  }
+  const quiet = async (ids, roomId, privateChat = false) => {
     let stableSince = 0, lastCount = count()
     await poll(async () => {
       const states = await Promise.all(ids.map((id) => request(page, '/v1/agents/' + id + '/memory-work')))
       const actors = await request(page, '/v1/agents?limit=100')
-      const topics = roomId ? (await request(page, '/v1/rooms/' + roomId + '/topics')).topics : []
-      const idle = (!roomId || topics.length > 0 && topics.every((topic) => topic.status === 'idle')) &&
+      const topics = roomId && !privateChat ? (await request(page, '/v1/rooms/' + roomId + '/topics')).topics : []
+      const direct = privateChat ? await request(page, '/v1/rooms/' + roomId + '/direct') : null
+      const idle = (privateChat ? !direct.active && direct.requests[0]?.status === 'completed'
+        : !roomId || topics.length > 0 && topics.every((topic) => topic.status === 'idle')) &&
         states.every((state) => !state.jobs.some((job) => ['pending', 'running'].includes(job.status))) &&
         ids.every((id) => !actors.activities?.[id]?.runs.length)
       const nowCount = count()
@@ -79,20 +87,22 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   }
   await sections.getByRole('button', { name: 'New conversation', exact: true }).click()
   const beforeCreate = count()
-  await page.getByRole('button', { name: 'Create Agent', exact: true }).click()
-  await active().getByLabel('Name', { exact: true }).fill('Ada independent fixture')
-  await active().getByLabel('Job / title', { exact: true }).fill('Evidence and scoped collaboration')
-  await active().getByLabel('Long-term responsibilities', { exact: true }).fill(MARK + ': provide concise evidence and respect the current scope.')
-  await active().getByRole('button', { name: 'Save', exact: true }).click()
-  await page.getByRole('heading', { name: 'Ada independent fixture', exact: true, level: 1 }).waitFor()
+  await page.locator('.direct-new-chat').getByRole('button', { name: 'Fill in yourself', exact: true }).click()
+  const form = page.getByRole('dialog', { name: 'Create Agent', exact: true })
+  await form.getByLabel('Name', { exact: true }).fill('Ada independent fixture')
+  await form.getByLabel('Job / title', { exact: true }).fill('Evidence and scoped collaboration')
+  // The field label also carries its hint and character count.
+  await form.getByLabel(/^Long-term responsibilities/).fill(MARK + ': provide concise evidence and respect the current scope.')
+  await form.getByRole('button', { name: 'Save', exact: true }).click()
+  await poll(async () => (await page.locator('.direct-chat-title strong').innerText().catch(() => '')) === 'Ada independent fixture',
+    15000, 'the created Agent opens in Code')
   const agents = await request(page, '/v1/agents?search=Ada%20independent%20fixture')
   assert.equal(agents.agents.length, 1)
   const ada = agents.agents[0]
   const bea = (await request(page, '/v1/agents', 'POST', { clientRequestId: 'independent-bea', name: 'Bea independent fixture',
     instructions: MARK + ': inspect only the supplied evidence.', defaultRole: 'reviewer' })).agent
-  await sections.getByRole('button', { name: ada.name, exact: true }).click()
-  await page.getByRole('heading', { name: ada.name, exact: true, level: 1 }).waitFor()
   const direct = (await request(page, '/v1/agents/' + ada.id + '/conversation', 'POST', {})).room
+  await openConversation(direct.id, ada.name)
   const repeated = (await request(page, '/v1/agents/' + ada.id + '/conversation', 'POST', {})).room
   assert.equal(direct.id, repeated.id)
   assert.equal(count(), beforeCreate, 'Creating/opening Agents must not call a model')
@@ -100,11 +110,12 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   assertions.push('UI creates a durable Agent and opening its unique private chat performs no model work')
   await send(MARK + ': remember that reports use Chinese and include source links.')
   await poll(async () => (await request(page, '/v1/agents/' + ada.id + '/memories')).memories.length === 1, 30000, 'automatic scoped memory is persisted')
-  await quiet([ada.id], direct.id)
-  const portraitBounds = await page.locator('.rooms-im-sidebar-open > .rooms-avatar .rooms-avatar-art').evaluateAll((elements) =>
+  await quiet([ada.id], direct.id, true)
+  // Agent portraits on private rows; group rows use a mosaic of smaller member portraits.
+  const portraitBounds = await sections.locator('[data-kind="user_agent"] .sidebar-agent-chat-avatar .rooms-avatar-art').evaluateAll((elements) =>
     elements.map((element) => ({ width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height })))
-  assert(portraitBounds.length >= 3 && portraitBounds.every((bounds) => bounds.width >= 16 && bounds.height >= 16),
-    'Agent directory portraits must retain their image dimensions')
+  assert(portraitBounds.length >= 2 && portraitBounds.every((bounds) => bounds.width >= 16 && bounds.height >= 16),
+    'Code conversation portraits must retain their image dimensions')
   const learned = (await request(page, '/v1/agents/' + ada.id + '/memories')).memories[0]
   assert.equal(learned.memory.agentContext.sourceConversationId, direct.id)
   assert.equal(learned.memory.agentContext.shared, false)
@@ -115,8 +126,8 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
       role: agent.defaultRole, roleNotes: '', enabled: true, allowedRepositoryIds: [], revision: 0 })) })).room
   const chooseGroup = async () => {
     await close()
-    await page.getByRole('button', { name: group.name, exact: true }).click()
-    await page.getByRole('heading', { name: group.name, exact: true }).waitFor()
+    await openConversation(group.id)
+    await page.getByRole('heading', { name: new RegExp('^' + group.name) }).waitFor()
   }
   await chooseGroup()
   await send(MARK + ': explain how Chinese reports should link sources in this group.')
@@ -126,11 +137,10 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   const beforeSharing = await request(page, '/v1/rooms/' + group.id + '/runs/' + firstRuns[0].id)
   assert(!beforeSharing.context?.memoryIds?.includes(learned.memory.id), 'Unshared private memory reached a group')
   assertions.push('one identity participates in a private chat and a group, while work memory stays isolated')
-  await sections.getByRole('button', { name: ada.name, exact: true }).click()
-  await page.getByRole('heading', { name: ada.name, exact: true, level: 1 }).waitFor()
-  await composer().getByRole('textbox', { name: INPUT, exact: true }).fill('PRIVATE_DRAFT_SURVIVES_MEMORY_VIEW')
+  await openConversation(direct.id, ada.name)
+  await input().fill('PRIVATE_DRAFT_SURVIVES_MEMORY_VIEW')
   const beforeView = count()
-  await page.locator('.agent-collaboration-strip').getByRole('button', { name: 'Agent profile and memory', exact: true }).click()
+  await headerAction('Agent profile and memory')
   await active().getByRole('button', { name: 'Memory', exact: true }).click()
   const memoryPanel = active().getByRole('region', { name: 'Long-term memory', exact: true })
   const entry = memoryPanel.locator('.agent-memory-entry').filter({ hasText: learned.memory.content }).last()
@@ -147,7 +157,7 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   await poll(async () => (await request(page, '/v1/agents/' + ada.id + '/memories')).memories[0].memory.content.includes('short conclusion'), 10000, 'memory correction saved')
   await shot('memory-corrected')
   await close()
-  assert((await composer().getByRole('textbox', { name: INPUT, exact: true }).innerText()).includes('PRIVATE_DRAFT_SURVIVES_MEMORY_VIEW'))
+  assert((await input().innerText()).includes('PRIVATE_DRAFT_SURVIVES_MEMORY_VIEW'))
   assert.equal(count(), beforeView, 'Memory viewing/correction/sharing must not call a model')
   await chooseGroup()
   await send(MARK + ': explain how Chinese reports should link sources and include a conclusion in this group.')
@@ -157,7 +167,7 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   assert(afterSharing.context?.memoryIds?.includes(learned.memory.id), 'Explicitly shared memory was not injected')
   assert(afterSharing.context.prompt.includes('short conclusion'))
   assertions.push('memory correction and explicit sharing change future scoped retrieval without background execution')
-  await page.getByRole('button', { name: 'Agent collaboration', exact: true }).click()
+  await headerAction('Agent collaboration')
   await active().getByText('Request help from an Agent', { exact: true }).click()
   await active().getByRole('button', { name: 'Choose a helper', exact: true }).click()
   const picker = page.getByRole('dialog', { name: 'Choose a helper', exact: true })
@@ -182,32 +192,38 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   await shot('handoff-completed')
   await active().getByRole('button', { name: 'Open Agent conversation', exact: true }).first().click()
   const pair = (await request(page, '/v1/rooms/' + handoff.pairRoomId)).room
-  await page.getByRole('heading', { name: pair.name, exact: true }).waitFor()
+  await page.locator(`[data-room-surface="agent-chat"][data-room-id="${pair.id}"]`).waitFor()
+  await page.getByRole('heading', { name: new RegExp('^' + pair.name) }).waitFor()
   assert.equal(await composer().count(), 0, 'Agent-to-Agent transcript must be read-only for user sends')
   const pairMessages = (await request(page, '/v1/rooms/' + pair.id + '/messages')).messages
-  assert(pairMessages.some((message) => message.originRunId === handoff.runId))
+  const handoffReply = pairMessages.find((message) => message.originRunId === handoff.runId)
+  assert(handoffReply)
   assert.equal((await request(page, '/v1/rooms/' + group.id + '/tasks')).tasks.length, 0)
   assertions.push('explicit collaboration uses the native queue, creates an inspectable pair chat, and creates no code tasks')
   await shot('pair-conversation')
   const beforeRead = count()
-  await page.getByRole('button', { name: 'View this run', exact: true }).first().click()
-  await active().getByRole('region', { name: 'Run details', exact: true }).waitFor()
-  assert.equal(await active().getByRole('region', { name: 'Run details', exact: true }).getAttribute('data-run-id'), handoff.runId)
+  const runMessage = page.locator('#room-message-' + handoffReply.id)
+  await runMessage.hover()
+  await runMessage.getByRole('button', { name: 'More actions', exact: true }).click()
+  await page.getByRole('button', { name: 'View Agent session', exact: true }).click()
+  await active().getByRole('region', { name: 'Agent session', exact: true }).waitFor()
+  assert.equal(await active().getByRole('region', { name: 'Agent session', exact: true }).getAttribute('data-run-id'), handoff.runId)
   await shot('exact-handoff-run')
   await close()
   assert.equal(count(), beforeRead)
-  await sections.getByRole('button', { name: ada.name, exact: true }).click()
-  await page.getByRole('heading', { name: ada.name, exact: true, level: 1 }).waitFor()
-  assert((await composer().getByRole('textbox', { name: INPUT, exact: true }).innerText()).includes('PRIVATE_DRAFT_SURVIVES_MEMORY_VIEW'))
-  await page.locator('.agent-collaboration-strip').getByRole('button', { name: 'Agent profile and memory', exact: true }).click()
+  await openConversation(direct.id, ada.name)
+  assert((await input().innerText()).includes('PRIVATE_DRAFT_SURVIVES_MEMORY_VIEW'))
+  await headerAction('Agent profile and memory')
   await active().getByRole('button', { name: 'Memory', exact: true }).click()
   await active().getByRole('button', { name: 'Forget', exact: true }).first().click()
+  await active().getByRole('alertdialog', { name: 'Forget', exact: true }).getByRole('button', { name: 'Forget this memory', exact: true }).click()
   await poll(async () => (await request(page, '/v1/agents/' + ada.id + '/memories')).memories.length === 0, 10000, 'forgotten memory excluded')
   await shot('memory-forgotten')
   await close()
-  await sections.getByRole('button', { name: 'Chat management', exact: true }).click()
-  await page.getByRole('dialog', { name: 'Chat management', exact: true }).getByRole('button', { name: 'Agents', exact: true }).click()
-  await page.getByRole('button', { name: 'Agent features', exact: true }).click()
+  await sections.getByRole('button', { name: 'Conversations · More actions', exact: true }).click()
+  await page.getByRole('button', { name: 'Agent directory', exact: true }).click()
+  const directory = page.getByRole('dialog', { name: 'Agent directory', exact: true })
+  await directory.getByRole('button', { name: 'Agent features', exact: true }).click()
   const features = page.getByRole('dialog', { name: 'Agent features', exact: true })
   const collaboration = features.getByLabel('Agent collaboration', { exact: true })
   await poll(async () => await collaboration.isEnabled() && await collaboration.isChecked(), 10000, 'feature controls loaded')
@@ -217,8 +233,8 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   await collaboration.check()
   await poll(async () => (await request(page, '/v1/agents/features')).features.collaboration, 10000, 'collaboration restored')
   await page.keyboard.press('Escape')
-  await page.getByRole('dialog', { name: 'Agents', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
-  await page.locator('.agent-collaboration-strip').getByRole('button', { name: 'Agent profile and memory', exact: true }).click()
+  await directory.getByRole('button', { name: 'Close', exact: true }).click()
+  await headerAction('Agent profile and memory')
   await active().getByRole('button', { name: 'Archive Agent', exact: true }).click()
   await active().getByRole('button', { name: 'Restore', exact: true }).waitFor()
   await shot('archived-profile')

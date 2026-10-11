@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { makeToolResultItem } from '../domain/item.js'
 import {
+  adeManagerContextBlock,
   pptSourceReadToolGate,
   pptWorkflowCompletionToolGate,
   requiredWorkflowToolGate,
@@ -107,5 +108,74 @@ describe('pptWorkflowCompletionToolGate', () => {
     })
     expect(pptWorkflowCompletionToolGate({ ...base, stage: 'review' }, [result], 'turn_ppt'))
       .toEqual({})
+  })
+})
+
+describe('adeManagerContextBlock', () => {
+  const resolve = async () => 'manager context'
+
+  it('renders only for ade-mode kun manager turns', async () => {
+    const block = await adeManagerContextBlock(
+      { workspaceMode: 'ade', harnessId: 'kun' },
+      'thr_mgr',
+      resolve
+    )
+    expect(block?.kind).toBe('ade-manager')
+    expect(block?.authority).toBe('runtime')
+    expect(block?.content).toBe('manager context')
+  })
+
+  it('accepts an unpinned harness as the native kun loop', async () => {
+    const block = await adeManagerContextBlock(
+      { workspaceMode: 'ade' },
+      'thr_mgr',
+      resolve
+    )
+    expect(block?.content).toBe('manager context')
+  })
+
+  it('includes the manager contract for explicitly enabled Code tasks', async () => {
+    const block = await adeManagerContextBlock(
+      { workspaceMode: 'code', collaboration: { enabled: true }, harnessId: 'kun' },
+      'thr_code_manager', resolve
+    )
+    expect(block?.kind).toBe('ade-manager')
+    expect(block?.content).toBe('manager context')
+  })
+
+  it('retains manager context for cleanup after Code collaboration is disabled', async () => {
+    const resolve = vi.fn(async () => 'existing team context')
+    const block = await adeManagerContextBlock(
+      { workspaceMode: 'code', collaboration: { enabled: false, everEnabled: true } },
+      'thr_code_manager', resolve
+    )
+    expect(block?.content).toBe('existing team context')
+    expect(resolve).toHaveBeenCalledWith({ threadId: 'thr_code_manager', newWorkAllowed: false })
+  })
+
+  it.each<[string, Parameters<typeof adeManagerContextBlock>[0]]>([
+    ['code workspace', { workspaceMode: 'code' }],
+    ['explicitly disabled ADE workspace', { workspaceMode: 'ade', collaboration: { enabled: false } }],
+    ['worker child thread', { workspaceMode: 'ade', parentThreadId: 'thr_mgr' }],
+    ['external harness', { workspaceMode: 'ade', harnessId: 'claude-code' }]
+  ])('skips %s', async (_label, thread) => {
+    const block = await adeManagerContextBlock(thread, 'thr_mgr', resolve)
+    expect(block).toBeNull()
+  })
+
+  it('skips when no resolver is wired', async () => {
+    const block = await adeManagerContextBlock(
+      { workspaceMode: 'ade' }, 'thr_mgr', undefined
+    )
+    expect(block).toBeNull()
+  })
+
+  it('returns null when the resolver yields no content or throws', async () => {
+    await expect(adeManagerContextBlock(
+      { workspaceMode: 'ade' }, 'thr_mgr', async () => undefined
+    )).resolves.toBeNull()
+    await expect(adeManagerContextBlock(
+      { workspaceMode: 'ade' }, 'thr_mgr', async () => { throw new Error('io') }
+    )).resolves.toBeNull()
   })
 })

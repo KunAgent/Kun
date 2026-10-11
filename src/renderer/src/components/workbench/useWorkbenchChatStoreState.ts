@@ -6,9 +6,11 @@ export function useWorkbenchChatStoreState() {
   return useChatStore(
     useShallow((s) => ({
       threads: s.threads,
+      adeThreads: s.adeThreads,
       threadSearch: s.threadSearch,
       showArchivedThreads: s.showArchivedThreads,
       activeThreadId: s.activeThreadId,
+      adeDraftOpen: s.adeDraftOpen,
       threadLoadingId: s.threadLoadingId,
       activeThreadRelation: s.activeThreadRelation,
       activeThreadParentId: s.activeThreadParentId,
@@ -31,6 +33,7 @@ export function useWorkbenchChatStoreState() {
       runtimeConnection: s.runtimeConnection,
       setRoute: s.setRoute,
       openCode: s.openCode,
+      openAde: s.openAde,
       openWrite: s.openWrite,
       openDesign: s.openDesign,
       clearActiveThreadSelection: s.clearActiveThreadSelection,
@@ -91,6 +94,7 @@ export function useWorkbenchChatStoreState() {
       pinThread: s.pinThread,
       archiveThread: s.archiveThread,
       deleteThread: s.deleteThread,
+      refreshAdeThreads: s.refreshAdeThreads,
       spawnSideConversation: s.spawnSideConversation,
       openSideConversationDraft: s.openSideConversationDraft,
       selectSideConversation: s.selectSideConversation,

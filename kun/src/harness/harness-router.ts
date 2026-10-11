@@ -1,0 +1,277 @@
+import type {
+  HarnessDefinition,
+  HarnessId,
+  HarnessRoute,
+  HarnessStatus,
+  HarnessTransport
+} from '../contracts/harness.js'
+import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
+import type { ThreadRecord } from '../contracts/threads.js'
+import type { Turn } from '../contracts/turns.js'
+import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
+import { checkHarnessAdmission } from './harness-admission.js'
+import { effectiveKunTurnIntent, isInternalGraphWorker, unsupportedKunTurnIntent } from './kun-turn-intent.js'
+import {
+  effectiveCapabilitiesForRoute,
+  roomAdjustedCapabilities
+} from './effective-capabilities.js'
+import { isUnattendedTurn, usageForTurn } from './usage-for-turn.js'
+import {
+  defaultCredentialMode,
+  legacyHarnessForProvider,
+  type ProviderKindsView
+} from './resolve-turn-harness.js'
+
+export const HARNESS_FAILURE_CODES = [
+  'harness_unknown',
+  'harness_unavailable',
+  'harness_not_ready',
+  'capability_missing',
+  'sandbox_insufficient',
+  'route_unsupported'
+] as const
+export type HarnessFailureCode = (typeof HARNESS_FAILURE_CODES)[number]
+
+export class HarnessAdmissionError extends Error {
+  constructor(
+    readonly code: HarnessFailureCode,
+    message: string,
+    readonly missing: readonly string[] = []
+  ) {
+    super(message)
+    this.name = 'HarnessAdmissionError'
+  }
+
+  /** User-facing message; i18n resolution happens at the client boundary. */
+  get userMessage(): string {
+    return this.message
+  }
+}
+
+export type ResolvedHarnessRoute = {
+  route: HarnessRoute
+  definition: HarnessDefinition
+  /** Effective capabilities for this route (declaration ∩ runtime report). */
+  effective: HarnessCapabilities
+  /** Resolved harness permission level after unattended clamping. */
+  permissionMode: string
+}
+
+export type HarnessResolveResult =
+  | { ok: true; runtime?: DelegatedTurnRuntime; resolved: ResolvedHarnessRoute }
+  | { ok: false; error: HarnessAdmissionError }
+
+export type HarnessRouterDeps = {
+  /** Feature switch: `agents.kun.ade.harnessRouter` (default true). */
+  enabled(): boolean
+  catalog: {
+    get(id: string): HarnessDefinition | undefined
+    /** User-disabled harness ids fail admission; absent means nothing disabled. */
+    isDisabled?(id: HarnessId): boolean
+    isProfileEnabled?(route: HarnessRoute): boolean
+  }
+  /**
+   * Live transport -> runtime view. A held reference must reflect hot
+   * replacement; implementations should read through a getter rather than
+   * snapshot the map.
+   */
+  runtimes(): Partial<Record<HarnessTransport, DelegatedTurnRuntime>>
+  providerKinds(): ProviderKindsView
+  defaultModel(): string | undefined
+  /**
+   * Last probed detector status; undefined means "never probed" and the
+   * not-ready gate is skipped (an unprobed harness is not a known-missing
+   * one). Compositions should warm detection in the background.
+   */
+  status?(id: HarnessId): HarnessStatus | undefined
+  /** `agents.kun.ade.allowUnattendedFullAccess`; default false. */
+  allowUnattendedFullAccess?(): boolean
+  /**
+   * /: whether the thread's bound task workspace is a
+   * host-created isolated worktree. Absent or unknown → not isolated.
+   */
+  taskWorkspaceIsolated?(workspaceId: string): boolean
+  readiness?: Pick<import('./harness-readiness.js').HarnessReadinessService, 'configurationSignature' | 'prepareTurn' | 'releaseTurn'>
+  /** Optional extra admission hook. Absent means capability-only routing. */
+  admission?(input: {
+    definition: HarnessDefinition
+    thread: ThreadRecord
+    turn: Turn
+  }): HarnessAdmissionError | undefined
+}
+
+/**
+ * Explicit `harnessId × providerId × model × credentialMode` resolution.
+ * `resolve` is synchronous and must run before any lifecycle await so a
+ * hot config swap can never retarget an already-admitted turn.
+ */
+export class HarnessRouter {
+  constructor(private readonly deps: HarnessRouterDeps) {}
+
+  enabled(): boolean {
+    return this.deps.enabled()
+  }
+
+  resolve(thread: ThreadRecord, turn: Turn): HarnessResolveResult {
+    const kinds = this.deps.providerKinds()
+    const harnessId: HarnessId =
+      turn.harnessId ?? thread.harnessId ?? legacyHarnessForProvider(turn.actingModelRoute?.providerId ?? turn.providerId, kinds)
+    const definition = this.deps.catalog.get(harnessId)
+    if (!definition) {
+      return {
+        ok: false,
+        error: new HarnessAdmissionError(
+          'harness_unknown',
+          `Unknown harness: ${harnessId}`
+        )
+      }
+    }
+    if (definition.transport === 'application' || definition.transport === 'terminal') {
+      return { ok: false, error: new HarnessAdmissionError('route_unsupported',
+        `${definition.displayName} runs through its ${definition.transport === 'terminal' ? 'native terminal' : 'application'} entry in the Agent Center`) }
+    }
+    if (this.deps.catalog.isDisabled?.(harnessId)) {
+      return {
+        ok: false,
+        error: new HarnessAdmissionError(
+          'harness_unavailable',
+          `Harness disabled in settings: ${harnessId}`
+        )
+      }
+    }
+    const route: HarnessRoute = {
+      harnessId,
+      ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {
+        providerId: turn.actingModelRoute?.providerId ?? turn.providerId ?? thread.providerId ?? undefined }),
+      model: (turn.gatewayBinding ? undefined : turn.actingModelRoute?.model) ?? turn.model ?? thread.model ?? this.deps.defaultModel() ?? '',
+      credentialMode:
+        turn.credentialMode ?? defaultCredentialMode(harnessId, definition)
+    }
+    if (route.gatewayBinding && (harnessId === 'kun' || route.credentialMode !== 'kun-gateway')) {
+      return { ok: false, error: new HarnessAdmissionError('route_unsupported', 'Structured gateway aliases require an external Agent in gateway mode') }
+    }
+    if (harnessId === 'kun' && legacyHarnessForProvider(route.providerId, kinds) !== 'kun') {
+      return { ok: false, error: new HarnessAdmissionError('route_unsupported',
+        'Kun Agent cannot use an external Agent provider. Select a Kun model connection or enable and select the external Agent profile.') }
+    }
+    if (harnessId !== 'kun' && this.deps.catalog.isProfileEnabled?.(route) !== true) {
+      return { ok: false, error: new HarnessAdmissionError('harness_unavailable', `Agent profile is disabled: ${harnessId}. Test and enable this profile in settings.`) }
+    }
+    const intentError = unsupportedKunTurnIntent(harnessId, effectiveKunTurnIntent(thread, turn), {
+      graphWorker: isInternalGraphWorker(thread, turn)
+    })
+    if (intentError) return { ok: false, error: new HarnessAdmissionError('route_unsupported', intentError) }
+    const admissionError = this.deps.admission?.({ definition, thread, turn })
+    if (admissionError) return { ok: false, error: admissionError }
+    let runtime: DelegatedTurnRuntime | undefined
+    if (definition.transport !== 'native-loop') {
+      const transport = this.deps.runtimes()[definition.transport]
+      if (!transport) {
+        return {
+          ok: false,
+          error: new HarnessAdmissionError(
+            'harness_unavailable',
+            `No runtime registered for harness transport: ${definition.transport}`
+          )
+        }
+      }
+      // Runtimes that understand routes get the explicit check; legacy runtimes
+      // keep the provider-based admission so existing threads are unaffected.
+      const owns = transport.handlesRoute
+        ? transport.handlesRoute(route)
+        : transport.handlesProvider(route.providerId)
+      if (!owns) {
+        return {
+          ok: false,
+          error: new HarnessAdmissionError(
+            'route_unsupported',
+            `Harness ${harnessId} does not handle provider route ${route.providerId ?? 'default'}`
+          )
+        }
+      }
+      runtime = transport.resolveProvider?.(route.providerId) ?? transport
+      const underlying = runtime
+      const readiness = this.deps.readiness
+      if (readiness) {
+        const signature = readiness.configurationSignature(route)
+        runtime = {
+          handlesProvider: (id) => underlying.handlesProvider(id),
+          capabilities: (id) => underlying.capabilities(id),
+          ...(underlying.capabilitiesV2 ? { capabilitiesV2: (id: string | undefined) => underlying.capabilitiesV2!(id) } : {}),
+          runTurn: async (threadId, turnId, signal, providerId) => {
+            try {
+              await readiness.prepareTurn(threadId, turnId, route, signature, signal)
+              return await underlying.runTurn(threadId, turnId, signal, providerId)
+            }
+            finally { readiness.releaseTurn(threadId, turnId) }
+          }
+        }
+      } else {
+        return { ok: false, error: new HarnessAdmissionError('harness_not_ready', 'Agent readiness service is unavailable') }
+      }
+    }
+    const usage = usageForTurn(thread, turn)
+    let effective = effectiveCapabilitiesForRoute(definition, runtime, route.providerId)
+    if (usage === 'room-execution' || usage === 'room-conversation') {
+      // A room turn strips native tools entirely: when the runtime declares
+      // `roomToolPolicy`, Kun's tool host mediates every call, so the
+      // room-scoped sandbox is host-enforced regardless of the harness's own
+      // sandbox declaration.
+      effective = roomAdjustedCapabilities(
+        effective,
+        runtime?.capabilities?.(route.providerId)?.roomToolPolicy === true
+      )
+    }
+    // a thread bound to a host-managed worktree counts isolated.
+    // Worker threads carry it on executionUnit; one-to-one threads on
+    // thread.taskWorkspaceId.
+    const boundWorkspaceId = thread.executionUnit?.taskWorkspaceId ?? thread.taskWorkspaceId
+    const verdict = checkHarnessAdmission({
+      usage,
+      credentialMode: route.credentialMode,
+      harness: definition,
+      effective,
+      status: (() => { const status = this.deps.status?.(harnessId); return status && this.deps.readiness ? { ...status, login: 'unknown' as const } : status })() ?? {
+        harnessId,
+        installed: 'yes',
+        login: 'unknown',
+        checkedAt: '1970-01-01T00:00:00.000Z'
+      },
+      workspace: {
+        isolated: Boolean(
+          boundWorkspaceId && this.deps.taskWorkspaceIsolated?.(boundWorkspaceId)
+        )
+      },
+      unattended: isUnattendedTurn(turn),
+      allowUnattendedFullAccess: this.deps.allowUnattendedFullAccess?.() ?? false
+    })
+    if (!verdict.ok) {
+      return {
+        ok: false,
+        error: new HarnessAdmissionError(verdict.code, verdict.message, verdict.missing)
+      }
+    }
+    return {
+      ok: true,
+      runtime,
+      resolved: { route, definition, effective, permissionMode: verdict.permissionMode }
+    }
+  }
+}
+
+/** Mutable map the router reads through; hot config swaps call replace(). */
+export class HarnessRuntimeMap {
+  private current: Partial<Record<HarnessTransport, DelegatedTurnRuntime>>
+
+  constructor(initial: Partial<Record<HarnessTransport, DelegatedTurnRuntime>>) {
+    this.current = initial
+  }
+
+  get(): Partial<Record<HarnessTransport, DelegatedTurnRuntime>> {
+    return this.current
+  }
+
+  replace(next: Partial<Record<HarnessTransport, DelegatedTurnRuntime>>): void {
+    this.current = next
+  }
+}

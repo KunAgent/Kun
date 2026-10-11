@@ -29,7 +29,7 @@
   "speakRuntimeHint": "About 3.5 MB. License {{license}}.",
   "speakVoiceHint": "Voice weights for the selected language.",
   "speakDownloadSource": "Download source",
-  "speakDownloadSourceDesc": "Preferred mirror for runtime WASM and voice files. Other sources are tried automatically if this one fails.",
+  "speakDownloadSourceDesc": "Choose the preferred source for voice weights. If it fails, Kun tries the remaining voice sources automatically.",
   "speakDownloadSourceChecking": "Checking download sources...",
   "speakDownloadSourceAvailable": "{{source}} reachable in {{ms}} ms",
   "speakDownloadSourceUnavailable": "{{source}} unavailable: {{reason}}",
@@ -51,5 +51,6 @@
   "speakStoredTracksDesc": "WAV files are independent of conversations and remain after a conversation is deleted. Limit: 1 GiB total, 200 MiB per recording; playback continues without saving when full.",
   "speakStoredTracksUsage_one": "{{count}} file, {{size}}",
   "speakStoredTracksUsage_other": "{{count}} files, {{size}}",
-  "speakStoredTracksClear": "Clear"
+  "speakStoredTracksClear": "Clear",
+  "speakDownloadSourceRuntimeHint": "The shared runtime and Russian pronunciation dictionary always download from pinned official GitHub versions. This selection controls voice weights; Hugging Face mirrors contain voices only."
 }

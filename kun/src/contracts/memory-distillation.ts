@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   MEMORY_MAX_SOURCES,
+  MemoryConsolidation,
   MemorySourceEvidence,
   MemoryType
 } from './memory.js'
@@ -70,6 +71,7 @@ export const MemoryCandidate = z.object({
   confidence: z.number().min(0).max(1),
   importance: z.number().min(0).max(1),
   observedAt: z.string().datetime(),
+  consolidation: MemoryConsolidation.optional(),
   tags: CandidateTags,
   sources: CandidateSources
 }).strict()
@@ -94,7 +96,8 @@ const MemoryCandidateComparison = z.object({
     .max(256)
     .transform(normalizeIdentifier)
     .pipe(z.string().min(1).max(256)),
-  relation: MemoryCandidateRelation
+  relation: MemoryCandidateRelation,
+  reason: z.string().trim().min(1).max(1000).optional()
 }).strict()
 
 const MemoryCandidateComparisons = z.array(MemoryCandidateComparison)
@@ -118,7 +121,9 @@ export const DistillationSkipReason = z.enum([
   'duplicate',
   'low-confidence',
   'non-durable',
-  'sensitive'
+  'sensitive',
+  'unsupported-success',
+  'unsafe-instruction'
 ])
 export type DistillationSkipReason = z.infer<typeof DistillationSkipReason>
 

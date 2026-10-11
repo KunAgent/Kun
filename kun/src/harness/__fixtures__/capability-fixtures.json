@@ -1,0 +1,366 @@
+{
+  "cases": [
+    {
+      "name": "kun",
+      "legacy": {
+        "nativeResume": true,
+        "structuredStreaming": true,
+        "kunTools": true,
+        "externalApproval": true,
+        "liveSteering": true,
+        "nativeContextTelemetry": true,
+        "fork": true
+      },
+      "base": {
+        "statuses": {
+          "nativeResume": {
+            "supported": true
+          },
+          "fork": {
+            "supported": true
+          },
+          "rewind": {
+            "supported": true
+          },
+          "structuredStreaming": {
+            "supported": true
+          },
+          "reasoningStream": {
+            "supported": true
+          },
+          "abort": {
+            "supported": true
+          },
+          "sameTurnSteer": {
+            "supported": true
+          },
+          "switchModelMidSession": {
+            "supported": true
+          },
+          "setPermissionModeMidSession": {
+            "supported": true
+          },
+          "effort": {
+            "supported": true
+          },
+          "planMode": {
+            "supported": true
+          },
+          "manualCompact": {
+            "supported": true
+          },
+          "kunTools": {
+            "supported": true
+          },
+          "externalApproval": {
+            "supported": true
+          },
+          "nativeToolInterception": {
+            "supported": true
+          },
+          "fsMediated": {
+            "supported": true
+          },
+          "terminalMediated": {
+            "supported": true
+          },
+          "nativeContextTelemetry": {
+            "supported": true
+          },
+          "imageInput": {
+            "supported": true
+          },
+          "fileInput": {
+            "supported": true
+          },
+          "nativeCommands": {
+            "supported": true
+          },
+          "modes": {
+            "supported": true
+          },
+          "userInput": {
+            "supported": true
+          }
+        },
+        "facts": {
+          "sandbox": "host",
+          "usageReporting": "exact",
+          "compactionOwner": "kun"
+        }
+      },
+      "expected": {
+        "statuses": {
+          "nativeResume": {
+            "supported": true
+          },
+          "fork": {
+            "supported": true
+          },
+          "rewind": {
+            "supported": true
+          },
+          "structuredStreaming": {
+            "supported": true
+          },
+          "reasoningStream": {
+            "supported": true
+          },
+          "abort": {
+            "supported": true
+          },
+          "sameTurnSteer": {
+            "supported": true
+          },
+          "switchModelMidSession": {
+            "supported": true
+          },
+          "setPermissionModeMidSession": {
+            "supported": true
+          },
+          "effort": {
+            "supported": true
+          },
+          "planMode": {
+            "supported": true
+          },
+          "manualCompact": {
+            "supported": true
+          },
+          "kunTools": {
+            "supported": true
+          },
+          "externalApproval": {
+            "supported": true
+          },
+          "nativeToolInterception": {
+            "supported": true
+          },
+          "fsMediated": {
+            "supported": true
+          },
+          "terminalMediated": {
+            "supported": true
+          },
+          "nativeContextTelemetry": {
+            "supported": true
+          },
+          "imageInput": {
+            "supported": true
+          },
+          "fileInput": {
+            "supported": true
+          },
+          "nativeCommands": {
+            "supported": true
+          },
+          "modes": {
+            "supported": true
+          },
+          "userInput": {
+            "supported": true
+          }
+        },
+        "facts": {
+          "sandbox": "host",
+          "usageReporting": "exact",
+          "compactionOwner": "kun"
+        }
+      }
+    },
+    {
+      "name": "claude-code",
+      "legacy": {
+        "nativeResume": true,
+        "structuredStreaming": true,
+        "kunTools": true,
+        "externalApproval": true,
+        "liveSteering": false,
+        "nativeContextTelemetry": false,
+        "fork": false
+      },
+      "base": {
+        "statuses": {
+          "nativeResume": {
+            "supported": true
+          },
+          "fork": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk has no native session fork"
+          },
+          "rewind": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk has no native session rewind"
+          },
+          "structuredStreaming": {
+            "supported": true
+          },
+          "reasoningStream": {
+            "supported": true
+          },
+          "abort": {
+            "supported": true
+          },
+          "sameTurnSteer": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk query cannot be steered mid-turn"
+          },
+          "switchModelMidSession": {
+            "supported": true
+          },
+          "setPermissionModeMidSession": {
+            "supported": true
+          },
+          "effort": {
+            "supported": true
+          },
+          "planMode": {
+            "supported": true
+          },
+          "manualCompact": {
+            "supported": false,
+            "reason": "not-implemented"
+          },
+          "kunTools": {
+            "supported": true
+          },
+          "externalApproval": {
+            "supported": true
+          },
+          "nativeToolInterception": {
+            "supported": true
+          },
+          "fsMediated": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk writes files directly"
+          },
+          "terminalMediated": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk runs commands directly"
+          },
+          "nativeContextTelemetry": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk does not report context usage"
+          },
+          "imageInput": {
+            "supported": true
+          },
+          "fileInput": {
+            "supported": true
+          },
+          "nativeCommands": {
+            "supported": true
+          },
+          "modes": {
+            "supported": true
+          },
+          "userInput": {
+            "supported": true
+          }
+        },
+        "facts": {
+          "sandbox": "native",
+          "usageReporting": "exact",
+          "compactionOwner": "harness"
+        }
+      },
+      "expected": {
+        "statuses": {
+          "nativeResume": {
+            "supported": true
+          },
+          "fork": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk has no native session fork"
+          },
+          "rewind": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk has no native session rewind"
+          },
+          "structuredStreaming": {
+            "supported": true
+          },
+          "reasoningStream": {
+            "supported": true
+          },
+          "abort": {
+            "supported": true
+          },
+          "sameTurnSteer": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk query cannot be steered mid-turn"
+          },
+          "switchModelMidSession": {
+            "supported": true
+          },
+          "setPermissionModeMidSession": {
+            "supported": true
+          },
+          "effort": {
+            "supported": true
+          },
+          "planMode": {
+            "supported": true
+          },
+          "manualCompact": {
+            "supported": false,
+            "reason": "not-implemented"
+          },
+          "kunTools": {
+            "supported": true
+          },
+          "externalApproval": {
+            "supported": true
+          },
+          "nativeToolInterception": {
+            "supported": true
+          },
+          "fsMediated": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk writes files directly"
+          },
+          "terminalMediated": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk runs commands directly"
+          },
+          "nativeContextTelemetry": {
+            "supported": false,
+            "reason": "upstream",
+            "upstreamRef": "agent sdk does not report context usage"
+          },
+          "imageInput": {
+            "supported": true
+          },
+          "fileInput": {
+            "supported": true
+          },
+          "nativeCommands": {
+            "supported": true
+          },
+          "modes": {
+            "supported": true
+          },
+          "userInput": {
+            "supported": true
+          }
+        },
+        "facts": {
+          "sandbox": "native",
+          "usageReporting": "exact",
+          "compactionOwner": "harness"
+        }
+      }
+    }
+  ]
+}

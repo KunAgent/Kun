@@ -1,17 +1,22 @@
-import { useEffect, useMemo, useState, type DragEvent, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
-  BookOpen,
   FolderInput,
+  Layers,
+  List,
   Loader2,
   Sparkles,
+  Table2,
   Trash2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { useWriteWorkspaceStore, writeBasenameFromPath } from '../../write/write-workspace-store'
+import { useChatStore } from '../../store/chat-store'
+import { paperSessionIds, usePaperBatchInterpret } from '../../paper/paper-batch-interpret'
+import { openPaperSession } from '../../paper/paper-session-open'
 import { normalizePath } from '../../write/write-workspace-store-helpers'
 import { confirmDialog } from '../../lib/confirm-dialog'
-import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { emptyPaperLibraryFilter, usePaperModeStore } from '../../paper/paper-mode-store'
 import {
   filterPaperEntries,
   sortPaperEntries
@@ -29,18 +34,19 @@ import { PaperMetaEditDialog } from './library/PaperMetaEditDialog'
 import { PaperMoveGroupDialog } from './library/PaperMoveGroupDialog'
 import { PaperLibraryTable } from './library/PaperLibraryTable'
 import { PaperLibraryToolbar } from './library/PaperLibraryToolbar'
-import {
-  buildPaperMultiPrompt,
-  paperMultiOutputPath,
-  type PaperMultiTask
-} from '../../paper/paper-multi-prompt'
-import { newPaperRequestId, usePaperStore } from '../../write/paper/paper-store'
+import { PaperLibraryEmptyState } from './library/PaperLibraryEmptyState'
+import paperSurface from './PaperWorkspaceSurface.module.css'
+import { PaperMatrixWorkspace } from './evidence/PaperMatrixWorkspace'
+import { buildPaperMultiPrompt, paperMultiOutputPath, type PaperMultiTask } from '../../paper/paper-multi-prompt'
+import { interpretPaperWithAssistant } from '../../write/paper/paper-actions'
+import { usePaperStore } from '../../write/paper/paper-store'
 import type {
   PaperLibraryEntry,
   PaperLibrarySortKey,
   PaperUnitReadingActivity
 } from '@shared/paper/paper-library-types'
-import { currentImportFolder, currentImportParentDir } from '../../paper/paper-import-target'
+import { setImportFolder } from '../../paper/paper-import-target'
+import { usePaperImportDraft } from '../../paper/paper-import-draft'
 
 function statusLabelKey(status: string | undefined): string {
   switch (status ?? 'unread') {
@@ -59,12 +65,16 @@ export function PaperLibraryView({
   onSubmitPrompt?: (value: string) => void
 } = {}): ReactElement {
   const { t } = useTranslation('common')
-  const { workspaceRoot, paperReading } = useWriteWorkspaceStore(
+  const { workspaceRoot, paperReading, defaultWorkspaceRoot } = useWriteWorkspaceStore(
     useShallow((s) => ({
       workspaceRoot: s.workspaceRoot,
-      paperReading: s.paperReading
+      paperReading: s.paperReading,
+      defaultWorkspaceRoot: s.defaultWorkspaceRoot
     }))
   )
+  // Readings and batch interpretations are sessions anchored to the paper.
+  const threadCount = useChatStore((s) => s.threads.length)
+  const batchItems = usePaperBatchInterpret((s) => s.job?.items)
   const {
     entries,
     entriesLoading,
@@ -108,24 +118,33 @@ export function PaperLibraryView({
   )
 
   const [dropActive, setDropActive] = useState(false)
+  const [matrixOpen, setMatrixOpen] = useState(false)
   const [menu, setMenu] = useState<{ entry: PaperLibraryEntry; x: number; y: number } | null>(null)
   const [editEntry, setEditEntry] = useState<PaperLibraryEntry | null>(null)
   const [moveUnits, setMoveUnits] = useState<string[] | null>(null)
   // R3.1: mark-density data for the per-row heat bar; fetched once per tab
   // visit (main process mtime-caches the per-unit aggregates).
+  const activityRequest = useRef(0)
+  const reloadRequest = useRef(0)
   const [activity, setActivity] = useState<Record<string, PaperUnitReadingActivity>>({})
 
   const loadActivity = async (): Promise<void> => {
     if (!workspaceRoot || typeof window.kunGui?.paperReadingActivity !== 'function') return
+    const request = ++activityRequest.current
     const result = await window.kunGui.paperReadingActivity({
       workspaceRoot,
       papersDir: paperReading.papersDir
     }).catch(() => null)
-    if (result?.ok) setActivity(result.activity)
+    if (result?.ok && request === activityRequest.current && workspaceRoot === useWriteWorkspaceStore.getState().workspaceRoot) setActivity(result.activity)
   }
 
   useEffect(() => {
+    setActivity({})
     void loadActivity()
+    return () => {
+      activityRequest.current += 1
+      reloadRequest.current += 1
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceRoot])
 
@@ -133,15 +152,30 @@ export function PaperLibraryView({
     () => sortPaperEntries(filterPaperEntries(entries, filter), sort),
     [entries, filter, sort]
   )
+  const sessionCounts = useMemo(() => Object.fromEntries(
+    entries.map((entry) => [entry.unitDir, paperSessionIds(workspaceRoot, entry.unitDir).length])
+  ), [entries, workspaceRoot, threadCount, batchItems]) // eslint-disable-line react-hooks/exhaustive-deps
+  const openSessions = (entry: PaperLibraryEntry): void => {
+    const [latest] = paperSessionIds(workspaceRoot, entry.unitDir)
+    if (latest) void openPaperSession(workspaceRoot, latest, entry.unitDir)
+  }
+  const interpretSelected = (): void => {
+    const chosen = visible.filter((entry) => selection.has(entry.unitDir))
+    usePaperBatchInterpret.getState().openDialog(workspaceRoot, chosen.map(({ unitDir, meta }) => ({ unitDir, meta })))
+  }
+  const spaceName = workspaceRoot === defaultWorkspaceRoot ? t('writeDefaultSpace') : writeBasenameFromPath(workspaceRoot)
 
   const reload = async (): Promise<void> => {
     if (!workspaceRoot || typeof window.kunGui?.paperLibraryList !== 'function') return
+    const request = ++reloadRequest.current
+    const isCurrent = (): boolean => request === reloadRequest.current && workspaceRoot === useWriteWorkspaceStore.getState().workspaceRoot
     setEntriesLoading(true)
     try {
       const result = await window.kunGui.paperLibraryList({
         workspaceRoot,
         papersDir: paperReading.papersDir
       })
+      if (!isCurrent()) return
       if (result.ok) {
         setEntriesResult({
           entries: result.entries,
@@ -154,6 +188,7 @@ export function PaperLibraryView({
         setEntriesError(result.message)
       }
     } catch (error) {
+      if (!isCurrent()) return
       setEntriesError(error instanceof Error ? error.message : String(error))
     }
   }
@@ -216,7 +251,7 @@ export function PaperLibraryView({
   const bulkTrash = async (): Promise<void> => {
     if (selection.size === 0) return
     if (!(await confirmDialog(t('writePaperTrashConfirm', { count: selection.size })))) return
-    const outcome = await trashPaperUnits([...selection])
+    const outcome = await trashPaperUnits([...selection], workspaceRoot)
     clearSelection()
     if (outcome.failed.length) {
       usePaperStore.getState().setNotice({
@@ -231,31 +266,34 @@ export function PaperLibraryView({
 
   const runRowAction = async (entry: PaperLibraryEntry, action: PaperRowMenuAction): Promise<void> => {
     if (typeof action === 'object') {
-      await updatePaperEntryMeta(entry, { status: action.status }, t)
+      await updatePaperEntryMeta(entry, { status: action.status }, t, workspaceRoot)
       return
     }
     switch (action) {
       case 'open':
-        await openLibraryEntry(entry)
+        await openLibraryEntry(entry, workspaceRoot, t)
+        return
+      case 'interpret':
+        await interpretPaperWithAssistant({ t, workspaceRoot, unitDir: entry.unitDir, meta: entry.meta })
         return
       case 'edit':
         setEditEntry(entry)
         return
       case 'download-pdf':
-        await downloadMissingPaperPdfs([entry], t)
+        await downloadMissingPaperPdfs([entry], t, workspaceRoot)
         return
       case 'copy-bibtex':
-        await copyPaperEntryBibtex(entry, t)
+        await copyPaperEntryBibtex(entry, t, workspaceRoot)
         return
       case 'reveal':
-        await revealPaperEntry(entry)
+        await revealPaperEntry(entry, workspaceRoot)
         return
       case 'move':
         setMoveUnits([entry.unitDir])
         return
       case 'trash': {
         if (!(await confirmDialog(t('writePaperTrashConfirm', { count: 1 })))) return
-        const outcome = await trashPaperUnits([entry.unitDir])
+        const outcome = await trashPaperUnits([entry.unitDir], workspaceRoot)
         if (outcome.failed.length) {
           usePaperStore.getState().setNotice({
             tone: 'error',
@@ -269,15 +307,15 @@ export function PaperLibraryView({
   const runMultiTask = (task: PaperMultiTask): void => {
     const chosen = entries.filter((entry) => selection.has(entry.unitDir))
     if (chosen.length === 0 || !onSubmitPrompt) return
-    const prompt = buildPaperMultiPrompt({ task, entries: chosen, outputPath: paperMultiOutputPath(task) })
-    useWriteWorkspaceStore.getState().setAssistantOpen(true)
-    onSubmitPrompt(prompt)
+    // The assistant reads each paper's files and writes one note under notes/.
+    onSubmitPrompt(buildPaperMultiPrompt({ task, entries: chosen, outputPath: paperMultiOutputPath(task) }))
     clearSelection()
   }
 
   const allVisibleSelected = visible.length > 0 && visible.every((e) => selection.has(e.unitDir))
 
-  // PM4: drop PDFs anywhere on the table to import them into this library.
+  // Drop PDFs anywhere on the library: the import dialog takes them (with a
+  // folder filter active they land in that folder) and reports each one.
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault()
     setDropActive(false)
@@ -286,38 +324,40 @@ export function PaperLibraryView({
       .map((file) => (typeof getPath === 'function' ? getPath(file) : ''))
       .filter((path) => /\.pdf$/i.test(path))
     if (!pdfs.length || !workspaceRoot) return
-    const notice = usePaperStore.getState().setNotice
-    void (async () => {
-      let imported = 0
-      for (const localPdfPath of pdfs) {
-        const result = await window.kunGui.paperImport({
-          workspaceRoot,
-          input: '',
-          localPdfPath,
-          // Dropping while a folder filter is active files the PDFs there.
-          parentDir: currentImportParentDir(filter.group || currentImportFolder()),
-          requestId: newPaperRequestId()
-        })
-        if (result.ok) imported += 1
-        else notice({ tone: 'error', message: result.message })
-      }
-      if (imported) {
-        notice({
-          tone: 'success',
-          message: t('writePaperDroppedImported', { count: imported })
-        })
-        void reload()
-      }
-    })()
+    if (filter.group) setImportFolder(filter.group, workspaceRoot)
+    usePaperImportDraft.getState().queue(pdfs)
+    setImportDialogOpen(true)
   }
 
   return (
     <div
-      className={`flex min-h-0 min-w-0 flex-1 flex-col ${dropActive ? 'bg-accent-tint/[0.04]' : ''}`}
+      className={`${paperSurface.surface} flex min-h-0 min-w-0 flex-1 flex-col ${dropActive ? 'bg-accent-tint/[0.04]' : ''}`}
       onDragOver={(event) => { event.preventDefault(); setDropActive(true) }}
       onDragLeave={() => setDropActive(false)}
       onDrop={onDrop}
     >
+      <header className="flex shrink-0 flex-wrap items-end gap-3 px-5 pb-3 pt-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-ds-ink">{t('workSidebarLibrary')}</h1>
+          <p className="mt-0.5 truncate text-[12.5px] text-ds-faint" title={workspaceRoot}>
+            {t('paperLibrarySummary', { space: spaceName, total: counts.total, unread: counts.unread, reading: counts.reading })}
+          </p>
+        </div>
+        <div role="tablist" aria-label={t('paperLibraryViewLabel')} className="inline-flex rounded-lg bg-ds-hover p-0.5">
+          <button type="button" role="tab" aria-selected={!matrixOpen} onClick={() => setMatrixOpen(false)}
+            className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition ${matrixOpen ? 'text-ds-muted hover:text-ds-ink' : 'bg-ds-card font-semibold text-ds-ink shadow-sm'}`}>
+            <List className="h-3.5 w-3.5" strokeWidth={1.9} />{t('paperLibraryViewList')}
+          </button>
+          <button type="button" role="tab" aria-selected={matrixOpen} data-testid="paper-open-matrix" onClick={() => setMatrixOpen(true)}
+            title={t('paperReadingLocalControls')}
+            className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition ${matrixOpen ? 'bg-ds-card font-semibold text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'}`}>
+            <Table2 className="h-3.5 w-3.5" strokeWidth={1.9} />{t('paperMatrixTitle')}
+          </button>
+        </div>
+      </header>
+      {matrixOpen ? (
+        <PaperMatrixWorkspace workspaceRoot={workspaceRoot} selected={entries.filter((entry) => selection.has(entry.unitDir))} onClose={() => setMatrixOpen(false)} />
+      ) : (<>
       <PaperLibraryToolbar
         filter={filter}
         counts={counts}
@@ -328,9 +368,10 @@ export function PaperLibraryView({
         missingPdf={counts.missingPdf}
         onFilter={setFilter}
         onRefresh={() => void reload()}
-        onDownloadMissing={() => void downloadMissingPaperPdfs(entries, t)}
+        onDownloadMissing={() => void downloadMissingPaperPdfs(entries, t, workspaceRoot)}
         onExportBibtex={() => void exportBibtex()}
         onImport={() => setImportDialogOpen(true)}
+        onShowInfo={() => usePaperModeStore.getState().openInfoDrawer()}
         t={t}
       />
 
@@ -339,6 +380,15 @@ export function PaperLibraryView({
           <span className="text-[12px] font-medium text-ds-ink">
             {t('writePaperSelected', { count: selection.size })}
           </span>
+          <button
+            type="button"
+            data-testid="paper-batch-interpret"
+            onClick={interpretSelected}
+            className="inline-flex h-6 items-center gap-1 rounded-full bg-accent px-2.5 text-[11.5px] font-medium text-white transition hover:brightness-110"
+          >
+            <Layers className="h-3 w-3" strokeWidth={1.9} />
+            {t('paperBatchAction', { count: selection.size })}
+          </button>
           {(['unread', 'reading', 'read'] as const).map((status) => (
             <button
               key={status}
@@ -399,7 +449,7 @@ export function PaperLibraryView({
       ) : null}
 
       {entriesError ? (
-        <div className="mx-4 mt-3 rounded-lg border border-red-200/70 bg-red-50/80 px-3 py-2 text-[12px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+        <div role="alert" className="mx-4 mt-3 break-words rounded-lg border border-red-200/70 bg-red-50/80 px-3 py-2 text-[12px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
           {entriesError}
         </div>
       ) : null}
@@ -411,21 +461,20 @@ export function PaperLibraryView({
             <span className="text-[13px]">{t('loading')}</span>
           </div>
         ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
-            <BookOpen className="h-8 w-8 text-ds-faint" strokeWidth={1.4} />
-            <p className="text-[13px] text-ds-muted">
-              {entries.length ? t('writePaperLibraryNoMatch') : t('writePaperLibraryEmpty')}
-            </p>
-            {entries.length ? null : (
-              <button
-                type="button"
-                onClick={() => setImportDialogOpen(true)}
-                className="mt-1 inline-flex h-8 items-center rounded-md bg-[var(--ds-control)] px-4 text-[12.5px] font-medium text-[var(--ds-control-foreground)] transition hover:opacity-90"
-              >
-                {t('writePaperImport')}
+          entriesError ? (
+            <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+              <p className="max-w-md text-[13px] leading-6 text-ds-muted">{t('paperWorkspaceUnavailableHint')}</p>
+              <button type="button" onClick={() => void reload()} className="rounded-lg border border-ds-border-muted px-4 py-2 text-[12px] text-ds-ink hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+                {t('paperWorkspaceRetry')}
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <PaperLibraryEmptyState
+              filtered={entries.length > 0}
+              onImport={() => setImportDialogOpen(true)}
+              onClearFilters={() => setFilter(emptyPaperLibraryFilter())}
+            />
+          )
         ) : (
           <PaperLibraryTable
             rows={visible}
@@ -437,12 +486,15 @@ export function PaperLibraryView({
             onToggleAll={() => setSelection(
               allVisibleSelected ? new Set<string>() : new Set(visible.map((entry) => entry.unitDir))
             )}
-            onOpen={(entry) => void openLibraryEntry(entry)}
+            onOpen={(entry) => void openLibraryEntry(entry, workspaceRoot, t)}
             onMenu={(entry, x, y) => setMenu({ entry, x, y })}
+            sessionCounts={sessionCounts}
+            onOpenSessions={openSessions}
             t={t}
           />
         )}
       </div>
+      </>)}
       {menu ? (
         <PaperRowMenu
           entry={menu.entry}
@@ -452,8 +504,12 @@ export function PaperLibraryView({
           onClose={() => setMenu(null)}
         />
       ) : null}
-      {editEntry ? <PaperMetaEditDialog entry={editEntry} onClose={() => setEditEntry(null)} /> : null}
-      {moveUnits ? <PaperMoveGroupDialog unitDirs={moveUnits} onClose={() => setMoveUnits(null)} /> : null}
+      {editEntry ? (
+        <PaperMetaEditDialog entry={editEntry} libraryRoot={workspaceRoot} onClose={() => setEditEntry(null)} />
+      ) : null}
+      {moveUnits ? (
+        <PaperMoveGroupDialog unitDirs={moveUnits} libraryRoot={workspaceRoot} onClose={() => setMoveUnits(null)} />
+      ) : null}
     </div>
   )
 }

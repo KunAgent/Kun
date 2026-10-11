@@ -25,6 +25,8 @@ export interface BridgeableTool {
   /** Original Kun capability provider retained across the SDK MCP rename. */
   providerId?: string
   providerKind?: string
+  /** Kun catalog classification; forwarded to ToolHost.execute by adapters. */
+  toolKind?: 'tool_call' | 'command_execution' | 'file_change'
 }
 
 export interface KunToolResult {
@@ -76,14 +78,14 @@ export interface SelectBridgeableOptions {
 }
 
 /** Filter a tool catalog down to the kun-exclusive tools worth bridging. */
-export function selectBridgeableTools(
-  tools: readonly BridgeableTool[],
+export function selectBridgeableTools<T extends { name: string }>(
+  tools: readonly T[],
   opts: SelectBridgeableOptions = {}
-): BridgeableTool[] {
+): T[] {
   const overlap = opts.overlap ?? DEFAULT_OVERLAP_TOOL_NAMES
   const excluded = opts.excluded ?? DEFAULT_EXCLUDED_TOOL_NAMES
   const seen = new Set<string>()
-  const out: BridgeableTool[] = []
+  const out: T[] = []
   for (const tool of tools) {
     const name = tool.name?.trim()
     if (!name || overlap.has(name) || excluded.has(name) || seen.has(name)) continue

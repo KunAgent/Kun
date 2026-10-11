@@ -1,4 +1,4 @@
-import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
+import { sdkProcessBaseEnv } from './sdk-process-environment.js'
 import type {
   ModelClient,
   ModelRequest,
@@ -86,7 +86,7 @@ export class AgentSdkApprovalReviewModelClient implements ModelClient {
           includePartialMessages: false,
           maxTurns: 1,
           env: buildScopedEnv(
-            this.options.baseEnv?.() ?? shellSpawnEnv(),
+            this.options.baseEnv?.() ?? sdkProcessBaseEnv(),
             this.options.oauthToken
           ),
           canUseTool: async () => ({

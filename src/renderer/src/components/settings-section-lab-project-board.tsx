@@ -1,11 +1,7 @@
 import type { ReactElement } from 'react'
 import type { KunLabSettingsPatchV1, KunLabSettingsV1 } from '@shared/app-settings'
-import {
-  InlineNoticeView,
-  SettingRow,
-  SettingsCard,
-  Toggle
-} from './settings-controls'
+import { Columns3 } from 'lucide-react'
+import { SettingsFeatureCard } from './settings-feature-card'
 
 type Translate = (key: string) => string
 
@@ -19,25 +15,15 @@ export function ProjectBoardSettingsPanel({
   onChange: (patch: KunLabSettingsPatchV1) => void
 }): ReactElement {
   return (
-    <div className="mt-6">
-      <SettingsCard title={t('labProjectBoardTitle')}>
-        <div className="space-y-3 px-3 py-4">
-          <InlineNoticeView notice={{
-            tone: 'info',
-            message: t('labProjectBoardDescription')
-          }} />
-        </div>
-        <SettingRow
-          title={t('labProjectBoardEnabled')}
-          description={t('labProjectBoardEnabledDesc')}
-          control={
-            <Toggle
-              checked={value.projectBoard.enabled}
-              onChange={(enabled) => onChange({ projectBoard: { enabled } })}
-            />
-          }
-        />
-      </SettingsCard>
-    </div>
+    <SettingsFeatureCard
+      icon={Columns3}
+      tone="pink"
+      title={t('labProjectBoardTitle')}
+      description={t('labProjectBoardDescription')}
+      enabled={value.projectBoard.enabled}
+      onEnabledChange={(enabled) => onChange({ projectBoard: { enabled } })}
+      toggleLabel={t('labProjectBoardEnabled')}
+      enabledLabel={t('settingsIaFeatureOn')}
+    />
   )
 }

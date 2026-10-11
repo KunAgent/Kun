@@ -4,16 +4,19 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RoomMessage } from '@shared/rooms-api'
 import type { Room } from '@shared/rooms-api'
-import { directActivityLabelKey, groupActivity } from './MobileRoomAgentActivity'
+import { directActivityLabelKey, groupActivity, MobileRoomActivityBubble } from './MobileRoomAgentActivity'
 import { ROOM_REPLY_AWAIT_TIMEOUT_MS, latestReplyId, useRoomReplyAwaiting } from '../../components/rooms/use-room-reply-awaiting'
 
 const message = (id: string, authorKind: RoomMessage['authorKind']) => ({ id, authorKind }) as RoomMessage
 const active = (status: string) => ({ active: { status }, approvals: [], userInputs: [] }) as never
+const working = (kind: string) => ({ active: { status: 'running' }, approvals: [], userInputs: [], activity: { kind } }) as never
 
 it('labels the run like the desktop progress line', () => {
   expect(directActivityLabelKey(null, false)).toBeNull()
   expect(directActivityLabelKey(null, true)).toBe('directQueued')
   expect(directActivityLabelKey(active('running'), false)).toBe('directResponding')
+  expect(directActivityLabelKey(working('reading'), false)).toBe('directReading')
+  expect(directActivityLabelKey(working('command'), false)).toBe('directRunningCommand')
   expect(directActivityLabelKey(active('pending'), false)).toBe('directQueued')
   expect(directActivityLabelKey(active('stopping'), false)).toBe('directStopping')
   expect(directActivityLabelKey({ active: { status: 'running' }, approvals: [{}], userInputs: [] } as never, false))
@@ -71,4 +74,11 @@ it('clears on a new agent reply or after the timeout', () => {
   expect(hook.awaiting).toBe(true)
   act(() => { vi.advanceTimersByTime(ROOM_REPLY_AWAIT_TIMEOUT_MS) })
   expect(hook.awaiting).toBe(false)
+})
+
+it('shows elapsed time for a 90-second command without inventing a message', () => {
+  const room = { members: [{ id: 'm1', displayName: 'Kun' }] } as unknown as Room
+  const startedAt = new Date(Date.now() - 90_000).toISOString()
+  act(() => root.render(createElement(MobileRoomActivityBubble, { room, label: 'Running a command…', startedAt })))
+  expect(host.textContent).toContain('1:30')
 })

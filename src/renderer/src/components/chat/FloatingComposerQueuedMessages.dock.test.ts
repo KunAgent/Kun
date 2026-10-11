@@ -107,10 +107,19 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
     expect(restore).toHaveBeenCalledWith('account-row')
   })
 
+  const MENU_ACTIONS = new Set(['edit', 'move-top', 'copy'])
   const action = (kind: string, row?: Element): HTMLButtonElement => {
     const scope = row ?? container
-    const button = scope.querySelector<HTMLButtonElement>(
-      `[data-queued-message-action="${kind}"]`
+    if (MENU_ACTIONS.has(kind)) {
+      // Row overflow actions live in the portaled more menu.
+      const more = scope.querySelector<HTMLButtonElement>('[data-queued-message-action="more"]')
+      if (!more) throw new Error(`missing queue action: ${kind}`)
+      if (more.getAttribute('aria-expanded') !== 'true') act(() => { more.click() })
+    }
+    const button = (MENU_ACTIONS.has(kind) ? document.body : scope).querySelector<HTMLButtonElement>(
+      MENU_ACTIONS.has(kind)
+        ? `[data-queued-message-menu] [data-queued-message-action="${kind}"]`
+        : `[data-queued-message-action="${kind}"]`
     )
     if (!button) throw new Error(`missing queue action: ${kind}`)
     return button
@@ -334,12 +343,15 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
     })
     const editButton = action('edit')
     await act(async () => editButton.click())
-    expect(editButton.disabled).toBe(true)
+    const more = container.querySelector<HTMLButtonElement>('[data-queued-message-action="more"]')!
+    expect(more.disabled).toBe(true)
+    expect(document.body.querySelector('[data-queued-message-menu]')).toBeNull()
 
     await act(async () => {
       pending.resolve(true)
       await pending.promise
     })
+    expect(more.disabled).toBe(false)
     expect(action('edit').disabled).toBe(false)
     expect(container.querySelector('[data-queued-message-editor]')).toBeNull()
   })
@@ -384,7 +396,9 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
         composerRestoreEligible: true
       })]
     })
-    expect(container.querySelector('[data-queued-message-action="edit"]')).toBeNull()
+    act(() => { container.querySelector<HTMLButtonElement>('[data-queued-message-action="more"]')!.click() })
+    expect(document.body.querySelector('[data-queued-message-menu]')).not.toBeNull()
+    expect(document.body.querySelector('[data-queued-message-action="edit"]')).toBeNull()
   })
 
   it('interlocks every row action and forces expansion while one operation is busy', async () => {
@@ -503,7 +517,7 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
 
     const failed = container.querySelector('[data-queued-message-id="q-failed"]')!
     const retry = action('guide', failed)
-    expect(retry.textContent).toBe('')
+    expect(retry.textContent).toBe('queuedMessageRetryShort')
     expect(retry.getAttribute('aria-label')).toBe('queuedMessageRetry')
     await act(async () => retry.click())
     expect(onGuide).toHaveBeenCalledWith('q-failed')
@@ -595,5 +609,16 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
     const header = container.querySelector<HTMLButtonElement>('[data-queued-message-header]')
     expect(header?.getAttribute('aria-expanded')).toBe('false')
     expect(container.querySelectorAll('[data-queued-message-id]')).toHaveLength(0)
+  })
+
+  it('describes deferred guidance and disables guiding a turn that cannot take it', async () => {
+    await render({ messages: [message('a', 'commit when done')], guidanceTarget: 'deferred' })
+    expect(action('guide').disabled).toBe(false)
+    expect(action('guide').title).toBe('guideQueuedMessageDeferredHint')
+    await render({ guidanceTarget: 'unsupported' })
+    expect(action('guide').disabled).toBe(true)
+    expect(action('guide').title).toBe('guideQueuedMessageUnsupported')
+    await render({ guidanceTarget: 'turn' })
+    expect(action('guide').title).toBe('guideQueuedMessageHint')
   })
 })

@@ -5,10 +5,12 @@ const { existsSync, lstatSync, readFileSync, readdirSync, statSync } = require('
 const { extname, join, resolve } = require('node:path')
 
 const MIB = 1024 * 1024
+// Bundled gws packages measured 272.8 MiB (DMG) / 285.2 MiB (ZIP) before
+// trimming unused browser bundles. Allow about 3% headroom; see DEVELOPMENT.md.
 const MAC_ARM64_BUDGETS = {
   app: 750 * MIB,
-  dmg: 272 * MIB,
-  zip: 285 * MIB
+  dmg: 280 * MIB,
+  zip: 295 * MIB
 }
 // Keep PR ad-hoc packages on the tighter limits. Official Developer ID signed
 // and stapled artifacts have a separate 300 MiB ceiling.

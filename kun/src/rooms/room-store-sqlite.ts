@@ -1,4 +1,5 @@
-import { roomAttentionPredicateSql, roomCurrentPeerRequestSql, roomIntegrationHasTaskSql } from './room-activity-predicates.js'
+import { eraseRoomMemoryProjections, type RoomMemoryErasure } from './room-memory-erasure.js'
+import { roomAttentionPredicateSql, roomCurrentAttentionRequestSql, roomIntegrationHasTaskSql } from './room-activity-predicates.js'
 import { queryRoomSidebar } from './room-sidebar-sqlite.js'
 import type { RoomSidebarQuery } from '../contracts/room-sidebar.js'
 import { RoomRunRecordSchema } from '../contracts/room-runs.js'
@@ -112,7 +113,9 @@ export class SqliteRoomStore implements RoomStore {
       args.push(parsed.threadId, parsed.threadId)
     }
     if (parsed.search) {
-      if (kind === 'agent_identity') {
+      if (kind === 'agent_commitment' || kind === 'agent_artifact') {
+        clauses.push("instr(lower(COALESCE(json_extract(document,'$.objective'),'') || ' ' || COALESCE(json_extract(document,'$.title'),'') || ' ' || COALESCE(json_extract(document,'$.relativePath'),'') || ' ' || COALESCE(json_extract(document,'$.waitingOn'),'')),lower(?))>0"); args.push(parsed.search)
+      } else if (kind === 'agent_identity') {
         clauses.push("instr(lower(COALESCE(json_extract(document,'$.name'),'') || ' ' || COALESCE(json_extract(document,'$.title'),'')),lower(?))>0"); args.push(parsed.search)
       } else if (kind === 'room_run') {
         clauses.push("instr(lower(COALESCE(json_extract(document,'$.input'),'') || ' ' || COALESCE(json_extract(document,'$.memberLabel'),'') || ' ' || COALESCE(json_extract(document,'$.reason'),'') || ' ' || COALESCE(json_extract(document,'$.error'),'')),lower(?))>0")
@@ -129,6 +132,15 @@ export class SqliteRoomStore implements RoomStore {
       if (parsed.archivedOnly) clauses.push('archived = 1')
       else if (!parsed.includeArchived) clauses.push('archived = 0')
     }
+    if (parsed.beforeSourceSeq !== undefined) {
+      if (kind !== 'message') throw new Error('beforeSourceSeq requires message history')
+      clauses.push(`(CASE WHEN seq < ? THEN 1 ELSE EXISTS (
+        SELECT 1 FROM room_documents r JOIN room_documents m
+          ON m.kind = 'message' AND m.id = json_extract(r.document, '$.sourceMessageId')
+        WHERE r.kind = 'request' AND r.id = json_extract(room_documents.document, '$.sourceRequestId')
+          AND r.room_id = room_documents.room_id AND m.room_id = room_documents.room_id AND m.seq < ?) END)`)
+      args.push(parsed.beforeSourceSeq, parsed.beforeSourceSeq)
+    }
     if (parsed.beforeSeq !== undefined) { clauses.push('seq < ?'); args.push(parsed.beforeSeq) }
     if (parsed.afterSeq !== undefined) { clauses.push('seq > ?'); args.push(parsed.afterSeq) }
     if (parsed.status !== undefined) {
@@ -140,8 +152,8 @@ export class SqliteRoomStore implements RoomStore {
     args.push(parsed.limit)
     const columns = parsed.activityOnly ? `seq,kind,id,room_id,task_id,revision,
       CASE kind WHEN 'task' THEN json_object('task',json_object('status',status,'requestId',json_extract(document,'$.task.requestId')))
-      WHEN 'request' THEN json_object('status',status,'currentPeerRequest',
-        CASE WHEN ${roomCurrentPeerRequestSql('room_documents')} THEN 1 ELSE 0 END)
+      WHEN 'request' THEN json_object('status',status,'currentAttentionRequest',
+        CASE WHEN ${roomCurrentAttentionRequestSql('room_documents')} THEN 1 ELSE 0 END)
       ELSE json_object('status',status,'taskId',json_extract(document,'$.taskId'),
         'requestId',(SELECT json_extract(t.document,'$.task.requestId') FROM room_documents t WHERE t.kind='task' AND t.id=room_documents.task_id),
         'attention',json_extract(document,'$.attention'), 'applyIntent',json_extract(document,'$.applyIntent'),
@@ -152,7 +164,7 @@ export class SqliteRoomStore implements RoomStore {
         'sourceMessageId',COALESCE(json_extract(document,'$.originalSourceMessageId'),json_extract(document,'$.sourceMessageId')),'error',json_extract(document,'$.error'),'clarification',json_extract(document,'$.clarification'),'continuation',json_extract(document,'$.continuation'),'contextState',json_extract(document,'$.contextState'),
         'rootRequestId',json_extract(document,'$.rootRequestId'),'peerLatestRequestId',json_extract(document,'$.peerLatestRequestId'),
         'collaborationProtocol',json_extract(document,'$.collaborationProtocol'),
-        'currentPeerRequest',CASE WHEN ${roomCurrentPeerRequestSql('room_documents')} THEN 1 ELSE 0 END)
+        'currentAttentionRequest',CASE WHEN ${roomCurrentAttentionRequestSql('room_documents')} THEN 1 ELSE 0 END)
       WHEN 'agent_memory_job' THEN json_remove(document,'$.snapshot')
       WHEN 'agent_handoff' THEN json_remove(document,'$.sources','$.recipientSnapshot.presetSnapshot','$.recipientSnapshot.agentInstructions','$.body','$.result')
       WHEN 'room_run' THEN json_set(document,'$.input',substr(COALESCE(json_extract(document,'$.input'),''),1,800))
@@ -204,6 +216,7 @@ export class SqliteRoomStore implements RoomStore {
           WHERE message.kind = 'message' AND message.room_id = room.id
           AND COALESCE(json_extract(message.document, '$.presentationKind'), '') <> 'setup'), 0) AS latest_message_seq
       FROM room_documents room WHERE room.kind = 'room' AND room.archived = ?
+      AND json_extract(room.document, '$.deletedAt') IS NULL
       AND instr(lower(COALESCE(json_extract(room.document, '$.name'), '')), lower(?)) > 0
       ${conditions.length ? 'AND ' + conditions.join(' AND ') : ''}
     ), ordered AS (
@@ -317,8 +330,8 @@ export class SqliteRoomStore implements RoomStore {
         written.add(key)
         const current = db.prepare('SELECT * FROM room_documents WHERE kind = ? AND id = ?')
           .get(put.kind, put.id) as DocumentRow | undefined
-        if (current && ['delivery', 'review', 'artifact', 'rule_version', 'context', 'rule_bundle', 'request_input',
-          'peer_inbox', 'peer_publication', 'peer_metric'].includes(put.kind)) {
+        if (current && (['delivery', 'review', 'artifact', 'rule_version', 'context', 'rule_bundle', 'request_input',
+          'peer_inbox', 'peer_publication', 'peer_metric'].includes(put.kind) || put.kind === 'agent_artifact' && JSON.parse(current.document).status === 'version')) {
           throw new RoomStoreConflictError(`room ${put.kind} versions are immutable`, current.revision)
         }
         if (put.kind === 'room_run') {
@@ -366,6 +379,12 @@ export class SqliteRoomStore implements RoomStore {
         .run(parsed.requestId, fingerprint, JSON.stringify(result), JSON.stringify(events))
       return { duplicate: false, result, events }
     })
+  }
+
+  async scrubMemoryData(input: RoomMemoryErasure, assertFence?: () => void): Promise<{ scrubbed: number }> {
+    const db = await this.database()
+    assertFence?.()
+    return eraseRoomMemoryProjections(db, input)
   }
 
   async close(): Promise<void> {

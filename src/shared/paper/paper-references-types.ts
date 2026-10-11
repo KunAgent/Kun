@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /**
- * `<unit>/references.json` (plan §5.5): a rebuildable cache of the paper's
+ * `<unit>/references.json`: a rebuildable cache of the paper's
  * bibliography. "Already in library" is computed at render time, never stored.
  */
 

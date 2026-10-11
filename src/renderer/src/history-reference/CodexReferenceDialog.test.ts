@@ -4,13 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CodexReferenceDialog } from './CodexReferenceDialog'
 import type { HistoryPreview } from './history-reference-api'
 
-const state = vi.hoisted(() => ({ request: vi.fn(), create: vi.fn(), pickFiles: vi.fn(), pickDirectory: vi.fn(), refresh: vi.fn() }))
+const state = vi.hoisted(() => ({ request: vi.fn(), create: vi.fn(), updateHarness: vi.fn(), pickFiles: vi.fn(), pickDirectory: vi.fn(), refresh: vi.fn() }))
 vi.mock('react-dom', () => ({ createPortal: (children: unknown) => children }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 vi.mock('../store/chat-store', () => ({ useChatStore: { getState: () => ({ refreshThreads: state.refresh }) } }))
 vi.mock('./use-codex-reference-enabled', () => ({ useCodexReferenceEnabled: () => true }))
 vi.mock('./SourceHistoryPreview', () => ({ SourceHistoryPreview: (props: { onMore: () => void }) => createElement('button', { onClick: props.onMore }, 'more') }))
-vi.mock('./history-reference-api', () => ({ historyRequest: state.request, createReferenceBranch: state.create }))
+vi.mock('./history-reference-api', () => ({ historyRequest: state.request, createReferenceBranch: state.create, updateThreadHarness: state.updateHarness }))
 let renderer: ReactTestRenderer | undefined
 function preview(path = '/source.jsonl', cwd = '/project-b'): HistoryPreview {
   return { session: { path, sessionId: 'session', title: 'Session', workspace: cwd, archived: false, updatedAt: '2026-09-13T00:00:00Z' },
@@ -24,16 +24,17 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('document', { activeElement: null, body: {} })
   vi.stubGlobal('window', { setTimeout: () => 1, kunGui: { pickLocalFiles: state.pickFiles, pickWorkspaceDirectory: state.pickDirectory } })
-  state.request.mockReset(); state.create.mockReset(); state.pickFiles.mockReset(); state.pickDirectory.mockReset()
+  state.request.mockReset(); state.create.mockReset(); state.updateHarness.mockReset(); state.pickFiles.mockReset(); state.pickDirectory.mockReset()
   state.refresh.mockResolvedValue(undefined)
+  state.updateHarness.mockResolvedValue(undefined)
   state.create.mockResolvedValue({ thread: { id: 'branch' } })
   state.pickFiles.mockResolvedValue({ canceled: false, paths: ['/source.jsonl'] })
   state.request.mockResolvedValue(preview())
 })
 afterEach(async () => { if (renderer) await act(async () => renderer?.unmount()); renderer = undefined; vi.unstubAllGlobals() })
-async function mount(): Promise<void> {
+async function mount(props: { fixedProvider?: 'codex' | 'claude-code' | 'opencode'; harnessId?: string } = {}): Promise<void> {
   await act(async () => { renderer = create(createElement(CodexReferenceDialog, {
-    workspaceRoot: '/global-project', onClose: vi.fn(), onCreated: vi.fn()
+    workspaceRoot: '/global-project', onClose: vi.fn(), onCreated: vi.fn(), ...props
   })) })
   await act(async () => { button('codexHistoryChooseFiles').props.onClick() })
 }
@@ -127,6 +128,26 @@ describe('Codex branch workspace defaults', () => {
     await submit()
     expect(state.create.mock.calls[0]![0]).not.toHaveProperty('workspace')
   })
+  it('pins the source and rebinds the created thread for ADE continuation', async () => {
+    await mount({ fixedProvider: 'claude-code', harnessId: 'claude-code' })
+    // The source picker is hidden — remaining selects belong to cutoff only.
+    expect(renderer!.root.findAllByType('select').every((node) =>
+      node.parent?.children.includes('historySourceLabel') !== true)).toBe(true)
+    expect(state.request).toHaveBeenLastCalledWith(
+      '/v1/history-sources/claude-code/preview', expect.objectContaining({ path: '/source.jsonl' }))
+    await submit()
+    expect(state.create).toHaveBeenCalledWith(expect.objectContaining({ sourceProvider: 'claude-code' }))
+    expect(state.updateHarness).toHaveBeenCalledWith('branch', 'claude-code')
+  })
+
+  it('reports the rebind failure when the harness patch rejects', async () => {
+    state.updateHarness.mockRejectedValue(new Error('conflict'))
+    await mount({ harnessId: 'codex' })
+    await submit()
+    expect(state.updateHarness).toHaveBeenCalledWith('branch', 'codex')
+    expect(renderer!.root.findAllByType('span').some((node) => node.children.includes('conflict'))).toBe(true)
+  })
+
   it('sends the displayed global-directory fallback only when the source has no effective cwd', async () => {
     state.request.mockResolvedValue(preview('/source.jsonl', ''))
     await mount()

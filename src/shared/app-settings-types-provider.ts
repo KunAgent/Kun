@@ -1,3 +1,5 @@
+import type { ModelMetadataState, ModelMetadataResolution, ModelCapabilityMetadata as RuntimeModelCapability } from '../../kun/src/contracts/capabilities-core.js'
+import type { ModelMetadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
 import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
@@ -360,6 +362,9 @@ export type ModelProviderReasoningCapabilityV1 = {
   supportedEfforts: ModelReasoningEffort[]
   defaultEffort: ModelReasoningEffort
   requestProtocol: ModelReasoningRequestProtocol
+  nativeEfforts?: string[]
+  nativeDefaultEffort?: string
+  effortMapping?: Partial<Record<ModelReasoningEffort, string>>
 }
 
 export type ModelProviderModelPricingV1 = {
@@ -374,12 +379,21 @@ export type ModelProviderModelPricingV1 = {
 }
 
 export type ModelProviderModelProfileV1 = {
+  metadata?: ModelMetadataState
+  metadataResolution?: ModelMetadataResolution
+  maxInputTokens?: number
+  supportsReasoning?: boolean
+  conditionalCapabilities?: RuntimeModelCapability['conditionalCapabilities']
   aliases?: string[]
   contextWindowTokens?: number
   maxOutputTokens?: number
   inputModalities: ModelProviderInputModality[]
   outputModalities: ModelProviderInputModality[]
   supportsToolCalling: boolean
+  parallelTools?: boolean
+  streaming?: boolean
+  structuredOutput?: boolean
+  evidence?: ModelMetadataEvidence
   messageParts: ModelProviderMessagePartSupport[]
   reasoning?: ModelProviderReasoningCapabilityV1
   /** Reference catalog pricing (USD per million tokens) for cost estimates. */
@@ -393,6 +407,11 @@ export type ModelProviderModelProfileV1 = {
    * request shape; this is preset metadata rather than a user-facing toggle.
    */
   responsesMode?: 'lite'
+  /**
+   * Name the upstream is asked for when a relay serves this model under its
+   * own id; `*` stands for the model id. Only the outbound request changes.
+   */
+  wireModelId?: string
 }
 
 export type ModelProviderImageCapabilityV1 = {
@@ -444,7 +463,7 @@ export type ModelProviderEndpointsV1 = {
   messages?: string
 }
 
-export const PROVIDER_ACCOUNT_STRATEGIES = ['smart', 'order', 'rotate', 'least-used'] as const
+export const PROVIDER_ACCOUNT_STRATEGIES = ['smart', 'order', 'rotate', 'least-used', 'pace'] as const
 
 export type ProviderAccountStrategy = (typeof PROVIDER_ACCOUNT_STRATEGIES)[number]
 
@@ -484,6 +503,12 @@ export type ModelProviderProfileV1 = {
   endpointFormat: ModelEndpointFormat
   /** Optional per-protocol base URL overrides (relay gateways). */
   endpoints?: ModelProviderEndpointsV1
+  /** HTTPS balance endpoint; `#/json/pointer` picks the value. Rules in provider-balance-endpoint.ts. */
+  balanceUrl?: string
+  balanceUnit?: string
+  balanceKeyHeader?: string
+  /** Another host the user confirmed to receive this key for balance checks. */
+  balanceHost?: string
   /** models.dev catalog keys consulted for metadata completion, first match wins. */
   catalogSources?: string[]
   /** Content-addressed custom icon id under userData/provider-icons. */
@@ -520,8 +545,34 @@ export const MODEL_ROUTE_STRATEGIES = [
   'weighted-round-robin',
   'least-latency',
   'least-used',
-  'adaptive'
+  'adaptive',
+  'manual'
 ] as const
+
+/** Target provider id that names another route alias (nested routing). */
+export const NESTED_ROUTE_PROVIDER_ID = '@route'
+
+export const MODEL_ROUTE_RULE_EFFORTS = ['off', 'low', 'medium', 'high', 'max', 'auto'] as const
+export type ModelRouteRuleEffort = (typeof MODEL_ROUTE_RULE_EFFORTS)[number]
+
+export type ModelRouteRuleV1 = {
+  id: string
+  enabled: boolean
+  use: string
+  effort?: ModelRouteRuleEffort
+  when: {
+    agents?: string[]
+    minTokens?: number
+    maxTokens?: number
+    images?: boolean
+    efforts?: ModelRouteRuleEffort[]
+    hours?: { from: number; to: number }
+    contains?: string
+    intent?: string
+  }
+}
+
+export type ModelRouteClassifierV1 = { providerId: string; modelId: string; intents: string[] }
 
 export type ModelRouteStrategy = (typeof MODEL_ROUTE_STRATEGIES)[number]
 
@@ -531,6 +582,7 @@ export type ModelRouteTargetV1 = {
   modelId: string
   enabled: boolean
   weight: number
+  effort?: ModelRouteRuleEffort
 }
 
 export type ModelRouteTargetReferenceStatus = 'valid' | 'provider-missing' | 'model-missing'
@@ -561,12 +613,18 @@ export type ModelRouteHealthPolicyV1 = {
 }
 
 export type ModelRoutePoolV1 = {
+  capabilityMode?: 'guaranteed' | 'request-filter'
+  affinity?: { mode: 'off' | 'turn' | 'session'; ttlMs: number }
   id: string
   name: string
   modelId: string
   enabled: boolean
   strategy: ModelRouteStrategy
   targets: ModelRouteTargetV1[]
+  pick?: string
+  rules?: ModelRouteRuleV1[]
+  classifier?: ModelRouteClassifierV1
+  overflowMove?: boolean
   failurePolicy: ModelRouteFailurePolicyV1
   healthPolicy: ModelRouteHealthPolicyV1
 }
@@ -579,6 +637,14 @@ export type LocalModelGatewaySettingsV1 = {
    * local gateway. Subscription/OAuth and non-HTTP providers are never exposed.
    */
   exposeProviderModels: boolean
+  /** Ordered request/reply transforms for external gateway traffic. */
+  middleware?: import('../../kun/src/contracts/gateway-middleware.js').GatewayMiddlewareConfig[]
+  /** Extension providers exported to the gateway, each with the account its requests use. */
+  extensionExports?: { providerId: string; accountId: string }[]
+  /** Experimental: ChatGPT subscription connections shared through the gateway (off unless listed). */
+  experimentalSubscriptionExports?: string[]
+  /** Publish ~/.kun/gateway.json for agents on this computer. Stored only when turned off. */
+  advertiseDiscovery?: false
 }
 
 export type ModelProviderSettingsV1 = {

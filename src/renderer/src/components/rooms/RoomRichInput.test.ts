@@ -32,6 +32,41 @@ async function render(body = '', mentions: string[] = []) {
 }
 
 describe('minimal room rich editor', () => {
+  it('appends dictation to the current document without replacing selected text or mentions', async () => {
+    const token = roomMentionToken('developer', 'Developer')
+    const f = await render(token + ' original', ['developer'])
+    await act(async () => { f.editor.commands.setTextSelection({ from: 2, to: 10 }) })
+    const selection = f.editor.state.selection.toJSON()
+    await act(async () => {
+      f.ref.current!.appendDictation('  Spoken words  ')
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    })
+    expect(roomRichDraft(f.editor.getJSON())).toEqual({ body: token + ' original Spoken words', mentions: ['developer'] })
+    expect(f.editor.state.selection.toJSON()).toEqual(selection)
+    expect(f.submit).not.toHaveBeenCalled()
+  })
+
+  it('waits for IME text and allows queued dictation to be cancelled', async () => {
+    const f = await render('Draft')
+    const composing = vi.spyOn(f.editor.view, 'composing', 'get').mockReturnValue(true)
+    await act(async () => {
+      f.ref.current!.appendDictation('Spoken words')
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    })
+    expect(roomRichDraft(f.editor.getJSON()).body).toBe('Draft')
+    await act(async () => { f.editor.commands.insertContentAt(f.editor.state.doc.content.size - 1, { type: 'text', text: ' 中文' }) })
+    composing.mockReturnValue(false)
+    await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)) })
+    expect(roomRichDraft(f.editor.getJSON()).body).toBe('Draft 中文 Spoken words')
+    await act(async () => {
+      f.ref.current!.appendDictation('Cancelled')
+      f.ref.current!.cancelDictation()
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    })
+    expect(roomRichDraft(f.editor.getJSON()).body).not.toContain('Cancelled')
+    composing.mockRestore()
+  })
+
   it('inserts an atomic member at the caret while retaining trailing text', async () => {
     const f = await render('Ask @Dev about tests')
     await act(async () => { f.editor.commands.setTextSelection(9) })

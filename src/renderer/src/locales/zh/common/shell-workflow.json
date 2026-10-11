@@ -38,6 +38,8 @@
   "code": "Code",
   "write": "办公",
   "workspaceModeWorkLabel": "Work",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "指挥一组 agent 协同工作",
   "workspaceModeCodeDescription": "构建、调试与发布",
   "workspaceModeWorkDescription": "写作、整理与日常任务",
   "design": "设计",
@@ -621,7 +623,7 @@
   "switchOn": "开",
   "switchOff": "关",
   "newChat": "新建会话",
-  "newAgent": "新建会话",
+  "newAgent": "新建任务",
   "plugins": "插件",
   "claw": "连接手机",
   "schedule": "定时任务",
@@ -662,5 +664,11 @@
   "designCanvasConversationRunning": "会话正在运行",
   "designCanvasConversationPanelLabel": "设计会话：{{title}}",
   "miniWindowRestore": "恢复窗口",
-  "miniWindowDragHint": "拖动此栏移动窗口"
+  "miniWindowDragHint": "拖动此栏移动窗口",
+  "sidebarKunStatusReady": "随时待命",
+  "sidebarKunStatusStarting": "正在启动…",
+  "sidebarKunStatusOffline": "未连接",
+  "sidebarKunStatusOpen": "打开我的衣橱",
+  "mobileCodeSegmentTasks": "任务",
+  "mobileCodeSegmentChats": "对话"
 }

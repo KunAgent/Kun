@@ -514,7 +514,7 @@ describe('FloatingComposer capability controls', () => {
     expect(sendButton).toContain('disabled=""')
   })
 
-  it('keeps the draft editable while the runtime is loading and shows send loading', () => {
+  it('keeps the draft editable while the runtime is loading and exposes its loading status', () => {
     useChatStore.setState({
       activeThreadId: null,
       activeThreadGoal: null,
@@ -547,7 +547,9 @@ describe('FloatingComposer capability controls', () => {
 
     expect(html.match(/<textarea[^>]*>/)?.[0] ?? '').not.toContain('disabled=""')
     const sendButton = html.match(/<button[^>]*aria-label="Send"[^>]*>/)?.[0] ?? ''
-    expect(sendButton).toContain('disabled=""')
+    expect(sendButton).toBe('')
+    expect(html).toContain('data-composer-waiting-for-kun')
+    expect(html).toContain('role="status"')
     expect(html).toContain('lucide-loader-circle')
   })
 })

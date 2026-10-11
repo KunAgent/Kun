@@ -132,6 +132,23 @@ function interpolationTokens(value: string): string[] {
   return Array.from(value.matchAll(/{{\s*([^,}\s]+)[^}]*}}/g), (match) => match[1]).sort()
 }
 
+const PLURAL_CATEGORY_KEY = /^(.+)_(zero|one|two|few|many|other)$/
+
+// A locale may author plural categories English does not use (Russian
+// `_few`/`_many`) for any key English has an `_other` form of. Returns that
+// English `_other` key, or undefined when `key` is not such an extra form.
+function extraPluralSourceKey(
+  key: string,
+  source: Map<string, string>,
+  categories: ReadonlySet<string>
+): string | undefined {
+  if (source.has(key)) return undefined
+  const match = PLURAL_CATEGORY_KEY.exec(key)
+  if (!match || !categories.has(match[2])) return undefined
+  const sourceKey = `${match[1]}_other`
+  return source.has(sourceKey) ? sourceKey : undefined
+}
+
 describe('active locale resources', () => {
   afterEach(async () => {
     await i18n.changeLanguage('en')
@@ -149,15 +166,28 @@ describe('active locale resources', () => {
   it.each(['ru', 'hi', 'th', 'ja', 'ko'] as const)(
     'keeps the %s locale complete and interpolation-safe',
     (locale) => {
+      const categories = new Set<string>(new Intl.PluralRules(locale).resolvedOptions().pluralCategories)
       for (const namespace of ['common', 'settings'] as const) {
         const source = flattenStrings(resources.en[namespace])
         const translated = flattenStrings(resources[locale][namespace])
-        expect([...translated.keys()], namespace).toEqual([...source.keys()])
+        const extraPluralForms = new Map<string, string>()
+        for (const key of translated.keys()) {
+          const sourceKey = extraPluralSourceKey(key, source, categories)
+          if (sourceKey) extraPluralForms.set(key, sourceKey)
+        }
+        expect([...translated.keys()].filter((key) => !extraPluralForms.has(key)), namespace)
+          .toEqual([...source.keys()])
         for (const [key, sourceValue] of source) {
           const translatedValue = translated.get(key)
           expect(translatedValue, `${namespace}:${key}`).toBeTruthy()
           expect(interpolationTokens(translatedValue ?? ''), `${namespace}:${key}`)
             .toEqual(interpolationTokens(sourceValue))
+        }
+        for (const [key, sourceKey] of extraPluralForms) {
+          const translatedValue = translated.get(key)
+          expect(translatedValue, `${namespace}:${key}`).toBeTruthy()
+          expect(interpolationTokens(translatedValue ?? ''), `${namespace}:${key}`)
+            .toEqual(interpolationTokens(source.get(sourceKey) ?? ''))
         }
       }
     }

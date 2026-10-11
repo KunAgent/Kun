@@ -1,3 +1,5 @@
+import { migrateModelMetadata, withModelObservation } from '../../../../kun/src/services/model-metadata-resolver.js'
+import { metadataEvidence } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import type {
   ModelProviderModelProfileV1,
   ModelProviderProfileV1
@@ -62,10 +64,11 @@ export function buildProviderModelImportEntries(
     })
   }
 
+  const configuredIds = new Set(providerModelListEntries(provider).map((entry) => modelKey(entry.modelId)))
   if (catalogResult.status === 'ok' && catalogResult.matchMode === 'catalog') {
     for (const catalog of catalogModels) {
       const key = modelKey(catalog.id)
-      if (!key || rows.has(key)) continue
+      if (!key || rows.has(key) || !configuredIds.has(key)) continue
       rows.set(key, {
         modelId: catalog.id.trim(),
         sources: ['models-dev'],
@@ -187,7 +190,8 @@ export function enrichProviderModelProfiles(
       if (next === provider.modelProfiles) next = { ...provider.modelProfiles }
       const key = normalizedId
       next[key] = {
-        ...modelProfileFromCatalog(catalog),
+        ...mergeCatalogModelProfile({ inputModalities: ['text'], outputModalities: ['text'],
+          supportsToolCalling: true, messageParts: ['text'], evidence: metadataEvidence({}, 'adapter') }, catalog),
         ...(aliases.length ? { aliases } : {})
       }
       profileKeyById.set(normalizedId, key)
@@ -195,27 +199,14 @@ export function enrichProviderModelProfiles(
     }
 
     const existing = next[existingKey]
-    const addContext = catalog?.contextWindowTokens !== undefined &&
-      existing.contextWindowTokens !== catalog.contextWindowTokens
-    const addOutput = catalog?.maxOutputTokens !== undefined &&
-      existing.maxOutputTokens !== catalog.maxOutputTokens
-    const addPricing = catalog?.pricing !== undefined &&
-      JSON.stringify(existing.pricing) !== JSON.stringify(catalog.pricing)
     const mergedAliases = normalizeAliases([...(existing.aliases ?? []), ...aliases])
-    const addAliases = mergedAliases.length !== (existing.aliases?.length ?? 0)
-    if (!addContext && !addOutput && !addPricing && !addAliases) continue
-    if (next === provider.modelProfiles) next = { ...provider.modelProfiles }
-    next[existingKey] = {
-      ...existing,
-      ...(mergedAliases.length ? { aliases: mergedAliases } : {}),
-      ...(addContext
-        ? { contextWindowTokens: catalog?.contextWindowTokens }
-        : {}),
-      ...(addOutput
-        ? { maxOutputTokens: catalog?.maxOutputTokens }
-        : {}),
-      ...(addPricing && catalog ? { pricing: { ...catalog.pricing! } } : {})
+    let updated = catalog ? mergeCatalogModelProfile(existing, catalog) : existing
+    if (mergedAliases.length !== (existing.aliases?.length ?? 0)) {
+      updated = { ...updated, aliases: mergedAliases }
     }
+    if (JSON.stringify(updated) === JSON.stringify(existing)) continue
+    if (next === provider.modelProfiles) next = { ...provider.modelProfiles }
+    next[existingKey] = updated
   }
 
   return next
@@ -286,20 +277,52 @@ export function modelProfileFromCatalog(
     ...(catalog.contextWindowTokens
       ? { contextWindowTokens: catalog.contextWindowTokens }
       : {}),
+    ...(catalog.maxInputTokens ? { maxInputTokens: catalog.maxInputTokens } : {}),
+    ...(typeof catalog.reasoning === 'boolean' ? { supportsReasoning: catalog.reasoning } : {}),
     ...(catalog.maxOutputTokens
       ? { maxOutputTokens: catalog.maxOutputTokens }
       : {}),
     inputModalities: supportsImageInput ? ['text', 'image'] : ['text'],
     outputModalities: supportsImageOutput ? ['text', 'image'] : ['text'],
     supportsToolCalling: catalog.toolCalling ?? true,
+    ...(typeof catalog.parallelTools === 'boolean' ? { parallelTools: catalog.parallelTools } : {}),
+    ...(typeof catalog.streaming === 'boolean' ? { streaming: catalog.streaming } : {}),
+    ...(typeof catalog.structuredOutput === 'boolean' ? { structuredOutput: catalog.structuredOutput } : {}),
+    evidence: metadataEvidence({ ...catalog, supportsToolCalling: catalog.toolCalling,
+      supportsReasoning: catalog.reasoning,
+      reasoning: catalog.reasoning === true ? catalogReasoningProfile(catalog) : undefined,
+      inputModalities: catalog.inputModalities.length ? catalog.inputModalities : undefined,
+      outputModalities: catalog.outputModalities.length ? catalog.outputModalities : undefined,
+      messageParts: catalog.inputModalities.length ? ['text'] : undefined }, 'catalog', catalog.observedAt ?? new Date().toISOString()),
     messageParts: supportsImageInput ? ['text', 'image_url'] : ['text'],
-    ...(catalog.reasoning === true ? { reasoning: catalogReasoningProfile() } : {}),
+    ...(catalog.reasoning === true ? { reasoning: catalogReasoningProfile(catalog) } : {}),
     ...(catalog.pricing ? { pricing: { ...catalog.pricing } } : {})
   }
 }
 
-function catalogReasoningProfile(): NonNullable<ModelProviderModelProfileV1['reasoning']> {
+function mergeCatalogModelProfile(
+  existing: ModelProviderModelProfileV1,
+  catalog: ModelsDevCatalogModel
+): ModelProviderModelProfileV1 {
+  const values = modelProfileFromCatalog(catalog)
+  // The resolver keeps inferred matches as suggestions and preserves user limits.
+  const match = catalog.matchSpecificity === 'exact' ? 'exact' : 'family'
+  const migrated = migrateModelMetadata(existing)
+  migrated.metadata.observations = migrated.metadata.observations.filter((row) => row.id !== 'legacy-catalog')
+  return withModelObservation(migrated, {
+    id: `models.dev:${catalog.id}`,
+    source: 'catalog',
+    values,
+    evidence: values.evidence,
+    match,
+    observedAt: catalog.observedAt ?? new Date().toISOString()
+  })
+}
+
+function catalogReasoningProfile(catalog: ModelsDevCatalogModel): NonNullable<ModelProviderModelProfileV1['reasoning']> {
   return {
+    ...(catalog.reasoningOptions?.supportedEfforts.length ? { nativeEfforts: [...catalog.reasoningOptions.supportedEfforts] } : {}),
+    ...(catalog.reasoningOptions?.defaultEffort ? { nativeDefaultEffort: catalog.reasoningOptions.defaultEffort } : {}),
     supportedEfforts: ['auto'],
     defaultEffort: 'auto',
     requestProtocol: 'none'

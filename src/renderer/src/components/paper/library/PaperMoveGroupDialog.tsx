@@ -13,13 +13,20 @@ import { usePaperStore } from '../../../write/paper/paper-store'
  */
 export function PaperMoveGroupDialog({
   unitDirs,
+  libraryRoot,
+  groups: groupsProp,
   onClose
 }: {
   unitDirs: readonly string[]
+  /** Root of the library the units live in; defaults to the mounted root. */
+  libraryRoot?: string
+  /** Target groups offered as chips; defaults to the mounted library's list. */
+  groups?: readonly string[]
   onClose: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const groups = usePaperModeStore((s) => s.groups)
+  const storeGroups = usePaperModeStore((s) => s.groups)
+  const groups = groupsProp ?? storeGroups
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const target = normalizePaperFolderInput(value)
@@ -28,7 +35,7 @@ export function PaperMoveGroupDialog({
     event.preventDefault()
     if (target === null || busy) return
     setBusy(true)
-    const outcome = await movePaperUnitsToGroup(unitDirs, target)
+    const outcome = await movePaperUnitsToGroup(unitDirs, target, libraryRoot)
     setBusy(false)
     if (outcome.failed.length) {
       usePaperStore.getState().setNotice({

@@ -1,3 +1,4 @@
+import { resolveModelMetadata } from '../../../../../kun/src/services/model-metadata-resolver.js'
 import {
   MODEL_REASONING_EFFORTS,
   type ModelReasoningEffort,
@@ -51,6 +52,9 @@ export type ComposerModelMenuGroup = {
   label: string
   modelIds: string[]
   modelProfiles?: Record<string, ModelProviderModelProfileV1>
+  nativeHarnessId?: string
+  agentIconId?: string
+  modelInfo?: ModelProviderModelGroup['modelInfo']
 }
 
 export const FLOATING_MENU_MARGIN = 12
@@ -137,11 +141,12 @@ export function buildComposerModelOptions(composerPickList: readonly string[]): 
 
 export function filterComposerModelIds(
   modelIds: readonly string[],
-  query: string
+  query: string,
+  modelInfo?: ComposerModelMenuGroup['modelInfo']
 ): string[] {
   const normalizedQuery = query.trim().toLowerCase()
   if (!normalizedQuery) return [...modelIds]
-  return modelIds.filter((id) => id.toLowerCase().includes(normalizedQuery))
+  return modelIds.filter((id) => `${id} ${modelInfo?.[id]?.displayName ?? ''}`.toLowerCase().includes(normalizedQuery))
 }
 
 export function shouldShowProviderSetupPrompt(groups: readonly ComposerModelMenuGroup[]): boolean {
@@ -159,15 +164,15 @@ export function shouldShowProviderSetupPrompt(groups: readonly ComposerModelMenu
 
 export function normalizeComposerReasoningEffort(
   value: string | undefined,
-  profile?: Pick<ModelProviderModelProfileV1, 'reasoning'>
+  profile?: Pick<ModelProviderModelProfileV1, 'reasoning' | 'supportsReasoning' | 'metadata' | 'evidence'>
 ): ComposerReasoningEffort {
   const normalized = normalizeComposerReasoningEffortValue(value)
-  if (!profile?.reasoning) {
-    return normalized && LEGACY_REASONING_EFFORTS.includes(normalized) ? normalized : 'max'
-  }
-  const supported = profile.reasoning.supportedEfforts
+  const effective = profile ? resolveModelMetadata(profile) : undefined
+  if (effective?.supportsReasoning === false) return 'off'
+  if (!effective?.reasoning) return 'auto'
+  const supported = effective.reasoning.supportedEfforts
   if (normalized && supported.includes(normalized)) return normalized
-  return profile.reasoning.defaultEffort
+  return effective.reasoning.defaultEffort
 }
 
 export function normalizeComposerReasoningEffortValue(
@@ -257,12 +262,16 @@ export function calculateFloatingMenuPlacement({
   menuHeight,
   viewportHeight,
   viewportWidth,
+  preferredWidth = FLOATING_MENU_WIDTH,
+  maximumHeight = FLOATING_MENU_MAX_HEIGHT,
   coordinateScale = 1
 }: {
   anchorRect: FloatingMenuAnchorRect
   menuHeight: number
   viewportHeight: number
   viewportWidth: number
+  preferredWidth?: number
+  maximumHeight?: number
   coordinateScale?: number
 }): FloatingMenuPlacement {
   const scale = Number.isFinite(coordinateScale) && coordinateScale > 0 ? coordinateScale : 1
@@ -277,7 +286,7 @@ export function calculateFloatingMenuPlacement({
     FLOATING_MENU_MIN_WIDTH,
     normalizedViewportWidth - FLOATING_MENU_MARGIN * 2
   )
-  const width = Math.min(FLOATING_MENU_WIDTH, viewportMaxWidth)
+  const width = Math.min(preferredWidth, viewportMaxWidth)
   const left = clamp(
     normalizedAnchorRect.right - width,
     FLOATING_MENU_MARGIN,
@@ -289,10 +298,10 @@ export function calculateFloatingMenuPlacement({
     0,
     normalizedViewportHeight - normalizedAnchorRect.bottom - FLOATING_MENU_MARGIN - FLOATING_MENU_GAP
   )
-  const targetHeight = Math.min(contentHeight, FLOATING_MENU_MAX_HEIGHT)
+  const targetHeight = Math.min(contentHeight, maximumHeight)
   const openAbove = spaceAbove >= targetHeight || spaceAbove >= spaceBelow
   const availableHeight = Math.max(openAbove ? spaceAbove : spaceBelow, FLOATING_MENU_MIN_HEIGHT)
-  const maxHeight = Math.min(FLOATING_MENU_MAX_HEIGHT, availableHeight)
+  const maxHeight = Math.min(maximumHeight, availableHeight)
   const visibleHeight = Math.min(contentHeight, maxHeight)
   const preferredTop = openAbove
     ? normalizedAnchorRect.top - FLOATING_MENU_GAP - visibleHeight
@@ -363,13 +372,17 @@ export function calculateFloatingSubmenuPlacement({
   submenuHeight,
   viewportHeight,
   viewportWidth,
-  coordinateScale = 1
+  coordinateScale = 1,
+  preferredWidth = FLOATING_SUBMENU_WIDTH,
+  maximumHeight = FLOATING_SUBMENU_MAX_HEIGHT
 }: {
   anchorRect: FloatingSubmenuAnchorRect
   submenuHeight: number
   viewportHeight: number
   viewportWidth: number
   coordinateScale?: number
+  preferredWidth?: number
+  maximumHeight?: number
 }): FloatingSubmenuPlacement {
   const scale = Number.isFinite(coordinateScale) && coordinateScale > 0 ? coordinateScale : 1
   const normalizedAnchorRect = {
@@ -384,7 +397,7 @@ export function calculateFloatingSubmenuPlacement({
     FLOATING_MENU_MIN_WIDTH,
     normalizedViewportWidth - FLOATING_MENU_MARGIN * 2
   )
-  const width = Math.min(FLOATING_SUBMENU_WIDTH, viewportMaxWidth)
+  const width = Math.min(preferredWidth, viewportMaxWidth)
   const spaceRight = normalizedViewportWidth - normalizedAnchorRect.right - FLOATING_MENU_MARGIN
   const spaceLeft = normalizedAnchorRect.left - FLOATING_MENU_MARGIN
   const openRight = spaceRight >= width + FLOATING_SUBMENU_GAP || spaceRight >= spaceLeft
@@ -398,7 +411,7 @@ export function calculateFloatingSubmenuPlacement({
   )
   const contentHeight = Math.max(submenuHeight, FLOATING_SUBMENU_MIN_HEIGHT)
   const maxHeight = Math.min(
-    FLOATING_SUBMENU_MAX_HEIGHT,
+    maximumHeight,
     Math.max(FLOATING_SUBMENU_MIN_HEIGHT, normalizedViewportHeight - FLOATING_MENU_MARGIN * 2)
   )
   const visibleHeight = Math.min(contentHeight, maxHeight)
@@ -483,10 +496,10 @@ export function modelProfileForModel(
   if (!key) return undefined
   const profiles = group.modelProfiles ?? {}
   const direct = profiles[key] ?? profiles[modelId.trim()]
-  if (direct) return direct
-  return Object.values(profiles).find((profile) =>
-    profile.aliases?.some((alias) => normalizeModelCapabilityKey(alias) === key)
+  const profile = direct ?? Object.values(profiles).find((candidate) =>
+    candidate.aliases?.some((alias) => normalizeModelCapabilityKey(alias) === key)
   )
+  return profile ? resolveModelMetadata(profile) : undefined
 }
 
 export function modelProfileForSelection(
@@ -497,10 +510,8 @@ export function modelProfileForSelection(
   const selectedGroup = providerId
     ? groups.find((group) => group.providerId === providerId)
     : null
-  if (selectedGroup && selectedGroup.modelIds.some((id) => modelIdsMatch(id, modelId))) {
-    const profile = modelProfileForModel(selectedGroup, modelId)
-    if (profile) return profile
-  }
+  // A selected connection with unknown metadata cannot borrow another account's limits.
+  if (providerId) return modelProfileForModel(selectedGroup, modelId)
   for (const group of groups) {
     if (!group.modelIds.some((id) => modelIdsMatch(id, modelId))) continue
     const profile = modelProfileForModel(group, modelId)
@@ -513,10 +524,38 @@ export function modelProfileForSelection(
   return undefined
 }
 
+/**
+ * Levels an external Agent model accepts, in Kun's vocabulary, led by `auto`
+ * (leave the level to the Agent). `undefined` when the Agent did not describe
+ * the model; Devin uses its own per-model details lookup instead.
+ */
+export function nativeReasoningChoices(
+  model: { reasoningEfforts?: readonly string[] } | undefined
+): ComposerReasoningEffort[] | undefined {
+  const efforts = model?.reasoningEfforts
+  if (!efforts) return undefined
+  const levels = LEGACY_REASONING_EFFORTS.filter((effort) => efforts.includes(effort))
+  return levels.length ? ['auto', ...levels] : []
+}
+
+/**
+ * Levels the composer offers for an Agent's model. A model whose levels the
+ * Agent did not report (OpenCode lists them only for the model its probe
+ * session had selected) offers every level: Kun applies the pick through the
+ * Agent's own reasoning option wherever that model accepts it. A model the
+ * Agent reports without levels offers none.
+ */
+export function agentModelReasoningChoices(
+  model: { reasoningEfforts?: readonly string[] } | undefined
+): ComposerReasoningEffort[] {
+  return nativeReasoningChoices(model) ?? ['auto', ...LEGACY_REASONING_EFFORTS]
+}
+
 export function reasoningOptionsForModel(
-  profile: Pick<ModelProviderModelProfileV1, 'reasoning'> | undefined
+  profile: Pick<ModelProviderModelProfileV1, 'reasoning' | 'supportsReasoning' | 'metadata' | 'evidence'> | undefined
 ): Array<{ id: ComposerReasoningEffort; labelKey: string }> {
-  const supported = profile?.reasoning?.supportedEfforts ?? LEGACY_REASONING_EFFORTS
+  const effective = profile ? resolveModelMetadata(profile) : undefined
+  const supported: ModelReasoningEffort[] = effective?.supportsReasoning === false ? ['off'] : effective?.reasoning?.supportedEfforts ?? ['auto']
   return supported
     .map((effort) => REASONING_OPTIONS.find((option) => option.id === effort))
     .filter((option): option is { id: ComposerReasoningEffort; labelKey: string } => Boolean(option))

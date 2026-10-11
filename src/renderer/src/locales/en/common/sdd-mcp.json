@@ -107,6 +107,7 @@
   "rightPanelSubagents": "Subagents",
   "rightPanelMcpSkills": "MCP & Skills",
   "rightPanelProviderQuotas": "Usage & quota",
+  "rightPanelWardrobe": "Wardrobe",
   "usageQuotaTitle": "Usage & quota",
   "usageQuotaDescription": "View Kun usage and provider subscription allowance.",
   "usageQuotaTabUsage": "Usage",
@@ -498,5 +499,12 @@
   "trajectoryDetailInputTokens": "Input tokens",
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
-  "trajectoryDetailError": "Error"
+  "trajectoryDetailError": "Error",
+  "trajectoryDetailAgent": "Agent",
+  "trajectoryAgentRequestHint": "Run by a third-party Agent: Kun rebuilt this model call from the Agent's output and cannot see the full request.",
+  "trajectoryAgentUsageAggregate": "The Agent reports usage per turn; these tokens are the total of {{steps}} model calls.",
+  "trajectoryAgentUsageIncluded": "The Agent reports usage per turn; this call is counted in a later call's total.",
+  "trajectoryAgentUsageUnreported": "The Agent did not report usage for this call.",
+  "providerQuotaResetReminder": "{{percent}}% of {{label}} is unused and renews in about {{hours}}h.",
+  "providerQuotaReminderTitle": "{{provider}}: allowance renews soon"
 }

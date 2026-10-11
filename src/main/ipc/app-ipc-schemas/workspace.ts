@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import {
+  CONVERSATION_EXPORT_BATCH_MAX_ITEMS,
+  CONVERSATION_EXPORT_BATCH_MAX_TOTAL_CHARS,
   CONVERSATION_EXPORT_FORMATS,
   CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS
 } from '../../../shared/conversation-export'
@@ -510,10 +512,36 @@ export const conversationExportPayloadSchema = z
   })
   .strict()
 
+export const conversationExportBatchPayloadSchema = z
+  .object({
+    format: z.enum(CONVERSATION_EXPORT_FORMATS),
+    folderName: trimmedString(200),
+    items: z
+      .array(
+        z
+          .object({
+            title: trimmedString(200),
+            markdown: z.string().min(1).max(CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS),
+            defaultFileName: trimmedString(200)
+          })
+          .strict()
+      )
+      .min(1)
+      .max(CONVERSATION_EXPORT_BATCH_MAX_ITEMS)
+  })
+  .strict()
+  .refine(
+    (payload) =>
+      payload.items.reduce((total, item) => total + item.markdown.length, 0) <=
+      CONVERSATION_EXPORT_BATCH_MAX_TOTAL_CHARS,
+    { message: 'Conversation export batch is too large' }
+  )
+
 export const memoryMarkdownExportPayloadSchema = z
   .object({
     markdown: z.string().max(MAX_BODY_BYTES),
-    defaultFileName: optionalTrimmedString(200)
+    defaultFileName: optionalTrimmedString(200),
+    projectKnowledge: z.object({ project: trimmedString(MAX_PATH_LENGTH), approvedIds: z.array(trimmedString(256)).min(1).max(100) }).strict().optional()
   })
   .strict()
 

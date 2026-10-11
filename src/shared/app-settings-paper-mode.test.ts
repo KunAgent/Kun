@@ -13,6 +13,7 @@ describe('write.paperMode settings', () => {
     expect(settings.enabled).toBe(false)
     expect(settings.libraries).toEqual([])
     expect(settings.activeLibrary).toBe('')
+    expect(settings.workspaceInitialized).toBe(false)
     expect(settings.autoMarkReading).toBe(true)
     expect(settings.translate).toMatchObject({ targetLanguage: 'zh', inheritModel: true })
     expect(settings.discover.arxivCategories).toEqual(PAPER_MODE_DEFAULT_ARXIV_CATEGORIES)
@@ -97,5 +98,20 @@ describe('write.paperMode settings', () => {
     })
     expect(merged.paperReading.papersDir).toBe('refs')
     expect(merged.paperMode).toEqual(defaultWritePaperModeSettings())
+  })
+
+  it('migrates legacy active-only and list-only roots as already initialized', () => {
+    expect(normalizeWritePaperModeSettings({ activeLibrary: '/legacy' }).workspaceInitialized).toBe(true)
+    expect(normalizeWritePaperModeSettings({ libraries: ['/legacy'] }).workspaceInitialized).toBe(true)
+    expect(normalizeWritePaperModeSettings({ workspaceInitialized: true }).workspaceInitialized).toBe(true)
+  })
+
+  it('keeps the initialization marker after explicit removal or a stale false patch', () => {
+    const legacy = normalizeWritePaperModeSettings({ activeLibrary: '/legacy', libraries: ['/legacy'] })
+    const removed = mergeWritePaperModeSettings(legacy, {
+      activeLibrary: '', libraries: [], workspaceInitialized: false
+    })
+    expect(removed).toMatchObject({ activeLibrary: '', libraries: [], workspaceInitialized: true })
+    expect(mergeWritePaperModeSettings(removed, { workspaceInitialized: false }).workspaceInitialized).toBe(true)
   })
 })

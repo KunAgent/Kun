@@ -53,9 +53,15 @@ export class ManagedRuntimeOperationCoordinator<Settings> {
   private activeOperation: ManagedRuntimeOperation<Settings> | null = null
   private draining = false
   private latestSettings: Settings | null = null
+  private generation = 0
 
   hasPendingOperation(): boolean {
     return this.activeOperation !== null || this.queue.length > 0
+  }
+
+  /** Advances whenever a restart, replacement, or settings apply starts or ends. */
+  lifecycleGeneration(): number {
+    return this.generation
   }
 
   latestOr(fallback: Settings): Settings {
@@ -175,6 +181,7 @@ export class ManagedRuntimeOperationCoordinator<Settings> {
         const next = this.queue.shift()
         if (!next) continue
         this.activeOperation = next
+        if (next.kind !== 'ensure') this.generation += 1
         await this.execute(next)
         if (this.activeOperation === next) this.activeOperation = null
       }
@@ -199,6 +206,7 @@ export class ManagedRuntimeOperationCoordinator<Settings> {
         }
       }
       if (this.activeOperation === next) this.activeOperation = null
+      this.generation += 1
       next.resolve()
       return
     }
@@ -209,10 +217,12 @@ export class ManagedRuntimeOperationCoordinator<Settings> {
       if (next.kind === 'ensure') {
         next.resolve(result as Settings)
       } else {
+        this.generation += 1
         next.resolve()
       }
     } catch (error) {
       if (this.activeOperation === next) this.activeOperation = null
+      if (next.kind !== 'ensure') this.generation += 1
       next.reject(error)
     }
   }

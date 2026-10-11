@@ -1,3 +1,4 @@
+import { prepareExplicitProviderRemoval } from './provider-removal-test-helpers.js'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -55,7 +56,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -146,6 +147,17 @@ async function registry(
 }
 
 describe('ModelConnectionRegistry', () => {
+  it('reads credentials without rewriting the Registry when no transaction is pending', async () => {
+    const { dataDir, manager, a } = await sharedManagerRegistryPair()
+    await a.connect(deepseekConnection())
+    const path = join(dataDir, 'model-connections.v2.json')
+    const before = manager.documents.get(path)!.revision
+    for (let index = 0; index < 3; index += 1) {
+      await expect(a.credentialStateForInternalConsumer('deepseek')).resolves.toMatchObject({ authoritative: true })
+    }
+    expect(manager.documents.get(path)!.revision).toBe(before)
+  })
+
   it('carries client generation high-water across delete and same-id re-add', async () => {
       const { a, b } = await sharedManagerRegistryPair()
       const connected = await a.connect(deepseekConnection())
@@ -155,7 +167,8 @@ describe('ModelConnectionRegistry', () => {
         expectedRevision: connected.revision,
         operationToken: firstToken
       })
-      const deleted = await b.delete('deepseek', fenced.revision)
+      const deletionReady = await prepareExplicitProviderRemoval(b, 'deepseek', fenced.revision, true)
+      const deleted = await b.delete('deepseek', deletionReady.revision)
       const readded = await b.connect({
         ...deepseekConnection(deleted.revision),
         credential: 'new-incarnation-secret'

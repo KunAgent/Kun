@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Columns2,
   FileDown,
+  Info,
   Languages,
   LayoutPanelLeft,
   Loader2,
@@ -64,6 +65,7 @@ export function PaperFloatingControls({
   drawerOpen,
   onToggleDrawer,
   onBackToLibrary,
+  onShowInfo,
   layoutPreset,
   onApplyLayout,
   immersive,
@@ -99,6 +101,8 @@ export function PaperFloatingControls({
   drawerOpen: boolean
   onToggleDrawer: () => void
   onBackToLibrary: () => void
+  /** Open the paper metadata drawer (info button). */
+  onShowInfo: () => void
   layoutPreset: PaperReaderLayoutPreset
   onApplyLayout: (preset: PaperReaderLayoutPreset) => void
   immersive: boolean
@@ -171,6 +175,15 @@ export function PaperFloatingControls({
             onClick={onToggleDrawer}
           >
             <PanelLeft className="h-4 w-4" strokeWidth={1.9} />
+          </button>
+          <button
+            type="button"
+            className={ICON}
+            title={t('writePaperInfoTitle')}
+            aria-label={t('writePaperInfoTitle')}
+            onClick={onShowInfo}
+          >
+            <Info className="h-4 w-4" strokeWidth={1.9} />
           </button>
           <span className="mx-0.5 h-4 w-px bg-ds-border-muted" />
           <div ref={layoutRef} className="relative flex">

@@ -1,3 +1,4 @@
+import type { RoomMemoryErasure } from './room-memory-erasure.js'
 import type { RoomSidebarQuery, RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
 import type { Room } from '../contracts/rooms.js'
@@ -7,13 +8,13 @@ import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replie
 import type { RoomRepositoryChoice, RoomSearchPage, RoomSearchQuery, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
 
 export const RoomDocumentKindSchema = z.enum([
-  'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim',
+  'agent_im_connection', 'agent_conversation_preparation', 'agent_conversation_cursor', 'room_result_inbox', 'agent_commitment', 'agent_artifact', 'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim',
   'room', 'message', 'request', 'task', 'dispatch', 'attempt',
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
   'request_input', 'rule_bundle', 'rule_compression',
-  'room_run', 'room_poll', 'room_reactions', 'room_preference', 'room_avatar', 'room_user_profile',
-  'room_proposal', 'room_reminder',
+  'room_engagement', 'room_run', 'room_poll', 'room_reactions', 'room_preference', 'room_avatar', 'room_user_profile', 'room_wardrobe', 'room_wardrobe_account',
+  'room_proposal', 'room_reminder', 'room_reminder_budget', 'workbench_link',
   'peer_topic', 'peer_inbox', 'peer_member', 'peer_publication', 'peer_metric', 'peer_cursor'
 ])
 export type RoomDocumentKind = z.infer<typeof RoomDocumentKindSchema>
@@ -57,6 +58,8 @@ export const RoomStoreListOptionsSchema = z.object({
   status: z.union([z.string(), z.array(z.string()).max(30)]).optional(),
   limit: z.number().int().min(1).max(1000).default(50),
   beforeSeq: Seq.optional(),
+  /** Private-history admission boundary, including late publications from earlier requests. */
+  beforeSourceSeq: Seq.optional(),
   afterSeq: Seq.optional(),
   order: z.enum(['asc', 'desc']).default('desc'),
   includeArchived: z.boolean().default(false),
@@ -139,6 +142,7 @@ export type RoomStoreRequest = z.infer<typeof RoomStoreRequestSchema>
 
 /** Canonical room storage. Each commit and its replay cursor become durable together. */
 export interface RoomStore {
+  scrubMemoryData?(input: RoomMemoryErasure): Promise<{ scrubbed: number }>
   get<T = unknown>(kind: RoomDocumentKind, id: string): Promise<RoomStoredDocument<T> | null>
   list<T = unknown>(kind: RoomDocumentKind, options?: RoomStoreListOptions): Promise<RoomStoredDocument<T>[]>
   listRooms(options?: RoomListOptions): Promise<RoomListPage>
@@ -161,5 +165,13 @@ export class RoomStoreConflictError extends Error {
   constructor(message: string, readonly currentRevision: number | null = null) {
     super(message)
     this.name = 'RoomStoreConflictError'
+  }
+}
+
+/** Readiness is retryable service availability, not a conflicting user edit. */
+export class RoomCoordinatorUnavailableError extends Error {
+  constructor() {
+    super('Conversation service is starting or reconnecting. Please try again in a moment.')
+    this.name = 'RoomCoordinatorUnavailableError'
   }
 }

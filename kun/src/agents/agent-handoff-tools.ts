@@ -97,7 +97,7 @@ export function agentHandoffTools(threads: ThreadStore) {
           for (const id of ids) {
             if (id === actor) continue
             const agent = await service.agents.get(id)
-            if (!agent.archivedAt && (!query || (agent.name + ' ' + agent.title).toLocaleLowerCase().includes(query.toLocaleLowerCase()))) {
+            if (!agent.archivedAt && !agent.executor && (!query || (agent.name + ' ' + agent.title).toLocaleLowerCase().includes(query.toLocaleLowerCase()))) {
               result.push({ id, name: agent.name, title: agent.title })
             }
             if (result.length >= 30) break

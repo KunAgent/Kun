@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { GatewayMiddlewareSchema } from './gateway-middleware.js'
 
 export const LOCAL_MODEL_GATEWAY_PROVIDER_ID = 'route-gateway:local'
 
@@ -8,8 +9,16 @@ export const ModelRouteStrategySchema = z.enum([
   'weighted-round-robin',
   'least-latency',
   'least-used',
-  'adaptive'
+  'adaptive',
+  /** The user picks one member (`pick`); the others wait as fallbacks. */
+  'manual'
 ])
+
+/** A target whose `modelId` names another route alias; flattened at load with cycle checks. */
+export const NESTED_ROUTE_PROVIDER_ID = '@route'
+export const MAX_NESTED_ROUTE_DEPTH = 3
+
+const RouteEffortSchema = z.enum(['off', 'low', 'medium', 'high', 'max', 'auto'])
 export type ModelRouteStrategy = z.infer<typeof ModelRouteStrategySchema>
 
 export const ModelRouteTargetConfigSchema = z.object({
@@ -17,9 +26,42 @@ export const ModelRouteTargetConfigSchema = z.object({
   providerId: z.string().min(1).max(128),
   modelId: z.string().min(1).max(512),
   enabled: z.boolean().default(true),
-  weight: z.number().int().min(1).max(100).default(1)
+  weight: z.number().int().min(1).max(100).default(1),
+  /** Reasoning this member always runs at, whatever the caller asked. */
+  effort: RouteEffortSchema.optional()
 }).strict()
 export type ModelRouteTargetConfig = z.infer<typeof ModelRouteTargetConfigSchema>
+
+/**
+ * A rule puts one member first for the turns it matches. It is evaluated when
+ * a turn begins and held for the rest of that turn, so tool results return
+ * to the model that asked for them.
+ */
+export const ModelRouteRuleSchema = z.object({
+  id: z.string().min(1).max(64),
+  enabled: z.boolean().default(true),
+  /** Target id to put first. */
+  use: z.string().min(1).max(64),
+  /** Reasoning to send that member at for matching turns. */
+  effort: RouteEffortSchema.optional(),
+  when: z.object({
+    /** Calling agents (gateway attribution); `kun` for Kun's own turns. */
+    agents: z.array(z.string().min(1).max(64)).max(20).optional(),
+    /** Estimated prompt tokens, inclusive bounds. */
+    minTokens: z.number().int().min(0).max(10_000_000).optional(),
+    maxTokens: z.number().int().min(0).max(10_000_000).optional(),
+    images: z.boolean().optional(),
+    /** Reasoning efforts the caller asked for. */
+    efforts: z.array(RouteEffortSchema).max(6).optional(),
+    /** Local hours [from, to); wraps past midnight when from > to. */
+    hours: z.object({ from: z.number().int().min(0).max(23), to: z.number().int().min(0).max(24) }).strict().optional(),
+    /** Case-insensitive text the turn's latest user message contains. */
+    contains: z.string().min(1).max(200).optional(),
+    /** Intent the pool's classifier assigned to the turn. */
+    intent: z.string().min(1).max(40).optional()
+  }).strict()
+}).strict()
+export type ModelRouteRule = z.infer<typeof ModelRouteRuleSchema>
 
 export const ModelRoutePoolConfigSchema = z.object({
   id: z.string().min(1).max(64),
@@ -27,7 +69,24 @@ export const ModelRoutePoolConfigSchema = z.object({
   modelId: z.string().min(1).max(512),
   enabled: z.boolean().default(true),
   strategy: ModelRouteStrategySchema.default('priority'),
+  /** Missing on legacy routes: preserve their request-filter behavior. */
+  capabilityMode: z.enum(['guaranteed', 'request-filter']).optional(),
+  affinity: z.object({
+    mode: z.enum(['off', 'turn', 'session']),
+    ttlMs: z.number().int().min(60_000).max(86_400_000).default(30 * 60_000)
+  }).strict().optional(),
   targets: z.array(ModelRouteTargetConfigSchema).min(1).max(50),
+  /** Member the `manual` strategy sends to. */
+  pick: z.string().min(1).max(64).optional(),
+  rules: z.array(ModelRouteRuleSchema).max(20).optional(),
+  /** Small model that labels each new turn with one of `intents` for intent rules. */
+  classifier: z.object({
+    providerId: z.string().min(1).max(128),
+    modelId: z.string().min(1).max(512),
+    intents: z.array(z.string().min(1).max(40)).min(2).max(12)
+  }).strict().optional(),
+  /** Demote members whose known window is at least 95% full for this request (default on). */
+  overflowMove: z.boolean().optional(),
   failurePolicy: z.object({
     failoverHttpStatusCodes: z.array(z.number().int().min(400).max(599)).max(64),
     failoverOnNetworkError: z.boolean(),
@@ -57,7 +116,15 @@ export const LocalModelGatewayConfigSchema = z.object({
    * local gateway. Off by default; subscription, OAuth, and non-HTTP providers
    * are never exposed regardless of this flag.
    */
-  exposeProviderModels: z.boolean().default(false)
+  exposeProviderModels: z.boolean().default(false),
+  /** Ordered request/reply transforms applied to external gateway traffic. */
+  middleware: z.array(GatewayMiddlewareSchema).max(32).optional(),
+  /** Extension providers the user exports, each with the one account requests use. */
+  extensionExports: z.array(z.object({ providerId: z.string().min(1).max(160), accountId: z.string().min(1).max(160) }).strict()).max(50).optional(),
+  /** Experimental: ChatGPT subscription connections the user chose to share through the gateway. */
+  experimentalSubscriptionExports: z.array(z.string().min(1).max(128)).max(10).optional(),
+  /** Publish ~/.kun/gateway.json so agents on this computer can find the gateway. On unless false. */
+  advertiseDiscovery: z.boolean().optional()
 }).strict()
 export type LocalModelGatewayConfig = z.infer<typeof LocalModelGatewayConfigSchema>
 
@@ -67,12 +134,15 @@ export type LocalModelGatewayConfig = z.infer<typeof LocalModelGatewayConfigSche
  * - `order`: strict member priority; later accounts only run on failover.
  * - `rotate`: round-robin across enabled members.
  * - `least-used`: member with the fewest served requests this session.
+ * - `pace`: member with the most allowance left per hour until its window
+ *   resets, so less of each window is lost at reset.
  */
 export const ModelFailoverStrategySchema = z.enum([
   'smart',
   'order',
   'rotate',
-  'least-used'
+  'least-used',
+  'pace'
 ])
 export type ModelFailoverStrategy = z.infer<typeof ModelFailoverStrategySchema>
 
@@ -129,6 +199,8 @@ export type ModelFailureReason =
   | 'other'
 
 export type ModelFailureMetadata = {
+  /** Local queue pressure is not an upstream health failure. */
+  localAdmission?: boolean
   category: ModelFailureCategory
   /** Unified failure reason; additive alongside the legacy `category`. */
   reason?: ModelFailureReason

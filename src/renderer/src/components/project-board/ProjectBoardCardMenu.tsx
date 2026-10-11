@@ -1,7 +1,8 @@
 import type { ReactElement } from 'react'
-import { Archive, ExternalLink, FileText, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { Archive, Bot, ExternalLink, FileText, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ProjectBoardCard, ProjectBoardStatus } from '../../project-board/project-board-types'
+import { sendBoardCardToBot } from '../rooms/workbench-bridge-actions'
 
 type Props = {
   card: ProjectBoardCard
@@ -33,6 +34,9 @@ export function ProjectBoardCardMenu(props: Props): ReactElement {
         <div className="my-1 h-px bg-ds-border-muted" />
         <MenuButton disabled={props.disabled} onClick={props.onEdit} icon={<Pencil className="h-3.5 w-3.5" />}>
           {t('projectBoardEdit')}
+        </MenuButton>
+        <MenuButton onClick={() => void sendBoardCardToBot(props.card)} icon={<Bot className="h-3.5 w-3.5" />}>
+          {t('roomsWorkbenchBoardToBot')}
         </MenuButton>
         {props.card.kind === 'thread_todo' ? (
           <>

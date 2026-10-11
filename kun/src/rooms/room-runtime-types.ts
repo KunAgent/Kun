@@ -23,6 +23,11 @@ export type RoomRequestState = {
     sourceTurnId: string
     kind: import('./room-continuation-dispatch.js').RoomContinuation['kind']
     goalCreatedAt?: string
+    inboxId?: string
+    /** Exact accepted parent route and authority; a task return cannot select a new engine. */
+    route?: Pick<import('../contracts/turns.js').Turn, 'model' | 'providerId' | 'accountId' | 'harnessId' |
+      'credentialMode' | 'gatewayBinding' | 'reasoningEffort' | 'serviceTier' | 'harnessAgentId' | 'harnessSettings'>
+    policy?: import('../contracts/policy.js').KunToolPermissionSettings
   }
   /** Provenance of the durable reminder that woke this private request. */
   privateReminder?: import('../contracts/room-reminders.js').RoomPrivateReminder
@@ -44,12 +49,16 @@ export type RoomRequestState = {
   peerCoordinationDone?: boolean
   status: 'pending' | 'running' | 'completed' | 'needs_input' | 'failed' | 'stopping' | 'cancelled' | 'recovery_required'
   message: SendRoomMessage
+  clientSurface?: 'gui' | 'im'
+  imConnectionId?: string
   sourceMessageId: string
   roomSnapshot: Room
   threadId: string
   turnId?: string
   admissionAttempted?: boolean
   error?: string
+  /** Document revision at which the user saw this failure; any later write raises attention again. */
+  failureAcknowledgedRevision?: number
   round?: number
   stage?: 'coordinate' | 'discuss'
   stepAttempt?: number
@@ -107,6 +116,9 @@ export type RoomTaskExecution = {
   contextSnapshot?: RoomContextSnapshot
 }
 export type RoomRuntimeDeps = {
+  /** Global execution ceiling; per-room limits remain independently enforced. */
+  maxConcurrentTasks?: number
+  eventBus?: import('../ports/event-bus.js').EventBus
   discussionFairness?: import('../agents/agent-discussion-fairness.js').AgentDiscussionFairness
   agentDirectory?: import('../agents/agent-identity-service.js').AgentIdentityService
   agentHandoffs?: import('../agents/agent-handoff-service.js').AgentHandoffService
@@ -125,15 +137,21 @@ export type RoomRuntimeDeps = {
   runTurn: (threadId: string, turnId: string) => Promise<unknown>
   dataDir: string
   model: () => { model: string; providerId?: string; accountId?: string }
+  /** Same provider-aware capacity resolver used by the native request composer. */
+  modelCapabilities?: (model: string, providerId?: string) => import('../contracts/capabilities.js').ModelCapabilityMetadata
   modelSnapshot?: () => Promise<import('../contracts/model-connections.js').ModelConnectionSnapshot>
   profiles: () => Record<string, SubagentProfileConfig>
   peerModels?: {
     client: import('../ports/model-client.js').ModelClient
     roles: () => import('../config/kun-config.js').RolesConfig | undefined
   }
+  /** Wait only before admitting a new API mutation, never while resuming side effects. */
+  waitForOwnership?: (signal?: AbortSignal) => Promise<void>
   assertOwnership: () => Promise<void>
   proveStopped?: (threadId: string, turnId?: string) => Promise<boolean>
+  /** Stop verification for one cancelled task; unrelated user turns remain independent. */
+  proveTurnStopped?: (threadId: string, turnId: string) => Promise<boolean>
   unsupportedProviderIds?: () => string[]
   backgroundExecutionActive?: (threadId: string) => boolean
-  stopBackgroundExecution?: (threadId: string) => Promise<void>
+  stopBackgroundExecution?: (threadId: string, turnId?: string) => Promise<void>
 }

@@ -35,7 +35,10 @@ async function fixture(twoMembers = false) {
   const members = [RoomMemberSchema.parse({ id: 'coordinator', displayName: 'Coordinator', presetId: 'general', role: 'coordinator', revision: 0 }),
     ...(twoMembers ? [RoomMemberSchema.parse({ id: 'developer', displayName: 'Developer', presetId: 'general', role: 'developer', revision: 0 })] : [])]
   const room = (await service.create({ clientRequestId: 'room', name: 'Correctness', members })).room
-  const sent = await service.send(room.id, { clientRequestId: 'input', body: 'Discuss the current design.', executionIntent: 'discussion' })
+  // Addressing the coordinator keeps the developer on the participation-check path;
+  // a whole-group message would let every member answer directly.
+  const sent = await service.send(room.id, { clientRequestId: 'input', body: 'Discuss the current design.', executionIntent: 'discussion',
+    mentionMemberIds: twoMembers ? ['coordinator'] : [] })
   const request = (await store.get<RoomRequestState>('request', sent.requestId))!
   await runner.state.initialize(request.value)
   const active = async () => (await runner.state.member(sent.requestId, 'coordinator'))!

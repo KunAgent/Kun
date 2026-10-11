@@ -4,8 +4,8 @@ import { RoomSidebarQuery } from '../../contracts/room-sidebar.js'
 import { RoomUserProfileSchema, UpdateRoomUserProfile } from '../../contracts/room-onboarding.js'
 import { roomFingerprint } from '../../rooms/room-service.js'
 import { RoomStoreConflictError } from '../../rooms/room-store.js'
-import { validateRoomMemberAvatars } from '../../rooms/room-avatar-service.js'
-import { RoomMemberSchema } from '../../contracts/rooms.js'
+import { validateRoomAvatarReferences } from '../../rooms/room-avatar-service.js'
+import { assertRoomWardrobeAllows } from '../../rooms/room-wardrobe-service.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { readJsonBody } from '../read-json-body.js'
 
@@ -16,7 +16,7 @@ export function registerRoomProfileRoutes(add: Add, runtime: ServerRuntime) {
     const bool = (key: string) => z.enum(['true', 'false']).parse(p.get(key) ?? 'false') === 'true'
     return rooms.service.store.sidebarPage(RoomSidebarQuery.parse({ kind: p.get('kind') ?? undefined,
       search: p.get('search') ?? undefined, cursor: p.get('cursor') ?? undefined, limit: p.get('limit') ?? undefined,
-      repositoryRoot: p.get('repository_root') ?? undefined, archivedOnly: bool('archived_only'),
+      repositoryRoot: p.get('repository_root') ?? undefined, archivedOnly: bool('archived_only'), deletedOnly: bool('deleted_only'),
       unreadOnly: bool('unread_only'), attentionOnly: bool('attention_only') }))
   })
   const detail = async (rooms: RoomRuntime) => {
@@ -30,13 +30,14 @@ export function registerRoomProfileRoutes(add: Add, runtime: ServerRuntime) {
     const input = UpdateRoomUserProfile.parse(raw.value)
     return rooms.exclusive(async () => {
       const store = rooms.service.store, requestId = 'room-user-profile:' + input.clientRequestId, fingerprint = roomFingerprint(input)
+      await assertRoomWardrobeAllows(store, [input.avatar], { self: true })
       const previous = await store.getRequest(requestId)
       if (previous) {
         if (previous.fingerprint !== fingerprint) throw new RoomStoreConflictError('profile request changed')
         return detail(rooms)
       }
-      await validateRoomMemberAvatars(store, runtime.attachmentStore, [RoomMemberSchema.parse({
-        id: 'user', revision: 0, displayName: 'User', presetId: 'general', role: 'developer', avatar: input.avatar ?? undefined })])
+      // The user's own look is the account avatar: only what this wardrobe owns.
+      await validateRoomAvatarReferences(store, runtime.attachmentStore, [input.avatar])
       await store.commit({ requestId, fingerprint,
         checks: [{ kind: 'room_user_profile', id: 'self', expectedRevision: input.expectedRevision }],
         puts: [{ kind: 'room_user_profile', id: 'self', value: { avatar: input.avatar } }],

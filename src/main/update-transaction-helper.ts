@@ -1,8 +1,10 @@
 import { app } from 'electron'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { openUpdateRollbackReadiness, powershellCaptureGuiProcess, powershellRollbackReadiness, powershellWaitForGuiExit } from './update-rollback-readiness'
 import { access, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { encodePowershellCommand, ONE_SHOT_HELPER_TIMEOUT_SECONDS, powershellHelperDeadline } from './one-shot-helper-script'
+import { isUpdateTransactionState, type UpdateTransactionState } from './update-transaction-states'
 import type { InstallerRecoveryEnvironment } from './gui-updater-pending'
 import {
   clearGuiUpdateRecovery,
@@ -48,13 +50,16 @@ export function runBoundedUpdateTransaction(
   })
 }
 
-export function scheduleBoundedUpdateRollback(
+export async function scheduleBoundedUpdateRollback(
   scriptPath: string,
   environment: InstallerRecoveryEnvironment,
   pid: number,
   spawnHelper: typeof spawn = spawn
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
+  const readiness = openUpdateRollbackReadiness()
+  let child: ChildProcess | undefined
+  try {
+    await readiness.listening
     const encode = (value: string) => Buffer.from(value, 'utf8').toString('base64')
     const assignments = Object.entries(environment).map(([key, value]) =>
       `$env:${key}=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(value)}'))`
@@ -62,26 +67,64 @@ export function scheduleBoundedUpdateRollback(
     const command = `${powershellHelperDeadline()}\n` + [
       `$script=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(scriptPath)}'))`,
       `$waitPid=${pid}`,
+      "$powershell=Join-Path $PSHOME 'powershell.exe'",
       ...assignments,
-      'if (Get-Process -Id $waitPid -ErrorAction SilentlyContinue) { Wait-Process -Id $waitPid -Timeout 90 -ErrorAction Stop }',
-      '& $script -Action RecoverUpdateTransaction',
+      // Actions use exit, so each runs in a native child:
+      // its status/output cannot terminate or bypass the coordinator.
+      '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action ValidateUpdateRollback -Bounded',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
-      '$exe=((& $script -Action ResolveRecoveryExecutable | Select-Object -Last 1).Trim())',
-      'if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($exe)) { exit 1 }',
-      '& $script -Action FinalizeUpdateTransaction',
+      ...powershellCaptureGuiProcess(),
+      ...powershellRollbackReadiness(readiness.pipeName, readiness.token),
+      powershellWaitForGuiExit(),
+      '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action RecoverUpdateTransaction -Bounded',
+      'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+      '$resultPath=[IO.Path]::GetTempFileName()',
+      [
+        'try {',
+        '  & $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action ResolveRecoveryExecutable -Bounded -ResultPath $resultPath | Out-Null',
+        '  if ($LASTEXITCODE -ne 0) { throw "Recovery executable resolution failed." }',
+        '  $exe=[IO.File]::ReadAllText($resultPath, [Text.Encoding]::Unicode).Trim()',
+        '} finally { Remove-Item -LiteralPath $resultPath -Force -ErrorAction SilentlyContinue }'
+      ].join('\n'),
+      'if ([string]::IsNullOrWhiteSpace($exe)) { exit 1 }',
+      '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action FinalizeUpdateTransaction -Bounded',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
       'Start-Process -FilePath $exe -ErrorAction Stop',
       'exit 0'
     ].join('; ')
     const encoded = encodePowershellCommand(command)
-    const elevated = environment.KUN_INSTALLER_INSTALL_MODE === 'all'
-    const args = elevated
-      ? ['-NoProfile', '-Command', `${powershellHelperDeadline()}\nStart-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile','-EncodedCommand','${encoded}' -ErrorAction Stop\nexit 0`]
-      : ['-NoProfile', '-EncodedCommand', encoded]
-    const child = spawnHelper('powershell.exe', args, { detached: true, stdio: 'ignore', windowsHide: true })
-    child.once('error', reject)
-    child.once('spawn', () => { child.unref(); resolve() })
-  })
+    const elevated = environment.KUN_INSTALLER_INSTALL_MODE?.toLowerCase() === 'all'
+    const powershell = win32.join(process.env.SystemRoot ?? 'C:\\Windows',
+      'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    // libuv's detached flag uses DETACHED_PROCESS, which makes Windows
+    // PowerShell exit before executing its command (nodejs/node#51018).
+    // Start-Process supplies an independent hidden console instead. Its child
+    // survives this short-lived bootstrap and the GUI; only readiness permits quit.
+    const bootstrap = `${powershellHelperDeadline()}\n` + [
+      `$coordinator=Start-Process -FilePath '${powershell.replace(/'/gu, "''")}'${elevated ? ' -Verb RunAs' : ''} -WindowStyle Hidden -PassThru -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}' -ErrorAction Stop`,
+      '$null=$coordinator.Handle',
+      '$coordinator.WaitForExit()',
+      '$exitCode=$coordinator.ExitCode',
+      'if ($null -eq $exitCode) { exit 1 }',
+      'exit $exitCode'
+    ].join('\n')
+    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', bootstrap]
+    child = spawnHelper(powershell, args, { detached: false, stdio: 'ignore', windowsHide: true })
+    child.once('error', readiness.cancel)
+    child.once('exit', (code) => {
+      // The bootstrap waits for the actual coordinator, including after UAC.
+      // Even exit zero cannot replace that coordinator's readiness handshake.
+      readiness.cancel(new Error(`Update rollback launcher exited with ${code} before readiness.`))
+    })
+    await readiness.ready
+    child.unref()
+  } catch (error) {
+    readiness.cancel(error instanceof Error ? error : new Error(String(error)))
+    child?.kill()
+    throw error
+  } finally {
+    readiness.dispose()
+  }
 }
 
 async function resolveScript(deps: UpdateTransactionHelperDeps): Promise<string> {
@@ -114,21 +157,32 @@ export type FinalizeUpdateTransactionOutcome =
   | { kind: 'already-finalized', phase: string }
   | { kind: 'unconfirmed', reason: string }
 
-/**
- * Read the installer-owned transaction file to confirm its terminal phase.
- * Returns null when the file is missing or unreadable; callers treat that as
- * "unconfirmed" and keep every recovery artifact.
- */
+type TransactionRead =
+  | { kind: 'missing' }
+  | { kind: 'present', phase: UpdateTransactionState }
+  | { kind: 'unconfirmed', reason: string }
+
+/** Only ENOENT proves absence. Invalid or unreadable state never permits cleanup. */
 async function readTransactionPhase(
   environment: InstallerRecoveryEnvironment
-): Promise<string | null> {
+): Promise<TransactionRead> {
   const transactionPath = environment.KUN_INSTALLER_TRANSACTION
-  if (!transactionPath) return null
+  if (!transactionPath) return { kind: 'unconfirmed', reason: 'Transaction path is not configured.' }
+  let raw: string
   try {
-    const value = JSON.parse(await readFile(transactionPath, 'utf8')) as Record<string, unknown>
-    return typeof value.Phase === 'string' ? value.Phase : null
-  } catch {
-    return null
+    raw = await readFile(transactionPath, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
+    return { kind: 'unconfirmed', reason: `Cannot read transaction: ${String(error)}` }
+  }
+  try {
+    // Windows PowerShell 5 writes Set-Content -Encoding UTF8 with a BOM.
+    const value: unknown = JSON.parse(raw.replace(/^\uFEFF/u, ''))
+    const phase = value && typeof value === 'object' && 'Phase' in value ? value.Phase : undefined
+    if (!isUpdateTransactionState(phase)) return { kind: 'unconfirmed', reason: 'Invalid transaction phase.' }
+    return { kind: 'present', phase }
+  } catch (error) {
+    return { kind: 'unconfirmed', reason: `Cannot parse transaction: ${String(error)}` }
   }
 }
 
@@ -165,22 +219,13 @@ export async function finalizeUpdateTransactionAndCleanup(
   }
 
   const before = await readTransactionPhase(input.environment)
-  if (before === null && input.environment.KUN_INSTALLER_TRANSACTION) {
-    // No transaction file at all: nothing the installer owns can block a new
-    // update, so converging the GUI records is safe.
+  if (before.kind === 'unconfirmed') return before
+  if (before.kind === 'missing') {
     await clearRecords()
     return { kind: 'already-finalized', phase: 'missing' }
   }
-  if (before === 'rolled_back' || before === 'finalizing') {
-    // Terminal states that no longer need a finalize round-trip. The payload
-    // backup is only removed when the state authorizes it (rolled_back);
-    // finalizing still owns artifacts a repeated finalize must clean up.
-    if (before === 'rolled_back') {
-      await cleanupBackup(input.backupDir).catch(() => undefined)
-    }
-    await clearRecords()
-    return { kind: 'already-finalized', phase: before }
-  }
+  // Even rolled_back and finalizing still own cleanup work. Resume the
+  // idempotent helper and keep GUI recovery until the transaction is removed.
 
   try {
     await runHelper('FinalizeUpdateTransaction', input.environment)
@@ -192,10 +237,11 @@ export async function finalizeUpdateTransactionAndCleanup(
   // FinalizeUpdateTransaction deletes the transaction file on success, so a
   // missing file after a successful helper run is the confirmation signal.
   const after = await readTransactionPhase(input.environment)
-  if (after !== null) {
+  if (after.kind === 'unconfirmed') return after
+  if (after.kind === 'present') {
     return {
       kind: 'unconfirmed',
-      reason: `transaction file still reports phase ${after} after finalize`
+      reason: `transaction file still reports phase ${after.phase} after finalize`
     }
   }
   await cleanupBackup(input.backupDir).catch(() => undefined)

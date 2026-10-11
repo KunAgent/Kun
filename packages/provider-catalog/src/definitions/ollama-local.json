@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "ollama-local",
+  "name": "Ollama (Local)",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "credentialRequirement": "optional",
+  "baseUrl": "http://localhost:11434/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.ollama.com/openai",
+  "credentialUrl": "https://docs.ollama.com/"
+}

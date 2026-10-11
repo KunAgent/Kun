@@ -56,3 +56,4 @@
 .rooms-pending-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .rooms-pending-failed { display: flex; align-items: center; gap: .5rem; margin: .3rem 0 0; font-size: .72rem; color: #ef4444; }
 .rooms-pending-failed button { display: inline-flex; align-items: center; gap: .25rem; flex-shrink: 0; font-size: .72rem; color: var(--ds-accent); }
+html[data-remote-surface='mobile'] .rooms-pending-failed button { min-width: 44px; min-height: 44px; justify-content: center; }

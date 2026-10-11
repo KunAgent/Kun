@@ -97,6 +97,7 @@ function quotaEntry(providerId: string, usedPercent: number): ProviderQuotaEntry
     providerId,
     providerName: providerId,
     status: 'available',
+    updatedAt: new Date().toISOString(),
     metrics: [{ id: 'quota', label: 'quota', unit: '%', usedPercent }]
   }
 }
@@ -228,6 +229,17 @@ describe('failover group routing', () => {
     expect(direct.seen).not.toContain('acct-a/model-x')
   })
 
+  it('does not block an account from a stale quota or an expired reset window', async () => {
+    for (const stale of [true, false]) {
+      const direct = new FakeDirect(() => ok()), client = new RoutePoolModelClient(direct, [], capability)
+      client.replaceFailoverGroups([group({ strategy: 'order' })])
+      client.setQuotaLookup((providerId) => providerId === 'acct-a' ? { ...quotaEntry(providerId, 100),
+        updatedAt: new Date(Date.now() - (stale ? 360000 : 0)).toISOString(),
+        metrics: [{ id: 'quota', label: 'quota', unit: '%', usedPercent: 100,
+          ...(stale ? {} : { resetsAt: new Date(Date.now() - 1000).toISOString() }) }] } : undefined)
+      await drain(client.stream(request())); expect(direct.seen[0]).toBe('acct-a/model-x')
+    }
+  })
   it('keeps the explicitly requested member as a candidate without a declared model', async () => {
     const direct = new FakeDirect(() => ok())
     const client = new RoutePoolModelClient(direct, [], capability)

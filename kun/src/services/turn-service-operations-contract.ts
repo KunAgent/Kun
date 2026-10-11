@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import type { DelegatedSteering } from './delegated-steering.js'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
 import type {
@@ -95,6 +96,8 @@ export interface TurnServiceOperations {
    * full capacity, closing, or no queued turns). Transiently unadmittable
    * queued turns are marked failed and skipped within the same call.
    */
+  pauseQueuedTurns(threadId: string, reason: 'user_stop' | 'restart_recovery', sourceTurnId: string): Promise<void>;
+  resumeQueuedTurns(threadId: string): Promise<void>;
   startNextQueuedTurn(threadId: string): Promise<{ turnId: string } | null>;
   /** Abort a queued turn before it starts; running turns must use interrupt. */
   cancelQueuedTurn(input: {
@@ -122,6 +125,8 @@ export interface TurnServiceOperations {
     messageSource?: UserMessageSource
     attachmentIds?: string[]
   }): Promise<void>;
+  /** Reopen steering for a delegated runtime that delivers guidance mid-turn. */
+  openDelegatedSteering(threadId: string, turnId: string): DelegatedSteering;
   steeringQueue(input: { threadId: string; turnId: string }): Promise<SteeringEntry[]>;
   replaceSteering(input: {
     threadId: string
@@ -231,10 +236,12 @@ export interface TurnServiceOperations {
       | 'toolCatalogToolCount'
       | 'toolCatalogDrift'
       | 'requiredToolGate'
+      | 'paperModelRequests'
       | 'extensionModelRequests'
       | 'extensionToolInvocations'
       | 'workspaceCheckpointId'
       | 'actingModelRoute'
+      | 'gatewayAliasGrants'
       | 'graphPlanningLifecycle'
     >, 'requiredToolGate'>
       & { requiredToolGate?: Turn['requiredToolGate'] | null }

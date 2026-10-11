@@ -11,6 +11,10 @@ import {
 } from '../../services/llm-debug-recorder.js'
 import { bridgedToolModelName, type BridgeableTool } from './sdk-tool-bridge.js'
 import { itemOf } from './agent-sdk-runtime-items.js'
+import {
+  attributeSdkContext,
+  type SdkContextOccupancy
+} from './sdk-context-occupancy.js'
 import type { SdkRuntimeDeps, SdkTurnContext, TurnStatus } from './agent-sdk-runtime-contracts.js'
 
 type AgentSdkTrace = {
@@ -241,4 +245,52 @@ export function sanitizeAgentSdkError(error: unknown, oauthToken: string | undef
     ? message.split(oauthToken).join('[REDACTED]')
     : message
   return withoutKnownToken.replace(CLAUDE_CREDENTIAL_PATTERN, '[REDACTED]')
+}
+
+/**
+ * Record the `context_snapshot` telemetry for a delegated SDK turn.
+ * `historyText` is the prompt-level history actually sent (handoff brief,
+ * portable transcript, or '' when the provider resumed natively).
+ * At turn start the figures are Kun-side estimates; once the SDK has reported
+ * the real occupancy (`live`) they are replaced by it, history included.
+ */
+export async function recordAgentSdkContextSnapshot(input: {
+  ctx: SdkTurnContext
+  threadId: string
+  turnId: string
+  resumed: boolean
+  historyText: string
+  live?: SdkContextOccupancy
+  selectedKunTools: readonly BridgeableTool[]
+  record: (draft: RuntimeEventDraft) => Promise<unknown> | unknown
+  kunSystemPrompt: () => string
+}): Promise<void> {
+  const { ctx, live } = input
+  if (!ctx.contextProfile) return
+  const system = estimatedTokens([input.kunSystemPrompt(), ctx.threadPersona ?? ''].join('\n'))
+  const tools = estimatedTokens(JSON.stringify(input.selectedKunTools))
+  const skills = estimatedTokens((ctx.contextInstructions ?? []).join('\n'))
+  const messages = estimatedTokens([input.historyText, ctx.userText].join('\n'))
+  const other = (ctx.images?.length ?? 0) * 1_024
+  await input.record({
+    kind: 'context_snapshot',
+    threadId: input.threadId,
+    turnId: input.turnId,
+    model: ctx.model ?? 'claude-default',
+    providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
+    stepIndex: 0,
+    ...(live?.contextWindowTokens
+      ? { contextWindowTokens: live.contextWindowTokens, softThresholdTokens: live.contextWindowTokens, hardThresholdTokens: live.contextWindowTokens }
+      : ctx.contextProfile),
+    estimatedInputTokens: live ? live.usedTokens : tools + system + skills + messages + other,
+    breakdown: live
+      ? attributeSdkContext({ tools, system, skills }, live.usedTokens)
+      : { tools, system, skills, messages, other },
+    toolCount: input.selectedKunTools.length,
+    activeSkillIds: [...(ctx.activeSkillIds ?? [])],
+    contextManagement: 'sdk-managed',
+    contextWindowKnown: Boolean(live?.contextWindowTokens),
+    occupancySource: live ? 'agent' : 'estimate',
+    nativeHistory: live ? 'known' : input.resumed ? 'unknown' : 'none'
+  })
 }

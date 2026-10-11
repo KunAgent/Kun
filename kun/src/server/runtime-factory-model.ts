@@ -1,3 +1,9 @@
+import { scopeBuiltInModelCapability } from '../loop/model-provider-profile-scope.js'
+import { MODEL_CONTEXT_PROFILES, resolveModelContextProfile } from '../loop/model-context-profile.js'
+import { resolveModelMetadata, withModelObservation } from '../services/model-metadata-resolver.js'
+import { metadataEvidence } from '../contracts/model-metadata-evidence.js'
+import { withModelVerification } from '../services/model-verification-client.js'
+import type { ModelConnectionRegistry } from '../services/model-connection-registry-core.js'
 import {
   CompatModelClient,
   GeminiCliApiModelClient,
@@ -19,6 +25,9 @@ import {
 } from './runtime-factory-dependencies.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { subscriptionBillingKind } from '../shared/subscription-billing.js'
+import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
+import { exposableProvider } from '../domain/model-gateway-export-policy.js'
+import { providerCredentialLease } from '../adapters/model/provider-credential-lease.js'
 
 export async function hydrateLegacyCredentialOptions(
   options: KunServeRuntimeOptions,
@@ -82,8 +91,10 @@ export function buildModelClientRouterInput(
     headers?: Record<string, string>
     geminiAuth?: GeminiCodeAssistCredential
     refreshable: boolean
-  }>
-): { default: ModelClient; providers: Map<string, ModelClient> } {
+  }>,
+  getRegistry?: () => ModelConnectionRegistry | undefined
+): { default: ModelClient; providers: Map<string, ModelClient>; gatewayClients: Map<string, ModelClient>;
+  defaultProviderId: string; admission: Map<string, { accountId: string; limits: import('../contracts/provider-configuration.js').ProviderAdmission }> } {
   const streamIdleOverride =
     options.runtime?.streamIdleTimeoutMs !== undefined
       ? { streamIdleTimeoutMs: options.runtime.streamIdleTimeoutMs }
@@ -96,7 +107,7 @@ export function buildModelClientRouterInput(
     : options.modelProxyUrl
   const defaultModelCapabilities = providerScopedModelCapabilities(
     activeProviderId,
-    activeProvider,
+    activeProvider ?? { apiKey: options.apiKey, baseUrl: options.baseUrl, endpointFormat: options.endpointFormat },
     modelCapabilities
   )
   const defaultBillingKind = subscriptionBillingKind({
@@ -106,7 +117,12 @@ export function buildModelClientRouterInput(
     baseUrl: activeProvider?.baseUrl ?? options.baseUrl
   })
   const defaultClient: ModelClient =
-    process.env.KUN_RUNTIME_PROVIDER_KIND === 'gemini-code-assist'
+    options.modelConnectionSelectionRequired && !options.activeProviderId
+      ? { provider: 'unavailable', model: options.model, async *stream() {
+          yield { kind: 'error' as const, code: 'model_connection_unavailable',
+            message: 'No active model connection. Enable and select a provider in settings.' }
+        } }
+      : process.env.KUN_RUNTIME_PROVIDER_KIND === 'gemini-code-assist'
       ? new GeminiCodeAssistModelClient({
           baseUrl: options.baseUrl,
           auth: options.geminiAuth,
@@ -123,6 +139,7 @@ export function buildModelClientRouterInput(
       : process.env.KUN_RUNTIME_PROVIDER_KIND === 'gemini-cli-api'
       ? new GeminiCliApiModelClient({
           model: options.model,
+          modelCapabilities: defaultModelCapabilities,
           modelProxyUrl: defaultModelProxyUrl,
           retry: options.retry,
           ...(llmDebug ? { debugSink: llmDebug } : {})
@@ -134,23 +151,28 @@ export function buildModelClientRouterInput(
           apiKey: options.apiKey,
           modelProxyUrl: defaultModelProxyUrl,
           endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+          customEndpointProtocol: activeProvider?.customEndpointProtocol,
+          inputTokenUpperBound: activeProvider?.admission?.inputTokenUpperBound,
           ...(activeProvider?.endpoints ? { endpoints: activeProvider.endpoints } : {}),
           retry: options.retry,
           model: options.model,
           modelCapabilities: defaultModelCapabilities,
           headers: options.headers,
           customHeaders: activeProvider?.customHeaders,
+          authProfile: activeProvider?.authProfile, headerProfile: activeProvider?.headerProfile,
           ...(defaultBillingKind ? { billingKind: defaultBillingKind } : {}),
           ...(options.credentialSourceId && credentialResolver
             ? {
-                resolveCredentials: (rejectedAccessToken?: string) =>
-                  credentialResolver(options.credentialSourceId!, rejectedAccessToken)
+                resolveCredentials: providerCredentialLease((rejectedAccessToken?: string) =>
+                  credentialResolver(options.credentialSourceId!, rejectedAccessToken), { apiKey: options.apiKey, headers: options.headers })
               }
             : {}),
           ...(llmDebug ? { debugSink: llmDebug } : {}),
           ...streamIdleOverride
         })
   const providerClients = new Map<string, ModelClient>()
+  const gatewayClients = new Map<string, ModelClient>()
+  const admission = new Map<string, { accountId: string; limits: import('../contracts/provider-configuration.js').ProviderAdmission }>()
   for (const [providerId, provider] of Object.entries(options.providers ?? {})) {
     const trimmedId = providerId.trim()
     if (!trimmedId) continue
@@ -186,6 +208,7 @@ export function buildModelClientRouterInput(
       : kind === 'gemini-cli-api'
       ? new GeminiCliApiModelClient({
           model: options.model,
+          modelCapabilities: scopedModelCapabilities,
           modelProxyUrl: Object.prototype.hasOwnProperty.call(provider, 'modelProxyUrl')
             ? provider.modelProxyUrl
             : options.modelProxyUrl,
@@ -201,25 +224,39 @@ export function buildModelClientRouterInput(
             ? provider.modelProxyUrl
             : options.modelProxyUrl,
           endpointFormat: provider.endpointFormat ?? options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+          customEndpointProtocol: provider.customEndpointProtocol,
+          inputTokenUpperBound: provider.admission?.inputTokenUpperBound,
           ...(provider.endpoints ? { endpoints: provider.endpoints } : {}),
           retry: provider.retry ?? options.retry,
           model: options.model,
           modelCapabilities: scopedModelCapabilities,
           headers: provider.headers,
           customHeaders: provider.customHeaders,
+          authProfile: provider.authProfile, headerProfile: provider.headerProfile,
           ...(providerBillingKind ? { billingKind: providerBillingKind } : {}),
           ...(provider.credentialSourceId && credentialResolver
             ? {
-                resolveCredentials: (rejectedAccessToken?: string) =>
-                  credentialResolver(provider.credentialSourceId!, rejectedAccessToken)
+                resolveCredentials: providerCredentialLease((rejectedAccessToken?: string) =>
+                  credentialResolver(provider.credentialSourceId!, rejectedAccessToken), { apiKey: provider.apiKey, headers: provider.headers })
               }
             : {}),
           ...(llmDebug ? { debugSink: llmDebug } : {}),
           ...streamIdleOverride
         })
-    providerClients.set(trimmedId, client)
+    const observedClient = withModelVerification(client, trimmedId, getRegistry, (model) => kind !== 'http' ? kind :
+      verificationProtocol(scopedModelCapabilities(model).endpointFormat ?? provider.endpointFormat ?? options.endpointFormat, provider.customEndpointProtocol),
+      (model) => verificationScopes(provider.modelCapabilities, model))
+    providerClients.set(trimmedId, observedClient)
+    if (provider.admission) admission.set(trimmedId.toLowerCase(), {
+      accountId: provider.accountId ?? trimmedId, limits: provider.admission
+    })
+    if (exposableProvider({ kind, authType: provider.authType ?? 'api-key',
+      configured: provider.authType === 'none' || Boolean(provider.apiKey.trim() || provider.credentialSourceId),
+      credentialStatus: provider.authType === 'none' ? 'not-required' : 'ready' })) gatewayClients.set(trimmedId, observedClient)
   }
-  return { default: defaultClient, providers: providerClients }
+  return { default: withModelVerification(defaultClient, activeProviderId, getRegistry, (model) =>
+    verificationProtocol(defaultModelCapabilities(model).endpointFormat ?? options.endpointFormat, activeProvider?.customEndpointProtocol),
+    (model) => verificationScopes(activeProvider?.modelCapabilities, model)), providers: providerClients, gatewayClients, admission, defaultProviderId: activeProviderId.toLowerCase() }
 }
 
 export function modelContextProfilesByProvider(
@@ -229,9 +266,10 @@ export function modelContextProfilesByProvider(
   for (const [providerId, provider] of Object.entries(providers ?? {})) {
     const normalized = providerId.trim().toLowerCase()
     if (!normalized) continue
-    out.set(normalized, modelContextProfilesFromConfig({
-      models: { profiles: provider.modelProfiles ?? {} }
-    }))
+    const declared = { ...provider.modelProfiles, ...provider.modelCapabilities }
+    const names = new Set(Object.keys(declared).map((name) => name.trim().toLowerCase()))
+    out.set(normalized, modelContextProfilesFromConfig({ models: { profiles: declared } })
+      .filter((profile) => names.has(profile.canonicalModel)))
   }
   return out
 }
@@ -245,42 +283,32 @@ export function providerScopedModelCapabilities(
   ) => ReturnType<typeof modelCapabilitiesForModel>
 ): (model: string) => ReturnType<typeof modelCapabilitiesForModel> {
   return (model) => {
+    // A `*` profile states provider-wide facts (window, output cap, prices,
+    // upstream naming) for models without a profile of their own.
+    const wildcard = provider?.modelCapabilities?.['*']
     const explicit = provider?.modelCapabilities?.[model] ??
-      provider?.modelCapabilities?.[model.trim().toLowerCase()]
+      provider?.modelCapabilities?.[model.trim().toLowerCase()] ??
+      (wildcard ? { ...wildcard, id: model } : undefined)
     const providerFallback = modelCapabilitiesForProviderModel({
       providerId,
       presetSource: provider?.presetSource ?? providerId,
       baseUrl: provider?.baseUrl,
+      endpointFormat: provider?.endpointFormat, endpoints: provider?.endpoints,
       kind: provider?.kind,
       model
     })
     if (explicit) {
-      const requestedReasoning = shouldUpgradeProviderReasoning(
-        providerId,
-        provider?.endpointFormat,
-        model,
-        explicit.reasoning,
-        providerFallback.reasoning
-      )
-        ? providerFallback.reasoning
-        : explicit.reasoning ?? providerFallback.reasoning
-      const reasoning = safeProviderReasoningCapability({
-        providerId,
-        presetSource: provider?.presetSource ?? providerId,
-        baseUrl: provider?.baseUrl,
-        kind: provider?.kind,
-        model
-      }, requestedReasoning)
-      return {
-        ...explicit,
-        id: model,
-        ...((reasoning ?? explicit.reasoning) ? { reasoning: reasoning ?? explicit.reasoning } : {}),
-        ...(explicit.serviceTiers ?? providerFallback.serviceTiers
-          ? { serviceTiers: [...(explicit.serviceTiers ?? providerFallback.serviceTiers ?? [])] }
-          : {})
-      }
+      const resolved = resolveModelMetadata(withModelObservation(explicit, {
+        id: 'runtime-adapter', source: 'adapter', values: providerFallback,
+        evidence: providerFallback.evidence ?? metadataEvidence(providerFallback, 'adapter'), match: 'exact'
+      }))
+      const reasoning = safeProviderReasoningCapability({ providerId, presetSource: provider?.presetSource,
+        baseUrl: provider?.baseUrl, kind: provider?.kind, model }, resolved.reasoning)
+      return { ...resolved, id: model, ...(reasoning ? { reasoning } : {}) }
     }
-    const base = fallback(model, providerId)
+    const base = scopeBuiltInModelCapability({ providerId, presetSource: provider?.presetSource,
+      baseUrl: provider?.baseUrl, kind: provider?.kind, endpointFormat: provider?.endpointFormat, endpoints: provider?.endpoints, model }, fallback(model, providerId),
+      Boolean(resolveModelContextProfile(model, MODEL_CONTEXT_PROFILES)))
     return {
       ...base,
       ...(providerFallback.reasoning ? { reasoning: providerFallback.reasoning } : {}),
@@ -340,6 +368,32 @@ export function cursorSdkProviderIdsForOptions(options: KunServeRuntimeOptions):
     if (trimmedId && (provider.kind ?? 'http') === 'cursor-sdk') out.add(trimmedId)
   }
   return out
+}
+
+/**
+ * Provider-kind view used to infer a harness for legacy threads/turns and to
+ * freeze `harnessId` at admission. `defaultKind` follows the env-level runtime
+ * provider kind (KUN_RUNTIME_PROVIDER_KIND), not a provider id.
+ */
+export function providerKindsForOptions(
+  options: KunServeRuntimeOptions,
+  defaults: { defaultIsAgentSdk: boolean; defaultIsCursorSdk: boolean; defaultIsAntigravity: boolean }
+): {
+  byId: Record<string, ServeProviderConfig['kind'] | undefined>
+  defaultKind: NonNullable<ServeProviderConfig['kind']>
+} {
+  const byId: Record<string, ServeProviderConfig['kind'] | undefined> = {}
+  for (const [providerId, provider] of Object.entries(options.providers ?? {})) {
+    byId[providerId] = provider.kind ?? 'http'
+  }
+  const defaultKind: NonNullable<ServeProviderConfig['kind']> = defaults.defaultIsAgentSdk
+    ? 'agent-sdk'
+    : defaults.defaultIsCursorSdk
+      ? 'cursor-sdk'
+      : defaults.defaultIsAntigravity
+        ? 'antigravity-cli'
+        : 'http'
+  return { byId, defaultKind }
 }
 
 /** Provider engines that cannot enforce Kun room tools, approvals, or scoped writes. */
@@ -488,7 +542,10 @@ export function modelConnectionSeedsForOptions(
         probe: false,
         select: false
       }))
-  ]
+  ].filter((seed) => !isRetiredOpenCodeFreeConnection({
+    id: seed.id,
+    presetSource: seed.presetSource
+  }))
 }
 
 export function uniqueModelCatalog(models: readonly (string | undefined)[]): string[] {
@@ -535,4 +592,13 @@ export function modelConnectionAuthType(
     // Plain API keys are intentionally not JSON.
   }
   return 'api-key'
+}
+
+function verificationProtocol(format: string | undefined, customProtocol?: string): string {
+  return format === 'custom_endpoint' ? customProtocol ?? 'chat_completions' : format ?? 'chat_completions'
+}
+
+function verificationScopes(capabilities: ServeProviderConfig['modelCapabilities'], model: string): string[] {
+  const profile = capabilities?.[model] ?? capabilities?.[model.toLowerCase()]
+  return profile?.metadata?.observations.flatMap((observation) => observation.scope ? [observation.scope] : []) ?? []
 }

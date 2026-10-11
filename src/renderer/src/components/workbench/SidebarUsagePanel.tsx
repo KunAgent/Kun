@@ -1,9 +1,8 @@
-import { BarChart3, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  usageTotalsFromBuckets
-} from '../chat/InitialSessionUsageHeatmap'
+import { harnessDisplayNames } from '../../lib/harness-display-name'
+import { usageTotalsFromBuckets } from '../chat/initial-session-usage-support'
 import {
   formatCompactNumber,
   formatCost,
@@ -13,28 +12,22 @@ import {
   useThreadUsageState,
   type MoneySummaryItem
 } from '../../hooks/use-thread-usage'
-import {
-  type DailyUsageBucket,
-  useDailyUsageState
-} from '../../hooks/use-daily-usage'
+import { type DailyUsageBucket, useDailyUsageState } from '../../hooks/use-daily-usage'
 import { useModelUsageState, type ModelUsageScope } from '../../hooks/use-model-usage'
 import { useUsageAutoRefresh } from '../../hooks/use-usage-auto-refresh'
-import { SidebarUsageHistoryCard } from './SidebarUsageHistoryCard'
+import { useActiveThreadMayHaveUsage } from '../../store/chat-store'
+import { formatUsageDay, UsageTrendChart, type UsageTrendMetric } from '../usage/UsageTrendChart'
 
-type UsageRangeKey = 'all' | '90d' | '30d' | '7d'
+export type UsagePeriod = 'today' | '7d' | '30d' | '90d'
 
-const RANGE_DAYS: Record<UsageRangeKey, number> = {
-  all: 365,
-  '90d': 90,
-  '30d': 30,
-  '7d': 7
-}
-
-const RANGE_KEYS: UsageRangeKey[] = ['7d', '30d', '90d', 'all']
+const PERIODS: UsagePeriod[] = ['today', '7d', '30d', '90d']
+const PERIOD_DAYS: Record<UsagePeriod, number> = { today: 1, '7d': 7, '30d': 30, '90d': 90 }
 const MODEL_SCOPES: ModelUsageScope[] = ['primary', 'side', 'all']
-const EMPTY_DAILY_USAGE_BUCKETS: DailyUsageBucket[] = []
-const HISTORY_RANGE_DAYS = 365
-const MODEL_USAGE_PAGE_SIZE = 5
+const HISTORY_DAYS = 90
+const MODELS_COLLAPSED = 5
+const EMPTY_BUCKETS: DailyUsageBucket[] = []
+const PERIOD_KEY = 'kun.usage.period'
+const METRIC_KEY = 'kun.usage.trendMetric'
 
 export type SidebarUsagePanelStatus = {
   loading: boolean
@@ -48,6 +41,23 @@ type Props = {
   onStatusChange?: (status: SidebarUsagePanelStatus) => void
 }
 
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const value = window.localStorage.getItem(key)
+    return allowed.includes(value as T) ? value as T : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function store(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // The choice lasts for this session only.
+  }
+}
+
 export function SidebarUsagePanel({
   activeThreadId,
   enabled = true,
@@ -55,421 +65,319 @@ export function SidebarUsagePanel({
   onStatusChange
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
-  const [rangeKey, setRangeKey] = useState<UsageRangeKey>('7d')
+  const locale = i18n.language
+  const [period, setPeriodState] = useState<UsagePeriod>(() => readStored(PERIOD_KEY, PERIODS, '7d'))
+  const [metric, setMetricState] = useState<UsageTrendMetric>(() => readStored(METRIC_KEY, ['tokens', 'cost'] as const, 'tokens'))
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [modelScope, setModelScope] = useState<ModelUsageScope>('primary')
-  const [historyVisibleWeeks, setHistoryVisibleWeeks] = useState(12)
-  const [modelPage, setModelPage] = useState(0)
+  const [modelsExpanded, setModelsExpanded] = useState(false)
   const [autoRefreshKey, setAutoRefreshKey] = useState(0)
   const effectiveRefreshKey = `${String(refreshKey)}:${autoRefreshKey}`
-  const threadState = useThreadUsageState(
-    activeThreadId,
-    enabled && Boolean(activeThreadId),
-    effectiveRefreshKey
-  )
-  const dailyState = useDailyUsageState(enabled, effectiveRefreshKey, HISTORY_RANGE_DAYS)
-  const modelState = useModelUsageState(
-    enabled,
-    effectiveRefreshKey,
-    RANGE_DAYS[rangeKey],
-    modelScope
-  )
-  const loading =
-    dailyState.loading ||
-    modelState.loading ||
-    (Boolean(activeThreadId) && threadState.loading)
-  const refreshedAt = earliestRefreshTime(dailyState.updatedAt, modelState.updatedAt)
+  const activeThreadMayHaveUsage = useActiveThreadMayHaveUsage()
+  const threadState = useThreadUsageState(activeThreadId,
+    enabled && Boolean(activeThreadId) && activeThreadMayHaveUsage, effectiveRefreshKey)
+  const dailyState = useDailyUsageState(enabled, effectiveRefreshKey, HISTORY_DAYS)
+  const modelState = useModelUsageState(enabled, effectiveRefreshKey, PERIOD_DAYS[period], modelScope)
+  const loading = dailyState.loading || modelState.loading || (Boolean(activeThreadId) && threadState.loading)
+  const refreshedAt = earliest(dailyState.updatedAt, modelState.updatedAt)
   const autoRefresh = useCallback(() => setAutoRefreshKey((current) => current + 1), [])
   useUsageAutoRefresh(enabled, refreshKey, autoRefreshKey, refreshedAt, autoRefresh)
 
   useEffect(() => {
-    onStatusChange?.({
-      loading,
-      ...(refreshedAt ? { refreshedAt } : {})
-    })
+    onStatusChange?.({ loading, ...(refreshedAt ? { refreshedAt } : {}) })
   }, [loading, onStatusChange, refreshedAt])
 
-  const buckets = dailyState.usage?.buckets ?? EMPTY_DAILY_USAGE_BUCKETS
-  const historyBuckets = useMemo(
-    () => buckets.slice(-(historyVisibleWeeks * 7)),
-    [buckets, historyVisibleWeeks]
-  )
-  const totals = useMemo(() => usageTotalsFromBuckets(historyBuckets), [historyBuckets])
-  const hasAccumulatedUsage =
-    totals.totalTokens > 0 ||
-    totals.turns > 0 ||
-    totals.costUsd > 0 ||
-    (totals.costCny ?? 0) > 0 ||
-    totals.valueEstimateUsd > 0 ||
-    (totals.valueEstimateCny ?? 0) > 0
-  const modelBuckets = modelState.usage?.buckets ?? []
-  // The usage API keeps zero-token model buckets in the response. Only models
-  // with real usage in the selected range are worth listing, so derive both the
-  // visible rows and the percentage denominator from the positive buckets.
-  const visibleModelBuckets = modelBuckets.filter((bucket) => bucket.totalTokens > 0)
-  const modelPageCount = Math.max(1, Math.ceil(visibleModelBuckets.length / MODEL_USAGE_PAGE_SIZE))
-  const safeModelPage = Math.min(modelPage, modelPageCount - 1)
-  const modelPageStart = safeModelPage * MODEL_USAGE_PAGE_SIZE
-  const pagedModelBuckets = visibleModelBuckets.slice(
-    modelPageStart,
-    modelPageStart + MODEL_USAGE_PAGE_SIZE
-  )
-  const modelPageEnd = modelPageStart + pagedModelBuckets.length
-  const modelTotal = Math.max(
-    1,
-    visibleModelBuckets.reduce((sum, bucket) => sum + bucket.totalTokens, 0)
-  )
-  useEffect(() => {
-    if (modelPage !== safeModelPage) setModelPage(safeModelPage)
-  }, [modelPage, safeModelPage])
+  const buckets = dailyState.usage?.buckets ?? EMPTY_BUCKETS
+  // "Today" draws the week for context, with today picked out.
+  const chartBuckets = useMemo(() => buckets.slice(-Math.max(7, PERIOD_DAYS[period])), [buckets, period])
+  const today = buckets.at(-1)?.date ?? null
+  const activeDay = selectedDay ?? (period === 'today' ? today : null)
+  const periodBuckets = useMemo(() => {
+    if (activeDay) return buckets.filter((bucket) => bucket.date === activeDay)
+    return buckets.slice(-PERIOD_DAYS[period])
+  }, [activeDay, buckets, period])
+  const totals = useMemo(() => usageTotalsFromBuckets(periodBuckets), [periodBuckets])
+  const recordedCost = chartBuckets.some((bucket) => bucket.costUsd > 0 || (bucket.costCny ?? 0) > 0)
 
-  const currentUsage = threadState.usage
-  const currentCacheHitRate = currentUsage ? primaryCacheHitRate(currentUsage) : null
-  const locale = i18n.language
-  const sessionMoneyItems = currentUsage
-    ? summarizeThreadMoney({
-        costUsd: currentUsage.costUsd,
-        costCny: currentUsage.costCny,
-        valueEstimateUsd: currentUsage.valueEstimateUsd,
-        valueEstimateCny: currentUsage.valueEstimateCny,
-        valueEstimateCoverage: currentUsage.valueEstimateCoverage,
-        locale
-      })
-    : []
-  const historyMoneyItems = summarizeThreadMoney({
-    costUsd: totals.costUsd,
-    costCny: totals.costCny,
-    valueEstimateUsd: totals.valueEstimateUsd,
-    valueEstimateCny: totals.valueEstimateCny,
-    valueEstimateCoverage: totals.valueEstimateCoverage,
-    locale
-  })
-  const estimateTitle = t('sessionUsageEstimateTitle')
-  const partialEstimateLabel = t('turnUsageEstimatePartial')
-  const referenceEstimate = (item: MoneySummaryItem): string => `${t('sessionUsageFooterEstimate', { value: item.value })}${
-    item.coverage === 'partial' ? ` · ${partialEstimateLabel}` : ''
-  }`
-  const sessionMoney = moneyMetric(
-    sessionMoneyItems,
-    formatRecordedCost(currentUsage?.costUsd, currentUsage?.costCny, locale),
-    referenceEstimate,
-    estimateTitle
-  )
-  const historyMoney = moneyMetric(
-    historyMoneyItems,
-    formatRecordedCost(totals.costUsd, totals.costCny, locale),
-    referenceEstimate,
-    estimateTitle
-  )
-  const hasReferenceEstimate = [...sessionMoneyItems, ...historyMoneyItems]
-    .some((item) => item.kind === 'estimate')
+  const setPeriod = (next: UsagePeriod): void => {
+    setPeriodState(next)
+    setSelectedDay(null)
+    setModelsExpanded(false)
+    store(PERIOD_KEY, next)
+  }
+  const setMetric = (next: UsageTrendMetric): void => {
+    setMetricState(next)
+    store(METRIC_KEY, next)
+  }
+  const selectDay = (day: string | null): void => {
+    setSelectedDay(period === 'today' && day === today ? null : day)
+  }
+
+  const money = moneyFigures(totals, locale, t)
+  const scopeLabel = activeDay && activeDay !== today
+    ? formatUsageDay(activeDay, locale)
+    : t(`usagePanelPeriodLabel.${activeDay ? 'today' : period}`)
 
   return (
     <div
       data-sidebar-usage-panel
-      className="h-0 min-h-0 flex-1 touch-pan-y overflow-y-auto overflow-x-hidden px-3 py-3 [scrollbar-gutter:stable]"
+      className="usage-panel-scroller"
       onWheel={(event) => event.stopPropagation()}
     >
-      <div className="space-y-3">
-        <section
-          aria-label={t('usageQuotaCurrentSession')}
-          className="rounded-[16px] border border-ds-border-muted bg-ds-card p-3 shadow-sm"
-        >
-          <div className="mb-2.5 flex items-center gap-2">
-            <BarChart3 className="h-3.5 w-3.5 text-accent" strokeWidth={1.9} />
-            <h3 className="text-[12.5px] font-semibold text-ds-ink">
-              {t('usageQuotaCurrentSession')}
-            </h3>
-          </div>
-          {activeThreadId && threadState.loading && !currentUsage ? (
-            <div className="flex min-h-20 items-center justify-center gap-2 text-[11px] text-ds-faint">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.8} />
-              {t('sessionUsageLoading')}
-            </div>
-          ) : currentUsage ? (
-            <MetricGrid
-              metrics={[
-                {
-                  label: t('usageQuotaMetricTokens'),
-                  value: formatCompactNumber(currentUsage.totalTokens)
-                },
-                {
-                  label: t('usageQuotaMetricCost'),
-                  ...sessionMoney
-                },
-                ...(currentCacheHitRate != null
-                  ? [{
-                      label: t('usageQuotaMetricCache'),
-                      value: formatPercent(currentCacheHitRate)
-                    }]
-                  : []),
-                {
-                  label: t('usageQuotaMetricTurns'),
-                  value: new Intl.NumberFormat(i18n.language).format(currentUsage.turns)
-                }
-              ]}
-            />
-          ) : (
-            <p className="rounded-xl bg-ds-surface-subtle px-3 py-5 text-center text-[11px] leading-5 text-ds-faint">
-              {activeThreadId ? t('sessionUsageUnavailable') : t('usageQuotaNoCurrentSession')}
-            </p>
-          )}
-        </section>
-
-        <SidebarUsageHistoryCard
-          buckets={buckets}
-          error={dailyState.error}
-          hasUsage={hasAccumulatedUsage}
-          loading={dailyState.loading}
-          onVisibleWeeksChange={setHistoryVisibleWeeks}
-          metrics={[
-            {
-              label: t('usageQuotaMetricTokens'),
-              value: formatCompactNumber(totals.totalTokens),
-              accent: true
-            },
-            {
-              label: t('usageQuotaMetricCost'),
-              ...historyMoney
-            },
-            {
-              label: t('usageQuotaMetricCacheHit'),
-              value: formatPercent(totals.cacheHitRate)
-            },
-            {
-              label: t('usageQuotaMetricSessions'),
-              value: new Intl.NumberFormat(i18n.language).format(totals.threadCount)
-            }
-          ]}
+      <div className="usage-stats">
+        <CurrentSessionStrip
+          activeThreadId={activeThreadId}
+          loading={threadState.loading}
+          usage={threadState.usage}
+          locale={locale}
         />
 
-        <section
-          aria-label={t('usageQuotaModels')}
-          className="rounded-[16px] border border-ds-border-muted bg-ds-card p-3 shadow-sm"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-[12.5px] font-semibold text-ds-ink">
-              {t('usageQuotaModels')}
-            </h3>
-            <div
-              className="inline-flex rounded-[9px] border border-ds-border-muted bg-ds-surface-subtle/70 p-0.5 text-[10px] font-medium text-ds-muted"
-              aria-label={t('usageQuotaModels')}
-            >
-              {RANGE_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  data-usage-range={key}
-                  aria-pressed={rangeKey === key}
-                  onClick={() => {
-                    setRangeKey(key)
-                    setModelPage(0)
-                  }}
-                  className={`min-h-6 rounded-[7px] px-2 transition ${
-                    rangeKey === key
-                      ? 'bg-accent/10 text-accent shadow-sm dark:bg-accent/20'
-                      : 'hover:text-ds-ink'
-                  }`}
-                >
-                  {t(`usageHeatmapRange.${key}`)}
+        <div className="usage-stats-bar">
+          <div className="kq-seg" role="radiogroup" aria-label={t('usagePanelPeriodGroup')}>
+            {PERIODS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                role="radio"
+                aria-checked={period === key}
+                data-active={period === key ? 'true' : 'false'}
+                data-usage-period={key}
+                onClick={() => setPeriod(key)}
+              >
+                {t(`usagePanelPeriod.${key}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <section className="usage-kpis" aria-label={scopeLabel} data-usage-kpis>
+          <div className="usage-kpis-head">
+            <span>{scopeLabel}</span>
+            {selectedDay ? (
+              <button type="button" className="usage-day-chip" onClick={() => setSelectedDay(null)}
+                aria-label={t('usagePanelClearDay')} title={t('usagePanelClearDay')}>
+                <X aria-hidden="true" strokeWidth={2} />
+              </button>
+            ) : null}
+          </div>
+          {dailyState.loading && !dailyState.usage ? (
+            <div className="usage-panel-state is-compact">
+              <Loader2 className="animate-spin" aria-hidden="true" strokeWidth={1.8} />
+              <p>{t('usageHeatmapLoading')}</p>
+            </div>
+          ) : (
+            <dl className="usage-kpi-grid">
+              <Kpi label={t('usagePanelKpiTokens')} value={formatCompactNumber(totals.totalTokens)}
+                detail={totals.totalTokens > 0 ? t('usagePanelKpiTokensDetail', {
+                  input: formatCompactNumber(totals.inputTokens),
+                  output: formatCompactNumber(totals.outputTokens)
+                }) : undefined} />
+              <Kpi label={t('usagePanelKpiCost')} value={money.value} detail={money.detail} detailTitle={money.detailTitle} />
+              <Kpi label={t('usagePanelKpiCache')} value={formatPercent(totals.cacheHitRate)}
+                detail={totals.cachedTokens > 0 ? t('usagePanelKpiCacheDetail', { cached: formatCompactNumber(totals.cachedTokens) }) : undefined} />
+              <Kpi label={t('usagePanelKpiSessions')} value={new Intl.NumberFormat(locale).format(totals.threadCount)}
+                detail={t('usagePanelKpiTurnsDetail', { turns: new Intl.NumberFormat(locale).format(totals.turns) })} />
+            </dl>
+          )}
+          {dailyState.error ? (
+            <p role="alert" className="usage-panel-note is-warning" title={dailyState.error}>
+              {t(dailyState.usage ? 'usageQuotaCachedRefreshFailed' : 'usageQuotaInitialLoadFailed')}
+            </p>
+          ) : null}
+        </section>
+
+        <section className="usage-card" aria-label={t('usagePanelTrend')} data-usage-trend>
+          <div className="usage-card-head">
+            <h3>{t('usagePanelTrend')}</h3>
+            <span className="kq-grow" />
+            <div className="kq-seg is-small" role="radiogroup" aria-label={t('usagePanelTrend')}>
+              {(['tokens', 'cost'] as const).map((key) => (
+                <button key={key} type="button" role="radio" aria-checked={metric === key}
+                  data-active={metric === key ? 'true' : 'false'} data-usage-metric={key}
+                  onClick={() => setMetric(key)}>
+                  {t(key === 'tokens' ? 'usagePanelKpiTokens' : 'usagePanelKpiCost')}
                 </button>
               ))}
             </div>
           </div>
-          <div
-            className="mt-2 inline-flex rounded-[9px] border border-ds-border-muted bg-ds-surface-subtle/70 p-0.5 text-[10px] font-medium text-ds-muted"
-            aria-label={t('usageModelScopeLabel')}
-          >
-            {MODEL_SCOPES.map((scope) => (
-              <button
-                key={scope}
-                type="button"
-                data-usage-scope={scope}
-                aria-pressed={modelScope === scope}
-                onClick={() => {
-                  setModelScope(scope)
-                  setModelPage(0)
-                }}
-                className={`min-h-6 rounded-[7px] px-2 transition ${
-                  modelScope === scope
-                    ? 'bg-accent/10 text-accent shadow-sm dark:bg-accent/20'
-                    : 'hover:text-ds-ink'
-                }`}
-              >
-                {t(`usageModelScope.${scope}`)}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1.5 text-[9.5px] leading-4 text-ds-faint">
-            {t('usageModelScopeNote')}
-          </p>
-          {modelState.error ? (
-            <p
-              role="alert"
-              title={modelState.error}
-              className="mt-2 text-[10.5px] leading-4 text-amber-700 dark:text-amber-300"
-            >
-              {t(modelState.usage ? 'usageQuotaCachedRefreshFailed' : 'usageQuotaInitialLoadFailed')}
-            </p>
+          <UsageTrendChart
+            buckets={chartBuckets}
+            metric={metric}
+            costSource={recordedCost ? 'recorded' : 'estimate'}
+            selectedDay={activeDay}
+            onSelectDay={selectDay}
+            locale={locale}
+          />
+          {metric === 'cost' && !recordedCost ? (
+            <p className="usage-panel-note">{t('usagePanelChartEstimateNote')}</p>
           ) : null}
-          {modelState.loading && !modelState.usage ? (
-            <div className="flex min-h-20 items-center justify-center gap-2 text-[11px] text-ds-faint">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.8} />
-              {t('usageHeatmapLoading')}
-            </div>
-          ) : visibleModelBuckets.length > 0 ? (
-            <>
-              <div className={`mt-2.5 space-y-2.5 ${
-                visibleModelBuckets.length > MODEL_USAGE_PAGE_SIZE ? 'min-h-[188px]' : ''
-              }`}>
-                {pagedModelBuckets.map((bucket) => {
-                const percent = Math.max(0, Math.min(100, bucket.totalTokens / modelTotal * 100))
-                return (
-                  <div key={bucket.model} className="min-w-0">
-                    <div className="flex items-center justify-between gap-3 text-[10.5px]">
-                      <span className="min-w-0 flex-1 truncate font-medium text-ds-ink" title={bucket.model}>
-                        {bucket.model}
-                      </span>
-                      <span className="shrink-0 tabular-nums text-ds-muted">
-                        {percent.toFixed(percent >= 10 ? 0 : 1)}%
-                      </span>
-                    </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-ds-border-muted">
-                      <div
-                        className="h-full rounded-full bg-accent"
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                    <p className="mt-0.5 text-right text-[9px] tabular-nums text-ds-faint">
-                      {formatCompactNumber(bucket.totalTokens)} tokens
-                    </p>
-                  </div>
-                )
-              })}
-              </div>
-              {visibleModelBuckets.length > MODEL_USAGE_PAGE_SIZE ? (
-                <nav
-                  className="mt-3 flex items-center justify-between gap-2 border-t border-ds-border-muted pt-2.5"
-                  aria-label={t('usageQuotaModelPagination')}
-                >
-                  <span className="min-w-0 text-[10px] tabular-nums text-ds-faint">
-                    {t('usageQuotaModelPageRange', {
-                      first: modelPageStart + 1,
-                      last: modelPageEnd,
-                      total: visibleModelBuckets.length
-                    })}
-                  </span>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={safeModelPage === 0}
-                      aria-label={t('usageQuotaModelPagePrevious')}
-                      onClick={() => setModelPage(safeModelPage - 1)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-ds-border-muted bg-ds-card text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.9} />
-                    </button>
-                    <span className="min-w-[2.75rem] text-center text-[10.5px] tabular-nums text-ds-muted" aria-live="polite">
-                      {t('usageQuotaModelPageIndicator', {
-                        page: safeModelPage + 1,
-                        total: modelPageCount
-                      })}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={safeModelPage >= modelPageCount - 1}
-                      aria-label={t('usageQuotaModelPageNext')}
-                      onClick={() => setModelPage(safeModelPage + 1)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-ds-border-muted bg-ds-card text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.9} />
-                    </button>
-                  </div>
-                </nav>
-              ) : null}
-            </>
-          ) : (
-            <p className="mt-2 rounded-xl bg-ds-surface-subtle px-3 py-5 text-center text-[11px] text-ds-faint">
-              {t('usageHeatmapModelsEmpty', { model: '-' })}
-            </p>
-          )}
         </section>
 
-        {hasReferenceEstimate ? (
-          <p className="px-1 text-[9.5px] leading-4 text-ds-faint">
-            {estimateTitle}
-          </p>
-        ) : null}
-        <p className="px-1 pb-1 text-[9.5px] leading-4 text-ds-faint">
-          {t('usageQuotaLocalNote')}
-        </p>
+        <ModelRanking
+          period={period}
+          scope={modelScope}
+          onScopeChange={(scope) => { setModelScope(scope); setModelsExpanded(false) }}
+          expanded={modelsExpanded}
+          onToggleExpanded={() => setModelsExpanded((value) => !value)}
+          state={modelState}
+        />
+
+        <p className="usage-panel-note">{t('usageQuotaLocalNote')}</p>
       </div>
     </div>
   )
 }
 
-function earliestRefreshTime(left?: string, right?: string): string | undefined {
-  if (!left) return right
-  if (!right) return left
-  return Date.parse(left) <= Date.parse(right) ? left : right
-}
-
-type UsageMetric = {
+function Kpi({ label, value, detail, detailTitle }: {
   label: string
   value: string
   detail?: string
   detailTitle?: string
-  accent?: boolean
-}
-
-function moneyMetric(
-  items: MoneySummaryItem[],
-  fallback: string,
-  referenceEstimate: (item: MoneySummaryItem) => string,
-  estimateTitle: string
-): Pick<UsageMetric, 'value' | 'detail' | 'detailTitle'> {
-  const actual = items.find((item) => item.kind === 'actual')
-  const estimate = items.find((item) => item.kind === 'estimate')
-  return {
-    value: actual?.value ?? (estimate ? referenceEstimate(estimate) : fallback),
-    ...(actual && estimate ? { detail: referenceEstimate(estimate), detailTitle: estimateTitle } : {})
-  }
-}
-
-function MetricGrid({
-  metrics
-}: {
-  metrics: UsageMetric[]
 }): ReactElement {
   return (
-    <dl className="grid gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(6.5rem,1fr))]">
-      {metrics.map((metric) => (
-        <div
-          key={metric.label}
-          className="min-w-0 rounded-xl border border-ds-border-muted bg-ds-surface-subtle/60 px-2.5 py-2"
-        >
-          <dt className="truncate text-[9.5px] leading-4 text-ds-faint" title={metric.label}>
-            {metric.label}
-          </dt>
-          <dd className="mt-0.5 break-words text-[14px] font-semibold leading-5 tabular-nums text-ds-ink" title={metric.value}>
-            {metric.value}
-          </dd>
-          {metric.detail ? (
-            <p className="mt-1 break-words text-[9px] leading-3.5 text-ds-muted" title={metric.detailTitle}>
-              {metric.detail}
-            </p>
-          ) : null}
-        </div>
-      ))}
-    </dl>
+    <div className="usage-kpi">
+      <dd title={value}>{value}</dd>
+      <dt>{label}</dt>
+      {detail ? <p title={detailTitle ?? detail}>{detail}</p> : null}
+    </div>
   )
 }
 
-function formatRecordedCost(
-  costUsd: number | null | undefined,
-  costCny: number | null | undefined,
+function CurrentSessionStrip({ activeThreadId, loading, usage, locale }: {
+  activeThreadId: string | null
+  loading: boolean
+  usage: ReturnType<typeof useThreadUsageState>['usage']
   locale: string
-): string {
+}): ReactElement | null {
+  const { t } = useTranslation('common')
+  if (!activeThreadId) return null
+  const cache = usage ? primaryCacheHitRate(usage) : null
+  const parts = usage ? [
+    `${formatCompactNumber(usage.totalTokens)} tokens`,
+    moneyFigures(usage, locale, t).value,
+    ...(cache != null ? [t('usagePanelSessionCache', { rate: formatPercent(cache) })] : []),
+    t('usagePanelKpiTurnsDetail', { turns: new Intl.NumberFormat(locale).format(usage.turns) })
+  ] : []
+  return (
+    <section className="usage-session" aria-label={t('usageQuotaCurrentSession')} data-usage-session>
+      <span className="usage-session-label">{t('usageQuotaCurrentSession')}</span>
+      {loading && !usage ? (
+        <Loader2 className="animate-spin" aria-hidden="true" strokeWidth={1.8} />
+      ) : (
+        <span className="usage-session-figures" title={parts.join(' · ')}>
+          {usage ? parts.join(' · ') : t('sessionUsageUnavailable')}
+        </span>
+      )}
+    </section>
+  )
+}
+
+function ModelRanking({ period, scope, onScopeChange, expanded, onToggleExpanded, state }: {
+  period: UsagePeriod
+  scope: ModelUsageScope
+  onScopeChange: (scope: ModelUsageScope) => void
+  expanded: boolean
+  onToggleExpanded: () => void
+  state: ReturnType<typeof useModelUsageState>
+}): ReactElement {
+  const { t } = useTranslation('common')
+  // Zero-token buckets stay in the response; only models used in the range rank.
+  const models = (state.usage?.buckets ?? [])
+    .filter((bucket) => bucket.totalTokens > 0)
+    .sort((left, right) => right.totalTokens - left.totalTokens)
+  const total = Math.max(1, models.reduce((sum, bucket) => sum + bucket.totalTokens, 0))
+  const shown = expanded ? models : models.slice(0, MODELS_COLLAPSED)
+  return (
+    <section className="usage-card" aria-label={t('usageQuotaModels')} data-usage-models>
+      <div className="usage-card-head">
+        <h3>{t('usageQuotaModels')}</h3>
+        <span className="usage-card-sub">{t(`usagePanelPeriodLabel.${period}`)}</span>
+        <span className="kq-grow" />
+        <label className="usage-select">
+          <span className="sr-only">{t('usageModelScopeLabel')}</span>
+          <select value={scope} onChange={(event) => onScopeChange(event.target.value as ModelUsageScope)}
+            data-usage-scope-select title={t('usageModelScopeNote')}>
+            {MODEL_SCOPES.map((key) => <option key={key} value={key}>{t(`usageModelScope.${key}`)}</option>)}
+          </select>
+        </label>
+      </div>
+      {state.error ? (
+        <p role="alert" title={state.error} className="usage-panel-note is-warning">
+          {t(state.usage ? 'usageQuotaCachedRefreshFailed' : 'usageQuotaInitialLoadFailed')}
+        </p>
+      ) : null}
+      {state.loading && !state.usage ? (
+        <div className="usage-panel-state is-compact">
+          <Loader2 className="animate-spin" aria-hidden="true" strokeWidth={1.8} />
+          <p>{t('usageHeatmapLoading')}</p>
+        </div>
+      ) : models.length > 0 ? (
+        <ol className="usage-models">
+          {shown.map((bucket) => {
+            const share = (bucket.totalTokens / total) * 100
+            return (
+              <li key={bucket.model} className="usage-model" data-usage-model={bucket.model}>
+                <div className="usage-model-row">
+                  <span className="usage-model-name" title={bucket.model}>
+                    {bucket.model}
+                    {bucket.harnessIds?.length ? (
+                      <small data-model-usage-agent>{harnessDisplayNames(bucket.harnessIds)}</small>
+                    ) : null}
+                  </span>
+                  <span className="usage-model-figure">{formatCompactNumber(bucket.totalTokens)}</span>
+                  <span className="usage-model-share">{share.toFixed(share >= 10 ? 0 : 1)}%</span>
+                </div>
+                <div className="usage-model-track"><span style={{ width: `${Math.min(100, share)}%` }} /></div>
+              </li>
+            )
+          })}
+        </ol>
+      ) : (
+        <p className="usage-chart-empty">{t('usagePanelModelsEmpty')}</p>
+      )}
+      {models.length > MODELS_COLLAPSED ? (
+        <button type="button" className="kq-text-button usage-models-more" aria-expanded={expanded} onClick={onToggleExpanded}>
+          {expanded ? t('usagePanelShowFewerModels') : t('usagePanelShowAllModels', { count: models.length })}
+        </button>
+      ) : null}
+    </section>
+  )
+}
+
+type MoneyInput = {
+  costUsd: number | null
+  costCny: number | null
+  valueEstimateUsd: number | null
+  valueEstimateCny: number | null
+  valueEstimateCoverage?: 'complete' | 'partial' | 'unavailable'
+}
+
+/** Recorded cost first; the reference estimate beside it, or alone when nothing was billed. */
+function moneyFigures(
+  input: MoneyInput,
+  locale: string,
+  t: ReturnType<typeof useTranslation>['t']
+): { value: string; detail?: string; detailTitle?: string } {
+  const items = summarizeThreadMoney({ ...input, locale })
+  const actual = items.find((item) => item.kind === 'actual')
+  const estimate = items.find((item) => item.kind === 'estimate')
+  const estimateText = (item: MoneySummaryItem): string => `${t('sessionUsageFooterEstimate', { value: item.value })}${
+    item.coverage === 'partial' ? ` · ${t('turnUsageEstimatePartial')}` : ''
+  }`
+  if (actual && estimate) return { value: actual.value, detail: estimateText(estimate), detailTitle: t('sessionUsageEstimateTitle') }
+  if (actual) return { value: actual.value }
+  if (estimate) return { value: estimateText(estimate), detailTitle: t('sessionUsageEstimateTitle') }
+  return { value: recordedCost(input.costUsd, input.costCny, locale) }
+}
+
+function recordedCost(costUsd: number | null, costCny: number | null, locale: string): string {
   const chineseLocale = /^zh(?:-|$)/i.test(locale.trim())
   const hasRecordedCny = typeof costCny === 'number' && Number.isFinite(costCny) && costCny > 0
   return formatCost(costUsd, chineseLocale && !hasRecordedCny ? 'en' : locale, costCny)
+}
+
+function earliest(left?: string, right?: string): string | undefined {
+  if (!left) return right
+  if (!right) return left
+  return Date.parse(left) <= Date.parse(right) ? left : right
 }

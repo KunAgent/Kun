@@ -1,0 +1,90 @@
+name: Paper evidence native smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/paper-evidence-smoke.yml'
+      - 'scripts/*paper-evidence*'
+      - 'scripts/*math-rendering*'
+      - 'src/renderer/src/components/chat/StreamdownAssistant.tsx'
+      - 'src/renderer/src/components/paper/PaperTitleText.tsx'
+      - 'src/renderer/src/write/tiptap/**'
+      - 'src/renderer/src/styles/write-editor/**'
+      - 'src/shared/markdown/**'
+      - 'src/main/services/write-export*'
+      - 'src/shared/paper/**'
+      - 'src/main/services/paper/**'
+      - 'src/main/ipc/*paper*'
+      - 'src/preload/paper-api.ts'
+      - 'src/renderer/src/paper/**'
+      - 'src/renderer/src/components/paper/**'
+      - 'src/renderer/src/components/write/WriteAssistantPanel.tsx'
+      - 'src/renderer/src/components/write/use-write-pdf-navigation.ts'
+      - 'src/renderer/src/write/paper/**'
+      - 'kun/src/contracts/paper-turn-context.ts'
+      - 'kun/src/loop/paper-model-step.ts'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paper-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-evidence-workspace:
+    name: Evidence workspace on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      KUN_PAPER_EVIDENCE: dist/paper-evidence-smoke
+      KUN_MATH_EVIDENCE: dist/math-rendering-smoke
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kun/package-lock.json
+      - run: npm ci
+      - name: Verify real persisted evidence and comparison data
+        run: >-
+          npx vitest run --maxWorkers=1
+          src/shared/paper/paper-matrix.test.ts
+          src/main/services/paper/paper-evidence-service.test.ts
+          src/main/services/paper/paper-evidence-mark-binding.test.ts
+          src/main/services/paper/paper-matrix-service.test.ts
+          src/main/ipc/register-app-paper-evidence-ipc-handlers.test.ts
+          src/renderer/src/paper/paper-evidence-actions.test.ts
+      - name: Ensure native Electron binary
+        run: npm run ensure:electron
+      - name: Exercise actual evidence, matrix and purpose-dialog components
+        run: node scripts/smoke-paper-evidence.mjs
+      - name: Exercise production math consumers in native Electron
+        if: ${{ !cancelled() }}
+        run: node scripts/smoke-math-rendering.mjs
+      - name: Upload native math screenshots and exact assertion report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: math-rendering-${{ matrix.os }}
+          path: dist/math-rendering-smoke
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload native screenshots and exact assertion report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-evidence-${{ matrix.os }}
+          path: dist/paper-evidence-smoke
+          if-no-files-found: warn
+          retention-days: 14

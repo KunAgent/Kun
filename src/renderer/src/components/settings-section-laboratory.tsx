@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   KunBrowserUseSettingsV1,
   ModelProviderProfileV1
@@ -15,24 +16,8 @@ import type {
   ComputerUsePermissions,
   ComputerUsePermissionState
 } from '@shared/kun-gui-api'
-import {
-  AppWindow,
-  Columns3,
-  Globe2,
-  Monitor,
-  Presentation,
-  Sparkles,
-  Waypoints,
-  Workflow
-} from 'lucide-react'
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
-import {
-  SettingRow,
-  SettingsCard,
-  SettingsTabPanel,
-  SettingsTabs,
-  Toggle
-} from './settings-controls'
+import { SettingRow } from './settings-controls'
 import {
   BrowserUseSettingsPanel,
   ComputerUseSettingsPanel
@@ -45,20 +30,18 @@ import { AutoPlanBuildSettingsPanel } from './settings-section-lab-auto-plan-bui
 import { CodexReferenceBranchesSettingsPanel } from './settings-section-lab-codex-reference'
 import { ProjectBoardSettingsPanel } from './settings-section-lab-project-board'
 
-type LaboratorySettingsPanel =
-  | 'visualization'
-  | 'contextWindow'
-  | 'autoPlanBuild'
-  | 'computer'
-  | 'browser'
-  | 'graph'
-  | 'ppt'
-  | 'projectBoard'
-  | 'codexReferenceBranches'
+/** One labelled group of feature cards on the Labs page. */
+function LabFeatureGroup({ label, children }: { label: string; children: ReactNode }): ReactElement {
+  return (
+    <section className="ds-settings-feature-group" aria-label={label}>
+      <h2 className="ds-settings-feature-group-label">{label}</h2>
+      <div className="ds-settings-feature-list">{children}</div>
+    </section>
+  )
+}
 
 export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const { t, form, kun, updateKun, selectControlClass, runtimeInfo } = ctx
-  const [activePanel, setActivePanel] = useState<LaboratorySettingsPanel>('contextWindow')
   const provider = form.provider ?? defaultModelProviderSettings()
   const modelProviders = provider.providers as ModelProviderProfileV1[]
   const activeProviderId = kun.providerId?.trim() || DEFAULT_MODEL_PROVIDER_ID
@@ -90,46 +73,25 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
     })
   }
 
+  const enabledCount = [
+    contextCompaction.modelInitiatedCompactionEnabled === true,
+    lab.conversationVisualization.enabled,
+    lab.codexReferenceBranches?.enabled === true || lab.claudeCodeReferenceBranches?.enabled === true
+      || lab.opencodeReferenceBranches?.enabled === true,
+    lab.autoPlanBuild.enabled,
+    graph.enabled,
+    lab.pptAgent.enabled,
+    lab.projectBoard.enabled,
+    computerUse.enabled,
+    browserUse.enabled
+  ].filter(Boolean).length
+
   return (
     <>
-      <SettingsTabs<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        ariaLabel={t('agentsQuickLaboratory')}
-        contentSized
-        items={[
-          { id: 'contextWindow', label: t('labContextCompressionTitle'), icon: AppWindow },
-          { id: 'visualization', label: t('labConversationVisualizationTitle'), icon: Waypoints },
-          { id: 'autoPlanBuild', label: t('labAutoPlanBuildTitle'), icon: Sparkles },
-          { id: 'computer', label: t('computerUseTitle'), icon: Monitor },
-          { id: 'browser', label: t('browserUseSettingsTitle'), icon: Globe2 },
-          { id: 'graph', label: t('graphSettingsTitle'), icon: Workflow },
-          { id: 'ppt', label: t('labPptTitle'), icon: Presentation },
-          { id: 'codexReferenceBranches', label: t('labCodexReferenceBranchesTitle'), icon: Waypoints },
-          { id: 'projectBoard', label: t('labProjectBoardTitle'), icon: Columns3 }
-        ]}
-        value={activePanel}
-        onChange={setActivePanel}
-      />
-
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="visualization"
-        active={activePanel === 'visualization'}
-        className="[&>div]:mt-0"
-      >
-        <ConversationVisualizationSettingsPanel
-          t={t}
-          value={lab}
-          onChange={(patch) => updateKun({ lab: patch })}
-        />
-      </SettingsTabPanel>
-
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="contextWindow"
-        active={activePanel === 'contextWindow'}
-        className="[&>div]:mt-0"
-      >
+      <p className="ds-settings-lab-summary" role="status">
+        {t('settingsIaLabsEnabledCount', { count: enabledCount, total: 9 })}
+      </p>
+      <LabFeatureGroup label={t('settingsIaLabsGroupConversation')}>
         <ContextWindowSettingsPanel
           t={t}
           modelInitiatedCompactionEnabled={contextCompaction.modelInitiatedCompactionEnabled === true}
@@ -150,14 +112,15 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
             }
           })}
         />
-      </SettingsTabPanel>
+        <ConversationVisualizationSettingsPanel
+          t={t}
+          value={lab}
+          onChange={(patch) => updateKun({ lab: patch })}
+        />
+        <CodexReferenceBranchesSettingsPanel t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
+      </LabFeatureGroup>
 
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="autoPlanBuild"
-        active={activePanel === 'autoPlanBuild'}
-        className="[&>div]:mt-0"
-      >
+      <LabFeatureGroup label={t('settingsIaLabsGroupAutomation')}>
         <AutoPlanBuildSettingsPanel
           t={t}
           settings={form}
@@ -165,44 +128,6 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ lab: patch })}
         />
-      </SettingsTabPanel>
-
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="computer"
-        active={activePanel === 'computer'}
-        className="[&>div]:mt-0"
-      >
-        <ComputerUseSettingsPanel
-          t={t}
-          value={computerUse}
-          selectControlClass={selectControlClass}
-          permissionRow={<ComputerUsePermissionRow t={t} />}
-          onChange={updateComputerUse}
-        />
-      </SettingsTabPanel>
-
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="browser"
-        active={activePanel === 'browser'}
-        className="[&>div]:mt-0"
-      >
-        <BrowserUseSettingsPanel
-          t={t}
-          value={browserUse}
-          capability={runtimeInfo?.capabilities?.browserUse}
-          selectControlClass={selectControlClass}
-          onChange={updateBrowserUse}
-        />
-      </SettingsTabPanel>
-
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="graph"
-        active={activePanel === 'graph'}
-        className="[&>div]:mt-0"
-      >
         <GraphModeSettingsPanel
           t={t}
           value={graph}
@@ -212,14 +137,6 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ graph: patch })}
         />
-      </SettingsTabPanel>
-
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="ppt"
-        active={activePanel === 'ppt'}
-        className="[&>div]:mt-0"
-      >
         <PptAgentSettingsPanel
           t={t}
           value={lab}
@@ -236,27 +153,29 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ lab: patch })}
         />
-      </SettingsTabPanel>
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="codexReferenceBranches"
-        active={activePanel === 'codexReferenceBranches'}
-        className="[&>div]:mt-0"
-      >
-        <CodexReferenceBranchesSettingsPanel t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
-      </SettingsTabPanel>
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="projectBoard"
-        active={activePanel === 'projectBoard'}
-        className="[&>div]:mt-0"
-      >
         <ProjectBoardSettingsPanel
           t={t}
           value={lab}
           onChange={(patch) => updateKun({ lab: patch })}
         />
-      </SettingsTabPanel>
+      </LabFeatureGroup>
+
+      <LabFeatureGroup label={t('settingsIaLabsGroupControl')}>
+        <ComputerUseSettingsPanel
+          t={t}
+          value={computerUse}
+          selectControlClass={selectControlClass}
+          permissionRow={computerUse.enabled ? <ComputerUsePermissionRow t={t} /> : null}
+          onChange={updateComputerUse}
+        />
+        <BrowserUseSettingsPanel
+          t={t}
+          value={browserUse}
+          capability={runtimeInfo?.capabilities?.browserUse}
+          selectControlClass={selectControlClass}
+          onChange={updateBrowserUse}
+        />
+      </LabFeatureGroup>
     </>
   )
 }
@@ -319,23 +238,20 @@ function ComputerUsePermissionRow({ t }: { t: (key: string) => string }): ReactE
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <button
+            <button className={settingsButtonClass()}
               type="button"
-              className="rounded-lg border border-ds-border-muted bg-ds-card px-2.5 py-1 text-[12px] font-medium text-ds-text hover:bg-ds-card-hover"
               onClick={() => request('accessibility')}
             >
               {t('computerUseGrantAccessibility')}
             </button>
-            <button
+            <button className={settingsButtonClass()}
               type="button"
-              className="rounded-lg border border-ds-border-muted bg-ds-card px-2.5 py-1 text-[12px] font-medium text-ds-text hover:bg-ds-card-hover"
               onClick={() => request('screenRecording')}
             >
               {t('computerUseGrantScreenRecording')}
             </button>
-            <button
+            <button className={settingsButtonClass()}
               type="button"
-              className="rounded-lg border border-ds-border-muted bg-ds-card px-2.5 py-1 text-[12px] font-medium text-ds-text hover:bg-ds-card-hover"
               onClick={refresh}
             >
               {t('computerUseRecheck')}

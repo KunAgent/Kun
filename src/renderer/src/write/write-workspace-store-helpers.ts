@@ -51,10 +51,6 @@ export function readStoredPreviewMode(): WritePreviewMode {
   return normalizeWriteViewMode(raw)
 }
 
-export function readStoredAssistantOpen(): boolean {
-  return readBrowserStorageItem(WRITE_ASSISTANT_OPEN_KEY) !== '0'
-}
-
 export function readStoredAssistantModel(): string {
   const stored = readBrowserStorageItem(WRITE_ASSISTANT_MODEL_KEY)
   const normalized = normalizeWriteAssistantModel(stored)

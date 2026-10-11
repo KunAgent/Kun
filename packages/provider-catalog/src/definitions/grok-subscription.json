@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "grok-subscription",
+  "name": "Grok 订阅",
+  "category": "subscription",
+  "kind": "http",
+  "authFlow": "grok-oauth",
+  "authType": "oauth",
+  "baseUrl": "https://cli-chat-proxy.grok.com/v1",
+  "endpointFormat": "responses",
+  "models": [
+    "grok-4.5",
+    "grok-4-1-fast-reasoning",
+    "grok-4-1-fast-non-reasoning",
+    "grok-code-fast-1"
+  ],
+  "docsUrl": "https://docs.x.ai/",
+  "credentialUrl": "https://accounts.x.ai"
+}

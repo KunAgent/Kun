@@ -559,6 +559,29 @@ describe('turn reference price breakdown', () => {
   })
 })
 
+describe('turn usage source attribution', () => {
+  it('aggregates record sources onto the turn bucket and omits it for native-only turns', () => {
+    const record = (turnId: string, extra: Partial<ThreadUsageRecord> = {}): ThreadUsageRecord => ({
+      threadId: 'thread-gw',
+      turnId,
+      completedAt: '2026-08-20T00:00:00.000Z',
+      usage: { promptTokens: 10, completionTokens: 1, totalTokens: 11, cacheHitRate: null, turns: 1 },
+      ...extra
+    })
+    const response = buildTurnUsageResponse([
+      record('turn-native'),
+      record('turn-gw', { source: 'harness-gateway', harnessId: 'claude-code' }),
+      record('turn-gw', { source: 'harness-reported', harnessId: 'claude-code' })
+    ], { groupBy: 'turn', threadId: 'thread-gw' })
+
+    expect(response.buckets).toHaveLength(2)
+    const native = response.buckets.find((bucket) => bucket.turn_id === 'turn-native')
+    const gateway = response.buckets.find((bucket) => bucket.turn_id === 'turn-gw')
+    expect(native).not.toHaveProperty('sources')
+    expect(gateway?.sources).toEqual(['harness-gateway', 'harness-reported'])
+  })
+})
+
 describe('usage per-turn timing aggregation', () => {
   const timed = (overrides: Record<string, unknown>) => ({
     promptTokens: 100,

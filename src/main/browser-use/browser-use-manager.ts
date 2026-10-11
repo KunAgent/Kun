@@ -18,7 +18,8 @@ import {
   MAX_BROWSER_USE_SESSIONS,
   normalizeBounds,
   resultError,
-  resultOk
+  resultOk,
+  type BrowserSessionEntry
 } from './browser-use-manager-support'
 
 export class BrowserUseManager extends BrowserUseManagerInteractions {
@@ -34,6 +35,7 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     if (!parsed.success) {
       return resultError('invalid_action', 'Browser Use rejected malformed or unsupported arguments.')
     }
+    if (signal?.aborted) return resultError('aborted', 'Browser Use action was cancelled.')
     const settings = this.options.settings()
     if (!settings.enabled) {
       return resultError('browser_use_disabled', 'Browser Use is disabled in Settings.')
@@ -54,7 +56,7 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
         )
       }
       const entry = existing ?? this.createSession(threadId, settings)
-      entry.activeTurnId = turnId
+      this.adoptTurn(entry, turnId)
       this.touch(entry, settings)
       if (entry.stopping) {
         return resultError(
@@ -87,7 +89,7 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
 
     const entry = this.sessions.get(threadId)
     if (!entry) return resultError('session_not_found', 'Open an authorized origin first.')
-    entry.activeTurnId = turnId
+    this.adoptTurn(entry, turnId)
     this.touch(entry, settings)
 
     if (action.action === 'close') {
@@ -147,10 +149,12 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     window: BrowserWindow,
     rawBounds: BrowserUseRect,
     visible: boolean,
-    supervisionActive = visible
+    supervisionActive = visible,
+    expectedTurnId?: string
   ): BrowserUseViewState {
     const entry = this.sessions.get(threadId)
     if (!entry) return this.defaultState()
+    this.assertExpectedTurn(threadId, expectedTurnId)
     if (entry.mount && entry.mount.window !== window) {
       throw new Error('Browser Use session is already bound to another window.')
     }
@@ -169,6 +173,7 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
       lifecycleWindow.once?.('closed', onRendererLost)
     }
     entry.mount = {
+      expectedTurnId,
       window,
       bounds,
       visible: visible && bounds.width > 0 && bounds.height > 0,
@@ -199,8 +204,10 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
 
   setControlOwner(
     threadId: string,
-    controlOwner: BrowserUseViewState['controlOwner']
+    controlOwner: BrowserUseViewState['controlOwner'],
+    expectedTurnId?: string
   ): BrowserUseViewState {
+    this.assertExpectedTurn(threadId, expectedTurnId)
     const entry = this.requireSession(threadId)
     if (entry.controlOwner === controlOwner) return this.state(entry)
     entry.controlOwner = controlOwner
@@ -220,6 +227,7 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
   }
 
   decideOrigin(input: BrowserUseDecisionInput): BrowserUseViewState {
+    this.assertExpectedTurn(input.threadId, input.expectedTurnId)
     const entry = this.requireSession(input.threadId)
     const pending = entry.pendingOriginDecision
     if (!pending || pending.id !== input.requestId) {
@@ -230,6 +238,7 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
   }
 
   decideAction(input: BrowserUseDecisionInput): BrowserUseViewState {
+    this.assertExpectedTurn(input.threadId, input.expectedTurnId)
     const entry = this.requireSession(input.threadId)
     const pending = entry.pendingActionDecision
     if (!pending || pending.id !== input.requestId) {
@@ -239,7 +248,8 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     return this.state(entry)
   }
 
-  stop(threadId: string): BrowserUseViewState {
+  stop(threadId: string, expectedTurnId?: string): BrowserUseViewState {
+    this.assertExpectedTurn(threadId, expectedTurnId)
     const entry = this.requireSession(threadId)
     entry.lifecycle = 'stopped'
     entry.stopping = true
@@ -254,9 +264,10 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     return this.state(entry)
   }
 
-  async clear(threadId: string, reason = 'cleared'): Promise<boolean> {
+  async clear(threadId: string, reason = 'cleared', expectedTurnId?: string): Promise<boolean> {
     const entry = this.sessions.get(threadId)
     if (!entry) return false
+    this.assertExpectedTurn(threadId, expectedTurnId)
     this.sessions.delete(threadId)
     entry.stopping = true
     this.cancelActiveOperations(entry)
@@ -291,9 +302,10 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
       action: reason,
       outcome: 'success'
     })
-    this.options.onState?.({
+    if (!this.sessions.has(threadId)) this.options.onState?.({
       ...this.defaultState(),
       threadId,
+      turnId: entry.activeTurnId,
       mode: entry.mode,
       updatedAt: this.now().toISOString()
     })
@@ -304,8 +316,11 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     await Promise.all([...this.sessions.keys()].map((threadId) => this.clear(threadId, reason)))
   }
 
-  stateForThread(threadId: string): BrowserUseViewState {
+  stateForThread(threadId: string, expectedTurnId?: string): BrowserUseViewState {
     const entry = this.sessions.get(threadId)
+    // Reads may race a new turn before it opens Browser Use. Return no stale
+    // contents; mutating operations still reject an expected-turn mismatch.
+    if (entry && expectedTurnId !== undefined && entry.activeTurnId !== expectedTurnId) return this.defaultState()
     return entry ? this.state(entry) : this.defaultState()
   }
 
@@ -315,8 +330,10 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
 
   navigate(
     threadId: string,
-    command: 'back' | 'forward' | 'reload'
+    command: 'back' | 'forward' | 'reload',
+    expectedTurnId?: string
   ): BrowserUseViewState {
+    this.assertExpectedTurn(threadId, expectedTurnId)
     const entry = this.requireSession(threadId)
     const tab = this.requireActiveTab(entry)
     const history = tab.view.webContents.navigationHistory
@@ -332,6 +349,32 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     }, tab.id)
     this.publish(entry)
     return this.state(entry)
+  }
+
+  private adoptTurn(entry: BrowserSessionEntry, turnId: string): void {
+    if (entry.activeTurnId === turnId) return
+    // A private panel supervises one turn only. Retire its native view now; its
+    // delayed cleanup must not be allowed to hide a newer turn's remount.
+    if (entry.mount?.expectedTurnId !== undefined && entry.mount.expectedTurnId !== turnId) {
+      entry.mount.visible = false
+      entry.mount.supervisionActive = false
+      this.cancelActiveOperations(entry)
+      this.invalidateDocument(entry, 'turn-changed')
+      entry.controlOwner = 'agent'
+      entry.lifecycle = entry.stopping ? 'stopped' : 'mount-required'
+      for (const tab of entry.tabs.values()) {
+        tab.view.setVisible(false)
+        tab.view.webContents.setIgnoreMenuShortcuts(true)
+      }
+    }
+    entry.activeTurnId = turnId
+    this.publish(entry)
+  }
+
+  private assertExpectedTurn(threadId: string, expectedTurnId?: string): void {
+    if (expectedTurnId !== undefined && this.sessions.get(threadId)?.activeTurnId !== expectedTurnId) {
+      throw new Error('Browser Use turn changed; refresh the current execution before continuing.')
+    }
   }
 
   auditSnapshot(): readonly BrowserUseAuditEntry[] {

@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { beginQueueAdmission } from './queue-admission-fence'
 import { confirmQueueAdmission } from './queue-admission-recovery'
 import type { AgentProvider } from '../agent/types'
@@ -38,6 +39,9 @@ export type RuntimeQueueSendInput = {
   composerModel: string
   composerProviderId: string
   composerAccountId: string | undefined
+  composerHarnessId: string
+  composerGatewayBinding?: HarnessGatewayBinding
+  composerCredentialMode: string
   userModelChip: string | undefined
   displayText: string | undefined
   reasoningEffort: string | undefined
@@ -52,6 +56,7 @@ export type RuntimeQueueSendInput = {
   attachments: readonly AttachmentReference[] | undefined
   fileReferences: SendMessageOverrides['fileReferences']
   composerContexts: ComposerContextAttachment[]
+  ackNoticeIds: string[] | undefined
   queued: QueuedUserMessage | undefined
   overrides: SendMessageOverrides | undefined
   set: ChatStoreSet
@@ -69,10 +74,11 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
   const {
     provider: p, activeThreadId, trimmedText, clientRequestId, mode, orchestration,
     requestedAgentSurface, writeContext, composerModel, composerProviderId,
-    composerAccountId, userModelChip, displayText, reasoningEffort, serviceTier,
+    composerAccountId, composerHarnessId, composerCredentialMode, composerGatewayBinding,
+    userModelChip, displayText, reasoningEffort, serviceTier,
     subagentResume, messageSource, persona, designProfile, designDocumentTarget,
     designImagePlacementTarget, attachmentIds, attachments, fileReferences, composerContexts,
-    queued, overrides, set: setStore, get
+    ackNoticeIds, queued, overrides, set: setStore, get
   } = input
   const initialState = { ...get() }
   const set: ChatStoreSet = (partial) => {
@@ -101,7 +107,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       settings,
       prompt: trimmedText
     })
-    const checkpointRequestId = startWorkspaceCheckpointSnapshot({
+    const checkpointRequestId = (queued?.paperContext ?? overrides?.paperContext) ? undefined : startWorkspaceCheckpointSnapshot({
       settings,
       threads: initialState.threads,
       activeThreadId,
@@ -121,6 +127,11 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(composerModel ? { model: composerModel } : {}),
       ...(!channel && composerProviderId ? { providerId: composerProviderId } : {}),
       ...(!channel && composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+      ...(composerCredentialMode
+        ? { credentialMode: composerCredentialMode as 'native-login' | 'provider' | 'kun-gateway' }
+        : {}),
+      ...(composerGatewayBinding ? { gatewayBinding: composerGatewayBinding } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(!channel && serviceTier ? { serviceTier } : {}),
       ...(subagentResume ? { subagentResume } : {}),
@@ -131,6 +142,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(designDocumentTarget ? { designDocumentTarget } : {}),
       ...(designImagePlacementTarget ? { designImagePlacementTarget } : {}),
       ...(writeContext ? { writeContext: toWriteTurnContext(writeContext) } : {}),
+      ...((queued?.paperContext ?? overrides?.paperContext) ? { paperContext: queued?.paperContext ?? overrides?.paperContext } : {}),
       ...(persona ? { persona } : {}),
       ...((queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact)
         ? { guiDesignArtifact: queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact }
@@ -138,7 +150,9 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(attachmentIds?.length ? { attachmentIds: [...attachmentIds] } : {}),
       ...(checkpointRequestId ? { workspaceCheckpointRequestId: checkpointRequestId } : {}),
       ...(fileReferences?.length ? { fileReferences } : {}),
-      ...(composerContexts.length ? { composerContexts } : {})
+      ...(composerContexts.length ? { composerContexts } : {}),
+      ...(ackNoticeIds?.length ? { ackNoticeIds } : {}),
+      ...((queued?.planBuild ?? overrides?.planBuild) ? { planBuild: true } : {})
     }
     const queuedRow = pendingQueuedMessage({
       ...queued,
@@ -149,6 +163,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       text: trimmedText,
       clientRequestId,
       ...(composerContexts.length ? { composerContexts } : {}),
+      ...(ackNoticeIds?.length ? { ackNoticeIds } : {}),
       ...(fileReferences?.length ? { fileReferences } : {}),
       ...(attachmentIds?.length ? { attachmentIds: [...attachmentIds] } : {}),
       ...(attachments?.length ? { attachments: [...attachments] } : {}),
@@ -156,6 +171,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(designDocumentTarget ? { designDocumentTarget } : {}),
       ...(designImagePlacementTarget ? { designImagePlacementTarget } : {}),
       ...(writeContext ? { writeContext } : {}),
+      ...((queued?.paperContext ?? overrides?.paperContext) ? { paperContext: queued?.paperContext ?? overrides?.paperContext } : {}),
       ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
       ...(displayText ? { displayText } : {}),
       ...(mode ? { mode } : {}),
@@ -163,13 +179,17 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       agentSurface: sendOptions.agentSurface,
       ...(composerProviderId ? { providerId: composerProviderId } : {}),
       ...(composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+      ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
+      ...(composerGatewayBinding ? { gatewayBinding: structuredClone(composerGatewayBinding) } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(serviceTier ? { serviceTier } : {}),
       ...(subagentResume ? { subagentResume } : {}),
       ...(messageSource ? { messageSource } : {}),
       ...(persona ? { persona } : {}),
       ...(composerModel ? { model: composerModel } : {}),
-      ...(userModelChip ? { modelLabel: userModelChip } : {})
+      ...(userModelChip ? { modelLabel: userModelChip } : {}),
+      ...((queued?.planBuild ?? overrides?.planBuild) ? { planBuild: true } : {})
     })
     // Persist a `starting` row before admission so a crash between the runtime
     // accepting the turn and the local state update cannot silently drop a

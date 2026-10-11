@@ -146,7 +146,7 @@ describe("TuiController reasoning and session lifecycle", () => {
     }
   })
 
-  it('cycles audited GLM variants from a legacy catalog without capability metadata', async () => {
+  it('does not infer GLM effort levels for a relay without scoped capability metadata', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-tui-legacy-glm-effort-'))
     const source = detail({
       providerId: 'opencode-go',
@@ -210,16 +210,16 @@ describe("TuiController reasoning and session lifecycle", () => {
         }]
       }, false)
 
-      expect(controller.reasoningOptions()).toEqual(['off', 'high', 'max'])
-      expect(controller.state.reasoningEffort).toBe('max')
-      expect(controller.cycleReasoningEffort()).toBe(true)
-      expect(controller.state.reasoningEffort).toBe('off')
+      expect(controller.reasoningOptions()).toEqual(['auto'])
+      expect(controller.state.reasoningEffort).toBe('auto')
+      expect(controller.cycleReasoningEffort()).toBe(false)
+      expect(controller.state.reasoningEffort).toBe('auto')
       await controller.submit('use the selected effort')
       expect(startTurn).toHaveBeenCalledWith(source.id, expect.objectContaining({
         providerId: 'opencode-go',
         accountId: 'account:opencode-go',
         model: 'glm-5.2',
-        reasoningEffort: 'off'
+        reasoningEffort: 'auto'
       }))
     } finally {
       await controller.stop()
@@ -270,6 +270,7 @@ describe("TuiController reasoning and session lifecycle", () => {
           kind: 'http',
           authType: 'subscription',
           endpointFormat: 'custom_endpoint',
+          baseUrl: 'https://chatgpt.com/backend-api/codex/responses',
           useProxy: false,
           configured: true,
           models: ['gpt-5.6-luna'],
@@ -288,6 +289,22 @@ describe("TuiController reasoning and session lifecycle", () => {
         model: 'gpt-5.6-luna',
         reasoningEffort: 'max'
       }))
+      // A modern Runtime has already resolved explicit user controls; do not
+      // replace its 'none' protocol with the legacy built-in Codex profile.
+      const modern = structuredClone(controller.state.modelConnections!)
+      const disabled = { supportedEfforts: ['auto'] as const, defaultEffort: 'auto' as const, requestProtocol: 'none' as const }
+      modern.providers[0]!.modelCapabilities = {
+        'gpt-5.6-luna': { id: 'gpt-5.6-luna', inputModalities: ['text'], outputModalities: ['text'],
+          messageParts: ['text'], supportsToolCalling: true, reasoning: { ...disabled, supportedEfforts: [...disabled.supportedEfforts] },
+          metadata: { schemaVersion: 1, overrides: { reasoning: { ...disabled, supportedEfforts: [...disabled.supportedEfforts] } }, observations: [] } }
+      }
+      controller.applyModelSelection(modern, false)
+      expect(controller.reasoningOptions()).toEqual(['auto'])
+      expect(controller.cycleReasoningEffort()).toBe(false)
+      modern.providers[0]!.modelCapabilities!['gpt-5.6-luna']!.supportsReasoning = false
+      controller.applyModelSelection(modern, false)
+      expect(controller.reasoningOptions()).toEqual([])
+
     } finally {
       await controller.stop()
       await rm(dataDir, { recursive: true, force: true })

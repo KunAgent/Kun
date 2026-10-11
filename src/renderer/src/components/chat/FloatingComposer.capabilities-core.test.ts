@@ -160,7 +160,7 @@ describe('FloatingComposer capability controls', () => {
     })
   })
 
-  it('declares progressive container-width fallbacks for secondary toolbar controls', async () => {
+  it('keeps enabled composer actions available and never wraps the toolbar', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
     const [composerSource, css] = await Promise.all([
@@ -170,13 +170,38 @@ describe('FloatingComposer capability controls', () => {
 
     expect(composerSource).toContain('ds-composer-voice-action')
     expect(composerSource).toContain('ds-composer-prompt-optimize-action')
-    expect(css).toContain('@container (max-width: 760px)')
-    expect(css).toContain('.ds-composer-optional-action')
+    expect(composerSource).toContain('ref={composerToolbarFitRef}')
+    expect(css).not.toMatch(/\.ds-composer-optional-action\s*\{[^}]*display:\s*none/)
+    expect(css).not.toMatch(/\.ds-composer-toolbar\s*\{[^}]*flex-wrap:\s*wrap/s)
+    expect(css).not.toContain('--ds-composer-model-min')
+    // Words give way level by level (composer-toolbar-fit.ts sets data-fit-N), never the actions.
+    expect(css).toMatch(/\[data-fit-1\] \.ds-composer-context-control,[\s\S]*?\.ds-composer-agent-surface\s*\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/\[data-fit-2\] \.ds-composer-task-surface-label\s*\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/\[data-fit-3\] \.ds-composer-model-trigger-model,[\s\S]*?\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/\[data-fit-4\] \.ds-composer-model-trigger-dot,[\s\S]*?\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/\[data-fit-5\] \.ds-composer-model-trigger-chevron,[\s\S]*?\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/@container \(max-width: 640px\)[\s\S]*?\.ds-composer-model-trigger-provider,/s)
     expect(css).toContain('@container (max-width: 700px)')
     expect(css).toContain('.ds-composer-mode-label,')
     expect(css).toContain('.ds-composer-permission-label,')
-    expect(css).toContain('.ds-composer-context-control,')
-    expect(css).toContain('.ds-composer-agent-picker')
+  })
+
+  it('shows the issue #1364 local Whisper configuration without cloud credentials', () => {
+    const speechToText = {
+      enabled: true,
+      providerId: 'custom',
+      protocol: 'local-whisper' as const,
+      baseUrl: '',
+      apiKey: '',
+      model: 'whisper-small-q5_1',
+      localWhisperDownloadSource: 'hf-mirror' as const,
+      language: 'zh',
+      timeoutMs: 60_000
+    }
+
+    expect(shouldShowVoiceDictation(speechToText)).toBe(true)
+    expect(shouldShowVoiceDictation({ ...speechToText, enabled: false })).toBe(false)
+    expect(shouldShowVoiceDictation({ ...speechToText, model: '' })).toBe(false)
   })
 
   it('shows voice dictation for every runnable speech configuration', () => {
@@ -238,7 +263,7 @@ describe('FloatingComposer capability controls', () => {
     expect(shouldSurfaceComposerUserInput('design', true)).toBe(false)
   })
 
-  it('hides the default slash footer hint but keeps status hints', async () => {
+  it('hides the default slash footer hint and waits for Kun during startup', async () => {
     const previousLanguage = i18n.language
     await i18n.changeLanguage('en')
     useChatStore.setState({
@@ -276,15 +301,11 @@ describe('FloatingComposer capability controls', () => {
           runtimeReady: true
         })
       )
-      const offlineHtml = renderToStaticMarkup(
-        createElement(FloatingComposer, {
-          ...baseProps,
-          runtimeReady: false
-        })
-      )
-
+      useChatStore.setState({ runtimeConnection: 'checking' })
+      const loadingHtml = renderToStaticMarkup(createElement(FloatingComposer, { ...baseProps, runtimeReady: false }))
       expect(readyHtml).not.toContain('Type / for commands')
-      expect(offlineHtml).toContain('Reconnect the runtime before sending another message.')
+      expect(loadingHtml).toContain('Waiting for Kun')
+      expect(loadingHtml).not.toContain('Reconnect the runtime before sending another message.')
     } finally {
       await i18n.changeLanguage(previousLanguage)
     }

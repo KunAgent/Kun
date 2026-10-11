@@ -1,5 +1,5 @@
 /**
- * ProseMirror JSON → mdast conversion (implementation §3.2 reverse path).
+ * ProseMirror JSON → mdast conversion.
  *
  * Custom constructs stay as their mdast-shaped nodes (`callout`, `wikiLink`,
  * `workRaw`); `to-markdown.ts` expands/serializes them. Inline marks are

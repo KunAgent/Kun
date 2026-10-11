@@ -73,7 +73,14 @@ export const ModelRequestTraceDelegatedCapabilitiesSchema = z.object({
 })
 
 export const ModelRequestTraceDelegatedSchema = z.object({
-  providerKind: z.enum(['agent-sdk', 'cursor-sdk', 'antigravity-cli']),
+  providerKind: z.enum([
+    'agent-sdk',
+    'cursor-sdk',
+    'antigravity-cli',
+    'acp',
+    'codex-app-server',
+    'pi-rpc'
+  ]),
   phase: z.enum(['portable', 'resumed', 'rebased']),
   reason: z.enum([
     'new',

@@ -1,3 +1,5 @@
+import { configuredModelMetadata } from '../../../../kun/src/services/model-metadata-resolver.js'
+import { normalizeModelProviderModelProfile } from '@shared/app-settings-provider-capabilities'
 import type {
   ModelProviderModelProfileV1,
   ModelProviderProfileV1,
@@ -12,6 +14,7 @@ import {
 import {
   modelProviderRequiresApiKey
 } from '@shared/app-settings-provider-core'
+import { normalizeModelProviderPricing } from '@shared/app-settings-provider-capabilities'
 import {
   type PendingSharedProviderCatalog,
   type PendingSharedProviderDeletion,
@@ -463,6 +466,11 @@ export function sharedModelProfiles(
       existing?.modelProfiles[model.trim().toLowerCase()]
     const capability = connection.modelCapabilities?.[model] ??
       connection.modelCapabilities?.[model.trim().toLowerCase()]
+    if (capability?.metadata) {
+      const { id: _id, ...current } = capability
+      return [model, normalizeModelProviderModelProfile(configuredModelMetadata({ ...current,
+        ...(previous?.aliases ? { aliases: [...previous.aliases] } : {}) }))]
+    }
     const contextWindowTokens = boundedSharedModelLimit(
       capability?.contextWindowTokens ?? previous?.contextWindowTokens,
       MAX_MODEL_CONTEXT_WINDOW_TOKENS
@@ -471,6 +479,8 @@ export function sharedModelProfiles(
       capability?.maxOutputTokens ?? previous?.maxOutputTokens,
       MAX_MODEL_OUTPUT_TOKENS
     )
+    const pricing = normalizeModelProviderPricing(capability?.pricing ?? previous?.pricing)
+    const serviceTiers = capability?.serviceTiers ?? previous?.serviceTiers
     return [model, {
       ...(previous?.aliases ? { aliases: [...previous.aliases] } : {}),
       inputModalities: capability?.inputModalities ?? previous?.inputModalities ?? ['text'],
@@ -479,9 +489,15 @@ export function sharedModelProfiles(
       messageParts: capability?.messageParts ?? previous?.messageParts ?? ['text'],
       ...(contextWindowTokens ? { contextWindowTokens } : {}),
       ...(maxOutputTokens ? { maxOutputTokens } : {}),
+      ...(capability?.maxInputTokens !== undefined ? { maxInputTokens: capability.maxInputTokens } : {}),
+      ...(capability?.supportsReasoning !== undefined ? { supportsReasoning: capability.supportsReasoning } : {}),
+      ...(capability?.evidence ? { evidence: capability.evidence } : previous?.evidence ? { evidence: previous.evidence } : {}),
+      ...(capability?.conditionalCapabilities ? { conditionalCapabilities: capability.conditionalCapabilities } : {}),
       ...(capability?.reasoning ?? previous?.reasoning
         ? { reasoning: capability?.reasoning ?? previous?.reasoning }
         : {}),
+      ...(pricing ? { pricing } : {}),
+      ...(serviceTiers ? { serviceTiers: [...serviceTiers] } : {}),
       ...(capability?.endpointFormat ?? previous?.endpointFormat
         ? { endpointFormat: capability?.endpointFormat ?? previous?.endpointFormat }
         : {}),

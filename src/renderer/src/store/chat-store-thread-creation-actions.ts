@@ -1,3 +1,6 @@
+import { markThreadWorkspacePreparing } from './task-workspace-store'
+import { startNewTaskTiming } from './new-task-timing'
+import { codeThreadWorkspaceIntent } from './code-thread-workspace-intent'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
@@ -182,18 +185,23 @@ export function createThreadCreationActions(
   const { set, get, sseAbortRef } = context
   return {
   createThread: async (options = {}) => {
+    const creationState = { ...get() }
     const activationAllowed = (): boolean => options.activationGuard?.() !== false
     if (get().runtimeConnection !== 'ready') {
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return null
     }
+    const timing = startNewTaskTiming('createThread')
     try {
       const p = getProvider()
       const settings = await rendererRuntimeClient.getSettings()
+      timing.step('settings')
       const runtime = getKunRuntimeSettings(settings)
-      const activeThread = get().activeThreadId
-        ? get().threads.find((thread) => thread.id === get().activeThreadId)
+      const activeThread = creationState.activeThreadId
+        ? creationState.threads.find((thread) => thread.id === creationState.activeThreadId) ??
+          (creationState.adeThreads ?? []).find((thread) => thread.id === creationState.activeThreadId)
         : null
+      const isAdeThread = options.workspaceMode === 'ade'
       const requestedAgentSurface = options.conversation ? 'code' : options.agentSurface ?? 'code'
       const pickedAgentId = options.agentId?.trim() || get().composerAgentId?.trim() || ''
       const personaProfile = pickedAgentId
@@ -202,10 +210,16 @@ export function createThreadCreationActions(
             primaryAgentAvailableOnSurface(profile, requestedAgentSurface)
         )
         : undefined
-      const initialModel = personaProfile?.model?.trim() || runtime.model.trim()
-      const initialProviderId = personaProfile?.providerId?.trim() ||
-        (personaProfile?.model?.trim() ? '' : runtime.providerId.trim())
-      const initialSelectionSource = personaProfile ? 'user' as const : 'default' as const
+      // explicit pins (harness defaults via the one-to-one pickers)
+      // outrank the persona/global defaults for the new thread's route.
+      const initialModel = options.model?.trim() ||
+        personaProfile?.model?.trim() || runtime.model.trim()
+      const initialProviderId = options.providerId?.trim() ||
+        personaProfile?.providerId?.trim() ||
+        ((personaProfile?.model?.trim() || options.model?.trim())
+          ? '' : runtime.providerId.trim())
+      const initialSelectionSource =
+        personaProfile || options.model?.trim() ? 'user' as const : 'default' as const
       // 对话会话:不绑定项目文件夹,在 conversationWorkspaceRoot 下自动创建
       // 一个时间戳子目录作为工作目录(主进程负责实际建目录)。
       if (options.conversation) {
@@ -259,27 +273,42 @@ export function createThreadCreationActions(
         (activeThread && !isInternalTemporaryWorkspace(activeThread.workspace)
           ? normalizeWorkspaceRoot(activeThread.workspace)
           : '') ||
-        currentCodeWorkspaceRoot(get(), settings)
+        currentCodeWorkspaceRoot(creationState, settings)
       if (!workspaceRoot) {
         await get().chooseWorkspace({ createThreadAfter: true })
         return null
       }
-      if (!(await workspaceDirectoryExists(workspaceRoot))) {
+      const workspaceExists = await workspaceDirectoryExists(workspaceRoot)
+      timing.step('workspace')
+      if (!workspaceExists) {
         set({ error: workspaceMissingError() })
         await showWorkspaceMissingDialog(workspaceRoot)
         return null
       }
       if (!activationAllowed()) return null
       // Creating a thread here is an explicit re-add for a removed project.
-      const restoredRegistry = removedRegistryAfterRestore(workspaceRoot, get().removedCodeWorkspaces)
-      const codeWorkspaceRoots = rememberRootForRestore(
-        codeRootsAfterRemoval(get().codeWorkspaceRoots, restoredRegistry),
-        workspaceRoot
-      )
-      set({ codeWorkspaceRoots, removedCodeWorkspaces: restoredRegistry })
+      // ADE threads do not enter Code's project/workspace bookkeeping.
+      if (!isAdeThread) {
+        const restoredRegistry = removedRegistryAfterRestore(workspaceRoot, get().removedCodeWorkspaces)
+        const codeWorkspaceRoots = rememberRootForRestore(
+          codeRootsAfterRemoval(get().codeWorkspaceRoots, restoredRegistry),
+          workspaceRoot
+        )
+        set({ codeWorkspaceRoots, removedCodeWorkspaces: restoredRegistry })
+      }
+      const workspaceIntent = !isAdeThread && requestedAgentSurface === 'code'
+        ? await codeThreadWorkspaceIntent({ state: creationState, workspaceRoot, provider: p,
+          useWorktreePool: options.useWorktreePool === false &&
+            creationState.composerIsolationExplicitWorkspaceRoot !== workspaceRoot
+              ? undefined : options.useWorktreePool, worktreeBranch: options.worktreeBranch,
+          stillCurrent: activationAllowed }) : undefined
+      timing.step('project-defaults')
+      if (workspaceIntent === null) return null
       // Worktree pool mode always needs a fresh thread bound to a fresh pool
       // slot, so never reuse an existing main-workspace thread in that case.
-      const reusableThreadId = options.forceNew || options.useWorktreePool || personaProfile
+      // ADE 不复用 Code 线程:复用池只扫 Code 清单,跨模式必须新建。
+      const reusableThreadId = isAdeThread || options.forceNew || workspaceIntent?.isolation === 'worktree' ||
+        workspaceIntent?.createFields.projectDefaultsRevision || personaProfile
         ? null
         : await findReusableEmptyThreadId(
             get(),
@@ -290,6 +319,7 @@ export function createThreadCreationActions(
               !isDesignThreadId(thread.id, readDesignThreadRegistry()) &&
               (thread.agentSurface ?? 'code') === requestedAgentSurface
           )
+      timing.step('reuse-lookup')
       if (reusableThreadId) {
         if (!activationAllowed()) return null
         if (initialModel) {
@@ -302,6 +332,7 @@ export function createThreadCreationActions(
         }
         if (get().activeThreadId !== reusableThreadId) {
           await get().selectThread(reusableThreadId)
+          timing.step('select')
         } else {
           set({
             error: null,
@@ -318,44 +349,21 @@ export function createThreadCreationActions(
               : {})
           })
         }
+        timing.finish('reused a thread')
         return reusableThreadId
-      }
-      // Worktree mode: checkout the selected branch into an isolated worktree
-      // and bind the new thread to that workspace.
-      let acquiredWorktree: { projectPath: string; path: string; branch: string } | null = null
-      if (options.useWorktreePool) {
-        try {
-          let branch = options.worktreeBranch?.trim() ?? ''
-          if (!branch) {
-            const branches = await window.kunGui.getGitBranches(workspaceRoot)
-            if (branches.ok) branch = branches.currentBranch ?? ''
-          }
-          if (!branch) {
-            throw new Error(i18n.t('common:worktreeBranchRequired'))
-          }
-          const wt = await window.kunGui.checkoutGitBranchWorktree(workspaceRoot, branch)
-          if (!wt.ok) {
-            throw new Error(wt.message)
-          }
-          acquiredWorktree = {
-            projectPath: wt.sourceRepositoryRoot,
-            path: wt.worktreePath,
-            branch: wt.currentBranch ?? branch
-          }
-          workspaceRoot = wt.worktreePath
-        } catch (err) {
-          set({ error: err instanceof Error ? err.message : i18n.t('common:worktreeAcquireFailed') })
-          return null
-        }
       }
       // Primary-agent persona snapshot: bind this thread to the picked
       // subagent profile and freeze its providerId / model / systemPrompt
       // at create time so later agent edits don't drift the thread.
       const t = await p.createThread({
         workspace: workspaceRoot,
+        ...workspaceIntent?.createFields,
         title: getDefaultThreadTitle(),
         mode: 'agent',
         agentSurface: requestedAgentSurface,
+        ...(isAdeThread ? { workspaceMode: 'ade' as const } : {}),
+        ...(options.harnessId?.trim() ? { harnessId: options.harnessId.trim() } : {}),
+        ...(options.credentialMode ? { credentialMode: options.credentialMode } : {}),
         ...(initialProviderId ? { providerId: initialProviderId } : {}),
         ...(initialModel ? { model: initialModel } : {}),
         ...(personaProfile ? {
@@ -363,6 +371,7 @@ export function createThreadCreationActions(
           ...(personaProfile.systemPrompt ? { systemPrompt: personaProfile.systemPrompt } : {})
         } : {})
       })
+      timing.step('create')
       if (initialModel) {
         rememberThreadComposerSelection(
           t.id,
@@ -378,24 +387,31 @@ export function createThreadCreationActions(
       set((s) => ({
         ...(activate ? { activeThreadId: t.id } : {}),
         ...(pickedAgentId && !options.agentId ? { composerAgentId: '' } : {}),
-        codeWorkspaceRoots: rememberCodeWorkspaceRoots(
-          s.codeWorkspaceRoots,
-          [acquiredWorktree?.projectPath ?? workspaceRoot]
-        ),
-        threads: s.threads.some((thread) => thread.id === t.id) ? s.threads : [t, ...s.threads]
+        ...(isAdeThread
+          ? {
+              adeThreads: (s.adeThreads ?? []).some((thread) => thread.id === t.id)
+                ? s.adeThreads
+                : [t, ...(s.adeThreads ?? [])]
+            }
+          : {
+              codeWorkspaceRoots: rememberCodeWorkspaceRoots(
+                s.codeWorkspaceRoots,
+                [workspaceRoot]
+              ),
+              threads: s.threads.some((thread) => thread.id === t.id) ? s.threads : [t, ...s.threads]
+            })
       }))
+      if (workspaceIntent?.isolation === 'worktree') markThreadWorkspacePreparing(t.id, '')
       if (activate) await get().selectThread(t.id)
-      if (acquiredWorktree) {
-        saveThreadWorktreeRegistry(
-          markThreadWorktree(t.id, {
-            projectPath: acquiredWorktree.projectPath,
-            worktreePath: acquiredWorktree.path,
-            branch: acquiredWorktree.branch,
-            createdAt: new Date().toISOString()
-          })
-        )
+      timing.step('select')
+      if (workspaceIntent?.isolation === 'worktree') {
+        await get().requestAdeThreadWorkspace(t.id, workspaceIntent.startFrom)
       }
-      if (activate) await get().refreshThreads()
+      if (activate) {
+        await (isAdeThread ? get().refreshAdeThreads() : get().refreshThreads())
+      }
+      timing.step('refresh-list')
+      timing.finish('created a thread')
       return t.id
     } catch (e) {
       set({

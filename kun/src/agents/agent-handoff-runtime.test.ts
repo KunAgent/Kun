@@ -164,6 +164,20 @@ describe('Agent handoffs through the native queue and tool host', () => {
     expect(f.calls).toHaveLength(before)
   })
 
+  it('preserves an IM origin through the child turn and handoff return request', async () => {
+    const f = await fixture()
+    const sent = await f.rooms.send(f.room.id, { clientRequestId: 'im-handoff', body: 'Ask another Agent', executionIntent: 'discussion' },
+      { clientSurface: 'im', imConnectionId: 'paired-im' })
+    const { handoff } = await f.create(sent, 'im-handoff-job')
+    await f.pump(async () => expect((await f.handoffs.get(handoff.id)).status).toBe('completed'))
+    const completed = await f.handoffs.get(handoff.id)
+    const thread = await f.h.threads.getMetadata(completed.threadId)
+    expect(thread?.turns.find((turn) => turn.id === completed.turnId)?.clientSurface).toBe('im')
+    const returned = (await f.store.list<RoomRequestState>('request', { roomId: f.room.id }))
+      .find((row) => row.value.handoffReturnId === handoff.id)
+    expect(returned?.value).toMatchObject({ clientSurface: 'im', imConnectionId: 'paired-im' })
+  })
+
   it('reuses a pair conversation but isolates two source topics in separate model threads', async () => {
     const f = await fixture()
     const one = await f.source('one', 'PRIVATE_ALPHA_ONLY')

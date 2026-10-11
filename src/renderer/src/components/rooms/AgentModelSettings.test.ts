@@ -57,7 +57,10 @@ vi.mock('./agent-client', async (original) => ({
   })
 }))
 vi.mock('../../store/chat-store', () => ({
-  useChatStore: { getState: () => ({ openSettings: vi.fn() }) }
+  useChatStore: Object.assign(
+    (selector: (state: { composerModelGroups: never[] }) => unknown) => selector({ composerModelGroups: [] }),
+    { getState: () => ({ openSettings: vi.fn() }) }
+  )
 }))
 vi.mock('./RoomModal', () => ({
   RoomModal: ({ children }: { children: unknown }) => children
@@ -92,14 +95,46 @@ describe('AgentModelSettings immediate apply', () => {
     return onSaved
   }
 
-  const select = (label: string) => renderer.root.findByProps({ 'aria-label': label })
+  const trigger = (label: string) => renderer.root.findByProps({ 'aria-label': label, 'aria-haspopup': 'listbox' })
+  const choose = async (label: string, binding: Parameters<typeof modelBindingKey>[0]) => {
+    act(() => trigger(label).props.onClick())
+    await act(async () => {
+      renderer.root.findByProps({ 'data-agent-model-option': modelBindingKey(binding) }).props.onClick()
+    })
+  }
+  const triggerModel = (role: 'main' | 'fast') => renderer.root.findByProps({ 'data-agent-model-trigger': role })
+    .findByProps({ className: 'agent-model-select-model' }).children
 
-  it('treats a model without a provider id as inheritance', async () => {
+  it('labels role-default scope and immediate save semantics', async () => {
+    await render()
+    expect(renderer.root.findAllByType('p').some((item) => String(item.children).includes('Existing conversation overrides and active requests stay unchanged'))).toBe(true)
+    expect(renderer.root.findAllByType('p').some((item) => String(item.children).includes('Model changes save immediately'))).toBe(true)
+  })
+
+  it('does not notify another Agent editor after an old save completes', async () => {
+    let resolve!: (value: unknown) => void
+    api.saveAgentModels.mockImplementationOnce(() => new Promise((yes) => { resolve = yes }))
+    const saved = await render()
+    await choose('Main model', api.snapshot.options[1])
+    act(() => renderer.unmount())
+    await act(async () => resolve({ agent: { ...api.snapshot.agent, revision: 3 } }))
+    expect(saved).not.toHaveBeenCalled()
+  })
+
+  it('lists a model without a provider id as unavailable and never saves it', async () => {
     const unavailable = { ...api.snapshot.options[0], model: 'legacy-model', providerId: undefined }
     api.snapshot = { ...api.snapshot, options: [...api.snapshot.options, unavailable] }
     await render()
+    await choose('Main model', unavailable)
+    expect(renderer.root.findByProps({ 'data-agent-model-option': modelBindingKey(unavailable) }).props['aria-disabled']).toBe(true)
+    expect(api.saveAgentModels).not.toHaveBeenCalled()
+  })
+
+  it('saves inheritance from the follow-default option', async () => {
+    await render()
+    act(() => trigger('Main model').props.onClick())
     await act(async () => {
-      select('Main model').props.onChange({ target: { value: modelBindingKey(unavailable) } })
+      renderer.root.findByProps({ 'data-agent-model-option': '__inherit__' }).props.onClick()
     })
     expect(api.saveAgentModels).toHaveBeenCalledWith('agent-1', {
       expectedRevision: 2,
@@ -111,24 +146,21 @@ describe('AgentModelSettings immediate apply', () => {
   it('saves the main model as soon as it changes and does not keep a Save button', async () => {
     const onSaved = await render()
     const next = { providerId: 'deepseek', accountId: 'acct-1', model: 'deepseek-chat' }
-    await act(async () => {
-      select('Main model').props.onChange({ target: { value: modelBindingKey(next) } })
-    })
+    await choose('Main model', next)
     expect(api.saveAgentModels).toHaveBeenCalledWith('agent-1', {
       expectedRevision: 2,
       modelRef: next,
       fastModelRef: api.snapshot.agent.fastModelRef
     })
     expect(onSaved).toHaveBeenCalledOnce()
+    expect(renderer.root.findByProps({ role: 'status' }).children).toEqual(['Model saved'])
     expect(renderer.root.findAllByProps({ className: 'rooms-run-primary' })).toHaveLength(0)
   })
 
   it('saves the lightweight model as soon as it changes', async () => {
     await render()
     const next = { providerId: 'deepseek', accountId: 'acct-1', model: 'deepseek-reasoner' }
-    await act(async () => {
-      select('Lightweight model').props.onChange({ target: { value: modelBindingKey(next) } })
-    })
+    await choose('Lightweight model', next)
     expect(api.saveAgentModels).toHaveBeenCalledWith('agent-1', {
       expectedRevision: 2,
       modelRef: api.snapshot.agent.modelRef,
@@ -154,14 +186,13 @@ describe('AgentModelSettings immediate apply', () => {
       () => new Promise((_, reject) => { finish = reject })
     )
     await render()
-    await act(async () => {
-      select('Main model').props.onChange({
-        target: { value: modelBindingKey({ providerId: 'deepseek', accountId: 'acct-1', model: 'deepseek-chat' }) }
-      })
-    })
+    await choose('Main model', { providerId: 'deepseek', accountId: 'acct-1', model: 'deepseek-chat' })
     expect(renderer.root.findAllByType('fieldset').every((node) => node.props.disabled)).toBe(true)
+    expect(trigger('Main model').props.disabled).toBe(true)
+    expect(triggerModel('main')).toEqual(['deepseek-chat'])
     await act(async () => { finish(new Error('revision conflict')) })
-    expect(select('Main model').props.value).toBe(modelBindingKey(api.snapshot.agent.modelRef))
+    expect(triggerModel('main')).toEqual(['deepseek-reasoner'])
+    expect(api.refresh).toHaveBeenCalledOnce()
     expect(renderer.root.findAllByProps({ role: 'alert' }).some((node) =>
       String(node.children).includes('revision conflict')
     )).toBe(true)

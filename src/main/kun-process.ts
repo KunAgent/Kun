@@ -1,3 +1,4 @@
+import { nativeAgentNetworkLaunchEnvironment } from './runtime/native-agent-network'
 import { rememberManagerStartupInput } from './runtime/kun-startup-manager-recovery'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { app } from 'electron'
@@ -59,6 +60,7 @@ import {
 import { defaultKunDataDir } from './runtime/kun-adapter'
 import { resolveClaudeBinary } from './agent-sdk-installer'
 import type { KunUnexpectedExitInfo } from './runtime/kun-process-controller'
+import { KUN_NODE_CHILD_V8_FLAGS } from '../../kun/src/process/node-child-v8-flags.js'
 import {
   waitForKunStartup
 } from './runtime/kun-runtime-health-monitor'
@@ -201,7 +203,7 @@ export async function ensureKunServiceManager(input: {
     settingsPath: input.settingsPath,
     launch: {
       command: resolveNodeScriptCommand(process.execPath),
-      args: [managerEntry],
+      args: [...KUN_NODE_CHILD_V8_FLAGS, managerEntry],
       runAsNode: true
     },
     ...(input.onLegacyHandoverStatus ? { onLegacyHandoverStatus: input.onLegacyHandoverStatus } : {})
@@ -359,7 +361,7 @@ export async function startKunSharedRuntime(
     ...(serviceManagerSettingsPath ? { settingsPath: serviceManagerSettingsPath } : {}),
     launch: {
       command: resolveNodeScriptCommand(process.execPath),
-      args: [managerEntry],
+      args: [...KUN_NODE_CHILD_V8_FLAGS, managerEntry],
       runAsNode: true
     }
   })
@@ -484,6 +486,7 @@ async function prepareKunLaunch(
   const paperSearch = normalizeWritePaperModeSettings(settings.write?.paperMode)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    ...await nativeAgentNetworkLaunchEnvironment(),
     ...kunManagerLaunchEnvironment({
       manager: mainManagerBinding,
       controlDir: process.env.KUN_MANAGER_CONTROL_DIR?.trim() || defaultKunControlDir(),

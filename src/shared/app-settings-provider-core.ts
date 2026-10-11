@@ -1,3 +1,6 @@
+import { resolveModelMetadata } from '../../kun/src/services/model-metadata-resolver.js'
+import { normalizeRouteEffort } from './app-settings-route-rules'
+import { normalizeExtensionExports, normalizeGatewayMiddleware, projectExecutableModelRoutePools, routePoolExtras } from './app-settings-route-projection'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
@@ -15,6 +18,7 @@ import {
   MODEL_REASONING_EFFORTS,
   MODEL_REASONING_REQUEST_PROTOCOLS,
   MODEL_ROUTE_STRATEGIES,
+  NESTED_ROUTE_PROVIDER_ID,
   CUSTOM_IMAGE_GENERATION_PROVIDER_ID,
   CUSTOM_SPEECH_TO_TEXT_PROVIDER_ID,
   CUSTOM_TEXT_TO_SPEECH_PROVIDER_ID,
@@ -73,10 +77,7 @@ import {
   CHATGPT_SUBSCRIPTION_NAME,
   CHATGPT_SUBSCRIPTION_PROVIDER_ID,
   GEMINI_SUBSCRIPTION_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
   TOKEN_PLAN_PROVIDER_ID_SUFFIX,
-  getModelProviderPreset,
-  modelProviderPresetProfile,
   modelProviderTokenPlanProfile,
   resolveModelProviderPresetSource,
   type ModelProviderPreset
@@ -107,7 +108,8 @@ import {
 
 export const DEFAULT_MODEL_PROVIDER_NAME = 'DeepSeek'
 
-export const DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS = 256_000
+// Keep unknown desktop models aligned with the runtime's conservative fallback.
+export const DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS = 32_000
 
 export const DEFAULT_TEXT_MODEL_PROFILE: ModelProviderModelProfileV1 = {
   inputModalities: ['text'],
@@ -139,15 +141,12 @@ export const NON_TEXT_MODEL_PATTERN =
 
 export function defaultModelProviderSettings(): ModelProviderSettingsV1 {
   const defaultProvider = defaultModelProviderProfile('', DEFAULT_DEEPSEEK_BASE_URL)
-  const openCodeFreeProvider = modelProviderPresetProfile(
-    getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!
-  )
   return {
     apiKey: defaultProvider.apiKey,
     baseUrl: defaultProvider.baseUrl,
     proxy: defaultNetworkProxySettings(),
     proxyRoutingVersion: PROVIDER_PROXY_ROUTING_VERSION,
-    providers: [defaultProvider, openCodeFreeProvider],
+    providers: [defaultProvider],
     routePools: [],
     localGateway: { enabled: false, name: 'Kun API', exposeProviderModels: false }
   }
@@ -163,7 +162,7 @@ export function normalizeModelProviderSettings(
   const legacyProxyRouting = input?.proxyRoutingVersion !== PROVIDER_PROXY_ROUTING_VERSION
   const missingUseProxy = legacyProxyRouting && proxy.enabled
   const rawProviders = Array.isArray(input?.providers) ? input.providers : []
-  const excludedBuiltinProviderIds = [DEFAULT_MODEL_PROVIDER_ID, OPENCODE_FREE_PROVIDER_ID]
+  const excludedBuiltinProviderIds = [DEFAULT_MODEL_PROVIDER_ID]
     .filter((id) => Array.isArray(input?.excludedBuiltinProviderIds) &&
       input.excludedBuiltinProviderIds.includes(id) &&
       !rawProviders.some((provider) => normalizeModelProviderId(provider?.id) === id))
@@ -172,15 +171,8 @@ export function normalizeModelProviderSettings(
     ...defaultModelProviderProfile(apiKey, baseUrl),
     useProxy: missingUseProxy
   }
-  const openCodeFreeProvider = modelProviderPresetProfile(
-    getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!
-  )
-  openCodeFreeProvider.useProxy = missingUseProxy
   if (!excludedBuiltinProviderIds.includes(defaultProvider.id)) {
     providersById.set(defaultProvider.id, defaultProvider)
-  }
-  if (!excludedBuiltinProviderIds.includes(openCodeFreeProvider.id)) {
-    providersById.set(openCodeFreeProvider.id, openCodeFreeProvider)
   }
   for (const rawProvider of rawProviders) {
     const provider = normalizeModelProviderProfile(rawProvider, missingUseProxy)
@@ -215,7 +207,14 @@ export function normalizeModelProviderSettings(
       name: typeof input?.localGateway?.name === 'string' && input.localGateway.name.trim()
         ? input.localGateway.name.trim().slice(0, 80)
         : defaults.localGateway.name,
-      exposeProviderModels: input?.localGateway?.exposeProviderModels === true
+      exposeProviderModels: input?.localGateway?.exposeProviderModels === true,
+      ...normalizeGatewayMiddleware(input?.localGateway?.middleware),
+      ...normalizeExtensionExports(input?.localGateway?.extensionExports),
+      ...(Array.isArray(input?.localGateway?.experimentalSubscriptionExports) && input.localGateway.experimentalSubscriptionExports.length
+        ? { experimentalSubscriptionExports: [...new Set(input.localGateway.experimentalSubscriptionExports
+          .filter((id): id is string => typeof id === 'string' && id.trim().length > 0 && id.length <= 128).map((id) => id.trim()))].slice(0, 10) }
+        : {}),
+      ...(input?.localGateway?.advertiseDiscovery === false ? { advertiseDiscovery: false as const } : {})
     }
   }
 }
@@ -273,12 +272,14 @@ export function normalizeModelRoutePools(
       const targetId = normalizeModelProviderId(target?.id) || `${id}-target-${index + 1}`
       if (targetIds.has(targetId)) return []
       targetIds.add(targetId)
+      const effort = normalizeRouteEffort(target?.effort)
       return [{
         id: targetId,
-        providerId,
+        providerId: target?.providerId === NESTED_ROUTE_PROVIDER_ID ? NESTED_ROUTE_PROVIDER_ID : providerId,
         modelId: targetModel,
         enabled: target?.enabled !== false,
-        weight: Math.min(100, Math.max(1, boundedNonNegativeInteger(target?.weight, 1, 100)))
+        weight: Math.min(100, Math.max(1, boundedNonNegativeInteger(target?.weight, 1, 100))),
+        ...(effort ? { effort } : {})
       }]
     })
     const strategy: ModelRouteStrategy = MODEL_ROUTE_STRATEGIES.includes(raw.strategy as ModelRouteStrategy)
@@ -298,7 +299,14 @@ export function normalizeModelRoutePools(
       // the request's provider id, so only duplicate route aliases are invalid.
       enabled: raw.enabled !== false,
       strategy,
+      ...(raw.capabilityMode === 'guaranteed' || raw.capabilityMode === 'request-filter'
+        ? { capabilityMode: raw.capabilityMode } : {}),
+      ...(raw.affinity && ['off', 'turn', 'session'].includes(raw.affinity.mode) ? {
+        affinity: { mode: raw.affinity.mode,
+          ttlMs: Math.min(86_400_000, Math.max(60_000, boundedNonNegativeInteger(raw.affinity.ttlMs, 1_800_000, 86_400_000))) }
+      } : {}),
       targets,
+      ...routePoolExtras(raw, targetIds),
       failurePolicy: {
         failoverHttpStatusCodes: failureCodes,
         failoverOnNetworkError: raw.failurePolicy?.failoverOnNetworkError !== false,
@@ -319,43 +327,7 @@ export function normalizeModelRoutePools(
   return out
 }
 
-export function resolveModelRouteTargetReference(
-  target: Pick<ModelRouteTargetV1, 'providerId' | 'modelId'>,
-  providers: readonly ModelProviderProfileV1[]
-): ModelRouteTargetResolutionV1 {
-  const providerId = normalizeModelProviderId(target.providerId)
-  const provider = providers.find((candidate) => candidate.id.toLowerCase() === providerId)
-  if (!provider) return { status: 'provider-missing' }
-  const requestedModel = target.modelId.trim().toLowerCase()
-  const modelId = provider.models.find((candidate) => candidate.trim().toLowerCase() === requestedModel)
-  if (!modelId) return { status: 'model-missing', provider }
-  return { status: 'valid', provider, modelId }
-}
-
-/**
- * Projects durable user intent into the concrete configuration Kun may run.
- * Missing references remain in settings but never reach the Runtime.
- */
-export function projectExecutableModelRoutePools(
-  settings: Pick<ModelProviderSettingsV1, 'providers' | 'routePools'>
-): ModelRoutePoolV1[] {
-  return settings.routePools.map((pool) => {
-    const targets = pool.targets.flatMap((target) => {
-      const resolved = resolveModelRouteTargetReference(target, settings.providers)
-      if (resolved.status !== 'valid' || !resolved.provider || !resolved.modelId) return []
-      return [{
-        ...target,
-        providerId: resolved.provider.id,
-        modelId: resolved.modelId
-      }]
-    })
-    return {
-      ...pool,
-      enabled: pool.enabled && targets.some((target) => target.enabled),
-      targets
-    }
-  })
-}
+export { projectExecutableModelRoutePools, projectRuntimeModelRoutePools, resolveModelRouteTargetReference } from './app-settings-route-projection'
 
 export function getModelProviderSettings(settings: AppSettingsV1): ModelProviderSettingsV1 {
   return normalizeModelProviderSettings((settings as { provider?: ModelProviderSettingsPatchV1 }).provider)
@@ -464,9 +436,7 @@ export function modelProviderRequiresApiKey(
 
   const source = resolveModelProviderPresetSource(provider)
   if (
-    provider.id === OPENCODE_FREE_PROVIDER_ID ||
     source?.preset.id === 'litellm' ||
-    source?.preset.id === OPENCODE_FREE_PROVIDER_ID ||
     source?.preset.keyOptional === true
   ) return false
   // Loopback/LAN servers (LM Studio, vLLM, a local Ollama) normally serve
@@ -641,7 +611,8 @@ export function modelProviderModelProfile(
 ): ModelProviderModelProfileV1 | undefined {
   const normalized = normalizeModelKey(modelId)
   if (!normalized) return undefined
-  return provider.modelProfiles[normalized]
+  const profile = provider.modelProfiles[normalized]
+  return profile ? resolveModelMetadata(profile) : undefined
 }
 
 export function modelProviderModelProfilesForProvider(
@@ -653,24 +624,25 @@ export function modelProviderModelProfilesForProvider(
   for (const [modelId, profile] of Object.entries(provider.modelProfiles)) {
     const normalized = normalizeModelKey(modelId)
     if (!normalized || !isProviderComposerChatModelId(provider, normalized)) continue
+    const effective = resolveModelMetadata(profile)
     profiles[normalized] = {
-      ...profile,
-      contextWindowTokens: profile.contextWindowTokens ?? DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS
+      ...effective,
+      contextWindowTokens: effective.contextWindowTokens ?? DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS
     }
   }
   return profiles
 }
 
 export function modelSupportsImageInput(
-  profile: Pick<ModelProviderModelProfileV1, 'inputModalities'> | undefined
+  profile: Pick<ModelProviderModelProfileV1, 'inputModalities' | 'metadata' | 'evidence'> | undefined
 ): boolean {
-  return profile?.inputModalities.includes('image') === true
+  return profile ? resolveModelMetadata(profile).inputModalities?.includes('image') === true : false
 }
 
 export function modelReasoningEfforts(
-  profile: Pick<ModelProviderModelProfileV1, 'reasoning'> | undefined
+  profile: Pick<ModelProviderModelProfileV1, 'reasoning' | 'supportsReasoning' | 'metadata' | 'evidence'> | undefined
 ): ModelProviderReasoningCapabilityV1 | undefined {
-  return profile?.reasoning
+  return profile ? resolveModelMetadata(profile).reasoning : undefined
 }
 
 export function listImageGenerationProviderProfiles(settings: AppSettingsV1): ModelProviderProfileV1[] {

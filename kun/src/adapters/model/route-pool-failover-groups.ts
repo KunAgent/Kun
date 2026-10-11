@@ -141,6 +141,8 @@ export function orderFailoverGroupTargets(input: {
   members: ModelRouteTargetConfig[]
   fallbacks: ModelRouteTargetConfig[]
   usedPercent: (providerId: string) => number | undefined
+  /** Allowance percent left per hour until reset; undefined without a reading. */
+  pace?: (providerId: string) => number | undefined
   state: FailoverGroupRouteState
   now: number
 }): ModelRouteTargetConfig[] {
@@ -153,11 +155,21 @@ function orderGroupMembers(input: {
   request: { threadId: string; model: string; providerId?: string }
   members: ModelRouteTargetConfig[]
   usedPercent: (providerId: string) => number | undefined
+  pace?: (providerId: string) => number | undefined
   state: FailoverGroupRouteState
   now: number
 }): ModelRouteTargetConfig[] {
   const { group, request, members, usedPercent, state, now } = input
   switch (group.strategy as ModelFailoverStrategy) {
+    case 'pace': {
+      // Members without a reading keep their order behind those with one.
+      const score = (target: ModelRouteTargetConfig) => input.pace?.(target.providerId)
+      return [...members].map((target, index) => ({ target, index, value: score(target) }))
+        .sort((a, b) => (a.value === undefined) === (b.value === undefined)
+          ? (b.value ?? 0) - (a.value ?? 0) || a.index - b.index
+          : a.value === undefined ? 1 : -1)
+        .map((entry) => entry.target)
+    }
     case 'rotate': {
       const cursor = state.rotation.get(group.providerId) ?? 0
       state.rotation.set(group.providerId, cursor + 1)

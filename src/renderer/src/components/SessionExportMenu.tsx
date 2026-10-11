@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Download, FileText, Loader2 } from 'lucide-react'
+import { Check, Download, FileText, ListChecks, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS,
@@ -8,6 +8,9 @@ import {
 } from '@shared/conversation-export'
 import type { ChatBlock } from '../agent/types'
 import { buildConversationExportDocument } from '../lib/conversation-export'
+import { ConversationExportDialog } from './conversation-export/ConversationExportDialog'
+import { useConversationExportLabels } from './conversation-export/use-conversation-export-labels'
+import { HEADER_ICON_BUTTON_CLASS, HEADER_ICON_CLASS, HEADER_ICON_STROKE } from './workbench/header-action-button'
 
 type Props = {
   title: string
@@ -35,16 +38,8 @@ export function SessionExportMenu({
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
-  const labels = useMemo(() => ({
-    exportedAt: t('conversationExportDocumentExportedAt'),
-    user: t('conversationExportDocumentUser'),
-    assistant: t('conversationExportDocumentAssistant'),
-    attachments: t('conversationExportDocumentAttachments'),
-    referencedFiles: t('conversationExportDocumentReferencedFiles'),
-    generatedFiles: t('conversationExportDocumentGeneratedFiles'),
-    sources: t('conversationExportDocumentSources'),
-    attachment: t('conversationExportDocumentAttachment')
-  }), [t])
+  const labels = useConversationExportLabels()
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   const preview = useMemo(() => buildConversationExportDocument({
     title,
@@ -56,7 +51,8 @@ export function SessionExportMenu({
     currentTurnId,
     currentTurnUserId
   }), [blocks, busy, currentTurnId, currentTurnUserId, i18n.language, labels, title])
-  const disabled = preview.messageCount === 0 || exportingFormat !== null
+  const disabled = exportingFormat !== null
+  const currentEmpty = preview.messageCount === 0
 
   useEffect(() => {
     setOpen(false)
@@ -165,18 +161,18 @@ export function SessionExportMenu({
           setOpen((value) => !value)
           setError('')
         }}
-        className="ds-topbar-action-button inline-flex h-8 w-8 items-center justify-center rounded-[var(--ds-radius-control)] border border-transparent bg-transparent text-ds-faint opacity-90 transition hover:border-ds-border-muted hover:bg-ds-hover hover:text-ds-ink hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-40"
+        className={HEADER_ICON_BUTTON_CLASS}
         data-tooltip={tooltip}
         aria-label={tooltip}
         aria-haspopup="menu"
         aria-expanded={open}
       >
         {exportingFormat ? (
-          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.8} />
+          <Loader2 className={`${HEADER_ICON_CLASS} animate-spin`} strokeWidth={HEADER_ICON_STROKE} />
         ) : success ? (
           <Check className="h-4 w-4 text-emerald-500" strokeWidth={2} />
         ) : (
-          <Download className="h-4 w-4" strokeWidth={1.8} />
+          <Download className={HEADER_ICON_CLASS} strokeWidth={HEADER_ICON_STROKE} />
         )}
       </button>
 
@@ -187,14 +183,14 @@ export function SessionExportMenu({
           className="ds-no-drag ds-card-strong absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-[18px] border border-ds-border py-1.5 shadow-[0_18px_52px_rgba(20,47,95,0.18)] backdrop-blur-xl dark:shadow-[0_22px_58px_rgba(0,0,0,0.38)]"
         >
           <div className="border-b border-ds-border-muted px-3 pb-2 pt-1.5 text-[11px] font-semibold text-ds-faint">
-            {t('conversationExportMenu')}
+            {t('exportDialogMenuCurrent')}
           </div>
           {(['md', 'pdf'] as const).map((format) => (
             <button
               key={format}
               type="button"
               role="menuitem"
-              disabled={exportingFormat !== null}
+              disabled={exportingFormat !== null || currentEmpty}
               onClick={() => void exportFormat(format)}
               className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-[13px] text-ds-muted transition hover:bg-ds-hover/70 hover:text-ds-ink disabled:opacity-50"
             >
@@ -209,6 +205,19 @@ export function SessionExportMenu({
               ) : null}
             </button>
           ))}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              setError('')
+              setDialogOpen(true)
+            }}
+            className="flex w-full items-center gap-3 border-t border-ds-border-muted px-3 py-2.5 text-left text-[13px] text-ds-muted transition hover:bg-ds-hover/70 hover:text-ds-ink"
+          >
+            <ListChecks className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+            <span className="min-w-0 flex-1">{t('exportDialogMenuMulti')}</span>
+          </button>
           {busy ? (
             <p className="border-t border-ds-border-muted px-3 py-2 text-[11px] leading-4 text-ds-faint">
               {t('conversationExportBusyHint')}
@@ -221,6 +230,7 @@ export function SessionExportMenu({
           ) : null}
         </div>
       ) : null}
+      {dialogOpen ? <ConversationExportDialog onClose={() => setDialogOpen(false)} /> : null}
     </div>
   )
 }

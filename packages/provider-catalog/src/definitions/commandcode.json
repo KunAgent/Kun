@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "commandcode",
+  "name": "Command Code",
+  "origin": "relay",
+  "baseUrl": "https://api.commandcode.ai/provider/v1",
+  "endpoints": {
+    "chat_completions": "https://api.commandcode.ai/provider/v1",
+    "responses": "https://api.commandcode.ai/provider/v1",
+    "messages": "https://api.commandcode.ai/provider"
+  },
+  "docsUrl": "https://commandcode.ai/docs/provider",
+  "credentialUrl": "https://commandcode.ai/settings/keys"
+}

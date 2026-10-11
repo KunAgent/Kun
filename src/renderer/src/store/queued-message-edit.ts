@@ -28,6 +28,7 @@ type EditableQueuedMessage = Pick<QueuedUserMessage,
   | 'designDocumentTarget'
   | 'designImagePlacementTarget'
   | 'writeContext'
+  | 'paperContext'
   | 'approvalPolicy'
   | 'sandboxMode'
   | 'approvalReviewer'
@@ -53,7 +54,7 @@ export function queuedMessageEditBlockReason(message: EditableQueuedMessage): Qu
     message.fileReferences?.length || message.composerContexts?.length ||
     message.guiDesignCanvas || message.guiExcalidrawCanvas || message.guiDesignMode ||
     message.guiDesignArtifact || message.designProfile || message.designDocumentTarget ||
-    message.designImagePlacementTarget || message.writeContext
+    message.designImagePlacementTarget || message.writeContext || message.paperContext
   ) return 'queuedMessageEditUnsupported'
   // Document content is already inlined into the text prompt and cannot be
   // faithfully rebuilt as a composer attachment.

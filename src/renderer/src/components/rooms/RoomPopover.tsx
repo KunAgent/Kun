@@ -7,7 +7,7 @@ type Placement = { left: number; top: number; width: number; maxHeight: number }
 export function roomPopoverPlacement(input: {
   anchor: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'right'>
   viewportWidth: number; viewportHeight: number; width: number; height: number
-  side: 'top' | 'bottom'; align: 'start' | 'end'; zoom?: number
+  side: 'top' | 'bottom'; align: 'start' | 'end'; zoom?: number; maxHeight?: number
 }): Placement {
   const zoom = input.zoom && input.zoom > 0 ? input.zoom : 1
   const viewportWidth = input.viewportWidth / zoom, viewportHeight = input.viewportHeight / zoom
@@ -15,18 +15,21 @@ export function roomPopoverPlacement(input: {
     left: input.anchor.left / zoom, right: input.anchor.right / zoom }
   const width = Math.max(1, Math.min(input.width, viewportWidth - 24))
   const above = Math.max(1, anchor.top - 20), below = Math.max(1, viewportHeight - anchor.bottom - 20)
-  const desiredHeight = Math.min(input.height || 260, 360)
+  const cap = input.maxHeight ?? 360
+  const desiredHeight = Math.min(input.height || 260, cap)
   const openAbove = input.side === 'top' ? above >= desiredHeight || above >= below : below < desiredHeight && above > below
-  const maxHeight = Math.min(360, openAbove ? above : below)
+  const maxHeight = Math.min(cap, openAbove ? above : below)
   const top = openAbove ? anchor.top - 8 - Math.min(desiredHeight, maxHeight) : anchor.bottom + 8
   return { left: Math.max(12, Math.min(input.align === 'end' ? anchor.right - width : anchor.left, viewportWidth - width - 12)),
     top: Math.max(12, Math.min(top, viewportHeight - Math.min(desiredHeight, maxHeight) - 12)), width, maxHeight }
 }
 
 export function RoomPopover({ label, trigger, children, side = 'bottom', align = 'start',
-  className = '', disabled = false, width = 280 }: {
+  className = '', disabled = false, width = 280, maxHeight }: {
   label: string; trigger: ReactNode; children: (close: () => void) => ReactNode
   side?: 'top' | 'bottom'; align?: 'start' | 'end'; className?: string; disabled?: boolean; width?: number
+  /** Long action menus may grow past the default cap; the viewport still bounds them. */
+  maxHeight?: number
 }) {
   const [open, setOpen] = useState(false)
   const [placement, setPlacement] = useState<Placement | null>(null)
@@ -38,8 +41,8 @@ export function RoomPopover({ label, trigger, children, side = 'bottom', align =
     if (!anchor.current || !panel.current) return
     setPlacement(roomPopoverPlacement({ anchor: anchor.current.getBoundingClientRect(),
       viewportWidth: window.innerWidth, viewportHeight: window.innerHeight,
-      width, height: panel.current.scrollHeight, side, align, zoom: bodyZoom() }))
-  }, [width, side, align])
+      width, height: panel.current.scrollHeight, side, align, zoom: bodyZoom(), maxHeight }))
+  }, [width, side, align, maxHeight])
   useLayoutEffect(() => { if (open) measure() }, [open, measure])
   useEffect(() => {
     if (!open) { focused.current = false; return }

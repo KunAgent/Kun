@@ -199,7 +199,7 @@ export abstract class PiTuiApplicationOverlays extends PiTuiApplicationInput {
     if (approval) {
       if (this.approvalOverlay?.id !== approval.approvalId) {
         this.approvalOverlay?.handle.hide()
-        const component = new ApprovalDialog(this.controller, approval.toolName, approval.summary)
+        const component = new ApprovalDialog(this.controller, approval.toolName, approval.summary, () => this.terminal.rows)
         this.approvalOverlay = {
           id: approval.approvalId,
           component,

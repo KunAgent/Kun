@@ -1,6 +1,9 @@
+import agentUpdates from './common/agent-updates.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
 import phoneComposer from './common/phone-composer.json'
+import pluginMarket from './common/plugin-market.json'
+import pluginsPage from './common/plugins-page.json'
 import composerFastMode from './common/composer-fast-mode.json'
 import commandsSdd from './common/commands-sdd.json'
 import providerErrors from './common/provider-errors.json'
@@ -15,11 +18,29 @@ import speak from './common/speak.json'
 import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
+import paperWorkspace from './common/paper-workspace.json'
+import ade from './common/ade.json'
+import workLayout from './common/work-layout.json'
+import workSidebar from './common/work-sidebar.json'
+import workMainline from './common/work-mainline.json'
+import usagePanel from './common/usage-panel.json'
+import conversationExport from './common/conversation-export.json'
+import paperSearch from './common/paper-search.json'
+import wardrobePage from './common/wardrobe-page.json'
+import kunAccount from './common/kun-account.json'
+import wardrobeAccount from './common/wardrobe-account.json'
+import wardrobeShare from './common/wardrobe-share.json'
+import whatsNew from './common/whats-new.json'
+import wardrobeInvite from './common/wardrobe-invite.json'
+import codeTour from './common/code-tour.json'
 
 const common = {
+  ...agentUpdates,
   ...shellWorkflow,
   ...workflowConnect,
   ...phoneComposer,
+  ...pluginMarket,
+  ...pluginsPage,
   ...composerFastMode,
   ...commandsSdd,
   ...providerErrors,
@@ -33,6 +54,21 @@ const common = {
   ...speak,
   ...remoteAccess,
   ...paper,
+  ...paperWorkspace,
+  ...ade,
+  ...workLayout,
+  ...workSidebar,
+  ...workMainline,
+  ...usagePanel,
+  ...conversationExport,
+  ...paperSearch,
+  ...wardrobePage,
+  ...kunAccount,
+  ...wardrobeAccount,
+  ...wardrobeShare,
+  ...whatsNew,
+  ...wardrobeInvite,
+  ...codeTour,
 }
 
 export default common

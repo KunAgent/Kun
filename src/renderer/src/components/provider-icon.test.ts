@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { MODEL_PROVIDER_PRESETS } from '@shared/model-provider-preset-catalog'
 import {
   ProviderIcon,
   resolveProviderIconKey,
@@ -31,7 +32,20 @@ describe('provider icon resolution', () => {
     ['xiaomi', 'mimo'],
     ['zai-coding-plan', 'zai'],
     ['zenmux', 'zenmux'],
-    ['zhipu-coding-plan', 'zai']
+    ['zhipu-coding-plan', 'zhipu'],
+    ['zhipu-api', 'zhipu'],
+    ['zai-api', 'zai'],
+    ['xai-api', 'xai'],
+    ['openai-api', 'openai'],
+    ['anthropic-api', 'anthropic'],
+    ['gemini-api', 'gemini'],
+    ['ollama-local', 'ollama'],
+    ['three02ai', 'ai302'],
+    ['tencentcloud', 'tencentcloud'],
+    ['tencent-tokenhub', 'tencentcloud'],
+    ['vercel-ai-gateway', 'vercel'],
+    ['local-openai', 'local-server'],
+    ['opper', 'gateway']
   ])('maps trusted preset %s to %s', (presetId, expected) => {
     expect(resolveProviderIconKey({ presetId, providerId: 'custom-account-4' })).toBe(expected)
   })
@@ -51,11 +65,12 @@ describe('provider icon resolution', () => {
     expect(resolveProviderIconKey({ providerId: 'my-codex-provider' })).toBe('kun')
   })
 
-  it('falls back to the Kun K mark for intentionally unmapped and unknown providers', () => {
-    expect(resolveProviderIconKey({ presetId: 'tencentcloud', providerId: 'tencentcloud' }))
-      .toBe('kun')
-    expect(resolveProviderIconKey({ presetId: 'vercel-ai-gateway', providerId: 'vercel-ai-gateway' }))
-      .toBe('kun')
+  it('gives every built-in preset its own mark', () => {
+    const unmapped = MODEL_PROVIDER_PRESETS.filter((preset) => resolveProviderIconKey({ presetId: preset.id }) === 'kun')
+    expect(unmapped.map((preset) => preset.id)).toEqual([])
+  })
+
+  it('falls back to the Kun K mark for custom and unknown providers', () => {
     expect(resolveProviderIconKey({ providerId: 'custom-provider' })).toBe('kun')
     expect(resolveProviderIconKey({ providerId: 'constructor' })).toBe('kun')
     expect(resolveProviderIconKey({ presetId: '__proto__', providerId: 'toString' })).toBe('kun')

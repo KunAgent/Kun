@@ -1,5 +1,5 @@
 /**
- * Frontmatter properties panel (implementation §4). Sits at the top of the
+ * Frontmatter properties panel. Sits at the top of the
  * document editor, collapsed to "properties · N" by default. Form mode
  * covers text/list/checkbox/date; complex YAML falls back to source mode.
  * Source mode edits the interior (no `---` fences) and validates on blur —

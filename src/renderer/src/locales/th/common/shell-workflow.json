@@ -38,6 +38,8 @@
   "code": "รหัส",
   "write": "งาน",
   "workspaceModeWorkLabel": "งาน",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "ควบคุมทีมเอเจนต์",
   "workspaceModeCodeDescription": "สร้าง ดีบัก และเผยแพร่",
   "workspaceModeWorkDescription": "เขียน จัดระเบียบ และงานประจำวัน",
   "design": "การออกแบบ",
@@ -651,5 +653,11 @@
   "workflowCallableShort": "สามารถเรียก AI ได้",
   "workflowCallableHint": "ปล่อยให้เอเจนต์โหมดโค้ดรันโดยตรงผ่าน run_workflow",
   "miniWindowRestore": "คืนขนาดหน้าต่าง",
-  "miniWindowDragHint": "ลากแถบนี้เพื่อย้ายหน้าต่าง"
+  "miniWindowDragHint": "ลากแถบนี้เพื่อย้ายหน้าต่าง",
+  "sidebarKunStatusReady": "พร้อมใช้งาน",
+  "sidebarKunStatusStarting": "กำลังเริ่ม…",
+  "sidebarKunStatusOffline": "ไม่ได้เชื่อมต่อ",
+  "sidebarKunStatusOpen": "เปิดตู้เสื้อผ้าของฉัน",
+  "mobileCodeSegmentTasks": "งาน",
+  "mobileCodeSegmentChats": "บทสนทนา"
 }

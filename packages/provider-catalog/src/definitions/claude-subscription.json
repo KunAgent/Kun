@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "claude-subscription",
+  "name": "Claude (Pro/Max 订阅)",
+  "category": "subscription",
+  "kind": "agent-sdk",
+  "authFlow": "claude-subscription",
+  "authType": "subscription",
+  "baseUrl": "https://api.anthropic.com",
+  "endpointFormat": "messages",
+  "models": [
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5"
+  ],
+  "docsUrl": "https://code.claude.com/docs/en/authentication",
+  "credentialUrl": "https://claude.ai"
+}

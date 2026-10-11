@@ -72,7 +72,7 @@ export function ProviderAddSheet(props: SheetProps): ReactElement {
                 </h2>
                 <p className="mt-1 text-[12.5px] text-ds-faint">{t('modelProviderAddDialogDesc')}</p>
               </div>
-              <button
+              <button data-settings-action="ghost" data-settings-size="icon"
                 type="button"
                 aria-label={t('modelProviderAddDialogCancel')}
                 onClick={onClose}
@@ -97,7 +97,7 @@ export function ProviderAddSheet(props: SheetProps): ReactElement {
                     className="w-full rounded-xl border border-ds-border bg-ds-card py-2 pl-9 pr-3 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
                   />
                 </label>
-                <button
+                <button data-settings-action="secondary" data-settings-size="default"
                   type="button"
                   onClick={() => onOpenExternalImport()}
                   className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
@@ -121,7 +121,7 @@ export function ProviderAddSheet(props: SheetProps): ReactElement {
                   spellCheck={false}
                   className="min-w-0 flex-1 rounded-xl border border-ds-border bg-ds-card px-3 py-1.5 font-mono text-[12px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
                 />
-                <button
+                <button data-settings-action="secondary" data-settings-size="default"
                   type="button"
                   disabled={!importLinkInput.trim()}
                   onClick={() => void onStageImportLink()}

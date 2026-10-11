@@ -12,6 +12,7 @@ export function useWritePdfNavigation(input: {
   filePath: string
   pdfDocument: PDFDocumentProxy | null
   pageCount: number
+  pdfSha256?: string
   pageTexts: PageText[]
   scrollerRef: RefObject<HTMLDivElement | null>
 }): {
@@ -27,7 +28,7 @@ export function useWritePdfNavigation(input: {
   schedulePageSync: () => void
   jumpSearch: (direction: 1 | -1) => void
 } {
-  const { filePath, pdfDocument, pageCount, pageTexts, scrollerRef } = input
+  const { filePath, pdfDocument, pageCount, pageTexts, scrollerRef, pdfSha256 } = input
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const scrollRafRef = useRef<number | null>(null)
   const [pageInput, setPageInput] = useState('1')
@@ -58,9 +59,12 @@ export function useWritePdfNavigation(input: {
 
   useEffect(() => subscribeKnowledgeSourceNavigation(filePath, (location) => {
     if (location.kind !== 'pdf' || !pdfDocument) return false
+    // A racing file replacement must never reuse a verified old page anchor.
+    if (location.expectedSha256 && !pdfSha256) return false
+    if (location.expectedSha256 && location.expectedSha256 !== pdfSha256) return true
     scrollToPage(location.pageStart)
     return true
-  }), [filePath, pdfDocument, scrollToPage])
+  }), [filePath, pdfDocument, scrollToPage, pdfSha256])
 
   const updateCurrentPageFromScroll = useCallback((): void => {
     const scroller = scrollerRef.current

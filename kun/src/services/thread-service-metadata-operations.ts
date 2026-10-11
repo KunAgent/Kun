@@ -30,6 +30,7 @@ import type { Turn } from '../contracts/turns.js'
 import {
   applyThreadCursor,
   filterThreadSummaries,
+  isCodeWorkbenchThread,
   pageThreadSummaries
 } from '../domain/thread-list-query.js'
 import { isPublicTurnItem, type TurnItem } from '../contracts/items.js'
@@ -57,6 +58,9 @@ import {
   todoContentHash
 } from '../shared/todos.js'
 import { type ThreadService, type ThreadServiceOptions, type ListThreadsOptions, type ForkThreadOptions, type ResumeSessionOptions, type ResumeSessionResult, type SyncPlanTodosOptions, cloneTurnForThread, normalizeTodoItems, preserveToolTodoSources, normalizeTodoStatus, normalizeTodoSource, findExistingTodoForRaw, sameTodoSource, uniqueTodoId, cloneTodoListForThread, resolveWorkspaceRelativePath, cloneTurnForFork, cloneItemForThread, cloneSessionItemsForThread, matchesThreadSearch, threadStatusFromTurns, rebuildTurnsFromItems, attachmentIdsFromItems, toSessionSnapshot } from './thread-service-core.js'
+import { adeProjectDefaultsRevision, canonicalProjectIdentity } from '../shared/project-identity.js'
+import { ProjectDefaultsStaleError, resolveThreadExecutionConfig } from '../domain/thread-execution-config.js'
+import { stampThreadExecutionConfig } from '../domain/thread-execution-config.js'
 
 function toThreadStoreListOptions(options: ListThreadsOptions): ThreadStoreListOptions {
   const storeOptions: ListThreadsOptions = { ...options }
@@ -96,6 +100,14 @@ async list(this: ThreadService, options: ListThreadsOptions = {}): Promise<Threa
     )
     if (workspaceSet.size > 0) {
       threads = threads.filter((thread) => workspaceSet.has(thread.workspace))
+    }
+    if (options.workspaceMode) {
+      threads = threads.filter(
+        (thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode
+      )
+    }
+    if (options.workbenchScope === 'code') {
+      threads = threads.filter(isCodeWorkbenchThread)
     }
     if (query) {
       threads = threads.filter((thread) => matchesThreadSearch(thread, query))
@@ -161,9 +173,13 @@ async create(this: ThreadService,
       relation?: ThreadRelation
       /** Parent thread this thread branches from (used by `side`/`fork` relations). */
       parentThreadId?: string
+      /** Host-only ADE worker identity; never accepted from the request body. */
+      executionUnit?: ThreadRecord['executionUnit']
       /** Broker-derived metadata. Never populated from the public thread request body. */
       extensionMetadata?: ExtensionThreadMetadata
       roomContext?: ThreadRecord['roomContext']
+      /** Host-written provenance for a thread a bot Agent started; never from a request body. */
+      workbenchOrigin?: ThreadRecord['workbenchOrigin']
       historyRefId?: string
     } = {}
   ): Promise<ThreadRecord> {
@@ -171,6 +187,38 @@ async create(this: ThreadService,
     // don't collide with later allocations from `fork`/etc.
     const generated = this['ids'].next('thr')
     const id = options.id ?? generated
+    const defaults = this['projectSettings']?.()
+    const wantsProject = request.projectDefaultsRevision !== undefined
+    if (request.routeIntent === 'inherit' && !wantsProject) {
+      throw new ProjectDefaultsStaleError('routeIntent inherit requires projectDefaultsRevision')
+    }
+    const sourceRoot = request.taskWorkspaceId
+      ? this['projectSourceRoot']?.(request.taskWorkspaceId) ?? request.workspace
+      : request.workspace
+    const shouldResolve = !options.executionUnit && !options.roomContext &&
+      (request.agentSurface ?? 'code') === 'code'
+    const projectKey = shouldResolve
+      ? await canonicalProjectIdentity(sourceRoot).then((identity) => identity.key).catch(() => undefined)
+      : undefined
+    if (wantsProject && !projectKey) {
+      throw new ProjectDefaultsStaleError('project defaults could not be resolved; refresh the project')
+    }
+    const project = wantsProject && projectKey
+      ? defaults?.projectDefaults?.[projectKey]
+      : undefined
+    if (wantsProject && projectKey && request.projectDefaultsRevision !==
+      adeProjectDefaultsRevision(projectKey, project ?? {})) {
+      throw new ProjectDefaultsStaleError('project defaults changed or have not applied yet; refresh the project')
+    }
+    const execution = shouldResolve
+      ? resolveThreadExecutionConfig({
+          request, ...(projectKey ? { projectKey } : {}),
+          ...(project ? { project } : {}),
+          ...(defaults ? { global: defaults } : {}),
+          nowIso: this['nowIso']()
+        })
+      : undefined
+    const route = execution?.route
     const thread = createThreadRecord({
       id,
       title: options.title ?? (request.title?.trim() || 'New chat'),
@@ -178,12 +226,23 @@ async create(this: ThreadService,
       workspace: request.workspace,
       additionalWorkspaces: request.additionalWorkspaces,
       knowledgeBases: request.knowledgeBases,
-      model: request.model,
+      model: route?.model ?? request.model,
       ...(request.agentSurface ? { agentSurface: request.agentSurface } : {}),
-      ...(request.providerId?.trim() ? { providerId: request.providerId.trim() } : {}),
+      ...(route ? (route.providerId ? { providerId: route.providerId } : {})
+        : request.providerId?.trim() ? { providerId: request.providerId.trim() } : {}),
+      ...(route ? (route.harnessId ? { harnessId: route.harnessId } : {})
+        : request.harnessId?.trim() ? { harnessId: request.harnessId.trim() } : {}),
+      ...(request.workspaceMode ? { workspaceMode: request.workspaceMode } : {}),
+      ...(execution ? { collaboration: {
+        enabled: execution.snapshot.collaborationEnabled,
+        everEnabled: execution.snapshot.collaborationEnabled
+      } } : {}),
+      ...(execution ? { executionConfig: execution.snapshot } : {}),
+      ...(request.taskWorkspaceId?.trim() ? { taskWorkspaceId: request.taskWorkspaceId.trim() } : {}),
       ...(request.accountId?.trim() ? { accountId: request.accountId.trim() } : {}),
       ...(options.extensionMetadata ?? {}),
       ...(options.roomContext ? { roomContext: options.roomContext } : {}),
+      ...(options.workbenchOrigin ? { workbenchOrigin: options.workbenchOrigin } : {}),
       ...(options.historyRefId ? { historyRefId: options.historyRefId } : {}),
       ...(request.agentId?.trim() ? { agentId: request.agentId.trim() } : {}),
       ...(request.systemPrompt?.trim() ? { systemPrompt: request.systemPrompt.trim() } : {}),
@@ -196,6 +255,7 @@ async create(this: ThreadService,
       ...(request.costBudgetUsd !== undefined ? { costBudgetUsd: request.costBudgetUsd } : {}),
       ...(options.relation ? { relation: options.relation } : {}),
       ...(options.parentThreadId ? { parentThreadId: options.parentThreadId } : {}),
+      ...(options.executionUnit ? { executionUnit: options.executionUnit } : {}),
       status: options.status
     })
     // `create` and destructive delete use the same per-thread mutation queue.
@@ -230,6 +290,11 @@ async update(this: ThreadService, threadId: string, patch: {
     titleAuto?: boolean
     summary?: string
     workspace?: string
+    /** Set-only binding to a host-managed task workspace. */
+    taskWorkspaceId?: string
+    /** Harness rebind for external-session continuation. */
+    harnessId?: string
+    collaboration?: ThreadRecord['collaboration']
     additionalWorkspaces?: string[]
     knowledgeBases?: KnowledgeBaseMount[]
     mode?: ThreadMode
@@ -243,13 +308,15 @@ async update(this: ThreadService, threadId: string, patch: {
     costBudgetUsd?: number | null
     costBudgetWarningSent?: boolean
     relation?: ThreadRelation
+    /** Host-only provenance update; omitted from the public thread-update schema. */
+    workbenchOrigin?: ThreadRecord['workbenchOrigin']
   }): Promise<ThreadRecord> {
     const updated = await this['withThreadMutation'](threadId, async () => {
       const current = await this['threadStore'].get(threadId)
       if (!current) throw new Error(`thread not found: ${threadId}`)
       if (current.roomContext) {
-        const protectedFields = ['workspace', 'additionalWorkspaces', 'knowledgeBases', 'mode',
-          'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation'] as const
+        const protectedFields = ['workspace', 'taskWorkspaceId', 'additionalWorkspaces', 'knowledgeBases', 'mode',
+          'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation', 'harnessId', 'collaboration'] as const
         if (Object.hasOwn(patch, 'roomContext') || protectedFields.some((key) =>
           patch[key] !== undefined && JSON.stringify(patch[key]) !== JSON.stringify(current[key]))) {
           throw new Error('room thread execution policy is frozen; change the room configuration or task instead')
@@ -262,16 +329,27 @@ async update(this: ThreadService, threadId: string, patch: {
       if (patch.status !== undefined && patch.status !== 'idle' && patch.status !== 'archived') {
         throw new Error(`thread status is managed by the runtime: ${patch.status}`)
       }
+      if (
+        patch.taskWorkspaceId !== undefined &&
+        current.taskWorkspaceId !== undefined &&
+        patch.taskWorkspaceId !== current.taskWorkspaceId
+      ) {
+        throw new Error('taskWorkspaceId is bound once; create a new thread to rebind')
+      }
       const { costBudgetUsd, costBudgetWarningSent, status, ...standardPatch } = patch
       if (standardPatch.additionalWorkspaces) {
         standardPatch.additionalWorkspaces = [...new Set(
           standardPatch.additionalWorkspaces.map((entry) => entry.trim()).filter(Boolean)
         )].filter((entry) => entry !== (standardPatch.workspace ?? current.workspace))
       }
-      if (standardPatch.knowledgeBases !== undefined || standardPatch.workspace !== undefined) {
+      if (standardPatch.knowledgeBases !== undefined || standardPatch.workspace !== undefined
+        || standardPatch.harnessId !== undefined || standardPatch.collaboration !== undefined) {
         if (current.status === 'running') {
-          throw new Error('workspace and knowledge bases cannot be changed while the thread is running')
+          throw new Error('workspace, knowledge bases, harness, and collaboration cannot be changed while the thread is running')
         }
+      }
+      if (standardPatch.collaboration && current.pendingExecutionConfig) {
+        throw new Error('task settings are pending; use the execution-config endpoint')
       }
       if (standardPatch.knowledgeBases !== undefined || standardPatch.workspace !== undefined) {
         standardPatch.knowledgeBases = normalizeKnowledgeBaseMounts(
@@ -280,6 +358,22 @@ async update(this: ThreadService, threadId: string, patch: {
         )
       }
       const merged: ThreadRecord = { ...current, ...standardPatch }
+      if (standardPatch.collaboration) {
+        merged.collaboration = {
+          enabled: standardPatch.collaboration.enabled,
+          everEnabled: current.collaboration?.everEnabled === true ||
+            current.collaboration?.enabled === true ||
+            standardPatch.collaboration.enabled
+        }
+        if (current.executionConfig) {
+          const { revision: _revision, resolvedAt: _resolvedAt, ...values } = current.executionConfig
+          merged.executionConfig = stampThreadExecutionConfig({
+            ...values,
+            collaborationEnabled: standardPatch.collaboration.enabled,
+            origins: { ...values.origins, collaborationEnabled: 'task' }
+          }, this['nowIso']())
+        }
+      }
       if (status === 'archived') {
         // Archival is a visibility overlay: an already-active turn can settle
         // but no new turn may be admitted until the thread is restored.

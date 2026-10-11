@@ -1,0 +1,60 @@
+/* Paper search page shell shared by the direct and Agent pages: a scrollable
+ * stage column plus a 360px paper-pool rail. Below ~980px (container width) the
+ * rail turns into an overlay toggled from the header. */
+
+.surface {
+  composes: surface from '../PaperWorkspaceSurface.module.css';
+  position: relative;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  container-type: inline-size;
+}
+
+.body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.body[data-rail='open'] {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.stage {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.rail {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  border-left: 1px solid var(--paper-surface-divider);
+  background: var(--paper-surface-rail);
+}
+
+@container (max-width: 980px) {
+  .body[data-rail='open'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    display: none;
+  }
+
+  .rail[data-overlay='true'] {
+    position: absolute;
+    z-index: 30;
+    inset-block: 44px 0;
+    inset-inline-end: 0;
+    display: flex;
+    width: min(360px, 92%);
+    box-shadow: var(--ds-shadow-overlay, 0 18px 48px rgba(20, 47, 95, 0.22));
+  }
+}

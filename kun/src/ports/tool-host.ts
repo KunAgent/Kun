@@ -4,7 +4,7 @@ import type {
   SandboxMode
 } from '../contracts/policy.js'
 import type { ApprovalRequest, ApprovalResolution } from '../domain/approval.js'
-import type { TurnItem } from '../contracts/items.js'
+import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type {
   ActingTurnModelRoute,
@@ -64,6 +64,8 @@ export type GuiPlanContext = {
   relativePath: string
   /** Stable plan id; matches `GuiPlanArtifact.id` on the GUI side. */
   planId: string
+  /** Keep the host-reserved path instead of deriving a new path from the model's title. */
+  fixedPath?: boolean
   /** Original user request that originated the plan turn. */
   sourceRequest?: string
   /** Display title for the plan. */
@@ -163,7 +165,7 @@ export type ToolHostContext = {
   /** Pending desktop checkpoint gate for the first workspace mutation. */
   workspaceCheckpointRequestId?: string
   orchestration?: 'direct' | 'graph'
-  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation'
+  messageSource?: UserMessageSource
   /** Structured child identity bound to a one-click resume turn. */
   subagentResume?: SubagentResumeRequest
   /** Additional explicitly trusted workspace roots for this persisted thread. */
@@ -214,6 +216,26 @@ export type ToolHostContext = {
   fastContextTaskCount?: number
   /** Active model provider id selected for this turn. Child agents inherit this routing unless a profile overrides it. */
   modelProviderId?: string
+  /** Frozen harness identity for this turn; tool providers use it for harness-aware behavior. */
+  harnessId?: string
+  /** Host proof that the active external route has a working, cancellable Kun tool bridge. */
+  managerToolBridgeAvailable?: boolean
+  /**
+   * Owning workspace mode of the turn's thread ('code' | 'ade'). Manager
+   * (`worker_*`) tools advertise only when this is 'ade'; missing counts as
+   * 'code'.
+   */
+  workspaceMode?: 'code' | 'ade'
+  /** Thread policy snapshot; absent legacy ADE retains manager admission. */
+  collaborationEnabled?: boolean
+  /** Allows read/stop/answer controls after new delegation is disabled. */
+  collaborationEverEnabled?: boolean
+  /**
+   * Execution-unit classification for the owning thread. P0 has no worker
+   * execution unit yet, so ADE workers leave this unset until task
+   * workspaces land.
+   */
+  executionUnitKind?: 'worker'
   /** Frozen model/provider/account route used by automatic approval review. */
   actingModelRoute?: ActingTurnModelRoute
   /** Bounded initiating intent supplied only to the isolated approval reviewer. */
@@ -244,14 +266,14 @@ export type ToolHostContext = {
   allowedToolNames?: readonly string[]
   /** Optional skill-id allow-list. When set, other skills are hidden and cannot be loaded. */
   allowedSkillIds?: readonly string[]
-  /** Workspace-relative read scopes captured at a delegated child boundary. */
+  /** Relative paths or host-minted absolute paths within the delegated workspace. */
   allowedReadPaths?: readonly string[]
   /**
    * When true and no delegated read scopes are set, file-read tools may resolve
    * paths outside the thread workspace. Writes and commands stay on sandboxMode.
    */
   allowHostReads?: boolean
-  /** Workspace-relative write scopes captured at a delegated child boundary. */
+  /** Relative paths or host-minted absolute paths within the delegated workspace. */
   allowedWritePaths?: readonly string[]
   /** Immutable artifact capability set captured at a delegated child boundary. */
   allowedArtifactIds?: readonly string[]

@@ -1,4 +1,8 @@
-import { session } from 'electron'
+import type { ModelProviderModelProfileV1 } from '../shared/app-settings'
+import type { DiscoveredModelProfile } from '../../kun/src/services/provider-model-descriptors'
+import { parseProviderModelDescriptor } from '../../kun/src/services/provider-model-descriptors'
+import { resolveElectronSystemProxyUrl } from './electron-system-proxy'
+export { resolveElectronSystemProxyUrl } from './electron-system-proxy'
 import {
   isCustomModelEndpointFormat,
   normalizeModelEndpointFormat,
@@ -13,7 +17,9 @@ import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
 import { resolveProviderEndpointBaseUrl } from '../shared/model-provider-endpoints'
 import { GROK_SUBSCRIPTION_MODEL_IDS } from '../shared/model-provider-presets'
 import { fetchWithOptionalProxy } from './proxy-fetch'
-import { CODEX_CLI_VERSION, codexRequestHeaders, isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
+import { codexRequestHeaders, isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
+import { defaultKeyHeader } from '../../kun/src/contracts/azure-openai.js'
+import { codexProviderCatalogUrl, fetchCodexProviderCatalog } from '../../kun/src/adapters/model/codex-provider-catalog.js'
 import { parseCodexModelCatalog } from './codex-model-catalog'
 import {
   ensureFreshGrokCredentials,
@@ -66,7 +72,8 @@ export async function fetchProviderProbe(
 export function providerProbeHeaders(
   endpointFormat: ModelEndpointFormat,
   apiKey: string,
-  customHeaders?: Record<string, string>
+  customHeaders?: Record<string, string>,
+  requestUrl?: string
 ): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   const key = apiKey.trim()
@@ -74,7 +81,7 @@ export function providerProbeHeaders(
     headers['anthropic-version'] = ANTHROPIC_VERSION
     if (key) headers['x-api-key'] = key
   } else if (key) {
-    headers.Authorization = `Bearer ${key}`
+    Object.assign(headers, defaultKeyHeader(requestUrl, key))
   }
   // Same layering as Kun's buildCompatRequestHeaders: user-configured custom
   // headers sit above protocol defaults (a relay may require its own auth
@@ -174,11 +181,11 @@ export async function probeModelProvider(
     { baseUrl, endpoints: request.endpoints },
     endpointFormat
   )
-  const url = codexHeaders
-    ? `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLI_VERSION}`
+  let url = codexHeaders
+    ? codexProviderCatalogUrl()
     : upstreamOpenAiModelsUrl(modelsBaseUrl)
-  const headers = {
-    ...(codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey, request.customHeaders)),
+  let headers = {
+    ...(codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey, request.customHeaders, url)),
     ...openCodeSessionRuntimeHeaders({
       presetSource: settings?.provider.providers.find((provider) => provider.id === request.providerId)
         ?.presetSource?.presetId,
@@ -190,16 +197,28 @@ export async function probeModelProvider(
   let res: Response
   let text: string
   try {
-    res = await fetcher(url, {
-      method: 'GET',
-      headers,
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
-    }, proxyUrl)
-    const body = await readBoundedResponseText(res, MAX_MODEL_LIST_RESPONSE_BYTES)
-    if (body.truncated) {
-      return { ok: false, message: `Model list response exceeded the ${MAX_MODEL_LIST_RESPONSE_BYTES} byte limit.` }
+    if (codexHeaders) {
+      const catalog = await fetchCodexProviderCatalog({
+        fetcher, proxyUrl, headers, timeoutMs: PROBE_TIMEOUT_MS,
+        onRequest: (request) => { url = request.url; headers = request.headers }
+      })
+      if (catalog.truncated) {
+        return { ok: false, message: `Model list response exceeded the ${MAX_MODEL_LIST_RESPONSE_BYTES} byte limit.` }
+      }
+      res = catalog.response
+      text = catalog.text
+    } else {
+      res = await fetcher(url, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
+      }, proxyUrl)
+      const body = await readBoundedResponseText(res, MAX_MODEL_LIST_RESPONSE_BYTES)
+      if (body.truncated) {
+        return { ok: false, message: `Model list response exceeded the ${MAX_MODEL_LIST_RESPONSE_BYTES} byte limit.` }
+      }
+      text = body.text
     }
-    text = body.text
   } catch (e) {
     const message = providerProbeFailureMessage(e, url)
     logWarn('provider-probe', 'Provider model discovery failed.', {
@@ -224,12 +243,21 @@ export async function probeModelProvider(
   }
   if (codexHeaders) {
     try {
-      return { ok: true, latencyMs, ...parseCodexModelCatalog(text) }
+      const result = parseCodexModelCatalog(text)
+      return { ok: true, latencyMs, modelIds: result.modelIds, modelProfiles: guiModelProfiles(result.modelProfiles) }
     } catch {
       return { ok: false, message: 'Codex returned an invalid model catalog.' }
     }
   }
-  return { ok: true, latencyMs, modelIds: parseModelIds(text) }
+  const modelIds = parseModelIds(text)
+  let rows: unknown[] = []
+  try { const value = JSON.parse(text); rows = Array.isArray(value?.data) ? value.data : [] } catch { /* Preserve legacy malformed-list behavior. */ }
+  const modelProfiles = Object.fromEntries(rows.flatMap((value) => {
+    const row = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+    return typeof row.id === 'string' && modelIds.includes(row.id.trim()) ? [[row.id.trim(), parseProviderModelDescriptor(row,
+      endpointFormat === 'responses' ? 'openai-responses' : endpointFormat === 'messages' ? 'anthropic-thinking' : 'openai-chat-completions')]] : []
+  }))
+  return { ok: true, latencyMs, modelIds, modelProfiles: guiModelProfiles(modelProfiles) }
 }
 
 function providerProbeFailureMessage(error: unknown, url: string): string {
@@ -288,34 +316,6 @@ async function providerReachable(
   }
 }
 
-export async function resolveElectronSystemProxyUrl(url: string): Promise<string> {
-  try {
-    const rules = await session.defaultSession.resolveProxy(url)
-    for (const entry of rules.split(';')) {
-      const [kind = '', target = ''] = entry.trim().split(/\s+/, 2)
-      if (!target || kind.toUpperCase() === 'DIRECT') continue
-      const protocol = kind.toUpperCase() === 'HTTPS'
-        ? 'https:'
-        : kind.toUpperCase() === 'SOCKS' || kind.toUpperCase() === 'SOCKS5'
-          ? 'socks5:'
-          : kind.toUpperCase() === 'SOCKS4'
-            ? 'socks4:'
-            : kind.toUpperCase() === 'PROXY'
-              ? 'http:'
-              : ''
-      if (!protocol) continue
-      const candidate = new URL(`${protocol}//${target}`)
-      if (!candidate.hostname || !candidate.port) continue
-      return candidate.toString()
-    }
-  } catch (error) {
-    logWarn('provider-probe', 'Failed to resolve the desktop system proxy.', {
-      requestUrl: url,
-      message: describeProviderProbeError(error)
-    })
-  }
-  return ''
-}
 
 export function parseModelIds(body: string): string[] {
   if (body.length > MAX_MODEL_LIST_RESPONSE_BYTES) return []
@@ -383,4 +383,12 @@ async function readBoundedResponseText(
     offset += chunk.byteLength
   }
   return { text: new TextDecoder().decode(bytes), truncated: false }
+}
+
+function guiModelProfiles(profiles: Record<string, DiscoveredModelProfile>): Record<string, ModelProviderModelProfileV1> {
+  return Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, {
+    // Required GUI compatibility fields are operational defaults. Their evidence
+    // remains unknown from the parser, so they never become declared facts.
+    inputModalities: ['text'], outputModalities: ['text'], messageParts: ['text'], supportsToolCalling: true, ...profile
+  }]))
 }

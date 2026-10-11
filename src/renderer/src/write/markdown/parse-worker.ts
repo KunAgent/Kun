@@ -1,6 +1,5 @@
 /**
- * Web Worker entry for off-main-thread Markdown parsing (implementation
- * §3.9/§11). remark fidelity costs ~1.5s at 300k characters; documents past
+ * Web Worker entry for off-main-thread Markdown parsing. remark fidelity costs ~1.5s at 300k characters; documents past
  * `WORK_PARSE_WORKER_THRESHOLD` parse here so the editor stays responsive.
  * Replies with the structured-clone-safe parse result.
  */

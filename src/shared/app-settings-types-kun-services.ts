@@ -21,6 +21,8 @@ import {
   KunDesignQualitySettingsV1,
   KunFastContextSettingsV1,
   KunGraphSettingsPatchV1,
+  KunHarnessDefaultsEntryV1,
+  KunHarnessProviderOverrideV1,
   KunInstructionSettingsV1,
   KunLabSettingsPatchV1,
   KunPlanExecutionSettingsV1,
@@ -325,10 +327,55 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
   historyHygiene?: Partial<KunHistoryHygieneSettingsV1>
 }
 
+/** Patch shape for agents.kun.harnesses; arrays/records replace whole. */
+export type KunHarnessSettingsPatchV1 = {
+  enabledProfiles?: import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1[]
+  disabledIds?: string[]
+  /** Replaces the whole override map, like the other records. */
+  providers?: Record<string, KunHarnessProviderOverrideV1>
+  defaults?: Record<string, KunHarnessDefaultsEntryV1>
+  /**
+   * Legacy shape: merges into `defaults[*].permissionMode` for
+   * entries that lack one. New writers should send `defaults` only.
+   */
+  defaultPermissionMode?: Record<string, string>
+  defaultHarnessId?: string
+  agentOrder?: string[]
+}
+
+/** Patch shape for agents.kun.ade; nested objects merge field-wise. */
+export type KunAdeSettingsPatchV1 = {
+  enabled?: boolean
+  /** Dedicated project mutation API writes this map; generic IPC does not. */
+  projectDefaults?: KunRuntimeSettingsV1['ade']['projectDefaults']
+  harnessRouter?: boolean
+  deterministicHandoff?: boolean
+  managerModel?: { providerId?: string; model?: string }
+  managerMayApprove?: boolean
+  allowUnattendedFullAccess?: boolean
+  limits?: { softWorkers?: number; hardWorkers?: number }
+  budget?: { softTokens?: number; hardTokens?: number } | null
+  hibernation?: { enabled?: boolean; idleMinutes?: number }
+  stall?: { structuredMinutes?: number; terminalMinutes?: number }
+  notifications?: {
+    waiting?: boolean
+    failed?: boolean
+    done?: boolean
+    stalled?: boolean
+    sound?: boolean
+    keepAwake?: boolean
+  }
+}
+
+/** Patch shape for agents.kun.worktrees. */
+export type KunWorktreeSettingsPatchV1 = {
+  sharedPaths?: Record<string, Array<{ path: string; mode?: string }>>
+}
+
 export type KunRuntimeSettingsPatchV1 = Partial<
   Omit<
     KunRuntimeSettingsV1,
-    'mcpSearch' | 'githubMcp' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'speak' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab'
+    'mcpSearch' | 'githubMcp' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'speak' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab' | 'harnesses' | 'ade' | 'worktrees'
   >
 > & {
   mcpSearch?: Partial<KunMcpSearchSettingsV1>
@@ -357,6 +404,9 @@ export type KunRuntimeSettingsPatchV1 = Partial<
   planExecution?: Partial<KunPlanExecutionSettingsV1>
   fastContext?: Partial<KunFastContextSettingsV1>
   lab?: KunLabSettingsPatchV1
+  harnesses?: KunHarnessSettingsPatchV1
+  ade?: KunAdeSettingsPatchV1
+  worktrees?: KunWorktreeSettingsPatchV1
 }
 
 export type KunSettingsEnvelopePatchV1 = {
@@ -420,6 +470,8 @@ export type NotificationConfigV1 = {
   mainAgentTurnComplete?: boolean
   /** Subagent side-session completion notifications. Missing legacy values normalize to disabled. */
   subagentTurnComplete?: boolean
+  /** Remind before a provider allowance window renews with much of it unused. Normalized settings keep only `false`. */
+  quotaReminders?: boolean
 }
 
 export const WINDOW_CLOSE_ACTIONS = ['quit'] as const

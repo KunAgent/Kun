@@ -13,7 +13,7 @@ type ActivityProjection = {
   cancelRequested?: boolean
   attention?: { approvalIds: string[]; userInputIds: string[] } | null
   applyIntent?: unknown
-  currentPeerRequest?: number | boolean
+  currentAttentionRequest?: number | boolean
   taskPresent?: number | boolean
 }
 
@@ -21,6 +21,12 @@ type ActivityProjection = {
 export async function roomActivitySummary(store: RoomStore, roomId?: string) {
   const running = new Set<string>()
   const attention = new Set<string>()
+  const deletedRooms = new Map<string, boolean>()
+  const deleted = async (id: string): Promise<boolean> => {
+    if (!deletedRooms.has(id)) deletedRooms.set(id, Boolean((await store.get<{ deletedAt?: string }>('room', id))?.value.deletedAt))
+    return deletedRooms.get(id)!
+  }
+  if (roomId && await deleted(roomId)) return { runningCount: 0, attentionCount: 0, attentionKeys: [] }
   for (const kind of ['task', 'integration', 'request'] as const) {
     let afterSeq: number | undefined
     for (;;) {
@@ -29,6 +35,7 @@ export async function roomActivitySummary(store: RoomStore, roomId?: string) {
         status: kind === 'task' ? [...taskRunning, ...taskAttention] : kind === 'request' ?
           ['pending', 'running', 'stopping', 'needs_input', 'failed', 'recovery_required'] : [...integrationRunning, ...integrationAttention] })
       for (const row of rows) {
+        if (await deleted(row.roomId!)) continue
         const value = row.value
         const key = JSON.stringify([row.roomId, kind === 'task' ? row.id : row.taskId ?? value.taskId ?? row.id])
         const requestId = kind === 'request' ? row.id : value.task?.requestId ?? value.requestId
@@ -38,7 +45,7 @@ export async function roomActivitySummary(store: RoomStore, roomId?: string) {
           if (taskAttention.includes(value.task?.status ?? '')) attention.add(attentionKey)
         } else if (kind === 'request') {
           if (['pending', 'running', 'stopping'].includes(value.status ?? '')) running.add(attentionKey)
-          if (value.currentPeerRequest &&
+          if (value.currentAttentionRequest &&
             (ROOM_REQUEST_ATTENTION_STATUSES as readonly string[]).includes(value.status ?? '')) {
             attention.add(attentionKey)
           }

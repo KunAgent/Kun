@@ -1,3 +1,4 @@
+import { completePendingModelCatalog } from './provider-model-progressive-import'
 import type {
   AppSettingsV1,
   ModelProviderModelProfileV1,
@@ -7,8 +8,6 @@ import type {
 } from '@shared/app-settings'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
-  OPENCODE_FREE_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
   defaultModelRequestRetrySettings,
   defaultModelProviderSettings,
   listModelProviderReferences,
@@ -38,6 +37,7 @@ import {
 } from './provider-model-import'
 import {
   cursorProviderNeedsMetadataRepair,
+  providerConnectionFingerprint,
   kunProviderSelectionPatch,
   modelProviderDeletionKunPatch,
   modelProviderDeletionWritePatch,
@@ -59,40 +59,17 @@ import {
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 
-
-
-
-
-
-
-function isOpenCodeFreeProvider(provider: ModelProviderProfileV1): boolean {
-  return resolveModelProviderPresetSource(provider)?.preset.id === OPENCODE_FREE_PROVIDER_ID
-}
-
-const OPEN_CODE_ANONYMOUS_CHAT_MODELS = new Set<string>(OPENCODE_FREE_MODEL_IDS)
-
-export function catalogResultForProviderImport(
-  provider: ModelProviderProfileV1,
-  catalogResult: ModelsDevCatalogResult
-): ModelsDevCatalogResult {
-  return isOpenCodeFreeProvider(provider) && catalogResult.status === 'ok'
-    ? {
-        ...catalogResult,
-        models: catalogResult.models.filter((model) =>
-          model.free === true && OPEN_CODE_ANONYMOUS_CHAT_MODELS.has(model.id)
-        )
-      }
-    : catalogResult
-}
-
 export function useProviderLifecycleActions(scope: Record<string, any>): Record<string, any> {
   const deletionInFlight = useRef(false)
+  const importSequence = useRef(0)
   const [deletingProviderId, setDeletingProviderId] = useState<string | null>(null)
   const { t, form, kun, provider, setSharedConnections, setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames, pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers, credentialMutationTimers, mounted, setCredentialDrafts, enqueueSharedMutation, selectedProviderId, setSelectedProviderId, activeTab, setActiveTab, previousProviderSelectionRef, setProbeStates, setPendingImport, cursorMetadataRepairAttempts, setDraftProvider, activeKunProviderId, confirmAction, updateModelProviders, sharedProjectionInput } = scope
   const modelProviders = scope.modelProviders as ModelProviderProfileV1[]
   const displayProviders = scope.displayProviders as ModelProviderProfileV1[]
   const draftProvider = scope.draftProvider as ModelProviderProfileV1 | null
   const activeProvider = scope.activeProvider as ModelProviderProfileV1 | undefined
+  const currentImportProvider = useRef<ModelProviderProfileV1 | undefined>(activeProvider)
+  currentImportProvider.current = activeProvider
   const patchProviderProfile = scope.patchProviderProfile as (
     item: ModelProviderProfileV1,
     transform: (item: ModelProviderProfileV1) => ModelProviderProfileV1
@@ -481,14 +458,15 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
     providerError?: string
     latencyMs?: number
     authoritative?: boolean
+    discoverySource?: 'provider' | 'preset' | 'manual'
+    catalogPromise?: Promise<ModelsDevCatalogResult>
+    catalogLoading?: boolean
   }): void => {
-    const catalogResult = catalogResultForProviderImport(input.target, input.catalogResult)
+    const catalogResult = input.catalogResult
     const catalogOnlyIds = catalogResult.status === 'ok' && catalogResult.matchMode === 'catalog'
       ? catalogResult.models.map((model) => model.id)
       : []
-    const providerModelIds = isOpenCodeFreeProvider(input.target)
-      ? input.providerModelIds.filter((modelId) => catalogOnlyIds.some((id) => id.toLowerCase() === modelId.toLowerCase()))
-      : input.providerModelIds
+    const providerModelIds = input.providerModelIds
     const total = mergeProviderModelIds(providerModelIds, catalogOnlyIds).length
     const hasUsableEntries = providerModelIds.length > 0 || catalogOnlyIds.length > 0
     if (!hasUsableEntries) {
@@ -520,9 +498,12 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
         total
       }
     }))
+    const importRequestId = ++importSequence.current
     setPendingImport({
       providerId: input.target.id,
+      importRequestId, catalogLoading: input.catalogLoading,
       providerModelIds,
+      discoverySource: input.discoverySource,
       ...(input.modelAliases ? { modelAliases: input.modelAliases } : {}),
       ...(input.discoveredModelProfiles
         ? { discoveredModelProfiles: input.discoveredModelProfiles }
@@ -530,6 +511,16 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       catalogResult,
       ...(input.providerError ? { providerError: input.providerError } : {}),
       ...(input.authoritative ? { authoritative: true } : {})
+    })
+    if (input.catalogPromise) void input.catalogPromise.catch((error: unknown): ModelsDevCatalogResult => ({
+      status: 'error', message: error instanceof Error ? error.message : String(error), models: []
+    })).then((catalogResult) => {
+      if (!mounted.current) return
+      const active = currentImportProvider.current
+      const stillCurrent = !!active && active.id === input.target.id &&
+        providerConnectionFingerprint(active, scope.providerProxy) === input.fingerprint
+      setPendingImport((previous: { providerId: string; importRequestId?: number } | null) =>
+        completePendingModelCatalog(previous, { providerId: input.target.id, importRequestId, stillCurrent }, catalogResult))
     })
   }
   return { updateModelProviderId, commitProviderDraft, commitProviderProfile, cancelProviderDraft, addModelProvider, addDefaultModelProvider, addPresetModelProvider, refreshPresetProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport }

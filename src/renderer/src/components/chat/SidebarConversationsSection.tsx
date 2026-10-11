@@ -53,6 +53,7 @@ type Props = {
   onDeleteThread: (threadId: string) => Promise<void>
   onRestoreThread: (threadId: string) => Promise<void>
   t: (k: string, opts?: Record<string, unknown>) => string
+  titleKey?: string
 }
 
 type LocalRenameState = RenameThreadDialogState
@@ -69,7 +70,8 @@ export function SidebarConversationsSection({
   onArchiveThread,
   onDeleteThread,
   onRestoreThread,
-  t
+  t,
+  titleKey = 'sidebarConversations'
 }: Props): ReactElement {
   const orderTracker = useRef(createSidebarThreadOrderTracker()).current
   const { i18n } = useTranslation('common')
@@ -259,11 +261,12 @@ export function SidebarConversationsSection({
       <div className="flex min-h-[34px] items-center justify-between px-2 pb-1 pt-2">
         <button
           type="button"
+          aria-expanded={!collapsed}
           onClick={() => setCollapsed((open) => !open)}
           className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-ds-faint transition hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-muted"
-          title={t('sidebarConversations')}
+          title={t(titleKey)}
           aria-label={[
-            t('sidebarConversations'),
+            t(titleKey),
             conversationsHaveRunning ? runningLabel : ''
           ].filter(Boolean).join(' - ')}
         >
@@ -272,7 +275,7 @@ export function SidebarConversationsSection({
           ) : (
             <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={2} />
           )}
-          <span className="truncate">{t('sidebarConversations')}</span>
+          <span className="truncate">{t(titleKey)}</span>
           {conversationsHaveRunning ? <ThreadRunningIndicator label={runningLabel} /> : null}
         </button>
         <div className="flex shrink-0 items-center gap-1">

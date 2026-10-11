@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FileEdit, PanelRightClose } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../agent/types'
@@ -19,16 +19,24 @@ import { DiffView } from './DiffView'
 export function ChangeInspector({
   blocks,
   className,
+  workspaceRoot: workspaceRootOverride,
+  isolated = false,
   onCollapse
 }: {
   blocks: ChatBlock[]
   className?: string
+  workspaceRoot?: string
+  isolated?: boolean
   onCollapse: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const selectedId = useChatStore((s) => s.inspectorSelectedId)
-  const selectInspectorItem = useChatStore((s) => s.selectInspectorItem)
-  const workspaceRoot = useChatStore((s) => s.workspaceRoot)
+  const sharedSelectedId = useChatStore((s) => s.inspectorSelectedId)
+  const sharedSelectItem = useChatStore((s) => s.selectInspectorItem)
+  const sharedWorkspaceRoot = useChatStore((s) => s.workspaceRoot)
+  const [localSelectedId, setLocalSelectedId] = useState<string | null>(null)
+  const selectedId = isolated ? localSelectedId : sharedSelectedId
+  const selectInspectorItem = isolated ? setLocalSelectedId : sharedSelectItem
+  const workspaceRoot = workspaceRootOverride ?? sharedWorkspaceRoot
 
   const fileChanges = useMemo<ToolBlock[]>(() => {
     return blocks.flatMap((block): ToolBlock[] => {

@@ -1,3 +1,4 @@
+import { readyHarnessProfiles } from '@shared/harness-enablement'
 import { useEffect, useState, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -5,6 +6,7 @@ import { Bot, Check, Plug, Search, Sparkles, Wrench, X } from 'lucide-react'
 import type { KunSubagentProfileV1 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { ModelSelect, ReasoningEffortPicker } from './SubagentProfileControls'
+import { harnessRowAvailable, harnessRowRunsTurns, loadHarnesses, loadHarnessProviderGroups, useHarnessStore } from '../../store/harness-store'
 import {
   BUILTIN_TOOL_NAMES,
   loadCapabilityCatalog,
@@ -34,6 +36,17 @@ export function ProfileDialog({
   const [tab, setTab] = useState<'basic' | 'permissions'>('basic')
   const [catalog, setCatalog] = useState<CapabilityCatalog | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
+  const harnessRows = useHarnessStore((state) => state.rows)
+  const aliasModels = useHarnessStore((state) => d.harnessId ? state.providerGroups[d.harnessId]?.aliasGroups : undefined)
+  const selectedHarness = harnessRows.find((row) => row.definition.id === d.harnessId)
+  const aliasProfiles = selectedHarness ? readyHarnessProfiles(selectedHarness).filter((profile) => profile.gatewayBinding) : []
+  useEffect(() => { if (d.harnessId) void loadHarnessProviderGroups(d.harnessId) }, [d.harnessId])
+
+  useEffect(() => {
+    // opening the dialog force-refreshes; waitMs lets an in-flight
+    // detection settle so harness options do not stay stuck on 'unknown'.
+    void loadHarnesses(true, { waitMs: 3_000 })
+  }, [])
   const set = <K extends keyof KunSubagentProfileV1>(k: K, v: KunSubagentProfileV1[K]): void =>
     setD((p) => ({ ...p, [k]: v }))
 
@@ -94,7 +107,7 @@ export function ProfileDialog({
               {PRESET_COLORS.map((c) => {
                 const selected = d.color === c
                 return (
-                  <button
+                  <button aria-label={`${t('agentsView.fColor', 'Color')}: ${c}`}
                     key={c}
                     type="button"
                     onClick={() => set('color', c)}
@@ -129,13 +142,84 @@ export function ProfileDialog({
             </select>
           </Field>
           <Field label={t('agentsView.fModel', 'Model')}>
-            <ModelSelectFull
+            {d.gatewayBinding ? <code>{d.model}</code> : <ModelSelectFull
               value={d.model ?? ''}
               providerId={d.providerId ?? ''}
               groups={groups}
               onChange={(m, pid) => setD((p) => ({ ...p, model: m || undefined, providerId: pid || undefined }))}
-            />
+            />}
           </Field>
+          <Field label={t('adeSettings.profileHarness', 'Agent (harness)')}>
+            <select
+              value={d.harnessId ?? ''}
+              onChange={(e) => {
+                const harnessId = e.target.value || undefined
+                setD((p) => ({
+                  ...p,
+                  harnessId,
+                  gatewayBinding: undefined,
+                  credentialMode: harnessId ? p.credentialMode : undefined
+                }))
+              }}
+              className="w-full rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] px-3 py-1.5 text-sm"
+            >
+              <option value="">{t('adeSettings.profileHarnessKun', 'Kun (native loop)')}</option>
+              {harnessRows
+                .filter((row) => row.definition.id !== 'kun' && harnessRowRunsTurns(row) && harnessRowAvailable(row))
+                .map((row) => (
+                  <option key={row.definition.id} value={row.definition.id}>
+                    {row.definition.displayName}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          {(() => {
+            const row = harnessRows.find((r) => r.definition.id === d.harnessId)
+            return row && row.definition.credentialModes.length > 1 ? (
+              <Field label={t('adeSettings.profileCredentialMode', 'Credentials')}>
+                <select
+                  value={d.credentialMode ?? ''}
+                  onChange={(e) =>
+                    setD((profile) => ({ ...profile, credentialMode: (e.target.value || undefined) as KunSubagentProfileV1['credentialMode'], gatewayBinding: undefined }))
+                  }
+                  className="w-full rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] px-3 py-1.5 text-sm"
+                >
+                  <option value="">{t('adeSettings.profileCredentialDefault', 'Harness default')}</option>
+                  {row.definition.credentialModes.map((mode) => (
+                    <option key={mode} value={mode}>{mode}</option>
+                  ))}
+                </select>
+              </Field>
+            ) : null
+          })()}
+          {d.harnessId && aliasProfiles.length ? <Field label={t('agentEnablement.alias')}>
+            <select className="w-full rounded-md border border-ds-border bg-ds-card px-3 py-1.5 text-sm"
+              value={d.gatewayBinding ? JSON.stringify(d.gatewayBinding) : ''} onChange={(event) => {
+                const selected = aliasProfiles.find((profile) => JSON.stringify(profile.gatewayBinding) === event.target.value)
+                const alias = aliasModels?.find((entry) => entry.routeId === selected?.gatewayBinding?.main.routeId)
+                setD((profile) => ({ ...profile, gatewayBinding: selected?.gatewayBinding,
+                  ...(selected ? { credentialMode: 'kun-gateway', providerId: undefined, model: alias?.modelId } : {}) }))
+              }}>
+              <option value="">{t('agentEnablement.chooseProvider')}</option>
+              {aliasProfiles.map((profile) => <option key={JSON.stringify(profile.gatewayBinding)} value={JSON.stringify(profile.gatewayBinding)}>
+                {aliasModels?.find((entry) => entry.routeId === profile.gatewayBinding!.main.routeId)?.label ?? profile.gatewayBinding!.main.routeId}
+              </option>)}
+            </select>
+          </Field> : null}
+          {d.harnessId ? (
+            <Field label={t('adeSettings.profileDelegationNotes', 'Best for')}>
+              <textarea
+                value={d.delegationNotes ?? ''}
+                rows={2}
+                placeholder={t(
+                  'adeSettings.profileDelegationNotesHint',
+                  'What this worker is good at; the manager reads this when picking workers.'
+                )}
+                onChange={(e) => set('delegationNotes', e.target.value || undefined)}
+                className="w-full resize-none rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] px-3 py-1.5 text-sm"
+              />
+            </Field>
+          ) : null}
           <Field label={t('subagentsPanel.reasoning', 'Reasoning')}>
             <ReasoningEffortPicker
               value={normalizeStoredReasoning(d.reasoningEffort)}
@@ -159,10 +243,10 @@ export function ProfileDialog({
           )}
         </div>
         <div className="flex justify-end gap-2 border-t border-ds-border px-4 py-3">
-          <button type="button" onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-ds-muted hover:text-ds-heading">
+          <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-ds-muted hover:text-ds-heading">
             {t('agentsView.cancel', 'Cancel')}
           </button>
-          <button
+          <button data-settings-action="primary" data-settings-size="default"
             type="button"
             onClick={() => onSave({ ...d, name: d.name.trim() || d.id })}
             className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white hover:bg-accent/90"

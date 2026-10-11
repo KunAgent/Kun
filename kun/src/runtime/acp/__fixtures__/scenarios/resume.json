@@ -1,0 +1,36 @@
+{
+  "sessionId": "sess-resume",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": true,
+      "promptCapabilities": { "image": false, "embeddedContext": false }
+    },
+    "authMethods": []
+  },
+  "loadSession": {
+    "modes": {
+      "currentModeId": "ask",
+      "availableModes": [{ "id": "ask", "name": "Ask" }]
+    }
+  },
+  "onLoad": {
+    "updates": [
+      { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "replayed turn text" } }
+    ]
+  },
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "first reply" } } }
+      ],
+      "stopReason": "end_turn"
+    },
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "second reply" } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

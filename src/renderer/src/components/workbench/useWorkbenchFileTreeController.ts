@@ -8,7 +8,7 @@ import {
   owningComposerWorkspaceRoot,
   type ComposerFileReference
 } from '../../lib/composer-file-references'
-import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
+import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../../lib/workspace-path'
 import { workspaceFileTargetKey } from '../../lib/workspace-file-target-key'
 import {
   readBrowserStorageItem,
@@ -211,10 +211,11 @@ export function useWorkbenchFileTreeController({
     () => extraRootsForWorkspace(fileTreeWorkspaceRoot, folderSets),
     [fileTreeWorkspaceRoot, folderSets]
   )
-  const allowedFileTreeRoots = useMemo(() => new Set(
+  const allowedFileTreeRoots = useMemo(() => new Map(
     [fileTreeWorkspaceRoot, ...extraWorkspaceRoots]
       .map((root) => normalizeWorkspaceRoot(root))
       .filter(Boolean)
+      .map((root) => [workspaceRootScopeKey(root), root] as const)
   ), [extraWorkspaceRoots, fileTreeWorkspaceRoot])
 
   function clearComposerFileReferences(): void {
@@ -333,10 +334,11 @@ export function useWorkbenchFileTreeController({
   }
 
   function previewWorkspaceFileFromSidebar(path: string, workspaceRootOverride?: string): void {
-    const workspace = normalizeWorkspaceRoot(workspaceRootOverride || '') ||
+    const requestedWorkspace = normalizeWorkspaceRoot(workspaceRootOverride || '') ||
       owningComposerWorkspaceRoot(path, [fileTreeWorkspaceRoot, ...extraWorkspaceRoots]) ||
       fileTreeWorkspaceRoot
-    if (!workspace || !allowedFileTreeRoots.has(workspace)) return
+    const workspace = allowedFileTreeRoots.get(workspaceRootScopeKey(requestedWorkspace))
+    if (!workspace) return
     openWorkspaceFilePreviewTarget({ path, workspaceRoot: workspace })
   }
 
@@ -437,8 +439,9 @@ export function useWorkbenchFileTreeController({
       if (route !== 'chat') return
       const detail = (rawEvent as CustomEvent<LiveOfficePreviewDetail>).detail
       if (!detail?.path || !detail.workspaceRoot) return
-      if (!allowedFileTreeRoots.has(normalizeWorkspaceRoot(detail.workspaceRoot))) return
-      const path = normalizeLiveOfficePreviewPath(detail.path, detail.workspaceRoot)
+      const workspace = allowedFileTreeRoots.get(workspaceRootScopeKey(normalizeWorkspaceRoot(detail.workspaceRoot)))
+      if (!workspace) return
+      const path = normalizeLiveOfficePreviewPath(detail.path, workspace)
       if (!path) return
       const turnId = detail.turnId || `office-preview:${detail.path}`
       const state = officePreviewTurnsRef.current.get(turnId) ?? { focused: false, suppressed: false }
@@ -447,7 +450,7 @@ export function useWorkbenchFileTreeController({
       latestOfficePreviewTurnRef.current = turnId
       upsertWorkspaceFilePreviewTarget({
         path,
-        workspaceRoot: detail.workspaceRoot
+        workspaceRoot: workspace
       }, { activate })
     }
     window.addEventListener(LIVE_OFFICE_PREVIEW_EVENT, onLiveOfficePreview)

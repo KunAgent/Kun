@@ -15,6 +15,8 @@ function image(id: string): AttachmentReference {
 describe('workbench composer attachment scopes', () => {
   it('maps assistant surfaces to isolated attachment scopes', () => {
     expect(composerAttachmentScopeForSurface('chat', null)).toBe('chat')
+    expect(composerAttachmentScopeForSurface('ade', null)).toBe('ade')
+    expect(composerAttachmentScopeForSurface('ade', BUILTIN_RIGHT_PANEL_IDS.sddAi)).toBe('ade')
     expect(composerAttachmentScopeForSurface('write', null)).toBe('write')
     expect(composerAttachmentScopeForSurface('design', null)).toBe('design')
     expect(composerAttachmentScopeForSurface('chat', BUILTIN_RIGHT_PANEL_IDS.sddAi)).toBe('sdd')
@@ -30,6 +32,7 @@ describe('workbench composer attachment scopes', () => {
     ])
 
     expect(withDesignImage.chat.map((attachment) => attachment.id)).toEqual(['code-drawing'])
+    expect(withDesignImage.ade).toEqual([])
     expect(withDesignImage.design.map((attachment) => attachment.id)).toEqual(['design-canvas'])
     expect(withDesignImage.write).toEqual([])
     expect(withDesignImage.sdd).toEqual([])

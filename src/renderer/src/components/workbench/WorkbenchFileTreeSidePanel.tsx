@@ -15,6 +15,7 @@ import type { WorkbenchFileTreeSidePanelView } from './useWorkbenchFileTreeContr
 export type WorkbenchFileTreeSidePanelProps = {
   open: boolean
   embedded?: boolean
+  showViewTabs?: boolean
   view: WorkbenchFileTreeSidePanelView
   width: number
   workspaceRoot: string
@@ -34,6 +35,7 @@ export type WorkbenchFileTreeSidePanelProps = {
 export function WorkbenchFileTreeSidePanel({
   open,
   embedded = false,
+  showViewTabs = true,
   view,
   width,
   workspaceRoot,
@@ -75,7 +77,7 @@ export function WorkbenchFileTreeSidePanel({
             />
           ) : (
             <>
-              <div className="flex shrink-0 gap-1 border-b border-ds-border-muted/70 p-2">
+              {showViewTabs ? <div className="flex shrink-0 gap-1 border-b border-ds-border-muted/70 p-2">
                 <button
                   type="button"
                   onClick={() => onViewChange('workspace')}
@@ -100,7 +102,7 @@ export function WorkbenchFileTreeSidePanel({
                   <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
                   <span className="truncate">{t('fileTreeDesignTab')}</span>
                 </button>
-              </div>
+              </div> : null}
               <div className="min-h-0 flex-1">
                 {view === 'design' ? (
                   designWorkspaceRoot ? (

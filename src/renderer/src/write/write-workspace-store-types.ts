@@ -1,3 +1,4 @@
+import type { WriteRightPanelId, WriteRightPanelState } from './write-right-panel-state'
 import type {
   WriteAgentPresetV1,
   WriteInlineCompletionSettingsV1,
@@ -225,7 +226,9 @@ export type WriteWorkspaceState = {
   /** True while an inline diff review (agent edit or AI rewrite) is in progress. */
   reviewActive: boolean
   previewMode: WritePreviewMode
+  /** Legacy projection: right panel expanded on the assistant tool. */
   assistantOpen: boolean
+  writeRightPanel: WriteRightPanelState
   assistantModel: string
   assistantProviderId: string
   /** Active writing-agent persona preset id ('' = none); applied to assistant sends. */
@@ -233,7 +236,7 @@ export type WriteWorkspaceState = {
   selection: WriteEditorSelectionState
   quotedSelections: WriteQuotedSelection[]
   recentEdits: WriteRecentEdit[]
-  loadWriteSettings: () => Promise<void>
+  loadWriteSettings: (options?: { mobile?: boolean }) => Promise<void>
   setWorkSurface: (surface: WriteWorkSurface) => void
   setPaperResearch: (patch: Partial<WritePaperResearchState>) => void
   selectWriteWorkspace: (workspaceRoot: string) => Promise<void>
@@ -242,7 +245,7 @@ export type WriteWorkspaceState = {
   setInlineCompletionEnabled: (enabled: boolean) => Promise<void>
   initializeWorkspace: (
     workspaceRoot: string,
-    options?: { force?: boolean }
+    options?: { force?: boolean; navigationPrepared?: boolean }
   ) => Promise<void>
   loadDirectory: (workspaceRoot: string, path?: string) => Promise<string | null>
   toggleDirectory: (workspaceRoot: string, path: string) => Promise<void>
@@ -355,6 +358,9 @@ export type WriteWorkspaceState = {
   setFileError: (message: string | null) => void
   setPreviewMode: (mode: WritePreviewMode) => void
   setAssistantOpen: (open: boolean) => void
+  openWriteRightPanel: (id: WriteRightPanelId) => void
+  toggleWriteRightPanel: (id: WriteRightPanelId) => void
+  setWriteRightPanelState: (state: WriteRightPanelState) => void
   setAssistantModel: (model: string, providerId?: string) => void
   setAssistantAgentPresetId: (id: string) => void
   setSelection: (selection: WriteEditorSelectionState) => void

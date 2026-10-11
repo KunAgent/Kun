@@ -4,6 +4,7 @@ import type { WritePaperReadingSettingsV1 } from '@shared/app-settings-types-pro
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { normalizePath } from '../write-workspace-store-helpers'
 import { newPaperRequestId, usePaperStore } from './paper-store'
+import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { openPaperInterpretation, openPaperUnit } from './paper-open-layout'
 import { buildPaperInterpretPrompt } from './paper-interpret-prompt'
 import {
@@ -41,6 +42,10 @@ function errorNotice(t: PaperTranslate, code: string, message: string): void {
   }
 }
 
+function workspaceIsCurrent(workspaceRoot: string): boolean {
+  return normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) === normalizePath(workspaceRoot)
+}
+
 function refreshWorkspace(workspaceRoot: string): Promise<void> {
   return useWriteWorkspaceStore.getState().refreshWorkspace(workspaceRoot)
 }
@@ -68,6 +73,7 @@ export async function importPaper(
       parentDir: deps.settings.papersDir,
       requestId
     })
+    if (!workspaceIsCurrent(workspaceRoot)) return result.ok
     if (!result.ok) {
       errorNotice(t, result.code, result.message)
       return false
@@ -78,6 +84,7 @@ export async function importPaper(
       message: t('writePaperImportDone', { title: result.meta.title })
     })
     await refreshWorkspace(workspaceRoot)
+    if (!workspaceIsCurrent(workspaceRoot)) return true
     await openPaperUnit({ workspaceRoot, unitDir: result.unitDir, meta: result.meta })
     deps.onImported?.(result.unitDir, result.meta)
     if (deps.settings.autoPreprocess) {
@@ -85,7 +92,9 @@ export async function importPaper(
     }
     return true
   } catch (error) {
-    paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    if (workspaceIsCurrent(workspaceRoot)) {
+      paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    }
     return false
   } finally {
     usePaperStore.getState().endJob(requestId)
@@ -104,7 +113,7 @@ export async function openPdfAsPaper(
 }
 
 /**
- * Fetch papers.cool/Kimi notes and append them to NOTES.md (§6.2). Flushes the
+ * Fetch papers.cool/Kimi notes and append them to NOTES.md. Flushes the
  * open document first; the NOTES.md reload comes from the file watcher.
  */
 export async function fetchCoolNotes(
@@ -125,6 +134,7 @@ export async function fetchCoolNotes(
       force: deps.force === true,
       requestId
     })
+    if (!workspaceIsCurrent(workspaceRoot)) return
     if (!result.ok) {
       if (result.code === 'no-notes-file') {
         paperNotice({ tone: 'info', message: t('writePaperCoolNotFound') })
@@ -143,7 +153,9 @@ export async function fetchCoolNotes(
     })
     await refreshWorkspace(workspaceRoot)
   } catch (error) {
-    paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    if (workspaceIsCurrent(workspaceRoot)) {
+      paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    }
   } finally {
     usePaperStore.getState().endJob(requestId)
   }
@@ -155,7 +167,7 @@ export function cancelPaperJob(kind: PaperJobKind): void {
   if (job) void window.kunGui.paperCancel({ requestId: job.requestId })
 }
 
-/** Deterministic preprocessing: paper.md text + figures/index.json (§6.3). */
+/** Deterministic preprocessing: paper.md text + figures/index.json. */
 export async function preprocessPaper(
   deps: PaperActionDeps & { unitDir: string; force?: boolean }
 ): Promise<boolean> {
@@ -169,6 +181,7 @@ export async function preprocessPaper(
       force: deps.force === true,
       requestId
     })
+    if (!workspaceIsCurrent(workspaceRoot)) return result.ok
     if (!result.ok) {
       errorNotice(t, result.code, result.message)
       return false
@@ -179,10 +192,12 @@ export async function preprocessPaper(
     })
     await refreshWorkspace(workspaceRoot)
     const read = await window.kunGui.paperReadUnit({ workspaceRoot, unitDir })
-    if (read.ok) usePaperStore.getState().rememberUnit(read.unitDir, read.meta)
+    if (read.ok && workspaceIsCurrent(workspaceRoot)) usePaperStore.getState().rememberUnit(read.unitDir, read.meta)
     return true
   } catch (error) {
-    paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    if (workspaceIsCurrent(workspaceRoot)) {
+      paperNotice({ tone: 'error', message: t('writePaperErrorGeneric', { message: errorMessage(error) }) })
+    }
     return false
   } finally {
     usePaperStore.getState().endJob(requestId)
@@ -199,7 +214,7 @@ export type InterpretDeps = PaperActionDeps & {
 }
 
 /**
- * One-click interpretation (§6.5/§7): flush, ensure paper.md exists, build the
+ * One-click interpretation: flush, ensure paper.md exists, build the
  * prompt, open the assistant, submit. The host watches the workspace for the
  * generated `-解读*.md` after the turn ends (see `checkPendingInterpretation`).
  */
@@ -227,8 +242,6 @@ export async function interpretPaper(deps: InterpretDeps): Promise<void> {
     entries.filter((entry) => entry.type === 'file').map((entry) => entry.name)
   )
   const outputPath = `${unitDir}/${outputName}`
-  const figuresFailed = meta.preprocess?.figuresStatus === 'failed'
-
   const prompt = buildPaperInterpretPrompt({
     unitDir,
     meta,
@@ -236,7 +249,7 @@ export async function interpretPaper(deps: InterpretDeps): Promise<void> {
     template: deps.settings.interpretTemplate,
     language: deps.settings.outputLanguage,
     visionCapable: deps.visionCapable,
-    figuresFailed
+    figuresFailed: meta.preprocess?.figuresStatus === 'failed'
   })
 
   usePaperStore.getState().setPendingInterpretation({
@@ -252,6 +265,20 @@ export async function interpretPaper(deps: InterpretDeps): Promise<void> {
   else deps.setInput(deps.input.trim() ? `${deps.input.trim()}\n\n${prompt}` : prompt)
 }
 
+/** Interpret from anywhere in Work: the composer bridge sends it to the assistant. */
+export function interpretPaperWithAssistant(
+  input: { t: PaperTranslate; workspaceRoot: string; unitDir: string; meta: PaperUnitMeta }
+): Promise<void> {
+  const bridge = usePaperModeStore.getState().composerBridge
+  return interpretPaper({
+    ...input,
+    settings: useWriteWorkspaceStore.getState().paperReading,
+    input: bridge?.input ?? '',
+    setInput: bridge?.setInput ?? (() => undefined),
+    onSubmitPrompt: bridge?.submit
+  })
+}
+
 /**
  * After an assistant turn ends, look for the interpretation file the agent was
  * asked to write. Accepts the planned name or any `<stem>-N.md` variant touched
@@ -265,7 +292,7 @@ export async function checkPendingInterpretation(workspaceRoot: string): Promise
     workspaceRoot,
     path: pending.outputDir
   })
-  if (!listing.ok) return
+  if (!listing.ok || !workspaceIsCurrent(workspaceRoot)) return
   const candidates = listing.entries.filter(
     (entry) =>
       entry.type === 'file' &&
@@ -287,19 +314,23 @@ export async function checkPendingInterpretation(workspaceRoot: string): Promise
     unitDir: pending.unitDir,
     path
   })
+  if (!workspaceIsCurrent(workspaceRoot)) return
   await refreshWorkspace(workspaceRoot)
+  if (!workspaceIsCurrent(workspaceRoot)) return
   await openPaperInterpretation({ workspaceRoot, unitDir: pending.unitDir, path })
 }
 
 /** Reload meta for the given unit into the paper store. */
 export async function refreshPaperUnit(workspaceRoot: string, unitDir: string): Promise<void> {
   const read = await window.kunGui.paperReadUnit({ workspaceRoot, unitDir })
+  if (!workspaceIsCurrent(workspaceRoot)) return
   if (read.ok) usePaperStore.getState().rememberUnit(read.unitDir, read.meta)
 }
 
 /** List paper units under the configured papers dir for the sidebar. */
 export async function listPaperUnits(workspaceRoot: string, parentDir: string): Promise<void> {
   const result = await window.kunGui.paperListUnits({ workspaceRoot, parentDir })
+  if (!workspaceIsCurrent(workspaceRoot)) return
   if (result.ok) usePaperStore.getState().setUnitsFromResult(result)
   else usePaperStore.getState().setUnitsError(result.message)
 }

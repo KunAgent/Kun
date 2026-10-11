@@ -36,10 +36,10 @@ export type TodoProgress = {
 
 export function getTodoProgress(items: readonly ThreadTodoItem[]): TodoProgress {
   const total = items.length
-  const completed = items.filter((item) => item.status === 'completed').length
+  const completed = items.filter((item) => item.taskStatus ? item.taskStatus === 'succeeded' : item.status === 'completed').length
   if (total === 0) return { completed: 0, current: 0, total: 0, allComplete: false }
 
-  const activeIndex = items.findIndex((item) => item.status === 'in_progress')
+  const activeIndex = items.findIndex((item) => item.taskStatus === 'running' || item.status === 'in_progress')
   const nextPendingIndex = items.findIndex((item) => item.status === 'pending')
   const currentIndex = activeIndex >= 0
     ? activeIndex
@@ -103,7 +103,7 @@ export function FloatingComposerTodoProgress({
   // its popover hint pointing at the Graph card) only applies while that
   // card can actually report execution progress.
   const graphOwnsProgress = useGraphStore((state) => (
-    enabled && graphRunOwnsThreadProgress(state.runs, todos.threadId, state.selectedRunId)
+    enabled && todos.revision === undefined && graphRunOwnsThreadProgress(state.runs, todos.threadId, state.selectedRunId)
   ))
   const progress = getTodoProgress(todos.items)
   const estimatedPopoverHeight = Math.min(
@@ -283,8 +283,8 @@ export function FloatingComposerTodoProgress({
 
 function TodoDetailRow({ item }: { item: ThreadTodoItem }): ReactElement {
   const { t } = useTranslation('common')
-  const completed = item.status === 'completed'
-  const active = item.status === 'in_progress'
+  const completed = item.taskStatus ? item.taskStatus === 'succeeded' : item.status === 'completed'
+  const active = item.taskStatus ? item.taskStatus === 'running' : item.status === 'in_progress'
 
   return (
     <li
@@ -308,8 +308,13 @@ function TodoDetailRow({ item }: { item: ThreadTodoItem }): ReactElement {
           completed ? 'text-ds-faint line-through decoration-ds-faint/50' : 'text-ds-muted'
         }`}
       >
-        <span className="sr-only">{t(`todoStatus.${item.status}`)}: </span>
+        <span className={item.taskStatus && !['pending', 'running', 'succeeded'].includes(item.taskStatus) ? 'mr-2 text-xs font-medium' : 'sr-only'}>
+          {item.taskStatus ? t(`executionTaskStatus.${item.taskStatus}`, { defaultValue: item.taskStatus }) : t(`todoStatus.${item.status}`)}:
+        </span>
         {item.content}
+        {item.reason && <span className="mt-1 block text-xs text-ds-faint">{item.reason}</span>}
+        {item.ownerThreadId && <span className="mt-1 block text-xs text-ds-faint">{t('executionTaskOwner', { defaultValue: 'Owner' })}: {item.ownerThreadId}</span>}
+        {item.source?.kind === 'plan' && <span className="mt-1 block text-xs text-ds-faint">{item.source.relativePath} · {item.source.ordinal + 1}</span>}
       </span>
     </li>
   )

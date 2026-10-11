@@ -1,5 +1,5 @@
 /**
- * ProseMirror plugin for the rich diff review (implementation §6.3).
+ * ProseMirror plugin for the rich diff review.
  *
  * State is a list of chunks whose `from`/`to` are positions in the *current*
  * (AI-written) document; `removed` chunks keep `from === to` at the anchor

@@ -1,6 +1,5 @@
 import type {
   KunBrowserUseSettingsV1,
-  KunToolPermissionMode,
   ModelProviderProfileV1
 } from '@shared/app-settings'
 import {
@@ -15,21 +14,11 @@ import {
   defaultKunContextCompactionSettings
 } from '@shared/app-settings-kun-defaults'
 import { defaultModelProviderSettings } from '@shared/app-settings-provider-core'
-import {
-  Bot,
-  FolderOpen,
-  Hand,
-  LockKeyholeOpen,
-  Settings,
-  ShieldCheck,
-  Sparkles,
-  Wrench
-} from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import {
-  SettingsTabs
-} from './settings-controls'
+import type { AgentSettingsPanel } from './settings-navigation'
 import { AgentsAssistantSettingsPanel } from './settings-section-agents-assistant'
+import { AgentsCollaborationSettingsPanel } from './settings-section-agents-collaboration'
+import { AgentsHarnessesSettingsPanel } from './settings-section-agents-harnesses'
 import { AgentsPermissionsSettingsPanel } from './settings-section-agents-permissions'
 import { AgentsProjectSettingsPanel } from './settings-section-agents-project'
 import { AgentsRuntimeSettingsPanel } from './settings-section-agents-runtime'
@@ -46,54 +35,14 @@ import {
 export { LaboratorySettingsSection } from './settings-section-laboratory'
 export { modelProvidersSettingsPatch } from './settings-section-providers'
 
-type AgentsSettingsPanel =
-  | 'assistant'
-  | 'permissions'
-  | 'skills'
-  | 'tools'
-  | 'project'
-  | 'runtime'
-type PermissionsSettingsPanel = 'policy' | 'quality'
-type LaboratorySettingsPanel = 'computer' | 'browser' | 'graph' | 'explore' | 'ppt'
-
-function panelForSettingsSection(section: unknown): AgentsSettingsPanel {
-  if (section === 'permissions') return 'permissions'
-  if (section === 'skill') return 'skills'
-  if (section === 'mcp') return 'tools'
-  return 'assistant'
-}
-
-const TOOL_PERMISSION_OPTIONS: Array<{
-  value: KunToolPermissionMode
-  labelKey: string
-  descriptionKey: string
-  Icon: typeof Hand
-  iconClass: string
-}> = [
-  {
-    value: 'ask-for-approval',
-    labelKey: 'toolPermissionAskForApproval',
-    descriptionKey: 'toolPermissionAskForApprovalDesc',
-    Icon: Hand,
-    iconClass: 'border-sky-400/30 bg-sky-500/10 text-sky-700 dark:text-sky-200'
-  },
-  {
-    value: 'approve-for-me',
-    labelKey: 'toolPermissionApproveForMe',
-    descriptionKey: 'toolPermissionApproveForMeDesc',
-    Icon: Bot,
-    iconClass: 'border-teal-400/30 bg-teal-500/10 text-teal-700 dark:text-teal-200'
-  },
-  {
-    value: 'full-access',
-    labelKey: 'toolPermissionFullAccess',
-    descriptionKey: 'toolPermissionFullAccessDesc',
-    Icon: LockKeyholeOpen,
-    iconClass: 'border-orange-400/35 bg-orange-500/10 text-orange-700 dark:text-orange-200'
-  }
-]
-
-export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
+/** Kun's own Agent settings. Each settings page shows one panel; there are no tabs here. */
+export function AgentsSettingsSection({
+  ctx,
+  panel = 'assistant'
+}: {
+  ctx: Record<string, any>
+  panel?: AgentSettingsPanel
+}): ReactElement {
   const {
     t,
     tCommon,
@@ -219,25 +168,12 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
   const [tokenEconomySavingsState, setTokenEconomySavingsState] =
     useState<TokenEconomySavingsState>(EMPTY_TOKEN_ECONOMY_SAVINGS_STATE)
   const [mcpRawMode, setMcpRawMode] = useState(false)
-  const [activePanel, setActivePanel] = useState<AgentsSettingsPanel>(() =>
-    panelForSettingsSection(ctx.settingsSection)
-  )
-  const [activePermissionsPanel, setActivePermissionsPanel] =
-    useState<PermissionsSettingsPanel>('policy')
+  const activePanel = panel
   const skillPermissionSummary = summarizeSkillPermissionSources(skillRoots, form.disabledSkillIds)
   const mcpPermissionSummary = useMemo(
     () => summarizeMcpPermissionSources(mcpConfigText),
     [mcpConfigText]
   )
-  useEffect(() => {
-    const requestedPanel = panelForSettingsSection(ctx.settingsSection)
-    if (ctx.settingsSection === 'agents' || requestedPanel !== 'assistant') {
-      setActivePanel(requestedPanel)
-    }
-    if (ctx.settingsSection === 'permissions') {
-      setActivePermissionsPanel('policy')
-    }
-  }, [ctx.settingsSection])
   useEffect(() => {
     let cancelled = false
     if (!tokenEconomy.enabled) {
@@ -467,8 +403,7 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
   const view = {
     ...ctx,
     productionManagedDataDir, windowsStorageManagement, mcpSearch, tokenEconomy,
-    tokenEconomySavingsState, mcpRawMode, setMcpRawMode, activePanel, setActivePanel,
-    activePermissionsPanel, setActivePermissionsPanel, skillPermissionSummary, mcpPermissionSummary,
+    tokenEconomySavingsState, mcpRawMode, setMcpRawMode, activePanel, skillPermissionSummary, mcpPermissionSummary,
     tokenEconomySavings, storage, contextCompaction, fastContext, modelContext, runtimeTuning, toolOutputLimits,
     updateMcpSearch, updateTokenEconomy, updateHistoryHygiene, updateStorage, updateContextCompaction, updateFastContext,
     updateRuntimeTuning, updateToolOutputLimits, updateToolStorm, updateToolArgumentRepair, provider,
@@ -477,28 +412,18 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     updatePromptOptimization, selectKunProvider, toolPermissionMode, approvalReview
   }
 
+  if (panel === 'assistant') return <AgentsAssistantSettingsPanel view={view} />
+  if (panel === 'permissions') return <AgentsPermissionsSettingsPanel view={view} />
+  if (panel === 'project') return <AgentsProjectSettingsPanel view={view} />
+  if (panel === 'skills' || panel === 'tools') return <AgentsToolsSettingsPanels view={view} />
+  if (panel === 'runtime') return <AgentsRuntimeSettingsPanel view={view} />
+  if (panel === 'harnesses') return <AgentsHarnessesSettingsPanel view={view} />
   return (
-            <>
-              <SettingsTabs<AgentsSettingsPanel>
-                baseId="agents-settings"
-                ariaLabel={t('agents')}
-                items={[
-                  { id: 'assistant', label: t('agentsQuickBase'), icon: Bot },
-                  { id: 'permissions', label: t('agentsQuickPermissions'), icon: ShieldCheck },
-                  { id: 'skills', label: t('agentsQuickSkill'), icon: Sparkles },
-                  { id: 'tools', label: t('agentsQuickMcp'), icon: Wrench },
-                  { id: 'project', label: t('projectConfigTitle'), icon: FolderOpen },
-                  { id: 'runtime', label: t('kunAdvanced'), icon: Settings }
-                ]}
-                value={activePanel}
-                onChange={setActivePanel}
-              />
-
-      <AgentsAssistantSettingsPanel view={view} />
-      <AgentsPermissionsSettingsPanel view={view} />
-      <AgentsProjectSettingsPanel view={view} />
-      <AgentsToolsSettingsPanels view={view} />
-      <AgentsRuntimeSettingsPanel view={view} />
-            </>
+    <AgentsCollaborationSettingsPanel view={{
+      t, kun, modelProviders, activePanel,
+      beforeSave: ctx.beforeAdeCollaborationSave,
+      onSaved: ctx.onAdeCollaborationSaved,
+      onDraftChange: ctx.onAdeCollaborationDraftChange
+    }} />
   )
 }

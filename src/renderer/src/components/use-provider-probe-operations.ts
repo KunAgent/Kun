@@ -1,3 +1,6 @@
+import { progressiveModelImport } from './provider-model-progressive-import'
+import { metadataEvidence } from '../../../../kun/src/contracts/model-metadata-evidence.js'
+import { migrateModelMetadata, withModelObservation } from '../../../../kun/src/services/model-metadata-resolver.js'
 import type {
   ModelProviderModelProfileV1,
   ModelProviderProfileV1
@@ -34,7 +37,7 @@ import {
 } from './settings-section-providers-profile'
 import {
   MAX_SHARED_MODEL_CONNECTION_MODELS,
-  requestSharedModelConnectionProbe,
+  requestSharedModelConnectionProbeDetails,
   shouldUseSharedModelConnectionProbe
 } from './settings-section-providers-shared-api'
 import { flushProviderMutations } from './provider-mutation-flush'
@@ -48,7 +51,7 @@ export { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 
 
 export function useProviderProbeOperations(scope: Record<string, any>): Record<string, any> {
-  const { t, sharedConnectionFor, fetchModelsDevCatalogFor, openModelImport, flushSharedProviderCatalog, providerProxy } = scope
+  const { t, sharedConnectionFor, fetchModelsDevCatalogFor: fetchCatalog, openModelImport: openImport, flushSharedProviderCatalog, providerProxy } = scope
   const setProbeStates = scope.setProbeStates as Dispatch<SetStateAction<Record<string, ProbeState>>>
   const setCursorAccounts = scope.setCursorAccounts as Dispatch<SetStateAction<Record<string, {
     fingerprint: string
@@ -61,6 +64,9 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
   ) => void
   const runProbe = async (target: ModelProviderProfileV1, mode: 'test' | 'fetch'): Promise<void> => {
     const fingerprint = providerConnectionFingerprint(target, providerProxy)
+    const progressive = progressiveModelImport(fetchCatalog, openImport)
+    const fetchModelsDevCatalogFor = progressive.fetchCatalog
+    const openModelImport = progressive.openImport
     if (isCursorSubscriptionProvider(target)) {
       const cursorCredentialReady =
         Boolean(target.apiKey.trim()) ||
@@ -112,6 +118,7 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
             fingerprint,
             providerModelIds: modelIds,
             modelAliases,
+            discoveredModelProfiles: Object.fromEntries(discovery.models.flatMap((model) => model.profile ? [[model.id, model.profile]] : [])),
             catalogResult: await fetchModelsDevCatalogFor(target, discovery.models),
             providerError: modelIds.length === 0
               ? t('providerModelImportProviderReturnedEmpty')
@@ -173,7 +180,7 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
         openModelImport({
           target,
           fingerprint,
-          providerModelIds: providerPatch.models,
+          providerModelIds: providerResult.catalog.models.map((model) => model.id),
           discoveredModelProfiles: providerPatch.modelProfiles,
           catalogResult,
           providerError: providerResult.error,
@@ -198,10 +205,12 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
       const [statusResult, modelResult, catalogResult] = await Promise.all([
         window.kunGui.geminiCliSubscriptionStatus()
           .catch(() => ({ installed: false, authenticated: false })),
-        window.kunGui.geminiCliSubscriptionModels()
-          .then((modelIds) => ({ modelIds, error: undefined as string | undefined }))
+        (sharedConnectionFor(target.id)
+          ? requestSharedModelConnectionProbeDetails(target.id)
+          : window.kunGui.geminiCliSubscriptionModels().then((models) => ({ models, modelProfiles: {}, source: 'preset' as const })))
+          .then((result) => ({ modelIds: result.models, modelProfiles: result.modelProfiles, source: result.source, error: undefined as string | undefined }))
           .catch((error: unknown) => ({
-            modelIds: [] as string[],
+            modelIds: [] as string[], modelProfiles: {}, source: undefined,
             error: error instanceof Error ? error.message : String(error)
           })),
         fetchModelsDevCatalogFor(target)
@@ -214,6 +223,8 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
           target,
           fingerprint,
           providerModelIds: modelResult.modelIds,
+          discoveredModelProfiles: modelResult.modelProfiles,
+          discoverySource: modelResult.source,
           catalogResult,
           providerError: modelResult.error ?? authError,
           latencyMs: 0,
@@ -251,10 +262,12 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
       }))
       if (mode === 'fetch') {
         const [providerResult, catalogResult] = await Promise.all([
-          window.kunGui.claudeSubscriptionModels(target.apiKey.trim() || undefined, target.id)
-            .then((modelIds) => ({ modelIds, error: undefined as string | undefined }))
+          (window.kunGui.claudeSubscriptionModelCatalog
+            ? window.kunGui.claudeSubscriptionModelCatalog(target.apiKey.trim() || undefined, target.id)
+            : window.kunGui.claudeSubscriptionModels(target.apiKey.trim() || undefined, target.id).then((models) => models.map((id) => ({ id, aliases: undefined as string[] | undefined, profile: undefined as Partial<ModelProviderModelProfileV1> | undefined }))))
+            .then((models) => ({ models, error: undefined as string | undefined }))
             .catch((error: unknown) => ({
-              modelIds: [] as string[],
+              models: [] as Array<{ id: string; aliases?: string[]; profile?: Partial<ModelProviderModelProfileV1> }>,
               error: error instanceof Error ? error.message : String(error)
             })),
           fetchModelsDevCatalogFor(target)
@@ -262,10 +275,12 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
         openModelImport({
           target,
           fingerprint,
-          providerModelIds: [...providerResult.modelIds],
+          providerModelIds: providerResult.models.map((model) => model.id),
+          modelAliases: Object.fromEntries(providerResult.models.map((model) => [model.id, model.aliases ?? []])),
+          discoveredModelProfiles: Object.fromEntries(providerResult.models.flatMap((model) => model.profile ? [[model.id, model.profile]] : [])),
           catalogResult,
           providerError: providerResult.error
-            ?? (providerResult.modelIds.length === 0 ? t('claudeSubProbeNotReady') : undefined),
+            ?? (providerResult.models.length === 0 ? t('claudeSubProbeNotReady') : undefined),
           latencyMs: 0
         })
         return
@@ -325,7 +340,8 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
               ? barrier.error
               : String(barrier.error)
         }
-        const models = await requestSharedModelConnectionProbe(target.id)
+        const discovered = await requestSharedModelConnectionProbeDetails(target.id)
+        const models = discovered.models
         if (mode === 'fetch') {
           let catalogResult = await fetchModelsDevCatalogFor(target)
           // Unmapped custom/relay providers still get completion-only
@@ -341,6 +357,8 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
             target,
             fingerprint,
             providerModelIds: models,
+            discoveredModelProfiles: discovered.modelProfiles,
+            discoverySource: discovered.source,
             catalogResult,
             latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
             authoritative: true
@@ -521,9 +539,9 @@ export function applyProviderModelImport(
   modelAliases: Readonly<Record<string, readonly string[]>> = {},
   discoveredModelProfiles: Readonly<Record<string, ModelProviderModelProfileV1>> = {}
 ): ModelProviderProfileV1 {
-  const nextChatModels = authoritative
-    ? [...picked.chat]
-    : mergeProviderModelIds(target.models, picked.chat)
+  // A refresh never removes an existing selection or historical model reference.
+  void authoritative
+  const nextChatModels = mergeProviderModelIds(target.models, picked.chat)
   const nextImageModels = target.image
     ? mergeProviderModelIds(target.image.models, picked.image)
     : picked.image
@@ -594,8 +612,13 @@ export function mergeDiscoveredModelProfile(
   discovered: ModelProviderModelProfileV1 | undefined
 ): ModelProviderModelProfileV1 | undefined {
   if (!discovered) return enriched
-  const merged: ModelProviderModelProfileV1 = { ...enriched, ...discovered }
-  if (discovered.serviceTiers) merged.serviceTiers = [...discovered.serviceTiers]
-  else delete merged.serviceTiers
+  const base = enriched ?? { inputModalities: ['text'], outputModalities: ['text'],
+    supportsToolCalling: true, messageParts: ['text'], evidence: metadataEvidence({}, 'adapter') } as ModelProviderModelProfileV1
+  const migrated = migrateModelMetadata(base)
+  migrated.metadata.observations = migrated.metadata.observations.filter((row) => row.id !== 'legacy-provider')
+  const merged = withModelObservation(migrated, {
+    id: 'provider-discovery', source: 'provider', values: discovered,
+    evidence: discovered.evidence, match: 'exact', observedAt: new Date().toISOString()
+  })
   return merged
 }

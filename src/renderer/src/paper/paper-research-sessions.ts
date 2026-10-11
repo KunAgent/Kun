@@ -87,6 +87,32 @@ export function listResearchSessions(
   return out.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
 }
 
+/** A research session plus the (normalized) library root it lives in. */
+export type AgentHistorySession = ResearchSessionSummary & { libraryRoot: string }
+
+/**
+ * All Agent research sessions across every configured library, newest first.
+ * Each summary carries its normalized `libraryRoot` so callers can mount the
+ * right workspace before opening a session.
+ */
+export function listResearchSessionsAcrossLibraries(
+  libraries: readonly string[],
+  threads: readonly NormalizedThread[],
+  registry: WriteThreadRegistry = readWriteThreadRegistry()
+): AgentHistorySession[] {
+  const seen = new Set<string>()
+  const out: AgentHistorySession[] = []
+  for (const item of libraries) {
+    const root = normalizePath(item)
+    if (!root || seen.has(root)) continue
+    seen.add(root)
+    for (const session of listResearchSessions(root, threads, registry)) {
+      out.push({ ...session, libraryRoot: root })
+    }
+  }
+  return out.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+}
+
 // ---- last selected session per library (per-viewer convenience) -----------
 
 const LAST_SESSION_KEY = 'kun.paper.research.lastSession'

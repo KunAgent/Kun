@@ -39,6 +39,23 @@ describe('TimelineRuntimeError', () => {
     expect(renderer.root.findAllByType('button')).toHaveLength(0)
   })
 
+  it('explains an Agent permission failure and opens Agent connections', async () => {
+    const openSettings = vi.fn(), previous = useChatStore.getState().openSettings
+    useChatStore.setState({ openSettings })
+    try {
+      await act(async () => {
+        renderer = create(createElement(TimelineRuntimeError, { block: {
+          kind: 'system', id: 'devin_error', severity: 'error', runtimeError: true, code: 'policy_denied',
+          text: "Devin did not advertise the requested permission mode 'normal'."
+        } }))
+      })
+      expect(renderer.root.findAllByType('p')[0]?.children.join('')).toContain('selected permission mode')
+      expect(renderer.root.findByType('pre').children.join('')).toContain("'normal'")
+      await act(async () => renderer.root.findByProps({ 'data-testid': 'timeline-runtime-error-agent-settings' }).props.onClick())
+      expect(openSettings).toHaveBeenCalledWith('agentsHarnesses')
+    } finally { useChatStore.setState({ openSettings: previous }) }
+  })
+
   it('prominently labels provider-returned errors and keeps the provider message visible', async () => {
     await act(async () => {
       renderer = create(createElement(TimelineRuntimeError, {

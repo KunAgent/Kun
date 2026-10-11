@@ -3,11 +3,7 @@ import process from 'node:process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseServeOptionsSafe, SERVE_USAGE, ServeExitCode } from './serve.js'
-import {
-  KUN_CLI_USAGE,
-  runAgentCommand,
-  splitKunCliCommand
-} from './agent-cli.js'
+import { KUN_CLI_USAGE, splitKunCliCommand } from './kun-cli-command.js'
 import { startKunServe, type KunServeHandle } from '../server/runtime-factory.js'
 import {
   resolveEventLoopHardStallThresholdMs,
@@ -15,13 +11,11 @@ import {
   startEventLoopMonitor
 } from '../server/event-loop-monitor.js'
 import { installServeCrashHandlers } from './serve-crash-handlers.js'
-import { runExtensionCommand } from './extension-cli.js'
 import { inspectSharedRuntime, resolveSharedRuntime, runRuntimeCommand } from './shared-runtime.js'
 import { withRuntimeStartLock } from '../server/runtime-discovery.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { readRuntimeBuildIdForEntry } from '../server/runtime-build-identity.js'
 import { KUN_VERSION } from '../version.js'
-import { runSelfUpdateCommand } from './self-update.js'
 import { RuntimeFlavorSchema } from '../contracts/runtime-flavor.js'
 import {
   KUN_RUNTIME_CLIENT_OWNER_KIND_ENV,
@@ -53,7 +47,6 @@ import { appSessionOwnerFromEnvironment } from '../contracts/app-session-owner.j
 import { createOwnedServiceManagerSession } from '../manager/owned-service-manager-session.js'
 import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from '../manager/owned-manager-binding.js'
 import { shutdownOwnedProcesses } from '../process/owned-process.js'
-import { runManagerRetireCommand } from './manager-retire.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
 // Replacement clients wait 15 seconds before escalating to a hard kill. Keep
@@ -170,6 +163,7 @@ async function serveMain(argv: readonly string[]): Promise<number> {
           runtimeFlavor,
           ...(ownerKind ? { clientOwnerKind: ownerKind } : {}),
           discoveryDir,
+          advertiseGatewayDiscovery: runtimeFlavor === 'production',
           serviceManager: manager,
           ...(buildId ? { buildId } : {}),
           sharedMcpConfigPath: process.env.KUN_MCP_CONFIG_PATH || join(homedir(), '.kun', 'mcp.json'),
@@ -420,15 +414,32 @@ export async function main(argv: readonly string[]): Promise<number> {
     executablePath: process.argv[1]
   })
   process.title = process.env.KUN_RUNTIME_FLAVOR === 'development' ? 'kun-dv' : 'kun'
-  if (argv[0] === 'manager') return runManagerRetireCommand(argv.slice(1), {
+  // Every subcommand except `serve` is loaded on demand: the desktop Runtime
+  // runs `kun serve` and must not carry the TUI, agent, extension packaging,
+  // gateway, or self-update CLIs in its heap.
+  if (argv[0] === 'host') return (await import('./host-cli.js')).runHostCommand(argv.slice(1), {
+    stdout: process.stdout, stderr: process.stderr, env: process.env
+  })
+  if (argv[0] === 'manager') return (await import('./manager-retire.js')).runManagerRetireCommand(argv.slice(1), {
     stdout: process.stdout, stderr: process.stderr, env: process.env
   })
   if (argv[0] === 'extension') {
-    return runExtensionCommand(argv.slice(1), {
+    return (await import('./extension-cli.js')).runExtensionCommand(argv.slice(1), {
       stdout: process.stdout,
       stderr: process.stderr,
       env: process.env,
       cwd: () => process.cwd()
+    })
+  }
+  if (argv[0] === 'gateway' || argv[0] === 'agents' || argv[0] === 'quota' || argv[0] === 'provider') {
+    return (await import('./gateway-cli.js')).runGatewayCliCommand(argv[0], argv.slice(1), { stdout: process.stdout, stderr: process.stderr, env: process.env })
+  }
+  if (argv[0] === 'worker') {
+    return (await import('./worker-callback-cli.js')).runWorkerCallbackCommand(argv.slice(1), {
+      stdin: process.stdin,
+      stdout: process.stdout,
+      stderr: process.stderr,
+      env: process.env
     })
   }
   const command = splitKunCliCommand(argv)
@@ -456,13 +467,21 @@ export async function main(argv: readonly string[]): Promise<number> {
     })
   }
   if (command.command === 'update') {
-    return runSelfUpdateCommand(command.args, {
+    return (await import('./self-update.js')).runSelfUpdateCommand(command.args, {
       stdout: process.stdout,
       stderr: process.stderr,
       env: process.env
     })
   }
-  return runAgentCommand(command.command, command.args, {
+  if (command.command === 'mcp-bridge') {
+    return (await import('./mcp-bridge-cli.js')).runMcpBridgeCommand(command.args, {
+      stdin: process.stdin,
+      stdout: process.stdout,
+      stderr: process.stderr,
+      env: process.env
+    })
+  }
+  return (await import('./agent-cli.js')).runAgentCommand(command.command, command.args, {
     stdin: process.stdin,
     stdout: process.stdout,
     stderr: process.stderr,

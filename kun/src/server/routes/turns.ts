@@ -44,7 +44,9 @@ export async function startTurn(
   threadId: string,
   request: Request,
   onStarted?: (response: StartTurnResponse) => void,
-  graphModeEnabled?: () => boolean
+  graphModeEnabled?: () => boolean,
+  /** ADE: ack worker notices attached to this user send. */
+  ackWorkerNotices?: (threadId: string, noticeIds: readonly string[]) => Promise<unknown>
 ): Promise<JsonResponse | Response> {
   const body = await readJsonBody(request)
   if (!body.ok) return body.response
@@ -60,6 +62,9 @@ export async function startTurn(
       threadId,
       request: parsed.data
     }, { onAdmitted: onStarted })
+    if (parsed.data.ackNoticeIds?.length) {
+      await ackWorkerNotices?.(threadId, parsed.data.ackNoticeIds).catch(() => undefined)
+    }
     return jsonResponse(StartTurnResponse.parse(response), 202)
   } catch (error) {
     if (error instanceof QueueAdmissionUncertainError) {
@@ -159,6 +164,7 @@ export async function resumeQueuedTurns(
   onStarted: (threadId: string, turnId: string) => void
 ): Promise<JsonResponse | Response> {
   try {
+    await turns.resumeQueuedTurns(threadId)
     const started = await turns.startNextQueuedTurn(threadId)
     turns.notifyTurnQueued(threadId)
     if (!started) return jsonResponse({ threadId, started: false as const })
@@ -383,6 +389,7 @@ export async function compactTurn(
     })
     return jsonResponse(response)
   } catch (error) {
+    if (error instanceof TurnConflictError) return ERRORS.conflict(error.message)
     if (error instanceof Error && /not found/i.test(error.message)) {
       return ERRORS.notFound(error.message)
     }

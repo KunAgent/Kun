@@ -1,0 +1,578 @@
+import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../contracts/harness-gateway-binding.js'
+import type { HarnessDefinition, HarnessRoute, HarnessStatus } from '../contracts/harness.js'
+import type { HarnessReadiness, HarnessTestHandshake, HarnessTestRequest, HarnessTestResponse } from '../contracts/harness-test.js'
+import type { HarnessEnabledProfile } from '../config/kun-config-harnesses.js'
+import type { HarnessCatalog } from './harness-catalog.js'
+import type { HarnessDetector } from './harness-detector.js'
+import { nativeHarnessCredentialEnv, resolveHarnessSecretEnv, type HarnessSecretRefResolver } from './harness-secret-env.js'
+import { probeAcpHandshake } from './acp-handshake-probe.js'
+import { probeCodexHandshake } from './codex-handshake-probe.js'
+import { probePiHandshake } from './pi-handshake-probe.js'
+import { providerModule } from './providers/registry.js'
+import { credentialVerdict, readinessDiagnostics } from './harness-readiness-verdict.js'
+import type { HarnessDiagnosticRow } from '../contracts/harness-diagnostics.js'
+import type { HarnessModelCatalog } from '../contracts/harness-models.js'
+import { parseGatewayModelId } from './gateway-model-id.js'
+import { exposableProvider } from '../domain/model-gateway-export-policy.js'
+import { nativeAgentNetworkEnv, nativeAgentNetworkStatus } from './native-agent-network.js'
+import { raceProbeAbort } from './probe-abort.js'
+import { harnessProfile, harnessProfileKey, nativeHasKey,
+  readinessFingerprint, readinessProvider, type ReadinessOptions } from './harness-readiness-profile.js'
+import { readinessProbeEnvironment } from './harness-readiness-env.js'
+import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
+import { spawnCaptured } from './harness-detector.js'
+import { AGY_MODELS_TIMEOUT_MS, agyModelsHandshake } from './antigravity-readiness-probe.js'
+import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
+import { HarnessReadinessProofFile, type PersistedReadinessProof } from './harness-readiness-store.js'
+
+/**
+ * How long a successful handshake admits turns without re-spawning the Agent.
+ * Each handshake starts the real CLI (Claude Code, Codex, agy, ...), so this is
+ * deliberately long; identity changes (binary, credentials, config) still
+ * invalidate a proof immediately through the cheap snapshot check.
+ */
+export const PROOF_TTL_MS = 30 * 60_000
+/**
+ * After its admission TTL a proof stays visible (the Agent keeps showing as
+ * ready in pickers) for this long while its identity is unchanged. Nothing
+ * re-validates it in the background: the next turn admission, an explicit
+ * test, or selecting the Agent in the composer does.
+ */
+export const PROOF_DISPLAY_TTL_MS = 12 * 60 * 60_000
+/** Turn admission reuses a proof only when it still has this much life left. */
+const PROOF_REUSE_MIN_REMAINING_MS = 15_000
+const WARM_RETRY_BASE_MS = 15_000
+const WARM_RETRY_MAX_MS = 5 * 60_000
+// Matches the ACP cold-start budget so a first-run bootstrap is not misread as unready.
+const DEFAULT_TIMEOUT_MS = 60_000
+/** `readiness` is what the check that earned the proof found, so a client can show it again without re-checking. */
+export type ReadyHarnessProfile = HarnessEnabledProfile & { expiresAt: string; readiness?: HarnessReadiness }
+type Handshake = Omit<HarnessTestHandshake, 'durationMs'> & { catalog?: HarnessModelCatalog }
+type Snapshot = { definition: HarnessDefinition; route: HarnessRoute; secretEnv: Record<string, string>;
+  env: Record<string, string>; identity: string; configured: boolean; hasKey: boolean; detail?: string }
+type Proof = { route: HarnessRoute; identity: string; command?: string; expires: number; displayExpires: number;
+  revision?: number; readiness?: HarnessReadiness }
+const proofKey = (route: HarnessRoute): string => JSON.stringify([harnessProfileKey(route), route.model])
+
+export type HarnessReadinessDeps = {
+  options(): ReadinessOptions
+  revision?: () => number
+  catalog: HarnessCatalog
+  detector: Pick<HarnessDetector, 'status'>
+  resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>
+  resolveSecretEnv?: HarnessSecretRefResolver
+  resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null>
+  sdkHandshake?: (definition: HarnessDefinition, env: Record<string, string>, signal: AbortSignal) => Promise<Handshake>
+  /** Receives the model catalog a successful handshake already read. */
+  onCatalog?: (definition: HarnessDefinition, catalog: HarnessModelCatalog) => void
+  handshake?: (definition: HarnessDefinition, command: string, env: Record<string, string>, signal: AbortSignal) => Promise<Handshake>
+  nowMs?: () => number
+  /**
+   * File that keeps display proofs across Runtime restarts, so startup does not
+   * spawn every enabled Agent just to repaint the picker. Restored proofs are
+   * display-only; the first turn admission re-checks them.
+   */
+  proofStorePath?: string
+}
+
+export type WarmProfilesOptions = {
+  /** Re-validate proofs past their admission TTL (user intent, e.g. composer selection). */
+  refreshStale?: boolean
+}
+
+/** Process-local proofs: no model prompts or interactive login. Adapter metadata may contact its service. */
+export class HarnessReadinessService {
+  private readonly proofs = new Map<string, Proof>()
+  private readonly warming = new Map<string, Promise<unknown>>()
+  /** Warm-ups that re-validate a still-valid proof ahead of its expiry. */
+  private readonly refreshingKeys = new Set<string>()
+  private readonly warmed = new Map<string, string>()
+  /** Background warm failures: retried with backoff instead of never again. */
+  private readonly warmFailures = new Map<string, { attempts: number; retryAt: number }>()
+  private readonly launches = new Map<string, { route: HarnessRoute; identity: string; signature: string }>()
+  private readonly generations = new Map<string, number>()
+  private readonly maintenance = new Set<string>()
+  private readonly preparing = new Map<string, string>()
+  private readonly store: HarnessReadinessProofFile | undefined
+  private readonly restored: Promise<void>
+  private restoredDone: boolean
+  /** Warm requests that arrived before restored proofs were loaded. */
+  private readonly deferredWarms = new Set<string>()
+  constructor(private readonly deps: HarnessReadinessDeps) {
+    this.store = deps.proofStorePath ? new HarnessReadinessProofFile(deps.proofStorePath) : undefined
+    this.restoredDone = !this.store
+    this.restored = this.store
+      ? this.restoreProofs().finally(() => { this.restoredDone = true })
+      : Promise.resolve()
+  }
+
+  private async restoreProofs(): Promise<void> {
+    if (!this.store) return
+    const now = this.now()
+    for (const entry of await this.store.load()) {
+      if (entry.displayExpires <= now) continue
+      const key = proofKey(entry.route)
+      if (this.proofs.has(key)) continue
+      // Restored proofs only repaint the picker. Turn admission never reuses
+      // them, because the handshake that produced them belongs to another process.
+      this.proofs.set(key, { route: entry.route, identity: entry.identity,
+        ...(entry.command ? { command: entry.command } : {}), expires: 0, displayExpires: entry.displayExpires,
+        ...(entry.readiness ? { readiness: entry.readiness } : {}) })
+    }
+  }
+
+  private persistProofs(): void {
+    if (!this.store) return
+    const now = this.now()
+    const entries: PersistedReadinessProof[] = [...this.proofs.values()]
+      .filter((proof) => proof.displayExpires > now)
+      .map((proof) => ({ route: proof.route, identity: proof.identity,
+        ...(proof.command ? { command: proof.command } : {}), displayExpires: proof.displayExpires,
+        ...(proof.readiness ? { readiness: proof.readiness } : {}) }))
+    this.store.schedule(entries)
+  }
+
+  route(definition: HarnessDefinition, input: Pick<HarnessTestRequest, 'credentialMode' | 'providerId' | 'model' | 'gatewayBinding'>): HarnessRoute {
+    const defaults = this.deps.options().harnesses?.defaults?.[definition.id]
+    const credentialMode = input.credentialMode ?? defaults?.credentialMode ?? definition.credentialModes[0]!
+    const gatewayBinding = input.gatewayBinding ?? (credentialMode === 'kun-gateway' ? defaults?.gatewayBinding : undefined)
+    const providerId = gatewayBinding ? undefined : input.providerId ?? (input.credentialMode === 'native-login' ? undefined : defaults?.providerId)
+    const aliasModel = gatewayBinding ? this.deps.options().routePools?.find((pool) => pool.id === gatewayBinding.main.routeId)?.modelId : undefined
+    return { harnessId: definition.id, credentialMode,
+      ...(gatewayBinding ? { gatewayBinding } : providerId ? { providerId } : credentialMode !== 'native-login' ? { providerId: 'default' } : {}),
+      // Kun's own main model is never an external Agent's provider model; an
+      // unselected native or provider route lets the Agent pick its default.
+      model: (gatewayBinding && input.model === 'default' ? undefined : input.model) ?? aliasModel ?? defaults?.model ??
+        (credentialMode === 'native-login' || credentialMode === 'provider' ? 'default' : this.deps.options().model ?? '') }
+  }
+
+  async test(definition: HarnessDefinition, input: HarnessTestRequest, signal?: AbortSignal): Promise<HarnessTestResponse> {
+    const route = this.route(definition, input)
+    this.invalidateProfile(harnessProfileKey(route))
+    return this.check(definition, route, input, signal)
+  }
+
+  private invalidateProfile(key: string): void {
+    this.generations.set(key, (this.generations.get(key) ?? 0) + 1)
+    let removed = false
+    for (const [candidate, proof] of this.proofs) {
+      if (harnessProfileKey(proof.route) === key) { this.proofs.delete(candidate); removed = true }
+    }
+    if (removed) this.persistProofs()
+  }
+
+  private async check(definition: HarnessDefinition, route: HarnessRoute, input: HarnessTestRequest, signal?: AbortSignal,
+    options: { keepProofOnFailure?: boolean } = {}): Promise<HarnessTestResponse> {
+    const started = this.now()
+    const key = harnessProfileKey(route)
+    const generation = this.generations.get(key) ?? 0
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(new Error('Readiness check timed out')), Math.min(input.timeoutMs ?? DEFAULT_TIMEOUT_MS, 60_000))
+    const bounded = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
+    const revision = this.deps.revision?.()
+    const initialEnabled = this.deps.catalog.isProfileEnabled(route)
+    let status: HarnessStatus = { harnessId: definition.id, installed: 'unknown', login: 'unknown', checkedAt: new Date(this.now()).toISOString() }
+    let handshake: HarnessTestHandshake | undefined
+    const checks: HarnessReadiness['checks'] = []
+    let authentication: HarnessReadiness['authentication'] = 'unverified'
+    let snapshot: Snapshot | undefined
+    let detail: string | undefined
+    let diagnostics: HarnessDiagnosticRow[] | undefined
+    let catalog: HarnessModelCatalog | undefined
+    try {
+      bounded.throwIfAborted()
+      snapshot = await raceProbeAbort(this.snapshot(route), bounded)
+      bounded.throwIfAborted()
+      status = await raceProbeAbort(this.deps.detector.status(definition.id, { force: true, signal: bounded }), bounded)
+      if (snapshot.identity !== (await raceProbeAbort(this.snapshot(route), bounded)).identity) throw new Error('Configuration or credentials changed during the check; test again')
+      snapshot = await raceProbeAbort(this.snapshot(route, status.resolvedCommand), bounded)
+      const terminalLaunch = definition.transport === 'terminal'
+      const installation = status.installed === 'yes' && status.versionSupported !== false &&
+        (!terminalLaunch || Boolean(status.resolvedCommand?.trim()))
+      const commandEvidence = providerModule(definition.id)?.credentials?.commandEvidence
+      if (commandEvidence && route.credentialMode === 'native-login' && installation &&
+        snapshot.configured && !snapshot.hasKey && input.level !== 'detect') {
+        // Keychain-only native login is configured evidence, never verified
+        // authentication. Status does not start a session or send a prompt.
+        const evidence = await raceProbeAbort(commandEvidence(status.resolvedCommand,
+          { env: snapshot.env, signal: bounded }), bounded)
+        snapshot.hasKey = evidence.configured === true
+      }
+      checks.push({ id: 'installation', ok: installation, detail: installation ? 'Installed supported runtime' : 'Install a supported runtime and retry' })
+      checks.push({ id: 'configuration', ok: snapshot.configured, ...(snapshot.detail ? { detail: snapshot.detail } : {}) })
+      if (!terminalLaunch && installation && snapshot.configured && input.level !== 'detect') {
+        const hsStarted = this.now()
+        const { catalog: probedCatalog, ...wire } = await raceProbeAbort(this.handshake(snapshot, status, bounded), bounded)
+        handshake = { ...wire, durationMs: this.now() - hsStarted }
+        catalog = probedCatalog
+      }
+      const requiresLogin = route.credentialMode === 'native-login' && handshake?.authRequired === true
+      const nativeEvidence = !terminalLaunch && !requiresLogin && route.credentialMode === 'native-login' && (handshake?.authentication === 'verified' ||
+        ((!route.providerId || route.providerId === 'default') &&
+          !(providerModule(definition.id)?.loginStatusIgnoredWhen ?? []).some((key) => snapshot!.env[key]) && status.login === 'signed-in'))
+      // Initializing ACP or returning model names is never evidence of authentication.
+      const credentials = credentialVerdict({ credentialMode: route.credentialMode, terminalLaunch,
+        nativeLoop: definition.transport === 'native-loop', requiresLogin, hasKey: snapshot.hasKey, nativeEvidence,
+        login: status.login, requireEvidence: providerModule(definition.id)?.credentials?.requireEvidence === true })
+      authentication = credentials.authentication
+      checks.push({ id: 'credentials', ok: credentials.ok, detail: credentials.detail })
+      const localSdk = definition.transport === 'cursor-sdk' && handshake?.protocol === 'cursor-sdk-local-api'
+      const protocol = terminalLaunch || definition.transport === 'native-loop' || (handshake?.ok === true && (handshake.supported || localSdk) && (route.credentialMode !== 'native-login' || handshake.authRequired !== true))
+      const modelMatches = terminalLaunch || route.credentialMode !== 'native-login' || (handshake?.models === undefined
+        ? route.model === 'default'
+        : handshake.models.length > 0 && (route.model === 'default' || handshake.models.includes(route.model)))
+      checks.push({ id: 'protocol', ok: protocol && modelMatches, ...(handshake?.detail ? { detail: handshake.detail } : {}) })
+      diagnostics = readinessDiagnostics({ definition, status, installation, credentials, handshake,
+        configuration: { ok: snapshot.configured, detail: snapshot.detail },
+        protocolOk: protocol && modelMatches, modelCount: catalog?.models.length })
+      bounded.throwIfAborted()
+      const latest = await raceProbeAbort(this.snapshot(route, status.resolvedCommand), bounded)
+      if (revision !== this.deps.revision?.() || latest.identity !== snapshot.identity ||
+        (this.generations.get(key) ?? 0) !== generation || initialEnabled !== this.deps.catalog.isProfileEnabled(route)) {
+        throw new Error('Configuration or credentials changed during the check; test again')
+      }
+      snapshot.identity = latest.identity
+    } catch (error) {
+      // Keep errors categorical: probe stderr and credential resolver errors may
+      // contain secrets, account names or workspace data.
+      detail = bounded.aborted ? 'Readiness check cancelled or timed out' :
+        error instanceof Error && error.message.startsWith('Configuration or credentials changed') ? error.message : 'Readiness check failed; review the selected profile and retry'
+    } finally { clearTimeout(timeout) }
+    const usable = !detail && input.level !== 'detect' && checks.length === 4 && checks.every((check) => check.ok)
+    const readiness: HarnessReadiness = { profileKey: key, usable, authentication, checks,
+      checkedAt: new Date(this.now()).toISOString(), ...(detail ? { detail } : {}), ...(diagnostics ? { diagnostics } : {}) }
+    // The handshake already opened a session: share its catalog so loading the
+    // model list does not start the Agent a second time.
+    if (usable && catalog?.models.length) this.deps.onCatalog?.(definition, catalog)
+    const result: HarnessTestResponse = { harnessId: definition.id, transport: definition.transport, level: input.level,
+      ok: usable, durationMs: this.now() - started, detect: { durationMs: this.now() - started, ok: status.installed === 'yes', status },
+      ...(handshake ? { handshake } : {}), readiness }
+    // A failed fresh check revokes older evidence, including pending checks.
+    // Cancelling one caller alone must not revoke a different live admission.
+    // A background refresh keeps the unexpired proof it was refreshing: a
+    // transient agent/backend hiccup must not blank a working profile early.
+    if (!usable && !bounded.aborted && !options.keepProofOnFailure && (this.generations.get(key) ?? 0) === generation) this.invalidateProfile(key)
+    if (usable && snapshot && (this.generations.get(key) ?? 0) === generation && !bounded.aborted) {
+      const existing = this.proofs.get(proofKey(route))
+      // A fresh admission must not replace a matching proof that another turn
+      // is validating. Different models retain independent launch evidence.
+      if (existing?.identity === snapshot.identity) {
+        existing.expires = this.now() + PROOF_TTL_MS
+        existing.displayExpires = this.now() + PROOF_DISPLAY_TTL_MS
+        existing.revision = revision
+        existing.readiness = readiness
+        if (status.resolvedCommand) existing.command = status.resolvedCommand
+      } else {
+        this.proofs.set(proofKey(route), { route, identity: snapshot.identity, command: status.resolvedCommand,
+          expires: this.now() + PROOF_TTL_MS, displayExpires: this.now() + PROOF_DISPLAY_TTL_MS, revision, readiness })
+      }
+      this.persistProofs()
+    }
+    return result
+  }
+
+  warmProfiles(id: string, options: WarmProfilesOptions = {}): void {
+    // Listing Agents right after startup must see restored proofs, otherwise it
+    // would spawn every enabled Agent to rediscover what the last run knew.
+    if (!this.restoredDone) {
+      this.deferredWarms.add(id)
+      void this.restored.then(() => { this.deferredWarms.delete(id); this.warmProfiles(id, options) })
+      return
+    }
+    const definition = this.deps.catalog.get(id)
+    if (!definition || id === 'kun' || this.maintenance.has(id)) return
+    const now = this.now()
+    for (const profile of this.deps.catalog.enabledProfiles(id)) {
+      // Native account readiness is independent of a saved model that a client
+      // upgrade may retire. The exact requested model is checked at turn admission.
+      const route = this.route(definition, { ...profile, ...(profile.credentialMode === 'native-login' ? { model: 'default' } : {}) })
+      const key = harnessProfileKey(route)
+      const signature = this.configurationSignature(route)
+      const expired = this.proofs.get(proofKey(route))
+      if (expired && expired.displayExpires <= now) {
+        this.proofs.delete(proofKey(route)); this.warmed.delete(key); this.persistProofs()
+      }
+      if (this.warming.has(key)) continue
+      const proof = this.proofs.get(proofKey(route))
+      // Polling the Agent list never re-spawns an Agent whose proof is still
+      // displayable. A stale proof is refreshed only on explicit user intent;
+      // otherwise the next turn admission re-checks it on demand.
+      const refreshing = Boolean(proof && proof.expires <= now && options.refreshStale)
+      if (proof && !refreshing) continue
+      if (refreshing && (this.warmFailures.get(key)?.retryAt ?? 0) > now) continue
+      if (!proof && this.warmed.get(key) === signature) {
+        // Same configuration already warmed but no proof survived (a failed
+        // check or a revoked proof): retry with backoff instead of never.
+        const failure = this.warmFailures.get(key) ?? this.recordWarmFailure(key, 0)
+        if (failure.retryAt > now) continue
+      }
+      this.warmed.set(key, signature)
+      const pending = this.check(definition, route, { level: 'handshake', ...route }, undefined, { keepProofOnFailure: refreshing })
+        .then((result) => {
+          if (result.ok) this.warmFailures.delete(key)
+          else this.recordWarmFailure(key, (this.warmFailures.get(key)?.attempts ?? 0) + 1)
+        }, () => { this.recordWarmFailure(key, (this.warmFailures.get(key)?.attempts ?? 0) + 1) })
+        .finally(() => { this.warming.delete(key); this.refreshingKeys.delete(key) })
+      this.warming.set(key, pending)
+      if (refreshing) this.refreshingKeys.add(key)
+    }
+  }
+  private recordWarmFailure(key: string, attempts: number): { attempts: number; retryAt: number } {
+    const delay = Math.min(WARM_RETRY_MAX_MS, WARM_RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1))
+    const entry = { attempts, retryAt: this.now() + delay }
+    this.warmFailures.set(key, entry)
+    return entry
+  }
+  checking(id: string): boolean {
+    if (this.deferredWarms.has(id)) return true
+    return [...this.warming.keys()].some((key) => JSON.parse(key)[0] === id)
+  }
+  /**
+   * A warm-up for a profile that has no valid proof yet. A refresh of a
+   * still-valid proof keeps the Agent usable, so it must not read as detecting.
+   */
+  verifying(id: string): boolean {
+    return [...this.warming.keys()].some((key) => JSON.parse(key)[0] === id && !this.refreshingKeys.has(key))
+  }
+
+  async readyProfiles(id: string): Promise<ReadyHarnessProfile[]> {
+    await this.restored
+    const signal = AbortSignal.timeout(5_000)
+    const profiles: ReadyHarnessProfile[] = []
+    for (const [key, proof] of this.proofs) {
+      if (proof.route.harnessId !== id) continue
+      if (proof.displayExpires <= this.now()) {
+        this.proofs.delete(key); this.warmed.delete(harnessProfileKey(proof.route)); this.persistProofs(); continue
+      }
+      if (!this.deps.catalog.isProfileEnabled(proof.route)) continue
+      try {
+        if ((await raceProbeAbort(this.snapshot(proof.route, proof.command), signal)).identity !== proof.identity) { this.proofs.delete(key); this.warmed.delete(harnessProfileKey(proof.route)); continue }
+        if (!profiles.some((profile) => harnessProfileKey(profile) === harnessProfileKey(proof.route))) {
+          profiles.push({ ...harnessProfile(proof.route), expiresAt: new Date(proof.displayExpires).toISOString(),
+            ...(proof.readiness ? { readiness: proof.readiness } : {}) })
+        }
+      } catch { this.proofs.delete(key) }
+    }
+    return profiles
+  }
+
+  configurationSignature(route: HarnessRoute): string {
+    route = { ...harnessProfile(route), model: route.model }
+    const definition = this.deps.catalog.get(route.harnessId)
+    if (!definition) return 'missing'
+    return `${this.deps.revision?.() ?? 0}:${readinessFingerprint({ options: this.deps.options(), definition, route, secretEnv: {} })}`
+  }
+  async prepareTurn(threadId: string, turnId: string, route: HarnessRoute, signature: string, signal: AbortSignal): Promise<void> {
+    if (this.maintenance.has(route.harnessId)) throw new Error('Agent update is in progress; retry when it finishes')
+    const key = `${threadId}:${turnId}`
+    this.preparing.set(key, route.harnessId)
+    try {
+    if (signature !== this.configurationSignature(route)) throw new Error('Agent profile changed before launch; retry the turn')
+    const identity = await this.assertReady(route, signal)
+    if (signature !== this.configurationSignature(route)) throw new Error('Agent profile changed during readiness check; retry the turn')
+    this.launches.set(`${threadId}:${turnId}`, { route, identity, signature })
+    await this.validateTurn(threadId, turnId, signal)
+    } catch (error) { this.launches.delete(key); throw error }
+    finally { this.preparing.delete(key) }
+  }
+
+  /** Stop new admissions while existing turns drain; never interrupt those turns. */
+  beginMaintenance(id: string): () => void {
+    if (this.maintenance.has(id)) throw new Error('Agent update is already in progress')
+    this.maintenance.add(id)
+    return () => this.maintenance.delete(id)
+  }
+  inUse(id: string): boolean {
+    return [...this.preparing.values()].includes(id) || [...this.launches.values()].some((entry) => entry.route.harnessId === id)
+  }
+  invalidateHarness(id: string): void {
+    for (const [key, proof] of this.proofs) if (proof.route.harnessId === id) this.invalidateProfile(harnessProfileKey(proof.route))
+    for (const key of this.warmed.keys()) if (JSON.parse(key)[0] === id) { this.warmed.delete(key); this.warmFailures.delete(key) }
+  }
+  async validateTurn(threadId: string, turnId: string, signal: AbortSignal, actualRoute?: HarnessRoute): Promise<string> {
+    const launch = this.launches.get(`${threadId}:${turnId}`)
+    if (!launch || launch.signature !== this.configurationSignature(launch.route)) throw new Error('Agent launch has no current readiness proof')
+    if (actualRoute && (harnessProfileKey(actualRoute) !== harnessProfileKey(launch.route) ||
+      (parseGatewayModelId(actualRoute.model)?.model ?? actualRoute.model) !== (parseGatewayModelId(launch.route.model)?.model ?? launch.route.model))) {
+      throw new Error('Actual Agent profile does not match the checked launch route')
+    }
+    await this.validateProof(launch.route, launch.identity, signal)
+    if (this.launches.get(`${threadId}:${turnId}`) !== launch || launch.signature !== this.configurationSignature(launch.route)) {
+      throw new Error('Agent profile changed during launch validation')
+    }
+    return launch.identity
+  }
+  commandForTurn(threadId: string, turnId: string): string | undefined {
+    const launch = this.launches.get(`${threadId}:${turnId}`)
+    return launch ? this.proofs.get(proofKey(launch.route))?.command : undefined
+  }
+  releaseTurn(threadId: string, turnId: string): void { this.launches.delete(`${threadId}:${turnId}`) }
+
+  async assertReady(route: HarnessRoute, signal?: AbortSignal): Promise<string> {
+    if (route.harnessId === 'kun') return 'native'
+    await this.restored
+    const definition = this.deps.catalog.get(route.harnessId)
+    if (!definition || definition.availability === 'retired' || !this.deps.catalog.isProfileEnabled(route)) {
+      throw new Error(`Agent profile is disabled: ${route.harnessId}. Test and enable this profile in Agent settings.`)
+    }
+    // An unexpired proof from the same configuration revision whose identity
+    // (binary, credentials, profile files, network) is unchanged admits the
+    // turn without re-spawning the agent: a full handshake per message added
+    // 5-20 s and a second failure point for slow native agents.
+    const reused = await this.reusableProof(route, signal)
+    if (reused) return reused
+    // Explicit settings tests supersede old checks; turn admissions only
+    // observe that fence and cannot invalidate another unchanged turn.
+    const result = await this.check(definition, route, { level: 'handshake', ...route }, signal)
+    signal?.throwIfAborted()
+    if (!result.readiness?.usable || !this.deps.catalog.isProfileEnabled(route)) {
+      throw new Error(result.readiness?.detail ?? result.readiness?.checks.find((check) => !check.ok)?.detail ?? 'Agent profile is not ready; test it in Agent settings')
+    }
+    const proof = this.proofs.get(proofKey(route))
+    if (!proof) throw new Error('Readiness check was superseded; retry')
+    return proof.identity
+  }
+
+  private async reusableProof(route: HarnessRoute, signal?: AbortSignal): Promise<string | undefined> {
+    const proof = this.proofs.get(proofKey(route))
+    if (!proof || proof.expires - this.now() < PROOF_REUSE_MIN_REMAINING_MS) return undefined
+    const revision = this.deps.revision?.()
+    if (proof.revision !== revision || !this.deps.catalog.isProfileEnabled(route)) return undefined
+    const bounded = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(10_000)])
+    try {
+      const current = await raceProbeAbort(this.snapshot(route, proof.command), bounded)
+      if (current.identity !== proof.identity) return undefined
+    } catch {
+      signal?.throwIfAborted()
+      return undefined
+    }
+    signal?.throwIfAborted()
+    if (this.proofs.get(proofKey(route)) !== proof || revision !== this.deps.revision?.() ||
+      !this.deps.catalog.isProfileEnabled(route)) return undefined
+    return proof.identity
+  }
+
+  /** Last boundary check, after turn setup awaits and immediately before acquiring/spawning. */
+  async validateProof(route: HarnessRoute, identity: string, signal?: AbortSignal): Promise<void> {
+    signal = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(10_000)])
+    signal.throwIfAborted()
+    const proof = this.proofs.get(proofKey(route))
+    const revision = this.deps.revision?.()
+    if (!this.deps.catalog.isProfileEnabled(route) || !proof || proof.identity !== identity ||
+      (await raceProbeAbort(this.snapshot(route, proof.command), signal)).identity !== identity) throw new Error('Agent profile changed before launch; test it again')
+    if (revision !== this.deps.revision?.() || !this.deps.catalog.isProfileEnabled(route) ||
+      this.proofs.get(proofKey(route)) !== proof) throw new Error('Agent profile changed during launch validation')
+    signal?.throwIfAborted()
+  }
+
+  private async snapshot(route: HarnessRoute, command?: string): Promise<Snapshot> {
+    route = { ...harnessProfile(route), model: route.model }
+    const definition = this.deps.catalog.get(route.harnessId)
+    if (!definition) throw new Error('Unknown harness')
+    const options = this.deps.options()
+    const secretEnv = await resolveHarnessSecretEnv(definition, this.deps.resolveSecretEnv)
+    const module = providerModule(definition.id)
+    const snapshotEvidence = route.credentialMode === 'native-login' ? module?.credentials?.snapshotEvidence : undefined
+    const nativeEvidence = snapshotEvidence
+      ? await snapshotEvidence({ ...process.env, ...definition.launch?.env, ...secretEnv }) : undefined
+    if (nativeEvidence) secretEnv.__KUN_READINESS_NATIVE_AUTH = nativeEvidence.fingerprint
+    const candidate = readinessProvider(options, route)
+    const provider = route.credentialMode === 'native-login' && (!route.providerId || route.providerId === 'default') &&
+      candidate?.kind !== module?.nativeAccount?.kind ? undefined : candidate
+    let apiKey = provider?.apiKey?.trim() ?? ''
+    if (provider?.credentialSourceId) {
+      apiKey = (await this.deps.resolveProviderCredential?.(provider.credentialSourceId))?.apiKey?.trim() ?? ''
+      // Bind the resolved credential value, not just its durable reference.
+      secretEnv.__KUN_READINESS_PROVIDER = apiKey
+    }
+    const env = { ...definition.launch?.env, ...secretEnv,
+      ...nativeHarnessCredentialEnv(definition, { ...process.env, ...definition.launch?.env, ...secretEnv }) }
+    delete env.__KUN_READINESS_PROVIDER
+    delete env.__KUN_READINESS_NATIVE_AUTH
+    if (route.credentialMode === 'native-login') {
+      for (const key of module?.nativeLoginStripEnv ?? []) delete env[key]
+    }
+    let configured = definition.availability !== 'retired' && definition.credentialModes.includes(route.credentialMode)
+    let detail: string | undefined
+    // Custom secrets are explicit user bindings. Their names are agent-owned,
+    // so a vendor-name allowlist would reject valid tokens such as KIMI_API_KEY.
+    // Presence is configuration evidence only, never verified authentication.
+    let hasKey = nativeEvidence?.configured || nativeHasKey(definition, env) || (!definition.builtin &&
+      (definition.launch?.secretEnv ?? []).some((entry) => Boolean(secretEnv[entry.name]?.trim())))
+    if (route.gatewayBinding) {
+      try {
+        if (route.credentialMode !== 'kun-gateway' || !definition.gateway || !this.deps.resolveGatewayAliases) throw new Error('Agent alias routing is unavailable')
+        if (route.gatewayBinding.small && !definition.gateway.env.smallModel) throw new Error('This Agent does not expose a separate small-model setting')
+        const aliases = await this.deps.resolveGatewayAliases(route.gatewayBinding)
+        const main = aliases.find((entry) => entry.role === 'main')
+        if (!main || main.alias !== route.model) throw new Error('Select the model alias associated with this Agent profile')
+        secretEnv.__KUN_READINESS_GATEWAY_ALIASES = JSON.stringify(aliases)
+        configured &&= true; hasKey = true
+      } catch (error) { configured = false; hasKey = false; detail = error instanceof Error ? error.message : 'Agent alias routing is unavailable' }
+    } else if (route.credentialMode !== 'native-login') {
+      hasKey = Boolean(apiKey)
+      const gateway = route.credentialMode === 'kun-gateway'
+      const validProvider = Boolean(provider && (gateway ? exposableProvider({
+        kind: provider.kind ?? 'http', authType: provider.authType ?? 'api-key',
+        configured: Boolean(apiKey), credentialStatus: apiKey ? 'ready' : 'missing'
+      }) :
+        !module?.nativeAccount || provider.kind === module.nativeAccount.kind))
+      configured &&= validProvider && Boolean(route.model) && (!gateway || Boolean(definition.gateway))
+      const modelPool = [...(provider?.models ?? []), ...(provider?.selectedModel ? [provider.selectedModel] : [])]
+      // "Agent default model" defers to the provider profile's own default.
+      const agentDefault = !gateway && route.model === 'default' && modelPool.length > 0
+      if ((gateway || modelPool.length) && !agentDefault && !modelPool.includes(parseGatewayModelId(route.model)?.model ?? route.model)) { configured = false; detail = 'Selected model is not in this provider profile' }
+      if (!validProvider) detail = 'Select a supported provider profile'
+      // Protocol initialization must not consume the provider key or issue a gateway grant.
+      // Its model route and credential are checked locally, independently of login.
+    } else if (provider && route.providerId && module?.nativeAccount && provider.kind === module.nativeAccount.kind) {
+      // A native account profile carries the engine's own credential.
+      if (apiKey) env[module.nativeAccount.credentialEnv] = apiKey
+      if (module.nativeAccount.countsAsEvidence) hasKey ||= Boolean(apiKey)
+    }
+    if (route.credentialMode === 'native-login' && route.providerId && route.providerId !== 'default' &&
+      (!module?.nativeAccount || !provider || provider.kind !== module.nativeAccount.kind)) { configured = false; detail = 'Native login cannot use an unrelated provider profile; choose the system account for native login or switch the connection to a provider profile' }
+    if (nativeAgentNetworkStatus(definition).networkSource === 'explicit-required') {
+      configured = false; detail = 'Configure an explicit proxy for this Agent'
+    }
+    return { definition, route, secretEnv, env, configured, hasKey, ...(detail ? { detail } : {}),
+      identity: readinessFingerprint({ options, definition, route, secretEnv, command }) }
+  }
+
+  private async handshake(snapshot: Snapshot, status: HarnessStatus, signal: AbortSignal): Promise<Handshake> {
+    const { definition } = snapshot
+    const probeEnv = await readinessProbeEnvironment(definition, snapshot.route, snapshot.env)
+    const env = probeEnv.env
+    try { return await this.runHandshake(snapshot, status, signal, env) } finally { await probeEnv.dispose() }
+  }
+
+  private async runHandshake(snapshot: Snapshot, status: HarnessStatus, signal: AbortSignal, env: Record<string, string>): Promise<Handshake> {
+    const { definition } = snapshot
+    const command = status.resolvedCommand ?? definition.launch?.command ?? definition.detect?.command ?? definition.id
+    if (this.deps.handshake) return this.deps.handshake(definition, command, env, signal)
+    const options = { env, signal, resolveSecretEnv: this.deps.resolveSecretEnv }
+    switch (definition.transport) {
+      case 'native-loop': return { ok: true, supported: true, protocol: 'native-loop' }
+      case 'acp': return probeAcpHandshake(definition, command, { ...options,
+        session: { model: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' ? snapshot.route.model : undefined,
+          permissionMode: harnessTurnPermissionMode(definition, { ...this.deps.options(),
+            requested: this.deps.options().harnesses?.defaults?.[definition.id]?.permissionMode,
+            unattended: false, allowUnattendedFullAccess: false }) },
+        includeModels: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' })
+      case 'codex-app-server': return probeCodexHandshake(definition, command, { ...options,
+        includeModels: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' })
+      case 'pi-rpc': return probePiHandshake(definition, command, { ...options, includeModels: true })
+      case 'agent-sdk': {
+        return await this.deps.sdkHandshake?.(definition, env, signal) ?? { ok: false, supported: true, protocol: 'agent-sdk' }
+      }
+      case 'cursor-sdk': return probeCursorSdkReadiness(signal)
+      case 'antigravity-cli': {
+        const result = await spawnCaptured(command, ['models'], { timeoutMs: AGY_MODELS_TIMEOUT_MS, signal,
+          env: { ...nativeAgentNetworkEnv(definition, process.env, env), ...env } })
+        return agyModelsHandshake(result)
+      }
+      default: return { ok: false, supported: false, detail: 'No supported non-inference readiness check for this transport' }
+    }
+  }
+  private now(): number { return this.deps.nowMs?.() ?? Date.now() }
+}

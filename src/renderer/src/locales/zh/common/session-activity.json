@@ -9,6 +9,7 @@
   "processed": "已处理",
   "processStepCount": "{{count}} 步",
   "workedFor": "用时 {{duration}}",
+  "turnUsageDetailsGatewaySource": "包含经 Kun 本地网关转发的请求。",
   "working": "执行中…",
   "workingSprint": "分析中…",
   "workingDive": "整理中…",
@@ -325,6 +326,18 @@
   "subagentSessionBannerSub": "这是「{{title}}」委派的子代理过程，可随时返回主对话。",
   "subagentSessionBannerSubUnknown": "这是子代理过程页，可随时返回主对话。",
   "subagentSessionBannerBack": "返回主对话",
+  "externalSubagentBannerTitle": "正在查看 {{agent}} 子代理过程",
+  "externalSubagentBannerSub": "这是「{{title}}」里 {{agent}} 委派的子代理，只能查看；要追问请回到主对话。",
+  "externalSubagentBannerSubUnknown": "这是 {{agent}} 委派的子代理，只能查看；要追问请回到主对话。",
+  "externalSubagentAwaitingNative": "在等 {{agent}} 里的权限，Kun 无法批准",
+  "externalSubagentEndedWithTurn": "主对话这一轮结束时它还没完成",
+  "externalSubagentClosedByParent": "已被主代理关闭",
+  "externalSubagentProgressChecks": "主代理查看过 {{count}} 次进度",
+  "externalSubagentNoProcess": "{{agent}} 没有提供这个子代理的过程",
+  "conversationSubagentsTitle": "本对话的子代理",
+  "conversationSubagentsRunning": "运行中 · {{count}}",
+  "conversationSubagentsFinished": "已结束 · {{count}}",
+  "conversationSubagentsExternalNote": "子代理的类型和模型由 {{agent}} 自己的配置决定，下面的设置只对 Kun 生效。",
   "subagentSwarmTitle": "{{count}} 子代理",
   "subagentSwarmRunning": "{{count}} 运行",
   "subagentSwarmQueued": "{{count}} 排队",
@@ -395,5 +408,15 @@
   "writeTableAlignLeft": "左对齐",
   "writeTableAlignCenter": "居中对齐",
   "writeTableAlignRight": "右对齐",
-  "writeCopyMarkdown": "复制为 Markdown"
+  "writeCopyMarkdown": "复制为 Markdown",
+  "acpTool": {
+    "cwd": "工作目录",
+    "exitCode": "退出码 {{code}}",
+    "summaryOnly": "Agent 仅返回了摘要，未提供文件正文。",
+    "waiting": "正在等待工具输出…",
+    "noOutput": "工具未返回输出。",
+    "truncated": "内容较长，当前显示保留的片段。",
+    "input": "输入参数",
+    "rawOutput": "原始输出"
+  }
 }

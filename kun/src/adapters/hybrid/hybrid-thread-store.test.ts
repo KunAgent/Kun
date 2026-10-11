@@ -45,7 +45,7 @@ function backfillInternals(store: HybridThreadStore): {
   }
 }
 
-function usageEvent(seq: number, usage: UsageSnapshot): UsageEvent {
+function usageEvent(seq: number, usage: UsageSnapshot, extra: Partial<UsageEvent> = {}): UsageEvent {
   return {
     kind: 'usage',
     threadId: 'thread-usage-1',
@@ -53,7 +53,8 @@ function usageEvent(seq: number, usage: UsageSnapshot): UsageEvent {
     timestamp: `2026-08-08T00:00:${String(seq).padStart(2, '0')}.000Z`,
     turnId: `turn-${seq}`,
     model: 'gpt-5.6-sol',
-    usage
+    usage,
+    ...extra
   }
 }
 
@@ -111,6 +112,43 @@ describe('HybridThreadStore usage timing persistence', () => {
         completionTokens: 60,
         avgTtftMs: 1_000,
         avgTokensPerSecond: 42.5
+      })
+    } finally {
+      store.close()
+    }
+  })
+
+  it('round-trips gateway source and harness id through the SQLite usage index', async () => {
+    const { store } = await createStore()
+    try {
+      await store.noteEvent(usageEvent(1, {
+        promptTokens: 100,
+        completionTokens: 10,
+        totalTokens: 110,
+        cacheHitRate: null,
+        turns: 1
+      }))
+      await store.noteEvent(usageEvent(2, {
+        promptTokens: 300,
+        completionTokens: 30,
+        totalTokens: 330,
+        cacheHitRate: null,
+        turns: 2
+      }, {
+        providerId: 'anthropic-sub',
+        source: 'harness-gateway',
+        harnessId: 'claude-code'
+      }))
+
+      const records = await store.loadUsageRecords({ threadId: 'thread-usage-1' })
+      expect(records).toHaveLength(2)
+      expect(records[0].source).toBeUndefined()
+      expect(records[1]).toMatchObject({
+        turnId: 'turn-2',
+        providerId: 'anthropic-sub',
+        source: 'harness-gateway',
+        harnessId: 'claude-code',
+        usage: { promptTokens: 200, completionTokens: 20 }
       })
     } finally {
       store.close()

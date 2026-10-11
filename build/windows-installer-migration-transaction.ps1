@@ -676,6 +676,7 @@ function Finalize-TerminalUpdateTransaction {
   }
   if ([string]$transaction.Phase -eq 'committed') {
     $transaction = Set-UpdateTransactionPhase $transaction 'finalizing'
+    Invoke-InstallerFaultPoint 'finalize.after_phase'
   }
   if ([string]$transaction.Phase -eq 'finalizing' -and -not [bool]$transaction.InPlace) {
     Remove-RetiredApplicationPayload (Normalize-FullPath ([string]$transaction.Source))
@@ -692,6 +693,7 @@ function Finalize-TerminalUpdateTransaction {
       Remove-Item -LiteralPath $path -Recurse -Force
     }
   }
-  Remove-Item -LiteralPath (Get-UpdateTransactionPath) -Force
   Remove-Journal
+  Invoke-InstallerFaultPoint 'finalize.before_transaction_removal'
+  Remove-Item -LiteralPath (Get-UpdateTransactionPath) -Force
 }

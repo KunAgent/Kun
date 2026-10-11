@@ -1,3 +1,4 @@
+import { InjectedMemoryDetails } from './injected-memory-details'
 import type { ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { useCallback, useRef, useState } from 'react'
@@ -27,7 +28,8 @@ export function InjectedMemoryMetaChip({
   chipClass: string
 }): ReactElement | null {
   const { t } = useTranslation('common')
-  const anchorRef = useRef<HTMLSpanElement>(null)
+  const anchorRef = useRef<HTMLButtonElement>(null)
+  const [details, setDetails] = useState(false)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
   const directiveIds = metaInjectedDirectiveIds(meta)
   const tooltipText = useInjectedMemoryTooltipText(meta, memoryIds, directiveIds, {
@@ -62,9 +64,12 @@ export function InjectedMemoryMetaChip({
 
   return (
     <>
-      <span
+      <button type="button"
+        aria-expanded={details}
+        aria-label={t('memoryUsedTitle')}
+        onClick={(event) => { event.stopPropagation(); hideTooltip(); setDetails(true) }}
         ref={anchorRef}
-        className={`${chipClass} cursor-default`}
+        className={`${chipClass} cursor-pointer`}
         onPointerEnter={(event) => showTooltip(event.clientX)}
         onPointerMove={(event) => moveTooltip(event.clientX)}
         onPointerLeave={hideTooltip}
@@ -73,7 +78,8 @@ export function InjectedMemoryMetaChip({
         {directiveIds.length > 0
           ? `${t('toolInjectedDirectives')} ${directiveIds.length} · ${t('toolInjectedMemories')} ${memoryIds.length}`
           : `${t('toolInjectedMemories')} ${memoryIds.length}`}
-      </span>
+      </button>
+      {details ? createPortal(<InjectedMemoryDetails meta={meta} memoryIds={memoryIds} onClose={() => setDetails(false)} />, document.body) : null}
       {tooltip
         ? createPortal(
             <div

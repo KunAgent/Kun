@@ -44,44 +44,62 @@ describe('initializeStartupTheme', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses the system theme immediately and then applies the saved theme', async () => {
+  function installStorage(initial?: string): Map<string, string> {
+    const store = new Map<string, string>(initial ? [['kun.theme.cache', initial]] : [])
+    const window = (globalThis as unknown as { window: Record<string, unknown> }).window
+    window.localStorage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value)
+    }
+    return store
+  }
+
+  it('paints the theme the user last applied, without waiting for settings', () => {
     const { attributes } = installThemeEnvironment(false)
-    let resolveSettings!: (settings: { theme: 'dark' }) => void
-    const settings = new Promise<{ theme: 'dark' }>((resolve) => {
-      resolveSettings = resolve
-    })
+    installStorage('dark')
 
-    initializeStartupTheme(() => settings)
-    expect(attributes.get('data-theme')).toBe('light')
-
-    resolveSettings({ theme: 'dark' })
-    await settings
-    await Promise.resolve()
+    initializeStartupTheme()
     expect(attributes.get('data-theme')).toBe('dark')
   })
 
-  it('keeps following the OS when the saved theme is system', async () => {
-    const { attributes, setSystemDark } = installThemeEnvironment(false)
+  it('falls back to the system theme on a first launch and keeps following the OS', () => {
+    const { attributes, setSystemDark } = installThemeEnvironment(true)
+    installStorage()
 
-    initializeStartupTheme(async () => ({ theme: 'system' }))
-    await Promise.resolve()
+    initializeStartupTheme()
+    expect(attributes.get('data-theme')).toBe('dark')
+
+    setSystemDark(false)
+    expect(attributes.get('data-theme')).toBe('light')
+  })
+
+  it('keeps following the OS when the remembered theme is system', () => {
+    const { attributes, setSystemDark } = installThemeEnvironment(false)
+    installStorage('system')
+
+    initializeStartupTheme()
     expect(attributes.get('data-theme')).toBe('light')
 
     setSystemDark(true)
     expect(attributes.get('data-theme')).toBe('dark')
   })
 
-  it('keeps the system fallback when saved settings cannot be read', async () => {
-    const { attributes, setSystemDark } = installThemeEnvironment(true)
-
-    initializeStartupTheme(async () => {
-      throw new Error('settings unavailable')
-    })
-    await Promise.resolve()
-    expect(attributes.get('data-theme')).toBe('dark')
-
-    setSystemDark(false)
+  it('ignores a remembered value it does not recognise', () => {
+    const { attributes } = installThemeEnvironment(false)
+    installStorage('sepia')
+    initializeStartupTheme()
     expect(attributes.get('data-theme')).toBe('light')
+  })
+
+  it('remembers a theme once it is applied, but not the startup fallback', () => {
+    installThemeEnvironment(false)
+    const store = installStorage()
+
+    initializeStartupTheme()
+    expect(store.has('kun.theme.cache')).toBe(false)
+
+    applyTheme('dark')
+    expect(store.get('kun.theme.cache')).toBe('dark')
   })
 })
 

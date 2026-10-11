@@ -72,6 +72,9 @@ type WorkbenchRightPanelElementOptions = Pick<
     | 'composerFastMode'
     | 'setComposerModel'
     | 'setComposerFastMode'
+    | 'executionSettings'
+    | 'executionSettingsApplying'
+    | 'onExecutionSettingsChange'
     | 'onNewConversation'
     | 'onPickWorkspace'
   >

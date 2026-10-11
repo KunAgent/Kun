@@ -54,6 +54,13 @@ export function createToolDiscoveryContext(
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),
     ...(input.imContext ? { imContext: true } : {}),
     model: input.modelCapabilities,
+    ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+    ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
+    ...(input.collaborationEnabled !== undefined
+      ? { collaborationEnabled: input.collaborationEnabled } : {}),
+    ...(input.collaborationEverEnabled !== undefined
+      ? { collaborationEverEnabled: input.collaborationEverEnabled } : {}),
+    ...(input.executionUnitKind ? { executionUnitKind: input.executionUnitKind } : {}),
     actingModelRoute: input.actingModelRoute,
     activeSkillIds: input.activeSkillIds,
     memoryPolicy: { enabled: deps.memoryEnabled },
@@ -81,9 +88,9 @@ export function createToolDiscoveryContext(
     ...(deps.fastContextTaskCount ? { fastContextTaskCount: deps.fastContextTaskCount } : {}),
     abortSignal: input.signal,
     // A tool schema lookup is not tool execution. Retain the existing inert
-    // approval callback so a provider cannot create a real approval request
-    // merely by enumerating its schemas.
-    awaitApproval: async () => 'allow',
+    // deny-closed callback so enumeration cannot mint execution authority or
+    // create a real approval request merely by inspecting schemas.
+    awaitApproval: async () => 'deny',
     ...(input.userInputDisabled
       ? {}
       : {

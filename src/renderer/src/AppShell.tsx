@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect } from 'react'
+import { useQuotaReminderNotifications } from './hooks/useQuotaReminderNotifications'
 import { appWindowTitleForFlavor } from '@shared/app-environment'
-import { MAX_APP_BADGE_COUNT } from '@shared/kun-gui-api'
 import { resolveDesktopTitleBarMode, usesCustomDesktopTitleBar } from '@shared/desktop-title-bar'
 import { installSidebarActivityLifecycle } from './sidebar-activity-lifecycle'
 import { useChatStore } from './store/chat-store'
+import { startBackgroundThreadSync } from './store/chat-background-sync'
 import { RuntimeStatusBanner } from './components/RuntimeStatusBanner'
 import i18n from './i18n'
 import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
@@ -12,14 +13,22 @@ import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-
 import { createInitialWorkbenchPreparer } from './initial-workbench-preparation'
 import { DataMigrationActivityIndicator } from './components/DataMigrationActivityIndicator'
 import { SpeakDownloadToast } from './components/SpeakDownloadToast'
+import { WhatsNewHost } from './components/whats-new/WhatsNewHost'
+import { AgentActivityToasts } from './components/ade/AgentActivityToasts'
 import { useRoomEvents } from './components/rooms/useRoomEvents'
+import { useWorkbenchDirectorySync } from './components/rooms/workbench-bridge-actions'
+import { WorkbenchFlash } from './components/rooms/workbench-flash'
 import { useRemoteSurface } from './mobile/use-remote-surface'
 import { useRemoteReconnectRecovery } from './use-remote-reconnect-recovery'
+import { clearCurrentlyVisibleUnreadCompletions } from './store/unread-completions'
+import { startActivityFeed, stopActivityFeed, useActivityStore } from './store/activity-store'
 import {
-  clearCurrentlyVisibleUnreadCompletions,
-  persistUnreadCompletions,
-  unreadCompletionCount
-} from './store/unread-completions'
+  startActivityNotifications,
+  stopActivityNotifications
+} from './store/activity-notifications'
+import { syncAppBadgeCount } from './store/app-badge'
+import { useAdeEnabled } from './components/ade/use-ade-enabled'
+import { KunLoader } from './components/KunLoader'
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
@@ -79,18 +88,7 @@ export async function prepareInitialMobileApp(): Promise<void> {
 }
 
 function RouteFallback(): React.ReactElement {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex h-full min-h-0 items-center justify-center bg-ds-main text-ds-muted"
-    >
-      <div className="flex items-center gap-2 rounded-full border border-ds-border-muted bg-ds-card px-4 py-2 text-[13px] shadow-sm">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden />
-        <span>{i18n.t('loading')}</span>
-      </div>
-    </div>
-  )
+  return <KunLoader fill label={i18n.t('loading')} />
 }
 
 export default function AppShell(): React.ReactElement {
@@ -98,6 +96,10 @@ export default function AppShell(): React.ReactElement {
   useRemoteReconnectRecovery()
   const route = useChatStore((s) => s.route)
   const surface = useRemoteSurface()
+  useQuotaReminderNotifications(surface === 'desktop')
+  // Only the desktop knows the user's real workspaces; a phone must never overwrite them.
+  useWorkbenchDirectorySync(surface === 'desktop')
+  const { enabled: adeEnabled } = useAdeEnabled()
   const initialSetupOpen = useChatStore((s) => s.initialSetupOpen)
   const platform = typeof window !== 'undefined' ? window.kunGui?.platform ?? 'unknown' : 'unknown'
   const appEnvironment = typeof window !== 'undefined' ? window.kunGui?.appEnvironment : undefined
@@ -111,19 +113,28 @@ export default function AppShell(): React.ReactElement {
   const MobileApp = preparedMobileAppShell ?? MobileAppShell
 
   useEffect(() => installSidebarActivityLifecycle(useChatStore), [])
+  useEffect(() => startBackgroundThreadSync(), [])
+
+  // The ADE activity feed is app-level: while the lab flag is on it
+  // stays live across routes so worker completions and waits still notify —
+  // and badge counts stay fresh — after the user leaves the ADE view. The
+  // Mission Control popout owns its own window's feed; the mobile surface
+  // runs the same feed but keeps local notifications desktop-only.
+  useEffect(() => {
+    if (!adeEnabled) return
+    startActivityFeed()
+    if (surface === 'desktop') startActivityNotifications()
+    return () => {
+      stopActivityFeed()
+      stopActivityNotifications()
+    }
+  }, [adeEnabled, surface])
 
   useEffect(() => {
     let previousUnread = useChatStore.getState().unreadThreadIds
     const syncBadge = (unread: typeof previousUnread): void => {
-      const normalized = persistUnreadCompletions(unread)
-      const count = Math.min(unreadCompletionCount(normalized), MAX_APP_BADGE_COUNT)
-      if (typeof window.kunGui?.setAppBadgeCount !== 'function') return
-      void window.kunGui.setAppBadgeCount(count).catch((error: unknown) => {
-        void window.kunGui?.logError?.('app-badge', 'Failed to update unread completion badge', {
-          message: error instanceof Error ? error.message : String(error),
-          count
-        }).catch(() => undefined)
-      })
+      // Dock badge = unread completions + ADE "needs you" rows.
+      syncAppBadgeCount(unread, useActivityStore.getState().rows)
     }
     const clearVisible = (): void => {
       const state = useChatStore.getState()
@@ -141,6 +152,12 @@ export default function AppShell(): React.ReactElement {
       previousUnread = state.unreadThreadIds
       syncBadge(previousUnread)
     })
+    const unsubscribeActivity = useActivityStore.subscribe(
+      (state, prevState) => {
+        if (state.rows === prevState.rows) return
+        syncBadge(previousUnread)
+      }
+    )
 
     clearVisible()
     previousUnread = useChatStore.getState().unreadThreadIds
@@ -150,6 +167,7 @@ export default function AppShell(): React.ReactElement {
     document.addEventListener('visibilitychange', onAttentionChanged)
     return () => {
       unsubscribe()
+      unsubscribeActivity()
       window.removeEventListener('focus', onAttentionChanged)
       window.removeEventListener('blur', onAttentionChanged)
       document.removeEventListener('visibilitychange', onAttentionChanged)
@@ -185,6 +203,9 @@ export default function AppShell(): React.ReactElement {
           </Suspense>
         </div>
         <SpeakDownloadToast />
+        {surface === 'desktop' ? <AgentActivityToasts /> : null}
+        {surface === 'desktop' ? <WhatsNewHost /> : null}
+        <WorkbenchFlash />
         {initialSetupOpen ? (
           surface === 'mobile' ? (
             <div className="kun-mobile-setup-hint" role="alertdialog" aria-modal="true">

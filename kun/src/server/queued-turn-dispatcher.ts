@@ -1,3 +1,4 @@
+import { isQueueExecutionBlocked } from '../domain/queue-execution-state.js'
 import type { TurnService } from '../services/turn-service.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
@@ -38,7 +39,7 @@ export class QueuedTurnDispatcher {
     }
   ) {}
 
-  /** Queue-commit / manual trigger: this thread has (or may have) queued work. */
+  /** Wake only: durable queue control in TurnService still governs admission. */
   requestDrain(threadId: string): void {
     this.paused.delete(threadId)
     this.cancelRetry(threadId)
@@ -51,7 +52,7 @@ export class QueuedTurnDispatcher {
    * slot, so the scheduler always wakes. `aborted` additionally evicts the
    * thread from the ready queue: an explicit user interrupt pauses that
    * thread's own queue (Stop reliably stops the conversation); it re-enters
-   * only on the next queue-commit event.
+   * only after a wake and an explicitly cleared durable pause.
    */
   onTurnSettled(threadId: string, status: 'completed' | 'failed' | 'aborted'): void {
     if (status === 'aborted') {
@@ -72,7 +73,7 @@ export class QueuedTurnDispatcher {
       const metadata = await (
         this.input.threadStore.getMetadata?.(summary.id) ?? this.input.threadStore.get(summary.id)
       ).catch(() => null)
-      if (!metadata?.turns.some((turn) => turn.status === 'queued')) continue
+      if (!metadata || isQueueExecutionBlocked(metadata) || !metadata.turns.some((turn) => turn.status === 'queued')) continue
       queuedThreads += 1
       this.markReady(summary.id)
     }
@@ -203,7 +204,7 @@ export class QueuedTurnDispatcher {
       const metadata = await (
         this.input.threadStore.getMetadata?.(threadId) ?? this.input.threadStore.get(threadId)
       )
-      return Boolean(metadata?.turns.some((turn) => turn.status === 'queued'))
+      return Boolean(metadata && !isQueueExecutionBlocked(metadata) && metadata.turns.some((turn) => turn.status === 'queued'))
     } catch {
       return true
     }

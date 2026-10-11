@@ -9,7 +9,7 @@ const flushMock = vi.fn<
 
 vi.mock('./settings-section-providers-shared-api', () => ({
   MAX_SHARED_MODEL_CONNECTION_MODELS: 300,
-  requestSharedModelConnectionProbe: (providerId: string) => probeMock(providerId),
+  requestSharedModelConnectionProbeDetails: async (providerId: string) => ({ models: await probeMock(providerId), modelProfiles: {} }),
   shouldUseSharedModelConnectionProbe: () => true
 }))
 vi.mock('./provider-mutation-flush', () => ({
@@ -48,6 +48,8 @@ const target = {
 
 describe('useProviderProbeOperations shared connection barrier', () => {
   let setProbeStates: ReturnType<typeof vi.fn>
+  let openModelImport: ReturnType<typeof vi.fn>
+  let fetchCatalogMock: ReturnType<typeof vi.fn>
   let runProbe: (provider: ModelProviderProfileV1, mode: 'test' | 'fetch') => Promise<void>
 
   beforeEach(async () => {
@@ -55,14 +57,16 @@ describe('useProviderProbeOperations shared connection barrier', () => {
     probeMock.mockResolvedValue(['deepseek-chat'])
     flushMock.mockResolvedValue({ ok: true })
     setProbeStates = vi.fn()
+    openModelImport = vi.fn()
+    fetchCatalogMock = vi.fn(async () => ({ models: [] }))
     const scope = {
       t: (key: string) => key,
       setProbeStates,
       setCursorAccounts: vi.fn(),
       sharedConnectionFor: () => ({ configured: true, credentialStatus: 'valid' }),
       patchProviderProfile: vi.fn(),
-      fetchModelsDevCatalogFor: vi.fn(async () => ({ models: [] })),
-      openModelImport: vi.fn(),
+      fetchModelsDevCatalogFor: fetchCatalogMock,
+      openModelImport,
       flushSharedProviderCatalog: vi.fn(async () => undefined)
     }
     const { useProviderProbeOperations } = await import('./use-provider-probe-operations')
@@ -110,6 +114,27 @@ describe('useProviderProbeOperations shared connection barrier', () => {
     expect(probeMock).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards shared Codex probe IDs to the import dialog without models.dev metadata', async () => {
+    probeMock.mockResolvedValue(['gpt-6-sol', 'gpt-6-luna'])
+    await runProbe({ ...target, id: 'codex' }, 'fetch')
+    expect(openModelImport).toHaveBeenCalledWith(expect.objectContaining({
+      authoritative: true,
+      providerModelIds: ['gpt-6-sol', 'gpt-6-luna']
+    }))
+  })
+
+  it('opens live provider models while public capability metadata is still pending', async () => {
+    let complete!: (value: unknown) => void
+    fetchCatalogMock.mockReturnValue(new Promise((resolve) => { complete = resolve }))
+    await runProbe(target, 'fetch')
+    expect(openModelImport).toHaveBeenCalledWith(expect.objectContaining({
+      providerModelIds: ['deepseek-chat'], catalogLoading: true,
+      catalogResult: expect.objectContaining({ models: [] })
+    }))
+    complete({ status: 'ok', providerKey: 'deepseek', providerName: 'DeepSeek', matchMode: 'catalog', stale: false, models: [] })
+    await expect(openModelImport.mock.calls[0][0].catalogPromise).resolves.toMatchObject({ providerKey: 'deepseek' })
+  })
+
   it('reports a sync failure instead of probing when the barrier fails', async () => {
     flushMock.mockResolvedValue({ ok: false, error: new Error('registry unavailable'), timedOut: false })
     await runProbe(target, 'test')
@@ -146,6 +171,16 @@ describe('useProviderProbeOperations shared connection barrier', () => {
   })
 })
 
+it('saves officially discovered gpt-6 models as selectable Codex models', async () => {
+  const { applyProviderModelImport } = await import('./use-provider-probe-operations')
+  const codex = { ...target, id: 'codex', modelProfiles: {} }
+  const saved = applyProviderModelImport(codex, {
+    chat: ['gpt-6-sol', 'gpt-6-luna'],
+    image: [], speech: [], tts: [], music: [], video: [], catalogModels: []
+  }, true)
+  expect(saved.models).toEqual(['gpt-6-sol', 'gpt-6-luna'])
+})
+
 describe('mergeDiscoveredModelProfile', () => {
   const enriched: ModelProviderModelProfileV1 = {
     inputModalities: ['text'],
@@ -153,7 +188,8 @@ describe('mergeDiscoveredModelProfile', () => {
     supportsToolCalling: true,
     messageParts: ['text'],
     contextWindowTokens: 128_000,
-    serviceTiers: ['priority']
+    serviceTiers: ['priority'],
+    evidence: { serviceTiers: { source: 'provider', status: 'declared' }, contextWindowTokens: { source: 'user', status: 'declared' } }
   }
   const discovered: ModelProviderModelProfileV1 = {
     inputModalities: ['text'],

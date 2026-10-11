@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "codex",
+  "name": "ChatGPT 订阅",
+  "category": "subscription",
+  "kind": "http",
+  "authFlow": "chatgpt-oauth",
+  "authType": "oauth",
+  "baseUrl": "https://chatgpt.com/backend-api/codex/responses",
+  "endpointFormat": "custom_endpoint",
+  "models": [
+    "gpt-5.5",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.3-codex-spark"
+  ],
+  "docsUrl": "https://openai.com/index/codex/",
+  "credentialUrl": "https://chatgpt.com"
+}

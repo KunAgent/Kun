@@ -10,10 +10,13 @@ import {
 } from '../../contracts/policy.js'
 import type { ThreadStoreListOptions } from '../../ports/thread-store.js'
 import { resolveThreadAgentSurface } from '../../domain/thread.js'
+import { executionTasksAsTodos } from '../../tasks/execution-task-state.js'
+import { isCodeWorkbenchThread } from '../../domain/thread-list-query.js'
 
 export type ThreadRow = {
   id: string; title: string; workspace: string; model: string; mode: ThreadMode; status: ThreadStatus
   agent_surface: ThreadAgentSurface | null
+  workspace_mode: 'code' | 'ade' | null
   approval_policy: ApprovalPolicy; sandbox_mode: SandboxMode
   approval_reviewer: ApprovalReviewer | null
   cost_budget_usd: number | null
@@ -37,6 +40,7 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
   return {
     id: thread.id, title: thread.title, workspace: thread.workspace, model: thread.model,
     agent_surface: resolveThreadAgentSurface(thread),
+    workspace_mode: thread.workspaceMode ?? 'code',
     mode: thread.mode, status: thread.status, approval_policy: thread.approvalPolicy,
     sandbox_mode: thread.sandboxMode,
     approval_reviewer: thread.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
@@ -48,10 +52,14 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
     forked_at: thread.forkedAt ?? null, forked_from_message_count: thread.forkedFromMessageCount ?? null,
     forked_from_turn_count: thread.forkedFromTurnCount ?? null,
     goal_json: thread.goal ? JSON.stringify(thread.goal) : null,
-    todos_json: thread.todos ? JSON.stringify(thread.todos) : null,
-    extension_metadata_json: thread.forkedFromTurnId || thread.historyRefId || thread.ownerExtensionId || thread.planBuildRunId
-      || thread.planBuildAdmissionFingerprint || thread.planBuildAdmissionCapabilityHash
-      || thread.planBuildAdmissionFrozen !== undefined ? JSON.stringify({
+    todos_json: thread.executionTasks ? JSON.stringify(executionTasksAsTodos(thread.id, thread.executionTasks))
+      : thread.todos ? JSON.stringify(thread.todos) : null,
+    extension_metadata_json: JSON.stringify({
+      summaryMetadataVersion: 1,
+      providerId: thread.providerId,
+      harnessId: thread.harnessId,
+      taskWorkspaceId: thread.taskWorkspaceId,
+      executionUnit: thread.executionUnit,
       historyRefId: thread.historyRefId,
       forkedFromTurnId: thread.forkedFromTurnId,
       ownerExtensionId: thread.ownerExtensionId,
@@ -62,10 +70,15 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
       extensionBudget: thread.extensionBudget,
       toolCatalogEpoch: thread.toolCatalogEpoch,
       planBuildRunId: thread.planBuildRunId,
+      collaboration: thread.collaboration,
+      executionConfig: thread.executionConfig,
+      workbenchOrigin: thread.workbenchOrigin,
       planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint,
       planBuildAdmissionCapabilityHash: thread.planBuildAdmissionCapabilityHash,
-      planBuildAdmissionFrozen: thread.planBuildAdmissionFrozen
-    }) : null,
+      planBuildAdmissionFrozen: thread.planBuildAdmissionFrozen,
+      // Rows written before this field stay without it; readers treat absence as unknown.
+      turnCount: Array.isArray(thread.turns) ? thread.turns.length : undefined
+    }),
     created_at: thread.createdAt, updated_at: thread.updatedAt,
     created_at_ms: isoToMillis(thread.createdAt), updated_at_ms: isoToMillis(thread.updatedAt),
     preview: record.preview || null, message_count: record.messageCount,
@@ -78,10 +91,12 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
 export function summaryFromRow(row: ThreadRow): ThreadSummary {
   const goal = parseJson<ThreadGoal>(row.goal_json)
   const todos = parseJson<ThreadTodoList>(row.todos_json)
-  const extension = parseJson<ExtensionThreadMetadata>(row.extension_metadata_json)
+  const { summaryMetadataVersion: _version, ...extension } =
+    parseJson<ExtensionThreadMetadata & { summaryMetadataVersion?: number }>(row.extension_metadata_json) ?? {}
   return {
     id: row.id, title: row.title, workspace: row.workspace, model: row.model, mode: row.mode,
     agentSurface: row.agent_surface ?? 'code',
+    ...(row.workspace_mode === 'ade' ? { workspaceMode: 'ade' as const } : {}),
     status: row.status, approvalPolicy: row.approval_policy, sandboxMode: row.sandbox_mode,
     approvalReviewer: row.approval_reviewer ?? DEFAULT_APPROVAL_REVIEWER,
     modelRequestCaptureEnabled: Boolean(row.model_request_capture_enabled),
@@ -100,10 +115,15 @@ export function summaryFromRow(row: ThreadRow): ThreadSummary {
 }
 
 type ExtensionThreadMetadata = Pick<ThreadRecord,
-  'forkedFromTurnId' | 'historyRefId' | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
-  | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId'
+  'providerId' | 'harnessId' | 'taskWorkspaceId' | 'executionUnit' | 'forkedFromTurnId' | 'historyRefId' | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
+  | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId' | 'workbenchOrigin'
+  | 'collaboration' | 'executionConfig'
   | 'planBuildAdmissionFingerprint' | 'planBuildAdmissionCapabilityHash'
-  | 'planBuildAdmissionFrozen'>
+  | 'planBuildAdmissionFrozen'> & { turnCount?: number }
+
+export function needsSummaryMetadataRepair(row: ThreadRow): boolean {
+  return parseJson<{ summaryMetadataVersion?: number }>(row.extension_metadata_json)?.summaryMetadataVersion !== 1
+}
 
 export function filterThreadSummaries(summaries: ThreadSummary[], options: ThreadStoreListOptions): ThreadSummary[] {
   const query = options.search?.trim().toLowerCase()
@@ -116,6 +136,10 @@ export function filterThreadSummaries(summaries: ThreadSummary[], options: Threa
       .filter((value): value is string => Boolean(value))
   )
   if (workspaceSet.size > 0) out = out.filter((thread) => workspaceSet.has(thread.workspace))
+  if (options.workspaceMode) {
+    out = out.filter((thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode)
+  }
+  if (options.workbenchScope === 'code') out = out.filter(isCodeWorkbenchThread)
   if (query) out = out.filter((thread) => searchTextForThread(thread).includes(query))
   return typeof options.limit === 'number' ? out.slice(0, options.limit) : out
 }
@@ -125,9 +149,9 @@ function parseJson<T>(raw: string | null): T | null {
   try { return JSON.parse(raw) as T } catch { return null }
 }
 
-function searchTextForThread(thread: Pick<ThreadRecord, 'id' | 'title' | 'workspace' | 'model' | 'mode' | 'forkedFromTitle' | 'forkedFromThreadId' | 'todos'>): string {
+function searchTextForThread(thread: Pick<ThreadRecord, 'id' | 'title' | 'workspace' | 'model' | 'mode' | 'forkedFromTitle' | 'forkedFromThreadId' | 'todos' | 'executionTasks'>): string {
   return [thread.id, thread.title, thread.workspace, thread.model, thread.mode, thread.forkedFromTitle,
-    thread.forkedFromThreadId, ...(thread.todos?.items.map((item) => item.content) ?? [])]
+    thread.forkedFromThreadId, ...(thread.executionTasks?.tasks.map((task) => task.title) ?? thread.todos?.items.map((item) => item.content) ?? [])]
     .filter(Boolean).join('\n').toLowerCase()
 }
 

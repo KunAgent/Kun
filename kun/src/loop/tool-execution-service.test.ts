@@ -405,10 +405,10 @@ describe('ToolExecutionService', () => {
     })
 
     expect(result.item).toMatchObject({ kind: 'tool_result', status: 'completed' })
-    expect(lifecycle).toEqual(['update', 'apply'])
-
+    expect(lifecycle).toEqual(['update', 'update', 'apply', 'update'])
+    const settledWrites = [...lifecycle]
     await emitUpdate?.(runningItem)
-    expect(lifecycle).toEqual(['update', 'apply'])
+    expect(lifecycle).toEqual(settledWrites)
   })
 
   it('persists the first progress state and publishes only changed later snapshots transiently', async () => {
@@ -456,9 +456,35 @@ describe('ToolExecutionService', () => {
       context
     })
 
-    expect(setup.turns.updateItem).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(setup.turns.updateItem).mock.calls.filter(([, id]) => id === first.id)).toHaveLength(1)
     expect(setup.turns.applyItem).toHaveBeenCalledTimes(1)
     expect(setup.turns.publishTransientItem).toHaveBeenCalledTimes(1)
-    expect(setup.lifecycle).toEqual(['update', 'apply', 'transient'])
+    expect(setup.lifecycle).toEqual(['update', 'update', 'apply', 'transient', 'update'])
+  })
+
+  it('advertises single-tool cancellation only after registration and clears it after disposal', async () => {
+    const registry = new ToolCancellationRegistry()
+    const setup = makeService({ toolCancellation: registry })
+    const observed: boolean[] = []
+    vi.mocked(setup.turns.updateItem).mockImplementation(async (threadId, _id, patch) => {
+      const presentation = 'meta' in patch ? patch.meta?.toolPresentation as { canCancel?: boolean } | undefined : undefined
+      if (presentation) {
+        observed.push(presentation.canCancel === true)
+        expect(registry.has({ threadId, turnId: 'turn_1', callId: 'call_1' })).toBe(presentation.canCancel)
+      }
+      return null
+    })
+    await setup.service.executeSafely({ threadId: 'thread_1', turnId: 'turn_1', call, context })
+    expect(observed).toEqual([true, false])
+    expect(registry.list()).toEqual([])
+  })
+
+  it('does not advertise foreground cancellation for detached execution', async () => {
+    const registry = new ToolCancellationRegistry()
+    const setup = makeService({ toolCancellation: registry })
+    await setup.service.executeSafely({ threadId: 'thread_1', turnId: 'turn_1', call,
+      context: { ...context, messageSource: 'background_subagent' } })
+    expect(registry.list()).toEqual([])
+    expect(setup.turns.updateItem).not.toHaveBeenCalled()
   })
 })

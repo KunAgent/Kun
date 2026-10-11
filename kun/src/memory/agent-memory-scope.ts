@@ -18,7 +18,7 @@ export const AgentMemoryAccessSchema = z.object({
 }).strict()
 export type AgentMemoryAccess = z.infer<typeof AgentMemoryAccessSchema>
 export type AgentMemoryOwnership = z.infer<typeof AgentMemoryOwnershipSchema>
-export type AgentMemoryScope = { agent?: AgentMemoryAccess; workspace?: string; project?: string }
+export type AgentMemoryScope = { agent?: AgentMemoryAccess; workspace?: string; project?: string; projectIdentity?: string }
 
 /** Ownership is checked even for list(all), mutations by ID and filesystem fallback. */
 export function agentMemoryVisible(record: Pick<MemoryRecord, 'agentContext'>, access: AgentMemoryScope): boolean {

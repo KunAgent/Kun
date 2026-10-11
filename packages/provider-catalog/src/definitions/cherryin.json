@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "cherryin",
+  "name": "CherryIN",
+  "origin": "relay",
+  "baseUrl": "https://open.cherryin.ai/v1",
+  "endpoints": {
+    "chat_completions": "https://open.cherryin.ai/v1",
+    "responses": "https://open.cherryin.ai/v1",
+    "messages": "https://open.cherryin.ai"
+  },
+  "balance": "new-api",
+  "docsUrl": "https://open.cherryin.ai",
+  "credentialUrl": "https://open.cherryin.ai/console/token"
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "modelscope",
+  "name": "ModelScope",
+  "origin": "relay",
+  "baseUrl": "https://api-inference.modelscope.cn/v1",
+  "endpoints": {
+    "chat_completions": "https://api-inference.modelscope.cn/v1",
+    "responses": "https://api-inference.modelscope.cn/v1"
+  },
+  "docsUrl": "https://modelscope.cn/docs/model-service/API-Inference/intro",
+  "credentialUrl": "https://modelscope.cn/my/myaccesstoken"
+}

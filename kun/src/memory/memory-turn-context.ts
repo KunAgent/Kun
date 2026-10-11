@@ -1,3 +1,4 @@
+import { resolveMemoryProjectAccess } from './memory-project-identity.js'
 import type { MemoryRecord } from '../contracts/memory.js'
 import { formatMemoryReferenceBlock } from './memory-context-format.js'
 import { formatMemoryDirectiveBlock } from './memory-directive-format.js'
@@ -12,6 +13,7 @@ export type MemoryTurnStore = {
   retrieve(input: {
     query: string
     workspace: string
+    projectIdentity?: string
     limit: number
   }): Promise<MemoryRecord[]>
   setLastInjected(ids: string[]): void
@@ -46,14 +48,15 @@ export async function resolveMemoryTurnContext(
   nowMs = Date.now()
 ): Promise<MemoryTurnContext> {
   if (!store) return EMPTY_MEMORY_TURN_CONTEXT
+  const access = await resolveMemoryProjectAccess({ workspace: input.workspace })
   const [memories, directiveResult] = await Promise.all([
     store.retrieve({
       query: input.query,
-      workspace: input.workspace,
+      ...access,
       limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
     }),
     store.listDirectives
-      ? store.listDirectives({ workspace: input.workspace })
+      ? store.listDirectives(access)
       : Promise.resolve(undefined)
   ])
   store.setLastInjected(memories.map((memory) => memory.id))

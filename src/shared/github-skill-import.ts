@@ -110,8 +110,10 @@ const TOOL_ALIAS_MAP: Record<string, string> = {
   patch: 'edit',
   write: 'write',
   writefile: 'write',
-  todowrite: 'todo_write',
-  todoread: 'todo_read',
+  taskcreate: 'task_create',
+  taskupdate: 'task_update',
+  taskget: 'task_get',
+  tasklist: 'task_list',
   webfetch: 'web_fetch',
   websearch: 'web_search'
 }
@@ -166,6 +168,7 @@ export function mapAllowedTools(rawTools: string[]): string[] {
   const mapped = rawTools
     .map((tool) => {
       const normalized = normalizeToolKey(tool)
+      if (['todowrite', 'todoread', 'todolist', 'taskgraph'].includes(normalized)) return ''
       return TOOL_ALIAS_MAP[normalized] ?? normalized
     })
     .filter(Boolean)

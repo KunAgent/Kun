@@ -1,3 +1,5 @@
+import { startQuotaReminderNotifications } from './quota-reminder-notification'
+import { requestRuntimeProviderQuotas } from './runtime-provider-quota'
 import {
   app,
   ipcMain,
@@ -13,6 +15,7 @@ import {
 import { preserveRedactedProviderCredentials } from './settings-credential-redaction'
 import { syncLoginItemSettings } from './desktop-behavior'
 import {
+  getKunRuntimeSettings,
   getModelProviderSettings,
   resolveTerminalColorMode,
   type AppSettingsPatch,
@@ -29,6 +32,10 @@ import {
   syncClawScheduleMcpConfig
 } from './claw-schedule-mcp-config'
 import { registerAppIpcHandlers } from './ipc/register-app-ipc-handlers'
+import { registerAdeCollaborationSettingsIpc } from './ipc/register-ade-collaboration-settings-ipc'
+import { createAdeCollaborationSettingsService } from './ade-collaboration-settings-service'
+import { registerAdeProjectDefaultsIpc } from './ipc/register-ade-project-defaults-ipc'
+import { createAdeProjectDefaultsService } from './ade-project-defaults-service'
 import { registerDevPreviewCaptureIpc } from './dev-preview-capture'
 import { DataMigrationController } from './data-migration/data-migration-controller'
 import { resolveDataMigrationFeatureEnabled } from './data-migration/feature-policy'
@@ -42,6 +49,8 @@ import { registerRuntimeSseIpc } from './runtime-sse-ipc'
 import { registerRemoteAccessIpc } from './remote/remote-ipc-handlers'
 import { RemoteAccessService } from './remote/remote-access-service'
 import { registerTerminalPtyIpc } from './terminal/terminal-pty-ipc'
+import { ensureKunCliLaunch } from './terminal/terminal-agent-cli-env'
+import { resolveKunExecutable } from './resolve-kun-binary'
 import { JsonRemoteSshHostStore } from './remote-ssh/host-store'
 import { RemoteSshKnownHostStore } from './remote-ssh/known-host-store'
 import { registerRemoteSshIpc } from './remote-ssh/register-remote-ssh-ipc'
@@ -89,14 +98,16 @@ import {
   shutdownServiceManagerAndWait
 } from './main-migrations'
 import {
-  preserveRuntimeTokenForFullSettingsSnapshot,
   queueRuntimeMcpConfigApply,
   queueRuntimeSettingsApply,
   reserveRuntimeSettingsApply,
   runtimeRequest,
-  runtimeRequestOnLease,
-  validateRuntimeSettingsForApply
+  runtimeRequestOnLease
 } from './main-runtime-settings'
+import {
+  preserveRuntimeTokenForFullSettingsSnapshot,
+  validateRuntimeSettingsForApply
+} from './main-runtime-settings-validate'
 import {
   ensureRuntime,
   restartGuiRuntime,
@@ -109,10 +120,12 @@ import {
   syncTray
 } from './main-tray'
 import type { MainServices } from './main-ready-services'
+import { registerMissionControlPopoutIpc } from './mission-control-popout'
 import { registerProviderMutationBarrierIpc } from './provider-mutation-barrier'
 
 export function registerMainIpc(services: MainServices): void {
   registerProviderMutationBarrierIpc(() => mainState.mainWindow)
+  registerMissionControlPopoutIpc(() => mainState.mainWindow)
   const {
     browserUseManager,
     credentialMigration,
@@ -391,6 +404,32 @@ export function registerMainIpc(services: MainServices): void {
       nativeDialogs: nativeDialogCoordinator,
       workspacePreviewProtocols
     })
+    startQuotaReminderNotifications(async () => requestRuntimeProviderQuotas(async (path, method) =>
+      runtimeRequest(await mainState.store.load(), path, { method: method ?? 'GET' })))
+    registerAdeCollaborationSettingsIpc({
+      getMainWindow: () => mainState.mainWindow,
+      service: createAdeCollaborationSettingsService({
+        store: mainState.store,
+        serializePersistence: (operation) => runtimeSettingsIntents.serializePersistence(operation),
+        onCommitted: (previous, saved) => {
+          const reservation = reserveRuntimeSettingsApply(previous, saved)
+          queueRuntimeSettingsApply(previous, saved, reservation, async () => undefined)
+          return reservation.generation
+        }
+      })
+    })
+    registerAdeProjectDefaultsIpc({
+      getMainWindow: () => mainState.mainWindow,
+      service: createAdeProjectDefaultsService({
+        store: mainState.store,
+        serializePersistence: (operation) => runtimeSettingsIntents.serializePersistence(operation),
+        onCommitted: (previous, saved) => {
+          const reservation = reserveRuntimeSettingsApply(previous, saved)
+          queueRuntimeSettingsApply(previous, saved, reservation, async () => undefined)
+          return reservation.generation
+        }
+      })
+    })
     registerDevPreviewCaptureIpc({ getMainWindow: () => mainState.mainWindow })
     const disposeBrowserUseIpc = registerBrowserUseIpc({
       ipcMain,
@@ -559,7 +598,32 @@ export function registerMainIpc(services: MainServices): void {
       ipcMain,
       getMainWindow: () => mainState.mainWindow,
       logError,
-      getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load())
+      getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load()),
+      resolveKunCli: async () => {
+        const appRoot = app.isPackaged
+          ? app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked')
+          : app.getAppPath()
+        const runtime = getKunRuntimeSettings(await mainState.store.load())
+        return ensureKunCliLaunch({
+          isPackaged: app.isPackaged,
+          platform: process.platform,
+          resourcesPath: process.resourcesPath,
+          execDir: dirname(process.execPath),
+          shimDir: join(app.getPath('userData'), 'cli-bin'),
+          resolution: resolveKunExecutable(appRoot, runtime.binaryPath)
+        })
+      },
+      runtimeFetch: async (path, init = {}) => {
+        const settings = await mainState.store.load()
+        const ensured = await ensureRuntime(settings)
+        const requestSettings = ensured ?? settings
+        const headers = runtimeAuthHeaders(requestSettings)
+        const normalizedPath = path.startsWith('/') ? path : `/${path}`
+        return fetch(`${getRuntimeBaseUrlForSettings(requestSettings)}${normalizedPath}`, {
+          ...init,
+          headers
+        } as RequestInit)
+      }
     })
     const remoteSshDataDir = join(app.getPath('userData'), 'remote-ssh')
     mainState.remoteSshController = registerRemoteSshIpc({

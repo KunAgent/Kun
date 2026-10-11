@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
-import { Client, type ClientChannel, type ConnectConfig, type HostVerifier } from 'ssh2'
+import type { Client, ClientChannel, ConnectConfig, HostVerifier } from 'ssh2'
 import type { RemoteSshConnectResult, RemoteSshHost as RemoteSshHostConfig } from '../../shared/remote-ssh'
 import { RemoteSshKnownHostStore, sshHostKeyFingerprint } from './known-host-store'
 
@@ -47,7 +47,9 @@ export class RemoteHost {
   }
 
   private async open(): Promise<RemoteSshConnectResult> {
-    const client = new Client()
+    // ssh2 (with its crypto helpers) loads only when a remote host connects.
+    const { Client: SshClient } = await import('ssh2')
+    const client: Client = new SshClient()
     let rejectedKey: RejectedHostKey | undefined
     const connectConfig = await this.connectConfig(async (key) => {
       const state = await this.knownHosts.state(

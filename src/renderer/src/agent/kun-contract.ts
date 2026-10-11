@@ -1,8 +1,10 @@
+import type { ContextSnapshotEvent } from '../../../../kun/src/contracts/context-snapshot'
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
 import type { RoomThreadSource } from '@shared/rooms-api'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { CoreTurnJson } from './kun-contract-runtime'
 import type { DesignTaskProfile } from './design-task-profile'
+import type { AdeExecutionConfigSnapshot } from '@shared/ade-execution-config'
 
 export type CoreComposerContextAttachmentJson = ComposerContextAttachment
 
@@ -26,6 +28,10 @@ export type CoreThreadSummaryJson = {
   title: string
   /** Durable product surface that owns the thread. Absent for legacy Code threads. */
   agentSurface?: 'code' | 'write' | 'design'
+  /** Owning workspace mode ('code' | 'ade'); absent counts as 'code'. */
+  workspaceMode?: 'code' | 'ade'
+  collaboration?: { enabled: boolean; everEnabled?: boolean }
+  executionConfig?: AdeExecutionConfigSnapshot
   /** Immutable Code/Design mode derived from the first accepted turn. */
   lockedTaskSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile
@@ -52,16 +58,35 @@ export type CoreThreadSummaryJson = {
   status: CoreThreadStatus
   /** Rebuildable event-log high-water mark available on lean list responses. */
   latestSeq?: number
+  /** Accepted turns; absent on runtimes or index rows that predate it. */
+  turnCount?: number
   approvalPolicy?: string
   sandboxMode?: string
   approvalReviewer?: string
   modelRequestCaptureEnabled?: boolean
   pinned?: boolean
   providerId?: string
+  /** Explicit harness identity inherited by new turns. */
+  harnessId?: string
+  /** Host-managed task workspace bound to this thread. */
+  taskWorkspaceId?: string
   agentId?: string
   systemPrompt?: string
   relation?: 'primary' | 'fork' | 'side'
   parentThreadId?: string
+  /** Host-written ADE worker binding; absent for normal threads. */
+  executionUnit?: {
+    kind: 'worker'
+    teamId: string
+    managerThreadId: string
+    label: string
+    role?: string
+    lifecycle: 'persistent' | 'ephemeral'
+    taskWorkspaceId?: string
+    control: 'manager' | 'user'
+  }
+  /** Host-written: a bot Agent started this Code/Work session on the user's behalf. */
+  workbenchOrigin?: { kind: 'bot'; roomId: string; linkId: string; agentId: string; agentName: string; messageId?: string }
   planBuildRunId?: string
   forkedFromThreadId?: string
   forkedFromTitle?: string
@@ -76,6 +101,7 @@ export type CoreThreadSummaryJson = {
 }
 
 export type CoreThreadJson = CoreThreadSummaryJson & {
+  contextSnapshot?: ContextSnapshotEvent | null
   turns?: CoreTurnJson[]
   latestSeq?: number
   /** Request ids the runtime is still actively awaiting (live ask-user gate). */
@@ -172,11 +198,15 @@ export type CoreAttachmentDiagnosticsJson = {
 
 export type CoreMemoryRecordJson = {
   schemaVersion?: 2
+  revision?: number
+  history?: CoreMemoryHistoryJson[]
+  consolidation?: CoreMemoryConsolidationJson
   id: string
   content: string
   scope: 'user' | 'workspace' | 'project'
   workspace?: string
   project?: string
+  projectIdentity?: string
   sourceThreadId?: string
   sourceTurnId?: string
   tags?: string[]
@@ -207,7 +237,26 @@ export type CoreMemorySourceEvidenceJson = {
   locator?: string
   excerpt?: string
   contentHash?: string
+  receiptId?: string
+  repositorySha?: string
+  artifactIds?: string[]
+  outcome?: 'succeeded' | 'failed' | 'aborted' | 'unknown'
   trust: 'explicit-user' | 'observed' | 'inferred' | 'imported' | 'legacy'
+}
+
+export type CoreMemoryConsolidationJson = {
+  sourceMemoryIds: string[]
+  reason: string
+  evidenceStatus: 'observed-success' | 'observed-failure' | 'aborted' | 'unverified' | 'user-stated'
+  sourceSessionIds: string[]
+}
+
+export type CoreMemoryHistoryJson = {
+  revision: number
+  changedAt: string
+  operation: 'create' | 'update' | 'disable' | 'restore' | 'forget' | 'rollback' | 'supersede'
+  snapshot: Pick<CoreMemoryRecordJson, 'content' | 'tags' | 'type' | 'authority' | 'confidence' |
+    'importance' | 'sources' | 'observedAt' | 'expiresAt' | 'validFrom' | 'validTo' | 'disabledAt' | 'consolidation'>
 }
 
 export type CorePendingMemoryCandidateJson = {
@@ -279,6 +328,10 @@ export type CoreThreadTodoItemJson = {
   id: string
   content: string
   status: CoreThreadTodoStatusJson
+  taskStatus?: 'pending' | 'running' | 'waiting' | 'blocked' | 'paused' | 'succeeded' | 'failed' | 'cancelled'
+  taskRevision?: number
+  ownerThreadId?: string
+  reason?: string
   source?: CoreThreadTodoSourceJson
   createdAt: string
   updatedAt: string
@@ -286,6 +339,7 @@ export type CoreThreadTodoItemJson = {
 
 export type CoreThreadTodoListJson = {
   threadId: string
+  revision?: number
   items: CoreThreadTodoItemJson[]
   updatedAt: string
 }
@@ -466,3 +520,4 @@ export type CoreRuntimeCapabilityManifestJson = {
 }
 
 export * from './kun-contract-runtime'
+export * from './kun-contract-approval'

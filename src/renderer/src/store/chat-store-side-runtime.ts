@@ -409,6 +409,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
               approvalId: req.approvalId,
               summary: req.summary,
               toolName: req.toolName,
+              ...(req.action ? { action: req.action } : {}),
               status: 'pending',
               ...(req.meta ? { meta: req.meta } : {})
             }

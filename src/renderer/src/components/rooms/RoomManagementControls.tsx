@@ -34,10 +34,10 @@ export function RoomListFilters({ filter, archived, repositoryRoot, onFilter, on
   </div>
 }
 
-export function RoomAppearanceMenu() {
+export function RoomAppearanceMenu({ inMenu = false }: { inMenu?: boolean } = {}) {
   const { t } = useTranslation('common')
   const preferences = useRoomPresentationPreferences()
-  return <RoomPopover label={t('roomsAppearance')} trigger={<SlidersHorizontal size={16} />} align="end" className="rooms-icon-button" width={256}>
+  return <RoomPopover label={t('roomsAppearance')} trigger={<><SlidersHorizontal size={16} />{inMenu ? <span>{t('roomsAppearance')}</span> : null}</>} align="end" className={inMenu ? 'rooms-submenu-trigger' : 'rooms-icon-button'} width={256}>
     {() => <div className="rooms-appearance-menu">
       <label className="rooms-appearance-check"><input type="checkbox" checked={preferences.autoLinkPreviews}
         onChange={(event) => preferences.setPreference({ autoLinkPreviews: event.target.checked })} />{t('roomsAutomaticLinkPreviews')}</label>
@@ -47,7 +47,7 @@ export function RoomAppearanceMenu() {
   </RoomPopover>
 }
 
-export function RoomNotificationMenu({ roomId }: { roomId: string }) {
+export function RoomNotificationMenu({ roomId, inMenu = false }: { roomId: string; inMenu?: boolean }) {
   const { t } = useTranslation('common')
   const [detail, setDetail] = useState<RoomPreferenceDetail | null>(null)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
@@ -78,7 +78,7 @@ export function RoomNotificationMenu({ roomId }: { roomId: string }) {
     finally { if (current.current === roomId) setBusy(false) }
   }
   return <RoomPopover label={t(muted ? 'roomsNotificationsMuted' : 'roomsNotificationSettings')}
-    trigger={muted ? <BellOff size={17} /> : <Bell size={17} />} align="end" className="rooms-icon-button" width={248}>
+    trigger={<>{muted ? <BellOff size={17} /> : <Bell size={17} />}{inMenu ? <span>{t(muted ? 'roomsNotificationsMuted' : 'roomsNotificationSettings')}</span> : null}</>} align="end" className={inMenu ? 'rooms-submenu-trigger' : 'rooms-icon-button'} width={248}>
     {() => <div className="rooms-menu-list">
       <p className="rooms-run-note">{t('roomsMuteBoundary')}</p>
       {muted ? <button type="button" disabled={busy} onClick={() => void update('off')}>{t('roomsUnmuteNotifications')}</button> : null}

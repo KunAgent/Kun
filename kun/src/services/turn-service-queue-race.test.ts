@@ -221,6 +221,7 @@ describe('enqueue race at turn-end boundaries', () => {
     const sessionStore = new InMemorySessionStore()
     const eventBus = new InMemoryEventBus()
     const nowIso = () => new Date().toISOString()
+    const ids = new SequentialIdGenerator()
     const build = () => new TurnService({
       threadStore,
       sessionStore,
@@ -233,7 +234,7 @@ describe('enqueue race at turn-end boundaries', () => {
       inflight: new InflightTracker(),
       steering: new SteeringQueue(),
       compactor: new ContextCompactor(),
-      ids: new SequentialIdGenerator(),
+      ids,
       nowIso
     })
     const first = build()
@@ -256,8 +257,15 @@ describe('enqueue race at turn-end boundaries', () => {
     await restarted.reconcileOrphanedTurns()
     const after = await threadStore.get('thr_restart')
     expect(after?.turns.find((turn) => turn.id === queued.turnId)?.status).toBe('queued')
-    // The parked running turn was swept; the queued record still promotes
-    // exactly once.
+    // Restart recovery owns execution before any later queued input.
+    expect(after?.queueControl?.reason).toBe('restart_recovery')
+    expect(await restarted.startNextQueuedTurn('thr_restart')).toBeNull()
+    const continuation = await restarted.startTurn({
+      threadId: 'thr_restart', request: startRequest('recover A')
+    }, { expectedLatestFailedTurnId: running.turnId })
+    expect((await threadStore.get('thr_restart'))?.queueControl).toBeUndefined()
+    expect(await restarted.startNextQueuedTurn('thr_restart')).toBeNull()
+    await restarted.finishTurn({ threadId: 'thr_restart', turnId: continuation.turnId, status: 'completed' })
     const promoted = await restarted.startNextQueuedTurn('thr_restart')
     expect(promoted).toEqual({ turnId: queued.turnId })
     expect(await restarted.startNextQueuedTurn('thr_restart')).toBeNull()

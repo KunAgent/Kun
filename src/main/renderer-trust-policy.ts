@@ -45,6 +45,19 @@ export function isTrustedRendererSurfaceUrl(
     rendererSurfaceForUrl(candidate) === surface
 }
 
+/**
+ * Auxiliary workbench windows (e.g. the Mission Control popout) load the
+ * same trusted renderer bundle as the main window, so their main frame may
+ * invoke workbench IPC. Registration is main-process controlled and the
+ * entry is removed when the window closes.
+ */
+const auxiliaryWorkbenchWindows = new Set<BrowserWindow>()
+
+export function registerAuxiliaryWorkbenchWindow(window: BrowserWindow): void {
+  auxiliaryWorkbenchWindows.add(window)
+  window.once('closed', () => auxiliaryWorkbenchWindows.delete(window))
+}
+
 export function trustedRendererSenderIsCurrent(
   event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
   window: BrowserWindow | null,
@@ -56,6 +69,23 @@ export function trustedRendererSenderIsCurrent(
   // Remote clients are authenticated by the Remote gateway and bridged in as
   // workbench-equivalent senders; the invoke allowlist still gates channels.
   if (isRemoteClientSender(event.sender)) return options.surface === 'workbench'
+  if (senderMatchesWindow(event, window, options)) return true
+  if (options.surface === 'workbench') {
+    for (const auxiliary of auxiliaryWorkbenchWindows) {
+      if (senderMatchesWindow(event, auxiliary, options)) return true
+    }
+  }
+  return false
+}
+
+function senderMatchesWindow(
+  event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
+  window: BrowserWindow | null,
+  options: {
+    trustedRendererUrl: string
+    surface: RendererSurface
+  }
+): boolean {
   const senderFrame = event.senderFrame
   const mainFrame = window?.webContents.mainFrame
   return Boolean(

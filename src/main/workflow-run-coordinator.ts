@@ -42,10 +42,13 @@ export class WorkflowRunCoordinator {
     for (const [token, pending] of this.pendingApprovals) {
       if (pending.entry.runId === runId) this.pendingApprovals.delete(token)
     }
+    // Each begin replaces these maps. A timer may only retire its own projection.
+    const statuses = this.liveNodeStatus.get(workflowId)
+    const results = this.liveNodeResults.get(workflowId)
     const timer = setTimeout(() => {
       this.cleanupTimers.delete(timer)
-      this.liveNodeStatus.delete(workflowId)
-      this.liveNodeResults.delete(workflowId)
+      if (this.liveNodeStatus.get(workflowId) === statuses) this.liveNodeStatus.delete(workflowId)
+      if (this.liveNodeResults.get(workflowId) === results) this.liveNodeResults.delete(workflowId)
     }, lingerMs)
     timer.unref?.()
     this.cleanupTimers.add(timer)
@@ -57,10 +60,14 @@ export class WorkflowRunCoordinator {
     return live
   }
 
-  finishSingleNode(workflowId: string, lingerMs: number): void {
+  finishSingleNode(
+    workflowId: string,
+    lingerMs: number,
+    statuses = this.liveNodeStatus.get(workflowId)
+  ): void {
     const timer = setTimeout(() => {
       this.cleanupTimers.delete(timer)
-      this.liveNodeStatus.delete(workflowId)
+      if (this.liveNodeStatus.get(workflowId) === statuses) this.liveNodeStatus.delete(workflowId)
     }, lingerMs)
     timer.unref?.()
     this.cleanupTimers.add(timer)

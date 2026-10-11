@@ -39,6 +39,7 @@ import {
   defaultDesignSettings,
   normalizeModelProviderSettings,
   projectExecutableModelRoutePools,
+  projectRuntimeModelRoutePools,
   resolveModelRouteTargetReference,
   resolveKunImageGenerationSettings,
   resolveKunMusicGenerationSettings,
@@ -217,7 +218,7 @@ describe('Gemini subscription provider preset', () => {
       baseUrl: '',
       endpointFormat: 'custom_endpoint',
       useProxy: false,
-      models: expect.arrayContaining(['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro'])
+      models: expect.arrayContaining(['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.1-pro'])
     })
   })
 
@@ -269,7 +270,7 @@ describe('Gemini subscription provider preset', () => {
     ).toMatchObject({
       kind: 'antigravity-cli',
       apiKey: '',
-      models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro']
+      models: ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.1-pro']
     })
   })
 })
@@ -366,6 +367,15 @@ describe('model route pool settings', () => {
     expect(normalizeModelProviderSettings({
       localGateway: { enabled: true, name: '  Team Relay  ' }
     }).localGateway).toEqual({ enabled: true, name: 'Team Relay', exposeProviderModels: false })
+    // A balance URL survives only as HTTPS on the provider's own host.
+    const provider = (balanceUrl: string) => normalizeModelProviderSettings({ providers: [{ id: 'relay', name: 'Relay', apiKey: 'k',
+      baseUrl: 'https://relay.example/v1', endpointFormat: 'chat_completions', models: ['m'], balanceUrl } as never] }).providers.find((entry) => entry.id === 'relay')?.balanceUrl
+    expect(provider('https://relay.example/api/balance#/data/left')).toBe('https://relay.example/api/balance#/data/left')
+    expect(provider('https://other.example/api/balance')).toBeUndefined()
+    expect(provider('http://relay.example/api/balance')).toBeUndefined()
+    // The discovery file is on by default; only an explicit off is stored.
+    expect(normalizeModelProviderSettings({ localGateway: { enabled: true, advertiseDiscovery: false } }).localGateway.advertiseDiscovery).toBe(false)
+    expect('advertiseDiscovery' in normalizeModelProviderSettings({ localGateway: { enabled: true, advertiseDiscovery: true as never } }).localGateway).toBe(false)
   })
 
   it('keeps valid concrete targets and allows a routed alias to match a concrete model', () => {
@@ -419,5 +429,31 @@ describe('model route pool settings', () => {
     expect(withoutProvider.routePools[0]).toMatchObject({ enabled: true })
     expect(withoutProvider.routePools[0].targets).toHaveLength(3)
     expect(projectExecutableModelRoutePools(withoutProvider)[0]).toMatchObject({ enabled: false, targets: [] })
+  })
+
+  it('leaves pools without runnable members out of the Runtime config', () => {
+    const policies = {
+      failurePolicy: { failoverHttpStatusCodes: [429], failoverOnNetworkError: true, failoverOnTimeout: true, failoverOnAuthError: true },
+      healthPolicy: { failureThreshold: 3, cooldownMs: 60_000, halfOpenMaxAttempts: 1 }
+    }
+    const settings = normalizeModelProviderSettings({
+      providers: [{ id: 'provider-a', name: 'A', baseUrl: 'https://a.example', models: ['kimi-k3'] }],
+      routePools: [
+        { id: 'stale', name: 'Stale', modelId: 'stale-auto', enabled: true, strategy: 'priority', ...policies,
+          targets: [{ id: 'gone', providerId: 'provider-gone', modelId: 'kimi-k3', enabled: true, weight: 1 }] },
+        { id: 'alias-only', name: 'Alias only', modelId: 'alias-auto', enabled: true, strategy: 'priority', ...policies,
+          targets: [{ id: 'nested', providerId: '@route', modelId: 'stale-auto', enabled: true, weight: 1 }] },
+        { id: 'mixed', name: 'Mixed', modelId: 'mixed-auto', enabled: true, strategy: 'priority', ...policies,
+          targets: [
+            { id: 'nested', providerId: '@route', modelId: 'stale-auto', enabled: true, weight: 1 },
+            { id: 'valid', providerId: 'provider-a', modelId: 'kimi-k3', enabled: true, weight: 1 }
+          ] }
+      ]
+    })
+
+    expect(projectExecutableModelRoutePools(settings).map((pool) => pool.targets.length)).toEqual([0, 1, 2])
+    const runtime = projectRuntimeModelRoutePools(settings)
+    expect(runtime.map((pool) => pool.id)).toEqual(['mixed'])
+    expect(runtime[0]).toMatchObject({ enabled: true, targets: [{ id: 'valid' }] })
   })
 })

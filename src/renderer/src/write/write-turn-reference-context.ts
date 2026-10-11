@@ -10,6 +10,7 @@ import {
   type WriteOfficeDocumentContext,
   type WriteQuotedSelection
 } from './quoted-selection'
+import type { WritePaperReference } from './write-paper-reference'
 
 export const MAX_WRITE_OFFICE_EXCERPT_BYTES = 5_000
 const MAX_OFFICE_EXCERPT_SEGMENTS = 3
@@ -25,6 +26,7 @@ type WorkReferenceKind =
   | 'work-reference-retrieval'
   | 'work-reference-office'
   | 'work-reference-whiteboard'
+  | 'work-reference-paper'
 
 export type WriteActiveResourceReference = {
   sourceName: string
@@ -156,6 +158,27 @@ function quoteReference(selection: WriteQuotedSelection): JsonObject {
   return reference
 }
 
+function paperReference(paper: WritePaperReference): JsonObject {
+  const text = (value: string, max: number): string => pathSafeEvidenceText(clipUnicode(compactText(value), max))
+  const locator = (value: string): string => pathSafeEvidenceText(clipUnicode(value, 1_024))
+  return {
+    kind: 'work-reference-paper',
+    schemaVersion: 1,
+    title: text(paper.title, 300),
+    ...(paper.authors.length ? { authors: paper.authors.slice(0, 8).map((author) => text(author, 80)) } : {}),
+    ...(paper.year ? { year: text(paper.year, 16) } : {}),
+    ...(paper.venue ? { venue: text(paper.venue, 160) } : {}),
+    ...(paper.arxivId ? { arxivId: text(paper.arxivId, 64) } : {}),
+    ...(paper.doi ? { doi: text(paper.doi, 160) } : {}),
+    unitLocator: locator(paper.unitLocator),
+    ...(paper.textLocator ? { textLocator: locator(paper.textLocator) } : {}),
+    ...(paper.notesLocator ? { notesLocator: locator(paper.notesLocator) } : {}),
+    ...(paper.pdfLocator ? { pdfLocator: locator(paper.pdfLocator) } : {}),
+    ...(paper.page ? { page: paper.page } : {}),
+    ...(paper.pageCount ? { pageCount: paper.pageCount } : {})
+  }
+}
+
 function retrievalLocation(snippet: WriteRetrievalSnippet): JsonObject {
   return snippet.location.kind === 'pdf'
     ? { kind: 'pdf', pageStart: snippet.location.pageStart, pageEnd: snippet.location.pageEnd }
@@ -284,6 +307,8 @@ export async function createWriteTurnReferenceAttachments(input: {
   retrieval: WriteRetrievalContext | null
   officeDocument: WriteOfficeDocumentContext | null
   query: string
+  /** The open paper: its identity and where its text lives. */
+  paper?: WritePaperReference
   now?: number
 }): Promise<ComposerContextAttachment[]> {
   const now = input.now ?? Date.now()
@@ -310,6 +335,17 @@ export async function createWriteTurnReferenceAttachments(input: {
           ? { sourceFormat: clipUnicode(resource.sourceFormat, 32) }
           : {})
       },
+      provenance: 'workspace-view',
+      now
+    }))
+  }
+  if (input.paper) {
+    attachments.push(await createAttachment({
+      workspaceRoot: input.workspaceRoot,
+      kind: 'work-reference-paper',
+      title: `Current paper · ${clipUnicode(compactText(input.paper.title), 96)}`,
+      summary: 'The open paper; read its text from the workspace-relative locators',
+      reference: paperReference(input.paper),
       provenance: 'workspace-view',
       now
     }))
@@ -425,7 +461,8 @@ export function isWriteTurnReferenceAttachment(
     kind === 'work-reference-quotes' ||
     kind === 'work-reference-retrieval' ||
     kind === 'work-reference-office' ||
-    kind === 'work-reference-whiteboard'
+    kind === 'work-reference-whiteboard' ||
+    kind === 'work-reference-paper'
   ) && (
     ('source' in parsed.data.provenance && parsed.data.provenance.source === 'workspace-selection') ||
     ('source' in parsed.data.provenance && parsed.data.provenance.source === 'workspace-view')

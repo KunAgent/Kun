@@ -1,3 +1,5 @@
+import { ModelMetadataStateSchema, ModelMetadataResolutionSchema, ModelCapabilityFactsSchema } from '../contracts/capabilities-core.js'
+import { ModelMetadataEvidenceSchema } from '../contracts/model-metadata-evidence.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -103,6 +105,11 @@ export const ModelContextProfileConfigSchema = z
   .object({
     aliases: z.array(z.string().min(1)).optional(),
     contextWindowTokens: PositiveInt.optional(),
+    maxInputTokens: PositiveInt.optional(),
+    supportsReasoning: z.boolean().optional(),
+    metadata: ModelMetadataStateSchema.optional(),
+    metadataResolution: ModelMetadataResolutionSchema.optional(),
+    conditionalCapabilities: ModelCapabilityFactsSchema.shape.conditionalCapabilities,
     maxOutputTokens: PositiveInt.optional(),
     contextCompaction: ModelContextCompactionProfileConfigSchema.optional(),
     softRatio: PositiveRatio.optional(),
@@ -112,6 +119,8 @@ export const ModelContextProfileConfigSchema = z
     inputModalities: z.array(ModelInputModality).optional(),
     outputModalities: z.array(ModelInputModality).optional(),
     supportsToolCalling: z.boolean().optional(),
+    parallelTools: z.boolean().optional(), streaming: z.boolean().optional(), structuredOutput: z.boolean().optional(),
+    evidence: ModelMetadataEvidenceSchema,
     messageParts: z.array(ModelMessagePartSupport).optional(),
     reasoning: ModelReasoningCapabilityMetadata.optional(),
     pricing: ModelCatalogPricing.optional(),
@@ -124,7 +133,8 @@ export const ModelContextProfileConfigSchema = z
     endpointFormat: z
       .preprocess(normalizeModelEndpointFormat, z.enum(MODEL_ENDPOINT_FORMATS))
       .optional(),
-    responsesMode: z.literal('lite').optional()
+    responsesMode: z.literal('lite').optional(),
+    wireModelId: z.string().min(1).max(512).optional()
   })
   .strict()
   .superRefine((profile, ctx) => {
@@ -187,6 +197,8 @@ export const ContextCompactionConfigSchema = z
 
 export const RuntimeTuningConfigSchema = z
   .object({
+    /** Global Rooms task ceiling; per-room limits still apply. */
+    rooms: z.object({ maxConcurrentTasks: z.number().int().min(1).max(32).optional() }).strict().optional(),
     // Max idle gap (ms) between streaming chunks before a turn fails with
     // `stream_idle_timeout`. Local LLM servers prefilling a huge prompt can
     // stay silent well past the 45s default; `0` disables the guard entirely.

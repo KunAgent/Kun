@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentIdentityService } from './agent-identity-service.js'
@@ -43,8 +43,7 @@ describe('agent memory service', () => {
     const changed = (await f.service.list(f.agent.id, {})).memories[0]
     await f.service.edit(f.agent.id, saved.memory.id, { clientRequestId: 'forget', expectedFingerprint: changed.fingerprint, forget: true })
     expect((await f.service.context(f.agent.id, f.room.id, 'Reports Chinese')).records).toHaveLength(0)
-    const replay = await f.service.create(f.agent.id, f.input)
-    expect(replay.memory.deletedAt).toBeTruthy()
+    await expect(f.service.create(f.agent.id, f.input)).rejects.toThrow('forgotten')
     expect((await f.service.list(f.agent.id, {})).memories).toHaveLength(0)
   })
 
@@ -64,6 +63,53 @@ describe('agent memory service', () => {
     expect(replay.memory).toEqual(applied)
     expect((await f.store.list('agent_memory_job', { status: 'prepared' }))).toHaveLength(0)
     await expect(f.service.edit(f.agent.id, saved.memory.id, { ...edit, clientRequestId: 'stale' })).rejects.toThrow('memory changed')
+  })
+
+  it('recovers full derivative erasure after canonical commit and before receipt compaction', async () => {
+    const f = await fixture()
+    const saved = await f.service.create(f.agent.id, f.input)
+    const marker = 'DERIVATIVE_ERASE_CRASH_BYTES_18d2'
+    const derived = await f.storage.createWithId('mem_erase_derivative', { content: marker, scope: 'user',
+      agentContext: saved.memory.agentContext, consolidation: { sourceMemoryIds: [saved.memory.id],
+        sourceSessionIds: [], reason: 'derived source', evidenceStatus: 'unverified' } })
+    await f.store.commit({ requestId: 'derived-memory-receipt', result: { memory: derived } })
+    const erase = { clientRequestId: 'erase', expectedFingerprint: saved.fingerprint, erase: true,
+      eraseConfirmation: { memoryId: saved.memory.id, irreversible: true } }
+    const originalScrub = f.store.scrubMemoryData.bind(f.store)
+    let failed = false
+    vi.spyOn(f.store, 'scrubMemoryData').mockImplementation(async (input) => {
+      if (!failed) { failed = true; throw new Error('interrupted erasure compaction') }
+      return originalScrub(input)
+    })
+    await expect(f.service.edit(f.agent.id, saved.memory.id, erase)).rejects.toThrow('interrupted')
+    expect((await f.store.list('agent_memory_job', { phase: 'edit', status: 'prepared' }))).toHaveLength(1)
+    await f.service.recoverEdits()
+    expect((await f.store.getRequest('derived-memory-receipt'))?.result).toMatchObject({ erased: true })
+    expect((await readFile(join(f.root, 'rooms.sqlite'))).includes(Buffer.from(marker))).toBe(false)
+    expect((await f.store.list('agent_memory_job', { phase: 'edit', status: 'prepared' }))).toHaveLength(0)
+    expect(await f.store.get('message', f.message.id)).not.toBeNull()
+    await expect(f.service.edit(f.agent.id, saved.memory.id, erase)).resolves.toMatchObject({ erased: true })
+    await expect(f.service.edit(f.agent.id, saved.memory.id, { ...erase, clientRequestId: 'retry-after-recovery' })).resolves.toMatchObject({ erased: true })
+  })
+
+  it('rejects invalid erase before preparing work and retires invalid historical jobs', async () => {
+    const f = await fixture()
+    const saved = await f.service.create(f.agent.id, f.input)
+    const invalid = { clientRequestId: 'invalid-erase', expectedFingerprint: saved.fingerprint, erase: true }
+    await expect(f.service.edit(f.agent.id, saved.memory.id, invalid)).rejects.toThrow('confirmation')
+    await expect(f.service.edit(f.agent.id, saved.memory.id, { ...invalid,
+      eraseConfirmation: { memoryId: 'wrong-memory', irreversible: true } })).rejects.toThrow('exact memory')
+    expect(await f.store.list('agent_memory_job', { phase: 'edit', status: 'prepared' })).toHaveLength(0)
+    await f.store.commit({ requestId: 'seed-invalid-old-edit',
+      checks: [{ kind: 'agent_memory_job', id: 'invalid-old-edit', expectedRevision: null }],
+      puts: [{ kind: 'agent_memory_job', id: 'invalid-old-edit', roomId: f.room.id, taskId: saved.memory.id,
+        value: { id: 'invalid-old-edit', phase: 'edit', status: 'prepared', participantAgentId: f.agent.id,
+          memoryId: saved.memory.id, input: invalid, fingerprint: 'f'.repeat(64) } }] })
+    await f.service.recoverEdits()
+    expect((await f.store.get<{ status: string }>('agent_memory_job', 'invalid-old-edit'))?.value.status).toBe('conflicted')
+    await expect(f.service.find(f.agent.id, saved.memory.id)).resolves.toMatchObject({ id: saved.memory.id })
+    await expect(f.service.edit(f.agent.id, saved.memory.id, { ...invalid, clientRequestId: 'confirmed-erase',
+      eraseConfirmation: { memoryId: saved.memory.id, irreversible: true } })).resolves.toMatchObject({ erased: true })
   })
 
   it('rejects sensitive memory and mismatched source or operation identities', async () => {

@@ -1,5 +1,6 @@
+import { registerHostActionApprovalGrant } from './action-approval-grants.js'
 import { randomUUID } from 'node:crypto'
-import type { ToolHost, ToolHostContext, ToolHostResult, ToolCallLike } from '../../ports/tool-host.js'
+import type { ToolHost, ToolHostContext, ToolHostResult, ToolCallLike, ToolProviderPolicy } from '../../ports/tool-host.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import { createApprovalActionEnvelope, createApprovalRequest, safeApprovalActionSummary } from '../../domain/approval.js'
 import type { TurnItem } from '../../contracts/items.js'
@@ -82,30 +83,18 @@ export class LocalToolHost implements ToolHost {
     if (context.abortSignal.aborted) {
       throw new Error('tool call aborted before start')
     }
-    const { tool, provider } = components.registry.resolveTool(
+    const resolved = components.registry.resolveTool(
       call.toolName,
       context,
       call.providerId
     )
+    let tool = resolved.tool
+    const provider = resolved.provider
     if (tool.policy === 'never') {
       throw new Error(`tool ${call.toolName} is disabled by policy`)
     }
-    // While the thread execution lease is inside its unilateral renewal grace
-    // window, this runtime is no longer provably the Manager-recognized
-    // owner. Pause side-effecting tools until renewal resolves; read-only
-    // tools proceed so the turn can keep observing state. A `lost` outcome
-    // means the turn is being aborted through the lease-lost path.
-    if (tool.sideEffect !== 'read-only' && this.leaseAuthority) {
-      const authority = await awaitLeaseAuthorityForSideEffectingTool({
-        authority: this.leaseAuthority,
-        threadId: context.threadId,
-        signal: context.abortSignal
-      })
-      if (authority === 'lost') {
-        throw context.abortSignal.reason ?? new Error('thread execution lease lost during renewal grace')
-      }
-    }
-    const sandboxBlock = sandboxBlockForTool(tool, context)
+    if (!tool.classifyCall) await this.awaitToolLease(tool, context)
+    const sandboxBlock = sandboxBlockForTool(tool, context, provider)
     if (sandboxBlock) {
       return {
         item: this.errorToolResult(context, call, tool, sandboxBlock.message, sandboxBlock.code),
@@ -137,6 +126,8 @@ export class LocalToolHost implements ToolHost {
     const activeCall = normalizedArguments === preHooks.call.arguments
       ? preHooks.call
       : { ...preHooks.call, arguments: normalizedArguments }
+    if (tool.classifyCall) tool = { ...tool, ...tool.classifyCall(activeCall.arguments) }
+    if (tool.classifyCall) await this.awaitToolLease(tool, context)
     const planModeBlock = await planModeToolBlock(tool, activeCall, context)
     if (planModeBlock) {
       return {
@@ -168,7 +159,7 @@ export class LocalToolHost implements ToolHost {
         approved: false
       }
     }
-    const runtimeBlock = this.runtimePolicyBlock(tool, activeCall, context)
+    const runtimeBlock = this.runtimePolicyBlock(tool, activeCall, context, provider)
     if (runtimeBlock) {
       return {
         item: this.errorToolResult(
@@ -199,10 +190,13 @@ export class LocalToolHost implements ToolHost {
     const externalPathApproval = externalWriteTargets.length > 0
     const workspaceCommandApproval =
       effectiveSandboxMode(context) === 'workspace-write' &&
-      isWorkspaceApprovalCommandTool({
+      (isWorkspaceApprovalCommandTool({
         name: activeCall.toolName,
         toolKind: activeCall.toolKind ?? tool.toolKind
-      })
+      }) || (
+        provider.kind === 'mcp' &&
+        (activeCall.toolKind ?? tool.toolKind) === 'command_execution'
+      ))
     let explicitApprovalRequired: boolean
     try {
       explicitApprovalRequired = typeof tool.requiresExplicitApproval === 'function'
@@ -240,13 +234,15 @@ export class LocalToolHost implements ToolHost {
       const approvalReason = externalPathApproval
         ? 'exact external workspace file write requires approval'
         : workspaceCommandApproval
-          ? 'host command execution from the workspace sandbox requires approval'
+          ? provider.kind === 'mcp'
+            ? 'MCP tool execution from the workspace sandbox requires approval'
+            : 'host command execution from the workspace sandbox requires approval'
           : explicitApprovalRequired
             ? tool.requiresApprovalInFullAccess === true
               ? 'this action requires an explicit user decision'
               : 'external side effect requires explicit approval'
             : 'runtime tool policy requires approval'
-      const action = createApprovalActionEnvelope({
+      const action = await tool.buildApprovalAction?.(activeCall, context) ?? createApprovalActionEnvelope({
         toolName: activeCall.toolName,
         providerId: provider.id,
         providerKind: provider.kind,
@@ -267,13 +263,17 @@ export class LocalToolHost implements ToolHost {
         threadId: context.threadId,
         turnId: context.turnId,
         toolName: activeCall.toolName,
-        summary: safeApprovalActionSummary(action),
+        summary: tool.buildApprovalSummary?.(action) ?? safeApprovalActionSummary(action),
         action
       })
       const resolution = await context.awaitApproval(approval)
-      const decision = typeof resolution === 'string' ? resolution : resolution.decision
+      const resolvedReviewer = typeof resolution === 'string'
+        ? context.approvalReviewer ?? 'user'
+        : resolution.reviewer ?? context.approvalReviewer ?? 'user'
+      const humanDecisionMissing = (action.requiresUserDecision || action.reviewerRequirement === 'user') && resolvedReviewer !== 'user'
+      const decision = humanDecisionMissing ? 'deny' : typeof resolution === 'string' ? resolution : resolution.decision
       if (decision !== 'allow') {
-        const reason = typeof resolution === 'string' ? undefined : resolution.reason
+        const reason = humanDecisionMissing ? 'This action requires an explicit human decision.' : typeof resolution === 'string' ? undefined : resolution.reason
         const reviewer = typeof resolution === 'string'
           ? context.approvalReviewer ?? 'user'
           : resolution.reviewer ?? context.approvalReviewer ?? 'user'
@@ -323,6 +323,7 @@ export class LocalToolHost implements ToolHost {
           issuedAt.getTime() + KUN_ACTION_APPROVAL_GRANT_TTL_MS
         ).toISOString()
       })
+      registerHostActionApprovalGrant(kunActionApprovalGrant)
     } else if (fullAccess && explicitApprovalRequired) {
       const issuedAt = new Date()
       kunActionApprovalGrant = Object.freeze({
@@ -450,9 +451,14 @@ export class LocalToolHost implements ToolHost {
         result
       })
     } catch (error) {
-      this.operationJournal.fail(operationIdentity, error)
+      const mandatoryWrite = tool.requiresApprovalInFullAccess === true && explicitApprovalRequired
+      const message = mandatoryWrite
+        ? `${hookErrorMessage(error)}. The external action may have completed; its outcome is unknown. Inspect the external system before retrying.`
+        : hookErrorMessage(error)
+      if (mandatoryWrite) this.operationJournal.unknown(operationIdentity, message)
+      else this.operationJournal.fail(operationIdentity, error)
       return {
-        item: this.errorToolResult(context, activeCall, tool, hookErrorMessage(error), 'hook_failed'),
+        item: this.errorToolResult(context, activeCall, tool, message, 'hook_failed'),
         approved: true
       }
     }
@@ -547,14 +553,27 @@ export class LocalToolHost implements ToolHost {
     for (const [turnId] of oldest) this.turnComponents.delete(turnId)
   }
 
+  /** Preserve the lease gate before hooks for static tools, after effective classification for gateways. */
+  private async awaitToolLease(tool: LocalTool, context: ToolHostContext): Promise<void> {
+    if (tool.sideEffect === 'read-only' || !this.leaseAuthority) return
+    const authority = await awaitLeaseAuthorityForSideEffectingTool({
+      authority: this.leaseAuthority, threadId: context.threadId, signal: context.abortSignal
+    })
+    if (authority === 'lost') {
+      throw context.abortSignal.reason ?? new Error('thread execution lease lost during renewal grace')
+    }
+  }
+
   private runtimePolicyBlock(
     tool: LocalTool,
     call: ToolCallLike,
-    context: ToolHostContext
+    context: ToolHostContext,
+    provider: Pick<ToolProviderPolicy, 'kind'>
   ): SandboxBlock | { code: 'approval_policy_blocked'; message: string } | null {
     const sandboxBlock = sandboxBlockForTool(
       { name: call.toolName, toolKind: call.toolKind ?? tool.toolKind },
-      context
+      context,
+      provider
     )
     if (sandboxBlock) return sandboxBlock
     if (this.isInteractiveGuiGateTool(call.toolName)) return null
@@ -643,6 +662,9 @@ export class LocalToolHost implements ToolHost {
       toolKind: tool.toolKind ?? 'tool_call',
       ...(tool.sideEffect ? { sideEffect: tool.sideEffect } : {}),
       ...(tool.effects ? { effects: { ...tool.effects } } : {}),
+      ...(tool.classifyCall ? { classifyCall: tool.classifyCall } : {}),
+      ...(tool.buildApprovalAction ? { buildApprovalAction: tool.buildApprovalAction } : {}),
+      ...(tool.buildApprovalSummary ? { buildApprovalSummary: tool.buildApprovalSummary } : {}),
       execute: tool.execute,
       ...(tool.modelAdvertised === false ? { modelAdvertised: false } : {}),
       ...(tool.shouldAdvertise ? { shouldAdvertise: tool.shouldAdvertise } : {}),

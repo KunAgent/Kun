@@ -46,7 +46,8 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       models: {
         profiles: {
           'gpt-5.6-luna': {
-            contextWindowTokens: 372_000
+            contextWindowTokens: 372_000,
+            reasoning: { supportedEfforts: ['low', 'medium', 'high', 'max'], defaultEffort: 'high', requestProtocol: 'openai-responses' }
           }
         }
       },

@@ -1,4 +1,6 @@
-import type { ModelProviderSettingsV1, ModelRoutePoolV1, ModelRouteStrategy } from '@shared/app-settings'
+import { settingsButtonClass } from './settings-button'
+import { MODEL_ROUTE_RULE_EFFORTS, NESTED_ROUTE_PROVIDER_ID, type ModelProviderSettingsV1, type ModelRoutePoolV1, type ModelRouteRuleEffort } from '@shared/app-settings'
+import { modelProviderIsOauthOrDelegated } from '@shared/app-settings-provider-failover'
 import { resolveModelRouteTargetReference } from '@shared/app-settings-provider-core'
 import type { TFunction } from 'i18next'
 import { AlertTriangle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react'
@@ -13,15 +15,18 @@ export function ModelRouteTargets({
   pool,
   metrics,
   onUpdate,
-  t
+  t,
+  routes = []
 }: {
   settings: ModelProviderSettingsV1
+  /** Other route aliases this route may use as a member (nested routing). */
+  routes?: readonly ModelRoutePoolV1[]
   pool: ModelRoutePoolV1
   metrics?: RouteMetrics
   onUpdate: (patch: Partial<ModelRoutePoolV1>) => void
   t: TFunction
 }): ReactElement {
-  const providers = settings.providers.filter((provider) => provider.models.length > 0)
+  const providers = settings.providers.filter((provider) => provider.models.length > 0 && !modelProviderIsOauthOrDelegated(provider))
   const changeTarget = (targetId: string, patch: Partial<ModelRoutePoolV1['targets'][number]>): void => {
     onUpdate({ targets: pool.targets.map((target) => target.id === targetId ? { ...target, ...patch } : target) })
   }
@@ -40,7 +45,7 @@ export function ModelRouteTargets({
           <h3 className="text-[13px] font-semibold text-ds-ink">{t('modelRoutes.routeTargets')}</h3>
           <p className="mt-1 text-[11px] text-ds-faint">{t('modelRoutes.routeTargetsHint')}</p>
         </div>
-        <button
+        <button className={settingsButtonClass()}
           type="button"
           disabled={providers.length === 0}
           title={providers.length === 0 ? t('modelRoutes.addTargetUnavailable') : undefined}
@@ -55,25 +60,31 @@ export function ModelRouteTargets({
               weight: 1
             }] })
           }}
-          className="inline-flex items-center gap-1 rounded-full border border-ds-border px-3 py-1.5 text-[12px] text-ds-muted disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Plus className="h-3.5 w-3.5" /> {t('modelRoutes.addTarget')}
         </button>
       </div>
       {providers.length === 0 ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">{t('modelRoutes.addTargetUnavailable')}</p> : null}
+      <p className="text-[11px] text-ds-muted">{t('modelRoutes.stableAliasHint', { defaultValue: 'Clients keep the same alias. Account and model changes apply to new requests; in-flight requests keep their route.' })}</p>
       <div className="grid gap-2">
         {pool.targets.map((target, index) => {
-          const resolution = resolveModelRouteTargetReference(target, settings.providers)
+          const nested = target.providerId === NESTED_ROUTE_PROVIDER_ID
+          const nestedRoute = nested ? routes.find((route) => route.id !== pool.id && route.modelId.toLowerCase() === target.modelId.toLowerCase()) : undefined
+          const resolution: ReturnType<typeof resolveModelRouteTargetReference> = nested
+            ? nestedRoute ? { status: 'valid', modelId: target.modelId } : { status: 'model-missing' }
+            : resolveModelRouteTargetReference(target, settings.providers)
           const provider = resolution.provider
+          const nativeOnly = modelProviderIsOauthOrDelegated(provider)
+          const selection = JSON.stringify([target.providerId, target.modelId])
           const metric = metrics?.[`${pool.id}:${target.id}`]
           return (
             <article
               key={target.id}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => reorderTarget(event, index, pool, onUpdate)}
-              className={`rounded-xl border bg-ds-card p-3 ${resolution.status === 'valid' ? 'border-ds-border' : 'border-amber-300/80'}`}
+              className={`rounded-xl border bg-ds-card p-3 ${resolution.status === 'valid' && !nativeOnly ? 'border-ds-border' : 'border-amber-300/80'}`}
             >
-              <div className="grid items-start gap-3 md:grid-cols-[72px_minmax(0,1fr)_112px]">
+              <div className="grid items-start gap-3 md:grid-cols-[112px_minmax(0,1fr)_112px]">
                 <div className="flex items-center gap-1 pt-1">
                   <button
                     type="button"
@@ -81,36 +92,58 @@ export function ModelRouteTargets({
                     title={t('modelRoutes.reorderTarget')}
                     aria-label={t('modelRoutes.reorderTarget')}
                     onDragStart={(event) => event.dataTransfer.setData('text/route-target-index', String(index))}
-                    className="cursor-grab rounded p-1 text-ds-faint hover:bg-ds-hover"
+                    className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                   ><GripVertical className="h-4 w-4" /></button>
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-ds-main text-[11px] text-ds-muted">{index + 1}</span>
                   <div className="grid gap-0.5">
-                    <button type="button" disabled={index === 0} onClick={() => moveTarget(index, index - 1)} aria-label={t('modelRoutes.moveTargetUp')} className="text-ds-faint disabled:opacity-30"><ChevronUp className="h-3.5 w-3.5" /></button>
-                    <button type="button" disabled={index === pool.targets.length - 1} onClick={() => moveTarget(index, index + 1)} aria-label={t('modelRoutes.moveTargetDown')} className="text-ds-faint disabled:opacity-30"><ChevronDown className="h-3.5 w-3.5" /></button>
+                    <button type="button" disabled={index === 0} onClick={() => moveTarget(index, index - 1)} aria-label={t('modelRoutes.moveTargetUp')} className={settingsButtonClass({ variant: 'ghost', size: 'icon' })} ><ChevronUp className="h-3.5 w-3.5" /></button>
+                    <button type="button" disabled={index === pool.targets.length - 1} onClick={() => moveTarget(index, index + 1)} aria-label={t('modelRoutes.moveTargetDown')} className={settingsButtonClass({ variant: 'ghost', size: 'icon' })} ><ChevronDown className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
                   <Field label={t('modelRoutes.targetEnabled')}><Toggle checked={target.enabled} onChange={(enabled) => changeTarget(target.id, { enabled })} ariaLabel={t('modelRoutes.targetEnabled')} /></Field>
-                  <Field label={t('modelRoutes.targetProvider')}><select value={target.providerId} onChange={(event) => {
-                    const nextProvider = providers.find((candidate) => candidate.id === event.target.value)
-                    changeTarget(target.id, { providerId: event.target.value, modelId: nextProvider?.models[0] ?? '' })
-                  }} className={compactInputClass}>
-                    {resolution.status === 'provider-missing' ? <option value={target.providerId}>{t('modelRoutes.providerDeleted', { providerId: target.providerId })}</option> : null}
-                    {providers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                  </select></Field>
-                  <Field label={t('modelRoutes.targetModel')}><select value={target.modelId} onChange={(event) => changeTarget(target.id, { modelId: event.target.value })} className={compactInputClass}>
-                    {resolution.status !== 'valid' ? <option value={target.modelId}>{resolution.status === 'provider-missing' ? t('modelRoutes.originalModel', { modelId: target.modelId }) : t('modelRoutes.modelDeleted', { modelId: target.modelId })}</option> : null}
-                    {(provider?.models ?? []).map((model) => <option key={model} value={model}>{model}</option>)}
+                  <div className="sm:col-span-2">
+                    <Field label={t('modelRoutes.targetAccountModel', { defaultValue: 'Account / model' })}>
+                      <select value={selection} aria-label={t('modelRoutes.targetAccountModel', { defaultValue: 'Account / model' })}
+                        onChange={(event) => {
+                          const choice = [...providers.flatMap((item) => item.models.map((modelId) => ({ providerId: item.id, modelId }))),
+                            ...routes.filter((route) => route.id !== pool.id).map((route) => ({ providerId: NESTED_ROUTE_PROVIDER_ID, modelId: route.modelId }))]
+                            .find((item) => JSON.stringify([item.providerId, item.modelId]) === event.target.value)
+                          if (choice) changeTarget(target.id, choice)
+                        }} className={compactInputClass}>
+                        {nested && nestedRoute ? null : resolution.status !== 'valid' || nativeOnly ? <option value={selection} disabled>
+                          {resolution.status === 'provider-missing' ? t('modelRoutes.providerDeleted', { providerId: target.providerId }) : provider?.name ?? target.providerId} / {resolution.status === 'provider-missing' ? t('modelRoutes.originalModel', { modelId: target.modelId }) : resolution.status === 'model-missing' ? t('modelRoutes.modelDeleted', { modelId: target.modelId }) : target.modelId} ({t('modelRoutes.targetUnavailable', { defaultValue: 'unavailable for gateway' })})
+                        </option> : null}
+                        {providers.map((item) => <optgroup key={item.id} label={item.name}>
+                          {item.models.map((modelId) => <option key={modelId} value={JSON.stringify([item.id, modelId])}>
+                            {item.name} / {modelId}
+                          </option>)}
+                        </optgroup>)}
+                        {routes.some((route) => route.id !== pool.id) ? <optgroup label={t('routeRules.otherRoutes')}>
+                          {routes.filter((route) => route.id !== pool.id).map((route) => <option key={route.id} value={JSON.stringify([NESTED_ROUTE_PROVIDER_ID, route.modelId])}>
+                            ↳ {route.name} ({route.modelId})
+                          </option>)}
+                        </optgroup> : null}
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label={t('routeRules.memberEffort')}><select value={target.effort ?? ''} aria-label={t('routeRules.memberEffort')}
+                    onChange={(event) => changeTarget(target.id, { effort: (event.target.value || undefined) as ModelRouteRuleEffort | undefined })} className={compactInputClass}>
+                    <option value="">{t('routeRules.effortAsAsked')}</option>
+                    {MODEL_ROUTE_RULE_EFFORTS.map((effort) => <option key={effort} value={effort}>{t(`routeRules.efforts.${effort}`)}</option>)}
                   </select></Field>
                   <Field label={t('modelRoutes.targetWeight')}><input type="number" min={1} max={100} disabled={pool.strategy !== 'weighted-round-robin'} title={pool.strategy === 'weighted-round-robin' ? undefined : t('modelRoutes.weightInactive')} value={target.weight} onChange={(event) => changeTarget(target.id, { weight: Number(event.target.value) || 1 })} className={compactInputClass} /></Field>
                 </div>
                 <div className="flex items-start justify-between gap-2 pt-1 text-[11px] text-ds-muted">
                   <div><span className="block text-ds-faint">{t('modelRoutes.targetHealth')}</span>{metric?.ewmaLatencyMs ? `${Math.round(metric.ewmaLatencyMs)} ms` : t('modelRoutes.notProbed')}<br /><span className="text-ds-faint">{metric ? t('modelRoutes.successCount', { successes: metric.successes, total: metric.successes + metric.failures }) : ''}</span></div>
-                  <button type="button" onClick={() => onUpdate({ targets: pool.targets.filter((item) => item.id !== target.id) })} aria-label={t('modelRoutes.deleteTarget')} className="rounded-full p-1.5 text-ds-faint hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => onUpdate({ targets: pool.targets.filter((item) => item.id !== target.id) })} aria-label={t('modelRoutes.deleteTarget')} className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon' })} ><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
               {pool.strategy !== 'weighted-round-robin' ? <p className="mt-2 text-[10.5px] text-ds-faint">{t('modelRoutes.weightInactive')}</p> : null}
-              {resolution.status !== 'valid' ? <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />{resolution.status === 'provider-missing' ? t('modelRoutes.providerMissingWarning', { providerId: target.providerId }) : t('modelRoutes.modelMissingWarning', { modelId: target.modelId, providerId: target.providerId })}</p> : null}
+              {nativeOnly ? <p className="mt-2 text-[11px] text-amber-700">{t('modelRoutes.targetNativeOnly', { defaultValue: 'This account is available only through its native Agent, not as a gateway model API.' })}</p> : null}
+              {nested && nestedRoute ? <p className="mt-2 text-[11px] text-ds-muted">{t('routeRules.nestedHint', { route: nestedRoute.name })}</p> : null}
+              {nested && !nestedRoute ? <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />{t('routeRules.nestedMissing', { route: target.modelId })}</p> : null}
+              {resolution.status !== 'valid' && !nested ? <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />{resolution.status === 'provider-missing' ? t('modelRoutes.providerMissingWarning', { providerId: target.providerId }) : t('modelRoutes.modelMissingWarning', { modelId: target.modelId, providerId: target.providerId })}</p> : null}
             </article>
           )
         })}

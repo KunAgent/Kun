@@ -68,8 +68,15 @@ export {
   FileDelegatedSessionBindingStore,
   delegatedSessionRoot
 } from '../runtime/delegated-session-binding.js'
+export {
+  AcpConnectionPool,
+  AcpClientHost,
+  AcpSessionManager,
+  AcpRuntime,
+  type AcpRuntimeDeps
+} from '../runtime/acp/acp-runtime-entry.js'
 export { buildGoalLocalTools } from '../adapters/tool/goal-tools.js'
-export { buildTodoLocalTools } from '../adapters/tool/todo-tools.js'
+export { buildExecutionTaskLocalTools } from '../adapters/tool/execution-task-tools.js'
 export { buildDesignCanvasLocalTools } from '../adapters/tool/design-canvas-tool.js'
 export { buildPptBoardLocalTools } from '../adapters/tool/ppt-board-tool.js'
 export { buildDesignMotionLocalTools } from '../adapters/tool/design-motion-tool.js'
@@ -83,7 +90,6 @@ export { ExtensionToolRegistry } from '../adapters/tool/extension-tool-provider.
 export { shutdownAllLspSessions } from '../adapters/tool/lsp-client.js'
 export { createReadArtifactTool } from '../adapters/tool/artifact-tool.js'
 export { FileArtifactStore, type ArtifactStore } from '../artifacts/artifact-store.js'
-export { createTaskGraphTool } from '../adapters/tool/task-graph-tool.js'
 export { buildMcpToolProviders } from '../adapters/tool/mcp-tool-provider.js'
 export { buildMemoryToolProviders } from '../adapters/tool/memory-tool-provider.js'
 export { KnowledgeBaseService } from '../knowledge/knowledge-base-service.js'
@@ -176,6 +182,24 @@ export { ScopedMigrationMaintenanceLock } from '../ports/migration-maintenance-l
 export { KUN_SYSTEM_PROMPT } from '../prompt/kun-system-prompt.js'
 export { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 export { ThreadActivityRegistry } from '../services/thread-activity-registry.js'
+export { ActivityStore } from '../services/activity-store.js'
+export { ActivityFactsStore } from '../services/activity-facts-store.js'
+export { TaskWorkspaceStore } from '../workspace-tasks/task-workspace-store.js'
+export { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+export { TaskWorkspaceSetupRunner } from '../workspace-tasks/setup-runner.js'
+export { fillTaskWorktreeEnvironment } from '../workspace-tasks/environment-fill.js'
+export {
+  createApprovedSetupResolver,
+  userSharedPathsForRepo
+} from '../workspace-tasks/approved-setup.js'
+export { loadKunProjectConfig } from '../config/project-config.js'
+export { createWorktreeLifecycle } from '../workspace-tasks/worktree-lifecycle.js'
+export {
+  workspaceGit,
+  workspaceCommitGit,
+  assertWorkspaceWriteFence,
+  withWorkspaceWriteCommit
+} from '../workspace-tasks/workspace-git.js'
 export { ToolCancellationService } from '../services/tool-cancellation-service.js'
 export { GraphRuntimeComposition } from './graph-runtime-factory.js'
 export { createGraphRuntimeStartOptions } from './graph-runtime-bootstrap.js'
@@ -228,7 +252,8 @@ export { RoutePoolTestService } from '../services/route-pool-test-service.js'
 export type { UsageEvent } from '../contracts/events.js'
 export type {
   RuntimeConfigApplyRequest,
-  RuntimeConfigApplyResponse
+  RuntimeConfigApplyResponse,
+  RuntimeConfigApplyRejectedSection
 } from '../contracts/runtime-config.js'
 export type { ModelConnectionConnectRequest } from '../contracts/model-connections.js'
 export {

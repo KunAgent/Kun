@@ -1,7 +1,6 @@
 import {
   dialog,
   ipcMain,
-  type BrowserWindow,
   type WebContents
 } from 'electron'
 import {
@@ -23,8 +22,6 @@ import type {
   WorkspacePickResult
 } from '../../shared/kun-gui-api'
 import {
-  alertDialogPayloadSchema,
-  confirmDialogPayloadSchema,
   defaultPathSchema,
   rootPathSchema,
   skillGithubImportPayloadSchema,
@@ -53,17 +50,12 @@ import {
 import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import { bundledSkillsDirectory } from '../bundled-skill-resources'
 import { parseIpcPayload, pathExists } from './app-ipc-handler-utils'
+import { registerAppConfirmationIpcHandlers } from './register-app-confirmation-ipc'
 
 export function registerAppWorkspaceIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const { store, getMainWindow } = options
   const nativeDialogs = options.nativeDialogs ?? new NativeDialogCoordinator()
-  const showMainWindowMessageBox = (
-    parent: BrowserWindow,
-    messageBoxOptions: Electron.MessageBoxOptions
-  ): Promise<Electron.MessageBoxReturnValue> => nativeDialogs.run(parent.webContents, async () => {
-    if (parent.isDestroyed()) throw new Error('Native dialog parent window is unavailable.')
-    return dialog.showMessageBox(parent, messageBoxOptions)
-  })
+  registerAppConfirmationIpcHandlers(options, nativeDialogs)
   ipcMain.handle('workspace:pick-directory', async (_, defaultPath: unknown): Promise<WorkspacePickResult> => {
     const normalizedDefaultPath = parseIpcPayload(
       'workspace:pick-directory',
@@ -191,46 +183,6 @@ export function registerAppWorkspaceIpcHandlers(options: RegisterAppIpcHandlersO
       }
     }
   )
-
-  ipcMain.handle('dialog:alert', async (_, payload: unknown): Promise<void> => {
-    const request = parseIpcPayload('dialog:alert', alertDialogPayloadSchema, payload)
-    const options: Electron.MessageBoxOptions = {
-      type: 'warning',
-      buttons: [request.buttonLabel ?? 'OK'],
-      defaultId: 0,
-      cancelId: 0,
-      message: request.message,
-      detail: request.detail,
-      noLink: true
-    }
-    const mainWindow = getMainWindow()
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      await showMainWindowMessageBox(mainWindow, options)
-      return
-    }
-    await dialog.showMessageBox(options)
-  })
-
-  // Replaces window.confirm in the renderer: the synchronous native confirm
-  // leaves the WebContents unable to focus inputs after it closes
-  // (electron/electron#19977), which froze the composer after deleting threads.
-  ipcMain.handle('dialog:confirm', async (_, payload: unknown): Promise<boolean> => {
-    const request = parseIpcPayload('dialog:confirm', confirmDialogPayloadSchema, payload)
-    const options: Electron.MessageBoxOptions = {
-      type: 'warning',
-      buttons: [request.confirmLabel ?? 'OK', request.cancelLabel ?? 'Cancel'],
-      defaultId: 0,
-      cancelId: 1,
-      message: request.message,
-      detail: request.detail,
-      noLink: true
-    }
-    const mainWindow = getMainWindow()
-    const result = mainWindow && !mainWindow.isDestroyed()
-      ? await showMainWindowMessageBox(mainWindow, options)
-      : await dialog.showMessageBox(options)
-    return result.response === 0
-  })
 
   ipcMain.handle(
     'skill:save-file',

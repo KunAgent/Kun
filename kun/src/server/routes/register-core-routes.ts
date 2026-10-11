@@ -1,4 +1,7 @@
+import { registerAgentDispatchIntentRoutes } from './agent-dispatch-intents.js'
 import type { Router } from '../router.js'
+import { registerProviderConfigurationRoutes } from './provider-configuration.js'
+import { registerModelUtilityRoutes } from './model-utility.js'
 import { healthJsonResponse } from './health.js'
 import {
   gatewayCredentialStatus,
@@ -12,7 +15,8 @@ import {
   routePoolStatus,
   testRoutePool
 } from './openai-model-gateway.js'
-import { gatewayMessages } from './openai-model-gateway-anthropic.js'
+import { listGatewayClients, createGatewayClient, revokeGatewayClient, rotateGatewayClient, gatewayClientUsage } from './gateway-clients.js'
+import { gatewayCountTokens, gatewayMessages } from './anthropic-messages-gateway.js'
 import { registerExtensionManagementRoutes } from './extensions.js'
 import { registerExtensionPublicRoutes } from './extension-public.js'
 import {
@@ -40,6 +44,7 @@ import {
   fenceModelCredential,
   detectModelConnectionProtocols,
   getModelConnectionCatalog,
+  getPublicModelCatalog,
   getModelConnectionCustomHeaders,
   listModelConnections,
   modelConnectionEvents,
@@ -61,37 +66,90 @@ import {
 import { applyRuntimeConfig } from './runtime-config.js'
 import { listSkills } from './skills.js'
 import { authorizeMcpOAuth, clearMcpOAuth, mcpOAuthDiagnostics } from './mcp-oauth.js'
-import { deleteMcpConfig, listMcpConfig, patchMcpConfig, putMcpConfig } from './mcp-config.js'
+import { addRemoteMcpApp, deleteMcpConfig, listMcpConfig, patchMcpConfig, putMcpConfig } from './mcp-config.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { authorize } from './route-auth.js'
+import { gatewayJsonResponse } from './gateway-json-response.js'
 import { strictRuntimeTokenAuthorized } from './gateway-request-guard.js'
+import { handleKunToolsMcp } from './kun-tools-mcp.js'
+import { gatewayHello, gatewayRouteTrace } from './gateway-discovery-routes.js'
+import { allowGatewayClientModel, gatewayAdminCatalog, gatewayAdminExtensionExports } from './gateway-agent-admin.js'
+import { registerGatewayAdminExtras } from './gateway-admin-extras.js'
+import { gatewayClientLimit } from './gateway-limit.js'
+import { geminiGenerate, geminiModels } from './gemini-gateway.js'
 
 export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void {
+  registerProviderConfigurationRoutes(router, runtime)
+  registerModelUtilityRoutes(router, runtime)
   router.add('GET', '/health', () => healthJsonResponse())
   router.add('GET', '/v1/models', (request) => gatewayModels(runtime, request))
+  router.add('GET', '/api/hello', (request) => gatewayHello(runtime, request))
+  router.add('GET', '/v1beta/models', (request) => geminiModels(runtime, request))
+  router.add('POST', '/v1beta/models/*call', (request, ctx) => geminiGenerate(runtime, request, ctx.params.call))
+  router.add('GET', '/v1/kun/route', (request) => gatewayRouteTrace(runtime, request))
+  router.add('GET', '/v1/kun/limit', (request) => gatewayClientLimit(runtime, request))
   router.add('POST', '/v1/chat/completions', (request) => gatewayChatCompletions(runtime, request))
   router.add('POST', '/v1/responses', (request) => gatewayResponses(runtime, request))
   router.add('POST', '/v1/messages', (request) => gatewayMessages(runtime, request))
+  router.add('POST', '/v1/messages/count_tokens', (request) => gatewayCountTokens(runtime, request))
+  // Kun Tools MCP endpoint lives outside /v1 so harness-scoped kgw_ tokens
+  // never share the runtime-token authorization surface.
+  router.add('POST', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
+  router.add('GET', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
+  registerAgentDispatchIntentRoutes(router, runtime)
   const strictGatewayAdmin = (request: Request) => strictRuntimeTokenAuthorized(request, runtime.runtimeToken)
+  router.add('GET', '/v1/model-gateway/clients', (request) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return listGatewayClients(runtime)
+  })
+  router.add('POST', '/v1/model-gateway/clients', (request) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return createGatewayClient(runtime, request)
+  })
+  router.add('DELETE', '/v1/model-gateway/clients/:id', (request, ctx) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return revokeGatewayClient(runtime, ctx.params.id, request)
+  })
+  router.add('GET', '/v1/model-gateway/catalog', (request) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return gatewayAdminCatalog(runtime)
+  })
+  router.add('GET', '/v1/model-gateway/extension-exports', (request) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return gatewayAdminExtensionExports(runtime)
+  })
+  registerGatewayAdminExtras(router, runtime, strictGatewayAdmin)
+  router.add('POST', '/v1/model-gateway/clients/:id/allow', (request, ctx) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return allowGatewayClientModel(runtime, ctx.params.id, request)
+  })
+  router.add('GET', '/v1/model-gateway/clients/:id/usage', (request, ctx) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return gatewayClientUsage(runtime, ctx.params.id)
+  })
+  router.add('POST', '/v1/model-gateway/clients/:id/rotate', (request, ctx) => {
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+    return rotateGatewayClient(runtime, ctx.params.id)
+  })
   router.add('GET', '/v1/model-gateway/credential/status', (request) => {
-    if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
     return gatewayCredentialStatus(runtime)
   })
   router.add('POST', '/v1/model-gateway/credential/ensure', (request) => {
-    if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
     return ensureGatewayCredential(runtime)
   })
   router.add('POST', '/v1/model-gateway/credential/rotate', (request) => {
-    if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
     return rotateGatewayCredential(runtime)
   })
   router.add('DELETE', '/v1/model-gateway/credential', (request) => {
-    if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
     return revokeGatewayCredential(runtime)
   })
   router.add('POST', '/v1/model-gateway/credential/reveal', (request) => {
-    if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()
+    if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
     return revealGatewayCredential(runtime)
   })
   router.add('GET', '/v1/model-routes', (request) => {
@@ -101,6 +159,14 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('POST', '/v1/model-routes/:id/test', (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return testRoutePool(runtime, ctx.params.id)
+  })
+  router.add('POST', '/v1/model-routes/:id/retry', (request, ctx) => {
+    if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()
+    const gateway = runtime.modelGateway
+    const pool = gateway?.configuredPools().find((candidate) => candidate.id === ctx.params.id)
+    if (!pool || !gateway) return ERRORS.validation('Unknown route')
+    for (const target of pool.targets) gateway.health.retry(pool, target)
+    return jsonResponse({ routeId: pool.id, dispatches: 0, recovery: 'half-open' })
   })
   if (runtime.extensionPlatform) {
     // Static public extension paths must precede `/v1/extensions/:id` because
@@ -272,9 +338,13 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return detectModelConnectionProtocols(runtime.modelConnections, request)
   })
+  router.add('POST', '/v1/model-catalog/public', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getPublicModelCatalog(runtime.modelConnections, request)
+  })
   router.add('GET', '/v1/model-connections/:providerId/catalog', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return getModelConnectionCatalog(runtime.modelConnections, ctx.params.providerId)
+    return getModelConnectionCatalog(runtime.modelConnections, ctx.params.providerId, request)
   })
   router.add('GET', '/v1/model-connections/:providerId/custom-headers', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -291,6 +361,10 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('GET', '/v1/mcp/config', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return listMcpConfig(runtime)
+  })
+  router.add('POST', '/v1/mcp/remote-apps/:id', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return addRemoteMcpApp(runtime, ctx.params.id, request)
   })
   router.add('PUT', '/v1/mcp/config/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

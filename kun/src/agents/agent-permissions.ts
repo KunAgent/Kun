@@ -1,3 +1,4 @@
+import { defaultAgentExecutionPolicy } from './agent-permission-snapshot.js'
 import { kunToolPermissionModeSettings, kunToolPermissionModeFromSettings } from '../contracts/policy.js'
 import type { RoomPermissionRequest } from '../contracts/room-permissions.js'
 import type { RoomRuntime } from '../rooms/room-runtime.js'
@@ -10,7 +11,7 @@ export async function agentPermissions(rooms: RoomRuntime, roomId: string) {
   const agent = await rooms.agents.get(room.members[0].participantAgentId!)
   const profile = rooms.deps.profiles()[agent.presetId]
   const fullAccessUnavailable = profile?.toolPolicy === 'readOnly' ? 'read_only_agent' : agent.allowedRepositoryRoots !== undefined ? 'agent_directory_limits' : undefined
-  const policy = room.privateExecutionPolicy ?? kunToolPermissionModeSettings(fullAccessUnavailable ? 'ask-for-approval' : 'full-access')
+  const policy = room.privateExecutionPolicy ?? defaultAgentExecutionPolicy()
   return { roomId, revision: room.revision, policy, mode: kunToolPermissionModeFromSettings(policy), fullAccessUnavailable }
 }
 export async function setAgentPermissions(rooms: RoomRuntime, roomId: string, input: RoomPermissionRequest) {

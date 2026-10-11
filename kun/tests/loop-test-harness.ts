@@ -1,3 +1,4 @@
+import { offlineAgentSdkHarness } from './helpers/offline-agent-sdk-harness.js'
 import { AgentLoop } from '../src/loop/agent-loop.js'
 import { InMemoryEventBus } from '../src/adapters/in-memory-event-bus.js'
 import { InMemoryApprovalGate } from '../src/adapters/in-memory-approval-gate.js'
@@ -118,7 +119,9 @@ export function makeHarness(
   const events = new RuntimeEventRecorder({ eventBus: bus, sessionStore, allocateSeq, nowIso })
   const ids = new SequentialIdGenerator()
   const prefix = createImmutablePrefix({ systemPrompt: 'be brief' })
+  const sdkHarness = options.sdkRuntime ? offlineAgentSdkHarness(options.sdkRuntime, [undefined]) : undefined
   const turns = new TurnService({
+    ...(sdkHarness ? { providerKinds: sdkHarness.providerKinds, harnessCatalog: sdkHarness.catalog } : {}),
     threadStore,
     sessionStore,
     events,
@@ -159,7 +162,7 @@ export function makeHarness(
     ...(options.toolStorm ? { toolStorm: options.toolStorm } : {}),
     ...(options.toolArgumentRepair ? { toolArgumentRepair: options.toolArgumentRepair } : {}),
     ...(options.hooks ? { hooks: options.hooks } : {}),
-    ...(options.sdkRuntime ? { sdkRuntime: options.sdkRuntime } : {}),
+    ...(options.sdkRuntime ? { sdkRuntime: options.sdkRuntime, harnessRouter: sdkHarness!.router } : {}),
     ...(options.approvalReview ? { approvalReview: options.approvalReview } : {}),
     ...(options.goalResume ? { goalResume: options.goalResume } : {})
   })

@@ -1,0 +1,327 @@
+{
+  "agentCenter": {
+    "title": "Third-party Agents",
+    "summary": {
+      "connected": "{{count}} connected",
+      "attention": "{{count}} to fix",
+      "updating": "{{count}} updating"
+    },
+    "refreshAll": "Re-detect all Agents",
+    "description": "Connect Codex, Claude Code, OpenCode and other Agents to your chats. Once connected and checked, they show up when you start a chat or add a group member.",
+    "defaultAgent": "Default for new chats",
+    "defaultAgentLabel": "Default Agent for new chats",
+    "group": {
+      "connected": "Connected",
+      "available": "Ready to connect",
+      "notInstalled": "Not installed"
+    },
+    "rail": {
+      "showMore": "Show the other {{count}}",
+      "showLess": "Show fewer",
+      "reorderHint": "Drag to reorder, or press Alt+Up / Alt+Down. This is the order in the chat and group pickers.",
+      "moved": "{{name}} moved to position {{position}} of {{total}}",
+      "footer": "Not in the list?",
+      "findInExtensions": "Find in extensions"
+    },
+    "state": {
+      "detecting": {
+        "list": "Detecting…",
+        "status": "Detecting…"
+      },
+      "notInstalled": {
+        "list_install": "Not installed · one-click install",
+        "list_docs": "Not installed · see install guide",
+        "list_none": "Not installed",
+        "status_install": "Not installed. You can install it here.",
+        "status_docs": "Not installed. Follow the official install guide.",
+        "status_none": "Not installed"
+      },
+      "installing": {
+        "list": "Installing…",
+        "status": "Installing…"
+      },
+      "installFailed": {
+        "list": "Install failed",
+        "status": "Install failed. See the log below."
+      },
+      "versionLow": {
+        "list": "Version too old",
+        "status": "This version is too old. Update it to continue."
+      },
+      "adapterMissing": {
+        "list": "ACP adapter missing",
+        "status": "The ACP adapter is missing. You can install it here."
+      },
+      "available": {
+        "list": "Installed · not connected",
+        "status": "Installed. Not connected to chats yet."
+      },
+      "checking": {
+        "list": "Checking…",
+        "status": "Checking…"
+      },
+      "ready": {
+        "list": "{{model}} · {{mode}}",
+        "status": "Ready · {{mode}}",
+        "statusModels": "Ready · {{mode}} · {{count}} models"
+      },
+      "needsRecheck": {
+        "list": "Needs a re-check",
+        "status": "Needs a re-check",
+        "statusChanged": "Settings changed. Check again to use them."
+      },
+      "signedOut": {
+        "list": "Sign in again",
+        "status": "Signed out. New turns fail until you sign in."
+      },
+      "connectFailed": {
+        "list": "Connection failed",
+        "status": "Connection failed. See the check results."
+      }
+    },
+    "cancel": "Cancel",
+    "defaultBadge": "Default",
+    "more": "More actions",
+    "pickPath": "Choose…",
+    "useInChats": "Use in chats",
+    "connection": {
+      "title": "Connection",
+      "desc": "How {{name}} reaches its models. A change is checked before it replaces the saved connection.",
+      "discard": "Discard changes",
+      "draftNote": "You changed the connection. It is checked first; the saved connection keeps working until the check passes.",
+      "manageProviders": "Manage model providers"
+    },
+    "modeDesc": {
+      "nativeLogin": "Use the account the Agent itself is signed in with.",
+      "provider": "Use an API key from Model providers and bill that.",
+      "kunGateway": "Route through the local gateway and limit which accounts it may use."
+    },
+    "delete": {
+      "title": "Remove {{name}}?",
+      "body": "Its launch settings are removed from this computer. Chats that already used it keep their history.",
+      "confirm": "Remove"
+    },
+    "diagnostics": {
+      "title": "Check results",
+      "checkedAt": "Last checked {{time}}",
+      "never": "Not checked yet",
+      "empty": "Run a check to see the command, sign-in and handshake results here.",
+      "copy": "Copy diagnostics",
+      "trialStart": "Run a trial turn…",
+      "trialHint": "Want proof a real chat works? A trial sends one real request and may use quota.",
+      "trialRunning": "Running a trial turn…",
+      "trialDone": "Trial turn finished in {{ms}} ms"
+    },
+    "launch": {
+      "title": "Launch",
+      "desc": "How Kun starts {{name}}. Leave a field empty to use what was detected. Changes need a re-check.",
+      "detected": "Detected: {{path}}",
+      "managedByExtension": "The extension {{name}} manages this Agent's command and arguments, so they cannot be edited here.",
+      "openExtensions": "Open extensions",
+      "envName": "Variable name",
+      "envValue": "Value",
+      "removeVariable": "Remove {{name}}",
+      "stored": "Stored in the keychain",
+      "secretValue": "Sensitive value",
+      "saveSecret": "Save",
+      "addVariable": "Add variable",
+      "addSecret": "Add sensitive value",
+      "envDesc": "Passed to the Agent when Kun starts it. Sensitive values go to the system credential store; this file only keeps a reference.",
+      "previewTitle": "Command Kun will run",
+      "previewDesc": "This is how Kun starts {{name}} after you save. Sensitive values are never shown.",
+      "copy": "Copy",
+      "noOverrides": "{{name}} runs inside Kun through its SDK, so extra arguments and environment variables are not passed to it. Set its network and command path here; configure the rest in {{name}} itself."
+    },
+    "menu": {
+      "redetect": "Re-detect",
+      "docs": "Open documentation",
+      "browser": "Browser",
+      "export": "Export configuration",
+      "delete": "Remove this Agent…"
+    },
+    "models": {
+      "title": "Available models",
+      "fromAgent": "From the Agent",
+      "fromProvider": "From the model provider",
+      "updated": "{{source}} · updated {{time}}",
+      "current": "Default",
+      "use": "Use as default",
+      "customLabel": "Not listed? Use a model ID directly"
+    },
+    "notice": {
+      "signedOut": {
+        "title": "{{name}} is signed out",
+        "body": "New turns fail until you sign in again. Kun prefills {{command}} in a terminal tab for you to review and run, then re-checks when it closes."
+      },
+      "needsRecheck": {
+        "title": "{{name}} needs a re-check",
+        "body": "Settings changed or the runtime restarted. Check again so new turns use the current settings."
+      },
+      "connectFailed": {
+        "title": "Could not connect to {{name}}",
+        "body": "The check results below show the step that failed. Fix it, then check again."
+      },
+      "versionLow": {
+        "title": "{{name}} is too old",
+        "body": "Update it from the Version tab to keep using it."
+      },
+      "useProvider": "Use a model provider instead"
+    },
+    "next": {
+      "enable": "Check and turn on",
+      "recheck": "Re-check",
+      "cancelCheck": "Cancel check",
+      "login": "Sign in in terminal",
+      "configureProvider": "Set up model provider",
+      "docs": "Open guide",
+      "update": "Open Version",
+      "install": "Install",
+      "cancelInstall": "Cancel install",
+      "reinstall": "Install again"
+    },
+    "setup": {
+      "title": "Connect {{name}}",
+      "subtitle": "Three steps. Afterwards {{name}} shows up when you start a chat or add a group member.",
+      "install": "Install",
+      "installed": "Found {{name}} at {{path}}",
+      "installedVersion": "Found {{name}} {{version}} at {{path}}",
+      "bundled": "{{name}} is bundled with Kun.",
+      "missing": "Kun could not find the command. Check the path, or install it yourself.",
+      "missingInstall": "Install it on this computer. Kun detects it again when the install ends.",
+      "docs": "Official install guide",
+      "pathLink": "Not this one? Set the command path",
+      "pathLinkMissing": "Already installed? Set the command path",
+      "connection": "Connection",
+      "connectionDesc": "How {{name}} reaches its models. You can change this later under Connection.",
+      "check": "Check and turn on",
+      "checkDesc": "Checks the command, sign-in and protocol handshake. It sends no prompt and uses no quota.",
+      "checkHint": "You can also use the switch at the top right.",
+      "checkLocked": "Finish the install first.",
+      "terminalInstall": "Install in a terminal instead"
+    },
+    "source": {
+      "derived": "Based on {{base}}"
+    },
+    "tabs": {
+      "label": "{{name}} settings",
+      "connection": "Connection",
+      "models": "Models",
+      "modelsCount": "Models · {{count}}",
+      "launch": "Launch",
+      "version": "Version",
+      "updateAvailable": "New version available"
+    },
+    "add": "Add",
+    "addDialog": {
+      "steps": "Steps",
+      "step_choose": "Choose how",
+      "step_form": "Fill in and test",
+      "intro": "Codex, Claude Code, OpenCode and the other built-in Agents are already in the list. Pick one there to connect it. Add an Agent that is not in the list here.",
+      "kindLabel": "How to add the Agent",
+      "next": "Next",
+      "kind_derive": {
+        "title": "Based on a built-in Agent",
+        "desc": "Run a built-in engine with another command, arguments or environment, for example a company fork of OpenCode, or a second account for the same Agent."
+      },
+      "kind_acp": {
+        "title": "Any ACP Agent",
+        "desc": "Enter a command that speaks the Agent Client Protocol. Kun talks to it through the generic adapter."
+      },
+      "kind_import": {
+        "title": "Import a configuration file",
+        "desc": "Import a .json Agent definition exported from Kun. Sensitive values have to be entered again on this computer."
+      },
+      "importHint": "Choose the .json file to read. The form below is filled from it and still needs a test before it can be added.",
+      "base": "Based on",
+      "name": "Name",
+      "idHint": "ID: {{id}}",
+      "command": "Command",
+      "commandHint": "An executable name or a full path.",
+      "commandHintBase": "Leave empty to use the built-in engine's command.",
+      "args": "Extra arguments",
+      "env": "Environment variables",
+      "secrets": "Sensitive values",
+      "preview": "Will run",
+      "testFirst": "Test before adding: it checks that the command starts and completes the handshake. It sends no prompt.",
+      "failureHint": "If the test fails you can still add it and troubleshoot from its page."
+    },
+    "login": {
+      "title": "Sign-in",
+      "desc": "{{name}} uses its own account. If it is not signed in yet, or you want another account, sign in once in a terminal; Kun detects it again when the terminal closes."
+    },
+    "activity": {
+      "step": {
+        "starting": "Starting",
+        "waiting": "Waiting for the current turn",
+        "running": "Installing",
+        "verifying": "Verifying the new version",
+        "switching": "Switching to the new version"
+      },
+      "update": {
+        "list": "Updating · {{step}}",
+        "status": "Updating · new messages wait in the queue",
+        "done": "Updated to {{version}}",
+        "failed": "Update did not finish",
+        "running": "Updating to {{version}}",
+        "runningPlain": "Updating",
+        "doneDetail": "Took {{time}} · new chats use the new version",
+        "failedDetail": "{{name}} still runs the previous version and works as before"
+      },
+      "rollback": {
+        "list": "Rolling back · {{step}}",
+        "status": "Rolling back · new messages wait in the queue",
+        "done": "Rolled back to {{version}}",
+        "failed": "Rollback did not finish",
+        "running": "Rolling back to {{version}}",
+        "runningPlain": "Rolling back",
+        "doneDetail": "Took {{time}}",
+        "failedDetail": "{{name}} still runs the current version"
+      },
+      "view": "View progress",
+      "cancel": "Cancel update",
+      "retry": "Retry",
+      "rollbackTo": "Roll back to {{version}}",
+      "rollbackPlain": "Roll back to the previous version",
+      "close": "Dismiss",
+      "leaveHint": "You can leave this page: the update keeps running and Kun tells you when it finishes or fails.",
+      "checking": "Checking {{name}}",
+      "installLeaveHint": "You can leave this page: Kun tells you when it is installed."
+    },
+    "toast": {
+      "region": "Agent background tasks",
+      "updating": "Updating {{name}}",
+      "rollingBack": "Rolling back {{name}}",
+      "updated": "{{name}} updated to {{version}}",
+      "rolledBack": "{{name}} rolled back to {{version}}",
+      "updatedDetail": "Took {{time}} · new chats use the new version",
+      "updateFailed": "{{name}} update did not finish",
+      "updateFailedDetail": "The previous version still works",
+      "installing": "Installing {{name}}",
+      "installed": "{{name}} is installed",
+      "installedDetail": "Next: choose a connection and run the check",
+      "installFailed": "{{name}} install did not finish",
+      "view": "View",
+      "connect": "Set up",
+      "hide": "Hide",
+      "close": "Close"
+    },
+    "header": {
+      "updatePill": "New version {{version}}",
+      "updateFailedPill": "Update did not finish"
+    },
+    "check": {
+      "ok": "Connection works",
+      "failed": "Check did not pass",
+      "never": "Not checked yet",
+      "passed": "{{count}} passed",
+      "issues": "{{count}} need attention",
+      "unverified": "account and quota are only confirmed by a real chat",
+      "at": "checked {{time}}",
+      "free": "Handshake only: no prompt is sent and no quota is used.",
+      "trialAsk": "Want to confirm a real chat works?"
+    },
+    "onlyMode": "{{name}} supports only this one",
+    "tagline": "Checked Agents appear in new chats and group members",
+    "addAgent": "Add Agent"
+  }
+}

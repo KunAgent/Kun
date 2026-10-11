@@ -57,6 +57,16 @@ export default {
           'diff-removed-soft': 'var(--ds-diff-removed-soft)',
           skill: 'var(--ds-skill)',
           'skill-soft': 'var(--ds-skill-soft)',
+          'status-success': 'var(--ds-status-success)',
+          'status-danger': 'var(--ds-status-danger)',
+          'status-warning': 'var(--ds-status-warning)',
+          'status-running': 'var(--ds-status-running)',
+          'status-muted': 'var(--ds-status-muted)',
+          'status-dot-success': 'var(--ds-status-dot-success)',
+          'status-dot-danger': 'var(--ds-status-dot-danger)',
+          'status-dot-warning': 'var(--ds-status-dot-warning)',
+          'status-dot-running': 'var(--ds-status-dot-running)',
+          'status-dot-muted': 'var(--ds-status-dot-muted)',
           userbubble: 'var(--ds-bubble-user)',
           userbubbleFg: 'var(--ds-bubble-user-fg)'
         }

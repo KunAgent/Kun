@@ -21,6 +21,8 @@ import type { KunUnexpectedExitInfo } from './kun-process'
 import { stopBrowserUseHost } from './browser-use/browser-use-host'
 import { stopComputerUseHost } from './computer-use/computer-use-host'
 import { stableSettingsStringify } from './runtime-settings-apply-mode'
+import { scheduleLocalGatewayCredentialReconcile } from './runtime/local-gateway-credential'
+import { forgetRecentRuntimeVerification } from './runtime/recent-runtime-verification'
 import { mainState } from './main-app-context'
 import { isAppQuitInProgress, runtimeShutdown } from './main-lifecycle'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
@@ -117,7 +119,9 @@ export const runtimeSupervisor = new KunRuntimeSupervisor<AppSettingsV1>({
     restartRuntime: (settings) => mainState.restartRuntime(settings),
     checkHealth: async (settings, timeoutMs) => {
       await kunRuntimeAdapter.resolveConnection(settings)
-      return kunRuntimeHealthMonitor.waitForHealthy(settings, timeoutMs)
+      const healthy = await kunRuntimeHealthMonitor.waitForHealthy(settings, timeoutMs)
+      if (!healthy) forgetRecentRuntimeVerification()
+      return healthy
     },
     isChildRunning: () => kunRuntimeAdapter.isChildRunning(),
     isStopped: () => runtimeShutdown.isStoppedForQuit || isAppQuitInProgress(),
@@ -227,10 +231,16 @@ export function noteRuntimeHealthy(source: string, settings?: AppSettingsV1): vo
     runtimeSupervisor.setManagedRuntimeExpected(true)
   }
   scheduleRuntimeMigrationHistoryVerification()
+  // heal the persisted "local gateway enabled without an API key"
+  // state so it cannot veto every later hot apply.
+  if (settings) {
+    scheduleLocalGatewayCredentialReconcile(runtimeSupervisor.latestOr(settings), source)
+  }
   runtimeSupervisor.noteHealthy(source)
 }
 
 export function handleUnexpectedKunExit(info: KunUnexpectedExitInfo): void {
+  forgetRecentRuntimeVerification()
   void stopBrowserUseHost()
   void stopComputerUseHost()
   runtimeSupervisor.handleUnexpectedExit(info)

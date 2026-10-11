@@ -240,7 +240,9 @@ export function parseServeOptions(
     capabilities: loadedConfig?.config.capabilities ?? DEFAULT_SERVE_OPTIONS.capabilities,
     hooks: loadedConfig?.config.hooks,
     quality: loadedConfig?.config.quality,
-    lab: loadedConfig?.config.lab
+    lab: loadedConfig?.config.lab,
+    harnesses: loadedConfig?.config.harnesses,
+    ade: loadedConfig?.config.ade
   }
   return ServeOptionsSchema.parse(merged)
 }

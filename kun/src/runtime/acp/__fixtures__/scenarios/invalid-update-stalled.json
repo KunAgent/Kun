@@ -1,0 +1,12 @@
+{
+  "sessionId": "sess-invalid-update",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": { "loadSession": false },
+    "authMethods": []
+  },
+  "turns": [{
+    "steps": [{ "update": { "sessionUpdate": "tool_call", "title": "Missing tool call identity" } }],
+    "neverRespond": true
+  }]
+}

@@ -1,103 +1,58 @@
 <p align="center">
-  <img src="src/asset/img/kun.png" width="88" alt="Kun 蓝色 K 标识">
+  <img src="src/asset/img/kun.png" width="72" alt="Kun 蓝色 K 标识">
 </p>
 
-<h1 align="center">Kun — 本地优先的 AI Agent 工作台</h1>
+<h1 align="center">Kun</h1>
 
 <p align="center">
-  让 AI 在真实项目中规划、执行、验证并交付。<br>
-  桌面 GUI 与终端 TUI 共用同一个本地运行时，任务、审批、计划和证据始终连续。
+  本地优先的 AI 工作台：写代码、做文档、和 Agent 一起推进事情。
 </p>
 
 <p align="center">
-  <a href="https://github.com/KunAgent/Kun/releases">下载桌面版</a>
+  <a href="https://github.com/KunAgent/Kun/releases">下载</a>
   &nbsp;·&nbsp;
-  <a href="https://www.kun-agent.com/docs">阅读文档</a>
+  <a href="https://www.kun-agent.com/docs">文档</a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/KunAgent/Kun">GitHub</a>
+  <a href="./release/release-v0.4.0.md">更新日志</a>
   &nbsp;·&nbsp;
   <a href="./README.en.md">English</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/KunAgent/Kun/releases"><img src="https://img.shields.io/github/v/release/KunAgent/Kun?label=release" alt="Kun 最新 GitHub Release"></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue" alt="Kun 使用 PolyForm Noncommercial 1.0.0 许可证"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="支持 macOS、Windows 和 Linux">
-  <img src="https://img.shields.io/badge/GUI%20%2B%20TUI-one%20shared%20runtime-6366f1" alt="桌面 GUI 与终端 TUI 共用一个 Kun 运行时">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20NC%201.0-blue" alt="Kun 使用 PolyForm Noncommercial 1.0.0 许可证"></a>
 </p>
 
 <p align="center">
-  <img src="./docs/assets/readme/kun-hero-gui-tui-character-demo.jpg" alt="Kun GUI 与 TUI 海报：虚构演示数据中的吉祥物、桌面 Code 界面与终端 TUI" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/hero-dark.webp">
+    <img src="./docs/assets/readme/hero-light.webp" width="100%" alt="Kun：本地优先的 AI 工作台。桌面 Code 界面、终端 TUI 与吉祥物">
+  </picture>
 </p>
 
-## Kun 是什么
+## Kun 能做什么
 
-Kun 是把 AI 从“回答问题”推进到“完成工作”的本地优先工作台。它以互补的界面组织真实工作：Code 面向软件交付，并在同一任务中提供 Design 画布；Work 面向写作、资料整理、文档分析和演示产出；Rooms 把多个 Agent 放进同一个协作空间，用私聊和群聊完成讨论、分工、执行与评审。Agent 可以读取工作区上下文、制定计划、调用工具、修改文件、运行验证，并把证据留在任务旁。
+Kun 是跑在你电脑上的桌面应用。代码、文档和 Agent 对话共用一个本地运行时；会话、记忆和设置都留在本机，模型由你自己接入。
 
-桌面 GUI 适合观察、审阅和控制过程；终端 TUI 适合专注于键盘工作。两者通过同一个本地 `kun serve` 运行时共享线程、目标、计划、审批和后台任务，而不是两套彼此割裂的会话。
+<table>
+  <tr>
+    <td><a href="docs/DESIGN_MODE.md"><img src="./docs/assets/readme/feature-code.png" width="420" alt="Code：项目、终端、Git 与 Diff 在一处，Design 画布把原型带进代码"></a></td>
+    <td><a href="docs/paper-evidence-workspace.md"><img src="./docs/assets/readme/feature-work.png" width="420" alt="Work：文档、论文和资料放在同一个工作区"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/code-agent-chats-and-rooms.md"><img src="./docs/assets/readme/feature-agents.png" width="420" alt="Agent 对话：和个人 Agent、Codex、Claude Code、OpenCode 私聊或拉群"></a></td>
+    <td><a href="docs/provider-configuration-and-gateway.md"><img src="./docs/assets/readme/feature-models.png" width="420" alt="模型与网关：接入任意兼容 Provider，本地网关复用同一份配置"></a></td>
+  </tr>
+</table>
 
-## 一眼了解
+还有：插件与技能市场（MCP / Skills）、提醒与定时任务、终端 TUI、手机远程、Kun 账号与衣橱。完整列表见 [0.4.0 更新日志](release/release-v0.4.0.md)。
 
-| 你需要 | Kun 提供 |
-| --- | --- |
-| 构建、调试与发布软件 | Code 模式提供项目上下文、文件编辑、终端、Git / Worktree、Diff、测试和审查。 |
-| 从需求走到可实现的设计 | 在同一 Code 任务中切换 Design 画布，沉淀原型、设计系统和 Design → Code 上下文。 |
-| 写作、整理与处理日常任务 | Work 模式可编辑 Markdown，预览、引用和分析 PDF / Office 文档，分析电子表格，并从大纲创建演示文稿；Office 文件保持只读。 |
-| 让多个 Agent 协作推进需求 | Rooms 提供私聊与群聊、可配置成员团队与协作模式、@ 提及与提案卡片；执行任务在独立 Git worktree 中验证、评审并交付。 |
-| 自动化重复流程 | Scheduled tasks、Loops、Hooks、MCP、Skills 与可安装扩展。 |
-| 选择模型和接入方式 | 订阅、计划、API、OpenAI / Anthropic 兼容服务与自托管模型均可通过 Provider 配置接入。 |
+## 三步开始
 
-## 当前界面
-
-以下截图均通过浏览器自动化在一次性隔离的应用配置和演示工作区中重新采集。截图内没有真实项目、账户信息、个人设置或会话记录。
-
-### Code：构建、调试与发布
-
-Code 模式把项目、分支、Code / Design 任务入口和任务输入区放在同一工作台中。它适合阅读和修改代码、运行终端与测试、检查 Diff，以及在需要时进入 Design 画布继续完成方案。
-
-<p align="center">
-  <img src="./docs/assets/readme/code-mode-overview.webp" alt="Code 模式概览：演示项目、Code 和 Design 任务入口、分支与任务输入区">
-</p>
-
-### Work：写作、整理与日常任务
-
-Work 模式用工作区文件树、任务启动器和 Work assistant 组织文档工作。可以起草 Markdown、总结或询问文档、分析电子表格、创建演示文稿，也可以用白板梳理想法。
-
-<p align="center">
-  <img src="./docs/assets/readme/work-mode-overview.webp" alt="Work 模式概览：演示文件树、文档任务启动器和 Work assistant">
-</p>
-
-## 从目标到验收
-
-```text
-澄清目标 → 形成计划 → 执行与协作 → 检查证据 → 交付或继续
-```
-
-1. **给出目标和约束。** Agent 结合项目内容补足范围、风险和验收标准。
-2. **按计划逐步执行。** 根据任务范围推进文件修改、工具调用和验证；需求变化时及时调整计划。
-3. **在可见的上下文中执行。** 计划、Todo、工具调用、文件改动、浏览器/终端结果和审批都关联到任务。
-4. **以证据完成交付。** 回看 Diff、测试、审查和产物；需求变化后可以继续、分叉、归档或重新规划。
-
-需求和计划默认可以保存在项目中，因此能进入版本控制、代码审查和后续恢复流程。
-
-## Rooms：多 Agent 协作空间
-
-Rooms 与 Code、Work 并列：创建一个房间，为成员选择 Agent 档案、模型和授权的本地仓库，然后用 IM 式的私聊或群聊推进工作。
-
-- **多种协作方式。** 默认同行讨论由成员自行判断是否发言；协调者模式由 Coordinator 分配任务；定向协作直接点名成员或默认响应者。
-- **人保留最终决策。** Agent 可以起草提案卡片——固定约定、请求执行、添加成员——但只有你能采纳或忽略。
-- **执行隔离且有证据。** 每个执行任务在独立 Git worktree 中运行，交付固定为不可变版本再交 Reviewer 评审；声明的验证检查、Diff、日志与集成面板都留在房间内。
-- **约定显式可控。** 只有你明确固定的内容才成为项目约定；约定按版本冻结进任务快照，历史可回看，可随时停用或恢复。
-
-## 本地优先，不等于永不联网
-
-会话、偏好、日志和运行时数据默认保存在本机。选择云端模型后，提示、附件和任务上下文会发送给所选 Provider；使用前请确认该服务的数据政策。工具权限、敏感操作和扩展权限会在界面中明确呈现，仍由你决定是否授权。
-
-Kun 不绑定单一模型。预设覆盖 ChatGPT / Codex、Claude、Gemini、Cursor、Ollama、DeepSeek、Kimi、GLM、Qwen、MiniMax 和 Xiaomi MiMo 等生态；登录方式、模型、地区与额度取决于当前版本和 Provider 规则。请查看 [模型 Provider 文档](docs/model-provider-presets.md) 了解配置方式。
-
-## 5 分钟开始
-
-从 [GitHub Releases](https://github.com/KunAgent/Kun/releases) 下载当前版本：
+1. **下载安装。** 从 [Releases](https://github.com/KunAgent/Kun/releases) 选择对应平台的安装包。
+2. **连接一个模型。** 首次启动的引导里填 API Key，或登录已有订阅。支持 OpenAI / Anthropic 兼容接口与本地模型，见 [Provider 文档](docs/model-provider-presets.md)。
+3. **给一件具体的事。** 打开一个项目文件夹交给 Code，或把资料拖进 Work。Agent 动手前会先请你确认。
 
 | 平台 | 安装包 | 架构 |
 | --- | --- | --- |
@@ -105,70 +60,85 @@ Kun 不绑定单一模型。预设覆盖 ChatGPT / Codex、Claude、Gemini、Cur
 | Windows | `.exe` | x64 |
 | Linux | `.AppImage` / `.deb` | x64 |
 
-启动后：
+## 看一眼
 
-1. 选择语言并配置一个模型订阅、计划、API 或自定义 Provider。
-2. 打开本地项目或创建工作区。
-3. 发送一个目标明确、范围有限、可以验证的任务。
+<table>
+  <tr>
+    <td align="center"><img src="./docs/assets/readme/code-mode-overview.webp" alt="Code 界面：项目、任务入口与输入区"><br><b>Code</b> · 项目、任务与改动</td>
+    <td align="center"><img src="./docs/assets/readme/work-mode-overview.webp" alt="Work 界面：文件树、文档与 Work 助手"><br><b>Work</b> · 资料、文档与论文</td>
+  </tr>
+</table>
 
-桌面版和 TUI 可同时连接同一个运行时。在项目目录中运行：
+## 本地优先，权限在你
 
-```bash
-kun
-```
-
-从 0.3.8 起不再单独分发 TUI 压缩包；请使用桌面应用内置的终端命令，更多配置见 [Kun TUI 文档](docs/kun-tui.md)。
+- **数据在本机。** 会话、记忆、日志存在本地；用云端模型时，只有本次请求的上下文发给你选的 Provider。
+- **动手先确认。** 工具、目录和工作台权限默认需要批准；记忆和群聊不会扩大权限。
+- **模型随你换。** DeepSeek、Kimi、GLM、Qwen、Ollama 等预设，也可自定义 Provider。
+- **GUI 与 TUI 共用。** 同一个 `kun serve` 运行时，线程、计划和审批两边都能接着用。
 
 ## 从源码运行
 
-要求：Node.js 22.19+、npm，以及至少一个可用的模型连接。
+需要 Node.js 22.19+。
 
 ```bash
-git clone https://github.com/KunAgent/Kun.git
-cd Kun
-npm ci
-npm run dev
+git clone --branch develop https://github.com/KunAgent/Kun.git
+cd Kun && npm ci && npm run dev
 ```
+
+<details>
+<summary>常用命令</summary>
 
 | 命令 | 用途 |
 | --- | --- |
 | `npm run dev` | 构建运行时并启动 Electron 开发环境 |
 | `npm run dev:tui` | 构建运行时并启动终端 TUI |
 | `npm run typecheck` | TypeScript 类型检查 |
-| `npm run lint` | 运行 ESLint 与文件大小检查 |
+| `npm run lint` | ESLint 与文件大小检查 |
 | `npm run test` | 运行测试 |
 | `npm run build` | 生产构建 |
 | `npm run dist:mac` / `dist:win` / `dist:linux` | 构建对应平台安装包 |
 
-中国大陆网络访问较慢时可使用 npm 镜像：
+中国大陆网络较慢时可加 `--registry=https://registry.npmmirror.com`。
+
+</details>
+
+<details>
+<summary>终端 TUI 的两种用法</summary>
+
+保持桌面应用运行，在项目目录连接它的运行时，与 GUI 共用线程和审批：
 
 ```bash
-npm ci --registry=https://registry.npmmirror.com
+kun --no-start
 ```
 
-## 文档与贡献
+单独使用时先退出桌面应用，再运行 `kun`；TUI 会启动自己的运行时，退出时一并停止。更多见 [Kun TUI 文档](docs/kun-tui.md)。
 
-| 主题 | 文档 |
+</details>
+
+## 文档
+
+| | |
 | --- | --- |
-| TUI、命令和运行时 | [docs/kun-tui.md](docs/kun-tui.md) / [kun/README.zh-CN.md](kun/README.zh-CN.md) |
-| Design 工作流 | [docs/DESIGN_MODE.md](docs/DESIGN_MODE.md) |
-| Rooms 多 Agent 协作 | [docs/rooms.md](docs/rooms.md) |
-| Loops、MCP 与 Skills | [docs/workflow-loop.md](docs/workflow-loop.md) / [docs/project-mcp-skills.md](docs/project-mcp-skills.md) |
-| Extension 平台 | [docs/extensions/README.md](docs/extensions/README.md) |
-| 本地开发 | [docs/DEVELOPMENT.zh-CN.md](docs/DEVELOPMENT.zh-CN.md) |
+| **上手** | [模型 Provider](docs/model-provider-presets.md) · [个人 Agent 与记忆](docs/independent-agents.md) · [终端 TUI](docs/kun-tui.md) |
+| **工作台** | [Code 中的 Agent 对话](docs/code-agent-chats-and-rooms.md) · [Design 画布](docs/DESIGN_MODE.md) · [论文与证据](docs/paper-evidence-workspace.md) |
+| **扩展** | [MCP 与 Skills](docs/project-mcp-skills.md) · [Loops](docs/workflow-loop.md) · [Extension 平台](docs/extensions/README.md) · [本地网关](docs/provider-configuration-and-gateway.md) |
+| **开发** | [本地开发](docs/DEVELOPMENT.zh-CN.md) · [运行时架构](docs/kun-architecture.md) · [贡献指南](docs/CONTRIBUTING.zh-CN.md) |
 
-欢迎贡献 bug 修复、UI/UX、运行时、Provider、扩展和文档。日常集成分支为 `develop`，PR 请以 `develop` 为目标分支；开始前阅读 [贡献指南](docs/CONTRIBUTING.zh-CN.md)，外部贡献需要接受 [CLA](./CLA.md)。
+## 参与贡献
+
+欢迎提交 bug 修复、UI、运行时、Provider 和文档改进。PR 请以 `develop` 为目标分支，开始前读一下 [贡献指南](docs/CONTRIBUTING.zh-CN.md)；外部贡献需要签署 [CLA](./CLA.md)。
+
+<a href="https://github.com/KunAgent/Kun/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=KunAgent/Kun" alt="Kun 贡献者">
+</a>
 
 ## 许可证
 
-Kun 使用 [PolyForm Noncommercial License 1.0.0](./LICENSE)，仅供学习、研究和非商业用途。商业使用、商业分发、SaaS / 托管服务、转售或集成到商业产品中，需要获得作者的单独书面授权。
+[PolyForm Noncommercial 1.0.0](./LICENSE)，仅限学习、研究和非商业用途。商业使用、托管服务或集成进商业产品，需要作者单独书面授权。
 
-## 致谢
+记忆架构参考了 [Nowledge Mem](https://mem.nowledge.co/zh/docs) 公开文档中的 Thread / Memory 分离与来源追踪理念，实现保持独立。
 
-感谢所有提交 issue、建议、代码和文档的贡献者。
-
-Kun 的记忆架构研究参考了 [Nowledge Mem](https://mem.nowledge.co/zh/docs) 公开文档中的 Thread / Memory 分离、来源追踪与混合检索理念；Kun 的实现保持独立，并遵循自身的单运行时和本地优先架构。
-
-<a href="https://github.com/KunAgent/Kun/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=KunAgent/Kun" alt="Kun contributors">
-</a>
+<p align="center">
+  <img src="src/asset/img/kun_cheer.png" width="88" alt=""><br>
+  <sub>觉得有用？点个 Star，让更多人看到 Kun。</sub>
+</p>

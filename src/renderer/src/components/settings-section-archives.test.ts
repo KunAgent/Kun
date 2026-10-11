@@ -120,9 +120,10 @@ describe('ArchivedThreadsSettingsSection', () => {
     expect(html).toContain('Move archived conversations into settings')
     expect(html).toContain('Restore')
     expect(html).toContain('Delete archived chat')
+    expect(html).toContain('aria-label="Search archived chats"')
   })
 
-  it('keeps subagents between the AI assistant and archived chats without a standalone permissions tab', () => {
+  it('orders destinations by topic with one page per topic', () => {
     const html = renderToStaticMarkup(createElement(SettingsSidebar, {
       category: 'archives',
       goBack: () => undefined,
@@ -130,22 +131,26 @@ describe('ArchivedThreadsSettingsSection', () => {
       t
     }))
 
-    const agentsIndex = html.indexOf('AI assistant')
-    const subagentsIndex = html.indexOf('Subagents')
-    const archivesIndex = html.indexOf('Archived chats')
-    const migrationIndex = html.indexOf('dataMigration')
-    const permissionsIndex = html.indexOf('permissions')
-    expect(agentsIndex).toBeGreaterThanOrEqual(0)
-    expect(subagentsIndex).toBeGreaterThan(agentsIndex)
-    expect(permissionsIndex).toBe(-1)
-    expect(archivesIndex).toBeGreaterThan(subagentsIndex)
-    expect(migrationIndex).toBeGreaterThan(archivesIndex)
+    const order = [...html.matchAll(/data-settings-category="([A-Za-z]+)"/g)].map((match) => match[1])
+    const before = (a: string, b: string): void => expect(order.indexOf(a)).toBeLessThan(order.indexOf(b))
+    expect(order).not.toContain('integrations')
+    expect(html).not.toContain('value="integrations"')
+    before('general', 'appearance')
+    before('providers', 'gateway')
+    before('agents', 'permissions')
+    before('memory', 'subagents')
+    before('subagents', 'harnesses')
+    before('code', 'write')
+    before('write', 'paper')
+    before('archives', 'dataMigration')
+    before('laboratory', 'agentRuntime')
     // The local speech provider lives under Media, not in its own entry. The
     // sidebar renders each item's labelKey, and the stub echoes unknown keys.
     expect(html.indexOf('speechToText')).toBeGreaterThanOrEqual(0)
     expect(html).not.toContain('speakTitle')
     expect(html).not.toContain('settingsNavSpeak')
-    expect(html.match(/data-cursor-spotlight-target/g)?.length).toBe(21)
+    // 31 destinations (no Windows storage, no extension page here) plus the back button.
+    expect(html.match(/data-cursor-spotlight-target/g)?.length).toBe(32)
   })
 
   it('groups compact settings navigation without pushing the footer away', () => {
@@ -156,15 +161,13 @@ describe('ArchivedThreadsSettingsSection', () => {
       t
     }))
 
-    expect(html).toContain('flex h-full min-h-0 w-[260px]')
+    expect(html).toContain('ds-settings-sidebar ds-drag flex h-full min-h-0 shrink-0 flex-col')
     expect(html).toContain('min-h-0 flex-1 overflow-y-auto overscroll-contain')
-    expect(html).toContain('ds-no-drag shrink-0 border-t border-ds-border px-5 py-3.5')
-    expect(html).toContain('group flex h-9 w-full')
+    expect(html).toContain('ds-settings-sidebar-footer ds-no-drag shrink-0')
+    expect(html).toContain('ds-settings-nav-item')
     expect(html).toContain('aria-current="page"')
-    expect(html.indexOf('Basics')).toBeLessThan(html.indexOf('Workbench'))
-    expect(html.indexOf('Workbench')).toBeLessThan(html.indexOf('Intelligence'))
-    expect(html.indexOf('Intelligence')).toBeLessThan(html.indexOf('Data'))
-    expect(html.indexOf('Data')).toBeLessThan(html.indexOf('System'))
+    const groups = [...html.matchAll(/id="settings-nav-group-([a-z]+)"/g)].map((match) => match[1])
+    expect(groups).toEqual(['general', 'models', 'assistant', 'connect', 'workspaces', 'data', 'system'])
     expect(html).toContain('Kun')
     expect(html).toContain('Settings')
   })

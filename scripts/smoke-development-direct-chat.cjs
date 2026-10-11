@@ -4,15 +4,27 @@
 // Exercise the real Electron renderer/preload/main/Manager/Runtime composition.
 // All model responses are deterministic and offline. Application settings, data,
 // discovery/control files, Git repositories and processes belong to this run.
+const { exercisePersonalAgentIm, exercisePersonalAgentImStorage } = require('./smoke-personal-agent-im.cjs')
+const { exercisePersonalAgentWorkspace } = require('./smoke-personal-agent-workspace.cjs')
 const { startDirectModel } = require('./smoke-direct-model.cjs')
 const { exerciseDirectChat } = require('./smoke-direct-controls.cjs')
+const { exerciseAgentModelControls } = require('./smoke-agent-model-controls.cjs')
 const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
 const { exerciseRoomApprovals } = require('./smoke-room-approvals.cjs')
+const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
+const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
+const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-controls.cjs')
+const { exerciseWardrobeDrops } = require('./smoke-wardrobe-drops.cjs')
+const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
+const { exerciseWorkAssistantAgent } = require('./smoke-work-assistant-agent.cjs')
+const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
+const { exerciseWhatsNew } = require('./smoke-whats-new.cjs')
+const { exerciseCodeTour } = require('./smoke-code-tour.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
 const { existsSync } = require('node:fs')
-const { mkdir, mkdtemp, readFile, readdir, rm, writeFile } = require('node:fs/promises')
+const { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } = require('node:fs/promises')
 const { createServer } = require('node:http')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
@@ -40,6 +52,14 @@ const VALIDATION_COMMAND = `node -e "console.log('rooms verification proof')"`
 
 async function main() {
   const repositoryRoot = resolve(__dirname, '..')
+  assert(!(process.argv.includes('--personal-workspace-only') && process.argv.includes('--real-model')),
+    'Personal workspace evidence must stay offline')
+  assert(!(process.argv.includes('--agent-models-only') && process.argv.includes('--real-model')),
+    'Agent model controls evidence must stay offline')
+  assert(!(process.argv.includes('--avatar-only') && process.argv.includes('--real-model')),
+    'Layered avatar evidence must stay offline')
+  assert(!(process.argv.includes('--wardrobe-only') && process.argv.includes('--real-model')),
+    'Wardrobe drop evidence must stay offline')
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 180_000)
   const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'rooms-direct-smoke'))
   for (const entry of ['out/main/index.js', 'kun/dist/cli/serve-entry.js']) {
@@ -50,7 +70,7 @@ async function main() {
   assert(existsSync(electronPathFile), 'Electron binary is not installed; install dependencies before this offline smoke')
   const electronExecutable = join(electronPackage, 'dist', (await readFile(electronPathFile, 'utf8')).trim())
   assert(existsSync(electronExecutable), 'Electron executable is missing; install dependencies before this offline smoke')
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'kun-rooms-desktop-smoke-'))
+  const temporaryRoot = await realpath(await mkdtemp(join(tmpdir(), 'kun-rooms-desktop-smoke-')))
   const home = join(temporaryRoot, 'home')
   const profile = join(home, '.kun', 'data')
   const userData = join(temporaryRoot, 'electron-user-data')
@@ -64,9 +84,13 @@ async function main() {
   let rendererOutput = '', electronOutput = ''
   const pageErrors = []
   const screenshots = []
-  const capture = async (name) => {
+  const recordDiagnostic = async (name, value) => {
+    assert(/^[a-z0-9-]+$/.test(name), 'Diagnostic name must stay within the evidence directory')
+    await writeFile(join(evidenceRoot, name + '.json'), JSON.stringify(value, null, 2) + '\n')
+  }
+  const capture = async (name, surface = page) => {
     const path = join(evidenceRoot, `${name}.png`)
-    await page.screenshot({ path })
+    await surface.screenshot({ path })
     screenshots.push(path)
   }
   try {
@@ -79,6 +103,10 @@ async function main() {
       home, appData, localAppData, temporaryDirectory
     }), { rendererPort, temporaryRoot })
     isolatedEnvironment.NODE_ENV = 'development'
+    // The wardrobe smoke needs a full shelf to exercise a real ten-pull.
+    if (process.argv.includes('--wardrobe-only')) isolatedEnvironment.KUN_WARDROBE_SEED_BOTTLES = '11'
+    // Development builds fake an upgrade from this version to show the post-update dialog.
+    if (process.argv.includes('--whats-new-only')) isolatedEnvironment.KUN_RELEASE_NOTICE_FROM = argumentValue('--whats-new-from') ?? '0.3.8'
     // Exclude ambient Git hooks, signing and global config from the disposable repository.
     const gitConfig = join(temporaryRoot, 'git-config')
     await writeFile(gitConfig, '')
@@ -93,10 +121,17 @@ async function main() {
     const baselineSha = (await git(['rev-parse', 'HEAD'])).stdout.trim()
 
     modelFixture = await startDirectModel({ real: process.argv.includes('--real-model') })
-    const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, profile), locale: 'en', theme: 'light', initialSetupCompleted: true }
+    const theme = argumentValue('--theme') === 'dark' ? 'dark' : 'light'
+    const locale = argumentValue('--locale') === 'zh' ? 'zh' : 'en'
+    const onboarding = process.argv.includes('--onboarding-only')
+    const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, profile), locale, theme, initialSetupCompleted: !onboarding }
     settings.agents.kun.baseUrl = modelFixture.baseUrl
     settings.agents.kun.apiKey = 'rooms-desktop-offline-fixture'
     settings.agents.kun.model = modelFixture.snapshot().model
+    if (process.argv.includes('--personal-workspace-only')) {
+      // Existing exact-origin local-development policy; public SSRF rules stay unchanged.
+      settings.agents.kun.browserUse = { ...settings.agents.kun.browserUse, enabled: true, mode: 'local-development' }
+    }
     const allocatedPorts = new Set([runtimePort, rendererPort, new URL(modelFixture.baseUrl).port].map(Number))
     const nextPort = async () => {
       let port
@@ -139,13 +174,40 @@ async function main() {
     page.setDefaultTimeout(30_000)
     page.on('pageerror', (error) => pageErrors.push(error.message))
     page.on('console', (message) => { if (message.type() === 'error' && message.text().includes('same key')) pageErrors.push(message.text()) })
-    await page.waitForLoadState('domcontentloaded')
+    // A cold isolated Vite cache can take longer than the per-action timeout on a busy host.
+    await page.waitForLoadState('domcontentloaded', { timeout: timeoutMs })
     await resize(electronApplication, 1360, 900)
-    await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-    const direct = await (process.argv.includes('--approvals') ? exerciseRoomApprovals : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat)({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+    await page.locator(onboarding ? '[data-onboarding-step]' : '[data-workspace-mode-trigger]').first().waitFor({ timeout: timeoutMs })
+    const exercise = onboarding ? exerciseOnboarding
+      : process.argv.includes('--whats-new-only') ? exerciseWhatsNew
+      : process.argv.includes('--code-tour-only') ? exerciseCodeTour
+      : process.argv.includes('--agent-models-only') ? exerciseAgentModelControls
+      : process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
+      : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
+      : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
+      : process.argv.includes('--avatar-only') ? exerciseLayeredAvatarControls
+      : process.argv.includes('--wardrobe-only') ? exerciseWardrobeDrops
+      : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
+      : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
+      : process.argv.includes('--work-only') ? exerciseWorkLayout
+      : process.argv.includes('--work-assistant-only') ? exerciseWorkAssistantAgent
+      : process.argv.includes('--approvals') ? exerciseRoomApprovals
+        : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
+    const exercised = exercise({ page, request: runtimeRequest, poll, capture, recordDiagnostic, fixture: modelFixture,
       application: electronApplication, workspaceRoot, real: process.argv.includes('--real-model'),
-      resize: (width, height) => resize(electronApplication, width, height), switchRooms: () => switchMode(page, 'rooms'),
+      resize: (width, height) => resize(electronApplication, width, height),
+      switchCode: () => switchMode(page, 'chat'),
+      openPrivate: (name) => openAgentPrivateChat({ page, name, switchCode: () => switchMode(page, 'chat') }),
+      openConversation: (roomId, privateName) => openCodeConversation({ page, poll, roomId, privateName,
+        switchCode: () => switchMode(page, 'chat') }),
       approve: (ref) => installNativeConsentFixture(electronApplication, ref) })
+    const direct = await (process.argv.includes('--agent-models-only')
+      ? withTimeout(exercised, 180_000, 'exercising the offline Agent model controls')
+      : process.argv.includes('--personal-workspace-only')
+      ? withTimeout(exercised, 300_000, 'exercising the offline personal workspace')
+      : process.argv.includes('--personal-im-storage-only')
+      ? withTimeout(exercised, 15_000, 'probing actual OS credential storage; verification blocked')
+      : process.argv.includes('--personal-im-only') ? withTimeout(exercised, 180_000, 'exercising native IM cards') : exercised)
     assert.deepEqual(pageErrors, [], 'Renderer uncaught exceptions')
     result = { ok: true, direct, model: modelFixture.snapshot(), pageErrors, screenshots }
     await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
@@ -164,10 +226,10 @@ async function main() {
     }
     let closing
     if (electronApplication) {
-      await electronApplication.evaluate(({ dialog }) => {
+      await withTimeout(electronApplication.evaluate(({ dialog }) => {
         const fixture = globalThis.__roomsSmokeNativeConsent
         if (fixture) dialog.showMessageBox = fixture.original
-      }).catch(() => undefined)
+      }), 3000, 'restoring native consent fixture').catch(() => undefined)
       closing = electronApplication.close()
       await withTimeout(closing, 3000, 'closing isolated Electron').catch(() => undefined)
     }

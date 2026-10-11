@@ -1,0 +1,18 @@
+{
+  "sessionId": "sess-cancel-ignore",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": { "loadSession": false, "promptCapabilities": {} },
+    "authMethods": []
+  },
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "stubborn" } } },
+        { "sleep": 30000 }
+      ],
+      "neverRespond": true
+    }
+  ],
+  "onCancel": { "settle": "ignore" }
+}

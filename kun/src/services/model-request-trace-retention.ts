@@ -1,4 +1,4 @@
-import { readdir, readFile, rm, stat } from 'node:fs/promises'
+import { open, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { applyPosixMode } from '../security/posix-permissions.js'
@@ -33,9 +33,21 @@ export class ModelRequestTraceRetention {
 
   constructor(
     private readonly root: string,
-    options: ModelRequestTraceRetentionOptions = {}
+    options: ModelRequestTraceRetentionOptions = {},
+    /** Older trace directories that readers still consult and share the budget. */
+    private readonly extraRoots: readonly string[] = []
   ) {
     this.options = normalizeOptions(options)
+  }
+
+  /** One full maintenance pass, e.g. shortly after startup before any append. */
+  sweepNow(): Promise<boolean> {
+    return this.sweep(this.options.now())
+  }
+
+  private async listAllTraceFiles(): Promise<TraceFile[]> {
+    const lists = await Promise.all([this.root, ...this.extraRoots].map((root) => listTraceFiles(root)))
+    return lists.flat()
   }
 
   async afterAppend(path: string): Promise<boolean> {
@@ -61,7 +73,7 @@ export class ModelRequestTraceRetention {
   private async sweep(now: number): Promise<boolean> {
     let changed = false
     const cutoff = now - this.options.maxAgeMs
-    let files = await listTraceFiles(this.root)
+    let files = await this.listAllTraceFiles()
     for (const file of files) {
       changed = await trimTraceFile(
         file.path,
@@ -70,7 +82,7 @@ export class ModelRequestTraceRetention {
       ) || changed
     }
 
-    files = await listTraceFiles(this.root)
+    files = await this.listAllTraceFiles()
     const total = files.reduce((sum, file) => sum + file.size, 0)
     if (total <= this.options.maxTotalBytes || files.length === 0) return changed
 
@@ -85,7 +97,7 @@ export class ModelRequestTraceRetention {
       ) || changed
     }
 
-    files = await listTraceFiles(this.root)
+    files = await this.listAllTraceFiles()
     let remaining = files.reduce((sum, file) => sum + file.size, 0)
     for (const file of files.sort((left, right) => left.mtimeMs - right.mtimeMs)) {
       if (remaining <= this.options.maxTotalBytes) break
@@ -122,34 +134,63 @@ async function listTraceFiles(root: string): Promise<TraceFile[]> {
   return files.filter((file): file is TraceFile => Boolean(file))
 }
 
+/**
+ * Bounds one trace file without loading it whole. Traces from long-lived
+ * threads reached hundreds of MB; trimming reads only the newest `maxBytes`
+ * tail, and a file whose last write predates the age cutoff is removed
+ * without being read at all.
+ */
 async function trimTraceFile(path: string, maxBytes: number, cutoffMs: number): Promise<boolean> {
-  let contents: string
+  let info: Awaited<ReturnType<typeof stat>>
   try {
-    contents = await readFile(path, 'utf8')
+    info = await stat(path)
   } catch (error) {
     if (isMissingFileError(error)) return false
     throw error
   }
-  const lines = contents.split('\n').filter((line) => line.trim().length > 0)
+  if (info.mtimeMs < cutoffMs) {
+    await rm(path, { force: true })
+    return true
+  }
+  if (info.size <= maxBytes) return false
+  const tail = await readTail(path, info.size, maxBytes)
+  const lines = tail.split('\n').filter((line) => line.trim().length > 0)
   const retained: string[] = []
   let retainedBytes = 0
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const line = lines[index]
     if (!isRecentTraceLine(line, cutoffMs)) continue
     const lineBytes = Buffer.byteLength(`${line}\n`, 'utf8')
-    if (retainedBytes + lineBytes > maxBytes) continue
+    if (retainedBytes + lineBytes > maxBytes) break
     retained.unshift(line)
     retainedBytes += lineBytes
   }
-  const next = retained.length ? `${retained.join('\n')}\n` : ''
-  if (next === contents) return false
-  if (!next) {
+  if (!retained.length) {
     await rm(path, { force: true })
     return true
   }
-  await atomicWriteFile(path, next)
+  await atomicWriteFile(path, `${retained.join('\n')}\n`)
   await applyPosixMode(path, 0o600)
   return true
+}
+
+/** Newest `maxBytes` of the file, starting at a line boundary. */
+async function readTail(path: string, size: number, maxBytes: number): Promise<string> {
+  const start = Math.max(0, size - maxBytes)
+  const handle = await open(path, 'r')
+  try {
+    // One extra byte tells whether the tail begins on a line boundary.
+    const lead = start > 0 ? 1 : 0
+    const buffer = Buffer.alloc(size - start + lead)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, start - lead)
+    const text = buffer.subarray(0, bytesRead).toString('utf8')
+    if (!lead) return text
+    if (text.startsWith('\n')) return text.slice(1)
+    const firstBreak = text.indexOf('\n')
+    return firstBreak < 0 ? '' : text.slice(firstBreak + 1)
+  } finally {
+    await handle.close()
+  }
 }
 
 function isRecentTraceLine(line: string, cutoffMs: number): boolean {

@@ -1,0 +1,33 @@
+{
+  "agentIntegrations": {
+    "search": "Search Agents",
+    "clearSearch": "Clear search",
+    "fromExtension": "From extension {{name}}",
+    "loadingCatalog": "Checking agents and applications…",
+    "catalogError": "Could not refresh the agent catalog. You can retry.",
+    "noMatches": "No agents or applications match this search.",
+    "emptyCatalog": "No integrations are available yet.",
+    "terminalExplanation": "Enable this agent to launch its interactive CLI in Kun's terminal. Its own interface manages the conversation.",
+    "terminalModelManaged": "Select the native model in the CLI itself. Kun does not advertise a native model catalog for this terminal integration.",
+    "askKun": "Ask Kun to fix this",
+    "askKunHint": "Opens a chat with Kun, prefilled with the error and log. Review it, then send.",
+    "askKunFailed": "Couldn't open the chat with Kun: {{error}}",
+    "askKunUnavailable": "Kun's private chat isn't available. Restore or start it from Conversations first.",
+    "askKunOperation": {
+      "install": "install",
+      "adapter": "install the adapter for",
+      "update": "update",
+      "readiness": "check or connect to"
+    },
+    "askKunPrompt": {
+      "intro": "Kun failed to {{operation}} the third-party Agent \"{{agent}}\". Please diagnose and fix it.",
+      "agent": "Agent: {{agent}} ({{id}})",
+      "command": "Command run: `{{command}}`",
+      "current": "Currently using: {{current}}",
+      "target": "Target version: {{version}}",
+      "error": "Error: {{error}}",
+      "log": "End of the log:",
+      "instructions": "Work out the cause from the log first and tell me which commands you plan to run. Ask before deleting or overwriting files or using sudo. After the fix, verify the command runs, and remind me to go back to Settings → AI assistant → Agent connections and click Retry detection."
+    }
+  }
+}

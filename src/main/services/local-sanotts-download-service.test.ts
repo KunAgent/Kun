@@ -5,6 +5,21 @@ import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Tiny deterministic manifests exercise real on-disk verification without model downloads.
+const fixture = vi.hoisted(() => ({
+  sizeBytes: 8,
+  sha256: '04abc8821a06e5a30937967d11ad10221cb5ac3b5273e434f1284ee87129a061'
+}))
+vi.mock('../../shared/local-sanotts', async (original) => {
+  const actual = await original<typeof import('../../shared/local-sanotts')>()
+  return { ...actual, LOCAL_SANOTTS_RUNTIME_FILES: actual.LOCAL_SANOTTS_RUNTIME_FILES.map(file => ({ ...file, ...fixture })) }
+})
+vi.mock('../../shared/local-sanotts-voices', async (original) => {
+  const actual = await original<typeof import('../../shared/local-sanotts-voices')>()
+  const voices = actual.LOCAL_SANOTTS_VOICES.map(voice => ({ ...voice, files: voice.files.map(file => ({ ...file, ...fixture })) }))
+  return { ...actual, LOCAL_SANOTTS_VOICES: voices, localSanottsVoiceById: (id: unknown) => voices.find(voice => voice.id === id) ?? voices[0] }
+})
+
 const assetDownload = vi.hoisted(() => ({
   impl: null as null | ((request: { url: string; targetPath: string; metadata?: { path: string; content: Record<string, unknown> } }) => Promise<void>)
 }))
@@ -43,6 +58,7 @@ import {
   getLocalSanottsRuntimeStatus,
   getLocalSanottsVoiceStatus,
   listDownloadedLocalSanottsVoices,
+  releaseLocalSanottsDownloads,
   setLocalSanottsProgressEmitter
 } from './local-sanotts-download-service'
 import { localSanottsRuntimeFilePath, localSanottsVoiceFilePath } from './local-sanotts-assets'
@@ -92,13 +108,13 @@ describe('local-sanotts-download-service', () => {
 
   it('builds mirror URLs for every download source', () => {
     const origins = LOCAL_SANOTTS_DOWNLOAD_SOURCES.map((source) =>
-      new URL(localSanottsRuntimeFileUrl('snt_g2p.wasm', source.id)).origin
+      new URL(localSanottsVoiceFileUrl('amy', 'meta.json', source.id)).origin
     )
 
     expect(origins).toEqual([
       'https://huggingface.co',
       'https://hf-mirror.com',
-      'https://ampixa.github.io'
+      'https://raw.githubusercontent.com'
     ])
     expect(localSanottsVoiceFileUrl('amy', 'meta.json', 'huggingface')).toContain('/voices/amy/meta.json')
   })
@@ -117,7 +133,7 @@ describe('local-sanotts-download-service', () => {
 
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.message).toContain('checksum mismatch')
-    expect((await getLocalSanottsRuntimeStatus()).state).toBe('not_downloaded')
+    expect((await getLocalSanottsRuntimeStatus()).state).toBe('error')
   })
 
   it('rejects a payload whose length does not match', async () => {
@@ -143,7 +159,7 @@ describe('local-sanotts-download-service', () => {
     }
   })
 
-  it('treats an on-disk voice as ready and skips the network', async () => {
+  it('treats a verified on-disk voice as ready and skips the network', async () => {
     const voice = LOCAL_SANOTTS_VOICES[0]
     globalThis.fetch = vi.fn(async () => bodyResponse(Buffer.alloc(8, 1))) as unknown as typeof fetch
     for (const file of voice.files) {
@@ -183,6 +199,24 @@ describe('local-sanotts-download-service', () => {
     expect(after.voiceId).toBe(voice.id)
   })
 
+  it('does not accept existing empty, truncated, or same-size corrupt assets as ready', async () => {
+    const voice = LOCAL_SANOTTS_VOICES[0]
+    for (const payload of [Buffer.alloc(0), Buffer.alloc(4, 1), Buffer.alloc(8, 2)]) {
+      for (const file of LOCAL_SANOTTS_RUNTIME_FILES) {
+        const path = localSanottsRuntimeFilePath(file.fileName)
+        await mkdir(dirname(path), { recursive: true })
+        await writeFile(path, payload)
+      }
+      for (const file of voice.files) {
+        const path = localSanottsVoiceFilePath(voice.id, file.fileName)
+        await mkdir(dirname(path), { recursive: true })
+        await writeFile(path, payload)
+      }
+      expect((await getLocalSanottsReadiness(voice.id)).ready).toBe(false)
+      expect(await listDownloadedLocalSanottsVoices()).toEqual([])
+    }
+  })
+
   it('deletes a downloaded runtime', async () => {
     const path = localSanottsRuntimeFilePath('snt_g2p.wasm')
     await mkdir(dirname(path), { recursive: true })
@@ -198,7 +232,7 @@ describe('local-sanotts-download-service', () => {
     expect((await getLocalSanottsRuntimeStatus()).state).toBe('not_downloaded')
   })
 
-  it('falls through to the next source after a 404 and skips later ones', async () => {
+  it('falls through to the next voice source after a 404 and skips later ones', async () => {
     const seen: string[] = []
     assetDownload.impl = async (request) => {
       seen.push(request.url)
@@ -212,13 +246,12 @@ describe('local-sanotts-download-service', () => {
       }
     }
 
-    const result = await downloadLocalSanottsRuntime('huggingface')
+    const result = await downloadLocalSanottsVoice('amy', 'huggingface')
 
-    expect(result.ok).toBe(true)
-    if (result.ok) expect(result.status.state).toBe('ready')
+    expect(result.state).toBe('ready')
     expect(seen.some((url) => url.includes('huggingface.co'))).toBe(true)
     expect(seen.some((url) => url.includes('hf-mirror.com'))).toBe(true)
-    expect(seen.some((url) => url.includes('ampixa.github.io'))).toBe(false)
+    expect(seen.some((url) => url.includes('raw.githubusercontent.com'))).toBe(false)
   })
 
   it('reports every source when they all fail', async () => {
@@ -228,13 +261,13 @@ describe('local-sanotts-download-service', () => {
       body: null
     })) as unknown as typeof fetch
 
-    const result = await downloadLocalSanottsRuntime('huggingface')
+    const result = await downloadLocalSanottsVoice('amy', 'huggingface')
 
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
+    expect(result.state).toBe('error')
+    if (result.state === 'error') {
       expect(result.message).toContain('Hugging Face:')
       expect(result.message).toContain('HF-Mirror:')
-      expect(result.message).toContain('GitHub Pages:')
+      expect(result.message).toContain('GitHub (pinned):')
       expect(result.message).toContain('HTTP 404')
     }
   })
@@ -262,10 +295,21 @@ describe('local-sanotts-download-service', () => {
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.status.state).toBe('not_downloaded')
     expect(seen).toHaveLength(1)
-    expect(seen[0]).toContain('huggingface.co')
+    expect(seen[0]).toContain('raw.githubusercontent.com')
   })
 
-  it('stops after the preferred source succeeds', async () => {
+  it('does not persist an error when playback is stopped before a transfer starts', async () => {
+    const runtime = downloadLocalSanottsRuntime('huggingface', 'early-runtime-stop')
+    releaseLocalSanottsDownloads('early-runtime-stop')
+    expect((await runtime).ok).toBe(true)
+    expect((await getLocalSanottsRuntimeStatus()).state).toBe('not_downloaded')
+    const voice = downloadLocalSanottsVoice('amy', 'huggingface', 'early-voice-stop')
+    releaseLocalSanottsDownloads('early-voice-stop')
+    expect((await voice).state).toBe('not_downloaded')
+    expect((await getLocalSanottsVoiceStatus('amy')).state).toBe('not_downloaded')
+  })
+
+  it('uses the fixed official runtime source even when a voice mirror is preferred', async () => {
     const seen: string[] = []
     assetDownload.impl = async (request) => {
       seen.push(request.url)
@@ -281,6 +325,6 @@ describe('local-sanotts-download-service', () => {
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.status.state).toBe('ready')
     expect(seen.length).toBe(LOCAL_SANOTTS_RUNTIME_FILES.length)
-    expect(seen.every((url) => url.includes('huggingface.co'))).toBe(true)
+    expect(seen.every((url) => url.includes('raw.githubusercontent.com'))).toBe(true)
   })
 })

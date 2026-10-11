@@ -1,0 +1,18 @@
+{
+  "sessionId": "sess-malformed",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": { "loadSession": false, "promptCapabilities": {} },
+    "authMethods": []
+  },
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "before garbage" } } },
+        { "raw": "{\"this is not valid json\n" },
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "after garbage" } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

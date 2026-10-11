@@ -57,6 +57,9 @@ export type ThreadUsageRecord = {
   model?: string
   providerId?: string
   relation?: ThreadRelation
+  /** Record origin; absent records are native loop usage. */
+  source?: 'native' | 'harness-gateway' | 'harness-reported' | 'public-gateway' | 'utility'
+  harnessId?: string
   completedAt: string
   usage: UsageSnapshot
 }
@@ -74,6 +77,7 @@ export type ThreadUsageAccumulator = ThreadUsageBucket & {
 
 export type ModelUsageAccumulator = ModelUsageBucket & {
   threadIds: Set<string>
+  harnessIds: Set<string>
   hasCacheTelemetry: boolean
 }
 

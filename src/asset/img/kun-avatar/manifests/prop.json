@@ -1,0 +1,209 @@
+{
+  "prop/magnifier": {
+    "png": "prop/magnifier.png",
+    "webp": {
+      "128": "128/prop/magnifier.webp",
+      "256": "256/prop/magnifier.webp",
+      "512": "512/prop/magnifier.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "v2-material-epic-tools.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 512,
+        "top": 0,
+        "width": 512,
+        "height": 512
+      }
+    }
+  },
+  "prop/paintbrush": {
+    "png": "prop/paintbrush.png",
+    "webp": {
+      "128": "128/prop/paintbrush.webp",
+      "256": "256/prop/paintbrush.webp",
+      "512": "512/prop/paintbrush.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "props.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 418,
+        "top": 0,
+        "width": 418,
+        "height": 451
+      }
+    }
+  },
+  "prop/flask": {
+    "png": "prop/flask.png",
+    "webp": {
+      "128": "128/prop/flask.webp",
+      "256": "256/prop/flask.webp",
+      "512": "512/prop/flask.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "v2-material-epic-tools.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 1024,
+        "top": 0,
+        "width": 512,
+        "height": 512
+      }
+    }
+  },
+  "prop/quill": {
+    "png": "prop/quill.png",
+    "webp": {
+      "128": "128/prop/quill.webp",
+      "256": "256/prop/quill.webp",
+      "512": "512/prop/quill.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "v2-outline-quill-refined.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 60,
+        "top": 76,
+        "width": 934,
+        "height": 1364
+      }
+    }
+  },
+  "prop/notebook": {
+    "png": "prop/notebook.png",
+    "webp": {
+      "128": "128/prop/notebook.webp",
+      "256": "256/prop/notebook.webp",
+      "512": "512/prop/notebook.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "props.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 418,
+        "top": 451,
+        "width": 418,
+        "height": 388
+      }
+    }
+  },
+  "prop/wrench": {
+    "png": "prop/wrench.png",
+    "webp": {
+      "128": "128/prop/wrench.webp",
+      "256": "256/prop/wrench.webp",
+      "512": "512/prop/wrench.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "props.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 836,
+        "top": 451,
+        "width": 418,
+        "height": 388
+      }
+    }
+  },
+  "prop/book": {
+    "png": "prop/book.png",
+    "webp": {
+      "128": "128/prop/book.webp",
+      "256": "256/prop/book.webp",
+      "512": "512/prop/book.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "props.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 839,
+        "width": 418,
+        "height": 415
+      }
+    }
+  },
+  "prop/leaf": {
+    "png": "prop/leaf.png",
+    "webp": {
+      "128": "128/prop/leaf.webp",
+      "256": "256/prop/leaf.webp",
+      "512": "512/prop/leaf.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "props.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 418,
+        "top": 839,
+        "width": 418,
+        "height": 415
+      }
+    }
+  },
+  "prop/camera": {
+    "png": "prop/camera.png",
+    "webp": {
+      "128": "128/prop/camera.webp",
+      "256": "256/prop/camera.webp",
+      "512": "512/prop/camera.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "props.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 836,
+        "top": 839,
+        "width": 418,
+        "height": 415
+      }
+    }
+  }
+}

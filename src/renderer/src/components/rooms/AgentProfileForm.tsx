@@ -1,12 +1,15 @@
 import { useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AgentIdentity } from '@shared/rooms-api'
+import type { AgentIdentity, RoomAvatarReference } from '@shared/rooms-api'
 import { RoomAvatarPicker } from './RoomAvatarPicker'
 import { AgentPicker } from './AgentPicker'
 import { agentMember, agentPath, useAgentResource } from './agent-client'
 import { roomRequestId, roomsRequest, type RoomPresetCatalog } from './rooms-client'
 import './agents.css'
 
+const DEFAULT_WORKBENCH: NonNullable<AgentIdentity['workbench']> = { code: 'confirm', work: 'read', maxActiveTasks: 3 }
+const CODE_LEVELS = ['off', 'confirm', 'auto'] as const
+const WORK_LEVELS = ['off', 'read', 'confirm', 'auto'] as const
 const lines = (text: string) => [...new Set(text.split(/[,\n]/).map((item) => item.trim()).filter(Boolean))]
 export function AgentProfileForm({ agent: initialAgent, draft, active = true, onSaved }: { agent: AgentIdentity | null; draft?: { name?: string; title?: string; instructions?: string }; active?: boolean; onSaved: (agent: AgentIdentity) => void }) {
   const { t } = useTranslation('common')
@@ -30,14 +33,26 @@ export function AgentProfileForm({ agent: initialAgent, draft, active = true, on
   const [skillsEnabled, setSkillsEnabled] = useState(agent?.capabilityOverrides?.skillsEnabled !== false)
   const [reviewerId, setReviewerId] = useState(agent?.reviewerAgentId), [reviewerName, setReviewerName] = useState('')
   const [memory, setMemory] = useState(agent?.memory ?? { readEnabled: true, captureEnabled: true })
+  const [workbench, setWorkbench] = useState({ ...DEFAULT_WORKBENCH, ...agent?.workbench })
   const [advancedDirty, setAdvancedDirty] = useState(false)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const pending = useRef<{ hash: string; id: string } | null>(null)
   const preview = agentMember({ ...(agent ?? {}), id: agent?.id ?? 'new-agent', name, avatar, defaultRole: role, presetId } as AgentIdentity)
+  // An existing Agent's new look is saved the moment the studio confirms it; every conversation icon follows at once.
+  const applyAvatar = async (next: RoomAvatarReference | undefined) => {
+    setAvatar(next)
+    if (!agent || busy) return
+    setBusy(true); setError('')
+    try {
+      const result = await roomsRequest<{ agent: AgentIdentity }>(agentPath(agent.id), 'PATCH',
+        { avatar: next ?? null, expectedRevision: agent.revision, clientRequestId: roomRequestId() })
+      setAgent(result.agent)
+    } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
+  }
   const save = async () => {
     if (busy) return
     const advanced = { ...templateRef, defaultRole: role, presetId,
-      allowedRepositoryRoots: lines(roots).length ? lines(roots) : null, reviewerAgentId: reviewerId ?? null, memory,
+      allowedRepositoryRoots: lines(roots).length ? lines(roots) : null, reviewerAgentId: reviewerId ?? null, memory, workbench,
       capabilityOverrides: { blockedTools: lines(tools), allowedTools: lines(allowedTools).length ? lines(allowedTools) : agent?.capabilityOverrides?.allowedTools?.length === 0 ? [] : undefined,
         blockedMcpServers: lines(mcp), blockedSkills: lines(skills), skillsEnabled } }
     const fields = { name, title, instructions, avatar: avatar ?? null, ...(!agent || advancedDirty ? advanced : {}) }
@@ -65,7 +80,7 @@ export function AgentProfileForm({ agent: initialAgent, draft, active = true, on
           <option key={template.templateId} value={template.templateId}>{template.name}</option>)}</select></label>
       </section> : null}
       <section className="agent-profile-section agent-profile-identity">
-        <RoomAvatarPicker id={preview.id} label={preview.displayName} avatar={avatar} onChange={setAvatar} />
+        <RoomAvatarPicker id={preview.id} label={preview.displayName} avatar={avatar} onChange={(next) => void applyAvatar(next)} />
         <label className="agent-profile-field">{t('agentsName')}<input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="agent-profile-field">{t('agentsTitle')}<input maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
       </section>
@@ -92,6 +107,17 @@ export function AgentProfileForm({ agent: initialAgent, draft, active = true, on
           <div className="agent-profile-field">
             <AgentPicker label={t('agentsChooseReviewer')} excluded={agent ? [agent.id] : []} onSelect={(value) => { setAdvancedDirty(true); setReviewerId(value.id); setReviewerName(value.name) }} />
             {reviewerId ? <div className="agent-profile-reviewer"><span>{reviewerName || t('agentsReviewerConfigured')}</span> <button type="button" onClick={() => { setAdvancedDirty(true); setReviewerId(undefined); setReviewerName('') }}>{t('roomsCancel')}</button></div> : null}
+          </div>
+          <div className="agent-profile-workbench" role="group" aria-label={t('roomsWorkbenchPolicyTitle')}>
+            <strong className="agent-profile-label">{t('roomsWorkbenchPolicyTitle')}</strong>
+            <label className="agent-profile-field">{t('roomsWorkbenchPolicyCode')}<select value={workbench.code} onChange={(e) => setWorkbench({ ...workbench, code: e.target.value as typeof workbench.code })}>
+              {CODE_LEVELS.map((level) => <option key={level} value={level}>{t('roomsWorkbenchPolicy_' + level)}</option>)}</select></label>
+            <label className="agent-profile-field">{t('roomsWorkbenchPolicyWork')}<select value={workbench.work} onChange={(e) => setWorkbench({ ...workbench, work: e.target.value as typeof workbench.work })}>
+              {WORK_LEVELS.map((level) => <option key={level} value={level}>{t('roomsWorkbenchPolicy_' + level)}</option>)}</select></label>
+            <label className="agent-profile-field">{t('roomsWorkbenchPolicyMax')}<input type="number" min={1} max={5} value={workbench.maxActiveTasks}
+              onChange={(e) => setWorkbench({ ...workbench, maxActiveTasks: Math.min(5, Math.max(1, Math.round(Number(e.target.value)) || 1)) })} /></label>
+            <span className="agent-profile-hint">{t('roomsWorkbenchPolicyHint')}</span>
+            <span className="agent-profile-hint">{t('roomsWorkbenchDispatchPolicyHint')}</span>
           </div>
           <details className="agent-profile-limits"><summary>{t('agentsLimits')}</summary>
             <div className="agent-profile-limits-body">

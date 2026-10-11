@@ -1,0 +1,195 @@
+/*
+ * Composer toolbar layout (Code, Work, side composers). The toolbar is one row
+ * at every width. composer-toolbar-fit.ts measures it and sets data-fit-1..7
+ * (cumulative) on .ds-composer-toolbar when the controls do not fit; each
+ * level gives up a little more text, never an enabled action:
+ *   1 secondary chrome: context gauge, sub-agent picker, "· Work"
+ *   2 Agent name (its icon and chevron stay)
+ *   3 model name (its source icon, level and chevron stay)
+ *   4 reasoning level
+ *   5 chevrons, tighter gaps
+ *   6 compact action buttons
+ *   7 below ~250px nothing else fits: wrap rather than clip an action
+ * Anything hidden stays in the control's tooltip and accessible name.
+ * Container queries use the composer's own width (layout px), not the window's.
+ */
+.ds-floating-composer {
+  container-type: inline-size;
+}
+
+.ds-composer-toolbar {
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.ds-composer-toolbar > .ds-composer-toolbar-start {
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.ds-composer-toolbar-start::-webkit-scrollbar {
+  display: none;
+}
+
+.ds-composer-toolbar > .ds-composer-toolbar-actions {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ds-composer-model-picker {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.ds-composer-toolbar-actions .ds-composer-model-picker {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Only a model with no source icon needs this stand-in once its name is hidden. */
+.ds-composer-model-trigger-glyph {
+  display: none;
+  flex: none;
+}
+
+/* In a cramped pill the provider gives way before the model name. */
+.ds-composer-model-trigger-provider {
+  flex: 0 4 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-git-branch-picker {
+  max-width: 100%;
+}
+
+@container (max-width: 700px) {
+  .ds-composer-mode-badge {
+    gap: 0;
+    padding-inline: 0;
+    width: 2rem;
+  }
+
+  .ds-composer-mode-label,
+  .ds-composer-permission-label,
+  .ds-composer-permission-chevron {
+    display: none;
+  }
+
+  .ds-floating-composer
+    .ds-composer-toolbar
+    .ds-composer-permission-control
+    .ds-composer-permission-button {
+    border-radius: 9999px;
+    gap: 0;
+    height: 2rem;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0;
+    width: 2rem;
+  }
+}
+
+@container (max-width: 640px) {
+  .ds-composer-model-trigger-provider,
+  .ds-composer-intent-detail {
+    display: none;
+  }
+
+  .ds-git-branch-picker {
+    flex: 1 1 180px;
+  }
+}
+
+@container (max-width: 380px) {
+  .ds-composer-intent-label {
+    display: none;
+  }
+
+  .ds-composer-task-surface-control > button {
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+  }
+
+  .ds-composer-toolbar .ds-composer-menu-button {
+    height: 2rem;
+    width: 2rem;
+  }
+}
+
+/*
+ * Level 1: secondary chrome. The native Agent picker (OpenCode primary agents)
+ * is not chrome: when a plugin replaces OpenCode's build/plan, a picked Agent is
+ * the only way to start a turn, so it stays in cramped composers such as Work.
+ */
+.ds-composer-toolbar[data-fit-1] .ds-composer-context-control,
+.ds-composer-toolbar[data-fit-1] .ds-composer-agent-picker:not([data-native-agent-picker]),
+.ds-composer-toolbar[data-fit-1] .ds-composer-agent-surface {
+  display: none;
+}
+
+/* Level 2: the Agent keeps its icon. */
+.ds-composer-toolbar[data-fit-2] .ds-composer-task-surface-label {
+  display: none;
+}
+
+/* Level 3: the model keeps its source icon (or a stand-in), level and chevron. */
+.ds-composer-toolbar[data-fit-3] .ds-composer-model-trigger-model,
+.ds-composer-toolbar[data-fit-3] .ds-composer-model-trigger-provider {
+  display: none;
+}
+
+.ds-composer-toolbar[data-fit-3] .ds-composer-model-trigger-glyph {
+  display: inline-block;
+}
+
+/* Level 4. */
+.ds-composer-toolbar[data-fit-4] .ds-composer-model-trigger-dot,
+.ds-composer-toolbar[data-fit-4] .ds-composer-model-trigger-effort {
+  display: none;
+}
+
+/* Level 5. */
+.ds-composer-toolbar[data-fit-5] {
+  column-gap: 0.25rem;
+}
+
+.ds-composer-toolbar[data-fit-5] > .ds-composer-toolbar-start,
+.ds-composer-toolbar[data-fit-5] > .ds-composer-toolbar-actions {
+  gap: 0.125rem;
+}
+
+.ds-composer-toolbar[data-fit-5] .ds-composer-model-trigger-chevron,
+.ds-composer-toolbar[data-fit-5] .ds-composer-agent-chevron {
+  display: none;
+}
+
+.ds-composer-toolbar[data-fit-5] .ds-composer-model-trigger {
+  gap: 0.25rem;
+  padding-inline: 0.5rem;
+}
+
+/* Level 6: 32px targets instead of 36-40px. */
+.ds-floating-composer .ds-composer-toolbar[data-fit-6] .ds-composer-menu-button,
+.ds-floating-composer .ds-composer-toolbar[data-fit-6] .ds-composer-optional-action,
+.ds-floating-composer .ds-composer-toolbar[data-fit-6] .ds-composer-primary-action {
+  height: 2rem;
+  width: 2rem;
+}
+
+/* Level 7: the actions drop to their own row only when even level 6 cannot hold them. */
+.ds-composer-toolbar[data-fit-7] {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+.ds-composer-toolbar[data-fit-7] > .ds-composer-toolbar-actions {
+  flex: 1 1 auto;
+}

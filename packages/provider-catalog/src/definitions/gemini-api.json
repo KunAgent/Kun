@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "gemini-api",
+  "name": "Google Gemini API",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://ai.google.dev/gemini-api/docs/openai",
+  "credentialUrl": "https://aistudio.google.com/app/apikey"
+}

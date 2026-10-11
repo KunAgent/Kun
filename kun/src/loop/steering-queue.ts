@@ -21,9 +21,31 @@ export class SteeringQueue {
   private readonly buffers = new Map<string, SteeringBuffer>()
   private readonly admissions = new Map<string, Set<Promise<void>>>()
   private readonly durablePending = new Set<string>()
+  private readonly listeners = new Map<string, Set<() => void>>()
 
   markDurablePending(turnId: string): void { this.durablePending.add(turnId) }
   clearDurablePending(turnId: string): void { this.durablePending.delete(turnId) }
+
+  /**
+   * Called after steering may have become pending for a turn: a volatile
+   * entry was queued or a durable admission finished. A delegated runtime
+   * that delivers guidance mid-turn listens here instead of polling.
+   */
+  subscribe(turnId: string, listener: () => void): () => void {
+    const listeners = this.listeners.get(turnId) ?? new Set<() => void>()
+    listeners.add(listener)
+    this.listeners.set(turnId, listeners)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0 && this.listeners.get(turnId) === listeners) this.listeners.delete(turnId)
+    }
+  }
+
+  private notify(turnId: string): void {
+    for (const listener of [...(this.listeners.get(turnId) ?? [])]) {
+      try { listener() } catch { /* a listener never blocks admission */ }
+    }
+  }
 
   /** Prevent final sealing while a durable admission crosses its commit boundary. */
   holdAdmission(turnId: string): () => void {
@@ -36,6 +58,7 @@ export class SteeringQueue {
       holds.delete(pending)
       if (holds.size === 0) this.admissions.delete(turnId)
       release()
+      this.notify(turnId)
     }
   }
 
@@ -91,6 +114,7 @@ export class SteeringQueue {
     next.entries.push(normalized)
     next.bytes += bytes
     this.buffers.set(turnId, next)
+    this.notify(turnId)
     return true
   }
 
@@ -141,7 +165,10 @@ export class SteeringQueue {
     const bytes = normalized.reduce((total, entry) => total + steeringEntryBytes(entry), 0)
     if (normalized.length > this.maxEntriesPerTurn || bytes > this.maxBytesPerTurn) return false
     if (normalized.length === 0) this.buffers.delete(turnId)
-    else this.buffers.set(turnId, { entries: normalized, bytes })
+    else {
+      this.buffers.set(turnId, { entries: normalized, bytes })
+      this.notify(turnId)
+    }
     return true
   }
 
@@ -173,6 +200,7 @@ export class SteeringQueue {
     this.durablePending.delete(turnId)
     this.drainedAttachments.delete(turnId)
     this.sealedTurns.delete(turnId)
+    this.listeners.delete(turnId)
   }
 }
 

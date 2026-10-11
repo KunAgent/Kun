@@ -23,7 +23,9 @@ import {
   StorageConfigSchema,
   TokenEconomyConfigSchema,
   ToolOutputLimitsConfigSchema,
-  LabConfigSchema
+  LabConfigSchema,
+  AdeConfigSchema,
+  HarnessesConfigSchema
 } from '../config/kun-config.js'
 import {
   ApprovalReviewModelSelectionSchema
@@ -98,7 +100,9 @@ export const ServeOptionsSchema = z.object({
   capabilities: KunCapabilitiesConfig.default(DEFAULT_KUN_CAPABILITIES_CONFIG),
   hooks: HooksConfigSchema.optional(),
   quality: QualityConfigSchema.optional(),
-  lab: LabConfigSchema.optional()
+  lab: LabConfigSchema.optional(),
+  harnesses: HarnessesConfigSchema.optional(),
+  ade: AdeConfigSchema.optional()
 }).superRefine((value, ctx) => {
   if (value.insecure && !isLoopbackHost(value.host)) {
     ctx.addIssue({

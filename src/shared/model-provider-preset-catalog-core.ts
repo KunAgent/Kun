@@ -17,7 +17,6 @@ import type {
   ModelProviderModelProfileV1,
   ModelProviderPresetMode,
   ModelProviderProfileV1,
-  ModelProviderReasoningCapabilityV1,
   ModelProviderSpeechCapabilityV1,
   ModelProviderTextToSpeechCapabilityV1,
   ModelProviderVideoCapabilityV1,
@@ -55,9 +54,6 @@ import {
   OLLAMA_CLOUD_MODEL_IDS,
   OLLAMA_CLOUD_PROVIDER_ID,
   OLLAMA_CLOUD_PROVIDER_NAME,
-  OPENCODE_FREE_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
-  OPENCODE_FREE_PROVIDER_NAME,
   VOLCENGINE_AGENT_PLAN_CHAT_MODELS,
   VOLCENGINE_CHAT_MODELS,
   VOLCENGINE_IMAGE_MODELS,
@@ -65,12 +61,6 @@ import {
   ZAI_CODING_PLAN_MODELS,
   ZHIPU_CODING_PLAN_MODELS
 } from './model-provider-preset-types'
-
-const OPENCODE_FREE_REASONING: ModelProviderReasoningCapabilityV1 = {
-  supportedEfforts: ['auto'],
-  defaultEffort: 'auto',
-  requestProtocol: 'none'
-}
 
 /** models.dev/kun-agent explicitly publish Coding Plan models as zero-cost. */
 function codingPlanProfile(
@@ -129,11 +119,12 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     endpointFormat: 'messages',
     // Ids match what the SDK's supportedModels() returns (see claude-subscription-models).
     models: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-    // The SDK does NOT report a context window, so we set it manually: Opus 4.8 and
-    // Sonnet 4.x support 1M; Haiku 4.5 is 200K. All Claude 4.x models are vision-capable,
-    // so every profile uses visionChatProfile (inputModalities text+image). Cosmetic on
-    // the agent-sdk path (the SDK enforces the real limit); preset profiles are
-    // authoritative, so edit them here.
+    // The SDK only reports a window after a query has run (`result.modelUsage`), so the
+    // pre-turn window comes from here: Opus 4.8 and Sonnet 4.x support 1M; Haiku 4.5 is
+    // 200K. All Claude 4.x models are vision-capable, so every profile uses
+    // visionChatProfile (inputModalities text+image). Once a query finishes, the window
+    // the SDK reports replaces this one in the context gauge (the SDK enforces the real
+    // limit); preset profiles are authoritative, so edit them here.
     modelProfiles: {
       'claude-opus-4-8': visionChatProfile(1_000_000, CLAUDE_ADAPTIVE_REASONING),
       'claude-sonnet-4-6': visionChatProfile(1_000_000, CLAUDE_ADAPTIVE_REASONING),
@@ -223,6 +214,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'zhipu-coding-plan',
+    planQuota: 'zhipu',
     name: 'Zhipu Coding Plan',
     category: 'subscription',
     subscriptionRegion: 'china',
@@ -244,6 +236,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'zai-coding-plan',
+    planQuota: 'zai',
     name: 'Z.ai Coding Plan',
     category: 'subscription',
     subscriptionRegion: 'china',
@@ -264,6 +257,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'kimi-code',
+    planQuota: 'kimi-code',
     name: 'Kimi Code',
     category: 'subscription',
     subscriptionRegion: 'china',
@@ -363,26 +357,6 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     apiKeyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey'
   },
 {
-    id: OPENCODE_FREE_PROVIDER_ID,
-    name: OPENCODE_FREE_PROVIDER_NAME,
-    category: 'free',
-    // Anonymous requests use Bearer public; the gateway treats it as no
-    // account key and permits only allowAnonymous models.
-    baseUrl: 'https://opencode.ai/zen/v1',
-    endpointFormat: 'chat_completions',
-    defaultRetryMaxAttempts: 10,
-    models: [...OPENCODE_FREE_MODEL_IDS],
-    modelProfiles: {
-      'big-pickle': openCodeFreeProfile(200_000, 32_000),
-      'mimo-v2.5-free': openCodeFreeProfile(200_000, 32_000, true),
-      'ling-3.0-flash-fin-free': openCodeFreeProfile(262_144, 32_768),
-      'nemotron-3-ultra-free': openCodeFreeProfile(1_000_000, 128_000),
-      'nemotron-3.5-lightning-free': openCodeFreeProfile(262_144, 262_144)
-    },
-    docsUrl: 'https://opencode.ai/docs/zen/',
-    apiKeyUrl: 'https://opencode.ai/docs/zen/'
-  },
-{
     id: 'opencode-go',
     name: 'OpenCode Go',
     category: 'subscription',
@@ -465,6 +439,8 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'moonshot-cn',
+    balance: 'moonshot',
+    endpoints: { chat_completions: 'https://api.moonshot.cn/v1', messages: 'https://api.moonshot.cn/anthropic' },
     name: 'Moonshot CN',
     tileGroup: 'moonshot',
     baseUrl: 'https://api.moonshot.cn/v1',
@@ -483,6 +459,8 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
   },
 {
     id: 'moonshot-global',
+    balance: 'moonshot',
+    endpoints: { chat_completions: 'https://api.moonshot.ai/v1', messages: 'https://api.moonshot.ai/anthropic' },
     name: 'Moonshot Global',
     tileGroup: 'moonshot',
     baseUrl: 'https://api.moonshot.ai/v1',
@@ -500,17 +478,3 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys'
   }
 ]
-
-function openCodeFreeProfile(
-  contextWindowTokens: number,
-  maxOutputTokens: number,
-  supportsImageInput = false,
-  supportsReasoning = true
-): ModelProviderModelProfileV1 {
-  return {
-    ...(supportsImageInput
-      ? visionChatProfile(contextWindowTokens, supportsReasoning ? OPENCODE_FREE_REASONING : undefined)
-      : textChatProfile(contextWindowTokens, supportsReasoning ? OPENCODE_FREE_REASONING : undefined)),
-    maxOutputTokens
-  }
-}

@@ -1,3 +1,4 @@
+import { HarnessGatewayBindingSchema } from '../contracts/harness-gateway-binding.js'
 import { z } from 'zod'
 import type { GraphRuntimeConfig } from '../config/kun-config.js'
 import {
@@ -11,6 +12,7 @@ import {
   type GraphPlanV1
 } from '../contracts/graph.js'
 import { ModelReasoningEffort } from '../contracts/capabilities.js'
+import { HarnessCredentialModeSchema, HarnessIdSchema } from '../contracts/harness.js'
 
 export const GraphIntentStrategySchema = z.union([
   z.literal('auto'),
@@ -33,7 +35,10 @@ const GraphPlanIntentV2TaskBaseShape = {
     z.string().trim().min(1).max(2_048)
   ).min(1).max(128),
   readScopes: z.array(GraphRelativePathSchema).max(1_000),
-  writeScopes: z.array(GraphRelativePathSchema).max(1_000)
+  writeScopes: z.array(GraphRelativePathSchema).max(1_000),
+  harnessId: HarnessIdSchema.optional(),
+  credentialMode: HarnessCredentialModeSchema.optional(),
+  gatewayBinding: HarnessGatewayBindingSchema.optional()
 } as const
 
 export const GraphPlanIntentV2OrdinaryTaskSchema = z.object({
@@ -160,6 +165,9 @@ export const GraphIntentTaskSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   model: z.string().trim().min(1).max(256).optional(),
   providerId: z.string().trim().min(1).max(128).optional(),
+  harnessId: HarnessIdSchema.optional(),
+  credentialMode: HarnessCredentialModeSchema.optional(),
+    gatewayBinding: HarnessGatewayBindingSchema.optional(),
   reasoningEffort: ModelReasoningEffort.optional(),
   loop: GraphIntentLoopSchema.optional()
 }).strict().superRefine((task, ctx) => {
@@ -276,6 +284,9 @@ export function compileGraphPlanIntentV2(input: {
       checks: task.writeScopes.length ? ['git diff --check'] : [],
       readScopes: task.readScopes,
       writeScopes: task.writeScopes,
+      ...(task.harnessId ? { harnessId: task.harnessId } : {}),
+      ...(task.credentialMode ? { credentialMode: task.credentialMode } : {}),
+      ...(task.gatewayBinding ? { gatewayBinding: task.gatewayBinding } : {}),
       ...(task.kind === 'loop_gate'
         ? {
             loop: {
@@ -340,7 +351,8 @@ export function compileGraphIntent(input: {
     // normal terminal `skipped` state prevent GraphRun completion.
     required: task.kind === 'loop_gate' ? false : task.required,
     riskClass: task.riskClass,
-    ...(task.model || task.providerId || task.reasoningEffort
+    ...(task.model || task.providerId || task.harnessId || task.credentialMode || task.gatewayBinding ||
+        task.reasoningEffort
       ? {
           assignment: {
             kind: 'ephemeral' as const,
@@ -353,6 +365,9 @@ export function compileGraphIntent(input: {
             ].join('\n\n'),
             ...(task.model ? { model: task.model } : {}),
             ...(task.providerId ? { providerId: task.providerId } : {}),
+            ...(task.harnessId ? { harnessId: task.harnessId } : {}),
+            ...(task.credentialMode ? { credentialMode: task.credentialMode } : {}),
+      ...(task.gatewayBinding ? { gatewayBinding: task.gatewayBinding } : {}),
             ...(task.reasoningEffort ? { reasoningEffort: task.reasoningEffort } : {}),
             toolPolicy: task.writeScopes.length ? 'inherit' as const : 'readOnly' as const,
             blockedTools: [],

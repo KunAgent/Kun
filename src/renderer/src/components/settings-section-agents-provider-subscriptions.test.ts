@@ -555,7 +555,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         provider: {
           providers: expect.arrayContaining([
             expect.objectContaining({
-              id: 'custom-provider-4',
+              id: 'custom-provider-3',
               apiKey: ''
             })
           ])

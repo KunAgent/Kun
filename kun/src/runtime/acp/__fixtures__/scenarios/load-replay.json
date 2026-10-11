@@ -1,0 +1,57 @@
+{
+  "sessionId": "sess-loadable",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": true,
+      "promptCapabilities": { "image": true }
+    },
+    "authMethods": []
+  },
+  "loadSession": {
+    "modes": {
+      "currentModeId": "ask",
+      "availableModes": [{ "id": "ask", "name": "Ask" }]
+    }
+  },
+  "onLoad": {
+    "updates": [
+      { "sessionUpdate": "user_message_chunk", "content": { "type": "text", "text": "old user message" } },
+      { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "old assistant reply" } },
+      {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "old-call",
+        "title": "Old tool",
+        "kind": "read",
+        "status": "completed"
+      },
+      {
+        "sessionUpdate": "available_commands_update",
+        "availableCommands": [
+          { "name": "compact", "description": "Compact the session", "input": null }
+        ]
+      },
+      {
+        "sessionUpdate": "config_option_update",
+        "configOptions": [
+          {
+            "id": "model",
+            "name": "Model",
+            "category": "model",
+            "type": "select",
+            "currentValue": "fake-model-1",
+            "options": [{ "value": "fake-model-1", "name": "Fake 1" }]
+          }
+        ]
+      }
+    ]
+  },
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "continued reply" } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

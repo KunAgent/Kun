@@ -204,14 +204,14 @@ describe('window-mode loop integration (review findings P1-1/P1-2/P1-3)', () => 
 
     const carriesNotice = (request: ModelRequest) =>
       (request.contextInstructions ?? []).some((entry) => entry.includes('[context window'))
-    // The first request already crosses 25% (the output reservation counts
-    // toward usage), so it carries the first notice.
-    expect(carriesNotice(model.requests[0]!)).toBe(true)
+    // The bounded output reserve leaves this small request below 25%; it
+    // must not invent an initial pressure notice from an oversized reserve.
+    expect(carriesNotice(model.requests[0]!)).toBe(false)
     // The same usage on the next request re-fires nothing: marks dedup.
     expect(carriesNotice(model.requests[1]!)).toBe(false)
     // The big response crosses 50/75%: exactly one new notice reaches the model.
     expect(carriesNotice(model.requests[2]!)).toBe(true)
-    expect(model.requests.filter(carriesNotice)).toHaveLength(2)
+    expect(model.requests.filter(carriesNotice)).toHaveLength(1)
 
     // The notices counted into the window budget.
     const state = harness.budget.stateFor('thread-w', 'win-0')
@@ -219,6 +219,6 @@ describe('window-mode loop integration (review findings P1-1/P1-2/P1-3)', () => 
     expect(state && state.noticeTokens > 0).toBe(true)
     // And the covered marks prevent a re-fire on the following request.
     await expect(runTurn(harness, 'step four')).resolves.toBe('completed')
-    expect(model.requests.filter(carriesNotice)).toHaveLength(2)
+    expect(model.requests.filter(carriesNotice)).toHaveLength(1)
   })
 })

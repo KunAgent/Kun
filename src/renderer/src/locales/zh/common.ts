@@ -1,3 +1,11 @@
+import composerSubscriptionQuota from './common/composer-subscription-quota.json'
+import toolApprovalDetails from './common/tool-approval-details.json'
+import toolDetails from './common/tool-details.json'
+import toolStates from './common/tool-states.json'
+import agentDispatch from './common/agent-dispatch.json'
+import agentUpdates from './common/agent-updates.json'
+import roomsPolish from './common/rooms-polish.json'
+import executionTasks from './common/execution-tasks.json'
 import roomsApproval from './common/rooms-approval.json'
 import roomsDirect from './common/rooms-direct.json'
 import roomsInitIm from './common/rooms-init-im.json'
@@ -8,9 +16,12 @@ import roomsReplies from './common/rooms-replies.json'
 import roomsInteractions from './common/rooms-interactions.json'
 import roomsExperience from './common/rooms-experience.json'
 import roomsContent from './common/rooms-content.json'
+import roomsWorkbench from './common/rooms-workbench.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
 import phoneComposer from './common/phone-composer.json'
+import pluginMarket from './common/plugin-market.json'
+import pluginsPage from './common/plugins-page.json'
 import composerFastMode from './common/composer-fast-mode.json'
 import commandsSdd from './common/commands-sdd.json'
 import providerErrors from './common/provider-errors.json'
@@ -32,8 +43,35 @@ import speak from './common/speak.json'
 import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
+import paperWorkspace from './common/paper-workspace.json'
+import paperEvidence from './common/paper-evidence.json'
+import mobileWork from './common/mobile-work.json'
+import agentHarness from './common/agent-harness.json'
+import agentIntegrations from './common/agent-integrations.json'
+import agentCenter from './common/agent-center.json'
+import ade from './common/ade.json'
+import workLayout from './common/work-layout.json'
+import workSidebar from './common/work-sidebar.json'
+import workMainline from './common/work-mainline.json'
+import conversationManage from './common/conversation-manage.json'
+import usagePanel from './common/usage-panel.json'
+import conversationExport from './common/conversation-export.json'
+import paperSearch from './common/paper-search.json'
+import wardrobePage from './common/wardrobe-page.json'
+import kunAccount from './common/kun-account.json'
+import wardrobeAccount from './common/wardrobe-account.json'
+import wardrobeShare from './common/wardrobe-share.json'
+import whatsNew from './common/whats-new.json'
+import wardrobeInvite from './common/wardrobe-invite.json'
+import codeTour from './common/code-tour.json'
 
 const common = {
+  ...composerSubscriptionQuota,
+  ...toolApprovalDetails,
+  ...toolDetails,
+  ...toolStates,
+  ...agentDispatch,
+  ...agentUpdates,
   ...roomsInitIm,
   ...roomsDirect,
   ...roomsApproval,
@@ -44,6 +82,8 @@ const common = {
   ...roomsInteractions,
   ...roomsExperience,
   ...roomsContent,
+  ...roomsPolish,
+  ...roomsWorkbench,
   queuedMessageEditAccountUnavailable: '原模型账号不可用或已变更，消息已保留。请恢复原模型连接后重试。',
   queuedMessageEditSteering: '消息正在作为引导送达，暂时无法修改。',
   queuedMessageRestorePending: '已撤回，待编辑',
@@ -53,8 +93,11 @@ const common = {
   ...shellWorkflow,
   ...workflowConnect,
   ...phoneComposer,
+  ...pluginMarket,
+  ...pluginsPage,
   ...composerFastMode,
   ...commandsSdd,
+  ...executionTasks,
   ...providerErrors,
   ...planBuild,
   ...sddFrameworks,
@@ -73,6 +116,27 @@ const common = {
   ...speak,
   ...remoteAccess,
   ...paper,
+  ...paperWorkspace,
+  ...paperEvidence,
+  ...mobileWork,
+  ...agentHarness,
+  ...agentIntegrations,
+  ...agentCenter,
+  ...ade,
+  ...workLayout,
+  ...workSidebar,
+  ...workMainline,
+  ...conversationManage,
+  ...usagePanel,
+  ...conversationExport,
+  ...paperSearch,
+  ...wardrobePage,
+  ...kunAccount,
+  ...wardrobeAccount,
+  ...wardrobeShare,
+  ...whatsNew,
+  ...wardrobeInvite,
+  ...codeTour,
 }
 
 export default common

@@ -584,7 +584,7 @@ function managerConnection(
   return {
     discovery: {
       version: 1,
-      protocolVersion: 5,
+      protocolVersion: 6,
       instanceId: 'manager-test',
       pid: 2_147_483_620,
       startedAt: '2026-09-02T00:00:00.000Z',

@@ -1,0 +1,452 @@
+/*
+ * Allowance cards shared by the right panel and the tray popover. Each host
+ * maps the --kq-* tokens onto its own palette (see panel.css and the tray's
+ * shell); nothing here reads a host token directly.
+ */
+
+.kq-board {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--kq-text);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.kq-board button {
+  font: inherit;
+  color: inherit;
+}
+
+.kq-board button:focus-visible,
+.kq-seg button:focus-visible,
+.kq-icon-button:focus-visible,
+.kq-text-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--kq-focus) 72%, transparent);
+  outline-offset: 2px;
+}
+
+.kq-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kq-section-head {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.kq-section-head h3 {
+  margin: 0;
+  color: var(--kq-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.kq-count {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: var(--kq-muted);
+  background: var(--kq-subtle);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kq-grow {
+  flex: 1;
+}
+
+/* Segmented control: used/left, periods, tabs. */
+.kq-seg {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--kq-subtle);
+}
+
+.kq-seg button {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--kq-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--kq-duration) ease,
+    background-color var(--kq-duration) ease,
+    box-shadow var(--kq-duration) ease;
+}
+
+.kq-seg.is-small button {
+  min-height: 22px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+.kq-seg button:hover {
+  color: var(--kq-text);
+}
+
+.kq-seg button[data-active='true'] {
+  color: var(--kq-text);
+  background: var(--kq-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 0 0 1px var(--kq-border);
+}
+
+.kq-icon-button {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--kq-faint);
+  background: transparent;
+  cursor: pointer;
+  transition: color var(--kq-duration) ease, background-color var(--kq-duration) ease;
+}
+
+.kq-icon-button:hover:not(:disabled) {
+  color: var(--kq-text);
+  background: var(--kq-hover);
+}
+
+.kq-icon-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.kq-icon-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.kq-text-button {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--kq-muted);
+  background: transparent;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.kq-text-button:hover {
+  color: var(--kq-text);
+  background: var(--kq-hover);
+}
+
+.kq-chip-button {
+  display: inline-flex;
+  min-height: 26px;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid var(--kq-border-strong);
+  border-radius: 999px;
+  color: var(--kq-text);
+  background: var(--kq-card);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.kq-chip-button:hover:not(:disabled) {
+  background: var(--kq-hover);
+}
+
+.kq-chip-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.kq-chip-button.is-primary {
+  border-color: transparent;
+  color: var(--kq-control-foreground);
+  background: var(--kq-control);
+}
+
+.kq-chip-button svg {
+  width: 12px;
+  height: 12px;
+}
+
+.kq-spin {
+  animation: kq-spin 0.9s linear infinite;
+}
+
+@keyframes kq-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* An allowance card: a provider, its plan, its windows. */
+.kq-card {
+  container-type: inline-size;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 11px;
+  border: 1px solid var(--kq-border);
+  border-radius: var(--kq-radius-card);
+  background: var(--kq-card);
+}
+
+.kq-card-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.kq-card-icon {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--kq-subtle);
+}
+
+.kq-card-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.kq-card-title strong {
+  overflow: hidden;
+  color: var(--kq-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kq-card-title small {
+  overflow: hidden;
+  color: var(--kq-faint);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kq-plan {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--kq-muted);
+  background: var(--kq-subtle);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kq-meters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px 16px;
+}
+
+@container (min-width: 300px) {
+  .kq-meters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.kq-meter {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  --kq-fill: var(--kq-accent);
+}
+
+.kq-meter[data-severity='warn'],
+.kq-ring[data-severity='warn'] {
+  --kq-fill: var(--kq-warn);
+}
+
+.kq-meter[data-severity='danger'],
+.kq-ring[data-severity='danger'] {
+  --kq-fill: var(--kq-danger);
+}
+
+.kq-meter-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.kq-meter-name {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--kq-muted);
+  font-size: 11.5px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.kq-nowrap {
+  white-space: nowrap;
+}
+
+.kq-meter-value {
+  flex: none;
+  padding: 0;
+  border: 0;
+  color: var(--kq-text);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.kq-meter[data-severity='danger'] .kq-meter-value {
+  color: var(--kq-danger);
+}
+
+.kq-meter-count {
+  margin: 0;
+  overflow: hidden;
+  color: var(--kq-muted);
+  font-size: 11px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kq-track {
+  position: relative;
+  height: 6px;
+  overflow: visible;
+  border-radius: 999px;
+  background: var(--kq-track);
+}
+
+.kq-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 0;
+  border-radius: inherit;
+  background: var(--kq-fill);
+  transition: width 240ms ease;
+}
+
+.kq-pace {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--kq-text);
+  opacity: 0.45;
+}
+
+.kq-reset {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  margin: 0;
+  color: var(--kq-faint);
+  font-size: 11px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kq-pace-note {
+  color: var(--kq-warn);
+  font-weight: 500;
+}
+
+.kq-card-more {
+  display: flex;
+  justify-content: flex-start;
+  margin: -4px 0 -2px -4px;
+}
+
+.kq-detail-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--kq-border);
+  color: var(--kq-muted);
+  font-size: 11.5px;
+}
+
+.kq-detail-row strong {
+  margin-left: auto;
+  color: var(--kq-text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.kq-detail-row small {
+  flex-basis: 100%;
+  color: var(--kq-faint);
+  font-size: 11px;
+}
+
+.kq-reminder {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--kq-warn);
+  background: var(--kq-warn-soft);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+.kq-local-cost {
+  margin: 0;
+  color: var(--kq-faint);
+  font-size: 11px;
+  line-height: 15px;
+}

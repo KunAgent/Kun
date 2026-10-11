@@ -81,7 +81,8 @@ import {
   buildHistoryTranscript,
   DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
 } from './sdk-context-assembler.js'
-import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
+import { sdkProcessBaseEnv } from './sdk-process-environment.js'
+import { nativeAgentNetworkEnv } from '../../harness/native-agent-network.js'
 import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import { mkdir } from 'node:fs/promises'
@@ -102,18 +103,8 @@ import {
   parkDelegatedGraphTurnAfterRecovery
 } from '../delegated-graph-turn-policy.js'
 
-const CLAUDE_KUN_TOOL_INSTRUCTION = [
-  'Kun-managed capabilities are available through the mcp__kun__ tools.',
-  'Use these tools for Kun capabilities such as MCP, extensions, skills, memory, media, GUI input, and delegation.',
-  'Their execution remains governed by Kun ToolHost approval and sandbox policy.'
-].join(' ')
-
-const SDK_ON_REQUEST_AUTO_ALLOWED_TOOLS = new Set([
-  'Read',
-  'Glob',
-  'Grep',
-  'TodoWrite'
-])
+import { maybeExternalSubagentRouting } from '../external-subagent-routing.js'
+import { DelegatedItemTimes } from '../delegated-item-times.js'
 import type { AgentSdkRuntimeFactoryDeps } from './agent-sdk-runtime-factory-contracts.js'
 import type { AgentSdkFactoryContext } from './agent-sdk-runtime-factory-context.js'
 
@@ -125,23 +116,32 @@ export function createAgentSdkLifecycleRuntimeDeps(
   SdkRuntimeDeps,
   'handlesProvider' | 'loadTurnContext' | 'executeKunTool' | 'decideToolApproval'
 > {
-  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages } = context
+  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, handoffBriefDigestsByTurn, skillTurnKey, nowIso, toolBridge, resolveImages } = context
+  // Claude Code subagents are mirrored into hidden side threads (sdk-subagent-router).
+  const subagents = maybeExternalSubagentRouting(deps)
+  const applyParentItem = (threadId: string, item: TurnItem) => deps.turns.applyItem(threadId, item)
+  const itemTimes = new DelegatedItemTimes()
   return {
+    readiness: deps.readiness,
     async recordEvent(draft): Promise<void> {
-      await deps.events.record(draft)
+      if (subagents) await subagents.recordEvent(draft, async (parent) => { await deps.events.record(parent) })
+      else await deps.events.record(draft)
     },
 
     async applyItem(threadId, item): Promise<void> {
-      await deps.turns.applyItem(threadId, item)
+      const stamped = itemTimes.stamp(item)
+      if (subagents) await subagents.applyItem(threadId, stamped, applyParentItem)
+      else await applyParentItem(threadId, stamped)
     },
 
     async applyAssistantDelta(threadId, item, deltaText, deltaOffset): Promise<void> {
-      await deps.turns.applyAssistantDelta(threadId, item, deltaText, deltaOffset)
+      await deps.turns.applyAssistantDelta(threadId, itemTimes.stamp(item), deltaText, deltaOffset)
     },
 
     async finishTurn(threadId, turnId, status, error, code): Promise<TurnRunOutcome> {
       const key = skillTurnKey(threadId, turnId)
       try {
+        await subagents?.settleTurn(threadId, turnId, applyParentItem)
         let outcome: TurnRunOutcome = status
         if (status === 'completed') {
           const graphCompletion = await parkDelegatedGraphTurnAfterRecovery(
@@ -189,7 +189,10 @@ export function createAgentSdkLifecycleRuntimeDeps(
                   sessionGoalContextKeysByTurn.get(key)
                 ),
                 lastCommittedTurnId: turnId,
-                nativeSessionId: sessionIdsByTurn.get(key)
+                nativeSessionId: sessionIdsByTurn.get(key),
+                ...(handoffBriefDigestsByTurn.has(key)
+                  ? { handoffBriefDigest: handoffBriefDigestsByTurn.get(key) }
+                  : {})
               })
             } catch {
               // Native continuation is an optimization. A failed checkpoint
@@ -200,11 +203,11 @@ export function createAgentSdkLifecycleRuntimeDeps(
         }
         return outcome
       } finally {
-        activeSkillIdsByTurn.delete(key)
-        skillPromptByTurn.delete(key)
+        toolBridge.releaseTurn(threadId, turnId)
         sessionIdsByTurn.delete(key)
         sessionPreparationsByTurn.delete(key)
         sessionGoalContextKeysByTurn.delete(key)
+        handoffBriefDigestsByTurn.delete(key)
         if (typeof deps.skillRuntime?.clearTurnActivation === 'function') {
           deps.skillRuntime.clearTurnActivation(threadId, turnId)
         }
@@ -221,21 +224,21 @@ export function createAgentSdkLifecycleRuntimeDeps(
       sessionIdsByTurn.set(skillTurnKey(threadId, turnId), sessionId)
     },
 
-    async rejectResume(threadId, turnId): Promise<void> {
+    async rejectResume(threadId, turnId) {
       const key = skillTurnKey(threadId, turnId)
       const preparation = sessionPreparationsByTurn.get(key)
-      if (!preparation) return
-      sessionPreparationsByTurn.set(
-        key,
-        await deps.sessionCoordinator!.rejectResume(preparation)
-      )
+      if (!preparation) return undefined
+      const rejected = await deps.sessionCoordinator!.rejectResume(preparation)
+      sessionPreparationsByTurn.set(key, rejected)
+      return rejected
     },
 
     loadSdk,
     // The embedded SDK launches a separate agent process. Give it the same
-    // scrubbed base environment as native shell tools; buildScopedEnv adds the
-    // selected SDK OAuth credential explicitly when it is needed.
-    baseEnv: () => shellSpawnEnv(),
+    // scrubbed execution environment plus explicitly inherited proxy settings;
+    // buildScopedEnv adds only the selected SDK credential.
+    baseEnv: (options) => ({ ...sdkProcessBaseEnv(), ...(options?.gateway ? {} :
+      nativeAgentNetworkEnv(deps.harnessCatalog?.get('claude-code'))) }),
     kunSystemPrompt: () => deps.prefix.systemPrompt,
     nextId: (prefix) => deps.ids.next(prefix),
     getTurnLimits: () => deps.turnLimits,

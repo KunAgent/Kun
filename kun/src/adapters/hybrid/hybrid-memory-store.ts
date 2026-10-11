@@ -1,3 +1,7 @@
+import { MemoryErasureIncompleteError } from '../../memory/memory-erasure-error.js'
+import type { MemoryLifecycleRequest, MemoryLifecycleResult, MemoryHistoryResult } from '../../contracts/memory-lifecycle.js'
+import { applyMemoryForgetting, readMemoryForgetting } from '../../memory/memory-forgetting.js'
+import { resolveMemoryProjectAccess } from '../../memory/memory-project-identity.js'
 import type { PendingMemoryCandidate } from '../../contracts/memory-distillation-runtime.js'
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -117,6 +121,71 @@ export class HybridMemoryStore implements MemoryStore {
     })
   }
 
+  async erasureReceipt(operationId: string): Promise<string[]> {
+    return this.enqueueMutation(async () => {
+      await this.ready()
+      const ids = await this.canonical.erasureReceipt(operationId)
+      if (ids.length) this.eraseIndexProjections(ids)
+      return ids
+    })
+  }
+
+  async isForgotten(input: MemoryCreateRequest, id?: string): Promise<boolean> {
+    return this.canonical.isForgotten(input, id)
+  }
+
+  async history(id: string, access?: MemoryAccess): Promise<MemoryHistoryResult> {
+    return this.canonical.history(id, access)
+  }
+
+  async lifecycle(id: string, request: MemoryLifecycleRequest, access?: MemoryAccess): Promise<MemoryLifecycleResult> {
+    return this.enqueueMutation(async () => {
+      this.mutationGeneration += 1
+      await this.ready()
+      if (request.action === 'erase' || request.action === 'forget') this.indexStale = true
+      const result = await this.canonical.lifecycle(id, request, access)
+      this.lastInjectedIds = []
+      this.lastRetrieval = undefined
+      this.lastDirectiveInjection = undefined
+      // Gate reads before projecting every derivative. A failed projection must use canonical fallback.
+      this.indexStale = true
+      if (result.erased) this.eraseIndexProjections(result.affectedIds)
+      else for (const affectedId of result.affectedIds) {
+        const record = await this.canonical.get(affectedId)
+        if (record) await this.projectRecord(record)
+      }
+      this.reconcileStaleIndex()
+      return result
+    })
+  }
+
+  private eraseIndexProjections(ids: readonly string[]): void {
+    this.indexStale = true
+    try {
+      if (!this.db || !this.index) throw new Error('memory index is unavailable for erasure')
+      this.db.pragma('secure_delete = ON')
+      for (const id of ids) { this.options.beforeIndexRemove?.(id); this.index.remove(id) }
+      const checkpoint = () => {
+        const result = this.db!.pragma('wal_checkpoint(TRUNCATE)') as Array<{ busy?: number }>
+        if (result.some((row) => row.busy !== 0)) throw new Error('memory index checkpoint is busy')
+      }
+      checkpoint()
+      this.db.exec('VACUUM')
+      checkpoint()
+    } catch (error) {
+      this.degraded.fail('erasure cleanup pending', error)
+      throw new MemoryErasureIncompleteError(error)
+    }
+  }
+
+  private async visibleCanonicalProjection(records: MemoryRecord[]): Promise<MemoryRecord[]> {
+    const ledger = await readMemoryForgetting(this.rootDir)
+    return records.flatMap((record) => {
+      const visible = applyMemoryForgetting(ledger, record)
+      return visible ? [visible] : []
+    })
+  }
+
   async getById(id: string, access?: MemoryAccess): Promise<MemoryRecord> { return this.canonical.getById(id, access) }
 
   async create(input: MemoryCreateRequest): Promise<MemoryRecord> {
@@ -154,7 +223,12 @@ export class HybridMemoryStore implements MemoryStore {
       this.mutationGeneration += 1
       await this.ready()
       const record = await this.canonical.delete(id, access)
+      this.indexStale = true
+      this.lastInjectedIds = []
+      this.lastRetrieval = undefined
+      this.lastDirectiveInjection = undefined
       await this.projectRecord(record)
+      this.reconcileStaleIndex()
       return record
     })
   }
@@ -176,11 +250,18 @@ export class HybridMemoryStore implements MemoryStore {
   }
 
   async list(filter: MemoryListFilter = {}): Promise<MemoryRecord[]> {
+    filter = await resolveMemoryProjectAccess(filter)
     await this.ready()
     if (this.indexReady()) {
       try {
         this.options.beforeIndexQuery?.('list')
-        const records = this.index!.list(filter)
+        const indexed = this.index!.list(filter)
+        const records = (await this.visibleCanonicalProjection(indexed))
+          .filter((record) => filter.includeDeleted || !record.deletedAt)
+        if (records.length !== indexed.length || records.some((record, index) => record.deletedAt !== indexed[index]?.deletedAt)) {
+          this.indexStale = true
+          return this.canonical.list(filter)
+        }
         this.degraded.recover()
         return records
       } catch (error) {
@@ -196,11 +277,12 @@ export class HybridMemoryStore implements MemoryStore {
     access: MemoryAccess = {},
     policy: MemoryCapabilityConfig = this.config()
   ): Promise<MemoryDirectiveResult> {
+    access = await resolveMemoryProjectAccess(access)
     await this.ready()
     if (this.indexReady()) {
       try {
         this.options.beforeIndexQuery?.('list')
-        const rows = this.index!.list({ ...access, authority: 'directive', includeDeleted: false })
+        const rows = await this.visibleCanonicalProjection(this.index!.list({ ...access, authority: 'directive', includeDeleted: false }))
         const result = selectMemoryDirectives({
           records: rows,
           access,
@@ -221,6 +303,7 @@ export class HybridMemoryStore implements MemoryStore {
   }
 
   async retrieve(request: MemoryRetrieveRequest): Promise<MemoryRecord[]> {
+    request = await resolveMemoryProjectAccess(request)
     await this.ready()
     const policy = request.policy ?? this.config()
     if (this.indexReady()) {
@@ -230,7 +313,7 @@ export class HybridMemoryStore implements MemoryStore {
         const nowIso = this.now()
         const candidates = this.index!.candidates(request, policy, queryTokens, nowIso)
         const result = retrieveMemoryRecords({
-          records: candidates.records,
+          records: await this.visibleCanonicalProjection(candidates.records),
           request,
           policy,
           mode: 'sqlite-fts5',
@@ -346,6 +429,7 @@ export class HybridMemoryStore implements MemoryStore {
       const factory = this.options.databaseFactory ?? await defaultDatabaseFactory()
       this.db = factory(this.sqlitePath)
       this.db.pragma('journal_mode = WAL')
+      this.db.pragma('secure_delete = ON')
       this.db.pragma('busy_timeout = 5000')
       this.db.pragma('foreign_keys = ON')
       this.options.beforeMigrate?.()
@@ -355,6 +439,8 @@ export class HybridMemoryStore implements MemoryStore {
       }
       this.index = new HybridMemoryIndex(this.db)
       this.index.integrityCheck()
+      const erased = (await readMemoryForgetting(this.rootDir)).barriers.filter((entry) => entry.erased)
+      if (erased.length) this.eraseIndexProjections(erased.map((entry) => entry.memoryId))
       this.backfill = new HybridMemoryBackfillCoordinator({
         readCanonical: () => readCanonicalMemoryDirectory(this.rootDir),
         readCanonicalRecordHashes: (ids) => readCanonicalMemoryRecordHashes(this.rootDir, ids),

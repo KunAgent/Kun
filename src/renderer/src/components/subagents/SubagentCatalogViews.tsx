@@ -254,6 +254,8 @@ export function AgentDetailsPanel({
           <button
             type="button"
             role="switch"
+            data-settings-switch="large"
+            aria-label={surfaceLabel(t, selectedSurface)}
             aria-checked={assigned}
             disabled={locked}
             onClick={onToggleSurface}
@@ -330,7 +332,7 @@ export function AgentDetailsPanel({
 
       <div className="mt-5 flex items-center gap-2 border-t border-ds-border-muted pt-4">
         {!builtin && source !== 'workspace' ? (
-          <button
+          <button data-settings-action="ghost" data-settings-size="icon" aria-label={profile.enabled ? t('disable', 'Disable') : t('enable', 'Enable')}
             type="button"
             onClick={onToggle}
             className="rounded-lg border border-ds-border px-2.5 py-2 text-ds-muted transition hover:bg-ds-hover hover:text-ds-heading"
@@ -344,7 +346,7 @@ export function AgentDetailsPanel({
             {t('subagentsPanel.workspaceReadOnly', 'Edit this role in .kun/agents/*.md')}
           </div>
         ) : (
-          <button
+          <button data-settings-action="primary" data-settings-size="default"
             type="button"
             onClick={onEdit}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-[11.5px] font-semibold text-white transition hover:bg-accent/90"
@@ -354,7 +356,7 @@ export function AgentDetailsPanel({
           </button>
         )}
         {!builtin && source !== 'workspace' ? (
-          <button
+          <button data-settings-action="danger-ghost" data-settings-size="icon" aria-label={t('agentsView.delete', 'Delete')}
             type="button"
             onClick={onDelete}
             className="rounded-lg border border-ds-border px-2.5 py-2 text-ds-muted transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30"
@@ -393,11 +395,13 @@ export function EmptyCatalogState({
 }
 
 export function BoundedNumberInput({
+  ariaLabel,
   value,
   min,
   max,
   onCommit
 }: {
+  ariaLabel?: string
   value: number
   min: number
   max: number
@@ -418,6 +422,7 @@ export function BoundedNumberInput({
   return (
     <input
       type="number"
+      aria-label={ariaLabel}
       min={min}
       max={max}
       value={draft}

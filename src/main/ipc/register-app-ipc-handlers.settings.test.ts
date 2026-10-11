@@ -1,6 +1,5 @@
 import {
   cleanupAppIpcHandlerTestState,
-  createGate,
   expectRendererModelCredentialsRedacted,
   getAppIpcElectronMock,
   handlers,
@@ -40,10 +39,6 @@ vi.mock('../main-window', () => ({
   trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
 }))
 
-import {
-  ApprovalConsentVerifier,
-  KUN_APPROVAL_CONSENT_HEADER
-} from '../../../kun/src/server/approval-consent.js'
 
 const electronMock = getAppIpcElectronMock()
 
@@ -330,7 +325,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
     })
   })
 
-  it('does not persist renderer-requested full access without protected native consent', async () => {
+  it('does not persist renderer-requested full access without protected confirmation', async () => {
     const current = settings()
     current.agents.kun = mergeKunRuntimeSettings(current.agents.kun, {
       approvalPolicy: 'on-request',
@@ -367,333 +362,90 @@ describe('registerAppIpcHandlers settings and approvals', () => {
 
     // A Direct DOM synthetic click can at most make the trusted renderer send
     // this request. Cancelling the Main-owned prompt leaves settings unchanged.
-    electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 })
+    electronMock.showProtectedDialog.mockResolvedValueOnce(false)
     await expect(handlers.get('settings:set')?.(trustedEvent, payload)).resolves.toEqual(current)
     expect(applySettingsPatch).not.toHaveBeenCalled()
-    expect(electronMock.showMessageBox).toHaveBeenLastCalledWith(
+    expect(electronMock.showProtectedDialog).toHaveBeenLastCalledWith(
       mainWindow,
       expect.objectContaining({
-        detail: expect.stringContaining(
-          'Full access lets Kun access any local file, execute host commands, and use network-capable tools'
-        )
-      })
+        description: expect.stringContaining(
+          'Full access lets Kun access local files, run commands and use network tools'
+        ),
+        bodyLabel: 'Changes',
+        body: 'Approval: Ask when approval is needed → Allow actions automatically\nAccess: Allow workspace changes → Full access to this computer'
+      }),
+      expect.any(Function)
     )
 
-    electronMock.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    electronMock.showProtectedDialog.mockResolvedValueOnce(true)
     await handlers.get('settings:set')?.(trustedEvent, payload)
     expect(applySettingsPatch).toHaveBeenCalledWith(payload)
 
-    electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 })
+    electronMock.showProtectedDialog.mockResolvedValueOnce(false)
     await handlers.get('settings:save-silent')?.(trustedEvent, payload)
     expect(saveSettingsPatch).not.toHaveBeenCalled()
   })
 
-  it('uses the resolved shared runtime token after trusted native approval', async () => {
+  it.each(['settings', 'sender', 'sender-after-read'] as const)('rejects a stale permissions confirmation: %s', async (changed) => {
     const current = settings()
-    const resolvedRuntimeToken = 'approval-runtime-secret'
-    expect(current.agents.kun.runtimeToken).toBe('')
+    current.agents.kun = mergeKunRuntimeSettings(current.agents.kun, {
+      approvalPolicy: 'on-request', sandboxMode: 'workspace-write', approvalReviewer: 'user'
+    })
     const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
-    const mainWindow = { isDestroyed: () => false, webContents: contents }
-    const leaseRequest = vi.fn(async (
-      _path: string,
-      _method?: string,
-      _body?: string,
-      _headers?: Record<string, string>
-    ) => ({ ok: true, status: 200, body: '{}' }))
-    const acquireRuntimeRequestLease = vi.fn(async () => ({
-      runtimeToken: resolvedRuntimeToken,
-      request: leaseRequest
-    }))
-    const runtimeRequest = vi.fn()
-    registerAppIpcHandlers(registerOptions({
-      store: { load: vi.fn(async () => current) } as never,
-      getMainWindow: () => mainWindow as never,
-      acquireRuntimeRequestLease,
-      runtimeRequest
-    }))
-    const handler = handlers.get('approval:decide')!
-    const payload = { approvalId: 'approval-1', decision: 'allow', source: 'user' }
-    await expect(handler({ sender: contents, senderFrame: mainFrame }, { ...payload, source: 'policy' })).rejects.toThrow('Runtime-owned')
-
-    await expect(handler({
-      sender: { id: 99 },
-      senderFrame: { processId: 90, routingId: 91, url: 'http://127.0.0.1:5173/index.html' }
-    }, payload)).rejects.toThrow(/trusted workbench frame/)
-    expect(runtimeRequest).not.toHaveBeenCalled()
-    expect(acquireRuntimeRequestLease).not.toHaveBeenCalled()
-
-    electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 })
-    await expect(handler({ sender: contents, senderFrame: mainFrame }, payload))
-      .resolves.toEqual({ confirmed: false })
-    expect(runtimeRequest).not.toHaveBeenCalled()
-    expect(acquireRuntimeRequestLease).not.toHaveBeenCalled()
-
-    electronMock.showMessageBox.mockResolvedValueOnce({ response: 0 })
-    await expect(handler({ sender: contents, senderFrame: mainFrame }, payload))
-      .resolves.toMatchObject({ confirmed: true, response: { ok: true } })
-    expect(acquireRuntimeRequestLease).toHaveBeenCalledOnce()
-    expect(runtimeRequest).not.toHaveBeenCalled()
-    expect(leaseRequest).toHaveBeenCalledOnce()
-    const headers = leaseRequest.mock.calls[0]?.[3] as Record<string, string>
-    const consent = headers[KUN_APPROVAL_CONSENT_HEADER]
-    expect(consent).toMatch(/^v1\./)
-    expect(new ApprovalConsentVerifier(resolvedRuntimeToken).verifyAndConsume({
-      token: consent,
-      approvalId: 'approval-1',
-      decision: 'allow'
-    })).toBe(true)
-  })
-
-  it('reveals the approval parent and records only a redacted native-dialog reference', async () => {
-    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
-    const contents = { id: 7, mainFrame }
-    const restore = vi.fn()
-    const show = vi.fn()
-    const focus = vi.fn()
-    const mainWindow = {
-      isDestroyed: () => false,
-      isMinimized: () => true,
-      isVisible: () => false,
-      isFocused: () => false,
-      restore,
-      show,
-      focus,
-      webContents: contents
-    }
-    const logInfo = vi.fn()
-    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
-    registerAppIpcHandlers(registerOptions({
-      getMainWindow: () => mainWindow as never,
-      runtimeRequest,
-      logInfo
-    }))
-    electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 })
-
-    await expect(handlers.get('approval:decide')?.({
-      sender: contents,
-      senderFrame: mainFrame
-    }, {
-      approvalId: 'approval-secret-value',
-      decision: 'allow',
-      source: 'user'
-    })).resolves.toEqual({ confirmed: false })
-
-    expect(restore).toHaveBeenCalledOnce()
-    expect(show).toHaveBeenCalledOnce()
-    expect(focus).toHaveBeenCalledOnce()
-    expect(electronMock.showMessageBox).toHaveBeenCalledWith(
-      mainWindow,
-      expect.objectContaining({
-        detail: expect.stringContaining('Approval reference: sha256:')
-      })
-    )
-    expect(electronMock.showMessageBox.mock.calls[0]?.[1]?.detail)
-      .not.toContain('approval-secret-value')
-    expect(logInfo).toHaveBeenCalledWith(
-      'approval',
-      'Opening protected native approval dialog.',
-      expect.objectContaining({
-        approvalRef: expect.stringMatching(/^sha256:[a-f0-9]{16}$/),
-        windowBeforeReveal: expect.objectContaining({
-          destroyed: false,
-          visible: false,
-          minimized: true,
-          focused: false
-        }),
-        windowAfterReveal: expect.objectContaining({ destroyed: false })
-      })
-    )
-    expect(logInfo).toHaveBeenCalledWith(
-      'approval',
-      'Protected native approval dialog resolved.',
-      expect.objectContaining({ response: 1, confirmed: false })
-    )
-    expect(runtimeRequest).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when the approval parent is destroyed while the native dialog closes', async () => {
-    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
-    let destroyed = false
-    const contents = { id: 7, mainFrame, isDestroyed: () => destroyed }
-    const mainWindow = { isDestroyed: () => destroyed, webContents: contents }
-    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
-    const logInfo = vi.fn()
-    registerAppIpcHandlers(registerOptions({
-      getMainWindow: () => mainWindow as never,
-      runtimeRequest,
-      logInfo
-    }))
-    electronMock.showMessageBox.mockImplementationOnce(async () => {
-      destroyed = true
-      return { response: 0 }
+    const parent = { isDestroyed: () => false, webContents: contents }
+    const navigate = () => { contents.mainFrame = { ...mainFrame, processId: 11, routingId: 21 } }
+    let confirmed = false
+    const load = vi.fn(async () => {
+      if (confirmed && changed === 'sender-after-read') navigate()
+      return current
     })
-
-    await expect(handlers.get('approval:decide')?.({
-      sender: contents,
-      senderFrame: mainFrame
-    }, {
-      approvalId: 'approval-parent-destroyed',
-      decision: 'allow',
-      source: 'user'
-    })).resolves.toEqual({ confirmed: false })
-
-    expect(runtimeRequest).not.toHaveBeenCalled()
-    expect(logInfo).toHaveBeenCalledWith(
-      'approval',
-      'Protected native approval confirmation was not submitted.',
-      expect.objectContaining({ reason: 'parent_or_sender_unavailable_after_confirmation' })
-    )
-  })
-
-  it('fails closed when the approval sender navigates while the native dialog is open', async () => {
-    const mainFrame = { processId: 10, routingId: 20, detached: false, url: 'http://127.0.0.1:5173/index.html' }
-    const contents = {
-      id: 7,
-      mainFrame,
-      isDestroyed: () => false
-    }
-    const mainWindow = { isDestroyed: () => false, webContents: contents }
-    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
-    const logInfo = vi.fn()
-    registerAppIpcHandlers(registerOptions({
-      getMainWindow: () => mainWindow as never,
-      runtimeRequest,
-      logInfo
-    }))
-    electronMock.showMessageBox.mockImplementationOnce(async () => {
-      contents.mainFrame = { processId: 11, routingId: 21, detached: false, url: 'http://127.0.0.1:5173/index.html' }
-      return { response: 0 }
+    const applySettingsPatch = vi.fn(async () => current)
+    registerAppIpcHandlers(registerOptions({ store: { load } as never, getMainWindow: () => parent as never, applySettingsPatch }))
+    electronMock.showProtectedDialog.mockImplementationOnce(async () => {
+      confirmed = true
+      if (changed === 'settings') current.agents.kun.approvalReviewer = 'agent'
+      if (changed === 'sender') navigate()
+      return true
     })
-
-    await expect(handlers.get('approval:decide')?.({
-      sender: contents,
-      senderFrame: mainFrame
-    }, {
-      approvalId: 'approval-navigated',
-      decision: 'allow',
-      source: 'user'
-    })).resolves.toEqual({ confirmed: false })
-
-    expect(runtimeRequest).not.toHaveBeenCalled()
-    expect(logInfo).toHaveBeenCalledWith(
-      'approval',
-      'Protected native approval confirmation was not submitted.',
-      expect.objectContaining({ reason: 'parent_or_sender_unavailable_after_confirmation' })
-    )
-  })
-
-  it('fails closed when the approval sender changes while the Runtime lease is acquired', async () => {
-    const mainFrame = { processId: 10, routingId: 20, detached: false, url: 'http://127.0.0.1:5173/index.html' }
-    const contents = {
-      id: 7,
-      mainFrame,
-      isDestroyed: () => false
-    }
-    const mainWindow = { isDestroyed: () => false, webContents: contents }
-    let releaseLease!: () => void
-    const leaseGate = new Promise<void>((resolve) => { releaseLease = resolve })
-    const leaseRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
-    const acquireRuntimeRequestLease = vi.fn(async () => {
-      await leaseGate
-      return { runtimeToken: 'lease-token', request: leaseRequest }
-    })
-    const logInfo = vi.fn()
-    registerAppIpcHandlers(registerOptions({
-      getMainWindow: () => mainWindow as never,
-      acquireRuntimeRequestLease,
-      logInfo
-    }))
-    electronMock.showMessageBox.mockResolvedValueOnce({ response: 0 })
-
-    const decision = handlers.get('approval:decide')?.({
-      sender: contents,
-      senderFrame: mainFrame
-    }, {
-      approvalId: 'approval-navigated-during-ensure',
-      decision: 'allow',
-      source: 'user'
-    })
-    await vi.waitFor(() => expect(acquireRuntimeRequestLease).toHaveBeenCalledOnce())
-    contents.mainFrame = { processId: 11, routingId: 21, detached: false, url: 'http://127.0.0.1:5173/index.html' }
-    releaseLease()
-
-    await expect(decision).resolves.toEqual({ confirmed: false })
-    expect(leaseRequest).not.toHaveBeenCalled()
-    expect(logInfo).toHaveBeenCalledWith(
-      'approval',
-      'Protected native approval confirmation was not submitted.',
-      expect.objectContaining({ reason: 'parent_or_sender_unavailable_after_runtime_ensure' })
-    )
-  })
-
-  it('revalidates a policy denial sender after Runtime lease acquisition', async () => {
-    const mainFrame = { processId: 10, routingId: 20, detached: false, url: 'http://127.0.0.1:5173/index.html' }
-    const contents = { id: 7, mainFrame, isDestroyed: () => false }
-    const mainWindow = { isDestroyed: () => false, webContents: contents }
-    const leaseGate = createGate()
-    const leaseRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
-    const acquireRuntimeRequestLease = vi.fn(async () => {
-      await leaseGate.promise
-      return { runtimeToken: 'lease-token', request: leaseRequest }
-    })
-    registerAppIpcHandlers(registerOptions({
-      getMainWindow: () => mainWindow as never,
-      acquireRuntimeRequestLease
-    }))
-
-    const decision = handlers.get('approval:decide')?.({
-      sender: contents,
-      senderFrame: mainFrame
-    }, {
-      approvalId: 'approval-policy-during-ensure',
-      decision: 'deny',
-      source: 'policy'
-    })
-    await vi.waitFor(() => expect(acquireRuntimeRequestLease).toHaveBeenCalledOnce())
-    contents.mainFrame = { processId: 11, routingId: 21, detached: false, url: 'http://127.0.0.1:5173/index.html' }
-    leaseGate.release()
-
-    await expect(decision).resolves.toEqual({ confirmed: false })
-    expect(leaseRequest).not.toHaveBeenCalled()
+    await expect(handlers.get('settings:set')?.({ sender: contents, senderFrame: mainFrame }, {
+      agents: { kun: { approvalPolicy: 'auto', sandboxMode: 'danger-full-access', approvalReviewer: 'user' } }
+    })).rejects.toThrow(changed === 'settings' ? 'settings changed' : 'no longer current')
+    expect(applySettingsPatch).not.toHaveBeenCalled()
     expect(electronMock.showMessageBox).not.toHaveBeenCalled()
   })
 
-  it('returns a safe Runtime failure when approval lease acquisition fails', async () => {
-    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
-    const contents = { id: 7, mainFrame, isDestroyed: () => false }
-    const mainWindow = { isDestroyed: () => false, webContents: contents }
-    const logError = vi.fn()
-    registerAppIpcHandlers(registerOptions({
-      getMainWindow: () => mainWindow as never,
-      acquireRuntimeRequestLease: vi.fn(async () => {
-        throw new Error('/Users/private-user/.kun/runtime failed to start')
-      }),
-      logError
-    }))
-
-    const result = await handlers.get('approval:decide')?.({
-      sender: contents,
-      senderFrame: mainFrame
-    }, {
-      approvalId: 'approval-lease-failed',
-      decision: 'deny',
-      source: 'policy'
-    }) as { confirmed: boolean; response: { ok: boolean; body: string } }
-
-    expect(result.confirmed).toBe(true)
-    expect(result.response.ok).toBe(false)
-    expect(result.response.body).toContain('runtime_unhealthy')
-    expect(result.response.body).not.toContain('private-user')
-    expect(logError).toHaveBeenCalledWith(
-      'approval',
-      'Protected approval Runtime lease acquisition failed.',
-      expect.objectContaining({
-        approvalRef: expect.stringMatching(/^sha256:/),
-        errorType: 'Error'
-      })
-    )
-    expect(JSON.stringify(logError.mock.calls)).not.toContain('private-user')
+  it('shows permission changes in Chinese with human-readable labels', async () => {
+    const current = settings()
+    current.locale = 'zh'
+    current.theme = 'dark'
+    current.agents.kun = mergeKunRuntimeSettings(current.agents.kun, { approvalPolicy: 'on-request', sandboxMode: 'workspace-write' })
+    const frame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
+    const contents = { id: 7, mainFrame: frame }
+    const parent = { isDestroyed: () => false, webContents: contents }
+    registerAppIpcHandlers(registerOptions({ store: { load: vi.fn(async () => current) } as never, getMainWindow: () => parent as never }))
+    electronMock.showProtectedDialog.mockResolvedValueOnce(false)
+    await handlers.get('settings:set')?.({ sender: contents, senderFrame: frame }, { agents: { kun: { sandboxMode: 'read-only' } } })
+    expect(electronMock.showProtectedDialog).toHaveBeenCalledWith(parent, expect.objectContaining({
+      title: '更改工具权限', language: 'zh', dark: true, bodyLabel: '本次变更',
+      body: '访问范围：允许修改工作区 → 只读访问'
+    }), expect.any(Function))
+    expect(JSON.stringify(electronMock.showProtectedDialog.mock.calls)).not.toContain('Direct DOM')
   })
 
+  it('shows reviewer and model-account changes without repeating unchanged permission fields', async () => {
+    const current = settings()
+    current.agents.kun.approvalReviewer = 'user'
+    current.agents.kun.approvalReview = { mode: 'fixed', providerId: 'provider', model: 'model', accountId: 'old-account' }
+    const frame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
+    const contents = { id: 7, mainFrame: frame }, parent = { isDestroyed: () => false, webContents: contents }
+    registerAppIpcHandlers(registerOptions({ store: { load: vi.fn(async () => current) } as never, getMainWindow: () => parent as never }))
+    electronMock.showProtectedDialog.mockResolvedValueOnce(false)
+    await handlers.get('settings:set')?.({ sender: contents, senderFrame: frame }, { agents: { kun: {
+      approvalReviewer: 'agent', approvalReview: { mode: 'fixed', providerId: 'provider', model: 'model', accountId: 'new-account' }
+    } } })
+    expect(electronMock.showProtectedDialog).toHaveBeenCalledWith(parent, expect.objectContaining({
+      bodyLabel: 'Changes', body: 'Reviewed by: You → Approval model\nReview model: provider (Account: old-account) / model → provider (Account: new-account) / model'
+    }), expect.any(Function))
+  })
 })

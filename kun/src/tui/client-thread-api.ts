@@ -1,5 +1,6 @@
 import { z, type ZodType } from 'zod'
 import { randomUUID } from 'node:crypto'
+import { ExecutionTaskSchema, CreateExecutionTaskSchema, UpdateExecutionTaskSchema } from '../contracts/execution-tasks.js'
 import {
   ApprovalDecisionResponse,
   AttachmentReleaseResponse,
@@ -135,6 +136,23 @@ export class KunTuiClientThreadApi extends KunTuiClientModelApi {
 
   threadTodos(threadId: string) {
     return this.request(`/v1/threads/${segment(threadId)}/todos`, ThreadTodosResponse)
+  }
+
+  listExecutionTasks(threadId: string, cursor?: string) {
+    const query = new URLSearchParams({ limit: '100', ...(cursor ? { cursor } : {}) })
+    return this.request(`/v1/threads/${segment(threadId)}/tasks?${query}`, z.object({
+      tasks: z.array(ExecutionTaskSchema), revision: z.number(), runnable: z.array(z.string()), nextCursor: z.string().optional()
+    }))
+  }
+
+  createExecutionTask(threadId: string, input: z.input<typeof CreateExecutionTaskSchema>) {
+    return this.request(`/v1/threads/${segment(threadId)}/tasks`, z.object({ task: ExecutionTaskSchema, replayed: z.boolean() }),
+      { method: 'POST', body: CreateExecutionTaskSchema.parse(input) })
+  }
+
+  updateExecutionTask(threadId: string, taskId: string, input: z.input<typeof UpdateExecutionTaskSchema>) {
+    return this.request(`/v1/threads/${segment(threadId)}/tasks/${segment(taskId)}`, z.object({ task: ExecutionTaskSchema, replayed: z.boolean() }),
+      { method: 'PATCH', body: UpdateExecutionTaskSchema.parse(input) })
   }
 
   setThreadTodos(threadId: string, input: z.input<typeof SetThreadTodosRequest>) {

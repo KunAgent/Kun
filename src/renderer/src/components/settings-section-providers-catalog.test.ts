@@ -1,6 +1,5 @@
 import {
   defaultModelProviderSettings,
-  defaultModelRequestRetrySettings,
   modelProviderTokenPlanProfile,
   type ModelProviderModelProfileV1
 } from '@shared/app-settings'
@@ -14,8 +13,7 @@ import {
   rebasePendingSharedProviderCatalog,
   reconcilePendingSharedProviderCatalogs,
   reconcilePendingSharedProviderNames,
-  replaceSharedModelConnectionCredential,
-  sharedConnectionBaseUrlOptional
+  replaceSharedModelConnectionCredential
 } from './settings-section-providers'
 import type { SharedModelConnectionsSnapshot } from './settings-section-providers-shared-api'
 import {
@@ -346,6 +344,104 @@ describe('pending shared model connection catalogs', () => {
   })
 })
 
+describe('shared model profile metadata projection', () => {
+  it('keeps pricing and service tiers when projecting registry capabilities into profiles', () => {
+    const current = defaultModelProviderSettings()
+    const snapshot: SharedModelConnectionsSnapshot = {
+      schemaVersion: 1,
+      proxyRoutingVersion: 1,
+      revision: 2,
+      providers: [{
+        id: 'custom-provider-2',
+        accountId: 'account:custom-provider-2',
+        name: 'Custom Provider',
+        kind: 'http',
+        authType: 'api-key',
+        baseUrl: 'https://api.example.com/v1',
+        endpointFormat: 'chat_completions',
+        useProxy: false,
+        configured: true,
+        models: ['priced-model'],
+        modelCapabilities: {
+          'priced-model': {
+            id: 'priced-model',
+            inputModalities: ['text'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text'],
+            contextWindowTokens: 128_000,
+            pricing: {
+              inputUsdPerMillion: 0.15,
+              outputUsdPerMillion: 0.6,
+              cacheReadUsdPerMillion: 0.015
+            },
+            serviceTiers: ['priority']
+          }
+        }
+      }]
+    }
+
+    const projected = projectSharedModelConnections(current, snapshot)
+
+    expect(projected.provider.providers
+      .find((item) => item.id === 'custom-provider-2')
+      ?.modelProfiles['priced-model']).toMatchObject({
+        contextWindowTokens: 128_000,
+        pricing: {
+          inputUsdPerMillion: 0.15,
+          outputUsdPerMillion: 0.6,
+          cacheReadUsdPerMillion: 0.015
+        },
+        serviceTiers: ['priority']
+      })
+  })
+
+  it('keeps stored profile pricing when the projected capability omits it', () => {
+    const current = defaultModelProviderSettings()
+    current.providers.push({
+      ...current.providers[0]!,
+      id: 'custom-provider-2',
+      models: ['priced-model'],
+      modelProfiles: {
+        'priced-model': {
+          ...textModelProfile,
+          pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
+          serviceTiers: ['flex']
+        }
+      }
+    })
+    const snapshot: SharedModelConnectionsSnapshot = {
+      schemaVersion: 1,
+      proxyRoutingVersion: 1,
+      revision: 2,
+      providers: [{
+        id: 'custom-provider-2',
+        accountId: 'account:custom-provider-2',
+        name: 'Custom Provider',
+        kind: 'http',
+        authType: 'api-key',
+        baseUrl: 'https://api.example.com/v1',
+        endpointFormat: 'chat_completions',
+        useProxy: false,
+        configured: true,
+        models: ['priced-model'],
+        modelCapabilities: {
+          'priced-model': { id: 'priced-model', ...textModelProfile }
+        }
+      }]
+    }
+
+    const projected = projectSharedModelConnections(current, snapshot)
+
+    expect(projected.provider.providers
+      .find((item) => item.id === 'custom-provider-2')
+      ?.modelProfiles['priced-model']).toMatchObject({
+        pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
+        serviceTiers: ['flex']
+      })
+  })
+})
+
 describe('shared model connection credential replacement', () => {
   it('treats clearing an absent connection credential as already complete', async () => {
     const snapshot = { schemaVersion: 1 as const, proxyRoutingVersion: 1 as const, revision: 20, providers: [] }
@@ -529,131 +625,6 @@ describe('shared model connection credential replacement', () => {
       expect(sharedProviderMutationCoordinator.pendingCredentials.has('deepseek')).toBe(false)
     } finally {
       resetSharedProviderMutationCoordinatorForTests()
-      vi.unstubAllGlobals()
-    }
-  })
-})
-
-describe('keyless gemini-cli-api shared connections', () => {
-  const geminiProvider = {
-    id: 'gemini-cli-subscription',
-    name: 'Gemini CLI subscription',
-    apiKey: '',
-    baseUrl: '',
-    endpointFormat: 'custom_endpoint' as const,
-    useProxy: false,
-    kind: 'gemini-cli-api' as const,
-    retry: defaultModelRequestRetrySettings(),
-    models: ['gemini-3.7-pro-preview'],
-    modelProfiles: {}
-  }
-
-  it('treats gemini-cli-api as a keyless transport without requiring baseUrl', () => {
-    expect(sharedConnectionBaseUrlOptional('gemini-cli-api')).toBe(true)
-    expect(sharedConnectionBaseUrlOptional('gemini-code-assist')).toBe(true)
-    expect(sharedConnectionBaseUrlOptional('http')).toBe(false)
-    expect(sharedConnectionBaseUrlOptional(undefined)).toBe(false)
-  })
-
-  it('projects a connected keyless gemini connection back into settings', () => {
-    const current = defaultModelProviderSettings()
-    const snapshot: SharedModelConnectionsSnapshot = {
-      schemaVersion: 1,
-      proxyRoutingVersion: 1 as const,
-      revision: 3,
-      providers: [{
-        id: 'gemini-cli-subscription',
-        accountId: 'account:gemini-cli-subscription',
-        name: 'Gemini CLI subscription',
-        kind: 'gemini-cli-api',
-        authType: 'subscription',
-        endpointFormat: 'custom_endpoint',
-        useProxy: false,
-        configured: true,
-        models: ['gemini-3.7-pro-preview']
-      }],
-      defaultProviderId: 'gemini-cli-subscription',
-      defaultAccountId: 'account:gemini-cli-subscription',
-      defaultModel: 'gemini-3.7-pro-preview'
-    }
-    const projected = projectSharedModelConnections(current, snapshot)
-    const projectedProvider = projected.provider.providers
-      .find((item) => item.id === 'gemini-cli-subscription')
-    expect(projectedProvider).toMatchObject({
-      kind: 'gemini-cli-api',
-      baseUrl: '',
-      models: ['gemini-3.7-pro-preview']
-    })
-    expect(projected.kun).toEqual({
-      providerId: 'gemini-cli-subscription',
-      model: 'gemini-3.7-pro-preview'
-    })
-  })
-
-  it('connects a catalog commit for a keyless gemini provider without baseUrl or credential', async () => {
-    const pending = {
-      generation: 1,
-      baseModels: ['gemini-3.1-pro-preview'],
-      baseModelProfiles: {},
-      localModels: ['gemini-3.7-pro-preview', 'gemini-3.1-pro-preview'],
-      localModelProfiles: {},
-      committedRevision: null
-    }
-    const snapshot = (revision: number, includeConnection = false) => ({
-      schemaVersion: 1 as const,
-      proxyRoutingVersion: 1 as const,
-      revision,
-      providers: includeConnection
-        ? [{
-            id: 'gemini-cli-subscription',
-            accountId: 'account:gemini-cli-subscription',
-            name: 'Gemini CLI subscription',
-            kind: 'gemini-cli-api' as const,
-            authType: 'subscription' as const,
-            endpointFormat: 'custom_endpoint' as const,
-            useProxy: false,
-            configured: true,
-            models: [],
-            selectedModel: 'gemini-3.7-pro-preview'
-          }]
-        : []
-    })
-    let connected = false
-    const runtimeRequest = vi.fn(async (path: string, method: string, body?: string) => {
-      if (path === '/v1/model-connections' && method === 'GET') {
-        return { ok: true, status: 200, body: JSON.stringify(snapshot(connected ? 8 : 7, connected)) }
-      }
-      if (path === '/v1/model-connections/connect' && method === 'POST') {
-        connected = true
-        return { ok: true, status: 201, body: JSON.stringify(snapshot(8, true)) }
-      }
-      if (
-        path === '/v1/model-connections/gemini-cli-subscription' && method === 'PATCH'
-      ) {
-        return { ok: true, status: 200, body: JSON.stringify(snapshot(9)) }
-      }
-      throw new Error(`Unexpected runtime request: ${method} ${path}`)
-    })
-    vi.stubGlobal('window', { kunGui: { runtimeRequest } })
-
-    try {
-      const result = await commitSharedModelConnectionCatalog(
-        'gemini-cli-subscription',
-        pending,
-        () => false,
-        { provider: geminiProvider }
-      )
-      expect(result.revision).toBe(9)
-      const connectCall = runtimeRequest.mock.calls.find(
-        ([path, method]) => path === '/v1/model-connections/connect' && method === 'POST'
-      )
-      expect(connectCall).toBeDefined()
-      const connectBody = JSON.parse(connectCall![2] as string) as Record<string, unknown>
-      expect(connectBody.kind).toBe('gemini-cli-api')
-      expect(connectBody).not.toHaveProperty('baseUrl')
-      expect(connectBody).not.toHaveProperty('credential')
-      expect(connectBody.models).toEqual(['gemini-3.7-pro-preview', 'gemini-3.1-pro-preview'])
-    } finally {
       vi.unstubAllGlobals()
     }
   })

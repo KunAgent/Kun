@@ -236,10 +236,11 @@ describe('probeModelProvider', () => {
       endpointFormat: 'chat_completions'
     })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       latencyMs: expect.any(Number),
-      modelIds: ['model-b', 'model-a']
+      modelIds: ['model-b', 'model-a'],
+      modelProfiles: { 'model-a': { evidence: { supportsToolCalling: { status: 'unknown' } } } }
     })
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example.com/v1/models',
@@ -268,10 +269,11 @@ describe('probeModelProvider', () => {
       endpointFormat: 'chat_completions'
     })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       latencyMs: expect.any(Number),
-      modelIds: ['gpt-oss:120b', 'qwen3.5:397b']
+      modelIds: ['gpt-oss:120b', 'qwen3.5:397b'],
+      modelProfiles: { 'gpt-oss:120b': { evidence: { contextWindowTokens: { status: 'unknown' } } } }
     })
     expect(fetchMock).toHaveBeenCalledWith(
       'https://ollama.com/v1/models',
@@ -468,5 +470,14 @@ describe('probeModelProvider', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.message).toContain('does not support /models probing')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('Azure OpenAI probe headers', () => {
+  it('sends the key as api-key on Azure resource hosts and Bearer elsewhere', () => {
+    expect(providerProbeHeaders('responses', 'k', undefined, 'https://acme.openai.azure.com/openai/v1/models'))
+      .toEqual({ Accept: 'application/json', 'api-key': 'k' })
+    expect(providerProbeHeaders('responses', 'k', undefined, 'https://api.openai.com/v1/models'))
+      .toEqual({ Accept: 'application/json', Authorization: 'Bearer k' })
   })
 })

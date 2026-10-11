@@ -1,6 +1,9 @@
+import { createPaperTurnContext } from '@shared/paper/paper-turn-context'
+import { codeDefaultRouteError } from './chat-store-code-default-route'
+import { designSubmissionMatchesCodeThread, kunWorkflowSendBlocked } from './chat-store-kun-capability-guard'
 import type { ChatBlock, NormalizedThread, ReviewTarget } from '../agent/types'
-import type { DesignDocumentTarget, DesignTaskProfileInput } from '../agent/design-task-profile'
 import { getProvider } from '../agent/registry'
+import { adeWorkerNoticeSendExtras } from '../agent/ade-notices'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { prepareAssistantMarkdownRenderer } from '../lib/assistant-markdown-loader'
 import {
@@ -51,6 +54,7 @@ import type {
   WriteAssistantMessageContext
 } from './chat-store-types'
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
+import { threadWorkspaceBlocksSend } from './task-workspace-store'
 import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
@@ -60,7 +64,6 @@ import {
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
 import {
-  accountIdForComposerSelection,
   activeClawChannel,
   compactCodeWorkspaceRoots,
   composerReasoningEffortForSelection,
@@ -121,7 +124,6 @@ import {
   isCodeThread,
   latestThread,
   looksLikeActiveTurnError,
-  readActiveWriteWorkspace,
   readWriteWorkspaceRoots,
   rememberPendingClawFeishuMirror,
   runtimeErrorDetail,
@@ -131,6 +133,7 @@ import {
   turnCompleteNotificationSource,
   watchTurnCompletionNotification
 } from './chat-store-runtime'
+import { resolveSendWorkspaceRoot } from './chat-store-runtime-notifications'
 import {
   getThreadSnapshot,
   invalidateThreadSnapshot,
@@ -139,19 +142,15 @@ import {
 import {
   composerSelectionForThread,
   ensureRuntimeProviderForSend,
-  fallbackComposerProviderIdForSend,
   subscribeThreadEventsWithRecovery
 } from './chat-store-thread-action-helpers'
 import { GitCheckpointAvailabilityCache } from '../lib/git-checkpoint-availability'
-import { readDesignThreadRegistry } from '../design/design-thread-registry'
-import { isDesignThreadId } from '../design/design-thread-registry'
 import { readSddThreadRegistry } from '../sdd/sdd-thread-registry'
-import { isWorkspaceOfficeViewPositionAttachment } from '../lib/workspace-office-view-context'
-import { isWriteTurnReferenceAttachment } from '../write/write-turn-reference-context'
+import type { ComposerContextAttachment } from '@kun/extension-api'
 import {
-  MAX_COMPOSER_CONTEXT_ATTACHMENTS,
-  type ComposerContextAttachment
-} from '@kun/extension-api'
+  mergeTurnComposerContexts,
+  routeComposerContexts
+} from './chat-store-composer-context-routing'
 import { mergeChatBlocks } from '../agent/kun-mapper'
 import {
   activeChatWorkspaceRoot,
@@ -174,82 +173,18 @@ import {
   type ThreadActionRuntime
 } from './chat-store-thread-actions-support'
 import { performPreparedThreadSend } from './chat-store-thread-send-direct'
+import {
+  adeDraftStillCurrent,
+  captureAdeDraftSendSnapshot,
+  captureCodeDraftComposer,
+  captureCodeProjectRouteSnapshot
+} from './chat-store-ade-send-snapshot'
+import { composerSelectionNeedsProvider, resolveDirectSendComposerSelection, sendFollowsComposerAgent } from './chat-store-send-composer-selection'
 import { submitToRuntimeQueue } from './chat-store-thread-send-enqueue'
 import { runtimePromptForSurface } from './chat-store-send-prompt'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
 
-function mergeTurnComposerContexts(
-  primary: readonly ComposerContextAttachment[],
-  pending: readonly ComposerContextAttachment[]
-): ComposerContextAttachment[] {
-  const merged: ComposerContextAttachment[] = []
-  const seen = new Set<string>()
-  for (const context of [...primary, ...pending]) {
-    if (seen.has(context.attachmentId)) continue
-    seen.add(context.attachmentId)
-    merged.push(context)
-    if (merged.length === MAX_COMPOSER_CONTEXT_ATTACHMENTS) break
-  }
-  return merged
-}
-
-function routeComposerContexts(
-  route: ChatState['route'],
-  primary: readonly ComposerContextAttachment[],
-  pending: readonly ComposerContextAttachment[]
-): ComposerContextAttachment[] {
-  if (route === 'chat') return mergeTurnComposerContexts(primary, pending)
-  if (route === 'write') {
-    const currentView = primary.find(isWorkspaceOfficeViewPositionAttachment)
-    const references = primary.filter(isWriteTurnReferenceAttachment)
-    const pptContexts = primary.filter((context) =>
-      'source' in context.provenance &&
-      context.provenance.source === 'dev-preview' &&
-      (context.reference.kind === 'ppt-review' || context.reference.kind === 'ppt-direction'))
-    return mergeTurnComposerContexts(
-      [...references, ...(currentView ? [currentView] : []), ...pptContexts],
-      []
-    )
-  }
-  return []
-}
-
 export const routeComposerContextsForTests = routeComposerContexts
-
-function sameDesignDocumentTarget(
-  left: DesignDocumentTarget | undefined,
-  right: DesignDocumentTarget | undefined
-): boolean {
-  return Boolean(
-    left && right &&
-    left.documentId === right.documentId &&
-    left.boardArtifactId === right.boardArtifactId
-  )
-}
-
-function designSubmissionMatchesCodeThread(
-  thread: NormalizedThread | null,
-  profile: DesignTaskProfileInput | undefined,
-  target: DesignDocumentTarget | undefined
-): boolean {
-  if (
-    !thread ||
-    thread.agentSurface === 'write' ||
-    thread.agentSurface === 'design' ||
-    isDesignThreadId(thread.id, readDesignThreadRegistry()) ||
-    !profile ||
-    !sameDesignDocumentTarget(profile.documentTarget, target)
-  ) return false
-  const locked = thread.designProfile
-  if (!locked) return true
-  return sameDesignDocumentTarget(locked.documentTarget, target) &&
-    locked.outputMedium === profile.outputMedium &&
-    locked.target === profile.target &&
-    locked.preset === profile.preset &&
-    locked.presetSource === profile.presetSource &&
-    JSON.stringify(locked.styleSnapshot ?? null) === JSON.stringify(profile.styleSnapshot ?? null) &&
-    JSON.stringify(locked.context) === JSON.stringify(profile.context)
-}
 
 export async function sendThreadMessage(
   context: StoreActionContext,
@@ -259,6 +194,20 @@ export async function sendThreadMessage(
   overrides: Parameters<ChatState['sendMessage']>[2]
 ): Promise<boolean> {
   const { set, get } = context
+  const routeError = codeDefaultRouteError(get())
+  if (routeError) {
+    set({ error: routeError })
+    return false
+  }
+  const adeDraft = captureAdeDraftSendSnapshot(get())
+  const codeDraftComposer = captureCodeDraftComposer(get())
+  const codeProjectRoute = captureCodeProjectRouteSnapshot(get())
+  const composerCollaborationEnabled = !get().activeThreadId && get().route === 'chat' &&
+    get().composerCollaborationEnabled === true
+  const composerCollaborationExplicit = !get().activeThreadId && get().route === 'chat' &&
+    Boolean(get().composerProjectCollaborationExplicitWorkspaceRoot) &&
+    normalizeWorkspaceRoot(get().composerProjectCollaborationExplicitWorkspaceRoot) === normalizeWorkspaceRoot(get().workspaceRoot)
+  if (get().route === 'ade' && !get().activeThreadId && !adeDraft) return false
     const trimmedText = text.trim()
     if (!trimmedText) return false
     const activeSyncThreadId = get().activeThreadId
@@ -269,7 +218,17 @@ export async function sendThreadMessage(
     // chunk finishes loading on a cold start. Warm it as soon as the user
     // commits a turn so the fallback plain-text frame is as short as possible.
     void prepareAssistantMarkdownRenderer().catch(() => undefined)
-    const queued = overrides?.queued
+    let queued = overrides?.queued
+    let paperContext = queued?.paperContext ?? overrides?.paperContext
+    if (paperContext) {
+      try {
+        paperContext = createPaperTurnContext(paperContext)
+        overrides = { ...overrides, paperContext }
+        if (queued) queued = { ...queued, paperContext }
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Invalid paper context' }); return false
+      }
+    }
     const clientRequestId = queued?.clientRequestId?.trim() ||
       overrides?.clientRequestId?.trim() ||
       createClientTurnRequestId()
@@ -285,7 +244,7 @@ export async function sendThreadMessage(
       : queued?.designDocumentTarget ?? overrides?.designDocumentTarget
     const designImagePlacementTarget = queued?.designImagePlacementTarget ?? overrides?.designImagePlacementTarget
     const messageSource = queued?.messageSource ?? overrides?.messageSource
-    const persona = resolveTurnPersona(
+    const persona = paperContext ? '' : resolveTurnPersona(
       get().composerPersonaEnabled,
       queued?.persona,
       overrides?.persona,
@@ -309,6 +268,8 @@ export async function sendThreadMessage(
       )
     )
     let writeContext = queued?.writeContext ?? overrides?.writeContext
+    const scopedWriteThread = !writeContext && requestedAgentSurface === 'write' && expectedThreadId
+      ? get().threads.find((thread) => thread.id === expectedThreadId && thread.agentSurface === 'write') ?? null : null
     const requireActiveWriteContext = Boolean(writeContext && !queued)
     const activeWriteContextIsValid = (): boolean => Boolean(
       !writeContext ||
@@ -328,22 +289,17 @@ export async function sendThreadMessage(
     }
     if (get().route !== 'claw') {
       const state = get()
-      const activeThread = state.activeThreadId
-        ? state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
-        : null
-      let workspaceRoot = writeContext
-        ? normalizeWorkspaceRoot(writeContext.workspaceRoot)
-        : state.route === 'write'
-          ? await readActiveWriteWorkspace(state.workspaceRoot)
-          : normalizeWorkspaceRoot(activeThread?.workspace)
+      const activeThread = state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
+      let workspaceRoot = adeDraft?.workspaceRoot ?? await resolveSendWorkspaceRoot(state, activeThread, writeContext, scopedWriteThread)
       if (!activeWriteContextIsValid()) return false
-      if (!workspaceRoot) {
+      if (!workspaceRoot && !adeDraft) {
         workspaceRoot = normalizeWorkspaceRoot((await rendererRuntimeClient.getSettings()).workspaceRoot)
         if (!activeWriteContextIsValid()) return false
       }
       if (workspaceRoot && !(await workspaceDirectoryExists(workspaceRoot))) {
+        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) return false
         set({ error: workspaceMissingError() })
-        await showWorkspaceMissingDialog(workspaceRoot)
+        if (!adeDraft) await showWorkspaceMissingDialog(workspaceRoot)
         return false
       }
       if (!activeWriteContextIsValid()) return false
@@ -361,13 +317,13 @@ export async function sendThreadMessage(
         ? boardThread && normalizeWorkspaceRoot(boardThread.workspace) === boardWorkspace
           ? boardThreadId
           : null
-        : await get().ensureWriteThreadForWorkspace(
-            writeContext?.workspaceRoot,
-            writeContext
-              ? writeConversationResourcePath(
-                  writeContext.workspaceRoot, writeContext.activeFilePath)
-              : undefined
-          )
+        : scopedWriteThread && get().activeThreadId === scopedWriteThread.id
+          ? scopedWriteThread.id
+          : await get().ensureWriteThreadForWorkspace(
+              writeContext?.workspaceRoot,
+              writeContext ? writeConversationResourcePath(
+                writeContext.workspaceRoot, writeContext.activeFilePath) : undefined
+            )
       if (!writeThreadId) return false
       if (writeContext?.threadId && writeThreadId !== writeContext.threadId) return false
       // ensureWriteThreadForWorkspace may await selectThread. If the user
@@ -379,30 +335,39 @@ export async function sendThreadMessage(
       }
       if (!activeWriteContextIsValid()) return false
     }
+    const selectedRoute = resolveDirectSendComposerSelection({
+      state: get(), queued, overrides, adeDraft, codeDraftComposer,
+      adeEligible: sendFollowsComposerAgent(get().route, overrides)
+    })
+    const orchestration = queued ? queued.orchestration ?? 'direct' : overrides?.orchestration ??
+      (mode === 'agent' && get().route === 'chat' && get().graphEnabled ? get().composerOrchestration : 'direct')
+    if (kunWorkflowSendBlocked({ state: get(), selection: selectedRoute, mode, orchestration, overrides })) {
+      set({ error: i18n.t('common:kunAgentRequiredForWorkflow', {
+        defaultValue: 'Design, Graph and plan workflows require Kun Agent. Select Kun to continue.'
+      }) })
+      return false
+    }
+    if (composerSelectionNeedsProvider(selectedRoute)) {
+      set({ error: i18n.t('common:adeProviderSelectionRequired') })
+      return false
+    }
     const admissionPromise = !queued && shouldWaitForRuntimeAdmission
       ? waitForRuntimeTurnAdmission(clientRequestId)
       : null
+    // ADE manager sends fold pending worker notices into the turn.
+    const adeExtras = await adeWorkerNoticeSendExtras(get(), queued?.ackNoticeIds, i18n.language)
+    const ackNoticeIds = adeExtras.ackNoticeIds
     const hasPendingActiveTurn = threadHasPendingRuntimeWork(get().blocks)
-    if (get().busy || hasPendingActiveTurn || (queued && !shouldWaitForRuntimeAdmission)) {
+    // Task-worktree prep queues locally: the runtime cannot admit
+    // a turn until the thread is bound to the ready workspace path.
+    const workspacePreparing = threadWorkspaceBlocksSend(get().activeThreadId)
+    if (get().busy || hasPendingActiveTurn || workspacePreparing || (queued && !shouldWaitForRuntimeAdmission)) {
       const state = get()
       const activeThreadId = state.activeThreadId
       const threadSnap = activeThreadId
         ? state.threads.find((thread) => thread.id === activeThreadId)
         : undefined
-      const clawModel = activeClawChannel(state)?.model
-      const overrideModel = queued?.model ?? overrides?.model?.trim()
-      const composerModel =
-        overrideModel ?? (state.route === 'claw' && clawModel ? clawModel : state.composerModel.trim())
-      const composerProviderId =
-        queued?.providerId?.trim() || overrides?.providerId?.trim() || fallbackComposerProviderIdForSend(state)
-      const composerAccountId =
-        queued?.accountId?.trim() ||
-        overrides?.accountId?.trim() ||
-        accountIdForComposerSelection(
-          state.composerModelGroups,
-          composerProviderId,
-          composerModel
-        )
+      const { composerModel, composerProviderId, composerAccountId, composerHarnessId, composerCredentialMode, composerGatewayBinding } = selectedRoute
       const userModelChip =
         queued?.modelLabel ?? overrides?.modelLabel ?? optimisticUserModelLabel(composerModel, threadSnap?.model)
       const displayText = queued?.displayText ?? overrides?.displayText?.trim()
@@ -418,20 +383,19 @@ export async function sendThreadMessage(
         reference.relativePath.trim().length > 0 &&
         reference.name.trim().length > 0
       )
-      const composerContexts = routeComposerContexts(
-        state.route,
-        queued?.composerContexts ?? overrides?.composerContexts ?? [],
-        queued ? [] : pendingComposerContexts(state)
+      const composerContexts = mergeTurnComposerContexts(
+        routeComposerContexts(
+          state.route,
+          queued?.composerContexts ?? overrides?.composerContexts ?? [],
+          queued ? [] : pendingComposerContexts(state)
+        ),
+        adeExtras.contexts
       )
-      const orchestration = queued?.orchestration ?? overrides?.orchestration ??
-        (mode === 'agent' && state.route === 'chat' && state.graphEnabled
-          ? state.composerOrchestration
-          : 'direct')
       // Runtime-owned queue: submit the follow-up directly with
       // enqueueIfBusy so it executes even when this conversation is never
       // opened again. Write sends now carry a durable `writeContext` reference
       // so they can join the runtime queue too.
-      if (activeThreadId && !shouldWaitForRuntimeAdmission) {
+      if (activeThreadId && !shouldWaitForRuntimeAdmission && !workspacePreparing) {
         const submitted = await submitToRuntimeQueue({
           provider: p,
           activeThreadId,
@@ -444,6 +408,9 @@ export async function sendThreadMessage(
           composerModel,
           composerProviderId,
           composerAccountId,
+          composerHarnessId,
+          composerCredentialMode,
+          composerGatewayBinding,
           userModelChip,
           displayText,
           reasoningEffort,
@@ -458,6 +425,7 @@ export async function sendThreadMessage(
           attachments,
           fileReferences,
           composerContexts,
+          ackNoticeIds,
           queued,
           overrides,
           set,
@@ -480,6 +448,9 @@ export async function sendThreadMessage(
           ...(composerModel ? { model: composerModel } : {}),
           ...(composerProviderId ? { providerId: composerProviderId } : {}),
           ...(composerAccountId ? { accountId: composerAccountId } : {}),
+          ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+          ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
+          ...(composerGatewayBinding ? { gatewayBinding: structuredClone(composerGatewayBinding) } : {}),
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
           ...(reasoningEffort ? { reasoningEffort } : {}),
           ...(serviceTier ? { serviceTier } : {}),
@@ -499,10 +470,12 @@ export async function sendThreadMessage(
             ? { guiDesignArtifact: queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact }
             : {}),
           ...(writeContext ? { writeContext } : {}),
+          ...(paperContext ? { paperContext: createPaperTurnContext(paperContext) } : {}),
           ...(attachmentIds?.length ? { attachmentIds } : {}),
           ...(attachments?.length ? { attachments } : {}),
           ...(fileReferences?.length ? { fileReferences } : {}),
-          ...(composerContexts.length ? { composerContexts } : {})
+          ...(composerContexts.length ? { composerContexts } : {}),
+          ...(ackNoticeIds?.length ? { ackNoticeIds } : {})
         }),
         extensionComposerContexts: withoutConsumedComposerContexts(s, composerContexts),
         error: null
@@ -533,10 +506,13 @@ export async function sendThreadMessage(
         reference.name.trim().length > 0
       ) ??
       []
-    const composerContexts = routeComposerContexts(
-      get().route,
-      queued?.composerContexts ?? overrides?.composerContexts ?? [],
-      queued ? [] : pendingComposerContexts(get())
+    const composerContexts = mergeTurnComposerContexts(
+      routeComposerContexts(
+        get().route,
+        queued?.composerContexts ?? overrides?.composerContexts ?? [],
+        queued ? [] : pendingComposerContexts(get())
+      ),
+      adeExtras.contexts
     )
     let activeThreadId = get().activeThreadId
     if (!expectedThreadStillActive()) {
@@ -558,16 +534,7 @@ export async function sendThreadMessage(
       get().blocks.every((block) => block.kind !== 'user') &&
       shouldAutoTitleThread(activeThread)
     const threadSnap = get().threads.find((thread) => thread.id === activeThreadId)
-    const clawModel = activeClawChannel(get())?.model
-    const overrideModel = overrides?.model?.trim()
-    const composerModel =
-      queued?.model ?? overrideModel ?? (get().route === 'claw' && clawModel ? clawModel : get().composerModel.trim())
-    const composerProviderId =
-      queued?.providerId ?? overrides?.providerId?.trim() ?? fallbackComposerProviderIdForSend(get())
-    const composerAccountId =
-      queued?.accountId ??
-      overrides?.accountId?.trim() ??
-      accountIdForComposerSelection(get().composerModelGroups, composerProviderId, composerModel)
+    const { composerModel, composerProviderId, composerAccountId, composerHarnessId, composerCredentialMode, composerGatewayBinding } = selectedRoute
     const reasoningEffort = queued?.reasoningEffort ?? overrides?.reasoningEffort?.trim()
     const serviceTier =
       (queued?.serviceTier ?? overrides?.serviceTier) === 'priority'
@@ -577,17 +544,12 @@ export async function sendThreadMessage(
     const guiDesignCanvas = (queued?.guiDesignCanvas ?? overrides?.guiDesignCanvas) === true
     const guiExcalidrawCanvas = (queued?.guiExcalidrawCanvas ?? overrides?.guiExcalidrawCanvas) === true
     const guiDesignMode = (queued?.guiDesignMode ?? overrides?.guiDesignMode) === true
-    const orchestration = queued?.orchestration ??
-      overrides?.orchestration ??
-      (mode === 'agent' && get().route === 'chat' && get().graphEnabled
-        ? get().composerOrchestration
-        : 'direct')
     const userModelChip =
       queued?.modelLabel ?? overrides?.modelLabel ?? optimisticUserModelLabel(composerModel, threadSnap?.model)
     // Freeze the composer execution settings at enqueue time so a queued
     // message keeps the approval/sandbox policy selected when it was submitted,
     // not whatever is global by the time the queue drains.
-    const composerExecutionSettings = get().composerExecutionSettings
+    const composerExecutionSettings = adeDraft ? adeDraft.composer.composerExecutionSettings : get().composerExecutionSettings
     const snapshotApprovalPolicy =
       queued?.approvalPolicy ?? overrides?.approvalPolicy ?? composerExecutionSettings?.approvalPolicy
     const snapshotSandboxMode =
@@ -606,6 +568,9 @@ export async function sendThreadMessage(
       ...(composerModel ? { model: composerModel } : {}),
       ...(composerProviderId ? { providerId: composerProviderId } : {}),
       ...(composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+      ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
+          ...(composerGatewayBinding ? { gatewayBinding: structuredClone(composerGatewayBinding) } : {}),
       ...(userModelChip ? { modelLabel: userModelChip } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(serviceTier ? { serviceTier } : {}),
@@ -625,18 +590,21 @@ export async function sendThreadMessage(
         ? { guiDesignArtifact: queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact }
         : {}),
       ...(writeContext ? { writeContext } : {}),
+          ...(paperContext ? { paperContext: createPaperTurnContext(paperContext) } : {}),
       ...(snapshotApprovalPolicy ? { approvalPolicy: snapshotApprovalPolicy } : {}),
       ...(snapshotSandboxMode ? { sandboxMode: snapshotSandboxMode } : {}),
       ...(snapshotApprovalReviewer ? { approvalReviewer: snapshotApprovalReviewer } : {}),
       ...(attachmentIds.length ? { attachmentIds } : {}),
       ...(attachments.length ? { attachments } : {}),
       ...(fileReferences.length ? { fileReferences } : {}),
-      ...(composerContexts.length ? { composerContexts } : {})
+      ...(composerContexts.length ? { composerContexts } : {}),
+      ...(ackNoticeIds?.length ? { ackNoticeIds } : {})
     })
     const sent = await performPreparedThreadSend({
       context,
       runtime,
       provider: p,
+      adeDraft,
       trimmedText,
       mode,
       overrides,
@@ -656,15 +624,22 @@ export async function sendThreadMessage(
       attachments,
       fileReferences,
       composerContexts,
+      ackNoticeIds,
       activeThreadId,
       displayText,
       userDisplayText,
       generatedTitle,
+      composerCollaborationEnabled,
+      composerCollaborationExplicit,
+      codeProjectRoute,
       shouldAutoRenameForRoute,
       shouldRenameThreadAfterSend,
       composerModel,
       composerProviderId,
       composerAccountId,
+      composerHarnessId,
+      composerCredentialMode,
+      composerGatewayBinding,
       reasoningEffort,
       serviceTier,
       guiDesignCanvas,

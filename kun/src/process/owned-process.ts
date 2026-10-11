@@ -8,13 +8,19 @@ import {
   beginWindowsOwnedProcessShutdown,
   shutdownWindowsOwnedProcesses,
   resumeWindowsOwnedProcessAdmission,
+  resolveWindowsExecutablePath,
   spawnWindowsOwnedProcess,
   stopWindowsOwnedProcess
 } from './owned-process-windows.js'
 
 export type OwnedProcessStopOptions = { graceMs?: number; timeoutMs?: number }
 export type OwnedProcessShutdownOptions = OwnedProcessStopOptions & { exclude?: readonly ChildProcess[] }
-export type SpawnOwnedProcessOptions = SpawnOptions & { ownerLossGraceMs?: number; trackDescendants?: boolean }
+export type SpawnOwnedProcessOptions = SpawnOptions & {
+  ownerLossGraceMs?: number
+  trackDescendants?: boolean
+  /** Revalidate admission after preparation and before releasing executable code. */
+  beforeLaunch?: () => Promise<unknown>
+}
 type Guard = {
   child: ChildProcess
   scopeOwnerPid?: number
@@ -29,6 +35,49 @@ let guardStartFailed = false
 let stopping = false
 const retired = new WeakSet<ChildProcess>()
 const windowsOwned = new WeakSet<ChildProcess>()
+/**
+ * A guard with nothing left to supervise is retired after this long. Each
+ * guard is an Electron-as-Node process (tens of MB); the Runtime only needs
+ * one while it has live children (MCP servers, Agent sessions, commands).
+ */
+export const OWNED_PROCESS_GUARD_IDLE_RETIRE_MS = 60_000
+let guardIdleRetireMs = OWNED_PROCESS_GUARD_IDLE_RETIRE_MS
+let guardIdleTimer: ReturnType<typeof setTimeout> | undefined
+/** Launches between guard acquisition and registration; retirement waits for them. */
+let admissionsInFlight = 0
+
+/** Test hook: shorten or disable (0) idle guard retirement. */
+export function setOwnedProcessGuardIdleRetireMs(ms: number): void {
+  guardIdleRetireMs = Math.max(0, Math.floor(ms))
+}
+
+function guardHasGroups(guard: Guard): boolean {
+  for (const owner of owned.values()) if (owner === guard) return true
+  return false
+}
+
+function scheduleGuardRetirement(): void {
+  if (guardIdleTimer || guardIdleRetireMs <= 0 || stopping) return
+  const guard = activeGuard
+  if (!guard || guardHasGroups(guard)) return
+  guardIdleTimer = setTimeout(() => {
+    guardIdleTimer = undefined
+    if (stopping || admissionsInFlight > 0 || activeGuard !== guard || guardHasGroups(guard)) return
+    if (guardChildDead(guard.child)) return
+    // Detach first so a concurrent launch starts a fresh guard instead of
+    // registering with the one that is about to exit.
+    activeGuard = undefined
+    guardPromise = undefined
+    void guard.request({ type: 'shutdown', graceMs: 0, timeoutMs: 5000 }).catch(() => undefined)
+  }, guardIdleRetireMs)
+  guardIdleTimer.unref?.()
+}
+
+function cancelGuardRetirement(): void {
+  if (!guardIdleTimer) return
+  clearTimeout(guardIdleTimer)
+  guardIdleTimer = undefined
+}
 
 function startGuard(): Promise<Guard> {
   return new Promise((resolveGuard, rejectGuard) => {
@@ -84,6 +133,7 @@ function startGuard(): Promise<Guard> {
           retired.add(target)
           owned.delete(target)
         }
+        scheduleGuardRetirement()
         return
       }
       if (message.id === undefined) return
@@ -144,6 +194,22 @@ async function resolveCommand(command: string, options: SpawnOptions): Promise<s
   throw Object.assign(new Error(`Could not start executable: ${command}`), { code: 'ENOENT', syscall: 'spawn' })
 }
 
+/**
+ * Read-only executable resolution for detection paths that must not spawn.
+ * Returns undefined instead of throwing when the command cannot be resolved.
+ */
+export async function resolveExecutable(
+  command: string,
+  options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
+): Promise<string | undefined> {
+  try {
+    if (process.platform === 'win32') return await resolveWindowsExecutablePath(command, options)
+    return await resolveCommand(command, options)
+  } catch {
+    return undefined
+  }
+}
+
 function withLaunchPipe(stdio: StdioOptions | undefined): Exclude<StdioOptions, string> {
   const result: Exclude<StdioOptions, string> = Array.isArray(stdio)
     ? [...stdio]
@@ -175,11 +241,27 @@ export async function spawnOwnedProcess(
   }
   if (options.shell) throw new Error('Owned commands must select an explicit shell executable')
   const executable = await resolveCommand(command, options)
+  admissionsInFlight += 1
+  cancelGuardRetirement()
+  try {
+    return await spawnWithGuard(executable, args, options)
+  } finally {
+    admissionsInFlight -= 1
+    scheduleGuardRetirement()
+  }
+}
+
+async function spawnWithGuard(
+  executable: string,
+  args: readonly string[],
+  options: SpawnOwnedProcessOptions
+): Promise<ChildProcess> {
   const guard = await getGuard()
+  await options.beforeLaunch?.()
   if (stopping) throw new Error('Owned process admission is closed')
   const stdio = withLaunchPipe(options.stdio)
   const gateFd = stdio.length - 1
-  const { ownerLossGraceMs = 20_000, trackDescendants = true, ...spawnOptions } = options
+  const { ownerLossGraceMs = 20_000, trackDescendants = true, beforeLaunch, ...spawnOptions } = options
   const wrapper = `IFS= read -r kun_start <&${gateFd} || exit 125; [ "$kun_start" = start ] || exit 125; exec ${gateFd}<&-; exec "$@"`
   const child = spawn('/bin/sh', ['-c', wrapper, 'kun-owned', executable, ...args], {
     ...spawnOptions,
@@ -200,6 +282,7 @@ export async function spawnOwnedProcess(
       child.once('error', reject)
     })
     await guard.request({ type: 'register', pid: child.pid, ownerLossGraceMs, trackDescendants })
+    await beforeLaunch?.()
     if (stopping) throw new Error('Owned process admission closed during launch')
     gate?.end('start\n')
     return child
@@ -213,6 +296,7 @@ export async function spawnOwnedProcess(
 /** Close admission synchronously before an asynchronous shutdown starts. */
 export function beginOwnedProcessShutdown(): void {
   stopping = true
+  cancelGuardRetirement()
   if (process.platform === 'win32') beginWindowsOwnedProcessShutdown()
 }
 
@@ -232,7 +316,14 @@ export async function registerOwnedProcessGroup(
   options: { ownerLossGraceMs?: number; trackDescendants?: boolean } = {}
 ): Promise<{ stop(options?: OwnedProcessStopOptions): Promise<void> }> {
   if (process.platform === 'win32') throw new Error('External groups require native Windows job registration')
-  const guard = await getGuard()
+  admissionsInFlight += 1
+  cancelGuardRetirement()
+  let guard: Guard
+  try {
+    guard = await getGuard()
+  } finally {
+    admissionsInFlight -= 1
+  }
   const reference = { pid } as ChildProcess
   owned.set(reference, guard)
   try {
@@ -298,6 +389,7 @@ export async function stopOwnedProcess(
   }
   owned.delete(child)
   retired.add(child)
+  scheduleGuardRetirement()
 }
 
 /** Wait for all registered groups and the session guard itself to exit. */

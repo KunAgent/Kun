@@ -1,3 +1,6 @@
+import { acpToolPresentation } from './acp-tool-presentation'
+import { mergeToolPresentations, toolPresentationFromItem } from './tool-presentation'
+import { externalSubagentChildMeta, readExternalSubagentMeta } from './external-subagent'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -343,6 +346,11 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     ...(item.cancelRequestedAt ? { cancelRequestedAt: item.cancelRequestedAt } : {})
   }
   applyRuntimeDisclosureMeta(meta, item, child)
+  const externalSubagent = readExternalSubagentMeta(item.meta)
+  if (externalSubagent) {
+    meta.externalSubagent = externalSubagent
+    if (!meta.child) meta.child = externalSubagentChildMeta(externalSubagent, item)
+  }
   const sources = extractToolSources(item)
   if (sources) meta.sources = sources
   const attachments = extractToolAttachments(item)
@@ -369,7 +377,12 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     }
   }
   const presentation = inferToolPresentation(item)
+  const acp = acpToolPresentation(item)
+  if (acp) Object.assign(meta, acp.meta)
+  meta.toolPresentation = toolPresentationFromItem(item)
   const payload = payloadFor(item)
+  if (typeof payload.dispatchIntentId === 'string') meta.dispatchIntentId = payload.dispatchIntentId
+  if (payload.dispatchIntent && typeof payload.dispatchIntent === 'object') meta.dispatchIntent = payload.dispatchIntent
   const paperSearch = paperSearchMetaFromToolItem(item)
   if (paperSearch) meta.paperSearch = paperSearch
   const paperDetails = paperDetailsFromToolItem(item)
@@ -385,15 +398,21 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     const plan = extractPlanMetadata(item)
     if (plan) meta.plan = plan
   }
+  const status = componentDesignStatusOverride(item, componentPrototype) ?? diagramStatusOverride(item, diagramPrototype) ?? delegateTaskStatusOverride(item, payload) ?? toolStatus(item)
+  const semantic = meta.toolPresentation as ReturnType<typeof toolPresentationFromItem>
+  if (status === 'running' && ['completed', 'failed', 'canceled'].includes(semantic.state)) semantic.state = 'running'
+  else if (status === 'success') semantic.state = 'completed'
+  else if (status === 'error' && semantic.state !== 'canceled') semantic.state = 'failed'
+  if (status !== 'running') semantic.canCancel = false
   return {
     kind: 'tool',
     id: toolBlockId(item),
     turnId: item.turnId,
     createdAt: itemCreatedAt(item),
     summary,
-    status: componentDesignStatusOverride(item, componentPrototype) ?? diagramStatusOverride(item, diagramPrototype) ?? delegateTaskStatusOverride(item, payload) ?? toolStatus(item),
+    status,
     toolKind: presentation.toolKind,
-    ...(presentation.filePath ? { filePath: presentation.filePath } : {}),
+    ...((acp?.filePath ?? presentation.filePath) ? { filePath: acp?.filePath ?? presentation.filePath } : {}),
     ...(detail ? { detail } : {}),
     meta
   }
@@ -439,9 +458,10 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
       merged.push(block)
       continue
     }
-    const existingIndex = toolIndexes.get(block.id)
+    const identity = `${block.turnId ?? ''}\u0000${block.id}`
+    const existingIndex = toolIndexes.get(identity)
     if (existingIndex === undefined) {
-      toolIndexes.set(block.id, merged.length)
+      toolIndexes.set(identity, merged.length)
       merged.push(block)
       continue
     }
@@ -452,8 +472,7 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
     }
     // A paged source result is final even if a later page only brings the
     // matching call. Loading that call must not replace output with arguments.
-    const resultOwnsContent = /^(codex|claude-code|opencode):/u.test(existing.turnId ?? '') &&
-      existing.meta?.sourceItemKind === 'tool_result' && block.meta?.sourceItemKind !== 'tool_result'
+    const resultOwnsContent = existing.meta?.sourceItemKind === 'tool_result' && block.meta?.sourceItemKind !== 'tool_result'
     const first = resultOwnsContent ? block : existing
     const last = resultOwnsContent ? existing : block
     merged[existingIndex] = {
@@ -467,7 +486,8 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
       detail: last.detail ?? first.detail,
       filePath: last.filePath ?? first.filePath,
       toolKind: last.toolKind ?? first.toolKind,
-      meta: { ...(first.meta ?? {}), ...(last.meta ?? {}) },
+      meta: { ...(first.meta ?? {}), ...(last.meta ?? {}),
+        toolPresentation: mergeToolPresentations(first.meta?.toolPresentation, last.meta?.toolPresentation) },
       ...(existing.sourceRecords || block.sourceRecords ? {
         sourceRecords: [...new Map([...(first.sourceRecords ?? []), ...(last.sourceRecords ?? [])]
           .map((record) => [record.itemId, record])).values()]

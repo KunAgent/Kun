@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { InMemoryApprovalGate } from '../../adapters/in-memory-approval-gate.js'
 import { createApprovalRequest } from '../../domain/approval.js'
-import { decideApproval } from './approvals.js'
+import { decideApproval, listPendingApprovals } from './approvals.js'
 
 function decisionRequest(approvalId: string, decision: 'allow' | 'deny'): Request {
   return new Request(`http://127.0.0.1/v1/approvals/${approvalId}`, {
@@ -10,6 +10,53 @@ function decisionRequest(approvalId: string, decision: 'allow' | 'deny'): Reques
     body: JSON.stringify({ decision })
   })
 }
+
+describe('pending approvals list route', () => {
+  it('lists pending approvals with the mobile projection fields', () => {
+    const gate = new InMemoryApprovalGate()
+    void gate.request(createApprovalRequest({
+      id: 'approval_1', threadId: 'thread_1', turnId: 'turn_1',
+      toolName: 'write', summary: 'Write the file'
+    }))
+    void gate.request(createApprovalRequest({
+      id: 'approval_2', threadId: 'thread_2', turnId: 'turn_2',
+      toolName: 'bash', summary: 'Run the command'
+    }))
+
+    const response = listPendingApprovals(gate)
+    expect(response.status).toBe(200)
+    const { approvals } = JSON.parse(response.body)
+    expect(approvals).toHaveLength(2)
+    expect(approvals.map((a: { approvalId: string }) => a.approvalId).sort())
+      .toEqual(['approval_1', 'approval_2'])
+    expect(approvals[0]).toMatchObject({
+      threadId: expect.any(String), turnId: expect.any(String),
+      toolName: expect.any(String), summary: expect.any(String),
+      createdAt: expect.any(String)
+    })
+  })
+
+  it('scopes to one thread and drops resolved requests', () => {
+    const gate = new InMemoryApprovalGate()
+    void gate.request(createApprovalRequest({
+      id: 'approval_keep', threadId: 'thread_1', turnId: 'turn_1',
+      toolName: 'write', summary: 'Keep me'
+    }))
+    void gate.request(createApprovalRequest({
+      id: 'approval_other', threadId: 'thread_2', turnId: 'turn_2',
+      toolName: 'bash', summary: 'Other thread'
+    }))
+    void gate.request(createApprovalRequest({
+      id: 'approval_resolved', threadId: 'thread_1', turnId: 'turn_1',
+      toolName: 'read', summary: 'Already decided'
+    }))
+    expect(gate.decide('approval_resolved', 'allow')).toBe(true)
+
+    const scoped = JSON.parse(listPendingApprovals(gate, 'thread_1').body)
+    expect(scoped.approvals.map((a: { approvalId: string }) => a.approvalId))
+      .toEqual(['approval_keep'])
+  })
+})
 
 describe('approval decision route', () => {
   it.each([

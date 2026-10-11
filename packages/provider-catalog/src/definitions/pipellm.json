@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "pipellm",
+  "name": "PipeLLM",
+  "origin": "relay",
+  "baseUrl": "https://api.pipellm.ai/openai/v1",
+  "endpoints": {
+    "chat_completions": "https://api.pipellm.ai/openai/v1",
+    "responses": "https://api.pipellm.ai/v1",
+    "messages": "https://api.pipellm.ai"
+  },
+  "docsUrl": "https://www.pipellm.ai",
+  "credentialUrl": "https://console.pipellm.ai"
+}

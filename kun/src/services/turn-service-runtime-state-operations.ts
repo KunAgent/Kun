@@ -1,3 +1,4 @@
+import { latestExecutedTurn } from '../domain/queue-execution-state.js'
 import { flushDurableSteering } from './durable-steering.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
@@ -251,6 +252,7 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
           }
         }
         try {
+          await this.pauseQueuedTurns(thread.id, 'restart_recovery', turn.id)
           await this.finishTurn({
             threadId: thread.id,
             turnId: turn.id,
@@ -290,18 +292,25 @@ async reconcileManagerSettledInterruptions(this: TurnService, input: {
     const candidateSources = new Map<string, RestartRecoverySource>()
     for (const summary of summaries) {
       if (
-        summary.status !== 'idle' ||
+        summary.status === 'archived' ||
         (summary.relation !== 'primary' && summary.relation !== 'fork')
       ) continue
       try {
-        const thread = await this['deps'].threadStore.get(summary.id)
+        // Only metadata is inspected here (turn states and settlement fields);
+        // loading every full record moved hundreds of MB through the Manager
+        // at startup on large histories.
+        const thread = await (
+          this['deps'].threadStore.getMetadata?.(summary.id) ??
+          this['deps'].threadStore.get(summary.id)
+        )
         if (
           !thread ||
-          thread.status !== 'idle' ||
+          thread.status === 'archived' ||
           (thread.relation !== 'primary' && thread.relation !== 'fork') ||
-          thread.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')
+          thread.queueControl?.reason === 'user_stop' ||
+          thread.turns.some((turn) => turn.status === 'running')
         ) continue
-        const latest = thread.turns.at(-1)
+        const latest = latestExecutedTurn(thread)
         if (!latest || latest.status !== 'failed') continue
 
         let sessionItems: TurnItem[] | undefined
@@ -322,6 +331,7 @@ async reconcileManagerSettledInterruptions(this: TurnService, input: {
             )
         }
         if (!recoverable) continue
+        await this.pauseQueuedTurns(thread.id, 'restart_recovery', latest.id)
         sessionItems ??= await this['deps'].sessionStore.loadItems(thread.id)
         const checkpointed = await recordInterruptionCheckpoint(this, {
           threadId: thread.id,
@@ -404,10 +414,12 @@ async updateTurnMetadata(this: TurnService,
       | 'toolCatalogToolCount'
       | 'toolCatalogDrift'
       | 'requiredToolGate'
+      | 'paperModelRequests'
       | 'extensionModelRequests'
       | 'extensionToolInvocations'
       | 'workspaceCheckpointId'
       | 'actingModelRoute'
+      | 'gatewayAliasGrants'
       | 'graphPlanningLifecycle'
     >, 'requiredToolGate'>
       & { requiredToolGate?: Turn['requiredToolGate'] | null }
@@ -418,6 +430,7 @@ async updateTurnMetadata(this: TurnService,
         turn.id === turnId
           ? {
               ...turn,
+              ...reservePaperModelRequest(turn, patch.paperModelRequests),
               ...(patch.activeSkillIds ? { activeSkillIds: [...patch.activeSkillIds] } : {}),
               ...(patch.injectedMemoryIds ? { injectedMemoryIds: [...patch.injectedMemoryIds] } : {}),
               ...(patch.injectedMemorySummaries
@@ -453,6 +466,8 @@ async updateTurnMetadata(this: TurnService,
               ...(patch.workspaceCheckpointId
                 ? { workspaceCheckpointId: patch.workspaceCheckpointId }
                 : {}),
+              ...(!turn.gatewayAliasGrants && patch.gatewayAliasGrants
+                ? { gatewayAliasGrants: structuredClone(patch.gatewayAliasGrants) } : {}),
               // The first resolved model/provider/account tuple owns the turn.
               // Later steps and settings changes cannot replace it.
               ...(!turn.actingModelRoute && patch.actingModelRoute
@@ -589,4 +604,14 @@ function extractInterruptionSummary(input: {
 function boundText(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value
   return `${value.slice(0, maxChars)}…`
+}
+
+
+/** Called inside the existing serialized/CAS thread mutation, never after network dispatch. */
+function reservePaperModelRequest(turn: Turn, requested: number | undefined): Partial<Turn> {
+  if (requested === undefined) return {}
+  if (!turn.paperContext || requested !== 1 || (turn.paperModelRequests ?? 0) >= 1) {
+    throw new Error('Paper model request budget is consumed or invalid; it cannot be reset')
+  }
+  return { paperModelRequests: 1 }
 }

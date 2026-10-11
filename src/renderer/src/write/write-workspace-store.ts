@@ -24,6 +24,13 @@ import { createWorkWhiteboardActions } from './work-whiteboard'
 import { writeDocumentKey } from './write-editor-layout'
 import { createWriteSpreadsheetActions } from './write-workspace-spreadsheet-actions'
 import { createWriteSurfaceActions } from './write-workspace-surface-actions'
+import {
+  createWriteRightPanelActions,
+  persistWriteRightPanel,
+  readStoredWriteRightPanel,
+  writeRightPanelPatch
+} from './write-right-panel-actions'
+import { openWriteRightPanelState } from './write-right-panel-state'
 import { writeBrowserStorageItem } from '../lib/browser-storage'
 import {
   captureWriteDocumentContext,
@@ -38,7 +45,6 @@ import {
 import {
   WRITE_ASSISTANT_MODEL_KEY,
   WRITE_ASSISTANT_PROVIDER_KEY,
-  WRITE_ASSISTANT_OPEN_KEY,
   WRITE_PREVIEW_MODE_KEY,
   commonPrefixLength,
   emptySelection,
@@ -48,7 +54,6 @@ import {
   normalizeWriteAssistantModel,
   pathsEqual,
   readStoredAssistantModel,
-  readStoredAssistantOpen,
   readStoredAssistantProviderId,
   readStoredPreviewMode,
   writeBasenameFromPath,
@@ -129,13 +134,14 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   settingsError: null,
   ...initialState(),
   previewMode: readStoredPreviewMode(),
-  assistantOpen: readStoredAssistantOpen(),
+  ...writeRightPanelPatch(readStoredWriteRightPanel()),
   assistantModel: readStoredAssistantModel(),
   assistantProviderId: readStoredAssistantProviderId(),
   assistantAgentPresetId: '',
 
   ...createWriteSettingsActions({ set, get }),
   ...createWriteSurfaceActions({ set, get }),
+  ...createWriteRightPanelActions({ set, get }),
   ...createWriteFileActions({
     set,
     get,
@@ -575,11 +581,6 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
     set({ previewMode: mode })
   },
 
-  setAssistantOpen: (open) => {
-    writeBrowserStorageItem(WRITE_ASSISTANT_OPEN_KEY, open ? '1' : '0')
-    set({ assistantOpen: open })
-  },
-
   setAssistantModel: (model, providerId) => {
     const normalized = normalizeWriteAssistantModel(model)
     writeBrowserStorageItem(WRITE_ASSISTANT_MODEL_KEY, normalized)
@@ -633,8 +634,10 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
       const selection = emptySelection()
       const key = current.activeFilePath ? writeDocumentKey(current.activeFilePath) : ''
       const document = key ? current.documentsByPath[key] : undefined
+      const writeRightPanel = openWriteRightPanelState(current.writeRightPanel, 'assistant')
+      persistWriteRightPanel(writeRightPanel)
       return {
-        assistantOpen: true,
+        ...writeRightPanelPatch(writeRightPanel),
         quotedSelections,
         selection,
         documentsByPath: document

@@ -1,17 +1,27 @@
-import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { dirname, join, relative } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { scheduleBoundedUpdateRollback } from './update-transaction-helper'
+import { createRollbackCoordinatorProbe, createRollbackGuiParent } from './windows-installer-coordinator-probe.test-utils'
+import { assertGuiExitWaitRace, stopRecoveredProcess, waitForRecoveredProcess } from './windows-installer-process-wait.test-utils'
+import { readInstallerUpdateTransaction } from './gui-updater-pending'
+
+// The transaction reader is given an explicit recoveryRoot. It must not load
+// Electron's binary-installing package entry or depend on a running GUI.
+vi.mock('electron', () => ({
+  app: { getPath: () => { throw new Error('Unexpected Electron app path in installer transaction test') } }
+}))
 
 const windowsOnly = process.platform === 'win32' ? describe : describe.skip
 const helper = join(process.cwd(), 'build/windows-installer-migration.ps1')
-const roots: string[] = []
+const roots: Array<{ root: string, artifactDirectory?: string }> = []
 const artifactRoot = process.env.KUN_INSTALLER_TEST_ARTIFACT_ROOT
 let fixtureIndex = 0
 
 type Fixture = ReturnType<typeof fixture>
-type Action = 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
+type Action = 'ValidateUpdateRollback' | 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
 
 function payload(root: string, executable: string): void {
   mkdirSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'cli'), { recursive: true })
@@ -22,14 +32,14 @@ function payload(root: string, executable: string): void {
   writeFileSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'manager', 'manager-entry.js'), 'manager')
 }
 
-function fixture(inPlace = false) {
+function fixture(inPlace = false, unicodePath = false) {
   const fixtureName = `fixture-${String(++fixtureIndex).padStart(2, '0')}-${inPlace ? 'in-place' : 'rename'}`
-  const root = artifactRoot
-    ? join(artifactRoot, fixtureName)
-    : join(tmpdir(), `kun-installer-migration-smoke-${process.pid}-${fixtureName}`)
+  // Production failpoints deliberately require a real temporary test root.
+  // The CI artifact directory is only an output destination, never execution state.
+  const root = join(tmpdir(), `kun-installer-migration-smoke-${process.pid}-${fixtureName}${unicodePath ? '-\u4f60\u597d' : ''}`)
+  roots.push({ root, artifactDirectory: artifactRoot ? join(artifactRoot, fixtureName) : undefined })
   rmSync(root, { recursive: true, force: true })
   mkdirSync(root, { recursive: true })
-  if (!artifactRoot) roots.push(root)
   const source = join(root, inPlace ? 'Kun' : 'DeepSeek GUI')
   const target = inPlace ? source : join(root, 'Kun')
   const stage = `${target}.kun-stage`
@@ -67,7 +77,7 @@ function run(input: Fixture, action: Action, fault = '') {
     process.env.SystemRoot ?? 'C:\\Windows',
     'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
   )
-  return spawnSync(powershell, [
+  const result = spawnSync(powershell, [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper, '-Action', action,
     '-ResultPath', input.result(action)
   ], {
@@ -105,6 +115,10 @@ function run(input: Fixture, action: Action, fault = '') {
       KUN_INSTALLER_FAULT_POINT: fault
     }
   })
+  if (fault) {
+    expect(result.stderr, processSummary(result, action)).toContain(`KUN_INSTALLER_FAULT_INJECTION:${fault}`)
+  }
+  return result
 }
 
 function powershell(command: string): ReturnType<typeof spawnSync> {
@@ -166,6 +180,27 @@ function transaction(path: string): {
   }
 }
 
+function captureDiagnostics(root: string, destination: string): void {
+  const files = ['fixture-summary.json']
+  const recovery = join(root, 'recovery')
+  if (existsSync(recovery)) {
+    for (const name of readdirSync(recovery)) {
+      if (/^(diagnostic\.log|journal\.json|transaction\.json|abc-update\.json|result-[\w-]+\.txt)$/.test(name)) {
+        files.push(join('recovery', name))
+      }
+    }
+  }
+  rmSync(destination, { recursive: true, force: true })
+  for (const name of files) {
+    if (!existsSync(join(root, name))) continue
+    // The first case uses a GUID-like filename; CI's existing upload glob uses
+    // transaction.json, so normalize only the diagnostic copy, not the live state.
+    const output = join(destination, name === join('recovery', 'abc-update.json') ? join('recovery', 'transaction.json') : name)
+    mkdirSync(dirname(output), { recursive: true })
+    copyFileSync(join(root, name), output)
+  }
+}
+
 afterEach(() => {
   if (process.platform === 'win32') {
     spawnSync('powershell.exe', [
@@ -173,10 +208,39 @@ afterEach(() => {
       "Remove-Item -LiteralPath 'HKCU:\\Software\\KunInstallerTransactionTest' -Recurse -Force -ErrorAction SilentlyContinue"
     ])
   }
-  while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true })
+  while (roots.length > 0) {
+    const { root, artifactDirectory } = roots.pop()!
+    try {
+      if (artifactDirectory) captureDiagnostics(root, artifactDirectory)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+})
+
+describe('Windows transaction test diagnostics', () => {
+  it('executes beneath OS temp and exports only whitelisted evidence', () => {
+    const input = fixture()
+    expect(relative(tmpdir(), input.root)).not.toMatch(/^\.\./)
+    const recovery = join(input.root, 'recovery')
+    writeFileSync(join(recovery, 'abc-update.json'), '{"Phase":"rolled_back"}')
+    writeFileSync(join(recovery, 'diagnostic.log'), 'recovered')
+    writeFileSync(join(recovery, 'journal.json'), '{}')
+    writeFileSync(join(recovery, 'result-Prepare.txt'), '0')
+    writeFileSync(join(recovery, 'user-path.clixml'), 'private snapshot')
+    const output = join(input.root, 'exported-diagnostics')
+    captureDiagnostics(input.root, output)
+    expect(readdirSync(output).sort()).toEqual(['fixture-summary.json', 'recovery'])
+    expect(readdirSync(join(output, 'recovery')).sort()).toEqual([
+      'diagnostic.log', 'journal.json', 'result-Prepare.txt', 'transaction.json'
+    ])
+    expect(readFileSync(join(output, 'recovery', 'transaction.json'), 'utf8')).toBe('{"Phase":"rolled_back"}')
+  })
 })
 
 windowsOnly('Windows automatic update transaction', () => {
+  it('handles GUI exit between process observation and waiting', assertGuiExitWaitRace, 30_000)
+
   it('restores from an environment rebuilt from the transaction without a result file', async () => {
     const input = fixture()
     input.transaction = join(input.root, 'recovery', 'abc-update.json')
@@ -192,7 +256,6 @@ windowsOnly('Windows automatic update transaction', () => {
     payload(input.stage, 'Kun.exe')
     assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
     const transactionPath = input.transaction
-    const { readInstallerUpdateTransaction } = await import('./gui-updater-pending')
     const rebuilt = await readInstallerUpdateTransaction(
       { oldVersion: '0.1.0', newVersion: '0.2.0' },
       { platform: 'win32', recoveryRoot: join(input.root, 'recovery') }
@@ -208,6 +271,82 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
     expect(transaction(transactionPath)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
   }, 180_000)
+
+  it.each([false, false, false, true, true, true])('completes uninstrumented Unicode rollback %# (real GUI parent exit: %s)', async (realParentExit) => {
+    const input = fixture(false, true)
+    input.transaction = join(input.root, 'recovery', 'abc-update.json')
+    // A real executable permits the recovered application's independent launch.
+    copyFileSync(process.execPath, join(input.source, 'DeepSeek GUI.exe'))
+    const recoveredExecutable = realpathSync.native(join(input.source, 'DeepSeek GUI.exe'))
+    assertSucceeded(run(input, 'Prepare'), 'Prepare')
+    payload(input.stage, 'Kun.exe')
+    assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
+    const record = await readInstallerUpdateTransaction(
+      { oldVersion: '0.1.0', newVersion: '0.2.0' },
+      { platform: 'win32', recoveryRoot: join(input.root, 'recovery') }
+    )
+    expect(record).not.toBeNull()
+    const gui = realParentExit ? createRollbackGuiParent() :
+      spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    const probe = createRollbackCoordinatorProbe(input.diagnostic, realParentExit ? gui : undefined, false)
+    let recoveredPid: number | undefined
+    try {
+      await scheduleBoundedUpdateRollback(helper, {
+        ...record!.recoveryEnvironment,
+        ...{ KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnostic }
+      }, gui.pid!, probe.launch)
+      expect(gui.exitCode).toBeNull()
+      expect(transaction(input.transaction).Phase).toBe('payload_switched')
+      gui.kill()
+      if (!realParentExit) expect(await probe.completion(), probe.output()).toBe(0)
+      recoveredPid = await waitForRecoveredProcess(recoveredExecutable)
+      expect(readFileSync(input.diagnostic, 'utf8')).toContain('SUCCESS action=FinalizeUpdateTransaction')
+      expect(existsSync(input.transaction)).toBe(false)
+      expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
+      expect(existsSync(input.target)).toBe(false)
+    } catch (error) {
+      throw new Error(`${String(error)}\n${await probe.drain()}`, { cause: error })
+    } finally {
+      gui.kill()
+      probe.kill()
+      stopRecoveredProcess(recoveredExecutable, recoveredPid)
+    }
+  }, 60_000)
+
+  it('rejects real helper startup failures before acknowledging readiness', async () => {
+    const input = fixture()
+    input.transaction = join(input.root, 'recovery', 'abc-update.json')
+    assertSucceeded(run(input, 'Prepare'), 'Prepare')
+    const record = await readInstallerUpdateTransaction(
+      { oldVersion: '0.1.0', newVersion: '0.2.0' },
+      { platform: 'win32', recoveryRoot: join(input.root, 'recovery') }
+    )
+    expect(record).not.toBeNull()
+    const probe = createRollbackCoordinatorProbe(input.diagnostic)
+    try {
+      await expect(scheduleBoundedUpdateRollback(helper, {
+        ...record!.recoveryEnvironment,
+        ...{ KUN_INSTALLER_FAULT_INJECTION: '1', KUN_INSTALLER_FAULT_POINT: 'rollback.before_ready',
+          KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnostic }
+      }, process.pid, probe.launch)).rejects.toThrow('exited with 1 before readiness')
+      await probe.drain()
+      expect(readFileSync(input.diagnostic, 'utf8')).toContain('KUN_INSTALLER_FAULT_INJECTION:rollback.before_ready')
+      expect(transaction(input.transaction).Phase).toBe('prepared')
+      expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
+    } catch (error) {
+      throw new Error(`${String(error)}\n${await probe.drain()}`, { cause: error })
+    } finally {
+      probe.kill()
+    }
+  }, 60_000)
+
+  it('rejects readiness when the required in-place payload backup is missing', () => {
+    const input = fixture(true)
+    assertSucceeded(run(input, 'Prepare'), 'Prepare')
+    rmSync(transaction(input.transaction).BackupRoot, { recursive: true, force: true })
+    assertExpectedFailure(run(input, 'ValidateUpdateRollback'), 'ValidateUpdateRollback')
+    expect(transaction(input.transaction).Phase).toBe('prepared')
+  })
 
   it('keeps the legacy payload untouched when staged validation fails', () => {
     const input = fixture()
@@ -300,7 +439,8 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
   })
 
-  it('retires an out-of-place legacy payload only during finalization', () => {
+  it.each(['finalize.after_phase', 'finalize.after_first_cleanup', 'finalize.before_transaction_removal'])(
+    'resumes interrupted finalization without losing the transaction: %s', (fault) => {
     const input = fixture()
     assertSucceeded(run(input, 'Prepare'), 'Prepare')
     payload(input.stage, 'Kun.exe')
@@ -319,7 +459,7 @@ windowsOnly('Windows automatic update transaction', () => {
     assertSucceeded(run(input, 'CommitUpdateTransaction'), 'CommitUpdateTransaction')
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
     assertExpectedFailure(
-      run(input, 'FinalizeUpdateTransaction', 'finalize.after_first_cleanup'),
+      run(input, 'FinalizeUpdateTransaction', fault),
       'FinalizeUpdateTransaction'
     )
     expect(transaction(input.transaction).Phase).toBe('finalizing')
@@ -425,8 +565,12 @@ windowsOnly('Windows automatic update transaction', () => {
     assertSucceeded(run(input, 'Prepare'), 'Prepare')
     payload(input.stage, 'Kun.exe')
     assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
-    assertExpectedFailure(run(input, 'UpdatePath', 'path.after_write'), 'UpdatePath')
-    assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'RollbackUpdateTransaction')
+    try {
+      assertExpectedFailure(run(input, 'UpdatePath', 'path.after_write'), 'UpdatePath')
+    } finally {
+      // Even an unexpected injection/marker failure must restore the real user PATH.
+      assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'RollbackUpdateTransaction')
+    }
     const current = spawnSync('powershell.exe', [
       '-NoProfile', '-Command', "[Environment]::GetEnvironmentVariable('Path','User')"
     ], { encoding: 'utf8' }).stdout.trim()
@@ -482,17 +626,25 @@ windowsOnly('Windows automatic update fault injection points', () => {
     expect(existsSync(input.target)).toBe(false)
   })
 
-  it('keeps the transaction rollback-capable after awaiting_health (cutover.after_awaiting_health)', () => {
-    const input = fixture()
-    assertSucceeded(run(input, 'Prepare'), 'Prepare')
-    payload(input.stage, 'Kun.exe')
-    assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
-    primeCutoverMetadata(input)
-    const failed = run(input, 'ValidateCutover', 'cutover.after_awaiting_health')
-    assertExpectedFailure(failed, 'ValidateCutover')
-    expect(readTransaction(input).Phase).toBe('awaiting_health')
-    assertSucceeded(run(input, 'RecoverUpdateTransaction'), 'RecoverUpdateTransaction')
-    expect(readTransaction(input)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
+  describe('awaiting-health recovery', () => {
+    let input: Fixture
+    // OS fixture setup has its own bounded clock. The recovery assertion keeps
+    // the existing 15s deadline instead of spending it on PowerShell/COM startup.
+    beforeEach(() => {
+      input = fixture()
+      assertSucceeded(run(input, 'Prepare'), 'Prepare')
+      payload(input.stage, 'Kun.exe')
+      assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
+    }, 15_000)
+    beforeEach(() => primeCutoverMetadata(input), 15_000)
+
+    it('keeps the transaction rollback-capable after awaiting_health (cutover.after_awaiting_health)', () => {
+      const failed = run(input, 'ValidateCutover', 'cutover.after_awaiting_health')
+      assertExpectedFailure(failed, 'ValidateCutover')
+      expect(readTransaction(input).Phase).toBe('awaiting_health')
+      assertSucceeded(run(input, 'RecoverUpdateTransaction'), 'RecoverUpdateTransaction')
+      expect(readTransaction(input)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
+    }, 15_000)
   })
 
   it('rolls back a transaction interrupted right before commit (commit.before_committed)', () => {

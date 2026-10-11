@@ -1,0 +1,5 @@
+{
+  "marketSkillInstalled": "{{source}} から {{name}} をインストールしました: {{path}}",
+  "marketSkillInstallFailed": "{{name}} をインストールできませんでした: {{message}}",
+  "marketMcpPlanFailed": "{{name}} を準備できませんでした: {{message}}"
+}

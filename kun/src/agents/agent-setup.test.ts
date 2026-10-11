@@ -39,7 +39,7 @@ async function fixture() {
 
 it('marks chat quick-create as pending and skips interview for default, template and form paths', async () => {
   const f = await fixture()
-  const chat = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'chat', setupMode: 'chat', name: '新 Agent' })
+  const chat = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'chat', setupMode: 'chat', modelRef: { providerId: 'test', model: 'first' }, name: '新 Agent' })
   expect((await f.runtime.agents.get(chat.agentId)).setup).toMatchObject({ status: 'pending' })
   const form = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'form', setupMode: 'form', name: '手册 Agent' })
   expect((await f.runtime.agents.get(form.agentId)).setup).toBeUndefined()
@@ -53,7 +53,7 @@ it('marks chat quick-create as pending and skips interview for default, template
 
 it('starts a hidden setup turn, injects the interview prompt, and restricts tools', async () => {
   const f = await fixture()
-  const created = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'chat', setupMode: 'chat', name: '新 Agent' })
+  const created = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'chat', setupMode: 'chat', modelRef: { providerId: 'test', model: 'first' }, name: '新 Agent' })
   await startAgentSetupTurn({ service: f.runtime.service, store: f.store, agents: f.runtime.agents,
     wake: () => undefined, created, clientRequestId: 'chat' })
   const listed = await f.runtime.messages(created.roomId, 20)
@@ -74,7 +74,7 @@ it('starts a hidden setup turn, injects the interview prompt, and restricts tool
 
 it('commits interviewed identity and treats profile edits or skip as a takeover that cancels the turn', async () => {
   const f = await fixture()
-  const created = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'chat', setupMode: 'chat', name: '新 Agent' })
+  const created = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'chat', setupMode: 'chat', modelRef: { providerId: 'test', model: 'first' }, name: '新 Agent' })
   await startAgentSetupTurn({ service: f.runtime.service, store: f.store, agents: f.runtime.agents,
     wake: () => undefined, created, clientRequestId: 'chat' })
   const request = (await f.store.list<RoomRequestState>('request', { roomId: created.roomId }))[0]
@@ -95,7 +95,7 @@ it('commits interviewed identity and treats profile edits or skip as a takeover 
   expect((await f.runtime.agents.get(created.agentId))).toMatchObject({
     name: 'Ada', title: 'Researcher', setup: { status: 'completed' }
   })
-  const pending = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'skip', setupMode: 'chat', name: '新 Agent' })
+  const pending = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'skip', setupMode: 'chat', modelRef: { providerId: 'test', model: 'first' }, name: '新 Agent' })
   await startAgentSetupTurn({ service: f.runtime.service, store: f.store, agents: f.runtime.agents,
     wake: () => undefined, created: pending, clientRequestId: 'skip' })
   const unchanged = await f.runtime.agents.get(pending.agentId)
@@ -108,7 +108,7 @@ it('commits interviewed identity and treats profile edits or skip as a takeover 
     instructions: 'User wrote this.'
   })
   expect((await f.runtime.agents.get(pending.agentId)).setup?.status).toBe('skipped')
-  const third = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'cancel', setupMode: 'chat', name: '新 Agent' })
+  const third = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'cancel', setupMode: 'chat', modelRef: { providerId: 'test', model: 'first' }, name: '新 Agent' })
   await startAgentSetupTurn({ service: f.runtime.service, store: f.store, agents: f.runtime.agents,
     wake: () => undefined, created: third, clientRequestId: 'cancel' })
   await skipAgentSetup({
@@ -123,7 +123,7 @@ it('commits interviewed identity and treats profile edits or skip as a takeover 
 
 it('persists a pending user_input as a public choice card without exposing the hidden kickoff', async () => {
   const f = await fixture()
-  const created = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'chat', setupMode: 'chat', name: '新 Agent' })
+  const created = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'chat', setupMode: 'chat', modelRef: { providerId: 'test', model: 'first' }, name: '新 Agent' })
   await startAgentSetupTurn({ service: f.runtime.service, store: f.store, agents: f.runtime.agents,
     wake: () => undefined, created, clientRequestId: 'chat' })
   const request = (await f.store.list<RoomRequestState>('request', { roomId: created.roomId }))[0]

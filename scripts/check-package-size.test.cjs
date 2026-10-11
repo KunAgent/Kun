@@ -9,6 +9,7 @@ const test = require('node:test')
 const {
   MIB,
   MAC_ARM64_BUDGETS,
+  MAC_ARM64_SIGNED_BUDGETS,
   buildReport,
   parseArgs,
   packagedAppPath,
@@ -65,14 +66,54 @@ test('enforces all macOS arm64 application and artifact budgets', () => {
   )
 })
 
-test('enforces a separate 300 MiB signed ceiling without relaxing ad-hoc budgets', () => {
+test('accepts measured gws packages within the revised ad-hoc budgets', () => {
+  assert.deepEqual(budgetFailures({
+    platform: 'darwin',
+    arch: 'arm64',
+    appBytes: 731 * MIB,
+    artifacts: [
+      { name: 'Kun-test-mac-arm64.dmg', extension: '.dmg', bytes: Math.ceil(272.8 * MIB) },
+      { name: 'Kun-test-mac-arm64.zip', extension: '.zip', bytes: Math.ceil(285.2 * MIB) }
+    ]
+  }), [])
+})
+
+test('accepts exact limits and rejects one-byte overruns in both signing modes', () => {
+  for (const signed of [false, true]) {
+    const budgets = signed ? MAC_ARM64_SIGNED_BUDGETS : MAC_ARM64_BUDGETS
+    const report = {
+      platform: 'darwin',
+      arch: 'arm64',
+      appBytes: budgets.app,
+      artifacts: [
+        { name: 'Kun-test-mac-arm64.dmg', extension: '.dmg', bytes: budgets.dmg },
+        { name: 'Kun-test-mac-arm64.zip', extension: '.zip', bytes: budgets.zip }
+      ]
+    }
+    assert.deepEqual(budgetFailures(report, { signed }), [])
+    assert.equal(budgetFailures({ ...report, appBytes: budgets.app + 1 }, { signed }).length, 1)
+    for (const extension of ['.dmg', '.zip']) {
+      const artifacts = report.artifacts.map((artifact) => ({
+        ...artifact,
+        bytes: artifact.bytes + (artifact.extension === extension ? 1 : 0)
+      }))
+      assert.equal(budgetFailures({ ...report, artifacts }, { signed }).length, 1)
+      assert.equal(budgetFailures({
+        ...report,
+        artifacts: report.artifacts.filter((artifact) => artifact.extension !== extension)
+      }, { signed }).length, 1)
+    }
+  }
+})
+
+test('retains a separate 300 MiB signed ceiling above the ad-hoc budgets', () => {
   const report = {
     platform: 'darwin',
     arch: 'arm64',
     appBytes: 731 * MIB,
     artifacts: [
-      { name: 'Kun-test-mac-arm64.dmg', extension: '.dmg', bytes: 272.6 * MIB },
-      { name: 'Kun-test-mac-arm64.zip', extension: '.zip', bytes: 286.4 * MIB }
+      { name: 'Kun-test-mac-arm64.dmg', extension: '.dmg', bytes: MAC_ARM64_BUDGETS.dmg + 1 },
+      { name: 'Kun-test-mac-arm64.zip', extension: '.zip', bytes: MAC_ARM64_BUDGETS.zip + 1 }
     ]
   }
   assert.equal(budgetFailures(report).length, 2)
@@ -87,10 +128,10 @@ test('CLI selects the signed budget only when MAC_SIGN is enabled', (t) => {
   const distDir = mkdtempSync(join(tmpdir(), 'kun-package-size-signed-'))
   t.after(() => rmSync(distDir, { recursive: true, force: true }))
   mkdirSync(join(distDir, 'mac-arm64', 'Kun.app'), { recursive: true })
-  for (const [extension, mib] of [['dmg', 272.6], ['zip', 286.4]]) {
+  for (const extension of ['dmg', 'zip']) {
     const path = join(distDir, `Kun-0.3.11-mac-arm64.${extension}`)
     writeFileSync(path, '')
-    truncateSync(path, Math.ceil(mib * MIB))
+    truncateSync(path, MAC_ARM64_BUDGETS[extension] + 1)
   }
   const args = [join(__dirname, 'check-package-size.cjs'), '--platform', 'darwin', '--arch', 'arm64', '--dist-dir', distDir, '--enforce']
   const unsigned = spawnSync(process.execPath, args, { encoding: 'utf8', env: { ...process.env, MAC_SIGN: '0' } })

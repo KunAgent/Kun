@@ -1,3 +1,6 @@
+import { createRuntimeAgentDispatch } from './runtime-composition-dispatch.js'
+import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
+import { createReviewContextResolver } from '../services/review-composer-context.js'
 import { ManagerRemoteMemoryDistillationPendingStore } from '../manager/remote-memory-distillation-pending.js'
 import {
   join,
@@ -13,8 +16,8 @@ import {
   PPT_AGENT_LOCAL_PROVIDER_ID,
   LocalToolHost,
   buildDefaultLocalTools,
+  buildExecutionTaskLocalTools,
   createReadArtifactTool,
-  createTaskGraphTool,
   buildMcpToolProviders,
   buildMemoryToolProviders,
   buildContextWindowToolProviders,
@@ -69,15 +72,40 @@ import { createRuntimeMaintenanceSlices } from './runtime-maintenance-slices.js'
 import { ThreadStoreGuardian } from '../services/thread-store-guardian.js'
 import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
 import { SessionGuardian } from '../services/session-guardian.js'
+import { WorkerCallbackService } from '../services/worker-callback-service.js'
+import { TerminalAgentRegistry } from '../services/terminal-agent-registry.js'
+import {
+  kunCommandParts,
+  kunHookCommand,
+  writeHookConfig
+} from '../harness/hook-config-writer.js'
+import { FileTeamStore } from '../ade/team-store.js'
+import { FileDispatchStore } from '../ade/dispatch-store.js'
+import { reconcileWorkerReviewActivity } from '../ade/worker-review-activity.js'
+import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
+import { FileQuestionStore } from '../ade/question-store.js'
+import { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
+import { FileReviewStore } from '../ade/review-store.js'
+import { FileRaceStore } from '../ade/race.js'
+import { AttributionLedger } from '../ade/attribution-ledger.js'
+import { ChangeRequestService } from '../ade/change-request-service.js'
+import { createWorkerCallbackToolProvider } from '../adapters/tool/worker-callback-tool-provider.js'
 import {
   MemoryDistillationCoordinator,
   MemoryDistillationPendingStore
 } from '../memory/index.js'
 import { createWriteDocumentGuard } from './runtime-write-document-guard.js'
+import { createHarnessComposition } from '../harness/harness-runtime.js'
+import { harnessSecretRefResolver } from '../harness/harness-secret-env.js'
+import { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
+import { createAcpCredentialEnv } from '../runtime/acp/acp-credential-env.js'
+import { providerKindsForOptions } from './runtime-factory-model.js'
+import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
 ) {
+  const agentDispatchService = createRuntimeAgentDispatch(model)
   const { core } = model
   const { options } = core
   const {
@@ -115,6 +143,7 @@ export async function createRuntimeServices(
   let [mcpProviders, skillRuntime] = await Promise.all([
     buildMcpToolProviders(core.activeOptions.capabilities?.mcp, {
       oauthStorageDir: join(core.activeOptions.dataDir, 'mcp-oauth'),
+      catalogCachePath: join(core.activeOptions.dataDir, 'mcp-catalog-cache.json'),
       ...(oauthEncryptor ? { oauthEncryptor } : {})
     }),
     SkillRuntime.create(skillsConfigForRuntime(core.activeOptions))
@@ -142,6 +171,37 @@ export async function createRuntimeServices(
     dataDir: core.activeOptions.dataDir,
     nowIso
   })
+  const harnesses = createHarnessComposition(() => core.activeOptions, {
+    // custom-agent `secretEnv` refs resolve against the credential
+    // store at spawn/probe time; values never reach config or logs.
+    revision: () => core.optionsRevision,
+    readinessProofStorePath: join(core.activeOptions.dataDir, 'harness-readiness.json'),
+    resolveProviderCredential: model.resolveLegacyRequestCredentials,
+    resolveGatewayAliases: async (binding) => freezeHarnessGatewayAliases(await model.modelConnections.snapshot(), binding),
+    resolveSecretEnv: harnessSecretRefResolver(model.extensionCredentials)
+  })
+  // Per-turn `kun-tools` grants + http/stdio MCP descriptors for ACP sessions
+  //. One provider is shared across every delegated-runtime build so
+  // revocation stays consistent no matter which runtime built the turn.
+  const kunToolsMcp = new KunToolsMcpProvider({
+    tokens: harnesses.tokens,
+    endpoint: () => harnesses.gatewayEndpoint.baseUrl,
+    command: kunCommandParts
+  })
+  // Per-turn `kun-gateway` grants + generated per-harness provider config for
+  // ACP children. One resolver shared by every delegated-runtime build.
+  const acpCredentialEnv = createAcpCredentialEnv({
+    tokens: harnesses.tokens,
+    endpoint: () => harnesses.gatewayEndpoint.baseUrl,
+    configDir: () => join(core.activeOptions.dataDir, 'acp-gateway'),
+    resolveAliases: async (binding) => freezeHarnessGatewayAliases(await model.modelConnections.snapshot(), binding)
+  })
+  const providerKinds = () =>
+    providerKindsForOptions(core.activeOptions, {
+      defaultIsAgentSdk,
+      defaultIsCursorSdk,
+      defaultIsAntigravity
+    })
   const turnService = new TurnService({
     threadStore,
     sessionStore,
@@ -153,6 +213,9 @@ export async function createRuntimeServices(
     usage: usageService,
     prefix,
     attachmentStore: () => attachmentStore,
+    resolveReviewRequests: (thread, contexts) => createReviewContextResolver({
+      reviews: adeStores.reviews, taskWorkspaces: core.taskWorkspaces
+    })(thread, contexts),
     writeDocumentGuard: createWriteDocumentGuard(),
     defaultModel: options.model,
     contextCompaction: options.contextCompaction,
@@ -174,7 +237,11 @@ export async function createRuntimeServices(
 	      graphRuntime.cancelSourceTurnRunsExplicitly(threadId, sourceTurnId),
 	    migrationMaintenance,
 	    ids,
-	    nowIso
+	    nowIso,
+	    providerKinds,
+	    gatewayAliasProfilesEnabled: () => core.activeOptions.ade?.harnessRouter !== false,
+            resolveGatewayAliasModel: (binding) => core.activeOptions.routePools?.find((pool) => pool.id === binding.main.routeId && pool.enabled)?.modelId,
+            harnessCatalog: harnesses.catalog
   })
   executionLeases?.setLeaseLostHandler((lease) => {
     turnService.abortTurnExecution(lease.turnId, ownerLeaseExpiredTurnAbortReason(lease))
@@ -423,8 +490,47 @@ export async function createRuntimeServices(
     profileDir: join(core.activeOptions.dataDir, 'officecli-profile'),
     ...(officeCliRunner ? { runner: officeCliRunner } : {})
   })
-	  const taskGraphTool = createTaskGraphTool({ rootDir: join(core.activeOptions.dataDir, 'task-graphs') })
+  const adeStores = {
+    teams: new FileTeamStore(core.activeOptions.dataDir, nowIso),
+    dispatches: new FileDispatchStore(core.activeOptions.dataDir, nowIso),
+    questions: new FileQuestionStore(core.activeOptions.dataDir, nowIso),
+    notices: new FileWorkerNoticeStore(core.activeOptions.dataDir, nowIso),
+    reviews: new FileReviewStore(core.activeOptions.dataDir, nowIso, (p) => ids.next(p), async (id) => {
+      const workspace = core.taskWorkspaces.get(id)
+      if (!workspace) throw new Error('task workspace not found')
+      return captureReviewRevision(id, workspace.path)
+    }, artifactStore),
+    races: new FileRaceStore(core.activeOptions.dataDir, nowIso)
+  }
+  await reconcileWorkerReviewActivity(
+    adeStores.dispatches, core.activityStore, adeStores.teams, core.taskWorkspaces
+  )
+  const attribution = new AttributionLedger(core.activeOptions.dataDir, nowIso)
+  const changeRequests = new ChangeRequestService({
+    taskWorkspaces: core.taskWorkspaces,
+    teams: adeStores.teams,
+    dispatches: adeStores.dispatches,
+    nowIso
+  })
+  const workerCallbacks = new WorkerCallbackService({
+    threadStore,
+    sessionStore,
+    ...adeStores,
+    activity: core.activityStore,
+    nowIso,
+    idGenerator: () => ids.next('q')
+  })
+  const terminalAgents = new TerminalAgentRegistry({
+    dataDir: core.activeOptions.dataDir,
+    activity: core.activityStore,
+    nowIso,
+    idGenerator: () => ids.next('tu')
+  })
+  const hookWriter = (unitId: string, hooks: { kind: string; events: string[] }) =>
+    writeHookConfig(core.activeOptions.dataDir, unitId, hooks, kunHookCommand())
 	  let baseToolProviders = [
+    { id: 'execution-tasks', kind: 'built-in' as const, enabled: true, available: true,
+      tools: buildExecutionTaskLocalTools(threadService.executionTasks) },
     {
       id: 'builtin',
       kind: 'built-in' as const,
@@ -467,7 +573,9 @@ export async function createRuntimeServices(
       mode: contextWindowModeFor(core.contextWindowModes),
       compact: core.contextCompact.asTool()
     }),
+    ...buildThreadHistoryToolProviders({ sessionStore, threadStore }),
     buildKnowledgeToolProvider(knowledgeBaseService),
+    createWorkerCallbackToolProvider(workerCallbacks),
     ...buildSkillToolProviders(skillRuntime),
     ...imageGenProviders.providers,
     ...speechGenProviders.providers,
@@ -499,6 +607,7 @@ export async function createRuntimeServices(
   const defaultIsCursorSdk = process.env.KUN_RUNTIME_PROVIDER_KIND === 'cursor-sdk'
   return {
     model,
+    agentDispatchService,
     migrationMaintenance,
     executionLeases,
     turnService,
@@ -522,11 +631,21 @@ export async function createRuntimeServices(
     memoryDistillation,
     designCanvasProvider,
     officeCliProviders,
-    taskGraphTool,
+    officeCli: { runner: officeCliRunner, providers: officeCliProviders },
     childToolHost,
+    adeStores,
+    attribution,
+    changeRequests,
+    workerCallbacks,
+    terminalAgents,
+    hookWriter,
     defaultIsAgentSdk,
     defaultIsAntigravity,
     defaultIsCursorSdk,
+    harnesses,
+    kunToolsMcp,
+    acpCredentialEnv,
+    providerKinds,
     get mcpProviders() { return mcpProviders },
     set mcpProviders(value: typeof mcpProviders) { mcpProviders = value },
     get skillRuntime() { return skillRuntime },

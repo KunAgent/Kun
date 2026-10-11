@@ -1,3 +1,4 @@
+import { dedupeAcpMediatedChanges } from '../../agent/acp-mediated-changes'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { dedupeTimelineTextBlocks } from '../../agent/timeline-text-blocks'
 import {
@@ -189,7 +190,7 @@ export function deriveTurnSections({
   liveContent,
   workspaceRoot
 }: DeriveTurnSectionsInput): TurnSections {
-  const timelineBlocks = dedupeTimelineTextBlocks(turn.blocks)
+  const timelineBlocks = dedupeAcpMediatedChanges(dedupeTimelineTextBlocks(turn.blocks))
   const processBlocks: ChatBlock[] = []
   const processTimelineBlocks: ChatBlock[] = []
   const assistantContentBlocks: TurnAssistantBlock[] = []
@@ -257,7 +258,8 @@ export function deriveTurnSections({
           id: `${block.id}-think`,
           turnId: block.turnId,
           createdAt: block.createdAt,
-          text: split.think
+          text: split.think,
+          ...(block.renderMode ? { renderMode: block.renderMode } : {})
         }
         processBlocks.push(reasoningBlock)
         processTimelineBlocks.push(reasoningBlock)

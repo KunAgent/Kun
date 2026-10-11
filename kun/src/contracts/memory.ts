@@ -55,7 +55,12 @@ export const MemorySourceEvidence = z.object({
   locator: z.string().min(1).max(MEMORY_MAX_SOURCE_LOCATOR_CHARS).optional(),
   excerpt: z.string().min(1).max(MEMORY_MAX_SOURCE_EXCERPT_CHARS).optional(),
   contentHash: z.string().min(1).max(128).optional(),
-  trust: MemoryEvidenceTrust
+  trust: MemoryEvidenceTrust,
+  /** Host-owned execution provenance; assistant statements never set observed outcomes. */
+  receiptId: z.string().min(1).max(256).optional(),
+  repositorySha: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/).optional(),
+  artifactIds: z.array(z.string().min(1).max(256)).max(8).optional(),
+  outcome: z.enum(['succeeded', 'failed', 'aborted', 'unknown']).optional()
 }).strict()
 export type MemorySourceEvidence = z.infer<typeof MemorySourceEvidence>
 
@@ -71,13 +76,52 @@ export const MemoryProvenance = z.object({
 }).strict()
 export type MemoryProvenance = z.infer<typeof MemoryProvenance>
 
+export const MemoryConsolidation = z.object({
+  sourceMemoryIds: z.array(z.string().min(1).max(256)).max(8),
+  sourceSessionIds: z.array(z.string().min(1).max(256)).max(8),
+  reason: z.string().min(1).max(1000),
+  evidenceStatus: z.enum(['observed-success', 'observed-failure', 'aborted', 'unverified', 'user-stated'])
+}).strict()
+export type MemoryConsolidation = z.infer<typeof MemoryConsolidation>
+
+export const MemoryRevisionOperation = z.enum([
+  'create', 'update', 'disable', 'restore', 'forget', 'rollback', 'supersede'
+])
+export const MemoryRevisionSnapshot = z.object({
+  content: z.string().min(1),
+  tags: z.array(z.string()),
+  type: MemoryType,
+  authority: MemoryAuthority,
+  confidence: z.number().min(0).max(1),
+  importance: z.number().min(0).max(1),
+  sources: MemorySourceEvidenceList,
+  observedAt: z.string().datetime(),
+  expiresAt: z.string().datetime().optional(),
+  validFrom: z.string().datetime().optional(),
+  validTo: z.string().datetime().optional(),
+  disabledAt: z.string().optional(),
+  agentContext: AgentMemoryOwnershipSchema.optional(),
+  consolidation: MemoryConsolidation.optional()
+}).strict()
+export const MemoryRevision = z.object({
+  revision: z.number().int().positive(),
+  changedAt: z.string(),
+  operation: MemoryRevisionOperation,
+  snapshot: MemoryRevisionSnapshot
+}).strict()
+export type MemoryRevision = z.infer<typeof MemoryRevision>
+
 const MemoryRecordInput = z.object({
+  revision: z.number().int().positive().default(1),
+  history: z.array(MemoryRevision).max(20).default([]),
   agentContext: AgentMemoryOwnershipSchema.optional(),
   id: z.string().min(1),
   content: z.string().min(1),
   scope: MemoryScope,
   workspace: z.string().optional(),
   project: z.string().optional(),
+  /** Canonical repository identity only for explicitly approved project-wide memories. */
+  projectIdentity: z.string().min(1).optional(),
   sourceThreadId: z.string().optional(),
   sourceTurnId: z.string().optional(),
   provenance: MemoryProvenance.optional(),
@@ -98,6 +142,7 @@ const MemoryRecordInput = z.object({
   observedAt: z.string().datetime().optional(),
   validFrom: z.string().datetime().optional(),
   validTo: z.string().datetime().optional(),
+  consolidation: MemoryConsolidation.optional(),
   sources: MemorySourceEvidenceList.optional()
 }).strict().superRefine(reportInvalidValidityInterval)
 
@@ -133,6 +178,7 @@ export const MemoryCreateRequest = z.object({
   expiresAt: z.string().datetime().optional(),
   disabled: z.boolean().optional(),
   supersedes: z.string().min(1).optional(),
+  supersedesExpectedRevision: z.number().int().positive().optional(),
   tags: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(1).optional(),
   type: MemoryType.optional(),
@@ -141,6 +187,7 @@ export const MemoryCreateRequest = z.object({
   observedAt: z.string().datetime().optional(),
   validFrom: z.string().datetime().optional(),
   validTo: z.string().datetime().optional(),
+  consolidation: MemoryConsolidation.optional(),
   sources: MemorySourceEvidenceInputList.optional()
 }).strict()
   .superRefine(reportInvalidValidityInterval)
@@ -149,6 +196,7 @@ export const MemoryCreateRequest = z.object({
 export type MemoryCreateRequest = z.input<typeof MemoryCreateRequest>
 
 export const MemoryUpdateRequest = z.object({
+  expectedRevision: z.number().int().positive().optional(),
   agentContext: AgentMemoryOwnershipSchema.optional(),
   content: z.string().min(1).optional(),
   tags: z.array(z.string()).optional(),
@@ -159,6 +207,7 @@ export const MemoryUpdateRequest = z.object({
   observedAt: z.string().datetime().optional(),
   validFrom: z.string().datetime().nullable().optional(),
   validTo: z.string().datetime().nullable().optional(),
+  consolidation: MemoryConsolidation.optional(),
   sources: MemorySourceEvidenceInputList.optional(),
   expiresAt: z.string().datetime().nullable().optional(),
   disabled: z.boolean().optional()

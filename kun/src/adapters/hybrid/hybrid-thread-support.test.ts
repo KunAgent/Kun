@@ -92,6 +92,25 @@ describe('usageRecordsFromRows', () => {
     const records = usageRecordsFromRows(rows)
     expect(records).toHaveLength(1)
     expect(records[0].providerId).toBeUndefined()
+    expect(records[0].source).toBeUndefined()
+    expect(records[0].harnessId).toBeUndefined()
+  })
+
+  it('round-trips harness-gateway source and harness id metadata', () => {
+    const rows: UsageRow[] = [
+      {
+        ...row(1, 'turn-gw', { promptTokens: 10, completionTokens: 1, totalTokens: 11, cacheHitRate: null, turns: 1 }),
+        source: 'harness-gateway',
+        harness_id: 'claude-code'
+      }
+    ]
+
+    const records = usageRecordsFromRows(rows)
+    expect(records[0]).toMatchObject({
+      turnId: 'turn-gw',
+      source: 'harness-gateway',
+      harnessId: 'claude-code'
+    })
   })
 })
 
@@ -120,6 +139,23 @@ describe('usageRowFromEvent', () => {
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2, cacheHitRate: null, turns: 1 }
     })
     expect(row.provider_id).toBeNull()
+    expect(row.source).toBeNull()
+    expect(row.harness_id).toBeNull()
+  })
+
+  it('carries gateway source and harness id into their columns', () => {
+    const row = usageRowFromEvent({
+      kind: 'usage',
+      threadId: 'thread-1',
+      seq: 9,
+      timestamp: '2026-08-23T00:00:00.000Z',
+      turnId: 'turn-9',
+      source: 'harness-gateway',
+      harnessId: 'claude-code',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2, cacheHitRate: null, turns: 1 }
+    })
+    expect(row.source).toBe('harness-gateway')
+    expect(row.harness_id).toBe('claude-code')
   })
 })
 

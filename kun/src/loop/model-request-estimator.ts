@@ -56,7 +56,8 @@ export function estimateModelRequestInputTokenBreakdown(
     estimateMessageAttachments(request.messageAttachments) +
     estimateText(request.requiredToolName) +
     estimateText(request.reasoningEffort) +
-    estimateText(request.serviceTier)
+    estimateText(request.serviceTier) +
+    estimateText(request.fim?.prompt) + estimateText(request.fim?.suffix)
   return {
     tools,
     system,

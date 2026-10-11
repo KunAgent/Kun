@@ -1,5 +1,6 @@
 import { readBrowserStorageItem, writeBrowserStorageItem } from './browser-storage'
 import { IKUN_MODE_STORAGE_KEY } from './ikun-mode'
+import { LEGACY_RETROMA_PALETTE_KEY } from './color-palettes'
 
 /**
  * 形象模式偏好:'default' | 'ikun' | 'retroma' | <UI 插件 id>。
@@ -9,13 +10,19 @@ export const UI_MODE_STORAGE_KEY = 'kun.uiMode'
 
 export const UI_MODE_DEFAULT = 'default'
 export const UI_MODE_IKUN = 'ikun'
-/** Retroma 羊皮纸浅色配色模式:纯配色(无吉祥物),仅浅色生效 */
+/** 旧的 Retroma 形象模式,读取时迁移为「羊皮纸」配色方案 */
 export const UI_MODE_RETROMA = 'retroma'
 
 const UI_MODE_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/
 
 export function readUiModePreference(): string {
   const stored = readBrowserStorageItem(UI_MODE_STORAGE_KEY)?.trim().toLowerCase()
+  if (stored === UI_MODE_RETROMA) {
+    // Retroma moved to Settings -> Appearance as the parchment color palette.
+    writeBrowserStorageItem(LEGACY_RETROMA_PALETTE_KEY, '1')
+    writeUiModePreference(UI_MODE_DEFAULT)
+    return UI_MODE_DEFAULT
+  }
   if (stored && (stored === UI_MODE_DEFAULT || UI_MODE_PATTERN.test(stored))) {
     return stored
   }

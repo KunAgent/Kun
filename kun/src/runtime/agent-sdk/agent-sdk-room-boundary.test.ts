@@ -12,18 +12,43 @@ import { LocalToolHost } from '../../adapters/tool/local-tool-host.js'
 const model = { provider: 'test', model: 'test', async *stream() { yield { kind: 'completed' as const, stopReason: 'stop' as const } } }
 
 describe('room SDK execution boundary', () => {
-  it.each([true, false])('AgentLoop admits only a room-safe runtime: %s', async (roomToolPolicy) => {
+  it('blocks SDK-native tools on a constrained Code handoff even with full access and no roomContext', async () => {
+    const h = makeHarness(model)
+    const thread = await h.threads.create({ title: 'Code handoff', workspace: '/tmp', model: 'test', mode: 'agent',
+      approvalPolicy: 'auto', sandboxMode: 'danger-full-access' }, { workbenchOrigin: { kind: 'bot', roomId: 'room',
+      linkId: 'link', agentId: 'agent', agentName: 'Bot', capabilityCeiling: {
+        blockedToolNames: ['write'], blockedProviderIds: ['private'], blockedSkillIds: [] } } })
+    const turn = await h.turns.startTurn({ threadId: thread.id, request: { prompt: 'Work' } })
+    const runtime = createAgentSdkRuntime({ registry: CapabilityRegistry.fromLocalTools([]), toolHost: new LocalToolHost({ tools: [] }),
+      turns: h.turns, threadStore: h.threadStore, sessionStore: h.sessionStore, events: h.events,
+      providerConfigs: {}, agentSdkProviderIds: new Set(), ids: { next: (prefix) => prefix },
+      prefix: { systemPrompt: '' }, defaultApprovalPolicy: 'auto' })
+    const deps = (runtime as unknown as { deps: SdkRuntimeDeps }).deps
+    expect((await h.threadStore.get(thread.id))?.roomContext).toBeUndefined()
+    await expect(deps.decideToolApproval(thread.id, turn.turnId, 'Write', { path: '/tmp/escape.txt' }, new AbortController().signal))
+      .resolves.toMatchObject({ allow: false, message: 'This turn only allows Kun-gated tools.' })
+  })
+
+  async function runRoomTurn(kind: 'conversation' | 'execution', roomToolPolicy: boolean) {
     const runTurn = vi.fn(async () => 'completed' as const)
     const sdkRuntime = { handlesProvider: () => true,
       capabilities: () => ({ ...agentSdkCapabilities(), roomToolPolicy }), runTurn } as unknown as AgentSdkRuntime
     const h = makeHarness(model, { sdkRuntime })
     const thread = await h.threads.create({ title: 'Room', workspace: '/tmp', model: 'test', mode: 'agent' }, {
       relation: 'side', roomContext: { roomId: 'room', memberId: 'member', participantAgentId: 'agent',
-        kind: 'conversation', blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: [] }
+        kind, blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: [] }
     })
     const turn = await h.turns.startTurn({ threadId: thread.id, request: { prompt: 'Work' } })
     await h.loop.runTurn(thread.id, turn.turnId)
-    expect(runTurn).toHaveBeenCalledTimes(roomToolPolicy ? 1 : 0)
+    return runTurn
+  }
+
+  it.each([true, false])('AgentLoop admits only a room-safe runtime for a room task: %s', async (roomToolPolicy) => {
+    expect(await runRoomTurn('execution', roomToolPolicy)).toHaveBeenCalledTimes(roomToolPolicy ? 1 : 0)
+  })
+
+  it('lets a private conversation run on its engine-native gate, which the host cannot mediate', async () => {
+    expect(await runRoomTurn('conversation', false)).toHaveBeenCalledTimes(1)
   })
 
   it('blocks native mutations and reads even with an unrestricted sandbox', () => {

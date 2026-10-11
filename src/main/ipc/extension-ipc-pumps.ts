@@ -22,6 +22,10 @@ import { isRecord, safeJsonParse } from './extension-ipc-common'
 
 const EXTENSION_PUMP_MAX_BACKOFF_MS = 30_000
 const EXTENSION_PUMP_LOG_REMINDER_MS = 30_000
+/** Empty polls kept at the base cadence before the idle stretch starts. */
+const EXTENSION_PUMP_IDLE_GRACE_POLLS = 4
+/** Upper bound for the idle cadence; any pending request snaps back to base. */
+export const EXTENSION_PUMP_MAX_IDLE_DELAY_MS = 4_000
 
 function createExtensionPumpBackoff(
   intervalMs: number,
@@ -30,16 +34,34 @@ function createExtensionPumpBackoff(
   delayMs(): number
   fail(error: unknown): void
   reset(): void
+  idle(): void
+  active(): void
 } {
   const baseDelayMs = Math.max(250, intervalMs)
   let consecutiveFailures = 0
+  let consecutiveIdlePolls = 0
   let lastFailureMessage = ''
   let lastLoggedAt = 0
   return {
-    delayMs: () => Math.min(
-      EXTENSION_PUMP_MAX_BACKOFF_MS,
-      baseDelayMs * (2 ** Math.min(consecutiveFailures, 8))
-    ),
+    delayMs: () => {
+      if (consecutiveFailures > 0) {
+        return Math.min(
+          EXTENSION_PUMP_MAX_BACKOFF_MS,
+          baseDelayMs * (2 ** Math.min(consecutiveFailures, 8))
+        )
+      }
+      // Each poll is a Runtime round trip; an empty queue for several polls
+      // in a row stretches the cadence so an idle desktop stops polling twice a
+      // second, while a live request immediately returns to the base cadence.
+      const stretch = Math.max(0, consecutiveIdlePolls - EXTENSION_PUMP_IDLE_GRACE_POLLS)
+      if (stretch === 0) return baseDelayMs
+      return Math.max(baseDelayMs, Math.min(
+        EXTENSION_PUMP_MAX_IDLE_DELAY_MS,
+        baseDelayMs * (2 ** Math.min(stretch, 8))
+      ))
+    },
+    idle: () => { consecutiveIdlePolls += 1 },
+    active: () => { consecutiveIdlePolls = 0 },
     fail: (error) => {
       consecutiveFailures += 1
       const message = error instanceof Error ? error.message : String(error)
@@ -99,7 +121,11 @@ export function startExtensionSecretRevealConsentPump(
         if (!isRecord(candidate)) return false
         return typeof candidate.id === 'string' && !handled.has(candidate.id)
       })
-      if (!isRecord(request)) return
+      if (!isRecord(request)) {
+        backoff.idle()
+        return
+      }
+      backoff.active()
       const requestId = typeof request.id === 'string' ? request.id : ''
       const extensionId = typeof request.extensionId === 'string' ? request.extensionId : ''
       const extensionVersion = typeof request.extensionVersion === 'string'
@@ -211,6 +237,8 @@ export function startExtensionNotificationPump(
       const payload: ExtensionNotificationSnapshot = {
         notifications: parsed.data.notifications
       }
+      if (payload.notifications.length === 0) backoff.idle()
+      else backoff.active()
       if (payload.notifications.length === 0 && !hadNotifications) return
       hadNotifications = payload.notifications.length > 0
       parent.webContents.send('extension:notifications', payload)

@@ -1,3 +1,4 @@
+import { cursorModelMetadata } from '../shared/cursor-model-metadata'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -244,13 +245,15 @@ function normalizeCursorModels(value: unknown): CursorSubscriptionModel[] {
       .filter((alias) => alias.toLowerCase() !== key)
     const parameters = normalizeCursorModelParameters(model.parameters)
     const variants = normalizeCursorModelVariants(model.variants)
+    const profile = cursorModelMetadata({ id, displayName, parameters, variants }, model)
     models.push({
       id,
       displayName,
       ...(description ? { description } : {}),
       ...(aliases.length ? { aliases } : {}),
       ...(parameters.length ? { parameters } : {}),
-      ...(variants.length ? { variants } : {})
+      ...(variants.length ? { variants } : {}),
+      ...(profile ? { profile } : {})
     })
   }
   return models

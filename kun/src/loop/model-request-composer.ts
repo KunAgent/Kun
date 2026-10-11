@@ -63,7 +63,10 @@ export function ordinaryOutputReserveTokens(input: {
     ? fallback
     : Math.max(1, Math.floor(input.declaredMaxOutputTokens))
   const remaining = Math.max(1, Math.floor(input.contextCapTokens - input.inputTokens))
-  return Math.min(declared, fallback, remaining)
+  // A small/unknown context must still have room for input. Reserving the
+  // entire cap (the old behavior below 32k) forced compaction on every turn.
+  const windowReserve = Math.max(1, Math.floor(input.contextCapTokens / 4))
+  return Math.min(declared, fallback, windowReserve, remaining)
 }
 
 export type ModelRequestComposerInput = Readonly<{

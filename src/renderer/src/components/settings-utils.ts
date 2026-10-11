@@ -14,6 +14,8 @@ import {
   mergeTerminalSettings,
   mergeRemoteAccessSettings,
   mergeDarkUiColors,
+  mergeColorPaletteSettings,
+  normalizeColorPaletteSettings,
   normalizeAppBehaviorSettings,
   normalizeClawSettings,
   normalizeDesignSettings,
@@ -98,12 +100,15 @@ export function mergeSettings(current: AppSettingsV1, patch: SettingsPatch): App
     agents: agentsPatch,
     provider: providerPatch,
     darkUiColors: darkUiColorsPatch,
+    colorPalette: colorPalettePatch,
     ...restPatch
   } = patch
+  const darkUiColors = mergeDarkUiColors(safeCurrent.darkUiColors, darkUiColorsPatch)
   return {
     ...applyKunRuntimePatch(safeCurrent, agentsPatch?.kun),
     ...restPatch,
-    darkUiColors: mergeDarkUiColors(safeCurrent.darkUiColors, darkUiColorsPatch),
+    darkUiColors,
+    colorPalette: mergeColorPaletteSettings(safeCurrent.colorPalette, colorPalettePatch, darkUiColors),
     provider: mergeModelProviderSettings(safeCurrent.provider, providerPatch),
     log: {
       ...safeCurrent.log,
@@ -162,6 +167,7 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     cursorSpotlight: raw.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(raw.cursorSpotlightColor),
     darkUiColors: normalizeDarkUiColors(raw.darkUiColors),
+    colorPalette: normalizeColorPaletteSettings(raw.colorPalette, raw.darkUiColors),
     provider: normalizeModelProviderSettings(raw.provider),
     agents: kunSettingsEnvelope(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), getKunRuntimeSettings(settings))),
     workspaceRoot: typeof raw.workspaceRoot === 'string' ? raw.workspaceRoot : DEFAULT_WORKSPACE_ROOT,
@@ -180,7 +186,8 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     notifications: {
       turnComplete: raw.notifications?.turnComplete !== false,
       mainAgentTurnComplete: raw.notifications?.mainAgentTurnComplete !== false,
-      subagentTurnComplete: raw.notifications?.subagentTurnComplete === true
+      subagentTurnComplete: raw.notifications?.subagentTurnComplete === true,
+      ...(raw.notifications?.quotaReminders === false ? { quotaReminders: false as const } : {})
     },
     appBehavior: normalizeAppBehaviorSettings(raw.appBehavior),
     keyboardShortcuts: normalizeKeyboardShortcuts(raw.keyboardShortcuts),

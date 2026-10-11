@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { useChatFindStore } from './chat-find'
 import { stableTurnKey, type Turn } from './message-timeline-turns'
+import { revealVirtualTimelineBlock } from './timeline-virtual-navigation'
 
 const FLASH_MS = 1600
 const FLASH_CLASS = 'timeline-find-flash'
@@ -47,7 +48,9 @@ export function useTimelineFindJump({
     // effect and the second pass lands the scroll.
     if (index < hiddenTurnCount) return
     landedNonce.current = jump.nonce
-    const frame = window.requestAnimationFrame(() => {
+    let attempts = 0
+    let frame: number
+    const land = (): void => {
       const key = stableTurnKey(turns[index]!, index)
       const turnNode = turnRefMap.current.get(key)
       if (!turnNode) return
@@ -57,10 +60,17 @@ export function useTimelineFindJump({
             `[data-timeline-block-id="${CSS.escape(jump.blockId)}"]`
           )
         : null
+      // A matched block can belong to an unmounted process row. Ask its list
+      // to reveal it, then let React commit before targeting the actual node.
+      if (!blockNode && jump.blockId && attempts++ < 4 && revealVirtualTimelineBlock(turnNode, jump.blockId)) {
+        frame = window.requestAnimationFrame(land)
+        return
+      }
       const target = blockNode ?? turnNode
       target.scrollIntoView({ behavior: 'auto', block: 'center' })
       flashNode(target)
-    })
+    }
+    frame = window.requestAnimationFrame(land)
     return () => window.cancelAnimationFrame(frame)
   }, [jump, activeThreadId, turns, hiddenTurnCount, turnRefMap, revealTurnAtIndex, onActive])
 }

@@ -18,7 +18,7 @@ export function SubagentPanelHeader({
       <Bot className="h-[17px] w-[17px] text-accent" strokeWidth={2} />
       <b className="text-[14px] font-semibold text-ds-heading">{t('subagents', 'Subagents')}</b>
       <span className="text-[11px] text-ds-faint">· {t('subagentsPanel.configModel', 'configure model')}</span>
-      <button
+      <button data-settings-action="ghost" data-settings-size="icon"
         type="button"
         onClick={onCollapse}
         title={t('agentsView.cancel', 'Close')}
@@ -105,7 +105,7 @@ export function RowActions({
   return (
     <div className="flex shrink-0 items-center gap-0.5">
       {builtin ? null : (
-        <button
+        <button aria-pressed={enabled} aria-label={enabled ? t('disable', 'Disable') : t('enable', 'Enable')}
           type="button"
           onClick={onToggle}
           title={enabled ? t('disable', 'Disable') : t('enable', 'Enable')}
@@ -114,7 +114,7 @@ export function RowActions({
           <Power className="h-3.5 w-3.5" />
         </button>
       )}
-      <button
+      <button data-settings-action="ghost" data-settings-size="icon" aria-label={t('agentsView.edit', 'Edit')}
         type="button"
         onClick={onEdit}
         title={t('agentsView.edit', 'Edit')}
@@ -123,7 +123,7 @@ export function RowActions({
         <Pencil className="h-3.5 w-3.5" />
       </button>
       {builtin ? null : (
-        <button
+        <button data-settings-action="danger-ghost" data-settings-size="icon" aria-label={t('agentsView.delete', 'Delete')}
           type="button"
           onClick={onDelete}
           title={t('agentsView.delete', 'Delete')}

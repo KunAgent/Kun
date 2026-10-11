@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { ArchiveRestore, FolderOpen, Loader2 } from 'lucide-react'
 import type { LegacySessionDetectResult } from '@shared/kun-gui-api'
@@ -6,8 +7,6 @@ import { InlineNoticeView, SettingsCard, SettingRow, type InlineNotice } from '.
 
 type TranslateFn = (key: string, options?: Record<string, unknown>) => string
 
-const buttonClass =
-  'inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-50'
 
 function sum(detection: LegacySessionDetectResult | null, key: 'threadCount' | 'newCount'): number {
   return detection?.sources.reduce((total, source) => total + source[key], 0) ?? 0
@@ -151,9 +150,8 @@ export function LegacySessionImportCard({
             ) : null}
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
+              <button aria-busy={Boolean(busy && !restarting)} className={settingsButtonClass()}
                 type="button"
-                className={buttonClass}
                 disabled={working || detecting || totalNew === 0}
                 onClick={() => void runImport()}
               >
@@ -164,9 +162,8 @@ export function LegacySessionImportCard({
                 )}
                 {restarting ? t('legacyImportRestarting') : t('legacyImportButton')}
               </button>
-              <button
+              <button className={settingsButtonClass()}
                 type="button"
-                className={buttonClass}
                 disabled={working}
                 onClick={() => void pickAndImport()}
               >

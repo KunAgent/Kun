@@ -13,6 +13,8 @@ export type RouteTargetMetrics = {
   ewmaLatencyMs?: number
   lastError?: string
   lastAttemptAt?: string
+  cooldownUntil?: number
+  recovery?: 'healthy' | 'cooldown' | 'half-open' | 'half-open-saturated'
 }
 
 export type ModelRouteEvent = {
@@ -85,6 +87,29 @@ export class RoutePoolHealthStore {
     if (testId) this.event(pool, target, 0, 'started', undefined, undefined, testId)
   }
 
+  /** Permit one bounded recovery probe on the next normal request; sends nothing itself. */
+  retry(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig): void {
+    const state = this.state(pool.id, target.id)
+    state.circuitOpenUntil = this.now()
+    state.halfOpenAttempts = 0
+    this.persist()
+  }
+
+  abandon(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig): void {
+    const state = this.state(pool.id, target.id)
+    if (state.circuitOpenUntil && state.circuitOpenUntil <= this.now()) {
+      state.halfOpenAttempts = Math.max(0, state.halfOpenAttempts - 1)
+    }
+  }
+
+  acquire(pool: ModelRoutePoolConfig, targets: ModelRouteTargetConfig[], testId?: string): (() => void) | undefined {
+    const unique = targets.filter((target, index) => targets.findIndex((other) => other.id === target.id) === index)
+    if (unique.some((target) => !this.available(pool, target))) return undefined
+    for (const target of unique) this.begin(pool, target, target === targets[0] ? testId : undefined)
+    let released = false
+    return () => { if (!released) { released = true; for (const target of unique) this.abandon(pool, target) } }
+  }
+
   success(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig, latencyMs: number, testId?: string): void {
     const state = this.state(pool.id, target.id)
     state.successes += 1
@@ -122,7 +147,10 @@ export class RoutePoolHealthStore {
     for (const [key, state] of this.states) {
       if (poolId && !key.startsWith(`${poolId}:`)) continue
       const { circuitOpenUntil: _open, halfOpenAttempts: _half, ...persisted } = state
-      metrics[key] = persisted
+      metrics[key] = { ...persisted, ...(state.circuitOpenUntil ? {
+        cooldownUntil: state.circuitOpenUntil,
+        recovery: state.circuitOpenUntil > this.now() ? 'cooldown' : 'half-open'
+      } : { recovery: 'healthy' }) }
     }
     return { metrics, events: this.events_.filter((event) => !poolId || event.poolId === poolId) }
   }

@@ -1,9 +1,16 @@
 export type TurnCompleteNotificationSource = 'main-agent' | 'subagent'
 
+/** ADE activity-transition categories. */
+export type AdeActivityNotificationCategory = 'waiting' | 'failed' | 'done' | 'stalled'
+
 export type TurnCompleteNotificationPayload = {
+  /** Stable delivery identity; Main persists successful/suppressed receipts. */
+  dedupeKey?: string
   roomId?: string
   threadId?: string
   source: TurnCompleteNotificationSource
+  /** Present on ADE activity-driven notifications; absent on legacy payloads. */
+  category?: AdeActivityNotificationCategory
   title: string
   body: string
 }

@@ -69,7 +69,7 @@ describe('Cursor subscription SDK discovery', () => {
         { id: '' },
         null
       ]
-    }), 'cursor-key')).toEqual({
+    }), 'cursor-key')).toMatchObject({
       account: {
         apiKeyName: 'Kun',
         userEmail: 'user@example.com'

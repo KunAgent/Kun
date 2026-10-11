@@ -1,0 +1,267 @@
+{
+  "created": "2026-10-08",
+  "sources": [
+    {
+      "prompt": "Create a production raster sprite sheet for the Kun desktop bird avatar wardrobe, matching the attached reference's friendly hand-painted game illustration style exactly: organically drawn navy #0e2f66 outline, clean two-tone cel shadows, one small highlight, not vector/3D. Transparent background including all holes, no ground shadows/glows/text, no person/bird/mannequin. SIX separate isolated icons, THREE columns TWO rows, each centered in its equal square cell, generous 12% transparent margins in EVERY cell so no two touch. All icons rendered with consistent exterior outline that will be 11 pixels on a 512px icon canvas; interior lines half as thick. Preserve original colors, insignia and garment identity, but IMPORTANT replace original T-shirt silhouettes with the distinctly posed shapes specified. Prioritize recognizable radically different outer silhouettes when solid black at 48px. No generic identical short wide shirts. Reading order: 1 BLACK HOODIE charcoal blue, hood standing tall upright over a small compact body, two cream drawstrings dangling, sleeves tucked close; tall rounded hood bump (not the open folded hood of reference). 2 MINT HOODIE aqua mint, hood folded behind, RIGHT sleeve raised straight sideways/up diagonally 55 degrees like a waving sleeve, left sleeve hangs low close; asymmetrical diagonal silhouette. 3 CREAM SHIRT neatly folded into a horizontal compact RECTANGULAR parcel with sharp corners and turned down collar atop, central little tan buttons, NO sleeves sticking out. 4 CREAM CARDIGAN unbuttoned with TRANSPARENT opening separating front panels, long left front panel pointing downward to a long asymmetric tail, right panel rolled up, sleeves folded behind; strong asymmetric hanging hook/diagonal silhouette. 5 LAB COAT white long slender hanging lab coat, high pointed lapels, sleeves vertical very close to body, one blue pen in chest pocket, small blue-gray blank ID badge and crisp cool blue-gray shadows, tall narrow silhouette height twice width. 6 SECURITY JACKET deep navy blue zipped to the top, upright squared collar, short VERY wide box-shaped body and horizontally outward short shoulders with two distinctive small epaulette tabs, bright BLUE SHIELD BADGE with subtle enamel highlight; horizontal silhouette width 1.7 times height. Keep rare/common clothes matte; lab-coat and security jacket epic materials subtle.",
+      "referencedImages": [
+        "polish-icons-clothes-a.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "79709b66f3e4a79ef30e7d7d66018a03ec5380c655f5fd281b1506224edabdfa",
+      "referenceHashes": {
+        "polish-icons-clothes-a.png": "9405234800717cb89b0eebc221e0e79267f3893ccc1b93c0441904d2a897a0d7"
+      },
+      "width": 1536,
+      "height": 1024,
+      "file": "v2-icons-clothes-a.png"
+    },
+    {
+      "prompt": "Create a production raster sprite sheet for the Kun desktop bird avatar wardrobe, matching the attached reference's friendly hand-painted game illustration style exactly: organically drawn navy #0e2f66 outline, clean two-tone cel shadows, one small highlight, not vector/3D. Transparent background including all holes, no ground shadows/glows/text, no person/bird/mannequin. SIX separate isolated icons, THREE columns TWO rows, each centered in its equal square cell, generous 12% transparent margins in EVERY cell so no two touch. All icons rendered with consistent exterior outline that will be 11 pixels on a 512px icon canvas; interior lines half as thick. Preserve original colors, insignia and garment identity, but IMPORTANT replace original T-shirt silhouettes with the distinctly posed shapes specified. Prioritize recognizable radically different outer silhouettes when solid black at 48px. No generic identical short wide shirts. Reading order: 1 SPACESUIT white and blue, circular shiny silver neck ring atop (interior pale gray, no black hole), rounded torso with lit small blue panel buttons, backpack visible jutting out on LEFT and one coiled flex hose with transparent loop on RIGHT; highly asymmetric silhouette, chrome white tiny highlights. 2 PILOT JACKET brown leather, collar a visibly fluffy ivory sheepwool crescent with three painted texture tufts, brass zipper, extremely SHORT squat cropped body and elbows outward at horizontal sides; wide flattened silhouette, not a usual T-shirt. 3 SAILOR SHIRT white with dark navy large square external collar opened into a tilted broad SQUARE FOLD, very long skinny navy necktie descending well below it; T-shaped silhouette square at top and single slim tail bottom, folded sleeves. 4 OVERALLS brown dungarees with mint shirt collar visible, leaf embroidered on chest pocket, include full two separated trouser legs down to cuffs, a wide TRANSPARENT separation up to the crotch, narrow vertical tall silhouette. 5 CHEF COAT white, red tied neckerchief and double row pale buttons, on a visible curved NAVY hanging hook atop, elongated coat angled 18 degrees clockwise, one sleeve folded behind, other sleeve hanging down close, thin long diagonal silhouette. 6 NURSE UNIFORM turquoise V neck, white medical cross pocket, fold garment into a compact offset diamond with sleeves tucked, stethoscope hanging OUTSIDE garment to the LEFT, very visible thin navy tube forms large transparent U loop and bright silver circular chestpiece below left corner; make lateral loop large and clear, subtle metallic highlight. CRITICAL SPACING: Each icon must be much smaller than its cell, have at least 15% blank margin on every side including between neighbors. Previous sheet icons nearly touched. Make SIX small icons with wide transparent blank corridors, 3columns x2rows. Each of6 shapes is no wider than 70% or taller than70% of its cell. A true evenly spaced rectangular sheet with ample gutters, not a tightly packed atlas.",
+      "referencedImages": [
+        "polish-icons-clothes-b.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "note": "Replaces first B generation because neighboring outlines overlapped rectangular crop bounds.",
+      "sha256": "dc4d6a51b2c3647eb8fbc3cbb79b13c0171286067bfba80cd09aaec6e7226454",
+      "referenceHashes": {
+        "polish-icons-clothes-b.png": "5b3ebdce678b12752898a3e765b5347ef7ade70bc24617469d5d58dceaff93e7"
+      },
+      "width": 1536,
+      "height": 1024,
+      "file": "v2-icons-clothes-b.png"
+    },
+    {
+      "prompt": "Create a production raster sprite sheet for the Kun desktop bird avatar wardrobe, matching the attached reference's friendly hand-painted game illustration style exactly: organically drawn navy #0e2f66 outline, clean two-tone cel shadows, one small highlight, not vector/3D. Transparent background including all holes, no ground shadows/glows/text, no person/bird/mannequin. SIX separate isolated icons, THREE columns TWO rows, each centered in its equal square cell, generous 12% transparent margins in EVERY cell so no two touch. All icons rendered with consistent exterior outline that will be 11 pixels on a 512px icon canvas; interior lines half as thick. Preserve original colors, insignia and garment identity, but IMPORTANT replace original T-shirt silhouettes with the distinctly posed shapes specified. Prioritize recognizable radically different outer silhouettes when solid black at 48px. No generic identical short wide shirts. Essential: real TRANSPARENT background, not black, no halos or glow around objects, do not reproduce the background seen in reference. Reading order: 1 WIZARD CAPE deep blue pointed high collar, unfold horizontally broad with a dramatic jagged ZIGZAG lower hem of 5 pointed tails, gold embroidered stars and a small PURPLE gemstone clasp at center neck, tiny white stitch highlight only. 2 COFFEE APRON caramel brown, one narrow long neck strap forms an open oval LOOP rising high above short pear-shaped body, only one generous front pocket with cream coffee cup symbol and three steam lines, button hardware in matte tan. 3 TOOL APRON dark brown, folded into a LOW HORIZONTAL TOOL BELT around waist, NO neck straps; yellow pencil, blue pencil and red screwdriver stick out unevenly upward from three pouches, only the uneven tool tops at upper edge give jagged silhouette; width twice height. 4 MAILBAG retain reference blue satchel with diagonal dark blue strap raised top left and small yellow buckle; near-identical to the reference center-right, no garment behind, optional very small silver hardware highlights, no additions. 5 ROBE ivory draped floor-length Greek-style fabric, very NARROW VERTICAL silhouette width less than half height, one rolled shoulder corner on RIGHT fixed with tiny blue gemstone brass clasp, bottom flowing softly into offset small scallops; three long tan shadow folds, no sleeves. 6 BLUE SCARF sapphire blue fabric shaped as inverted U, a rounded scarf loop atop and TWO DISTINCT NARROW PARALLEL TAILS dangling straight down with a large TRANSPARENT GAP between them going up inside loop, small fringes; tall inverted U silhouette, no knot.",
+      "referencedImages": [
+        "polish-icons-clothes-c.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "9034748bd6be0e6609244f29723b5c492a0dbbaadc9b9369f4da4e359b545570",
+      "referenceHashes": {
+        "polish-icons-clothes-c.png": "fa9c3daebfdfd73fd293c149bbebcf5e58f92b2df6350cf58d168964ac61ce65"
+      },
+      "width": 1223,
+      "height": 1286,
+      "file": "v2-icons-clothes-c.png"
+    },
+    {
+      "prompt": "Create a production raster sprite sheet for the Kun desktop bird avatar wardrobe, matching the attached reference's friendly hand-painted game illustration style exactly: organically drawn navy #0e2f66 outline, clean two-tone cel shadows, one small highlight, not vector/3D. Transparent background including all holes, no ground shadows/glows/text, no person/bird/mannequin. SIX separate isolated icons, THREE columns TWO rows, each centered in its equal square cell, generous 12% transparent margins in EVERY cell so no two touch. All icons rendered with consistent exterior outline that will be 11 pixels on a 512px icon canvas; interior lines half as thick. Preserve original colors, insignia and garment identity, but IMPORTANT replace original T-shirt silhouettes with the distinctly posed shapes specified. Prioritize recognizable radically different outer silhouettes when solid black at 48px. No generic identical short wide shirts. Essential real TRANSPARENT background, no backgrounds no shadows no glow. Reading order: 1 RED SCARF tied at far LEFT in a compact knot, two narrow red tails flying diagonally to upper RIGHT and lower RIGHT, slightly curved pointed fringed tails; strong sideways V shape with large transparent center gap. 2 CREAM SCARF laid out as long LOW HORIZONTAL beige strip, RIGHT end rolled into a visible ROUND fabric coil like a scroll, left end flat fringed; width 2.8 times height. 3 MOON SCARF deep royal blue knitted scarf in a striking single HOOK shape: one long thin end curves up to LEFT like a crescent, the other short end below, round navy neck wrap at right top, yellow crescent moon enamel clasp with small white highlight at crook and just two stitch texture lines; open transparent middle. 4 CAMERA STRAP SHIRT cream shirt folded into two DIAGONAL crossed narrow fabric strips, bold dark brown leather camera straps crossed into a clear X with two small tan buckles; crucial FOUR TRIANGULAR NOTCHES / TRANSPARENT OPEN AREAS reaching far into left and right sides around the X, silhouette itself is unmistakably an X, not a rectangular shirt with X painted inside. Original cream collar folded onto upper center. 5 SPORTS VEST white fabric orange trim with extremely thin narrow shoulder straps rising separately atop, very deep U neck and large deeply cut armpits, slender hourglass body unlike shirt; transparent neck and armpit areas. 6 STORYTELLER CAPE purple cape fanned wide open into a very BROAD TRIANGULAR FAN, high narrow neck up top, sweeping long horizontal curved base at bottom width 2x height, gold neckline edging and tiny blue gemstone brass clasp. Preserve existing palette; gold small highlights on cape only.",
+      "referencedImages": [
+        "polish-icons-clothes-a.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "b6a109a09a67c43fa383856d2547ea397d96b9e865418af9ee5b9c5fe4aafc4b",
+      "referenceHashes": {
+        "polish-icons-clothes-a.png": "9405234800717cb89b0eebc221e0e79267f3893ccc1b93c0441904d2a897a0d7"
+      },
+      "width": 1536,
+      "height": 1024,
+      "file": "v2-icons-clothes-d.png"
+    },
+    {
+      "prompt": "Create TWO isolated inventory hat icons on a transparent background. Use the attached exact Kun game art style, hand-painted navy #0e2f66 organic outer outline 11px per512px icon, two cel shadow shades one highlight, friendly soft shape. TWO columns ONE row and lots of transparent margin. No text, no head/body, no shadows or glow outside icons, true alpha. LEFT: redesign only reference sailor hat (middle right), white with navy band and golden anchor symbol, left-front 3/4 view slightly looking down, rotated 15 degrees anticlockwise, broad UPTURNED curved rolled brim clearly rising on both sides and low rounded top seen behind. Emphasize a low wide BOAT shape with upturned sides, width almost twice height. RIGHT: reference nurse cap (bottom right), keep white and turquoise trim and turquoise HEART emblem (not medical cross), FRONT view, very angular folded paper cap with conspicuous triangular folded flaps/creases on BOTH ends, pointed almost wing-like upper corners, narrow flat top, white trapezoid front. Compact narrow fairly tall geometry distinct from wide upturned sailor brim. Make two silhouettes unmistakably different at48px. Keep color and symbols faithfully from references.",
+      "referencedImages": [
+        "polish-icons-headwear-a.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "52296a0462a08a9308e4645aecdb1febad139dbaefffd27f87862514f4744533",
+      "referenceHashes": {
+        "polish-icons-headwear-a.png": "4ac473f21884bc3e2f3667aab04ebf73d379437d1925ffb7910ff4663ad7b8cf"
+      },
+      "width": 1774,
+      "height": 887,
+      "file": "v2-icons-clothes-hats.png"
+    },
+    {
+      "prompt": "Refine ONLY THREE isolated clothing inventory icons in exact same Kun hand-painted navy-outline cute cel-shaded game style of attached contact sheet. THREE columns ONE row, real transparent background with very wide gutters. No text/bird/body/shadows/background. Exterior navy #0e2f66 outline should be 10–12 px on512px final icon; thicker than interior seams. Preserve natural material palette and design identity. LEFT: WHITE LAB COAT (top row fifth in ref), make significantly more NARROW VERTICAL silhouette: height THREE times width, very long slender front panels open with deep transparent slit between them, upright pointed lapels, sleeves folded tightly behind so they do not widen body; blue-gray crisp shadows, one blue pocket pen and small blank hanging ID badge. MIDDLE: BROWN PILOT JACKET (second row second), create a large very fluffy ivory SHEARLING COLLAR sticking strongly outward as wide bushy crescent, three painted wool tufts, below it a tapered short brown leather body whose hem is only HALF the collar width, sleeves folded INWARD across lower torso so they do not add width, small brass zipper, no gold glow. Body height including fur around three quarters collar width: broad white fluffy top narrows sharply to small brown hem, this should have inverse-triangle silhouette unlike rectangular security jacket. RIGHT: BLUE SCARF (third row fifth), preserve vivid sapphire blue color but redraw as very open TALL INVERTED U shape: medium round hollow loop atop with large transparent middle, two very THIN parallel tails descending vertically far down each side, tails only 10% of overall scarf width each and the transparent gap between them at least50% of width, tiny fringe ends, entire shape height1.5xwidth. Both tails same length, no knot, no badge, no pattern. Consistent navy ink, two-level shadows, friendly illustrated material; no gradients or external glows.",
+      "referencedImages": [
+        "v2-clothing-refinement-reference.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "note": "Second art pass for the three remaining silhouette pairs >= 0.80 after first generated set.",
+      "sha256": "d27fb7328414b61313534765b23639dea3d6bec13c310510c3fe22fdf0d3fbb6",
+      "referenceHashes": {
+        "v2-clothing-refinement-reference.png": "eeb13d5ccf996c77ff017da1f878ebba2fe53c732f0175be9bb65a20dc0217df"
+      },
+      "width": 2172,
+      "height": 724,
+      "file": "v2-icons-clothes-refined.png"
+    },
+    {
+      "prompt": "Create ONLY TWO isolated Kun wardrobe inventory sprites matching attached generated art style exactly: hand-drawn organic navy #0e2f66 outlines, 10–12pixel external stroke at512px, warm cute hand-painted game art, two tone shadows. Two columns one row, real transparent background, no glows/shadows/labels/character, each centered with generous clear margins. LEFT: IVORY CLASSICAL ROBE from first reference (bottom middle), keep ivory drapery, small thin brass shoulder clasp with little blue jewel, tan draped shadows and thin ochre trim, BUT display fabric hanging asymmetrically from the shoulder clasp at UPPER RIGHT, swaying way out to LEFT into a long softly waving crescent and then lower hem sweeps to the RIGHT; its entire silhouette is like a long flowing diagonal curved S or ribbon, NOT straight symmetric vertical dress/coat. One shoulder much higher, slant top, soft lower hem, long narrow draped cloth, recognizable toga/fabric with no human. Distinct asymmetry with deep concave RIGHT edge. RIGHT: CREAM COLLARED SHIRT from second reference (top right), a neatly folded RECTANGULAR clothing parcel, change ratio to short and extra WIDE horizontal folded rectangle: width 1.8 times height, a small cream turned-down collar near left-of-center, tiny tan buttons, flat neat folded bottom and sides with a little stacked fabric fold visible at right edge. NO sleeves, no legs, no props, NO hanger. Keep ivory cream and simple tan shadows, no patterns. These are pose/silhouette changes only; keep palette.",
+      "referencedImages": [
+        "v2-icons-clothes-c.png",
+        "v2-icons-clothes-a.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "note": "Further natural pose variation removes lab-coat/robe and pilot-jacket/cream-shirt silhouette collisions.",
+      "sha256": "ccd0c3c4f76943746a1f0480cfe66c8d6fb790fea2662e092e1c95530ca29088",
+      "referenceHashes": {
+        "v2-icons-clothes-c.png": "9034748bd6be0e6609244f29723b5c492a0dbbaadc9b9369f4da4e359b545570",
+        "v2-icons-clothes-a.png": "79709b66f3e4a79ef30e7d7d66018a03ec5380c655f5fd281b1506224edabdfa"
+      },
+      "width": 1536,
+      "height": 1024,
+      "file": "v2-icons-clothes-refined-2.png"
+    },
+    {
+      "prompt": "Edit the folded cream shirt seen in top right of reference into ONE isolated production game inventory icon. Same Kun hand-painted navy contour style, ivory cream fabric, three tiny tan buttons, turn-down collar, simple two-tone shadows. TRUE transparent background, no scene no shadow no glow. CRITICAL SILHOUETTE: the neatly folded shirt is a perfect compact SQUARE parcel, 1:1 width to height, straight near vertical sides with gently rounded corners, collar small at upper middle, folded sides tucked in, bottom flat horizontal, absolutely NO sleeves visible. Shape must be square, not the reference landscape rectangle and not typical t-shirt. Centered big with transparent margins on all sides. Navy #0e2f66 organically drawn11px exterior line on512px icon, no logos, no text, no body.",
+      "referencedImages": [
+        "v2-icons-clothes-a.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "174326151a0ec0c9275596cde9d382b604f491ea1ae74ea5867de0213f129140",
+      "referenceHashes": {
+        "v2-icons-clothes-a.png": "79709b66f3e4a79ef30e7d7d66018a03ec5380c655f5fd281b1506224edabdfa"
+      },
+      "width": 1254,
+      "height": 1254,
+      "file": "v2-icon-cream-shirt.png"
+    },
+    {
+      "prompt": "Make a precise MATERIAL DETAIL EDIT to the attached Kun wearable sprite sheet. Preserve the same transparent background, original3columns x3rows layout, all9 items in EXACT SAME positions, EXACT existing outer silhouettes and neckline contours/proportions, ALL colors. No character/body/head, no written text, no glows outside objects. Friendly hand-painted navy outline two-tone cel style. Edit ONLY THREE: middle row MIDDLE lab coat: add clearer blue-gray fabric shadow on lapel, tiny blank cool-blue chest ID badge alongside pen, 2 small crisp fold lines suggesting structured fabric. Middle row RIGHT navy security jacket: give blue shield a subtle enamel specular glint using tiny white accent and slightly richer dark-blue inner rim; no shape changes. Bottom row RIGHT deep-blue MOON SCARF: make yellow moon clasp enameled with two-tone ochre edge and one tiny white glint, add exactly TWO short knit texture stitch strokes on scarf, no additional pattern. The other SIX clothing items stay visually identical to source. Material accent total area less than8% each garment, preserve existing line thickness and all silhouettes, do not redesign shirt/body.",
+      "referencedImages": [
+        "polish-worn-a.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "8f5563360378138660d7f64753803a663e67b317d1b3abb6c8510e0f7ea730f5",
+      "referenceHashes": {
+        "polish-worn-a.png": "1059e1d414d66af431322a650a959128e34d88560a7bf7c67afe956831e5fd78"
+      },
+      "width": 1254,
+      "height": 1254,
+      "file": "v2-worn-materials-a.png"
+    },
+    {
+      "prompt": "Precise local MATERIAL DETAIL EDIT of attached Kun wearable clothing sheet. Preserve EXACT 3columns x3rows layout and ALL nine icons sizes, positions, outer silhouettes, proportions and collar contours. True transparent background. Hand-painted navy-outline two-tone cel cute game art. Do not add a character/mannequin/body/head or text. Only change these FOUR: top LEFT WHITE SPACESUIT: fill inside the dark elliptical neck-ring with pale light-gray inner padding instead of a black hole, no added helmet; give chrome ring one narrow white highlight stripe and chest panel2 tiny luminous blue points, VERY small. Top MIDDLE BROWN PILOT JACKET: add2-3 short soft ivory sheepwool tufts INSIDE original fur collar outline, and change metal zipper warm brass with tiny light glint, maintain leather brown shadows. Middle row RIGHT TURQUOISE NURSE: retain existing navy stethoscope placement and white medical cross but enhance silver head+earpieces with thin white metal highlights; no costume pose change. Bottom RIGHT PURPLE STORYTELLER CAPE: add thin gold trim along upper neckline and change round yellow central clasp into SMALL BLUE gemstone with brass rim and one white glint; preserve cloak's outer silhouette and empty center opening. All other five cells stay exactly identical. Accent areas less than8% of each costume, no external glows no added jewelry.",
+      "referencedImages": [
+        "polish-worn-b.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "1a7d2379604cff6d0fc375b3c1341d8d889c67838d897b90b8dc5d61553d28d5",
+      "referenceHashes": {
+        "polish-worn-b.png": "0296de9dfc7be1adf929a8bfb674c3a8b16ca8a6338f350ea76d84b50c9732de"
+      },
+      "width": 1254,
+      "height": 1254,
+      "file": "v2-worn-materials-b.png"
+    },
+    {
+      "prompt": "Precise local MATERIAL DETAIL EDIT of attached Kun wearables sheet. Keep exact 2columns x3rows layout of six items, all existing item positions/proportions/OUTER SILHOUETTES and all neckline shapes. TRUE transparent background, no body/mannequin/person/bird, no text/background/external glows. Same friendly hand-painted navy contour with 2-tone cel colors. Change ONLY TWO: TOP LEFT deep-blue WIZARD CAPE: small central clasp becomes a tiny PURPLE gemstone in subtle brass setting, remaining stars stay at original positions but are GOLD EMBROIDERY with ochre second tone and one white stitched glint each, tiny local shimmer only INSIDE stars; no new stars, do not change shape or neckline. BOTTOM LEFT IVORY ROBE: retain entire original shape and same cream/tan palette, add slightly richer shadow to existing drapery folds to imply soft heavy fabric; round right-shoulder clasp becomes SMALL BLUE GEMSTONE with brass rim one tiny white highlight. Other four items (coffee apron/tool apron/mailbag/blue scarf) identical and untouched. Material highlights occupy less than8% item area. External navy outline thickness unchanged.",
+      "referencedImages": [
+        "polish-worn-c.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "78e31f4357a606c7343e0b6e318091e8c9481a020e9433958cfb349518538cbf",
+      "referenceHashes": {
+        "polish-worn-c.png": "0af870f8330deb1fe81ce52ec4fd6f7db8c65b0664793de0cc458095361724f2"
+      },
+      "width": 1254,
+      "height": 1254,
+      "file": "v2-worn-materials-c.png"
+    },
+    {
+      "prompt": "Edit the attached exact3x3 sprite sheet only by adding TWO SHORT LIGHT BLUE KNITTED STITCH MARKS onto the BLUE MOON SCARF at BOTTOM RIGHT. Each mark is a short group of three tiny V stitches. Place these two marks just left of the gold crescent, on blue cloth, one over the other. Make them visible periwinkle-blue cloth thread, covering about4% of the scarf. No other edits. Preserve every pixel position, exact outer silhouette, collar shape, colors and shade of all9items. The moon scarf outer shape and its hanging fringe must be identical. Keep transparency and all existing blank space. No added glows or background. This is a minimal material embroidery texture patch, not redraw. Do NOT remove ID badge on lab coat or enamel on shield. Final must match entire reference layout.",
+      "referencedImages": [
+        "v2-worn-materials-a.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "note": "Final knit detail preserves original sheet crop and silhouette; supersedes rejected single-scarf enlargement.",
+      "sha256": "787758a1667d4691aabc78e6ff6d5083ce8dd6b6cd877aee7fe62380dd9aa978",
+      "referenceHashes": {
+        "v2-worn-materials-a.png": "8f5563360378138660d7f64753803a663e67b317d1b3abb6c8510e0f7ea730f5"
+      },
+      "width": 1254,
+      "height": 1254,
+      "file": "v2-worn-materials-a-knit.png"
+    },
+    {
+      "prompt": "Very precise local material-color touchup to attached 3columns x2rows Kun inventory sprite sheet. Preserve all6 icons positions and EXACT outer silhouettes and every transparent gap. Do not redesign, reposition, resize or change any garment shape. TRUE transparency preserved, no external glow. ONLY bottom-right navy SECURITY JACKET: make shield badge visibly enamel by adding a tiny icy-cyan glint, small white reflection and a deep-blue beveled rim, 3 subtle color steps within existing blue badge; small silver epaulette buttons receive blue-gray plus one white glint. All other5items stay EXACTLY identical. Original hand-painted navy outline and two-tone game art. Do not add patches/logos/border or text.",
+      "referencedImages": [
+        "v2-icons-clothes-a.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "a54cc3fa0001c59dd354c1464b713ba4abbf6e5e9556ba1e260aea63781721f4",
+      "referenceHashes": {
+        "v2-icons-clothes-a.png": "79709b66f3e4a79ef30e7d7d66018a03ec5380c655f5fd281b1506224edabdfa"
+      },
+      "width": 1536,
+      "height": 1024,
+      "file": "v2-icons-clothes-a-materials.png"
+    },
+    {
+      "prompt": "Precise MATERIAL COLOR edit only to two icons of the attached3columns x2rows Kun inventory sheet. Retain ALL6 item silhouettes, exact positions, transparent loops and holes, proportions, colors and navy outer contours. True transparent background with zero external effects. TOP LEFT spacesuit: chest panel small indicator lights have a tiny luminous icy-cyan/white center and deepblue body, add a faint small blue-violet reflection stripe within the silver chrome neck ring alongside the existing white highlight; inner neck pale gray unchanged. BOTTOM RIGHT turquoise nurse shirt: existing silver stethoscope chest piece gains detailed metallic blue-gray two-tone crescent reflection with very small white glint and dark blue inner rim. Do not add a stethoscope or change tubing route, no silhouette changes. Allother4items IDENTICAL. Friendly hand-painted navy ink, cel shading, accents less than8% of objects, no text/logos/glows outside.",
+      "referencedImages": [
+        "v2-icons-clothes-b.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "888dbbe8a63e444268c6a0ac6e0c3a0d709d9ac21aea451e2d8bfe3b9ca822f1",
+      "referenceHashes": {
+        "v2-icons-clothes-b.png": "dc4d6a51b2c3647eb8fbc3cbb79b13c0171286067bfba80cd09aaec6e7226454"
+      },
+      "width": 1536,
+      "height": 1024,
+      "file": "v2-icons-clothes-b-materials.png"
+    },
+    {
+      "prompt": "Keep this exact3columns x2rows Kun clothing icon sheet. Make only a tiny material detail edit to TOP RIGHT deep-blue MOON SCARF: add TWO short clearly visible knit-stitch marks on broad blue curve left of existing yellow moon clasp, each mark a small row of3 V stitches. Thread is periwinkle lavender with two pale blue-lilac shades and a narrow navy shadow for embroidered texture. These2strokes together occupy under4% of scarf. The existing crescent moon clasp gets one tiny white point and orange-ochre shaded enamel rim. Critical preserve exact hook-shaped OUTER silhouette, exact item positions, size, every transparent gap; no shape changes. Allother5items untouched pixelwise. Real transparent background no glows, no new stars/text/border. Same hand-painted navy contour game style.",
+      "referencedImages": [
+        "v2-icons-clothes-d.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "739001a0c07ac469d738b37f86789ccb7fa71f3b8ae18e42b708a000592b422e",
+      "referenceHashes": {
+        "v2-icons-clothes-d.png": "b6a109a09a67c43fa383856d2547ea397d96b9e865418af9ee5b9c5fe4aafc4b"
+      },
+      "width": 1536,
+      "height": 1024,
+      "file": "v2-icons-clothes-d-materials.png"
+    },
+    {
+      "prompt": "Keep exact3icons1row sprite sheet. Edit ONLY leftmost white LAB COAT material details, preserve every pixel of its original thin vertical OUTER silhouette, sleeves shape, deep lower slit, position and size. Chest badge becomes a small enamel icy-blue ID badge with darker teal-blue lower bevel, pale cyan highlight, two tiny non-text white rectangles and navy hanging lanyard, pen cap has a tiny light-blue highlight. Add just one faint blue-gray lapel shadow step for crisp material. Stay under8% material accent area. The other2icons (pilot jacket, blue scarf) must be identical. True transparent background unchanged. Same organically hand-painted navy-outline clean cel gameart, no text/logos/new insignia/glows.",
+      "referencedImages": [
+        "v2-icons-clothes-refined.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "c9785f1f47b678dcb0ab9089edaedd090920c3b1085c9d389c44d775ca9b0f9c",
+      "referenceHashes": {
+        "v2-icons-clothes-refined.png": "d27fb7328414b61313534765b23639dea3d6bec13c310510c3fe22fdf0d3fbb6"
+      },
+      "width": 2172,
+      "height": 724,
+      "file": "v2-icons-clothes-refined-materials.png"
+    }
+  ]
+}

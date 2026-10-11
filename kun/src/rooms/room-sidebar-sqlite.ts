@@ -1,14 +1,15 @@
+import { RoomNotificationPreferenceSchema, roomNotificationsMuted } from '../contracts/room-experience.js'
 import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { AgentIdentitySchema } from '../contracts/agent-identities.js'
+import { AgentIdentitySchema, type AgentIdentity } from '../contracts/agent-identities.js'
 import { RoomSidebarQuery, type RoomSidebarEntry, type RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { roomAttentionPredicateSql } from './room-activity-predicates.js'
 import { roomMessagePreview } from './room-message-preview.js'
-import { RoomSchema, type RoomMessage } from '../contracts/rooms.js'
+import { RoomSchema, type RoomMember, type RoomMessage } from '../contracts/rooms.js'
 
 const Cursor = z.object({ scope: z.string(), pinned: z.number().int().min(0).max(1), activitySeq: z.number().int().nonnegative(), id: z.string() }).strict()
-/** One keyset across both persisted conversations and identities with no private chat yet. */
+/** One keyset of persisted conversations; the Agent directory is a separate surface. */
 export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomSidebarPage {
   const input = RoomSidebarQuery.parse(raw)
   const { cursor: encoded, limit, ...filter } = input
@@ -19,9 +20,11 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
     catch { throw new z.ZodError([{ code: 'custom', path: ['cursor'], message: 'invalid sidebar cursor' }]) }
     if (cursor.scope !== scope) throw new z.ZodError([{ code: 'custom', path: ['cursor'], message: 'sidebar cursor scope changed' }])
   }
-  const conditions = ['s.archived=?'], args: Array<string | number> = [input.archivedOnly ? 1 : 0]
-  if (input.kind === 'all') conditions.push("conversation_kind IN ('user_agent','group')")
-  else { conditions.push('conversation_kind=?'); args.push(input.kind === 'agents' ? 'user_agent' : input.kind) }
+  const conditions = ['s.deleted=?'], args: Array<string | number> = [input.deletedOnly ? 1 : 0]
+  if (!input.deletedOnly) { conditions.push('s.archived=?'); args.push(input.archivedOnly ? 1 : 0) }
+  if (input.kind === 'all') {
+    if (!input.deletedOnly) conditions.push("conversation_kind IN ('user_agent','group')")
+  } else { conditions.push('conversation_kind=?'); args.push(input.kind === 'agents' ? 'user_agent' : input.kind) }
   if (input.search) { conditions.push("instr(lower(name || ' ' || title),lower(?))>0"); args.push(input.search) }
   if (input.repositoryRoot) {
     conditions.push("EXISTS(SELECT 1 FROM json_each(room_document,'$.repositories') repo WHERE json_extract(repo.value,'$.canonicalRoot')=?)")
@@ -29,26 +32,26 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
   }
   if (input.unreadOnly) conditions.push('message_seq>read_seq')
   if (input.attentionOnly) conditions.push('attention_count>0')
-  const rows = db.prepare(`WITH identities AS (
-    SELECT a.id AS agent_id, a.document AS agent_document, a.archived AS agent_archived, a.seq AS created_seq,
-      (SELECT r.id FROM room_documents r WHERE r.kind='room' AND json_extract(r.document,'$.conversationKind')='user_agent'
-        AND json_extract(r.document,'$.members[0].participantAgentId')=a.id ORDER BY r.seq LIMIT 1) AS room_id
-    FROM room_documents a WHERE a.kind='agent_identity'
-  ), entries AS (
-    SELECT 'agent:' || a.agent_id AS stable_id, a.agent_id, a.agent_document, r.id AS room_id, r.document AS room_document,
-      'user_agent' AS conversation_kind, json_extract(a.agent_document,'$.name') AS name,
-      COALESCE(json_extract(a.agent_document,'$.title'),'') AS title,
-      CASE WHEN a.agent_archived=1 OR r.archived=1 THEN 1 ELSE 0 END AS archived,
-      COALESCE(json_extract(r.document,'$.pinned'),0) AS pinned,
-      a.created_seq AS created_seq
-    FROM identities a LEFT JOIN room_documents r ON r.kind='room' AND r.id=a.room_id
-    UNION ALL
-    SELECT 'room:' || r.id, NULL, NULL, r.id, r.document, COALESCE(json_extract(r.document,'$.conversationKind'),'group'),
-      json_extract(r.document,'$.name'), COALESCE(json_extract(r.document,'$.description'),''), r.archived,
-      COALESCE(json_extract(r.document,'$.pinned'),0), r.seq
-    FROM room_documents r WHERE r.kind='room' AND COALESCE(json_extract(r.document,'$.conversationKind'),'group')<>'user_agent'
+  // Persisted private rooms remain conversations before the first message.
+  // Unused Agent identities never enter this room-based projection.
+  const rows = db.prepare(`WITH entries AS (
+    SELECT 'room:' || r.id AS stable_id,
+      CASE WHEN json_extract(r.document,'$.conversationKind')='user_agent'
+        THEN json_extract(r.document,'$.members[0].participantAgentId') END AS agent_id,
+      a.document AS agent_document, r.id AS room_id, r.document AS room_document,
+      COALESCE(json_extract(r.document,'$.conversationKind'),'group') AS conversation_kind,
+      COALESCE(json_extract(a.document,'$.name'),json_extract(r.document,'$.name')) AS name,
+      COALESCE(json_extract(a.document,'$.title'),json_extract(r.document,'$.description'),'') AS title,
+      r.archived AS archived,
+      CASE WHEN json_extract(r.document,'$.deletedAt') IS NULL THEN 0 ELSE 1 END AS deleted,
+      COALESCE(json_extract(r.document,'$.pinned'),0) AS pinned, r.seq AS created_seq
+    FROM room_documents r LEFT JOIN room_documents a ON a.kind='agent_identity'
+      AND a.id=json_extract(r.document,'$.members[0].participantAgentId')
+      AND json_extract(r.document,'$.conversationKind')='user_agent'
+    WHERE r.kind='room'
   ), summaries AS (
     SELECT e.*,
+      (SELECT p.document FROM room_documents p WHERE p.kind='room_preference' AND p.id=e.room_id) AS notification_preference,
       COALESCE((SELECT m.seq FROM room_documents m WHERE m.kind='message' AND m.room_id=e.room_id
         AND COALESCE(json_extract(m.document,'$.status'),'final')<>'streaming'
         AND COALESCE(json_extract(m.document,'$.presentationKind'),'')<>'setup'
@@ -67,7 +70,11 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
           (r.kind='integration' AND r.status IN ('preparing','validating')))) OR
         (r.kind='room_run' AND r.status IN ('queued','running','recovery_required') AND (
           (e.agent_id IS NOT NULL AND json_extract(r.document,'$.participantAgentId')=e.agent_id) OR
-          (e.agent_id IS NULL AND r.room_id=e.room_id AND json_extract(r.document,'$.phase') IN ('discussion','triage','conversation'))))) AS running_count
+          (e.agent_id IS NULL AND r.room_id=e.room_id AND json_extract(r.document,'$.phase') IN ('discussion','triage','conversation'))))) AS running_count,
+      (SELECT COUNT(DISTINCT 'task:' || COALESCE(r.task_id,json_extract(r.document,'$.taskId'),r.id))
+        FROM room_documents r WHERE r.room_id=e.room_id AND
+        ((r.kind='task' AND r.status IN ('queued','running','waiting_dependency','stopping')) OR
+          (r.kind='integration' AND r.status IN ('preparing','validating')))) AS task_running_count
     FROM entries e
   ), ordered AS (
     SELECT s.*, CASE WHEN s.message_seq>0 THEN s.message_seq ELSE s.created_seq END AS activity_seq,
@@ -82,21 +89,45 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
     ...(cursor ? [cursor.pinned, cursor.activitySeq, cursor.id] : []), limit + 1) as Array<{
       stable_id: string; agent_document: string | null; agent_id: string | null; room_document: string | null; room_id: string | null
       conversation_kind: RoomSidebarEntry['kind']; name: string; title: string; archived: number; pinned: number; activity_seq: number
-      latest_message: string | null; message_seq: number; read_seq: number; running_count: number; attention_count: number
+      notification_preference: string | null; latest_message: string | null; message_seq: number; read_seq: number; running_count: number; task_running_count: number; attention_count: number; deleted: number
     }>
   const page = rows.slice(0, limit), last = page.at(-1)
-  return { entries: page.map((row) => {
+  const rooms = page.map((row) => row.room_document ? RoomSchema.parse(JSON.parse(row.room_document)) : undefined)
+  const memberAgents = currentAgentIdentities(db, rooms.flatMap((room, index) => page[index].conversation_kind === 'user_agent' || !room ? []
+    : room.members.flatMap((member) => member.participantAgentId ? [member.participantAgentId] : [])))
+  return { entries: page.map((row, index) => {
     const agent = row.agent_document ? AgentIdentitySchema.parse(JSON.parse(row.agent_document)) : undefined
-    const room = row.room_document ? RoomSchema.parse(JSON.parse(row.room_document)) : undefined
+    const room = rooms[index]
+    const preference = row.notification_preference ? RoomNotificationPreferenceSchema.safeParse(JSON.parse(row.notification_preference)) : undefined
     const message = row.latest_message ? JSON.parse(row.latest_message) as RoomMessage : undefined
     return { id: row.stable_id, agentId: row.agent_id ?? undefined, roomId: row.room_id ?? undefined,
-      name: row.name, title: row.title,
+      name: row.name, title: row.title, notificationsMuted: preference?.success ? roomNotificationsMuted(preference.data) : false,
+      ...(agent?.archivedAt ? { agentArchived: true } : {}),
       avatar: agent?.avatar ?? (row.conversation_kind === 'user_agent' ? undefined : room?.avatar),
-      kind: row.conversation_kind, members: room?.members ?? [],
-      activitySeq: row.activity_seq, pinned: Boolean(row.pinned), archived: Boolean(row.archived), latestMessageSeq: row.message_seq, readSeq: row.read_seq,
-      runningCount: row.running_count, attentionCount: row.attention_count,
+      kind: row.conversation_kind, members: room ? presentMembers(room.members, memberAgents) : [],
+      activitySeq: row.activity_seq, pinned: Boolean(row.pinned), archived: Boolean(row.archived), deleted: Boolean(row.deleted), latestMessageSeq: row.message_seq, readSeq: row.read_seq,
+      runningCount: row.running_count, taskRunningCount: row.task_running_count, attentionCount: row.attention_count,
       latestMessage: message ? { id: message.id, authorKind: message.authorKind, authorLabelSnapshot: message.authorLabelSnapshot,
         createdAt: message.createdAt, preview: roomMessagePreview(message.body), attachmentCount: message.attachmentIds.length } : undefined }
   }), ...(rows.length > limit && last ? { nextCursor: Buffer.from(JSON.stringify({ scope, pinned: last.pinned,
     activitySeq: last.activity_seq, id: last.stable_id })).toString('base64url') } : {}) }
+}
+
+/** Group mosaics show each Agent as it is now, like AgentIdentityService.present() does for open rooms. */
+function presentMembers(members: RoomMember[], agents: ReadonlyMap<string, AgentIdentity>): RoomMember[] {
+  return members.map((member) => {
+    const agent = member.participantAgentId ? agents.get(member.participantAgentId) : undefined
+    return agent ? { ...member, displayName: agent.name, avatar: agent.avatar, agentTitle: agent.title } : member
+  })
+}
+
+function currentAgentIdentities(db: DatabaseSync, ids: string[]): Map<string, AgentIdentity> {
+  const unique = [...new Set(ids)], agents = new Map<string, AgentIdentity>()
+  for (let offset = 0; offset < unique.length; offset += 400) {
+    const chunk = unique.slice(offset, offset + 400)
+    const rows = db.prepare(`SELECT id, document FROM room_documents WHERE kind='agent_identity' AND id IN (${chunk.map(() => '?').join(',')})`)
+      .all(...chunk) as Array<{ id: string; document: string }>
+    for (const row of rows) agents.set(row.id, AgentIdentitySchema.parse(JSON.parse(row.document)))
+  }
+  return agents
 }

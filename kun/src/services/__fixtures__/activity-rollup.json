@@ -1,0 +1,70 @@
+{
+  "cases": [
+    {
+      "name": "main waiting wins over children",
+      "main": "waiting",
+      "children": { "working": 2, "waiting": 1, "done": 0, "failed": 0 },
+      "expected": "waiting"
+    },
+    {
+      "name": "waiting child surfaces on done parent",
+      "main": "done",
+      "children": { "working": 0, "waiting": 1, "done": 3, "failed": 0 },
+      "expected": "waiting"
+    },
+    {
+      "name": "waiting child surfaces on failed parent",
+      "main": "failed",
+      "children": { "working": 0, "waiting": 1, "done": 0, "failed": 2 },
+      "expected": "waiting"
+    },
+    {
+      "name": "working main stays working",
+      "main": "working",
+      "children": { "working": 0, "waiting": 0, "done": 0, "failed": 0 },
+      "expected": "working"
+    },
+    {
+      "name": "initializing main stays initializing",
+      "main": "initializing",
+      "children": { "working": 0, "waiting": 0, "done": 0, "failed": 0 },
+      "expected": "initializing"
+    },
+    {
+      "name": "done main with working children rolls up working",
+      "main": "done",
+      "children": { "working": 1, "waiting": 0, "done": 2, "failed": 0 },
+      "expected": "working"
+    },
+    {
+      "name": "idle main with working children rolls up working",
+      "main": "idle",
+      "children": { "working": 1, "waiting": 0, "done": 0, "failed": 0 },
+      "expected": "working"
+    },
+    {
+      "name": "done main with only done children stays done",
+      "main": "done",
+      "children": { "working": 0, "waiting": 0, "done": 4, "failed": 0 },
+      "expected": "done"
+    },
+    {
+      "name": "failed main with failed children stays failed",
+      "main": "failed",
+      "children": { "working": 0, "waiting": 0, "done": 1, "failed": 2 },
+      "expected": "failed"
+    },
+    {
+      "name": "idle main stays idle",
+      "main": "idle",
+      "children": { "working": 0, "waiting": 0, "done": 0, "failed": 0 },
+      "expected": "idle"
+    },
+    {
+      "name": "closed main stays closed",
+      "main": "closed",
+      "children": { "working": 0, "waiting": 0, "done": 1, "failed": 0 },
+      "expected": "closed"
+    }
+  ]
+}

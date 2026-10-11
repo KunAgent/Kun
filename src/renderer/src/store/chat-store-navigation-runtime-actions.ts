@@ -11,6 +11,7 @@ import {
   applyUiFontScale,
   applyWriteTypography
 } from '../lib/apply-theme'
+import { applyColorPalette, migrateLegacyRetromaPalette } from '../lib/color-palettes'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import { formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import { isAppQuitting, markAppQuitting } from '../lib/app-quitting'
@@ -300,6 +301,10 @@ export function createNavigationRuntimeActions(
         applyCursorSpotlight(settings.cursorSpotlight !== false)
         applyCursorSpotlightColor(settings.cursorSpotlightColor)
         applyDarkUiColors(settings.darkUiColors)
+        applyColorPalette(
+          migrateLegacyRetromaPalette(settings.colorPalette, (patch) => rendererRuntimeClient.setSettings(patch)),
+          settings.darkUiColors
+        )
         if (settings.write?.typography) applyWriteTypography(settings.write.typography)
         await get().applyI18nFromSettings(readRemoteLocaleOverride() ?? settings.locale)
         if (!appQuittingUnsubscribe && typeof window.kunGui.onAppQuitting === 'function') {

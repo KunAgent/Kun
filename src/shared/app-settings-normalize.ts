@@ -45,6 +45,7 @@ import {
   normalizeModelProviderSettings
 } from './app-settings-provider-core'
 import { defaultMiniMaxMediaGenerationKunPatch } from './app-settings-provider-media'
+import { isRetiredOpenCodeFreeProviderId } from './app-settings-provider-profiles'
 import { normalizeDeepseekBaseUrl } from './app-settings-normalizers'
 import { normalizeClawSettings } from './app-settings-claw'
 import { normalizeScheduleSettings } from './app-settings-schedule'
@@ -58,6 +59,7 @@ import {
   type RemoteAccessSettingsPatchV1
 } from './app-settings-remote'
 import { normalizeDarkUiColors } from './app-settings-dark-ui'
+import { normalizeColorPaletteSettings } from './app-settings-color-palette'
 
 export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
   const migrated = shouldMigrateLegacySettings(settings)
@@ -78,6 +80,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     terminal?: TerminalSettingsPatchV1
     remote?: RemoteAccessSettingsPatchV1
     darkUiColors?: Parameters<typeof normalizeDarkUiColors>[0]
+    colorPalette?: Parameters<typeof normalizeColorPaletteSettings>[0]
   }
   const providerSettings = normalizeModelProviderSettings(maybeSettings.provider)
   const rawKun = maybeSettings.agents?.kun
@@ -124,6 +127,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     cursorSpotlight: maybeSettings.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(maybeSettings.cursorSpotlightColor),
     darkUiColors: normalizeDarkUiColors(maybeSettings.darkUiColors),
+    colorPalette: normalizeColorPaletteSettings(maybeSettings.colorPalette, maybeSettings.darkUiColors),
     provider: providerSettings,
     agents: kunSettingsEnvelope(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       ...runtime,
@@ -147,7 +151,8 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     notifications: {
       turnComplete: maybeSettings.notifications?.turnComplete !== false,
       mainAgentTurnComplete: maybeSettings.notifications?.mainAgentTurnComplete !== false,
-      subagentTurnComplete: maybeSettings.notifications?.subagentTurnComplete === true
+      subagentTurnComplete: maybeSettings.notifications?.subagentTurnComplete === true,
+      ...(maybeSettings.notifications?.quotaReminders === false ? { quotaReminders: false as const } : {})
     },
     appBehavior: normalizeAppBehaviorSettings(maybeSettings.appBehavior),
     keyboardShortcuts: normalizeKeyboardShortcuts(maybeSettings.keyboardShortcuts),
@@ -224,7 +229,7 @@ function normalizeModelProviderPair(
   providers: readonly ModelProviderProfileV1[],
   preferModelOwner: boolean
 ): { providerId: string; model: string } {
-  const providerId = providerInput.trim()
+  const providerId = isRetiredOpenCodeFreeProviderId(providerInput.trim()) ? '' : providerInput.trim()
   const model = modelInput.trim()
   const selected = providerId
     ? providers.find((provider) => provider.id === providerId)

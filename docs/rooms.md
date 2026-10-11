@@ -1,6 +1,7 @@
 # Rooms V1
 
-Rooms is a personal collaboration workspace alongside Code and Work. It uses
+Rooms provides the private and group Agent conversations shown in Code (it is
+no longer a separate workspace mode). It uses
 Kun's existing native AgentLoop and the Renderer -> preload -> Main -> Kun
 HTTP/SSE path. The Service Manager remains the only owner of canonical room
 data; the renderer does not run a second coordinator or agent engine.
@@ -53,7 +54,6 @@ Agents can draft structured proposals — pin an agreement, request an execution
 add a member or create an agent — that render as timeline cards. Drafts never
 execute anything; only the user can adopt or dismiss a card, and committing
 requires a durable result produced through the ordinary user-scoped paths.
-See [Room proposals](./rooms-proposals.md).
 
 Room names and message text can be searched locally. Tasks can be filtered by
 status, member or repository. Room, message and task lists use pagination and
@@ -405,6 +405,10 @@ cd kun
   src/services/thread-service.rooms.test.ts
 ```
 
-Smoke helpers isolate their settings, Git repository, Runtime data, Manager
-control directory and processes, and remove temporary execution state afterward.
+`smoke-development-rooms.cjs` opens groups and private chats from the Code
+sidebar; the Rooms mode it originally switched to has been retired. Room details
+is the embedded right-panel region, and tool, integration and cleanup
+confirmations are clicked in Kun's protected windows. Smoke helpers isolate
+their settings, Git repository, Runtime data, Manager control directory and
+processes, and remove temporary execution state afterward.
 Reports and screenshots are ignored build evidence rather than committed assets.

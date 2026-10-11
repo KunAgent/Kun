@@ -1,3 +1,4 @@
+import { memoryHistory, memoryLifecycle } from './memory-lifecycle.js'
 import type { Router } from '../router.js'
 import { buildWorkspaceStatusResponse } from './workspace.js'
 import { refreshSkills, setSkillsEnabled } from './skills.js'
@@ -110,6 +111,14 @@ export function registerResourceRoutes(router: Router, runtime: ServerRuntime): 
       ctx.params.id,
       request
     )
+  })
+  router.add('GET', '/v1/memory/:id/history', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return memoryHistory(runtime.memoryStore, ctx.params.id, request)
+  })
+  router.add('POST', '/v1/memory/:id/lifecycle', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return memoryLifecycle(runtime.memoryStore, ctx.params.id, request)
   })
   router.add('PATCH', '/v1/memory/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

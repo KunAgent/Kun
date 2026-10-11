@@ -76,6 +76,10 @@ describe('parseSkillFrontmatter', () => {
 })
 
 describe('mapAllowedTools', () => {
+  it('does not resurrect retired tool aliases or rewrite incompatible full-list inputs', () => {
+    expect(mapAllowedTools(['TodoWrite', 'todo_write', 'todo_list', 'TodoRead', 'task_graph'])).toEqual([])
+    expect(mapAllowedTools(['task_create', 'task_update', 'task_get', 'task_list'])).toEqual(['task_create', 'task_update', 'task_get', 'task_list'])
+  })
   it('normalizes aliases into Kun tool names', () => {
     expect(mapAllowedTools(['ReadFile', 'grep', 'shell', 'unknown_tool'])).toEqual([
       'read',

@@ -1,26 +1,33 @@
 'use strict'
 const assert = require('node:assert/strict')
+const { confirmAgentCreationModel } = require('./smoke-agent-creation-model.cjs')
 const { createHash } = require('node:crypto')
 const { readFile } = require('node:fs/promises')
 const { join } = require('node:path')
+const { previewRoomWorkspaceFile, collapseRoomPanel, roomWorkbenchSnapshot } = require('./smoke-agent-chat-workbench.cjs')
 
-async function exerciseDirectChat({ page, request, poll, capture, fixture, application, workspaceRoot, real, resize, switchRooms, approve }) {
+async function exerciseDirectChat({ page, request, poll, capture, fixture, application, workspaceRoot, real, resize, openPrivate, approve }) {
   let userRequests = 0, approvals = 0
-  await switchRooms()
+  await openPrivate()
   await page.locator('.direct-header').waitFor()
   const entry = await request(page, '/v1/agents/chat-entry')
   assert(entry.initialized && entry.roomId)
   const agents = await request(page, '/v1/agents')
-  assert.equal(agents.agents.length, 1, 'Opening Rooms initializes exactly one Agent')
+  assert.equal(agents.agents.length, 1, 'Opening Code Conversations initializes exactly one Agent')
   assert.equal(agents.agents[0].name, '小 Kun')
   assert.equal((await request(page, '/v1/rooms?conversation_kind=user_agent')).rooms.length, 1)
   assert.equal(fixture.snapshot().mainCalls, 0, 'Initialization must not call a model')
   assert.equal(await page.locator('.rooms-init-banner').count(), 0)
   assert.equal(await page.locator('.agent-collaboration-strip').count(), 0)
-  assert.equal(await page.locator('.rooms-composer select').count(), 0)
+  assert.equal(await page.locator('.rooms-composer select').count(), 0, 'Private composer has no native select')
+  assert.equal(await page.locator('.rooms-composer [data-room-model-picker] [data-composer-model-trigger]').count(), 1,
+    'Private composer has one model · effort pill, like the Code composer')
+  const composerModel = page.locator('.rooms-composer [data-room-model-picker] [data-composer-model-trigger]')
+  await poll(() => composerModel.isEnabled(), 10000, 'private composer model metadata loaded')
   await capture('01-empty-kun')
-  await page.getByRole('button', { name: 'Add context', exact: true }).click()
-  await page.getByRole('button', { name: 'Emoji', exact: true }).click()
+  // Code conversations keep composer tools in the "+" menu, like the Code task composer.
+  await page.locator('.rooms-composer').getByRole('button', { name: 'Add context', exact: true }).click()
+  await page.locator('.rooms-popover-surface').getByRole('button', { name: 'Emoji', exact: true }).click()
   await page.getByRole('button', { name: '👍', exact: true }).click()
   await poll(async () => (await page.locator('.rooms-rich-input').innerText()).includes('👍'), 10000, 'nested emoji menu')
   await page.locator('.rooms-rich-input').fill('')
@@ -50,6 +57,8 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     await poll(async () => (await request(page, `/v1/rooms/${roomId}/messages`)).messages.some((message) => message.originRunId === completed.runId && message.status === 'final'), 15000, 'public projection')
     const published = (await request(page, `/v1/rooms/${roomId}/messages`)).messages.find((message) => message.originRunId === completed.runId && message.status === 'final')
     await page.locator('#room-message-' + published.id).waitFor()
+    await poll(async () => !(await request(page, `/v1/rooms/${roomId}/direct`)).active &&
+      !(await page.locator('.rooms-agent-activity').count()), 15000, 'working row clears after completion')
     return completed
   }
   await send('你好，请用一句简短的中文回复。')
@@ -65,6 +74,18 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   assert(composed.height < 110, 'Empty composer starts at one compact row')
   await send('CREATE_FILE：请直接用文件工具在当前工作目录创建 hello.txt，内容必须是 hello from Kun 加一个换行。完成后简短确认，不要只给出代码。')
   const created = await settle(entry.roomId, greeting.id)
+  const publishedWork = (await request(page, `/v1/rooms/${entry.roomId}/messages`)).messages
+    .filter((message) => message.originRunId === created.runId)
+  const start = publishedWork.find((message) => message.deliveryPhase === 'start')
+  const final = publishedWork.find((message) => message.deliveryPhase === 'final')
+  assert(start && final && start.messageSeq < final.messageSeq, 'Work shows a start bubble before its final result')
+  const createdRun = await request(page, `/v1/rooms/${entry.roomId}/runs/${created.runId}`)
+  assert(Number.isFinite(createdRun.run.firstResponseMs), 'The run records time to first public response')
+  const paintedStart = await page.evaluate(async (id) => {
+    const { roomResponseLatencySnapshot } = await import('/src/components/rooms/room-im-response-metrics.ts')
+    return roomResponseLatencySnapshot().find((item) => item.messageId === id)
+  }, start.id)
+  assert(Number.isFinite(paintedStart?.commitToRenderMs), 'The renderer records commit-to-render latency separately')
   const location = await request(page, `/v1/rooms/${entry.roomId}/direct`)
   assert.equal(await readFile(join(location.workspace.path, 'hello.txt'), 'utf8'), 'hello from Kun\n')
   await capture('03-file-created')
@@ -72,12 +93,24 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   const updated = await settle(entry.roomId, created.id)
   assert.equal(updated.threadId, created.threadId, 'Follow-up reuses the same model conversation')
   assert.equal(await readFile(join(location.workspace.path, 'hello.txt'), 'utf8'), 'updated by Kun\n')
-  await page.getByRole('button', { name: 'More actions', exact: true }).click()
-  await page.getByRole('button', { name: 'Conversation files', exact: true }).click()
-  await page.getByRole('dialog', { name: 'Conversation files', exact: true }).getByRole('button', { name: 'hello.txt', exact: true }).click()
-  await page.getByText('updated by Kun', { exact: false }).first().waitFor()
+  const senderBeforePreview = await roomWorkbenchSnapshot(page)
+  await previewRoomWorkspaceFile(page, 'hello.txt', 'updated by Kun', poll)
+  assert.deepEqual(await roomWorkbenchSnapshot(page), senderBeforePreview,
+    'Opening a private file preview preserves the selected Agent, Code route and project scope')
   await capture('04-updated-file-preview')
-  await page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
+  await collapseRoomPanel(page)
+  if (process.argv.includes('--delivery-only')) {
+    await page.evaluate(async () => { const { applyTheme } = await import('/src/lib/apply-theme.ts'); applyTheme('dark') })
+    await capture('05-dark-delivery')
+    await resize(760, 780)
+    await page.waitForTimeout(200)
+    assert((await page.evaluate(() => window.innerWidth)) < 768, 'Exercise the narrow renderer layout')
+    await capture('06-narrow-delivery')
+    assert(await page.locator('[data-rooms-workspace]').evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+    return { userRequests, approvals, roomId: entry.roomId,
+      responseTiming: { firstResponseMs: createdRun.run.firstResponseMs, commitToRenderMs: paintedStart.commitToRenderMs },
+      assertions: ['first public response before work', 'final result after work', 'real file creation and modification', 'desktop, dark and narrow screenshots'] }
+  }
   await application.evaluate(({ dialog }, path) => {
     const original = dialog.showOpenDialog
     dialog.showOpenDialog = async (...args) => { dialog.showOpenDialog = original; return { canceled: false, filePaths: [path] } }
@@ -92,32 +125,45 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   assert.equal(await readFile(join(workspaceRoot, 'project-result.txt'), 'utf8'), 'project verified\n')
   assert.equal((await request(page, `/v1/rooms/${entry.roomId}/tasks`)).tasks.length, 0)
   await capture('05-project-work')
-  await page.locator('.direct-current-model').click()
-  const models = page.getByRole('dialog', { name: 'Model settings', exact: true })
-  await models.getByRole('combobox', { name: 'Main model', exact: true }).waitFor()
+  const models = page.locator('.rooms-details-panel:visible')
+  const openRoleModels = async () => {
+    await page.locator('.direct-header').getByRole('button', { name: 'More actions', exact: true }).click()
+    await page.getByRole('button', { name: 'Model settings', exact: true }).click()
+    await models.getByRole('combobox', { name: 'Main model', exact: true }).waitFor()
+  }
+  await openRoleModels()
   await capture('06-model-settings')
   assert((await models.innerText()).includes('Effective'))
   await models.getByRole('button', { name: 'Close', exact: true }).click()
   if (!real) {
-    await page.getByRole('button', { name: 'New conversation', exact: true }).click()
+    await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New conversation', exact: true }).click()
     await capture('07-new-chat-picker')
-    await page.getByRole('button', { name: 'Create new agent', exact: true }).click()
+    await page.getByRole('button', { name: 'Define in chat', exact: true }).click()
+    const createdModelRef = await confirmAgentCreationModel({ page, request })
     await poll(async () => (await page.locator('.direct-chat-title').innerText()).includes('New agent'), 15000, 'quick creation')
     assert.equal(await page.locator('.agent-profile-form').count(), 0, 'No creation form gates chat')
     const newAgent = (await request(page, '/v1/agents')).agents.find((agent) => agent.id !== entry.agentId)
+    assert.deepEqual(newAgent.modelRef, createdModelRef)
     const conversation = (await request(page, `${'/v1/agents/' + newAgent.id}/conversations`)).conversations[0]
     await send('你好，新 Agent。请简短回复。')
     await settle(conversation.id)
     await capture('08-new-agent-chat')
-    await page.locator('.direct-current-model').click()
+    await openRoleModels()
     const options = await request(page, `/v1/agents/${newAgent.id}/models`)
     const other = options.options.find((item) => item.available && item.fastAvailable && item.model !== options.main.model)
     assert(other, 'A second configured model is available')
     const key = JSON.stringify([other.providerId, other.accountId, other.model])
     await models.getByRole('combobox', { name: 'Main model', exact: true }).selectOption(key)
+    await poll(async () => {
+      const saved = (await request(page, `/v1/agents/${newAgent.id}/models`)).agent.modelRef
+      return JSON.stringify([saved?.providerId, saved?.accountId, saved?.model]) === key &&
+        await models.getByRole('combobox', { name: 'Lightweight model', exact: true }).isEnabled()
+    }, 10000, 'main model saved immediately before lightweight selection')
     await models.getByRole('combobox', { name: 'Lightweight model', exact: true }).selectOption(key)
-    await models.getByRole('button', { name: 'Save', exact: true }).click()
-    await poll(async () => (await request(page, `/v1/agents/${newAgent.id}/models`)).agent.fastModelRef?.model === other.model, 10000, 'main and lightweight save')
+    await poll(async () => {
+      const saved = (await request(page, `/v1/agents/${newAgent.id}/models`)).agent
+      return [saved.modelRef, saved.fastModelRef].every((ref) => JSON.stringify([ref?.providerId, ref?.accountId, ref?.model]) === key)
+    }, 10000, 'exact main and lightweight provider/account/model saved immediately')
     const unchanged = await request(page, `/v1/agents/${entry.agentId}/models`)
     assert(!unchanged.agent.modelRef && !unchanged.agent.fastModelRef)
     await capture('09-independent-models')
@@ -127,6 +173,11 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     const switched = await settle(conversation.id, previous.id)
     const switchedRun = await request(page, `/v1/rooms/${conversation.id}/runs/${switched.runId}`)
     assert.equal(switchedRun.run.model, other.model)
+    // Setup interviews never steer, and the offline fixture never finishes one,
+    // so end the interview before exercising busy-message steering.
+    await page.getByRole('button', { name: 'Skip interview', exact: true }).first().click()
+    await poll(async () => (await request(page, '/v1/agents')).agents.find((agent) => agent.id === newAgent.id)?.setup?.status === 'skipped',
+      10000, 'setup interview skipped')
     await send('HOLD_RESPONSE 请等待。')
     await poll(() => fixture.holding() && page.getByRole('button', { name: 'Stop response', exact: true }).isVisible(), 15000, 'active response')
     // A message sent while the reply is running steers into the live turn
@@ -153,7 +204,7 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     assert.equal(await editor().innerText(), 'Preserved draft')
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-    if (!await page.locator('[data-rooms-workspace]').count()) await switchRooms()
+    await openPrivate(newAgent.name)
     await editor().waitFor()
     assert.equal(await editor().innerText(), 'Preserved draft')
     await capture('10-restored-draft')

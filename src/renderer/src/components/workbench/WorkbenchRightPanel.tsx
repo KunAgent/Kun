@@ -30,12 +30,20 @@ import {
   WorkbenchFileTreeSidePanel,
   type WorkbenchFileTreeSidePanelProps
 } from './WorkbenchFileTreeSidePanel'
+import { WorkbenchRightSidebar } from './WorkbenchRightSidebar'
 import { workbenchDividerClassName } from './workbench-divider'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { X } from 'lucide-react'
+import type { WriteRightPanelContentProps } from '../write/WriteRightPanelContent'
 
 const ChangeInspector = lazy(() =>
   import('../ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
+)
+const CodeChangesPanel = lazy(() =>
+  import('../review/CodeChangesPanel').then((module) => ({ default: module.CodeChangesPanel }))
+)
+const WorkersPanel = lazy(() =>
+  import('../workers/WorkersPanel').then((module) => ({ default: module.WorkersPanel }))
 )
 const DevBrowserPanel = lazy(() =>
   import('../DevBrowserPanel').then((module) => ({ default: module.DevBrowserPanel }))
@@ -51,8 +59,8 @@ const CodeCanvasPanel = lazy(() =>
 const SubagentDetailPanel = lazy(() =>
   import('../subagents/SubagentDetailPanel').then((module) => ({ default: module.SubagentDetailPanel }))
 )
-const WriteAssistantPanel = lazy(() =>
-  import('../write/WriteAssistantPanel').then((module) => ({ default: module.WriteAssistantPanel }))
+const WriteRightPanelContent = lazy(() =>
+  import('../write/WriteRightPanelContent').then((module) => ({ default: module.WriteRightPanelContent }))
 )
 const SddAssistantPanel = lazy(() =>
   import('../sdd/SddAssistantPanel').then((module) => ({ default: module.SddAssistantPanel }))
@@ -66,6 +74,9 @@ const McpSkillsPanel = lazy(() =>
 const UsageQuotaPanel = lazy(() =>
   import('./UsageQuotaPanel').then((module) => ({ default: module.UsageQuotaPanel }))
 )
+const RoomWardrobePanel = lazy(() =>
+  import('../rooms/RoomWardrobePanel').then((module) => ({ default: module.RoomWardrobePanel }))
+)
 const RemoteAccessPanel = lazy(() =>
   import('../remote/RemoteAccessPanel').then((module) => ({ default: module.RemoteAccessPanel }))
 )
@@ -73,7 +84,6 @@ const GraphModePanel = lazy(() =>
   import('../graph/GraphModePanel').then((module) => ({ default: module.GraphModePanel }))
 )
 
-type WriteAssistantPanelProps = ComponentProps<typeof WriteAssistantPanel>
 type SddAssistantPanelProps = ComponentProps<typeof SddAssistantPanel>
 type ChangeInspectorProps = ComponentProps<typeof ChangeInspector>
 type DevBrowserPanelProps = ComponentProps<typeof DevBrowserPanel>
@@ -107,7 +117,7 @@ export type WorkbenchRightPanelProps = {
   onBeginResize: PointerEventHandler<HTMLDivElement>
   design: DesignRightPanelContentProps
   writeAssistantOpen: boolean
-  write: Omit<WriteAssistantPanelProps, 'className'>
+  write: WriteRightPanelContentProps['write']
   sdd: Omit<SddAssistantPanelProps, 'draft' | 'className'> & {
     draft: SddAssistantPanelProps['draft'] | null
   }
@@ -149,7 +159,7 @@ export function WorkbenchRightPanel({
 }: WorkbenchRightPanelProps): ReactElement | null {
   const { t } = useTranslation('common')
   const remoteMobile = useRemoteMobileLayout()
-  if (route === 'chat' && rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.sddAi && code) {
+  if ((route === 'chat' || route === 'ade') && rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.sddAi && code) {
     const visibleCodeState = codeRightTabsForGraphVisibility(code.state, graphEnabled)
     if (
       (!visible && visibleCodeState.tabs.length === 0) ||
@@ -197,7 +207,7 @@ export function WorkbenchRightPanel({
           {design.panelMode !== 'hidden' ? (
             <DesignRightPanelContent {...design} />
           ) : route === 'write' && writeAssistantOpen ? (
-            <WriteAssistantPanel {...write} className="h-full max-h-full w-full" />
+            <WriteRightPanelContent write={write} onOpenAgentSettings={mcpSkills.onOpenSettings} onCollapse={onCollapse} />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sddAi && sdd.draft ? (
             <SddAssistantPanel {...sdd} draft={sdd.draft} className="h-full max-h-full w-full" />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.subagents ? (
@@ -296,8 +306,11 @@ function CodeRightPanelWorkspace({
     if (id === BUILTIN_RIGHT_PANEL_IDS.subagents) {
       return <SubagentDetailPanel className="h-full max-h-full w-full" onCollapse={onCollapse} />
     }
-    if (id === BUILTIN_RIGHT_PANEL_IDS.changes) {
-      return <ChangeInspector {...changes} className="h-full max-h-full w-full flex-col" />
+    if (id === BUILTIN_RIGHT_PANEL_IDS.changes || id === BUILTIN_RIGHT_PANEL_IDS.review) {
+      return <CodeChangesPanel active={visible && code.state.activeId === id} changes={changes} className="h-full max-h-full w-full" />
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.workers) {
+      return <WorkersPanel active={visible && code.state.activeId === id} className="h-full max-h-full w-full" />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.browser) {
       return (
@@ -364,6 +377,9 @@ function CodeRightPanelWorkspace({
         />
       )
     }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.wardrobe) {
+      return <RoomWardrobePanel active={visible && code.state.activeId === id} />
+    }
     if (id === BUILTIN_RIGHT_PANEL_IDS.graph) {
       return (
         <GraphModePanel
@@ -390,52 +406,39 @@ function CodeRightPanelWorkspace({
   }
 
   return (
-    <>
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        className={`${visible ? '' : 'hidden '}ds-workbench-divider ds-no-drag relative z-20 shrink-0 cursor-col-resize`}
-        onPointerDown={onBeginResize}
-      />
-      <div
-        data-workbench-right-panel
-        className={`${visible ? 'flex' : 'hidden'} ds-sidebar-surface h-full min-h-0 shrink-0 flex-col`}
-        style={{ width }}
-      >
-        <CodeRightPanelTabs
-          state={code.state}
-          domIdPrefix={domIdPrefix}
-          titles={titles}
-          sideConversationCount={code.sideConversationCount}
-          sideConversationRunningCount={code.sideConversationRunningCount}
-          extensionItems={code.extensionItems}
-          onActivate={code.onActivate}
-          onClose={code.onClose}
-          onNewSideConversation={code.onNewSideConversation}
-          onCollapse={onCollapse}
-        />
-        <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
-          <div className="ds-sidebar-surface-body relative min-h-0 flex-1">
-            {code.state.tabs.map((id) => {
-              const active = code.state.activeId === id
-              if (!visited.has(id) && !active) return null
-              const { tabId, panelId } = codeRightTabDomIds(domIdPrefix, id)
-              return (
-                <div
-                  key={id}
-                  id={panelId}
-                  role="tabpanel"
-                  aria-labelledby={tabId}
-                  hidden={!active}
-                  className="absolute inset-0 min-h-0 overflow-hidden"
-                >
-                  {renderPanel(id)}
-                </div>
-              )
-            })}
-          </div>
-        </Suspense>
-      </div>
-    </>
+    <WorkbenchRightSidebar visible={visible} width={width}
+      dividerProps={{ onPointerDown: onBeginResize }}
+      header={<CodeRightPanelTabs
+        state={code.state}
+        domIdPrefix={domIdPrefix}
+        titles={titles}
+        sideConversationCount={code.sideConversationCount}
+        sideConversationRunningCount={code.sideConversationRunningCount}
+        extensionItems={code.extensionItems}
+        onActivate={code.onActivate}
+        onClose={code.onClose}
+        onNewSideConversation={code.onNewSideConversation}
+        onCollapse={onCollapse}
+      />}>
+      <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
+        {code.state.tabs.map((id) => {
+          const active = code.state.activeId === id
+          if (!visited.has(id) && !active) return null
+          const { tabId, panelId } = codeRightTabDomIds(domIdPrefix, id)
+          return (
+            <div
+              key={id}
+              id={panelId}
+              role="tabpanel"
+              aria-labelledby={tabId}
+              hidden={!active}
+              className="absolute inset-0 min-h-0 overflow-hidden"
+            >
+              {renderPanel(id)}
+            </div>
+          )
+        })}
+      </Suspense>
+    </WorkbenchRightSidebar>
   )
 }

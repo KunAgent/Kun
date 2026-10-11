@@ -6,6 +6,7 @@ const REQUIRED_PATHS = [
   'kun/package-lock.json',
   'kun/node_modules/diff/package.json',
   'kun/node_modules/semver/package.json',
+  'kun/node_modules/smol-toml/package.json',
   'kun/node_modules/yauzl/package.json',
   'kun/node_modules/yazl/package.json',
   'kun/node_modules/zod/package.json',

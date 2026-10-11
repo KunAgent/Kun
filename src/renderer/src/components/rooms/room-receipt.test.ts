@@ -127,6 +127,12 @@ describe('room-receipt-helpers', () => {
     ])]
     expect(roomWaitingMemberIds(topics)).toEqual(['a', 'b'])
   })
+  it('lists a member active in two topics once', () => {
+    const topics = [topic('active', [member({ memberId: 'a', pendingCount: 1 }), member({ memberId: 'b', state: 'responding' })]),
+      topic('active', [member({ memberId: 'a', state: 'pending' }), member({ memberId: 'b', state: 'triaging' })])]
+    expect(roomWaitingMemberIds(topics)).toEqual(['a'])
+    expect(roomRespondingMemberIds(topics)).toEqual(['b'])
+  })
   it('does not count paused leftover inbox as user-facing pending work', () => {
     const stuck = topic('active', [
       member({ memberId: 'a', state: 'idle', pendingCount: 4, waitingReason: 'waiting_capacity' }),

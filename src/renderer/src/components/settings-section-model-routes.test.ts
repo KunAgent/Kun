@@ -55,13 +55,15 @@ describe('ModelRoutesSettings', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('renders four persistent task tabs with matching panels', () => {
+  it('renders four persistent tabs with matching panels', () => {
     const html = renderToStaticMarkup(createElement(ModelRoutesSettings, {
       settings: settings(),
       onChange: () => undefined
     }))
 
-    for (const tabId of ['gateway', 'models', 'resilience', 'monitoring']) {
+    expect(html).toContain('data-local-gateway')
+
+    for (const tabId of ['connect', 'models', 'activity', 'advanced']) {
       expect(html).toContain(`id="model-routes-settings-tab-${tabId}"`)
       expect(html).toContain(`aria-controls="model-routes-settings-panel-${tabId}"`)
       expect(html).toContain(`id="model-routes-settings-panel-${tabId}"`)
@@ -71,12 +73,14 @@ describe('ModelRoutesSettings', () => {
 
   it('pauses Runtime polling while its persistent parent panel is hidden', async () => {
     vi.useFakeTimers()
-    const runtimeRequest = vi.fn(async () => ({
+    const runtimeRequest = vi.fn(async (_path: string) => ({
       ok: true,
       status: 200,
       body: '{"localGateway":{"enabled":true},"pools":[],"metrics":{},"events":[]}'
     }))
-    vi.stubGlobal('window', { kunGui: { runtimeRequest } })
+    vi.stubGlobal('window', { kunGui: { runtimeRequest, agentWiring: vi.fn(async () => ({ ok: true, agents: [] })) } })
+    // Gateway side panels load once on activation; only the route status endpoint polls.
+    const statusCalls = (): number => runtimeRequest.mock.calls.filter(([path]) => path === '/v1/model-routes').length
 
     let renderer!: ReactTestRenderer
     await act(async () => {
@@ -96,7 +100,7 @@ describe('ModelRoutesSettings', () => {
       }))
       await Promise.resolve()
     })
-    expect(runtimeRequest).toHaveBeenCalledOnce()
+    expect(statusCalls()).toBe(1)
 
     await act(async () => {
       renderer.update(createElement(ModelRoutesSettings, {
@@ -109,7 +113,7 @@ describe('ModelRoutesSettings', () => {
       vi.advanceTimersByTime(1_100)
       await Promise.resolve()
     })
-    expect(runtimeRequest).toHaveBeenCalledOnce()
+    expect(statusCalls()).toBe(1)
 
     await act(async () => renderer.unmount())
   })
@@ -127,7 +131,7 @@ describe('ModelRoutesSettings', () => {
     expect(html).toContain('Add model')
     expect(html).toContain('Stability-first adaptive')
     expect(html).toContain('After streaming output begins')
-    expect(html).toContain('Bearer key required; loopback only')
+    expect(html).toContain('OpenAI / Anthropic / Gemini compatible, this computer only')
     expect(html).toContain('http://127.0.0.1:18899/v1')
     expect(html).toContain('GET /models')
     expect(html).toContain('POST /chat/completions')
@@ -188,7 +192,7 @@ describe('ModelRoutesSettings', () => {
     }))
 
     expect(html).toContain('Local relay provider')
-    expect(html).toContain('Gateway &amp; API')
+    expect(html).toContain('Connect by hand')
     expect(html).not.toMatch(/[\p{Script=Han}]/u)
   })
 
@@ -238,8 +242,8 @@ describe('ModelRoutesSettings', () => {
     const html = renderToStaticMarkup(createElement(ModelRoutesSettings, { settings: draft, onChange: () => undefined }))
     expect(html).toContain('Kimi Code')
     expect(html).toContain('Kimi Code 2')
-    expect(html).toContain('value="kimi-code"')
-    expect(html).toContain('value="kimi-code-2"')
+    expect(html).toContain(`value="${JSON.stringify([first.id, first.models[0]]).replaceAll('"', '&quot;')}"`)
+    expect(html).toContain(`value="${JSON.stringify([second.id, second.models[0]]).replaceAll('"', '&quot;')}"`)
   })
 
   it('dispatches local API and route pool enable switches', async () => {
@@ -259,7 +263,7 @@ describe('ModelRoutesSettings', () => {
     })
 
     await act(async () => {
-      renderer!.root.findByProps({ 'aria-label': 'Enable local API' }).props.onClick()
+      renderer!.root.findByProps({ 'aria-label': 'Turn on local gateway' }).props.onClick()
     })
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
       localGateway: expect.objectContaining({ enabled: true })
@@ -426,7 +430,7 @@ describe('ModelRoutesSettings', () => {
       renderer = createRenderer(createElement(ModelRoutesSettings, { settings: draft, onChange: () => undefined }))
     })
 
-    expect(textContent(renderer.root)).toContain('Kun Runtime synced')
+    expect(stateLabel(renderer.root)).toBe('Running')
     expect(textContent(renderer.root)).not.toContain('Waiting for Kun Runtime sync')
     await act(async () => { renderer.unmount() })
   })
@@ -557,6 +561,7 @@ describe('ModelRoutesSettings', () => {
 
     await act(async () => { renderer!.unmount() })
   })
+
 })
 
 function routeStatus(
@@ -608,6 +613,10 @@ function testRecord(status: 'running' | 'succeeded') {
       }
     ]
   } as const
+}
+
+function stateLabel(root: ReactTestInstance): string {
+  return textContent(root.findByProps({ 'data-gateway-state': true }))
 }
 
 function textContent(node: ReactTestInstance): string {

@@ -60,7 +60,7 @@ describe('SubagentsSettingsSection', () => {
     expect(html).toContain('data-variant="settings"')
   })
 
-  it('places Laboratory beside AI assistant before Subagents', () => {
+  it('keeps Subagents with the other Kun Agent pages', () => {
     const html = renderToStaticMarkup(createElement(SettingsSidebar, {
       category: 'subagents',
       goBack: () => undefined,
@@ -68,16 +68,13 @@ describe('SubagentsSettingsSection', () => {
       t
     }))
 
-    const agentsIndex = html.indexOf('AI assistant')
-    const laboratoryIndex = html.indexOf('Laboratory')
-    const subagentsIndex = html.indexOf('Subagents')
-    const archivesIndex = html.indexOf('Archived chats')
-
-    expect(agentsIndex).toBeGreaterThanOrEqual(0)
-    expect(laboratoryIndex).toBeGreaterThan(agentsIndex)
-    expect(subagentsIndex).toBeGreaterThan(laboratoryIndex)
-    expect(archivesIndex).toBeGreaterThan(subagentsIndex)
+    const assistantGroup = html.slice(
+      html.indexOf('id="settings-nav-group-assistant"'),
+      html.indexOf('id="settings-nav-group-connect"')
+    )
+    const order = [...assistantGroup.matchAll(/data-settings-category="([A-Za-z]+)"/g)].map((match) => match[1])
+    expect(order).toEqual(['agents', 'permissions', 'skills', 'mcp', 'memory', 'subagents', 'projects'])
     expect(html).toContain('lucide-users-round')
-    expect(html).toContain('bg-[var(--ds-control)]')
+    expect(html).toMatch(/aria-current="page"[^>]*data-settings-category="subagents"/)
   })
 })

@@ -17,16 +17,20 @@ describe('WorkspaceModeTabs', () => {
     await i18n.changeLanguage('en')
   })
 
-  function props(activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' = 'chat') {
+  function props(
+    activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' | 'ade' = 'chat'
+  ) {
     return {
       activeView,
       onCodeOpen: vi.fn(),
       onWriteOpen: vi.fn(),
-      onRoomsOpen: vi.fn()
+      onAdeOpen: vi.fn()
     }
   }
 
-  function renderInteractive(activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' = 'chat') {
+  function renderInteractive(
+    activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' | 'ade' = 'chat'
+  ) {
     const componentProps = props(activeView)
     let renderer!: ReactTestRenderer
     act(() => {
@@ -58,8 +62,8 @@ describe('WorkspaceModeTabs', () => {
     act(() => trigger.props.onClick())
 
     const options = renderer.root.findAllByProps({ role: 'menuitemradio' })
-    expect(options).toHaveLength(3)
-    expect(options.map((option) => option.props['data-workspace-mode'])).toEqual(['write', 'chat', 'rooms'])
+    expect(options).toHaveLength(2)
+    expect(options.map((option) => option.props['data-workspace-mode'])).toEqual(['write', 'chat'])
     expect(renderer.root.findAllByProps({ role: 'menu' })).toHaveLength(1)
     const rendered = JSON.stringify(renderer.toJSON())
     expect(rendered).toContain('Build, debug, and ship')
@@ -112,43 +116,77 @@ describe('WorkspaceModeTabs', () => {
     act(() => trigger.props.onKeyDown({ key: 'ArrowDown', preventDefault }))
 
     expect(preventDefault).toHaveBeenCalledOnce()
-    expect(renderer.root.findAllByProps({ role: 'menuitemradio' })).toHaveLength(3)
+    expect(renderer.root.findAllByProps({ role: 'menuitemradio' })).toHaveLength(2)
     act(() => renderer.unmount())
   })
 
-  it('hides the rooms attention count after Rooms is opened', () => {
+  it('keeps the conversation attention count off the trigger while Code is open', () => {
     attention.count = 3
-    const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('rooms')))
-    expect(html).toContain(`title="${i18n.t('roomsLabel')}"`)
+    const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('chat')))
+    expect(html).toContain('title="Code"')
     expect(html).not.toContain(' · 3')
     expect(html).not.toContain('>3<')
   })
 
-  it('shows a rooms attention badge while another workspace is active', () => {
+  it('shows the Code conversation attention badge while Work is active', () => {
     attention.count = 3
-    const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('chat')))
+    const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('write')))
     expect(html).toContain(`aria-label="${i18n.t('roomsAttention')}"`)
     expect(html).toContain('>3<')
-    expect(html).not.toContain('Rooms · 3')
   })
 
-  it('does not keep the rooms count in the open menu once Rooms is selected', () => {
+  it('puts the attention count on the Code option only when another mode is selected', () => {
     attention.count = 3
-    const { renderer } = renderInteractive('rooms')
+    const inCode = renderInteractive('chat')
+    act(() => inCode.renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
+    expect(JSON.stringify(inCode.renderer.toJSON())).not.toContain('>3<')
+    act(() => inCode.renderer.unmount())
+    const inWork = renderInteractive('write')
+    act(() => inWork.renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
+    const codeOption = inWork.renderer.root.findAllByProps({ role: 'menuitemradio' })[1]
+    expect(codeOption?.props['data-workspace-mode']).toBe('chat')
+    expect(codeOption?.findAllByProps({ 'aria-label': i18n.t('roomsAttention') })).toHaveLength(1)
+    act(() => inWork.renderer.unmount())
+  })
+
+  it('keeps the Code menu focused on work surfaces', () => {
+    const { renderer } = renderInteractive()
     act(() => renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
-    expect(JSON.stringify(renderer.toJSON())).not.toContain('>3<')
-    expect(JSON.stringify(renderer.toJSON())).not.toContain(' · 3')
+
+    const options = renderer.root.findAllByProps({ role: 'menuitemradio' })
+    expect(options.map((option) => option.props['data-workspace-mode'])).toEqual([
+      'write', 'chat'
+    ])
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('data-workspace-mode="ade"')
     act(() => renderer.unmount())
   })
 
-  it('opens Rooms through the dedicated callback and labels its active mode', () => {
+  it('projects legacy ADE sessions into the Code surface without a second mode', () => {
     const { componentProps, renderer } = renderInteractive()
     act(() => renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
-    act(() => renderer.root.findAllByProps({ role: 'menuitemradio' })[2]?.props.onClick())
-    expect(componentProps.onRoomsOpen).toHaveBeenCalledOnce()
-    expect(componentProps.onCodeOpen).not.toHaveBeenCalled()
+
+    const options = renderer.root.findAllByProps({ role: 'menuitemradio' })
+    expect(options.map((option) => option.props['data-workspace-mode'])).toEqual([
+      'write', 'chat'
+    ])
+    expect(componentProps.onAdeOpen).not.toHaveBeenCalled()
     act(() => renderer.unmount())
-    expect(renderToStaticMarkup(createElement(WorkspaceModeTabs, props('rooms')))).toContain(`title="${i18n.t('roomsLabel')}"`)
+    expect(
+      renderToStaticMarkup(createElement(WorkspaceModeTabs, props('ade')))
+    ).toContain('data-workspace-mode="chat"')
+  })
+
+  it('keeps an ADE thread projected to Code while the flag is off', () => {
+    const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('ade')))
+    expect(html).toContain('data-workspace-mode="chat"')
+    expect(html).not.toContain('data-workspace-mode="ade"')
+  })
+
+  it('shows the retired Rooms route as Code without a separate mode', () => {
+    const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('rooms')))
+    expect(html).toContain('data-workspace-mode="chat"')
+    expect(html).toContain('title="Code"')
+    expect(html).not.toContain('data-workspace-mode="rooms"')
   })
 
   it('uses Work as the trigger value in the Work workspace', () => {
@@ -181,7 +219,7 @@ describe('WorkspaceModeTabs', () => {
       disabledReason: 'Preparing the drawing'
     }))
 
-    expect(html).toContain(`aria-label="${i18n.t('code')} / ${i18n.t('workspaceModeWorkLabel')} / ${i18n.t('roomsLabel')}"`)
+    expect(html).toContain(`aria-label="${i18n.t('code')} / ${i18n.t('workspaceModeWorkLabel')}"`)
     expect(html).toContain('disabled=""')
     expect(html).toContain('title="Preparing the drawing"')
     expect(html).not.toContain('role="menu"')

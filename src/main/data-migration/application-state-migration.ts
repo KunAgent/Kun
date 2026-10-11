@@ -39,6 +39,9 @@ export function applyPortableSettingsMigration(
       : {}),
     ...(typeof value.cursorSpotlight === 'boolean' ? { cursorSpotlight: value.cursorSpotlight } : {}),
     ...(typeof value.cursorSpotlightColor === 'string' ? { cursorSpotlightColor: value.cursorSpotlightColor } : {}),
+    ...(value.colorPalette && typeof value.colorPalette === 'object'
+      ? { colorPalette: value.colorPalette as AppSettingsV1['colorPalette'] }
+      : {}),
     darkUiColors: {
       ...current.darkUiColors,
       ...pickDefined(darkUiColors, ['background', 'border', 'panel'])
@@ -53,7 +56,8 @@ export function applyPortableSettingsMigration(
         : {}),
       ...(typeof notifications.subagentTurnComplete === 'boolean'
         ? { subagentTurnComplete: notifications.subagentTurnComplete as boolean }
-        : {})
+        : {}),
+      ...(notifications.quotaReminders === false ? { quotaReminders: false as const } : {})
     },
     appBehavior: {
       ...current.appBehavior,

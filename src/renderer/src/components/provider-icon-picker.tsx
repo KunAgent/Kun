@@ -80,7 +80,7 @@ export function ProviderIconPicker({
           className="hidden"
           onChange={(event) => void pick(event.target.files?.[0])}
         />
-        <button
+        <button data-settings-action="secondary" data-settings-size="default"
           type="button"
           disabled={busy}
           onClick={() => fileRef.current?.click()}
@@ -90,7 +90,7 @@ export function ProviderIconPicker({
           {provider.iconId ? t('modelProviderIconReplace') : t('modelProviderIconUpload')}
         </button>
         {provider.iconId ? (
-          <button
+          <button data-settings-action="danger" data-settings-size="default"
             type="button"
             onClick={() => onChange({ iconId: undefined })}
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-3 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"

@@ -16,6 +16,7 @@ import {
 } from '../contracts/memory-distillation-runtime.js'
 import type { MemoryCandidate } from '../contracts/memory-distillation.js'
 import { MemoryDistillationCandidateInsert as CandidateInsert } from '../contracts/memory-distillation-storage.js'
+import { readMemoryForgetting, memoryBlockedByForgetting } from './memory-forgetting.js'
 import { withMemoryMutation } from './memory-mutation-queue.js'
 
 export type PendingMemoryCandidateInsert = z.input<typeof CandidateInsert>
@@ -73,6 +74,8 @@ export class MemoryDistillationPendingStore {
       ).toISOString()
       for (const raw of inserts) {
         const input = CandidateInsert.parse(raw)
+        if (memoryBlockedByForgetting(await readMemoryForgetting(join(this.options.dataDir, 'memory')),
+          { ...input.candidate, ...input.target })) continue
         const fingerprint = candidateFingerprint(input.threadId, input.turnId, input.candidate)
         if (state.candidates.some((candidate) => candidate.fingerprint === fingerprint)) continue
         const candidate = PendingMemoryCandidate.parse({
@@ -234,6 +237,14 @@ export class MemoryDistillationPendingStore {
         candidates: []
       })
     }
+    const ledger = await readMemoryForgetting(join(this.options.dataDir, 'memory'))
+    const retained = this.state.candidates.filter((entry) => !memoryBlockedByForgetting(ledger,
+      { ...entry.candidate, ...entry.target }, entry.memoryId))
+    if (retained.length !== this.state.candidates.length) {
+      // Keep non-content run receipts so replay cannot regenerate an erased candidate.
+      this.state = { ...this.state, candidates: retained }
+      await this.persist(this.state)
+    }
     return this.state
   }
 
@@ -260,11 +271,11 @@ export class MemoryDistillationPendingStore {
   }
 
   private withMutation<T>(operation: () => Promise<T>): Promise<T> {
-    return withMemoryMutation(this.path(), async () => {
+    return withMemoryMutation(join(this.options.dataDir, 'memory'), () => withMemoryMutation(this.path(), async () => {
       // Another adapter in this owner may have committed since our last read.
       this.state = undefined
       return operation()
-    })
+    }))
   }
 }
 

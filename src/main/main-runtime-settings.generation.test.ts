@@ -110,6 +110,9 @@ vi.mock('./managed-runtime-startup-policy', () => ({
 vi.mock('./runtime/managed-runtime-idle', () => ({
   waitForRuntimeTurnsIdle: vi.fn(async () => 'idle')
 }))
+vi.mock('./runtime/native-agent-network', () => ({
+  resolveNativeAgentNetworkSnapshot: vi.fn(async () => ({ codex: { source: 'direct' } }))
+}))
 vi.mock('./runtime/kun-runtime-config-service', () => ({
   buildManagedRuntimeHotApplyBody: (
     settings: AppSettingsV1,
@@ -166,12 +169,29 @@ describe('Runtime settings generation ownership', () => {
     harness.classifyHotApply.mockReturnValue({ result: 'applied', message: '' })
   })
 
+  it.each(['idle', 'failed', 'unavailable'] as const)('retries unchanged configuration after %s instead of declaring success', async (state) => {
+    const settings = browserSettings(false)
+    harness.mainState.settledRuntimeSettings = settings
+    harness.mainState.runtimeSettingsSyncStatus = { state, generation: 0, at: '' }
+    const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const reservation = reserveRuntimeSettingsApply(settings, settings)
+    expect(reservation.shouldApply).toBe(true)
+    queueRuntimeSettingsApply(settings, settings, reservation, async () => undefined)
+    await harness.runtimeSupervisor.waitForIdle()
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(harness.mainState.runtimeSettingsSyncStatus).toMatchObject({ state: 'synced', generation: reservation.generation })
+  })
+
   it('keeps the current runtime running when hot configuration validation fails', async () => {
     const current = browserSettings(false)
     harness.classifyHotApply.mockReturnValue({ result: 'failed', message: 'invalid credentials' })
     vi.stubGlobal('fetch', vi.fn(async () => new Response('invalid credentials', { status: 400 })))
 
-    await expect(applyManagedRuntimeSettingsHot(current, 'settings-test')).resolves.toBe('failed')
+    await expect(applyManagedRuntimeSettingsHot(current, 'settings-test')).resolves.toMatchObject({
+      result: 'failed',
+      message: 'invalid credentials'
+    })
 
     expect(harness.stopSharedAndWait).not.toHaveBeenCalled()
   })
@@ -203,7 +223,8 @@ describe('Runtime settings generation ownership', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({
       browserEnabled: false,
-      browserUseHostBinding: null
+      browserUseHostBinding: null,
+      nativeAgentNetwork: { codex: { source: 'direct' } }
     })
     expect(harness.mainState.settledRuntimeSettings).toBe(s0)
   })

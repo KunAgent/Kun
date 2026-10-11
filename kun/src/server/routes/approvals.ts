@@ -2,6 +2,8 @@ import {
   ApprovalDecisionRequest,
   ApprovalDecisionResponse
 } from '../../contracts/approvals.js'
+import { approvalChoiceIsValid, approvalChoiceKey, type ApprovalChoice } from '../../contracts/approval-choice.js'
+import { manualApprovalResolution, type ApprovalResolution } from '../../domain/approval.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import { ERRORS } from './runtime-error.js'
@@ -12,13 +14,35 @@ import {
   type ApprovalConsentVerifier
 } from '../approval-consent.js'
 
-const approvalDecisionFlights = new WeakMap<ApprovalGate, Map<string, Promise<boolean>>>()
+type DecisionFlight = Promise<ApprovalResolution | undefined>
+const approvalDecisionFlights = new WeakMap<ApprovalGate, Map<string, DecisionFlight>>()
+
+/**
+ * GET /v1/approvals?threadId=<id> — pending approval requests, optionally
+ * scoped to one thread. Read-only projection; the decision route
+ * stays `POST /v1/approvals/:id`.
+ */
+export function listPendingApprovals(
+  gate: Pick<ApprovalGate, 'pending'>,
+  threadId?: string
+): JsonResponse {
+  const approvals = gate.pending(threadId).map((approval) => ({
+    approvalId: approval.id,
+    threadId: approval.threadId,
+    turnId: approval.turnId,
+    toolName: approval.toolName,
+    summary: approval.summary,
+    createdAt: approval.createdAt,
+    ...(approval.action ? { action: approval.action } : {})
+  }))
+  return jsonResponse({ approvals })
+}
 
 function resolvedDecision(status: string): 'allow' | 'deny' | null {
   return status === 'allowed' ? 'allow' : status === 'denied' ? 'deny' : null
 }
 
-function decisionFlightsFor(gate: ApprovalGate): Map<string, Promise<boolean>> {
+function decisionFlightsFor(gate: ApprovalGate): Map<string, DecisionFlight> {
   let flights = approvalDecisionFlights.get(gate)
   if (!flights) {
     flights = new Map()
@@ -31,22 +55,26 @@ async function recordApprovalResolution(input: {
   approvalId: string
   decision: 'allow' | 'deny'
   reason?: string
+  choice?: ApprovalChoice
   gate: ApprovalGate
   events: RuntimeEventRecorder
-}): Promise<{ joined: boolean }> {
+}): Promise<{ joined: boolean; resolution?: ApprovalResolution }> {
   const flights = decisionFlightsFor(input.gate)
   const active = flights.get(input.approvalId)
   if (active) {
-    await active
-    return { joined: true }
+    return { joined: true, resolution: await active }
   }
 
   const approval = input.gate.get(input.approvalId)
-  if (!approval || approval.status !== 'pending') return { joined: true }
+  if (!approval || approval.status !== 'pending') {
+    const decision = approval ? resolvedDecision(approval.status) : null
+    return { joined: true, ...(approval && decision ? { resolution: manualApprovalResolution(decision, approval.reason, approval.choice) } : {}) }
+  }
   const status = input.decision === 'allow' ? 'allowed' : 'denied'
-  const flight = (async (): Promise<boolean> => {
-    if (!input.gate.reserveDecision(input.approvalId, input.decision, input.reason)) {
-      return false
+  const resolution = manualApprovalResolution(input.decision, input.reason, input.choice)
+  const flight = (async (): DecisionFlight => {
+    if (!input.gate.reserveDecision(input.approvalId, input.decision, input.reason, input.choice)) {
+      return undefined
     }
     try {
       // Persist the audit event before releasing the loop to execute an allowed tool.
@@ -60,6 +88,7 @@ async function recordApprovalResolution(input: {
         status,
         approvalReviewer: 'user',
         summary: approval.summary,
+        ...(input.choice ? { choice: input.choice } : {}),
         ...(approval.action ? { action: approval.action } : {}),
         ...(input.reason ? { reason: input.reason } : {})
       })
@@ -70,12 +99,11 @@ async function recordApprovalResolution(input: {
     if (!input.gate.commitDecision(input.approvalId)) {
       throw new Error(`approval reservation lost before commit: ${input.approvalId}`)
     }
-    return true
+    return resolution
   })()
   flights.set(input.approvalId, flight)
   try {
-    await flight
-    return { joined: false }
+    return { joined: false, resolution: await flight }
   } finally {
     if (flights.get(input.approvalId) === flight) flights.delete(input.approvalId)
   }
@@ -101,7 +129,8 @@ export async function decideApproval(input: {
   if (input.consent && !input.consent.verifyAndConsume({
     token: input.request.headers.get(KUN_APPROVAL_CONSENT_HEADER),
     approvalId: input.approvalId,
-    decision: parsed.data.decision
+    decision: parsed.data.decision,
+    choice: parsed.data.choice
   })) {
     return ERRORS.forbidden('protected approval consent required')
   }
@@ -109,9 +138,12 @@ export async function decideApproval(input: {
   if (!approval) {
     return ERRORS.notFound(`approval not found: ${input.approvalId}`)
   }
+  if (!approvalChoiceIsValid(approval.action?.permissionOptions, parsed.data.decision, parsed.data.choice)) {
+    return ERRORS.validation('approval option does not match this request or decision')
+  }
   if (approval.status !== 'pending') {
     const existingDecision = resolvedDecision(approval.status)
-    if (existingDecision && existingDecision === parsed.data.decision) {
+    if (existingDecision && existingDecision === parsed.data.decision && approvalChoiceKey(approval.choice) === approvalChoiceKey(parsed.data.choice)) {
       const response: ApprovalDecisionResponse = {
         approvalId: input.approvalId,
         decision: parsed.data.decision,
@@ -126,12 +158,11 @@ export async function decideApproval(input: {
     approvalId: input.approvalId,
     decision: parsed.data.decision,
     reason: parsed.data.reason,
+    choice: parsed.data.choice,
     gate: input.gate,
     events: input.events
   })
-  const resolved = input.gate.get(input.approvalId)
-  const finalDecision = resolved ? resolvedDecision(resolved.status) : null
-  if (finalDecision !== parsed.data.decision) {
+  if (result.resolution?.decision !== parsed.data.decision || approvalChoiceKey(result.resolution?.choice) !== approvalChoiceKey(parsed.data.choice)) {
     return ERRORS.conflict(`approval already decided: ${input.approvalId}`)
   }
   const response: ApprovalDecisionResponse = {

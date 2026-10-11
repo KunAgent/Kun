@@ -43,6 +43,7 @@ export function createGate(): { promise: Promise<void>; release: () => void } {
 
 const electronMock = vi.hoisted(() => ({
   showMessageBox: vi.fn(),
+  showProtectedDialog: vi.fn(),
   openPath: vi.fn(async () => ''),
   showItemInFolder: vi.fn(),
   appLocale: 'en-US',
@@ -89,6 +90,7 @@ vi.mock('electron', () => ({
     setBadgeCount: electronMock.setBadgeCount
   },
   dialog: { showMessageBox: electronMock.showMessageBox },
+  nativeTheme: { shouldUseDarkColors: false },
   clipboard: { writeText: electronMock.writeText },
   shell: {
     openPath: electronMock.openPath,
@@ -100,6 +102,11 @@ vi.mock('electron', () => ({
     })
   }
 }))
+
+// The art hot-update service has its own lifecycle (a before-quit hook, a daily timer); these suites only
+// exercise the handlers registered around it.
+vi.mock('./register-kun-art-ipc', () => ({ registerKunArtIpc: vi.fn() }))
+vi.mock('../protected-room-dialog', () => ({ showProtectedRoomDialog: electronMock.showProtectedDialog }))
 
 vi.mock('../services/ui-plugin-service', () => ({
   installUiPluginFromDirectory: uiPluginMocks.installUiPluginFromDirectory,
@@ -327,6 +334,7 @@ export function resetAppIpcHandlerTestState(): void {
     electronMock.appLocale = 'en-US'
     electronMock.userDataPath = '/tmp/kun-user-data'
     electronMock.showMessageBox.mockReset()
+    electronMock.showProtectedDialog.mockReset()
     electronMock.openPath.mockClear()
     electronMock.showItemInFolder.mockClear()
     electronMock.setBadgeCount.mockClear()

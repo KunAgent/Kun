@@ -1,0 +1,174 @@
+{
+  "crest/sky": {
+    "png": "crest/sky.png",
+    "webp": {
+      "128": "128/crest/sky.webp",
+      "256": "256/crest/sky.webp",
+      "512": "512/crest/sky.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "features.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 2
+    }
+  },
+  "crest/tucked-sky": {
+    "png": "crest/tucked-sky.png",
+    "webp": {
+      "128": "128/crest/tucked-sky.webp",
+      "256": "256/crest/tucked-sky.webp",
+      "512": "512/crest/tucked-sky.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "features.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 2
+    }
+  },
+  "crest/teal": {
+    "png": "crest/teal.png",
+    "webp": {
+      "128": "128/crest/teal.webp",
+      "256": "256/crest/teal.webp",
+      "512": "512/crest/teal.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 568,
+        "width": 418,
+        "height": 331
+      }
+    }
+  },
+  "crest/tucked-teal": {
+    "png": "crest/tucked-teal.png",
+    "webp": {
+      "128": "128/crest/tucked-teal.webp",
+      "256": "256/crest/tucked-teal.webp",
+      "512": "512/crest/tucked-teal.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 568,
+        "width": 418,
+        "height": 331
+      }
+    }
+  },
+  "crest/periwinkle": {
+    "png": "crest/periwinkle.png",
+    "webp": {
+      "128": "128/crest/periwinkle.webp",
+      "256": "256/crest/periwinkle.webp",
+      "512": "512/crest/periwinkle.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 418,
+        "top": 568,
+        "width": 418,
+        "height": 331
+      }
+    }
+  },
+  "crest/tucked-periwinkle": {
+    "png": "crest/tucked-periwinkle.png",
+    "webp": {
+      "128": "128/crest/tucked-periwinkle.webp",
+      "256": "256/crest/tucked-periwinkle.webp",
+      "512": "512/crest/tucked-periwinkle.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 418,
+        "top": 568,
+        "width": 418,
+        "height": 331
+      }
+    }
+  },
+  "crest/mint": {
+    "png": "crest/mint.png",
+    "webp": {
+      "128": "128/crest/mint.webp",
+      "256": "256/crest/mint.webp",
+      "512": "512/crest/mint.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 836,
+        "top": 568,
+        "width": 418,
+        "height": 331
+      }
+    }
+  },
+  "crest/tucked-mint": {
+    "png": "crest/tucked-mint.png",
+    "webp": {
+      "128": "128/crest/tucked-mint.webp",
+      "256": "256/crest/tucked-mint.webp",
+      "512": "512/crest/tucked-mint.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "color-variants.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 836,
+        "top": 568,
+        "width": 418,
+        "height": 331
+      }
+    }
+  }
+}

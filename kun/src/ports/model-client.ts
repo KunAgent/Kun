@@ -15,7 +15,15 @@ export type ModelRouteTargetMetadata = {
   providerId: string
   modelId: string
   requestedModelId: string
+  /** Route rule that put this target first for the turn, when one matched. */
+  ruleId?: string
+  /** Why this target was tried: what put it first, or `failover` after an earlier target failed. */
+  decision?: RouteDecisionSource
+  /** Intent the pool's classifier assigned to the turn. */
+  intent?: string
 }
+
+export type RouteDecisionSource = 'rule' | 'manual' | 'affinity' | 'overflow' | 'failover-group' | 'strategy' | 'failover'
 
 /**
  * Durable route identity for a historical turn. This contains no credential
@@ -74,6 +82,15 @@ export type ModelStreamChunk = (
  * conversation history, and any tools that are currently advertised.
  */
 export type ModelRequest = {
+  /** Host-only paper transport fence: single physical attempt and exact provider generation. */
+  paperReadOnly?: { assertCurrent: () => void; takeAttempt: () => boolean }
+  requestId?: string
+  /** Absolute deadline retained through queueing, retries and target changes. */
+  deadlineAt?: number
+  parallelToolCalls?: boolean
+  onWireDispatch?: () => void
+  attemptObserver?: import('./model-attempt.js').ModelAttemptObserver
+  beforeWireDispatch?: (input: import('./model-attempt.js').ModelAttemptInput) => Promise<void>
   threadId: string
   turnId: string
   /** Internal correlation carried through every concrete Provider attempt. */
@@ -111,6 +128,25 @@ export type ModelRequest = {
    * out a provider backoff is pointless when the user asked to switch.
    */
   failover?: { alternatives: number }
+  /**
+   * Server-owned gateway export scope. Every attempt, including account-group
+   * fallbacks, must remain in this exact allowlist. Never populate from client
+   * JSON. Native harness/model requests omit this field.
+   */
+  gatewayRouting?: {
+    /** Server-derived caller identity; never accepted from request JSON. */
+    callerId?: string
+    /** Calling agent for route rules (attribution only, never authorization). */
+    agent?: string
+    affinity?: { turn?: string; session?: string }
+    allowedTargets: ReadonlyArray<{ providerId: string; modelId: string }>
+    /** Captured router generation; checked synchronously at every dispatch. */
+    assertCurrent?: () => void
+    /** Recheck durable admission after asynchronous credential resolution. */
+    beforeDispatch?: () => Promise<void>
+    /** Shared physical HTTP-attempt budget, including protocol/auth retries. */
+    takeAttempt?: () => boolean
+  }
   /** Runtime-owned diagnostic run id used to correlate route-test progress. */
   routeTestId?: string
   /** Opaque account selection for custom/extension providers. Never a credential. */
@@ -168,6 +204,12 @@ export type ModelRequest = {
    * (used by probes that must fail fast without touching shared health).
    */
   maxRetryAttempts?: number
+  /** Runtime-owned physical request budget, independent of gateway permissions. */
+  routingBudget?: { requestId?: string; deadlineAt?: number; takeAttempt(): boolean }
+  /** Runtime configuration fence checked after credential resolution, before HTTP dispatch. */
+  beforeProviderDispatch?: () => void | Promise<void>
+  /** Internal text completion mode, admitted only by an explicitly compatible provider. */
+  fim?: { prompt: string; suffix: string }
   /** Optional sampling controls for classifier-style calls. */
   temperature?: number
   topP?: number
@@ -261,6 +303,10 @@ export type ModelToolSpec = {
 export interface ModelClient {
   readonly provider: string
   readonly model: string
+  /** Returns a trusted exact-route fence, or throws before any paper text is transmitted. */
+  paperReadOnlyDispatchGuard?(request: Pick<ModelRequest, 'model' | 'providerId'>): () => void
+  /** Captures a fail-closed generation proof for model gateway admission. */
+  gatewayDispatchGuard?(): () => void
   /**
    * True when the concrete provider/model target is selected only after the
    * stream starts (for example a failover route pool). Callers must not freeze

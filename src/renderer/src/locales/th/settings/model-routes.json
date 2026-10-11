@@ -27,6 +27,12 @@
     "runtimeNotRunning": "Kun Runtime ไม่ทำงาน",
     "runtimeNotConnected": "Kun Runtime ไม่ได้เชื่อมต่อ",
     "runtimeSyncing": "กำลังซิงค์กับ Kun Runtime",
+    "gatewayFix": "แก้ไข",
+    "gatewayIssue": {
+      "gateway_key_missing": "เกตเวย์ในเครื่องไม่มีคีย์ API แยก",
+      "gateway_non_loopback_host": "เกตเวย์ในเครื่องต้องใช้ที่อยู่ loopback",
+      "gateway_disabled": "เกตเวย์ในเครื่องถูกปิดอัตโนมัติ (สร้างคีย์ API ไม่ได้)"
+    },
     "runtimeWaitingForSync": "กำลังรอการซิงค์ Kun Runtime",
     "tabsAria": "การตั้งค่าเส้นทางจำลอง",
     "tabGateway": "เกตเวย์ & API",
@@ -46,7 +52,7 @@
     "localApi": "API ท้องถิ่น",
     "localApiEnabledLocalOnly": "เปิดใช้งาน · การเข้าถึงเฉพาะที่เท่านั้น",
     "disabled": "พิการ",
-    "apiCompatibilityDesc": "เข้ากันได้กับ OpenAI Chat Completions และการตอบกลับ โมเดลสาธารณะ ID มาจากโมเดลที่กำหนดเส้นทางด้านล่าง",
+    "apiCompatibilityDesc": "รองรับ OpenAI Chat Completions, Responses และ Anthropic Messages โดย ID โมเดลสาธารณะมาจากโมเดลที่กำหนดเส้นทางไว้ด้านล่าง",
     "copyLocalApiAddress": "คัดลอกที่อยู่ API ในเครื่อง",
     "copied": "คัดลอกแล้ว",
     "copy": "สำเนา",
@@ -144,7 +150,7 @@
     "latency": "เวลาแฝง",
     "noEvents": "ไม่มีเหตุการณ์เส้นทาง",
     "apiDialogTitle": "คู่มือ API ท้องถิ่น",
-    "apiDialogDesc": "จุดสิ้นสุดที่เข้ากันได้กับ OpenAI สำหรับกระบวนการในเครื่องเท่านั้น ไม่จำเป็นต้องมีส่วนหัวการอนุญาต",
+    "apiDialogDesc": "เอนด์พอยต์ที่เข้ากันได้กับ OpenAI, Anthropic และ Gemini สำหรับโปรเซสบนเครื่องนี้เท่านั้น ทุกคำขอต้องมีคีย์เกตเวย์",
     "closeApiDocs": "ปิดคำแนะนำ API",
     "endpoints": "จุดสิ้นสุด",
     "modelList": "รายการรุ่น",
@@ -158,7 +164,7 @@
     "responsesAndLimits": "การตอบสนองและขีดจำกัด",
     "curlExample": "ตัวอย่าง cURL",
     "copyExample": "คัดลอกตัวอย่าง",
-    "apiSecurityWarning": "รีเลย์นี้ไม่ใช่บริการ API สาธารณะ โดยจะผูกกับที่อยู่ลูปแบ็คในเครื่องเท่านั้น และขณะนี้ไม่มีการตรวจสอบสิทธิ์ อย่าเปิดเผยข้อมูลดังกล่าวกับ LAN หรืออินเทอร์เน็ตผ่านการส่งต่อพอร์ตหรือพร็อกซีย้อนกลับที่ไม่มีการป้องกัน",
+    "apiSecurityWarning": "เกตเวย์ภายในเครื่องไม่ใช่บริการ API สาธารณะ รับฟังเฉพาะที่อยู่ loopback และต้องใช้คีย์เกตเวย์ อย่าเปิดสู่ LAN หรืออินเทอร์เน็ตผ่านการส่งต่อพอร์ตหรือ reverse proxy ที่ไม่มีการป้องกัน",
     "guideModelsDesc": "แสดงรายการโมเดลที่กำหนดเส้นทางที่เปิดใช้งานทั้งหมดในรีเลย์ภายในเครื่อง data[].id ที่ส่งคืนแต่ละรายการคือโมเดลสาธารณะ ID ที่ใช้โดยคำขอสร้าง",
     "guideModelsNoBody": "ไม่จำเป็นต้องมีเนื้อหาคำขอ",
     "guideModelsEnabledOnly": "ส่งคืนเฉพาะโมเดลกำหนดเส้นทางที่เปิดใช้งานเท่านั้น พูลที่ปิดใช้งานหรือไม่ถูกต้องจะถูกละเว้น",
@@ -180,6 +186,10 @@
     "guideChatModelMissing": "โมเดลที่ไม่รู้จักส่งคืน 404 (model_not_found)",
     "exampleChatPrompt": "สวัสดีคุน!",
     "exampleResponsesPrompt": "แนะนำเกตเวย์ท้องถิ่น Kun ในประโยคเดียว",
-    "statusRequestFailed": "การร้องขอสถานะ Kun Runtime ล้มเหลว ({{status}})"
+    "statusRequestFailed": "การร้องขอสถานะ Kun Runtime ล้มเหลว ({{status}})",
+    "targetAccountModel": "บัญชี / โมเดล",
+    "targetUnavailable": "ใช้งานผ่านเกตเวย์ไม่ได้",
+    "targetNativeOnly": "บัญชีนี้ใช้ได้ผ่าน Agent ดั้งเดิมเท่านั้น ไม่สามารถใช้เป็น API โมเดลผ่านเกตเวย์ได้",
+    "stableAliasHint": "ไคลเอนต์ยังคงใช้นามแฝงเดิม การเปลี่ยนบัญชีหรือโมเดลมีผลกับคำขอใหม่ ส่วนคำขอที่กำลังทำงานจะใช้เส้นทางเดิม"
   }
 }

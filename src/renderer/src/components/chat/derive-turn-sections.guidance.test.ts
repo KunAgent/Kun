@@ -119,6 +119,12 @@ describe('deriveTurnSections guided user timeline', () => {
         text: 'Graph Lead supervision for durable run run_1.',
         meta: { messageSource: 'graph_runtime' }
       },
+      {
+        kind: 'user',
+        id: 'worker_update_1',
+        text: '<kun_worker_updates>\n- [Completed] fix login dsp_1\n</kun_worker_updates>',
+        meta: { displayText: '1 worker update', messageSource: 'worker_update' }
+      },
       { kind: 'assistant', id: 'answer', text: '完成。' }
     ])
 

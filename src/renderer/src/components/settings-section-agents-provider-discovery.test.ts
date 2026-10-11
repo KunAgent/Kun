@@ -286,14 +286,14 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         'gpt-oss-120b'
       ])
       expect(patch.modelProfiles['gemini-3.6-flash']).toMatchObject({
-        inputModalities: ['text', 'image'],
+        inputModalities: ['text'],
         reasoning: {
           supportedEfforts: ['low', 'medium', 'high'],
           defaultEffort: 'medium',
           requestProtocol: 'none'
         }
       })
-      expect(patch.modelProfiles['claude-sonnet-4-6'].inputModalities).toEqual(['text', 'image'])
+      expect(patch.modelProfiles['claude-sonnet-4-6'].inputModalities).toEqual(['text'])
       expect(patch.modelProfiles['gpt-oss-120b']).toMatchObject({
         inputModalities: ['text'],
         reasoning: {
@@ -332,11 +332,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         provider?: { providers?: ModelProviderProfileV1[] }
       }
       const saved = lastPatch.provider?.providers?.find((provider) => provider.id === antigravity.id)
-      expect(saved?.models).toEqual([
-        'gemini-3.6-flash',
-        'claude-sonnet-4-6',
-        'gpt-oss-120b'
-      ])
+      expect(saved?.models).toEqual([...new Set([...antigravity.models, 'gemini-3.6-flash', 'claude-sonnet-4-6', 'gpt-oss-120b'])])
       expect(saved?.modelProfiles['claude-sonnet-4-6']?.reasoning?.supportedEfforts)
         .toEqual(['medium'])
       expect(saved?.modelProfiles['gpt-oss-120b']?.reasoning?.supportedEfforts)
@@ -396,11 +392,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
 
       const updatedProviders = update.mock.calls[0]?.[0]?.provider?.providers as ModelProviderProfileV1[]
       const saved = updatedProviders.find((provider) => provider.id === antigravity.id)
-      expect(saved?.models).toEqual([
-        'gemini-3.6-flash',
-        'claude-sonnet-4-6',
-        'gpt-oss-120b'
-      ])
+      expect(saved?.models).toEqual([...new Set([...antigravity.models, 'gemini-3.6-flash', 'claude-sonnet-4-6', 'gpt-oss-120b'])])
       expect(saved?.modelProfiles['gemini-3.6-flash']).toMatchObject({
         contextWindowTokens: 1_048_576,
         reasoning: {
@@ -410,7 +402,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       })
       expect(saved?.modelProfiles['claude-sonnet-4-6']?.reasoning?.supportedEfforts)
         .toEqual(['medium'])
-      expect(saved?.modelProfiles['claude-sonnet-4-6']?.contextWindowTokens).toBe(200_000)
+      expect(saved?.modelProfiles['claude-sonnet-4-6']?.contextWindowTokens).toBeUndefined()
+      expect(saved?.modelProfiles['claude-sonnet-4-6']?.metadata?.observations.some((row) => row.match === 'family' && row.values.contextWindowTokens === 200_000)).toBe(true)
     })
 
     it('turns a stale Cursor discovery handler error into restart guidance', async () => {
@@ -576,19 +569,14 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
 
       const updatedProviders = update.mock.calls[0]?.[0]?.provider?.providers as ModelProviderProfileV1[]
       const updatedCursor = updatedProviders.find((item) => item.id === cursor.id)
-      expect(updatedCursor?.models).toEqual(['gemini-3.6-flash'])
-      expect(updatedCursor?.modelProfiles['gemini-3.6-flash']).toEqual(expect.objectContaining({
-        aliases: ['gemini-flash-latest'],
-        contextWindowTokens: 1_048_576,
-        maxOutputTokens: 65_536,
-        inputModalities: ['text', 'image'],
-        messageParts: ['text', 'image_url'],
-        reasoning: {
-          supportedEfforts: ['auto'],
-          defaultEffort: 'auto',
-          requestProtocol: 'none'
-        }
-      }))
+      expect(updatedCursor?.models).toEqual(['auto', 'gemini-3.6-flash'])
+      const profile = updatedCursor?.modelProfiles['gemini-3.6-flash']
+      expect(profile?.aliases).toEqual(['gemini-flash-latest'])
+      expect(profile?.contextWindowTokens).toBeUndefined()
+      expect(profile?.inputModalities).toEqual(['text'])
+      expect(profile?.metadata?.observations).toEqual(expect.arrayContaining([expect.objectContaining({
+        source: 'catalog', match: 'family', values: expect.objectContaining({ contextWindowTokens: 1_048_576 })
+      })]))
     })
 
     it('repairs missing metadata for an existing pulled Cursor model list', async () => {
@@ -649,17 +637,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         | ModelProviderProfileV1[]
         | undefined
       const updatedCursor = updatedProviders?.find((item) => item.id === cursor.id)
-      expect(updatedCursor?.modelProfiles['gemini-3.6-flash']).toEqual(expect.objectContaining({
-        contextWindowTokens: 1_048_576,
-        maxOutputTokens: 65_536,
-        inputModalities: ['text', 'image'],
-        messageParts: ['text', 'image_url'],
-        reasoning: {
-          supportedEfforts: ['auto'],
-          defaultEffort: 'auto',
-          requestProtocol: 'none'
-        }
-      }))
+      const profile = updatedCursor?.modelProfiles['gemini-3.6-flash']
+      expect(profile?.contextWindowTokens).toBeUndefined()
+      expect(profile?.metadata?.observations).toEqual(expect.arrayContaining([expect.objectContaining({
+        source: 'catalog', match: 'family', values: expect.objectContaining({ contextWindowTokens: 1_048_576, maxOutputTokens: 65_536 })
+      })]))
     })
   })
 })

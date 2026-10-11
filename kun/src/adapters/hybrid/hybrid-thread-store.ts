@@ -1,3 +1,4 @@
+import { repairLegacySummaryMetadata } from './hybrid-thread-summary-repair.js'
 import { historyReferenceThreadIds, hasThreadHistoryReference } from './hybrid-thread-reference-lookup.js'
 import { mkdir, open, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -18,6 +19,7 @@ import { type ThreadIndexRecord, type ThreadRow } from './hybrid-thread-index-ma
 import { requiresLegacyWorkThreadHydration } from './hybrid-thread-legacy-surface.js'
 import { HybridThreadIndexRepository } from './hybrid-thread-index.js'
 import { HybridThreadIndexDirtyTracker } from './hybrid-thread-index-dirty.js'
+import { ThreadRowReadability } from './hybrid-thread-row-readability.js'
 import { hybridThreadStoreListPage, summariesFromRows } from './hybrid-thread-list-page.js'
 import { HybridThreadBackfillCoordinator } from './hybrid-thread-backfill.js'
 import { readMissingIndexRecords } from './hybrid-thread-backfill-read.js'
@@ -67,6 +69,11 @@ export class HybridThreadStore implements ThreadStore {
   // re-compiles the SQL on every prepare() call otherwise.
   private readonly statementCache = new Map<string, Statement>()
   private readonly documents: HybridThreadDocumentRepository
+  private readonly rowReadability = new ThreadRowReadability({
+    threadDir: (id) => this.threadDir(id), metadataPath: (id) => this.metadataPath(id),
+    legacyThreadPath: (id) => this.legacyThreadPath(id), messagesPath: (id) => this.messagesPath(id),
+    eventsPath: (id) => this.eventsPath(id)
+  }, (id) => this.index?.repairPaths(id))
   // Per-thread floor that keeps metadata compaction from re-running on every
   // append when a single snapshot is already larger than the threshold.
   private readonly metadataCompactFloor = new Map<string, number>()
@@ -284,15 +291,16 @@ export class HybridThreadStore implements ThreadStore {
     try {
       this.cachedStatement(`
         INSERT INTO usage_events (
-          thread_id, seq, timestamp, turn_id, model, provider_id, usage_json
+          thread_id, seq, timestamp, turn_id, model, provider_id, source, harness_id, usage_json
         )
         VALUES (
-          @thread_id, @seq, @timestamp, @turn_id, @model, @provider_id, @usage_json
+          @thread_id, @seq, @timestamp, @turn_id, @model, @provider_id, @source, @harness_id, @usage_json
         )
         ON CONFLICT(thread_id, seq) DO UPDATE SET
           timestamp = excluded.timestamp,
           turn_id = excluded.turn_id,
           model = excluded.model, provider_id = excluded.provider_id,
+          source = excluded.source, harness_id = excluded.harness_id,
           usage_json = excluded.usage_json
       `).run(usageRowFromEvent(event))
       this.usageQueries.invalidate()
@@ -482,6 +490,7 @@ export class HybridThreadStore implements ThreadStore {
 
   /** Reconcile legacy Work rows even if an older index cached a Code fallback. */
   private async ensureRowAgentSurface(row: ThreadRow): Promise<ThreadRow> {
+    row = await repairLegacySummaryMetadata(this, row)
     if (row.agent_surface !== null && (
       row.agent_surface !== 'code' || !legacyWorkThreadTitleMatches(row.title)
     )) return row
@@ -536,6 +545,7 @@ export class HybridThreadStore implements ThreadStore {
   }
 
   private deleteIndexRow(threadId: string): void {
+    this.rowReadability.forget(threadId)
     this.index?.delete(threadId)
     this.highWaterBuffer.clearThread(threadId)
   }
@@ -652,25 +662,8 @@ export class HybridThreadStore implements ThreadStore {
     return this.filesystemSummaries.readByIds(ids)
   }
 
-  private async rowHasReadableJsonl(row: ThreadRow): Promise<boolean> {
-    if (!isSafeThreadId(row.id)) return false
-    if (!(await pathExists(this.threadDir(row.id)))) return false
-    const readable =
-      (await pathExists(this.metadataPath(row.id))) ||
-      (await pathExists(this.legacyThreadPath(row.id)))
-    if (!readable) return false
-    if (
-      row.metadata_path !== this.metadataPath(row.id) ||
-      row.messages_path !== this.messagesPath(row.id) ||
-      row.events_path !== this.eventsPath(row.id)
-    ) {
-      // JSONL is canonical and the SQLite paths are derived. Moving a Runtime
-      // data directory (including the GUI's legacy migration) must not make a
-      // valid thread disappear merely because its cached absolute paths still
-      // point at the previous root.
-      this.index?.repairPaths(row.id)
-    }
-    return true
+  private rowHasReadableJsonl(row: ThreadRow): Promise<boolean> {
+    return this.rowReadability.check(row)
   }
 
   private threadDir(threadId: string): string {

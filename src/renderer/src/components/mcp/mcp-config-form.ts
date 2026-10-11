@@ -32,6 +32,8 @@ export type McpFormServer = {
   env: McpKeyValue[]
   url: string
   headers: McpKeyValue[]
+  /** OAuth settings are edited as JSON; preserve the trusted issuer on form saves. */
+  oauth?: Record<string, unknown>
   /** Visibility roots. Empty = visible in every workspace. */
   workspaceRoots: string[]
   trustScope: 'user' | 'workspace'
@@ -131,6 +133,7 @@ function parseServerEntry(name: string, raw: unknown): McpFormServer {
     env: asKeyValues(record.env),
     url,
     headers: asKeyValues(record.headers),
+    ...(isRecord(record.oauth) ? { oauth: record.oauth } : {}),
     workspaceRoots,
     trustScope,
     trustedWorkspaceRoots,
@@ -210,6 +213,7 @@ function keyValuesToRecord(entries: McpKeyValue[]): Record<string, string> {
 /** Serialize one form server into its canonical mcp.json object form. */
 export function serializeMcpServer(server: McpFormServer): Record<string, unknown> {
   const out: Record<string, unknown> = { transport: server.transport }
+  if (server.oauth) out.oauth = server.oauth
   if (!server.enabled) out.enabled = false
 
   if (server.transport === 'stdio') {

@@ -6,6 +6,7 @@ import {
 } from '../../shared/app-settings'
 import { openCodeSessionRuntimeHeaders } from '../../shared/opencode-session'
 import { fetchWithOptionalProxy } from '../proxy-fetch'
+import { routesTextThroughRuntime, requestRuntimeModelText } from './runtime-model-requests'
 import {
   codexResponsesLiteInput,
   resolveCodexResponsesRequestAuth,
@@ -24,6 +25,7 @@ import {
 export const DEFAULT_ONE_SHOT_MAX_OUTPUT_TOKENS = 1600
 
 export type OneShotModelRequestInput = {
+  purpose?: 'prompt-optimization' | 'paper-translation'
   baseUrl: string
   apiKey: string
   endpointFormat: ModelEndpointFormat
@@ -273,6 +275,12 @@ export function extractOneShotSseContent(rawSse: string): string {
 export async function oneShotModelRequest(
   input: OneShotModelRequestInput
 ): Promise<OneShotModelRequestResult> {
+  if (routesTextThroughRuntime()) {
+    if (!input.providerId) return { ok: false, message: 'Select a provider connection for this request.' }
+    return requestRuntimeModelText({ purpose: input.purpose ?? 'paper-translation', providerId: input.providerId,
+      model: input.model, messages: [{ role: 'system', content: input.systemPrompt }, { role: 'user', content: input.userText }],
+      maxOutputTokens: input.maxOutputTokens ?? DEFAULT_ONE_SHOT_MAX_OUTPUT_TOKENS, timeoutMs: input.timeoutMs })
+  }
   const request = buildOneShotModelRequest({
     baseUrl: input.baseUrl,
     apiKey: input.apiKey,

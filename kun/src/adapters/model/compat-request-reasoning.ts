@@ -22,6 +22,8 @@ export function responsesReasoningForEffort(
     effort: wireEffort,
     ...(options.includeSummary ? { summary: 'auto' } : {})
   })
+  const mapped = reasoning?.effortMapping?.[normalized]
+  if (mapped && (!reasoning?.nativeEfforts || reasoning.nativeEfforts.includes(mapped))) return payload(mapped)
   switch (normalized) {
     case 'low':
       return payload('low')
@@ -117,9 +119,13 @@ function applyProfileReasoningEffort(
     case 'openai-responses':
     case 'anthropic-thinking':
       return
-    case 'openai-chat-completions':
-      applyOpenAiChatReasoningEffort(body, effort)
+    case 'openai-chat-completions': {
+      const mapped = reasoning.effortMapping?.[effort]
+      if (mapped && effort !== 'auto' && (!reasoning.nativeEfforts || reasoning.nativeEfforts.includes(mapped))) {
+        body.reasoning_effort = mapped
+      } else applyOpenAiChatReasoningEffort(body, effort)
       return
+    }
     case 'qwen-chat-completions':
       applyQwenChatReasoningEffort(body, effort)
       return
@@ -254,7 +260,7 @@ export function resolveReasoningEffort(
   reasoning: ModelReasoningCapability
 ): NormalizedReasoningEffort | undefined {
   const normalized = normalizeReasoningEffortValue(effort)
-  if (!normalized) return undefined
+  if (!normalized || !reasoning.supportedEfforts.length) return undefined
   if (reasoning.supportedEfforts.includes(normalized)) return normalized
   if (
     normalized === 'low' &&
@@ -263,7 +269,7 @@ export function resolveReasoningEffort(
   ) {
     return 'off'
   }
-  return reasoning.defaultEffort
+  return reasoning.supportedEfforts.includes(reasoning.defaultEffort) ? reasoning.defaultEffort : undefined
 }
 
 function normalizeReasoningEffortValue(effort: string | undefined): NormalizedReasoningEffort | undefined {

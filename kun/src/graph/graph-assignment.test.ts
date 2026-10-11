@@ -121,6 +121,50 @@ describe('GraphAssignmentResolver', () => {
     expect(assignment.blockedTools).not.toContain('report_to_parent')
   })
 
+  it('carries ephemeral harness routing into the resolved snapshot', async () => {
+    const node = {
+      ...testGraphPlan().nodes[0]!,
+      assignment: {
+        kind: 'ephemeral' as const,
+        name: 'Claude worker',
+        systemPrompt: 'Do the task.',
+        harnessId: 'claude-code' as const,
+        credentialMode: 'native-login' as const,
+        toolPolicy: 'readOnly' as const,
+        blockedTools: [],
+        blockedSkills: [],
+        blockedMcpServers: []
+      }
+    }
+    const assignment = await new GraphAssignmentResolver({ registry }).resolve({
+      projectId: 'project_1',
+      node,
+      reference: node.assignment,
+      parent,
+      maxWallTimeMs: 60_000
+    })
+
+    expect(assignment.harnessId).toBe('claude-code')
+    expect(assignment.credentialMode).toBe('native-login')
+  })
+
+  it('leaves harness routing unset for profile and fallback assignments', async () => {
+    const node = {
+      ...testGraphPlan().nodes[0]!,
+      assignment: { kind: 'existing' as const, profileId: 'explore' }
+    }
+    const assignment = await new GraphAssignmentResolver({ registry }).resolve({
+      projectId: 'project_1',
+      node,
+      reference: node.assignment,
+      parent,
+      maxWallTimeMs: 60_000
+    })
+
+    expect(assignment.harnessId).toBeUndefined()
+    expect(assignment.credentialMode).toBeUndefined()
+  })
+
   it('rejects node scopes that expand the parent authority', async () => {
     const node = {
       ...testGraphPlan().nodes[0]!,

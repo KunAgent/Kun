@@ -2,7 +2,7 @@ import type { Database as BetterSqliteDatabase } from 'better-sqlite3'
 import type { SessionUsageQueryOptions, SessionUsageRecord } from '../../ports/session-store.js'
 import { usageRecordsFromRows, type UsageRow } from './hybrid-thread-support.js'
 
-const USAGE_COLUMNS = 'u.thread_id, u.seq, u.timestamp, u.turn_id, u.model, u.provider_id, u.usage_json'
+const USAGE_COLUMNS = 'u.thread_id, u.seq, u.timestamp, u.turn_id, u.model, u.provider_id, u.source, u.harness_id, u.usage_json'
 
 export function loadIndexedUsageRecords(
   db: BetterSqliteDatabase,

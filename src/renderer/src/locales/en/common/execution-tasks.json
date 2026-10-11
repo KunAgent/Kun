@@ -1,0 +1,13 @@
+{
+  "executionTaskStatus": {
+    "pending": "Pending",
+    "running": "Running",
+    "waiting": "Waiting",
+    "blocked": "Blocked",
+    "paused": "Paused",
+    "succeeded": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
+  },
+  "executionTaskOwner": "Owner"
+}

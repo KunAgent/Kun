@@ -42,9 +42,13 @@ import type {
 import { trajectoryUiState, useTrajectoryUiStore } from '../../store/trajectory-ui-store'
 import { useTrajectoryData } from '../trajectory/useTrajectoryData'
 import { TrajectoryView } from '../trajectory/TrajectoryView'
+import { CodeHomeQuickStart } from '../chat/CodeHomeQuickStart'
 
-const TerminalPanel = lazy(() =>
-  import('../terminal/TerminalPanel').then((module) => ({ default: module.TerminalPanel }))
+const CodeTour = lazy(() =>
+  import('../code-tour/CodeTour').then((module) => ({ default: module.CodeTour }))
+)
+const TerminalDrawer = lazy(() =>
+  import('../terminal/TerminalDrawer').then((module) => ({ default: module.TerminalDrawer }))
 )
 
 type FloatingComposerProps = ComponentProps<typeof FloatingComposer>
@@ -68,7 +72,9 @@ export type WorkbenchChatStageProps = {
   devPreviewOpened: boolean
   returnParentTitle: string
   showReturnBar: boolean
-  returnBarVariant?: 'explore' | 'subagent'
+  returnBarVariant?: 'explore' | 'subagent' | 'external'
+  /** Agent that ran an external subagent session (variant `external`). */
+  returnBarAgentName?: string
   graphChildContext?: GraphChildSessionContext
   composerProps: FloatingComposerProps
   conversationDropWorkspaceRoot: string
@@ -97,6 +103,8 @@ export type WorkbenchChatStageProps = {
   onToggleRightWorkspace: () => void
   onOpenCommandPalette?: () => void
   onOpenRequirementDraft?: () => void
+  /** Code home only: opens a task like the sidebar does, for the resume card under the composer. */
+  onOpenThread?: (threadId: string) => unknown
   /** Remote-mobile only: opens the bottom-sheet version of the right rail. */
   onOpenMobileRail?: () => void
   extensionTopBarActions?: readonly RegisteredContribution<'actions.topBar'>[]
@@ -139,6 +147,7 @@ export function WorkbenchChatStage({
   returnParentTitle,
   showReturnBar,
   returnBarVariant = 'subagent',
+  returnBarAgentName,
   graphChildContext,
   composerProps,
   conversationDropWorkspaceRoot,
@@ -164,6 +173,7 @@ export function WorkbenchChatStage({
   onToggleRightWorkspace,
   onOpenCommandPalette,
   onOpenRequirementDraft,
+  onOpenThread,
   onOpenMobileRail,
   extensionTopBarActions = [],
   extensionComposerActions = [],
@@ -395,6 +405,7 @@ export function WorkbenchChatStage({
                 parentTitle={returnParentTitle}
                 onBack={onBackToParent}
                 variant={returnBarVariant}
+                agentName={returnBarAgentName}
               />
             ) : (
               <div className="flex w-full min-w-0 flex-col items-center gap-1">
@@ -409,28 +420,28 @@ export function WorkbenchChatStage({
                   {...composerProps}
                   emptyTaskLayout={emptyTaskLayout}
                 />
+                {emptyTaskLayout && onOpenThread ? (
+                  <CodeHomeQuickStart disabled={runtimeConnection !== 'ready'} onOpenThread={onOpenThread} />
+                ) : null}
+                {emptyTaskLayout && onOpenThread && !focusModeEnabled ? (
+                  <Suspense fallback={null}>
+                    <CodeTour setInput={composerProps.setInput} />
+                  </Suspense>
+                ) : null}
               </div>
             )}
           </div>
         </div>
       </div>
       {terminalOpen ? (
-        <div className="ds-no-drag relative z-[3] flex w-full shrink-0 flex-col px-0 pb-0">
-          <div
-            role="separator"
-            aria-orientation="horizontal"
-            className="relative z-20 h-1 shrink-0 cursor-row-resize bg-transparent transition hover:bg-ds-border-muted"
-            onPointerDown={onBeginTerminalResize}
+        <Suspense fallback={null}>
+          <TerminalDrawer
+            workspaceRoot={terminalWorkspaceRoot}
+            height={terminalHeight}
+            onBeginResize={onBeginTerminalResize}
+            onCollapse={onToggleTerminal}
           />
-          <Suspense fallback={<div className="ds-surface-strong h-full w-full" />}>
-            <TerminalPanel
-              workspaceRoot={terminalWorkspaceRoot}
-              height={terminalHeight}
-              className="w-full"
-              onCollapse={onToggleTerminal}
-            />
-          </Suspense>
-        </div>
+        </Suspense>
       ) : null}
     </section>
   )

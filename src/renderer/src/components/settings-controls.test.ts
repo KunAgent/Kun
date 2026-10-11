@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, Fragment, useState, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
@@ -173,6 +174,10 @@ describe('SettingsTabs', () => {
     })
 
     const tablist = renderer.root.findByProps({ role: 'tablist' })
+    expect(tablist.props.className).toContain('ds-settings-tabs--wrap')
+    const css = readFileSync(new URL('../styles/settings-layout.css', import.meta.url), 'utf8')
+    expect(css).toContain('grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));')
+    expect(css).toMatch(/\.ds-settings-surface \.ds-settings-tabs--wrap button \{[^}]*min-inline-size: 0;[^}]*white-space: normal;/)
     expect(tablist.props.className).toContain('grid-cols-[repeat(auto-fit,minmax(9.5rem,max-content))]')
     expect(tablist.props.className).not.toContain('overflow-x-auto')
     expect(tabs(renderer).every((tab) => tab.props.className.includes('min-w-max'))).toBe(true)

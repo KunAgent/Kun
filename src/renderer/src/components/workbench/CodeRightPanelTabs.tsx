@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useLayoutEffect,
   useMemo,
   useRef,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -14,6 +15,8 @@ import {
   Gauge,
   Globe2,
   GitBranch,
+  GitCompare,
+  IdCard,
   MessageCircleMore,
   PanelRightClose,
   Plus,
@@ -21,6 +24,8 @@ import {
   Radio,
   ScanSearch,
   Shapes,
+  Shirt,
+  Users,
   X,
   type LucideIcon
 } from 'lucide-react'
@@ -75,6 +80,20 @@ export function CodeRightPanelTabs({
   const { t } = useTranslation('common')
   const idPrefix = safeDomId(domIdPrefix)
   const tabRefs = useRef(new Map<RightPanelContributionId, HTMLButtonElement>())
+  const tabListRef = useRef<HTMLDivElement>(null)
+  const tabOrder = state.tabs.join('\n')
+  const activeTitle = state.activeId ? titles[state.activeId] : undefined
+  useLayoutEffect(() => {
+    const list = tabListRef.current
+    if (!list || !state.expanded || !state.activeId) return
+    const activeId = state.activeId
+    let live = true
+    const reveal = () => { if (live) tabRefs.current.get(activeId)?.parentElement?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }
+    reveal()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(reveal)
+    observer?.observe(list)
+    return () => { live = false; observer?.disconnect() }
+  }, [state.activeId, state.expanded, tabOrder, activeTitle])
 
   const builtinTabs = useMemo<BuiltinTab[]>(() => [
     { id: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowserTool'), icon: Globe2 },
@@ -85,7 +104,7 @@ export function CodeRightPanelTabs({
       icon: MessageCircleMore
     },
     { id: BUILTIN_RIGHT_PANEL_IDS.plan, label: t('rightPanelPlan'), icon: ClipboardList },
-    { id: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChangesReview'), icon: FileEdit },
+    { id: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
     { id: BUILTIN_RIGHT_PANEL_IDS.canvas, label: t('rightPanelWhiteboard'), icon: Shapes },
     {
       id: BUILTIN_RIGHT_PANEL_IDS.graph,
@@ -100,6 +119,18 @@ export function CodeRightPanelTabs({
       icon: Gauge
     },
     { id: BUILTIN_RIGHT_PANEL_IDS.remote, label: t('rightPanelRemote'), icon: Radio },
+    {
+      id: BUILTIN_RIGHT_PANEL_IDS.review,
+      label: t('rightPanelReview', { defaultValue: 'Review' }),
+      icon: GitCompare
+    },
+    {
+      id: BUILTIN_RIGHT_PANEL_IDS.workers,
+      label: t('rightPanelWorkers', { defaultValue: 'Workers' }),
+      icon: Users
+    },
+    { id: BUILTIN_RIGHT_PANEL_IDS.conversationInfo, label: t('conversationInfoTab'), icon: IdCard },
+    { id: BUILTIN_RIGHT_PANEL_IDS.wardrobe, label: t('rightPanelWardrobe'), icon: Shirt },
   ], [t])
 
   const builtinById = useMemo(
@@ -164,6 +195,7 @@ export function CodeRightPanelTabs({
   return (
     <div className="ds-code-right-tabs ds-sidebar-surface-chrome ds-no-drag relative flex h-11 shrink-0 items-center gap-1 border-b border-ds-border-muted px-2 backdrop-blur-xl">
       <div
+        ref={tabListRef}
         role="tablist"
         aria-label={t('rightPanelTabs')}
         className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -177,6 +209,7 @@ export function CodeRightPanelTabs({
           return (
             <Fragment key={id}>
             <div
+              style={{ minWidth: 'min(7rem, 100%)', maxWidth: 'min(15rem, 100%)' }}
               className={`group flex h-8 min-w-[7rem] max-w-[15rem] shrink-0 items-center rounded-[9px] border transition ${
                 active
                   ? 'border-ds-border-strong bg-ds-card text-ds-ink shadow-sm'

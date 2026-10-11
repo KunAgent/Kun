@@ -1,3 +1,4 @@
+import { latestExecutedTurn } from '../domain/queue-execution-state.js'
 import type { ServerRuntime } from './routes/server-runtime.js'
 import type { RestartRecoverySource } from '../loop/restart-recovery-source.js'
 
@@ -77,9 +78,13 @@ export async function reconcileRuntimeAfterRestart(
   if (!childReconciliationFailed && runtime.threadStore) {
     for (const [threadId, provenTurnIds] of sourceTurnIdsByThread) {
       const thread = await runtime.threadStore.get(threadId).catch(() => null)
-      if (!thread || (thread.relation === 'side' && thread.roomContext?.kind !== 'conversation')) continue
-      const latest = thread.turns.at(-1)
-      if (!latest || latest.status !== 'failed' || !provenTurnIds.has(latest.id)) continue
+      if (!thread || thread.queueControl?.reason === 'user_stop' || (thread.relation === 'side' && thread.roomContext?.kind !== 'conversation')) continue
+      const latest = latestExecutedTurn(thread)
+      if (!latest || latest.status !== 'failed' || !provenTurnIds.has(latest.id) ||
+        thread.queueResumeSourceTurnId === latest.id) continue
+      if (thread.turns.some((turn) => turn.status === 'queued')) {
+        await runtime.turnService.pauseQueuedTurns(threadId, 'restart_recovery', latest.id)
+      }
       resumeCandidateSources.push({ threadId, turnId: latest.id })
       resumeCandidateThreads.set(threadId, thread)
     }

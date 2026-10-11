@@ -1,3 +1,4 @@
+import { prepareExplicitProviderRemoval } from './provider-removal-test-helpers.js'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -55,7 +56,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -149,14 +150,16 @@ describe('ModelConnectionRegistry', () => {
   it('moves an existing Registry AtomicJson client from Manager M1 to M2', async () => {
       const dataDir = await mkdtemp(join(tmpdir(), 'kun-registry-manager-rebind-'))
       roots.push(dataDir)
-      let document: FakeManagerDocument = { revision: 0, value: null }
+      const documents = new Map<string, FakeManagerDocument>()
       const requests: Array<{ url: string; method: string }> = []
       vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input)
         const body = JSON.parse(String(init?.body ?? '{}')) as {
           expectedRevision?: number
           value?: unknown
+          path: string
         }
+        let document = documents.get(body.path) ?? { revision: 0, value: null }
         requests.push({ url, method: String(init?.method ?? 'GET') })
         if (url.endsWith('/read')) return Response.json({ snapshot: structuredClone(document) })
         if (body.expectedRevision !== document.revision) {
@@ -166,6 +169,7 @@ describe('ModelConnectionRegistry', () => {
           revision: document.revision + 1,
           value: structuredClone(body.value ?? null)
         }
+        documents.set(body.path, document)
         return Response.json({ snapshot: structuredClone(document) })
       }))
       configureManagerAtomicJsonClient({
@@ -318,7 +322,8 @@ describe('ModelConnectionRegistry', () => {
       expect(firstProcess.preparedCredentialSecrets.get('deepseek')).toMatchObject({
         operationToken: firstToken
       })
-      await b.delete('deepseek', secondFence.revision)
+      const deletionReady = await prepareExplicitProviderRemoval(b, 'deepseek', secondFence.revision, true)
+      await b.delete('deepseek', deletionReady.revision)
 
       await vi.advanceTimersByTimeAsync(70_000)
       expect(firstProcess.preparedCredentialSecrets.has('deepseek')).toBe(false)

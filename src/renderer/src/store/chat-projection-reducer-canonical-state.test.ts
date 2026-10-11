@@ -56,6 +56,7 @@ function initialState(): ChatState {
       goal,
       todos
     }],
+    adeThreads: [],
     liveReasoning: '',
     liveAssistant: '',
     lastSeq: 0,

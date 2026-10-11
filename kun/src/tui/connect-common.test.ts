@@ -5,24 +5,9 @@ import {
 } from './connect-common.js'
 
 describe('TUI connection catalog', () => {
-  it('keeps OpenCore Free in the Free group and permits anonymous connection', () => {
-    const preset = connectionPresets.find((entry) => entry.id === 'opencode-free')
-
-    expect(preset).toMatchObject({
-      category: 'Free',
-      kind: 'http',
-      authType: 'api-key',
-      credentialRequirement: 'optional',
-      endpointFormat: 'chat_completions',
-      models: [
-        'big-pickle',
-        'mimo-v2.5-free',
-        'ling-3.0-flash-fin-free',
-        'nemotron-3-ultra-free',
-        'nemotron-3.5-lightning-free'
-      ]
-    })
-    expect(connectionRequiresCredential(preset!)).toBe(false)
+  it('does not ship an OpenCode Free catalog entry', () => {
+    expect(connectionPresets.find((entry) => entry.id === 'opencode-free')).toBeUndefined()
+    expect(connectionPresets.filter((entry) => entry.category === 'Free')).toEqual([])
   })
 
   it('continues to require credentials for normal API providers', () => {

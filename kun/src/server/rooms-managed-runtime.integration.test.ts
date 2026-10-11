@@ -8,9 +8,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startServiceManager, type ServiceManagerHandle } from '../manager/service-manager.js'
 import { startKunServe, type KunServeHandle } from './runtime-factory.js'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
+import { defaultRoomMembers } from '../rooms/room-service.js'
 import type { RoomTask } from '../contracts/room-tasks.js'
 import type { RoomPeerTopicSummary } from '../rooms/room-peer-types.js'
-import type { RoomRunRecord } from '../contracts/room-runs.js'
+import { RoomRunRecordSchema, type RoomRunRecord } from '../contracts/room-runs.js'
 import type { RoomRunDetail, RoomRunItemsPage } from '../contracts/room-run-query.js'
 import { heartbeatRuntimeWithManager } from '../manager/manager-client.js'
 
@@ -26,7 +27,7 @@ async function modelServer() {
   let executionCalls = 0
   let originalRuleId = ''
   let originalRuleRead = false
-  let peerSubmissions = 0, triageCalls = 0, peerAccepted = false, peerToolAdvertised = false
+  let peerSubmissions = 0, triageCalls = 0, peerFollowUps = 0, peerToolAdvertised = false
   const server = createServer(async (request, response) => {
     try {
       const chunks: Buffer[] = []
@@ -56,8 +57,8 @@ async function modelServer() {
             name: 'send_room_message', arguments: JSON.stringify({ body: PEER_REPLY })
           } }]
         } else {
-          const output = JSON.parse(String(toolResult.content))
-          peerAccepted ||= output.accepted === true && output.staged === true && output.value?.body === PEER_REPLY
+          // The accepted submission now ends the turn; a follow-up round would only produce discarded prose.
+          peerFollowUps++
           content = PEER_END_PROSE
         }
       } else if (prompt.includes('READ_ORIGINAL_ROOM_RULE')) {
@@ -113,7 +114,7 @@ async function modelServer() {
   cleanup.push(() => closeServer(server))
   return { baseUrl: 'http://127.0.0.1:' + address.port, calls: () => executionCalls,
     setRule: (id: string) => { originalRuleId = id }, ruleRead: () => originalRuleRead,
-    peer: () => ({ submissions: peerSubmissions, triageCalls, accepted: peerAccepted, advertised: peerToolAdvertised }) }
+    peer: () => ({ submissions: peerSubmissions, triageCalls, followUps: peerFollowUps, advertised: peerToolAdvertised }) }
 }
 
 function closeServer(server: Server): Promise<void> {
@@ -167,8 +168,9 @@ describe('Rooms full managed Runtime HTTP composition', () => {
       expect(response.ok, JSON.stringify(payload)).toBe(true)
       return payload as T
     }
+    // A new group starts with 小 Kun only; this suite works with the coordinator, developer and reviewer of a legacy group.
     const { room } = await api<{ room: Room }>('/v1/rooms', { clientRequestId: 'room', name: 'Managed smoke', collaborationMode: 'autonomous',
-      repositories: [{ id: 'repo', displayPath: repo }] })
+      repositories: [{ id: 'repo', displayPath: repo }], members: defaultRoomMembers(['repo']) })
     const message = { clientRequestId: 'message', body: 'Create smoke.txt and have it reviewed.', executionIntent: 'execute' }
     const sent = await api('/v1/rooms/' + room.id + '/messages', message)
     expect(await api('/v1/rooms/' + room.id + '/messages', message)).toEqual(sent)
@@ -228,10 +230,14 @@ describe('Rooms full managed Runtime HTTP composition', () => {
       expect(response.ok, JSON.stringify(value)).toBe(true)
       return value as T
     }
-    const { room } = await api<{ room: Room }>('/v1/rooms', { clientRequestId: 'peer-room', name: 'Native peer boundary' })
+    // The peers of the addressed member are what the participation check runs over, so the group needs more than 小 Kun.
+    const { room } = await api<{ room: Room }>('/v1/rooms', { clientRequestId: 'peer-room', name: 'Native peer boundary',
+      members: defaultRoomMembers([]) })
     expect(room.collaborationMode).toBe('peer')
+    // Addressing the default member keeps the others on the participation-check path.
     const sent = await api<{ requestId: string }>(`/v1/rooms/${room.id}/messages`, {
-      clientRequestId: 'peer-discussion', body: 'Discuss the publication boundary only.', executionIntent: 'discussion' })
+      clientRequestId: 'peer-discussion', body: 'Discuss the publication boundary only.', executionIntent: 'discussion',
+      mentionMemberIds: [room.defaultMemberId] })
     await vi.waitFor(async () => {
       const { topics } = await api<{ topics: RoomPeerTopicSummary[] }>(`/v1/rooms/${room.id}/topics`)
       expect(topics.find((topic) => topic.rootRequestId === sent.requestId)?.status).toBe('idle')
@@ -241,7 +247,7 @@ describe('Rooms full managed Runtime HTTP composition', () => {
     expect(replies.map((message) => message.body)).toEqual([PEER_REPLY])
     expect(replies[0]).toMatchObject({ rootRequestId: sent.requestId, status: 'final', authorMemberId: room.defaultMemberId })
     expect(messages.some((message) => message.body.includes(PEER_END_PROSE))).toBe(false)
-    expect(model.peer()).toMatchObject({ submissions: 1, accepted: true, advertised: true })
+    expect(model.peer()).toMatchObject({ submissions: 1, followUps: 0, advertised: true })
     expect(model.peer().triageCalls).toBeGreaterThanOrEqual(2)
     expect((await api<{ tasks: RoomTask[] }>(`/v1/rooms/${room.id}/tasks`)).tasks).toEqual([])
     expect(model.calls()).toBe(0)
@@ -279,6 +285,17 @@ describe('Rooms full managed Runtime HTTP composition', () => {
     expect(secondRun.run.memberId).toBe(firstRun.run.memberId)
     const afterAdmissions = model.peer()
     const listing = await api<{ runs: RoomRunRecord[] }>(`${runBase}?root_request_id=${sent.requestId}&limit=50`)
+    // Deterministically model an already-authorized background capture settling
+    // between inspector reads. It has no peer execution thread or turn.
+    const memoryId = 'agent-memory-run-inspection-race-' + sent.requestId
+    const now = new Date().toISOString()
+    const memoryRun = RoomRunRecordSchema.parse({ id: memoryId, roomId: room.id, rootRequestId: sent.requestId,
+      participantAgentId: firstRun.run.participantAgentId, memberId: room.defaultMemberId, memberLabel: 'Background memory',
+      phase: 'memory', attempt: 1, clientRequestId: memoryId, input: 'Background capture fixture', attachmentIds: [],
+      status: 'completed', createdAt: now, updatedAt: now })
+    await runtime.runtime.rooms!.deps.store.commit({ requestId: memoryId,
+      checks: [{ kind: 'room_run', id: memoryId, expectedRevision: null }],
+      puts: [{ kind: 'room_run', id: memoryId, roomId: room.id, value: memoryRun }] })
     const skipped = listing.runs.filter((run) => run.phase === 'triage' && run.outcome === 'skipped')
     expect(skipped.length).toBeGreaterThan(0)
     expect(skipped.every((run) => run.status === 'completed' && !run.turnId)).toBe(true)
@@ -294,7 +311,17 @@ describe('Rooms full managed Runtime HTTP composition', () => {
       expect(earlier.items.every((item) => item.turnId === run.turnId)).toBe(true)
     }
     expect(model.peer()).toEqual(afterAdmissions)
-    expect((await api<{ runs: RoomRunRecord[] }>(`${runBase}?root_request_id=${sent.requestId}&limit=50`))
-      .runs.map((run) => run.id)).toEqual(listing.runs.map((run) => run.id))
+    expect(model.calls()).toBe(0)
+    const afterInspection = await api<{ runs: RoomRunRecord[] }>(`${runBase}?root_request_id=${sent.requestId}&limit=50`)
+    expect(afterInspection.runs.some((run) => run.id === memoryId)).toBe(true)
+    // The Manager may finish a scheduled extraction during these reads. Only
+    // typed, sessionless Agent memory runs are independent of peer admission;
+    // every triage/discussion/execution ID must remain exactly unchanged.
+    const executionIds = (runs: RoomRunRecord[]) => runs.filter((run) =>
+      !(run.phase === 'memory' && run.id.startsWith('agent-memory-run-') && !run.threadId && !run.turnId))
+      .map((run) => run.id)
+    expect(executionIds(afterInspection.runs)).toEqual(executionIds(listing.runs))
+    expect(executionIds([{ ...memoryRun, phase: 'discussion' }])).toEqual([memoryId])
+    expect(executionIds([{ ...memoryRun, threadId: 'unexpected-executor' }])).toEqual([memoryId])
   }, 60000)
 })

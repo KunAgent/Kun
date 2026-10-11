@@ -16,6 +16,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   Minimize2,
+  Network,
   Palette,
   PencilLine,
   Pin,
@@ -25,6 +26,7 @@ import {
   Search,
   SearchCode,
   Settings,
+  Shirt,
   Smartphone,
   Sparkles,
   Target,
@@ -87,6 +89,8 @@ export type PaletteSourcesInput = {
   activeThreadPinned: boolean
   /** Laboratory project board gate; the board route entry is hidden while off. */
   projectBoardEnabled?: boolean
+  /** agents.kun.ade.enabled gate; the ADE route entry is hidden while off. */
+  adeEnabled?: boolean
 }
 
 /**
@@ -96,6 +100,7 @@ export type PaletteSourcesInput = {
 const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   rooms: 'roomsLabel',
   chat: 'code',
+  'agent-chat': 'sidebarConversations',
   write: 'write',
   design: 'design',
   settings: 'settings',
@@ -104,12 +109,15 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   claw: 'claw',
   board: 'projectBoardNav',
   schedule: 'schedule',
-  workflow: 'workflowCreate'
+  workflow: 'workflowCreate',
+  ade: 'workspaceModeAdeLabel',
+  wardrobe: 'roomsWardrobeMine'
 }
 
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   rooms: MessageSquare,
   chat: Code2,
+  'agent-chat': MessageSquare,
   write: PencilLine,
   design: Palette,
   settings: Settings,
@@ -118,7 +126,9 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   claw: Smartphone,
   board: Columns3,
   schedule: Clock3,
-  workflow: Workflow
+  workflow: Workflow,
+  ade: Network,
+  wardrobe: Shirt
 }
 
 /**
@@ -129,54 +139,75 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
  */
 const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
   general: 'general',
-  providers: 'providers',
+  appearance: 'settingsIaAppearance',
+  notifications: 'settingsIaNotifications',
+  providers: 'settingsIaProviders',
+  gateway: 'settingsIaGateway',
   extensions: 'extensions',
   write: 'write',
+  paper: 'settingsIaPaper',
   design: 'design',
   imageGeneration: 'mediaGeneration',
   mediaGeneration: 'mediaGeneration',
   speak: 'mediaGeneration',
-  speechToText: 'settingsNavSpeech',
-  agents: 'settingsNavAssistant',
-  laboratory: 'agentsQuickLaboratory',
+  speechToText: 'settingsIaSpeechInput',
+  agents: 'settingsIaAssistant',
+  agentsHarnesses: 'settingsIaHarnesses',
+  agentsCollaboration: 'settingsIaCollaboration',
+  projects: 'settingsIaProjects',
+  agentRuntime: 'settingsIaRuntime',
+  laboratory: 'settingsIaLabs',
   subagents: 'subagents',
   archives: 'settingsNavArchives',
-  worktree: 'worktree',
+  code: 'settingsIaCode',
+  worktree: 'settingsIaCodeWorktreeTab',
   memory: 'memory',
-  permissions: 'permissions',
-  skill: 'skill',
-  mcp: 'mcp',
+  permissions: 'settingsIaPermissions',
+  skill: 'settingsIaSkills',
+  mcp: 'settingsIaMcp',
   shortcuts: 'keyboardShortcuts',
-  easterEgg: 'settingsNavAppearance',
+  easterEgg: 'settingsIaAvatar',
   claw: 'settingsNavPhone',
   updates: 'settingsNavUpdates',
   terminal: 'terminal',
-  debug: 'debug',
+  debug: 'settingsIaDiagnostics',
   storage: 'storageRelocation',
   dataMigration: 'settingsNavMigration'
 }
 
 const SETTINGS_SECTION_DESCRIPTION_KEYS: Partial<Record<SettingsRouteSection, string>> = {
-  general: 'subtitle',
+  general: 'settingsIaGeneralDesc',
+  appearance: 'settingsIaAppearanceDesc',
+  notifications: 'settingsIaNotificationsDesc',
   providers: 'providersDesc',
+  gateway: 'settingsIaGatewayDesc',
   extensions: 'extensionsDesc',
   write: 'writeDesc',
+  paper: 'settingsIaPaperDesc',
   design: 'designDesc',
   imageGeneration: 'mediaGenerationDesc',
   mediaGeneration: 'mediaGenerationDesc',
   speechToText: 'speechToTextEnabledDesc',
-  agents: 'kunProviderDesc',
-  laboratory: 'laboratorySettingsDesc',
+  agents: 'settingsIaAssistantDesc',
+  agentsHarnesses: 'settingsIaHarnessesDesc',
+  agentsCollaboration: 'settingsIaCollaborationDesc',
+  projects: 'settingsIaProjectsDesc',
+  agentRuntime: 'settingsIaRuntimeDesc',
+  laboratory: 'settingsIaLabsDesc',
   subagents: 'subagentsSettingsIntro',
   archives: 'archivesOverviewDesc',
+  code: 'settingsIaCodeDesc',
   worktree: 'worktreeOverviewDesc',
   memory: 'memoryOverviewDesc',
+  permissions: 'settingsIaPermissionsDesc',
+  skill: 'settingsIaSkillsDesc',
+  mcp: 'settingsIaMcpDesc',
   shortcuts: 'shortcutsDesc',
   easterEgg: 'uiModeWorkshopDesc',
   claw: 'clawEnabledDesc',
   updates: 'guiUpdateDesc',
-  debug: 'llmDebugDesc',
-  terminal: 'terminalColorModeDesc',
+  debug: 'settingsIaDiagnosticsDesc',
+  terminal: 'settingsIaTerminalDesc',
   storage: 'storageRelocationSubtitle',
   dataMigration: 'dataMigrationSubtitle'
 }
@@ -250,7 +281,10 @@ function shortcutCommandEntries(input: PaletteSourcesInput): PaletteEntry[] {
 function routeEntries(input: PaletteSourcesInput): PaletteEntry[] {
   const { t } = input
   return (Object.keys(ROUTE_LABEL_KEYS) as AppRoute[])
+    // Conversations are opened from the Code sidebar; Rooms is no longer a mode.
+    .filter((route) => route !== 'agent-chat' && route !== 'rooms')
     .filter((route) => route !== 'board' || input.projectBoardEnabled === true)
+    .filter((route) => route !== 'ade' || input.adeEnabled === true)
     .map((route) => {
       const title = t(ROUTE_LABEL_KEYS[route])
       return {

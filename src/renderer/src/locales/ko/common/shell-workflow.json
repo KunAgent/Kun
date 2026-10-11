@@ -38,6 +38,8 @@
   "code": "코드",
   "write": "업무",
   "workspaceModeWorkLabel": "업무",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "에이전트 팀 지휘",
   "workspaceModeCodeDescription": "구축, 디버깅 및 배포",
   "workspaceModeWorkDescription": "작성, 정리 및 일상 업무",
   "design": "디자인",
@@ -651,5 +653,11 @@
   "workflowCallableShort": "AI 호출 가능",
   "workflowCallableHint": "코드 모드 에이전트가 run_workflow를 통해 직접 실행하도록 합니다.",
   "miniWindowRestore": "창 복원",
-  "miniWindowDragHint": "이 표시줄을 드래그하여 창 이동"
+  "miniWindowDragHint": "이 표시줄을 드래그하여 창 이동",
+  "sidebarKunStatusReady": "준비됨",
+  "sidebarKunStatusStarting": "시작 중…",
+  "sidebarKunStatusOffline": "연결되지 않음",
+  "sidebarKunStatusOpen": "내 옷장 열기",
+  "mobileCodeSegmentTasks": "작업",
+  "mobileCodeSegmentChats": "대화"
 }

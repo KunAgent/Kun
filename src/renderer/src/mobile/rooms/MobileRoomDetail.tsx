@@ -14,6 +14,8 @@ import { RoomContentPreview } from '../../components/rooms/RoomContentPreview'
 import { RoomNoticeDismiss } from '../../components/rooms/RoomDirectChat'
 import { MobileSheet } from '../sheets/MobileSheet'
 import type { MobilePage } from '../navigation/mobile-page'
+// Reply threads reuse desktop message rows; load their sheet before mobile overrides.
+import '../../components/rooms/rooms-timeline.css'
 import './mobile-room-detail.css'
 import { MobileLoadingState } from '../lib/MobileLoading'
 

@@ -272,7 +272,7 @@ export class KunRuntimeProviderServices {
 
   async updateMemory(
     memoryId: string,
-    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; authority?: CoreMemoryRecordJson['authority']; disabled?: boolean },
+    patch: { expectedRevision: number; content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; authority?: CoreMemoryRecordJson['authority']; disabled?: boolean },
     options: { workspace?: string; project?: string } = {}
   ): Promise<CoreMemoryRecordJson> {
     const query = buildQuery({ workspace: options.workspace, project: options.project })
@@ -290,8 +290,8 @@ export class KunRuntimeProviderServices {
     ).memory
   }
 
-  async deleteMemory(memoryId: string, options: { workspace?: string; project?: string } = {}): Promise<CoreMemoryRecordJson> {
-    const query = buildQuery({ workspace: options.workspace, project: options.project })
+  async deleteMemory(memoryId: string, options: { workspace?: string; project?: string; expectedRevision?: number } = {}): Promise<CoreMemoryRecordJson> {
+    const query = buildQuery({ workspace: options.workspace, project: options.project, expected_revision: options.expectedRevision })
     const response = await rendererRuntimeClient.runtimeRequest(`${kunMemoryRecordPath(memoryId)}${query}`, 'DELETE')
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to delete memory'))

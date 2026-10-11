@@ -26,6 +26,8 @@ describe('usage aggregate query runner', () => {
         turn_id TEXT,
         model TEXT,
         provider_id TEXT,
+        source TEXT,
+        harness_id TEXT,
         usage_json TEXT NOT NULL,
         PRIMARY KEY(thread_id, seq)
       )
@@ -82,6 +84,8 @@ describe('usage aggregate query runner', () => {
         turn_id TEXT,
         model TEXT,
         provider_id TEXT,
+        source TEXT,
+        harness_id TEXT,
         usage_json TEXT NOT NULL,
         PRIMARY KEY(thread_id, seq)
       );

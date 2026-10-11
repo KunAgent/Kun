@@ -5,6 +5,7 @@ import {
   makeModelContextItem,
   makeToolCallItem,
   makeToolResultItem,
+  makeUserInputItem,
   makeUserItem
 } from '../../domain/item.js'
 import type { ModelRequest } from '../../ports/model-client.js'
@@ -348,5 +349,29 @@ describe('compat composer context projection', () => {
     })
     expect(switched.some((message) => message.tool_calls?.length)).toBe(false)
     expect(switched.some((message) => message.role === 'tool')).toBe(false)
+  })
+
+  it('replays a parallel tool round whose user_input gate record lands between results', () => {
+    const ids = { threadId: 'thread-gate', turnId: 'turn-gate' }
+    const request: ModelRequest = {
+      ...ids,
+      model: 'test-model',
+      prefix: [],
+      history: [
+        makeUserItem({ ...ids, id: 'user', text: 'Start the interview now.' }),
+        makeToolCallItem({ ...ids, id: 'call-im', callId: 'im', toolName: 'send_im_message', arguments: { text: 'hi' }, status: 'completed' }),
+        makeToolCallItem({ ...ids, id: 'call-ask', callId: 'ask', toolName: 'user_input', arguments: { question: 'Q1?' }, status: 'completed' }),
+        makeToolResultItem({ ...ids, id: 'result-im', callId: 'im', toolName: 'send_im_message', output: { accepted: true } }),
+        makeUserInputItem({ ...ids, id: 'gate', inputId: 'in-1', prompt: 'Q1?' }),
+        makeToolResultItem({ ...ids, id: 'result-ask', callId: 'ask', toolName: 'user_input', output: { status: 'submitted', answers: [{ value: 'Research' }] } })
+      ],
+      tools: [],
+      abortSignal: new AbortController().signal
+    }
+
+    const messages = projectCompatMessages(request, { thinkingMode: false, supportsImages: false })
+    expect(messages.map((message) => message.role)).toEqual(['user', 'assistant', 'tool', 'tool'])
+    expect(messages[1]?.tool_calls?.map((call) => call.id)).toEqual(['im', 'ask'])
+    expect(String(messages[3]?.content)).toContain('Research')
   })
 })

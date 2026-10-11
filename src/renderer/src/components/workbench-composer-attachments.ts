@@ -2,7 +2,7 @@ import type { AttachmentReference } from '../agent/types'
 import type { RightPanelMode } from './chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../extensions/contribution-ids'
 
-export const COMPOSER_ATTACHMENT_SCOPES = ['chat', 'write', 'design', 'sdd', 'inactive'] as const
+export const COMPOSER_ATTACHMENT_SCOPES = ['chat', 'ade', 'write', 'design', 'sdd', 'inactive'] as const
 
 export type ComposerAttachmentScope = (typeof COMPOSER_ATTACHMENT_SCOPES)[number]
 export type ComposerAttachmentsByScope = Record<ComposerAttachmentScope, AttachmentReference[]>
@@ -13,6 +13,7 @@ export type ComposerAttachmentUpdater =
 export function createEmptyComposerAttachmentsByScope(): ComposerAttachmentsByScope {
   return {
     chat: [],
+    ade: [],
     write: [],
     design: [],
     sdd: [],
@@ -24,6 +25,7 @@ export function composerAttachmentScopeForSurface(
   route: string,
   rightPanelMode: RightPanelMode | null
 ): ComposerAttachmentScope {
+  if (route === 'ade') return 'ade'
   if (rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sddAi) return 'sdd'
   if (route === 'design') return 'design'
   if (route === 'write') return 'write'

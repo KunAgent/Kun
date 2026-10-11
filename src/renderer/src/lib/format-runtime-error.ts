@@ -1,5 +1,6 @@
 import i18n from '../i18n'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
+import { harnessRuntimeErrorKey } from './harness-runtime-error'
 
 type RuntimeErrorPayload = {
   code?: string
@@ -16,7 +17,7 @@ export type RuntimeErrorView = {
   message: string
   detail?: string
   code?: string
-  settingsAction?: 'agents'
+  settingsAction?: 'agents' | 'harnesses'
 }
 
 export type RuntimeErrorViewOptions = {
@@ -191,12 +192,13 @@ export function describeRuntimeError(
   const payloadText = payloadMessage(payload)
   const text = stripIpcPrefix(payloadText || raw)
   const redactedText = redactSecretText(text)
-  const summary = localizedRuntimeSummary(errorCode, redactedText, options) ||
+  const harnessKey = harnessRuntimeErrorKey(errorCode, redactedText)
+  const summary = (harnessKey ? i18n.t(`common:${harnessKey}`) : null) || localizedRuntimeSummary(errorCode, redactedText, options) ||
     redactedText ||
     i18n.t('common:runtimeRequestFailed')
   const isStreamDisconnect = errorCode === 'stream_disconnected' ||
     redactedText.toLowerCase().includes('stream closed before')
-  const message = errorCode === 'service_manager_unavailable' || errorCode === 'thread_busy' ||
+  const message = harnessKey || errorCode === 'service_manager_unavailable' || errorCode === 'thread_busy' ||
     errorCode === 'model_provider_unreachable' ||
     isStreamDisconnect
     ? summary
@@ -226,7 +228,8 @@ export function describeRuntimeError(
     message,
     ...(details.length > 0 ? { detail: details.join('\n\n') } : {}),
     ...(errorCode ? { code: errorCode } : {}),
-    ...(shouldOpenAgentsSettings(errorCode, redactedText) ? { settingsAction: 'agents' as const } : {})
+    ...(harnessKey ? { settingsAction: 'harnesses' as const }
+      : shouldOpenAgentsSettings(errorCode, redactedText) ? { settingsAction: 'agents' as const } : {})
   }
 }
 

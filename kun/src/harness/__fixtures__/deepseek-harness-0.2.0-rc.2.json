@@ -1,0 +1,37 @@
+{
+  "sessionId": "deepseek-harness-fixture-session",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentInfo": { "name": "deepseek-harness-acp", "version": "0.0.1" },
+    "agentCapabilities": {
+      "mcpCapabilities": { "http": true },
+      "promptCapabilities": { "image": false, "audio": false, "embeddedContext": false },
+      "sessionCapabilities": { "close": {}, "list": {}, "resume": {} }
+    },
+    "authMethods": []
+  },
+  "newSession": {
+    "configOptions": [
+      {
+        "id": "model", "name": "Model", "category": "model", "type": "select",
+        "currentValue": "[\"deepseek-official\",\"deepseek-v4-flash\"]",
+        "options": [{
+          "group": "deepseek-official", "name": "DeepSeek",
+          "options": [
+            { "value": "[\"deepseek-official\",\"deepseek-v4-flash\"]", "name": "deepseek-v4-flash" },
+            { "value": "[\"deepseek-official\",\"deepseek-flash\"]", "name": "DeepSeek-V41-Flash" },
+            { "value": "[\"deepseek-official\",\"deepseek-v4-pro\"]", "name": "DeepSeek-V4-Pro" }
+          ]
+        }]
+      },
+      {
+        "id": "reasoning_effort", "name": "Reasoning effort", "category": "thought_level", "type": "select",
+        "currentValue": "high",
+        "options": [
+          { "value": "off", "name": "Off" }, { "value": "low", "name": "Low" },
+          { "value": "high", "name": "High" }, { "value": "max", "name": "Max" }
+        ]
+      }
+    ]
+  }
+}

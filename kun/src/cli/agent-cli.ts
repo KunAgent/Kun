@@ -34,78 +34,11 @@ export type CliIo = {
   createRuntime?: (options: ServeOptions) => Promise<ServerRuntime>
 }
 
-export const KUN_CLI_USAGE = `kun <command> [options]
-
-Run \`kun\` without a command to open the inline terminal UI.
-
-Commands:
-  serve [options]            Start the local HTTP/SSE runtime
-  run [options] <prompt>     Run one agent turn without the GUI
-  chat [options]             Start a line-oriented terminal chat
-  tui [options]              Open the inline terminal UI (same as bare kun)
-  runtime <command>          Inspect, stop, or restart the shared runtime
-  update [--check|--yes]     Check or update a stable standalone TUI archive
-  exec [options] <tool>      List or invoke tools directly
-  extension <command>        Create, validate, pack, install, and manage extensions
-
-Common options:
-  --config <path>            JSON config file
-  --data-dir <path>          Root directory for Kun data
-  --workspace <path>         Workspace root for run/chat/exec
-  --model <model>            Model id
-  --provider-id <id>         Route through a configured or extension model provider
-  --account-id <id>          Bind an opaque core-managed provider account
-  --approval-policy <p>      on-request | untrusted | never | auto | suggest
-  --approval-reviewer <r>    user | agent
-  --prompt-file <path|->     Read the run prompt from a UTF-8 file or stdin
-  --reasoning-effort <e>     auto | off | low | medium | high | max
-  --service-tier <tier>      priority
-  --max-steps <n>            Maximum model steps for this run
-  --max-wall-time-ms <n>     Maximum wall time for this run
-  --max-tool-calls-per-step <n>
-                             Maximum tool calls in one model step
-  --json                     Emit machine-readable JSON where supported
-  --jsonl                    Stream one machine-readable event per line for kun run
-
-Exec options:
-  --list-tools               Print available tools
-  --args <json>              JSON object passed to the selected tool
-`
-
-export type KunCliCommand = 'serve' | 'run' | 'chat' | 'tui' | 'exec' | 'runtime' | 'update' | 'version' | 'help'
-
-export function splitKunCliCommand(argv: readonly string[]): {
-  command: KunCliCommand
-  args: string[]
-  error?: string
-} {
-  const first = argv[0]
-  if (!first) return { command: 'tui', args: [] }
-  if (first === '--help' || first === '-h' || first === 'help') {
-    return { command: 'help', args: [] }
-  }
-  if (first === '--version' || first === '-V' || first === 'version') {
-    return { command: 'version', args: [] }
-  }
-  if (
-    first === 'serve' ||
-    first === 'run' ||
-    first === 'chat' ||
-    first === 'tui' ||
-    first === 'exec' ||
-    first === 'runtime' ||
-    first === 'update'
-  ) {
-    return { command: first, args: [...argv.slice(1)] }
-  }
-  if (first.startsWith('-')) {
-    return { command: 'tui', args: [...argv] }
-  }
-  return { command: 'help', args: [], error: `unknown command: ${first}` }
-}
+export { KUN_CLI_USAGE, splitKunCliCommand, type KunCliCommand } from './kun-cli-command.js'
+import type { KunCliCommand } from './kun-cli-command.js'
 
 export async function runAgentCommand(
-  command: Exclude<KunCliCommand, 'serve' | 'runtime' | 'update' | 'version' | 'help'>,
+  command: Exclude<KunCliCommand, 'serve' | 'runtime' | 'update' | 'mcp-bridge' | 'version' | 'help'>,
   argv: readonly string[],
   io: CliIo
 ): Promise<number> {
@@ -418,7 +351,12 @@ function buildExecContext(options: ServeOptions, workspace: string): ToolHostCon
     sandboxMode: options.sandboxMode,
     approvalReviewer: options.approvalReviewer,
     abortSignal: new AbortController().signal,
-    awaitApproval: async () => (options.approvalPolicy === 'auto' ? 'allow' : 'deny')
+    awaitApproval: async (approval) => {
+      if (approval.action?.requiresUserDecision || approval.action?.reviewerRequirement === 'user') {
+        return { decision: 'deny', reviewer: 'user', reason: 'This action needs interactive human approval; run it through the GUI or TUI.' }
+      }
+      return options.approvalPolicy === 'auto' ? 'allow' : 'deny'
+    }
   }
 }
 

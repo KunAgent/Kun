@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "version": "5",
+  "canvas": 1024,
+  "anchors": {
+    "faceBox": [
+      232,
+      300,
+      792,
+      860
+    ],
+    "compactFaceBox": [
+      200,
+      236,
+      824,
+      860
+    ],
+    "eyeLineY": 584,
+    "beak": [
+      512,
+      666
+    ]
+  },
+  "assetManifests": [
+    "manifests/base.json",
+    "manifests/face.json",
+    "manifests/crest.json",
+    "manifests/wing.json",
+    "manifests/headwear.json",
+    "manifests/glasses.json",
+    "manifests/outfit.json",
+    "manifests/prop.json",
+    "manifests/icon-outfit.json",
+    "manifests/scene.json",
+    "manifests/fx.json",
+    "manifests/container.json",
+    "manifests/card.json",
+    "manifests/icon-headwear.json",
+    "manifests/icon-glasses.json",
+    "manifests/icon-prop.json"
+  ]
+}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { ChevronRight, Folder, Plus, Search, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
@@ -91,9 +91,11 @@ function MobileProjectHome({ project, onBack, onOpen, onOpenSettings }: {
 
 const RECENT_LIMIT = 5
 
-export function MobileCodeHome({ onOpen, onOpenSettings }: {
+export function MobileCodeHome({ onOpen, onOpenSettings, segments }: {
   onOpen: (threadId: string) => void
   onOpenSettings: () => void
+  /** Tasks / conversations switch shown under the header. */
+  segments?: ReactNode
 }) {
   const { t, i18n } = useTranslation('common')
   const [project, setProject] = useState<string | null>(null)
@@ -185,6 +187,7 @@ export function MobileCodeHome({ onOpen, onOpenSettings }: {
           onClick={onOpenSettings}><Settings size={20} aria-hidden /></button>
       </div>
     </header>
+    {segments}
     <label className="kun-mobile-project-search"><Search size={18} aria-hidden />
       <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
         placeholder={t('mobileSearch')} aria-label={t('mobileSearch')} />

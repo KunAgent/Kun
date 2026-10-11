@@ -4,7 +4,6 @@ import { useChatStore } from '../../store/chat-store'
 import { useProjectBoardStore } from '../../project-board/project-board-store'
 import { projectBoardApi } from '../../project-board/project-board-api'
 import type { ProjectBoardCard } from '../../project-board/project-board-types'
-import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import { useRoomExcalidrawStore } from './room-excalidraw-store'
 
@@ -12,7 +11,8 @@ export const useRoomBoardTarget = create<{ target: { workspaceRoot: string; card
 
 export async function openRoomContentTarget(target: RoomContentOpenTarget,
   openThread: (id: string, turnId?: string) => void | Promise<void>,
-  roomId?: string): Promise<void> {
+  roomId?: string, isCurrent: () => boolean = () => true): Promise<void> {
+  if (!isCurrent()) return
   if (target.kind === 'thread') { await openThread(target.threadId, target.turnId); return }
   if (target.kind === 'excalidraw_board') {
     if (!roomId) throw new Error('Referenced room is unavailable')
@@ -22,6 +22,7 @@ export async function openRoomContentTarget(target: RoomContentOpenTarget,
   }
   if (target.kind === 'board') {
     const result = await projectBoardApi.card(target.workspaceRoot, target.cardId)
+    if (!isCurrent()) return
     if (result.card.id !== target.cardId) throw new Error('Referenced board card is unavailable')
     useProjectBoardStore.getState().selectWorkspace(result.workspaceRoot)
     useRoomBoardTarget.setState({ target: { workspaceRoot: result.workspaceRoot, cardId: target.cardId, card: result.card } })
@@ -29,16 +30,7 @@ export async function openRoomContentTarget(target: RoomContentOpenTarget,
     return
   }
   const resolved = await window.kunGui.resolveWorkspaceFile({ path: target.relativePath, workspaceRoot: target.workspaceRoot })
+  if (!isCurrent()) return
   if (!resolved.ok) throw new Error(resolved.message)
-  if (target.kind === 'work_file') {
-    const write = useWriteWorkspaceStore.getState()
-    await write.selectWriteWorkspace(target.workspaceRoot)
-    await useWriteWorkspaceStore.getState().openFile(target.workspaceRoot, resolved.path)
-    const selected = useWriteWorkspaceStore.getState()
-    if (selected.fileError || selected.activeFilePath !== resolved.path) throw new Error(selected.fileError ?? 'Referenced document is unavailable')
-    useChatStore.getState().setRoute('write')
-    return
-  }
-  useChatStore.getState().setRoute('chat')
   previewWorkspaceFile({ path: resolved.path, workspaceRoot: target.workspaceRoot })
 }

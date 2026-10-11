@@ -1,0 +1,273 @@
+import { listHarnessesForManager, type HarnessListDeps } from '../ade/tools/harness-list.js'
+import { resolveWorkerRoute } from '../ade/worker-route.js'
+import type { HarnessDefinition, HarnessStatus } from '../contracts/harness.js'
+import { isModelConnectionProfileUsable, type ModelConnectionProfile, type ModelConnectionSnapshot } from '../contracts/model-connections.js'
+import type { WorkbenchExecution, WorkbenchRequest } from '../contracts/workbench-links.js'
+import { createThreadRecord } from '../domain/thread.js'
+import { createTurnRecord } from '../domain/turn.js'
+import { exposableProvider } from '../domain/model-gateway-export-policy.js'
+import { parseGatewayModelId } from '../harness/gateway-model-id.js'
+import { legacyProviderKindFor } from '../harness/harness-provider-kind.js'
+import type { HarnessRouter } from '../harness/harness-router.js'
+import { legacyHarnessForProvider } from '../harness/resolve-turn-harness.js'
+import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
+import { KUN_TOOL_PERMISSION_MODES, kunToolPermissionModeFromSettings, kunToolPermissionModeSettings,
+  type KunToolPermissionSettings } from '../contracts/policy.js'
+import { hasWorkbenchCapabilityConstraints, type WorkbenchCapabilityCeiling } from '../contracts/thread-workbench-origin.js'
+
+type Model = NonNullable<WorkbenchExecution['model']>
+const modelIds = (provider: ModelConnectionProfile) => [...new Set([provider.selectedModel, ...provider.models]
+  .filter((model): model is string => Boolean(model)))]
+const usable = (provider: ModelConnectionProfile) => isModelConnectionProfileUsable(provider) && !isRetiredOpenCodeFreeConnection(provider)
+const httpModel = (provider: ModelConnectionProfile) => ['http', 'gemini-cli-api', 'gemini-code-assist'].includes(provider.kind)
+
+/**
+ * Discovery waits at most this long for engine detection and model probes.
+ * Slower engines are listed as `detecting`; their probes keep running in the
+ * background and land in the shared caches for the next refresh.
+ */
+export const HARNESS_DISCOVERY_ENGINE_BUDGET_MS = 6_000
+/** Whole-list guard; stays below the desktop's 15s GET timeout so callers get an answer. */
+const HARNESS_DISCOVERY_TOTAL_BUDGET_MS = 14_000
+
+/** Read-only access to the same catalog, model pools and admission router as Code. */
+export class WorkbenchHarnessService {
+  constructor(private readonly deps: HarnessListDeps & {
+    router: HarnessRouter
+    probeModels?: (definition: HarnessDefinition) => Promise<string[]>
+    snapshot: () => Promise<ModelConnectionSnapshot>
+    defaultModel: () => { model: string; providerId?: string; accountId?: string }
+    /** Test seam for `HARNESS_DISCOVERY_ENGINE_BUDGET_MS`. */
+    discoveryBudgetMs?: number
+  }) {}
+
+  /** The effective route is saved on the card before it can start; never silently switch engines. */
+  async resolve(request: WorkbenchRequest): Promise<Model> {
+    return this.resolveWithSnapshot(request, await this.deps.snapshot())
+  }
+
+  /** Native permission declarations can only narrow the source conversation's authority. */
+  permissionCeiling(request: WorkbenchRequest, inherited: KunToolPermissionSettings): KunToolPermissionSettings {
+    const definition = this.deps.catalog.get(request.execution?.model?.harnessId ?? 'kun')
+    if (!definition) throw new Error('The selected Code Agent is unavailable')
+    if (definition.transport === 'native-loop') return inherited
+    const rank = KUN_TOOL_PERMISSION_MODES.indexOf(kunToolPermissionModeFromSettings(inherited))
+    const allowed = definition.permissionModes.map((mode) => KUN_TOOL_PERMISSION_MODES.indexOf(mode.kunPermissionMode))
+      .filter((mode) => mode <= rank)
+    if (!allowed.length) throw new Error('The selected Code Agent has no permission mode within the source conversation\'s limits')
+    const effective = Math.max(...allowed)
+    return effective < rank ? kunToolPermissionModeSettings(KUN_TOOL_PERMISSION_MODES[effective]!) : inherited
+  }
+
+  /** Constrained source Agents require proven host mediation, including native tools. */
+  assertCapabilityCeiling(request: WorkbenchRequest, ceiling?: WorkbenchCapabilityCeiling): void {
+    if (!hasWorkbenchCapabilityConstraints(ceiling)) return
+    const route = request.execution?.model
+    const thread = createThreadRecord({ id: 'workbench-scope-admission', title: request.title, workspace: request.workspaceRoot ?? '.',
+      model: route?.model ?? this.deps.defaultModel().model, providerId: route?.providerId, harnessId: route?.harnessId,
+      workbenchOrigin: { kind: 'bot', roomId: 'scope-check', linkId: 'scope-check', agentId: 'source', agentName: '', capabilityCeiling: ceiling } })
+    const turn = createTurnRecord({ id: 'scope-check', threadId: thread.id, prompt: '', ...route })
+    const admitted = this.deps.router.resolve(thread, turn)
+    if (!admitted.ok) throw new Error(`This Code Agent cannot enforce the source Agent's tool limits: ${admitted.error.userMessage}`)
+  }
+
+  isUserSelection(request: WorkbenchRequest, userIntent: string): boolean {
+    const id = request.execution?.model?.harnessId
+    if (!id) return false
+    const name = this.deps.catalog.get(id)?.displayName
+    const normalized = userIntent.toLocaleLowerCase().replace(/[\s_-]+/g, ' ')
+    return [id, name].filter((entry): entry is string => Boolean(entry))
+      .some((entry) => normalized.includes(entry.toLocaleLowerCase().replace(/[\s_-]+/g, ' ')))
+  }
+
+  private async resolveWithSnapshot(request: WorkbenchRequest, snapshot: ModelConnectionSnapshot, knownStatus?: HarnessStatus | null): Promise<Model> {
+    const selected: Model = request.execution?.model ?? this.deps.defaultModel()
+    const provider = snapshot.providers.find((entry) => entry.id === selected.providerId)
+    const harnessId = selected.harnessId ?? legacyHarnessForProvider(selected.providerId, {
+      byId: Object.fromEntries(snapshot.providers.map((entry) => [entry.id, entry.kind])), defaultKind: 'http'
+    })
+    const definition = this.deps.catalog.get(harnessId)
+    if (!definition) throw new Error(`Unknown Code Agent: ${harnessId}`)
+    if (this.deps.catalog.isDisabled(harnessId)) throw new Error(`Code Agent is disabled in settings: ${definition.displayName}`)
+    if (harnessId !== 'kun' && !this.deps.router.enabled()) throw new Error('External Code Agent routing is disabled in settings')
+    if (definition.transport === 'terminal' || definition.transport === 'application') {
+      throw new Error('Terminal-only and application-only Agents cannot execute a Code task')
+    }
+    const mode = request.execution?.mode ?? (request.mode === 'plan' ? 'plan' : 'direct')
+    if (harnessId !== 'kun' && (mode !== 'direct' || request.execution?.orchestration === 'graph')) {
+      throw new Error('External Code Agents support direct tasks only. Select Kun for plan, auto, goal or Graph tasks.')
+    }
+    const credentialMode = selected.credentialMode ?? definition.credentialModes[0]!
+    this.assertProvider(definition, credentialMode, selected, provider)
+    const resolved = await resolveWorkerRoute({ catalog: this.deps.catalog,
+      agent: { harnessId, model: selected.model, providerId: selected.providerId, credentialMode },
+      providerPool: async (id) => {
+        const candidate = snapshot.providers.find((entry) => entry.id === id)
+        if (!candidate || !usable(candidate)) return undefined
+        if (credentialMode === 'kun-gateway' && !exposableProvider(candidate)) return undefined
+        if (harnessId === 'kun' && !httpModel(candidate)) return undefined
+        return { kind: candidate.kind, models: modelIds(candidate), gatewayExportable: exposableProvider(candidate) }
+      }, probedModels: this.deps.probedModels })
+    if ('error' in resolved) throw new Error(resolved.error)
+    const route = resolved.route
+    if (!route.model) throw new Error('Select an available model for this Code Agent')
+    if (knownStatus === null) throw new Error(`${definition.displayName} availability could not be checked. Refresh its connection in Code.`)
+    const status = knownStatus ?? await this.deps.detector.status(harnessId).catch(() => {
+      throw new Error(`${definition.displayName} availability could not be checked. Refresh its connection in Code.`)
+    })
+    if (definition.transport !== 'native-loop' && (status.installed !== 'yes' || status.login === 'signed-out' ||
+      status.versionSupported === false || status.ready === 'no')) {
+      throw new Error(`${definition.displayName} is unavailable (${availabilityReason(status)}). Check its installation and sign-in in Code.`)
+    }
+    const thread = createThreadRecord({ id: 'workbench-admission', title: request.title,
+      workspace: request.workspaceRoot ?? '.', ...route, agentSurface: 'code', mode: mode === 'plan' || mode === 'auto' ? 'plan' : 'agent' })
+    const turn = createTurnRecord({ id: 'workbench-admission', threadId: thread.id, prompt: '', ...route,
+      agentSurface: 'code', mode: thread.mode, orchestration: request.execution?.orchestration ?? 'direct' })
+    const admission = this.deps.router.resolve(thread, turn)
+    if (!admission.ok) throw new Error(admission.error.userMessage)
+    const routedProvider = snapshot.providers.find((entry) => entry.id === route.providerId)
+    return { ...route, ...(routedProvider ? { accountId: routedProvider.accountId } : {}),
+      ...(selected.reasoningEffort ? { reasoningEffort: selected.reasoningEffort } : {}),
+      ...(selected.serviceTier ? { serviceTier: selected.serviceTier } : {}) }
+  }
+
+  private assertProvider(definition: HarnessDefinition, mode: string, selected: Model,
+    provider: ModelConnectionProfile | undefined): void {
+    const address = parseGatewayModelId(selected.model)
+    if (mode === 'kun-gateway' && address && selected.providerId && address.providerId !== selected.providerId) {
+      throw new Error('The gateway model and selected provider do not match')
+    }
+    if (selected.providerId && (!provider || !usable(provider))) throw new Error('The selected model connection is unavailable')
+    if (selected.accountId && (!provider || provider.accountId !== selected.accountId)) throw new Error('The selected model account is unavailable')
+    if (mode === 'native-login' && provider && provider.kind !== legacyProviderKindFor(definition.id)) {
+      throw new Error('Native sign-in cannot use an unrelated provider or account')
+    }
+    if (mode === 'provider' && !selected.providerId) throw new Error('Select a model connection for provider authentication')
+  }
+
+  /** Bounded discovery output; launch commands, secret refs and credentials never leave the host. */
+  /**
+   * Changes whenever settings would change the discovered list. Spawn-free, so
+   * callers can cache discovery for minutes and still react to a settings edit.
+   */
+  discoveryKey(): string {
+    return JSON.stringify([this.deps.router.enabled(), this.deps.catalog.list().map((definition) => [
+      definition.id, definition.availability ?? '', this.deps.catalog.isDisabled(definition.id),
+      this.deps.catalog.enabledProfiles?.(definition.id) ?? []
+    ])])
+  }
+
+  /** `modelLimit` raises the per-Agent model cap for pickers; tool callers keep the compact default. */
+  async list(signal?: AbortSignal, ceiling?: WorkbenchCapabilityCeiling, options: { modelLimit?: number } = {}) {
+    const bounded = AbortSignal.any([AbortSignal.timeout(HARNESS_DISCOVERY_TOTAL_BUDGET_MS), ...(signal ? [signal] : [])])
+    const result = await abortable(this.listWithin(bounded, options.modelLimit), bounded)
+    if (!hasWorkbenchCapabilityConstraints(ceiling)) return result
+    return { ...result, agents: result.agents.map((agent) => {
+      let reason = agent.reason
+      const models = agent.models.filter((model) => {
+        try {
+          this.assertCapabilityCeiling({ title: 'Code task', goal: '', mode: 'agent', isolation: 'inherit', report: 'final',
+            execution: { mode: 'direct', model } }, ceiling)
+          return true
+        } catch (error) { reason = error instanceof Error ? error.message : String(error); return false }
+      })
+      return { ...agent, models, available: agent.available && models.length > 0, ...(models.length ? {} : { reason }) }
+    }) }
+  }
+
+  private async listWithin(signal: AbortSignal, modelLimit?: number) {
+    const perGroup = modelLimit ?? 8, perAgent = modelLimit ?? 24
+    signal.throwIfAborted()
+    const snapshot = await this.deps.snapshot()
+    const providers = snapshot.providers.filter(usable)
+    const statuses = new Map<string, Promise<HarnessStatus>>()
+    // One shared deadline: engines are probed concurrently, so a single slow CLI
+    // cannot hold the list longer than the budget. Its detection is not
+    // cancelled; the detector and model caches keep the late result.
+    const deadline = AbortSignal.timeout(this.deps.discoveryBudgetMs ?? HARNESS_DISCOVERY_ENGINE_BUDGET_MS)
+    const budgeted = AbortSignal.any([signal, deadline])
+    const slow = new Set<string>()
+    const awaitBudgeted = <T>(id: string, operation: Promise<T>): Promise<T> =>
+      abortable(operation, budgeted).catch((error: unknown) => {
+        if (deadline.aborted && !signal.aborted) slow.add(id)
+        throw error
+      })
+    const status = (id: string) => {
+      signal.throwIfAborted()
+      if (this.deps.catalog.isDisabled(id) || (id !== 'kun' && !this.deps.router.enabled())) return Promise.resolve({
+        harnessId: id, installed: 'unknown' as const, login: 'unknown' as const, checkedAt: '1970-01-01T00:00:00.000Z'
+      })
+      if (!statuses.has(id)) {
+        // The identity-checked verdict (binary, config files, environment) is
+        // as current as a new spawn for listing purposes; launch re-verifies.
+        const cached = this.deps.detector.cachedStatus?.(id)
+        statuses.set(id, cached ? Promise.resolve(cached) : awaitBudgeted(id, this.deps.detector.status(id)))
+      }
+      return statuses.get(id)!
+    }
+    // Cold-start discovery must not require opening the Code model picker first.
+    // Reuse its cached, prompt-free probes and never start disabled/unready engines.
+    // Engines are independent processes, so probe them concurrently instead of one after another.
+    await Promise.all(this.deps.catalog.list().slice(0, 30).map(async (definition) => {
+      if (!this.deps.router.enabled() || definition.modelSource !== 'probe' || this.deps.catalog.isDisabled(definition.id) ||
+        !definition.credentialModes.includes('native-login') || this.deps.probedModels?.(definition)?.length) return
+      const detected = await status(definition.id).catch(() => undefined)
+      if (detected?.installed === 'yes' && detected.login !== 'signed-out' &&
+        detected.ready !== 'no' && detected.versionSupported !== false) {
+        if (this.deps.probeModels) await awaitBudgeted(definition.id, this.deps.probeModels(definition)).catch(() => undefined)
+      }
+    }))
+    signal.throwIfAborted()
+    const listed = await listHarnessesForManager({ ...this.deps, detector: { status }, providers: async () => providers.map((entry) => ({
+      providerId: entry.id, label: entry.name, kind: entry.kind, models: modelIds(entry), gatewayExportable: exposableProvider(entry)
+    })) }, undefined, { modelsPerGroup: perGroup })
+    const agents = await Promise.all(listed.agents.slice(0, 30).map(async (agent) => {
+      signal.throwIfAborted()
+      const definition = this.deps.catalog.get(agent.harnessId)!
+      const detected = await status(agent.harnessId).catch(() => undefined)
+      const models = [...agent.models]
+      if (definition.modelSource === 'provider' && definition.credentialModes.includes('native-login')) {
+        for (const provider of providers.filter((entry) => entry.kind === legacyProviderKindFor(definition.id))) {
+          models.push(...modelIds(provider).slice(0, perGroup).map((model) => ({ model, providerId: provider.id, credentialMode: 'native-login' as const })))
+        }
+      }
+      const detecting = slow.has(agent.harnessId)
+      let reason = this.deps.catalog.isDisabled(agent.harnessId) ? 'Disabled in Code settings' :
+        agent.harnessId !== 'kun' && !this.deps.router.enabled() ? 'External Code Agent routing is disabled in settings' :
+        agent.terminalOnly ? 'Terminal-only Agent' : detecting && !detected ? 'Still checking this Agent' :
+          !agent.ready ? availabilityReason(detected) : undefined
+      const routes: Model[] = []
+      for (const model of models.slice(0, perAgent)) {
+        try {
+          routes.push(await this.resolveWithSnapshot({ title: 'Code task', goal: '', mode: 'agent', isolation: 'inherit', report: 'final',
+            execution: { mode: 'direct', model: { ...model, harnessId: agent.harnessId } } }, snapshot, detected ?? null))
+        } catch (error) { reason ??= error instanceof Error ? error.message : String(error) }
+      }
+      return { harnessId: agent.harnessId, displayName: agent.displayName, available: routes.length > 0,
+        ...(routes.length ? {} : { reason: reason ?? 'No available models. Configure or refresh this Agent in Code.' }),
+        ...(detecting ? { detecting: true as const } : {}),
+        models: routes, ...(models.length > perAgent || agent.modelsTruncated ? { modelsTruncated: (models.length - Math.min(models.length, perAgent)) + (agent.modelsTruncated ?? 0) } : {}),
+        executionModes: agent.harnessId === 'kun' ? ['direct', 'plan', 'auto', 'goal'] : ['direct'],
+        orchestration: agent.harnessId === 'kun' ? ['direct', 'graph'] : ['direct'] }
+    }))
+    return { agents, ...(listed.agents.length > agents.length ? { agentsTruncated: listed.agents.length - agents.length } : {}) }
+  }
+}
+
+/** Detection diagnostics may contain command paths; keep discovery/action errors categorical. */
+function availabilityReason(status?: HarnessStatus): string {
+  if (status?.installed === 'no') return 'not installed'
+  if (status?.login === 'signed-out') return 'signed out'
+  if (status?.versionSupported === false) return 'unsupported version'
+  return 'not ready'
+}
+
+/** Stop waiting and stop starting new probes; shared Code probes retain their own bounded lifetime/cache. */
+function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason ?? new Error('Code Agent discovery was cancelled'))
+    if (signal.aborted) { operation.catch(() => undefined); abort(); return }
+    signal.addEventListener('abort', abort, { once: true })
+    operation.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+  })
+}

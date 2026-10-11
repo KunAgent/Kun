@@ -118,11 +118,31 @@ describe('runtimeRequestViaHost', () => {
       'GET'
     )).toBe(30_000)
     expect(resolveRuntimeRequestTimeoutMs('/v1/threads', 'GET')).toBe(15_000)
+    // The Gateway page's recent routes wait 15 s; the request must outlive that wait.
+    expect(resolveRuntimeRequestTimeoutMs('/v1/model-gateway/route-traces?after=3&wait=15', 'GET')).toBeGreaterThan(15_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/model-gateway/route-traces?after=3', 'GET')).toBe(15_000)
     expect(resolveRuntimeRequestTimeoutMs(
       '/v1/model-connections/events?since_revision=62&wait_ms=25000',
       'GET',
       40_000
     )).toBe(40_000)
+  })
+
+  it('keeps interactive MCP OAuth open through the browser callback window', () => {
+    expect(resolveRuntimeRequestTimeoutMs('/v1/mcp/oauth/google_gmail', 'POST')).toBe(180_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/mcp/oauth/google_gmail', 'GET')).toBe(15_000)
+  })
+
+  it('allows harness cold probes and trial turns to finish through Main', () => {
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/models', 'GET')).toBe(90_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates', 'GET')).toBe(60_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates/check', 'POST')).toBe(60_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates/activate', 'POST')).toBe(90_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/updates', 'GET', 25_000)).toBe(25_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/devin/probe', 'POST')).toBe(90_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/probe-definition', 'POST')).toBe(90_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/test', 'POST')).toBe(420_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/test', 'GET')).toBe(15_000)
   })
 
   it('keeps thread activity long polls alive beyond their server wait window', () => {
@@ -139,6 +159,17 @@ describe('runtimeRequestViaHost', () => {
       'GET',
       45_000
     )).toBe(45_000)
+  })
+
+  it('keeps execution-unit activity long polls alive beyond their wait window', () => {
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/activity/events?wait_ms=25000&cursor=cursor_1',
+      'GET'
+    )).toBe(30_000)
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/activity/events?wait_ms=0',
+      'GET'
+    )).toBe(15_000)
   })
 
   it('allows bounded thread timeline reads to finish cold storage scans', () => {
@@ -159,6 +190,7 @@ describe('runtimeRequestViaHost', () => {
 
   it('allows the bounded provider quota scan to outlive the generic GET budget', () => {
     expect(resolveRuntimeRequestTimeoutMs('/v1/provider-quotas', 'GET')).toBe(120_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/subscription-quota?credential_mode=native-login', 'GET')).toBe(120_000)
     expect(resolveRuntimeRequestTimeoutMs(
       '/v1/provider-quotas?refresh=true',
       'GET',

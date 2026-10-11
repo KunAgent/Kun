@@ -40,7 +40,7 @@ describe('Manager-owned reference cleanup', () => {
     const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
     const baseUrl = `http://127.0.0.1:${server.port}`
     const threadStore = new ManagerRemoteThreadStore({ discovery: {
-      version: 1, protocolVersion: 5, instanceId: 'manager-a', pid: process.pid,
+      version: 1, protocolVersion: 6, instanceId: 'manager-a', pid: process.pid,
       startedAt: nowIso(), host: '127.0.0.1', port: server.port, baseUrl,
       managerToken: 'manager-secret', serviceVersion: '0.1.0', dataDir,
       settingsPath: join(root, 'settings.json')

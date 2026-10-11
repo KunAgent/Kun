@@ -1,4 +1,5 @@
 import type { ServeProviderConfig } from '../config/kun-config.js'
+import type { ModelClientRouterInput } from '../adapters/model/multi-provider-model-client.js'
 import type {
   ModelClient,
   ModelRequest,
@@ -13,7 +14,7 @@ export type ApprovalReviewModelRouterInput = {
   direct: {
     default: ModelClient
     providers: Map<string, ModelClient>
-  }
+  } & Pick<ModelClientRouterInput, 'admission' | 'defaultProviderId'>
   providers?: Record<string, ServeProviderConfig>
   defaultProviderKind?: ServeProviderConfig['kind']
   defaultApiKey?: string
@@ -32,7 +33,7 @@ export type ApprovalReviewModelRouterInput = {
  */
 export function buildApprovalReviewModelRouterInput(
   input: ApprovalReviewModelRouterInput
-): { default: ModelClient; providers: Map<string, ModelClient> } {
+): { default: ModelClient; providers: Map<string, ModelClient> } & Pick<ModelClientRouterInput, 'admission' | 'defaultProviderId'> {
   const providers = new Map(input.direct.providers)
   for (const [rawProviderId, config] of Object.entries(input.providers ?? {})) {
     const providerId = rawProviderId.trim()
@@ -66,7 +67,7 @@ export function buildApprovalReviewModelRouterInput(
     providers.set('antigravity-cli', defaultClient)
   }
 
-  return { default: defaultClient, providers }
+  return { default: defaultClient, providers, admission: input.direct.admission, defaultProviderId: input.direct.defaultProviderId }
 }
 
 function agentSdkReviewClient(

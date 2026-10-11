@@ -24,6 +24,7 @@ import type {
   PaperLibraryEntriesResult,
   PaperLibraryTrashResult,
   PaperLocalLibraryState,
+  PaperLocalStateWriteResult,
   PaperCreateGroupResult,
   PaperMoveToGroupResult,
   PaperReadingActivityResult
@@ -346,7 +347,7 @@ export function registerAppPaperLibraryIpcHandlers(
 
   ipcMain.handle(
     'paper-library:local-state-write',
-    async (event, payload: unknown): Promise<void> => {
+    async (event, payload: unknown): Promise<PaperLocalStateWriteResult> => {
       assertTrustedWorkbenchSender(event, getMainWindow)
       const request = parseIpcPayload(
         'paper-library:local-state-write',
@@ -360,8 +361,10 @@ export function registerAppPaperLibraryIpcHandlers(
           request.unitRelDir,
           request.patch
         )
+        return { ok: true }
       } catch (error) {
         logError?.('paper-library', 'paper-library:local-state-write failed', error)
+        return { ok: false, message: error instanceof Error ? error.message : String(error) }
       }
     }
   )

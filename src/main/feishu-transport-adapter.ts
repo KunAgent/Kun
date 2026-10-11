@@ -1,22 +1,30 @@
-import {
+import type {
   createLarkChannel,
-  Domain,
-  LoggerLevel,
-  type LarkChannel,
-  type NormalizedMessage,
-  type SendInput,
-  type SendOptions,
-  type SendResult
+  LarkChannel,
+  NormalizedMessage,
+  SendInput,
+  SendOptions,
+  SendResult
 } from '@larksuiteoapi/node-sdk'
 import type { AppSettingsV1, ClawImChannelV1 } from '../shared/app-settings'
 import type { ClawGeneratedFileV1 } from '../shared/app-settings'
 import { deliverImGeneratedFiles, type ImAttachmentDeliveryResult } from './im-attachment-pipeline'
+
+let larkSdk: Promise<typeof import('@larksuiteoapi/node-sdk')> | undefined
+function loadLarkSdk(): Promise<typeof import('@larksuiteoapi/node-sdk')> {
+  larkSdk ??= import('@larksuiteoapi/node-sdk').catch((error: unknown) => {
+    larkSdk = undefined
+    throw error
+  })
+  return larkSdk
+}
 
 export type FeishuTransportAdapterDeps = {
   logError: (category: string, message: string, detail?: unknown) => void
   onMessage: (channelId: string, message: NormalizedMessage) => void | Promise<void>
   allowedFileDirs: (settings: AppSettingsV1, channel: ClawImChannelV1) => string[]
   createChannel?: typeof createLarkChannel
+  suppressSdkLogs?: boolean
 }
 
 /** Owns Feishu/Lark SDK connections; callers only coordinate normalized messages. */
@@ -184,11 +192,15 @@ export class FeishuTransportAdapter {
         if (this.stopped || version !== this.syncVersion) return
       }
       try {
-        const bridge = (this.deps.createChannel ?? createLarkChannel)({
+        // The SDK (axios, protobufjs, ws, two 10 MB source texts) loads only
+        // once a Feishu channel is actually configured.
+        const sdk = await loadLarkSdk()
+        const bridge = (this.deps.createChannel ?? sdk.createLarkChannel)({
           appId,
           appSecret,
-          domain: domain === 'lark' ? Domain.Lark : Domain.Feishu,
-          loggerLevel: LoggerLevel.warn,
+          domain: domain === 'lark' ? sdk.Domain.Lark : sdk.Domain.Feishu,
+          loggerLevel: sdk.LoggerLevel.warn,
+          ...(this.deps.suppressSdkLogs ? { logger: { error() {}, warn() {}, info() {}, debug() {}, trace() {} } } : {}),
           source: 'kun',
           transport: 'websocket',
           policy: { dmMode: 'open', requireMention: true, respondToMentionAll: true },

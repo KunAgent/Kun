@@ -1,3 +1,4 @@
+import { normalizeModelProviderModelProfile, normalizeModelReasoningCapability } from './app-settings-provider-capabilities'
 import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_APPROVAL_POLICY,
@@ -182,55 +183,13 @@ export function normalizeKunModelProfiles(
 export function normalizeKunModelProfile(
   input: ModelProviderModelProfilePatchV1 | undefined
 ): ModelProviderModelProfileV1 {
-  const inputModalities = normalizeKunModelInputModalities(input?.inputModalities)
-  const fallbackMessageParts: ModelProviderMessagePartSupport[] = inputModalities.includes('image')
-    ? ['text', 'image_url']
-    : ['text']
-  const contextWindowTokens = typeof input?.contextWindowTokens === 'number' &&
-    Number.isInteger(input.contextWindowTokens) &&
-    input.contextWindowTokens > 0
-    ? input.contextWindowTokens
-    : undefined
-  const maxOutputTokens = typeof input?.maxOutputTokens === 'number' &&
-    Number.isInteger(input.maxOutputTokens) &&
-    input.maxOutputTokens > 0
-    ? input.maxOutputTokens
-    : undefined
-  const reasoning = normalizeKunReasoningCapability(input?.reasoning)
-  const endpointFormat = typeof input?.endpointFormat === 'string' && input.endpointFormat.trim()
-    ? normalizeModelEndpointFormat(input.endpointFormat)
-    : undefined
-  return {
-    ...(normalizeKunProfileAliases(input?.aliases).length
-      ? { aliases: normalizeKunProfileAliases(input?.aliases) }
-      : {}),
-    ...(contextWindowTokens ? { contextWindowTokens } : {}),
-    ...(maxOutputTokens ? { maxOutputTokens } : {}),
-    inputModalities,
-    outputModalities: normalizeKunModelInputModalities(input?.outputModalities),
-    supportsToolCalling: input?.supportsToolCalling !== false,
-    messageParts: normalizeKunModelMessageParts(input?.messageParts, fallbackMessageParts),
-    ...(reasoning ? { reasoning } : {}),
-    ...(endpointFormat ? { endpointFormat } : {})
-  }
+  return normalizeModelProviderModelProfile(input)
 }
 
 export function normalizeKunReasoningCapability(
   input: ModelProviderModelProfilePatchV1['reasoning'] | undefined
 ): ModelProviderReasoningCapabilityV1 | undefined {
-  if (!input || typeof input !== 'object') return undefined
-  const supportedEfforts = normalizeKunReasoningEfforts(input.supportedEfforts)
-  if (supportedEfforts.length === 0) return undefined
-  const defaultEffort = normalizeKunReasoningEffort(input.defaultEffort)
-  const requestProtocol = normalizeKunReasoningRequestProtocol(input.requestProtocol)
-  if (!requestProtocol) return undefined
-  return {
-    supportedEfforts,
-    defaultEffort: defaultEffort && supportedEfforts.includes(defaultEffort)
-      ? defaultEffort
-      : supportedEfforts[0],
-    requestProtocol
-  }
+  return normalizeModelReasoningCapability(input)
 }
 
 export function normalizeKunReasoningEfforts(value: unknown): ModelProviderReasoningCapabilityV1['supportedEfforts'] {

@@ -7,9 +7,10 @@ import {
 import {
   canCloseInitialSetup,
   commitInitialSetupRegistryCredentials,
-  completeInitialSetupAfterSave,
   dismissInitialSetup,
-  isUnreadableCredentialKeyError
+  finishInitialSetup,
+  isUnreadableCredentialKeyError,
+  verifyInitialSetupRuntime
 } from './InitialSetupDialog'
 import {
   drainSharedProviderCredentialMutation,
@@ -239,74 +240,116 @@ describe('InitialSetupDialog completion flow', () => {
     expect(storedCredential).toBe('newer-key')
   })
 
-  it('keeps required first-run setup modal-only until the runtime is ready, then opens Code', async () => {
+  it('keeps required first-run setup open until the runtime is ready', async () => {
     const reloadUiSettings = vi.fn(async () => undefined)
     const probeRuntime = vi.fn(async () => undefined)
-    const openCode = vi.fn(async () => undefined)
-    const closeInitialSetup = vi.fn()
     const setDialogError = vi.fn()
 
-    const completed = await completeInitialSetupAfterSave({
+    const ready = await verifyInitialSetupRuntime({
       mode: 'required',
       reloadUiSettings,
       probeRuntime,
-      openCode,
-      closeInitialSetup,
       getState: () => ({ runtimeConnection: 'ready', error: null }),
       setDialogError,
       fallbackRuntimeError: 'Could not reach Kun.'
     })
 
-    expect(completed).toBe(true)
+    expect(ready).toBe(true)
     expect(reloadUiSettings).toHaveBeenCalledTimes(1)
     expect(probeRuntime).toHaveBeenCalledWith('user')
-    expect(openCode).toHaveBeenCalledTimes(1)
-    expect(closeInitialSetup).toHaveBeenCalledTimes(1)
     expect(setDialogError).not.toHaveBeenCalled()
   })
 
-  it('does not close required first-run setup when the runtime cannot connect', async () => {
-    const closeInitialSetup = vi.fn()
-    const openCode = vi.fn(async () => undefined)
+  it('reports the runtime error and stays on the save step when Kun cannot connect', async () => {
     const setDialogError = vi.fn()
 
-    const completed = await completeInitialSetupAfterSave({
+    const ready = await verifyInitialSetupRuntime({
       mode: 'required',
       reloadUiSettings: vi.fn(async () => undefined),
       probeRuntime: vi.fn(async () => undefined),
-      openCode,
-      closeInitialSetup,
       getState: () => ({ runtimeConnection: 'offline', error: 'Port is busy.' }),
       setDialogError,
       fallbackRuntimeError: 'Could not reach Kun.'
     })
 
-    expect(completed).toBe(false)
-    expect(openCode).not.toHaveBeenCalled()
-    expect(closeInitialSetup).not.toHaveBeenCalled()
+    expect(ready).toBe(false)
     expect(setDialogError).toHaveBeenCalledWith('Port is busy.')
   })
 
-  it('keeps preview setup dismissible and avoids forcing the user into Code', async () => {
+  it('probes in the background for the settings preview', async () => {
     const probeRuntime = vi.fn(async () => undefined)
-    const openCode = vi.fn(async () => undefined)
-    const closeInitialSetup = vi.fn()
 
-    const completed = await completeInitialSetupAfterSave({
+    const ready = await verifyInitialSetupRuntime({
       mode: 'preview',
       reloadUiSettings: vi.fn(async () => undefined),
       probeRuntime,
-      openCode,
-      closeInitialSetup,
       getState: () => ({ runtimeConnection: 'offline', error: null }),
       setDialogError: vi.fn(),
       fallbackRuntimeError: 'Could not reach Kun.'
     })
 
-    expect(completed).toBe(true)
+    expect(ready).toBe(true)
     expect(probeRuntime).toHaveBeenCalledWith('background')
-    expect(openCode).not.toHaveBeenCalled()
+  })
+
+  it('lands a finished first run in Code and only closes the preview', async () => {
+    const openCode = vi.fn(async () => undefined)
+    const closeInitialSetup = vi.fn()
+    await finishInitialSetup({ mode: 'required', openCode, closeInitialSetup })
+    expect(openCode).toHaveBeenCalledTimes(1)
     expect(closeInitialSetup).toHaveBeenCalledTimes(1)
+
+    const previewOpenCode = vi.fn(async () => undefined)
+    const previewClose = vi.fn()
+    await finishInitialSetup({ mode: 'preview', openCode: previewOpenCode, closeInitialSetup: previewClose })
+    expect(previewOpenCode).not.toHaveBeenCalled()
+    expect(previewClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('connects a keyless local provider before selecting it', async () => {
+    let revision = 2
+    const providers: Array<{ id: string }> = [{ id: 'deepseek' }]
+    const snapshot = () => ({ schemaVersion: 1, revision, providers: [...providers] })
+    const request = vi.fn(async (path: string, method?: string, body?: string) => {
+      const payload = body ? JSON.parse(body) as Record<string, unknown> : {}
+      if (path === '/v1/model-connections' && method === 'GET') {
+        return { ok: true, status: 200, body: JSON.stringify(snapshot()) }
+      }
+      if (path === '/v1/model-connections/connect' && method === 'POST') {
+        expect(payload.expectedRevision).toBe(revision)
+        expect(payload.credential).toBeUndefined()
+        expect(payload.authType).toBe('none')
+        expect(payload.baseUrl).toBe('http://localhost:11434/v1')
+        providers.push({ id: String(payload.id) })
+        revision += 1
+        return { ok: true, status: 200, body: JSON.stringify(snapshot()) }
+      }
+      if (path === '/v1/model-connections/select' && method === 'POST') {
+        expect(payload.providerId).toBe('ollama-local')
+        expect(payload.model).toBe('qwen3:8b')
+        revision += 1
+        return { ok: true, status: 200, body: JSON.stringify(snapshot()) }
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`)
+    })
+    const ollama = {
+      ...modelProviderPresetProfile(getModelProviderPreset('ollama-local')!, ''),
+      models: ['qwen3:8b']
+    }
+
+    await commitInitialSetupRegistryCredentials({
+      'ollama-local': { apiKey: '', baseUrl: 'http://localhost:11434/v1', models: ['qwen3:8b'] }
+    }, {
+      profiles: [ollama],
+      selectedProviderId: 'ollama-local',
+      selectedModel: 'qwen3:8b'
+    }, request)
+
+    expect(request.mock.calls.map(([path]) => path)).toEqual([
+      '/v1/model-connections',
+      '/v1/model-connections/connect',
+      '/v1/model-connections/select'
+    ])
   })
 
   it('allows users to dismiss both required and preview setup flows', () => {

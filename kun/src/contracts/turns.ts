@@ -1,3 +1,7 @@
+import { RequiredToolGateSchema } from './turn-required-tool-gate.js'
+export { RequiredToolGateSchema, type RequiredToolGate } from './turn-required-tool-gate.js'
+import { PaperTurnContextSchema, validatePaperTurnCombination } from './paper-turn-context.js'
+import { HarnessGatewayBindingSchema, HarnessGatewayAliasGrantSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { SteeringDeliverySchema } from './steering-delivery.js'
 import { TurnItem, UserFileReferenceSchema, UserMessageSource } from './items.js'
@@ -23,6 +27,12 @@ import {
   DesignTaskProfileSchema
 } from './design-task-profile.js'
 import { WriteTurnContextSchema } from './write-turn-context.js'
+import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
+import { HarnessNativeAgentIdSchema } from './harness-native-agents.js'
+import { ActingTurnModelRouteSchema } from './turn-acting-route.js'
+import { ManagerLeaseSettlementSchema } from './turn-manager-lease.js'
+import { HarnessSettingValuesSchema } from './harness-session-settings.js'
+export * from './turn-manager-lease.js'
 
 export { TurnReasoningEffortSchema } from './turn-reasoning.js'
 export type { TurnReasoningEffort } from './turn-reasoning.js'
@@ -52,16 +62,7 @@ export type TurnServiceTier = z.infer<typeof TurnServiceTierSchema>
 export const TurnClientSurfaceSchema = z.enum(['gui', 'tui', 'cli', 'api', 'im', 'extension'])
 export type TurnClientSurface = z.infer<typeof TurnClientSurfaceSchema>
 
-/**
- * Immutable transport route used by model-controlled approval review for one
- * acting turn. It contains identifiers only; credentials remain host-owned.
- */
-export const ActingTurnModelRouteSchema = z.object({
-  model: z.string().trim().min(1),
-  providerId: z.string().trim().min(1).optional(),
-  accountId: z.string().trim().min(1).optional()
-}).strict()
-export type ActingTurnModelRoute = Readonly<z.infer<typeof ActingTurnModelRouteSchema>>
+export { ActingTurnModelRouteSchema, type ActingTurnModelRoute } from './turn-acting-route.js'
 
 /**
  * Plan operation kinds the renderer can advertise on a plan turn.
@@ -85,7 +86,7 @@ export const GuiPlanContextSchema = z.object({
     .refine(isGuiPlanRelativePath, {
       message: 'relativePath must be a direct Markdown file under .kunsdd/plan'
     }),
-  planId: z.string().min(1),
+  planId: z.string().min(1), fixedPath: z.boolean().optional(),
   sourceRequest: z.string().optional(),
   title: z.string().optional()
 })
@@ -127,19 +128,6 @@ export const InjectedInstructionSourceSchema = z.object({
 })
 export type InjectedInstructionSource = z.infer<typeof InjectedInstructionSourceSchema>
 
-/**
- * Durable state for a hard named-tool gate. It is deliberately optional so
- * legacy turns remain valid, while an interrupted Graph creation turn cannot
- * restart its bounded retry window after a runtime restart.
- */
-export const RequiredToolGateSchema = z.object({
-  toolName: z.string().min(1).max(256),
-  attempt: z.number().int().positive(),
-  maxAttempts: z.number().int().positive(),
-  phase: z.enum(['preparing', 'retrying', 'succeeded', 'failed']),
-  lastError: z.string().min(1).max(2_048).optional()
-}).strict()
-export type RequiredToolGate = z.infer<typeof RequiredToolGateSchema>
 
 /**
  * Durable ownership state for a Graph source Lead. The turn remains logically
@@ -167,16 +155,6 @@ export const GraphPlanningLifecycleSchema = z.object({
 }).strict()
 export type GraphPlanningLifecycle = z.infer<typeof GraphPlanningLifecycleSchema>
 
-/** Manager-authored proof that an execution owner expired for this turn. */
-export const ManagerLeaseSettlementSchema = z.object({
-  code: z.literal('owner_lease_expired'),
-  ownerFlavor: z.enum(['production', 'development']),
-  ownerInstanceId: z.string().min(1).max(256),
-  fencingToken: z.number().int().positive(),
-  settledAt: z.string().datetime()
-}).strict()
-export type ManagerLeaseSettlement = z.infer<typeof ManagerLeaseSettlementSchema>
-
 export const TurnSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
@@ -194,11 +172,25 @@ export const TurnSchema = z.object({
   admissionPending: z.literal(true).optional(),
   status: TurnStatus,
   prompt: z.string(),
+  paperContext: PaperTurnContextSchema.optional(),
+  paperContextSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  paperModelRequests: z.number().int().min(0).max(1).optional(),
   messageSource: UserMessageSource.optional(),
   /** Explicit one-click continuation request for an interrupted generic child. */
   subagentResume: SubagentResumeRequestSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
+  /** Frozen harness identity; inferred at admission when absent on legacy records. */
+  harnessId: HarnessIdSchema.optional(),
+  /** Persistent-team permission captured at admission; pending task edits cannot widen this turn. */
+  collaborationEnabled: z.boolean().optional(),
+  /** Frozen credential mode for the frozen harness; defaults to the harness's first mode. */
+  credentialMode: HarnessCredentialModeSchema.optional(),
+  /** Native Agent (OpenCode primary agent) frozen for this turn; absent keeps permission mapping. */
+  harnessAgentId: HarnessNativeAgentIdSchema.optional(),
+  harnessSettings: HarnessSettingValuesSchema.optional(),
+  gatewayBinding: HarnessGatewayBindingSchema.optional(),
+  gatewayAliasGrants: z.array(HarnessGatewayAliasGrantSchema).max(2).optional(),
   accountId: z.string().min(1).optional(),
   /** First successfully resolved route; immutable for the remainder of this turn. */
   actingModelRoute: ActingTurnModelRouteSchema.optional(),
@@ -216,6 +208,10 @@ export const TurnSchema = z.object({
   steeredToTurnId: z.string().optional(),
   createdAt: z.string(),
   startedAt: z.string().optional(),
+  /** Last executable history item before durable queue promotion. */
+  queueExecutionAnchorItemId: z.string().optional(),
+  /** Fresh input admitted after Stop when no older queued input existed. */
+  queueResumeSourceTurnId: z.string().optional(),
   finishedAt: z.string().optional(),
   items: z.array(TurnItem).default([]),
   attachmentIds: z.array(z.string().min(1)).default([]),
@@ -289,12 +285,10 @@ export const TurnSchema = z.object({
    * rejects calls to them instead of blocking on a GUI answer.
    */
   disableUserInput: z.boolean().optional(),
-  /**
-   * True when this turn originated from an IM bridge. Kun exposes
-   * IM-only tools such as outbound attachment delivery only for these
-   * turns.
-   */
+  /** IM-bridge turn; gates IM-only tools such as outbound attachment delivery. */
   imContext: z.boolean().optional(),
+  /** Managed plan build: selects the `plan-build` admission usage. */
+  planBuild: z.boolean().optional(),
   /** Optional stable machine-readable reason for a terminal turn. */
   terminalCode: z.string().trim().min(1).max(128).optional(),
   /** Internal Manager-authored ownership-expiry provenance. */
@@ -305,6 +299,7 @@ export type Turn = z.infer<typeof TurnSchema>
 
 export const StartTurnRequest = z.object({
   prompt: z.string().min(1),
+  paperContext: PaperTurnContextSchema.optional(),
   /** Retry-stable client-generated admission key, scoped to this thread. */
   clientRequestId: z.string().trim().min(1).max(256).optional(),
   /**
@@ -318,6 +313,18 @@ export const StartTurnRequest = z.object({
   subagentResume: SubagentResumeRequestSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
+  /**
+   * Explicit harness override for this turn. Absent means "inherit the
+   * thread's harness (or infer from the provider for legacy records)".
+   */
+  harnessId: HarnessIdSchema.optional(),
+  /** Explicit credential mode; absent means "the harness's default". */
+  credentialMode: HarnessCredentialModeSchema.optional(),
+  /** Native Agent for harnesses that declare `nativeAgents`; ignored by others. */
+  harnessAgentId: HarnessNativeAgentIdSchema.optional(),
+  /** Values for Agent-published settings; unknown ids are ignored. */
+  harnessSettings: HarnessSettingValuesSchema.optional(),
+  gatewayBinding: HarnessGatewayBindingSchema.optional(),
   accountId: z.string().min(1).optional(),
   reasoningEffort: TurnReasoningEffortSchema.optional(),
   serviceTier: TurnServiceTierSchema.optional(),
@@ -363,6 +370,11 @@ export const StartTurnRequest = z.object({
       { message: 'composerContexts must not contain duplicate attachmentId values' }
     )
     .default([]),
+  /**
+   * ADE manager threads: pending worker-notice ids attached via
+   * composerContexts, acked after admission. Request-scoped, not persisted.
+   */
+  ackNoticeIds: z.array(z.string().trim().min(1).max(256)).max(1_024).optional(),
   fileReferences: z.array(UserFileReferenceSchema).default([]),
   workspaceCheckpointId: z.string().min(1).optional(),
   workspaceCheckpointRequestId: z.string().min(1).optional(),
@@ -407,6 +419,8 @@ export const StartTurnRequest = z.object({
    * IM-only tool exposure separately from generic headless turns.
    */
   imContext: z.boolean().optional(),
+  /** External-harness plan build: admission enforces the host worktree. */
+  planBuild: z.boolean().optional(),
   /**
    * When true and the thread already has an active turn, the request is
    * persisted as a queued turn instead of being rejected with a busy
@@ -415,6 +429,7 @@ export const StartTurnRequest = z.object({
    */
   enqueueIfBusy: z.boolean().optional()
 }).superRefine((value, ctx) => {
+  validatePaperTurnCombination(value, ctx)
   if (Boolean(value.designProfile) !== Boolean(value.designDocumentTarget)) {
     ctx.addIssue({
       code: 'custom',

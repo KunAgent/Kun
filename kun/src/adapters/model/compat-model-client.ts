@@ -1,3 +1,6 @@
+import { modelRequestCapacityFailure } from './model-request-capacity.js'
+import { serialToolStream } from './serial-tool-stream.js'
+import { observeModelAttempts } from './model-attempt-observer.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { goalContextTexts } from '../../contracts/items.js'
 import { startLlmDebugRoundIfEnabled, type LlmDebugRound } from '../../services/llm-debug-recorder.js'
@@ -33,6 +36,7 @@ import {
   warnModelTraceFailure
 } from './compat-model-support.js'
 import { resolveModelEndpointFormat, usesChatCompletionsShape, type ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
+import { gatewaySafeModelChunk, gatewaySafeThrownError } from './gateway-model-privacy.js'
 
 export { redactUrlForLog } from './compat-http-diagnostics.js'
 export { DEFAULT_MODEL_STREAM_LIMITS, type ModelStreamLimits } from './model-stream-resource-budget.js'
@@ -41,7 +45,29 @@ export type { CompatModelClientConfig } from './compat-model-types.js'
 
 /** Multi-provider HTTP model client with compatible endpoint formats. */
 export class CompatModelClient extends CompatModelStreamingClient implements ModelClient {
-  async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+  paperReadOnlyDispatchGuard(): () => void { return () => undefined }
+
+  stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    const stream = (current: ModelRequest) => current.parallelToolCalls === false
+      ? serialToolStream(this.streamObserved(current)) : this.streamObserved(current)
+    return request.attemptObserver ? observeModelAttempts(request, stream) : stream(request)
+  }
+
+  private async *streamObserved(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    // External gateway content never enters native prompt/trajectory diagnostics,
+    // even when a global or per-thread debug policy requests full capture.
+    if (request.gatewayRouting || request.paperReadOnly) {
+      try {
+        for await (const chunk of this.streamInner(request, null)) {
+          const safe = gatewaySafeModelChunk(this.attributeUsage(chunk, request))
+          yield request.paperReadOnly && safe.kind === 'error'
+            ? { ...safe, message: safe.message.replace('Gateway upstream', 'Paper model') } : safe
+        }
+      } catch (error) {
+        if (!request.abortSignal.aborted) yield gatewaySafeThrownError(error)
+      }
+      return
+    }
     const sink = this.config.debugSink
     if (!sink) {
       for await (const chunk of this.streamInner(request, null)) {
@@ -115,6 +141,8 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
   ): AsyncIterable<ModelStreamChunk> {
     if (request.abortSignal.aborted) return
     const requestModel = request.model?.trim() || this.config.model
+    const capacityFailure = modelRequestCapacityFailure(request, this.config.modelCapabilities?.(requestModel))
+    if (capacityFailure) { yield capacityFailure; return }
     // Resolve the wire format per request model: a single provider (e.g.
     // OpenCode Go) can route some models to chat completions and others to
     // Anthropic Messages. Falls back to the provider/runtime format.
@@ -126,7 +154,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     const resolveBaseUrl = isCodex
       ? normalizeCodexResponsesUrl(this.config.baseUrl)
       : this.config.baseUrl
-    const endpointFormat = resolveModelEndpointFormat(
+    const endpointFormat = this.config.customEndpointProtocol ?? resolveModelEndpointFormat(
       isCodex ? 'custom_endpoint' : configuredEndpointFormat,
       resolveBaseUrl
     )
@@ -137,11 +165,23 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       }
       return
     }
-    const url = buildModelEndpointUrl(this.baseUrlForFormat(configuredEndpointFormat), configuredEndpointFormat)
+    let url = this.config.customEndpointProtocol ? this.config.baseUrl
+      : buildModelEndpointUrl(this.baseUrlForFormat(configuredEndpointFormat), configuredEndpointFormat)
     // Codex Responses only accepts streamed requests; explicit stream:false
     // callers (subagents, background distillations) get forced streaming.
-    const stream = isCodex ? true : (request.stream ?? !this.config.nonStreaming)
-    const body = this.buildRequestBody(request, stream, { endpointFormat })
+    const stream = request.fim ? false : isCodex ? true : (request.stream ?? !this.config.nonStreaming)
+    let body = this.buildRequestBody(request, stream, { endpointFormat })
+    if (request.fim) {
+      const endpoint = new URL(this.config.baseUrl)
+      if (endpoint.hostname !== 'api.deepseek.com' || configuredEndpointFormat !== 'chat_completions') {
+        yield { kind: 'error', code: 'fim_unsupported', message: 'The selected connection does not support fill-in-middle completion.' }
+        return
+      }
+      endpoint.pathname = '/beta/completions'
+      url = endpoint.toString()
+      body = { model: requestModel, prompt: request.fim.prompt, suffix: request.fim.suffix,
+        stream: false, max_tokens: this.resolveMaxTokens(request, requestModel, 256), temperature: request.temperature ?? 0 }
+    }
     let credentials: { apiKey: string; headers?: Record<string, string>; refreshable: boolean }
     try {
       credentials = this.config.resolveCredentials
@@ -181,7 +221,13 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       endpointFormat,
       attempt: ++attemptOrdinal,
       reason,
-      apiKey: credentials.apiKey
+      apiKey: credentials.apiKey,
+      ...(request.gatewayRouting ? { gatewayRouting: request.gatewayRouting } : {}),
+      ...(request.paperReadOnly ? { paperReadOnly: request.paperReadOnly } : {}),
+      ...(request.routingBudget ? { routingBudget: request.routingBudget } : {}),
+      beforeProviderDispatch: request.beforeProviderDispatch,
+      beforeWireDispatch: request.beforeWireDispatch,
+      onWireDispatch: request.onWireDispatch
     })
     let result = await post(body, 'initial')
     let transportRetryAttempt = 0
@@ -420,7 +466,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         this.logHttpFailure({
           url,
           status: response.status,
-          body: retryText,
+          body: request.gatewayRouting ? '[gateway error body omitted]' : retryText,
           endpointFormat,
           configuredEndpointFormat,
           model: requestModel
@@ -437,7 +483,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       this.logHttpFailure({
         url,
         status: response.status,
-        body: text,
+        body: request.gatewayRouting ? '[gateway error body omitted]' : text,
         endpointFormat,
         configuredEndpointFormat,
         model: requestModel

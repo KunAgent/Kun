@@ -1,3 +1,5 @@
+import { metadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
+import { resolveModelMetadata } from '../../kun/src/services/model-metadata-resolver.js'
 import { describe, expect, it } from 'vitest'
 import {
   activeModelProviderNeedsApiKey,
@@ -28,8 +30,6 @@ import {
   CHATGPT_SUBSCRIPTION_MODEL_IDS,
   GROK_SUBSCRIPTION_PROVIDER_ID,
   OLLAMA_CLOUD_MODEL_IDS,
-  OPENCODE_FREE_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
   listMusicGenerationProviderProfiles,
   listSpeechToTextProviderProfiles,
   listTextToSpeechProviderProfiles,
@@ -39,6 +39,7 @@ import {
   modelSupportsImageInput,
   defaultDesignSettings,
   normalizeModelProviderSettings,
+  normalizeAppSettings,
   projectExecutableModelRoutePools,
   resolveModelRouteTargetReference,
   resolveKunImageGenerationSettings,
@@ -278,39 +279,17 @@ describe('provider presets', () => {
     }
   })
 
-  it('ships OpenCore Free as a no-key built-in provider with ten retries', () => {
-    const preset = getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)
-    expect(preset).toMatchObject({
-      id: OPENCODE_FREE_PROVIDER_ID,
-      name: 'OpenCore Free',
-      baseUrl: 'https://opencode.ai/zen/v1',
-      endpointFormat: 'chat_completions',
-      defaultRetryMaxAttempts: 10,
-      models: [...OPENCODE_FREE_MODEL_IDS]
-    })
-
-    const profile = modelProviderPresetProfile(preset!)
-    expect(profile.retry?.maxAttempts).toBe(10)
-    expect(profile.modelProfiles['mimo-v2.5-free']).toMatchObject({
-      contextWindowTokens: 200_000,
-      maxOutputTokens: 32_000,
-      inputModalities: ['text', 'image']
-    })
-    expect(modelProviderRequiresApiKey(profile)).toBe(false)
-
-    const defaults = defaultModelProviderSettings()
-    expect(defaults.providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID))
-      .toMatchObject({ retry: { maxAttempts: 10 } })
-
-    const normalized = normalizeModelProviderSettings({ providers: [] })
-    expect(normalized.providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID))
-      .toMatchObject({ retry: { maxAttempts: 10 } })
+  it('does not ship OpenCode Free as a built-in provider', () => {
+    expect(getModelProviderPreset('opencode-free')).toBeNull()
+    expect(defaultModelProviderSettings().providers.map((provider) => provider.id)).toEqual(['deepseek'])
+    expect(normalizeModelProviderSettings({ providers: [] }).providers.map((provider) => provider.id))
+      .toEqual(['deepseek'])
   })
 
-  it('repairs a stored OpenCore Free profile to the built-in free preset', () => {
+  it('drops stored OpenCode Free profiles during normalization', () => {
     const normalized = normalizeModelProviderSettings({
       providers: [{
-        id: OPENCODE_FREE_PROVIDER_ID,
+        id: 'opencode-free',
         name: 'opencode-free',
         apiKey: '',
         baseUrl: 'https://opencode.ai/zen/v1',
@@ -318,27 +297,51 @@ describe('provider presets', () => {
         useProxy: false,
         models: ['gpt-5-nano'],
         modelProfiles: {}
+      }, {
+        id: 'opencode-free-2',
+        name: 'OpenCore Free 2',
+        presetSource: { presetId: 'opencode-free', mode: 'api' },
+        apiKey: '',
+        baseUrl: 'https://opencode.ai/zen/v1',
+        endpointFormat: 'chat_completions',
+        useProxy: false,
+        models: ['big-pickle'],
+        modelProfiles: {}
       }]
-    }).providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID)
-
-    expect(normalized).toMatchObject({
-      presetSource: { presetId: OPENCODE_FREE_PROVIDER_ID, mode: 'api' },
-      name: 'opencode-free',
-      retry: { maxAttempts: 10 }
     })
-    expect(normalized && modelProviderRequiresApiKey(normalized)).toBe(false)
+
+    expect(normalized.providers.map((provider) => provider.id)).toEqual(['deepseek'])
+    expect(normalized.providers.some((provider) => provider.id.startsWith('opencode-free'))).toBe(false)
   })
 
-  it('preserves explicit OpenCore Free retry settings during normalization', () => {
-    const profile = modelProviderPresetProfile(getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!)
-    const normalized = normalizeModelProviderSettings({
-      providers: [{
-        ...profile,
-        retry: { maxAttempts: 2, initialDelayMs: 3_000, httpStatusCodes: [429, 500, 502, 503, 504], defaultsVersion: 1 }
-      }]
-    }).providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID)
+  it('remaps a saved OpenCode Free runtime selection onto remaining providers', () => {
+    const normalized = normalizeAppSettings({
+      ...settings(),
+      provider: {
+        ...defaultModelProviderSettings(),
+        providers: [{
+          id: 'opencode-free',
+          name: 'OpenCore Free',
+          apiKey: '',
+          baseUrl: 'https://opencode.ai/zen/v1',
+          endpointFormat: 'chat_completions',
+          useProxy: false,
+          models: ['big-pickle'],
+          modelProfiles: {}
+        }]
+      },
+      agents: {
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          providerId: 'opencode-free',
+          model: 'big-pickle'
+        }
+      }
+    })
 
-    expect(normalized?.retry?.maxAttempts).toBe(2)
+    expect(normalized.provider.providers.map((provider) => provider.id)).toEqual(['deepseek'])
+    expect(normalized.agents.kun.providerId).toBe('')
+    expect(normalized.agents.kun.model).not.toBe('big-pickle')
   })
 
   it('keeps per-model endpointFormat overrides on the OpenCode Go preset', () => {
@@ -382,7 +385,7 @@ describe('provider presets', () => {
     }
   })
 
-  it('publishes and narrowly repairs the OpenCode Go Grok 4.5 capacity profile', () => {
+  it('preserves historical Grok limits and bounds runtime output by the current adapter', () => {
     const preset = getModelProviderPreset('opencode-go')!
     const profile = modelProviderPresetProfile(preset, 'sk-opencode')
 
@@ -400,6 +403,7 @@ describe('provider presets', () => {
 
     profile.modelProfiles['grok-4.5'] = {
       ...profile.modelProfiles['grok-4.5']!,
+      evidence: undefined,
       contextWindowTokens: 256_000,
       maxOutputTokens: 500_000
     }
@@ -407,12 +411,15 @@ describe('provider presets', () => {
       providers: [profile]
     }).providers.find((provider) => provider.id === 'opencode-go')
     expect(repaired?.modelProfiles['grok-4.5']).toMatchObject({
-      contextWindowTokens: 500_000,
-      maxOutputTokens: 64_000
+      contextWindowTokens: 256_000, maxOutputTokens: 500_000
+    })
+    expect(resolveModelMetadata(repaired!.modelProfiles['grok-4.5'])).toMatchObject({
+      contextWindowTokens: 256_000, maxOutputTokens: 64_000
     })
 
     profile.modelProfiles['grok-4.5'] = {
       ...profile.modelProfiles['grok-4.5']!,
+      evidence: undefined,
       contextWindowTokens: 300_000,
       maxOutputTokens: 80_000
     }
@@ -437,6 +444,7 @@ describe('provider presets', () => {
       }
     }
 
+    profile.modelProfiles['glm-5.2'].evidence = metadataEvidence(profile.modelProfiles['glm-5.2'], 'adapter')
     const normalized = normalizeModelProviderSettings({
       providers: [profile]
     }).providers.find((provider) => provider.id === 'opencode-go')
@@ -468,6 +476,8 @@ describe('provider presets', () => {
       }
     }
 
+    aliyun.modelProfiles['qwq-plus'].evidence = metadataEvidence(aliyun.modelProfiles['qwq-plus'], 'adapter')
+    kimi.modelProfiles.k3.evidence = metadataEvidence(kimi.modelProfiles.k3, 'adapter')
     const normalized = normalizeModelProviderSettings({ providers: [aliyun, kimi] }).providers
     expect(normalized.find((provider) => provider.id === 'aliyun')
       ?.modelProfiles['qwq-plus']?.reasoning?.requestProtocol).toBe('qwen-chat-completions')
@@ -477,6 +487,18 @@ describe('provider presets', () => {
         defaultEffort: 'high',
         requestProtocol: 'openai-chat-completions'
       })
+  })
+
+  it('preserves unknown-provenance reasoning and only refreshes identified adapter observations', () => {
+    const profile = modelProviderPresetProfile(getModelProviderPreset('opencode-go')!, '')
+    profile.modelProfiles['glm-5.2'] = { ...profile.modelProfiles['glm-5.2'], evidence: undefined, reasoning: {
+      supportedEfforts: ['auto'], defaultEffort: 'auto', requestProtocol: 'none'
+    } }
+    const normalized = normalizeModelProviderSettings({ providers: [profile] }).providers.find((item) => item.id === profile.id)!
+    expect(normalized.modelProfiles['glm-5.2'].reasoning?.supportedEfforts).toEqual(['auto'])
+    expect(normalized.modelProfiles['glm-5.2'].metadata?.overrideEvidence?.reasoning?.source).toBe('legacy')
+    const repeated = normalizeModelProviderSettings({ providers: [normalized] }).providers.find((item) => item.id === profile.id)!
+    expect(repeated.modelProfiles['glm-5.2'].metadata).toEqual(normalized.modelProfiles['glm-5.2'].metadata)
   })
 
   it('adds K3 when normalizing the legacy Kimi Code model catalog', () => {
@@ -539,7 +561,7 @@ describe('provider presets', () => {
         kun: { ...defaultKunRuntimeSettings(), providerId: profile.id, model: 'deepseek-v4-pro' }
       }
     })
-    expect(resolved.modelProfiles['deepseek-v4-pro']).toEqual(profile.modelProfiles['deepseek-v4-pro'])
-    expect(resolved.modelProfiles['deepseek-v4-flash']).toEqual(profile.modelProfiles['deepseek-v4-flash'])
+    expect(resolved.modelProfiles['deepseek-v4-pro']).toMatchObject(profile.modelProfiles['deepseek-v4-pro'])
+    expect(resolved.modelProfiles['deepseek-v4-flash']).toMatchObject(profile.modelProfiles['deepseek-v4-flash'])
   })
 })

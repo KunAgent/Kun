@@ -1,5 +1,8 @@
+import { restartSourceIsCurrent, insertRecoveryTurn } from '../domain/queue-execution-state.js'
+import { resolveTurnReviewRequests } from './review-composer-context.js'
 import { createHash } from 'node:crypto'
 import { assertRoomTurnAdmission } from './room-thread-admission-policy.js'
+import { promotePendingExecutionConfig } from './thread-service-execution-config.js'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
 import type {
@@ -43,6 +46,9 @@ import type { ContextCompactionConfig } from '../loop/model-context-profile.js'
 import { reserveExtensionModelRequest } from '../loop/turn-budget-gate.js'
 import { makeGoalContextItem, makeUserItem, makeErrorItem } from '../domain/item.js'
 import { appendTurnItem, createTurnRecord, finishTurn, replaceTurnItem, startTurn as startTurnRecord } from '../domain/turn.js'
+import {
+  defaultCredentialMode
+} from '../harness/resolve-turn-harness.js'
 import { finalizeTurnItems } from '../domain/turn-item-finalization.js'
 import { resolveThreadAgentSurface, touchThread } from '../domain/thread.js'
 import type { RuntimeEventRecorder } from './runtime-event-recorder.js'
@@ -60,6 +66,7 @@ import {
 } from '../loop/continuation-instructions.js'
 import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnInProgressError, ThreadClosingError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction, isPendingQueuedAdmission } from './turn-service-core.js'
 import { resolveDesignTurnAdmission } from './turn-service-design-admission.js'
+import { resolveSupportedAdmissionHarness } from './turn-harness-admission.js'
 import {
   InternalTurnRuntimeContext,
   makeInternalTurnRuntimeContextSource
@@ -121,7 +128,7 @@ async startTurn(this: TurnService, input: {
         if (this['deps'].lifecycleFence?.isClosing(input.threadId)) {
           throw new ThreadClosingError(input.threadId)
         }
-        const thread = await this['deps'].threadStore.get(input.threadId)
+        let thread = await this['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
         await assertHistoryReferenceWorkspace(thread)
         assertRoomTurnAdmission(thread, input.request)
@@ -136,11 +143,7 @@ async startTurn(this: TurnService, input: {
           }
         }
         if (options.expectedLatestFailedTurnId) {
-          const latest = thread.turns.at(-1)
-          if (
-            latest?.id !== options.expectedLatestFailedTurnId ||
-            latest.status !== 'failed'
-          ) {
+          if (!restartSourceIsCurrent(thread, options.expectedLatestFailedTurnId)) {
             throw new TurnConflictError(
               `restart recovery source is no longer latest: ${options.expectedLatestFailedTurnId}`
             )
@@ -154,9 +157,11 @@ async startTurn(this: TurnService, input: {
         if (thread.status === 'archived') {
           throw new TurnConflictError(`thread is archived: ${input.threadId}`)
         }
-        if (thread.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')) {
+        if (thread.turns.some((turn) => turn.status === 'running' ||
+          (turn.status === 'queued' && !options.expectedLatestFailedTurnId))) {
           throw new TurnConflictError(`thread already has an active turn: ${input.threadId}`)
         }
+        thread = promotePendingExecutionConfig(thread)
         // Allocate only an in-memory id before admission. A rejected request
         // still has no turn record, item, or event to persist.
         const turnId = this['deps'].ids.next('turn')
@@ -164,6 +169,10 @@ async startTurn(this: TurnService, input: {
           thread,
           request: input.request,
           turnId
+        })
+        const turnHarnessId = resolveSupportedAdmissionHarness({
+          request: input.request, thread, effectiveSurface: designAdmission.effectiveSurface,
+          providerKinds: this['deps'].providerKinds?.(), harnessCatalog: this['deps'].harnessCatalog
         })
         if (!this['tryAdmitTurn'](turnId, input.threadId)) {
           throw new TurnCapacityError(this['maxConcurrentTurns'])
@@ -209,6 +218,9 @@ async startTurn(this: TurnService, input: {
           const composerContexts = ComposerContextAttachmentSchema.array().parse(
             input.request.composerContexts ?? []
           )
+          const reviewRequests = await resolveTurnReviewRequests(
+            thread, composerContexts, this['deps'].resolveReviewRequests
+          )
           const attachmentIds = [...new Set(
             (input.request.attachmentIds ?? []).map((id) => id.trim()).filter(Boolean)
           )]
@@ -236,7 +248,7 @@ async startTurn(this: TurnService, input: {
           // fields that merely inherit the thread. Without this copy a model
           // picker change could mutate `thread.model` between tool steps and
           // silently move an already-running turn onto a different protocol.
-          const turnModel = firstNonBlank(
+          let turnModel = firstNonBlank(
             input.request.model,
             thread.model,
             this['deps'].defaultModel,
@@ -248,11 +260,27 @@ async startTurn(this: TurnService, input: {
           // consumers. Persist the default alias explicitly so a selection
           // change after admission cannot move this already-running turn.
           const turnProviderId = requestedProviderId ?? threadProviderId ?? 'default'
+          const turnCredentialMode =
+            input.request.credentialMode ??
+            (turnHarnessId === thread.executionConfig?.route.harnessId
+              ? thread.executionConfig.route.credentialMode : undefined) ??
+            defaultCredentialMode(turnHarnessId, this['deps'].harnessCatalog?.get(turnHarnessId))
           const turnAccountId = firstNonBlank(input.request.accountId) ?? (
             !requestedProviderId || requestedProviderId === threadProviderId
               ? firstNonBlank(thread.accountId)
               : undefined
           )
+          const gatewayBinding = input.request.gatewayBinding ?? (!input.request.providerId?.trim() && turnCredentialMode === 'kun-gateway' && turnHarnessId === thread.executionConfig?.route.harnessId
+              ? thread.executionConfig.route.gatewayBinding : undefined)
+          if (gatewayBinding && !this['deps'].gatewayAliasProfilesEnabled?.()) throw new Error('Gateway alias profiles require the Agent router')
+          if (gatewayBinding) {
+            if (input.request.providerId?.trim() && input.request.providerId !== 'default') throw new Error('Choose a provider connection or a gateway alias, not both')
+            if (turnCredentialMode !== 'kun-gateway' || turnHarnessId === 'kun') throw new Error('Alias bindings require an external Agent in gateway mode')
+            const alias = this['deps'].resolveGatewayAliasModel?.(gatewayBinding)
+            if (!alias) throw new Error('The selected Agent gateway alias is unavailable')
+            if (input.request.model && input.request.model !== 'default' && input.request.model !== alias) throw new Error('The model does not match the selected gateway alias')
+            turnModel = alias
+          }
           const turn = createTurnRecord({
             id: turnId,
             threadId: input.threadId,
@@ -260,10 +288,17 @@ async startTurn(this: TurnService, input: {
             clientRequestFingerprint: requestFingerprint,
             admissionPending: true,
             prompt: input.request.prompt,
+            paperContext: input.request.paperContext,
             messageSource: input.request.messageSource,
             subagentResume: input.request.subagentResume,
             model: turnModel,
             providerId: turnProviderId,
+            harnessId: turnHarnessId,
+            collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
+            credentialMode: turnCredentialMode,
+            harnessAgentId: input.request.harnessAgentId,
+            harnessSettings: input.request.harnessSettings,
+            gatewayBinding,
             accountId: turnAccountId,
             reasoningEffort: input.request.reasoningEffort,
             serviceTier: input.request.serviceTier,
@@ -282,11 +317,12 @@ async startTurn(this: TurnService, input: {
             designDocumentTarget: designAdmission.effectiveDocumentTarget,
             persona: input.request.persona,
             guiDesignArtifact: input.request.guiDesignArtifact,
-            mode: input.request.mode,
+            mode: input.request.mode ?? thread.mode,
             orchestration: input.request.orchestration,
             graphPlanningLifecycle,
             disableUserInput: input.request.disableUserInput,
             imContext: input.request.imContext,
+            planBuild: input.request.planBuild,
             workspaceCheckpointId: input.request.workspaceCheckpointId,
             workspaceCheckpointRequestId: input.request.workspaceCheckpointRequestId,
             ...(options.extensionBudgetTokenBaseline !== undefined
@@ -302,6 +338,7 @@ async startTurn(this: TurnService, input: {
             messageSource: input.request.messageSource,
             attachmentIds,
             composerContexts,
+            reviewRequests,
             fileReferences: input.request.fileReferences ?? [],
             workspaceCheckpointId: input.request.workspaceCheckpointId,
             workspace: thread.workspace,
@@ -323,7 +360,8 @@ async startTurn(this: TurnService, input: {
             ...touchThread(thread, this['deps'].nowIso()),
             status: 'running' as const,
             ...(pendingThreadSurface ? { agentSurface: pendingThreadSurface } : {}),
-            turns: [...thread.turns, startedTurn]
+            turns: options.expectedLatestFailedTurnId
+              ? insertRecoveryTurn(thread.turns, startedTurn) : [...thread.turns, startedTurn]
           }
           await this['deps'].threadStore.upsert({ ...next, updatedAt: this['deps'].nowIso() })
           if (runtimeContext) {

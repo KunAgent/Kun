@@ -27,6 +27,12 @@
     "runtimeNotRunning": "Kun Runtime नहीं चल रहा है",
     "runtimeNotConnected": "Kun Runtime कनेक्ट नहीं है",
     "runtimeSyncing": "Kun Runtime से सिंक किया जा रहा है",
+    "gatewayFix": "ठीक करें",
+    "gatewayIssue": {
+      "gateway_key_missing": "लोकल गेटवे में स्वतंत्र API कुंजी नहीं है",
+      "gateway_non_loopback_host": "लोकल गेटवे के लिए loopback पता आवश्यक है",
+      "gateway_disabled": "लोकल गेटवे अपने आप बंद हो गया (API कुंजी बनाई नहीं जा सकी)"
+    },
     "runtimeWaitingForSync": "Kun Runtime सिंक की प्रतीक्षा की जा रही है",
     "tabsAria": "मॉडल मार्ग सेटिंग्स",
     "tabGateway": "गेटवे और API",
@@ -46,7 +52,7 @@
     "localApi": "स्थानीय API",
     "localApiEnabledLocalOnly": "सक्षम · केवल स्थानीय पहुंच",
     "disabled": "अक्षम",
-    "apiCompatibilityDesc": "OpenAI Chat Completions और प्रतिक्रियाओं के साथ संगत। सार्वजनिक मॉडल ID नीचे दिए गए रूटेड मॉडल से आते हैं।",
+    "apiCompatibilityDesc": "OpenAI Chat Completions, Responses और Anthropic Messages के साथ संगत। सार्वजनिक मॉडल ID नीचे दिए गए रूट किए गए मॉडल से आते हैं।",
     "copyLocalApiAddress": "स्थानीय API पता कॉपी करें",
     "copied": "कॉपी किया गया",
     "copy": "प्रतिलिपि",
@@ -144,7 +150,7 @@
     "latency": "विलंब",
     "noEvents": "कोई रूट इवेंट नहीं",
     "apiDialogTitle": "स्थानीय API गाइड",
-    "apiDialogDesc": "केवल स्थानीय प्रक्रियाओं के लिए OpenAI-संगत समापन बिंदु; किसी प्राधिकरण शीर्षलेख की आवश्यकता नहीं है.",
+    "apiDialogDesc": "OpenAI, Anthropic और Gemini के अनुकूल एंडपॉइंट, केवल इस कंप्यूटर की प्रक्रियाओं के लिए। हर अनुरोध में गेटवे कुंजी ज़रूरी है।",
     "closeApiDocs": "API गाइड बंद करें",
     "endpoints": "अंतिमबिंदुओं",
     "modelList": "मॉडल सूची",
@@ -158,7 +164,7 @@
     "responsesAndLimits": "प्रतिक्रियाएँ और सीमाएँ",
     "curlExample": "cURL उदाहरण",
     "copyExample": "उदाहरण कॉपी करें",
-    "apiSecurityWarning": "यह रिले सार्वजनिक API सेवा नहीं है। यह केवल स्थानीय लूपबैक पते से जुड़ता है और वर्तमान में इसका कोई प्रमाणीकरण नहीं है। पोर्ट फ़ॉरवर्डिंग या असुरक्षित रिवर्स प्रॉक्सी के माध्यम से इसे LAN या इंटरनेट के संपर्क में न लाएँ।",
+    "apiSecurityWarning": "लोकल गेटवे सार्वजनिक API सेवा नहीं है। यह केवल लूपबैक पते पर सुनता है और गेटवे कुंजी माँगता है। पोर्ट फ़ॉरवर्डिंग या असुरक्षित रिवर्स प्रॉक्सी से इसे LAN या इंटरनेट पर उजागर न करें।",
     "guideModelsDesc": "स्थानीय रिले में सभी सक्षम रूटेड मॉडलों को सूचीबद्ध करता है। लौटाया गया प्रत्येक data[].id जनरेशन अनुरोधों द्वारा उपयोग किया जाने वाला सार्वजनिक मॉडल ID है।",
     "guideModelsNoBody": "किसी अनुरोध निकाय की आवश्यकता नहीं है.",
     "guideModelsEnabledOnly": "केवल सक्षम रूट किए गए मॉडल ही लौटाए जाते हैं; अक्षम या अमान्य पूल छोड़े गए हैं।",
@@ -180,6 +186,10 @@
     "guideChatModelMissing": "एक अज्ञात मॉडल 404 (model_not_found) लौटाता है।",
     "exampleChatPrompt": "नमस्ते कुन!",
     "exampleResponsesPrompt": "एक वाक्य में कुन स्थानीय प्रवेश द्वार का परिचय दें।",
-    "statusRequestFailed": "Kun Runtime स्थिति अनुरोध विफल ({{status}})"
+    "statusRequestFailed": "Kun Runtime स्थिति अनुरोध विफल ({{status}})",
+    "targetAccountModel": "खाता / मॉडल",
+    "targetUnavailable": "गेटवे के लिए उपलब्ध नहीं",
+    "targetNativeOnly": "यह खाता केवल अपने मूल Agent के माध्यम से उपलब्ध है, गेटवे मॉडल API के रूप में नहीं।",
+    "stableAliasHint": "क्लाइंट एक ही उपनाम बनाए रखते हैं। खाते और मॉडल में बदलाव नए अनुरोधों पर लागू होते हैं; चल रहे अनुरोध अपना मौजूदा रूट बनाए रखते हैं।"
   }
 }

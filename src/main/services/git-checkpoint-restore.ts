@@ -64,7 +64,7 @@ export async function restoreGitCheckpoint(params: {
     return { ok: false, reason: 'not_found', message: `Git checkpoint not found: ${checkpointId}` }
   }
 
-  // Partial-checkpoint data-loss guard (P0-01). If the snapshot skipped any
+  // Partial-checkpoint data-loss guard. If the snapshot skipped any
   // untracked file, the upcoming `git clean -fd` would delete those files with
   // no snapshot to restore them. Refuse unless the caller explicitly opts in.
   const skippedUntracked = metadata.skippedUntracked ?? []
@@ -105,7 +105,6 @@ export async function restoreGitCheckpoint(params: {
     // activity-relevant field is `status` with the enum
     // `idle | running | archived | deleted`; a thread is busy exactly when its
     // status is `running`. Fail closed if the runtime cannot be queried.
-    //
     // (An earlier version of this guard read a non-existent `thread.state`
     // field and compared it against turn-level states that never appear on a
     // thread summary; that made the guard a no-op and the race still fired.)

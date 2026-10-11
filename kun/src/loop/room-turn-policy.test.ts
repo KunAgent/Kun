@@ -6,6 +6,8 @@ import { applyRoomToolPolicy } from './room-turn-policy.js'
 import { TurnContextResolver, resolveTurnModeContext, type TurnContextResolverInput } from './turn-context-resolver.js'
 import type { ToolHostContext } from '../ports/tool-host.js'
 import { canWritePath } from '../adapters/tool/sandbox-policy.js'
+import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
+import type { LocalTool } from '../adapters/tool/local-tool-host.js'
 
 function roomThread(overrides: Partial<NonNullable<ThreadRecord['roomContext']>> = {}) {
   return createThreadRecord({ id: 'room_thread', title: 'Room', workspace: '/workspace', model: 'test',
@@ -120,6 +122,25 @@ describe('writable room general-capability parity', () => {
     const context = applyRoomToolPolicy({ ...raw, allowedToolNames: ['read'] },
       roomThread({ kind: 'conversation', participantAgentId: 'agent_one', allowedToolNames: ['read'] }))
     expect(context.allowedToolNames).toEqual(expect.arrayContaining(['read', 'send_im_message']))
+  })
+
+  it('hides Google MCP providers in private Rooms without hiding other apps', () => {
+    const context = applyRoomToolPolicy(raw, roomThread({ kind: 'conversation', participantAgentId: 'agent_one',
+      blockedProviderIds: [] }))
+    expect(context.blockedProviderIds).toEqual(expect.arrayContaining([
+      'mcp:google_gmail', 'mcp:google_drive', 'mcp:google_calendar'
+    ]))
+    const tool = (name: string): LocalTool => ({ name, description: name, inputSchema: { type: 'object', properties: {} },
+      policy: 'auto', toolKind: 'tool_call', sideEffect: 'read-only', execute: async () => ({ output: {} }) })
+    const registry = new CapabilityRegistry([
+      { id: 'mcp:google_gmail', kind: 'mcp', enabled: true, available: true, tools: [tool('gmail_search')] },
+      { id: 'mcp:notion', kind: 'mcp', enabled: true, available: true, tools: [tool('notion_search')] }
+    ])
+    expect(registry.listTools(context).map((entry) => entry.name)).toEqual(['notion_search'])
+    expect(() => registry.resolveTool('gmail_search', context)).toThrow('not advertised')
+    expect(registry.resolveTool('notion_search', context).tool.name).toBe('notion_search')
+    expect(applyRoomToolPolicy(raw, roomThread({ kind: 'execution', blockedProviderIds: [] })).blockedProviderIds)
+      .not.toContain('mcp:google_gmail')
   })
 
   it('keeps delegate/subagent available for a writable group execution thread', () => {

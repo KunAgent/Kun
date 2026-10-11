@@ -160,17 +160,24 @@ type SidebarSectionHeaderProps = {
   label: string
   title?: string
   actions?: ReactNode
+  /** Tight variant used inside a list (Work directory view). */
+  compact?: boolean
 }
 
 export function SidebarSectionHeader({
   label,
   title,
-  actions
+  actions,
+  compact = false
 }: SidebarSectionHeaderProps): ReactElement {
   return (
-    <div className="ds-sidebar-section-header flex items-center justify-between px-3 pb-2 pt-5">
+    <div className={compact
+      ? 'ds-sidebar-section-header flex min-h-[26px] items-center justify-between pb-0.5 pl-2 pr-1 pt-1.5'
+      : 'ds-sidebar-section-header flex items-center justify-between px-3 pb-2 pt-5'}>
       <span
-        className="min-w-0 truncate text-[11px] font-medium tracking-[0.02em] text-ds-faint"
+        className={compact
+          ? 'min-w-0 truncate text-[11.5px] font-semibold tracking-[0.02em] text-ds-faint'
+          : 'min-w-0 truncate text-[11px] font-medium tracking-[0.02em] text-ds-faint'}
         title={title}
       >
         {label}

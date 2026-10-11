@@ -15,6 +15,8 @@ import {
 } from '../services/canvas-receipt-registry.js'
 import { prepareBrowserUseToolResultForPersistence } from './tool-result-image.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
+import { toolPresentationKind } from '../contracts/tool-presentation-fields.js'
+import type { ToolPresentation } from '../contracts/tool-presentation.js'
 
 export const TOOL_RESULT_ARTIFACT_THRESHOLD_BYTES = 1024 * 1024
 const TOOL_RESULT_PREVIEW_CHARS = 16 * 1024
@@ -61,6 +63,7 @@ export type ToolExecutionInput = {
   turnId: string
   call: ToolCallLike
   context: ToolHostContext
+  cancellationRegistered?: boolean
 }
 
 /**
@@ -99,11 +102,16 @@ export class ToolExecutionService {
         )
     const executionInput: ToolExecutionInput = {
       ...input,
+      cancellationRegistered: Boolean(registration),
       ...(registration
         ? { context: { ...input.context, abortSignal: registration.signal } }
         : {})
     }
     try {
+      if (registration) await this.deps.turns.updateItem(input.threadId, `item_tool_${input.turnId}_${input.call.callId}`, {
+        status: 'running',
+        meta: { toolPresentation: this.executionPresentation(input, !registration.signal.aborted) }
+      })
       const result = await this.execute(executionInput)
       if (input.context.abortSignal.aborted) {
         throw input.context.abortSignal.reason ?? new Error('Tool execution aborted')
@@ -143,7 +151,21 @@ export class ToolExecutionService {
       }
     } finally {
       registration?.dispose()
+      if (registration) {
+        const settled = this.deps.turns.updateItem(input.threadId, `item_tool_${input.turnId}_${input.call.callId}`, {
+          meta: { toolPresentation: this.executionPresentation(input, false) }
+        }).catch(() => undefined)
+        // The update only clears "can cancel". An aborted turn must not wait on it, or an interrupt
+        // would stall behind a persistence queue that is itself stuck.
+        if (!input.context.abortSignal.aborted) await settled
+      }
     }
+  }
+
+  private executionPresentation(input: ToolExecutionInput, canCancel: boolean): ToolPresentation {
+    return { version: 1, source: 'native', kind: toolPresentationKind(input.call.toolName, input.call.toolKind),
+      name: input.call.toolName, state: 'running', canCancel,
+      ...(input.call.providerId?.startsWith('mcp:') ? { server: input.call.providerId.slice(4) } : {}) }
   }
 
   private cancelledResult(input: ToolExecutionInput): ToolHostResult {
@@ -294,7 +316,11 @@ export class ToolExecutionService {
               if (fingerprint === lastProgressFingerprint) return pendingUpdates
               lastProgressFingerprint = fingerprint
               const update = pendingUpdates.then(async () => {
-                const runningItem = { ...item, status: 'running' } as TurnItem
+                const runningItem = { ...item, status: 'running',
+                  ...((item.kind === 'tool_call' || item.kind === 'tool_result') ? { meta: {
+                    ...item.meta, toolPresentation: this.executionPresentation(input,
+                      input.cancellationRegistered === true && !input.context.abortSignal.aborted)
+                  } } : {}) } as TurnItem
                 if (durableProgressInitialized) {
                   await this.deps.turns.publishTransientItem(input.threadId, runningItem)
                   return
@@ -302,7 +328,7 @@ export class ToolExecutionService {
                 const existing = await this.deps.turns.updateItem(input.threadId, item.id, {
                     output: item.kind === 'tool_result' ? item.output : undefined,
                     isError: item.kind === 'tool_result' ? item.isError : undefined,
-                    meta: item.kind === 'tool_result' ? item.meta : undefined,
+                    meta: runningItem.kind === 'tool_result' ? runningItem.meta : undefined,
                     status: 'running'
                   } as Partial<TurnItem>)
                 if (!existing) await this.deps.turns.applyItem(input.threadId, runningItem)

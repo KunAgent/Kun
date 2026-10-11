@@ -532,6 +532,44 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
     })
   })
 
+  it('accepts ordinary full settings saves with existing project defaults', async () => {
+    const applySettingsPatch = vi.fn(async () => settings())
+    registerAppIpcHandlers(registerOptions({ applySettingsPatch }))
+    const projectDefaults = {
+      '/repo/source': {
+        route: { harnessId: 'codex', model: 'gpt-5', credentialMode: 'native-login' as const },
+        collaborationEnabled: false, isolation: 'worktree' as const,
+        limits: { softWorkers: 2, hardWorkers: 4 }
+      }
+    }
+    const current = settings()
+    const payload = { ...current, locale: 'zh' as const,
+      agents: { ...current.agents, kun: { ...current.agents.kun,
+        ade: { ...current.agents.kun.ade, projectDefaults }
+      } }
+    }
+    await expect(handlers.get('settings:set')?.({}, payload)).resolves.toEqual(settings())
+    expect(applySettingsPatch).toHaveBeenCalledWith(expect.objectContaining({
+      locale: 'zh', agents: { kun: expect.objectContaining({
+        ade: expect.objectContaining({ projectDefaults })
+      }) }
+    }))
+  })
+
+  it('rejects secrets, program paths, and unknown project-default fields before settings persistence', async () => {
+    const applySettingsPatch = vi.fn(async () => settings())
+    registerAppIpcHandlers(registerOptions({ applySettingsPatch }))
+    const handler = handlers.get('settings:set')!
+    for (const entry of [
+      { apiKey: 'secret' }, { binaryPath: '/private/agent' }, { unexpected: true },
+      { route: { harnessId: 'kun', model: 'model', providerId: 'provider', apiKey: 'secret' } }
+    ]) {
+      await expect(handler({}, { agents: { kun: { ade: { projectDefaults: { '/repo': entry } } } } }))
+        .rejects.toThrow(/Invalid payload for settings:set/)
+    }
+    expect(applySettingsPatch).not.toHaveBeenCalled()
+  })
+
   it('passes schedule settings patches through to applySettingsPatch', async () => {
     const applySettingsPatch = vi.fn(async (partial: AppSettingsPatch) => ({
       ...settings(),

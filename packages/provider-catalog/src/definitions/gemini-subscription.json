@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "gemini-subscription",
+  "name": "Google Antigravity 订阅",
+  "category": "subscription",
+  "kind": "antigravity-cli",
+  "authFlow": "gemini-subscription",
+  "authType": "subscription",
+  "baseUrl": "",
+  "endpointFormat": "custom_endpoint",
+  "models": [
+    "gemini-3.6-flash",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.1-pro"
+  ],
+  "docsUrl": "https://github.com/google-antigravity/antigravity-cli",
+  "credentialUrl": "https://antigravity.google"
+}

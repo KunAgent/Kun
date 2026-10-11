@@ -1,4 +1,17 @@
+import { accountModelRequest } from './request-attempt-accounting.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
+import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
+import { ProviderRequestScheduler, ProviderAdmissionError } from '../../services/provider-request-scheduler.js'
+import type { ProviderAdmission } from '../../contracts/provider-configuration.js'
+
+export type ModelClientRouterInput = {
+  default: ModelClient
+  providers?: Map<string, ModelClient>
+  /** Trusted HTTP/API-key clients, pinned by object identity at construction. */
+  gatewayClients?: Map<string, ModelClient>
+  admission?: Map<string, { accountId: string; limits: ProviderAdmission }>
+  defaultProviderId?: string
+}
 
 /**
  * Routes a streaming model request to a per-`providerId` `ModelClient`.
@@ -17,8 +30,15 @@ export class MultiProviderModelClient implements ModelClient {
   readonly provider = 'compat-multi'
   model: string
 
+  private dispatchAuthority?: () => Promise<void>
+  setDispatchAuthority(check: () => Promise<void>): void { this.dispatchAuthority = check }
+
   private default_: ModelClient
   private providers: Map<string, ModelClient>
+  private gatewayClients: Map<string, ModelClient>
+  private gatewayGeneration = {}
+  private admission: NonNullable<ModelClientRouterInput['admission']>
+  private defaultProviderId: string
   private readonly turnPins = new Map<string, {
     client: ModelClient
     /** Pin identity: the provider id, or a routing selection (`kind:id`). */
@@ -26,18 +46,26 @@ export class MultiProviderModelClient implements ModelClient {
     label: string
     routed: boolean
     touchedAt: number
+    admitted?: boolean
   }>()
 
-  constructor(input: { default: ModelClient; providers?: Map<string, ModelClient> }) {
+  constructor(input: ModelClientRouterInput, private readonly scheduler = new ProviderRequestScheduler()) {
     this.default_ = input.default
     this.providers = canonicalProviders(input.providers)
+    this.gatewayClients = canonicalProviders(input.gatewayClients)
     this.model = input.default.model
+    this.admission = input.admission ?? new Map()
+    this.defaultProviderId = input.defaultProviderId ?? 'default'
   }
 
-  replace(input: { default: ModelClient; providers?: Map<string, ModelClient> }): void {
+  replace(input: ModelClientRouterInput): void {
+    this.gatewayGeneration = {}
     this.default_ = input.default
     this.providers = canonicalProviders(input.providers)
+    this.gatewayClients = canonicalProviders(input.gatewayClients)
     this.model = input.default.model
+    this.admission = input.admission ?? new Map()
+    this.defaultProviderId = input.defaultProviderId ?? 'default'
   }
 
   register(providerId: string, client: ModelClient): () => void {
@@ -45,13 +73,21 @@ export class MultiProviderModelClient implements ModelClient {
     if (!id) throw new Error('model provider id is required')
     if (this.providers.has(id)) throw new Error(`model provider already registered: ${providerId}`)
     this.providers.set(id, client)
+    this.gatewayGeneration = {}
     return () => {
-      if (this.providers.get(id) === client) this.providers.delete(id)
+      if (this.providers.get(id) === client) { this.providers.delete(id); this.gatewayGeneration = {} }
     }
   }
 
   unregister(providerId: string): boolean {
-    return this.providers.delete(providerId.trim().toLowerCase())
+    const removed = this.providers.delete(providerId.trim().toLowerCase())
+    if (removed) this.gatewayGeneration = {}
+    return removed
+  }
+
+  gatewayDispatchGuard(): () => void {
+    const generation = this.gatewayGeneration
+    return () => { if (generation !== this.gatewayGeneration) throw new GatewayRouteChangedError() }
   }
 
   registeredProviderIds(): string[] {
@@ -71,7 +107,35 @@ export class MultiProviderModelClient implements ModelClient {
     return client
   }
 
+  paperReadOnlyDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): () => void {
+    const client = this.resolve(request.providerId)
+    if (!client.paperReadOnlyDispatchGuard) throw new Error('This provider cannot enforce paper read-only transport')
+    const guard = client.paperReadOnlyDispatchGuard(request)
+    const generation = this.gatewayGeneration
+    return () => {
+      if (generation !== this.gatewayGeneration || client !== this.resolve(request.providerId)) {
+        throw new Error('Paper provider changed after disclosure; submit again with the new selection')
+      }
+      guard()
+    }
+  }
+
+  /** Exact review clients retain account scheduling and cannot silently adopt a replacement credential client. */
+  capture(providerId?: string): ModelClient {
+    const client = this.resolve(providerId)
+    const sourceId = !providerId || providerId === 'default' ? this.defaultProviderId : providerId.toLowerCase()
+    const assertCurrent = () => { if (this.resolve(providerId) !== client) throw new GatewayRouteChangedError() }
+    return { provider: client.provider, model: client.model, stream: (request) => {
+      assertCurrent()
+      return accountModelRequest(request, (accounted) => this.streamAdmitted(client, { ...accounted, beforeProviderDispatch: async () => {
+        assertCurrent(); if (this.dispatchAuthority) await this.dispatchAuthority(); await request.beforeProviderDispatch?.()
+      } }, this.admission.get(sourceId)))
+    } }
+  }
+
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    request.paperReadOnly?.assertCurrent()
+    request.gatewayRouting?.assertCurrent?.()
     const providerId = request.providerId?.trim().toLowerCase() || 'default'
     const selection = request.routeSelection
     // A declared routing selection pins the turn to the *selection*, not to
@@ -95,16 +159,48 @@ export class MultiProviderModelClient implements ModelClient {
     }
     // Routed requests re-resolve per attempt because each failover target is
     // a different provider client; unrouted requests keep the pinned client.
-    const client = pinned && !selection ? pinned.client : this.resolve(request.providerId)
+    // Gateway ids always address an explicit connection, including a profile
+    // literally named "default"; never borrow the ambient default credential.
+    const client = request.gatewayRouting ? this.providers.get(providerId)
+      : pinned && !selection ? pinned.client : this.resolve(request.providerId)
+    if (!client || (request.gatewayRouting && (!request.gatewayRouting.assertCurrent || this.gatewayClients.get(providerId) !== client))) {
+      throw new GatewayRouteChangedError()
+    }
     this.turnPins.set(request.turnId, {
       client,
       pinKey,
       label,
       routed: Boolean(selection),
-      touchedAt: Date.now()
+      touchedAt: Date.now(),
+      admitted: pinned?.client === client && pinned.admitted === true
     })
+    const pin = this.turnPins.get(request.turnId)!
     this.pruneTurnPins()
-    return client.stream(request)
+    const admitted = { ...request, beforeProviderDispatch: async () => {
+      const current = providerId === 'default' && !request.gatewayRouting ? this.default_ : this.providers.get(providerId)
+      if (!pin.admitted && current !== client) throw new GatewayRouteChangedError()
+      if (this.dispatchAuthority) await this.dispatchAuthority()
+      await request.beforeProviderDispatch?.()
+      pin.admitted = true
+    } }
+    const admission = this.admission.get(providerId === 'default' ? this.defaultProviderId : providerId)
+    return this.streamAdmitted(client, admitted, admission)
+  }
+
+  private async *streamAdmitted(client: ModelClient, request: ModelRequest,
+    admission?: { accountId: string; limits: ProviderAdmission }): AsyncIterable<ModelStreamChunk> {
+    let release: (() => void) | undefined
+    try {
+      if (admission) release = await this.scheduler.acquire(admission.accountId, request.gatewayRouting?.callerId ?? 'kun',
+        admission.limits, request.abortSignal)
+      request.abortSignal.throwIfAborted()
+      if (this.dispatchAuthority) await this.dispatchAuthority()
+      yield* client.stream(request)
+    } catch (error) {
+      if (!(error instanceof ProviderAdmissionError)) throw error
+      yield { kind: 'error', code: error.code, message: error.message,
+        failure: { category: 'rate_limit', reason: 'rate', httpStatus: 429, localAdmission: true, failoverAllowed: true } }
+    } finally { release?.() }
   }
 
   /**

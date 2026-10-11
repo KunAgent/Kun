@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "xiaomi",
+  "name": "Xiaomi",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.xiaomimimo.com/v1",
+  "endpointFormat": "chat_completions",
+  "models": [
+    "mimo-v2.5-pro",
+    "mimo-v2.5",
+    "mimo-v2-pro",
+    "mimo-v2-omni"
+  ],
+  "docsUrl": "https://platform.xiaomimimo.com/#/docs",
+  "credentialUrl": "https://platform.xiaomimimo.com/#/console/api-keys",
+  "tokenPlan": {
+    "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1",
+    "regions": [
+      {
+        "id": "cn",
+        "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1"
+      },
+      {
+        "id": "sgp",
+        "baseUrl": "https://token-plan-sgp.xiaomimimo.com/v1"
+      },
+      {
+        "id": "ams",
+        "baseUrl": "https://token-plan-ams.xiaomimimo.com/v1"
+      }
+    ],
+    "endpointFormat": "chat_completions",
+    "models": [
+      "mimo-v2.5-pro",
+      "mimo-v2.5",
+      "mimo-v2-pro",
+      "mimo-v2-omni"
+    ],
+    "credentialUrl": "https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access"
+  }
+}

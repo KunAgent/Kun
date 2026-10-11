@@ -10,6 +10,9 @@ import {
   threadPrewarmStats
 } from './thread-detail-prewarm'
 import {
+  buildPrefetchedThreadSnapshot,
+  cacheThreadSnapshot,
+  captureThreadSnapshotCacheToken,
   clearThreadSnapshotCache,
   getThreadSnapshot,
   invalidateThreadSnapshot,
@@ -261,5 +264,18 @@ describe('thread detail prewarm coordinator', () => {
 
     pending.resolve(detail('invalidate'))
     await flushAsyncWork()
+  })
+
+  it('cannot overwrite a newer background checkpoint with an older hover response', async () => {
+    const pending = deferred<ThreadDetail>()
+    registryMock.getProvider.mockReturnValue({ getThreadDetail: vi.fn(() => pending.promise) })
+    const target = thread('competing')
+    requestThreadPrewarm(target)
+    const backgroundToken = captureThreadSnapshotCacheToken(target.id)
+    const latest = buildPrefetchedThreadSnapshot(target, { ...detail(target.id), latestSeq: 100 })!
+    expect(cacheThreadSnapshot({ ...latest, backgroundSyncedAt: Date.now() }, backgroundToken)).toBe(true)
+    pending.resolve({ ...detail(target.id), latestSeq: 1 })
+    await flushAsyncWork()
+    expect(getThreadSnapshot(target.id)?.lastSeq).toBe(100)
   })
 })

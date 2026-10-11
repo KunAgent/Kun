@@ -30,22 +30,33 @@ export type KunGitHubMcpPolicy = {
   authorization?: KunGitHubMcpAuthorization
 }
 
-/** Recognize only the exact host-authored read-only GitHub connector. */
-export function isKunManagedGitHubMcpServer(value: unknown): boolean {
+/**
+ * Recognize the host-authored GitHub connector by its stable ownership marker
+ * and transport identity, even when an older persisted entry is missing its
+ * policy metadata. Configuration sync uses this to migrate stale managed
+ * entries without mistaking them for user-owned servers.
+ */
+export function isKunManagedGitHubMcpEntry(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const server = value as Record<string, unknown>
   const headers = recordValue(server.headers)
-  const policy = githubPolicyFromUnknown(server.githubPolicy)
-  return policy?.host === 'github.com' && server.managedBy === KUN_MANAGED_GITHUB_MCP_MARKER &&
-    typeof server.enabled === 'boolean' &&
+  return server.managedBy === KUN_MANAGED_GITHUB_MCP_MARKER &&
     server.transport === 'streamable-http' &&
     server.url === KUN_MANAGED_GITHUB_MCP_URL &&
     server.trustScope === 'user' &&
     headers?.Authorization === KUN_MANAGED_GITHUB_MCP_AUTHORIZATION &&
     headers['X-MCP-Toolsets'] === KUN_MANAGED_GITHUB_MCP_TOOLSETS &&
-    headers['X-MCP-Readonly'] === 'true' &&
-    Array.isArray(server.planModeReadOnlyTools) &&
-    policy !== undefined
+    headers['X-MCP-Readonly'] === 'true'
+}
+
+/** Recognize only the exact host-authored read-only GitHub connector. */
+export function isKunManagedGitHubMcpServer(value: unknown): boolean {
+  if (!isKunManagedGitHubMcpEntry(value)) return false
+  const server = value as Record<string, unknown>
+  const policy = githubPolicyFromUnknown(server.githubPolicy)
+  return policy !== undefined && policy.host === 'github.com' &&
+    typeof server.enabled === 'boolean' &&
+    Array.isArray(server.planModeReadOnlyTools)
 }
 
 export function githubPolicyFromServer(server: McpServerConfig): KunGitHubMcpPolicy | undefined {

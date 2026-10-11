@@ -1,3 +1,4 @@
+import { modelProfileForModel, reasoningOptionsForModel } from '../chat/floating-composer-model-picker-logic'
 import type {
   KunRuntimeSettingsPatchV1,
   KunRuntimeSettingsV1,
@@ -147,6 +148,9 @@ type WorkspaceAgentJson = {
   allowedTools?: string[]
   blockedTools?: string[]
   surfaces?: KunSubagentSurfaceV1[]
+  harnessId?: string
+  credentialMode?: KunSubagentProfileV1['credentialMode']
+  gatewayBinding?: KunSubagentProfileV1['gatewayBinding']
 }
 
 function workspaceProfileToKun(entry: WorkspaceAgentJson): KunSubagentProfileV1 {
@@ -162,7 +166,10 @@ function workspaceProfileToKun(entry: WorkspaceAgentJson): KunSubagentProfileV1 
     promptPreamble: entry.promptPreamble,
     allowedTools: entry.allowedTools,
     blockedTools: entry.blockedTools,
-    surfaces: entry.surfaces ?? ['code']
+    surfaces: entry.surfaces ?? ['code'],
+    ...(entry.harnessId ? { harnessId: entry.harnessId } : {}),
+    ...(entry.credentialMode ? { credentialMode: entry.credentialMode } : {}),
+    ...(entry.gatewayBinding ? { gatewayBinding: entry.gatewayBinding } : {})
   }
 }
 
@@ -246,8 +253,8 @@ function profileAvailableOnSurface(
 
 // Reasoning-effort segment (mirrors the composer's reasoning picker). Labels
 // reuse the composer i18n keys (composerReasoning*). When a model declares
-// supportedEfforts those are used; otherwise the full list is offered so
-// follow-default / unprofiled models can still set profile.reasoningEffort.
+// supportedEfforts those are used; unresolved follow-default models expose
+// only auto until a concrete model capability is available.
 const REASONING_OPTIONS: Array<{ id: ModelReasoningEffort; labelKey: string }> = [
   { id: 'auto', labelKey: 'composerReasoningAuto' },
   { id: 'off', labelKey: 'composerReasoningOff' },
@@ -257,55 +264,24 @@ const REASONING_OPTIONS: Array<{ id: ModelReasoningEffort; labelKey: string }> =
   { id: 'max', labelKey: 'composerReasoningMax' }
 ]
 
-function normalizeModelCapabilityKey(modelId: string): string {
-  return modelId.trim().toLowerCase()
-}
-
-/** Resolve the model profile for (group, model), matching by id or alias. */
-function modelProfileForModel(
-  group: ModelProviderModelGroup | undefined,
-  modelId: string
-): ModelProviderModelProfileV1 | undefined {
-  if (!group || !modelId) return undefined
-  const key = normalizeModelCapabilityKey(modelId)
-  if (!key) return undefined
-  const profiles = group.modelProfiles ?? {}
-  const direct = profiles[key] ?? profiles[modelId.trim()]
-  if (direct) return direct
-  return Object.values(profiles).find((p) =>
-    p.aliases?.some((alias) => normalizeModelCapabilityKey(alias) === key)
-  )
-}
-
-/** Capability-gated options for a model profile; empty when unsupported/unknown. */
-function reasoningOptionsForModel(
-  profile: ModelProviderModelProfileV1 | undefined
-): Array<{ id: ModelReasoningEffort; labelKey: string }> {
-  const supported = profile?.reasoning?.supportedEfforts
-  if (!supported || supported.length === 0) return []
-  return supported
-    .map((effort) => REASONING_OPTIONS.find((o) => o.id === effort))
-    .filter((o): o is { id: ModelReasoningEffort; labelKey: string } => Boolean(o))
-}
-
-/** Resolve picker options: prefer model capability list, else full REASONING_OPTIONS. */
+/** Model choices use the same effective capabilities as the composer. */
 function resolveReasoningOptions(
   groups: ModelProviderModelGroup[],
   model: string,
   providerId: string
 ): Array<{ id: ModelReasoningEffort; labelKey: string }> {
-  if (!model) return REASONING_OPTIONS
+  if (!model) return REASONING_OPTIONS.filter((option) => option.id === 'auto')
   const selectedGroup = providerId ? groups.find((group) => group.providerId === providerId) : undefined
-  const profile = modelProfileForModel(selectedGroup, model)
-    ?? groups.map((group) => modelProfileForModel(group, model)).find(Boolean)
+  const profile = providerId ? modelProfileForModel(selectedGroup, model)
+    : groups.map((group) => modelProfileForModel(group, model)).find(Boolean)
   const gated = reasoningOptionsForModel(profile)
-  return gated.length > 0 ? gated : REASONING_OPTIONS
+  return gated
 }
 
 function normalizeStoredReasoning(effort: string | undefined): ModelReasoningEffort {
   return effort && REASONING_OPTIONS.some((option) => option.id === effort)
     ? (effort as ModelReasoningEffort)
-    : 'off'
+    : 'auto'
 }
 
 type RoleSlot = {

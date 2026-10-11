@@ -23,7 +23,7 @@ describe('ModelsDevCatalogService pricing', () => {
     })
     const service = new ModelsDevCatalogService(vi.fn(async () => new Response(body, { status: 200 })))
     await expect(service.fetch({
-      providerId: 'opencode-free',
+      providerId: 'custom-zen',
       baseUrl: OPENCODE_ZEN_BASE
     })).resolves.toMatchObject({
       status: 'ok',
@@ -45,7 +45,7 @@ describe('ModelsDevCatalogService pricing', () => {
     })
     const service = new ModelsDevCatalogService(vi.fn(async () => new Response(body, { status: 200 })))
     await expect(service.fetch({
-      providerId: 'opencode-free',
+      providerId: 'custom-zen',
       baseUrl: OPENCODE_ZEN_BASE
     })).resolves.toMatchObject({
       status: 'ok',
@@ -71,7 +71,7 @@ describe('ModelsDevCatalogService pricing', () => {
     })
     const service = new ModelsDevCatalogService(vi.fn(async () => new Response(body, { status: 200 })))
     const result = await service.fetch({
-      providerId: 'opencode-free',
+      providerId: 'custom-zen',
       baseUrl: OPENCODE_ZEN_BASE
     })
     expect(result).toMatchObject({ status: 'ok', providerKey: 'opencode' })

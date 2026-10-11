@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { probeModels } from './model-connection-probe.js'
 import { CODEX_CLI_VERSION } from '../adapters/model/provider-cli-identity.js'
+import { CODEX_PROVIDER_VERSION_URL } from '../adapters/model/codex-provider-catalog.js'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -27,8 +28,22 @@ it('discovers Codex models through the registry custom endpoint path', async () 
     `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLI_VERSION}`,
     expect.objectContaining({ headers: expect.objectContaining({
       authorization: 'Bearer test-token', 'ChatGPT-Account-Id': 'test-account'
-    }) })
+    }) }), ''
   )
+})
+
+it('requests the current catalog and keeps listed GPT-6.1 subscription models', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => {
+    if (url === CODEX_PROVIDER_VERSION_URL) return Response.json({ name: '@openai/codex', version: '0.161.0' })
+    expect(new URL(url).searchParams.get('client_version')).toBe('0.161.0')
+    return Response.json({ models: [
+      { slug: 'gpt-6.1-sol', visibility: 'list' },
+      { slug: 'gpt-6-sol', visibility: 'list' },
+      { slug: 'gpt-6-luna', visibility: 'list', supported_in_api: false },
+      { slug: 'gpt-6-hidden', visibility: 'hide' }
+    ] })
+  }))
+  await expect(probeModels(input)).resolves.toEqual(['gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-luna'])
 })
 
 it('does not report configured models as a successful discovery on API failure', async () => {

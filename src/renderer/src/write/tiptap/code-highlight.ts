@@ -1,5 +1,5 @@
 /**
- * Lazy Shiki parser for `prosemirror-highlight` (implementation §7.3).
+ * Lazy Shiki parser for `prosemirror-highlight`.
  * Shares the language normalization of `lib/code-highlighting` and the
  * same theme pair. The highlighter instance is created on first use; a
  * parser call made while it (or a requested language) is still loading

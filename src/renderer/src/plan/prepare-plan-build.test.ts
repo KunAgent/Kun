@@ -44,4 +44,15 @@ describe('preparePlanBuild', () => {
       getGitBranches: vi.fn()
     })).rejects.toThrow('active plan or conversation changed')
   })
+  it.each([false, true])('reuses an existing workspace unless explicitly overridden (%s)', async (explicit) => {
+    const getGitBranches = vi.fn(async () => ({ ok: true as const, repositoryRoot: '/repo',
+      primaryRepositoryRoot: '/repo', currentBranch: 'task', branches: [], dirtyCount: 0 }))
+    const result = await preparePlanBuild({ plan, content: '# Plan', orchestration: 'direct',
+      graphEnabled: true, usePromptWorktree: true, workspaceAlreadyIsolated: true,
+      usePromptWorktreeExplicit: explicit, branchPrefix: 'codex/', activeThreadId: 'task',
+      save: async () => true, currentPlanId: () => plan.id, currentThreadId: () => 'task', getGitBranches })
+    expect(getGitBranches).toHaveBeenCalledTimes(explicit ? 1 : 0)
+    expect(result.prompt.includes('<prompt_managed_worktree_protocol>')).toBe(explicit)
+  })
+
 })

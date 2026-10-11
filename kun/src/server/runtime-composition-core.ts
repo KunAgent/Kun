@@ -1,3 +1,4 @@
+import { modelContextProfilesForProvider } from '../loop/model-context-profile.js'
 import {
   mkdir,
   join,
@@ -9,6 +10,9 @@ import {
   DelegatedSessionCoordinator,
   FileDelegatedSessionBindingStore,
   delegatedSessionRoot,
+  AcpConnectionPool,
+  AcpClientHost,
+  AcpSessionManager,
   FileArtifactStore,
   type ArtifactStore,
   LocalWorkspaceInspector,
@@ -19,7 +23,6 @@ import {
   modelCapabilitiesForModel,
   modelCapabilitiesForProviderModel,
   modelContextProfilesFromConfig,
-  contextThresholdsForModel,
   DEFAULT_GRAPH_RUNTIME_CONFIG,
   type GraphRuntimeConfig,
   createAgentObservabilityRecorder,
@@ -32,6 +35,20 @@ import {
   KUN_SYSTEM_PROMPT,
   RuntimeEventRecorder,
   ThreadActivityRegistry,
+  ActivityStore,
+  ActivityFactsStore,
+  TaskWorkspaceStore,
+  TaskWorkspaceService,
+  TaskWorkspaceSetupRunner,
+  fillTaskWorktreeEnvironment,
+  createApprovedSetupResolver,
+  userSharedPathsForRepo,
+  loadKunProjectConfig,
+  createWorktreeLifecycle,
+  workspaceGit,
+  workspaceCommitGit,
+  assertWorkspaceWriteFence,
+  withWorkspaceWriteCommit,
   GraphRuntimeComposition,
   LifecycleFencedSessionStore,
   LifecycleFencedThreadStore,
@@ -64,15 +81,22 @@ import {
   tokenEconomyConfigForOptions
 } from './runtime-factory-config.js'
 import { modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { delegatedContextProfile as resolveDelegatedContextProfile } from './delegated-context-profile.js'
+import { FileTeamStore } from '../ade/team-store.js'
 import { createPersistentStores } from './runtime-factory-storage.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { HistoryReferenceService } from '../history/history-reference-service.js'
+import { consumeNativeAgentNetworkEnvironment } from '../contracts/native-agent-network.js'
+import { mergeModelContextProfiles } from '../loop/model-context-profile-merge.js'
 
 export async function createRuntimeCore(
   options: KunServeRuntimeOptions,
   dataDirLease: RuntimeDataDirLease | undefined
 ) {
+  const launchNetwork = consumeNativeAgentNetworkEnvironment(process.env)
+  options = { ...options, nativeAgentNetwork: options.nativeAgentNetwork ?? launchNetwork }
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
+  let optionsRevision = 0
   let activeOptions: KunServeRuntimeOptions = { ...options }
   // Production replay reads the durable session store; nothing calls
   // snapshotSince on the live bus, so skip retaining a serialized tail.
@@ -106,9 +130,28 @@ export async function createRuntimeCore(
     models: activeOptions.models
   })
   let providerModelProfiles = modelContextProfilesByProvider(activeOptions.providers)
-  const profilesForProvider = (providerId?: string) => providerId
-    ? providerModelProfiles.get(providerId.trim().toLowerCase()) ?? modelProfiles
-    : modelProfiles
+  // Explicit provider profiles win; global preferences fill missing models.
+  // Built-in vendor facts are scoped to the actual endpoint before budgeting.
+  let mergedProfiles = new Map<string, ReturnType<typeof mergeModelContextProfiles>>()
+  let mergedFor: [typeof providerModelProfiles, typeof modelProfiles, number] | undefined
+  const profilesForProvider = (providerId?: string) => {
+    if (mergedFor?.[0] !== providerModelProfiles || mergedFor[1] !== modelProfiles || mergedFor[2] !== optionsRevision) {
+      mergedProfiles = new Map()
+      mergedFor = [providerModelProfiles, modelProfiles, optionsRevision]
+    }
+    const key = (providerId ?? activeOptions.activeProviderId ?? '').trim().toLowerCase()
+    let merged = mergedProfiles.get(key)
+    if (!merged) {
+      const provider = Object.entries(activeOptions.providers ?? {}).find(([id]) => id.toLowerCase() === key)?.[1]
+      const scoped = providerModelProfiles.get(key)
+      merged = modelContextProfilesForProvider({ providerId: key, presetSource: provider?.presetSource, kind: provider?.kind,
+        endpointFormat: provider?.endpointFormat, endpoints: provider?.endpoints,
+        baseUrl: provider?.baseUrl ?? (!providerId || key === activeOptions.activeProviderId?.toLowerCase() ? activeOptions.baseUrl : undefined) },
+      scoped ? mergeModelContextProfiles(scoped, modelProfiles) : modelProfiles)
+      mergedProfiles.set(key, merged)
+    }
+    return merged
+  }
   const compactor = new ContextCompactor({
     contextCompaction: activeOptions.contextCompaction,
     models: activeOptions.models,
@@ -132,6 +175,17 @@ export async function createRuntimeCore(
     dataDir: activeOptions.dataDir
   })
   const threadActivity = new ThreadActivityRegistry()
+  const activityFacts = new ActivityFactsStore({ dataDir: activeOptions.dataDir })
+  await activityFacts.load().catch(() => undefined)
+  const activityStore: ActivityStore = new ActivityStore({
+    nowIso,
+    threadMetadata: (id) => threadStore.getMetadata?.(id) ?? Promise.resolve(null),
+    facts: activityFacts,
+    // Graph attempt rows are keyed by attemptId while event.child carries the
+    // worker child thread id; resolved lazily at event time.
+    unitIdForChild: (childId: string): string | undefined =>
+      graphRuntime.workerSessions.get(childId)?.attemptId
+  })
   const contextWindowModes = new ContextWindowTurnModes(
     liveContextWindowMode(() => activeOptions)
   )
@@ -159,8 +213,17 @@ export async function createRuntimeCore(
     ids,
     nowIso
   })
+  // Rebuild activity rows for recently-active threads from durable turn
+  // state before live events start flowing, then reapply
+  // the persisted per-unit user facts.
+  await activityStore.hydrate(threadStore)
+  for (const [unitId, fact] of Object.entries(activityFacts.all())) {
+    const row = activityStore.get(unitId)
+    if (row) activityStore.apply(unitId, fact, row.provenance)
+  }
   const observers = [
     threadActivity,
+    activityStore,
     ...(agentObservability ? [agentObservability] : [])
   ]
   const events = new RuntimeEventRecorder({
@@ -171,6 +234,8 @@ export async function createRuntimeCore(
     lifecycleFence,
     observers
   })
+  const taskWorkspaceStore = new TaskWorkspaceStore({ dataDir: activeOptions.dataDir })
+  await taskWorkspaceStore.load().catch(() => undefined)
   const contextWindowState = new FileContextWindowStateStore({ dataDir: activeOptions.dataDir })
   const contextWindowStateRestore = new ContextWindowStateRestore({
     store: contextWindowState,
@@ -221,13 +286,35 @@ export async function createRuntimeCore(
     new FileDelegatedSessionBindingStore(delegatedSessionRoot(activeOptions.dataDir)),
     nowIso
   )
+  // ACP serve-process singletons: pooled agent connections and the mediation
+  // host must outlive hot config reloads that rebuild the runtime objects.
+  const acpConnectionPool = new AcpConnectionPool()
+  const acpClientHost = new AcpClientHost()
+  const acpSessionManager = new AcpSessionManager({ coordinator: delegatedSessions })
+  const teamStoreForAdmission = new FileTeamStore(activeOptions.dataDir, nowIso)
   const threadService: ThreadService = new ThreadService({
+    legacyTaskGraphRoot: join(activeOptions.dataDir, 'task-graphs'),
     threadStore,
     deleteThreadStore: rawThreadStore,
     sessionStore,
     events,
     ids,
     nowIso,
+    projectSettings: () => ({
+      projectDefaults: activeOptions.ade?.projectDefaults ?? {},
+      defaultRoute: {
+        model: activeOptions.model,
+        ...(activeOptions.activeProviderId ? { providerId: activeOptions.activeProviderId } : {})
+      },
+      ...(activeOptions.ade?.managerModel ? { managerModel: activeOptions.ade.managerModel } : {}),
+      ...(activeOptions.ade?.limits ? { limits: activeOptions.ade.limits } : {}),
+      ...(activeOptions.ade?.budget ? { budget: activeOptions.ade.budget } : {})
+    }),
+    projectSourceRoot: (workspaceId) => taskWorkspaceStore.get(workspaceId)?.sourceRoot,
+    hasActiveTeam: async (threadId) => {
+      const team = await teamStoreForAdmission.get(threadId)
+      return team?.workers.some((worker) => worker.state === 'active') ?? false
+    },
     defaultApprovalPolicy: activeOptions.approvalPolicy,
     defaultSandboxMode: activeOptions.sandboxMode,
     defaultApprovalReviewer: activeOptions.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
@@ -283,9 +370,37 @@ export async function createRuntimeCore(
   const artifactStore: ArtifactStore = activeOptions.serviceManager
     ? new ManagerRemoteArtifactStore(activeOptions.serviceManager)
     : new FileArtifactStore(join(activeOptions.dataDir, 'artifacts'), nowIso)
+  const approvedSetup = createApprovedSetupResolver({
+    approvedEntries: () => activeOptions.ade?.approvedWorktreeConfigs ?? []
+  })
+  const taskWorkspaces = new TaskWorkspaceService({
+    store: taskWorkspaceStore,
+    lifecycle: createWorktreeLifecycle({
+      git: workspaceGit,
+      commitGit: workspaceCommitGit,
+      fence: assertWorkspaceWriteFence,
+      withCommit: withWorkspaceWriteCommit
+    }),
+    events,
+    projectConfig: async (repoRoot) => {
+      const loaded = await loadKunProjectConfig(repoRoot).catch(() => null)
+      return loaded?.status === 'valid' ? loaded : null
+    },
+    approvedSetup,
+    environmentFill: (input) =>
+      fillTaskWorktreeEnvironment({
+        ...input,
+        userSharedPaths: userSharedPathsForRepo(
+          activeOptions.ade?.worktreeSharedPaths, input.repoRoot
+        )
+      }),
+    setupRunner: new TaskWorkspaceSetupRunner({ artifacts: artifactStore }),
+    artifacts: artifactStore
+  })
+  taskWorkspaces.recoverInterrupted()
   const graphConfig = (): GraphRuntimeConfig =>
     activeOptions.graph ?? DEFAULT_GRAPH_RUNTIME_CONFIG
-  const graphRuntime = new GraphRuntimeComposition({
+  const graphRuntime: GraphRuntimeComposition = new GraphRuntimeComposition({
     dataDir: activeOptions.dataDir,
     config: graphConfig,
     artifactStore,
@@ -343,25 +458,26 @@ export async function createRuntimeCore(
       providerId: profile?.id,
       presetSource: profile?.presetSource,
       baseUrl: profile?.baseUrl,
+      endpointFormat: profile?.endpointFormat, endpoints: profile?.endpoints,
       kind: profile?.kind,
       model
     }, modelProfiles)
-  const delegatedContextProfile = (model: string) => {
-    const thresholds = contextThresholdsForModel(model, {
-      softThreshold:
-        activeOptions.contextCompaction?.defaultSoftThreshold ??
-        DEFAULT_CONTEXT_THRESHOLDS.softThreshold,
-      hardThreshold:
-        activeOptions.contextCompaction?.defaultHardThreshold ??
-        DEFAULT_CONTEXT_THRESHOLDS.hardThreshold
-    }, modelProfiles)
-    return {
-      contextWindowTokens: modelCapabilities(model).contextWindowTokens ??
-        Math.max(thresholds.softThreshold, thresholds.hardThreshold),
-      softThresholdTokens: thresholds.softThreshold,
-      hardThresholdTokens: thresholds.hardThreshold
-    }
-  }
+  const delegatedContextProfile = (model: string, providerId?: string) =>
+    resolveDelegatedContextProfile({
+      model,
+      ...(providerId ? { providerId } : {}),
+      defaults: {
+        softThreshold:
+          activeOptions.contextCompaction?.defaultSoftThreshold ??
+          DEFAULT_CONTEXT_THRESHOLDS.softThreshold,
+        hardThreshold:
+          activeOptions.contextCompaction?.defaultHardThreshold ??
+          DEFAULT_CONTEXT_THRESHOLDS.hardThreshold
+      },
+      providers: activeOptions.providers,
+      profilesForProvider,
+      modelCapabilities
+    })
   return {
     options,
     dataDirLease,
@@ -395,8 +511,14 @@ export async function createRuntimeCore(
     contextWindowStateRestore,
     events,
     threadActivity,
+    activityStore,
+    activityFacts,
+    taskWorkspaces,
     prefix,
     delegatedSessions,
+    acpConnectionPool,
+    acpClientHost,
+    acpSessionManager,
     threadService,
     projectBoardStore,
     historyReferences,
@@ -410,7 +532,11 @@ export async function createRuntimeCore(
     registryModelCapabilities,
     delegatedContextProfile,
     get activeOptions() { return activeOptions },
-    set activeOptions(value: KunServeRuntimeOptions) { activeOptions = value },
+    set activeOptions(value: KunServeRuntimeOptions) {
+      if (value.providers !== activeOptions.providers) providerModelProfiles = modelContextProfilesByProvider(value.providers)
+      activeOptions = value; optionsRevision += 1
+    },
+    get optionsRevision() { return optionsRevision },
     get modelProfiles() { return modelProfiles },
     set modelProfiles(value: typeof modelProfiles) { modelProfiles = value },
     get providerModelProfiles() { return providerModelProfiles },

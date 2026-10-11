@@ -1,6 +1,8 @@
+import { restoredThreadContextSnapshot } from './thread-context-snapshot'
 import type { ChatBlock } from '../agent/types'
 import type { RuntimeProjectionAction } from '../agent/runtime-projection-actions'
 import type { ChatState } from './chat-store-types'
+import { threadTodosForProjection } from './thread-todo-projection'
 import type { ChatProjectionReducerContext } from './chat-projection-reducer'
 import {
   finalizeTurnTimingAt,
@@ -182,7 +184,9 @@ export function reduceLateChatProjection(
     case 'todos_changed': {
       const event = action.payload
       if (!event.threadId) return {}
-      const todos = event.cleared ? null : event.todos
+      const previous = threadTodosForProjection(state, event.threadId)
+      const todos = threadTodosForProjection(state, event.threadId, event.cleared ? null : event.todos)
+      if (todos === previous) return {}
       const updatedAt = todos?.updatedAt ?? event.createdAt ?? new Date(context.now).toISOString()
       const threads = state.threads.map((thread) =>
         thread.id === event.threadId ? { ...thread, todos, updatedAt } : thread
@@ -199,28 +203,72 @@ export function reduceLateChatProjection(
         !event.threadId ||
         (!title && !status && event.titleAuto === undefined && !event.agentSurface && !event.designProfile)
       ) return {}
+      const applyMetadata = (thread: typeof state.threads[number]): typeof thread =>
+        thread.id === event.threadId
+          ? {
+              ...thread,
+              ...(title ? { title } : {}),
+              ...(status ? { status } : {}),
+              ...(event.titleAuto !== undefined ? { titleAuto: event.titleAuto } : {}),
+              ...(event.agentSurface ? { agentSurface: event.agentSurface } : {}),
+              ...(event.designProfile ? { designProfile: event.designProfile } : {})
+            }
+          : thread
       return {
-        threads: state.threads.map((thread) =>
-          thread.id === event.threadId
-            ? {
-                ...thread,
-                ...(title ? { title } : {}),
-                ...(status ? { status } : {}),
-                ...(event.titleAuto !== undefined ? { titleAuto: event.titleAuto } : {}),
-                ...(event.agentSurface ? { agentSurface: event.agentSurface } : {}),
-                ...(event.designProfile ? { designProfile: event.designProfile } : {})
-              }
-            : thread
-        )
+        threads: state.threads.map(applyMetadata),
+        adeThreads: (state.adeThreads ?? []).map(applyMetadata)
       }
     }
     case 'context_snapshot_received':
       return state.activeThreadId === action.payload.threadId
         ? { lastContextSnapshot: action.payload }
         : {}
+    case 'handoff_received': {
+      const event = action.payload
+      const id = `handoff-${event.turnId ?? 'turn'}-${event.briefDigest || 'brief'}`
+      const index = state.blocks.findIndex(
+        (block) => block.kind === 'handoff' && block.id === id
+      )
+      if (index >= 0) {
+        const current = state.blocks[index]
+        if (current.kind !== 'handoff') return {}
+        const blocks = [...state.blocks]
+        blocks[index] = {
+          ...current,
+          turnId: event.turnId ?? current.turnId,
+          reason: event.reason,
+          handoffMode: event.mode,
+          toHarnessName: event.toHarnessName,
+          toModel: event.toModel,
+          recentTurns: event.recentTurns,
+          files: event.files,
+          briefDigest: event.briefDigest
+        }
+        return { blocks }
+      }
+      const block: Extract<ChatBlock, { kind: 'handoff' }> = {
+        kind: 'handoff',
+        id,
+        turnId: event.turnId,
+        createdAt: event.createdAt ?? new Date(context.now).toISOString(),
+        reason: event.reason,
+        handoffMode: event.mode,
+        toHarnessName: event.toHarnessName,
+        toModel: event.toModel,
+        recentTurns: event.recentTurns,
+        files: event.files,
+        briefDigest: event.briefDigest
+      }
+      const blocks = upsertProjectedTimelineBlock(state, block)
+      return blocks === state.blocks ? {} : { blocks }
+    }
     case 'delegated_runtime_received':
       return state.activeThreadId === action.payload.threadId
         ? { lastDelegatedRuntimeState: action.payload }
+        : {}
+    case 'harness_runtime_received':
+      return state.activeThreadId === action.payload.threadId
+        ? { lastHarnessRuntimeState: action.payload }
         : {}
     case 'usage_received': {
       const threadId = state.activeThreadId ?? ''
@@ -288,42 +336,54 @@ export function reduceLateChatProjection(
               : snapshot.threadStatus
           )
         : undefined
-      const statusThreads = snapshotTurnIsCurrent && (
-        reconciledStatus || snapshot.latestTurnId || snapshot.latestTurnStatus
-      )
-        ? updateProjectedThreadStatus(
-            state.threads,
-            snapshot.threadId,
-            reconciledStatus ?? (busy ? 'running' : 'idle'),
-            snapshot.latestTurnStatus,
-            snapshot.latestTurnId
-          )
-        : state.threads
-      let threads = statusThreads
-      if (
-        snapshotTurnIsCurrent &&
-        (snapshot.goal !== undefined || snapshot.todos !== undefined)
-      ) {
-        let canonicalStateChanged = false
-        const canonicalThreads = statusThreads.map((thread) => {
+      const canonicalTodos = threadTodosForProjection(state, snapshot.threadId, snapshot.todos)
+      const statusUpdate = (
+        list: ChatState['threads'],
+        hasUpdate: boolean
+      ): ChatState['threads'] => {
+        if (!hasUpdate) return list
+        const next = updateProjectedThreadStatus(
+          list,
+          snapshot.threadId,
+          reconciledStatus ?? (busy ? 'running' : 'idle'),
+          snapshot.latestTurnStatus,
+          snapshot.latestTurnId
+        )
+        if (
+          snapshot.goal === undefined && snapshot.todos === undefined
+        ) return next
+        let changed = false
+        const canonical = next.map((thread) => {
           if (thread.id !== snapshot.threadId) return thread
           const goalMatches = snapshot.goal === undefined || thread.goal === snapshot.goal
-          const todosMatch = snapshot.todos === undefined || thread.todos === snapshot.todos
+          const todosMatch = snapshot.todos === undefined || thread.todos === canonicalTodos
           if (goalMatches && todosMatch) return thread
-          canonicalStateChanged = true
+          changed = true
           return {
             ...thread,
             ...(snapshot.goal !== undefined ? { goal: snapshot.goal } : {}),
-            ...(snapshot.todos !== undefined ? { todos: snapshot.todos } : {})
+            ...(snapshot.todos !== undefined ? { todos: canonicalTodos } : {})
           }
         })
-        if (canonicalStateChanged) threads = canonicalThreads
+        return changed ? canonical : next
       }
+      const hasStatusUpdate = snapshotTurnIsCurrent && Boolean(
+        reconciledStatus || snapshot.latestTurnId || snapshot.latestTurnStatus
+      )
+      const hasCanonicalUpdate = snapshotTurnIsCurrent && (
+        snapshot.goal !== undefined || snapshot.todos !== undefined
+      )
+      const threads = statusUpdate(state.threads, hasStatusUpdate || hasCanonicalUpdate)
+      const adeThreads = statusUpdate(
+        state.adeThreads ?? [],
+        (hasStatusUpdate || hasCanonicalUpdate) && (state.adeThreads?.length ?? 0) > 0
+      )
       const canonicalBlocks = busy || !snapshotTurnIsCurrent
         ? snapshot.blocks
         : context.settlePendingRuntimeWork(snapshot.blocks)
       const shouldClearLive = snapshotTurnIsCurrent
       return {
+        ...(snapshotTurnIsCurrent ? { lastContextSnapshot: restoredThreadContextSnapshot(snapshot.threadId, snapshot.contextSnapshot, state.lastContextSnapshot) } : {}),
         blocks: snapshot.turnId
           ? reconcileSnapshotTurn(
               state.blocks,
@@ -376,8 +436,9 @@ export function reduceLateChatProjection(
         activeThreadTodos:
           !snapshotTurnIsCurrent || snapshot.todos === undefined
             ? state.activeThreadTodos
-            : snapshot.todos,
+            : canonicalTodos,
         ...(threads !== state.threads ? { threads } : {}),
+        ...(adeThreads !== state.adeThreads ? { adeThreads } : {}),
         error: context.clearRecoveringError(state.error)
       }
     }
@@ -394,6 +455,14 @@ export function reduceLateChatProjection(
             action.payload.turnId
           )
         : state.threads
+      const adeThreads = threadId
+        ? settleProjectedThreadStatus(
+            state.adeThreads ?? [],
+            threadId,
+            aborted ? 'aborted' : 'completed',
+            action.payload.turnId
+          )
+        : state.adeThreads
       const patch = flushLiveProjection(state, context.now, {
         ...finalizeTurnTimingAt(state, context.now),
         error: null,
@@ -406,7 +475,8 @@ export function reduceLateChatProjection(
         } : {}),
         ...(state.busy ? { busy: false, busyUnconfirmed: false } : {}),
         ...(settledCurrentTurn ? { usageRefreshKey: state.usageRefreshKey + 1 } : {}),
-        ...(threads !== state.threads ? { threads } : {})
+        ...(threads !== state.threads ? { threads } : {}),
+        ...(adeThreads !== state.adeThreads ? { adeThreads } : {})
       })
       if (!threadId) return patch
       const watchTurnCompletion = { ...state.watchTurnCompletion }
@@ -450,6 +520,13 @@ export function reduceLateChatProjection(
           turnId
         )
         if (threads !== state.threads) patch.threads = threads
+        const adeThreads = settleProjectedThreadStatus(
+          state.adeThreads ?? [],
+          settleThreadId,
+          interrupted ? 'aborted' : 'failed',
+          turnId
+        )
+        if (adeThreads !== state.adeThreads) patch.adeThreads = adeThreads
       }
       if (terminal && settleThreadId) {
         const watchTurnCompletion = { ...state.watchTurnCompletion }

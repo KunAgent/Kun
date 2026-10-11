@@ -13,7 +13,8 @@ import {
   type SubscriptionQuotaProbeKind,
   type SubscriptionQuotaRuntime
 } from './provider-subscription-quota.js'
-import { MAX_RESPONSE_BYTES, type ProbeContext, type ProviderQuotaProbeKind, ProviderQuotaRequestError, QUOTA_TIMEOUT_MS } from './provider-quota-service-core.js'
+import { customBalanceUrl, MAX_RESPONSE_BYTES, type ProbeContext, type ProviderQuotaProbeKind, ProviderQuotaRequestError, QUOTA_TIMEOUT_MS } from './provider-quota-service-core.js'
+import { parseAiHubMixBalance, parseCustomBalance, parseNewApiKeyBalance, parseSiliconFlowBalance, parseStepFunBalance } from './provider-quota-balance-parsers.js'
 import { parseDeepSeekQuota, parseKimiCodeQuota, parseMiniMaxQuota, parseMoonshotQuota, parseOpenAiQuota, parseOpenRouterQuota, parseZaiQuota } from './provider-quota-service-provider-parsers.js'
 
 export async function runProbe(
@@ -23,7 +24,7 @@ export async function runProbe(
   subscriptionRuntime: Partial<SubscriptionQuotaRuntime>
 ): Promise<{ metrics: ProviderQuotaMetric[]; summary?: string; source?: string }> {
   if (isSubscriptionQuotaProbe(kind)) {
-    return runSubscriptionQuotaProbe(kind, provider, context, subscriptionRuntime)
+    return runSubscriptionQuotaProbe(kind, provider, { fetcher: context.fetcher, proxyUrl: context.proxyUrl }, subscriptionRuntime)
   }
   if (kind === 'deepseek') {
     return { metrics: parseDeepSeekQuota(await requestJson(
@@ -62,6 +63,29 @@ export async function runProbe(
       'https://api.openai.com/v1/dashboard/billing/credit_grants',
       context
     )) }
+  }
+  if (kind === 'siliconflow-cn' || kind === 'siliconflow-global') {
+    return { metrics: parseSiliconFlowBalance(await requestJson(kind === 'siliconflow-cn'
+      ? 'https://api.siliconflow.cn/v1/user/info' : 'https://api.siliconflow.com/v1/user/info', context),
+    kind === 'siliconflow-cn' ? 'CNY' : 'USD') }
+  }
+  if (kind === 'stepfun-cn' || kind === 'stepfun-global') {
+    return { metrics: parseStepFunBalance(await requestJson(kind === 'stepfun-cn'
+      ? 'https://api.stepfun.com/v1/accounts' : 'https://api.stepfun.ai/v1/accounts', context),
+    kind === 'stepfun-cn' ? 'CNY' : 'USD') }
+  }
+  if (kind === 'aihubmix') {
+    return { metrics: parseAiHubMixBalance(await requestJson('https://aihubmix.com/dashboard/billing/remain', context)) }
+  }
+  if (kind === 'new-api') {
+    return { metrics: parseNewApiKeyBalance(await requestJson(`${new URL(provider.baseUrl ?? '').origin}/api/usage/token`, context)) }
+  }
+  if (kind === 'custom-balance') {
+    const url = customBalanceUrl(provider)
+    if (!url) throw new ProviderQuotaRequestError('The balance URL must be HTTPS on the provider host or the host confirmed for it.')
+    const pointer = url.hash ? decodeURIComponent(url.hash.slice(1)) : undefined
+    url.hash = ''
+    return { metrics: parseCustomBalance(await requestJson(url.toString(), context, { keyHeader: provider.balanceKeyHeader }), pointer, provider.balanceUnit) }
   }
   if (kind === 'kimi-code') {
     return {
@@ -105,14 +129,15 @@ export async function probeMiniMax(
   throw lastError ?? new Error('MiniMax quota is unavailable.')
 }
 
-export async function requestJson(url: string, context: ProbeContext): Promise<unknown> {
+export async function requestJson(url: string, context: ProbeContext, options: { keyHeader?: string } = {}): Promise<unknown> {
   let response: Response
   try {
     response = await context.fetcher(url, {
       method: 'GET',
+      redirect: 'error',
       headers: {
         Accept: 'application/json',
-        Authorization: `Bearer ${context.apiKey}`
+        ...(options.keyHeader ? { [options.keyHeader]: context.apiKey } : { Authorization: `Bearer ${context.apiKey}` })
       },
       signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS)
     }, context.proxyUrl)

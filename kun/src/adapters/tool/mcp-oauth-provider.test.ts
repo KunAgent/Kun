@@ -46,7 +46,7 @@ describe('defaultMcpOAuthRedirectPort', () => {
     expect(different).not.toBe(first)
   })
 
-  it('accepts legacy unstamped tokens and stamps the issuer on successful save', async () => {
+  it('withholds legacy unstamped tokens until a fresh authorization stamps the issuer', async () => {
     await withStore(async (path) => {
       const store = new FileMcpOAuthStore(path)
       await store.update((state) => ({
@@ -54,9 +54,9 @@ describe('defaultMcpOAuthRedirectPort', () => {
         tokens: { access_token: 'legacy', token_type: 'bearer' }
       }))
       const provider = new FileMcpOAuthProvider('docs', remoteServer, path)
-      await expect(provider.tokens({ issuer: 'https://auth.example.test' })).resolves.toMatchObject({
-        access_token: 'legacy'
-      })
+      await expect(provider.tokens({ issuer: 'https://auth.example.test' })).resolves.toBeUndefined()
+      await expect(provider.tokens()).resolves.toBeUndefined()
+      await expect(store.read()).resolves.toMatchObject({ tokens: { access_token: 'legacy' } })
 
       await provider.saveTokens(
         { access_token: 'renewed', token_type: 'bearer' },

@@ -1,0 +1,28 @@
+{
+  "sessionId": "gateway-model-session",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {},
+    "authMethods": []
+  },
+  "newSession": {
+    "configOptions": [{
+      "id": "model",
+      "name": "Model",
+      "category": "model",
+      "type": "select",
+      "currentValue": "other-model",
+      "options": [
+        { "value": "other-model", "name": "Other model" },
+        { "value": "kun/deepseek/deepseek-chat", "name": "Kun gateway model" }
+      ]
+    }]
+  },
+  "turns": [{
+    "steps": [{ "update": {
+      "sessionUpdate": "agent_message_chunk",
+      "content": { "type": "text", "text": "Gateway response" }
+    } }],
+    "stopReason": "end_turn"
+  }]
+}

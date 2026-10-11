@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "together",
+  "name": "Together",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.together.xyz/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.together.ai/",
+  "credentialUrl": "https://api.together.ai/settings/api-keys"
+}

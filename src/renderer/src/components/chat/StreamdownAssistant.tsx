@@ -1,5 +1,4 @@
 import type { ComponentPropsWithRef, MouseEvent, ReactElement } from 'react'
-import { useEffect, useRef, useState } from 'react'
 import { Streamdown, type StreamdownProps } from 'streamdown'
 import remarkGfm from 'remark-gfm'
 import { harden } from 'rehype-harden'
@@ -10,104 +9,12 @@ import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import { sanitizeAssistantCanvasToolDisplay } from '../../design/canvas/strip-canvas-tool-display'
 import { StreamdownCode } from './StreamdownCode'
+import { useAssistantTextReveal } from './use-assistant-text-reveal'
 import { useTimelineFilePreviewWorkspaceRoot } from './timeline-file-preview-workspace'
 import { createMathPlugin } from '@streamdown/math'
 import 'katex/dist/katex.min.css'
 
-/** Reveal ~1/8 of the outstanding backlog per frame… */
-const CATCHUP_DIVISOR = 8
-/** …but never more than this, so a huge backlog (tab refocus, resumed
- * thread, burst from a fast model) drains as fast typing instead of a
- * near-instant wall of text. */
-const MAX_STEP_PER_FRAME = 32
-const COMBINING_MARK_REGEX = /\p{Mark}/u
-const VARIATION_SELECTOR_REGEX = /\p{Variation_Selector}/u
-const graphemeSegmenter =
-  typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
-    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
-    : null
-
-export function nextVisibleLength(current: number, target: number): number {
-  if (current === target) return current
-  // Live text shrank (interrupt / reset) — snap, never animate backwards.
-  if (current > target) return target
-  const backlog = target - current
-  return current + Math.min(MAX_STEP_PER_FRAME, Math.max(1, Math.ceil(backlog / CATCHUP_DIVISOR)))
-}
-
-function fallbackBoundary(text: string, length: number): number {
-  let boundary = length
-  const previousCode = text.charCodeAt(boundary - 1)
-  if (previousCode >= 0xd800 && previousCode <= 0xdbff && boundary < text.length) {
-    boundary += 1
-  }
-
-  while (boundary < text.length) {
-    const codePoint = text.codePointAt(boundary)
-    if (codePoint == null) break
-    const char = String.fromCodePoint(codePoint)
-    if (COMBINING_MARK_REGEX.test(char) || VARIATION_SELECTOR_REGEX.test(char)) {
-      boundary += char.length
-      continue
-    }
-    if (codePoint === 0x200d) {
-      boundary += 1
-      const joinedCodePoint = text.codePointAt(boundary)
-      if (joinedCodePoint == null) break
-      boundary += String.fromCodePoint(joinedCodePoint).length
-      continue
-    }
-    break
-  }
-
-  return boundary
-}
-
-function nextTextBoundary(text: string, visibleLength: number): number {
-  const length = Math.max(0, Math.min(visibleLength, text.length))
-  if (length === 0 || length === text.length) return length
-
-  if (graphemeSegmenter) {
-    for (const segment of graphemeSegmenter.segment(text)) {
-      const boundary = segment.index + segment.segment.length
-      if (boundary >= length) return boundary
-    }
-  }
-
-  return fallbackBoundary(text, length)
-}
-
-export function visibleTextForTypewriter(text: string, visibleLength: number): string {
-  return text.slice(0, nextTextBoundary(text, visibleLength))
-}
-
-/**
- * Paces streaming text so it reveals sequentially, decoupled from SSE
- * chunk sizes. Without this, one bursty chunk spans several markdown
- * blocks and every affected line blurs in at once — the half-faded
- * patches scattered across bullets read as holes instead of typing.
- */
-function useTypewriterText(text: string, streaming: boolean): string {
-  // Start at the current length: re-entering a thread mid-turn must not
-  // replay everything already on screen.
-  const [visibleLength, setVisibleLength] = useState(() => text.length)
-  const targetRef = useRef(text.length)
-  targetRef.current = text.length
-
-  useEffect(() => {
-    if (!streaming) return
-    let raf = requestAnimationFrame(function tick() {
-      // When caught up this returns the same value, so React bails out of
-      // re-rendering and the idle loop costs only the rAF callback.
-      setVisibleLength((current) => nextVisibleLength(current, targetRef.current))
-      raf = requestAnimationFrame(tick)
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [streaming])
-
-  if (!streaming) return text
-  return visibleTextForTypewriter(text, visibleLength)
-}
+export { nextVisibleLength, visibleTextForTypewriter } from './assistant-text-reveal'
 
 const rehypePlugins = [
   rehypeFileReferences,
@@ -250,7 +157,7 @@ export function StreamdownAssistant({
   hideHtmlComments = false
 }: Props): ReactElement {
   const displayText = sanitizeAssistantCanvasToolDisplay(text)
-  const pacedText = useTypewriterText(displayText, streaming)
+  const pacedText = useAssistantTextReveal(displayText, streaming)
   const remarkPlugins = hideHtmlComments
     ? [remarkGfm, remarkHideHtmlComments]
     : [remarkGfm]

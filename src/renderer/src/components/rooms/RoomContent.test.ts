@@ -91,3 +91,16 @@ it('keeps the explicitly chosen builtin portrait stable when role or name change
   expect(renderer!.root.findByProps({ 'data-avatar-id': 'scientist' })).toBeTruthy()
   expect(requests).not.toHaveBeenCalled()
 })
+
+
+it('collapses long assistant text without hiding its delivered file cards', async () => {
+  await act(async () => { renderer = create(createElement(RoomMessageBody, {
+    room, messageId: 'long', body: 'Long answer '.repeat(400), attachmentIds: ['report'], collapsible: true
+  })) })
+  expect(renderer!.root.findAllByType(RoomContentCard)).toHaveLength(1)
+  const toggle = renderer!.root.findByProps({ className: 'rooms-message-collapse' })
+  expect(toggle.props['aria-expanded']).toBe(false)
+  act(() => toggle.props.onClick())
+  expect(renderer!.root.findByProps({ className: 'rooms-message-collapse' }).props['aria-expanded']).toBe(true)
+  expect(renderer!.root.findAllByType(RoomContentCard)).toHaveLength(1)
+})

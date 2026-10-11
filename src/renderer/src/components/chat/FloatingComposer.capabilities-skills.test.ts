@@ -76,7 +76,11 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 const DEEPSEEK_PROVIDER_GROUP = {
   providerId: 'deepseek',
   label: 'DeepSeek',
-  modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash']
+  modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+  modelProfiles: Object.fromEntries(['deepseek-v4-pro', 'deepseek-v4-flash'].map((id): [string, NonNullable<ModelProviderModelGroup['modelProfiles']>[string]] => [id, {
+    inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
+    reasoning: { supportedEfforts: ['off', 'high', 'max'], defaultEffort: 'max', requestProtocol: 'deepseek-chat-completions' }
+  }]))
 }
 
 const CODEX_PROVIDER_GROUP: ModelProviderModelGroup = {
@@ -339,12 +343,9 @@ describe('FloatingComposer capability controls', () => {
 
     expect(html).toContain('deepseek-v4-pro')
     expect(html).toContain('Queue message')
-    const modelTrigger = html.match(/<button[^>]*aria-label="Model: DeepSeek \/ deepseek-v4-pro"[^>]*>/)?.[0]
-    const reasoningTrigger = html.match(/<button[^>]*aria-label="Reasoning: High"[^>]*>/)?.[0]
+    const modelTrigger = html.match(/<button[^>]*aria-label="Model and reasoning settings: DeepSeek \/ deepseek-v4-pro \/ Reasoning High"[^>]*>/)?.[0]
     expect(modelTrigger).toBeDefined()
     expect(modelTrigger).not.toContain('disabled=""')
-    expect(reasoningTrigger).toBeDefined()
-    expect(reasoningTrigger).not.toContain('disabled=""')
     expect(html).not.toContain('Stop and discard')
     expect(html).not.toContain('lucide-trash-2')
     expect(html).not.toContain('lucide-zap')
@@ -392,7 +393,7 @@ describe('FloatingComposer capability controls', () => {
     expect(html).toContain('deepseek-v4-flash')
     expect(html).toContain('High')
     expect(html).toContain('Model and reasoning settings')
-    expect(html).toContain('aria-haspopup="menu"')
+    expect(html).toContain('aria-haspopup="dialog"')
     expect(html).not.toContain('<input')
   })
 

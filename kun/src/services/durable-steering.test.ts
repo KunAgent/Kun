@@ -82,3 +82,27 @@ describe('durable queued-to-steering ownership', () => {
     expect((await h.sessionStore.loadItems('thread')).filter((item) => item.id.startsWith('item_steered_'))).toHaveLength(1)
   })
 })
+
+describe('delegated runtime steering', () => {
+  it('reopens a sealed turn, signals admitted guidance and seals again once drained', async () => {
+    const h = await harness()
+    // The agent loop seals steering before it hands a delegated turn over.
+    expect(h.steering.sealIfEmpty(h.a.turnId)).toBe(true)
+    const live = h.turns.openDelegatedSteering('thread', h.a.turnId)
+    let signals = 0
+    const unsubscribe = live.subscribe(() => { signals += 1 })
+
+    await h.turns.steerTurn({ threadId: 'thread', turnId: h.a.turnId, operationId: 'guide-1', text: 'also allow 5-1' })
+    expect(signals).toBeGreaterThan(0)
+    expect(live.sealIfEmpty()).toBe(false)
+    expect(await live.take()).toEqual([{ text: 'also allow 5-1' }])
+    expect(await live.take()).toEqual([])
+    const history = executableHistory(await h.sessionStore.loadItems('thread'), await h.threadStore.get('thread'))
+    expect(history.filter((item) => item.kind === 'user_message').map((item) => item.text)).toEqual(['A', 'also allow 5-1'])
+
+    expect(live.sealIfEmpty()).toBe(true)
+    unsubscribe()
+    await expect(h.turns.steerTurn({ threadId: 'thread', turnId: h.a.turnId, operationId: 'guide-2', text: 'late' }))
+      .rejects.toThrow('steering_target_closed')
+  })
+})

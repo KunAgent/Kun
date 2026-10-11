@@ -45,6 +45,8 @@ export const SVG_ARTIFACT_ALLOWED_TOOL_NAMES = [
   'design_svg_validate',
   'get_goal',
   'update_goal',
-  'todo_list',
-  'todo_write'
+  'task_list',
+  'task_get',
+  'task_create',
+  'task_update'
 ] as const

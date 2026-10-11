@@ -1,3 +1,4 @@
+import { executionTaskCommand } from './execution-task-commands.js'
 import type {
   AttachmentMetadata,
   GraphOrchestrationStrategy,
@@ -131,69 +132,11 @@ export abstract class TuiControllerWorkspace extends TuiControllerAttachments {
   async manageTodos(action?: string): Promise<void> {
     const projection = this.requireProjection()
     if (!projection) return
-    const value = action?.trim() ?? ''
     try {
-      const current = (await this.client.threadTodos(projection.thread.id)).todos?.items ?? []
-      if (!value || value === 'list') {
-        this.inspect('Plan', current.length
-          ? current.map((todo, index) => `${index + 1}. [${todo.status}] ${todo.content}\n   ${todo.id}`)
-          : ['No persisted plan tasks.', 'Usage: /tasks add <task>'])
-        return
-      }
-      const [verb = '', target = '', ...rest] = splitWords(value)
-      if (verb === 'clear') {
-        await this.client.clearThreadTodos(projection.thread.id)
-        this.notify('Plan tasks cleared.')
-        return
-      }
-      let next: Array<{
-        id?: string
-        content: string
-        status: ThreadTodoStatus
-        source?: ThreadTodoItem['source']
-      }> = current.map(todoInput)
-      if (verb === 'add') {
-        const content = [target, ...rest].join(' ').trim()
-        if (!content) throw new Error('Usage: /tasks add <task>')
-        next.push({ content, status: 'pending' })
-      } else if (['start', 'done', 'pending'].includes(verb)) {
-        const selected = resolveTodo(current, target)
-        if (!selected) throw new Error(`Unknown task: ${target}`)
-        const status: ThreadTodoStatus = verb === 'start'
-          ? 'in_progress'
-          : verb === 'done'
-            ? 'completed'
-            : 'pending'
-        next = next.map((todo) => todo.id === selected.id
-          ? { ...todo, status }
-          : status === 'in_progress' && todo.status === 'in_progress'
-            ? { ...todo, status: 'pending' }
-            : todo)
-      } else if (verb === 'edit') {
-        const selected = resolveTodo(current, target)
-        const content = rest.join(' ').trim()
-        if (!selected || !content) throw new Error('Usage: /tasks edit <number|id> <text>')
-        next = next.map((todo) => todo.id === selected.id ? { ...todo, content } : todo)
-      } else if (verb === 'delete') {
-        const selected = resolveTodo(current, target)
-        if (!selected) throw new Error(`Unknown task: ${target}`)
-        next = next.filter((todo) => todo.id !== selected.id)
-      } else if (verb === 'move') {
-        const from = Number(target) - 1
-        const to = Number(rest[0]) - 1
-        if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || !next[from] || to < 0 || to >= next.length) {
-          throw new Error('Usage: /tasks move <from-number> <to-number>')
-        }
-        const [moved] = next.splice(from, 1)
-        next.splice(to, 0, moved!)
-      } else {
-        throw new Error('Usage: /tasks [list|add|edit|start|done|pending|delete|move|clear]')
-      }
-      await this.client.setThreadTodos(projection.thread.id, { todos: next })
-      this.notify('Plan tasks updated.')
-    } catch (error) {
-      this.fail(error)
-    }
+      const result = await executionTaskCommand(this.client, projection.thread.id, action?.trim() ?? '')
+      if (result.lines) this.inspect('Tasks', result.lines)
+      else if (result.message) this.notify(result.message)
+    } catch (error) { this.fail(error) }
   }
 
   async manageGoal(action?: string): Promise<void> {

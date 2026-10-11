@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -38,7 +38,7 @@ export function trustedWorkbenchRendererUrl(): string {
   return developmentRendererUrl() ?? pathToFileURL(join(__dirname, '../renderer/index.html')).href
 }
 
-function hardenTrustedRendererWindow(window: BrowserWindow, surface: RendererSurface): void {
+export function hardenTrustedRendererWindow(window: BrowserWindow, surface: RendererSurface): void {
   const trustedRendererUrl = trustedWorkbenchRendererUrl()
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   const preventUntrustedNavigation = (event: Electron.Event, targetUrl: string): void => {
@@ -55,7 +55,7 @@ export function createWindow(options: {
   useSystemTitleBar?: boolean
 } = {}): void {
   traceStartup('createWindow:start')
-  const preloadPath = resolveNamedPreloadPath(__dirname, 'index')
+  const preloadPath = resolveNamedPreloadPath(app.getAppPath(), 'index')
   const desktopTitleBarMode = resolveDesktopTitleBarMode(
     process.platform,
     options.useSystemTitleBar === true
@@ -242,7 +242,7 @@ export function createStorageRelocationWindow(): BrowserWindow {
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
-      preload: resolveNamedPreloadPath(__dirname, 'storage-relocation-recovery'),
+      preload: resolveNamedPreloadPath(app.getAppPath(), 'storage-relocation-recovery'),
       contextIsolation: true,
       sandbox: true,
       webviewTag: false,
@@ -283,7 +283,7 @@ export function createRuntimeDataRecoveryWindow(): BrowserWindow {
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
-      preload: resolveNamedPreloadPath(__dirname, 'runtime-data-recovery'),
+      preload: resolveNamedPreloadPath(app.getAppPath(), 'runtime-data-recovery'),
       contextIsolation: true,
       sandbox: true,
       webviewTag: false,

@@ -14,7 +14,8 @@ export const MemoryDistillationExtractionCandidate = MemoryCandidateDraft.extend
   durability: MemoryCandidateDurability,
   comparisons: z.array(z.object({
     memoryId: z.string().min(1).max(256),
-    relation: MemoryCandidateRelation
+    relation: MemoryCandidateRelation,
+    reason: z.string().trim().min(1).max(1000).optional()
   }).strict()).max(8).default([])
 }).strict()
 export type MemoryDistillationExtractionCandidate = z.infer<

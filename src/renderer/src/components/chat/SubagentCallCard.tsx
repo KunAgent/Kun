@@ -4,7 +4,6 @@ import { Check, ChevronDown, ChevronRight, Eye, Hourglass, Loader2, RotateCcw } 
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { BUILTIN_AGENT_CATALOG_BY_ID } from '../../../../../kun/src/delegation/builtin-agent-catalog'
-import { AgentKun } from '../subagents/AgentKun'
 import {
   SubagentLiveAvatar as AvatarDisc,
   SubagentLivenessLane as LaneHairline,
@@ -18,8 +17,18 @@ import {
   firstUsefulLine,
   isBareSubagentToolName,
   isFastContextToolBlock,
-  resolveFastContextTaskTitle
+  resolveFastContextTaskTitle,
+  splitTaskLine
 } from './fast-context-card-copy'
+import {
+  ExternalSubagentAvatar,
+  SwarmClusterAvatar,
+  ExternalSubagentNotice,
+  externalAgentIdentity,
+  externalPoseId,
+  mergeExternalDetail,
+  readExternalSubagentView
+} from './subagent-external-card'
 import {
   formatChildActivityLabel,
   readChildActivityFromBlock
@@ -81,16 +90,17 @@ export function SubagentCallCard({
   const onScreen = useOnScreen(ref)
 
   const child = readChildMeta(block)
+  const external = readExternalSubagentView(block)
   const detail = useMemo(
-    () => parseDelegateDetail(block.kind === 'tool' ? (block as ToolBlock).detail : undefined),
-    [block]
+    () => mergeExternalDetail(parseDelegateDetail(block.kind === 'tool' ? (block as ToolBlock).detail : undefined), external),
+    [block, external]
   )
   const evidencePack = useMemo(
     () => parseFastContextEvidencePack(block.kind === 'tool' ? (block as ToolBlock).detail : undefined),
     [block]
   )
   const activity = useMemo(() => readChildActivityFromBlock(block), [block])
-  const status = resolveStatus(block, child, detail)
+  const status = external?.status === 'awaiting' ? 'awaiting-permission' : resolveStatus(block, child, detail)
   const detached = child.detached === true || detail.detached === true
   const resultRef = child.resultRef ?? detail.resultRef
   const resultExternalized = Boolean(resultRef)
@@ -98,23 +108,23 @@ export function SubagentCallCard({
   const generated = detail.generated === true || (child.childProfile?.startsWith('generated:') ?? false)
   const animate = !reducedMotion && onScreen && status === 'running'
   const launcher = child.childLauncher || detail.launcher
-  const isFastContext = launcher === 'fast_context' || (launcher as string | undefined) === 'explore_agent' || (
-    block.kind === 'tool' && isFastContextToolBlock(block as ToolBlock)
-  )
+  const isFastContext = launcher === 'fast_context' || (launcher as string | undefined) === 'explore_agent' ||
+    (block.kind === 'tool' && isFastContextToolBlock(block as ToolBlock))
 
   // Profile id: prefer the live `childProfile` from the runtime metadata (set on
   // the first queued/running event) so the agent type shows immediately; the
   // result-JSON `profile` only arrives after the child completes.
   const profileId = child.childProfile || detail.profile || (isFastContext ? 'explore' : undefined)
   // Pose key: profile → childLabel → block toolName → 'custom'.
-  const poseId = profileId || (isFastContext ? 'explore' : undefined) || child.childLabel || child.childId || 'custom'
+  const poseId = external ? externalPoseId(external)
+    : profileId || (isFastContext ? 'explore' : undefined) || child.childLabel || child.childId || 'custom'
   const isKnownPose = KNOWN_POSE_IDS.has(poseId)
   const hue = isKnownPose ? null : hashHue(poseId)
 
   // Keep the task label and the selected agent identity separate. The runtime
   // snapshot is authoritative for custom/generated roles; built-ins may use a
   // localized catalog label without consulting mutable profile settings.
-  const taskText = block.kind === 'tool' ? splitTaskLine(block as ToolBlock) : undefined
+  const taskText = block.kind === 'tool' && !external ? splitTaskLine(block as ToolBlock) : undefined
   const exploreCatalog = BUILTIN_AGENT_CATALOG_BY_ID.explore
   const recordedAgentName = child.childProfileName || detail.profileName || detail.generatedAgentName
   const localizedBuiltinName =
@@ -136,7 +146,7 @@ export function SubagentCallCard({
       profileId?.trim() ||
       t('subagentNotRecorded', { defaultValue: 'Not recorded' })
     )
-  const agentIdentity = isFastContext
+  const agentIdentity = external ? externalAgentIdentity(external) : isFastContext
     ? agentName
     : (profileId && agentName !== profileId ? `${agentName} (${profileId})` : agentName)
   const model = (child.childModel || detail.model || '').trim() || undefined
@@ -158,7 +168,9 @@ export function SubagentCallCard({
     )
   const activityLine = !isTerminal(status) ? formatChildActivityLabel(activity) : undefined
   const steps = child.toolInvocations ?? detail.toolInvocations
-  const childId = child.childId || detail.childId
+  // External transcripts exist only when the owning adapter supplied this ID.
+  // Tool arguments/results and native child metadata cannot invent a drilldown.
+  const childId = external ? external.childThreadId : child.childId || detail.childId
   // Short subtitle only — keep CTA on the explicit process button, not in truncated text.
   const taskLine = activityLine || (
     isFastContext && isTerminal(status)
@@ -188,7 +200,7 @@ export function SubagentCallCard({
   const proactiveRetry = child.proactiveRetry ?? detail.proactiveRetry
   const attemptParentTurnId = child.parentTurnId || detail.parentTurnId
   const canResume = Boolean(
-    childId &&
+    !external && childId &&
     (status === 'failed' || status === 'stopped') &&
     (child.resumable ?? detail.resumable) === true &&
     (!attemptParentTurnId || !block.turnId || attemptParentTurnId === block.turnId)
@@ -277,7 +289,8 @@ export function SubagentCallCard({
         }`} data-subagent-header
       >
         <span className="ds-subagent-focus-decoration contents">
-          <AvatarDisc poseId={poseId} status={status} hue={hue} compact={compact} animate={animate} />
+          {external ? <ExternalSubagentAvatar view={external} compact={compact} running={animate} />
+            : <AvatarDisc poseId={poseId} status={status} hue={hue} compact={compact} animate={animate} />}
         </span>
         <div className="min-w-0 flex-1" data-subagent-title>
           <div className="flex min-w-0 items-center gap-2">
@@ -318,6 +331,7 @@ export function SubagentCallCard({
               {taskLine}
             </span>
           ) : null}
+          <ExternalSubagentNotice view={external} t={t} />
           {hasBody && !expanded ? (
             <span className="mt-0.5 block text-[11.5px] font-semibold text-accent">
               {t('exploreExpandConclusion', { defaultValue: 'Show conclusion' })}
@@ -355,7 +369,7 @@ export function SubagentCallCard({
           ) : null}
           <SubagentStopControl
             childId={childId}
-            active={status === 'queued' || status === 'running' || status === 'awaiting-permission'}
+            active={!external && (status === 'queued' || status === 'running' || status === 'awaiting-permission')}
             t={t}
           />
           {childId ? (
@@ -437,6 +451,12 @@ export function SubagentCallCard({
           <FastContextEvidenceDetail pack={evidencePack} t={t} />
 
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {launcher === 'manager-worker' && detail.harnessId ? (
+              <MetaChip title={detail.harnessId}>{detail.harnessId}</MetaChip>
+            ) : null}
+            {launcher === 'manager-worker' && detail.taskWorkspaceId ? (
+              <MetaChip title={detail.taskWorkspaceId}>{t('subagentWorktreeBadge', { defaultValue: 'worktree' })}</MetaChip>
+            ) : null}
             {detail.profile ? <MetaChip title={detail.profile}>{detail.profile}</MetaChip> : null}
             {typeof (child.totalTokens ?? detail.totalTokens) === 'number' && (child.totalTokens ?? detail.totalTokens ?? 0) > 0 ? (
               <MetaChip>{t('subagentTokensChip', { count: child.totalTokens ?? detail.totalTokens })}</MetaChip>
@@ -490,21 +510,6 @@ export function SubagentCallCard({
       ) : null}
     </section>
   )
-}
-
-/** Best-effort task one-liner from a generic delegate/explore summary string. */
-function splitTaskLine(block: ToolBlock): string | undefined {
-  const detail = parseDelegateDetail(block.detail)
-  if (detail.title?.trim()) return detail.title.trim()
-  const raw = block.summary?.trim()
-  if (!raw) return undefined
-  const stripped = raw
-    .replace(/^(delegate_task|fast_context|explore_agent|generate_subagent)\s*:\s*/i, '')
-    .trim()
-  if (!stripped || stripped.length > 160) return undefined
-  // Bare tool name (no task text yet, e.g. while running) — nothing useful.
-  if (/^(delegate_task|fast_context|explore_agent|generate_subagent)$/i.test(stripped)) return undefined
-  return stripped
 }
 
 /**
@@ -574,12 +579,8 @@ export function SubagentGroup({
     )
   }
 
-  const clusterPoses = sorted.slice(0, 5).map((b) => {
-    const c = readChildMeta(b)
-    const d = parseDelegateDetail(b.kind === 'tool' ? (b as ToolBlock).detail : undefined)
-    return c.childProfile || d.profile || c.childLabel || c.childId || 'custom'
-  })
-  const overflow = sorted.length - clusterPoses.length
+  const clusterBlocks = sorted.slice(0, 5)
+  const overflow = sorted.length - clusterBlocks.length
 
   const summaryParts: string[] = []
   if (running > 0) summaryParts.push(t('subagentSwarmRunning', { count: running }))
@@ -608,18 +609,7 @@ export function SubagentGroup({
           ) : null}
         </span>
         <span className="ds-subagent-focus-decoration flex shrink-0">
-          {clusterPoses.map((pose, i) => (
-            <span
-              key={`${pose}-${i}`}
-              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-ds-card"
-              style={{
-                marginLeft: i === 0 ? 0 : -8,
-                background: 'radial-gradient(circle at 50% 36%,#fff,#eef4fb)'
-              }}
-            >
-              <AgentKun id={pose} className="h-5 w-5" />
-            </span>
-          ))}
+          {clusterBlocks.map((b, i) => <SwarmClusterAvatar key={b.id} block={b} index={i} />)}
           {overflow > 0 ? (
             <span
               className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-ds-card bg-ds-card-muted text-[9px] font-semibold text-ds-muted"

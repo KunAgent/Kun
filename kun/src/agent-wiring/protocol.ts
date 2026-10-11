@@ -1,0 +1,49 @@
+import type { AgentWiringStatus, GatewayModelInfo, WiringProfile } from './types.js'
+
+/** Renderer → Main actions for the Agents page. Keys never cross this boundary. */
+export type AgentWiringAction =
+  | { action: 'list' }
+  | { action: 'connect'; agentId: string; model: string; smallModel?: string; effort?: string }
+  | { action: 'preview'; agentId: string; model: string; smallModel?: string; effort?: string }
+  | { action: 'disconnect'; agentId: string }
+  /** A fresh key for an agent that keeps it outside its config, handed over by the client. */
+  | { action: 'copy-key'; agentId: string }
+  | { action: 'sync' }
+  | { action: 'save-profile'; name: string }
+  | { action: 'apply-profile'; name: string }
+  | { action: 'delete-profile'; name: string }
+
+export type AgentWiringOverview = {
+  origin?: string
+  gatewayEnabled: boolean
+  agents: AgentWiringStatus[]
+  models: GatewayModelInfo[]
+  profiles: Record<string, WiringProfile>
+}
+
+/** One config file a connection would change; keys in the diff are masked. */
+export type AgentWiringFilePreview = { file: string; created: boolean; diff: string }
+export type AgentWiringPreview = { agentId: string; files: AgentWiringFilePreview[]; restartRequired: boolean }
+
+export type AgentWiringResult =
+  | ({ ok: true; notice?: string; applied?: string[]; failed?: { agentId: string; error: string }[]; preview?: AgentWiringPreview } & AgentWiringOverview)
+  | { ok: false; error: string; code?: string; file?: string }
+
+/** Maps a `/v1/model-gateway/catalog` row onto the model facts agent configs can use. */
+export function gatewayModelInfo(row: Record<string, unknown>): GatewayModelInfo | null {
+  if (typeof row.id !== 'string' || !row.id) return null
+  const number = (value: unknown): number | undefined => typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+  const levels = Array.isArray(row.supported_reasoning_levels)
+    ? row.supported_reasoning_levels.map((entry) => (entry as { effort?: unknown }).effort).filter((value): value is string => typeof value === 'string')
+    : undefined
+  const modalities = row.modalities as { input?: unknown } | undefined
+  return {
+    id: row.id,
+    ...(typeof row.display_name === 'string' ? { displayName: row.display_name } : {}),
+    ...(number(row.context_window) ? { contextWindow: number(row.context_window) } : {}),
+    ...(number(row.max_output_tokens) ? { maxOutputTokens: number(row.max_output_tokens) } : {}),
+    ...(levels?.length ? { reasoningLevels: levels } : {}),
+    ...(typeof row.reasoning === 'boolean' ? { reasoning: row.reasoning } : {}),
+    ...(Array.isArray(modalities?.input) ? { images: modalities.input.includes('image') } : {})
+  }
+}

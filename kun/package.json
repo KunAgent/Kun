@@ -1,6 +1,6 @@
 {
   "name": "kun",
-  "version": "0.3.10",
+  "version": "0.4.0",
   "description": "Kun local HTTP/SSE agent runtime",
   "engines": {
     "node": ">=22.19.0"
@@ -80,6 +80,7 @@
     "dev": "tsc -p tsconfig.build.json --watch"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "1.4.0",
     "@anthropic-ai/claude-agent-sdk": "0.3.220",
     "@computer-use/nut-js": "^4.2.0",
     "@cursor/sdk": "1.0.24",
@@ -88,7 +89,7 @@
     "@emnapi/runtime": "^1.10.0",
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
-    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/client": "^2.2.0",
     "@xmldom/xmldom": "^0.9.12",
     "ajv": "^8.20.0",
     "better-sqlite3": "^12.10.0",
@@ -101,30 +102,34 @@
     "proxy-agent": "^8.0.2",
     "safe-regex2": "5.1.1",
     "semver": "^7.8.5",
+    "smol-toml": "1.9.1",
     "typescript": "5.9.3",
     "typescript-language-server": "5.3.0",
-    "undici": "^7.29.0",
+    "undici": "^7.29.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "yaml": "^2.9.0",
     "yauzl": "^3.4.0",
     "yazl": "^3.3.1",
-    "zod": "^4.4.3",
-    "yaml": "^2.9.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/semver": "^7.7.1",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
+    "selfsigned": "5.5.0",
     "vitest": "^4.1.7"
   },
   "overrides": {
     "@hono/node-server": "2.0.11",
-    "fast-uri": "3.1.6",
-    "hono": "4.13.5",
-    "ip-address": "10.4.0",
+    "basic-ftp": "6.2.1",
+    "fast-uri": "3.1.8",
+    "hono": "4.13.7",
+    "ip-address": "10.7.2",
+    "proxy-addr": "2.0.8",
     "qs": "6.16.0",
     "@connectrpc/connect-node": {
-      "undici": "6.28.0"
+      "undici": "6.28.1"
     }
   }
 }

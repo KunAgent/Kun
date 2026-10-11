@@ -70,6 +70,8 @@ export function PaperVisualMarkCard({
         page: mark.page,
         comment: mark.comment ?? ''
       })
+      // The captured region rides along as an image when the model takes
+      // images; otherwise the question says so and goes as text.
       const dataUrl = cardImageRef.current
       let attached = false
       if (dataUrl && bridge.attachImage) {
@@ -77,11 +79,9 @@ export function PaperVisualMarkCard({
           .attachImage({ dataBase64: dataUrl.split(',')[1] ?? '', name: `paper-region-p${mark.page}.png` })
           .catch(() => false)
       }
-      if (bridge.submit) {
-        bridge.submit(attached ? prompt : `${prompt}\n${t('writePaperReaderRegionNoImage')}`)
-      } else {
-        bridge.setInput(attached ? prompt : `${prompt}\n${t('writePaperReaderRegionNoImage')}`)
-      }
+      const text = attached ? prompt : `${prompt}\n${t('writePaperReaderRegionNoImage')}`
+      if (bridge.submit) bridge.submit(text)
+      else bridge.setInput(text)
     } finally {
       setBusy(false)
     }

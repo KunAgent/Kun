@@ -163,7 +163,7 @@ export function emptyThreadBucket(threadId: string): ThreadUsageAccumulator {
 }
 
 export function emptyModelBucket(model: string): ModelUsageAccumulator {
-  return { model, ...emptyCounters(), threadIds: new Set<string>(), hasCacheTelemetry: false }
+  return { model, ...emptyCounters(), threadIds: new Set<string>(), harnessIds: new Set<string>(), hasCacheTelemetry: false }
 }
 
 type CounterFields = Omit<DailyUsageCounters, 'thread_count'>
@@ -219,7 +219,8 @@ export function finalizeThreadBucket(bucket: ThreadUsageAccumulator): ThreadUsag
 
 export function finalizeModelBucket(bucket: ModelUsageAccumulator): ModelUsageBucket {
   const finalized = counters(finalizeCacheRate(bucket, bucket.hasCacheTelemetry))
-  return { model: bucket.model, ...finalized, thread_count: bucket.thread_count }
+  return { model: bucket.model, ...finalized, thread_count: bucket.thread_count,
+    ...(bucket.harnessIds.size ? { harness_ids: [...bucket.harnessIds].sort() } : {}) }
 }
 
 function referenceCoverage(value: Pick<

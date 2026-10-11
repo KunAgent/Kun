@@ -36,13 +36,14 @@ export type SharedModelConnection = {
   presetSource?: string
   presetMode?: 'api' | 'token-plan'
   kind: 'http' | 'agent-sdk' | 'antigravity-cli' | 'cursor-sdk' | 'gemini-code-assist' | 'gemini-cli-api'
-  authType: 'api-key' | 'oauth' | 'subscription'
+  authType: 'api-key' | 'oauth' | 'subscription' | 'none'
   baseUrl?: string
   endpointFormat: ModelEndpointFormat
   endpoints?: ModelProviderEndpointsV1
   useProxy: boolean
   configured: boolean
-  credentialStatus?: 'ready' | 'missing' | 'unreadable'
+  enabled?: boolean
+  credentialStatus?: 'ready' | 'missing' | 'unreadable' | 'not-required'
   credentialErrorCode?: 'credential_missing' | 'credential_unreadable'
   models: string[]
   modelCapabilities?: Record<string, Omit<ModelProviderModelProfileV1, 'aliases'> & { id: string }>
@@ -53,6 +54,7 @@ export type SharedModelConnectionsSnapshot = {
   schemaVersion: 1
   proxyRoutingVersion: 1
   revision: number
+  metadataRevision?: number
   providers: SharedModelConnection[]
   defaultProviderId?: string
   defaultAccountId?: string
@@ -96,6 +98,7 @@ export function validateSharedModelConnections(value: unknown): SharedModelConne
   if (snapshot?.schemaVersion !== 1 || !Number.isInteger(snapshot.revision) || !Array.isArray(snapshot.providers)) {
     throw new Error('Invalid shared model connection response')
   }
+  if (snapshot.metadataRevision !== undefined && (!Number.isSafeInteger(snapshot.metadataRevision) || snapshot.metadataRevision < 0)) throw new Error('Invalid model metadata revision')
   return snapshot
 }
 
@@ -127,7 +130,7 @@ export function SharedDefaultModelPicker({
   const [placement, setPlacement] = useState<'down' | 'up'>('down')
   const [activeProviderId, setActiveProviderId] = useState('')
   const [query, setQuery] = useState('')
-  const providers = useMemo(() => snapshot?.providers ?? [], [snapshot?.providers])
+  const providers = useMemo(() => snapshot?.providers.filter((provider) => provider.enabled !== false) ?? [], [snapshot?.providers])
   const defaultProvider = providers.find((connection) =>
     connection.id === snapshot?.defaultProviderId
   )
@@ -396,7 +399,18 @@ export async function requestSharedModelConnections(
   return parseSharedModelConnections(result.body)
 }
 
+export type SharedModelProbeDetails = {
+  models: string[]
+  modelProfiles: Record<string, ModelProviderModelProfileV1>
+  source?: 'provider' | 'manual' | 'preset'
+  lastAttemptStatus?: 'success' | 'fallback'
+}
+
 export async function requestSharedModelConnectionProbe(providerId: string): Promise<string[]> {
+  return (await requestSharedModelConnectionProbeDetails(providerId)).models
+}
+
+export async function requestSharedModelConnectionProbeDetails(providerId: string): Promise<SharedModelProbeDetails> {
   const result = await window.kunGui.runtimeRequest(
     `/v1/model-connections/${encodeURIComponent(providerId)}/probe`,
     'POST'
@@ -411,11 +425,11 @@ export async function requestSharedModelConnectionProbe(providerId: string): Pro
     }
     throw new Error(message || `Shared model connection probe failed (HTTP ${result.status})`)
   }
-  const value = JSON.parse(result.body) as { ok?: unknown; models?: unknown }
+  const value = JSON.parse(result.body) as { ok?: unknown; models?: unknown; modelProfiles?: Record<string, ModelProviderModelProfileV1>; source?: SharedModelProbeDetails['source']; lastAttemptStatus?: SharedModelProbeDetails['lastAttemptStatus'] }
   if (value.ok !== true || !Array.isArray(value.models)) {
     throw new Error('Shared model connection probe returned an invalid response')
   }
-  return value.models.flatMap((model) => typeof model === 'string' && model.trim() ? [model.trim()] : [])
+  return { models: value.models.flatMap((model) => typeof model === 'string' && model.trim() ? [model.trim()] : []), modelProfiles: value.modelProfiles ?? {}, source: value.source, lastAttemptStatus: value.lastAttemptStatus }
 }
 
 export async function deleteSharedModelConnection(

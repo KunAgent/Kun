@@ -1,3 +1,4 @@
+import type { AgentDispatchService } from '../../delegation/agent-dispatch-service.js'
 import type { ThreadActivityRegistry } from '../../services/thread-activity-registry.js'
 import type { ThreadService } from '../../services/thread-service.js'
 import type { TurnService } from '../../services/turn-service.js'
@@ -19,6 +20,7 @@ import type {
   McpCapabilityConfig,
   McpServerConfig
 } from '../../contracts/capabilities.js'
+import type { ModelCapabilityMetadata } from '../../contracts/capabilities-core.js'
 import type {
   RuntimeConfigApplyRequest,
   RuntimeConfigApplyResponse
@@ -51,9 +53,17 @@ import type { BackgroundShellRuntime } from '../../services/background-shell-run
 import type { ModelClient } from '../../ports/model-client.js'
 import type { ModelRoutePoolConfig } from '../../contracts/model-route-pool.js'
 import type { GatewayCredentialService } from '../../services/gateway-credential-service.js'
+import type { GatewayUsageService } from '../../services/gateway-usage-service.js'
 import type { RoutePoolHealthStore } from '../../adapters/model/route-pool-model-client.js'
 import type { RoutePoolTestService } from '../../services/route-pool-test-service.js'
 import type { GraphRuntimeConfig, RolesConfig } from '../../config/kun-config.js'
+import type { ServeProviderConfig } from '../../config/kun-config-application.js'
+import type { HarnessCatalog } from '../../harness/harness-catalog.js'
+import type { HarnessDetector } from '../../harness/harness-detector.js'
+import type { AcpModelProbe } from '../../harness/acp-model-probe.js'
+import type { AgentSdkModelProbe } from '../../harness/agent-sdk-model-probe.js'
+import type { CodexModelProbe } from '../../harness/codex-model-probe.js'
+import type { HarnessDefinition, HarnessStatus } from '../../contracts/harness.js'
 import type {
   FileGraphWriteCoordinator,
   FileGraphThreadReferenceStore,
@@ -173,6 +183,7 @@ export type ExtensionPlatformRuntime = {
  * file-backed adapters without leaking concrete types into routes.
  */
 export type ServerRuntime = {
+  agentDispatchService?: AgentDispatchService
   historyReferences?: import('../../history/history-reference-service.js').HistoryReferenceService
   threadService: ThreadService
   rooms?: RoomRuntime
@@ -186,6 +197,18 @@ export type ServerRuntime = {
   events: RuntimeEventRecorder
   /** Compact process-wide invalidations used by sidebar observers. */
   threadActivity?: ThreadActivityRegistry
+  /** Execution-unit activity rows shared by all clients. */
+  activityStore?: import('../../services/activity-store.js').ActivityStore
+  /** Persisted user facts (ack/dismiss/pin) for activity rows. */
+  activityFacts?: import('../../services/activity-facts-store.js').ActivityFactsStore
+  /** Stall/dormancy scanner plus the client foreground registry. */
+  activityHibernation?: import('../../services/activity-hibernation.js').ActivityHibernation
+  /** Host-owned task workspaces. */
+  taskWorkspaces?: import('../../workspace-tasks/task-workspace-service.js').TaskWorkspaceService
+  /** AI line-attribution ledger for workspace files. */
+  attribution?: import('../../ade/attribution-ledger.js').AttributionLedger
+  /** Forge change requests on workspace branches. */
+  changeRequests?: import('../../ade/change-request-service.js').ChangeRequestService
   /** Active SSE streams, so a successful thread delete can close them. */
   eventStreamRegistry?: ThreadEventStreamRegistry
   /** Optional troubleshooting buffer of the most recent LLM rounds (in-memory). */
@@ -233,6 +256,100 @@ export type ServerRuntime = {
   /** Single extension platform instance shared by HTTP, CLI-style services, tools, and model routing. */
   extensionPlatform?: ExtensionPlatformRuntime
   /**
+   * Harness catalog + detection status cache for `/v1/harnesses`. Optional so
+   * test scaffolds can omit it.
+   */
+  harnesses?: {
+    catalog: HarnessCatalog
+    integration?: import('../../harness/harness-runtime.js').HarnessRuntimeComposition['integration']
+    resolveIntegration?: import('../../harness/harness-runtime.js').HarnessRuntimeComposition['resolveIntegration']
+    updates?: import('../../harness/harness-updates.js').HarnessUpdates
+    invalidateModels?: (id: string) => void
+    readiness?: import('../../harness/harness-readiness.js').HarnessReadinessService
+    detector: HarnessDetector
+    /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
+    acpModels?: AcpModelProbe
+    /** Agent SDK `supportedModels()` probing for `modelSource: 'probe'` harnesses. */
+    agentSdkModels?: AgentSdkModelProbe
+    /** Codex app-server `model/list` probing. */
+    codexModels?: CodexModelProbe
+    piModels?: import('../../harness/pi-model-probe.js').PiModelProbe
+    antigravityModels?: import('../../harness/antigravity-model-probe.js').AntigravityModelProbe
+    installNetwork?: () => import('../../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
+    /**
+     * Spawn-free read of the freshest probed model list, dispatched by
+     * transport; `undefined` means no fresh successful probe is cached.
+     */
+    probedModels?: (definition: HarnessDefinition) => string[] | undefined
+    /**
+     * Loopback `kun serve` endpoint shared with harness env injection; the
+     * serve layer fills `baseUrl` once the listener binds.
+     */
+    gatewayEndpoint?: { baseUrl?: string }
+    /**
+     * Resolves `launch.secretEnv` credential-store refs at spawn/probe time;
+     * undefined when the runtime has no credential store.
+     */
+    resolveSecretEnv?: import('../../harness/harness-secret-env.js').HarnessSecretRefResolver
+    /** Agents declared by enabled extensions. */
+    extensionAgents?: import('../../harness/extension-agent-providers.js').ExtensionAgentProviderSource
+  }
+  /**
+   * Process-local `kgw_` bearer tokens scoped to spawned harnesses.
+   * Optional so test scaffolds can omit it.
+   */
+  harnessTokens?: import('../../harness/harness-token-service.js').HarnessTokenService
+  /**
+   * Shared Kun-tool bridge host backing the `/mcp/kun` route. Optional so test scaffolds can omit it.
+   */
+  kunToolBridge?: import('../../harness/kun-tool-bridge-host.js').KunToolBridgeHost
+  /**
+   * ADE control-plane stores + worker callback service. Optional so test scaffolds can omit it.
+   */
+  ade?: {
+    stores: {
+      teams: import('../../ade/team-store.js').FileTeamStore
+      dispatches: import('../../ade/dispatch-store.js').FileDispatchStore
+      questions: import('../../ade/question-store.js').FileQuestionStore
+      notices: import('../../ade/worker-notice-store.js').FileWorkerNoticeStore
+      /** Line-level review comments per task workspace. */
+      reviews: import('../../ade/review-store.js').FileReviewStore
+    }
+    workerCallbacks: import('../../services/worker-callback-service.js').WorkerCallbackService
+    /** Same-task race records + services; optional for test scaffolds. */
+    races?: import('../../ade/race.js').RaceServiceDeps
+    /**
+     * Tier-0 terminal-agent units + scoped token issuance.
+     * Optional so test scaffolds can omit it.
+     */
+    terminalAgents?: import('../../services/terminal-agent-registry.js').TerminalAgentRegistry
+    /**
+     * Managed-hook config writer for terminal launches.
+     * Returns argv/env additions; null when the harness kind is unsupported.
+     */
+    hookWriter?: (
+      unitId: string,
+      hooks: { kind: string; events: string[] }
+    ) => Promise<{ args: string[]; env: Record<string, string>; dir: string } | null>
+    /** Manager control plane + exactly-once dispatch delivery. */
+    manager?: import('../../ade/manager-runtime.js').ManagerRuntime
+    deliverer?: import('../../ade/dispatch-deliverer.js').DispatchDeliverer
+    /** Manager wake-up batching + composer holds. */
+    noticeCoordinator?: import('../../ade/worker-notice-coordinator.js').WorkerNoticeCoordinator
+  }
+  /**
+   * Admission evaluation for a harness in a usage surface (one-to-one,
+   * worker, graph, ...). Added in the admission step; routes only call it
+   * when present.
+   */
+  harnessAdmission?(input: {
+    definition: HarnessDefinition
+    status: HarnessStatus
+    usage: string
+  }): Promise<unknown>
+  /** Read-only view of the configured provider map (serve.providers). */
+  providerConfigs?(): Record<string, ServeProviderConfig>
+  /**
    * Default ModelClient + model id for one-shot completions outside the
    * agent loop (e.g. AI-generated subagent profiles). Optional so test
    * scaffolds can omit it.
@@ -249,15 +366,36 @@ export type ServerRuntime = {
   modelConnectionOAuth?: ModelConnectionOAuthService
   officialProviderAuth?: OfficialProviderAuthService
   officialProviderCli?: OfficialProviderCliService
-  providerQuotaService?: Pick<ProviderQuotaService, 'list'>
+  providerQuotaService?: Pick<ProviderQuotaService, 'list'> & Partial<Pick<ProviderQuotaService, 'subscription'>>
   modelGateway?: {
+    requiresAdminToken?(): boolean
     enabled(): boolean
     exposeProviderModels(): boolean
     pools(): ModelRoutePoolConfig[]
     configuredPools(): ModelRoutePoolConfig[]
+    previewOrder?(pool: ModelRoutePoolConfig, targets: import('../../contracts/model-route-pool.js').ModelRouteTargetConfig[]): import('../../contracts/model-route-pool.js').ModelRouteTargetConfig[]
     health: RoutePoolHealthStore
     tests: RoutePoolTestService
+    budget?: import('../../services/gateway-token-budget.js').GatewayTokenBudget
     credentials: GatewayCredentialService
+    usage?: GatewayUsageService
+    /**
+     * Capability lookup for a gateway-addressed model (pool model id or a
+     * providerId/modelId pair). Lets gateway entry points reject inputs the
+     * resolved model cannot consume (e.g. images for text-only models).
+     * Optional for test scaffolds.
+     */
+    modelCapabilities?(model: string, providerId?: string): ModelCapabilityMetadata
+    /** User-selected extension provider exports (provider + account). */
+    extensionExports?(): { providerId: string; accountId: string }[]
+    /** Experimental opt-in subscription connections exported through the gateway. */
+    experimentalSubscriptionExports?(): string[]
+    /** Request/reply transforms for external gateway traffic. Optional for test scaffolds. */
+    middleware?: import('./gateway-middleware.js').GatewayMiddlewareHost
+    /** Whether the user wants the discovery file published (default true). */
+    advertiseDiscovery?(): boolean
+    /** Live discovery-file state, set by the production server once it listens. */
+    discovery?: { readonly instanceId: string; status(): import('../gateway-discovery-file.js').GatewayDiscoveryStatus }
   }
   defaultModel?: string
   /**

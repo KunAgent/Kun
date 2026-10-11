@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getDocument, type PDFDocumentProxy } from 'pdfjs-dist/build/pdf.mjs'
+import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist/build/pdf.mjs'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { bytesFromBase64, emptyPdfSelection, type PageText } from './WritePdfPage'
 import type { WriteEditorSelectionState } from './WriteMarkdownEditor'
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 /**
  * Owns the PDF.js document lifecycle: decoding base64 data, loading state,
@@ -12,6 +15,8 @@ import type { WriteEditorSelectionState } from './WriteMarkdownEditor'
 export function useWritePdfDocument(input: {
   filePath: string
   dataBase64: string
+  /** Remote PDF preview URL avoids holding a second base64 copy on phones. */
+  url?: string
   mtimeMs: number
   publishSelection: (selection: WriteEditorSelectionState) => void
 }): {
@@ -25,7 +30,7 @@ export function useWritePdfDocument(input: {
   updatePageText: (page: PageText) => void
   resetTransientState: () => void
 } {
-  const { filePath, dataBase64, mtimeMs, publishSelection } = input
+  const { filePath, dataBase64, url, mtimeMs, publishSelection } = input
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -44,7 +49,7 @@ export function useWritePdfDocument(input: {
     setPageTexts([])
     publishSelection(emptyPdfSelection())
     const task = getDocument({
-      data: bytesFromBase64(dataBase64),
+      ...(url ? { url } : { data: bytesFromBase64(dataBase64) }),
       isEvalSupported: false
     })
     void task.promise.then((pdf) => {
@@ -64,7 +69,7 @@ export function useWritePdfDocument(input: {
       cancelled = true
       task.destroy()
     }
-  }, [dataBase64, filePath, mtimeMs, publishSelection])
+  }, [dataBase64, filePath, mtimeMs, publishSelection, url])
 
   useEffect(() => {
     return () => {

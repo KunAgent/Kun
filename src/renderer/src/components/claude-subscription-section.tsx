@@ -239,7 +239,7 @@ export function ClaudeSubscriptionSection({
           ) : null}
 
           {sdk === 'missing' ? (
-            <button
+            <button data-settings-action="primary" data-settings-size="default"
               type="button"
               onClick={() => void installSdk()}
               className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-lg border border-accent/50 bg-ds-main/45 px-3 text-[13px] font-medium text-ds-ink transition hover:bg-ds-main/70"
@@ -276,7 +276,7 @@ export function ClaudeSubscriptionSection({
             <span className="text-ds-muted">{t('claudeSubStatusLoggedOut')}</span>
           </>
         )}
-        <button
+        <button data-settings-action="secondary" data-settings-size="default"
           type="button"
           onClick={() => void refreshStatus()}
           disabled={sdkInstallBusy}
@@ -286,7 +286,7 @@ export function ClaudeSubscriptionSection({
         </button>
       </div>
 
-      <button
+      <button aria-busy={busy} data-settings-action="primary" data-settings-size="default"
         type="button"
         disabled={busy || sdkInstallBusy}
         onClick={() => void runLogin()}
@@ -320,7 +320,7 @@ export function ClaudeSubscriptionSection({
 
       <div className="flex items-center gap-2 rounded-lg border border-ds-border bg-ds-card px-3 py-2">
         <code className="flex-1 truncate font-mono text-[12px] text-ds-ink">{SETUP_TOKEN_COMMAND}</code>
-        <button
+        <button data-settings-action="secondary" data-settings-size="compact"
           type="button"
           onClick={() => void copyCommand()}
           className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] text-ds-muted transition hover:text-ds-ink"

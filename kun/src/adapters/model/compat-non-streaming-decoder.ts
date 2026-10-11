@@ -42,7 +42,7 @@ function decodeChatCompletions(
   const reasoning = message
     ? recordString(message, 'reasoning_content') || recordString(message, 'reasoning')
     : ''
-  const text = message ? recordString(message, 'content') : ''
+  const text = message ? recordString(message, 'content') : recordString(choice, 'text')
   if (reasoning) chunks.push({ kind: 'assistant_reasoning_delta', text: reasoning })
   if (text) chunks.push({ kind: 'assistant_text_delta', text })
   const toolCalls = message && Array.isArray(message.tool_calls) ? message.tool_calls : []

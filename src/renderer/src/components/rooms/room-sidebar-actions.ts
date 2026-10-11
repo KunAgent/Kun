@@ -1,16 +1,18 @@
 import type { Room, RoomSidebarEntry } from '@shared/rooms-api'
 import { agentPath } from './agent-client'
-import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
+import { roomsClient, roomsRequest } from './rooms-client'
 
-/** Archives or restores a sidebar entry: an agent through its profile, a room through its record. */
+/** Conversation actions never mutate the Agent identity. */
 export async function toggleRoomSidebarEntryArchived(entry: RoomSidebarEntry): Promise<void> {
-  if (entry.agentId) {
-    const { agent } = await roomsRequest<{ agent: { revision: number } }>('/v1/agents/' + entry.agentId)
-    await roomsRequest('/v1/agents/' + entry.agentId, 'PATCH', { clientRequestId: roomRequestId(), expectedRevision: agent.revision, archived: !entry.archived })
-    return
-  }
-  const { room } = entry.roomId ? await roomsClient.get(entry.roomId) : await roomsRequest<{ room: Room }>('/v1/agents/' + entry.agentId + '/conversation', 'POST', {})
+  if (!entry.roomId) throw new Error('Conversation not found')
+  const { room } = await roomsClient.get(entry.roomId)
   await roomsClient.update(room, { archived: !entry.archived })
+}
+
+export async function setRoomSidebarEntryDeleted(entry: RoomSidebarEntry, deleted: boolean): Promise<void> {
+  if (!entry.roomId) throw new Error('Conversation not found')
+  const { room } = await roomsClient.get(entry.roomId)
+  await roomsClient.update(room, { deleted })
 }
 
 /** An agent listed before its first message has no room yet; opening it creates the direct conversation. */

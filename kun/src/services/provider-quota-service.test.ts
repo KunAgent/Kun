@@ -402,7 +402,7 @@ describe('ProviderQuotaService', () => {
       2,
       expect.anything(),
       'codex-rejected-access',
-      expect.objectContaining({ fetcher, proxyUrl: '' })
+      expect.objectContaining({ fetcher: expect.any(Function), proxyUrl: '' })
     )
     expect(fetcher).toHaveBeenCalledTimes(2)
   })
@@ -453,7 +453,7 @@ describe('ProviderQuotaService', () => {
       2,
       expect.anything(),
       'grok-rejected-access',
-      expect.objectContaining({ fetcher, proxyUrl: '' })
+      expect.objectContaining({ fetcher: expect.any(Function), proxyUrl: '' })
     )
     expect(fetcher).toHaveBeenCalledTimes(2)
   })

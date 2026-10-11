@@ -69,6 +69,7 @@ import { WriteTableToolbar } from './blocks/table-toolbar'
 import { WriteBlockShortcuts } from './blocks/write-shortcuts'
 import { WriteFindBar } from '../../components/write/WriteFindBar'
 import { WriteOutlineRail } from '../../components/write/WriteOutlineRail'
+import { useWriteEditorBridgePublisher } from './use-write-editor-bridge'
 
 /**
  * Imperative surface for flows that operate on the markdown projection
@@ -139,6 +140,8 @@ type Props = {
   onImagePasteError?: (message: string) => void
   onReviewStateChange?: (active: boolean) => void
   handleRef?: MutableRefObject<WriteRichEditorHandle | null>
+  /** Focused group only: feeds the Work outline/review panels. */
+  publishToPanels?: boolean
 }
 
 function fileKeyOf(filePath?: string | null): string {
@@ -170,7 +173,8 @@ export function WriteRichEditor({
   onImagePasteSaved,
   onImagePasteError,
   onReviewStateChange,
-  handleRef
+  handleRef,
+  publishToPanels = false
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -211,7 +215,7 @@ export function WriteRichEditor({
   })
   const [mountedEditor, setMountedEditor] = useState<Editor | null>(null)
   // Initial parse result; large documents parse in a Web Worker and arrive
-  // asynchronously (§3.9/§11).
+  // asynchronously.
   const [boot, setBoot] = useState<{ parsed: ParsedWorkDocument; source: string } | null>(null)
 
   workspaceRootRef.current = workspaceRoot ?? ''
@@ -253,7 +257,7 @@ export function WriteRichEditor({
   useEffect(() => {
     if (value === lastEmittedValueRef.current) return
     // During an active diff review the agent's next snapshot re-enters
-    // through `beginDiffReview` (§6.3.4); applying it here would clobber
+    // through `beginDiffReview`; applying it here would clobber
     // chunk positions.
     if (reviewSessionRef.current?.isActive()) return
     const editor = editorRef.current
@@ -625,6 +629,8 @@ export function WriteRichEditor({
     editor.setEditable(!readOnly)
   }, [readOnly])
 
+  const floatingOutline = useWriteEditorBridgePublisher({ editor: mountedEditor, enabled: publishToPanels,
+    scrollHostRef, reviewSessionRef, reviewActive: reviewUi.active, reviewTotal: reviewUi.total })
   const fileName = (() => {
     const path = filePathRef.current.replace(/\\/g, '/')
     const base = path.split('/').pop() ?? ''
@@ -684,7 +690,7 @@ export function WriteRichEditor({
           </div>
           <div ref={hostRef} className="write-rich-editor-mount" />
         </div>
-        <WriteOutlineRail editor={mountedEditor} scrollHost={scrollHostRef.current} />
+        {floatingOutline ? <WriteOutlineRail editor={mountedEditor} scrollHost={scrollHostRef.current} /> : null}
       </div>
     </div>
   )

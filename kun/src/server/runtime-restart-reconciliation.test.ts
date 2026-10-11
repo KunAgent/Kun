@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { ThreadRecord } from '../contracts/threads.js'
+import { TurnService } from '../services/turn-service-core.js'
 import type { ServerRuntime } from './routes/server-runtime.js'
 import { reconcileRuntimeAfterRestart } from './runtime-restart-reconciliation.js'
 
@@ -201,5 +203,76 @@ describe('reconcileRuntimeAfterRestart', () => {
 
     expect(resumeInterruptedGoals).not.toHaveBeenCalled()
     expect(resumeInterruptedTurns).toHaveBeenCalledWith([source], [])
+  })
+})
+
+describe('restart execution source behind queued inputs', () => {
+  it('does not reinstall a recovery barrier after an explicit capacity-blocked queue resume', async () => {
+    const source = { threadId: 'thread', turnId: 'A' }
+    let thread = {
+      id: source.threadId, relation: 'primary', revision: 0,
+      turns: [
+        { id: source.turnId, status: 'failed', startedAt: '2026-10-05T00:00:00.000Z' },
+        { id: 'B', status: 'queued' }
+      ]
+    } as unknown as ThreadRecord
+    const get = async () => thread
+    const control = {
+      deps: { threadStore: { get }, nowIso: () => '2026-10-05T00:01:00.000Z' },
+      withQueueDataMutation: async (_threadId: string, operation: () => Promise<unknown>) => operation(),
+      commitThreadRecordCAS: async (next: ThreadRecord, revision: number) => {
+        if (revision !== thread.revision) return { applied: false }
+        thread = { ...next, revision: revision + 1 }
+        return { applied: true }
+      }
+    } as unknown as TurnService
+    const pause = vi.fn(async (threadId: string, reason: 'user_stop' | 'restart_recovery', turnId: string) =>
+      TurnService.prototype.pauseQueuedTurns.call(control, threadId, reason, turnId))
+    const resume = vi.fn(async () => 1)
+    const runtime = {
+      turnService: {
+        reconcileOrphanedTurns: async () => {
+          await pause(source.threadId, 'restart_recovery', source.turnId)
+          return [source]
+        },
+        reconcileManagerSettledInterruptions: async () => {
+          // The user resumes after orphan settlement; global capacity is still full,
+          // so B remains queued when the final recovery candidate sweep runs.
+          await TurnService.prototype.resumeQueuedTurns.call(control, source.threadId)
+          return []
+        },
+        pauseQueuedTurns: pause
+      },
+      threadStore: { get },
+      resumeInterruptedTurns: resume,
+      queuedTurnDispatcher: { drainAllQueued: vi.fn(async () => 1) }
+    } as unknown as ServerRuntime
+
+    const report = await reconcileRuntimeAfterRestart(runtime)
+
+    expect(thread.queueControl).toBeUndefined()
+    expect(thread.turns.find((turn) => turn.id === 'B')?.status).toBe('queued')
+    expect(report.resumeCandidateIds).toEqual([])
+    expect(resume).not.toHaveBeenCalled()
+  })
+
+  it('recovers interrupted execution before draining later queued inputs', async () => {
+    const resume = vi.fn(async () => 1)
+    const drain = vi.fn(async () => 0)
+    const runtime = {
+      turnService: {
+        reconcileOrphanedTurns: async () => [{ threadId: 'thread', turnId: 'A' }],
+        reconcileManagerSettledInterruptions: async () => [],
+        pauseQueuedTurns: vi.fn(async () => {})
+      },
+      threadStore: { get: async () => ({ id: 'thread', relation: 'primary',
+        turns: [{ id: 'A', status: 'failed' }, { id: 'B', status: 'queued' }, { id: 'C', status: 'queued' }] }) },
+      resumeInterruptedTurns: resume,
+      queuedTurnDispatcher: { drainAllQueued: drain }
+    } as unknown as ServerRuntime
+    const result = await reconcileRuntimeAfterRestart(runtime)
+    expect(result.resumeCandidateIds).toEqual(['thread'])
+    expect(resume).toHaveBeenCalledWith([{ threadId: 'thread', turnId: 'A' }], [])
+    expect(resume.mock.invocationCallOrder[0]).toBeLessThan(drain.mock.invocationCallOrder[0]!)
   })
 })

@@ -1,3 +1,4 @@
+import type { HarnessGatewayBinding } from '../../kun/src/contracts/harness-gateway-binding.js'
 import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
@@ -15,6 +16,7 @@ import type {
   ApprovalReviewModelSelection
 } from '../../kun/src/contracts/approval-review-config.js'
 import type { KunGitHubMcpSettingsV1 } from './github-mcp-authorization'
+import type { AdeProjectDefaults } from './ade-project-defaults'
 
 import {
   KunContextCompactionSettingsV1,
@@ -72,6 +74,13 @@ export type KunSubagentProfileV1 = {
   blockedSkills?: string[]
   /** Reasoning depth applied to this profile's child model requests. Default 'off'. */
   reasoningEffort?: ModelReasoningEffort
+  /** ADE worker harness binding; empty/absent = native Kun loop. */
+  harnessId?: string
+  /** Credential path on the bound harness; empty/absent = harness default. */
+  credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  gatewayBinding?: HarnessGatewayBinding
+  /** "Best for / not for" notes read by the manager worker selector. */
+  delegationNotes?: string
 }
 
 export type KunSubagentsSettingsV1 = {
@@ -348,6 +357,155 @@ export type KunPlanExecutionSettingsV1 = {
   useWorktreeByDefault: boolean
 }
 
+/**
+ * A `secretEnv` binding: settings only carry
+ * the opaque credential-store ref; the secret value resolves inside kun at
+ * spawn time and is never echoed to the UI or logs.
+ */
+export type KunHarnessSecretEnvEntryV1 = {
+  name: string
+  secretRef: string
+}
+
+/**
+ * Per-Agent launch override or user Agent under agents.kun.harnesses.providers;
+ * the shape is Kun's config schema.
+ */
+export type KunHarnessProviderOverrideV1 =
+  import('../../kun/src/config/kun-config-harness-providers.js').HarnessProviderOverride
+
+/**
+ * Portable user-Agent definition: the import/export JSON and the legacy
+ * `harnesses.custom[]` entry. `extends` names a builtin ACP engine it derives
+ * from; absent means a generic ACP agent.
+ */
+export type KunHarnessCustomEntryV1 = {
+  id: string
+  extends?: string
+  displayName: string
+  command: string
+  args: string[]
+  env: Record<string, string>
+  secretEnv?: KunHarnessSecretEnvEntryV1[]
+}
+
+/**
+ * Per-harness defaults: the composer, the
+ * one-to-one dialog, and the manager worker selector fall back to these
+ * when nothing was picked explicitly. Supersedes the legacy flat
+ * `defaultPermissionMode` map, which normalization folds into
+ * `defaults[id].permissionMode`.
+ */
+export type KunHarnessDefaultsEntryV1 = {
+  gatewayBinding?: HarnessGatewayBinding
+  credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  /** Provider connection id; meaningful for `provider`/`kun-gateway` only. */
+  providerId?: string
+  model?: string
+  /** A permissionModes[].id on the harness definition. */
+  permissionMode?: string
+  isolation?: 'local' | 'worktree'
+}
+
+/**
+ * Terminal-only agent: an interactive CLI
+ * launched inside a Kun terminal tab as a registered execution unit. It
+ * cannot host delegated turns — dispatch reaches it only through the
+ * `kun worker` callback, and only when the agent cooperates.
+ */
+export type KunTerminalAgentEntryV1 = {
+  id: string
+  displayName: string
+  command: string
+  args: string[]
+  /** Flag that carries the initial task (e.g. '-i'); absent appends positionally. */
+  taskFlag?: string
+  /** Args the launcher offers for "continue session" affordances. */
+  resumeArgs?: string[]
+  /** Managed-hook mechanism; 'none' (or absent) disables hook injection. */
+  hooks?: 'none' | 'claude-settings'
+}
+
+export type KunHarnessEnabledProfileV1 = {
+  gatewayBinding?: HarnessGatewayBinding
+  harnessId: string
+  credentialMode: 'native-login' | 'provider' | 'kun-gateway'
+  providerId?: string
+}
+
+export type KunHarnessSettingsV1 = {
+  /** Explicit opt-in for an exact agent/account route. Legacy settings default off. */
+  enabledProfiles: KunHarnessEnabledProfileV1[]
+  /** Builtin harnesses the user turned off; they stay out of pickers. */
+  disabledIds: string[]
+  /**
+   * Launch overrides for builtin Agents (command path, arguments, env) and
+   * user Agents (`extends`: a builtin ACP engine, `acp` or `terminal`).
+   * Replaces the legacy `binaryPaths`, `custom[]` and `terminalAgents[]`.
+   */
+  providers: Record<string, KunHarnessProviderOverrideV1>
+  /** Per-harness defaults; the migrated home of `defaultPermissionMode`. */
+  defaults: Record<string, KunHarnessDefaultsEntryV1>
+  /** Default harness for new one-to-one ADE conversations. */
+  defaultHarnessId: string
+  /** User preference order for ADE worker selection. */
+  agentOrder: string[]
+}
+
+export type KunAdeSettingsV1 = {
+  /** Master switch; shows the ADE mode entry. Default off (Lab). */
+  enabled: boolean
+  /** Host-local defaults keyed by canonical source project path. */
+  projectDefaults: Record<string, AdeProjectDefaults>
+  /** New harness-aware turn routing; false restores provider inference. */
+  harnessRouter: boolean
+  /** Deterministic handoff briefs; false restores the raw transcript tail. */
+  deterministicHandoff: boolean
+  managerModel?: {
+    providerId: string
+    model: string
+  }
+  managerMayApprove: boolean
+  /** Unattended turns may keep full-access when true; otherwise clamped. */
+  allowUnattendedFullAccess: boolean
+  limits: {
+    softWorkers: number
+    hardWorkers: number
+  }
+  budget?: {
+    softTokens?: number
+    hardTokens?: number
+  }
+  hibernation: {
+    enabled: boolean
+    idleMinutes: number
+  }
+  stall: {
+    structuredMinutes: number
+    terminalMinutes: number
+  }
+  /** GUI-only notification switches; never written into Kun config. */
+  notifications: {
+    waiting: boolean
+    failed: boolean
+    done: boolean
+    stalled: boolean
+    sound: boolean
+    keepAwake: boolean
+  }
+}
+
+/** User-level task-worktree fill additions (`agents.kun.worktrees`). */
+export type KunWorktreeSharedPathV1 = {
+  path: string
+  mode: 'symlink' | 'clone' | 'copy'
+}
+
+export type KunWorktreeSettingsV1 = {
+  /** Per-repository ignored paths shared into task worktrees. */
+  sharedPaths: Record<string, KunWorktreeSharedPathV1[]>
+}
+
 export type KunRuntimeSettingsV1 = {
   binaryPath: string
   port: number
@@ -428,6 +586,12 @@ export type KunRuntimeSettingsV1 = {
   graph: KunGraphSettingsV1
   /** Host-owned defaults for executing reviewed GUI plans. */
   planExecution: KunPlanExecutionSettingsV1
+  /** Harness enablement, overrides, and custom ACP harnesses. */
+  harnesses: KunHarnessSettingsV1
+  /** ADE mode switches; runtime-relevant subset syncs into Kun config. */
+  ade: KunAdeSettingsV1
+  /** User-level task-worktree fill additions, merged with project config. */
+  worktrees: KunWorktreeSettingsV1
   /** Formal Fast Context settings. Enabled by default. */
   fastContext: KunFastContextSettingsV1
   /** Experimental Lab features that remain in Laboratory. */

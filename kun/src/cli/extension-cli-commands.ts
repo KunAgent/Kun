@@ -24,6 +24,8 @@ import {
 } from '../extensions/index.js'
 import { ServeExitCode } from './serve.js'
 import { KUN_VERSION } from '../version.js'
+import { defaultKunDataDir } from './kun-data-dir.js'
+import { migrateLegacyExtensionRoots } from './extension-cli-migration.js'
 
 import {
   errorExitCode,
@@ -71,7 +73,7 @@ Commands:
 
 Common options:
   --json                     Emit schema-versioned machine-readable output
-  --data-dir <path>          Profile root used for extension registry and data
+  --data-dir <path>          Extension profile root (default: ~/.kun/data)
   --extension-root <path>    Override immutable extension package root
   --extension-data-root <p>  Override extension state/log root
   --help                     Show help
@@ -109,6 +111,7 @@ export type ExtensionCliIo = {
   stderr: WritableLike
   env?: Record<string, string | undefined>
   cwd?: () => string
+  homeDir?: () => string
   scaffold?: (options: {
     targetDirectory: string
     publisher: string
@@ -185,19 +188,12 @@ export function createExtensionCliServices(options: {
   extensionDataRoot?: string
   kunVersion?: string
   runnerPath?: string
+  homeDir?: string
 } = {}): ExtensionCliServices {
-  const profileRoot = options.dataDir === undefined ? undefined : resolve(options.dataDir)
+  const profileRoot = resolve(options.dataDir ?? defaultKunDataDir(options.homeDir))
   const paths = new ExtensionPaths({
-    ...(options.packageRoot !== undefined
-      ? { packageRoot: options.packageRoot }
-      : profileRoot !== undefined
-        ? { packageRoot: join(profileRoot, 'extensions') }
-        : {}),
-    ...(options.extensionDataRoot !== undefined
-      ? { dataRoot: options.extensionDataRoot }
-      : profileRoot !== undefined
-        ? { dataRoot: join(profileRoot, 'extension-data') }
-        : {})
+    packageRoot: options.packageRoot ?? join(profileRoot, 'extensions'),
+    dataRoot: options.extensionDataRoot ?? join(profileRoot, 'extension-data')
   })
   const compatibility: ExtensionCompatibility = {
     kunVersion: options.kunVersion ?? DEFAULT_KUN_VERSION,
@@ -256,12 +252,24 @@ export async function runExtensionCommand(
     if (parsed.command === 'create') {
       return await runCreate(parsed, io)
     }
+    const homeDir = io.homeDir?.()
+    const dataDirOption = parsed.values.get('data-dir')?.trim()
+    if (parsed.values.has('data-dir') && !dataDirOption) {
+      throw usageError('--data-dir requires a non-empty path')
+    }
     const services = suppliedServices ?? createExtensionCliServices({
-      dataDir: parsed.values.get('data-dir') ?? io.env?.KUN_DATA_DIR,
+      dataDir: dataDirOption || io.env?.KUN_DATA_DIR?.trim() || undefined,
       packageRoot: parsed.values.get('extension-root'),
-      extensionDataRoot: parsed.values.get('extension-data-root')
+      extensionDataRoot: parsed.values.get('extension-data-root'),
+      homeDir
     })
     if (suppliedServices === undefined) ownedServices = services
+    await migrateLegacyExtensionRoots({
+      packageRoot: services.paths.packageRoot,
+      dataRoot: services.paths.dataRoot,
+      homeDir,
+      warn: (message) => io.stderr.write(`kun extension: ${message}\n`)
+    })
     await services.packageManager.recover()
     switch (parsed.command) {
       case 'validate':

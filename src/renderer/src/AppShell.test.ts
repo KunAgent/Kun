@@ -30,7 +30,9 @@ describe('AppShell', () => {
 
     expect(html).toContain('role="status"')
     expect(html).toContain('Loading')
-    expect(html).toContain('bg-ds-card')
+    // The fallback is the Kun loader filling the route, not an empty card.
+    expect(html).toContain('kun-loader')
+    expect(html).toContain('items-center justify-center bg-ds-main')
   })
 
   it('omits the renderer title bar when Linux uses the system window frame', () => {

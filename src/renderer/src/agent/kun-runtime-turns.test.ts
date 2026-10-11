@@ -188,6 +188,23 @@ describe('KunRuntimeProvider', () => {
     )
   })
 
+  it('forwards ADE worker-notice ack ids on manager sends', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true, status: 202,
+      body: JSON.stringify({ threadId: 'thr_mgr', turnId: 'turn_1', userMessageItemId: 'item_1' })
+    }))
+    installDsGui({ runtimeRequest })
+
+    await new KunRuntimeProvider().sendUserMessage('thr_mgr', 'continue', { ackNoticeIds: ['ntc_1', 'ntc_2'] })
+
+    expect(runtimeRequest).toHaveBeenCalledWith('/v1/threads/thr_mgr/turns', 'POST', JSON.stringify({
+      prompt: 'continue',
+      clientSurface: 'gui',
+      ...DEFAULT_EXECUTION_SETTINGS,
+      ackNoticeIds: ['ntc_1', 'ntc_2']
+    }))
+  })
+
   it('posts Design continuation metadata for runtime-auditable progress turns', async () => {
     const runtimeRequest = vi.fn(async () => ({
       ok: true,

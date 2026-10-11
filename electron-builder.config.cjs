@@ -216,6 +216,10 @@ module.exports = {
     '!**/tsconfig*.json',
     '!**/README*',
     '!**/CHANGELOG*',
+    // Kun's node_modules is copied as app files, so electron-builder's normal
+    // dependency test exclusions do not apply. gifwrap's ~6 MiB of test images
+    // are not used by its src/ runtime; keep the runtime and LICENSE intact.
+    '!**/node_modules/gifwrap/test{,/**/*}',
     // Lark SDK ships an ESM (`es/`) build for bundlers alongside its CJS `main`
     // (`lib/`). The main process resolves `@larksuiteoapi/node-sdk` through
     // Node's `main` field, so the ESM copy is dead weight at runtime.
@@ -229,6 +233,13 @@ module.exports = {
     '!**/node_modules/pdfjs-dist/build/**/*',
     '!**/node_modules/pdfjs-dist/web/**/*',
     '!**/node_modules/pdfjs-dist/**/*.min.mjs',
+    // SheetJS resolves its Node import/require exports to xlsx.mjs/xlsx.js.
+    // These prebuilt browser/ExtendScript copies are unused; keep both Node
+    // entries, the legacy codepage tables, Numbers data, and dist/LICENSE.
+    '!**/node_modules/xlsx/dist/xlsx.{core.min,full.min,mini.min,extendscript}.js',
+    // DOCX export requires html-to-docx's Node entry. Its two browser bundles
+    // duplicate the converter and are never loaded by the application.
+    '!**/node_modules/html-to-docx/dist/html-to-docx.browser{,.esm}.js',
     'packages/create-kun-extension/templates/**/*',
     // @computer-use/libnut-linux currently publishes an x86-64 libnut.node
     // even though its npm metadata also declares arm64. Keep that incompatible
@@ -344,8 +355,8 @@ module.exports = {
       height: 430
     },
     contents: [
-      { x: 350, y: 310, type: 'file' },
-      { x: 535, y: 310, type: 'link', path: '/Applications' }
+      { x: 364, y: 284, type: 'file' },
+      { x: 548, y: 284, type: 'link', path: '/Applications' }
     ]
   },
   win: {
@@ -360,10 +371,12 @@ module.exports = {
     target: [{ target: 'nsis', arch: ['x64'] }]
   },
   nsis: {
+    // Custom LangStrings in build/installer-pages.nsh only cover en + zh_CN.
+    installerLanguages: ['en_US', 'zh_CN'],
     oneClick: false,
     installerHeader: './build/installerHeader.bmp',
     installerSidebar: './build/installerSidebar.bmp',
-    uninstallerSidebar: './build/installerSidebar.bmp',
+    uninstallerSidebar: './build/uninstallerSidebar.bmp',
     // The stock assisted directory page appends APP_FILENAME by substring and
     // turns a registered `DeepSeek GUI` location into `DeepSeek GUI\Kun`.
     // installer.nsh adds one MUI directory page with component-aware migration.
@@ -384,6 +397,11 @@ module.exports = {
     category: 'Development',
     icon: './src/asset/img/kun.png',
     maintainer: 'Kun Contributors <1736101137@qq.com>',
+    // Electron derives the window's WM_CLASS / Wayland app_id from package.json
+    // `desktopName`. afterPack renames the real binary to `<exe>.electron-bin`, which
+    // is what the window would otherwise be called, so the .desktop entry has to be
+    // named after desktopName for the dock to match windows with their icon.
+    syncDesktopName: true,
     // AppImage covers generic Linux; deb covers Debian-family installers such as
     // openKylin / Ubuntu that expect apt/software-store packages.
     target: [
@@ -398,8 +416,16 @@ module.exports = {
   appImage: {
     executableArgs: ['--disable-setuid-sandbox', '--no-first-run']
   },
+  deb: {
+    // Ubuntu 24.04+ denies unprivileged user namespaces, which Chromium's sandbox
+    // needs, to any program without an AppArmor profile that grants them. The stock
+    // profile only covers the launcher script; this one covers the renamed binary too.
+    appArmorProfile: 'build/linux-apparmor-profile.tpl'
+  },
   extraMetadata: {
     ...(releaseAppVersion ? { version: releaseAppVersion } : {}),
+    // Keeps a development build's dock entry apart from the production one.
+    ...(developmentFlavor ? { desktopName: 'kun-gui-dv.desktop' } : {}),
     kunAppFlavor: appFlavor,
     updateChannel,
     buildHints: {

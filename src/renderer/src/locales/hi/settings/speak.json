@@ -16,7 +16,7 @@
   "speakPreviewPlay": "चलाएँ",
   "speakPreviewStop": "रोकें",
   "speakDownloadSource": "डाउनलोड स्रोत",
-  "speakDownloadSourceDesc": "रनटाइम WASM और आवाज़ फ़ाइलें पहले चुने हुए स्रोत से आती हैं। विफल होने पर अन्य मिरर अपने आप आज़माए जाते हैं।",
+  "speakDownloadSourceDesc": "आवाज़ के वेट के लिए पसंदीदा स्रोत चुनें। विफल होने पर Kun अन्य आवाज़ स्रोतों को अपने आप आज़माता है।",
   "speakDownloadSourceChecking": "डाउनलोड स्रोत जाँचे जा रहे हैं...",
   "speakDownloadSourceAvailable": "{{source}} {{ms}} ms में उपलब्ध",
   "speakDownloadSourceUnavailable": "{{source}} अनुपलब्ध: {{reason}}",
@@ -51,5 +51,6 @@
   "speakRuntimeCard": "sanoTTS रनटाइम",
   "speakRuntimeCardDesc": "साझा G2P WASM और चयनित आवाज़। उपयोग से पहले SHA-256 से सत्यापित।",
   "speakRuntimeHint": "लगभग 3.5 MB। लाइसेंस {{license}}।",
-  "speakVoiceHint": "चयनित भाषा की आवाज़ वेट्स।"
+  "speakVoiceHint": "चयनित भाषा की आवाज़ वेट्स।",
+  "speakDownloadSourceRuntimeHint": "साझा रनटाइम और रूसी उच्चारण शब्दकोश हमेशा आधिकारिक GitHub के निश्चित संस्करण से डाउनलोड होते हैं। यह चयन आवाज़ के वेट डाउनलोड के लिए है; Hugging Face मिरर में केवल आवाज़ की फ़ाइलें हैं।"
 }

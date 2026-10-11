@@ -1,3 +1,5 @@
+import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { getKunThreadDetail } from './kun-runtime-thread-detail'
 import type {
   AgentProvider,
@@ -49,6 +51,11 @@ import {
   type KunThreadMode
 } from '@shared/kun-endpoints'
 import { parseRuntimeErrorBody, runtimeErrorToError, type RuntimeError } from '@shared/runtime-error'
+import { createKunActivityClient } from './kun-activity-client'
+import { createKunTaskWorkspaceClient } from './kun-task-workspace-client'
+import { createKunReviewClient } from './kun-review-client'
+import { createKunTeamsClient } from './kun-teams-client'
+import { createKunHarnessesClient } from './kun-harnesses-client'
 import { extraRootsForWorkspace } from '../lib/code-workspace-folder-lookup'
 import { additionalWorkspacesForThread, readCodeWorkspaceFolderSets } from '../lib/code-workspace-folder-sets'
 import {
@@ -93,6 +100,8 @@ import { rendererRuntimeClient } from './runtime-client'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import { KunRuntimeThreadServices } from './kun-runtime-thread-services'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
+import { harnessAgentRequestField } from '../lib/harness-native-agent'
+import { harnessSettingsRequestField } from '../lib/harness-session-settings'
 import type {
   DesignDocumentTarget,
   DesignImagePlacementTarget,
@@ -266,6 +275,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         limit: options.limit ?? 500,
         ...(cursor ? { cursor } : {})
       })
+      if (options.workbenchScope && page.workbenchScopeApplied !== true) {
+        throw new Error('Kun runtime does not support the unified Code workbench query')
+      }
       threads.push(...page.threads)
       cursor = page.hasMore ? page.nextCursor : undefined
     } while (cursor)
@@ -281,6 +293,8 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       include: options.includeSide ? 'side' : undefined,
       cursor: options.cursor,
       workspace: options.workspace,
+      workspace_mode: options.workspaceMode,
+      workbench_scope: options.workbenchScope,
       lean: options.lean === true ? '1' : undefined
     })
     // Repeatable `workspaces` params carry the project's worktree roots; each
@@ -298,6 +312,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
     const body = readRuntimeJson<{
       threads: CoreThreadSummaryJson[]
+      workbenchScope?: 'code'
       nextCursor?: string
       hasMore?: boolean
       total?: number
@@ -308,6 +323,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     )
     return {
       threads: body.threads.map(threadFromCore),
+      ...(options.workbenchScope ? { workbenchScopeApplied: body.workbenchScope === options.workbenchScope } : {}),
       nextCursor: body.nextCursor,
       hasMore: body.hasMore === true,
       total: body.total,
@@ -315,19 +331,80 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
   }
 
-  async createThread(input: {
-    workspace?: string
-    additionalWorkspaces?: string[]
-    title?: string
-    titleAuto?: boolean
-    mode?: KunThreadMode
-    agentSurface?: 'code' | 'write' | 'design'
-    agentId?: string
-    providerId?: string
-    accountId?: string
-    model?: string
-    systemPrompt?: string
-  }): Promise<NormalizedThread> {
+  /** Execution-unit activity surface. */
+  private readonly activity = createKunActivityClient()
+  readonly getActivitySnapshot = this.activity.getActivitySnapshot
+  readonly pollActivity = this.activity.pollActivity
+  readonly ackActivity = this.activity.ackActivity
+  readonly dismissActivity = this.activity.dismissActivity
+  readonly pinActivity = this.activity.pinActivity
+  readonly reportActivityForeground = this.activity.reportActivityForeground
+  readonly listPendingApprovals = this.activity.listPendingApprovals
+
+  /** Host task-workspace surface. */
+  private readonly taskWorkspaces = createKunTaskWorkspaceClient()
+  readonly listTaskWorkspaces = this.taskWorkspaces.listTaskWorkspaces
+  readonly createTaskWorkspace = this.taskWorkspaces.createTaskWorkspace
+  readonly retryTaskWorkspace = this.taskWorkspaces.retryTaskWorkspace
+  readonly getTaskWorkspaceDiff = this.taskWorkspaces.getTaskWorkspaceDiff
+  readonly getTaskWorkspaceDiffFile = this.taskWorkspaces.getTaskWorkspaceDiffFile
+  readonly getTaskWorkspaceAttribution = this.taskWorkspaces.getTaskWorkspaceAttribution
+  readonly getChangeRequest = this.taskWorkspaces.getChangeRequest
+  readonly createChangeRequest = this.taskWorkspaces.createChangeRequest
+  readonly getTaskWorkspaceIntegratePreview = this.taskWorkspaces.getTaskWorkspaceIntegratePreview
+  readonly integrateTaskWorkspace = this.taskWorkspaces.integrateTaskWorkspace
+  readonly previewTaskWorkspaceDiscard = this.taskWorkspaces.previewTaskWorkspaceDiscard
+  readonly discardTaskWorkspace = this.taskWorkspaces.discardTaskWorkspace
+  readonly cleanupTaskWorkspace = this.taskWorkspaces.cleanupTaskWorkspace
+  readonly listPreservedBranches = this.taskWorkspaces.listPreservedBranches
+
+  private readonly teams = createKunTeamsClient()
+  readonly getTeamOverview = this.teams.getTeamOverview
+  readonly answerTeamQuestion = this.teams.answerTeamQuestion
+  readonly getTeamWorker = this.teams.getTeamWorker
+  readonly controlTeamWorker = this.teams.controlTeamWorker
+  readonly getRaceComparison = this.teams.getRaceComparison
+  readonly decideRace = this.teams.decideRace
+  readonly discardRaceOthers = this.teams.discardRaceOthers
+  readonly runTeamWorkerChecks = this.teams.runTeamWorkerChecks
+
+  private readonly harnesses = createKunHarnessesClient()
+  readonly listHarnesses = this.harnesses.listHarnesses
+  readonly listHarnessModels = this.harnesses.listHarnessModels
+  readonly probeHarness = this.harnesses.probeHarness
+  readonly testHarness = this.harnesses.testHarness
+  readonly probeHarnessDefinition = this.harnesses.probeHarnessDefinition
+  readonly storeHarnessSecret = this.harnesses.storeHarnessSecret
+  readonly deleteHarnessSecret = this.harnesses.deleteHarnessSecret
+
+  private readonly reviews = createKunReviewClient()
+  readonly listReviewComments = this.reviews.listReviewComments
+  readonly createReviewComment = this.reviews.createReviewComment
+  readonly updateReviewComment = this.reviews.updateReviewComment
+  readonly sendReview = this.reviews.sendReview
+
+  /** Rebuild a recorded handoff brief on demand. */
+  async getHandoffPreview(threadId: string, turnId: string): Promise<{
+    turnId: string
+    reason: string
+    mode: string
+    from: { harnessName: string; model?: string }
+    to: { harnessName: string; model?: string }
+    brief: string
+    briefDigest: string
+    recordedBriefDigest: string
+  }> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      `/v1/threads/${encodeURIComponent(threadId)}/handoff-preview${buildQuery({ turnId })}`,
+      'GET'
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load handoff preview'))
+    }
+    return readRuntimeJson(response.body, 'runtime returned an invalid handoff preview')
+  }
+
+  async createThread(input: Parameters<AgentProvider['createThread']>[0]): Promise<NormalizedThread> {
     const settings = await rendererRuntimeClient.getSettings()
     const runtime = getKunRuntimeSettings(settings)
     const workspace = (input.workspace || settings.workspaceRoot || '').trim()
@@ -335,13 +412,21 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       throw new Error(workspaceMissingError())
     }
     const sharedDefault = await sharedDefaultModelSelection()
-    const requestedProviderId = input.providerId?.trim() || sharedDefault.providerId
+    // A harness thread on native login owns its model selection; the
+    // provider-registry gate below only applies to gateway/provider routes.
+    const harnessNativeLogin = Boolean(input.harnessId?.trim()) && input.credentialMode === 'native-login'
+    const inheritWithoutProvider = input.routeIntent === 'inherit' && !input.providerId?.trim()
+    const requestedProviderId = harnessNativeLogin || inheritWithoutProvider
+      ? undefined
+      : input.providerId?.trim() || sharedDefault.providerId
     const requestedModel = input.model?.trim() ||
-      (requestedProviderId === sharedDefault.providerId ? sharedDefault.model : undefined)
+      (!harnessNativeLogin && !inheritWithoutProvider && requestedProviderId === sharedDefault.providerId
+        ? sharedDefault.model : undefined)
     const requestedProfile = sharedDefault.providers?.find((profile) =>
       profile.id === requestedProviderId
     )
     if (
+      !harnessNativeLogin && !inheritWithoutProvider &&
       sharedDefault.registryAvailable &&
       (
         !requestedProviderId ||
@@ -365,7 +450,17 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         title: input.title,
         ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
         ...(input.agentSurface ? { agentSurface: input.agentSurface } : {}),
-        model: requestedModel || runtime.model,
+        ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
+        ...(input.collaboration ? { collaboration: input.collaboration } : {}),
+        ...(input.routeIntent ? { routeIntent: input.routeIntent } : {}),
+        ...(input.workspaceIsolation ? { workspaceIsolation: input.workspaceIsolation } : {}),
+        ...(input.projectDefaultsRevision
+          ? { projectDefaultsRevision: input.projectDefaultsRevision } : {}),
+        ...(input.harnessId?.trim() ? { harnessId: input.harnessId.trim() } : {}),
+        ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
+        ...(input.gatewayBinding ? { gatewayBinding: input.gatewayBinding } : {}),
+        ...(input.taskWorkspaceId?.trim() ? { taskWorkspaceId: input.taskWorkspaceId.trim() } : {}),
+        model: requestedModel || (harnessNativeLogin ? 'default' : runtime.model),
         mode: normalizeThreadMode(input.mode),
         approvalPolicy: runtime.approvalPolicy,
         sandboxMode: runtime.sandboxMode,
@@ -374,8 +469,11 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         ...(requestedProviderId
           ? { providerId: requestedProviderId }
           : {}),
-        ...(input.accountId?.trim() || requestedProfile?.accountId || sharedDefault.accountId
-          ? { accountId: input.accountId?.trim() || requestedProfile?.accountId || sharedDefault.accountId }
+        ...(!harnessNativeLogin && !inheritWithoutProvider &&
+          (input.accountId?.trim() || requestedProfile?.accountId ||
+            (requestedProviderId === sharedDefault.providerId ? sharedDefault.accountId : undefined))
+          ? { accountId: input.accountId?.trim() || requestedProfile?.accountId ||
+              (requestedProviderId === sharedDefault.providerId ? sharedDefault.accountId : undefined) }
           : {}),
         ...(input.agentId?.trim() ? { agentId: input.agentId.trim() } : {}),
         ...(input.systemPrompt?.trim() ? { systemPrompt: input.systemPrompt.trim() } : {})
@@ -402,6 +500,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       model?: string
       providerId?: string
       accountId?: string
+      /** ADE harness override for this turn; absent inherits the thread. */
+      harnessId?: string
+      /** Harness credential path; absent = the harness's default. */
+      gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
       reasoningEffort?: string
       serviceTier?: 'priority'
       subagentResume?: { childId: string; expectedResumeCount: number }
@@ -438,6 +540,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       workspaceCheckpointRequestId?: string
       fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
       composerContexts?: ComposerContextAttachment[]
+      ackNoticeIds?: string[]
+      /** Managed plan-build turn; Kun enforces isolated-worktree admission. */
+      planBuild?: boolean
+      paperContext?: PaperTurnContext
       writeContext?: WriteTurnContext
     }
   ): Promise<{
@@ -471,6 +577,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       ...(selectedModel ? { model: selectedModel } : {}),
       ...(selectedProviderId ? { providerId: selectedProviderId } : {}),
       ...(selectedAccountId ? { accountId: selectedAccountId } : {}),
+      ...(options?.harnessId?.trim() ? { harnessId: options.harnessId.trim(), ...harnessAgentRequestField(options.harnessId),
+        ...harnessSettingsRequestField(options.harnessId) } : {}),
+      ...(options?.credentialMode ? { credentialMode: options.credentialMode } : {}),
+      ...(options?.gatewayBinding ? { gatewayBinding: options.gatewayBinding } : {}),
       approvalPolicy: options?.approvalPolicy ?? runtime.approvalPolicy,
       sandboxMode: options?.sandboxMode ?? runtime.sandboxMode,
       approvalReviewer: options?.approvalReviewer ?? runtime.approvalReviewer
@@ -512,6 +622,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     if (options?.guiDesignMode) {
       body.guiDesignMode = true
     }
+    if (options?.planBuild) {
+      body.planBuild = true
+    }
     if (options?.persona?.trim()) {
       body.persona = options.persona.trim()
     }
@@ -545,6 +658,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     if (options?.composerContexts?.length) {
       body.composerContexts = options.composerContexts
     }
+    if (options?.ackNoticeIds?.length) {
+      body.ackNoticeIds = options.ackNoticeIds
+    }
+    if (options?.paperContext) body.paperContext = options.paperContext
     if (options?.writeContext) {
       body.writeContext = options.writeContext
     }

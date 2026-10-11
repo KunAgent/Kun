@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { AlertTriangle, Check, Info, Loader2, Search, X } from 'lucide-react'
 import type { ModelProviderProfileV1 } from '@shared/app-settings'
 import type {
@@ -40,6 +40,8 @@ export function ProviderModelImportDialog({
   catalogResult,
   providerError,
   authoritative = false,
+  discoverySource = 'provider',
+  catalogLoading = false,
   t,
   onCancel,
   onConfirm
@@ -49,6 +51,8 @@ export function ProviderModelImportDialog({
   catalogResult: ModelsDevCatalogResult
   providerError?: string
   authoritative?: boolean
+  discoverySource?: 'provider' | 'preset' | 'manual'
+  catalogLoading?: boolean
   t: Translate
   onCancel: () => void
   onConfirm: (result: ProviderModelImportResult) => Promise<void>
@@ -57,6 +61,7 @@ export function ProviderModelImportDialog({
     () => buildProviderModelImportEntries(provider, providerModelIds, catalogResult),
     [provider, providerModelIds, catalogResult]
   )
+  const [page, setPage] = useState(0)
   const [query, setQuery] = useState('')
   const [kindFilter, setKindFilter] = useState<ProviderModelKind | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
@@ -66,6 +71,17 @@ export function ProviderModelImportDialog({
   const [selected, setSelected] = useState<Set<string>>(
     () => defaultSelectedProviderModelImportKeys(entries, authoritative)
   )
+
+  const previousEntries = useRef(entries)
+  useEffect(() => {
+    const previous = previousEntries.current
+    previousEntries.current = entries
+    setSelected((selection) => {
+      const ids = new Set(previous.filter((entry) => selection.has(providerModelImportEntryKey(entry.kind, entry.modelId))).map((entry) => entry.modelId))
+      const next = new Set(entries.filter((entry) => ids.has(entry.modelId)).map((entry) => providerModelImportEntryKey(entry.kind, entry.modelId)))
+      return next.size === selection.size && [...next].every((key) => selection.has(key)) ? selection : next
+    })
+  }, [entries])
 
   const normalizedQuery = query.trim().toLowerCase()
   const visibleEntries = useMemo(
@@ -102,6 +118,10 @@ export function ProviderModelImportDialog({
     () => entries.reduce((count, entry) => count + (entry.catalog?.metadataIssues?.length ?? 0), 0),
     [entries]
   )
+
+  useEffect(() => { setPage(0) }, [query, kindFilter, sourceFilter, hideExisting])
+  const pageCount = Math.max(1, Math.ceil(visibleEntries.length / 50))
+  const currentPage = Math.min(page, pageCount - 1)
 
   const toggleOne = (key: string): void => {
     setSelected((previous) => {
@@ -165,7 +185,7 @@ export function ProviderModelImportDialog({
       aria-modal="true"
       aria-label={t('providerModelImportTitle')}
     >
-      <section className="grid max-h-[calc(100vh-2rem)] w-full max-w-3xl grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-ds-border bg-ds-card shadow-panel">
+      <section className="grid max-h-[calc(100vh-2rem)] w-full max-w-3xl grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] overflow-hidden rounded-2xl border border-ds-border bg-ds-card shadow-panel">
         <header className="flex items-start justify-between gap-3 border-b border-ds-border px-5 py-4">
           <div className="grid gap-1">
             <h2 className="text-[15px] font-semibold text-ds-ink">{t('providerModelImportTitle')}</h2>
@@ -177,7 +197,7 @@ export function ProviderModelImportDialog({
               })}
             </p>
           </div>
-          <button
+          <button data-settings-action="ghost" data-settings-size="icon"
             type="button"
             aria-label={t('providerModelImportCancel')}
             onClick={onCancel}
@@ -188,12 +208,14 @@ export function ProviderModelImportDialog({
         </header>
 
         <div className="grid gap-2.5 border-b border-ds-border px-5 py-3">
+          {catalogLoading ? <p role="status" className="text-[12px] text-ds-faint">{t('providerConfiguration.catalogLoading')}</p> : null}
           {submitError ? (
             <ImportNotice tone="warning" icon={<AlertTriangle className="h-3.5 w-3.5" />}>
               {t('providerModelImportSubmitFailed', { message: submitError })}
             </ImportNotice>
           ) : null}
-          {providerError ? (
+          {discoverySource !== 'provider' ? <p className="text-[12px] text-amber-600 dark:text-amber-300">{t('providerConfiguration.candidateModelsHint')}</p> : null}
+      {providerError ? (
             <ImportNotice tone="warning" icon={<AlertTriangle className="h-3.5 w-3.5" />}>
               {t('providerModelImportProviderWarning', { message: providerError })}
             </ImportNotice>
@@ -247,7 +269,7 @@ export function ProviderModelImportDialog({
               onClick={() => setSourceFilter('provider-api')}
               className={filterChipClass(sourceFilter === 'provider-api')}
             >
-              {t('providerModelImportSourceApi', { count: sourceCounts['provider-api'] })}
+              {t(discoverySource === 'provider' ? 'providerModelImportSourceApi' : `providerConfiguration.discovery${discoverySource}Count`, { count: sourceCounts['provider-api'] })}
             </button>
             <button
               type="button"
@@ -307,10 +329,12 @@ export function ProviderModelImportDialog({
             </p>
           ) : (
             <ul className="grid gap-1.5">
-              {visibleEntries.map((entry) => {
+              {visibleEntries.slice(currentPage * 50, currentPage * 50 + 50).map((entry) => {
                 const key = providerModelImportEntryKey(entry.kind, entry.modelId)
                 const checked = selected.has(key)
-                const sourceLabel = entry.sources.length === 2
+                const sourceLabel = discoverySource !== 'provider' && entry.sources.includes('provider-api')
+                  ? t(`providerConfiguration.discovery${discoverySource}Badge`)
+                  : entry.sources.length === 2
                   ? t('providerModelImportSourceBothBadge')
                   : entry.sources[0] === 'provider-api'
                     ? t('providerModelImportSourceApiBadge')
@@ -388,9 +412,14 @@ export function ProviderModelImportDialog({
           )}
         </div>
 
+        {pageCount > 1 ? <nav className="flex items-center justify-center gap-3 border-t border-ds-border px-5 py-2 text-[12px]" aria-label={t('providerConfiguration.modelPages')}>
+          <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} aria-label={t('providerConfiguration.previousPage')}>←</button>
+          <span>{currentPage + 1} / {pageCount}</span>
+          <button type="button" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)} aria-label={t('providerConfiguration.nextPage')}>→</button>
+        </nav> : null}
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-ds-border px-5 py-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <button
+            <button data-settings-action="secondary" data-settings-size="compact"
               type="button"
               onClick={allVisibleSelected ? clearVisible : selectAllVisible}
               disabled={visibleEntries.length === 0}
@@ -411,7 +440,7 @@ export function ProviderModelImportDialog({
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <button data-settings-action="secondary" data-settings-size="default"
               type="button"
               onClick={onCancel}
               disabled={submitting}
@@ -419,7 +448,7 @@ export function ProviderModelImportDialog({
             >
               {t('providerModelImportCancel')}
             </button>
-            <button
+            <button aria-busy={submitting} data-settings-action="primary" data-settings-size="default"
               type="button"
               onClick={() => void submit()}
               disabled={submitting || (totalSelected === 0 && existingMetadataCount === 0)}

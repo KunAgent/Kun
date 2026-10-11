@@ -1,0 +1,297 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import type { KunHarnessSettingsV1 } from '@shared/app-settings'
+import { AgentCenterCustomForm } from './agent-center-custom-form'
+import { useHarnessStore } from '../../store/harness-store'
+import { AgentSettingsSelect } from './AgentSettingsSelect'
+
+const mocks = vi.hoisted(() => ({
+  probeHarnessDefinition: vi.fn(),
+  storeHarnessSecret: vi.fn(async () => 'cred_new'),
+  deleteHarnessSecret: vi.fn(async () => undefined)
+}))
+
+vi.mock('../../agent/registry', () => ({
+  getProvider: () => ({
+    probeHarnessDefinition: mocks.probeHarnessDefinition,
+    storeHarnessSecret: mocks.storeHarnessSecret,
+    deleteHarnessSecret: mocks.deleteHarnessSecret
+  })
+}))
+
+const t = (key: string, options?: Record<string, unknown>): string =>
+  options ? `${key} ${JSON.stringify(options)}` : key
+
+function settings(providers: KunHarnessSettingsV1['providers'] = {}): KunHarnessSettingsV1 {
+  return {
+    enabledProfiles: [], disabledIds: [],
+    providers,
+    defaults: {},
+    defaultHarnessId: 'kun',
+    agentOrder: []
+  }
+}
+
+function render(custom: KunHarnessSettingsV1['providers'] = {}) {
+  const updateKun = vi.fn()
+  let root!: ReactTestRenderer
+  act(() => {
+    root = create(
+      createElement(AgentCenterCustomForm, { settings: settings(custom), updateKun, t })
+    )
+  })
+  return { root, updateKun }
+}
+
+function inputByPlaceholder(root: ReactTestRenderer, placeholder: string) {
+  return root.root.find(
+    (node) => node.type === 'input' && node.props.placeholder === placeholder
+  )
+}
+
+function textContent(children: unknown): string {
+  if (typeof children === 'string') return children
+  if (typeof children === 'number') return String(children)
+  if (Array.isArray(children)) return children.map(textContent).join('')
+  if (children && typeof children === 'object' && 'props' in children) {
+    return textContent((children.props as { children?: unknown }).children)
+  }
+  return ''
+}
+
+function buttonByText(root: ReactTestRenderer, text: string) {
+  return root.root.findAll(
+    (node) => node.type === 'button' && textContent(node.props.children).includes(text)
+  )[0]
+}
+
+async function fillBasics(root: ReactTestRenderer): Promise<void> {
+  await act(async () => {
+    inputByPlaceholder(root, 'adeSettings.acpFormName').props.onChange({
+      target: { value: 'My Agent' }
+    })
+    inputByPlaceholder(root, 'adeSettings.acpFormCommand').props.onChange({
+      target: { value: '/bin/my-agent' }
+    })
+  })
+}
+
+const okProbe = {
+  durationMs: 12,
+  ok: true,
+  supported: true,
+  protocol: 'acp',
+  agent: { name: 'my-agent', version: '1.0' }
+}
+
+beforeAll(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+})
+
+afterEach(() => {
+  vi.clearAllMocks()
+})
+
+describe('AgentCenterCustomForm test-before-save gating', () => {
+  it('keeps Add disabled until a fresh successful probe', async () => {
+    const { root } = render()
+    const add = buttonByText(root, 'adeSettings.acpFormAdd')
+    expect(add.props.disabled).toBe(true)
+
+    mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+    await fillBasics(root)
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormTest').props.onClick()
+    })
+
+    expect(mocks.probeHarnessDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: 'My Agent',
+        command: '/bin/my-agent',
+        id: 'custom-my-agent'
+      }), { signal: expect.any(AbortSignal) }
+    )
+    expect(buttonByText(root, 'adeSettings.acpFormAdd').props.disabled).toBe(false)
+  })
+
+  it('saves the custom entry through updateKun once probed', async () => {
+    const { root, updateKun } = render()
+    mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+    await fillBasics(root)
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormTest').props.onClick()
+    })
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormAdd').props.onClick()
+    })
+    expect(updateKun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        harnesses: expect.objectContaining({
+          providers: {
+            'custom-my-agent': { extends: 'acp', label: 'My Agent', command: '/bin/my-agent' }
+          }
+        })
+      })
+    )
+  })
+
+  it('preserves an imported stable ID through probe and save', async () => {
+    const { root, updateKun } = render()
+    mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+    const fileInput = root.root.findAllByType('input' as never)
+      .find((input) => input.props.type === 'file')!
+    await act(async () => fileInput.props.onChange({ target: {
+      files: [{ text: async () => JSON.stringify({
+        id: 'custom-stable-id', displayName: 'Renamed Agent', command: '/bin/stable'
+      }) }],
+      value: 'custom.json'
+    } }))
+    await act(async () => buttonByText(root, 'adeSettings.acpFormTest').props.onClick())
+    expect(mocks.probeHarnessDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'custom-stable-id' }),
+      { signal: expect.any(AbortSignal) }
+    )
+    await act(async () => buttonByText(root, 'adeSettings.acpFormAdd').props.onClick())
+    expect(Object.keys(updateKun.mock.calls[0]?.[0].harnesses.providers)).toEqual(['custom-stable-id'])
+  })
+
+  it('submits a probed definition only once across rapid duplicate clicks', async () => {
+    const { root, updateKun } = render()
+    mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+    await fillBasics(root)
+    await act(async () => buttonByText(root, 'adeSettings.acpFormTest').props.onClick())
+    const save = buttonByText(root, 'adeSettings.acpFormAdd')
+    await act(async () => { save.props.onClick(); save.props.onClick() })
+    expect(updateKun).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks save on a failed probe until save-anyway is chosen', async () => {
+    const { root } = render()
+    mocks.probeHarnessDefinition.mockResolvedValue({
+      durationMs: 5,
+      ok: false,
+      supported: true,
+      detail: 'spawn failed'
+    })
+    await fillBasics(root)
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormTest').props.onClick()
+    })
+    expect(buttonByText(root, 'adeSettings.acpFormAdd').props.disabled).toBe(true)
+
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormSaveAnyway').props.onClick()
+    })
+    expect(buttonByText(root, 'adeSettings.acpFormAdd').props.disabled).toBe(false)
+  })
+
+  it('invalidates the probe when a field changes afterwards', async () => {
+    const { root } = render()
+    mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+    await fillBasics(root)
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormTest').props.onClick()
+    })
+    expect(buttonByText(root, 'adeSettings.acpFormAdd').props.disabled).toBe(false)
+
+    await act(async () => {
+      inputByPlaceholder(root, 'adeSettings.acpFormArgs').props.onChange({
+        target: { value: '--acp' }
+      })
+    })
+    expect(buttonByText(root, 'adeSettings.acpFormAdd').props.disabled).toBe(true)
+  })
+
+  it('aborts an in-flight definition probe when its command changes', async () => {
+    let resolveProbe!: (result: typeof okProbe) => void
+    mocks.probeHarnessDefinition.mockImplementation(() => new Promise((resolve) => { resolveProbe = resolve }))
+    const { root } = render()
+    await fillBasics(root)
+    await act(async () => buttonByText(root, 'adeSettings.acpFormTest').props.onClick())
+    const calls = mocks.probeHarnessDefinition.mock.calls as unknown as Array<[unknown, { signal: AbortSignal }]>
+    const signal = calls[0]![1].signal
+    expect(signal.aborted).toBe(false)
+    await act(async () => inputByPlaceholder(root, 'adeSettings.acpFormCommand').props.onChange({ target: { value: '/bin/changed-agent' } }))
+    expect(signal.aborted).toBe(true)
+    await act(async () => resolveProbe(okProbe))
+    expect(buttonByText(root, 'adeSettings.acpFormAdd').props.disabled).toBe(true)
+  })
+
+  it('binds a secret into a secretEnv ref and never stores the raw value', async () => {
+    const { root, updateKun } = render()
+    mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+    await fillBasics(root)
+    await act(async () => {
+      inputByPlaceholder(root, 'adeSettings.acpFormSecretName').props.onChange({
+        target: { value: 'my_key' } // upper-cased by the input handler
+      })
+      inputByPlaceholder(root, 'adeSettings.acpFormSecretValue').props.onChange({
+        target: { value: 'super-secret' }
+      })
+    })
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormSecretBind').props.onClick()
+    })
+    expect(mocks.storeHarnessSecret).toHaveBeenCalledWith('super-secret')
+
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormTest').props.onClick()
+    })
+    expect(mocks.probeHarnessDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        secretEnv: [{ name: 'MY_KEY', secretRef: 'cred_new' }]
+      }), { signal: expect.any(AbortSignal) }
+    )
+    // The probe request — and everything on the wire — carries the ref only.
+    const payload = mocks.probeHarnessDefinition.mock.calls[0]?.[0]
+    expect(JSON.stringify(payload)).not.toContain('super-secret')
+
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormAdd').props.onClick()
+    })
+    const patch = updateKun.mock.calls[0]?.[0]
+    expect(patch.harnesses.providers['custom-my-agent'].secretEnv).toEqual([
+      { name: 'MY_KEY', secretRef: 'cred_new' }
+    ])
+    expect(JSON.stringify(patch)).not.toContain('super-secret')
+  })
+
+  it('rejects a duplicate id before save', async () => {
+    const { root, updateKun } = render({
+      'custom-my-agent': { extends: 'acp', label: 'My Agent', command: '/bin/x' }
+    })
+    mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+    await fillBasics(root)
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormTest').props.onClick()
+    })
+    // Even with a fresh probe the duplicate id must not be persisted.
+    await act(async () => {
+      buttonByText(root, 'adeSettings.acpFormAdd').props.onClick()
+    })
+    expect(updateKun).not.toHaveBeenCalled()
+  })
+
+  it('derives an Agent from a builtin ACP engine and keeps its command when left empty', async () => {
+    useHarnessStore.setState({ rows: [{ definition: { id: 'opencode', displayName: 'OpenCode', transport: 'acp', builtin: true,
+      credentialModes: ['native-login'], permissionModes: [], modelSource: 'probe', staticModels: [],
+      launch: { command: 'opencode', args: ['acp'] } } } as never] })
+    try {
+      const { root, updateKun } = render()
+      await act(async () => root.root.findByType(AgentSettingsSelect).props.onChange('opencode'))
+      await act(async () => {
+        inputByPlaceholder(root, 'adeSettings.acpFormName').props.onChange({ target: { value: 'Fork' } })
+      })
+      expect(inputByPlaceholder(root, 'adeSettings.acpFormCommandOptional {"command":"opencode"}')).toBeTruthy()
+      mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+      await act(async () => { buttonByText(root, 'adeSettings.acpFormTest').props.onClick() })
+      expect(mocks.probeHarnessDefinition).toHaveBeenCalledWith(
+        expect.objectContaining({ extends: 'opencode', command: 'opencode', args: [] }), { signal: expect.any(AbortSignal) })
+      await act(async () => { buttonByText(root, 'adeSettings.acpFormAdd').props.onClick() })
+      expect(updateKun.mock.calls[0]?.[0].harnesses.providers).toEqual({ 'custom-fork': { extends: 'opencode', label: 'Fork' } })
+    } finally {
+      useHarnessStore.setState({ rows: [] })
+    }
+  })
+})

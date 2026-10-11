@@ -22,9 +22,10 @@ describe('nextVisibleLength', () => {
     expect(nextVisibleLength(100, 104)).toBe(101)
   })
 
-  it('accelerates with backlog but caps the per-frame step so bursts stay readable', () => {
-    expect(nextVisibleLength(0, 80)).toBe(10)
-    expect(nextVisibleLength(0, 100_000)).toBe(32)
+  it('paces small deltas and immediately catches up a large burst', () => {
+    expect(nextVisibleLength(0, 80)).toBeGreaterThan(0)
+    expect(nextVisibleLength(0, 80)).toBeLessThan(80)
+    expect(nextVisibleLength(0, 100_000)).toBe(100_000)
   })
 
   it('never overshoots the target', () => {

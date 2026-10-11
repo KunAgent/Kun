@@ -92,6 +92,51 @@ describe('JsonSettingsStore', () => {
     expect(writes).toBe(2)
   })
 
+  it('reuses the cached snapshot through etag conditional reads until the document changes', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'kun-conditional-settings-'))
+    let revision = 1
+    let value: string | null = JSON.stringify({ version: 1, locale: 'zh' })
+    const etagOf = (text: string | null) => `etag:${text?.length ?? 0}:${text ?? ''}`
+    const calls: string[] = []
+    const backend = {
+      async read() {
+        calls.push('read')
+        return { revision, value, etag: etagOf(value) }
+      },
+      async readIfChanged(ifNoneMatch?: string) {
+        if (ifNoneMatch && ifNoneMatch === etagOf(value)) {
+          calls.push('unchanged')
+          return { revision, etag: ifNoneMatch, unchanged: true as const }
+        }
+        calls.push('changed')
+        return { revision, value, etag: etagOf(value) }
+      },
+      async write(expectedRevision: number, next: string) {
+        if (expectedRevision !== revision) throw new Error('revision conflict')
+        value = next
+        revision += 1
+        return { revision, value: next }
+      }
+    }
+    const store = new JsonSettingsStore(userDataDir, { documentBackend: backend })
+    const first = await store.load()
+    expect(first.locale).toBe('zh')
+    expect(await store.load()).toBe(first)
+    expect(await store.load()).toBe(first)
+    expect(calls).toEqual(['read', 'unchanged', 'unchanged'])
+
+    value = JSON.stringify({ version: 1, locale: 'en' })
+    revision += 1
+    const changed = await store.load()
+    expect(changed.locale).toBe('en')
+    expect(calls.at(-1)).toBe('changed')
+
+    await store.patch({ locale: 'zh' })
+    expect((await store.load()).locale).toBe('zh')
+    expect(await store.load()).toBe(await store.load())
+    expect(calls.at(-1)).toBe('unchanged')
+  })
+
   it('retains the last valid snapshot while an external edit contains invalid JSON', async () => {
     const userDataDir = await mkdtemp(join(tmpdir(), 'kun-invalid-external-settings-'))
     let revision = 1

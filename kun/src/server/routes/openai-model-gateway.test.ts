@@ -7,6 +7,7 @@ import { DEFAULT_SERVE_OPTIONS, ServeOptionsSchema } from '../../cli/cli-options
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-pool.js'
 import { buildRouter } from './index.js'
 import { RoutePoolTestService } from '../../services/route-pool-test-service.js'
+import { HarnessTokenService } from '../../harness/harness-token-service.js'
 
 class GatewayModel implements ModelClient {
   provider = 'test'
@@ -81,13 +82,13 @@ function runtime(
   const pools = [
     {
       id: 'pool', name: 'Pool', modelId: 'local-model', enabled: true, strategy: 'priority' as const,
-      targets: [{ id: 'target', providerId: 'provider', modelId: 'real', enabled: true, weight: 1 }],
+      targets: [{ id: 'target', providerId: 'relay-key', modelId: 'relay-a', enabled: true, weight: 1 }],
       failurePolicy: { failoverHttpStatusCodes: [429, 503], failoverOnNetworkError: true, failoverOnTimeout: true, failoverOnAuthError: true },
       healthPolicy: { failureThreshold: 3, cooldownMs: 60_000, halfOpenMaxAttempts: 1 }
     },
     {
       id: 'coding-pool', name: 'Coding Pool', modelId: 'local-coding', enabled: true, strategy: 'adaptive' as const,
-      targets: [{ id: 'coding-target', providerId: 'provider', modelId: 'real-coding', enabled: true, weight: 1 }],
+      targets: [{ id: 'coding-target', providerId: 'relay-key', modelId: 'relay-b', enabled: true, weight: 1 }],
       failurePolicy: { failoverHttpStatusCodes: [429, 503], failoverOnNetworkError: true, failoverOnTimeout: true, failoverOnAuthError: true },
       healthPolicy: { failureThreshold: 3, cooldownMs: 60_000, halfOpenMaxAttempts: 1 }
     }
@@ -165,13 +166,13 @@ describe('local OpenAI model gateway', () => {
     expect((blocked as { status: number }).status).toBe(404)
   })
 
-  it('reports the effective local gateway state with route status', () => {
-    expect(JSON.parse(routePoolStatus(runtime(true)).body)).toMatchObject({
+  it('reports the effective local gateway state with route status', async () => {
+    expect(JSON.parse((await routePoolStatus(runtime(true))).body)).toMatchObject({
       localGateway: { enabled: true, exposeProviderModels: false },
       pools: expect.arrayContaining([expect.objectContaining({ id: 'pool' })]),
       configuredPools: expect.arrayContaining([expect.objectContaining({ id: 'pool' })])
     })
-    expect(JSON.parse(routePoolStatus(runtime(false)).body)).toMatchObject({
+    expect(JSON.parse((await routePoolStatus(runtime(false))).body)).toMatchObject({
       localGateway: { enabled: false }
     })
   })
@@ -328,5 +329,162 @@ describe('local OpenAI model gateway', () => {
       expect(testRuntime.modelGateway!.tests.list('pool')[0]).toMatchObject({ status: 'succeeded', output: 'hello' })
     })
     expect((testRuntime.modelClient as GatewayModel).last?.providerId).toBe(LOCAL_MODEL_GATEWAY_PROVIDER_ID)
+  })
+})
+
+describe('harness-grant gateway requests', () => {
+  function grantRuntime(modelClient: ModelClient, tokens: HarnessTokenService) {
+    const usageEvents: Record<string, unknown>[] = []
+    const records: { threadId: string; turnId?: string }[] = []
+    const base = runtime(true, modelClient) as unknown as Record<string, unknown>
+    base.harnessTokens = tokens
+    base.threadService = {
+      get: async (threadId: string) => threadId === 'worker-thread'
+        ? { id: threadId, turns: [{ id: 'turn_live', status: 'running' }] }
+        : null
+    }
+    base.usageService = {
+      record: (threadId: string, usage: unknown, _sig: unknown, turnId?: string) => {
+        records.push({ threadId, turnId })
+        return usage
+      }
+    }
+    base.events = {
+      record: async (event: Record<string, unknown>) => { usageEvents.push(event); return event }
+    }
+    return { base: base as unknown as ServerRuntime, usageEvents, records }
+  }
+
+  function grantPost(path: string, body: Record<string, unknown>, token: string): Request {
+    return new Request(`http://localhost${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify(body)
+    })
+  }
+
+  function issue(tokens: HarnessTokenService, routes: { providerId: string; model: string; role: 'main' | 'small' }[]) {
+    return tokens.issue({
+      threadId: 'worker-thread',
+      harnessId: 'claude-code',
+      credentialIdentity: 'kun-gateway:relay-key/relay-a',
+      scopes: ['gateway'],
+      routes
+    })
+  }
+
+  it('lists only granted routes in kun/ addressing form', async () => {
+    const tokens = new HarnessTokenService()
+    const { base } = grantRuntime(new GatewayModel(), tokens)
+    const token = issue(tokens, [
+      { providerId: 'relay-key', model: 'relay-a', role: 'main' },
+      { providerId: 'relay-key', model: 'relay-b', role: 'small' }
+    ])
+    const response = await gatewayModels(base, new Request('http://localhost/v1/models', {
+      headers: { authorization: `Bearer ${token}` }
+    }))
+    const data = JSON.parse(response.body).data as { id: string; owned_by: string }[]
+    expect(data.map((entry) => entry.id)).toEqual(['kun/relay-key/relay-a', 'kun/relay-key/relay-b'])
+    expect(data[0]?.owned_by).toBe('kun-harness:main')
+  })
+
+  class UsageModel extends GatewayModel {
+    override async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+      this.last = request
+      yield { kind: 'assistant_text_delta', text: 'hi' }
+      yield { kind: 'usage', usage: { promptTokens: 2, completionTokens: 1, totalTokens: 3, cacheHitRate: null } as never }
+      yield { kind: 'completed', stopReason: 'stop' }
+    }
+  }
+
+  it('completes a chat request on a granted route and records harness-gateway usage', async () => {
+    const tokens = new HarnessTokenService()
+    const model = new UsageModel()
+    const { base, usageEvents, records } = grantRuntime(model, tokens)
+    const token = issue(tokens, [{ providerId: 'relay-key', model: 'relay-a', role: 'main' }])
+    const response = await gatewayChatCompletions(base, grantPost('/v1/chat/completions', {
+      model: 'kun/relay-key/relay-a',
+      messages: [{ role: 'user', content: 'hi' }]
+    }, token))
+    expect(response).not.toBeInstanceOf(Response)
+    expect(response.status).toBe(200)
+    expect(model.last?.providerId).toBe('relay-key')
+    expect(model.last?.model).toBe('relay-a')
+    expect(model.last?.threadId).toBe('worker-thread')
+    expect(model.last?.turnId).toBe('turn_live')
+    expect(records).toEqual([{ threadId: 'worker-thread', turnId: 'turn_live' }])
+    const usage = usageEvents.find((event) => event.kind === 'usage')
+    expect(usage).toMatchObject({
+      threadId: 'worker-thread',
+      turnId: 'turn_live',
+      model: 'relay-a',
+      providerId: 'relay-key',
+      source: 'harness-gateway',
+      harnessId: 'claude-code'
+    })
+  })
+
+  class SlowUsageModel extends GatewayModel {
+    override async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+      this.last = request
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      yield { kind: 'assistant_text_delta', text: 'hi' }
+      await new Promise((resolve) => setTimeout(resolve, 70))
+      yield { kind: 'usage', usage: { promptTokens: 2, completionTokens: 30, totalTokens: 32, cacheHitRate: null } as never }
+      yield { kind: 'completed', stopReason: 'stop' }
+    }
+  }
+
+  it('times every granted route call so a gateway-routed Agent shows TTFT and tok/s', async () => {
+    const tokens = new HarnessTokenService()
+    const { base, usageEvents } = grantRuntime(new SlowUsageModel(), tokens)
+    const token = issue(tokens, [{ providerId: 'relay-key', model: 'relay-a', role: 'main' }])
+    const streamed = await gatewayResponses(base, grantPost('/v1/responses', {
+      model: 'kun/relay-key/relay-a', input: 'hi', stream: true
+    }, token))
+    await (streamed as Response).text()
+    const usage = usageEvents.find((event) => event.kind === 'usage') as { usage: Record<string, number> } | undefined
+    // Lower bounds are the script's delays; the upper bound only rules out a clock mix-up.
+    expect(usage!.usage.requestTtftMs).toBeGreaterThanOrEqual(25)
+    expect(usage!.usage.requestTtftMs).toBeLessThan(5_000)
+    expect(usage!.usage.requestGenerationMs).toBeGreaterThanOrEqual(60)
+    expect(usage!.usage.requestGenerationMs).toBeLessThan(5_000)
+    expect(usage!.usage.completionTokens).toBe(30)
+  })
+
+  it('streams Responses output on a granted route and settles usage on close', async () => {
+    const tokens = new HarnessTokenService()
+    const { base, usageEvents } = grantRuntime(new UsageModel(), tokens)
+    const token = issue(tokens, [{ providerId: 'relay-key', model: 'relay-a', role: 'main' }])
+    const streamed = await gatewayResponses(base, grantPost('/v1/responses', {
+      model: 'kun/relay-key/relay-a', input: 'hi', stream: true
+    }, token))
+    expect(streamed).toBeInstanceOf(Response)
+    await (streamed as Response).text()
+    const usage = usageEvents.find((event) => event.kind === 'usage')
+    expect(usage).toMatchObject({ source: 'harness-gateway', harnessId: 'claude-code', turnId: 'turn_live' })
+  })
+
+  it('fails closed for tokens outside the grant, forged tokens, and kun/ addressing on public keys', async () => {
+    const tokens = new HarnessTokenService()
+    const { base } = grantRuntime(new GatewayModel(), tokens)
+    const token = issue(tokens, [{ providerId: 'relay-key', model: 'relay-a', role: 'main' }])
+
+    // Route not in the grant.
+    expect((await gatewayChatCompletions(base, grantPost('/v1/chat/completions', {
+      model: 'kun/relay-key/relay-b', messages: [{ role: 'user', content: 'hi' }]
+    }, token)) as { status: number }).status).toBe(404)
+
+    // Forged kgw_ token: never falls back to the public credential path.
+    expect((await gatewayChatCompletions(base, grantPost('/v1/chat/completions', {
+      model: 'local-model', messages: [{ role: 'user', content: 'hi' }]
+    }, 'kgw_forged.bad')) as { status: number }).status).toBe(401)
+
+    // Public credentials cannot use kun/ direct addressing.
+    expect((await gatewayChatCompletions(base, authorizedRequest('/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'kun/relay-key/relay-a', messages: [{ role: 'user', content: 'hi' }] })
+    })) as { status: number }).status).toBe(404)
   })
 })

@@ -1,12 +1,14 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { GatewayCredentialService } from '../../services/gateway-credential-service.js'
+import { rawGatewayCredential, splitAttributedKey } from './gateway-caller-agent.js'
+import { GATEWAY_REQUEST_TIMEOUT_MS } from '../../adapters/model/gateway-routing-budget.js'
 
 const DEFAULT_CAPACITY = 20
 const DEFAULT_REFILL_PER_SECOND = 1
 const DEFAULT_CONCURRENCY = 2
-const DEFAULT_TIMEOUT_MS = 120_000
 
 export type GatewayLease = {
+  deadlineAt?: number
   signal: AbortSignal
   timedOut(): boolean
   release(): void
@@ -17,6 +19,7 @@ export class GatewayRequestGuard {
   private tokens: number
   private lastRefill: number
   private active = 0
+  private readonly leases = new Set<GatewayLease>()
 
   constructor(
     private readonly credentials: Pick<GatewayCredentialService, 'verify'>,
@@ -33,11 +36,9 @@ export class GatewayRequestGuard {
   }
 
   authorize(request: Request): boolean {
-    const header = request.headers.get('authorization')
-    const match = /^Bearer ([^\s]+)$/.exec(header ?? '')
-    // Anthropic-style clients authenticate with `x-api-key` instead of Bearer.
-    const candidate = match?.[1] ?? request.headers.get('x-api-key')
-    return this.credentials.verify(candidate && candidate.trim() ? candidate : null)
+    // Anthropic-style clients authenticate with `x-api-key` instead of Bearer;
+    // an attribution prefix (`kun-<app>.`) is never part of the secret.
+    return this.credentials.verify(splitAttributedKey(rawGatewayCredential(request)).secret)
   }
 
   consumeToken(): boolean {
@@ -49,6 +50,13 @@ export class GatewayRequestGuard {
     if (this.tokens < 1) return false
     this.tokens -= 1
     return true
+  }
+
+  /** Milliseconds until the bucket holds a whole token again; 0 when it already does. */
+  retryAfterMs(): number {
+    if (this.tokens >= 1) return 0
+    const rate = this.options.refillPerSecond ?? DEFAULT_REFILL_PER_SECOND
+    return rate > 0 ? Math.ceil(((1 - this.tokens) / rate) * 1_000) : 60_000
   }
 
   acquire(parentSignal: AbortSignal): GatewayLease | null {
@@ -63,7 +71,7 @@ export class GatewayRequestGuard {
     const timer = setTimeout(() => {
       timeoutReached = true
       controller.abort(new Error('gateway request timed out'))
-    }, this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+    }, this.options.timeoutMs ?? GATEWAY_REQUEST_TIMEOUT_MS)
     timer.unref?.()
     const release = () => {
       if (released) return
@@ -71,8 +79,10 @@ export class GatewayRequestGuard {
       clearTimeout(timer)
       parentSignal.removeEventListener('abort', onParentAbort)
       this.active -= 1
+      this.leases.delete(lease)
     }
-    return {
+    const lease: GatewayLease = {
+      deadlineAt: this.now() + (this.options.timeoutMs ?? GATEWAY_REQUEST_TIMEOUT_MS),
       signal: controller.signal,
       timedOut: () => timeoutReached,
       release,
@@ -81,6 +91,14 @@ export class GatewayRequestGuard {
         release()
       }
     }
+    this.leases.add(lease)
+    return lease
+  }
+
+  cancelAll(): number {
+    const leases = [...this.leases]
+    for (const lease of leases) lease.cancel()
+    return leases.length
   }
 
   activeCount(): number {

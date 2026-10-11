@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Archive, Loader2, PanelRight, Square } from 'lucide-react'
+import { Archive, Layers, Loader2, Plus, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ChatBlock } from '../../../agent/types'
 import { useChatStore } from '../../../store/chat-store'
@@ -9,39 +9,26 @@ import { usePaperStore } from '../../../write/paper/paper-store'
 import { buildResearchPool } from '../../../paper/paper-research-pool'
 import {
   listResearchSessions,
-  readLastResearchSession,
-  researchResourcePath
+  listResearchSessionsAcrossLibraries,
+  researchResourcePath,
+  type AgentHistorySession
 } from '../../../paper/paper-research-sessions'
 import {
+  openPaperResearchSession,
   selectPaperResearchSession,
   startPaperResearch,
   type PaperResearchRequest
 } from '../../../paper/paper-research-actions'
-import { useWriteAssistantStage } from '../../write/WriteAssistantStageContext'
+import { readSearchHistory, readSearchSources, type PaperSearchHistoryEntry } from '../../../paper/paper-search-prefs'
 import { paperResearchStageActive } from '../../../paper/paper-view'
-import { PaperSearchTabs } from '../discover/PaperSearchScope'
+import { useWriteAssistantStage } from '../../write/WriteAssistantStageContext'
+import { usePaperSearchRail } from '../discover/use-paper-search-rail'
+import layout from '../discover/PaperSearchLayout.module.css'
 import { PaperResearchEmpty } from './PaperResearchEmpty'
 import { PaperResearchPool } from './PaperResearchPool'
 import { PaperResearchStage } from './PaperResearchStage'
 
-const POOL_KEY = 'kun.paper.research.poolOpen'
 const NO_BLOCKS: ChatBlock[] = []
-
-function readPoolOpen(): boolean {
-  try {
-    return window.localStorage.getItem(POOL_KEY) !== '0'
-  } catch {
-    return true
-  }
-}
-
-function writePoolOpen(open: boolean): void {
-  try {
-    window.localStorage.setItem(POOL_KEY, open ? '1' : '0')
-  } catch {
-    // Panel memory is a convenience only.
-  }
-}
 
 function useElapsed(since: string | undefined, running: boolean): string {
   const [now, setNow] = useState(() => Date.now())
@@ -57,24 +44,31 @@ function useElapsed(since: string | undefined, running: boolean): string {
 }
 
 /**
- * Agent research stage (paper search → Agent tab), laid out like a Code
- * conversation: a slim header, the session's Work conversation in the
- * center and the paper pool on the right. Sessions live in the sidebar
- * under 论文搜索.
+ * Agent research page. With no session open it is the home screen (search
+ * box + recent searches); with a session it is the conversation in the
+ * center and the paper pool on the right. There is no separate history
+ * column: sessions are conversations in the sidebar, and the home screen
+ * lists the recent ones.
  */
 export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }): ReactElement {
   const { t } = useTranslation('common')
   const assistant = useWriteAssistantStage()
   const libraryRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
+  const libraries = useWriteWorkspaceStore((s) => s.paperMode.libraries)
   const sessionId = useWriteWorkspaceStore((s) => s.paperResearch.sessionId)
   const threads = useChatStore((s) => s.threads)
   const draft = usePaperModeStore((s) => s.discover.researchDraft)
-  const [poolOpen, setPoolOpen] = useState(readPoolOpen)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const { railOpen, narrow, railRef, toggleRail, closeRail } = usePaperSearchRail(rootRef)
   const [starting, setStarting] = useState(false)
+  const [quickHistory] = useState<PaperSearchHistoryEntry[]>(readSearchHistory)
   const stageRef = useRef<HTMLDivElement | null>(null)
-  const restoredFor = useRef<string | null>(null)
 
   const sessions = useMemo(() => listResearchSessions(libraryRoot, threads), [libraryRoot, threads])
+  const history = useMemo(
+    () => listResearchSessionsAcrossLibraries([...libraries, libraryRoot], threads),
+    [libraries, libraryRoot, threads]
+  )
   const activeSession = sessions.find((session) => session.sessionId === sessionId) ?? null
   const bound = Boolean(activeSession && assistant && assistant.activeThreadId === activeSession.threadId)
   const blocks = bound && assistant ? assistant.blocks : NO_BLOCKS
@@ -83,18 +77,9 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
   const lastUserAt = [...blocks].reverse().find((block) => block.kind === 'user')?.createdAt
   const elapsed = useElapsed(lastUserAt, running)
 
-  // Reopen the library's last session once per library, unless the user is
-  // already on a session or arrived with a hand-off draft.
-  useEffect(() => {
-    if (restoredFor.current === libraryRoot || !sessions.length) return
-    restoredFor.current = libraryRoot
-    if (sessionId || draft) return
-    const last = readLastResearchSession(libraryRoot)
-    if (last && sessions.some((session) => session.sessionId === last)) selectPaperResearchSession(last)
-  }, [libraryRoot, sessions, sessionId, draft])
-
-  // The resource → thread effect normally binds the session within a tick;
-  // if something else holds editor focus or selection lags, select directly.
+  // A research run is a session: the Work runtime makes the selected run the
+  // current session within a tick; if selection lags, select it directly.
+  // Opening the page never picks a run by itself — the user does.
   useEffect(() => {
     if (!activeSession || bound) return
     const timer = setTimeout(() => {
@@ -134,79 +119,108 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  const showPool = Boolean(activeSession && bound && poolOpen)
+  const openSession = (session: AgentHistorySession): void => {
+    void openPaperResearchSession({ libraryRoot: session.libraryRoot, sessionId: session.sessionId }, t)
+  }
+
+  const runQuick = (entry: PaperSearchHistoryEntry): void => {
+    usePaperModeStore.getState().patchDiscover({
+      quickRun: {
+        query: entry.query,
+        sources: entry.sources?.length ? entry.sources : readSearchSources(),
+        yearFrom: entry.yearFrom,
+        yearTo: entry.yearTo
+      }
+    })
+    onShowDirect()
+  }
+
+  const showPool = Boolean(activeSession) && railOpen
+  const headerButton = 'inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-md text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink'
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-3 border-b border-ds-border-muted px-4">
-        <PaperSearchTabs tab="agent" compact onChange={(tab) => tab === 'direct' && onShowDirect()} />
+    <div ref={rootRef} data-paper-search="agent" className={layout.surface}>
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-ds-border-muted px-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="shrink-0 text-[12.5px] text-ds-faint">{t('workSidebarDiscover')}</span>
           {activeSession ? (
             <>
+              <span aria-hidden="true" className="text-ds-faint">›</span>
               <span className="min-w-0 truncate text-[13px] font-medium text-ds-ink" title={activeSession.title}>
                 {activeSession.title}
               </span>
               {running ? (
-                <span className="inline-flex shrink-0 items-center gap-1 text-[11.5px] text-[var(--ds-accent)]">
+                <span className="inline-flex h-[22px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--ds-accent-soft)] px-2 text-[11.5px] text-[var(--ds-accent)]">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   {t('paperResearchStatusRunning')}
-                  {elapsed ? <span className="tabular-nums text-ds-faint">{elapsed}</span> : null}
+                  {elapsed ? <span className="tabular-nums opacity-70">{elapsed}</span> : null}
                 </span>
               ) : null}
             </>
           ) : null}
         </div>
         {running ? (
-          <button
-            type="button"
-            onClick={() => assistant?.onInterrupt()}
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-          >
+          <button type="button" onClick={() => assistant?.onInterrupt()} className={`${headerButton} px-2`}>
             <Square className="h-3 w-3" strokeWidth={2.2} />
             {t('paperResearchStop')}
           </button>
         ) : null}
-        {activeSession && !running ? (
-          <button
-            type="button"
-            onClick={archiveSession}
-            aria-label={t('paperResearchArchive')}
-            title={t('paperResearchArchive')}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-          >
-            <Archive className="h-3.5 w-3.5" strokeWidth={1.8} />
-          </button>
-        ) : null}
         {activeSession ? (
-          <button
-            type="button"
-            onClick={() => {
-              setPoolOpen((open) => {
-                writePoolOpen(!open)
-                return !open
-              })
-            }}
-            aria-pressed={poolOpen}
-            title={t('paperResearchPoolTitle')}
-            className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] transition hover:bg-ds-hover hover:text-ds-ink ${
-              poolOpen ? 'text-ds-ink' : 'text-ds-muted'
-            }`}
-          >
-            <PanelRight className="h-4 w-4" strokeWidth={1.8} />
-            <span className="tabular-nums">{pool.entries.length}</span>
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => selectPaperResearchSession(null)}
+              aria-label={t('paperResearchNew')}
+              title={t('paperResearchNew')}
+              className={`${headerButton} w-7`}
+            >
+              <Plus className="h-4 w-4" strokeWidth={1.8} />
+            </button>
+            {!running ? (
+              <button
+                type="button"
+                onClick={archiveSession}
+                aria-label={t('paperResearchArchive')}
+                title={t('paperResearchArchive')}
+                className={`${headerButton} w-7`}
+              >
+                <Archive className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={toggleRail}
+              aria-pressed={railOpen}
+              aria-label={t('paperResearchPoolTitle')}
+              title={t('paperResearchPoolTitle')}
+              className={`${headerButton} px-1.5 ${railOpen ? 'bg-accent-tint/15 text-accent' : ''}`}
+            >
+              <Layers className="h-4 w-4" strokeWidth={1.8} />
+              {pool.entries.length ? <span className="text-[11px] tabular-nums">{pool.entries.length}</span> : null}
+            </button>
+          </>
         ) : null}
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <div ref={stageRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className={layout.body} data-rail={showPool ? 'open' : 'closed'}>
+        <div ref={stageRef} className={`${layout.stage} flex flex-col`}>
           {!assistant ? (
             <div className="m-auto flex items-center gap-2 text-[12.5px] text-ds-faint">
               <Loader2 className="h-4 w-4 animate-spin" />
               {t('paperResearchLoading')}
             </div>
           ) : !activeSession ? (
-            <PaperResearchEmpty assistant={assistant} draft={draft} starting={starting} onStart={start} />
+            <PaperResearchEmpty
+              assistant={assistant}
+              draft={draft}
+              starting={starting}
+              onStart={start}
+              onShowDirect={onShowDirect}
+              sessions={history}
+              quickHistory={quickHistory}
+              onOpenSession={openSession}
+              onRunQuick={runQuick}
+            />
           ) : !bound ? (
             <div className="m-auto flex items-center gap-2 text-[12.5px] text-ds-faint">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -216,10 +230,17 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
             <PaperResearchStage assistant={assistant} newCountByBlock={pool.newCountByBlock} />
           )}
         </div>
-        {showPool ? (
-          <div className="hidden w-[300px] shrink-0 border-l border-ds-border-muted min-[1100px]:block">
-            <PaperResearchPool pool={pool} onFocusBlock={focusBlock} />
-          </div>
+        {showPool && activeSession ? (
+          <aside ref={railRef} className={layout.rail} data-overlay={narrow ? 'true' : 'false'}>
+            <PaperResearchPool
+              pool={pool}
+              scope={activeSession.threadId}
+              topic={activeSession.title}
+              running={running}
+              onFocusBlock={focusBlock}
+              onClose={closeRail}
+            />
+          </aside>
         ) : null}
       </div>
     </div>

@@ -73,6 +73,13 @@ export type ModelStepServiceDeps = {
     sentInputTokens: number
   }) => Promise<void>
   rememberFailure: (turnId: string, failure: TurnExecutionFailure) => void
+  /** Dynamic Graph planning harness summary; per-turn, never prefix. */
+  graphHarnessSummary?: () => Promise<string | undefined>
+  /**
+   * ADE manager turn context: bounded per-turn block for
+   * `workspaceMode === 'ade'` Kun-harness manager turns, never prefix.
+   */
+  adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
   awaitWorkspaceCheckpoint?: (
     checkpointRequestId: string,
     signal: AbortSignal

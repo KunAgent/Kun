@@ -3,6 +3,7 @@ import { createNavigationModeActions } from './chat-store-navigation-mode-action
 import { createNavigationRuntimeActions } from './chat-store-navigation-runtime-actions'
 import { createNavigationWorkspaceActions } from './chat-store-navigation-workspace-actions'
 import { createWorkspaceFolderActions } from './chat-store-workspace-folder-actions'
+import { createAdeActions } from './chat-store-ade-actions'
 
 type SseAbortRef = { current: AbortController | null }
 
@@ -13,9 +14,10 @@ type StoreActionContext = {
 }
 export function createNavigationActions(
   context: StoreActionContext
-): Pick<ChatState, 'openCode' | 'openDesign' | 'clearActiveThreadSelection' | 'openWrite' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread' | 'probeRuntime' | 'boot' | 'chooseWorkspace' | 'selectWorkspaceRoot' | 'clearWorkspace' | 'removeWorkspace' | 'addWorkspaceFolder' | 'removeWorkspaceFolder' | 'refreshThreads' | 'loadMoreThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
+): Pick<ChatState, 'openCode' | 'openAde' | 'startAdeDraft' | 'openDesign' | 'clearActiveThreadSelection' | 'openWrite' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread' | 'probeRuntime' | 'boot' | 'chooseWorkspace' | 'selectWorkspaceRoot' | 'chooseAdeWorkspace' | 'selectAdeWorkspaceRoot' | 'setComposerIsolationForWorkspace' | 'clearWorkspace' | 'removeWorkspace' | 'addWorkspaceFolder' | 'removeWorkspaceFolder' | 'refreshThreads' | 'refreshAdeThreads' | 'loadMoreThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
   return {
     ...createNavigationModeActions(context),
+    ...createAdeActions(context),
     ...createNavigationRuntimeActions(context),
     ...createNavigationWorkspaceActions(context),
     ...createWorkspaceFolderActions(context)

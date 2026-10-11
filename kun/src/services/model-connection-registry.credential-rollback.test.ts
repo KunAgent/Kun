@@ -55,7 +55,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -268,7 +268,7 @@ describe('ModelConnectionRegistry', () => {
         optionsA: {
           afterCredentialConnectWrite: async (providerId) => {
             const manager = managerRef!
-            const path = join(dataDirRef, 'model-connections.v1.json')
+            const path = join(dataDirRef, 'model-connections.v2.json')
             const entry = manager.documents.get(path)!
             const value = structuredClone(entry.value) as {
               revision: number
@@ -339,7 +339,7 @@ describe('ModelConnectionRegistry', () => {
         credentials
       })).toThrow(/outside the configured Manager data directory/)
       await expect(readFile(
-        join(mismatchedDataDir, 'model-connections.v1.json'),
+        join(mismatchedDataDir, 'model-connections.v2.json'),
         'utf8'
       )).rejects.toMatchObject({ code: 'ENOENT' })
     })

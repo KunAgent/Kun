@@ -4,6 +4,7 @@ import type { TurnClientSurface } from '../contracts/turns.js'
 import type { IdGenerator } from '../ports/id-generator.js'
 import type { ModelClient, ModelToolSpec } from '../ports/model-client.js'
 import type { SessionStore } from '../ports/session-store.js'
+import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { rewriteItemHistoryWithRetry } from '../services/history-commit-coordinator.js'
 import type { UsageService } from '../services/usage-service.js'
@@ -24,9 +25,12 @@ import type { ContextCompactionConfig } from './model-context-profile.js'
 import { estimateRequestOverheadTokens } from './model-request-estimator.js'
 import type { LoopTelemetry } from './loop-telemetry.js'
 import { extractSkillPins } from './context-compactor.js'
+import { executableHistory } from './executable-history.js'
+import { restoreUnexecutedHistory } from './preserve-unexecuted-history.js'
 
 export type HistoryCompactionServiceDeps = {
   sessionStore: SessionStore
+  threadStore?: Pick<ThreadStore, 'get'>
   compactor: ContextCompactor
   prefix: ImmutablePrefix
   model: ModelClient
@@ -74,6 +78,7 @@ export type CompactIfNeededInput = {
     requestOverheadTokens?: number
     requestInputTokens?: number
     outputBudgetTokens?: number
+    requestMaxInputTokens?: number
     requestHardCapTokens?: number
     allowModelSummary?: boolean
     reserveModelRequest?: () => Promise<{ allowed: boolean; reason?: string }>
@@ -87,6 +92,13 @@ export type CompactIfNeededInput = {
  */
 export class HistoryCompactionService {
   constructor(private readonly deps: HistoryCompactionServiceDeps) {}
+
+  private async projectExecutableHistory(threadId: string, items: TurnItem[]): Promise<TurnItem[]> {
+    if (!this.deps.threadStore) return items
+    const thread = await this.deps.threadStore.get(threadId)
+    if (!thread) throw new Error(`thread not found during history compaction: ${threadId}`)
+    return executableHistory(items, thread)
+  }
 
   /**
    * Resolve the verbatim-tail token budget from live config. An absolute
@@ -108,6 +120,7 @@ export class HistoryCompactionService {
   }
 
   async compactIfNeeded(input: CompactIfNeededInput): Promise<HistoryCompactionOutcome> {
+    const inputItems = await this.projectExecutableHistory(input.threadId, input.items)
     const pressure = this.deps.telemetry.consumePromptPressure(input.threadId, input.model)
     const thresholdModel = pressure?.model || input.model
     const overheadTokens = input.requestOverheadTokens === undefined
@@ -121,18 +134,19 @@ export class HistoryCompactionService {
       mode: 'force' as const,
       keepRecent: Math.max(0, input.force.keepRecent ?? 1),
       reason: input.force.reason
-    } : this.deps.compactor.planCompaction(input.items, {
+    } : this.deps.compactor.planCompaction(inputItems, {
       model: thresholdModel,
       providerId: input.providerId,
       promptTokens: pressure?.promptTokens,
       overheadTokens,
       requestInputTokens: input.requestInputTokens,
       outputBudgetTokens: input.outputBudgetTokens,
+      requestMaxInputTokens: input.requestMaxInputTokens,
       requestHardCapTokens: input.requestHardCapTokens
     })
     if (!plan) {
       return {
-        history: input.items,
+        history: inputItems,
         triggered: false,
         compacted: false,
         replacedTokens: 0
@@ -166,8 +180,9 @@ export class HistoryCompactionService {
       threadId: input.threadId,
       maxAttempts: 2,
       build: async (snapshot, attempt) => {
+        const executableItems = await this.projectExecutableHistory(input.threadId, snapshot.items)
         const currentItems = repairModelHistoryItemsForModel(
-          effectiveHistoryAfterLatestCompaction(snapshot.items)
+          effectiveHistoryAfterLatestCompaction(executableItems)
         )
         const currentPlan = input.force
           ? {
@@ -186,6 +201,7 @@ export class HistoryCompactionService {
               // so the budget-driven force compaction still applies.
               requestInputTokens: input.requestInputTokens,
               outputBudgetTokens: input.outputBudgetTokens,
+              requestMaxInputTokens: input.requestMaxInputTokens,
               requestHardCapTokens: input.requestHardCapTokens
             })
         if (!currentPlan) {
@@ -323,14 +339,15 @@ export class HistoryCompactionService {
             })
           }
         }
-        const nextItems = insertCompactionIntoVisibleHistory({
-          visibleItems: snapshot.items,
+        const compactedItems = insertCompactionIntoVisibleHistory({
+          visibleItems: executableItems,
           compactedItems: result.next,
           summaryItem: result.summaryItem,
           threadId: input.threadId,
           activeTurnId: input.turnId,
           nowIso: () => new Date().toISOString()
         })
+        const nextItems = restoreUnexecutedHistory(snapshot.items, executableItems, compactedItems)
         squashed = nextItems.filter((item) => item.kind === 'model_context' && item.baseline).length > 0
           ? Math.max(0, snapshot.items.filter((item) => item.kind === 'model_context').length -
               nextItems.filter((item) => item.kind === 'model_context').length + 1)
@@ -390,7 +407,9 @@ export class HistoryCompactionService {
     // loop step can retry compaction from this current safe history.
     return {
       history: repairModelHistoryItemsForModel(
-        effectiveHistoryAfterLatestCompaction(await this.deps.sessionStore.loadItems(input.threadId))
+        effectiveHistoryAfterLatestCompaction(await this.projectExecutableHistory(
+          input.threadId, await this.deps.sessionStore.loadItems(input.threadId)
+        ))
       ),
       triggered: true,
       compacted: false,

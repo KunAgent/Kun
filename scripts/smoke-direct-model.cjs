@@ -28,13 +28,19 @@ async function startDirectModel({ real = false } = {}) {
   }
   const stats = { real, model: realModel ?? 'deepseek-chat', calls: 0, mainCalls: 0, backgroundCalls: 0, byPrompt: {}, models: {}, blocked: 0, automaticReviews: 0, benchmarkChunks: [] }
   let held = false, releaseHold = () => {}, lastPrompt = 'background'
+  const heldBrowserPrompts = new Set()
+  const hold = async () => { held = true; await new Promise((resolve) => { releaseHold = resolve }); held = false }
   const server = createServer(async (request, response) => {
     try {
       if (request.method === 'GET') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ data: [{ id: realModel ?? 'deepseek-chat' }, { id: 'deepseek-reasoner' }] })); return }
       const chunks = []; for await (const chunk of request) chunks.push(chunk)
       const body = JSON.parse(Buffer.concat(chunks).toString())
       const messages = body.messages ?? []
-      const user = [...messages].reverse().find((item) => item.role === 'user' && JSON.stringify(item.content).includes('User message:'))
+      // A connection decision is a new host-owned continuation, not another
+      // copy of the earlier user request. Keep its tool history scoped to it.
+      const intentIndex = messages.findLastIndex((item) => item.role === 'user' &&
+        /User message:|The user (?:skipped connecting|connected) app im\./.test(JSON.stringify(item.content)))
+      const user = messages[intentIndex]
       const prompt = user ? JSON.stringify(user.content).split('User message:').at(-1).slice(0, 500) : undefined
       if (prompt) lastPrompt = prompt
       const count = (stats.byPrompt[lastPrompt] ?? 0) + 1
@@ -60,21 +66,50 @@ async function startDirectModel({ real = false } = {}) {
         response.write('data: ' + JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }) + '\n\n')
         response.end('data: [DONE]\n\n'); return
       }
-      if (prompt?.includes('HOLD_RESPONSE') && !held) { held = true; await new Promise((resolve) => { releaseHold = resolve }); held = false }
+      if (prompt?.includes('HOLD_RESPONSE') && !held) await hold()
       const memory = JSON.stringify(messages).includes('agent_memory_capture')
       const review = JSON.stringify(messages).includes('hostApprovalReason')
       if (review) stats.automaticReviews++
       const last = messages.at(-1)
-      const intentIndex = messages.findLastIndex((item) => item.role === 'user' && JSON.stringify(item.content).includes('User message:'))
-      const wrote = messages.findLastIndex((item) => item.role === 'tool') > intentIndex
+      const afterIntent = messages.slice(intentIndex + 1)
+      const calls = afterIntent.flatMap((item) => item.role === 'assistant' ? item.tool_calls ?? [] : [])
+      const resultIds = new Set(afterIntent.filter((item) => item.role === 'tool').map((item) => item.tool_call_id))
+      const succeeded = (name, phase) => calls.some((call) => {
+        if (call.function?.name !== name || !resultIds.has(call.id)) return false
+        if (!phase) return true
+        try { return JSON.parse(call.function.arguments).phase === phase } catch { return false }
+      })
+      const started = succeeded('send_im_message', 'start')
+      const wrote = succeeded('write')
+      const finished = succeeded('send_im_message', 'final')
+      const browserUrl = /WORKSPACE_BROWSER_OPEN (http:\/\/127\.0\.0\.1:\d+\/workspace-browser)/.exec(prompt ?? '')?.[1]
+      if (browserUrl && !memory && !review && succeeded('browser_use') && !heldBrowserPrompts.has(prompt)) {
+        heldBrowserPrompts.add(prompt)
+        await hold()
+      }
       let content = review ? JSON.stringify({ decision: 'allow', riskLevel: 'low', rationale: 'Isolated fixture write requested by the user.' }) : memory ? '{"candidates":[]}' : prompt ? '你好！我可以帮你处理问题和文件。' : 'Private chat'
       let tool
-      if (prompt && !wrote && !memory && !review) {
+      if (prompt && !memory && !review) {
         const external = /EXTERNAL_FILE_B64:([A-Za-z0-9_-]+)/.exec(prompt)
-        const command = external ? { path: Buffer.from(external[1], 'base64url').toString(), content: 'external verified\n' } : prompt.includes('PROJECT_FILE') ? { path: 'project-result.txt', content: 'project verified\n' } :
+        const artifact = prompt.includes('WORKSPACE_ARTIFACT')
+        const command = artifact ? { path: 'workspace-evidence.txt', content: 'Saved personal workspace artifact v1\n' } : external ? { path: Buffer.from(external[1], 'base64url').toString(), content: 'external verified\n' } : prompt.includes('PROJECT_FILE') ? { path: 'project-result.txt', content: 'project verified\n' } :
           prompt.includes('UPDATE_FILE') ? { path: 'hello.txt', content: 'updated by Kun\n' } :
           prompt.includes('CREATE_FILE') ? { path: 'hello.txt', content: 'hello from Kun\n' } : undefined
-        if (command) tool = { id: 'call_' + stats.calls, type: 'function', function: { name: 'write', arguments: JSON.stringify(command) } }
+        const outgoing = browserUrl
+          ? !started ? { name: 'send_im_message', args: { text: 'Opening the isolated browser evidence page.', phase: 'start' } }
+            : !succeeded('browser_use') ? { name: 'browser_use', args: { action: 'open', url: browserUrl } }
+              : !finished ? { name: 'send_im_message', args: { text: 'Browser evidence inspected.', phase: 'final' } } : null
+          : prompt.includes('IM_CONNECTION_SMOKE_')
+          ? !succeeded('request_app_connection') ? { name: 'request_app_connection', args: {
+            serverId: prompt.includes('IM_CONNECTION_SMOKE_weixin') ? 'im.weixin' : 'im.feishu',
+            reason: 'Continue our conversation from your phone using this same Agent.' } } : null
+          : command
+          ? !started ? { name: 'send_im_message', args: { text: '我先检查任务并创建文件。', phase: 'start' } }
+            : !wrote ? { name: 'write', args: command }
+              : !finished ? { name: 'send_im_message', args: { text: '文件已完成，并保存在当前工作目录。', phase: 'final',
+                ...(artifact ? { attachments: [{ path: 'workspace-evidence.txt' }] } : {}) } } : null
+          : !finished ? { name: 'send_im_message', args: { text: content, phase: 'final' } } : null
+        if (outgoing) tool = { id: 'call_' + stats.calls, type: 'function', function: { name: outgoing.name, arguments: JSON.stringify(outgoing.args) } }
       }
       if (wrote && !review && !memory) content = /denied|not allowed/i.test(JSON.stringify(messages.findLast((item) => item.role === 'tool')?.content)) ? '这一步已被拒绝，未修改文件。' : '文件已完成，并保存在当前工作目录。'
       if (body.stream === false) {

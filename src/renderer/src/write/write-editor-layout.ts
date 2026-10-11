@@ -320,7 +320,7 @@ export function defaultWriteViewModeForPath(path: string): WritePreviewMode {
 }
 
 /**
- * Migrate persisted view modes (implementation §8.1): the old
+ * Migrate persisted view modes: the old
  * `source`/`live`/`preview` surfaces collapse into the single document
  * view (`'rich'`); `'plain'` maps to the plain-text editor.
  */
@@ -331,7 +331,7 @@ export function normalizeWriteViewMode(value: unknown): WritePreviewMode {
 export type WriteEditorSurface = 'document' | 'plain'
 
 /**
- * Pick the editing surface for an open file (implementation §8.2):
+ * Pick the editing surface for an open file:
  * non-markdown text, `.mdx`, truncated content, oversized markdown, or an
  * explicit `plain` view mode all go to the plain-text editor; everything
  * else renders the block document editor.

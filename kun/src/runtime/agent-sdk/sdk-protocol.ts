@@ -224,7 +224,7 @@ export interface SdkHookMatcher {
 export interface SdkQueryOptions {
   model?: string
   effort?: 'low' | 'medium' | 'high' | 'max'
-  thinking?: { type: 'adaptive' }
+  thinking?: { type: 'adaptive' } | { type: 'disabled' }
   cwd?: string
   systemPrompt?: string | SdkSystemPromptPreset
   /** Base set of Claude Code built-ins. An empty array disables all built-ins. */
@@ -259,6 +259,14 @@ export interface SdkQueryInput {
 export interface SdkQueryResult extends AsyncIterableIterator<SdkMessage> {
   interrupt?: () => Promise<void>
   setPermissionMode?: (mode: SdkPermissionMode) => Promise<void>
+  /** Control request listing the CLI's available models (used by probing). */
+  supportedModels?: () => Promise<
+    Array<{ value?: string; resolvedModel?: string } & Record<string, unknown>>
+  >
+  /** Prompt-free account control request; metadata is not a quota check. */
+  accountInfo?: () => Promise<{ email?: string; subscriptionType?: string; apiProvider?: string; apiKeySource?: string }>
+  /** Terminate the spawned CLI process. */
+  close?: () => void
 }
 
 export type SdkQueryFn = (input: SdkQueryInput) => SdkQueryResult

@@ -1,6 +1,9 @@
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import type { SubagentToolPolicy } from '../contracts/capabilities.js'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '../contracts/policy.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
+import type { HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
+import type { ThreadExecutionUnit } from '../contracts/threads.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type { ChildExecutionState } from './delegation-runtime-base.js'
 import type {
@@ -10,6 +13,7 @@ import type {
 import { ChildResultExecutionError } from './child-result-materializer.js'
 
 export type ChildExecutionArgs = {
+  gatewayBinding?: HarnessGatewayBinding
   state: ChildExecutionState
   queuedAt: string
   profileName: string | undefined
@@ -46,6 +50,11 @@ export type ChildExecutionArgs = {
   parentTurnId: string
   prompt: string
   source: ChildSourceEnvelope | undefined
+  clientRequestId: string | undefined
+  harnessId: HarnessId | undefined
+  credentialMode: HarnessCredentialMode | undefined
+  /** Only meaningful on first delivery; resumes reuse the persisted thread. */
+  executionUnit?: ThreadExecutionUnit
   controlPrompt: string | undefined
   pptWorkflowScope: PptWorkflowScope | undefined
   resumeChild?: boolean
@@ -66,7 +75,7 @@ export async function executeWithProviderFallback(
   } catch (error) {
     const route = record.parentModelRoute
     if (
-      input.signal.aborted || record.providerFallback || !route ||
+      input.signal.aborted || input.gatewayBinding || record.providerFallback || !route ||
       !(error instanceof ChildResultExecutionError) || error.failure?.source !== 'model' ||
       !fallbackRouteAllowed(route, input) ||
       (canonicalProvider(route.providerId) === canonicalProvider(input.providerId) &&
@@ -84,6 +93,9 @@ export async function executeWithProviderFallback(
       serviceTier: route.serviceTier,
       resumeChild: true,
       providerFallbackContinuation: true,
+      // The fallback turn appends a control prompt, so it is a distinct
+      // request and must not reuse the original idempotency key.
+      clientRequestId: undefined,
       controlPrompt: [
         input.controlPrompt,
         'The previous model provider failed. Continue the same task using the existing conversation and completed tool results. Do not repeat completed actions.'

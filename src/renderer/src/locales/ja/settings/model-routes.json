@@ -27,6 +27,12 @@
     "runtimeNotRunning": "Kun Runtime が実行されていません",
     "runtimeNotConnected": "Kun Runtime が接続されていません",
     "runtimeSyncing": "Kun Runtime に同期中",
+    "gatewayFix": "修正する",
+    "gatewayIssue": {
+      "gateway_key_missing": "ローカルゲートウェイに独立した API キーがありません",
+      "gateway_non_loopback_host": "ローカルゲートウェイにはループバックアドレスが必要です",
+      "gateway_disabled": "ローカルゲートウェイは自動的にオフになりました（API キーを生成できません）"
+    },
     "runtimeWaitingForSync": "Kun Runtime 同期を待機しています",
     "tabsAria": "モデルルートの設定",
     "tabGateway": "ゲートウェイ & API",
@@ -46,7 +52,7 @@
     "localApi": "ローカル API",
     "localApiEnabledLocalOnly": "有効 · ローカルアクセスのみ",
     "disabled": "無効",
-    "apiCompatibilityDesc": "OpenAI Chat Completionsおよびレスポンスと互換性があります。パブリック モデル ID は、以下の配線済みモデルに由来しています。",
+    "apiCompatibilityDesc": "OpenAI Chat Completions、Responses、Anthropic Messages に対応しています。公開モデル ID は以下のルーティングされたモデルで定義されます。",
     "copyLocalApiAddress": "ローカルのAPIアドレスをコピーします",
     "copied": "コピーされました",
     "copy": "コピー",
@@ -144,7 +150,7 @@
     "latency": "レイテンシー",
     "noEvents": "ルートイベントはありません",
     "apiDialogTitle": "地元の API ガイド",
-    "apiDialogDesc": "ローカルプロセスのみの OpenAI 互換エンドポイント。 Authorization ヘッダーは必要ありません。",
+    "apiDialogDesc": "OpenAI・Anthropic・Gemini 互換のエンドポイントで、このコンピューターのプロセスからのみ利用できます。すべてのリクエストにゲートウェイキーが必要です。",
     "closeApiDocs": "API ガイドを閉じる",
     "endpoints": "エンドポイント",
     "modelList": "機種一覧",
@@ -158,7 +164,7 @@
     "responsesAndLimits": "対応と制限",
     "curlExample": "cURL の例",
     "copyExample": "コピー例",
-    "apiSecurityWarning": "このリレーはパブリック API サービスではありません。これはローカル ループバック アドレスにのみバインドされ、現在認証はありません。ポート転送や保護されていないリバース プロキシを介して LAN やインターネットに公開しないでください。",
+    "apiSecurityWarning": "ローカルゲートウェイは公開 API サービスではありません。ループバックアドレスでのみ待ち受け、ゲートウェイキーを必要とします。ポートフォワーディングや保護されていないリバースプロキシで LAN やインターネットに公開しないでください。",
     "guideModelsDesc": "ローカルリレー内の有効なルーテッドモデルをすべてリストします。返される各 data[].id は、生成リクエストで使用されるパブリック モデル ID です。",
     "guideModelsNoBody": "リクエスト本文は必要ありません。",
     "guideModelsEnabledOnly": "有効なルーティングされたモデルのみが返されます。無効なプールまたは無効なプールは省略されます。",
@@ -180,6 +186,10 @@
     "guideChatModelMissing": "不明なモデルは 404 (model_not_found) を返します。",
     "exampleChatPrompt": "こんにちは、クン！",
     "exampleResponsesPrompt": "Kun ローカル ゲートウェイを一文で紹介します。",
-    "statusRequestFailed": "Kun Runtime ステータス要求が失敗しました ({{status}})"
+    "statusRequestFailed": "Kun Runtime ステータス要求が失敗しました ({{status}})",
+    "targetAccountModel": "アカウント / モデル",
+    "targetUnavailable": "ゲートウェイでは利用不可",
+    "targetNativeOnly": "このアカウントはネイティブ Agent でのみ利用でき、ゲートウェイのモデル API としては利用できません。",
+    "stableAliasHint": "各クライアントは同じエイリアスを使い続けます。アカウントやモデルの変更は新しいリクエストに適用され、実行中のリクエストは元のルートを維持します。"
   }
 }

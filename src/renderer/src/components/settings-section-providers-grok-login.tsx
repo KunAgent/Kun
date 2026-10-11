@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   ModelProviderProfileV1
 } from '@shared/app-settings'
@@ -167,7 +168,7 @@ export function GrokLoginSection({
         <span className="text-[13px] text-ds-ink">{identity ?? provider.name}</span>
         <button
           type="button"
-          className="ml-auto rounded-lg px-3 py-1.5 text-[12px] font-medium text-ds-muted hover:bg-ds-hover"
+           className={settingsButtonClass({ variant: 'danger', className: 'ml-auto' })}
           onClick={disconnect}
         >
           {t('grokDisconnect')}
@@ -194,9 +195,9 @@ export function GrokLoginSection({
             onChange={(e) => setPasteCode(e.target.value)}
             disabled={pasteBusy}
           />
-          <button
+          <button aria-busy={Boolean(pasteBusy)}
             type="button"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+             className={settingsButtonClass({ variant: 'primary', className: 'w-full' })}
             onClick={() => void submitPastedCode()}
             disabled={pasteBusy || !pasteCode.trim()}
           >
@@ -207,7 +208,7 @@ export function GrokLoginSection({
         {error ? <InlineNoticeView notice={{ tone: 'error', message: error }} /> : null}
         <button
           type="button"
-          className="w-fit text-[12px] font-medium text-ds-muted hover:text-ds-ink"
+          className={settingsButtonClass({ className: 'w-fit' })}
           onClick={cancelLogin}
         >
           {t('grokCancel')}
@@ -220,7 +221,7 @@ export function GrokLoginSection({
     <div className="grid gap-2">
       <button
         type="button"
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-accent/90"
+         className={settingsButtonClass({ variant: 'primary', className: 'w-full' })}
         onClick={startBrowserLogin}
       >
         <LogIn className="h-4 w-4" strokeWidth={1.9} />

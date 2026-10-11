@@ -9,10 +9,19 @@ affects new topics, not the protocol already attached to a running topic.
 ## Starting and continuing a topic
 
 The composer starts a **New topic** by default. Structured `@` selections give
-those members a direct response opportunity. With no selection, the default
-member responds directly and other members first perform a participation check.
-Members can invite enabled peers using structured invitation fields; plain `@`
-text in a message does not schedule work.
+those members a direct response opportunity; the others first perform a
+participation check. A message with no selection is addressed to the whole
+group: every member that receives it responds directly, because a check on a
+human message could only say yes. The response turn can still skip. This does
+not apply when the coordinator turned the message into task work, to a
+referenced task, or to an explicit Execute request. Participation checks
+otherwise gate members' messages to each other. Members can invite enabled
+peers using structured invitation fields; plain `@` text in a message does not
+schedule work.
+
+Up to six members of one room respond in parallel, so a whole-group question
+is answered by each member directly instead of members answering each other's
+earlier replies. Participation checks share a runtime-wide limit of four.
 
 A reply inherits its source message's `rootRequestId`. Choose **Continue topic**
 in the composer or discussion details to add a new user message to that same
@@ -41,7 +50,7 @@ Member messages, invitations and task events cannot reset these budgets. A
 member may decline to respond. Reaching a limit pauses automatic participation
 with visible status; already assigned execution tasks keep their own lifecycle.
 The configured `smallModel` handles participation checks, with the current main
-model as the fallback. A failed check retains pending work and retries with
+model as the fallback; checks run with thinking disabled. A failed check retains pending work and retries with
 bounded backoff; it does not automatically become a full model response.
 
 The status summary opens **Room details**. Its discussion section shows actual
@@ -76,7 +85,10 @@ Closing the drawer or leaving Rooms does not stop a discussion or execution.
 Discussion tools are read-only. Peers may inspect a scoped repository checkout
 and any local path the user names; they cannot write files or run host commands.
 A peer can propose work, but only the coordinator can submit an execution plan
-under the actual user's authorization. A peer message cannot create tasks,
+under the actual user's authorization. In a room with no repository an
+auto-intent message skips the coordinator turn: no plan could be dispatched,
+and a discussion verdict is not used in peer mode. Choosing Execute still asks
+the coordinator, which explains that a repository is needed. A peer message cannot create tasks,
 modify an existing task, expand repository permissions or adopt a project
 agreement. Reading a path does not become execution authorization. New chat
 evidence remains reference material; frozen user authority, repository scope
@@ -105,8 +117,13 @@ passed the hit-test. This does not establish support below the app's minimum
 window width or native-provider conversation quality.
 
 Run all desktop scenarios with `node scripts/smoke-development-rooms.cjs`;
-`--peer-only` runs just the scoped peer interaction checks. Avoid changing the
-renderer or rebuilding/removing `kun/dist` during a running development smoke.
+`--peer-only` runs just the scoped peer interaction checks. The peer scenario
+(`scripts/smoke-rooms-peer-controls.cjs`) starts the group from the Code New
+conversation picker with the five default-team Agents, renames it in its header,
+reads the topic from the composer's Add context menu, and checks that the docked
+Room details leave the Code mode trigger usable instead of the former drawer
+overlay hit-test. Avoid changing the renderer or rebuilding/removing `kun/dist`
+during a running development smoke.
 
 ## Real-model comparison
 

@@ -70,8 +70,13 @@ export const ThreadStoreListOptionsSchema: z.ZodType<ThreadStoreListOptions> = z
   includeSide: z.boolean().optional(),
   cursor: z.string().min(1).optional(),
   workspace: z.string().optional(),
-  workspaces: z.array(z.string()).max(64).optional()
-}).strict()
+  workspaces: z.array(z.string()).max(64).optional(),
+  workspaceMode: z.enum(['code', 'ade']).optional(),
+  workbenchScope: z.literal('code').optional()
+}).strict().refine((options) => !options.workspaceMode || !options.workbenchScope, {
+  message: 'workspaceMode and workbenchScope cannot be combined',
+  path: ['workbenchScope']
+})
 
 export function finishedTurnStatus(status: string): FinishedTurnStatus | null {
   return status === 'completed' || status === 'failed' || status === 'aborted' ? status : null
@@ -167,6 +172,7 @@ export type ManagerSessionStoreOperation =
   | 'allocateEventSeq'
   | 'loadUsageRecords'
   | 'aggregateUsage'
+  | 'loadLatestContextSnapshot'
   | 'loadLatestUsageSnapshots'
   | 'resetMemory'
   | 'clearThreadMemory'
@@ -186,6 +192,10 @@ export type ManagerArtifactStoreOperation =
   | 'stat'
 
 export type ManagerMemoryStoreOperation =
+  | 'erasureReceipt'
+  | 'isForgotten'
+  | 'history'
+  | 'lifecycle'
   | 'getById'
   | 'distillationPending'
   | 'commitDistillation'

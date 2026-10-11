@@ -20,14 +20,13 @@ export {
   OLLAMA_CLOUD_MODEL_IDS,
   OLLAMA_CLOUD_PROVIDER_ID,
   OLLAMA_CLOUD_PROVIDER_NAME,
-  OPENCODE_FREE_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
-  OPENCODE_FREE_PROVIDER_NAME,
   TOKEN_PLAN_PROVIDER_ID_SUFFIX,
   type ModelProviderPreset,
   type ModelProviderPresetId,
   type ModelProviderSubscriptionRegion,
   type ModelProviderTokenPlanPreset,
+  type ModelProviderBalanceSource,
+  type ModelProviderPlanQuotaSource,
   type ModelProviderTokenPlanRegion
 } from './model-provider-preset-types'
 export { MODEL_PROVIDER_PRESETS } from './model-provider-preset-catalog'
@@ -38,7 +37,9 @@ export {
   modelProviderPresetAccountProfile,
   modelProviderPresetProfile,
   modelProviderTokenPlanProfile,
+  presetRegionEndpoints,
   resolveModelProviderPresetSource,
+  withPresetRegion,
   tokenPlanProviderId,
   type ResolvedModelProviderPresetSource
 } from './model-provider-preset-operations'

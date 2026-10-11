@@ -4,12 +4,11 @@
 // Exercise the real Electron renderer/preload/main/Manager/Runtime composition.
 // All model responses are deterministic and offline. Application settings, data,
 // discovery/control files, Git repositories and processes belong to this run.
-const { exerciseRoomsInitIm, exerciseRoomsUpgrade } = require('./smoke-rooms-init-im.cjs')
+const { exerciseRoomsInitIm } = require('./smoke-rooms-init-im.cjs')
 const assert = require('node:assert/strict')
-const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
 const { existsSync } = require('node:fs')
-const { mkdir, mkdtemp, readFile, readdir, rm, writeFile } = require('node:fs/promises')
+const { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } = require('node:fs/promises')
 const { createServer } = require('node:http')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
@@ -32,6 +31,7 @@ const { exerciseTaskRoomRuns } = require('./smoke-rooms-run-inspector.cjs')
 const { independentAgentModelFixture, exerciseIndependentAgents } = require('./smoke-independent-agents.cjs')
 const { roomExperienceModelFixture, exerciseRoomsExperience } = require('./smoke-rooms-experience-controls.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
+const { openCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
 
 const exec = promisify(execFile)
 const ROOM_NAME = 'Rooms desktop smoke'
@@ -53,7 +53,8 @@ async function main() {
   assert(existsSync(electronPathFile), 'Electron binary is not installed; install dependencies before this offline smoke')
   const electronExecutable = join(electronPackage, 'dist', (await readFile(electronPathFile, 'utf8')).trim())
   assert(existsSync(electronExecutable), 'Electron executable is missing; install dependencies before this offline smoke')
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'kun-rooms-desktop-smoke-'))
+  // The Manager reports canonical paths; macOS temporary directories are symlinked.
+  const temporaryRoot = await realpath(await mkdtemp(join(tmpdir(), 'kun-rooms-desktop-smoke-')))
   const home = join(temporaryRoot, 'home')
   const profile = join(home, '.kun', 'data')
   const userData = join(temporaryRoot, 'electron-user-data')
@@ -142,11 +143,15 @@ async function main() {
     page.setDefaultTimeout(30_000)
     page.on('pageerror', (error) => pageErrors.push(error.message))
     page.on('console', (message) => { if (message.type() === 'error' && message.text().includes('same key')) pageErrors.push(message.text()) })
-    await page.waitForLoadState('domcontentloaded')
-    await page.locator('[data-workspace-mode-trigger]').first().waitFor()
+    // A cold isolated Vite cache can take longer than the per-action timeout on a busy host.
+    await page.waitForLoadState('domcontentloaded', { timeout: timeoutMs })
+    await page.locator('[data-workspace-mode-trigger]').first().waitFor({ timeout: timeoutMs })
+    // Private chats and groups open from the Code sidebar; there is no separate Rooms mode.
+    const openConversation = (roomId, privateName) => openCodeConversation({ page, poll, roomId, privateName,
+      switchCode: () => switchMode(page, 'chat') })
     if (process.argv.includes('--init-im-only')) {
       const initIm = await exerciseRoomsInitIm({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
-        resize: (width, height) => resize(electronApplication, width, height), switchRooms: () => switchMode(page, 'rooms') })
+        resize: (width, height) => resize(electronApplication, width, height), openConversation })
       assert.deepEqual(pageErrors, [])
       result = { ok: true, scenario: 'init-im', initIm, modelFixture: modelFixture.snapshot(), pageErrors, screenshots }
       await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
@@ -158,28 +163,22 @@ async function main() {
       repositories: [{ id: 'repo', displayPath: workspaceRoot, defaultBaseRef: 'develop' }]
     })
     assert.equal(room.collaborationMode, 'autonomous')
-    await switchMode(page, 'rooms')
-    await page.locator('.rooms-im-sidebar').getByRole('button', { name: ROOM_NAME, exact: true }).click()
-    await page.getByRole('heading', { name: ROOM_NAME, exact: true }).waitFor()
+    await openConversation(room.id)
+    await page.getByRole('heading', { name: new RegExp('^' + ROOM_NAME) }).waitFor()
     await capture('1-room-ready')
-    if (process.argv.includes('--init-upgrade-only')) {
-      const upgrade = await exerciseRoomsUpgrade({ page, request: runtimeRequest, poll, capture, fixture: modelFixture })
-      assert.deepEqual(pageErrors, [])
-      result = { ok: true, scenario: 'init-upgrade', upgrade, pageErrors, screenshots }
-      await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
-      process.stdout.write(JSON.stringify(result, null, 2) + '\n')
-      return
-    }
 
     const uiScenario = () => exerciseRoomsUi({ page, request: runtimeRequest, poll, capture,
-      fixture: modelFixture, home, profile, workspaceRoot,
+      fixture: modelFixture, home, profile, workspaceRoot, openConversation,
       resize: (width, height) => resize(electronApplication, width, height) })
     const experienceScenario = () => exerciseRoomsExperience({ page, request: runtimeRequest, poll, capture,
-      fixture: modelFixture, home, profile, workspaceRoot, application: electronApplication,
+      fixture: modelFixture, home, profile, workspaceRoot, application: electronApplication, openConversation,
       resize: (width, height) => resize(electronApplication, width, height) })
+    const agentsScenario = () => exerciseIndependentAgents({ page, request: runtimeRequest, poll, capture,
+      fixture: modelFixture, openConversation, resize: (width, height) => resize(electronApplication, width, height) })
+    const peerScenario = () => exercisePeerRoom({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+      openConversation, resize: (width, height) => resize(electronApplication, width, height) })
     if (process.argv.includes('--agents-only')) {
-      const agents = await exerciseIndependentAgents({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
-        resize: (width, height) => resize(electronApplication, width, height) })
+      const agents = await agentsScenario()
       assert.deepEqual(pageErrors, [])
       result = { ok: true, scenario: 'agents-only', agents, modelFixture: modelFixture.snapshot(), pageErrors, screenshots }
       await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
@@ -203,17 +202,16 @@ async function main() {
       return
     }
     if (process.argv.includes('--peer-only')) {
-      const peer = await exercisePeerRoom({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
-        resize: (width, height) => resize(electronApplication, width, height) })
+      const peer = await peerScenario()
       assert.deepEqual(pageErrors, [])
       result = { ok: true, scenario: 'peer-only', peer, modelFixture: modelFixture.snapshot(), pageErrors, screenshots }
       await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
       process.stdout.write(JSON.stringify(result, null, 2) + '\n')
       return
     }
-    await page.getByLabel('Automatic intent', { exact: true }).selectOption('execute')
-    await page.getByRole('textbox', { name: 'Discuss a question or describe the work to do…' }).fill(TASK_PROMPT)
-    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    await mainComposer(page).getByLabel('Message intent', { exact: true }).selectOption('execute')
+    await mainComposer(page).locator('.rooms-rich-input').fill(TASK_PROMPT)
+    await mainComposer(page).getByRole('button', { name: 'Send', exact: true }).click()
     await poll(() => modelFixture.snapshot().executionRequests > 0, timeoutMs, 'real task model dispatch')
     await openRoomDetails(page, 'Tasks')
     await page.locator('[aria-label="Tasks"]').getByRole('button', { name: new RegExp(TASK_TITLE) }).waitFor()
@@ -222,8 +220,9 @@ async function main() {
     assert.equal(agreement.version, 4)
 
     // Hold the real write response until the room has unmounted, proving that
-    // neither scheduling nor execution depends on a Rooms React component.
-    await switchMode(page, 'chat')
+    // neither scheduling nor execution depends on the conversation React view.
+    await page.locator('.sidebar-new-task').click()
+    await page.locator('[data-home-quick-start]').waitFor()
     assert.equal(await page.locator('[data-rooms-workspace]').count(), 0)
     await capture('3-code-while-running')
     await switchMode(page, 'write')
@@ -238,10 +237,10 @@ async function main() {
       assert(!['failed', 'recovery_required'].includes(task.status), `${task.status}: ${task.latestProgress}`)
       if (task.status === 'needs_approval' && approvalsResolved === 0) {
         assert(!existsSync(join(workspaceRoot, 'desktop-smoke.txt')), 'Unapproved write changed source repository')
-        await switchMode(page, 'rooms')
+        await openConversation(room.id)
         await openTask(page)
         await capture('approval-required')
-        const allow = page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Allow', exact: true })
+        const allow = details(page).getByRole('button', { name: 'Review and allow', exact: true })
         await allow.waitFor()
         await capture('approval-in-room')
         const thread = await runtimeRequest(page, `/v1/threads/${task.executionThreadId}`)
@@ -250,18 +249,14 @@ async function main() {
         assert.equal(pending.length, 1)
         assert.equal(pending[0].toolName, 'write')
         assert.equal(pending[0].summary, 'Review file action write: file="desktop-smoke.txt"')
-        const approvalRef = 'sha256:' + createHash('sha256').update(pending[0].approvalId).digest('hex').slice(0, 16)
-        await installNativeConsentFixture(electronApplication, approvalRef)
-        await allow.click()
-        await poll(() => electronApplication.evaluate(() => globalThis.__roomsSmokeNativeConsent?.calls === 1),
-          10_000, 'the fixture-scoped protected native consent')
+        await allowProtectedTool(electronApplication, details(page))
         approvalsResolved += 1
         await switchMode(page, 'write')
       }
       if (task.status === 'needs_input' && inputsResolved === 0) {
-        await switchMode(page, 'rooms')
+        await openConversation(room.id)
         await openTask(page)
-        const question = page.getByRole('dialog', { name: 'Room details', exact: true })
+        const question = details(page)
         await question.getByLabel('Proceed').check()
         await question.getByRole('button', { name: 'Submit answers', exact: true }).click()
         inputsResolved += 1
@@ -273,12 +268,12 @@ async function main() {
     }, timeoutMs, 'offscreen task development and review')
     assert(!existsSync(join(workspaceRoot, 'desktop-smoke.txt')), 'Task wrote the source checkout before explicit application')
     assert.equal((await git(['rev-parse', 'HEAD'])).stdout.trim(), baselineSha)
-    await switchMode(page, 'rooms')
+    await openConversation(room.id)
     await openTask(page)
     const detailBeforeReload = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}`)
     assert.equal(detailBeforeReload.reviews[0]?.verdict, 'passed')
     assert(detailBeforeReload.diff.includes(FILE_CONTENT.trim()), 'Delivery must include the actual write tool diff')
-    const panel = page.getByRole('dialog', { name: 'Room details', exact: true })
+    const panel = details(page)
     await panel.getByRole('heading', { name: 'Delivery', exact: true }).waitFor()
     await panel.getByRole('combobox', { name: 'Delivery history' }).selectOption(detailBeforeReload.delivery.id)
     await panel.getByText(detailBeforeReload.delivery.versionHash, { exact: true }).waitFor()
@@ -295,8 +290,8 @@ async function main() {
     // Reload the actual Electron page and restore durable room state.
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-    if (!(await page.locator('[data-rooms-workspace]').count())) await switchMode(page, 'rooms')
-    await page.getByRole('heading', { name: ROOM_NAME, exact: true }).waitFor()
+    await openConversation(room.id)
+    await page.getByRole('heading', { name: new RegExp('^' + ROOM_NAME) }).waitFor()
     await openTask(page)
     const restored = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}`)
     assert.equal(restored.task.latestDeliveryId, detailBeforeReload.task.latestDeliveryId)
@@ -327,10 +322,7 @@ async function main() {
         await capture('integration-structured-answer')
       }
       if (integrations[0]?.approvals?.length && !integrationApprovalsResolved) {
-        const approval = integrations[0].approvals[0]
-        const ref = 'sha256:' + createHash('sha256').update(approval.id).digest('hex').slice(0, 16)
-        await installNativeConsentFixture(electronApplication, ref)
-        await panel.getByRole('button', { name: 'Allow', exact: true }).click()
+        await allowProtectedTool(electronApplication, panel)
         integrationApprovalsResolved += 1
         await capture('integration-protected-approval')
       }
@@ -369,8 +361,10 @@ async function main() {
     await panel.getByText('Applied', { exact: true }).first().waitFor()
     assert.equal(await readFile(join(workspaceRoot, 'target-advance.txt'), 'utf8'), 'new target commit\n')
     await panel.getByRole('button', { name: 'Review disk usage and cleanup', exact: true }).click()
-    await installCleanupConsentFixture(electronApplication)
+    // Cleanup asks through Kun's protected confirmation window, clicked through its real UI.
+    const cleanupConfirmation = electronApplication.waitForEvent('window')
     await panel.getByRole('button', { name: 'Clean up directories', exact: true }).click()
+    await (await cleanupConfirmation).getByRole('button', { name: 'Clean up directories', exact: true }).click()
     await poll(() => !existsSync(detailBeforeReload.workspace.path), timeoutMs, 'explicit safe task cleanup')
     assert.equal(await readFile(join(workspaceRoot, 'desktop-smoke.txt'), 'utf8'), FILE_CONTENT)
     const retained = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}/deliveries/${detailBeforeReload.delivery.id}`)
@@ -381,8 +375,8 @@ async function main() {
     const retainedLog = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}/logs/${logId}`)
     assert.equal(retainedLog.missing, undefined)
     await panel.getByRole('button', { name: 'Close', exact: true }).click()
-    const hardening = await exerciseRoomHardening({ page, request: runtimeRequest, switchMode, poll, capture, fixture: modelFixture })
-    await page.getByRole('button', { name: new RegExp(ROOM_NAME) }).click()
+    const hardening = await exerciseRoomHardening({ page, request: runtimeRequest, switchMode, openConversation, poll, capture, fixture: modelFixture })
+    await openConversation(room.id)
     await openTask(page)
     await capture('7-applied-delivery')
     const taskRuns = await exerciseTaskRoomRuns({ page, request: runtimeRequest,
@@ -394,15 +388,13 @@ async function main() {
     const narrowViewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
     assert(narrowBounds.x >= 0 && narrowBounds.x + narrowBounds.width <= narrowViewport.width + 1,
       'Narrow task details overflow the window')
+    // Code docks the details beside the conversation; the sidebar's mode trigger stays usable.
     assert(await page.locator('[data-workspace-mode-trigger]').first().evaluate((trigger) => {
       const bounds = trigger.getBoundingClientRect()
-      return Boolean(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
-        ?.closest('aside[aria-label="Room details"]'))
-    }), 'Underlying mode trigger paints above the narrow task overlay')
-    const peer = await exercisePeerRoom({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
-      resize: (width, height) => resize(electronApplication, width, height) })
-    const agents = process.argv.includes('--with-agents') ? await exerciseIndependentAgents({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
-      resize: (width, height) => resize(electronApplication, width, height) }) : undefined
+      return trigger.contains(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2))
+    }), 'Narrow task details cover the Code mode trigger')
+    const peer = await peerScenario()
+    const agents = process.argv.includes('--with-agents') ? await agentsScenario() : undefined
     const experience = await experienceScenario()
     const ui = process.argv.includes('--ui-visual') ? await uiScenario() : undefined
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
@@ -413,10 +405,10 @@ async function main() {
       executionThreadId: task.executionThreadId, deliveryId: task.latestDeliveryId,
       baselineSha, targetSha, agreement, hardening, peer, agents, experience, ui, taskRuns, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
       modelFixture: modelFixture.snapshot(), approvalsResolved,
-      nativeConsent: 'fixture response through real trusted IPC; native OS click not exercised',
+      nativeConsent: 'protected consent and cleanup confirmation windows clicked through their real UI',
       narrowViewport, pageErrors, screenshots,
       assertions: ['real Electron bridge and Manager-backed Runtime', 'UI send dispatches real write tool',
-        'Code and Work mode switches preserve background task', 'approval resolved within room through protected IPC', 'structured input answered within room', 'integration question answered on actual integration thread', 'versioned rules and search', 'durable read cursor',
+        'leaving the conversation for Code home and Work preserves background task', 'approval resolved within room through protected IPC', 'structured input answered within room', 'integration question answered on actual integration thread', 'versioned rules and search', 'durable read cursor',
         'immutable delivery and review',
         'renderer reload restores delivery', 'accept does not apply', 'target advances then declared validation and fixed-version review pass before applying the candidate', 'explicit cleanup retains immutable delivery history',
         'clean source repository', 'narrow task panel', 'default peer mode and activity drawer',
@@ -440,10 +432,6 @@ async function main() {
     }
     let closing
     if (electronApplication) {
-      await electronApplication.evaluate(({ dialog }) => {
-        const fixture = globalThis.__roomsSmokeNativeConsent
-        if (fixture) dialog.showMessageBox = fixture.original
-      }).catch(() => undefined)
       closing = electronApplication.close()
       await withTimeout(closing, 3000, 'closing isolated Electron').catch(() => undefined)
     }
@@ -467,13 +455,14 @@ async function main() {
 }
 
 async function exerciseRoomProductControls(page, roomId, capture) {
-  await page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
+  await details(page).getByRole('button', { name: 'Close', exact: true }).click()
   const sent = (await runtimeRequest(page, `/v1/rooms/${roomId}/messages?limit=200`)).messages
     .filter((message) => message.authorKind === 'user' && message.body === TASK_PROMPT)
   assert.equal(sent.length, 1, 'Expected one exact original user task request')
   const userMessage = page.locator('#room-message-' + sent[0].id)
   await userMessage.hover()
-  await userMessage.getByRole('button', { name: 'Pin as project agreement', exact: true }).click()
+  await userMessage.getByRole('button', { name: 'More actions', exact: true }).click()
+  await page.getByRole('button', { name: 'Pin as project agreement', exact: true }).click()
   await openRoomDetails(page, 'Room overview')
   await page.getByRole('button', { name: /Pinned project agreements \(1\)/ }).click()
   await page.getByRole('button', { name: 'Edit agreement', exact: true }).click()
@@ -488,7 +477,7 @@ async function exerciseRoomProductControls(page, roomId, capture) {
   assert.equal(rule.active, true)
   await capture('agreement-history')
   await page.getByRole('button', { name: /Pinned project agreements \(1\)/ }).click()
-  await page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
+  await details(page).getByRole('button', { name: 'Close', exact: true }).click()
   const search = page.getByRole('textbox', { name: 'Search messages (2+ characters)', exact: true })
   await page.getByRole('button', { name: 'Search messages (2+ characters)', exact: true }).click()
   await search.fill('desktop-smoke.txt')
@@ -504,41 +493,12 @@ async function exerciseRoomProductControls(page, roomId, capture) {
   return { id: rule.id, version: rule.version, active: rule.active }
 }
 
-async function installCleanupConsentFixture(application) {
-  await application.evaluate(({ dialog }) => {
-    const original = dialog.showMessageBox
-    const state = { original, calls: 0 }
-    globalThis.__roomsSmokeNativeConsent = state
-    dialog.showMessageBox = async (...args) => {
-      const options = args.at(-1) ?? {}
-      if (state.calls === 0 && options.message === 'Remove these task directories?' && options.detail?.includes('rooms')) {
-        state.calls += 1
-        dialog.showMessageBox = original
-        return { response: 0, checkboxChecked: false }
-      }
-      return original.apply(dialog, args)
-    }
-  })
-}
-
-async function installNativeConsentFixture(application, approvalRef) {
-  await application.evaluate(({ dialog }, expectedRef) => {
-    const original = dialog.showMessageBox
-    const state = { original, calls: 0 }
-    globalThis.__roomsSmokeNativeConsent = state
-    dialog.showMessageBox = async (...args) => {
-      const options = args.at(-1) ?? {}
-      if (state.calls === 0 && options.title === 'Approve tool action' &&
-        options.message === 'Allow this pending Kun tool action once?' &&
-        options.detail?.startsWith(`Approval reference: ${expectedRef}\n\n`) &&
-        JSON.stringify(options.buttons) === JSON.stringify(['Allow once', 'Cancel'])) {
-        state.calls += 1
-        dialog.showMessageBox = original
-        return { response: 0, checkboxChecked: false }
-      }
-      return original.apply(dialog, args)
-    }
-  }, approvalRef)
+// Tool approvals open the real protected consent window; it is clicked through its own UI.
+async function allowProtectedTool(application, scope) {
+  const next = application.waitForEvent('window')
+  await scope.getByRole('button', { name: 'Review and allow', exact: true }).first().click()
+  const consent = await next
+  await consent.getByRole('button', { name: 'Allow once', exact: true }).click()
 }
 
 async function captureIsolatedLogs(root, destination) {
@@ -566,8 +526,12 @@ async function switchMode(page, mode) {
   await page.locator(`[data-workspace-mode-trigger][data-workspace-mode="${mode}"]`).first().waitFor()
 }
 
+// Room details are an embedded region of the Code right panel, not a modal.
+const details = (page) => page.getByRole('region', { name: 'Room details', exact: true })
+const mainComposer = (page) => page.locator('[data-rooms-workspace] > section > .rooms-composer')
+
 async function openRoomDetails(page, section) {
-  const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+  const drawer = details(page)
   if (!(await drawer.count())) await page.getByRole('button', { name: 'Room details', exact: true }).click()
   while (await drawer.count() && !await drawer.locator('.rooms-details-tabs').count()) {
     await drawer.getByRole('button', { name: 'Back to previous view', exact: true }).click()
@@ -579,7 +543,7 @@ async function openRoomDetails(page, section) {
 async function openTask(page) {
   await openRoomDetails(page, 'Tasks')
   await page.locator('[aria-label="Tasks"]').getByRole('button', { name: new RegExp(TASK_TITLE) }).click()
-  await page.getByRole('dialog', { name: 'Room details', exact: true }).waitFor()
+  await details(page).waitFor()
 }
 
 function resize(application, width, height) {
@@ -624,6 +588,7 @@ async function startModelFixture() {
       let content = 'Completed.', toolCalls
       const called = (name) => messages.some((message) => message.tool_calls?.some((tool) => tool.function?.name === name))
       const tool = (name, args) => [{ index: 0, id: 'smoke-' + name, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
+      const tools = (body.tools ?? []).map((entry) => entry.function?.name)
       const peerResponse = agentFixture.respond({ body, prompt, called, tool }) ?? experienceFixture.respond({ body, prompt, called, tool }) ??
         await peerFixture.respond({ body, prompt, called, tool })
       if (peerResponse) { content = peerResponse.content; toolCalls = peerResponse.toolCalls }
@@ -667,6 +632,13 @@ async function startModelFixture() {
           state.inputRequests += 1
           content = ''; toolCalls = tool('user_input', { prompt: 'Confirm the smoke fixture delivery', questions: [{ id: 'delivery', question: 'Deliver this file?', options: [{ label: 'Proceed', description: 'Finish the requested file.' }, { label: 'Stop', description: 'Cancel delivery.' }] }] })
         } else content = 'Created desktop-smoke.txt; no test commands were run.'
+      } else if (tools.includes('send_im_message') && !tools.includes('send_room_message')) {
+        // Private chats publish one visible IM bubble per user message; plain text stays internal.
+        state.privateRequests = (state.privateRequests ?? 0) + 1
+        const intent = messages.findLastIndex((message) => message.role === 'user' && messageText(message).includes('User message:'))
+        if (!messages.slice(intent + 1).some((message) => message.tool_calls?.some((call) => call.function?.name === 'send_im_message'))) {
+          content = ''; toolCalls = tool('send_im_message', { text: 'Private fixture reply: the request was read; no work was started.', phase: 'final' })
+        }
       } else state.otherRequests += 1
       const message = { role: 'assistant', content, ...(toolCalls ? { tool_calls: toolCalls } : {}) }
       const finish_reason = toolCalls ? 'tool_calls' : 'stop'

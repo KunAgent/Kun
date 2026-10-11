@@ -1,6 +1,6 @@
 /**
- * Review-session state-machine tests on a view-less editor harness
- * (implementation §6.7): start → resolve chunks → finish, asserting the
+ * Review-session state-machine tests on a view-less editor harness:
+ * start → resolve chunks → finish, asserting the
  * serialized markdown is byte-exact in both directions.
  */
 import { describe, expect, it } from 'vitest'

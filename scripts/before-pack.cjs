@@ -52,7 +52,6 @@ async function beforePack(context) {
       stdio: 'inherit'
     }
   )
-
 }
 
 exports._internals = {

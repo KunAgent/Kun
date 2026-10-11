@@ -2,8 +2,12 @@
 
 This supersedes the default-team onboarding flow documented in
 `rooms-init-im.md`. The previous team, conversations, tasks, avatars and memory
-remain readable; entering Rooms now idempotently adds only one general Kun
-Agent and its private conversation. Professional templates are opt-in.
+remain readable. Desktop Code Conversations idempotently adds one general Kun
+Agent and its private conversation. Rooms retains the former Bots IM interface
+and lists private Agent conversations alongside groups; Code Conversations is
+an additional private-chat entry. Both entries open the same room and history.
+The phone keeps its existing chat entry. Professional templates are opt-in. See
+[Code conversations and Rooms](./code-agent-chats-and-rooms.md).
 
 The UX reference is the public Grok Bot demo at <https://x.ai/bot> and its
 creation/chat documentation at <https://docs.x.ai/grok-bot/bots>. The public demo
@@ -12,12 +16,38 @@ not establish how Grok Bot's cloud implementation works. Per-Agent main and
 lightweight model controls follow the local Cumora Agent editor's inheritance
 and independent-selection workflow.
 
+## Public response cadence
+
+Fresh user requests in a private Agent Room publish a visible response before
+business tools run. `send_im_message.phase` distinguishes `start`, `progress`
+and `final`; an omitted phase remains a legacy final reply. The message and
+Room run receipt commit together. A question, approval or app connection card
+is a visible wait state. A start or progress bubble cannot settle a user task
+without a later final result; an app-connection continuation requires a final
+result without another mechanical start notice. Reminders and internal wakes
+can remain silent when there is no user-facing change.
+
+The next model step requests a progress message after 30 seconds or six
+completed work tools since the last visible message, with a ten-second minimum
+gap. One long-running tool does not start a parallel model call; the activity
+row shows its safe category and locally computed elapsed time. The run records
+first response latency, and the selected renderer keeps a bounded in-memory
+commit-to-render sample for validation. Raw arguments, output and internal
+reasoning remain in the run inspector.
+
+The first-step tool filter is reinforced at dispatch: unadvertised work calls
+receive a persisted "not executed" result. Publication failures get at most
+two recovery steps before a visible failure. Existing conversations apply the
+new rule to their next user request; historical messages need no migration.
+
 ## Conversation workflow
 
 - The v3 entry marker records first positioning independently from the old
   five-person setup. Existing drafts and explicit navigation take precedence.
 - New creates a recipient chooser: existing Agent, group selection, a
   chat-defined Agent, a filled-in profile, or a professional template.
+  Code offers all of these through one recipient picker, and creating or
+  opening a private Agent or group keeps the Code sidebar visible.
   Identity and private room commit together. Chat definition starts a
   pending interview (`setup.status = pending`) with structured
   `user_input` cards and `commit_agent_setup`. Filling the profile, using
@@ -27,6 +57,12 @@ and independent-selection workflow.
 - Private headers show identity and the effective main model. Profile, memory,
   run history, files and context reset are in menus. Advanced policy controls
   stay collapsed; basic profile edits do not overwrite model or policy fields.
+- Code and Rooms privately address the same Agent room, with one message
+  history and draft. Editing its draft from either entry carries through to
+  the other. Project tasks and other rooms retain their own drafts.
+- Opening a private file updates the shared right panel without changing the
+  recipient or moving a Rooms conversation to Code. Explicit task links retain
+  their existing Code navigation behavior.
 - Enter sends; Shift+Enter inserts a line break. IME composition and mention
   acceptance take precedence. Cmd/Ctrl+Enter remains supported.
 - The composer starts at one line, grows to six and then scrolls. Attachments,
@@ -119,6 +155,10 @@ are updated. Storage and ownership remain in the single Kun Runtime and Manager.
   It creates and sends exclusively through the UI. Seven requests exercise file
   work, an actual switched-model response, cancellation while the model is active,
   drafts/reload, two model selections, themes and a narrow window.
+- `--workbench-only` checks the mixed Rooms IM list, existing private history
+  shared with Code, private and group creation from Rooms Add, recipient-safe
+  file previews and draft recovery across surfaces. It uses one offline greeting
+  to establish public history in its disposable profile.
 - Real acceptance used the existing configured `deepseek-v4-pro` connection with
   four user requests: greeting, file creation, continuous modification and project
   work. All passed, including actual file contents and approval UI. There were

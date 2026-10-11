@@ -1,9 +1,10 @@
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import type {
   AttachmentReference,
   ChatBlock,
   NormalizedThread,
   RequestContextSnapshot,
-  DelegatedRuntimeState,
+  DelegatedRuntimeState, HarnessRuntimeState,
   RuntimeConnectionStatus,
   ReviewTarget,
   ThreadGoal,
@@ -13,7 +14,6 @@ import type {
   ThreadUsageSnapshot,
   KnowledgeBaseIndexStatus,
   KnowledgeBaseMount,
-  UserFileReference,
   UserInputAnswer
 } from '../agent/types'
 import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
@@ -32,191 +32,55 @@ import type {
   SandboxMode
 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
-import type { ComposerContextAttachment } from '@kun/extension-api'
+import type { AdeProjectDefaults } from '@shared/ade-project-defaults'
 import type {
   ExtensionComposerContextEvent,
   PendingComposerContextEvent
 } from '@shared/extension-ipc'
-import type {
-  DesignDocumentTarget,
-  DesignImagePlacementTarget,
-  DesignTaskProfile,
-  DesignTaskProfileInput
-} from '../agent/design-task-profile'
+import type { DesignTaskProfile } from '../agent/design-task-profile'
 import type { ThreadRecoveryOptions } from './thread-recovery-coordinator'
 import type { CodeWorkspaceFolderSetsRegistry } from '../lib/code-workspace-folder-sets'
 import type { RemovedCodeWorkspacesRegistry } from '../lib/removed-code-workspaces'
 
-export type QueuedUserMessage = {
-  id: string
-  text: string
-  /** Stable idempotency key reused while this user submission is retried. */
-  clientRequestId?: string
-  editIntent?: 'cancelling' | 'restoring'
-  steeringRequest?: { operationId: string; turnId: string }
-  waitForRuntimeAdmission?: boolean
-  /** Pending/paused items wait locally; admitted items remain until runtime execution starts. */
-  deliveryState?: 'pending' | 'paused' | 'starting' | 'in_flight' | 'failed'
-  deliveryTurnId?: string
-  deliveryUserMessageItemId?: string
-  /** Structured code of a terminal deterministic rejection (e.g. `task_surface_locked`). */
-  errorCode?: string
-  /** Localized summary of a terminal rejection for inline retry UI. */
-  errorMessage?: string
-  /** Frozen runtime prompt reused for idempotent background admission retries. */
-  backgroundRuntimeText?: string
-  /** Frozen checkpoint request id reused with the same clientRequestId. */
-  backgroundCheckpointRequestId?: string
-  displayText?: string
-  mode?: string
-  orchestration?: 'direct' | 'graph'
-  model?: string
-  providerId?: string
-  accountId?: string
-  modelLabel?: string
-  reasoningEffort?: string
-  serviceTier?: 'priority'
-  subagentResume?: { childId: string; expectedResumeCount: number }
-  messageSource?: 'design_continuation'
-  /** Renderer-only guard that prevents a scoped send from falling back to another thread. */
-  expectedThreadId?: string
-  attachmentIds?: string[]
-  attachments?: AttachmentReference[]
-  fileReferences?: UserFileReference[]
-  composerContexts?: ComposerContextAttachment[]
-  /** GUI plan context forwarded to Kun for its reserved plan artifact. */
-  guiPlan?: {
-    operation: 'draft' | 'refine'
-    workspaceRoot: string
-    relativePath: string
-    planId: string
-    sourceRequest?: string
-    title?: string
-  }
-  guiDesignCanvas?: boolean
-  guiExcalidrawCanvas?: boolean
-  /** True only for the product Design surface; Code whiteboards leave this unset. */
-  guiDesignMode?: boolean
-  /** Turn-scoped persona text resolved from the composer preset. */
-  persona?: string
-  agentSurface?: 'code' | 'write' | 'design'
-  /** Frozen Design task profile used for admission, retry, and queue recovery. */
-  designProfile?: DesignTaskProfileInput
-  /** Turn-scoped writable document target; must match the profile target. */
-  designDocumentTarget?: DesignDocumentTarget
-  designImagePlacementTarget?: DesignImagePlacementTarget
-  guiDesignArtifact?: GuiDesignArtifactMessageContext
-  writeContext?: WriteAssistantMessageContext
-  /** Execution settings frozen at enqueue time; empty fields fall back to runtime defaults. */
-  approvalPolicy?: ApprovalPolicy
-  sandboxMode?: SandboxMode
-  approvalReviewer?: ApprovalReviewer
-}
-
-/**
- * GUI plan context attached to a send-message call. Mirrors the
- * Kun `GuiPlanContextSchema` and is forwarded to the runtime
- * request body so plan/refine turns are scoped to a reserved path.
- */
-export type GuiPlanMessageContext = {
-  operation: 'draft' | 'refine'
-  workspaceRoot: string
-  relativePath: string
-  planId: string
-  sourceRequest?: string
-  title?: string
-}
-
-export type GuiDesignArtifactMessageContext = {
-  kind: 'svg'
-  artifactId: string
-  relativePath: string
-}
-
-/** Renderer-only routing context that keeps a Write send bound to the file and
- * conversation selected when the user submitted it. */
-export type WriteAssistantMessageContext = {
-  workspaceRoot: string
-  activeFilePath: string | null
-  documentEpoch: number
-  contentRevision: number
-  /** Present for a first-class Work whiteboard send; fences async sends across board switches. */
-  whiteboardId?: string
-  whiteboardRevision?: number
-  /** Filled after the first explicit ensure; queued sends keep this identity. */
-  threadId?: string
-  /** SHA-256 of the saved document bytes; the runtime recomputes this at promotion. */
-  expectedSha256?: string
-}
-
-export type SendMessageOverrides = {
-  queued?: QueuedUserMessage
-  /** Optional stable idempotency key for callers that retry one logical submission. */
-  clientRequestId?: string
-  /** Per-send execution settings that override the composer snapshot for this submission. */
-  approvalPolicy?: ApprovalPolicy
-  sandboxMode?: SandboxMode
-  approvalReviewer?: ApprovalReviewer
-  /** Resolve the send only after Kun accepts it, including when it first enters the queue. */
-  waitForRuntimeAdmission?: boolean
-  model?: string
-  providerId?: string
-  accountId?: string
-  modelLabel?: string
-  reasoningEffort?: string
-  serviceTier?: 'priority'
-  /** Structured one-click resume identity forwarded to Kun. */
-  subagentResume?: { childId: string; expectedResumeCount: number }
-  /** Internal Design runner progress retained by Kun but hidden as a user bubble. */
-  messageSource?: 'design_continuation'
-  /** Renderer-only guard that prevents Design/Write-style sends from changing thread identity. */
-  expectedThreadId?: string
-  displayText?: string
-  orchestration?: 'direct' | 'graph'
-  guiPlan?: GuiPlanMessageContext
-  guiDesignCanvas?: boolean
-  guiExcalidrawCanvas?: boolean
-  guiDesignMode?: boolean
-  /** Turn-scoped persona text resolved from the composer preset. */
-  persona?: string
-  agentSurface?: 'code' | 'write' | 'design'
-  designProfile?: DesignTaskProfileInput
-  designDocumentTarget?: DesignDocumentTarget
-  designImagePlacementTarget?: DesignImagePlacementTarget
-  guiDesignArtifact?: GuiDesignArtifactMessageContext
-  attachmentIds?: string[]
-  attachments?: AttachmentReference[]
-  fileReferences?: UserFileReference[]
-  composerContexts?: ComposerContextAttachment[]
-  writeContext?: WriteAssistantMessageContext
-}
-
-export type ClearDesignHistoryOptions = {
-  /** Create and bind one empty replacement thread after the old history is gone. */
-  recreate?: boolean
-  /** Known provisional ids to clean even if the renderer registry write failed. */
-  includeThreadIds?: string[]
-}
-
-export type CreateDesignThreadOptions = {
-  /** Select the new thread and navigate to Design. Defaults to true. */
-  activate?: boolean
-  /** Keep the current route when creation fails during background maintenance. */
-  suppressSettingsRedirect?: boolean
-}
-
-export type ClearDesignHistoryResult = {
-  /** True only when no runtime thread or local chat mirror remains to retry. */
-  cleared: boolean
-  deletedThreadIds: string[]
-  retainedThreadIds: string[]
-  recreatedThreadId: string | null
-}
-
-export type InitialSetupMode = 'required' | 'preview'
 import type { SettingsRouteSection } from './settings-route-sections'
 export type { SettingsRouteSection }
-export type AppRoute = 'chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
+/**
+ * The Work assistant composer's choice a new session starts with: an external
+ * Agent is pinned on the thread; Kun's choice is remembered for the composer.
+ */
+export type WorkThreadRoute = {
+  harnessId?: string
+  credentialMode?: string
+  gatewayBinding?: HarnessGatewayBinding
+  model?: string
+  providerId?: string
+  accountId?: string
+}
+import type {
+  ClearDesignHistoryOptions,
+  ClearDesignHistoryResult,
+  CreateDesignThreadOptions,
+  ExternalPlanBuildRequest,
+  GuiDesignArtifactMessageContext,
+  GuiPlanMessageContext,
+  InitialSetupMode,
+  QueuedUserMessage,
+  SendMessageOverrides,
+  WriteAssistantMessageContext
+} from './chat-store-message-types'
+export type {
+  ClearDesignHistoryOptions,
+  ClearDesignHistoryResult,
+  CreateDesignThreadOptions,
+  ExternalPlanBuildRequest,
+  GuiDesignArtifactMessageContext,
+  GuiPlanMessageContext,
+  InitialSetupMode,
+  QueuedUserMessage,
+  SendMessageOverrides,
+  WriteAssistantMessageContext
+}
+export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade' | 'wardrobe'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
@@ -337,6 +201,17 @@ export type ChatState = {
   threadHistoryLoading: boolean
   /** 最近一次在 Code 工作台(chat 路由)选中的会话,供从设置/其他工作区/Connect Phone 返回时恢复。 */
   lastCodeThreadId: string | null
+  /** 旧 ADE 会话的兼容记忆;打开时进入统一 Code 工作台。 */
+  lastAdeThreadId: string | null
+  /** True while an unsent ADE new-session composer is visible. */
+  adeDraftOpen: boolean
+  /** Transient draft identity; late ADE sends must not activate a newer draft. */
+  adeDraftRevision: number
+  /**
+   * Legacy ADE inventory (`workspace_mode=ade`) retained for old links.
+   * The unified Code `threads` inventory also includes these root tasks.
+   */
+  adeThreads: NormalizedThread[]
   /** Relationship of the active thread (e.g. `side` for a subagent's own session). */
   activeThreadRelation: 'primary' | 'fork' | 'side' | null
   /** Parent thread of the active thread, when it is a `side`/`fork` branch. */
@@ -374,6 +249,7 @@ export type ChatState = {
   lastContextSnapshot: RequestContextSnapshot | null
   /** Latest truthful optional-capability snapshot for the active delegated route. */
   lastDelegatedRuntimeState: DelegatedRuntimeState | null
+  lastHarnessRuntimeState: HarnessRuntimeState | null
   /**
    * Latest cumulative usage snapshot, tagged with the thread it belongs to.
    * This is billing/cache telemetry and must not be used as context occupancy.
@@ -420,11 +296,35 @@ export type ChatState = {
   graphEnabled: boolean
   composerModel: string
   composerProviderId: string
+  /** Project defaults actually loaded and displayed for this unsent Code task. */
+  composerProjectDefaults: { workspaceRoot: string; revision: string; value: AdeProjectDefaults; routeError?: string } | null
+  /** A user Agent/model pick for this workspace takes priority over project inheritance. */
+  composerRouteExplicitWorkspaceRoot: string
+  /** A user collaboration toggle takes priority over the project default. */
+  composerProjectCollaborationExplicitWorkspaceRoot: string
   composerReasoningEffort: ModelReasoningEffort
+  /**
+   * ADE harness id for the next turn/thread. Empty = thread/runtime default.
+   * Persisted per thread via `ThreadComposerSelection` in the Code workbench.
+   */
+  composerHarnessId: string
+  /** Explicit opt-in for the next new Code task, never inferred from its route. */
+  composerCollaborationEnabled: boolean
+  /** Credential mode for the selected harness route (`native-login` or a provider id). */
+  composerGatewayBinding?: HarnessGatewayBinding
+  composerCredentialMode: string
+  /**
+   * ADE new-session isolation: 'local' binds the picked workspace
+   * directly; 'worktree' asks the host to prepare a fresh task workspace.
+   */
+  composerIsolation: 'local' | 'worktree'
+  composerIsolationExplicitWorkspaceRoot: string
+  composerWorktreeStartFrom?: import('@shared/task-workspace').TaskWorkspaceStartFrom
   /** User preference; effective only for eligible ChatGPT subscription models. */
   composerFastMode: boolean
   composerPickList: string[]
   composerModelGroups: ModelProviderModelGroup[]
+  composerModelCatalogStatus: 'idle' | 'loading' | 'ready' | 'error'
   /**
    * Optional subagent profile id selected as the persona for the next new
    * thread / next-turn override. Empty = use the runtime default.
@@ -468,7 +368,28 @@ export type ChatState = {
     approvalReviewer: ApprovalReviewer
   } | null) => void
   setComposerOrchestration: (mode: 'direct' | 'graph') => void
-  setComposerModel: (modelId: string, providerId?: string) => void
+  setComposerModel: (modelId: string, providerId?: string, source?: 'user' | 'settings') => void
+  /**
+   * ADE-only: switch the harness (and optional credential mode) used by the
+   * next turn or next new thread. Confirmed switches on a non-empty thread
+   * apply to subsequent turns only — the runtime opens a fresh native
+   * session with a deterministic handoff summary.
+   */
+  setComposerGatewayBinding: (binding?: HarnessGatewayBinding) => void
+  setComposerHarness: (harnessId: string, credentialMode?: string) => void
+  /** ADE-only: pick the isolation used by the next new session. */
+  setComposerIsolation: (
+    isolation: 'local' | 'worktree',
+    startFrom?: import('@shared/task-workspace').TaskWorkspaceStartFrom
+  ) => void
+  /**
+   * ADE-only: (re)request a task worktree for an existing thread — used by
+   * the isolation picker's retry affordance after a failed preparation.
+   */
+  requestAdeThreadWorkspace: (
+    threadId: string,
+    startFrom?: import('@shared/task-workspace').TaskWorkspaceStartFrom
+  ) => Promise<boolean>
   setComposerReasoningEffort: (effort: ModelReasoningEffort) => void
   setComposerFastMode: (enabled: boolean) => void
   setComposerAgentId: (agentId: string) => void
@@ -477,11 +398,18 @@ export type ChatState = {
   setRoute: (r: AppRoute) => void
   openWrite: (options?: { activationGuard?: () => boolean }) => Promise<void>
   openCode: (options?: { activationGuard?: () => boolean }) => Promise<void>
+  /** Enter the ADE workspace mode, restoring the last-open ADE thread. */
+  openAde: (options?: { activationGuard?: () => boolean }) => Promise<void>
+  /** Show a fresh ADE composer without creating a runtime thread. */
+  startAdeDraft: () => void
+  /** Reload the ADE-mode (`workspace_mode=ade`) thread inventory. */
+  refreshAdeThreads: () => Promise<void>
   ensureWriteThreadForWorkspace: (workspaceRoot?: string, activeFilePath?: string) => Promise<string | null>
   createWriteThread: (
     workspaceRoot?: string,
     activeFilePath?: string,
-    options?: { title?: string; titleAuto?: boolean }
+    /** `route` pins the session to the Work assistant's Agent, like a new Code task. */
+    options?: { title?: string; titleAuto?: boolean; route?: WorkThreadRoute }
   ) => Promise<string | null>
   ensureDesignThreadForWorkspace: (workspaceRoot?: string, docId?: string) => Promise<string | null>
   createDesignThread: (
@@ -547,6 +475,12 @@ export type ChatState = {
     /** See `chooseWorkspace` — `false` skips the host settings write. */
     persist?: boolean
   }) => Promise<string | null>
+  /** ADE project switch: persist the shared root and enter a new ADE draft. */
+  selectAdeWorkspaceRoot: (workspaceRoot: string) => Promise<string | null>
+  /** ADE directory dialog; cancellation leaves the current session unchanged. */
+  chooseAdeWorkspace: () => Promise<string | null>
+  /** Session-only isolation fallback for a selected non-Git project. */
+  setComposerIsolationForWorkspace: (isolation: 'local') => void
   clearWorkspace: () => Promise<void>
   /**
    * Remove a sidebar project from the Code project list. Keeps threads,
@@ -574,16 +508,29 @@ export type ChatState = {
   reindexThreadKnowledgeBase: (threadId: string, knowledgeBaseId: string) => Promise<boolean>
   setThreadSearch: (query: string) => void
   setShowArchivedThreads: (show: boolean) => void
+  /** Clears a non-empty conversation so New task can show its blank page before the thread exists. */
+  leaveThreadForNewTask: () => boolean
   createThread: (options?: {
     workspaceRoot?: string
     forceNew?: boolean
     /** Durable ownership for renderer-created Code-workbench threads. */
     agentSurface?: 'code' | 'design'
+    /** Owning workspace mode for the new thread; absent counts as 'code'. */
+    workspaceMode?: 'ade'
     /** Prevent a completed async creation from overriding newer navigation. */
     activationGuard?: () => boolean
     /** When true, checkout the selected branch into an isolated worktree. */
     useWorktreePool?: boolean
     worktreeBranch?: string
+    /**
+     * ADE one-to-one threads: pin the thread to this harness from
+     * creation instead of inferring a route from the composer model.
+     */
+    harnessId?: string
+    gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    /** Explicit provider/model pins for the new thread. */
+    providerId?: string
+    model?: string
     /**
      * Optional subagent profile id to bind the new thread to. When set
      * and the profile mode is 'primary' or 'all', the agent's
@@ -611,6 +558,13 @@ export type ChatState = {
   subscribeThreadEventsLive: (threadId: string) => Promise<void>
   recoverActiveTurn: (options?: ThreadRecoveryOptions) => Promise<boolean>
   sendMessage: (text: string, mode?: string, overrides?: SendMessageOverrides) => Promise<boolean>
+  /**
+   * Run a plan build on an external harness inside a host-managed task
+   * worktree: creates the ADE build thread, parks the
+   * `planBuild`-marked turn until the worktree is ready, and flags the
+   * Review panel when the turn settles.
+   */
+  dispatchExternalPlanBuild: (input: ExternalPlanBuildRequest) => Promise<boolean>
   reviewActiveThread: (target: ReviewTarget) => Promise<boolean>
   drainQueuedMessages: () => Promise<void>
   removeQueuedMessage: (id: string) => Promise<void> | void
@@ -618,6 +572,8 @@ export type ChatState = {
   reorderQueuedMessage: (id: string, targetId: string, position: 'before' | 'after') => Promise<void> | void
   /** Resume a runtime queue paused by an interrupt. */
   resumeQueuedTurns: () => Promise<boolean>
+  /** Resume every paused queued message (runtime-owned and local) in order. */
+  resumePausedQueuedMessages: () => Promise<boolean>
   guideQueuedMessage: (id: string) => Promise<boolean>
   attachExtensionComposerContext: (event: ExtensionComposerContextEvent) => void
   removeExtensionComposerContext: (attachmentId: string) => void
@@ -682,7 +638,7 @@ export type ChatState = {
     options?: { model?: string; mode?: string }
   ) => Promise<string | null>
   deleteThread: (threadId: string) => Promise<void>
-  resolveApproval: (blockId: string, decision: 'allow' | 'deny') => Promise<void>
+  resolveApproval: (blockId: string, decision: 'allow' | 'deny', choice?: import('@shared/approval-choice').ApprovalChoice) => Promise<void>
   resolveUserInput: (
     blockId: string,
     action: { kind: 'submit'; answers: UserInputAnswer[] } | { kind: 'cancel' }

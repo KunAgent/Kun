@@ -141,7 +141,7 @@ it('treats a saved token with future expiry as authorized and exposes expiresAt'
       () => clock
     )
 
-    await provider.saveTokens({ access_token: 'access-1', token_type: 'Bearer', expires_in: 3600 })
+    await provider.saveTokens({ issuer: 'https://auth.example.test', access_token: 'access-1', token_type: 'Bearer', expires_in: 3600 })
     const diagnostics = await provider.diagnostics()
 
     expect(diagnostics.status).toBe('authorized')
@@ -159,7 +159,7 @@ it('flips to expired once the access token outlives its lifetime', async () => {
       () => clock
     )
 
-    await provider.saveTokens({ access_token: 'access-1', token_type: 'Bearer', expires_in: 10, refresh_token: 'refresh-1' })
+    await provider.saveTokens({ issuer: 'https://auth.example.test', access_token: 'access-1', token_type: 'Bearer', expires_in: 10, refresh_token: 'refresh-1' })
     clock += 20_000
     const diagnostics = await provider.diagnostics()
 
@@ -171,7 +171,7 @@ it('surfaces the provider-granted scopes parsed from the token', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
     const provider = new FileMcpOAuthProvider('vercel', oauthServer(), join(root, 'vercel.json'), async () => undefined)
 
-    await provider.saveTokens({
+    await provider.saveTokens({ issuer: 'https://auth.example.test',
       access_token: 'access-1',
       token_type: 'Bearer',
       scope: 'projects.read  deployments.read projects.read deployments.write'
@@ -185,7 +185,7 @@ it('omits grantedScopes when the provider returns no scope', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
     const provider = new FileMcpOAuthProvider('vercel', oauthServer(), join(root, 'vercel.json'), async () => undefined)
 
-    await provider.saveTokens({ access_token: 'access-1', token_type: 'Bearer' })
+    await provider.saveTokens({ issuer: 'https://auth.example.test', access_token: 'access-1', token_type: 'Bearer' })
     const diagnostics = await provider.diagnostics()
 
     expect(diagnostics.grantedScopes).toBeUndefined()
@@ -201,7 +201,7 @@ it('surfaces a recorded authorization failure as error and clears it on the next
     expect(failed.lastError).toContain('access_denied')
     expect(failed.lastErrorAt).toBeDefined()
 
-    await provider.saveTokens({ access_token: 'access-1', token_type: 'Bearer' })
+    await provider.saveTokens({ issuer: 'https://auth.example.test', access_token: 'access-1', token_type: 'Bearer' })
     const recovered = await provider.diagnostics()
     expect(recovered.status).toBe('authorized')
     expect(recovered.lastError).toBeUndefined()

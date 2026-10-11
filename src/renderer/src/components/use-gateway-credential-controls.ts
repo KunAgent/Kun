@@ -15,13 +15,14 @@ export function useGatewayCredentialControls(
 ): {
   credential: GatewayCredentialStatus
   pending: boolean
-  update(action: 'ensure' | 'copy' | 'rotate' | 'revoke'): Promise<void>
+  /** Resolves true when the runtime accepted the action. */
+  update(action: 'ensure' | 'copy' | 'rotate' | 'revoke'): Promise<boolean>
   setEnabled(enabled: boolean): Promise<void>
 } {
   const [credential, setCredential] = useState<GatewayCredentialStatus>({ configured: false })
   const [pending, setPending] = useState(false)
 
-  const update = async (action: 'ensure' | 'copy' | 'rotate' | 'revoke'): Promise<void> => {
+  const update = async (action: 'ensure' | 'copy' | 'rotate' | 'revoke'): Promise<boolean> => {
     setPending(true)
     onError('')
     try {
@@ -30,14 +31,17 @@ export function useGatewayCredentialControls(
       const result = await bridge(action)
       if (!result.ok) throw new Error(`Gateway credential ${action} failed (${result.status})`)
       setCredential(result.credential)
+      return true
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error))
+      return false
     } finally {
       setPending(false)
     }
   }
 
   const setEnabled = async (enabled: boolean): Promise<void> => {
+    onError('')
     if (enabled && !credential.configured) {
       setPending(true)
       try {

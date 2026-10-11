@@ -1,3 +1,4 @@
+import type { ModelProviderModelGroup } from './model-provider-model-group'
 import type {
   AppSettingsPatch,
   AppSettingsV1,
@@ -203,8 +204,10 @@ export type KunRuntimeSettingsSyncStatusPayload = {
   state: 'idle' | 'syncing' | 'synced' | 'unavailable' | 'failed'
   generation: number
   message?: string
+  sections?: Record<string, RuntimeConfigRejectedSection>
   at: string
 }
+export type RuntimeConfigRejectedSection = { code: string; message: string }
 export type RuntimeRequestResult = { ok: boolean; status: number; body: string }
 export type GatewayCredentialStatus = { configured: boolean; createdAt?: string; rotatedAt?: string }
 export type GatewayCredentialResult = { ok: boolean; status: number; credential: GatewayCredentialStatus; copied?: boolean }
@@ -253,6 +256,8 @@ export type SkillListItem = {
   scope: 'project' | 'global'
   builtin?: boolean
   legacy: boolean
+  /** Set when the skill was installed from a remote market. */
+  market?: { sourceId: string; version?: string }
 }
 export type SkillListResult = { ok: true; skills: SkillListItem[]; validationErrors: Array<{ root: string; message: string }> }
   | { ok: false; message: string }
@@ -365,21 +370,7 @@ export type ModelProviderModelSelection = {
   modelId: string
 }
 
-export type ModelProviderModelGroup = {
-  providerId: string
-  /** Stable built-in preset identity; survives multi-account ids such as codex-2. */
-  presetSource?: string
-  label: string
-  modelIds: string[]
-  modelProfiles?: Record<string, ModelProviderModelProfileV1>
-  /** Opaque account reference used only for an acknowledged extension binding. */
-  accountId?: string
-  extensionProvider?: {
-    extensionId: string
-    extensionVersion: string
-    localProviderId: string
-  }
-}
+export type { ModelProviderModelGroup } from './model-provider-model-group'
 
 export type ModelProviderProbeRequest = {
   providerId: string
@@ -428,72 +419,10 @@ export type CursorSubscriptionModel = {
   aliases?: string[]
   parameters?: CursorSubscriptionModelParameter[]
   variants?: CursorSubscriptionModelVariant[]
+  profile?: Partial<ModelProviderModelProfileV1>
 }
 
-export type ModelsDevCatalogModelHint = {
-  id: string
-  aliases?: string[]
-}
-
-export type ModelsDevCatalogMetadataIssue = {
-  field: 'contextWindowTokens' | 'maxOutputTokens'
-  code: 'out_of_range'
-  rawValue: number
-  maxAllowed: number
-}
-
-export type ModelsDevCatalogPricing = {
-  /** USD per million input tokens (non-cache). */
-  inputUsdPerMillion: number
-  /** USD per million output tokens. */
-  outputUsdPerMillion: number
-  /** Cache-read/write USD per million tokens; omitted falls back to input. */
-  cacheReadUsdPerMillion?: number
-  cacheWriteUsdPerMillion?: number
-}
-
-export type ModelsDevCatalogModel = {
-  id: string
-  providerKey?: string
-  name?: string
-  description?: string
-  inputModalities: ModelsDevCatalogModality[]
-  outputModalities: ModelsDevCatalogModality[]
-  reasoning?: boolean
-  toolCalling?: boolean
-  /** True only when models.dev reports both input and output cost as zero. */
-  free?: boolean
-  pricing?: ModelsDevCatalogPricing
-  contextWindowTokens?: number
-  maxOutputTokens?: number
-  /** Import-only diagnostics for catalog fields omitted by the sanitizer. */
-  metadataIssues?: ModelsDevCatalogMetadataIssue[]
-}
-
-export type ModelsDevCatalogRequest = {
-  providerId: string
-  baseUrl: string
-  forceRefresh?: boolean
-  modelHints?: ModelsDevCatalogModelHint[]
-}
-
-export type ModelsDevCatalogMatchMode = 'catalog' | 'enrichment-only'
-
-export type ModelsDevCatalogSource = 'models.dev' | 'kun-agent'
-
-export type ModelsDevCatalogResult =
-  | {
-      status: 'ok'
-      providerKey: string
-      providerName: string
-      matchMode: ModelsDevCatalogMatchMode
-      stale: boolean
-      /** Which catalog source produced the model data (for diagnostics/UI). */
-      source?: ModelsDevCatalogSource
-      models: ModelsDevCatalogModel[]
-    }
-  | { status: 'unmapped'; models: [] }
-  | { status: 'error'; message: string; models: [] }
+export type { ModelsDevCatalogModelHint, ModelsDevCatalogMetadataIssue, ModelsDevCatalogPricing, ModelsDevCatalogModel, ModelsDevCatalogRequest, ModelsDevCatalogMatchMode, ModelsDevCatalogSource, ModelsDevCatalogResult } from '../../kun/src/contracts/public-model-catalog'
 
 export type PromptOptimizationRequest = {
   text: string
@@ -508,7 +437,7 @@ export type ClawImInstallQrResult =
   | { ok: false; message: string }
 
 export type ClawImInstallPollResult =
-  | { done: true; kind: 'feishu'; appId: string; appSecret: string; domain: string }
+  | { done: true; kind: 'feishu'; appId: string; appSecret: string; domain: string; ownerId?: string }
   | { done: true; kind: 'weixin'; accountId: string; sessionKey: string }
   | { done: false; error?: string }
 
@@ -690,9 +619,7 @@ export type AntigravitySubscriptionModelCatalog = {
 
 export const UNREADABLE_CREDENTIAL_KEY_ERROR_CODE = 'credential_key_unreadable'
 
-export type CredentialRecoveryResetResult =
-  | { reset: false }
-  | { reset: true; backupPath: string; movedItems: string[] }
+export type CredentialRecoveryResetResult = { reset: false } | { reset: true; backupPath: string; movedItems: string[] }
 
 export type ModelProviderCredentialRevealResult = {
   providerId: string

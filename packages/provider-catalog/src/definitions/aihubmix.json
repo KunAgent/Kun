@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "id": "aihubmix",
+  "name": "AiHubMix",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://aihubmix.com/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.aihubmix.com/",
+  "credentialUrl": "https://aihubmix.com/token",
+  "origin": "relay",
+  "balance": "aihubmix",
+  "endpoints": {
+    "chat_completions": "https://aihubmix.com/v1",
+    "messages": "https://aihubmix.com"
+  }
+}

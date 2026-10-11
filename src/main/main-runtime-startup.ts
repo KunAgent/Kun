@@ -28,6 +28,7 @@ import { rememberedManagerStartupProfile } from './runtime/kun-startup-manager-r
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
 import { throwIfApplicationQuitting } from './app-quit-signal'
 import { logWarn } from './logger'
+import { recentRuntimeVerification, rememberRuntimeVerification } from './runtime/recent-runtime-verification'
 import {
   mainState,
   runtimeJsonError
@@ -53,13 +54,22 @@ export async function ensureRuntime(settings: AppSettingsV1): Promise<AppSetting
   }
   mainState.assertCanonicalRuntimeMigrationReady()
   const fingerprint = runtimeFingerprint(requested)
-  return runtimeSupervisor.ensure(
+  const generation = runtimeSupervisor.lifecycleGeneration()
+  const verified = runtimeSupervisor.hasPendingOperation()
+    ? null
+    : recentRuntimeVerification(fingerprint, generation)
+  if (verified) return verified
+  const ensured = await runtimeSupervisor.ensure(
     fingerprint,
     // Freeze this FIFO node to the snapshot used for its fingerprint. A later
     // persisted settings snapshot has its own queued apply node and must not
     // jump across this lifecycle barrier.
     () => ensureRuntimeOnce(requested)
   )
+  if (generation === runtimeSupervisor.lifecycleGeneration()) {
+    rememberRuntimeVerification({ fingerprint, generation, settings: ensured })
+  }
+  return ensured
 }
 
 /** Recover data service without first trying to load settings from its dead endpoint. */

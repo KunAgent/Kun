@@ -107,6 +107,12 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.model ? { model: message.model } : {}),
     ...(!input.claw && message.providerId ? { providerId: message.providerId } : {}),
     ...(!input.claw && message.accountId ? { accountId: message.accountId } : {}),
+    ...(message.harnessId ? { harnessId: message.harnessId } : {}),
+    ...(message.credentialMode
+      ? { credentialMode: message.credentialMode as 'native-login' | 'provider' | 'kun-gateway' }
+      : {}),
+    ...(message.gatewayBinding ? { gatewayBinding: message.gatewayBinding } : {}),
+    ...(message.planBuild ? { planBuild: true } : {}),
     ...(message.reasoningEffort ? { reasoningEffort: message.reasoningEffort } : {}),
     ...(!input.claw && message.serviceTier ? { serviceTier: message.serviceTier } : {}),
     ...(message.subagentResume ? { subagentResume: message.subagentResume } : {}),
@@ -123,6 +129,7 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.designProfile ? { designProfile: message.designProfile } : {}),
     ...(message.designDocumentTarget ? { designDocumentTarget: message.designDocumentTarget } : {}),
     ...(message.writeContext ? { writeContext: toWriteTurnContext(message.writeContext) } : {}),
+    ...(message.paperContext ? { paperContext: message.paperContext } : {}),
     ...(message.designImagePlacementTarget
       ? { designImagePlacementTarget: message.designImagePlacementTarget }
       : {}),
@@ -130,7 +137,8 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.attachmentIds?.length ? { attachmentIds: message.attachmentIds } : {}),
     ...(input.checkpointRequestId ? { workspaceCheckpointRequestId: input.checkpointRequestId } : {}),
     ...(message.fileReferences?.length ? { fileReferences: message.fileReferences } : {}),
-    ...(message.composerContexts?.length ? { composerContexts: message.composerContexts } : {})
+    ...(message.composerContexts?.length ? { composerContexts: message.composerContexts } : {}),
+    ...(message.ackNoticeIds?.length ? { ackNoticeIds: message.ackNoticeIds } : {})
   }
 }
 
@@ -194,7 +202,7 @@ export async function drainBackgroundQueuedMessage(
         settings,
         prompt: next.text
       })
-      const checkpointRequestId = next.backgroundCheckpointRequestId ?? startWorkspaceCheckpointSnapshot({
+      const checkpointRequestId = next.paperContext ? undefined : next.backgroundCheckpointRequestId ?? startWorkspaceCheckpointSnapshot({
         settings,
         threads: state.threads,
         activeThreadId: threadId,

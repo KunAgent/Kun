@@ -150,4 +150,19 @@ describe('buildKunServeArgs', () => {
     expect(args).toContain('--approval-reviewer')
     expect(args).toContain('user')
   })
+
+  it('caps the young generation only for Node-script launches, ahead of the entry', () => {
+    const base = {
+      host: '127.0.0.1', port: 0, dataDir: '/tmp/kun', approvalPolicy: 'on-request',
+      sandboxMode: 'workspace-write', approvalReviewer: 'user', tokenEconomyMode: false, insecure: false
+    }
+    const script = buildKunServeArgs({ ...base, resolution: {
+      kind: 'node-script', command: '/usr/bin/node', args: ['/app/kun/dist/cli/serve-entry.js'], dataDir: ''
+    } })
+    expect(script.slice(0, 2)).toEqual(['--max-semi-space-size=8', '/app/kun/dist/cli/serve-entry.js'])
+    const binary = buildKunServeArgs({ ...base, resolution: {
+      kind: 'custom', command: '/usr/local/bin/kun', args: [], dataDir: ''
+    } })
+    expect(binary[0]).toBe('serve')
+  })
 })

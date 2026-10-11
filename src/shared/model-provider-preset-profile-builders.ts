@@ -1,3 +1,4 @@
+import { metadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
 import type {
   ImageGenerationProtocol,
   MusicGenerationProtocol,
@@ -145,6 +146,7 @@ export function copyModelProfiles(
       modelId,
       {
         ...profile,
+        evidence: profile.evidence ?? metadataEvidence(profile, 'adapter'),
         ...(profile.aliases ? { aliases: [...profile.aliases] } : {}),
         inputModalities: [...profile.inputModalities],
         outputModalities: [...profile.outputModalities],
@@ -153,6 +155,7 @@ export function copyModelProfiles(
         ...(profile.reasoning
           ? {
               reasoning: {
+                ...profile.reasoning,
                 supportedEfforts: [...profile.reasoning.supportedEfforts],
                 defaultEffort: profile.reasoning.defaultEffort,
                 requestProtocol: profile.reasoning.requestProtocol

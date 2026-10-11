@@ -1,6 +1,7 @@
-import { Gauge, Loader2, RefreshCw } from 'lucide-react'
-import { useCallback, useState, type ReactElement } from 'react'
+import { RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { relativeTime } from '../usage/quota-view-model'
 import {
   ProviderQuotaPanel,
   type ProviderQuotaPanelStatus
@@ -10,7 +11,10 @@ import {
   type SidebarUsagePanelStatus
 } from './SidebarUsagePanel'
 
-type UsageQuotaTab = 'usage' | 'quota'
+type UsageQuotaTab = 'quota' | 'usage'
+
+const TABS: UsageQuotaTab[] = ['quota', 'usage']
+const TAB_KEY = 'kun.usagePanel.tab'
 
 type Props = {
   activeThreadId: string | null
@@ -24,85 +28,109 @@ type TabStatus = {
 
 const EMPTY_STATUS: TabStatus = { loading: false }
 
+function readTab(): UsageQuotaTab {
+  try {
+    return window.localStorage.getItem(TAB_KEY) === 'usage' ? 'usage' : 'quota'
+  } catch {
+    return 'quota'
+  }
+}
+
+/** Re-renders every half minute so "updated 2 min ago" keeps counting. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return now
+}
+
 export function UsageQuotaPanel({ activeThreadId, active = true }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
-  const [activeTab, setActiveTab] = useState<UsageQuotaTab>('usage')
+  const [activeTab, setActiveTab] = useState<UsageQuotaTab>(readTab)
   const [usageRefreshKey, setUsageRefreshKey] = useState(0)
   const [quotaRefreshKey, setQuotaRefreshKey] = useState(0)
   const [usageStatus, setUsageStatus] = useState<TabStatus>(EMPTY_STATUS)
   const [quotaStatus, setQuotaStatus] = useState<TabStatus>(EMPTY_STATUS)
   const activeStatus = activeTab === 'usage' ? usageStatus : quotaStatus
+  const now = useNow()
 
-  const handleUsageStatus = useCallback((status: SidebarUsagePanelStatus): void => {
-    setUsageStatus(status)
-  }, [])
-  const handleQuotaStatus = useCallback((status: ProviderQuotaPanelStatus): void => {
-    setQuotaStatus(status)
-  }, [])
+  const handleUsageStatus = useCallback((status: SidebarUsagePanelStatus): void => setUsageStatus(status), [])
+  const handleQuotaStatus = useCallback((status: ProviderQuotaPanelStatus): void => setQuotaStatus(status), [])
 
+  const selectTab = (tab: UsageQuotaTab): void => {
+    setActiveTab(tab)
+    try {
+      window.localStorage.setItem(TAB_KEY, tab)
+    } catch {
+      // Remembered for this session only.
+    }
+  }
   const refresh = (): void => {
     if (activeTab === 'usage') setUsageRefreshKey((value) => value + 1)
     else setQuotaRefreshKey((value) => value + 1)
   }
+  const refreshLabel = t(activeStatus.loading ? 'usageQuotaRefreshing' : 'usageQuotaRefresh')
+  const updated = activeStatus.refreshedAt ? Date.parse(activeStatus.refreshedAt) : Number.NaN
 
   return (
     <section
-      aria-label={t('usageQuotaTitle')}
+      aria-label={t('usagePanelTitle')}
       className="usage-quota-panel ds-no-drag"
       data-usage-quota-panel
     >
       <header className="usage-quota-header">
         <div className="usage-quota-heading">
-          <div className="usage-quota-heading-icon">
-            <Gauge aria-hidden="true" strokeWidth={1.8} />
+          <div
+            role="tablist"
+            aria-label={t('usagePanelTitle')}
+            className="kq-seg usage-quota-tabs"
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+              event.preventDefault()
+              selectTab(activeTab === 'quota' ? 'usage' : 'quota')
+            }}
+          >
+            {TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                id={`usage-quota-tab-${tab}`}
+                role="tab"
+                aria-selected={activeTab === tab}
+                aria-controls={`usage-quota-panel-${tab}`}
+                tabIndex={activeTab === tab ? 0 : -1}
+                onClick={() => selectTab(tab)}
+                className="usage-quota-tab"
+                data-active={activeTab === tab ? 'true' : 'false'}
+              >
+                {t(tab === 'quota' ? 'usagePanelTabQuota' : 'usagePanelTabUsage')}
+              </button>
+            ))}
           </div>
-          <div className="usage-quota-heading-copy">
-            <h2>{t('usageQuotaTitle')}</h2>
-            <p>{t('usageQuotaDescription')}</p>
-          </div>
+          <span className="kq-grow" />
+          {Number.isFinite(updated) ? (
+            <span
+              className="usage-quota-refreshed-at"
+              title={new Intl.DateTimeFormat(i18n.resolvedLanguage, { dateStyle: 'medium', timeStyle: 'short' }).format(updated)}
+            >
+              {t('usagePanelUpdated', {
+                time: now - updated < 60_000 ? t('usagePanelJustNow') : relativeTime(updated - now, i18n.resolvedLanguage)
+              })}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={refresh}
             disabled={activeStatus.loading}
-            className="usage-quota-refresh"
+            className="kq-icon-button usage-quota-refresh"
             data-loading={activeStatus.loading ? 'true' : 'false'}
-            aria-label={t(activeStatus.loading ? 'usageQuotaRefreshing' : 'usageQuotaRefresh')}
-            title={t(activeStatus.loading ? 'usageQuotaRefreshing' : 'usageQuotaRefresh')}
+            aria-label={refreshLabel}
+            title={refreshLabel}
           >
-            {activeStatus.loading ? (
-              <Loader2 className="animate-spin" aria-hidden="true" strokeWidth={1.9} />
-            ) : (
-              <RefreshCw aria-hidden="true" strokeWidth={1.9} />
-            )}
-            <span className="usage-quota-refresh-label">
-              {t(activeStatus.loading ? 'usageQuotaRefreshing' : 'usageQuotaRefresh')}
-            </span>
+            <RefreshCw className={activeStatus.loading ? 'kq-spin' : undefined} aria-hidden="true" strokeWidth={1.9} />
           </button>
-        </div>
-        {activeStatus.refreshedAt ? (
-          <p className="usage-quota-refreshed-at">
-            {t('usageQuotaLastRefreshed', {
-              time: formatRefreshTime(activeStatus.refreshedAt, i18n.resolvedLanguage)
-            })}
-          </p>
-        ) : null}
-        <div
-          role="tablist"
-          aria-label={t('usageQuotaTitle')}
-          className="usage-quota-tabs"
-        >
-          <TabButton
-            active={activeTab === 'usage'}
-            id="usage"
-            label={t('usageQuotaTabUsage')}
-            onClick={() => setActiveTab('usage')}
-          />
-          <TabButton
-            active={activeTab === 'quota'}
-            id="quota"
-            label={t('usageQuotaTabQuota')}
-            onClick={() => setActiveTab('quota')}
-          />
         </div>
       </header>
 
@@ -121,7 +149,7 @@ export function UsageQuotaPanel({ activeThreadId, active = true }: Props): React
           />
         ) : (
           <ProviderQuotaPanel
-            embedded
+            active={active}
             refreshKey={quotaRefreshKey}
             onStatusChange={handleQuotaStatus}
           />
@@ -129,41 +157,4 @@ export function UsageQuotaPanel({ activeThreadId, active = true }: Props): React
       </div>
     </section>
   )
-}
-
-function TabButton({
-  active,
-  id,
-  label,
-  onClick
-}: {
-  active: boolean
-  id: UsageQuotaTab
-  label: string
-  onClick: () => void
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      id={`usage-quota-tab-${id}`}
-      role="tab"
-      aria-selected={active}
-      aria-controls={`usage-quota-panel-${id}`}
-      tabIndex={active ? 0 : -1}
-      onClick={onClick}
-      className="usage-quota-tab"
-      data-active={active ? 'true' : 'false'}
-    >
-      {label}
-    </button>
-  )
-}
-
-function formatRefreshTime(value: string, locale?: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(date)
 }

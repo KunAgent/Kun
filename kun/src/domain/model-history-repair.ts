@@ -215,8 +215,13 @@ export function isToolResultBridgeItem(
   // A provider permits ignored runtime records between an assistant tool-call
   // message and its first tool result. Once results start, they must remain a
   // contiguous one-to-one sequence; otherwise an unrelated record can mask a
-  // malformed result block.
-  if (options.sawResult) return false
+  // malformed result block. Interactive gate records are the exception: when
+  // one parallel call finishes before another opens an approval or user_input
+  // gate, that record lands between results. It is never model-visible, so it
+  // must not invalidate (and silently drop) the whole round.
+  if (options.sawResult) {
+    return (item.kind === 'approval' || item.kind === 'user_input') && item.turnId === options.turnId
+  }
   switch (item.kind) {
     case 'assistant_reasoning':
     case 'approval':

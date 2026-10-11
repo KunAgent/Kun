@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { routesTextThroughRuntime } from './runtime-model-requests'
+import { requestWriteInlineThroughRuntime } from './write-inline-runtime'
 import {
   DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS,
   isCustomModelEndpointFormat,
@@ -71,6 +73,7 @@ export async function requestWriteInlineCompletion(
     appendInlineCompletionPreflightFailure(startedAt, settings, request, 'Inline completion is disabled.')
     return { ok: false, message: 'Inline completion is disabled.' }
   }
+  if (routesTextThroughRuntime()) return requestWriteInlineThroughRuntime(settings, request)
 
   const rawApiKey = resolveWriteInlineCompletionApiKey(settings)
   if (!rawApiKey) {

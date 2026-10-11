@@ -277,7 +277,7 @@ export abstract class RoundOutcomeRequiredToolPhase extends RoundOutcomeState {
 
   protected async failHardRequiredTool(
     input: RoundOutcomeInput,
-    code: 'required_tool_missing' | 'required_tool_mismatch',
+    code: 'required_tool_missing' | 'required_tool_mismatch' | 'im_final_missing',
     message: string
   ): Promise<'failed'> {
     this.deps.rememberFailure(input.turnId, { error: message, code, severity: 'error' })

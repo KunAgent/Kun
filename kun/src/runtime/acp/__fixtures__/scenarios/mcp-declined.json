@@ -1,0 +1,22 @@
+{
+  "sessionId": "sess-mcp-declined",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": false,
+      "promptCapabilities": { "image": false, "embeddedContext": false },
+      "elicitation": true,
+      "mcpCapabilities": { "http": false, "stdio": false }
+    },
+    "authMethods": [],
+    "agentInfo": { "name": "fake-acp-agent", "version": "0.0.1" }
+  },
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "hi" } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

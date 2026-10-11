@@ -1,13 +1,11 @@
-import { useEffect, type ReactElement } from 'react'
+import { useContext, useEffect, useMemo, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
-  FolderOpen,
-  FileText,
-  GraduationCap,
-  ListTodo,
   Loader2,
   MessageSquareQuote,
+  PanelRightClose,
   Plus,
+  TextSelect,
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -26,19 +24,35 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import {
   useWriteWorkspaceStore,
   writeBasenameFromPath,
+  writeJoinPath,
   writeRelativeToWorkspace
 } from '../../write/write-workspace-store'
+import { writeThreadIdsForFile, readWriteThreadRegistry } from '../../write/write-thread-registry'
+import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
+import { useWorkContextStore, workContextKey } from '../../write/work-context-store'
+import { WorkContextChip, type WorkContextDescriptor } from './WorkContextChip'
 import { selectFocusedPresentationView } from '../../write/write-presentation-view-state'
 import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { FloatingComposer } from '../chat/FloatingComposer'
+import type { FloatingComposerProps } from '../chat/floating-composer-policy'
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
 import { SubagentReturnBar } from '../chat/message-timeline-empty'
 import { WriteAssistantSparkleIcon } from './WriteAssistantIcons'
-import { WritePaperAssistantActions } from './WritePaperAssistantActions'
+import { WriteAssistantEmptyState } from './WriteAssistantEmptyState'
+import { WorkHomeHero, WorkHomeSpaceChip, WorkKunAvatar } from './WorkHomeEmptyState'
+import { WorkHomeCards } from './WorkHomeCards'
+import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
+import { focusedPaperViewId, paperResearchStageActive } from '../../paper/paper-view'
+import type { WritePaperViewId } from '../../write/write-workspace-store-types'
+import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
+import { workSessionDisplayTitle } from '../../write/work-sessions-model'
+import { prepareWorkSessionForSend } from '../../write/work-session-actions'
+import { workAssistantHarnessId } from '../../write/work-assistant-agent'
+import { AgentIcon } from '../agent-icon'
+import './work-stage.css'
 import { WritePresentationViewChip } from './WritePresentationViewChip'
-import { WriteResourceConversationHistoryPopover } from './WriteResourceConversationHistoryPopover'
-import { useWriteResourceConversationHistory } from './useWriteResourceConversationHistory'
 import { useChildThreadViewer } from './useChildThreadViewer'
+import { useWorkComposerReferenceProps } from './use-work-composer-references'
 
 type Props = {
   input: string
@@ -62,6 +76,10 @@ type Props = {
   setComposerModel: (modelId: string, providerId?: string) => void
   setComposerReasoningEffort: (effort: ComposerReasoningEffort) => void
   setComposerFastMode: (enabled: boolean) => void
+  /** Code's permission setting; Work and Code run the same Agent. */
+  executionSettings?: FloatingComposerProps['executionSettings']
+  executionSettingsApplying?: boolean
+  onExecutionSettingsChange?: FloatingComposerProps['onExecutionSettingsChange']
   queuedMessages: QueuedUserMessage[]
   removeQueuedMessage: (id: string) => void
   guideQueuedMessage: (id: string) => void | Promise<unknown>
@@ -85,6 +103,15 @@ type Props = {
 
 const EMPTY_SKILL_COMMANDS: CoreRuntimeSkillJson[] = []
 
+/** Context chip label for a library/discover page, which opens no file. */
+const PAPER_VIEW_LABEL_KEYS: Record<WritePaperViewId, string> = {
+  library: 'workSidebarLibrary',
+  'discover:search': 'writePaperDiscoverTab_search',
+  'discover:arxiv': 'writePaperDiscoverNav_arxiv',
+  'discover:venue': 'writePaperDiscoverNav_venue',
+  'discover:feeds': 'writePaperDiscoverNav_feeds'
+}
+
 export function WriteAssistantPanel({
   input,
   setInput,
@@ -107,6 +134,9 @@ export function WriteAssistantPanel({
   setComposerModel,
   setComposerReasoningEffort,
   setComposerFastMode,
+  executionSettings = null,
+  executionSettingsApplying = false,
+  onExecutionSettingsChange,
   queuedMessages,
   removeQueuedMessage,
   guideQueuedMessage,
@@ -123,7 +153,6 @@ export function WriteAssistantPanel({
   onOpenSettings,
   onConfigureProviders,
   onNewConversation,
-  onPickWorkspace,
   onCollapse,
   className = ''
 }: Props): ReactElement {
@@ -137,7 +166,9 @@ export function WriteAssistantPanel({
     quotedSelections,
     quoteCurrentSelection,
     removeQuotedSelection,
-    workSurface
+    activeWhiteboard,
+    contextKey,
+    researchActive
   } = useWriteWorkspaceStore(
     useShallow((s) => ({
       workspaceRoot: s.workspaceRoot,
@@ -146,10 +177,22 @@ export function WriteAssistantPanel({
       quotedSelections: s.quotedSelections,
       quoteCurrentSelection: s.quoteCurrentSelection,
       removeQuotedSelection: s.removeQuotedSelection,
-      workSurface: s.workSurface
+      activeWhiteboard: s.activeWhiteboardId ? s.whiteboards[s.activeWhiteboardId] ?? null : null,
+      contextKey: workContextKey(s),
+      researchActive: paperResearchStageActive(s)
     }))
   )
-  const papersSurface = workSurface === 'papers'
+  // Nothing open: the panel is the center stage (Code-like home/conversation).
+  const stage = useWorkConversationStage()
+  const stageChrome = useContext(WorkStageChromeContext)
+  const detachedKey = useWorkContextStore((s) => s.detachedKey)
+  // A removed chip only applies to the item it was removed from.
+  useEffect(() => {
+    if (detachedKey && detachedKey !== contextKey) useWorkContextStore.getState().attach()
+  }, [contextKey, detachedKey])
+  const sessionTitle = useChatStore((s) =>
+    workSessionDisplayTitle(s.threads.find((thread) => thread.id === s.activeThreadId)?.title))
+  const agentHarnessId = useChatStore(workAssistantHarnessId)
   const paperEntries = usePaperModeStore((s) => s.entries)
   const readerPage = usePaperModeStore((s) => s.readerPage)
   const knownUnits = usePaperStore((s) => s.unitsByDir)
@@ -157,7 +200,7 @@ export function WriteAssistantPanel({
   // the store's known units — drives the context header, the composer chip,
   // and the papers-only empty-state prompts.
   const activeUnitRel = (() => {
-    if (!papersSurface || !activeFilePath || !workspaceRoot) return null
+    if (!activeFilePath || !workspaceRoot) return null
     const abs = paperUnitDirFromKnownUnits(
       workspaceRoot,
       activeFilePath,
@@ -176,8 +219,45 @@ export function WriteAssistantPanel({
   const activeFileLabel = activeFilePath
     ? writeRelativeToWorkspace(workspaceRoot, activeFilePath)
     : t('writeNoFileOpen')
-  const activeFileName = activeFilePath ? writeBasenameFromPath(activeFilePath) : activeFileLabel
+  const paperView = useWriteWorkspaceStore(focusedPaperViewId)
+  const libraryTotal = usePaperModeStore((s) => s.counts.total)
+  const paperContext = Boolean(activeUnitRel || paperView)
+  const threadCount = useChatStore((s) => s.threads.length)
+  // What is open, as the current session's context chip. Its session list is
+  // read from the registry only when the item (or the thread list) changes.
+  const context = useMemo((): WorkContextDescriptor | null => {
+    if (!workspaceRoot || !contextKey) return null
+    const registry = readWriteThreadRegistry()
+    if (paperView) {
+      if (researchActive) return { kind: 'research', key: contextKey, label: t('paperResearchContext'), sessionIds: [] }
+      if (paperView === 'library') {
+        return { kind: 'library', key: contextKey, label: t('workSidebarLibrary'),
+          detail: t('workContextPaperCount', { count: libraryTotal }), sessionIds: [] }
+      }
+      return { kind: 'discover', key: contextKey, label: t(PAPER_VIEW_LABEL_KEYS[paperView]), sessionIds: [] }
+    }
+    if (activeWhiteboard) {
+      return { kind: 'whiteboard', key: contextKey, label: activeWhiteboard.title,
+        sessionIds: workWhiteboardThreadIds(activeWhiteboard) }
+    }
+    if (activeUnitRel) {
+      return {
+        kind: 'paper', key: contextKey, label: paperContextLabel ?? writeBasenameFromPath(activeUnitRel),
+        ...(readerPage && readerPage.unitDir === activeUnitRel ? { detail: `p.${readerPage.page}/${readerPage.pageCount || '–'}` } : {}),
+        sessionIds: writeThreadIdsForFile(workspaceRoot, writeJoinPath(workspaceRoot, activeUnitRel), registry)
+      }
+    }
+    if (activeFilePath) {
+      return { kind: 'file', key: contextKey, label: writeBasenameFromPath(activeFilePath),
+        sessionIds: writeThreadIdsForFile(workspaceRoot, activeFilePath, registry) }
+    }
+    return null
+    // threadCount/activeThreadId: a new session about this item joins its list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilePath, activeThreadId, activeUnitRel, activeWhiteboard, contextKey, libraryTotal, paperContextLabel,
+    paperView, readerPage, researchActive, t, threadCount, workspaceRoot])
   const presentationView = useWriteWorkspaceStore(selectFocusedPresentationView)
+  const referenceProps = useWorkComposerReferenceProps(workspaceRoot)
   const {
     childThreadId,
     childBlocks,
@@ -188,7 +268,6 @@ export function WriteAssistantPanel({
     openChildThread,
     closeChildThread
   } = useChildThreadViewer(`${activeFilePath ?? ''}\u0000${activeThreadId ?? ''}\u0000${workspaceRoot}`)
-  const conversationHistory = useWriteResourceConversationHistory(busy)
 
   useEffect(() => {
     const threadId = childThreadId?.trim() || activeThreadId?.trim() || null
@@ -208,22 +287,12 @@ export function WriteAssistantPanel({
     }
   }, [activeThreadId, childThreadId])
 
-  const canCreateConversation = runtimeConnection === 'ready' &&
-    !busy &&
-    !viewingChildThread &&
-    !conversationHistory?.running &&
-    !conversationHistory?.workflowLocked
-  const startNewConversation = (): void => {
-    if (!conversationHistory) {
-      onNewConversation()
-      return
-    }
-    void conversationHistory.canStartConversation().then((allowed) => {
-      if (allowed) onNewConversation()
-    })
-  }
+  // A running session keeps going in the background; a new one is a draft.
+  const canCreateConversation = runtimeConnection === 'ready' && !viewingChildThread
+  const startNewConversation = (): void => onNewConversation()
   const hasParentTimeline =
     blocks.length > 0 || liveReasoning.trim().length > 0 || liveAssistant.trim().length > 0
+  const home = stage && !hasParentTimeline && !viewingChildThread
   const selectionIsReadOnly = selection.sourceKind != null && selection.sourceKind !== 'text'
   const selectionIsSpreadsheet = selection.sourceKind === 'spreadsheet'
   const selectionActionLabel = selectionIsSpreadsheet
@@ -260,76 +329,63 @@ export function WriteAssistantPanel({
 
   return (
     <aside
-      className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${className}`}
+      className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${stage ? 'is-stage ' : ''}${home ? 'is-home ' : ''}${className}`}
+      data-work-assistant={stage ? 'stage' : 'panel'}
     >
-      <div className="write-assistant-header ds-sidebar-surface-chrome shrink-0 border-b border-ds-border-muted">
-        <div className="flex h-14 min-w-0 items-center gap-1.5 px-4">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <WriteAssistantSparkleIcon className="h-[19px] w-[19px] shrink-0 text-accent" />
-            <span className="min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-ds-ink">
-              {t('writeAssistant')}
-            </span>
-          </div>
-          {conversationHistory ? (
-            <WriteResourceConversationHistoryPopover
-              model={conversationHistory}
-              lockedExternally={viewingChildThread}
-              onNewConversation={startNewConversation}
-            />
+      <div className="write-assistant-header ds-sidebar-surface-chrome relative shrink-0">
+        <div className="flex h-[52px] min-w-0 items-center gap-1 border-b border-ds-border-muted pl-4 pr-2.5">
+          {stage && stageChrome ? (
+            <div className={`mr-1.5 flex shrink-0 items-center ${stageChrome.leftSidebarCollapsed ? 'ds-window-controls-collapsed-titlebar-inset' : ''}`}>
+              <SidebarTitlebarToggleButton
+                onClick={stageChrome.onToggleLeftSidebar}
+                title={stageChrome.leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+                ariaLabel={stageChrome.leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+              />
+            </div>
           ) : null}
-          <button
-            type="button"
-            onClick={onPickWorkspace}
-            className="ds-sidebar-toggle-button shrink-0"
-            aria-label={t('writeAssistantChangeWorkspace')}
-            title={t('writeAssistantChangeWorkspace')}
-          >
-            <FolderOpen className="h-4 w-4" strokeWidth={1.85} />
-          </button>
+          {/* Who answers: Kun, or the external Agent picked in the composer. */}
+          {agentHarnessId === 'kun'
+            ? <WorkKunAvatar variant={paperContext ? 'researcher' : 'writer'} size={22} />
+            : <AgentIcon harnessId={agentHarnessId} size={22} />}
+          {/* The header names the current session; the sidebar lists them all. */}
+          <span className="write-assistant-session-title ml-2 text-[14px] font-semibold tracking-[-0.01em] text-ds-ink"
+            data-placeholder={sessionTitle ? undefined : 'true'} title={sessionTitle || t('workSessionNew')}>
+            {sessionTitle || t('workSessionNew')}
+          </span>
           <button
             type="button"
             onClick={startNewConversation}
             disabled={!canCreateConversation}
-            className="ds-sidebar-toggle-button shrink-0 disabled:cursor-not-allowed disabled:opacity-45"
+            className="write-panel-icon-button disabled:cursor-not-allowed disabled:opacity-45"
             aria-label={t('writeAssistantNewConversation')}
             title={t('writeAssistantNewConversation')}
           >
-            <Plus className="h-4 w-4" strokeWidth={2.1} />
+            <Plus className="h-4 w-4" strokeWidth={2} />
           </button>
-          <button
-            type="button"
-            onClick={onCollapse}
-            className="ds-sidebar-toggle-button ml-0.5 shrink-0"
-            aria-label={t('rightPanelCollapse')}
-            title={t('rightPanelCollapse')}
-          >
-            <X className="h-4 w-4" strokeWidth={1.85} />
-          </button>
+          {stage ? null : (
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="write-panel-icon-button"
+              aria-label={t('rightPanelCollapse')}
+              title={t('rightPanelCollapse')}
+            >
+              <PanelRightClose className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          )}
         </div>
-        <div className="min-w-0 border-t border-ds-border-muted/70 px-4 py-2.5">
-          <div
-            className="flex min-w-0 items-center gap-2 text-[11.5px] font-medium text-ds-muted"
-            title={paperContextLabel ?? activeFileLabel}
-          >
-            {papersSurface && activePaperEntry ? (
-              <GraduationCap className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
-            ) : (
-              <FileText className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
-            )}
-            <span className="shrink-0">
-              {papersSurface ? t('writePaperContextPaper') : t('writePromptActiveFile')}
+        {context || (selection.charCount > 0 && !viewingChildThread) ? (
+        <div className="write-assistant-context flex min-w-0 items-center gap-1.5 border-b border-ds-border-muted px-4 py-2.5"
+          data-work-context={context?.kind}>
+          {context ? <WorkContextChip context={context} disabled={busy} /> : null}
+          {selection.charCount > 0 && !viewingChildThread ? (
+            <span className="write-context-chip is-accent shrink-0">
+              <TextSelect className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              {t('workAssistantSelectionChip', { count: selection.charCount })}
             </span>
-            <span className="text-ds-faint" aria-hidden="true">·</span>
-            <span className="min-w-0 truncate">
-              {papersSurface && paperContextLabel ? paperContextLabel : activeFileName}
-            </span>
-            {papersSurface && readerPage ? (
-              <span className="shrink-0 text-ds-faint">
-                p.{readerPage.page}/{readerPage.pageCount || '–'}
-              </span>
-            ) : null}
-          </div>
+          ) : null}
         </div>
+        ) : null}
       </div>
 
       <div className="write-assistant-body ds-sidebar-surface-body flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -392,111 +448,28 @@ export function WriteAssistantPanel({
               onOpenSettings={onOpenSettings}
               onSelectSuggestion={(text) => setInput(text)}
               onOpenChildThread={openChildThread}
-              compactCards
+              compactCards={!stage}
             />
           </div>
+        ) : stage ? (
+          <WorkHomeHero />
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 py-5">
-            <div className="write-assistant-ready flex flex-col items-center px-3 pb-8 pt-12 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[16px] border border-accent/12 bg-accent/[0.07] text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.62)]">
-                <WriteAssistantSparkleIcon className="h-6 w-6" />
-              </div>
-              <h3 className="mt-5 text-[17px] font-semibold tracking-[-0.025em] text-ds-ink">
-                {t('writeAssistantEmptyTitle')}
-              </h3>
-              <p className="mt-2 max-w-[270px] text-[12.5px] leading-5 text-ds-muted">
-                {t('writeAssistantEmptySub')}
-              </p>
-            </div>
-
-            <div className="write-assistant-actions mt-auto overflow-hidden border-y border-ds-border-muted">
-              {papersSurface ? (
-                <WritePaperAssistantActions
-                  paperTitle={paperContextLabel ?? ''}
-                  selectionIsSpreadsheet={selectionIsSpreadsheet}
-                  selectionActionLabel={selectionActionLabel}
-                  selectionActionDescription={selectionActionDescription}
-                  selectionCharCount={selection.charCount}
-                  onSetPrompt={setAssistantPrompt}
-                  onQuoteSelection={quoteSelectionForAssistant}
-                  t={t}
-                />
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setAssistantPrompt(t('writeAssistantSummarizePrompt', { file: activeFileLabel }))}
-                    className="write-assistant-action-row"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-300">
-                      <FileText className="h-4 w-4" strokeWidth={1.9} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[13.5px] font-semibold text-ds-ink">{t('writeAssistantSummarize')}</span>
-                      <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('writeAssistantSummarizeSub')}</span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAssistantPrompt(t('writeAssistantOutlinePrompt', { file: activeFileLabel }))}
-                    className="write-assistant-action-row border-t border-ds-border-muted"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-                      <ListTodo className="h-4 w-4" strokeWidth={1.9} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[13.5px] font-semibold text-ds-ink">{t('writeAssistantOutline')}</span>
-                      <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('writeAssistantOutlineSub')}</span>
-                    </span>
-                  </button>
-                  {!selectionIsSpreadsheet ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (selection.charCount > 0) {
-                          quoteSelectionForAssistant()
-                        } else {
-                          setAssistantPrompt(t('writeAssistantPolishSelectionPrompt'))
-                        }
-                      }}
-                      className="write-assistant-action-row border-t border-ds-border-muted"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-300">
-                        <MessageSquareQuote className="h-4 w-4" strokeWidth={1.9} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[13.5px] font-semibold text-ds-ink">
-                          {selectionActionLabel}
-                        </span>
-                        <span className="mt-0.5 block truncate text-[12px] text-ds-faint">
-                          {selectionActionDescription}
-                        </span>
-                      </span>
-                    </button>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </div>
+          <WriteAssistantEmptyState
+            papersSurface={paperContext}
+            paperContextLabel={paperContextLabel}
+            activeFileLabel={activeFileLabel}
+            selectionCharCount={selection.charCount}
+            selectionIsSpreadsheet={selectionIsSpreadsheet}
+            selectionActionLabel={selectionActionLabel}
+            selectionActionDescription={selectionActionDescription}
+            setAssistantPrompt={setAssistantPrompt}
+            quoteSelectionForAssistant={quoteSelectionForAssistant}
+            t={t}
+          />
         )}
       </div>
 
       <div className="write-assistant-footer ds-sidebar-surface-chrome shrink-0 border-t border-ds-border-muted px-3 pb-3 pt-3">
-        {!viewingChildThread && papersSurface && activePaperEntry && readerPage
-          && readerPage.unitDir === activeUnitRel ? (
-          <div
-            className="mb-3 flex min-w-0 items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] px-3 py-2 text-[12px] text-ds-muted"
-            data-testid="write-paper-context-chip"
-          >
-            <GraduationCap className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" strokeWidth={1.9} />
-            <span className="min-w-0 flex-1 truncate font-medium text-ds-ink">
-              {activePaperEntry.meta.title}
-            </span>
-            <span className="shrink-0 text-[11px] text-ds-faint">
-              p.{readerPage.page}/{readerPage.pageCount || '–'}
-            </span>
-          </div>
-        ) : null}
         {!viewingChildThread && presentationView ? (
           <WritePresentationViewChip view={presentationView} />
         ) : null}
@@ -555,6 +528,7 @@ export function WriteAssistantPanel({
             ))}
           </div>
         ) : null}
+        {home ? <WorkHomeSpaceChip /> : null}
         {viewingChildThread ? (
           <SubagentReturnBar
             parentTitle={t('writeAssistant')}
@@ -563,6 +537,8 @@ export function WriteAssistantPanel({
         ) : (
           <FloatingComposer
             variant="compact"
+            agentSwitcher
+            {...referenceProps}
             workspaceRootOverride={workspaceRoot}
             input={input}
             setInput={setInput}
@@ -585,6 +561,11 @@ export function WriteAssistantPanel({
             modelPickerMode="combobox"
             modelControlVariant="split"
             showProviderInModelLabel
+            // The home invites like Code's; a docked draft keeps the short prompt.
+            placeholderOverride={home ? t('workHomeComposerPlaceholder') : t('workComposerMentionPlaceholder')}
+            executionSettings={executionSettings}
+            executionSettingsApplying={executionSettingsApplying}
+            onExecutionSettingsChange={onExecutionSettingsChange}
             queuedMessages={queuedMessages}
             onRemoveQueuedMessage={removeQueuedMessage}
             onGuideQueuedMessage={guideQueuedMessage}
@@ -595,11 +576,14 @@ export function WriteAssistantPanel({
             onPickAttachments={onPickAttachments}
             onPasteClipboardImage={onPasteClipboardImage}
             onRemoveAttachment={onRemoveAttachment}
-            onSend={onSend}
+            // A draft or empty home becomes a new session before the turn; the
+            // open document or paper travels with it as context, never a dialog.
+            onSend={() => { void prepareWorkSessionForSend().then((ready) => { if (ready) onSend() }) }}
             onInterrupt={onInterrupt}
             onConfigureProviders={onConfigureProviders}
           />
         )}
+        {home ? <WorkHomeCards /> : null}
       </div>
     </aside>
   )

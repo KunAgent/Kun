@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ReviewOutputSchema, ReviewTargetSchema } from './review.js'
+import { MAX_REVIEW_REQUEST_CHARS, ReviewOutputSchema, ReviewTargetSchema } from './review.js'
 import { RuntimeErrorSeverity } from './errors.js'
 import {
   ComposerContextAttachmentSchema,
@@ -89,7 +89,8 @@ export const UserMessageSource = z.enum([
   'background_subagent',
   'graph_runtime',
   'subagent_resume',
-  'design_continuation'
+  'design_continuation',
+  'worker_update'
 ])
 export type UserMessageSource = z.infer<typeof UserMessageSource>
 
@@ -102,6 +103,13 @@ export const UserTurnItem = TurnItemBase.extend({
   messageSource: UserMessageSource.optional(),
   attachmentIds: z.array(z.string().min(1)).optional(),
   composerContexts: z.array(ComposerContextAttachmentSchema).max(MAX_COMPOSER_CONTEXT_ATTACHMENTS).optional(),
+  /** Host-resolved immutable review bodies; not accepted in StartTurnRequest. */
+  reviewRequests: z.array(z.object({
+    workspaceId: z.string().min(1).max(256),
+    requestId: z.string().regex(/^rvq_[a-z0-9]{8,32}$/),
+    title: z.string().max(240),
+    body: z.string().max(MAX_REVIEW_REQUEST_CHARS)
+  }).strict()).max(MAX_COMPOSER_CONTEXT_ATTACHMENTS).optional(),
   fileReferences: z.array(UserFileReferenceSchema).optional(),
   workspaceCheckpointId: z.string().min(1).optional(),
   /** Durable source workspace used to keep session-only Design resumes scoped. */
@@ -217,12 +225,14 @@ export type InterruptionNoteTurnItem = z.infer<typeof InterruptionNoteTurnItem>
 
 export const AssistantTextTurnItem = TurnItemBase.extend({
   kind: z.literal('assistant_text'),
+  renderMode: z.enum(['plain-text', 'safe-markdown']).optional(),
   text: z.string()
 })
 export type AssistantTextTurnItem = z.infer<typeof AssistantTextTurnItem>
 
 export const AssistantReasoningTurnItem = TurnItemBase.extend({
   kind: z.literal('assistant_reasoning'),
+  renderMode: z.enum(['plain-text', 'safe-markdown']).optional(),
   text: z.string()
 })
 export type AssistantReasoningTurnItem = z.infer<typeof AssistantReasoningTurnItem>
@@ -273,7 +283,9 @@ export const ToolCallTurnItem = TurnItemBase.extend({
       reasoningItems: z.array(z.record(z.string(), z.unknown())).min(1).max(16)
     }).strict().optional()
   }).strict().optional(),
-  summary: z.string().optional()
+  summary: z.string().optional(),
+  /** Client-only tool evidence, separate from executable arguments. */
+  meta: z.record(z.string(), z.unknown()).optional()
 })
 export type ToolCallTurnItem = z.infer<typeof ToolCallTurnItem>
 export type ToolCallProviderMetadata = NonNullable<ToolCallTurnItem['providerMetadata']>

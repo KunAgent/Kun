@@ -35,6 +35,7 @@ import {
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
+import { applyTodosSnapshot } from './execution-task-actions'
 import { invalidatePendingTurnStarts } from './turn-start-fence'
 
 /**
@@ -150,6 +151,10 @@ type StoreActionContext = {
   sseAbortRef: SseAbortRef
 }
 
+function isAdeListedThread(state: Pick<ChatState, 'adeThreads'>, threadId: string): boolean {
+  return (state.adeThreads ?? []).some((thread) => thread.id === threadId)
+}
+
 function applyGoalSnapshot(
   set: ChatStoreSet,
   threadId: string,
@@ -162,21 +167,10 @@ function applyGoalSnapshot(
       thread.id === threadId
         ? { ...thread, goal, updatedAt: goal?.updatedAt ?? updatedAt }
         : thread
-    )
-  }))
-}
-
-function applyTodosSnapshot(
-  set: ChatStoreSet,
-  threadId: string,
-  todos: ThreadTodoList | null,
-  updatedAt = new Date().toISOString()
-): void {
-  set((s) => ({
-    activeThreadTodos: s.activeThreadId === threadId ? todos : s.activeThreadTodos,
-    threads: s.threads.map((thread) =>
+    ),
+    adeThreads: (s.adeThreads ?? []).map((thread) =>
       thread.id === threadId
-        ? { ...thread, todos, updatedAt: todos?.updatedAt ?? updatedAt }
+        ? { ...thread, goal, updatedAt: goal?.updatedAt ?? updatedAt }
         : thread
     )
   }))
@@ -216,7 +210,12 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
         ? s.threads.map((thread) => thread.id === threadId
             ? { ...thread, status: 'idle' as const, latestTurnStatus: 'aborted' as const }
             : thread)
-        : s.threads
+        : s.threads,
+      adeThreads: threadId
+        ? (s.adeThreads ?? []).map((thread) => thread.id === threadId
+            ? { ...thread, status: 'idle' as const, latestTurnStatus: 'aborted' as const }
+            : thread)
+        : s.adeThreads
     }
   })
   if (threadId) {
@@ -297,9 +296,13 @@ export function createMaintenanceMetadataActions(
         threads: s.threads.map((thread) =>
           thread.id === targetId ? { ...thread, title: nextTitle, titleAuto: false } : thread
         ),
+        adeThreads: (s.adeThreads ?? []).map((thread) =>
+          thread.id === targetId ? { ...thread, title: nextTitle, titleAuto: false } : thread
+        ),
         error: null
       }))
       await get().refreshThreads()
+      if (isAdeListedThread(get(), targetId)) void get().refreshAdeThreads()
     } catch (e) {
       set({
         error: formatRuntimeError(e),
@@ -328,9 +331,13 @@ export function createMaintenanceMetadataActions(
         threads: s.threads.map((thread) =>
           thread.id === targetId ? { ...thread, pinned } : thread
         ),
+        adeThreads: (s.adeThreads ?? []).map((thread) =>
+          thread.id === targetId ? { ...thread, pinned } : thread
+        ),
         error: null
       }))
       await get().refreshThreads()
+      if (isAdeListedThread(get(), targetId)) void get().refreshAdeThreads()
     } catch (e) {
       set({
         error: formatRuntimeError(e),
@@ -379,6 +386,9 @@ export function createMaintenanceMetadataActions(
           threads: s.threads.map((thread) =>
             thread.id === targetId ? { ...thread, archived } : thread
           ),
+          adeThreads: (s.adeThreads ?? []).map((thread) =>
+            thread.id === targetId ? { ...thread, archived } : thread
+          ),
           watchTurnCompletion: w,
           unreadThreadIds: u,
           ...(archivingActive ? clearedThreadSelection() : {}),
@@ -386,6 +396,7 @@ export function createMaintenanceMetadataActions(
         }
       })
       await get().refreshThreads()
+      if (isAdeListedThread(get(), targetId)) void get().refreshAdeThreads()
     } catch (e) {
       set({
         error: formatRuntimeError(e),
@@ -579,6 +590,28 @@ export function createMaintenanceMetadataActions(
       return false
     }
     const p = getProvider()
+    if (activeThreadTodos.revision !== undefined) {
+      const task = activeThreadTodos.items.find((item) => item.id === todoId)
+      if (!task || task.taskRevision === undefined || !p.updateThreadExecutionTask) {
+        set({ error: i18n.t('common:runtimeFeatureUnsupported') })
+        return false
+      }
+      try {
+        const todos = await p.updateThreadExecutionTask(activeThreadId, todoId, {
+          expectedRevision: task.taskRevision, clientRequestId: `ui:${todoId}:${task.taskRevision}:${status}`, status
+        })
+        applyTodosSnapshot(set, activeThreadId, todos)
+        return true
+      } catch (error) {
+        // Reload current state on CAS conflict; never retry by replacing the list.
+        try {
+          const latest = await p.getThreadTodos?.(activeThreadId)
+          if (latest) applyTodosSnapshot(set, activeThreadId, latest)
+        } catch { /* Preserve the original actionable error. */ }
+        set({ error: formatRuntimeError(error) })
+        return false
+      }
+    }
     if (typeof p.setThreadTodos !== 'function') {
       set({ error: i18n.t('common:runtimeFeatureUnsupported') })
       return false

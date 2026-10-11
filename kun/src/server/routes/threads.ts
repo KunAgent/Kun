@@ -1,3 +1,4 @@
+import { threadContextSnapshot } from './thread-context-snapshot.js'
 import { z } from 'zod'
 import {
   CreateThreadRequest,
@@ -26,10 +27,12 @@ import {
 } from '../../contracts/threads.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
+import { parseListThreadsOptions } from './thread-list-query.js'
 import { threadStateLoadFailure } from './thread-state-error.js'
 import { parseThreadTimelineQuery } from './thread-timeline-read-key.js'
 import { getExactTurnTimeline } from './thread-turn-timeline.js'
-import type { ForkThreadOptions, ListThreadsOptions, ThreadService } from '../../services/thread-service.js'
+import type { ForkThreadOptions, ThreadService } from '../../services/thread-service.js'
+import { ProjectDefaultsStaleError, ThreadExecutionConfigConflictError } from '../../domain/thread-execution-config.js'
 import type { RuntimeError } from './runtime-error.js'
 import type { SessionStore } from '../../ports/session-store.js'
 import type { UserInputGate } from '../../ports/user-input-gate.js'
@@ -58,36 +61,6 @@ import {
  * pre-validated body when possible and otherwise parse it through
  * the contract Zod schema. Validation failures return HTTP 400.
  */
-const BooleanQuery = z.preprocess((value) => {
-  if (typeof value !== 'string') return value
-  const normalized = value.trim().toLowerCase()
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
-  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
-  return value
-}, z.boolean())
-
-const ListThreadsQuery = z.object({
-  limit: z.preprocess((value) => {
-    if (typeof value !== 'string' || value.trim() === '') return undefined
-    return Number(value)
-  }, z.number().int().positive().max(500).optional()),
-  search: z.string().optional(),
-  include_archived: BooleanQuery.optional(),
-  archived_only: BooleanQuery.optional(),
-  /**
-   * Comma-separated list of additional categories to include. Currently
-   * the only opt-in category is `side` (side conversations are hidden
-   * from the default listing).
-   */
-  include: z.string().optional(),
-  /** Opaque keyset cursor for the next page of results. */
-  cursor: z.string().optional(),
-  /** Filter by workspace root path. */
-  workspace: z.string().optional(),
-  /** Return the lean sidebar projection (omits heavy metadata blobs). */
-  lean: BooleanQuery.optional()
-})
-
 export async function listThreads(
   service: ThreadService,
   request: Request
@@ -100,6 +73,7 @@ export async function listThreads(
     : page.threads
   const payload: ListThreadsResponse = {
     threads,
+    ...(parsed.options.workbenchScope ? { workbenchScope: parsed.options.workbenchScope } : {}),
     ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
     ...(page.hasMore ? { hasMore: page.hasMore } : {}),
     ...(page.total != null ? { total: page.total } : {}),
@@ -114,12 +88,30 @@ export async function createThread(
 ): Promise<JsonResponse | Response> {
   const body = await readJsonBody(request)
   if (!body.ok) return body.response
-  const parsed = CreateThreadRequest.safeParse(body.value)
+  const raw = body.value && typeof body.value === 'object' && !Array.isArray(body.value)
+    ? body.value as Record<string, unknown>
+    : null
+  const nativeWithoutModel = raw?.credentialMode === 'native-login' &&
+    typeof raw.harnessId === 'string' && raw.harnessId !== 'kun' &&
+    (typeof raw.model !== 'string' || !raw.model.trim())
+  const parsed = CreateThreadRequest.safeParse(nativeWithoutModel
+    ? { ...raw, model: 'default' }
+    : body.value)
   if (!parsed.success) {
     return validationError('invalid create thread body', parsed.error.issues)
   }
-  const thread = await service.create(parsed.data)
-  return jsonResponse(ThreadSchema.parse(projectPublicThreadRecord(thread)), 201)
+  try {
+    const thread = await service.create(parsed.data)
+    return jsonResponse(ThreadSchema.parse(projectPublicThreadRecord(thread)), 201)
+  } catch (error) {
+    if (error instanceof ProjectDefaultsStaleError) {
+      return jsonResponse({ code: 'project_defaults_stale', message: error.message }, 409)
+    }
+    if (error instanceof ThreadExecutionConfigConflictError) {
+      return jsonResponse({ code: error.code, message: error.message }, 409)
+    }
+    throw error
+  }
 }
 
 export async function getThread(
@@ -198,6 +190,7 @@ export async function getThread(
     : undefined
   return jsonResponse({
     ...ThreadSchemaReadable.parse(hydratedThread),
+    ...await threadContextSnapshot(sessionStore, threadId, replayFloor),
     activeTurn: thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)
       ? omitTurnItems(projectTimelineTurn(thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)!, [])) : null,
     latestSeq: replayFloor,
@@ -426,6 +419,7 @@ export async function getThreadTimeline(
 
   return jsonResponse(ThreadTimelineResponseSchema.parse({
     ...ThreadSchemaReadable.parse(projectTimelineThread(pageThread)),
+    ...(!parsedQuery.data.before ? await threadContextSnapshot(sessionStore, threadId, replayFloor) : {}),
     latestSeq: replayFloor,
     activeTurn: activeTurn ? omitTurnItems(projectTimelineTurn(activeTurn, [])) : null,
     latestTurn: latestTurnMetadata,
@@ -462,6 +456,9 @@ export async function updateThread(
       )
     }
     if (error instanceof Error && /cannot be changed while the thread is running/i.test(error.message)) {
+      return jsonResponse({ code: 'conflict', message: error.message }, 409)
+    }
+    if (error instanceof Error && /Kun coordination|task settings are pending/i.test(error.message)) {
       return jsonResponse({ code: 'conflict', message: error.message }, 409)
     }
     if (error instanceof Error && /knowledge base|absolute roots|overlap|primary workspace|unique/i.test(error.message)) {
@@ -663,38 +660,3 @@ function validationError(message: string, issues: unknown): JsonResponse {
 
 // Re-export for tests
 export const _internal = { readJsonBody, parseListThreadsOptions }
-
-function parseListThreadsOptions(
-  request: Request
-): { ok: true; options: ListThreadsOptions } | { ok: false; response: JsonResponse } {
-  const url = new URL(request.url)
-  const parsed = ListThreadsQuery.safeParse(Object.fromEntries(url.searchParams.entries()))
-  if (!parsed.success) {
-    return {
-      ok: false,
-      response: validationError('invalid list threads query', parsed.error.issues)
-    }
-  }
-  const includeSide = (parsed.data.include ?? '').split(',').map((value) => value.trim().toLowerCase())
-    .includes('side')
-  // Repeated workspaces params are trimmed and capped; an absent/empty list
-  // omits the option entirely rather than serializing workspaces: [].
-  const workspaces = url.searchParams.getAll('workspaces').map((value) => value.trim())
-    .filter(Boolean).slice(0, 64)
-  return {
-    ok: true,
-    options: {
-      limit: parsed.data.limit,
-      search: parsed.data.search,
-      includeArchived: parsed.data.include_archived,
-      archivedOnly: parsed.data.archived_only,
-      includeSide,
-      cursor: parsed.data.cursor,
-      workspace: parsed.data.workspace,
-      ...(workspaces.length > 0 ? { workspaces } : {}),
-      lean: parsed.data.lean === true
-    }
-  }
-}
-
-void z

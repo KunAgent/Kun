@@ -3,6 +3,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { applyPosixMode } from '../security/posix-permissions.js'
 import type { MemoryRecord } from '../contracts/memory.js'
+import { applyMemoryForgetting, readMemoryForgetting } from './memory-forgetting.js'
 import { canonicalMemoryHash, normalizeMemoryRecord } from './memory-record-normalizer.js'
 
 export const MEMORY_MAX_FALLBACK_FILES = 5_000
@@ -21,6 +22,11 @@ export async function readCanonicalMemoryDirectory(
 ): Promise<CanonicalMemoryReadResult> {
   await ensureMemoryRoot(rootDir)
   const maxFiles = Math.max(0, Math.floor(options.maxFiles ?? Number.MAX_SAFE_INTEGER))
+  const forgetting = await readMemoryForgetting(rootDir)
+  // Finish interrupted irreversible erasure before any rebuild can read old content.
+  for (const barrier of forgetting.barriers) {
+    if (barrier.erased) await purgeCanonicalMemoryRecord(rootDir, barrier.memoryId)
+  }
   const entries = (await readdir(rootDir).catch(() => []))
     .filter((entry) => entry.endsWith('.json'))
     .sort((left, right) => left.localeCompare(right))
@@ -38,7 +44,11 @@ export async function readCanonicalMemoryDirectory(
     })))
   }
   return {
-    records: parsed.flatMap((result) => result.ok ? [result.record] : []),
+    records: parsed.flatMap((result) => {
+      if (!result.ok) return []
+      const record = applyMemoryForgetting(forgetting, result.record)
+      return record ? [record] : []
+    }),
     malformedIds: parsed.flatMap((result) => result.ok ? [] : [result.identifier]).slice(0, 64),
     totalFiles: entries.length,
     truncated: entries.length > selected.length

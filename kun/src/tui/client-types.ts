@@ -90,6 +90,7 @@ export type ModelConnectionTransport = {
   modelConnections(): Promise<z.infer<typeof ModelConnectionSnapshotSchema>>
   subscribeModelConnections(input: {
     sinceRevision: number
+    sinceMetadataRevision?: number
     signal: AbortSignal
     onSnapshot: (snapshot: z.infer<typeof ModelConnectionSnapshotSchema>) => void | Promise<void>
     onError?: (error: Error) => void

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RoomMessage, SendRoomMessage } from '@shared/rooms-api'
 
+export type RoomPendingAttachment = { id: string; name: string; mimeType?: string; previewUrl?: string }
+
 export type RoomPendingSend = {
+  attachments?: RoomPendingAttachment[]
   clientRequestId: string
   body: string
   message: SendRoomMessage
@@ -74,8 +77,9 @@ export function useRoomPendingSends(
     },
     []
   )
-  const enqueue = useCallback((message: SendRoomMessage): RoomPendingSend => {
+  const enqueue = useCallback((message: SendRoomMessage, attachments?: RoomPendingAttachment[]): RoomPendingSend => {
     const item: RoomPendingSend = {
+      attachments,
       clientRequestId: message.clientRequestId,
       body: message.body,
       message,
@@ -86,7 +90,7 @@ export function useRoomPendingSends(
       current.some((entry) => entry.clientRequestId === item.clientRequestId)
         ? current.map((entry) =>
             entry.clientRequestId === item.clientRequestId
-              ? { ...item, state: 'sending', error: undefined }
+              ? { ...item, attachments: attachments ?? entry.attachments, state: 'sending', error: undefined }
               : entry
           )
         : [...current, item]

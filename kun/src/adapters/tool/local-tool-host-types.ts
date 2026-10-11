@@ -1,3 +1,4 @@
+import type { ApprovalActionEnvelope } from '../../contracts/approvals.js'
 import type { ToolCallLike, ToolEffects, ToolExecutionUpdate, ToolHostContext } from '../../ports/tool-host.js'
 import type { ResolvedHook } from '../../hooks/hook-engine.js'
 import type { ToolOperationJournal } from '../../reliability/operation-journal.js'
@@ -16,6 +17,12 @@ export type LocalTool = {
   sideEffect?: ToolSideEffect
   /** Host-authored effects. Omission is intentionally treated as unknown. */
   effects?: ToolEffects
+  /** Host-authored effective classification after argument normalization and hooks. */
+  classifyCall?: (args: Record<string, unknown>) => { sideEffect: ToolSideEffect; effects: ToolEffects }
+  /** Optional bounded, complete preview for actions whose content cannot be truncated. */
+  buildApprovalAction?: (call: ToolCallLike, context: ToolHostContext) => ApprovalActionEnvelope | Promise<ApprovalActionEnvelope>
+  /** Human-facing complete summary for specialized external approvals across GUI, TUI and IM. */
+  buildApprovalSummary?: (action: ApprovalActionEnvelope) => string
   /**
    * Tool policy. `auto` runs the tool without asking. `on-request` and
    * `suggest` always ask the user. `never` blocks the tool. `untrusted`

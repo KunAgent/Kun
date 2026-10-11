@@ -1,0 +1,19 @@
+{
+  "card/back": {
+    "png": "card/back.png",
+    "webp": {
+      "128": "128/card/back.webp",
+      "256": "256/card/back.webp",
+      "512": "512/card/back.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-card-back.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0
+    }
+  }
+}

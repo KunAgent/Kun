@@ -4,7 +4,11 @@ const assert = require('node:assert/strict')
 const { EventEmitter, once } = require('node:events')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
+const { runInNewContext } = require('node:vm')
 const test = require('node:test')
+const {
+  preloadBridgeProbe
+} = require('./smoke-packaged-preload.cjs')
 const {
   NEGATIVE_SCENARIOS,
   POSITIVE_SCENARIOS,
@@ -184,6 +188,7 @@ test('profile settings preserve explicit auto-start policy and canonical data sc
   assert.equal(settings.agents.kun.autoStart, false)
   assert.equal(settings.agents.kun.dataDir, '/profile/data')
   assert.equal(settings.agents.kun.port, 18899)
+  assert.equal(settings.provider.providers[0].modelProfiles['packaged-handoff-smoke-model'].contextWindowTokens, 64_000)
 })
 
 test('acceptance and recovery markers are machine-readable', () => {
@@ -274,4 +279,73 @@ test('linux desktop smoke keeps the sandbox on unless CI explicitly opts out', (
     if (previousActive === undefined) delete process.env.KUN_CI_NO_SANDBOX_ACTIVE
     else process.env.KUN_CI_NO_SANDBOX_ACTIVE = previousActive
   }
+})
+
+function preloadFixture() {
+  const calls = []
+  const bridge = {
+    onProviderMutationFlushRequest: (handler) => {
+      assert.equal(typeof handler, 'function')
+      calls.push('subscribe')
+      return () => calls.push('unsubscribe')
+    },
+    startup: { getState: async () => ({ phase: 'ready' }) }
+  }
+  return { bridge, calls }
+}
+
+function evaluateProbe(probe, bridge, readyState = 'complete', args = []) {
+  return runInNewContext(`(${probe.toString()})(...args)`, {
+    document: { readyState }, window: { kunGui: bridge }, args
+  })
+}
+
+test('packaged preload probe subscribes/unsubscribes with the retired bridge absent', () => {
+  const { bridge, calls } = preloadFixture()
+  const result = evaluateProbe(preloadBridgeProbe, bridge)
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+    bridge: 'kunGui', providerMutationSubscription: true
+  })
+  assert.deepEqual(calls, ['subscribe', 'unsubscribe'])
+})
+
+test('packaged preload probe waits only for loading and then fails immediately on a missing bridge', () => {
+  assert.equal(evaluateProbe(preloadBridgeProbe, undefined, 'loading'), null)
+  for (const readyState of ['interactive', 'complete']) {
+    assert.throws(() => evaluateProbe(preloadBridgeProbe, undefined, readyState), /did not expose window\.kunGui/u)
+  }
+})
+
+test('packaged preload probe rejects the retired Google bridge and a missing provider subscription', () => {
+  const { bridge, calls } = preloadFixture()
+  bridge.googleWorkspace = {}
+  assert.throws(() => evaluateProbe(preloadBridgeProbe, bridge), /retired Google Workspace bridge/u)
+  assert.deepEqual(calls, [])
+  delete bridge.googleWorkspace
+  delete bridge.onProviderMutationFlushRequest
+  assert.throws(() => evaluateProbe(preloadBridgeProbe, bridge), /missing onProviderMutationFlushRequest/u)
+})
+
+test('packaged preload probe rejects a broken unsubscribe contract', () => {
+  const { bridge } = preloadFixture()
+  bridge.onProviderMutationFlushRequest = () => undefined
+  assert.throws(() => evaluateProbe(preloadBridgeProbe, bridge), /did not return an unsubscribe function/u)
+  bridge.onProviderMutationFlushRequest = () => () => { throw new Error('unsubscribe failed') }
+  assert.throws(() => evaluateProbe(preloadBridgeProbe, bridge), /unsubscribe failed/u)
+})
+
+test('positive packaged startup gates the preload before discovery', () => {
+  const source = readFileSync(join(process.cwd(), 'scripts/smoke-packaged-update-handoff.cjs'), 'utf8')
+  const positive = source.slice(
+    source.indexOf('async function runPositiveScenario'), source.indexOf('async function runNegativeScenario')
+  )
+  assert(positive.indexOf('await assertPackagedPreloadBridge(') > positive.indexOf('tracked.push(candidateDesktop)'))
+  assert(positive.indexOf('await assertPackagedPreloadBridge(') < positive.indexOf('const current = await waitForCurrentOwners('))
+})
+
+test('Windows packaged handoff cleanup retries transient profile locks', () => {
+  const source = readFileSync(join(process.cwd(), 'scripts/smoke-packaged-update-handoff.cjs'), 'utf8')
+  assert.match(source, /process\.platform === 'win32'/u)
+  assert.match(source, /maxRetries: 40, retryDelay: 250/u)
+  assert.match(source, /rm\(root\.temporaryRoot, \{ recursive: true, force: true, \.\.\.retry \}/u)
 })

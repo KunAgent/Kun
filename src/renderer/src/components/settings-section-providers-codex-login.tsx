@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   ModelProviderProfileV1
 } from '@shared/app-settings'
@@ -212,7 +213,7 @@ export function CodexLoginSection({
         <span className="text-[13px] text-ds-ink">{codexEmail ?? provider.name}</span>
         <button
           type="button"
-          className="ml-auto rounded-lg px-3 py-1.5 text-[12px] font-medium text-ds-muted hover:bg-ds-hover"
+           className={settingsButtonClass({ variant: 'danger', className: 'ml-auto' })}
           onClick={disconnect}
         >
           {t('codexDisconnect')}
@@ -231,7 +232,7 @@ export function CodexLoginSection({
         </div>
         <button
           type="button"
-          className="w-fit text-[12px] font-medium text-ds-muted hover:text-ds-ink"
+          className={settingsButtonClass({ className: 'w-fit' })}
           onClick={cancelLogin}
         >
           {t('codexCancel')}
@@ -250,7 +251,7 @@ export function CodexLoginSection({
         </div>
         <button
           type="button"
-          className="w-fit text-[12px] font-medium text-ds-muted hover:text-ds-ink"
+          className={settingsButtonClass({ className: 'w-fit' })}
           onClick={cancelLogin}
         >
           {t('codexCancel')}
@@ -268,9 +269,8 @@ export function CodexLoginSection({
           <code className="rounded-lg bg-ds-hover px-3 py-1.5 text-[16px] font-mono font-bold tracking-widest text-ds-ink">
             {userCode}
           </code>
-          <button
+          <button className={settingsButtonClass()}
             type="button"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent/10 px-3 py-1.5 text-[12px] font-medium text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={openVerifyUrl}
             disabled={!verifyUrl}
           >
@@ -284,7 +284,7 @@ export function CodexLoginSection({
         </div>
         <button
           type="button"
-          className="w-fit text-[12px] font-medium text-ds-muted hover:text-ds-ink"
+          className={settingsButtonClass({ className: 'w-fit' })}
           onClick={cancelLogin}
         >
           {t('codexCancel')}
@@ -297,7 +297,7 @@ export function CodexLoginSection({
     <div className="grid gap-2">
       <button
         type="button"
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-accent/90"
+         className={settingsButtonClass({ variant: 'primary', className: 'w-full' })}
         onClick={startBrowserLogin}
       >
         <LogIn className="h-4 w-4" strokeWidth={1.9} />
@@ -305,7 +305,7 @@ export function CodexLoginSection({
       </button>
       <button
         type="button"
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-ds-border bg-ds-card px-4 py-2 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover"
+        className={settingsButtonClass({ className: 'w-full' })}
         onClick={() => void startDeviceCodeLogin()}
       >
         <KeyRound className="h-3.5 w-3.5" strokeWidth={1.9} />

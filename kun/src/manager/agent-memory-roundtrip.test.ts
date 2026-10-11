@@ -44,3 +44,30 @@ it('preserves Agent visibility across the real Manager store, remote validation 
     expect(await remote.retrieve({ query: 'Reports source links', agent: { agentId: 'agent', conversationId: 'private' }, limit: 8 })).toEqual([])
   } finally { await shared.close() }
 })
+
+
+it('carries lifecycle revisions, forgetting checks, and erasure through the real Manager', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kun-manager-memory-lifecycle-')); roots.push(root)
+  const shared = await ManagerSharedDataStore.create(root)
+  bridge.call.mockImplementation(async (_connection, entity, operation, value) => {
+    expect(entity).toBe('memory')
+    return shared.executeMemory(operation, value)
+  })
+  const remote = new ManagerRemoteMemoryStore({} as ServiceManagerConnection,
+    MemoryCapabilityConfig.parse({ enabled: true }))
+  const access = { workspace: '/project' }
+  try {
+    const memory = await remote.createWithId('mem_revision', { content: 'Private remembered finding', scope: 'workspace', ...access })
+    expect(await remote.isForgotten(memory, memory.id)).toBe(false)
+    const edited = await remote.update(memory.id, { content: 'Corrected finding', expectedRevision: memory.revision }, access)
+    expect((await remote.history(memory.id, access)).history).toHaveLength(1)
+    await expect(remote.lifecycle(memory.id, { action: 'disable', expectedRevision: memory.revision }, access)).rejects.toThrow('changed')
+    const forgotten = await remote.lifecycle(memory.id, { action: 'forget', expectedRevision: edited.revision }, access)
+    expect(await remote.isForgotten(memory, memory.id)).toBe(true)
+    await expect(remote.create({ content: memory.content, scope: 'workspace', ...access })).rejects.toThrow('forgotten')
+    await remote.lifecycle(memory.id, { action: 'erase', expectedRevision: forgotten.memory!.revision,
+      confirmation: { memoryId: memory.id, irreversible: true } }, access)
+    await expect(remote.getById(memory.id, access)).rejects.toThrow('not found')
+    expect(await remote.list({ ...access, includeDeleted: true })).toEqual([])
+  } finally { await shared.close() }
+})

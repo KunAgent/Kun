@@ -107,9 +107,10 @@ export function runWorkbenchShortcutCommand(
     context.openKeyboardShortcuts?.()
     return
   }
-  // Paper mode lives on the Work route; the runner navigates there first.
+  // Papers live on the Work route; the runner navigates there first. The
+  // historical command id stays so saved bindings keep working.
   if (commandId === 'toggle-paper-mode' || commandId === 'paper-import') {
-    void runPaperModeShortcut(commandId === 'toggle-paper-mode' ? 'toggle' : 'import')
+    void runPaperModeShortcut(commandId === 'toggle-paper-mode' ? 'library' : 'import')
     return
   }
 

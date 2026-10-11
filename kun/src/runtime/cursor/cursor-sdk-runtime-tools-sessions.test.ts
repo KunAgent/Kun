@@ -452,7 +452,7 @@ describe('CursorSdkRuntime', () => {
     expect(String(h.sentMessages[0])).toContain('current only')
     expect(String(h.sentMessages[0])).not.toContain('portable old context')
   })
-  test('rebases request-local dynamic context', async () => {
+  test('updates request-local context inside the existing native session', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-cursor-dynamic-rebase-'))
     const coordinator = new DelegatedSessionCoordinator(new FileDelegatedSessionBindingStore(root))
     const route = {
@@ -489,9 +489,9 @@ describe('CursorSdkRuntime', () => {
     await expect(h.runtime.runTurn(
       'thread_1', 'turn_1', new AbortController().signal, 'cursor-subscription'
     )).resolves.toBe('completed')
-    expect(h.resumedAgentIds).toEqual([])
+    expect(h.resumedAgentIds).toEqual(['agent_persisted'])
     expect(String(h.sentMessages[0])).toContain(hostControl)
-    expect((await coordinator.store.load('thread_1'))?.nativeSessionId).toBeUndefined()
+    expect((await coordinator.store.load('thread_1'))?.nativeSessionId).toBe('agent_1')
   })
   test('rebases a native session when the current turn introduces active goal context', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-cursor-goal-rebase-'))
@@ -591,10 +591,10 @@ describe('CursorSdkRuntime', () => {
     )).resolves.toBe('completed')
 
     expect(h.resumedAgentIds).toEqual([])
-    expect(String(h.sentMessages[0])).toContain('<prior_conversation>')
+    expect(String(h.sentMessages[0])).toContain('<kun_handoff')
     expect(String(h.sentMessages[0])).toContain('portable context before the goal')
     expect(String(h.sentMessages[0])).toContain(
-      '[active goal] Finish the migration before answering anything else.'
+      'Finish the migration before answering anything else.'
     )
   })
 

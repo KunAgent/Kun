@@ -1,8 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { RuntimeInfoResponse, type RuntimeInfoResponse as RuntimeInfo } from '../contracts/runtime-info.js'
@@ -41,6 +39,7 @@ import {
   withRuntimeDataDirAncillaryWriter,
   withRuntimeDataDirConfigWriter
 } from '../server/runtime-data-dir-lease.js'
+import { defaultKunDataDir } from './kun-data-dir.js'
 
 export function discoveryFromManagerRegistration(
   registration: RuntimeRegistration,
@@ -109,7 +108,7 @@ export function runtimeDataDir(
   env: Record<string, string | undefined>
 ): { ok: true; dataDir: string; source: 'argument' | 'environment' | 'default' } | { ok: false; message: string } {
   const environmentDataDir = env.KUN_DATA_DIR?.trim()
-  let dataDir = environmentDataDir || join(homedir(), '.kun', 'data')
+  let dataDir = environmentDataDir || defaultKunDataDir()
   let source: 'argument' | 'environment' | 'default' = environmentDataDir ? 'environment' : 'default'
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] !== '--data-dir') return { ok: false, message: `unknown option: ${argv[index]}` }

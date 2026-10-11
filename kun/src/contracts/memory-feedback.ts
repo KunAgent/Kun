@@ -157,6 +157,7 @@ export const MemoryCorrectionFields = z.object({
 export type MemoryCorrectionFields = z.infer<typeof MemoryCorrectionFields>
 
 export const MemoryCorrectRequest = z.object({
+  expectedRevision: z.number().int().positive().optional(),
   operationId: FeedbackId,
   memoryId: FeedbackId,
   access: MemoryFeedbackAccess.default({}),

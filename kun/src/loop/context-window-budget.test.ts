@@ -29,7 +29,7 @@ describe('ContextWindowBudget', () => {
     const budget = makeBudget()
     expect(budget.capacityFor('big-model')).toBe(100_000)
     expect(budget.capacityFor('small-model')).toBe(1_000)
-    expect(budget.capacityFor('unknown-model')).toBe(256_000)
+    expect(budget.capacityFor('unknown-model')).toBe(32_000)
     // The ordinary reserve is bounded by the runtime default even when the
     // provider advertises a huge max output.
     expect(budget.outputReserveFor('big-model', 0)).toBeLessThanOrEqual(8_192)

@@ -23,7 +23,8 @@ const room = {
   conversationKind: 'group',
   pinned: false,
   archivedAt: undefined,
-  members: []
+  members: [],
+  repositories: []
 } as unknown as Room
 
 const baseProps = () => ({
@@ -90,11 +91,58 @@ describe('RoomHeader inline rename', () => {
     expect(renderer.root.findAllByType('input')).toHaveLength(0)
   })
 
+  it('shows the collaboration mode in the header and summarizes members and the linked project', async () => {
+    const onUpdate = vi.fn()
+    const groupRoom = { ...room, members: [{ id: 'a', displayName: 'Avery', enabled: true }, { id: 'b', displayName: 'Codex', enabled: true }],
+      repositories: [{ id: 'repo', displayName: 'DeepSeek-GUI' }] } as unknown as Room
+    await act(async () => { renderer = create(createElement(RoomHeader, { ...baseProps(), room: groupRoom, onUpdate })) })
+    const select = renderer.root.findByProps({ 'aria-label': i18n.t('roomsMode') })
+    expect(select.props.value).toBe('peer')
+    await act(async () => { select.props.onChange({ target: { value: 'directed' } }) })
+    expect(onUpdate).toHaveBeenCalledWith({ collaborationMode: 'directed' })
+    expect(renderer.root.findByType('p').children.join('')).toBe(`${i18n.t('conversationMemberCount', { count: 2 })} · DeepSeek-GUI`)
+  })
+
+  it('toggles the Code sidebar and keeps pair transcripts without a mode control', async () => {
+    const onSidebar = vi.fn()
+    const pair = { ...room, conversationKind: 'agent_agent' } as unknown as Room
+    await act(async () => { renderer = create(createElement(RoomHeader, { ...baseProps(), room: pair, onSidebar })) })
+    await act(async () => { renderer.root.findByProps({ 'aria-label': i18n.t('sidebarToggle') }).props.onClick() })
+    expect(onSidebar).toHaveBeenCalledOnce()
+    expect(renderer.root.findAllByProps({ 'aria-label': i18n.t('roomsMode') })).toHaveLength(0)
+  })
+
   it('starts editing from the more-actions menu', async () => {
     await act(async () => { renderer = create(createElement(RoomHeader, baseProps())) })
     const renameItem = renderer.root.findAllByType('button')
       .find((button) => Array.isArray(button.children) && button.children.includes('Rename'))!
     await act(async () => { renameItem.props.onClick() })
     expect(renderer.root.findByType('input').props.value).toBe('Project Alpha')
+  })
+})
+
+describe('RoomHeader conversation management', () => {
+  let renderer: ReactTestRenderer
+  beforeEach(async () => { await i18n.changeLanguage('en') })
+  afterEach(() => { if (renderer) act(() => renderer.unmount()) })
+
+  it('opens group info first and keeps group deletion last in the menu', async () => {
+    const onInfo = vi.fn(), onRemove = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomHeader, { ...baseProps(), onInfo, onRemove })) })
+    const actions = renderer.root.findAllByType('button').map((button) => button.props['data-conversation-action']).filter(Boolean)
+    expect(actions).toEqual(['info', 'group'])
+    const remove = renderer.root.findByProps({ 'data-conversation-action': 'group' })
+    expect(remove.props.className).toBe('is-danger')
+    await act(async () => { renderer.root.findByProps({ 'data-conversation-action': 'info' }).props.onClick() })
+    await act(async () => { remove.props.onClick() })
+    expect(onInfo).toHaveBeenCalledOnce()
+    expect(onRemove).toHaveBeenCalledOnce()
+  })
+
+  it('offers neither the board nor removal for an Agent pair transcript', async () => {
+    await act(async () => { renderer = create(createElement(RoomHeader, { ...baseProps(),
+      room: { ...room, conversationKind: 'agent_agent' } as Room, onInfo: vi.fn(), onRemove: vi.fn() })) })
+    expect(renderer.root.findAllByProps({ 'data-conversation-action': 'info' })).toHaveLength(0)
+    expect(renderer.root.findAllByProps({ 'data-conversation-action': 'group' })).toHaveLength(0)
   })
 })

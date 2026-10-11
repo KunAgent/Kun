@@ -58,7 +58,21 @@ export const TrajectoryRequestRecordSchema = TrajectoryRecordBaseSchema.extend({
   previousPromptFingerprint: z.string().min(1).optional(),
   systemBlobId: z.string().min(1).optional(),
   toolsBlobId: z.string().min(1).optional(),
-  configBlobId: z.string().min(1).optional()
+  configBlobId: z.string().min(1).optional(),
+  /**
+   * `agent`: a third-party Agent's model call, rebuilt from the output it
+   * streamed back. Kun never saw the request itself, only output and usage.
+   */
+  origin: z.enum(['kun', 'agent']).optional(),
+  harnessId: z.string().min(1).max(64).optional(),
+  harnessLabel: z.string().min(1).max(128).optional(),
+  /**
+   * How the Agent's reported usage maps onto this call: its own (`call`), a
+   * total over `usageSteps` calls ending here (`aggregate`), counted in a
+   * later total (`included`), or never reported (`unreported`).
+   */
+  usageAttribution: z.enum(['call', 'aggregate', 'included', 'unreported']).optional(),
+  usageSteps: z.number().int().positive().optional()
 })
 export type TrajectoryRequestRecord = z.infer<typeof TrajectoryRequestRecordSchema>
 
@@ -171,6 +185,7 @@ export const TrajectoryDetailSchema = z.object({
   section: TrajectoryDetailSectionSchema,
   state: TrajectoryDetailStateSchema,
   content: z.unknown().optional(),
+  renderMode: z.enum(['plain-text', 'safe-markdown']).optional(),
   truncated: z.boolean().default(false),
   warning: z.string().optional()
 })

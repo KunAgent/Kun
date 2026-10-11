@@ -22,7 +22,6 @@ export function resolveProjectWorkspacePath(
 ): string {
   const normalized = normalizeWorkspaceRoot(workspacePath)
   if (!normalized) return ''
-  if (!isKunBranchWorktreePath(normalized)) return normalized
 
   const key = workspaceRootIdentityKey(normalized)
   for (const record of Object.values(options.threadWorktrees ?? {})) {
@@ -33,6 +32,7 @@ export function resolveProjectWorkspacePath(
     }
   }
 
+  if (!isKunBranchWorktreePath(normalized)) return normalized
   const resolved = resolveKunBranchWorktreeProjectPath(
     normalized,
     options.candidateProjectPaths ?? []

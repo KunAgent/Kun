@@ -41,6 +41,14 @@ function planChecklist(threadId: string, total: number): ThreadTodoList {
 }
 
 describe('FloatingComposerTodoProgress', () => {
+  it('never presents failed or cancelled canonical tasks as successful legacy checkboxes', () => {
+    const items = [
+      { ...item('failed', 'completed'), taskStatus: 'failed' as const },
+      { ...item('cancelled', 'completed'), taskStatus: 'cancelled' as const },
+      { ...item('running', 'pending'), taskStatus: 'running' as const }
+    ]
+    expect(getTodoProgress(items)).toMatchObject({ completed: 0, current: 3, allComplete: false })
+  })
   it('reports the active ordered step and completed state', () => {
     expect(getTodoProgress(todos.items)).toEqual({
       completed: 1,

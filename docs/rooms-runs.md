@@ -83,10 +83,16 @@ node scripts/smoke-development-rooms.cjs --ui-visual --evidence dist/rooms-run-i
 npm run check:file-lines
 ```
 
-The smoke includes live activity entry, cancelled and triage history, old-message
-origin, tool expansion, themes/narrow windows, exact Code turn visibility and
-zero model calls caused by inspection. Do not rebuild or modify renderer sources
-while the Electron smoke is running.
+The smoke (`scripts/smoke-rooms-run-inspector.cjs`) includes live activity entry
+from the embedded Room details region, cancelled and triage history, old-message
+origin through the message's More actions > View Agent session, the exact tool
+call/result pair from the run items API, the run turn replayed in the Agent
+session panel, themes/narrow windows, closing the run subscription with the
+panel, and zero mutating requests or model calls caused by inspection. Task
+status notices must not offer View Agent session. "Open this run in Code" and
+the per-tool expansion controls were removed, so exact Code turn visibility is
+no longer checked. Do not rebuild or modify renderer sources while the Electron
+smoke is running.
 
 ### Recorded acceptance (2026-09-13)
 

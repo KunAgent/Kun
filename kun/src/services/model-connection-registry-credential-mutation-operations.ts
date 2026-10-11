@@ -1,3 +1,5 @@
+import { configurationAfterLegacyPatch } from './provider-legacy-patch.js'
+import { prepareProviderHeaders, providerHeadersPatch, settleProviderHeaders } from './provider-protected-headers.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -30,13 +32,22 @@ async patch(this: ModelConnectionRegistry, providerId: string, raw: unknown): Pr
     const input = ModelConnectionPatchRequestSchema.parse(raw)
     const { expectedRevision: _expectedRevision, ...changes } = input
     const fallbackHealth = await this['inspectCredentialHealth'](await this['file'].read(emptyDocument))
+    const preparedHeaders = await prepareProviderHeaders(this, input.customHeaders)
+    try {
     const document = await this['file'].update(emptyDocument, (current) => {
       assertRevision(current, input.expectedRevision, this['options'].modelCapabilities, this['credentialHealth'])
       const profile = requireProfile(current, providerId)
+      if (input.authType && input.authType !== profile.authType &&
+          (!['api-key', 'none'].includes(profile.authType) || !['api-key', 'none'].includes(input.authType))) {
+        throw new Error('Subscription authentication is managed by its provider login flow')
+      }
       if (current.credentialTransactions[providerId]) {
         throw new ModelConnectionConflictError(this['project'](current))
       }
       const kind = input.kind ?? profile.kind
+      if ((input.authType ?? profile.authType) === 'none' && kind !== 'http') {
+        throw new Error('Anonymous authentication is supported only for HTTP model providers')
+      }
       const baseUrl = input.baseUrl ?? profile.baseUrl
       if (kind === 'http' && !baseUrl) throw new Error('baseUrl is required for HTTP providers')
       const models = input.models ? uniqueModels(input.models) : profile.models
@@ -57,6 +68,8 @@ async patch(this: ModelConnectionRegistry, providerId: string, raw: unknown): Pr
       const nextProfile = StoredProfileSchema.parse({
         ...profileWithoutSelection,
         ...changes,
+        ...providerHeadersPatch(profile, preparedHeaders),
+        ...(input.authType === 'none' ? { configured: true } : {}),
         models,
         ...(modelCapabilities ? { modelCapabilities } : {}),
         ...(selectedModel ? { selectedModel } : {})
@@ -72,6 +85,7 @@ async patch(this: ModelConnectionRegistry, providerId: string, raw: unknown): Pr
         ...current,
         revision: current.revision + 1,
         profiles,
+        configuration: configurationAfterLegacyPatch(profile, current.configuration, input),
         ...(current.defaultProviderId === providerId
           ? selectedModel
             ? {
@@ -95,6 +109,7 @@ async patch(this: ModelConnectionRegistry, providerId: string, raw: unknown): Pr
     })
     await this['changed'](document)
     return this['projectWithCredentialHealth'](document)
+    } finally { await settleProviderHeaders(this, preparedHeaders) }
   },
 
 /**
@@ -470,7 +485,8 @@ async clearCredential(this: ModelConnectionRegistry,
           )
         : undefined
       return {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        configuration: current.configuration,
         proxyRoutingVersion: 1,
         revision: current.revision + 1,
         profiles,
@@ -509,70 +525,8 @@ async clearCredential(this: ModelConnectionRegistry,
   },
 
 async delete(this: ModelConnectionRegistry, providerId: string, expectedRevision: number): Promise<ModelConnectionSnapshot> {
-    const fallbackHealth = await this['inspectCredentialHealth'](await this['file'].read(emptyDocument))
-    let credentialRef: string | undefined
-    let legacyCredentialSourceToRetire: string | undefined
-    let cancelledTransactionToken: string | undefined
-    const document = await this['file'].update(emptyDocument, (current) => {
-      assertRevision(current, expectedRevision, this['options'].modelCapabilities, this['credentialHealth'])
-      const profile = requireProfile(current, providerId)
-      credentialRef = profile.credentialRef
-      legacyCredentialSourceToRetire = this['options'].retireLegacyCredentialSource
-        ? profile.legacyCredentialSourceToRetire ?? profile.credentialSourceId
-        : undefined
-      const transaction = current.credentialTransactions[providerId]
-      if (transaction?.phase === 'recovering') {
-        throw new ModelConnectionConflictError(this['project'](current))
-      }
-      cancelledTransactionToken = transaction?.operationToken
-      const credentialTransactions = { ...current.credentialTransactions }
-      delete credentialTransactions[providerId]
-      const profiles = { ...current.profiles }
-      delete profiles[providerId]
-      const fallback = configuredFallback(Object.values(profiles), fallbackHealth)
-      return {
-        schemaVersion: 1,
-        proxyRoutingVersion: 1,
-        revision: current.revision + 1,
-        profiles,
-        tombstones: {
-          ...current.tombstones,
-          [providerId]: {
-            deletedRevision: current.revision + 1,
-            credentialMutationHighWater: profile.credentialMutationHighWater,
-            ...(legacyCredentialSourceToRetire ? { legacyCredentialSourceToRetire } : {})
-          }
-        },
-        credentialTransactions,
-        credentialRefCleanup: appendCredentialRefs(
-          appendCredentialRefs(current.credentialRefCleanup, this['nowMs'](), credentialRef),
-          this['nowMs'](),
-          transaction?.nextCredentialRef,
-          transaction?.writerInstanceId,
-          transaction?.writerPid
-        ),
-        proxy: current.proxy,
-        routePools: current.routePools,
-        failover: current.failover,
-        localModelGateway: current.localModelGateway,
-        ...(current.defaultProviderId === providerId
-          ? fallback ? {
-              defaultProviderId: fallback.profile.id,
-              defaultAccountId: fallback.profile.accountId,
-              defaultModel: fallback.model
-            } : {}
-          : {
-              defaultProviderId: current.defaultProviderId,
-              defaultAccountId: current.defaultAccountId,
-              defaultModel: current.defaultModel
-            })
-      }
-    })
-    this['clearPreparedCredentialSecret'](providerId, cancelledTransactionToken)
-    this['cancelCredentialRecoveryTimer'](providerId)
-    await this['changed'](document)
-    await this['drainCredentialRefCleanup']()
-    await this['retireDeletedLegacyCredentialSource'](providerId)
-    return this['projectWithCredentialHealth'](await this['file'].read(emptyDocument))
+    const preview = await this.previewConfiguration({ expectedRevision, operations: [{ kind: 'remove-connection', connectionId: providerId }] })
+    await this.commitConfiguration({ expectedRevision, previewId: preview.previewId, idempotencyKey: `delete:${preview.previewId}` })
+    return this.snapshot()
   },
 }

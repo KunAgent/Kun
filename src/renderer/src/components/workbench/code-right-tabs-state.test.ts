@@ -15,6 +15,19 @@ import {
 } from './code-right-tabs-state'
 
 describe('code right tab state', () => {
+  it('merges old ADE review tabs into the existing changes tab', () => {
+    const state = normalizeCodeRightTabsState({
+      version: 1,
+      tabs: [BUILTIN_RIGHT_PANEL_IDS.changes, BUILTIN_RIGHT_PANEL_IDS.review],
+      activeId: BUILTIN_RIGHT_PANEL_IDS.review,
+      expanded: true
+    })
+    expect(state.tabs).toEqual([BUILTIN_RIGHT_PANEL_IDS.changes])
+    expect(state.activeId).toBe(BUILTIN_RIGHT_PANEL_IDS.changes)
+    expect(openCodeRightTab(state, BUILTIN_RIGHT_PANEL_IDS.review).tabs).toEqual(state.tabs)
+    expect(migrateLegacyRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.review).activeId)
+      .toBe(BUILTIN_RIGHT_PANEL_IDS.changes)
+  })
   it('opens singleton tools and activates an existing tab without duplication', () => {
     const withFiles = openCodeRightTab(emptyCodeRightTabsState(), BUILTIN_RIGHT_PANEL_IDS.files)
     const withSubagents = openCodeRightTab(withFiles, BUILTIN_RIGHT_PANEL_IDS.subagents)

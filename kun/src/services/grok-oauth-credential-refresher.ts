@@ -1,4 +1,5 @@
 import { GROK_CLI_VERSION } from '../adapters/model/provider-cli-identity.js'
+import { mayRefreshOAuthCredential, runInsideOAuthRefresh } from './oauth-refresh-scope.js'
 
 export const GROK_OAUTH_CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828'
 export const GROK_OAUTH_ISSUER = 'https://auth.x.ai'
@@ -76,7 +77,9 @@ export class GrokOAuthCredentialRefresher {
     const shouldRefresh = rejectedAccessToken
       ? credentials.accessToken === rejectedAccessToken
       : isStoredGrokCredentialExpired(credentials, this.nowMs())
-    if (shouldRefresh) {
+    // Read-only chains and resolutions nested inside this source's own refresh
+    // use the stored credential instead of refreshing (or waiting for) it.
+    if (shouldRefresh && mayRefreshOAuthCredential(sourceId)) {
       await this.refreshSingleFlight(sourceId, rejectedAccessToken)
       resolved = await this.store.resolveApiKey(sourceId)
       if (!resolved) {
@@ -97,7 +100,7 @@ export class GrokOAuthCredentialRefresher {
   ): Promise<void> {
     let pending = this.inflight.get(sourceId)
     if (!pending) {
-      pending = this.refreshSource(sourceId, rejectedAccessToken)
+      pending = runInsideOAuthRefresh(sourceId, () => this.refreshSource(sourceId, rejectedAccessToken))
       this.inflight.set(sourceId, pending)
       void pending.finally(() => {
         if (this.inflight.get(sourceId) === pending) this.inflight.delete(sourceId)
@@ -180,6 +183,7 @@ export async function refreshStoredGrokOAuthCredentials(
   nowMs: () => number = Date.now
 ): Promise<StoredGrokOAuthCredentials> {
   const issuer = (credentials.issuer || GROK_OAUTH_ISSUER).replace(/\/$/, '')
+  if (issuer !== GROK_OAUTH_ISSUER) throw new Error('Grok OAuth issuer is outside the adapter credential scope')
   let tokenEndpoint = `${issuer}/oauth2/token`
   try {
     tokenEndpoint = await discoverTokenEndpoint(issuer, fetchImpl)
@@ -190,6 +194,7 @@ export async function refreshStoredGrokOAuthCredentials(
 
   const response = await fetchImpl(tokenEndpoint, {
     method: 'POST',
+    redirect: 'error',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'x-grok-client-version': GROK_CLIENT_VERSION
@@ -238,6 +243,7 @@ export async function refreshStoredGrokOAuthCredentials(
 async function discoverTokenEndpoint(issuer: string, fetchImpl: typeof fetch): Promise<string> {
   const response = await fetchImpl(`${issuer}/.well-known/openid-configuration`, {
     method: 'GET',
+    redirect: 'error',
     headers: { Accept: 'application/json' },
     signal: AbortSignal.timeout(GROK_REFRESH_TIMEOUT_MS)
   })
@@ -246,7 +252,11 @@ async function discoverTokenEndpoint(issuer: string, fetchImpl: typeof fetch): P
   if (typeof value.token_endpoint !== 'string' || !value.token_endpoint) {
     throw new Error('OIDC discovery did not return a token endpoint')
   }
-  return value.token_endpoint
+  const endpoint = new URL(value.token_endpoint)
+  if (endpoint.origin !== new URL(GROK_OAUTH_ISSUER).origin || endpoint.username || endpoint.password || endpoint.hash) {
+    throw new Error('Grok token endpoint is outside the adapter credential scope')
+  }
+  return endpoint.toString()
 }
 
 function expiresAtFromTokens(

@@ -7,6 +7,7 @@ import {
   LOCAL_SANOTTS_MODEL_REPO,
   LOCAL_SANOTTS_RUNTIME_FILES,
   LOCAL_SANOTTS_RUNTIME_ID,
+  LOCAL_SANOTTS_RUNTIME_REVISION,
   LOCAL_SANOTTS_RUNTIME_LABEL,
   LOCAL_SANOTTS_RUNTIME_SIZE_BYTES,
   localSanottsDownloadSourcesForRetry,
@@ -39,7 +40,8 @@ import {
   localSanottsUserAgent,
   localSanottsVoiceDir,
   localSanottsVoiceFilePath,
-  readAssetSize,
+  readVerifiedAssetSize,
+  sanottsFetch,
   removeLegacyKokoroSpeechCache,
   sanottsTimeoutMessage
 } from './local-sanotts-assets'
@@ -47,6 +49,7 @@ import {
 let progressEmitter: ((progress: LocalSanottsAssetProgress) => void) | null = null
 const progressByKey = new Map<string, LocalSanottsAssetProgress>()
 const transfers = new SanottsDownloadTasks()
+const errorsByKey = new Map<string, string>()
 let legacyCleanup: Promise<void> | null = null
 
 function ensureLegacyCleanup(): void {
@@ -71,9 +74,7 @@ export function shutdownLocalSanottsDownloads(): void {
 export async function getLocalSanottsRuntimeStatus(): Promise<LocalSanottsRuntimeStatus> {
   ensureLegacyCleanup()
   const path = localSanottsRuntimeDir()
-  const size = await totalPresentBytes(
-    LOCAL_SANOTTS_RUNTIME_FILES.map((file) => localSanottsRuntimeFilePath(file.fileName))
-  )
+  const size = await totalVerifiedBytes(LOCAL_SANOTTS_RUNTIME_FILES, localSanottsRuntimeFilePath)
   if (size !== null) {
     return runtimeStatus('ready', { path, downloadedBytes: size, totalBytes: size })
   }
@@ -85,7 +86,8 @@ export async function getLocalSanottsRuntimeStatus(): Promise<LocalSanottsRuntim
       speedBytesPerSecond: lastProgress?.speedBytesPerSecond
     })
   }
-  return runtimeStatus('not_downloaded')
+  const message = errorsByKey.get(localSanottsRuntimeDir())
+  return message ? runtimeStatus('error', { message }) : runtimeStatus('not_downloaded')
 }
 
 export async function getLocalSanottsVoiceStatus(
@@ -94,16 +96,20 @@ export async function getLocalSanottsVoiceStatus(
   ensureLegacyCleanup()
   const voice = localSanottsVoiceById(voiceId)
   const path = localSanottsVoiceDir(voice.id)
-  const size = await totalPresentBytes(
-    voice.files.map((file) => localSanottsVoiceFilePath(voice.id, file.fileName))
-  )
+  const size = await totalVerifiedBytes(voice.files, (fileName) => localSanottsVoiceFilePath(voice.id, fileName))
   if (size !== null) {
     return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'ready', path, downloadedBytes: size }
   }
   if (transfers.has(voice.id)) {
-    return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'downloading' }
+    return {
+      voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'downloading',
+      downloadedBytes: progressByKey.get(voice.id)?.downloadedBytes,
+      totalBytes: progressByKey.get(voice.id)?.totalBytes,
+      speedBytesPerSecond: progressByKey.get(voice.id)?.speedBytesPerSecond
+    }
   }
-  return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'not_downloaded' }
+  const message = errorsByKey.get(localSanottsVoiceDir(voice.id))
+  return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: message ? 'error' : 'not_downloaded', ...(message ? { message } : {}) }
 }
 
 export async function listDownloadedLocalSanottsVoices(): Promise<LocalSanottsVoiceId[]> {
@@ -119,24 +125,33 @@ export async function downloadLocalSanottsRuntime(
 ): Promise<LocalSanottsRuntimeDownloadResult> {
   try {
     return await transfers.run(LOCAL_SANOTTS_RUNTIME_ID, ownerId, async (controller) => {
+      errorsByKey.delete(localSanottsRuntimeDir())
       const current = await getLocalSanottsRuntimeStatus()
       if (current.state === 'ready') return { ok: true, status: current }
       controller.signal.throwIfAborted()
       return runRuntimeDownload(sourceId, controller)
     })
   } catch (error) {
-    return { ok: false, message: String(error), status: runtimeStatus('not_downloaded') }
+    if (error instanceof Error && error.name === 'AbortError') {
+      errorsByKey.delete(localSanottsRuntimeDir())
+      return { ok: true, status: runtimeStatus('not_downloaded') }
+    }
+    const message = String(error)
+    errorsByKey.set(localSanottsRuntimeDir(), message)
+    return { ok: false, message, status: runtimeStatus('error', { message }) }
   }
 }
 
 export async function cancelLocalSanottsRuntime(): Promise<LocalSanottsRuntimeDownloadResult> {
   await transfers.cancel(LOCAL_SANOTTS_RUNTIME_ID)
+  errorsByKey.delete(localSanottsRuntimeDir())
   return { ok: true, status: await getLocalSanottsRuntimeStatus() }
 }
 
 export async function deleteLocalSanottsRuntime(): Promise<LocalSanottsRuntimeDeleteResult> {
   try {
     await transfers.cancel(LOCAL_SANOTTS_RUNTIME_ID)
+    errorsByKey.delete(localSanottsRuntimeDir())
     await rm(localSanottsRuntimeDir(), { recursive: true, force: true })
     const status = await getLocalSanottsRuntimeStatus()
     emitProgress({
@@ -162,6 +177,7 @@ export async function downloadLocalSanottsVoice(
 ): Promise<LocalSanottsVoiceStatus> {
   const voice = localSanottsVoiceById(voiceId)
   return transfers.run<LocalSanottsVoiceStatus>(voice.id, ownerId, async (controller) => {
+    errorsByKey.delete(localSanottsVoiceDir(voice.id))
     const current = await getLocalSanottsVoiceStatus(voice.id)
     if (current.state === 'ready') return current
     controller.signal.throwIfAborted()
@@ -185,6 +201,7 @@ export async function downloadLocalSanottsVoice(
       return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'not_downloaded' }
     }
     if (!outcome.ok) {
+      errorsByKey.set(localSanottsVoiceDir(voice.id), outcome.message)
       return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'error', message: outcome.message }
     }
     const status = await getLocalSanottsVoiceStatus(voice.id)
@@ -195,12 +212,15 @@ export async function downloadLocalSanottsVoice(
       totalBytes: voice.sizeBytes
     })
     return status
-  }).catch((error) => ({
-    voiceId: voice.id,
-    sizeBytes: voice.sizeBytes,
-    state: 'error' as const,
-    message: String(error)
-  }))
+  }).catch((error) => {
+    if (error instanceof Error && error.name === 'AbortError') {
+      errorsByKey.delete(localSanottsVoiceDir(voice.id))
+      return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'not_downloaded' as const }
+    }
+    const message = String(error)
+    errorsByKey.set(localSanottsVoiceDir(voice.id), message)
+    return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'error' as const, message }
+  }).finally(() => progressByKey.delete(voice.id))
 }
 
 export async function getLocalSanottsReadiness(
@@ -249,6 +269,7 @@ async function runRuntimeDownload(
           content: {
             runtimeId: LOCAL_SANOTTS_RUNTIME_ID,
             source: LOCAL_SANOTTS_MODEL_REPO,
+            revision: LOCAL_SANOTTS_RUNTIME_REVISION,
             license: LOCAL_SANOTTS_LICENSE,
             downloadSource: source.id,
             downloadSourceLabel: source.label,
@@ -256,12 +277,14 @@ async function runRuntimeDownload(
             downloadedAt: new Date().toISOString()
           }
         }
-      )
+      ),
+      'runtime'
     )
     if (outcome.canceled) {
       return { ok: true, status: runtimeStatus('not_downloaded') }
     }
     if (!outcome.ok) {
+      errorsByKey.set(localSanottsRuntimeDir(), outcome.message)
       return { ok: false, message: outcome.message, status: runtimeStatus('error', { message: outcome.message }) }
     }
     const status = await getLocalSanottsRuntimeStatus()
@@ -285,10 +308,11 @@ type SourceFallbackOutcome =
 async function downloadWithSourceFallback(
   preferredSourceId: unknown,
   parent: AbortController,
-  downloadFrom: (source: LocalSanottsDownloadSource, attempt: AbortController) => Promise<void>
+  downloadFrom: (source: LocalSanottsDownloadSource, attempt: AbortController) => Promise<void>,
+  asset: 'runtime' | 'voice' = 'voice'
 ): Promise<SourceFallbackOutcome> {
   const errors: string[] = []
-  for (const source of localSanottsDownloadSourcesForRetry(preferredSourceId)) {
+  for (const source of localSanottsDownloadSourcesForRetry(preferredSourceId, asset)) {
     if (parent.signal.aborted) return { ok: false, canceled: true }
     const attempt = new AbortController()
     const unlink = linkAbortSignal(parent.signal, attempt)
@@ -345,12 +369,14 @@ async function downloadFileGroup(
 async function checkDownloadSource(
   source: LocalSanottsDownloadSource
 ): Promise<LocalSanottsDownloadSourceStatus> {
-  const url = localSanottsRuntimeFileUrl('snt_g2p.wasm', source.id)
+  const url = source.id === 'github-pages'
+    ? localSanottsRuntimeFileUrl('snt_g2p.wasm', source.id)
+    : localSanottsVoiceFileUrl(LOCAL_SANOTTS_DEFAULT_VOICE_ID, 'meta.json', source.id)
   const controller = new AbortController()
   const startedAt = Date.now()
   const timer = setTimeout(() => controller.abort(), SANOTTS_SOURCE_CHECK_TIMEOUT_MS)
   try {
-    const response = await fetch(url, {
+    const response = await sanottsFetch(url, {
       headers: { Range: 'bytes=0-0', 'User-Agent': localSanottsUserAgent() },
       signal: controller.signal
     })
@@ -379,10 +405,13 @@ async function checkDownloadSource(
   }
 }
 
-async function totalPresentBytes(paths: string[]): Promise<number | null> {
+async function totalVerifiedBytes(
+  files: readonly { fileName: string; sizeBytes: number; sha256: string }[],
+  pathFor: (fileName: string) => string
+): Promise<number | null> {
   let total = 0
-  for (const path of paths) {
-    const size = await readAssetSize(path)
+  for (const file of files) {
+    const size = await readVerifiedAssetSize(pathFor(file.fileName), file)
     if (size === null) return null
     total += size
   }

@@ -1,0 +1,102 @@
+name: Personal Agent IM native smoke
+on:
+  workflow_dispatch:
+    inputs:
+      real_os_storage:
+        description: 'Run the real macOS credential probe (may require interactive Keychain access)'
+        type: boolean
+        required: false
+        default: false
+  pull_request:
+    paths:
+      - 'src/main/personal-agent-im*'
+      - 'src/renderer/src/components/rooms/RoomImConnectionCard*'
+      - 'kun/src/rooms/room-im-connections*'
+      - 'kun/src/server/routes/*room-im-connection*'
+      - 'scripts/smoke-personal-agent-im.cjs'
+      - 'scripts/smoke-development-direct-chat.cjs'
+      - 'scripts/smoke-direct-model.cjs'
+      - 'scripts/smoke-direct-model.test.cjs'
+      - 'scripts/release-workflow-guardrails.test.cjs'
+      - 'src/main/personal-agent-weixin*'
+      - 'src/main/ipc/app-ipc-schemas.personal-im.test.ts'
+      - 'docs/personal-agent-im.md'
+      - '.github/workflows/personal-agent-im-smoke.yml'
+permissions:
+  contents: read
+concurrency:
+  group: personal-agent-im-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-card:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - run: node --test scripts/smoke-direct-model.test.cjs scripts/release-workflow-guardrails.test.cjs
+      - name: Verify IM encryption, authority and consent contracts
+        run: >-
+          npx vitest run src/main/personal-agent-im-secrets.test.ts
+          src/main/personal-agent-im-store.test.ts src/main/personal-agent-im-service.test.ts
+          src/main/personal-agent-weixin-boundary.test.ts src/main/personal-agent-weixin-context.test.ts
+          src/main/ipc/app-ipc-schemas.personal-im.test.ts
+          src/renderer/src/components/rooms/RoomImConnectionCard.test.ts
+      - run: npm run build
+      - run: npm run ensure:electron
+      - name: Verify native proposals and explicit consent boundary
+        timeout-minutes: 8
+        run: node scripts/smoke-development-direct-chat.cjs --personal-im-only --evidence dist/personal-agent-im-smoke
+      - name: Record deferred interactive macOS verification
+        if: always() && !(github.event_name == 'workflow_dispatch' && inputs.real_os_storage)
+        run: |
+          echo 'Real macOS safeStorage encryption and legacy-byte compatibility: NOT RUN; deferred to local interactive validation.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Automated unit and native-card results do not prove OS credential compatibility. See docs/personal-agent-im.md for the local probe.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: personal-agent-im-native-evidence
+          path: dist/personal-agent-im-smoke
+          if-no-files-found: warn
+  os-storage:
+    if: github.event_name == 'workflow_dispatch' && inputs.real_os_storage
+    needs: native-card
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run ensure:electron
+      - name: Inspect runner keychain configuration read-only
+        timeout-minutes: 1
+        run: |
+          security list-keychains -d user
+          security default-keychain -d user
+          security show-keychain-info || true
+      - name: Probe real OS safeStorage in a separate bounded launch
+        # Diagnostic commands inspect only this disposable runner. Never unlock,
+        # create, replace or change the access policy of any keychain.
+        # A blocked probe remains a failed verification, not a mocked success.
+        timeout-minutes: 4
+        run: node scripts/smoke-development-direct-chat.cjs --personal-im-storage-only --evidence dist/personal-agent-im-storage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: personal-agent-im-storage-evidence
+          path: dist/personal-agent-im-storage
+          if-no-files-found: warn

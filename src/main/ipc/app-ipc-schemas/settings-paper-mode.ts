@@ -17,6 +17,7 @@ export const writePaperModePatchSchema = z.object({
   enabled: z.boolean().optional(),
   libraries: z.array(trimmedString(MAX_PATH_LENGTH)).max(PAPER_MODE_MAX_LIBRARIES).optional(),
   activeLibrary: optionalTrimmedString(MAX_PATH_LENGTH),
+  workspaceInitialized: z.boolean().optional(),
   autoMarkReading: z.boolean().optional(),
   translate: z.object({
     targetLanguage: z.enum(['zh', 'en']).optional(),

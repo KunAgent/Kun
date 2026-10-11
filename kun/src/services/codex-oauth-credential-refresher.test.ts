@@ -108,6 +108,31 @@ describe('CodexOAuthCredentialRefresher', () => {
     })
   })
 
+  it('does not wait on its own refresh when the transport lookup resolves the same source', async () => {
+    const store = memoryStore(encodedCredentials())
+    const { fetchImpl, tokenPosts } = tokenFetch()
+    let nested: Awaited<ReturnType<CodexOAuthCredentialRefresher['resolve']>> | undefined
+    // The runtime picks the refresh transport by materializing the registry,
+    // which reads the model catalog with this same (still expired) credential.
+    const refresher: CodexOAuthCredentialRefresher = new CodexOAuthCredentialRefresher(store, {
+      fetchForSource: async (id) => {
+        nested = await refresher.resolve(id)
+        return fetchImpl
+      },
+      nowMs: () => NOW
+    })
+
+    const outcome = await Promise.race([
+      refresher.resolve(SOURCE_ID).then(() => 'resolved'),
+      new Promise<string>((resolve) => setTimeout(() => resolve('deadlocked'), 500))
+    ])
+
+    expect(outcome).toBe('resolved')
+    expect(nested).toEqual({ rawApiKey: encodedCredentials(), refreshable: true })
+    expect(tokenPosts).toHaveBeenCalledTimes(1)
+    expect(parseStoredCodexOAuthCredentials(store.current)?.accessToken).toBe('new-access')
+  })
+
   it('reuses an unexpired credential outside the early-invalidation window', async () => {
     const store = memoryStore(encodedCredentials({ expiresAt: NOW + 10 * 60_000 }))
     const fetchImpl = vi.fn() as unknown as typeof fetch

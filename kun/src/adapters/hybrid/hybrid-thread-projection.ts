@@ -59,13 +59,14 @@ export function hydrateThreadItems(
     if (!knownTurnIds.has(turnId)) turns.push(turnFromItems(thread.id, turnId, turnItems, thread.updatedAt))
   }
   turns.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  // Hydration may recover missing historical turns, but creation order must
-  // not undo the durable user-selected order of queued turns.
-  const queued = thread.turns.filter((turn) => turn.status === 'queued')
+  // New recovered turns keep their chronological slots. Known turns retain
+  // the authoritative admission order: recovery can execute before a queued
+  // input that was created earlier, and queue reordering is also durable.
+  const ordered = thread.turns
   const hydratedById = new Map(turns.map((turn) => [turn.id, turn]))
-  let queueIndex = 0
-  return { ...thread, turns: turns.map((turn) => turn.status === 'queued' && knownTurnIds.has(turn.id)
-    ? hydratedById.get(queued[queueIndex++]!.id)!
+  let knownIndex = 0
+  return { ...thread, turns: turns.map((turn) => knownTurnIds.has(turn.id)
+    ? hydratedById.get(ordered[knownIndex++]!.id)!
     : turn) }
 }
 

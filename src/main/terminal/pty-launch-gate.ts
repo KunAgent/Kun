@@ -16,14 +16,13 @@ type PtyLaunch = {
 }
 
 /** ConPTY runs a native launcher that owns the target shell's Windows Job. */
-async function spawnWindowsPty(module: PtyModule, file: string, args: string[], options: PtyOptions, cancelled: () => boolean): Promise<PtyLaunch> {
+async function spawnWindowsPty(module: PtyModule, file: string, args: string[], options: PtyOptions,
+  cancelled: () => boolean, validateLaunch?: () => Promise<void>): Promise<PtyLaunch> {
   const prepared = await prepareWindowsOwnedPty(file, args, { env: options?.env, cwd: options?.cwd })
-  if (cancelled()) {
-    await prepared.abort()
-    throw new Error('Terminal service is stopping.')
-  }
   let pty: IPty
   try {
+    if (validateLaunch) await validateLaunch()
+    if (cancelled()) throw new Error('Terminal service is stopping.')
     pty = module.spawn(prepared.command, prepared.args, { ...options, env: prepared.env })
   } catch (error) {
     await prepared.abort()
@@ -61,10 +60,13 @@ export async function spawnPtyBehindGate(
   file: string,
   args: string[],
   options: PtyOptions,
-  cancelled: () => boolean = () => false
+  cancelled: () => boolean = () => false,
+  validateLaunch?: () => Promise<void>
 ): Promise<PtyLaunch> {
   if (cancelled()) throw new Error('Terminal service is stopping.')
-  if (process.platform === 'win32') return spawnWindowsPty(module, file, args, options, cancelled)
+  if (process.platform === 'win32') return spawnWindowsPty(module, file, args, options, cancelled, validateLaunch)
+  if (validateLaunch) await validateLaunch()
+  if (cancelled()) throw new Error('Terminal service is stopping.')
   const marker = `kun-pty-ready-${randomUUID()}`
   const token = randomUUID()
   const pty = module.spawn('/bin/sh', ['-c',

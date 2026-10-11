@@ -50,30 +50,62 @@ export function withModelTiming(
   return wrapped
 }
 
+type TimingState = { startedAt: number; firstChunkAt: number | null }
+
+/** Attach the request's timing to its usage chunk once content has started. */
+function timeChunk(chunk: ModelStreamChunk, state: TimingState, now: () => number): ModelStreamChunk {
+  if (state.firstChunkAt === null && isContentChunk(chunk)) {
+    state.firstChunkAt = now()
+  }
+  if (chunk.kind === 'usage' && state.firstChunkAt !== null) {
+    const usageAt = now()
+    const ttftMs = Math.max(0, Math.round(state.firstChunkAt - state.startedAt))
+    const generationMs = Math.max(0, Math.round(usageAt - state.firstChunkAt))
+    return {
+      ...chunk,
+      usage: {
+        ...chunk.usage,
+        requestTtftMs: ttftMs,
+        requestGenerationMs: generationMs
+      }
+    }
+  }
+  return chunk
+}
+
 async function* timedStream(
   stream: AsyncIterable<ModelStreamChunk>,
   now: () => number
 ): AsyncIterable<ModelStreamChunk> {
-  const startedAt = now()
-  let firstChunkAt: number | null = null
+  const state: TimingState = { startedAt: now(), firstChunkAt: null }
   for await (const chunk of stream) {
-    if (firstChunkAt === null && isContentChunk(chunk)) {
-      firstChunkAt = now()
-    }
-    if (chunk.kind === 'usage' && firstChunkAt !== null) {
-      const usageAt = now()
-      const ttftMs = Math.max(0, Math.round(firstChunkAt - startedAt))
-      const generationMs = Math.max(0, Math.round(usageAt - firstChunkAt))
-      yield {
-        ...chunk,
-        usage: {
-          ...chunk.usage,
-          requestTtftMs: ttftMs,
-          requestGenerationMs: generationMs
-        }
+    yield timeChunk(chunk, state, now)
+  }
+}
+
+/**
+ * Time one model stream that is consumed elsewhere (the local gateway streams a
+ * harness's request straight from the pooled client). Unlike `timedStream` this
+ * is a plain iterator wrapper: an async generator would queue `return()` behind
+ * a pending `next()`, so cancelling a stream that is waiting on the provider
+ * would never reach it.
+ */
+export function timeModelStream(
+  stream: AsyncIterable<ModelStreamChunk>,
+  now: () => number = () => performance.now()
+): AsyncIterable<ModelStreamChunk> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<ModelStreamChunk> {
+      const source = stream[Symbol.asyncIterator]()
+      const state: TimingState = { startedAt: now(), firstChunkAt: null }
+      return {
+        async next(): Promise<IteratorResult<ModelStreamChunk>> {
+          const result = await source.next()
+          return result.done ? result : { done: false, value: timeChunk(result.value, state, now) }
+        },
+        ...(source.return ? { return: (value?: unknown) => source.return!(value) } : {}),
+        ...(source.throw ? { throw: (error?: unknown) => source.throw!(error) } : {})
       }
-      continue
     }
-    yield chunk
   }
 }

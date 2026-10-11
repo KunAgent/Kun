@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomContentReference, RoomMessage, RoomTask, SendRoomMessage } from '@shared/rooms-api'
+import type { RoomPendingAttachment } from './useRoomPendingSends'
 import { RoomComposer } from './RoomComposer'
 import { RoomMessageRow } from './RoomMessageRow'
 import { useRoomReplyThread } from './useRoomReplyThread'
@@ -9,9 +10,9 @@ import './rooms-replies.css'
 
 export function RoomReplyThread({ room, messageId, tasks, active = true, autoFocus = true, onSend, onReply, onPin, onTask, onRun, onMember, onOpenContent }: {
   room: Room; messageId: string; tasks: RoomTask[]; active?: boolean; autoFocus?: boolean
-  onSend: (message: SendRoomMessage) => Promise<void>
+  onSend: (message: SendRoomMessage, attachments?: RoomPendingAttachment[]) => Promise<void>
   onReply?: (message: RoomMessage) => void
-  onPin: (message: RoomMessage) => void; onTask: (id: string) => void; onRun: (id: string) => void
+  onPin: (message: RoomMessage) => void | Promise<boolean>; onTask: (id: string) => void; onRun: (id: string) => void
   onMember: (id: string, rootRequestId?: string) => void
   onOpenContent: (reference: RoomContentReference, messageId?: string) => void
 }) {
@@ -79,8 +80,9 @@ export function RoomReplyThread({ room, messageId, tasks, active = true, autoFoc
     </div>
     {!onReply && root && target && room.conversationKind !== 'agent_agent' ? <RoomComposer room={room} tasks={tasks} draftId={`reply:${room.id}:${root.id}`} autoFocus={autoFocus}
       replyTarget={{ messageId: target.id, body: target.body, rootRequestId: target.rootRequestId }}
-      onSend={async (input) => {
-        await onSend({ ...input, replyToMessageId: input.replyToMessageId ?? target.id })
+      onClearReply={() => setReplyTarget(null)}
+      onSend={async (input, attachments) => {
+        await onSend({ ...input, replyToMessageId: input.replyToMessageId ?? target.id }, attachments)
         await state.refresh()
         setReplyTarget(null)
       }} /> : null}

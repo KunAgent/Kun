@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   activeModelConnectionProviderId,
   extensionAgentRunOptionsForOptions
 } from './runtime-factory.js'
+import { modelConnectionSeedsForOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { resolveModelContextProfile } from '../loop/model-context-profile.js'
 
 describe('activeModelConnectionProviderId', () => {
   const providers = {
@@ -88,11 +90,47 @@ describe('activeModelConnectionProviderId', () => {
     })
   })
 
-  it('projects an explicitly selected anonymous provider without a credential source', () => {
+  it('projects an explicitly selected provider catalog without a credential source', () => {
     expect(extensionAgentRunOptionsForOptions({
       host: '127.0.0.1',
       port: 0,
-      dataDir: '/tmp/kun-anonymous-model-options',
+      dataDir: '/tmp/kun-custom-model-options',
+      runtimeToken: 'runtime-token',
+      apiKey: '',
+      activeProviderId: 'custom-http',
+      baseUrl: 'https://api.example.test/v1',
+      model: 'custom-model',
+      approvalPolicy: 'on-request',
+      sandboxMode: 'workspace-write',
+      tokenEconomyMode: false,
+      insecure: false,
+      providers: {
+        'custom-http': {
+          apiKey: '',
+          baseUrl: 'https://api.example.test/v1',
+          models: ['custom-model', 'other-model'],
+          selectedModel: 'custom-model'
+        },
+        deepseek: {
+          apiKey: 'must-not-leak',
+          baseUrl: 'https://api.deepseek.com',
+          models: ['deepseek-chat']
+        }
+      }
+    })).toMatchObject({
+      defaultModel: 'custom-model',
+      models: [
+        { id: 'custom-model', selected: true },
+        { id: 'other-model', selected: false }
+      ]
+    })
+  })
+
+  it('does not seed leftover OpenCode Free connections', () => {
+    expect(modelConnectionSeedsForOptions({
+      host: '127.0.0.1',
+      port: 0,
+      dataDir: '/tmp/kun-model-seeds',
       runtimeToken: 'runtime-token',
       apiKey: '',
       activeProviderId: 'opencode-free',
@@ -105,22 +143,52 @@ describe('activeModelConnectionProviderId', () => {
       providers: {
         'opencode-free': {
           apiKey: '',
+          presetSource: 'opencode-free',
           baseUrl: 'https://opencode.ai/zen/v1',
-          models: ['big-pickle', 'minimax-m2.5-free'],
+          models: ['big-pickle', 'gpt-5-nano'],
           selectedModel: 'big-pickle'
         },
         deepseek: {
-          apiKey: 'must-not-leak',
+          apiKey: 'secret',
           baseUrl: 'https://api.deepseek.com',
-          models: ['deepseek-chat']
+          models: ['deepseek-chat'],
+          selectedModel: 'deepseek-chat'
         }
       }
-    })).toMatchObject({
-      defaultModel: 'big-pickle',
-      models: [
-        { id: 'big-pickle', selected: true },
-        { id: 'minimax-m2.5-free', selected: false }
-      ]
-    })
+    }).map((seed) => seed.id)).toEqual(['deepseek'])
+  })
+})
+
+describe('modelContextProfilesByProvider', () => {
+  it('does not throw for a provider model profile without capacity info', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const profilesByProvider = modelContextProfilesByProvider({
+        'custom-provider': {
+          apiKey: '',
+          baseUrl: 'https://api.example.com/v1',
+          models: ['sparse-model'],
+          modelProfiles: {
+            'sparse-model': {
+              pricing: { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.2 },
+              inputModalities: ['text'],
+              outputModalities: ['text'],
+              supportsToolCalling: true,
+              messageParts: ['text']
+            }
+          }
+        }
+      })
+
+      expect(resolveModelContextProfile('sparse-model', profilesByProvider.get('custom-provider')))
+        .toMatchObject({
+          contextWindowTokens: 32_000,
+          softThreshold: 24_000,
+          hardThreshold: 27_200,
+          pricing: { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.2 }
+        })
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

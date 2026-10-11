@@ -67,7 +67,7 @@ export function memoryFreshnessClass(value: number): MemoryFreshnessClass {
 }
 
 export function memoryInScope(
-  record: MemoryRecord,
+  record: Pick<MemoryRecord, 'scope' | 'workspace' | 'project' | 'projectIdentity' | 'agentContext'>,
   access: AgentMemoryScope,
   allowedScopes: readonly MemoryScope[] = ['user', 'workspace', 'project']
 ): boolean {
@@ -75,10 +75,14 @@ export function memoryInScope(
   if (!allowedScopes.includes(record.scope)) return false
   if (record.scope === 'user') return true
   const workspace = normalizeMemoryScopePath(access.workspace)
-  if (!workspace) return false
   if (record.scope === 'workspace') {
-    return normalizeMemoryScopePath(record.workspace) === workspace
+    return Boolean(workspace && normalizeMemoryScopePath(record.workspace) === workspace)
   }
+  if (record.projectIdentity) {
+    return Boolean(access.projectIdentity &&
+      normalizeMemoryScopePath(record.projectIdentity) === normalizeMemoryScopePath(access.projectIdentity))
+  }
+  // Legacy project records remain exact-path scoped; resolving a worktree must not migrate them.
   const project = normalizeMemoryScopePath(access.project ?? access.workspace)
   const recordProject = normalizeMemoryScopePath(record.project ?? record.workspace)
   return Boolean(project && recordProject && project === recordProject)

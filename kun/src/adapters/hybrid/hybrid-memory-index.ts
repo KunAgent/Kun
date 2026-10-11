@@ -269,7 +269,13 @@ function addScopeWhere(
   }
   const project = normalizeMemoryScopePath(access.project ?? access.workspace)
   if (project && allowedScopes.includes('project')) {
-    clauses.push(`(${prefix}scope = 'project' AND ${prefix}project = @scopeProject)`)
+    const identityField = `json_extract(${prefix}record_json, '$.projectIdentity')`
+    const projectIdentity = normalizeMemoryScopePath(access.projectIdentity)
+    clauses.push(`(${prefix}scope = 'project' AND (
+      (${identityField} IS NULL AND ${prefix}project = @scopeProject)
+      ${projectIdentity ? `OR ${identityField} = @scopeProjectIdentity` : ''}
+    ))`)
+    if (projectIdentity) params.scopeProjectIdentity = projectIdentity
     params.scopeProject = project
   }
   where.push(clauses.length ? `(${clauses.join(' OR ')})` : '0 = 1')

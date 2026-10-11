@@ -59,6 +59,28 @@ describe('useWorkbenchComposerSubmitController', () => {
     vi.unstubAllGlobals()
   })
 
+  it('forwards ADE uploads without consuming Code file references', async () => {
+    useChatStore.setState({ route: 'ade', runtimeConnection: 'ready' })
+    const sendMessage = vi.fn(async (..._args: Parameters<ControllerParams['sendMessage']>) => true)
+    const clearComposerFileReferences = vi.fn()
+    const attachment = { id: 'ade-image', kind: 'image' as const, name: 'image.png', mimeType: 'image/png' }
+    const controller = useWorkbenchComposerSubmitController(controllerParams({
+      route: 'ade', activeThreadId: null, input: 'review image',
+      composerAttachments: [attachment],
+      composerFileReferences: [{ path: '/repo/code.ts', relativePath: 'code.ts', name: 'code.ts' }],
+      getAttachmentScope: () => 'ade',
+      clearComposerFileReferences,
+      sendMessage
+    }))
+    controller.handleSend()
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce())
+    expect(sendMessage).toHaveBeenCalledWith('review image', 'agent', expect.objectContaining({
+      attachmentIds: ['ade-image'], attachments: [attachment]
+    }))
+    expect(sendMessage.mock.calls[0]?.[2]?.fileReferences).toBeUndefined()
+    expect(clearComposerFileReferences).not.toHaveBeenCalled()
+  })
+
   it('keeps an Automatic draft until the configuration actually submits it', async () => {
     useChatStore.setState({ route: 'chat', runtimeConnection: 'ready' })
     const input = inputHarness('implement automatic mode')
@@ -542,12 +564,11 @@ describe('useWorkbenchComposerSubmitController', () => {
         }
       }
     }
-    useWriteWorkspaceStore.setState({
-      assistantModel: 'gpt-5.4',
-      assistantProviderId: 'codex-2'
-    })
+    // Work runs on the composer's (Code's) selection, not a Work-only model.
     const controller = useWorkbenchComposerSubmitController(controllerParams({
       input: 'polish it',
+      composerModel: 'gpt-5.4',
+      composerProviderId: 'codex-2',
       composerModelGroups: [modelGroup],
       composerFastMode: true,
       sendMessage
@@ -558,7 +579,10 @@ describe('useWorkbenchComposerSubmitController', () => {
     await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledWith(
       expect.any(String),
       'agent',
-      expect.objectContaining({ serviceTier: 'priority' })
+      expect.objectContaining({ serviceTier: 'priority', agentSurface: 'write', useComposerAgent: true })
     ))
+    const overrides = (sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>
+    expect(overrides).not.toHaveProperty('model')
+    expect(overrides).not.toHaveProperty('providerId')
   })
 })

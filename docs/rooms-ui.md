@@ -1,15 +1,25 @@
 # Rooms conversation interface
 
+Rooms is no longer a separate workspace mode. Its private chats, group rooms,
+filters and Agent directory are part of the Code sidebar's Conversations
+section, and every conversation opens inside Code with the Code right panel.
+See [Code conversations](./code-agent-chats-and-rooms.md). The layout notes
+below describe the conversation view itself.
+
 The Rooms interface borrows Cumora's conversation hierarchy while using Kun's
 existing light and dark theme tokens. It does not change peer discussion,
 execution intent, approval, task recovery, or delivery protocols.
 
 ## Conversation layout
 
-- A 320px conversation list shows local member avatars, a current message
-  preview, its timestamp, unread markers, and real activity counts.
-- The header contains the room name, members, collaboration mode, message
-  search, details, and a menu for room settings, pinning, and archival.
+- The Code sidebar lists Agent or group avatars, a current message preview,
+  its timestamp, unread markers and real activity counts. Private and group
+  conversations appear together in the default view.
+- One picker opens an existing Agent, creates a private Agent or starts a
+  group; every selection stays in Code.
+- Private headers show the Agent identity and model, with profile, memory,
+  history, files and context actions. Group headers show the room name,
+  members, collaboration mode, search and room settings.
 - The 400px details panel opens on demand. Below 1280px it becomes an overlay;
   below 768px the conversation list also opens as an overlay.
 - Message authors remain left aligned. Static 38px avatars and historical
@@ -28,15 +38,21 @@ execution intent, approval, task recovery, or delivery protocols.
 ## Composer and details
 
 The composer grows from 40px to 200px before scrolling internally. Its toolbar
-contains attachments, member mentions, Add context, topic selection, execution
-intent, and Send. Task and repository selectors live in Add context; selected
-values appear as removable chips. Replies, files, and mentioned members share
-the area above the text input.
+contains attachments, emoji, Add context and Send. Private chats use a fixed
+Agent recipient, model and permission controls. Groups add member mentions,
+polls, topic selection and Auto/Discuss/Execute intent. Task and repository
+selectors live in Add context; selected values appear as removable chips.
+Replies, files, and mentioned members share the area above the text input.
 
-Enter inserts a newline; Cmd/Ctrl+Enter sends. Mention navigation takes keyboard
+Enter sends; Shift+Enter inserts a newline; Cmd/Ctrl+Enter also sends. Mention navigation takes keyboard
 priority, and composing text with an input method never accidentally sends.
 Failed sends retain their draft and request identity. The existing local-file
 attachment contract remains in use.
+
+Opening the same private chat from Code or Rooms uses its existing message
+history and draft. Switching between distinct rooms or project tasks restores
+their own drafts. Shared file and content-reference previews update the right
+panel while retaining the current recipient, conversation and workspace mode.
 
 Topic cards show their title, status, and stop/continue actions first. Member
 details and response counters are collapsed under Members and response budgets.
@@ -64,11 +80,17 @@ build, and the authored-file line limit. Then use the offline Electron fixture:
 ```sh
 node scripts/smoke-development-rooms.cjs --ui-only --evidence dist/rooms-ui-smoke
 node scripts/smoke-development-rooms.cjs --ui-visual --evidence dist/rooms-ui-full-smoke
+node scripts/smoke-development-direct-chat.cjs --workbench-only --evidence /tmp/kun-rooms-mixed-im-smoke
 ```
 
 The fixture uses isolated settings, a temporary Manager profile, synthetic
 messages, and a local model stub. It checks menus, focus restoration, mentions,
 attachments, search, reading position, input growth, and horizontal overflow.
+The scenario (`scripts/smoke-rooms-ui-controls.cjs`) opens conversations from the
+Code sidebar and checks its row preview. Search shows a result list beside the
+timeline, Reply quotes into the main composer, the sidebar's Conversations menu
+replaces Chat management, and Room details is an embedded right-panel region.
+The narrow renderer emulation reveals the Code sidebar with Toggle sidebar.
 Screenshots cover light/dark themes at desktop sizes and a separately labelled
 narrow renderer emulation. Real desktop window dimensions are recorded because
 the application's minimum window size can prevent a requested smaller size.

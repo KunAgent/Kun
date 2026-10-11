@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create as createRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearProviderQuotaListCache } from '../../hooks/provider-quota-list-cache'
 import { resetUsageRequestCacheForTests } from '../../hooks/usage-request-cache'
 import { resetUsageSummaryCacheForTests } from '../../hooks/usage-summary-cache'
 import i18n from '../../i18n'
@@ -114,8 +115,29 @@ function expectUsageRange(
   expect(path).toBeTypeOf('string')
   expect(inclusiveRangeDays(path as string)).toBe(days)
 }
+function stubWindow(
+  kunGui: Record<string, unknown>,
+  storedTab?: 'usage' | 'quota'
+): Map<string, string> {
+  const store = new Map<string, string>(storedTab ? [['kun.usagePanel.tab', storedTab]] : [])
+  vi.stubGlobal('window', {
+    kunGui,
+    localStorage: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value)
+    },
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+    setInterval: vi.fn(() => 1),
+    clearInterval: vi.fn()
+  })
+  return store
+}
+
 describe('UsageQuotaPanel', () => {
   beforeEach(async () => {
+    clearProviderQuotaListCache()
     resetUsageRequestCacheForTests()
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     await i18n.changeLanguage('en')
@@ -127,143 +149,97 @@ describe('UsageQuotaPanel', () => {
     vi.unstubAllGlobals()
   })
 
-  it('opens on Usage and lazy-loads provider quota only after its tab is selected', async () => {
+  it('opens on allowances and loads usage only once its tab is chosen', async () => {
     const runtimeRequest = vi.fn(async (path: string) => usageResponse(path))
     const listProviderQuotas = vi.fn(async () => ({
       refreshedAt: '2026-07-29T08:00:00.000Z',
       entries: []
     }))
-    vi.stubGlobal('window', {
-      kunGui: {
-        runtimeRequest,
-        listProviderQuotas
-      }
-    })
+    const store = stubWindow({ runtimeRequest, listProviderQuotas })
 
     let renderer!: ReturnType<typeof createRenderer>
     await act(async () => {
-      renderer = createRenderer(createElement(UsageQuotaPanel, {
-        activeThreadId: 'thread-a'
-      }))
-    })
-
-    expect(renderer.root.findByProps({ 'data-usage-quota-panel': true })).toBeTruthy()
-    expect(renderer.root.findByProps({ id: 'usage-quota-tab-usage' }).props['aria-selected']).toBe(true)
-    expect(renderer.root.findByProps({ id: 'usage-quota-tab-usage' }).props['data-active']).toBe('true')
-    expect(renderer.root.findByProps({ id: 'usage-quota-tab-quota' }).props['data-active']).toBe('false')
-    expect(renderer.root.findByProps({ 'data-sidebar-usage-panel': true })).toBeTruthy()
-    expect(renderer.root.findByProps({ 'data-usage-range': '7d' }).props['aria-pressed']).toBe(true)
-    expect(renderer.root.findByProps({ 'data-usage-range': '30d' }).props['aria-pressed']).toBe(false)
-    expect(renderer.root.findByProps({ 'data-usage-range': '90d' }).props['aria-pressed']).toBe(false)
-    expect(renderer.root.findByProps({ 'data-usage-range': 'all' }).props['aria-pressed']).toBe(false)
-    expectUsageRange(runtimeRequest, 'day', 365)
-    expectUsageRange(runtimeRequest, 'model', 7)
-    expect(listProviderQuotas).not.toHaveBeenCalled()
-    const output = JSON.stringify(renderer.toJSON())
-    expect(output).toContain('1.0k')
-    expect(output).toContain('deepseek-v4')
-    expect(output).toContain('glm-5.2')
-    expect(output).not.toContain('custom/qwen3-coder')
-    expect(output).toContain('Showing 1–5 / 6')
-    expect(output).toContain('1 / 2')
-    expect(output).toContain('32.25806451612903%')
-    expect(output).not.toContain('glm-4-zero-usage')
-    expect(output).not.toContain('0.0%')
-    expect(output).not.toContain('"width":"0%"')
-
-    const previousPage = renderer.root.findByProps({ 'aria-label': 'Previous page' })
-    const nextPage = renderer.root.findByProps({ 'aria-label': 'Next page' })
-    expect(previousPage.props.disabled).toBe(true)
-    expect(nextPage.props.disabled).toBe(false)
-
-    await act(async () => {
-      nextPage.props.onClick()
-    })
-
-    const secondPage = JSON.stringify(renderer.toJSON())
-    expect(secondPage).toContain('custom/qwen3-coder')
-    expect(secondPage).not.toContain('deepseek-v4')
-    expect(secondPage).toContain('Showing 6–6 / 6')
-    expect(secondPage).toContain('2 / 2')
-    expect(secondPage).toContain('3.225806451612903%')
-    expect(renderer.root.findByProps({ 'aria-label': 'Next page' }).props.disabled).toBe(true)
-
-    await act(async () => {
-      renderer.root.findByProps({ 'data-usage-range': '30d' }).props.onClick()
-    })
-    expectUsageRange(runtimeRequest, 'day', 365)
-    expectUsageRange(runtimeRequest, 'model', 30)
-
-    await act(async () => {
-      renderer.root.findByProps({ 'data-usage-range': '90d' }).props.onClick()
-    })
-    expectUsageRange(runtimeRequest, 'day', 365)
-    expectUsageRange(runtimeRequest, 'model', 90)
-
-    await act(async () => {
-      renderer.root.findByProps({ 'data-usage-range': 'all' }).props.onClick()
-    })
-    expectUsageRange(runtimeRequest, 'day', 365)
-    expectUsageRange(runtimeRequest, 'model', 365)
-
-    const resetPage = JSON.stringify(renderer.toJSON())
-    expect(resetPage).toContain('Showing 1–5 / 6')
-    expect(resetPage).not.toContain('custom/qwen3-coder')
-
-    await act(async () => {
-      renderer.root.findByProps({ id: 'usage-quota-tab-quota' }).props.onClick()
+      renderer = createRenderer(createElement(UsageQuotaPanel, { activeThreadId: 'thread-a' }))
     })
 
     expect(renderer.root.findByProps({ id: 'usage-quota-tab-quota' }).props['aria-selected']).toBe(true)
-    expect(renderer.root.findByProps({ id: 'usage-quota-tab-quota' }).props['data-active']).toBe('true')
-    expect(renderer.root.findByProps({ 'data-provider-quota-panel': true }).props['data-embedded'])
-      .toBe('true')
-    expect(renderer.root.findAllByProps({ className: 'provider-quota-header' })).toHaveLength(0)
-    expect(renderer.root.findByProps({ 'data-provider-quota-scroller': true })).toBeTruthy()
+    expect(renderer.root.findByProps({ 'data-provider-quota-panel': true })).toBeTruthy()
     expect(listProviderQuotas).toHaveBeenCalledTimes(1)
+    expect(runtimeRequest).not.toHaveBeenCalled()
 
+    await act(async () => {
+      renderer.root.findByProps({ id: 'usage-quota-tab-usage' }).props.onClick()
+    })
+
+    expect(renderer.root.findByProps({ id: 'usage-quota-tab-usage' }).props['data-active']).toBe('true')
+    expect(renderer.root.findByProps({ 'data-sidebar-usage-panel': true })).toBeTruthy()
+    expect(store.get('kun.usagePanel.tab')).toBe('usage')
+    expectUsageRange(runtimeRequest, 'day', 90)
+    expectUsageRange(runtimeRequest, 'model', 7)
     act(() => renderer.unmount())
   })
 
-  it('shows the existing models empty state when every returned model bucket has zero usage', async () => {
+  it('ranks models by tokens, five at first, and follows the chosen period', async () => {
+    const runtimeRequest = vi.fn(async (path: string) => usageResponse(path))
+    stubWindow({ runtimeRequest, listProviderQuotas: vi.fn() }, 'usage')
+
+    let renderer!: ReturnType<typeof createRenderer>
+    await act(async () => {
+      renderer = createRenderer(createElement(UsageQuotaPanel, { activeThreadId: 'thread-a' }))
+    })
+
+    expect(renderer.root.findByProps({ 'data-usage-period': '7d' }).props['aria-checked']).toBe(true)
+    const models = (): string[] => renderer.root.findAllByProps({ className: 'usage-model' })
+      .map((row) => row.props['data-usage-model'])
+    expect(models()).toEqual(['deepseek-v4', 'gpt-5.6-sol', 'claude-opus-4', 'gemini-3-pro', 'glm-5.2'])
+    const output = JSON.stringify(renderer.toJSON())
+    expect(output).not.toContain('glm-4-zero-usage')
+    expect(output).toContain('1.0k')
+    expect(output).toContain('Show all 6')
+
+    await act(async () => {
+      renderer.root.findByProps({ className: 'kq-text-button usage-models-more' }).props.onClick()
+    })
+    expect(models()).toContain('custom/qwen3-coder')
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-usage-period': '30d' }).props.onClick()
+    })
+    expectUsageRange(runtimeRequest, 'day', 90)
+    expectUsageRange(runtimeRequest, 'model', 30)
+    expect(models()).toHaveLength(5)
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-usage-period': 'today' }).props.onClick()
+    })
+    expectUsageRange(runtimeRequest, 'model', 1)
+    act(() => renderer.unmount())
+  })
+
+  it('shows the models empty state when every returned model bucket has zero usage', async () => {
     const runtimeRequest = vi.fn(async (path: string) =>
       usageResponse(path, [
         { model: 'glm-4-zero-usage', input_tokens: 0, output_tokens: 0, total_tokens: 0 },
         { model: 'deepseek-v4-idle', input_tokens: 0, output_tokens: 0, total_tokens: 0 }
       ]))
-    const listProviderQuotas = vi.fn(async () => ({
-      refreshedAt: '2026-07-29T08:00:00.000Z',
-      entries: []
-    }))
-    vi.stubGlobal('window', {
-      kunGui: {
-        runtimeRequest,
-        listProviderQuotas
-      }
-    })
+    stubWindow({ runtimeRequest, listProviderQuotas: vi.fn() }, 'usage')
 
     let renderer!: ReturnType<typeof createRenderer>
     await act(async () => {
-      renderer = createRenderer(createElement(UsageQuotaPanel, {
-        activeThreadId: 'thread-a'
-      }))
+      renderer = createRenderer(createElement(UsageQuotaPanel, { activeThreadId: 'thread-a' }))
     })
 
     const output = JSON.stringify(renderer.toJSON())
-    expect(output).toContain('No model usage for - yet.')
+    expect(output).toContain('No model usage in this period')
     expect(output).not.toContain('glm-4-zero-usage')
     expect(output).not.toContain('deepseek-v4-idle')
-    expect(output).not.toContain('0.0%')
-    expect(listProviderQuotas).not.toHaveBeenCalled()
     act(() => renderer.unmount())
   })
 
   it('labels Chinese reference estimates separately from recorded cost', async () => {
     await i18n.changeLanguage('zh')
     const runtimeRequest = vi.fn(async (path: string) => usageResponse(path))
-    vi.stubGlobal('window', {
-      kunGui: { runtimeRequest, listProviderQuotas: vi.fn(async () => ({ entries: [] })) }
-    })
+    stubWindow({ runtimeRequest, listProviderQuotas: vi.fn(async () => ({ entries: [] })) }, 'usage')
 
     let renderer!: ReturnType<typeof createRenderer>
     await act(async () => {
@@ -273,7 +249,6 @@ describe('UsageQuotaPanel', () => {
     const output = JSON.stringify(renderer.toJSON())
     expect(output).toContain('￥9.78')
     expect(output).toContain('订阅折合 ≈￥16,880.03')
-    expect(output).toContain('订阅套餐用量按公开 API 标价折算，不是套餐扣费，也不是按量账单。')
     expect(output).not.toContain('￥9.78 · ≈￥16880.03')
     act(() => renderer.unmount())
   })
@@ -281,18 +256,11 @@ describe('UsageQuotaPanel', () => {
   it('refreshes only the active Usage tab', async () => {
     const runtimeRequest = vi.fn(async (path: string) => usageResponse(path))
     const listProviderQuotas = vi.fn(async () => ({ refreshedAt: '', entries: [] }))
-    vi.stubGlobal('window', {
-      kunGui: {
-        runtimeRequest,
-        listProviderQuotas
-      }
-    })
+    stubWindow({ runtimeRequest, listProviderQuotas }, 'usage')
 
     let renderer!: ReturnType<typeof createRenderer>
     await act(async () => {
-      renderer = createRenderer(createElement(UsageQuotaPanel, {
-        activeThreadId: 'thread-a'
-      }))
+      renderer = createRenderer(createElement(UsageQuotaPanel, { activeThreadId: 'thread-a' }))
     })
     const initialUsageRequests = runtimeRequest.mock.calls.length
 
@@ -305,36 +273,25 @@ describe('UsageQuotaPanel', () => {
     act(() => renderer.unmount())
   })
 
-  it('refreshes only provider quota after switching tabs', async () => {
+  it('refreshes only provider quota, asking the vendors again, on the allowances tab', async () => {
     const runtimeRequest = vi.fn(async (path: string) => usageResponse(path))
     const listProviderQuotas = vi.fn(async () => ({
       refreshedAt: '2026-07-29T08:00:00.000Z',
       entries: []
     }))
-    vi.stubGlobal('window', {
-      kunGui: {
-        runtimeRequest,
-        listProviderQuotas
-      }
-    })
+    stubWindow({ runtimeRequest, listProviderQuotas }, 'quota')
 
     let renderer!: ReturnType<typeof createRenderer>
     await act(async () => {
-      renderer = createRenderer(createElement(UsageQuotaPanel, {
-        activeThreadId: 'thread-a'
-      }))
+      renderer = createRenderer(createElement(UsageQuotaPanel, { activeThreadId: 'thread-a' }))
     })
-    await act(async () => {
-      renderer.root.findByProps({ id: 'usage-quota-tab-quota' }).props.onClick()
-    })
-    const usageRequestsAfterSwitch = runtimeRequest.mock.calls.length
-
     await act(async () => {
       renderer.root.findByProps({ 'aria-label': 'Refresh' }).props.onClick()
     })
 
     expect(listProviderQuotas).toHaveBeenCalledTimes(2)
-    expect(runtimeRequest).toHaveBeenCalledTimes(usageRequestsAfterSwitch)
+    expect(listProviderQuotas).toHaveBeenLastCalledWith({ forceRefresh: true })
+    expect(runtimeRequest).not.toHaveBeenCalled()
     act(() => renderer.unmount())
   })
 })

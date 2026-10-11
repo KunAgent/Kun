@@ -255,6 +255,148 @@ describe('kun extension CLI', () => {
     expect(validated.code).toBe(0)
     expect(JSON.parse(validated.stdout).result).toMatchObject({ mode: 'development' })
   })
+
+  it('defaults extension roots to the shared Kun data directory', async () => {
+    const root = await temporaryRoot()
+    const home = join(root, 'home')
+    const services = createExtensionCliServices({ homeDir: home, kunVersion: '0.1.0' })
+    try {
+      expect(services.paths.packageRoot).toBe(join(home, '.kun', 'data', 'extensions'))
+      expect(services.paths.dataRoot).toBe(join(home, '.kun', 'data', 'extension-data'))
+    } finally {
+      await services.manager.shutdown()
+    }
+  })
+
+  it('keeps explicit roots and --data-dir ahead of the shared default', async () => {
+    const root = await temporaryRoot()
+    const home = join(root, 'home')
+    const profile = join(root, 'profile')
+    const fromDataDir = createExtensionCliServices({
+      homeDir: home,
+      dataDir: profile,
+      kunVersion: '0.1.0'
+    })
+    const explicit = createExtensionCliServices({
+      homeDir: home,
+      dataDir: profile,
+      packageRoot: join(root, 'packages'),
+      extensionDataRoot: join(root, 'extension-state'),
+      kunVersion: '0.1.0'
+    })
+    try {
+      expect(fromDataDir.paths.packageRoot).toBe(join(profile, 'extensions'))
+      expect(fromDataDir.paths.dataRoot).toBe(join(profile, 'extension-data'))
+      expect(explicit.paths.packageRoot).toBe(join(root, 'packages'))
+      expect(explicit.paths.dataRoot).toBe(join(root, 'extension-state'))
+    } finally {
+      await fromDataDir.manager.shutdown()
+      await explicit.manager.shutdown()
+    }
+  })
+
+  it('does not migrate the legacy root when KUN_DATA_DIR or flags redirect the CLI', async () => {
+    const root = await temporaryRoot()
+    const home = join(root, 'home')
+    const legacyRoot = join(home, '.kun', 'extensions')
+    await writeLegacyRegistry(legacyRoot)
+
+    const viaEnvironment = createIo(root)
+    viaEnvironment.env = { KUN_DATA_DIR: ` ${join(root, 'env-profile')} ` }
+    viaEnvironment.homeDir = () => home
+    const environmentCode = await runExtensionCommand(['list', '--json'], viaEnvironment)
+    expect(environmentCode).toBe(0)
+    expect(JSON.parse(viaEnvironment.output()).extensions).toEqual([])
+
+    const viaFlag = createIo(root)
+    viaFlag.env = { KUN_DATA_DIR: join(root, 'env-profile') }
+    viaFlag.homeDir = () => home
+    const flagCode = await runExtensionCommand(
+      ['list', '--data-dir', join(root, 'flag-profile'), '--json'],
+      viaFlag
+    )
+    expect(flagCode).toBe(0)
+    expect(JSON.parse(viaFlag.output()).extensions).toEqual([])
+
+    // An explicit --extension-root can still manage the deprecated root.
+    const viaRoot = createIo(root)
+    viaRoot.homeDir = () => home
+    const rootCode = await runExtensionCommand(
+      ['list', '--extension-root', legacyRoot, '--json'],
+      viaRoot
+    )
+    expect(rootCode).toBe(0)
+    expect(JSON.parse(viaRoot.output()).extensions).toMatchObject([{ id: 'acme.demo' }])
+    expect(viaRoot.errors()).not.toContain('deprecated')
+
+    // Nothing was migrated away from or into the legacy root.
+    await stat(join(legacyRoot, 'registry.json'))
+    await expect(stat(join(home, '.kun', 'data', 'extensions', 'registry.json'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+  })
+
+  it('migrates a legacy ~/.kun extension registry into the shared data directory', async () => {
+    const root = await temporaryRoot()
+    const home = join(root, 'home')
+    const legacyRoot = join(home, '.kun', 'extensions')
+    const sharedRoot = join(home, '.kun', 'data', 'extensions')
+    await writeLegacyRegistry(legacyRoot)
+    await writeFile(join(legacyRoot, 'acme.demo', '1.0.0', 'marker.txt'), 'package\n')
+    const legacyState = join(home, '.kun', 'extension-data', 'acme.demo', 'state')
+    await mkdir(legacyState, { recursive: true })
+    await writeFile(join(legacyState, 'state.json'), '{"value":1}\n')
+
+    const io = createIo(root)
+    io.homeDir = () => home
+    const code = await runExtensionCommand(['list', '--json'], io)
+
+    expect(code).toBe(0)
+    expect(io.errors()).toContain('deprecated')
+    expect(JSON.parse(io.output()).extensions).toMatchObject([{ id: 'acme.demo' }])
+
+    const migrated = JSON.parse(await readFile(join(sharedRoot, 'registry.json'), 'utf8'))
+    expect(migrated.extensions['acme.demo'].versions['1.0.0'].packagePath).toBe(
+      join(sharedRoot, 'acme.demo', '1.0.0')
+    )
+    await stat(join(sharedRoot, 'acme.demo', '1.0.0', 'marker.txt'))
+    await stat(join(home, '.kun', 'data', 'extension-data', 'acme.demo', 'state', 'state.json'))
+    await expect(stat(join(legacyRoot, 'registry.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await stat(join(legacyRoot, 'registry.json.pre-cli-root-migration.bak'))
+  })
+
+  it('warns without merging when both the legacy and shared registries exist', async () => {
+    const root = await temporaryRoot()
+    const home = join(root, 'home')
+    const legacyRoot = join(home, '.kun', 'extensions')
+    const sharedRoot = join(home, '.kun', 'data', 'extensions')
+    await writeLegacyRegistry(legacyRoot)
+    await mkdir(sharedRoot, { recursive: true })
+    await writeFile(
+      join(sharedRoot, 'registry.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        revision: 4,
+        updatedAt: '2025-01-02T00:00:00.000Z',
+        extensions: {}
+      })
+    )
+    const legacyState = join(home, '.kun', 'extension-data', 'acme.demo')
+    await mkdir(legacyState, { recursive: true })
+
+    const io = createIo(root)
+    io.homeDir = () => home
+    const code = await runExtensionCommand(['list', '--json'], io)
+
+    expect(code).toBe(0)
+    expect(io.errors()).toContain('deprecated')
+    expect(JSON.parse(io.output()).extensions).toEqual([])
+    // The shared registry kept its contents and the legacy files stayed put.
+    const shared = JSON.parse(await readFile(join(sharedRoot, 'registry.json'), 'utf8'))
+    expect(shared.revision).toBe(4)
+    await stat(join(legacyRoot, 'registry.json'))
+    await stat(legacyState)
+  })
 })
 
 function createTestServices(root: string): ExtensionCliServices {
@@ -295,6 +437,54 @@ async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'kun-extension-cli-'))
   cleanupRoots.push(root)
   return root
+}
+
+async function writeLegacyRegistry(packageRoot: string): Promise<void> {
+  const manifest = {
+    publisher: 'acme',
+    name: 'demo',
+    displayName: 'Demo',
+    version: '1.0.0',
+    manifestVersion: 1,
+    apiVersion: '1.0.0',
+    engines: { kun: '*' },
+    main: 'dist/main.mjs',
+    activationEvents: ['onStartup'],
+    contributes: {},
+    permissions: [] as string[],
+    stateSchemaVersion: 0
+  }
+  await mkdir(join(packageRoot, 'acme.demo', '1.0.0'), { recursive: true })
+  await writeFile(join(packageRoot, 'registry.json'), `${JSON.stringify({
+    schemaVersion: 1,
+    revision: 1,
+    updatedAt: '2025-01-01T00:00:00.000Z',
+    extensions: {
+      'acme.demo': {
+        id: 'acme.demo',
+        globallyEnabled: true,
+        workspaceEnablement: {},
+        workspacePermissionGrants: {},
+        selectedVersion: '1.0.0',
+        useDevelopment: false,
+        versions: {
+          '1.0.0': {
+            version: '1.0.0',
+            packagePath: join(packageRoot, 'acme.demo', '1.0.0'),
+            archiveSha256: 'a'.repeat(64),
+            integrity: { algorithm: 'sha256', files: {} },
+            source: { type: 'local', locator: join(packageRoot, '..', 'acme-demo-1.0.0.kunx') },
+            signatureStatus: 'unsigned',
+            requestedPermissions: [],
+            grantedPermissions: [],
+            installedAt: '2025-01-01T00:00:00.000Z',
+            manifest,
+            mutable: false
+          }
+        }
+      }
+    }
+  }, null, 2)}\n`)
 }
 
 async function writeExtensionSource(root: string, version: string, permissions: string[]): Promise<void> {

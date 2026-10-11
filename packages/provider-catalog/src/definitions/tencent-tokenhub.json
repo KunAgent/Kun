@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "tencent-tokenhub",
+  "name": "Tencent TokenHub",
+  "origin": "vendor",
+  "baseUrl": "https://tokenhub.tencentmaas.com/v1",
+  "regionLabel": "Region",
+  "regions": [
+    {
+      "id": "cn",
+      "name": "China",
+      "baseUrl": "https://tokenhub.tencentmaas.com/v1",
+      "endpoints": {
+        "chat_completions": "https://tokenhub.tencentmaas.com/v1",
+        "responses": "https://tokenhub.tencentmaas.com/v1",
+        "messages": "https://tokenhub.tencentmaas.com"
+      }
+    },
+    {
+      "id": "intl",
+      "name": "Global",
+      "baseUrl": "https://tokenhub-intl.tencentmaas.com/v1",
+      "endpoints": {
+        "chat_completions": "https://tokenhub-intl.tencentmaas.com/v1",
+        "responses": "https://tokenhub-intl.tencentmaas.com/v1",
+        "messages": "https://tokenhub-intl.tencentmaas.com"
+      }
+    }
+  ],
+  "endpoints": {
+    "chat_completions": "https://tokenhub.tencentmaas.com/v1",
+    "responses": "https://tokenhub.tencentmaas.com/v1",
+    "messages": "https://tokenhub.tencentmaas.com"
+  },
+  "docsUrl": "https://cloud.tencent.com/document/product/1823/130078",
+  "credentialUrl": "https://console.cloud.tencent.com/tokenhub/apikey"
+}

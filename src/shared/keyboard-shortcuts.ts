@@ -139,7 +139,7 @@ export const KEYBOARD_SHORTCUT_COMMANDS = [
     id: 'toggle-paper-mode',
     labelKey: 'shortcutTogglePaperMode',
     descriptionKey: 'shortcutTogglePaperModeDesc',
-    // Unbound by default (plan §6.1): users opt into a chord in settings.
+    // Unbound by default: users opt into a chord in settings.
     defaultBindings: []
   },
   {

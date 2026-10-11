@@ -5,6 +5,7 @@ import type { ChatBlock, RuntimeDisclosureMetadata, UserInputAnswer } from '../.
 import type { WriteExportFormat } from '@shared/write-export'
 import { ComposerContextAttachmentSchema } from '@kun/extension-api'
 import { useChatStore } from '../../store/chat-store'
+import { assistantExportMarkdown } from '../../lib/conversation-export-markdown'
 import {
   readWorkspaceOfficeViewPosition,
   type WorkspaceOfficeViewPosition
@@ -255,10 +256,12 @@ export function CopyFeedbackButton({
 
 export function AssistantExportButton({
   text,
-  createdAt
+  createdAt,
+  renderMode
 }: {
   text: string
   createdAt?: string
+  renderMode?: 'plain-text' | 'safe-markdown'
 }): ReactElement {
   const { t } = useTranslation('common')
   const workspaceRoot = useChatStore((state) => state.workspaceRoot)
@@ -282,7 +285,7 @@ export function AssistantExportButton({
         title,
         workspaceRoot: workspaceRoot || undefined,
         format,
-        content: text
+        content: assistantExportMarkdown(text, renderMode)
       })
       if (!result.ok && !result.canceled) {
         setError(result.message)

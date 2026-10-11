@@ -1,3 +1,4 @@
+import { prepareExplicitProviderRemoval } from './provider-removal-test-helpers.js'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -55,7 +56,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -310,14 +311,15 @@ describe('ModelConnectionRegistry', () => {
         select: true
       }
       const connected = await value.initialize([seed])
-      const deleted = await value.delete('legacy-delete', connected.revision)
-      expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8'))
+      const deletionReady = await prepareExplicitProviderRemoval(value, 'legacy-delete', connected.revision)
+      const deleted = await value.delete('legacy-delete', deletionReady.revision)
+      expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8'))
         .toContain('settings:provider:legacy-delete')
 
       const restarted = await value.initialize([{ ...seed, expectedRevision: deleted.revision }])
       expect(restarted.providers).toEqual([])
       expect(retired).toEqual(['settings:provider:legacy-delete'])
-      expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8'))
+      expect(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8'))
         .not.toContain('settings:provider:legacy-delete')
       warn.mockRestore()
     })

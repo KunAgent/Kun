@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "lmstudio",
+  "name": "LM Studio",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "credentialRequirement": "optional",
+  "baseUrl": "http://localhost:1234/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://lmstudio.ai/docs",
+  "credentialUrl": "https://lmstudio.ai/docs"
+}

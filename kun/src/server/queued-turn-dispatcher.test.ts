@@ -1,3 +1,8 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { FileThreadStore } from '../adapters/file/file-thread-store.js'
+import type { ThreadStore } from '../ports/thread-store.js'
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { InMemoryEventBus } from '../adapters/in-memory-event-bus.js'
 import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
@@ -18,7 +23,7 @@ type RunTurnFn = (threadId: string, turnId: string) => Promise<unknown> | void
 
 type DispatcherHarness = {
   turns: TurnService
-  threadStore: InMemoryThreadStore
+  threadStore: ThreadStore
   dispatcher: QueuedTurnDispatcher
   runTurn: Mock<RunTurnFn>
 }
@@ -33,11 +38,12 @@ async function createThread(h: DispatcherHarness, id: string): Promise<void> {
 }
 
 function createDispatcherHarness(options: {
+  threadStore?: ThreadStore
   maxConcurrentTurns?: number
   executionLeases?: ThreadExecutionLeasePort
   runTurn?: RunTurnFn
 } = {}): DispatcherHarness {
-  const threadStore = new InMemoryThreadStore()
+  const threadStore = options.threadStore ?? new InMemoryThreadStore()
   const sessionStore = new InMemorySessionStore()
   const eventBus = new InMemoryEventBus()
   const nowIso = () => new Date().toISOString()
@@ -262,5 +268,70 @@ describe('QueuedTurnDispatcher global scheduling', () => {
     expect(runTurn.mock.calls[1]).toEqual(['thr_gate', second.turnId])
     const after = await h.threadStore.get('thr_gate')
     expect(after?.turns.find((turn) => turn.id === second.turnId)?.status).toBe('running')
+  })
+})
+
+describe('durable queue safety', () => {
+  it('keeps stopped queued inputs paused across a new dispatcher until explicit resume', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-stopped-queue-'))
+    const h = createDispatcherHarness({ threadStore: new FileThreadStore({ dataDir: dir }) })
+    await h.dispatcher.dispose()
+    await createThread(h, 'stopped')
+    const active = await h.turns.startTurn({ threadId: 'stopped', request: { prompt: 'A' } })
+    await h.turns.enqueueTurn({ threadId: 'stopped', request: { prompt: 'B' } })
+    await h.turns.enqueueTurn({ threadId: 'stopped', request: { prompt: 'C' } })
+    await h.turns.interruptTurn({ threadId: 'stopped', turnId: active.turnId })
+    await h.dispatcher.dispose()
+    const runTurn = vi.fn()
+    const coldStore = new FileThreadStore({ dataDir: dir })
+    const cold = createDispatcherHarness({ threadStore: coldStore })
+    await cold.dispatcher.dispose()
+    const restarted = new QueuedTurnDispatcher({ turns: cold.turns, threadStore: coldStore, runTurn })
+    try {
+      await restarted.drainAllQueued()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(runTurn).not.toHaveBeenCalled()
+      expect(await cold.turns.startNextQueuedTurn('stopped')).toBeNull()
+      await h.turns.enqueueTurn({ threadId: 'stopped', request: { prompt: 'D' } })
+      expect(await cold.turns.startNextQueuedTurn('stopped')).toBeNull()
+      await cold.turns.resumeQueuedTurns('stopped')
+      expect(await cold.turns.startNextQueuedTurn('stopped')).toEqual({ turnId: 'turn_2' })
+    } finally {
+      await restarted.dispose()
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('Stop linearization', () => {
+  it('blocks a promotion already waiting on the Stop mutation before Stop returns', async () => {
+    const h = createDispatcherHarness()
+    await createThread(h, 'racing-stop')
+    const active = await h.turns.startTurn({ threadId: 'racing-stop', request: { prompt: 'A' } })
+    try {
+      await h.turns.enqueueTurn({ threadId: 'racing-stop', request: { prompt: 'B' } })
+      await h.turns.enqueueTurn({ threadId: 'racing-stop', request: { prompt: 'C' } })
+      await h.turns.interruptTurn({ threadId: 'racing-stop', turnId: active.turnId })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(h.runTurn).not.toHaveBeenCalled()
+      expect((await h.threadStore.get('racing-stop'))?.turns.map((turn) => turn.status))
+        .toEqual(['aborted', 'queued', 'queued'])
+    } finally {
+      await h.dispatcher.dispose()
+    }
+  })
+})
+
+describe('fresh work after Stop', () => {
+  it('allows a new committed input when Stop left no older queued inputs', async () => {
+    const h = createDispatcherHarness()
+    await createThread(h, 'fresh-after-stop')
+    const active = await h.turns.startTurn({ threadId: 'fresh-after-stop', request: { prompt: 'A' } })
+    try {
+      await h.turns.interruptTurn({ threadId: 'fresh-after-stop', turnId: active.turnId })
+      const next = await h.turns.enqueueTurn({ threadId: 'fresh-after-stop', request: { prompt: 'New independent task' } })
+      await vi.waitFor(() => expect(h.runTurn).toHaveBeenCalledExactlyOnceWith('fresh-after-stop', next.turnId))
+      expect((await h.threadStore.get('fresh-after-stop'))?.queueResumeSourceTurnId).toBe(active.turnId)
+    } finally { await h.dispatcher.dispose() }
   })
 })

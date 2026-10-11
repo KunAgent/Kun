@@ -17,7 +17,7 @@ describe('SddAssistantPanel', () => {
     })
   })
 
-  it('shows separate reasoning and Fast controls for eligible Codex models', () => {
+  it('shows reasoning and Fast in the model control for eligible Codex models', () => {
     const html = renderToStaticMarkup(createElement(SddAssistantPanel, {
       draft: {
         id: 'draft-1',
@@ -76,8 +76,7 @@ describe('SddAssistantPanel', () => {
       onCollapse: () => undefined
     }))
 
-    expect(html).toContain('aria-label="Model: Codex / gpt-5.6-sol"')
-    expect(html).toContain('aria-label="Reasoning: High"')
-    expect(html).toContain('aria-label="Fast mode on"')
+    expect(html).toContain('aria-label="Model and reasoning settings: Codex / gpt-5.6-sol / Reasoning High / Fast mode on"')
+    expect(html).toContain('lucide-zap')
   })
 })

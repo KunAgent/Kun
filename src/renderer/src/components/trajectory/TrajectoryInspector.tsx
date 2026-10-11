@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { kunAttachmentContentPath } from '@shared/kun-endpoints'
 import { fetchTrajectoryDetail, type TrajectoryDetail, type TrajectoryDetailSection } from '../../agent/trajectory'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
-import { StreamdownAssistant } from '../chat/StreamdownAssistant'
+import { AssistantMarkdown } from '../chat/AssistantMarkdown'
 import type { HarnessCell, HarnessRequestBoundary } from './trajectory-harness-model'
 import { TrajectoryJsonTree } from './TrajectoryJsonTree'
 import { TrajectoryMessageSource } from './TrajectoryMessageSource'
@@ -180,7 +180,8 @@ function DetailContent({
     <div className={styles.payload}>
       {warning}
       {detail.section === 'rendered' && markdown !== null
-        ? <StreamdownAssistant text={markdown} streaming={false} className={styles.markdown} />
+        ? <AssistantMarkdown text={markdown} streaming={false} className={`ds-markdown ${styles.markdown}`}
+            plainText={detail.renderMode === 'plain-text'} safeMarkdown={detail.renderMode === 'safe-markdown'} />
         : <TrajectoryJsonTree value={detail.content} />}
       {attachmentIds.length ? <TrajectoryImages threadId={threadId} ids={attachmentIds} /> : null}
     </div>

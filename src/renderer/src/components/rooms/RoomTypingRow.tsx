@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next'
+import { roomWaitingReceipt } from './room-receipt-helpers'
 
 /**
- * Receipt/typing indicator pinned right above the composer, modeled after
- * cumora's TypingRow: a fixed-height row (no layout shift) whose content
- * fades in/out, with three bouncing dots and a live-region label.
+ * Receipt/typing indicator pinned right above the composer: a fixed-height
+ * row (no layout shift) whose content fades in/out, with three bouncing dots and a live-region label.
  *
  * Priority: active member names > waiting (delivered, not yet received)
  * member names > fallback text > nothing.
@@ -59,10 +59,7 @@ export function RoomTypingRow({
       </>
     )
   } else if (waitingNames?.length) {
-    body = t('roomsReceipt_waiting', {
-      name: waitingNames.slice(0, 2).join(t('roomsTyping_sep')),
-      count: waitingNames.length
-    })
+    body = roomWaitingReceipt(t, waitingNames)
   } else if (fallback) {
     body = fallback
   }

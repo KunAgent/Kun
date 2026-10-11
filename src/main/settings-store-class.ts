@@ -75,6 +75,8 @@ export class JsonSettingsStore {
   private path: string
   private cache: AppSettingsV1 | null = null
   private documentRevision: number | undefined
+  /** Etag of the shared document bytes behind `cache`; enables conditional reads. */
+  private documentEtag: string | undefined
   private operationTail: Promise<void> = Promise.resolve()
 
   constructor(
@@ -88,11 +90,30 @@ export class JsonSettingsStore {
     return this.enqueueOperation(() => this.loadOnce())
   }
 
+  private async readSharedDocument(): Promise<
+    { revision: number; value: string | null; etag?: string } | undefined
+  > {
+    const backend = this.options.documentBackend
+    if (!backend) return undefined
+    // Main calls load() from timers and before most Runtime requests. A cached
+    // snapshot only needs an etag round trip instead of the whole document.
+    if (this.cache && this.documentEtag && backend.readIfChanged) {
+      const conditional = await backend.readIfChanged(this.documentEtag)
+      if (!('unchanged' in conditional)) return conditional
+      if (this.cache) {
+        this.documentRevision = conditional.revision
+        return { revision: conditional.revision, value: null, etag: conditional.etag }
+      }
+    }
+    return backend.read()
+  }
+
   private async loadOnce(): Promise<AppSettingsV1> {
-    const document = this.options.documentBackend
-      ? await this.options.documentBackend.read()
-      : undefined
+    const cachedEtag = this.documentEtag
+    const document = await this.readSharedDocument()
     const lastValidCache = this.cache
+    if (this.cache && document?.etag && document.etag === cachedEtag) return this.cache
+    if (document) this.documentEtag = document.etag
     if (this.cache && (!document || document.revision === this.documentRevision)) return this.cache
     if (document) {
       this.cache = null
@@ -341,6 +362,7 @@ export class JsonSettingsStore {
         ) {
           this.cache = null
           this.documentRevision = undefined
+          this.documentEtag = undefined
           continue
         }
         throw error
@@ -418,6 +440,8 @@ export class JsonSettingsStore {
       const revision = expectedRevision ?? (await this.options.documentBackend.read()).revision
       const committed = await this.options.documentBackend.write(revision, serialized)
       this.documentRevision = committed.revision
+      // The next load re-reads once to learn the committed bytes' etag.
+      this.documentEtag = undefined
       return
     }
     await mkdir(dirname(this.path), { recursive: true })

@@ -54,6 +54,10 @@ plan worktree、bash 默认 cwd 和 `.kun/project.json` 仍只跟随主目录；
   经 RoomRuntime 校验原请求、权限快照、workspace/epoch 和取消状态后，先持久化 request，再通过原房间队列执行。
   不扫描历史线程接管未知 turn；同根后台通知可连续交付，但新用户请求或权限变更会使旧通知失效。
   历史 run inspector 永远只读，不得因查看历史重新执行工具。
+- 新建内置个人助手小 Kun（`agent-default-kun` / `templateId: kun`）私聊时，
+  将完整的 Full access 权限档位持久化到房间，composer 与后续运行时读取同一份策略。
+  自定义/模板 Agent、只读 profile、显式目录限制仍使用受限默认值。已有私聊的显式策略、
+  历史缺失策略的受限兼容语义与已接纳回合快照不变；任务与外部 harness 的独立授权门禁也不变。
 - GUI 结构化结果使用 Code 的 canonical mapper/renderer（chart、visualization、generatedFiles）；
   文件引用来自成功的结构化 tool result，并验证文件存在及 canonical path 在工作区内，不能从模型文字或目录时间戳猜交付物。
 - Excalidraw apply 不会先把旧的本地草稿写回磁盘。保存带读取版本，冲突时保留草稿并提示保存副本后重载；
@@ -391,8 +395,7 @@ custom agent 都禁用 Skills 自动激活。child record 持久化 route method
 
 Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
 
-- Agent 切换器：`AgentSwitcher` 不再出现，`AGENT_CATALOG` 只有
-  `kun`。
+- 不恢复切换运行时的 Agent 切换器；harness 选择器选择的是 turn 引擎。
 - 顶部连接状态条和 runtime 诊断按钮：不再把运行时检测作为用户入口。
 - Runtime insights/right panel：右侧面板可以展示只读 Kun 用量与 provider
   订阅额度，但不恢复 runtime 诊断、切换或控制台。
@@ -400,7 +403,8 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
   `GET /v1/usage` 生成用量报告，不代表可切换或可控制的运行时。
 - 设置页 provider selector：Settings -> Agents 直接展示 Kun 配置，
   包含 binary path、port、autoStart、API key、base URL、runtime token、
-  data dir、model、approval policy、sandbox mode、insecure。
+  data dir、model、approval policy、sandbox mode、insecure。Agents 分组
+  可列出 harness（检测、登录、默认权限），它们都在 Kun 运行时内执行。
 - 旧绘画/设计 starter：不恢复独立 Design 工作区入口。核心工作区入口只有
   Code、Work；Design 是 Code 工作台内的任务类型并使用右侧白板，连接手机和自动化仍走各自入口。
 
@@ -422,6 +426,9 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
 - `startSse/stopSse`：按 `threadId + sinceSeq` 转发 Kun SSE。
 
 ## Settings / Migration
+
+供应商模型发现、能力来源、用户限制与运行预算的规则见
+[`provider-model-metadata.md`](./provider-model-metadata.md)。
 
 保存后的 settings 结构只应有：
 
@@ -463,6 +470,32 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
   provider。同一 Code-owned 会话可为每个下一回合选择 Code 或 Design；
   admission 把意图固定在当前 turn/user item，不改变 thread ownership。首个被接纳的
   Design 回合只锁定设计文档、产物介质、目标与风格 profile；后续 Code 回合仍然有效。
+- 会话正文缓存由应用级后台同步维护，不依赖消息组件挂载。最近访问和后台运行的会话
+  使用有容量限制的快照；元数据变化触发更新，运行中定期检查，前台恢复优先。后台读取
+  只更新展示数据，不发送消息、不执行审批，也不重复产生完成通知。运行时断线、历史
+  来源变更、删除或归档必须使相应请求失效，过期响应不得覆盖新选择的会话。
+- 切回会话先展示可信缓存；落后较多时读取最新累计消息页，一次替换，再从响应的安全
+  事件水位续接 SSE。不能用侧边栏的最新序号替代快照水位，也不能绕过子代理状态核对
+  失败时的回放要求。文本 offset 和 replay barrier 继续负责去重及就绪状态。
+- 长回合的过程记录按视口挂载，仍使用消息时间线的同一个滚动容器。上翻阅读、查找跳转、
+  待审批/待输入卡片和已展开记录的状态必须在虚拟行回收后保持正确；会话身份仍隔离。
+  首次显示和窗口恢复直接呈现已收到的文本，只有前台新增文本参与有时限的平滑显示。
+- 原生工具和外部 harness 的详情共用 `ToolPresentation` 展示数据，独立保存输入、输出、
+  错误和资源；历史 call/result 合并不得用结果覆盖输入，也不得让迟到的运行事件覆盖
+  已结束状态。展示元数据有总预算与截断标记，不替代原始工具结果，不进入模型上下文。
+  取消状态使用中性呈现；单工具停止只在运行时确实注册取消句柄后开放，不能从 ACP 的
+  整轮取消能力推断单工具可停止。文件统计按已知路径去重，工具调用次数保持独立。
+- ACP 审批的原始选项只在冻结的 action envelope 中传递；用户所选 optionId 或取消选择
+  必须与决定一起进入原生确认、签名凭据和运行时校验。自动批准与旧版二选一请求只能
+  使用一次性选项，不得隐式升级为 Agent 的永久授权。审批详情只能使用已脱敏的请求数据。
+- 工具图片可使用保留的本地栅格数据，音频、资源下载和外部链接要求显式点击；SVG/HTML
+  不得作为活动内容执行，本地资源仍经过工作区文件验证。外部子代理只有真实 childThreadId
+  才开放会话下钻；审批和停止操作按实际归属显示，不从普通工具输出猜测可控制的会话。
+- 输入框的上下文弹层可附加 Claude Code / Codex 官方订阅额度，显示剩余比例和真实窗口的
+  重置时间；额度与上下文 token 占用分开。只查询当前发送路线对应的原生登录或精确命名
+  账号，不按模型名或供应商 preset 猜账号，不将 API 余额当成订阅额度。没有可靠额度时
+  不显示该区域；只有额度、没有上下文数据时仍可单独打开。每次打开重新确认账号，
+  切换路线立即移除旧值。探测是只读的，不启动 Agent，也不替模型登录刷新或改写凭据。
 - Design 任务：与 Code 任务共用工作台、会话列表、输入框、模型、权限和工作区控制；
   设计稿、原型和设计流程图落在 `.kun-design/`，在右侧白板中预览和迭代。
 - Work：办公助手和 inline completion 读取同一份 Kun API key /
@@ -579,6 +612,32 @@ agent。
 历史独立 TUI 包及其旧更新清单不在本次变更中删除。旧独立客户端不会收到 0.3.8
 独立包；需要安装桌面应用才能获得后续版本。TUI 的只读用量、provider 额度和上下文
 命令继续复用已有协议，不增加 GUI Runtime 诊断或控制入口。
+
+## ADE：总管与 worker
+
+Kun 的 Code 模式可以升级为 ADE（Agentic Development Environment）：一对一
+会话可以跑在 Kun 原生 loop 或某个外部 harness 上；具备 Kun 工具桥的主 Agent（Kun 或第三方）可以
+拆任务、派 worker、盯进度、验收、汇报。不变量：
+
+- 外部 agent 只能以 `kun serve` 内部的 `DelegatedTurnRuntime` 身份进入；
+  GUI 永远只和 `kun serve` 通信。唯一例外是终端 agent：PTY 由主进程持有，
+  但状态必须经 Kun 的 ActivityStore 上报。
+- 每个线程/回合的 harness 在准入时冻结；没有 `harnessId` 的历史线程按
+  provider kind 推断，行为与引入 harness 之前一致。
+- worker 的有效权限是总管快照与所选档位的交集，只降不升；无人值守路径不
+  升级权限。
+- 任务工作区（worktree）由宿主创建、采集与合入；合入绝不改动用户源
+  checkout 里的未提交改动。
+- 交接上下文由代码确定性生成（`kun_handoff` 简报），不靠模型摘要；
+  `docs/AGENTS.md` 的不可变前缀不因 ADE 改变。
+- `agents.kun.ade.*` 保留为协作策略设置，日常入口在 Code 的模型菜单、加号菜单、
+  任务设置和原有助手设置内。关闭高级协作阻止新派工，历史任务及已有停止、审批、
+  回答入口保持可达；`harnessRouter` 关闭时保留旧 provider 推断路径。
+- Code 与历史 ADE 根任务使用统一服务端分页和搜索；旧 `ade` 路由重定向 Code，
+  原 thread ID 和持久字段保留。worker 预览与审查目标不修改主会话选择。
+
+普通对话派工使用三档权限、60 秒干预窗口、持久化恢复与卡片控制。
+新 Code 任务默认可派工，高级协作开关继续控制赛马等高级能力；用户显式限制和历史不明设置仍保留。
 
 ## 验证清单
 

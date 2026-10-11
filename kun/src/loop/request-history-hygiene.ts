@@ -581,7 +581,7 @@ function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function estimateTokens(text: string): number {
+export function estimateTokens(text: string): number {
   if (!text) return 0
   let asciiRun = 0
   let tokens = 0

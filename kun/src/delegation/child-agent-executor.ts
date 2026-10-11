@@ -4,7 +4,8 @@ import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import { InMemoryUserInputGate } from '../adapters/in-memory-user-input-gate.js'
 import { setSystemPrompt, type ImmutablePrefix } from '../cache/immutable-prefix.js'
-import { SUBAGENT_READ_ONLY_TOOL_NAMES, type ModelCapabilityMetadata } from '../contracts/capabilities.js'
+import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
+import { readOnlyToolCeiling } from '../contracts/ade.js'
 import { ChildRunFailureSchema, type ChildRunFailure } from '../contracts/subagent-retry.js'
 import {
   DEFAULT_APPROVAL_REVIEWER,
@@ -32,7 +33,6 @@ import type { ModelClient } from '../ports/model-client.js'
 import { RandomIdGenerator } from '../ports/id-generator.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../ports/approval-review.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import {
   childDirectionBundle,
   childDeckArtifact,
@@ -42,7 +42,6 @@ import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { ToolHost } from '../ports/tool-host.js'
 import { findSessionEvent } from '../adapters/session-event-query.js'
-import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import type { SkillRuntime } from '../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../instructions/instruction-runtime.js'
 import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
@@ -67,34 +66,12 @@ import {
   FAST_CONTEXT_RECOVERABLE_LOOP_ERROR_CODES
 } from './child-agent-result-support.js'
 
-export type ChildDelegatedRuntimeFactory = (input: {
-  threads: ThreadService
-  turns: TurnService
-  sessionStore: SessionStore
-  threadStore: ThreadStore
-  events: RuntimeEventRecorder
-  ids: { next(prefix: string): string }
-  prefix: ImmutablePrefix
-  toolPolicy: 'readOnly' | 'inherit'
-  allowedModelProviderIds?: readonly string[]
-  allowedModelIds?: readonly string[]
-  allowedToolNames?: readonly string[]
-  allowedProviderIds?: readonly string[]
-  allowedSkillIds?: readonly string[]
-  allowedReadPaths?: readonly string[]
-  allowHostReads?: boolean
-  allowedWritePaths?: readonly string[]
-  allowedArtifactIds?: readonly string[]
-  blockedToolNames?: readonly string[]
-  blockedProviderIds?: readonly string[]
-  blockedSkillIds?: readonly string[]
-  skillsEnabled: boolean
-  instructionsEnabled: boolean
-  memoryEnabled: boolean
-  pptWorkflowScope?: PptWorkflowScope
-}) => DelegatedTurnRuntime | undefined
+export type { ChildDelegatedRuntimeFactory } from './child-delegated-runtime-factory.js'
+import type { ChildDelegatedRuntimeFactory } from './child-delegated-runtime-factory.js'
 
 export type ChildAgentExecutorOptions = {
+  providerKinds?: () => import('../harness/resolve-turn-harness.js').ProviderKindsView
+  harnessCatalog?: import('../services/turn-service-core.js').TurnServiceDeps['harnessCatalog']
   model: ModelClient
   toolHost: ToolHost
   prefix: ImmutablePrefix
@@ -191,6 +168,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       profilesForProvider: options.profilesForProvider
     })
     const turns = new TurnService({
+      ...(!input.fastContext ? { providerKinds: options.providerKinds, harnessCatalog: options.harnessCatalog } : {}),
       threadStore,
       sessionStore,
       events,
@@ -212,7 +190,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     // capabilities are added only after that narrowing and remain subject to
     // the parent snapshot plus explicit tool/provider deny-lists.
     const ordinaryAllowedToolNames = intersectDefinedLists(
-      input.toolPolicy === 'readOnly' ? SUBAGENT_READ_ONLY_TOOL_NAMES : undefined,
+      input.toolPolicy === 'readOnly' ? readOnlyToolCeiling(input.executionUnit) : undefined,
       input.fastContext ? ['grep', 'glob', 'read'] : undefined,
       input.allowedTools,
       input.security?.allowedToolNames
@@ -262,7 +240,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     // Provider-native SDKs own separate shell/search tool catalogs. Fast
     // Context deliberately stays in Kun's managed loop so its exact source
     // tool allow-list, semaphore, and result bounds cannot be bypassed.
-    const delegatedRuntime = input.fastContext ? undefined : options.createDelegatedRuntime?.({
+    const delegated = input.fastContext ? undefined : options.createDelegatedRuntime?.({
       threads,
       turns,
       sessionStore,
@@ -310,7 +288,8 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       userInputGate: new InMemoryUserInputGate(),
       model: options.model,
       toolHost,
-      ...(delegatedRuntime ? { sdkRuntime: delegatedRuntime } : {}),
+      ...(delegated?.delegated ? { sdkRuntime: delegated.delegated } : {}),
+      ...(delegated?.router ? { harnessRouter: delegated.router } : {}),
       usage,
       events,
       turns,
@@ -376,9 +355,17 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     })
 
     const title = childThreadTitle(input.childId, input.label, input.profile)
+    // Worker/side threads belong to the parent's workspace mode: a child of an
+    // ADE thread stays in ADE and never leaks into the Code listing.
+    const parentThread = input.resumeChild
+      ? null
+      : (threadStore.getMetadata
+          ? await threadStore.getMetadata(input.parentThreadId)
+          : await threadStore.get(input.parentThreadId))
     const thread = input.resumeChild
       ? await threadStore.get(input.childId)
       : await threads.create({
+        collaboration: { enabled: false },
         title,
         workspace: input.workspace?.trim() || '~',
         model,
@@ -386,14 +373,19 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         approvalPolicy,
         ...(sandboxMode ? { sandboxMode } : {}),
         approvalReviewer,
+        ...(parentThread?.workspaceMode ? { workspaceMode: parentThread.workspaceMode } : {}),
         // Route the child to the profile's provider. ThreadService threads
         // providerId into every ModelRequest, and the executor's model is the
         // MultiProviderModelClient, so this single field is all routing needs.
-        ...(input.providerId ? { providerId: input.providerId } : {}),
+        ...(!input.gatewayBinding && input.providerId ? { providerId: input.providerId } : {}),
         ...(input.accountId ? { accountId: input.accountId } : {}),
         // Persist the resolved profile id so the GUI can label explore/side
         // sessions (e.g. return-bar "viewing explore process").
-        ...(input.profile?.trim() ? { agentId: input.profile.trim() } : {})
+        ...(input.profile?.trim() ? { agentId: input.profile.trim() } : {}),
+        // ADE workers pin the dispatch's harness so resumes reuse the engine.
+        ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+        ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
+        ...(input.gatewayBinding ? { gatewayBinding: input.gatewayBinding } : {})
       }, {
         id: input.childId,
         title,
@@ -401,16 +393,18 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         // list, but loadable on demand so the user can open the subagent's own
         // session from the parent's delegate_task card.
         relation: 'side',
-        parentThreadId: input.parentThreadId
+        parentThreadId: input.parentThreadId,
+        // Host-only ADE worker/team identity; callbacks never trust args.
+        ...(input.executionUnit ? { executionUnit: input.executionUnit } : {})
       })
     if (!thread) throw new Error(`child thread ${input.childId} no longer exists`)
     if (input.resumeChild && (thread.relation !== 'side' || thread.parentThreadId !== input.parentThreadId)) {
       throw new Error(`child thread ${input.childId} is not a side thread of the expected parent`)
     }
     const parentDesignProfile = agentSurface === 'design' && !thread.designProfile
-      ? (threadStore.getMetadata
+      ? (parentThread ?? (threadStore.getMetadata
           ? await threadStore.getMetadata(input.parentThreadId)
-          : await threadStore.get(input.parentThreadId))?.designProfile
+          : await threadStore.get(input.parentThreadId)))?.designProfile
       : undefined
     const designAdmission = parentDesignProfile
       ? {
@@ -443,13 +437,17 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       threadId: thread.id,
       request: {
         prompt,
+        ...(input.clientRequestId ? { clientRequestId: input.clientRequestId } : {}),
         ...(source?.displayText !== undefined ? { displayText: source.displayText } : {}),
         ...(source?.attachmentIds.length ? { attachmentIds: source.attachmentIds } : {}),
         ...(source?.composerContexts.length ? { composerContexts: source.composerContexts } : {}),
         ...(source?.fileReferences.length ? { fileReferences: source.fileReferences } : {}),
         model,
         clientSurface: input.guiDesignCanvas || input.guiExcalidrawCanvas ? 'gui' : input.clientSurface ?? 'api',
-        ...(input.providerId ? { providerId: input.providerId } : {}),
+        ...(!input.gatewayBinding && input.providerId ? { providerId: input.providerId } : {}),
+        ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+        ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
+        ...(input.gatewayBinding ? { gatewayBinding: input.gatewayBinding } : {}),
         ...(input.accountId ? { accountId: input.accountId } : {}),
         approvalPolicy,
         ...(sandboxMode ? { sandboxMode } : {}),

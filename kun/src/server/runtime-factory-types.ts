@@ -31,6 +31,8 @@ import type {
   TokenEconomyConfig,
   ToolOutputLimitsConfig
 } from './runtime-factory-dependencies.js'
+import type { AdeConfig, HarnessesConfig } from '../config/kun-config-application.js'
+import type { NativeAgentNetworkSnapshot } from '../contracts/native-agent-network.js'
 
 export type KunServeRuntimeOptions = {
   host: string
@@ -43,6 +45,8 @@ export type KunServeRuntimeOptions = {
   apiKey: string
   /** Selected model-connection identity, including anonymous providers. */
   activeProviderId?: string
+  /** Registry ownership prevents stale root credentials or anonymous URLs from becoming a fallback. */
+  modelConnectionSelectionRequired?: boolean
   credentialSourceId?: string
   geminiAuth?: GeminiCodeAssistCredential
   baseUrl: string
@@ -73,6 +77,11 @@ export type KunServeRuntimeOptions = {
   capabilities?: KunCapabilitiesConfig
   hooks?: HooksConfig
   quality?: QualityConfig
+  /** `harnesses` config section (per-harness enable/path/custom entries). */
+  harnesses?: HarnessesConfig
+  nativeAgentNetwork?: NativeAgentNetworkSnapshot
+  /** `ade` config section (runtime-side ADE switches). */
+  ade?: AdeConfig
   fastContext?: FastContextConfig
   lab?: LabConfig
   startedAt?: string
@@ -82,6 +91,8 @@ export type KunServeRuntimeOptions = {
   clientOwnerKind?: RuntimeClientOwnerKind
   runtimeFlavor?: RuntimeFlavor
   discoveryDir?: string
+  /** Publish `~/.kun/gateway.json` for external agents (production serve only). */
+  advertiseGatewayDiscovery?: boolean
   serviceManager?: ServiceManagerConnection
   logPath?: string
   faultInjection?: FaultInjectionController

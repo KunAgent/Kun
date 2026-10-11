@@ -1,4 +1,6 @@
+import { resolveRegistryDocumentMetadata } from './registry-model-metadata.js'
 import { randomUUID } from 'node:crypto'
+import { parseProviderHeaders } from './provider-protected-headers.js'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
@@ -97,6 +99,9 @@ scheduleCredentialRecovery(this: ModelConnectionRegistry,
   },
 
 async readDocumentForCredentialConsumer(this: ModelConnectionRegistry, providerId: string): Promise<RegistryDocument> {
+    // Main can request credentials before Runtime initialize(). Recovery must
+    // not publish an empty v2 document and hide the v1 credentials/selection.
+    await this['migrateLegacyRegistry']()
     await this['recoverExpiredCredentialTransaction'](providerId).catch(() => undefined)
     return this['file'].read(emptyDocument)
   },
@@ -122,6 +127,15 @@ async recoverExpiredCredentialTransaction(this: ModelConnectionRegistry,
     providerId: string,
     operationToken?: string
   ): Promise<boolean> {
+    // Every Main credential read passes through here. Without a pending
+    // transaction the conditional update below changed nothing yet still wrote
+    // the Registry, bumped its revision, and woke every model-connection
+    // watcher, which re-read credentials and wrote again.
+    const pending = (await this['file'].read(emptyDocument)).credentialTransactions[providerId]
+    if (!pending || (operationToken && pending.operationToken !== operationToken)) {
+      if (operationToken) this['clearPreparedCredentialSecret'](providerId, operationToken)
+      return false
+    }
     let recover = false
     let removedOrphan = false
     let durableTokenMissingOrMismatch = false
@@ -409,6 +423,18 @@ async applyLatest(this: ModelConnectionRegistry): Promise<void> {
     await operation
   },
 
+async refreshMetadata(this: ModelConnectionRegistry): Promise<void> {
+    const operation = this['changeOperation'].then(async () => {
+      const document = await this['file'].read(emptyDocument)
+      await this['apply'](document)
+      await this['metadataRevisionFile'].update(() => ({ revision: 0 }), (current) => ({ revision: current.revision + 1 }))
+      const snapshot = await this['projectWithCredentialHealth'](document)
+      for (const listener of this['listeners']) listener(snapshot)
+    })
+    this['changeOperation'] = operation.catch(() => undefined)
+    await operation
+  },
+
 project(this: ModelConnectionRegistry, document: RegistryDocument): ModelConnectionSnapshot {
     return project(document, this['options'].modelCapabilities, this['credentialHealth'])
   },
@@ -421,25 +447,49 @@ async projectWithCredentialHealth(this: ModelConnectionRegistry,
       this['credentialHealthRevision'] = document.revision
       this['credentialHealth'] = new Map(health)
     }
-    return project(document, this['options'].modelCapabilities, health)
+    // Capture the cursor before reading facts: a concurrent refresh must not
+    // label an older materialization with a newer cursor and hide the update.
+    const { revision: metadataRevision } = await this['metadataRevisionFile'].read(() => ({ revision: 0 }))
+    const enriched = await resolveRegistryDocumentMetadata(this, document)
+    return { ...project(enriched, this['options'].modelCapabilities, health), metadataRevision }
   },
 
 async inspectCredentialHealth(this: ModelConnectionRegistry,
     document: RegistryDocument
   ): Promise<ReadonlyMap<string, ProjectedCredentialHealth>> {
-    const entries = await Promise.all(Object.values(document.profiles).map(async (profile) => {
+    const profiles = Object.values(document.profiles)
+    const headerRefs = new Set(profiles.flatMap((profile) => profile.customHeadersRef ? [profile.customHeadersRef] : []))
+    const healthByRef = await this['options'].credentials.inspectHealth(
+      profiles.flatMap((profile) => [
+        ...(profile.customHeadersRef ? [profile.customHeadersRef] : []),
+        ...(profile.credentialRef && !document.credentialTransactions[profile.id] &&
+          !(profile.configured && isAnonymousHttpProfile(profile)) ? [profile.credentialRef] : [])
+      ]),
+      (payload, reference) => {
+        let headersReadable = false
+        if (headerRefs.has(reference)) {
+          try { parseProviderHeaders(payload); headersReadable = true } catch { /* Fail closed. */ }
+        }
+        return { apiKeyPresent: Boolean(payload?.apiKey?.trim()), headersReadable }
+      }
+    )
+    const inspect = async (profile: StoredProfile) => {
+      if (profile.customHeadersRef) {
+        const headers = healthByRef.get(profile.customHeadersRef)
+        if (!headers?.readable || !headers.health.headersReadable) {
+          return [profile.id, credentialHealth('unreadable')] as const
+        }
+      }
+      if (profile.configured && isAnonymousHttpProfile(profile)) {
+        return [profile.id, credentialHealth('not-required')] as const
+      }
       if (document.credentialTransactions[profile.id]) {
         return [profile.id, credentialHealth('missing')] as const
       }
       if (profile.credentialRef) {
-        try {
-          const credential = await this['options'].credentials.get(profile.credentialRef)
-          return [profile.id, credential?.apiKey?.trim()
-            ? credentialHealth('ready')
-            : credentialHealth('missing')] as const
-        } catch {
-          return [profile.id, credentialHealth('unreadable')] as const
-        }
+        const inspected = healthByRef.get(profile.credentialRef)
+        return [profile.id, credentialHealth(!inspected?.readable ? 'unreadable'
+          : inspected.health.apiKeyPresent ? 'ready' : 'missing')] as const
       }
       if (profile.credentialSourceId && this['options'].inspectCredentialSource) {
         try {
@@ -452,13 +502,21 @@ async inspectCredentialHealth(this: ModelConnectionRegistry,
       // Anonymous HTTP providers authenticate by sending no credential at
       // all, so the absence of one is the healthy state, not a missing one.
       if (profile.configured && profile.kind === 'http' && isAnonymousHttpProfile(profile)) {
-        return [profile.id, credentialHealth('ready')] as const
+        return [profile.id, credentialHealth('not-required')] as const
       }
       if (!profile.configured && profile.kind === 'http') {
         return [profile.id, credentialHealth('missing')] as const
       }
       return null
+    }
+    const entries = new Map<string, ProjectedCredentialHealth>()
+    let next = 0
+    await Promise.all(Array.from({ length: Math.min(8, profiles.length) }, async () => {
+      while (next < profiles.length) {
+        const entry = await inspect(profiles[next++])
+        if (entry) entries.set(...entry)
+      }
     }))
-    return new Map(entries.filter((entry): entry is NonNullable<typeof entry> => entry !== null))
+    return entries
   },
 }

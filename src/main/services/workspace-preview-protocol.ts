@@ -1,3 +1,4 @@
+import { KUN_WORKSPACE_PREVIEW_PRIVILEGED_SCHEME } from '../privileged-schemes'
 import { randomBytes } from 'node:crypto'
 import { open, readFile, realpath, stat, type FileHandle } from 'node:fs/promises'
 import { extname, isAbsolute, relative, resolve } from 'node:path'
@@ -12,17 +13,7 @@ import { resolveOpenTargetPath } from './workspace-paths'
 
 export const KUN_WORKSPACE_PREVIEW_SCHEME = 'kun-workspace-preview'
 
-export const KUN_WORKSPACE_PREVIEW_PRIVILEGED_SCHEME = {
-  scheme: KUN_WORKSPACE_PREVIEW_SCHEME,
-  privileges: {
-    standard: true,
-    secure: true,
-    supportFetchAPI: true,
-    corsEnabled: false,
-    bypassCSP: false,
-    stream: true
-  }
-} as const
+export { KUN_WORKSPACE_PREVIEW_PRIVILEGED_SCHEME } from '../privileged-schemes'
 
 const DEFAULT_LEASE_TTL_MS = 5 * 60 * 1_000
 const MAX_RESOURCE_BYTES = 512 * 1024 * 1024

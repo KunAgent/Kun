@@ -23,7 +23,7 @@ import { prepareRoomAgreements, roomBundleRules } from './room-rule-compression.
 import { RoomRuleSchema } from '../contracts/rooms-product.js'
 import { settleRoomRequestStop } from './room-request-actions.js'
 import { preserveRoomDiscussions, roomDiscussionContext } from './room-discussion-evidence.js'
-import { admitPeerRoomAmendment, peerRoomDispatchChecks, pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
+import { admitPeerRoomAmendment, peerCoordinationNeeded, peerRoomDispatchChecks, pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 
 export class RoomRequestRunner {
   constructor(private readonly deps: RoomRuntimeDeps, private readonly service: RoomService) {}
@@ -56,7 +56,7 @@ export class RoomRequestRunner {
         return this.save(row, request)
       }
     }
-    if (request.collaborationProtocol === 'peer' && request.message.executionIntent === 'discussion') {
+    if (!peerCoordinationNeeded(request)) {
       return this.save(row, { ...request, peerCoordinationDone: true, status: 'completed' })
     }
     const coordinator = room.members.find((member) => member.id === room.defaultMemberId)!
@@ -128,6 +128,7 @@ export class RoomRequestRunner {
         if (!member || member.role === 'reviewer' || member.role === 'coordinator') {
           throw new Error('当前 Agent 不能承接执行任务，请选择具备开发或诊断能力的执行负责人。')
         }
+        if (member.executor) throw new Error('编程 Agent 只参与讨论，不承接群内执行任务，请把任务交给 Kun Agent。')
         const task = await this.prepareTask(request, assignment, member)
         if (task && 'clarify' in task) return this.finish(row, 'needs_input', task.clarify)
         if (task) prepared.push(task)

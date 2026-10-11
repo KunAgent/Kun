@@ -1,7 +1,10 @@
+import type { ProviderCatalogDiscovery } from './discovery.js'
+export * from './discovery.js'
 import { PROVIDER_CATALOG } from './presets.js'
 
 export * from './antigravity-model-catalog.js'
 export { PROVIDER_CATALOG } from './presets.js'
+export { validateProviderCatalog } from './validation.js'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
@@ -28,17 +31,43 @@ export type ProviderCatalogEndpointFormat =
   | 'messages'
   | 'custom_endpoint'
 
+/** Per-protocol base URLs for vendors that serve several wire formats on different paths. */
+export type ProviderCatalogEndpoints = {
+  chat_completions?: string
+  responses?: string
+  messages?: string
+}
+
+/** One base-URL choice (a regional cluster or a plan tier). The first entry is the default. */
+export type ProviderCatalogRegion = {
+  discovery?: ProviderCatalogDiscovery
+  id: string
+  /** Display name; the id is shown when omitted. */
+  name?: string
+  baseUrl: string
+  endpoints?: ProviderCatalogEndpoints
+}
+
+/** Where a key's remaining balance or plan allowance can be read (schema v2). */
+export type ProviderCatalogBalanceSource = 'deepseek' | 'moonshot' | 'openrouter' | 'siliconflow' |
+  'stepfun' | 'aihubmix' | 'new-api'
+export type ProviderCatalogPlanQuotaSource = 'zhipu' | 'zai' | 'kimi-code' | 'minimax'
+
 export type ProviderCatalogTokenPlan = {
+  discovery?: ProviderCatalogDiscovery
   /** Optional product-specific name used instead of the generic "Token Plan" label. */
   displayName?: string
   baseUrl: string
-  regions?: ReadonlyArray<{ id: string; baseUrl: string }>
+  regions?: ReadonlyArray<ProviderCatalogRegion>
+  endpoints?: ProviderCatalogEndpoints
+  planQuota?: ProviderCatalogPlanQuotaSource
   endpointFormat: ProviderCatalogEndpointFormat
   models: readonly string[]
   credentialUrl: string
 }
 
 export type ProviderCatalogPreset = {
+  discovery?: ProviderCatalogDiscovery
   id: string
   name: string
   category: ProviderCatalogCategory
@@ -52,6 +81,21 @@ export type ProviderCatalogPreset = {
   docsUrl: string
   credentialUrl: string
   tokenPlan?: ProviderCatalogTokenPlan
+  /** Schema v2: picker grouping. */
+  origin?: 'vendor' | 'relay' | 'local'
+  /** Schema v2: API-mode base-URL choices; the first equals `baseUrl`. */
+  regions?: ReadonlyArray<ProviderCatalogRegion>
+  regionLabel?: string
+  /** Schema v2: per-protocol base URLs of the default region. */
+  endpoints?: ProviderCatalogEndpoints
+  /** Schema v2: documented optional request headers the editor offers to add (values stay user-owned). */
+  headerHints?: readonly string[]
+  /** Schema v2: the vendor serves no model list; `models` is authoritative. */
+  noList?: boolean
+  /** Schema v2: the endpoint lives at the user's own resource; `baseUrl` is only an example. */
+  endpointHint?: string
+  balance?: ProviderCatalogBalanceSource
+  planQuota?: ProviderCatalogPlanQuotaSource
 }
 
 export type ProviderCatalogEntry = {
@@ -124,6 +168,8 @@ export function resolveProviderCatalogSource(
   }
 
   const id = input.id?.trim().toLowerCase() ?? ''
+  const exactPlan = id.endsWith(TOKEN_PLAN_PROVIDER_ID_SUFFIX) ? catalog.find((preset) => preset.id === id.slice(0, -TOKEN_PLAN_PROVIDER_ID_SUFFIX.length) && preset.tokenPlan) : undefined
+  if (exactPlan) return { preset: exactPlan, presetSource: exactPlan.id, presetMode: 'token-plan' }
   const exact = catalog.find((preset) => preset.id === id)
   if (exact) return { preset: exact, presetSource: exact.id, presetMode: 'api' }
   const numbered = /^(.*)-(?:[2-9]|[1-9][0-9]+)$/u.exec(id)?.[1]

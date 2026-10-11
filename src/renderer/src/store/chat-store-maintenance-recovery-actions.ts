@@ -369,6 +369,8 @@ export function createMaintenanceRecoveryActions(
         delete u[targetId]
         return {
           threads: s.threads.filter((thread) => thread.id !== targetId),
+          adeThreads: (s.adeThreads ?? []).filter((thread) => thread.id !== targetId),
+          ...(s.lastAdeThreadId === targetId ? { lastAdeThreadId: null } : {}),
           watchTurnCompletion: w,
           unreadThreadIds: u,
           ...(deletingActive ? clearedThreadSelection() : {}),
@@ -376,6 +378,9 @@ export function createMaintenanceRecoveryActions(
         }
       })
       await get().refreshThreads()
+      if (get().route === 'ade' || (get().adeThreads?.length ?? 0) > 0) {
+        void get().refreshAdeThreads?.()
+      }
     } catch (e) {
       set({
         error: formatRuntimeError(e),

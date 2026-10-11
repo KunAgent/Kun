@@ -1,3 +1,4 @@
+import { latestExecutedTurn } from '../domain/queue-execution-state.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -87,6 +88,8 @@ async applyAssistantDelta(this: TurnService,
     if (item.kind !== 'assistant_text' && item.kind !== 'assistant_reasoning') {
       throw new TypeError(`assistant delta requires assistant item: ${item.kind}`)
     }
+    // Scoped paper output must carry its rendering policy before any text is shown.
+    if (item.renderMode) return this.applyItem(threadId, item)
     if (!Number.isSafeInteger(deltaOffset) || deltaOffset < 0) {
       throw new RangeError(`assistant delta offset must be a non-negative safe integer: ${deltaOffset}`)
     }
@@ -231,8 +234,15 @@ async markTurnAdmissionCompleted(this: TurnService,
         const { admissionPending: _pending, ...committed } = turn
         return { ...committed, admissionCompletedAt: completedAt }
       })
+      const stopped = latestExecutedTurn(current)
+      const resumesFreshInput = existing.status === 'queued' && existing.queueResumeSourceTurnId &&
+        stopped?.id === existing.queueResumeSourceTurnId && stopped.status === 'aborted' &&
+        current.queueControl?.reason !== 'restart_recovery'
       const next: ThreadRecord = {
         ...current,
+        ...(resumesFreshInput
+          ? { queueControl: undefined, queueResumeSourceTurnId: stopped.id }
+          : existing.status === 'running' && current.queueControl ? { queueControl: undefined } : {}),
         ...(locks.agentSurface ? { agentSurface: locks.agentSurface } : {}),
         ...(locks.designProfile ? { designProfile: locks.designProfile } : {}),
         ...(locks.approvalPolicy ? { approvalPolicy: locks.approvalPolicy } : {}),

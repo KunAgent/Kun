@@ -1,0 +1,42 @@
+{
+  "sessionId": "sess-noconfig",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": false,
+      "promptCapabilities": {}
+    },
+    "authMethods": []
+  },
+  "newSession": {
+    "modes": {
+      "currentModeId": "default",
+      "availableModes": [
+        {
+          "id": "default",
+          "name": "Default"
+        },
+        {
+          "id": "auto",
+          "name": "Auto"
+        }
+      ]
+    }
+  },
+  "turns": [
+    {
+      "steps": [
+        {
+          "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "ok"
+            }
+          }
+        }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

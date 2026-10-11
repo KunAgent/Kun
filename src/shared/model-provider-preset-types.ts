@@ -5,6 +5,7 @@ import type {
   ModelProviderImageCapabilityV1,
   ModelProviderMusicCapabilityV1,
   ModelProviderModelProfileV1,
+  ModelProviderEndpointsV1,
   ModelProviderPresetMode,
   ModelProviderProfileV1,
   ModelProviderReasoningCapabilityV1,
@@ -31,7 +32,6 @@ export type ModelProviderPresetId =
   | 'volcengine-agent-plan'
   | 'volcengine-coding-plan'
   | 'opencode-go'
-  | 'opencode-free'
   | 'zenmux'
   | 'codex'
   | 'claude-subscription'
@@ -66,6 +66,20 @@ export type ModelProviderPresetId =
   | 'ollama-local'
   | 'lmstudio'
   | 'local-openai'
+  | 'baidu-qianfan'
+  | 'huaweicloud-maas'
+  | 'tencent-tokenhub'
+  | 'amazon-bedrock'
+  | 'azure-openai'
+  | 'nvidia-nim'
+  | 'modelscope'
+  | 'opencode-zen'
+  | 'kilo-gateway'
+  | 'commandcode'
+  | 'pipellm'
+  | 'cherryin'
+  | 'yylx'
+  | 'omlx'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
@@ -97,22 +111,6 @@ export const OLLAMA_CLOUD_PROVIDER_ID = 'ollama'
 
 export const OLLAMA_CLOUD_PROVIDER_NAME = 'Ollama Cloud'
 
-export const OPENCODE_FREE_PROVIDER_ID = 'opencode-free'
-
-export const OPENCODE_FREE_PROVIDER_NAME = 'OpenCore Free'
-
-// Bootstrap snapshot of the non-deprecated zero-cost models that OpenCode Zen
-// serves anonymously through Chat Completions. Settings may import newer
-// zero-cost models from models.dev, but a mixed endpoint family must not be
-// seeded into this single-protocol provider.
-export const OPENCODE_FREE_MODEL_IDS = [
-  'big-pickle',
-  'mimo-v2.5-free',
-  'ling-3.0-flash-fin-free',
-  'nemotron-3-ultra-free',
-  'nemotron-3.5-lightning-free'
-] as const
-
 // Bootstrap snapshot from Ollama Cloud's official GET /v1/models response.
 // The live endpoint remains authoritative and Settings can import additions.
 export const OLLAMA_CLOUD_MODEL_IDS = [
@@ -136,9 +134,12 @@ export const OLLAMA_CLOUD_MODEL_IDS = [
   'qwen3.5:397b'
 ] as const
 
+// Bootstrap ids for the Antigravity CLI (`agy models`, 1.3.1). The live list
+// replaces this catalog once the user refreshes models.
 export const GEMINI_SUBSCRIPTION_MODEL_IDS = [
   'gemini-3.6-flash',
-  'gemini-3.5-flash',
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
   'gemini-3.1-pro'
 ] as const
 
@@ -184,8 +185,19 @@ export const CHATGPT_SUBSCRIPTION_MODEL_IDS = [
 
 export type ModelProviderTokenPlanRegion = {
   id: string
+  /** Display name; the picker falls back to the id. */
+  name?: string
   baseUrl: string
+  /** Per-protocol base URLs served by this region or plan tier. */
+  endpoints?: ModelProviderEndpointsV1
 }
+
+/** Where a key's balance is read; see kun provider-balance readers. */
+export type ModelProviderBalanceSource = 'deepseek' | 'moonshot' | 'openrouter' | 'siliconflow' |
+  'stepfun' | 'aihubmix' | 'new-api'
+
+/** Where a plan key's allowance windows are read. */
+export type ModelProviderPlanQuotaSource = 'zhipu' | 'zai' | 'kimi-code' | 'minimax'
 
 export type ModelProviderSubscriptionRegion = 'china' | 'united-states'
 
@@ -233,6 +245,9 @@ export type ModelProviderTokenPlanPreset = {
   }
   /** Expected key prefix, e.g. "tp-". Hint only, never enforced. */
   keyPrefix?: string
+  /** Per-protocol base URLs of the default plan endpoint. */
+  endpoints?: ModelProviderEndpointsV1
+  planQuota?: ModelProviderPlanQuotaSource
   apiKeyUrl: string
 }
 
@@ -313,6 +328,18 @@ export type ModelProviderPreset = {
     models: string[]
   }
   tokenPlan?: ModelProviderTokenPlanPreset
+  /** Label for the region picker (e.g. "AWS region", "Plan"). */
+  regionLabel?: string
+  /** Per-protocol base URLs of the default region (relay gateways, multi-format vendors). */
+  endpoints?: ModelProviderEndpointsV1
+  /** Documented optional request headers offered by the editor; values remain user-owned. */
+  headerHints?: string[]
+  /** The vendor serves no model list; `models` is authoritative and discovery is skipped. */
+  noList?: boolean
+  /** The endpoint is the user's own resource; `baseUrl` is only an example and must be replaced. */
+  endpointHint?: string
+  balance?: ModelProviderBalanceSource
+  planQuota?: ModelProviderPlanQuotaSource
   docsUrl: string
   apiKeyUrl: string
 }

@@ -7,6 +7,8 @@ import {
 
 export const LIVE_ITEM_CHECKPOINT_MAX_EVENTS = 128
 export const LIVE_ITEM_CHECKPOINT_MAX_AGE_MS = 1_000
+export const LIVE_ITEM_CHECKPOINT_RETRY_MAX_MS = 30_000
+const FAILURE_LOG_INTERVAL_MS = 30_000
 
 type PendingCheckpoint = {
   threadId: string
@@ -19,12 +21,17 @@ type PendingCheckpoint = {
   lastFlushedAt: number
   dirtyEvents: number
   generation: number
+  failures: number
+  retryAfter: number
+  lastFailureLogAt?: number
   timer?: ReturnType<typeof setTimeout>
   flush?: Promise<void>
 }
 
 export type LiveCheckpointStats = {
   pending: number
+  degraded: boolean
+  failedFlushes: number
   flushes: number
   skipped: number
   maxObservedSeqLag: number
@@ -44,6 +51,8 @@ export type FileSessionLiveCheckpointHost = {
 export class FileSessionLiveCheckpointCoordinator {
   private readonly pending = new Map<string, PendingCheckpoint>()
   private readonly threadGenerations = new Map<string, number>()
+  private closed = false
+  private failedFlushes = 0
   private flushes = 0
   private skipped = 0
   private maxObservedSeqLag = 0
@@ -55,6 +64,7 @@ export class FileSessionLiveCheckpointCoordinator {
   ) {}
 
   async checkpoint(threadId: string, item: TurnItem, representedSeq: number): Promise<void> {
+    if (this.closed) throw new Error('live checkpoint coordinator is closed')
     const key = checkpointKey(threadId, item.id)
     let state = this.pending.get(key)
     if (!state) {
@@ -69,6 +79,8 @@ export class FileSessionLiveCheckpointCoordinator {
         lastFlushedSeq: representedSeq,
         lastFlushedAt: now,
         dirtyEvents: 1,
+        failures: 0,
+        retryAfter: 0,
         generation: this.threadGenerations.get(threadId) ?? 0
       }
       this.pending.set(key, state)
@@ -86,7 +98,8 @@ export class FileSessionLiveCheckpointCoordinator {
     this.maxObservedAgeMs = Math.max(this.maxObservedAgeMs, age)
     this.maxObservedSeqLag = Math.max(this.maxObservedSeqLag, seqLag)
     const bytesDue = state.latestBytes - state.lastFlushedBytes >= LIVE_ITEM_CHECKPOINT_STEP_BYTES
-    if (bytesDue || state.dirtyEvents >= LIVE_ITEM_CHECKPOINT_MAX_EVENTS || age >= LIVE_ITEM_CHECKPOINT_MAX_AGE_MS) {
+    if (this.now() >= state.retryAfter && (bytesDue ||
+      state.dirtyEvents >= LIVE_ITEM_CHECKPOINT_MAX_EVENTS || age >= LIVE_ITEM_CHECKPOINT_MAX_AGE_MS)) {
       await this.flushState(state)
       return
     }
@@ -122,6 +135,13 @@ export class FileSessionLiveCheckpointCoordinator {
   }
 
   async close(): Promise<void> {
+    this.closed = true
+    for (const state of this.pending.values()) {
+      if (state.timer) clearTimeout(state.timer)
+      state.timer = undefined
+    }
+    // Keep dirty state if the final write fails, so a caller can retry close.
+    // No background callback may outlive a failed shutdown.
     await Promise.all([...this.pending.values()].map((state) => this.flushState(state)))
     for (const [key, state] of this.pending) this.clearState(key, state)
   }
@@ -140,6 +160,8 @@ export class FileSessionLiveCheckpointCoordinator {
   stats(): LiveCheckpointStats {
     return {
       pending: this.pending.size,
+      degraded: [...this.pending.values()].some((state) => state.failures > 0),
+      failedFlushes: this.failedFlushes,
       flushes: this.flushes,
       skipped: this.skipped,
       maxObservedSeqLag: this.maxObservedSeqLag,
@@ -148,15 +170,12 @@ export class FileSessionLiveCheckpointCoordinator {
   }
 
   private armTimer(state: PendingCheckpoint): void {
-    if (state.timer) return
-    const remaining = Math.max(1, LIVE_ITEM_CHECKPOINT_MAX_AGE_MS - (this.now() - state.lastFlushedAt))
+    if (this.closed || state.timer || this.pending.get(checkpointKey(state.threadId, state.itemId)) !== state) return
+    const remaining = Math.max(1, state.retryAfter - this.now(),
+      LIVE_ITEM_CHECKPOINT_MAX_AGE_MS - (this.now() - state.lastFlushedAt))
     state.timer = setTimeout(() => {
       state.timer = undefined
-      void this.flushState(state).catch((error) => {
-        console.warn(`[kun] live checkpoint flush deferred for ${state.threadId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`)
-      })
+      void this.flushState(state).catch(() => undefined)
     }, remaining)
     state.timer.unref?.()
   }
@@ -178,7 +197,23 @@ export class FileSessionLiveCheckpointCoordinator {
       state.lastFlushedSeq = representedSeq
       state.lastFlushedAt = this.now()
       state.dirtyEvents = Math.max(0, state.dirtyEvents - dirtyAtStart)
+      state.failures = 0
+      state.retryAfter = 0
+      state.lastFailureLogAt = undefined
       this.flushes += 1
+    }).catch((error: unknown) => {
+      state.failures += 1
+      this.failedFlushes += 1
+      const now = this.now()
+      state.retryAfter = now + Math.min(LIVE_ITEM_CHECKPOINT_RETRY_MAX_MS,
+        1_000 * 2 ** Math.min(state.failures - 1, 5))
+      if (state.lastFailureLogAt === undefined || now - state.lastFailureLogAt >= FAILURE_LOG_INTERVAL_MS) {
+        state.lastFailureLogAt = now
+        console.warn(`[kun] live checkpoint persistence degraded for ${state.threadId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`)
+      }
+      throw error
     })
     state.flush = task
     try {

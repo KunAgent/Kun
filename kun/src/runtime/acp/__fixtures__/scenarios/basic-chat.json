@@ -1,0 +1,56 @@
+{
+  "sessionId": "sess-basic",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": true,
+      "promptCapabilities": { "image": true, "embeddedContext": true },
+      "mcpCapabilities": { "http": true }
+    },
+    "authMethods": [],
+    "agentInfo": { "name": "fake-acp-agent", "version": "0.0.1" }
+  },
+  "newSession": {
+    "modes": {
+      "currentModeId": "ask",
+      "availableModes": [
+        { "id": "ask", "name": "Ask" },
+        { "id": "auto", "name": "Auto" }
+      ]
+    },
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "fake-model-1",
+        "options": [
+          { "value": "fake-model-1", "name": "Fake Model 1" },
+          { "value": "fake-model-2", "name": "Fake Model 2" }
+        ]
+      },
+      {
+        "id": "thought",
+        "name": "Thinking",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "medium",
+        "options": [
+          { "value": "low", "name": "Low" },
+          { "value": "medium", "name": "Medium" },
+          { "value": "high", "name": "High" }
+        ]
+      }
+    ]
+  },
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Hello " } } },
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "world" } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

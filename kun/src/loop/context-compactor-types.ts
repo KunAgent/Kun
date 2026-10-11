@@ -50,5 +50,7 @@ export type CompactionTriggerOptions = {
    * exceed it). Only when both this and `outputBudgetTokens` are present
    * does the budget-driven force compaction apply.
    */
+  /** Independent model maximum input, excluding the output reservation. */
+  requestMaxInputTokens?: number
   requestHardCapTokens?: number
 }

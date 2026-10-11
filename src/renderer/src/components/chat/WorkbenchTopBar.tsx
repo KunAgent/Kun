@@ -1,7 +1,9 @@
 import type { ReactElement } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorInfo } from '@shared/editor'
+import { WorkbenchSideRailDivider, WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
 import { WorkbenchGuiUpdateButton } from './WorkbenchGuiUpdateButton'
+import { useWardrobe } from '../rooms/room-wardrobe'
 import {
   Blocks,
   Bot,
@@ -24,8 +26,11 @@ import {
   RefreshCw,
   Search,
   Shapes,
+  Shirt,
   Smartphone,
-  Terminal
+  Terminal,
+  Users,
+  type LucideIcon
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { readPreferredEditorId, writePreferredEditorId } from '../../lib/editor-preferences'
@@ -56,6 +61,10 @@ type Props = {
   planPanelEnabled?: boolean
   canvasEnabled?: boolean
   graphEnabled?: boolean
+  /** Thread binds a task workspace → offer the review tab. */
+  reviewEnabled?: boolean
+  /** ADE thread has worker activity rows → offer the Workers tab. */
+  workersEnabled?: boolean
   sideChatRunningCount?: number
   sideChatOpen?: boolean
   sideChatEnabled?: boolean
@@ -70,6 +79,18 @@ type Props = {
   onSelectExtension?: (entry: ExtensionRightRailViewEntry) => void
 }
 
+type RailEntry = {
+  key: string
+  label: string
+  icon: LucideIcon
+  active: boolean
+  disabled?: boolean
+  running?: boolean
+  /** Unread count, e.g. unopened wardrobe bottles. */
+  badge?: number
+  onClick: () => void
+}
+
 type WorkbenchTopActionsProps = {
   terminalOpen?: boolean
   onToggleTerminal?: () => void
@@ -81,17 +102,10 @@ type WorkbenchTopActionsProps = {
 }
 
 const TOPBAR_ICON_CLASS = 'h-4 w-4'
-const SIDE_RAIL_BUTTON_BASE =
-  'ds-side-rail-button inline-flex h-8 w-8 items-center justify-center rounded-[var(--ds-radius-control)] border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30'
-const SIDE_RAIL_BUTTON_ACTIVE = 'border-ds-border-strong bg-ds-card text-ds-ink'
-const SIDE_RAIL_BUTTON_IDLE =
-  'border-transparent bg-transparent text-ds-faint opacity-90 hover:border-ds-border-muted hover:bg-ds-hover hover:text-ds-ink hover:opacity-100'
+const SIDE_RAIL_BUTTON_ACTIVE = 'border-transparent bg-ds-hover text-ds-ink'
+const SIDE_RAIL_BUTTON_IDLE = 'border-transparent bg-transparent text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
 const TOPBAR_ACTION_BUTTON_BASE =
   'ds-topbar-action-button inline-flex h-8 w-8 items-center justify-center rounded-[var(--ds-radius-control)] border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30'
-
-function sideRailButtonClass(active: boolean, extra?: string): string {
-  return `${SIDE_RAIL_BUTTON_BASE} ${active ? SIDE_RAIL_BUTTON_ACTIVE : SIDE_RAIL_BUTTON_IDLE}${extra ? ` ${extra}` : ''}`
-}
 
 function topbarActionButtonClass(active: boolean, extra?: string): string {
   return `${TOPBAR_ACTION_BUTTON_BASE} ${active ? SIDE_RAIL_BUTTON_ACTIVE : SIDE_RAIL_BUTTON_IDLE}${extra ? ` ${extra}` : ''}`
@@ -304,12 +318,13 @@ export function WorkbenchTopActions({
         </button>
       ) : null}
 
+      {!remoteMobile ? <span aria-hidden="true" className="mx-0.5 h-4 w-px shrink-0 bg-ds-border" /> : null}
       {!remoteMobile ? (
       <button
         type="button"
         onClick={() => void restartKunServe()}
         disabled={restartingKunServe || !restartKunServeAvailable}
-        className="ds-topbar-action-button inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--ds-radius-control)] border border-amber-200/75 bg-white/70 text-amber-600/85 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-sm transition hover:border-amber-300/90 hover:bg-amber-50/90 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/25 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-800/55 dark:bg-amber-950/15 dark:text-amber-400/85 dark:shadow-none dark:hover:border-amber-700/80 dark:hover:bg-amber-950/35 dark:hover:text-amber-300"
+        className={topbarActionButtonClass(false, 'shrink-0 disabled:cursor-not-allowed disabled:opacity-50')}
         data-tooltip={restartingKunServe
           ? t('restartKunServeRestarting')
           : restartKunServeError || t('restartKunServeTooltip')}
@@ -351,6 +366,7 @@ export function WorkbenchSideRail({
   planPanelEnabled = false,
   canvasEnabled = false,
   graphEnabled = false,
+  workersEnabled = false,
   sideChatRunningCount = 0,
   sideChatOpen = false,
   sideChatEnabled = true,
@@ -365,25 +381,30 @@ export function WorkbenchSideRail({
   const { t } = useTranslation(['common', 'settings'])
   // The Remote panel configures this host; hide the entry inside Remote clients.
   const isRemoteWeb = typeof window !== 'undefined' && window.kunGui?.isRemoteWeb === true
-  const items = [
-    ...(planPanelEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.plan, label: t('rightPanelPlan'), icon: ClipboardList }] : []),
-    { mode: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
-    { mode: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowser'), icon: Globe2 },
-    ...(canvasEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.canvas, label: t('rightPanelWhiteboard'), icon: Shapes }] : []),
-    ...(graphEnabled ? [{
-      mode: BUILTIN_RIGHT_PANEL_IDS.graph,
-      label: t('rightPanelGraph', { defaultValue: 'Graph' }),
-      icon: GitBranch
-    }] : []),
-    { mode: BUILTIN_RIGHT_PANEL_IDS.subagents, label: t('rightPanelSubagents'), icon: Bot },
-    { mode: BUILTIN_RIGHT_PANEL_IDS.mcpSkills, label: t('rightPanelMcpSkills'), icon: Blocks },
-    {
-      mode: BUILTIN_RIGHT_PANEL_IDS.providerQuotas,
-      label: t('rightPanelProviderQuotas'),
-      icon: Gauge
-    },
-    ...(isRemoteWeb ? [] : [{ mode: BUILTIN_RIGHT_PANEL_IDS.remote, label: t('rightPanelRemote'), icon: Radio }])
-  ]
+  const bottles = useWardrobe().wardrobe?.pending.length ?? 0
+  const panel = (mode: Exclude<RightPanelMode, null>, label: string, icon: LucideIcon): RailEntry => ({
+    key: mode, label, icon, active: rightPanelMode === mode, onClick: () => onToggleRightPanelMode(mode)
+  })
+  // Workspace tools first, collaboration next, tools and status pinned to the bottom.
+  const groups: RailEntry[][] = [[
+    ...(onToggleFileTree ? [{ key: 'files', label: t('rightPanelFiles'), icon: Folders, active: fileTreeOpen,
+      disabled: !fileTreeEnabled, onClick: onToggleFileTree }] : []),
+    panel(BUILTIN_RIGHT_PANEL_IDS.changes, t('rightPanelChanges'), FileEdit),
+    ...(planPanelEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.plan, t('rightPanelPlan'), ClipboardList)] : []),
+    panel(BUILTIN_RIGHT_PANEL_IDS.browser, t('rightPanelBrowser'), Globe2)
+  ], [
+    ...(onOpenSideChat ? [{ key: 'side-chat', label: t('sidePanelOpen'), icon: MessageCircleMore, active: sideChatOpen,
+      disabled: !sideChatEnabled, onClick: onOpenSideChat, running: sideChatRunningCount > 0 }] : []),
+    panel(BUILTIN_RIGHT_PANEL_IDS.subagents, t('rightPanelSubagents'), Bot),
+    ...(workersEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.workers, t('rightPanelWorkers', { defaultValue: 'Workers' }), Users)] : []),
+    ...(graphEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.graph, t('rightPanelGraph', { defaultValue: 'Graph' }), GitBranch)] : []),
+    ...(canvasEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.canvas, t('rightPanelWhiteboard'), Shapes)] : [])
+  ], [
+    panel(BUILTIN_RIGHT_PANEL_IDS.mcpSkills, t('rightPanelMcpSkills'), Blocks),
+    panel(BUILTIN_RIGHT_PANEL_IDS.providerQuotas, t('rightPanelProviderQuotas'), Gauge),
+    { ...panel(BUILTIN_RIGHT_PANEL_IDS.wardrobe, t('rightPanelWardrobe'), Shirt), badge: bottles },
+    ...(isRemoteWeb ? [] : [panel(BUILTIN_RIGHT_PANEL_IDS.remote, t('rightPanelRemote'), Radio)])
+  ]]
 
   if (presentation === 'sheet') {
     if (!sheetOpen) return null
@@ -410,52 +431,28 @@ export function WorkbenchSideRail({
         />
         <div className="ds-sidebar-surface absolute inset-x-0 bottom-0 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-ds-border-muted px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] pt-2 shadow-2xl">
           <div className="mx-auto mb-1 h-1 w-9 rounded-full bg-ds-border-strong" aria-hidden />
-          {onOpenSideChat ? (
-            <button
-              type="button"
-              onClick={() => pick(onOpenSideChat)}
-              disabled={!sideChatEnabled}
-              className={rowClass}
-              aria-pressed={sideChatOpen}
-            >
-              <MessageCircleMore className={rowIconClass} strokeWidth={1.75} />
-              <span className="flex-1">{t('sidePanelOpen')}</span>
-              {sideChatRunningCount > 0 ? (
-                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" aria-hidden />
-              ) : null}
-            </button>
-          ) : null}
-          {items.map((item) => {
-            const Icon = item.icon
-            const active = rightPanelMode === item.mode
-            return (
-              <button
-                key={item.mode}
-                type="button"
-                onClick={() => pick(() => onToggleRightPanelMode(item.mode))}
-                disabled={'disabled' in item && item.disabled === true}
-                className={rowClass}
-                aria-pressed={active}
-              >
-                <Icon className={rowIconClass} strokeWidth={1.75} />
-                <span className="flex-1">{item.label}</span>
-                {active ? <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} /> : null}
-              </button>
-            )
-          })}
-          {onToggleFileTree ? (
-            <button
-              type="button"
-              onClick={() => pick(onToggleFileTree)}
-              disabled={!fileTreeEnabled}
-              className={rowClass}
-              aria-pressed={fileTreeOpen}
-            >
-              <Folders className={rowIconClass} strokeWidth={1.75} />
-              <span className="flex-1">{t('rightPanelFiles')}</span>
-              {fileTreeOpen ? <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} /> : null}
-            </button>
-          ) : null}
+          {groups.map((group, index) => (
+            <div key={index} className={index > 0 ? 'mt-1 border-t border-ds-border-muted pt-1' : undefined}>
+              {group.map((entry) => {
+                const Icon = entry.icon
+                return (
+                  <button
+                    key={entry.key}
+                    type="button"
+                    onClick={() => pick(entry.onClick)}
+                    disabled={entry.disabled}
+                    className={rowClass}
+                    aria-pressed={entry.active}
+                  >
+                    <Icon className={rowIconClass} strokeWidth={1.75} />
+                    <span className="flex-1">{entry.label}</span>
+                    {entry.running ? <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" aria-hidden /> : null}
+                    {entry.active ? <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} /> : null}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
           {isRemoteWeb ? (
             <button
               type="button"
@@ -509,59 +506,38 @@ export function WorkbenchSideRail({
   }
 
   return (
-    <div className="ds-workbench-side-rail ds-sidebar-surface ds-no-drag flex h-full w-12 shrink-0 flex-col items-center gap-1.5 border-l border-ds-border-muted py-3">
-      {onOpenSideChat ? (
-        <button
-          type="button"
-          onClick={onOpenSideChat}
-          disabled={!sideChatEnabled}
-          className={sideRailButtonClass(sideChatOpen, 'relative disabled:cursor-not-allowed disabled:opacity-45')}
-          data-tooltip={t('sidePanelOpen')}
-          aria-label={t('sidePanelOpen')}
-          aria-pressed={sideChatOpen}
-        >
-          <MessageCircleMore className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
-          {sideChatRunningCount > 0 ? (
-            <span className="absolute -bottom-0.5 -left-0.5 h-2 w-2 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.18)]" />
-          ) : null}
-        </button>
-      ) : null}
-
-      {items.map((item) => {
-        const active = rightPanelMode === item.mode
-        const Icon = item.icon
-        return (
-          <button
-            key={item.mode}
-            type="button"
-            onClick={() => onToggleRightPanelMode(item.mode)}
-            disabled={'disabled' in item && item.disabled === true}
-            className={sideRailButtonClass(active, 'disabled:cursor-not-allowed disabled:opacity-45')}
-            data-tooltip={item.label}
-            aria-label={item.label}
-            aria-pressed={active}
-          >
-            <Icon className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
-          </button>
-        )
-      })}
-
-      {onToggleFileTree ? (
-        <button
-          type="button"
-          onClick={onToggleFileTree}
-          disabled={!fileTreeEnabled}
-          className={sideRailButtonClass(fileTreeOpen, 'disabled:cursor-not-allowed disabled:opacity-45')}
-          data-tooltip={t('rightPanelFiles')}
-          aria-label={t('rightPanelFiles')}
-          aria-pressed={fileTreeOpen}
-        >
-          <Folders className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
-        </button>
-      ) : null}
+    <WorkbenchSideRailSurface>
+      {groups.map((group, index) => (
+        <Fragment key={index}>
+          {index === 2 ? <span className="flex-1" aria-hidden="true" /> : null}
+          {index > 0 && group.length > 0 ? <WorkbenchSideRailDivider /> : null}
+          {group.map((entry) => {
+            const Icon = entry.icon
+            return (
+              <button
+                key={entry.key}
+                type="button"
+                onClick={entry.onClick}
+                disabled={entry.disabled}
+                className={sideRailButtonClass(entry.active, 'relative disabled:cursor-not-allowed disabled:opacity-45')}
+                data-tooltip={entry.label}
+                data-rail-entry={entry.key}
+                aria-label={entry.label}
+                aria-pressed={entry.active}
+              >
+                <Icon className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
+                {entry.running ? (
+                  <span className="absolute bottom-1 left-1 h-[7px] w-[7px] animate-pulse rounded-full bg-emerald-500 shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)]" />
+                ) : null}
+                {entry.badge ? <span className="ds-rail-badge absolute right-0.5 top-0.5 grid h-[14px] min-w-[14px] place-items-center rounded-full bg-[var(--ds-danger,#d14343)] px-[3px] text-[9.5px] font-bold leading-none text-white shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)]" data-rail-badge={entry.badge}>{entry.badge > 9 ? '9+' : entry.badge}</span> : null}
+              </button>
+            )
+          })}
+        </Fragment>
+      ))}
 
       {extensionContainers.length > 0 || extensionItems.length > 0 ? (
-        <div className="ds-extension-side-rail-group mt-auto flex shrink-0 flex-col items-center gap-1.5 border-t border-ds-border-muted pt-2">
+        <div className="ds-extension-side-rail-group flex shrink-0 flex-col items-center gap-1">
           {extensionContainers.map(({ container, target }) => {
             if (container.owner.kind !== 'extension') return null
             const active = rightPanelMode === target.id
@@ -658,6 +634,6 @@ export function WorkbenchSideRail({
           <Smartphone className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
       ) : null}
-    </div>
+    </WorkbenchSideRailSurface>
   )
 }

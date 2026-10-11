@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { resolveWindowsExecutablePath } from './owned-process-windows.js'
 import { quoteWindowsArgument, spawnWindowsOwnedProcess, stopWindowsOwnedProcess, shutdownWindowsOwnedProcesses, resumeWindowsOwnedProcessAdmission } from './owned-process-windows.js'
 
 describe('Windows executable argument encoding', () => {
+  it('uses the same case-insensitive PATH and command suffix lookup for detection and launch', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'kun-windows-command-'))
+    try {
+      await writeFile(join(directory, 'npm.cmd'), '@exit /b 0')
+      expect(await resolveWindowsExecutablePath('npm', { env: { Path: directory } })).toBe(join(directory, 'npm.cmd'))
+      expect(await resolveWindowsExecutablePath(join(directory, 'npm.cmd'), {})).toBe(join(directory, 'npm.cmd'))
+    } finally { await rm(directory, { recursive: true, force: true }) }
+  })
   it('preserves whitespace, trailing backslashes and embedded quotes without a shell', () => {
     expect(quoteWindowsArgument('plain')).toBe('plain')
     expect(quoteWindowsArgument('')).toBe('""')

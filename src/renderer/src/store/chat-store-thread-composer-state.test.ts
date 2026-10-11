@@ -4,6 +4,7 @@ import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import type { BrowserStorageLike } from '../lib/browser-storage'
 import {
   rememberThreadComposerMode,
+  rememberThreadComposerReasoning,
   rememberThreadComposerSelection
 } from './chat-store-helpers'
 import {
@@ -408,6 +409,69 @@ describe('thread composer state restoration', () => {
     expect(restored.composerModel).toBe('shared-model')
     expect(restored.composerProviderId).toBe('provider-b')
     expect(restored.composerReasoningEffort).toBe('high')
+  })
+
+  it('restores an external Agent thread at Auto until a level is picked for its model', () => {
+    const { state } = buildHarness()
+    rememberThreadComposerSelection('thread-a', 'gpt-6.1-sol', '', 'user', { harnessId: 'codex', credentialMode: 'native-login' })
+    state.threads = [{ ...thread('thread-a'), harnessId: 'codex' }]
+    state.composerPickList = ['gpt-6.1-sol']
+
+    const restored = resolveThreadComposerState(state, state.threads[0])
+
+    expect(restored.composerHarnessId).toBe('codex')
+    expect(restored.composerModel).toBe('gpt-6.1-sol')
+    expect(restored.composerReasoningEffort).toBe('auto')
+  })
+
+  it('restores the level picked in an external Agent thread together with its model', () => {
+    const { state } = buildHarness()
+    const harness = { harnessId: 'codex', credentialMode: 'provider' }
+    rememberThreadComposerSelection('thread-a', 'gpt-6.1-sol', 'qiniu', 'user', harness)
+    rememberThreadComposerReasoning('thread-a', 'high')
+    // A later same-model update (e.g. on send) keeps the level; a model switch drops it.
+    rememberThreadComposerSelection('thread-a', 'gpt-6.1-sol', 'qiniu', 'user', harness)
+    state.threads = [{ ...thread('thread-a'), harnessId: 'codex' }]
+    state.composerPickList = ['gpt-6.1-sol']
+    expect(resolveThreadComposerState(state, state.threads[0]).composerReasoningEffort).toBe('high')
+
+    rememberThreadComposerSelection('thread-a', 'gpt-6 luna', 'qiniu', 'user', harness)
+    expect(resolveThreadComposerState(state, state.threads[0]).composerReasoningEffort).not.toBe('high')
+  })
+
+  it('restores a native Agent model the Kun catalog does not list', () => {
+    const { state } = buildHarness()
+    rememberThreadComposerSelection('thread-devin', 'swe-2-high', '', 'user', { harnessId: 'devin', credentialMode: 'native-login' })
+    state.threads = [thread('thread-devin', { model: 'swe-2-high', harnessId: 'devin' })]
+    state.composerPickList = ['gpt-5.3-codex-spark']
+    state.composerModelGroups = [{ providerId: 'codex', label: 'Codex', modelIds: ['gpt-5.3-codex-spark'] }]
+
+    const restored = resolveThreadComposerState(state, state.threads[0], { hasUserMessages: true })
+
+    expect(restored.composerHarnessId).toBe('devin')
+    expect(restored.composerCredentialMode).toBe('native-login')
+    expect(restored.composerModel).toBe('swe-2-high')
+    expect(restored.composerProviderId).toBe('')
+  })
+
+  it('falls back to the recorded Agent route when no composer selection was stored', () => {
+    const { state } = buildHarness()
+    state.threads = [thread('thread-devin', {
+      model: 'swe-2-high',
+      harnessId: 'devin',
+      executionConfig: {
+        version: 1, revision: 'r1', route: { model: 'swe-2-high', harnessId: 'devin', credentialMode: 'native-login' },
+        collaborationEnabled: false, limits: { softWorkers: 4, hardWorkers: 8 }, isolation: 'local',
+        origins: { route: 'task', collaborationEnabled: 'global', managerModel: 'global', limits: 'global', budget: 'global', isolation: 'task' },
+        resolvedAt: '2026-10-06T05:55:14.324Z'
+      }
+    })]
+    state.composerPickList = ['gpt-5.3-codex-spark']
+
+    const restored = resolveThreadComposerState(state, state.threads[0], { hasUserMessages: true })
+
+    expect(restored.composerHarnessId).toBe('devin')
+    expect(restored.composerModel).toBe('swe-2-high')
   })
 
   it('prefers a thread provider identity when no stored composer selection exists', () => {

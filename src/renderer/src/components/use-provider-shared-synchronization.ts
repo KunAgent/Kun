@@ -1,3 +1,4 @@
+import { sameCatalogCapabilities } from './settings-section-providers-shared-payloads'
 import type {
   AppSettingsPatch,
   KunRuntimeSettingsPatchV1,
@@ -50,7 +51,10 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
   useEffect(() => {
     let disposed = false
     let hadRefreshError = false
+    let lastConfigurationRevision: number | undefined
     const applySnapshot = (snapshot: SharedModelConnectionsSnapshot): void => {
+      const metadataOnly = lastConfigurationRevision === snapshot.revision
+      lastConfigurationRevision = snapshot.revision
       setSharedConnections(snapshot)
       setSharedConnectionsError('')
       if (hadRefreshError) onSharedSyncRecovered?.()
@@ -72,7 +76,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
       // Skip AppSettings writes while a catalog commit owns the queue so a
       // stale registry snapshot cannot revert an in-flight Token Plan fetch
       // (#1117). SharedConnections UI state above still refreshes.
-      if (hasInFlightSharedProviderCatalogMutation()) return
+      if (metadataOnly || hasInFlightSharedProviderCatalogMutation()) return
       const projected = projectSharedModelConnections(
         current.provider,
         snapshot,
@@ -221,7 +225,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
             existing.kind !== (item.kind ?? 'http') ||
             (!hasPendingCatalog && (
               JSON.stringify(existing.models) !== JSON.stringify(item.models) ||
-              JSON.stringify(existing.modelCapabilities ?? {}) !== JSON.stringify(modelCapabilities ?? {}) ||
+              !sameCatalogCapabilities(existing.modelCapabilities, modelCapabilities) ||
               existing.selectedModel !== selectedModel
             ))
           if (needsPatch) {

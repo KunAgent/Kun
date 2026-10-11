@@ -98,6 +98,7 @@ export class GeminiCliOAuthSource {
     try {
       response = await this.fetchImpl(GEMINI_CLI_OAUTH_TOKEN_URL, {
         method: 'POST',
+        redirect: 'error',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           client_id: GEMINI_CLI_OAUTH_CLIENT_ID,

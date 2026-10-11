@@ -1,3 +1,4 @@
+import { migrateAgentPermissions } from './agent-permission-migration.js'
 import { observeRoomRepository } from '../rooms/task-workspace-service.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { AgentIdentitySchema, CreateAgentRequest, UpdateAgentRequest, AgentPageQuery,
@@ -6,8 +7,8 @@ import { RoomMemberSchema, RoomSchema, type Room, type RoomMember } from '../con
 import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
 import type { RoomStore, RoomStoreCommit } from '../rooms/room-store.js'
 import { RoomStoreConflictError } from '../rooms/room-store.js'
-import { DEFAULT_AGENT_TEMPLATES } from './agent-defaults.js'
 import { bindAgentMembers, freezeAgentRoom } from './agent-membership.js'
+import { agentExecutorRouteKey, type AgentExecutor } from '../contracts/agent-executor.js'
 
 export const agentStableId = (kind: string, ...parts: string[]): string =>
   kind + '-' + createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 40)
@@ -16,6 +17,9 @@ const namespace = 'agent-directory'
 
 export class AgentIdentityService {
   private initializing?: Promise<void>
+  private executorValidator?: (executor: AgentExecutor) => Promise<AgentExecutor>
+  /** Coding Agent routes resolve through the same catalog and admission checks as Code tasks. */
+  setExecutorValidator(validator: (executor: AgentExecutor) => Promise<AgentExecutor>): void { this.executorValidator = validator }
   constructor(readonly store: RoomStore, readonly profiles: () => Record<string, SubagentProfileConfig>,
     private readonly validateAvatars?: (members: RoomMember[]) => Promise<void>) {}
 
@@ -31,7 +35,7 @@ export class AgentIdentityService {
     return result.result
   }
   async initialize(): Promise<void> {
-    if (!this.initializing) this.initializing = this.migrate().catch((error) => { this.initializing = undefined; throw error })
+    if (!this.initializing) this.initializing = this.migrate().then(() => migrateAgentPermissions(this.store)).catch((error) => { this.initializing = undefined; throw error })
     return this.initializing
   }
   private async migrate(): Promise<void> {
@@ -90,11 +94,11 @@ export class AgentIdentityService {
       ...(copy ? { title: copy.title, instructions: copy.instructions, defaultRole: copy.defaultRole,
         presetId: copy.presetId, avatar: input.avatar ?? copy.avatar, modelRef: copy.modelRef, fastModelRef: copy.fastModelRef,
         capabilityOverrides: copy.capabilityOverrides, allowedRepositoryRoots: copy.allowedRepositoryRoots,
-        reviewerAgentId: copy.reviewerAgentId, memory: copy.memory } : {}),
+        reviewerAgentId: copy.reviewerAgentId, workbench: copy.workbench, memory: copy.memory } : {}),
       id: 'agent-' + randomUUID(), schemaVersion: 1, revision: 0, createdAt: now, updatedAt: now,
       archivedAt: undefined, migratedFrom: undefined,
       setup: copy ? undefined : { status: 'completed' as const, startedAt: now, completedAt: now } })
-    await this.validate(agent)
+    await this.validate(normalizeExternalAgent(agent))
     const result = { agent }
     const saved = await this.store.commit({ requestId: key, fingerprint: hash,
       checks: [{ kind: 'agent_identity', id: agent.id, expectedRevision: null }],
@@ -125,24 +129,40 @@ export class AgentIdentityService {
       updatedAt: now, ...(archived === undefined ? {} : {
         archivedAt: archived ? now : undefined }),
       ...(takeover ? { setup: { status: 'skipped', startedAt: old.setup!.startedAt, completedAt: now } } : {}) })
-    await this.validate(agent)
+    if (Boolean(old.executor) !== Boolean(agent.executor) ||
+      (old.executor && agentExecutorRouteKey(old.executor) !== agentExecutorRouteKey(agent.executor!))) {
+      throw new RoomStoreConflictError('an Agent\'s engine route cannot change; only a coding Agent\'s model can')
+    }
+    await this.validate(normalizeExternalAgent(agent), old.executor, old.avatar)
     const saved = await this.store.commit({ requestId: key, fingerprint: hash,
       checks: [{ kind: 'agent_identity', id, expectedRevision }],
       puts: [{ kind: 'agent_identity', id, value: agent }], result: { agent },
       events: [{ roomId: namespace, kind: 'agent.updated', payload: { id } }] })
     return saved.result as { agent: AgentIdentity }
   }
-  private async validate(agent: AgentIdentity) {
+  private async validate(agent: AgentIdentity, previousExecutor?: AgentExecutor, previousAvatar?: AgentIdentity['avatar']) {
     if (agent.allowedRepositoryRoots) {
       const repositories = await Promise.all(agent.allowedRepositoryRoots.map((root) => observeRoomRepository(root)))
       agent.allowedRepositoryRoots = [...new Set(repositories.map((repo) => repo.root))]
     }
     if (agent.reviewerAgentId) {
       if (agent.reviewerAgentId === agent.id) throw new RoomStoreConflictError('an agent cannot review its own work')
-      await this.active(agent.reviewerAgentId)
+      if ((await this.active(agent.reviewerAgentId)).executor) throw new RoomStoreConflictError('coding Agents cannot review Agent work')
     }
+    if (agent.avatar?.kind === 'harness' && agent.avatar.harnessId !== agent.executor?.harnessId) {
+      throw new RoomStoreConflictError('engine marks belong to their coding Agents')
+    }
+    // Profile edits keep working while an engine is signed out; only a new route is resolved.
+    if (agent.executor && JSON.stringify(agent.executor) !== JSON.stringify(previousExecutor)) {
+      if (!this.executorValidator) throw new RoomStoreConflictError('coding Agents are unavailable')
+      agent.executor = await this.executorValidator(agent.executor)
+    }
+    if (JSON.stringify(agent.avatar) === JSON.stringify(previousAvatar)) return
     if (agent.avatar?.kind === 'uploaded') {
       if (!this.validateAvatars) throw new Error('avatar storage unavailable')
+      await this.validateAvatars([this.asMember(agent)])
+    } else if (agent.avatar?.kind === 'composed' && this.validateAvatars) {
+      // A composed look may only wear items the user's wardrobe holds.
       await this.validateAvatars([this.asMember(agent)])
     }
   }
@@ -151,24 +171,16 @@ export class AgentIdentityService {
       presetId: agent.presetId, role: agent.defaultRole, avatar: agent.avatar, revision: 0,
       allowedRepositoryIds: repositoryIds, ...(repositoryIds.length === 1 ? { defaultRepositoryId: repositoryIds[0] } : {}) })
   }
+  /** A new group starts with 小 Kun only; role presets are created on request, never seeded. */
   async defaultMembers(repositoryIds: string[]): Promise<RoomMember[]> {
-    const members: RoomMember[] = []
-    for (const template of DEFAULT_AGENT_TEMPLATES) {
-      const id = 'agent-default-' + template.templateId
-      let row = await this.store.get<AgentIdentity>('agent_identity', id)
-      if (!row) {
-        const now = new Date().toISOString()
-        const { examples: _examples, ...fields } = template
-        const agent = AgentIdentitySchema.parse({ ...fields, schemaVersion: 1, id, revision: 0, createdAt: now, updatedAt: now })
-        await this.store.commit({ requestId: 'agent-default:' + id,
-          checks: [{ kind: 'agent_identity', id, expectedRevision: null }],
-          puts: [{ kind: 'agent_identity', id, value: agent }] })
-        row = await this.store.get<AgentIdentity>('agent_identity', id)
-      }
-      if (!row!.value.archivedAt) members.push({ ...this.asMember(row!.value, repositoryIds), id: template.templateId })
-    }
-    if (!members.length) throw new RoomStoreConflictError('choose an active agent for the room')
-    return members
+    const { quickCreateAgent } = await import('./agent-chat-entry.js')
+    const { agentId } = await quickCreateAgent(this, { clientRequestId: 'default-members' }, true)
+    const kun = await this.store.get<AgentIdentity>('agent_identity', agentId)
+    if (kun && !kun.value.archivedAt) return [this.asMember(kun.value, repositoryIds)]
+    const fallback = (await this.store.list<AgentIdentity>('agent_identity', { limit: 50 }))
+      .find((row) => !row.value.archivedAt && !row.value.executor && row.value.setup?.status !== 'pending')
+    if (!fallback) throw new RoomStoreConflictError('choose an active agent for the room')
+    return [this.asMember(fallback.value, repositoryIds)]
   }
   async present(room: Room): Promise<Room> {
     const members = await Promise.all(room.members.map(async (member) => {
@@ -183,4 +195,17 @@ export class AgentIdentityService {
     room: Room; checks: NonNullable<RoomStoreCommit['checks']>; puts: NonNullable<RoomStoreCommit['puts']>
   }> { return bindAgentMembers(this, room, previous) }
   freeze(room: Room): Promise<Room> { return freezeAgentRoom(this, room) }
+}
+
+/** Coding Agents keep their fixed engine and may reach Code through the scoped bridge. */
+function normalizeExternalAgent(agent: AgentIdentity): AgentIdentity {
+  if (!agent.executor) return agent
+  agent.modelRef = undefined
+  agent.fastModelRef = undefined
+  if (agent.workbench) agent.workbench = { ...agent.workbench, work: 'off' }
+  agent.reviewerAgentId = undefined
+  agent.presetId = 'general'
+  agent.defaultRole = 'developer'
+  agent.memory = { readEnabled: false, captureEnabled: false }
+  return agent
 }

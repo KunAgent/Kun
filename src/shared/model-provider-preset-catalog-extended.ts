@@ -156,6 +156,7 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
       models: ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast']
     },
     tokenPlan: {
+      planQuota: 'minimax',
       baseUrl: 'https://api.minimaxi.com/anthropic',
       regions: [
         { id: 'cn', baseUrl: 'https://api.minimaxi.com/anthropic' },
@@ -376,6 +377,8 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
   },
 {
     id: 'stepfun',
+    balance: 'stepfun',
+    endpoints: { chat_completions: 'https://api.stepfun.com/v1', messages: 'https://api.stepfun.com' },
     name: 'StepFun',
     subscriptionRegion: 'china',
     baseUrl: 'https://api.stepfun.com/v1',
@@ -386,6 +389,7 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
       'step-3.5-flash': textChatProfile(262_144)
     },
     tokenPlan: {
+      endpoints: { chat_completions: 'https://api.stepfun.com/step_plan/v1', messages: 'https://api.stepfun.com/step_plan' },
       displayName: 'Step Plan',
       baseUrl: 'https://api.stepfun.com/step_plan/v1',
       endpointFormat: 'chat_completions',

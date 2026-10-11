@@ -1,3 +1,4 @@
+import { agentMemoryCaptureInput } from './agent-memory-forgetting.js'
 import type { RoomReview } from '../contracts/room-deliveries.js'
 import type { AgentHandoff } from '../contracts/agent-handoffs.js'
 import type { Room } from '../contracts/rooms.js'
@@ -29,22 +30,29 @@ export class AgentMemoryCoordinator {
   async tick(): Promise<boolean> {
     if (this.closed || !this.deps.agentMemory || !this.deps.memoryStore) return false
     await this.deps.agentMemory.recoverEdits()
+    await this.deps.agentMemory.scrubForgotten()
     await this.discover()
     if (this.active) {
       const row = await this.deps.store.get<AgentMemoryCapture>('agent_memory_job', this.active.jobId)
-      if (row && !await this.allowed(row.value)) this.active.controller.abort(new Error('memory source cancelled or disabled'))
+      if (row && (row.value.phase !== 'capture' || !await this.allowed(row.value))) this.active.controller.abort(new Error('memory source cancelled or disabled'))
       if (!this.active.done) return true
       const active = this.active; this.active = undefined
-      if (row) await this.apply(row, active.result!)
+      if (row?.value.phase === 'capture') await this.apply(row, active.result!)
     }
     if (!await this.deps.agentMemory.available()) return false
     const jobs = await this.deps.store.list<AgentMemoryCapture>('agent_memory_job', {
       phase: 'capture', status: ['pending', 'running'], limit: 50, order: 'asc' })
+    // Only real progress keeps the room loop on its one-second cadence. A job
+    // waiting for its peer topic to go idle is retried on the idle cadence or
+    // when room activity wakes the loop; counting it as work kept an idle
+    // desktop polling the Manager every second forever.
+    let progressed = false
     for (const row of jobs) {
       if (!await this.allowed(row.value)) { await this.save(row, { status: 'cancelled' }); continue }
       const topic = await this.deps.store.get<RoomPeerTopic>('peer_topic', row.value.rootRequestId)
       const request = await this.deps.store.get<RoomRequestState>('request', row.value.rootRequestId)
       if (topic && !['idle', 'paused'].includes(topic.value.status) || !topic && request?.value.status !== 'completed') continue
+      progressed = true
       if (row.value.status === 'running') {
         // No durable extraction handle exists after restart. Count the lost attempt; never acknowledge its source.
         const run = row.value.runId ? await this.deps.store.get('room_run', row.value.runId) : null
@@ -61,7 +69,7 @@ export class AgentMemoryCoordinator {
       await this.start(row)
       break
     }
-    return jobs.length > 0 || Boolean(this.active)
+    return progressed || Boolean(this.active)
   }
   private async save(row: RoomStoredDocument<AgentMemoryCapture>, patch: Partial<AgentMemoryCapture>) {
     await this.deps.store.commit({ requestId: agentStableId('memory-state', row.id, String(row.revision), JSON.stringify(patch)),
@@ -131,6 +139,7 @@ export class AgentMemoryCoordinator {
       const memoryConversationId = handoff && origin?.value.members.some((member) => member.participantAgentId === agentId && member.enabled && !member.removedAt) ? handoff.sourceRoomId : event.roomId
       const previous = await this.deps.store.get<AgentMemoryCapture>('agent_memory_job', jobId)
       const old = previous?.value
+      if (old && old.phase !== 'capture') continue // Forgotten capture identities are terminal.
       if (old && event.seq <= old.sourceSeq) continue
       const value: AgentMemoryCapture = { id: jobId, phase: 'capture', roomId: event.roomId,
         rootRequestId: rootId, participantAgentId: agentId, memberId, taskScopeId, handoffId: handoff?.id, memoryConversationId,
@@ -201,6 +210,7 @@ export class AgentMemoryCoordinator {
     let saved = 0, pending = 0
     if (allowed && !result.error) {
       for (const value of result.candidates) {
+        if (await this.deps.agentMemory!.store().isForgotten?.(agentMemoryCaptureInput(job, value.candidate))) continue
         const candidateId = agentStableId('agent-memory-candidate', job.runId!, value.candidate.content)
         const record: AgentMemoryCandidate = { id: candidateId, phase: 'candidate', participantAgentId: job.participantAgentId,
           roomId: job.roomId, rootRequestId: job.rootRequestId, status: 'pending', ...value,

@@ -1,5 +1,5 @@
 /**
- * Code block NodeView (implementation §7.2/§7.3): header bar with a
+ * Code block NodeView: header bar with a
  * language selector + copy button, `pre > code` as the editable region,
  * and a Mermaid preview below the code for `language === 'mermaid'`.
  * While the selection is outside a mermaid block the source is hidden and

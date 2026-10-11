@@ -1,3 +1,4 @@
+import { newAgentExecutionPolicy } from '../agents/agent-permission-snapshot.js'
 import { freezeAgentPermissions } from '../agents/agent-permission-snapshot.js'
 import { prepareAgentTaskParticipants } from '../agents/agent-task-participants.js'
 import type { AgentIdentityService } from '../agents/agent-identity-service.js'
@@ -90,6 +91,11 @@ export class RoomService {
     await this.assertUploadedAvatars([...room.members, { avatar: room.avatar }])
     const binding = this.agents ? await this.agents.prepareRoom(room) : undefined
     room = binding?.room ?? room
+    if (room.conversationKind === 'user_agent') {
+      const member = room.members.find((item) => item.id === room.defaultMemberId)
+      const agent = member?.participantAgentId ? await this.agents?.get(member.participantAgentId) : undefined
+      room.privateExecutionPolicy = newAgentExecutionPolicy(agent, agent && this.agents?.profiles()[agent.presetId])
+    }
     const result = { room }
     const committed = await this.store.commit({
       requestId: key, fingerprint: roomFingerprint(body),
@@ -106,12 +112,25 @@ export class RoomService {
     const replay = await this.replay(key, body)
     if (replay) return replay as { room: Room }
     const old = await this.get(id)
-    const { clientRequestId: _request, expectedRevision, archived, repositories, avatar, ...patch } = body
+    const { clientRequestId: _request, expectedRevision, archived, deleted, repositories, avatar, ...patch } = body
     void _request
+    if (old.deletedAt && deleted !== false) throw new RoomStoreConflictError('restore the deleted conversation before editing it')
+    if (deleted === true && !old.deletedAt) {
+      const active = await Promise.all([
+        this.store.list('request', { roomId: id, status: ['pending', 'running', 'stopping', 'recovery_required'], limit: 1 }),
+        this.store.list('task', { roomId: id, status: ['queued', 'running', 'waiting_dependency', 'stopping', 'recovery_required'], limit: 1 }),
+        this.store.list('integration', { roomId: id, status: ['preparing', 'validating', 'recovery_required'], limit: 1 }),
+        this.store.list('room_run', { roomId: id, status: ['queued', 'running', 'recovery_required'], limit: 1 })
+      ])
+      if (active.some((rows) => rows.length)) throw new RoomStoreConflictError('stop or reconcile active work before deleting the conversation')
+    }
+    const now = new Date().toISOString()
     const next = { ...old, ...patch,
       ...(repositories ? { repositories: await this.repositories(repositories) } : {}),
-      ...(archived !== undefined ? { archivedAt: archived ? new Date().toISOString() : undefined } : {}),
-      revision: expectedRevision + 1, updatedAt: new Date().toISOString() }
+      ...(archived !== undefined ? { archivedAt: archived ? now : undefined } : {}),
+      ...(deleted !== undefined ? { deletedAt: deleted ? now : undefined,
+        archivedAt: deleted ? now : undefined } : {}),
+      revision: expectedRevision + 1, updatedAt: now }
     if (avatar === null) delete next.avatar
     else if (avatar !== undefined) next.avatar = avatar
     let room = RoomSchema.parse(next)
@@ -136,11 +155,11 @@ export class RoomService {
     return saved.result as typeof result
   }
 
-  async send(id: string, input: unknown, internal?: { ruleAdoption: import('../contracts/rooms-product.js').RoomRule }): Promise<{ message: RoomMessage; requestId: string }> {
+  async send(id: string, input: unknown, internal?: { ruleAdoption?: import('../contracts/rooms-product.js').RoomRule; clientSurface?: 'im'; imConnectionId?: string }): Promise<{ message: RoomMessage; requestId: string }> {
     const body = SendRoomMessageSchema.parse(input)
     // Sharing a card alone supplies reference data, not an implementation goal.
     if (!body.body.trim() && body.references?.length && body.executionIntent === 'auto') body.executionIntent = 'discussion'
-    const identity = internal ? { ...body, ruleAdoption: internal.ruleAdoption } : body
+    const identity = internal ? { ...body, ...internal } : body
     const key = 'room-message:' + id + ':' + body.clientRequestId
     const replay = await this.replay(key, identity)
     if (replay) return replay as { message: RoomMessage; requestId: string }
@@ -194,7 +213,8 @@ export class RoomService {
             ...(protocol === 'peer' && !root ? { peerLatestRequestId: requestId } : {}) }),
           taskParticipants,
           ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
-          ...(internal ? { ruleAdoption: internal.ruleAdoption } : {})
+          ...(internal?.ruleAdoption ? { ruleAdoption: internal.ruleAdoption } : {}),
+          ...(internal?.clientSurface ? { clientSurface: internal.clientSurface, imConnectionId: internal.imConnectionId } : {})
         }
       : {
           taskParticipants, id: requestId, roomId: id, status: 'pending',
@@ -203,7 +223,8 @@ export class RoomService {
           message: body, sourceMessageId: message.id,
           ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
           roomSnapshot: root ? { ...room, collaborationMode: root.value.roomSnapshot.collaborationMode } : room,
-          threadId: 'room-discussion-' + roomId(), ...(internal ? { ruleAdoption: internal.ruleAdoption } : {}) }
+          threadId: 'room-discussion-' + roomId(), ...(internal?.ruleAdoption ? { ruleAdoption: internal.ruleAdoption } : {}),
+          ...(internal?.clientSurface ? { clientSurface: internal.clientSurface, imConnectionId: internal.imConnectionId } : {}) }
     const result = { message, requestId: request.id }
     const commit: RoomStoreCommit = { requestId: key, fingerprint: roomFingerprint(identity),
       checks: [{ kind: 'room', id, expectedRevision: room.revision },
@@ -294,6 +315,7 @@ export class RoomService {
     runId: string
     itemId: string
     body: string
+    deliveryPhase?: RoomMessage['deliveryPhase']
     memberId: string
     taskId?: string
     createdAt: string
@@ -309,12 +331,14 @@ export class RoomService {
     if (old && (old.value.status === 'final' || old.value.status === 'failed') && input.status === 'streaming') return
     const message: RoomMessage = old
       ? { ...old.value, status: input.status, body: text, bodyRevision: old.value.bodyRevision + 1,
+          ...(input.deliveryPhase ? { deliveryPhase: input.deliveryPhase } : {}),
           ...(input.references?.length ? { references: input.references } : {}),
           ...(input.displayThreadRootId ? { displayThreadRootId: input.displayThreadRootId } : {}) }
       : RoomMessageSchema.parse({ id: input.messageId, roomId: id, messageSeq: 1,
           authorKind: 'member', authorMemberId: input.memberId, originItemId: input.itemId,
           authorLabelSnapshot: '', body: text, bodyRevision: 0, mentionMemberIds: [], attachmentIds: [],
           taskId: input.taskId, status: input.status, createdAt: input.createdAt,
+          ...(input.deliveryPhase ? { deliveryPhase: input.deliveryPhase } : {}),
           ...(input.references?.length ? { references: input.references } : {}),
           ...(input.displayThreadRootId ? { displayThreadRootId: input.displayThreadRootId } : {}) })
     if (old && old.value.body === message.body && old.value.status === input.status && old.value.originRunId === input.runId) return

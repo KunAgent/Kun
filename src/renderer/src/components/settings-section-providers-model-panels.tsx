@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   ImageGenerationProtocol,
   MusicGenerationProtocol,
@@ -61,11 +62,10 @@ export function ProviderModelsCapabilitiesPanels({ view }: { view: Record<string
                 <DetailSection
                   title={`${t('modelProviderModels')} · ${providerModelCount(activeProvider)}`}
                   action={
-                    <button
+                    <button aria-busy={Boolean(probeBusy && activeProbe?.mode === 'fetch')} className={settingsButtonClass()}
                       type="button"
                       disabled={probeBusy || activeProbeBlocked}
                       onClick={() => void runProbe(activeProvider, 'fetch')}
-                      className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-2.5 text-[12px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {probeBusy && activeProbe?.mode === 'fetch'
                         ? <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.9} />

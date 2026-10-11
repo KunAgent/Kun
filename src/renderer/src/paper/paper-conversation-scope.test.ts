@@ -12,18 +12,16 @@ describe('paperConversationResourcePath', () => {
   const unitDirs = ['/lib/papers/attention']
   const entriesByDir = { '/lib/papers': [ { name: 'attention', path: '/lib/papers/attention', type: 'directory' } as WorkspaceEntry ] }
 
-  it('passes file paths through on the docs surface', () => {
+  it('anchors an ordinary document to the file itself', () => {
     expect(paperConversationResourcePath({
-      surface: 'docs',
       workspaceRoot: '/docs',
       activeFilePath: '/docs/a.md',
       unitDirs: []
     })).toBe('/docs/a.md')
   })
 
-  it('maps files inside a unit to the unit dir on the papers surface', () => {
+  it('anchors files inside a unit to the unit dir', () => {
     expect(paperConversationResourcePath({
-      surface: 'papers',
       workspaceRoot: ROOT,
       activeFilePath: '/lib/papers/attention/NOTES.md',
       unitDirs,
@@ -32,9 +30,8 @@ describe('paperConversationResourcePath', () => {
     })).toBe('/lib/papers/attention')
   })
 
-  it('keeps non-unit files on their own path on the papers surface', () => {
+  it('keeps non-unit files on their own path', () => {
     expect(paperConversationResourcePath({
-      surface: 'papers',
       workspaceRoot: ROOT,
       activeFilePath: '/lib/reading-list.md',
       unitDirs,
@@ -43,11 +40,10 @@ describe('paperConversationResourcePath', () => {
     })).toBe('/lib/reading-list.md')
   })
 
-  it('returns the library-level thread on library/discover views', () => {
+  it('anchors library and discover pages to the space itself', () => {
     for (const view of ['library', 'discover'] as const) {
       expect(paperConversationResourcePath({
-        surface: 'papers',
-        workspaceRoot: ROOT,
+          workspaceRoot: ROOT,
         activeFilePath: '/lib/papers/attention/paper.pdf',
         unitDirs,
         entriesByDir,
@@ -58,7 +54,6 @@ describe('paperConversationResourcePath', () => {
 
   it('resolves units via known unit dirs when entries are unloaded', () => {
     expect(paperConversationResourcePath({
-      surface: 'papers',
       workspaceRoot: ROOT,
       activeFilePath: '/lib/papers/attention/paper.pdf',
       unitDirs,

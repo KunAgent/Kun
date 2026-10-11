@@ -14,12 +14,15 @@ import {
   LOCAL_SANOTTS_SAMPLE_RATE
 } from '../../shared/local-sanotts'
 import { widenSanottsF16, type SanottsWeightDims } from '../../shared/local-sanotts-weights'
+import {
+  SanottsRussianDictionary, sanottsLengthScale, type SanottsDictionaryModule
+} from './local-sanotts-worker-language'
 import type {
   SanottsWorkerRequest,
   SanottsWorkerResponse
 } from './local-sanotts-worker-protocol'
 
-type EmscriptenModule = {
+type EmscriptenModule = SanottsDictionaryModule & {
   HEAPU8: Uint8Array
   HEAP32: Int32Array
   HEAPF32: Float32Array
@@ -73,6 +76,7 @@ const G2P_CHATTER =
 
 let runtime: { dir: string; g2p: EmscriptenModule; voice: EmscriptenModule } | null = null
 let setVoice: ((espeakVoice: string, slot: number) => number) | null = null
+let russianDictionary: SanottsRussianDictionary | null = null
 const voiceCache = new Map<string, LoadedVoice>()
 const canceled = new Set<string>()
 
@@ -93,6 +97,7 @@ async function loadRuntime(runtimeDir: string): Promise<{ g2p: EmscriptenModule;
   if (rc !== 0) throw new Error(`snt_g2p_init failed with ${rc}`)
   runtime = { dir: runtimeDir, g2p, voice }
   setVoice = g2p.cwrap('snt_g2p_set_voice', 'number', ['string', 'number'])
+  russianDictionary = new SanottsRussianDictionary(g2p)
   voiceCache.clear()
   return runtime
 }
@@ -173,12 +178,18 @@ async function synthesize(request: Extract<SanottsWorkerRequest, { type: 'synthe
     if (voiceRc !== 0) {
       throw new Error(`snt_g2p_set_voice("${espeakVoice}", ${slot}) failed rc=${voiceRc}`)
     }
+    // The bundled runtime omits ru_dict. Without compiling it before phonemization,
+    // eSpeak silently returns invalid Russian IDs instead of reporting an error.
+    if (espeakVoice === 'ru') {
+      if (!russianDictionary) throw new Error('Russian pronunciation dictionary runtime is unavailable')
+      await russianDictionary.prepare(request.voiceDir)
+    }
     const ids = phonemeIds(g2p, request.text)
     if (canceled.has(request.id)) {
       reply({ type: 'result', id: request.id, ok: false, canceled: true })
       return
     }
-    const lengthScale = Math.min(2, Math.max(0.5, request.speed)) * (Number(bundle.meta.length_scale) || 1)
+    const lengthScale = sanottsLengthScale(request.speed, bundle.meta.length_scale)
     const sampleRate = Number(bundle.meta.sample_rate) || LOCAL_SANOTTS_SAMPLE_RATE
     const frontPtr = toHeap(voice, bundle.front)
     const decPtr = toHeap(voice, bundle.dec)
@@ -246,6 +257,7 @@ parentPort?.on('message', (message: SanottsWorkerRequest) => {
   if (message?.type === 'reset') {
     runtime = null
     setVoice = null
+    russianDictionary = null
     voiceCache.clear()
     parentPort?.postMessage({ type: 'reset-done' } satisfies SanottsWorkerResponse)
   }

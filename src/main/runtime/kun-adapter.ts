@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { refreshNativeAgentNetworkBeforeProbe } from './native-agent-network'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -265,8 +266,11 @@ export type RuntimeRequestLease = Readonly<{
 
 const DEFAULT_RUNTIME_GET_TIMEOUT_MS = 15_000
 const DEFAULT_RUNTIME_POST_TIMEOUT_MS = 60_000
+const MCP_OAUTH_POST_TIMEOUT_MS = 180_000
 const THREAD_TIMELINE_GET_TIMEOUT_MS = 120_000
 const THREAD_SUMMARIZE_POST_TIMEOUT_MS = 120_000
+const HARNESS_PROBE_TIMEOUT_MS = 90_000
+const HARNESS_TEST_TIMEOUT_MS = 420_000
 const PROVIDER_QUOTA_GET_TIMEOUT_MS = 120_000
 const USAGE_HISTORY_GET_TIMEOUT_MS = 120_000
 const RUNTIME_EVENTS_TIMEOUT_MARGIN_MS = 5_000
@@ -287,13 +291,19 @@ function isThreadSummarizePath(pathNorm: string): boolean {
 function isProviderQuotaPath(pathNorm: string): boolean {
   const queryIndex = pathNorm.indexOf('?')
   const pathname = queryIndex >= 0 ? pathNorm.slice(0, queryIndex) : pathNorm
-  return pathname === '/v1/provider-quotas'
+  return pathname === '/v1/provider-quotas' || /^\/v1\/harnesses\/[^/]+\/subscription-quota$/u.test(pathname)
 }
 
 function runtimeEventsWaitMs(pathNorm: string): number | null {
+  // Recent gateway routes long-poll with `wait` in seconds rather than `wait_ms`.
+  if (pathNorm.startsWith('/v1/model-gateway/route-traces?')) {
+    const wait = Number(new URLSearchParams(pathNorm.slice(pathNorm.indexOf('?') + 1)).get('wait'))
+    return Number.isFinite(wait) && wait > 0 ? Math.round(wait * 1_000) : null
+  }
   if (
     !pathNorm.startsWith('/v1/model-connections/events?') &&
-    !pathNorm.startsWith('/v1/thread-activity/events?')
+    !pathNorm.startsWith('/v1/thread-activity/events?') &&
+    !pathNorm.startsWith('/v1/activity/events?')
   ) return null
   const query = pathNorm.slice(pathNorm.indexOf('?') + 1)
   const waitMs = Number(new URLSearchParams(query).get('wait_ms'))
@@ -321,6 +331,25 @@ export function resolveRuntimeRequestTimeoutMs(
   requestedTimeoutMs?: number
 ): number {
   if (requestedTimeoutMs !== undefined) return requestedTimeoutMs
+  const pathname = pathNorm.split('?')[0] ?? pathNorm
+  if ((method === 'GET' && /^\/v1\/harnesses\/[^/]+\/updates$/u.test(pathname)) ||
+      (method === 'POST' && /^\/v1\/harnesses\/[^/]+\/updates\/check$/u.test(pathname))) {
+    // Version detection, alternative local installations and release metadata
+    // are sequential; the ordinary GET budget can expire before they finish.
+    return DEFAULT_RUNTIME_POST_TIMEOUT_MS
+  }
+  if (method === 'POST' && /^\/v1\/harnesses\/[^/]+\/test$/u.test(pathname)) {
+    // Trial can run for 300s, plus detection, handshake, interrupt and cleanup.
+    return HARNESS_TEST_TIMEOUT_MS
+  }
+  if ((method === 'POST' && (/^\/v1\/harnesses\/[^/]+\/(?:probe|updates\/activate)$/u.test(pathname) ||
+    pathname === '/v1/harnesses/probe-definition')) ||
+    (method === 'GET' && /^\/v1\/harnesses\/[^/]+\/models$/u.test(pathname))) {
+    return HARNESS_PROBE_TIMEOUT_MS
+  }
+  if (method === 'POST' && /^\/v1\/mcp\/oauth\/[A-Za-z0-9._-]+$/.test(pathNorm)) {
+    return MCP_OAUTH_POST_TIMEOUT_MS
+  }
   const fallback = method === 'POST'
     ? DEFAULT_RUNTIME_POST_TIMEOUT_MS
     : DEFAULT_RUNTIME_GET_TIMEOUT_MS
@@ -353,7 +382,8 @@ export async function runtimeRequestViaHost(
   settings: AppSettingsV1,
   pathAndQuery: string,
   init: RuntimeRequestInit,
-  ensureRuntime: (settings: AppSettingsV1) => Promise<AppSettingsV1 | void>
+  ensureRuntime: (settings: AppSettingsV1) => Promise<AppSettingsV1 | void>,
+  onConnectionFailure?: () => void
 ): Promise<{ ok: boolean; status: number; body: string }> {
   init.signal?.throwIfAborted()
   const ensuredSettings = await ensureRuntime(settings)
@@ -362,6 +392,8 @@ export async function runtimeRequestViaHost(
   const method = (init.method ?? 'GET').toUpperCase()
   const lease = snapshotRuntimeRequestLease(requestSettings)
   const pathNorm = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`
+  await refreshNativeAgentNetworkBeforeProbe(pathNorm, method, (body) =>
+    fetchRuntimeRequest(lease, '/v1/runtime/config/apply', 'POST', { body, signal: init.signal }))
   try {
     return await fetchRuntimeRequest(lease, pathNorm, method, init)
   } catch (error) {
@@ -370,6 +402,8 @@ export async function runtimeRequestViaHost(
     // whether the process is globally unhealthy instead of turning one slow
     // attachment preview into an immediate managed-runtime restart.
     if (!isRuntimeConnectionFailure(error)) throw error
+    // A refused connection invalidates any recently verified health result.
+    onConnectionFailure?.()
     const retrySettings = await ensureRuntime(requestSettings)
     init.signal?.throwIfAborted()
     const nextSettings = retrySettings ?? requestSettings

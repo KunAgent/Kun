@@ -1,0 +1,85 @@
+import { HarnessGatewayBindingSchema, harnessGatewayBindingKey } from '../../kun/src/contracts/harness-gateway-binding.js'
+import type { AdeHarnessRow } from './ade-harnesses'
+import type { KunHarnessEnabledProfileV1, KunHarnessSettingsV1 } from './app-settings-types-kun-runtime'
+import { legacyProviderKindFor } from '../../kun/src/harness/harness-provider-kind.js'
+
+/** Mirrored by the runtime; neither presence on disk nor a legacy setting is opt-in. */
+export function harnessProfileKey(profile: KunHarnessEnabledProfileV1): string {
+  if (profile.gatewayBinding) return JSON.stringify([profile.harnessId, profile.credentialMode, 'alias', harnessGatewayBindingKey(profile.gatewayBinding)])
+  return JSON.stringify([profile.harnessId, profile.credentialMode,
+    profile.credentialMode === 'native-login' && (!profile.providerId?.trim() || profile.providerId.trim() === 'default')
+      ? '' : profile.providerId?.trim() || 'default'])
+}
+
+export function normalizeEnabledProfiles(value: unknown): KunHarnessEnabledProfileV1[] {
+  if (!Array.isArray(value)) return []
+  const profiles = new Map<string, KunHarnessEnabledProfileV1>()
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue
+    const { harnessId, credentialMode, providerId, gatewayBinding } = entry as Record<string, unknown>
+    if (typeof harnessId !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(harnessId) ||
+      harnessId === 'kun' ||
+      !['native-login', 'provider', 'kun-gateway'].includes(String(credentialMode))) continue
+    if (providerId !== undefined && (typeof providerId !== 'string' || !providerId.trim() || providerId.length > 128)) continue
+    const binding = gatewayBinding === undefined ? undefined : HarnessGatewayBindingSchema.safeParse(gatewayBinding)
+    if (binding && (!binding.success || credentialMode !== 'kun-gateway' || (providerId && providerId !== 'default'))) continue
+    const profile: KunHarnessEnabledProfileV1 = { harnessId,
+      ...(binding?.success ? { gatewayBinding: binding.data } : {}),
+      credentialMode: credentialMode as KunHarnessEnabledProfileV1['credentialMode'],
+      ...(!binding && typeof providerId === 'string' ? { providerId: providerId.trim() } : {}) }
+    profiles.set(harnessProfileKey(profile), profile)
+    if (profiles.size >= 128) break
+  }
+  return [...profiles.values()]
+}
+
+export function selectedHarnessProfile(row: AdeHarnessRow, settings: KunHarnessSettingsV1): KunHarnessEnabledProfileV1 {
+  const defaults = settings.defaults[row.definition.id]
+  const credentialMode = defaults?.credentialMode && row.definition.credentialModes.includes(defaults.credentialMode)
+    ? defaults.credentialMode : row.definition.credentialModes[0] ?? 'native-login'
+  // Native login binds a provider account only for engines whose native
+  // credential is itself a Kun provider kind (Claude Code, Cursor,
+  // Antigravity), mirroring the runtime's readiness rule. Any other saved
+  // providerId is a stale default the panel cannot show, so it must not turn
+  // native login into a rejected route.
+  const providerId = defaults?.providerId && (credentialMode !== 'native-login' || legacyProviderKindFor(row.definition.id))
+    ? defaults.providerId : undefined
+  return { harnessId: row.definition.id, credentialMode,
+    ...(defaults?.gatewayBinding && credentialMode === 'kun-gateway' ? { gatewayBinding: defaults.gatewayBinding }
+      : providerId ? { providerId } : {}) }
+}
+
+export function harnessProfileEnabled(settings: Pick<KunHarnessSettingsV1, 'enabledProfiles' | 'disabledIds'>,
+  profile: KunHarnessEnabledProfileV1): boolean {
+  if (profile.harnessId === 'kun') return true
+  return !settings.disabledIds.includes(profile.harnessId) &&
+    (settings.enabledProfiles ?? []).some((entry) => harnessProfileKey(entry) === harnessProfileKey(profile))
+}
+
+/** Only unexpired runtime proofs for explicitly enabled exact routes can enter a picker. */
+export function readyHarnessProfiles(row: AdeHarnessRow, now = Date.now()): KunHarnessEnabledProfileV1[] {
+  if (row.definition.transport === 'application' || row.definition.transport === 'terminal' || row.definition.availability === 'retired' || row.enabled !== true ||
+    (row.status.installed !== 'yes' && !(row.status.installed === 'unknown' && row.status.detecting)) ||
+    row.status.versionSupported === false) return []
+  // A metadata refresh may be detecting while the runtime still supplies a
+  // current proof for this exact profile. Never extend or invent that proof.
+  return (row.readyProfiles ?? []).filter((profile) => profile.harnessId === row.definition.id &&
+    row.definition.credentialModes.includes(profile.credentialMode) &&
+    typeof profile.expiresAt === 'string' && Date.parse(profile.expiresAt) > now &&
+    (row.enabledProfiles ?? []).some((enabled) => harnessProfileKey(enabled) === harnessProfileKey(profile)))
+}
+
+export function harnessProfileReady(row: AdeHarnessRow, profile: KunHarnessEnabledProfileV1): boolean {
+  return row.definition.id === 'kun' || readyHarnessProfiles(row).some((entry) =>
+    harnessProfileKey(entry) === harnessProfileKey(profile))
+}
+
+/** PTY readiness is separate from admission to the chat model picker. */
+export function terminalHarnessProfileReady(row: AdeHarnessRow, profile: KunHarnessEnabledProfileV1, now = Date.now()): boolean {
+  if (row.definition.transport !== 'terminal' || row.enabled !== true || row.status.installed !== 'yes' ||
+    row.status.versionSupported === false) return false
+  return (row.readyProfiles ?? []).some((proof) => proof.harnessId === row.definition.id &&
+    harnessProfileKey(proof) === harnessProfileKey(profile) &&
+    typeof proof.expiresAt === 'string' && Date.parse(proof.expiresAt) > now &&
+    (row.enabledProfiles ?? []).some((enabled) => harnessProfileKey(enabled) === harnessProfileKey(proof)))
+}

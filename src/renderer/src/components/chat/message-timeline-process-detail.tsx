@@ -1,13 +1,15 @@
+import { AcpToolDetail } from './AcpToolDetail'
+import { ToolBlockDetails } from './ToolBlockDetails'
 import { SourceHistoryReadDetail } from '../../history-reference/SourceHistoryReadDetail'
 import type { ReactElement } from 'react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
-import { DiffView } from '../DiffView'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { MessageBubble } from './message-timeline-bubbles'
 import {
   isBackgroundShellNoticeBlock,
   isBackgroundSubagentNoticeBlock,
+  isWorkerUpdateNoticeBlock,
   splitThink
 } from './message-timeline-turns'
 import {
@@ -25,8 +27,14 @@ import {
   summarizePaperToolBlock,
   type PaperToolDetail
 } from './paper-tool-process'
+import { HandoffBriefDetail } from './message-timeline-handoff-entry'
 
 export function toolNameForBlock(block: ToolBlock): string {
+  if (typeof block.meta?.acpKind === 'string') {
+    const names: Record<string, string> = { read: 'read_file', search: 'search_files', execute: 'shell', edit: 'edit_file',
+      delete: 'edit_file', move: 'edit_file', 'fs.write': 'write_file', fetch: 'fetch' }
+    if (typeof names[block.meta.acpKind] === 'string') return names[block.meta.acpKind]
+  }
   const rawSummary = block.summary?.trim() ?? ''
   return (extractToolName(rawSummary) || readMetaString(block.meta, 'toolName') || '').toLowerCase()
 }
@@ -51,6 +59,7 @@ export function toolFilePath(block: ToolBlock): string | undefined {
 
 
 export type ProcessDetail =
+  | { kind: 'acp-tool' }
   | { kind: 'none' }
   | { kind: 'reasoning'; text: string }
   | { kind: 'assistant'; text: string }
@@ -60,6 +69,8 @@ export type ProcessDetail =
   | { kind: 'user_input' }
   | { kind: 'background_shell' }
   | { kind: 'background_subagent' }
+  | { kind: 'worker_update' }
+  | { kind: 'handoff' }
   | { kind: 'text'; text: string }
   | { kind: 'paper'; paper: PaperToolDetail }
 
@@ -263,6 +274,9 @@ export function summarizeToolBlock(
 ): string {
   const rawSummary = block.summary?.trim() ?? ''
   const toolName = toolNameForBlock(block)
+  if (block.meta?.acpKind && toolName.startsWith('acp:')) {
+    return readMetaString(block.meta, 'acpTitle') || t('toolActionTool')
+  }
   const paperTool = paperToolName(toolName)
   if (paperTool) return summarizePaperToolBlock(block, paperTool, t)
   const label = builtInToolLabel(toolName, t) || humanizeToolName(toolName) || formatToolTitle(block, t)
@@ -340,10 +354,12 @@ export function getProcessDetail(block: ChatBlock, summaryText?: string): Proces
     return text.trim() ? { kind: 'assistant', text } : { kind: 'none' }
   }
   if (block.kind === 'tool') {
+    if (block.meta?.acpKind) return { kind: 'acp-tool' }
     const paperTool = paperToolName(toolNameForBlock(block))
     const paper = paperTool ? paperToolProcessDetail(block, paperTool) : null
     if (paper) return { kind: 'paper', paper }
     const detailText = block.detail?.trim() ?? ''
+    if (block.meta?.toolPresentation) return { kind: 'tool', text: detailText, isPatch: false, isError: block.status === 'error', filePath: block.filePath }
     if (!detailText) return { kind: 'none' }
     if (summaryText && normalizeProcessText(detailText) === normalizeProcessText(summaryText)) {
       return { kind: 'none' }
@@ -371,9 +387,13 @@ export function getProcessDetail(block: ChatBlock, summaryText?: string): Proces
   }
   if (block.kind === 'approval') return { kind: 'approval' }
   if (block.kind === 'approval_review') return { kind: 'approval_review' }
+  // Handoff briefs are rebuilt on demand through the preview route instead of
+  // being persisted into the block, so the detail is just a fetch trigger.
+  if (block.kind === 'handoff') return { kind: 'handoff' }
   if (block.kind === 'user_input') return { kind: 'user_input' }
   if (isBackgroundShellNoticeBlock(block)) return { kind: 'background_shell' }
   if (isBackgroundSubagentNoticeBlock(block)) return { kind: 'background_subagent' }
+  if (isWorkerUpdateNoticeBlock(block)) return { kind: 'worker_update' }
   if (block.kind === 'system' && block.text.trim()) {
     if (block.detail?.trim()) return { kind: 'text', text: block.detail }
     // Short system messages already fit in the summary line — skip the
@@ -399,7 +419,7 @@ export function ProcessEntryDetail({
     const streamReason = block.id === 'live-reasoning' && processing
     return (
       <div className="ds-markdown text-[13.5px] leading-6 text-ds-muted">
-        <AssistantMarkdown text={detail.text} streaming={streamReason} hideHtmlComments />
+        <AssistantMarkdown plainText={block.renderMode === 'plain-text'} safeMarkdown={block.renderMode === 'safe-markdown'} text={detail.text} streaming={streamReason} hideHtmlComments />
       </div>
     )
   }
@@ -408,31 +428,16 @@ export function ProcessEntryDetail({
       <div className="ds-markdown text-[13.5px] leading-6 text-ds-ink">
         <AssistantMarkdown
           text={detail.text}
+          plainText={block.renderMode === 'plain-text'} safeMarkdown={block.renderMode === 'safe-markdown'}
           streaming={processing && block.kind === 'assistant' && block.id === 'live-assistant'}
         />
       </div>
     )
   }
+  if (detail.kind === 'acp-tool' && block.kind === 'tool') return <AcpToolDetail block={block} />
   if (detail.kind === 'tool') {
     if (block.kind === 'tool' && toolNameForBlock(block) === 'read_source_history' && !/^(codex|claude-code|opencode):/u.test(block.turnId ?? '')) {
       return <SourceHistoryReadDetail block={block} />
-    }
-    if (detail.isPatch) {
-      return <DiffView patch={detail.text} filePath={detail.filePath} />
-    }
-    if (detail.isError) {
-      return (
-        <div className="overflow-hidden rounded-[10px] border border-orange-200/80 bg-orange-50/80 dark:border-orange-800/40 dark:bg-orange-500/10">
-          {detail.filePath ? (
-            <div className="border-b border-orange-200/70 bg-orange-100/50 px-3 py-1.5 font-mono text-[12px] text-orange-700 dark:border-orange-800/40 dark:bg-orange-500/15 dark:text-orange-300">
-              {detail.filePath}
-            </div>
-          ) : null}
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-3 py-2.5 font-mono text-[12px] leading-6 text-orange-900 dark:text-orange-100">
-            {detail.text}
-          </pre>
-        </div>
-      )
     }
     if (
       block.kind === 'tool' &&
@@ -441,11 +446,7 @@ export function ProcessEntryDetail({
     ) {
       return <KnowledgeEvidenceDetail block={block} />
     }
-    return (
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-ds-ink">
-        {detail.text}
-      </pre>
-    )
+    return block.kind === 'tool' ? <ToolBlockDetails block={block} /> : null
   }
   if (detail.kind === 'text') {
     return <p className="whitespace-pre-wrap text-[13.5px] leading-6 text-ds-muted">{detail.text}</p>
@@ -462,7 +463,15 @@ export function ProcessEntryDetail({
   if (detail.kind === 'user_input' && block.kind === 'user_input') {
     return <MessageBubble block={block} nested allowThreadActions={allowThreadActions} />
   }
-  if ((detail.kind === 'background_shell' || detail.kind === 'background_subagent') && block.kind === 'user') {
+  if (detail.kind === 'handoff' && block.kind === 'handoff') {
+    return <HandoffBriefDetail block={block} />
+  }
+  if (
+    (detail.kind === 'background_shell' ||
+      detail.kind === 'background_subagent' ||
+      detail.kind === 'worker_update') &&
+    block.kind === 'user'
+  ) {
     return <MessageBubble block={block} nested allowThreadActions={allowThreadActions} />
   }
   return null
@@ -487,6 +496,9 @@ export function describeProcessBlock(
   if (block.kind === 'user' && isBackgroundSubagentNoticeBlock(block)) {
     return block.meta?.displayText?.trim() || t('backgroundSubagentNotice.title', { defaultValue: 'Background subagent completed' })
   }
+  if (block.kind === 'user' && isWorkerUpdateNoticeBlock(block)) {
+    return block.meta?.displayText?.trim() || t('workerUpdateNotice.title', { defaultValue: 'Worker updates' })
+  }
   if (block.kind === 'compaction') {
     if (block.variant === 'window') return t('contextWindowSwitched')
     if (block.status === 'running') return t('compactionRunning')
@@ -507,6 +519,18 @@ export function describeProcessBlock(
         : t('compactionManualCompletedWithTokens', { tokens })
     }
     return block.auto === true ? t('compactionAutoCompleted') : t('compactionManualCompleted')
+  }
+  if (block.kind === 'handoff') {
+    // A same-Agent rebase is a session restart, not a hand-off to someone else.
+    return block.handoffMode === 'delta'
+      ? t('adeHandoffDelta', { agent: block.toHarnessName })
+      : block.reason === 'rebase'
+        ? t('adeHandoffRestart', { agent: block.toHarnessName, turns: block.recentTurns })
+        : t('adeHandoff', {
+          agent: block.toHarnessName,
+          turns: block.recentTurns,
+          files: block.files
+        })
   }
   if (block.kind === 'approval') {
     return block.summary || t('approvalTitle')

@@ -10,6 +10,8 @@ export class ManagerMemoryDistillationPendingOwner {
     this.pending = new MemoryDistillationPendingStore({ dataDir })
   }
 
+  async scrubForgotten(): Promise<void> { await this.pending.list() }
+
   async execute(value: unknown): Promise<unknown> {
     const request = MemoryDistillationPendingRequest.parse(value)
     // A runtime reconnect must not mark another live runtime's extraction failed.

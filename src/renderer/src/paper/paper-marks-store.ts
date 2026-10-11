@@ -12,6 +12,8 @@ import type {
  * payload but are keyed under `cards` by mark id.
  */
 export type PaperMarksState = {
+  /** Library ownership; identical relative unit paths in different libraries are distinct. */
+  workspaceRoot: string
   /** Unit dir the marks belong to ('' = unloaded). */
   unitDir: string
   items: PaperHighlight[]
@@ -34,6 +36,7 @@ export type PaperMarksState = {
 }
 
 const initialMarksState = (): PaperMarksState => ({
+  workspaceRoot: '',
   unitDir: '',
   items: [],
   cards: {},
@@ -134,6 +137,7 @@ export function newPaperHighlight(input: {
   page: number
   rects: [number, number, number, number][]
   quote: string
+  pdfSha256?: string
 }): PaperHighlight {
   const now = new Date().toISOString()
   return {
@@ -143,6 +147,7 @@ export function newPaperHighlight(input: {
     page: input.page,
     rects: input.rects,
     quote: input.quote.slice(0, 8000),
+    ...(input.pdfSha256 ? { pdfSha256: input.pdfSha256 } : {}),
     createdAt: now,
     updatedAt: now
   }

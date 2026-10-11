@@ -21,7 +21,7 @@ export function RoomApprovalCard({ approval, onUpdated }: { approval: RoomApprov
   }
   return <section className="room-approval-card" aria-label={t('roomApprovalTitle')}>
     <header><span className="room-approval-icon"><ShieldCheck size={18} /></span><div><strong>{t('roomApprovalTitle')}</strong><small>{t('roomApproval_' + data.kind)} · {data.tool}</small></div></header>
-    <pre className="room-approval-command"><Terminal size={14} aria-hidden /><code>{data.content}</code></pre>
+    <pre className="room-approval-command" tabIndex={0}><Terminal size={14} aria-hidden /><code>{data.content}</code></pre>
     {data.workspace ? <p className="room-approval-workspace"><Folder size={13} /><span title={data.workspace}>{data.workspace}</span></p> : null}
     <footer><details><summary>{t('roomApprovalDetails')}<ChevronDown size={12} /></summary><p>{data.details}</p></details>
       <button type="button" disabled={busy} onClick={(event) => runTrustedUserActivation(event, () => void decide('deny'))}>{t('roomsDeny')}</button>

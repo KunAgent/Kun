@@ -1,4 +1,6 @@
+import { restoredThreadContextSnapshot } from './thread-context-snapshot'
 import type {
+  RequestContextSnapshot,
   ChatBlock,
   NormalizedThread,
   ThreadDetail,
@@ -8,13 +10,15 @@ import type {
 import type { ChatState, QueuedUserMessage } from './chat-store-types'
 import {
   copyLiveProjection,
-  emptyLiveProjection,
+  restoredLiveProjection,
   liveProjectionIsCoherent,
   type LiveProjectionState
 } from './chat-store-live-projection'
 import { hydrateBlockModelLabels } from './chat-store-helpers'
+import { reconcileThreadTodos } from './thread-todo-projection'
 import {
   settlePendingRuntimeWorkAfterInterrupt,
+  findLatestUserBlockId,
   threadLooksRunning,
   threadSnapshotLooksRunning
 } from './chat-store-runtime-helpers'
@@ -32,6 +36,7 @@ const UNKNOWN_SNAPSHOT_BYTES = 4 * 1024 * 1024
 const SNAPSHOT_ESTIMATE_OVERFLOW = THREAD_SNAPSHOT_CACHE_MAX_BYTES + 1
 
 export type ThreadSnapshot = {
+  contextSnapshot?: RequestContextSnapshot | null
   threadId: string
   fingerprint: string
   blocks: ChatBlock[]
@@ -54,6 +59,9 @@ export type ThreadSnapshot = {
   activeThreadTodos: ThreadTodoList | null
   queuedMessages: QueuedUserMessage[]
   payloadBytes: number
+  capturedAt?: number
+  /** Read-only background snapshots have not yet crossed an SSE replay barrier. */
+  backgroundSyncedAt?: number
 } & LiveProjectionState
 
 export type ThreadTurnTimingSnapshot = Pick<
@@ -151,10 +159,13 @@ const snapshots = new Map<string, ThreadSnapshot>()
 let totalBytes = 0
 let cacheGeneration = 0
 const threadGenerations = new Map<string, number>()
+const snapshotWriteRevisions = new Map<string, number>()
+let nextWriteRevision = 0
 
 export type ThreadSnapshotCacheToken = {
   cacheGeneration: number
   threadGeneration: number
+  writeRevision: number
 }
 
 type ThreadFingerprintSource = Pick<
@@ -167,6 +178,7 @@ type ThreadFingerprintSource = Pick<
   | 'latestTurnStatus'
   | 'relation'
   | 'archived'
+  | 'todos'
 >
 
 export function threadSnapshotFingerprint(thread: ThreadFingerprintSource): string {
@@ -178,18 +190,29 @@ export function threadSnapshotFingerprint(thread: ThreadFingerprintSource): stri
     thread.latestTurnId ?? '',
     thread.latestTurnStatus?.trim().toLowerCase() ?? '',
     thread.relation ?? '',
-    thread.archived === true ? 'archived' : ''
+    thread.archived === true ? 'archived' : '',
+    String(thread.todos?.revision ?? '')
   ].join('\u0000')
 }
 
 export function captureThreadSnapshotCacheToken(threadId: string): ThreadSnapshotCacheToken {
   return {
     cacheGeneration,
-    threadGeneration: threadGenerations.get(threadId) ?? 0
+    threadGeneration: threadGenerations.get(threadId) ?? 0,
+    writeRevision: snapshotWriteRevisions.get(threadId) ?? 0
   }
 }
 
 export function threadSnapshotCacheTokenIsCurrent(
+  threadId: string,
+  token: ThreadSnapshotCacheToken
+): boolean {
+  return threadSnapshotCacheGenerationIsCurrent(threadId, token) &&
+    token.writeRevision === (snapshotWriteRevisions.get(threadId) ?? 0)
+}
+
+/** Ownership survives another writer's commit, but not explicit invalidation. */
+export function threadSnapshotCacheGenerationIsCurrent(
   threadId: string,
   token: ThreadSnapshotCacheToken
 ): boolean {
@@ -279,6 +302,7 @@ function evictUntilBounded(): void {
     if (!oldestId) return
     const oldest = snapshots.get(oldestId)
     snapshots.delete(oldestId)
+    snapshotWriteRevisions.delete(oldestId)
     totalBytes -= oldest?.payloadBytes ?? 0
   }
 }
@@ -287,6 +311,7 @@ function removeSnapshot(threadId: string): void {
   const existing = snapshots.get(threadId)
   if (!existing) return
   snapshots.delete(threadId)
+  snapshotWriteRevisions.delete(threadId)
   totalBytes -= existing.payloadBytes
 }
 
@@ -300,13 +325,17 @@ export function cacheThreadSnapshot(
     return false
   }
   const payloadBytes = normalizedPayloadBytes(snapshot.payloadBytes)
-  const bytes = Math.max(payloadBytes, estimateSnapshotBytes(snapshot))
+  const candidate = { ...snapshot, capturedAt: snapshot.capturedAt ?? Date.now() }
+  const bytes = Math.max(payloadBytes, estimateSnapshotBytes(candidate))
   if (bytes > THREAD_SNAPSHOT_CACHE_MAX_BYTES) {
     invalidateThreadSnapshot(snapshot.threadId)
     return false
   }
   removeSnapshot(snapshot.threadId)
-  snapshots.set(snapshot.threadId, { ...snapshot, payloadBytes: bytes })
+  snapshots.set(snapshot.threadId, { ...candidate, payloadBytes: bytes })
+  // All snapshot writers share this commit fence. A slower hover prewarm or
+  // background request must not replace a projection committed since it began.
+  snapshotWriteRevisions.set(snapshot.threadId, ++nextWriteRevision)
   totalBytes += bytes
   evictUntilBounded()
   return snapshots.has(snapshot.threadId)
@@ -327,6 +356,7 @@ export function snapshotThreadProjection(state: ChatState, payloadBytes?: number
     fingerprint: thread
       ? threadSnapshotFingerprint(thread)
       : [threadId, '', '', '', '', '', '', ''].join('\u0000'),
+    contextSnapshot: restoredThreadContextSnapshot(threadId, state.lastContextSnapshot),
     blocks: state.blocks,
     lastSeq: state.lastSeq,
     threadHistoryCursor: state.threadHistoryCursor,
@@ -387,7 +417,7 @@ export function getThreadSnapshotForSelection(thread: NormalizedThread): ThreadS
     return snapshot
   }
   const sameRunningTurn = snapshot.busy &&
-    !snapshot.busyUnconfirmed &&
+    (!snapshot.busyUnconfirmed || snapshot.backgroundSyncedAt !== undefined) &&
     thread.archived !== true &&
     threadLooksRunning(thread) &&
     Boolean(snapshot.currentTurnId) &&
@@ -408,7 +438,8 @@ export function getThreadSnapshotForSelection(thread: NormalizedThread): ThreadS
 
 export function buildPrefetchedThreadSnapshot(
   thread: NormalizedThread,
-  detail: ThreadDetail
+  detail: ThreadDetail,
+  options: { allowRunning?: boolean } = {}
 ): ThreadSnapshot | null {
   const labeledBlocks =
     detail.relation === 'side' && detail.model
@@ -419,40 +450,40 @@ export function buildPrefetchedThreadSnapshot(
         )
       : detail.blocks
   const loaded = hydrateBlockModelLabels(thread.id, labeledBlocks)
-  const busy = threadSnapshotLooksRunning(
-    loaded,
-    detail.threadStatus,
-    detail.latestTurnStatus
-  )
-  if (busy) return null
-  const blocks = settlePendingRuntimeWorkAfterInterrupt(loaded)
+  const busy = detail.activeTurn !== undefined ? Boolean(detail.activeTurn) :
+    threadSnapshotLooksRunning(loaded, detail.threadStatus, detail.latestTurnStatus)
+  if (busy && !options.allowRunning) return null
+  const blocks = busy ? loaded : settlePendingRuntimeWorkAfterInterrupt(loaded)
+  const turnId = detail.activeTurn !== undefined ? detail.activeTurn?.id : detail.latestTurnId
   const queuedMessages = reconcileQueuedMessages(queuedMessagesForThread(thread.id), {
-    busy: false,
-    turnId: detail.latestTurnId,
+    busy,
+    turnId,
     blocks
   })
   return {
     threadId: thread.id,
+    contextSnapshot: restoredThreadContextSnapshot(thread.id, detail.contextSnapshot),
     fingerprint: threadSnapshotFingerprint(thread),
     blocks,
     lastSeq: detail.latestSeq,
     threadHistoryCursor: detail.historyCursor ?? null,
     threadHasMoreHistory: detail.hasMoreHistory === true,
-    ...emptyLiveProjection(detail.latestSeq),
-    busy: false,
-    busyUnconfirmed: false,
-    currentTurnId: null,
-    currentTurnOrchestration: null,
-    currentTurnUserId: null,
-    currentTurnStartedAtMs: null,
-    turnStartedAtByUserId: {},
-    turnDurationByUserId: detail.turnDurationByUserId ?? {},
-    turnReasoningFirstAtByUserId: {},
-    turnReasoningLastAtByUserId: {},
+    ...restoredLiveProjection(detail.latestSeq, busy ? detail.liveProjection : undefined),
+    busy,
+    busyUnconfirmed: busy,
+    ...hydratedTurnTimingPatch({
+      busy,
+      latestTurnId: turnId,
+      latestTurnOrchestration: detail.activeTurn !== undefined
+        ? detail.activeTurn?.orchestration : detail.latestTurnOrchestration,
+      currentTurnUserId: busy ? detail.latestUserMessageId ?? findLatestUserBlockId(blocks) : null,
+      latestTurnStartedAtMs: detail.latestTurnStartedAtMs,
+      turnDurationByUserId: detail.turnDurationByUserId ?? {}
+    }),
     activeThreadRelation: detail.relation ?? thread.relation ?? 'primary',
     activeThreadParentId: detail.parentThreadId ?? thread.parentThreadId ?? null,
     activeThreadGoal: detail.goal === undefined ? thread.goal ?? null : detail.goal,
-    activeThreadTodos: detail.todos === undefined ? thread.todos ?? null : detail.todos,
+    activeThreadTodos: reconcileThreadTodos(thread.todos, detail.todos),
     queuedMessages,
     payloadBytes: normalizedPayloadBytes(detail.payloadBytes)
   }
@@ -468,6 +499,7 @@ export function clearThreadSnapshotCache(): void {
   totalBytes = 0
   cacheGeneration += 1
   threadGenerations.clear()
+  snapshotWriteRevisions.clear()
 }
 
 /** Test-only, kept narrow so product code never depends on cache internals. */

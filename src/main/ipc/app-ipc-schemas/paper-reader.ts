@@ -15,6 +15,7 @@ export const paperMarksWritePayloadSchema = z
   .object({
     ...workspaceUnitScoped,
     items: z.array(z.unknown()).max(2000),
+    expectedPdfSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     removedIds: z.array(z.string().max(80)).max(2000).optional()
   })
   .strict()
@@ -26,7 +27,7 @@ const translateModel = {
 
 export const paperTranslateSelectionPayloadSchema = z
   .object({
-    // Plan §3.4.3: selection translation is capped at 2000 characters.
+    // Plan: selection translation is capped at 2000 characters.
     text: z.string().min(1).max(2_000),
     targetLanguage: z.enum(['zh', 'en']),
     ...translateModel
@@ -83,7 +84,8 @@ export const paperSaveVisualMarkPayloadSchema = z
         comment: z.string().max(8_000).optional()
       })
       .strict(),
-    pngBase64: z.string().min(8).max(6_000_000)
+    pngBase64: z.string().min(8).max(6_000_000),
+    expectedPdfSha256: z.string().regex(/^[a-f0-9]{64}$/).optional()
   })
   .strict()
 

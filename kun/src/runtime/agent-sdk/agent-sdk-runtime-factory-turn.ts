@@ -1,3 +1,7 @@
+import { dispatchGuidanceForTools } from '../../ade/dispatch-guidance.js'
+import { hasWorkbenchCapabilityConstraints } from '../../contracts/thread-workbench-origin.js'
+import { retainFrozenHarnessAliases } from '../../harness/gateway-alias-binding.js'
+import { observeHarnessAliasRoute } from '../../harness/gateway-alias-route-observer.js'
 /**
  * Binds the decoupled {@link AgentSdkRuntime} to kun's real runtime services.
  * This is the only place that touches the SDK package and kun's concrete stores,
@@ -6,52 +10,23 @@
 import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   AgentSdkCredentialUnavailableError,
-  AgentSdkRuntime,
+  AgentSdkGatewayUnavailableError,
   agentSdkCapabilities,
   type SdkRuntimeDeps,
   type SdkTurnContext
 } from './agent-sdk-runtime.js'
-import type { SdkStreamResourceLimits } from './sdk-event-mapper.js'
-import {
-  normalizeClaudeOAuthToken,
-  resolveSdkModel,
-  type ToolApprovalDecision
-} from './sdk-options-builder.js'
-import {
-  selectBridgeableTools,
-  type BridgeableTool,
-  type KunToolResult
-} from './sdk-tool-bridge.js'
-import type { SdkApi } from './sdk-protocol.js'
+import { normalizeClaudeOAuthToken, resolveSdkModel, type SdkGatewayEnv } from './sdk-options-builder.js'
+import { parseGatewayModelId } from '../../harness/gateway-model-id.js'
+import { resolveAgentSdkGatewayEnv } from './agent-sdk-gateway.js'
 import { subscriptionBillingKind } from '../../shared/subscription-billing.js'
-import type { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
-import type { LlmDebugSink } from '../../services/llm-debug-recorder.js'
 import type { TurnService } from '../../services/turn-service.js'
-import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
-import type { SessionStore } from '../../ports/session-store.js'
-import type { ThreadStore } from '../../ports/thread-store.js'
-import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
-import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
-import { applyRoomToolPolicy, mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
-import {
-  DEFAULT_APPROVAL_REVIEWER,
-  DEFAULT_SANDBOX_MODE,
-  type ApprovalPolicy,
-  type ApprovalReviewer,
-  type SandboxMode
-} from '../../contracts/policy.js'
-import type { ServeProviderConfig } from '../../config/kun-config.js'
-import type { AttachmentStore } from '../../attachments/attachment-store.js'
-import type { SkillRuntime } from '../../skills/skill-runtime.js'
-import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
-import type { MemoryStore } from '../../memory/memory-store.js'
+import { DEFAULT_APPROVAL_REVIEWER } from '../../contracts/policy.js'
 import { resolveMemoryTurnContext } from '../../memory/memory-turn-context.js'
 import { memoryInjectionMetadata } from '../../loop/model-step-preparation-memory.js'
 import { recordRetrieved } from '../../memory/memory-retrieval-feedback.js'
 import {
   PLAN_MODE_INSTRUCTION,
-  todoContinuationInstruction,
-  isStalePlanContext
+  todoContinuationInstruction
 } from '../../loop/agent-loop.js'
 import {
   filterGoalContextsForGoalKey,
@@ -59,54 +34,26 @@ import {
 } from '../../loop/continuation-instructions.js'
 import {
   DESIGN_MODE_INSTRUCTION,
-  SVG_ARTIFACT_ALLOWED_TOOL_NAMES,
   SVG_ARTIFACT_MODE_INSTRUCTION
 } from '../../loop/design-mode.js'
-import type { GuiDesignArtifactContext, GuiPlanContext } from '../../ports/tool-host.js'
-import type { ThreadRecord } from '../../contracts/threads.js'
-import type {
-  UserInputGate,
-  UserInputRequest,
-  UserInputResolution
-} from '../../ports/user-input-gate.js'
-import { goalContextTexts, type TurnItem } from '../../contracts/items.js'
-import type { ApprovalGate } from '../../ports/approval-gate.js'
-import {
-  createApprovalActionEnvelope,
-  createApprovalRequest,
-  safeApprovalActionSummary,
-  type ApprovalRequest,
-  type ApprovalResolution
-} from '../../domain/approval.js'
-import type { ApprovalReviewPort } from '../../ports/approval-review.js'
 import type { ActingTurnModelRoute } from '../../contracts/turns.js'
-import { makeUserInputItem } from '../../domain/item.js'
-import { awaitAbortableGate } from '../../services/interactive-gate.js'
+import { goalContextTexts } from '../../contracts/items.js'
 import {
   buildHistoryTranscript,
   DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
 } from './sdk-context-assembler.js'
-import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
-import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
+import { resolveTurnHandoff, type TurnHandoff } from '../../handoff/turn-handoff.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import { mkdir } from 'node:fs/promises'
-import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import { buildAdditionalWorkspacesInstruction, buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import {
   delegatedCapabilityFingerprint,
   delegatedCredentialIdentity,
+  delegatedRouteKey,
   priorItemsForDelegatedTurn,
-  type DelegatedSessionCoordinator,
   type DelegatedSessionPreparation
 } from '../delegated-session-binding.js'
-import {
-  delegatedGraphCompletionCheck,
-  delegatedGraphAllowedToolNames,
-  delegatedGraphTurnPolicy,
-  intersectDelegatedToolNames,
-  parkDelegatedGraphTurnAfterRecovery
-} from '../delegated-graph-turn-policy.js'
 
 const CLAUDE_KUN_TOOL_INSTRUCTION = [
   'Kun-managed capabilities are available through the mcp__kun__ tools.',
@@ -114,21 +61,14 @@ const CLAUDE_KUN_TOOL_INSTRUCTION = [
   'Their execution remains governed by Kun ToolHost approval and sandbox policy.'
 ].join(' ')
 
-const SDK_ON_REQUEST_AUTO_ALLOWED_TOOLS = new Set([
-  'Read',
-  'Glob',
-  'Grep',
-  'TodoWrite'
-])
 import type { AgentSdkRuntimeFactoryDeps } from './agent-sdk-runtime-factory-contracts.js'
-import { resolveTurnPlanContext } from './agent-sdk-runtime-factory-plan.js'
 import type { AgentSdkFactoryContext } from './agent-sdk-runtime-factory-context.js'
 
 export function createAgentSdkTurnRuntimeDeps(
   deps: AgentSdkRuntimeFactoryDeps,
   context: AgentSdkFactoryContext
 ): Pick<SdkRuntimeDeps, 'handlesProvider' | 'loadTurnContext'> {
-  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages } = context
+  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, handoffBriefDigestsByTurn, skillTurnKey, nowIso, toolBridge, resolveImages } = context
   return {
     handlesProvider: (providerId) => {
       if (providerId && deps.agentSdkProviderIds.has(providerId)) return true
@@ -173,13 +113,81 @@ export function createAgentSdkTurnRuntimeDeps(
           ? thread.accountId?.trim()
           : undefined
       )
-      const selectedModel = resolveSdkModel(turn?.model || thread.model, deps.defaultModel)
-      const actingModelRoute: ActingTurnModelRoute = turn.actingModelRoute ?? {
-        model: selectedModel ?? 'claude-default',
-        ...(actingProviderId ? { providerId: actingProviderId } : {}),
+      // `kun-gateway` turns address the routed provider through the loopback
+      // gateway as `kun/<provider>/<model>`; the grant only authorizes those
+      // routes. Provider credentials never enter the env.
+      const gatewayMode = turn.credentialMode === 'kun-gateway'
+      const rawModel = turn?.model || thread.model
+      const gatewayAddress = gatewayMode && !turn.gatewayBinding ? parseGatewayModelId(rawModel) : null
+      const admittedProviderId = turn.actingModelRoute?.providerId?.trim() || requestedRouteProviderId || 'default'
+      if (gatewayAddress && gatewayAddress.providerId !== admittedProviderId) {
+        throw new AgentSdkGatewayUnavailableError('the encoded model provider does not match the selected Agent profile')
+      }
+      const gatewayProviderId = gatewayMode && !turn.gatewayBinding
+        ? gatewayAddress?.providerId ?? explicitRouteProviderId ??
+          await deps.resolveDefaultProviderId?.().catch(() => undefined)
+        : undefined
+      const gatewayModelId = gatewayAddress?.model ?? rawModel
+      const aliasActingRoute: ActingTurnModelRoute | undefined = turn.gatewayBinding ? turn.actingModelRoute ?? {
+        model: rawModel, unresolvedGatewayAlias: true, requestedGatewayAlias: rawModel
+      } : undefined
+      let gatewayEnv: SdkGatewayEnv | undefined
+      if (gatewayMode) {
+        if ((!gatewayProviderId && !turn.gatewayBinding) || !gatewayModelId) {
+          throw new AgentSdkGatewayUnavailableError(
+            'the turn has no provider/model route to address through the gateway'
+          )
+        }
+        // A bare model id only reaches the gateway when the resolved provider
+        // actually offers it — otherwise a stale pick like `claude-sonnet-4-6`
+        // would be addressed to DeepSeek and fail upstream as a 404.
+        if (!gatewayAddress && !turn.gatewayBinding) {
+          const offered = await deps.listProviderModels?.(gatewayProviderId!)
+            .catch(() => undefined)
+          if (offered && offered.length > 0 && !offered.includes(gatewayModelId)) {
+            throw new AgentSdkGatewayUnavailableError(
+              `model "${gatewayModelId}" is not offered by provider "${gatewayProviderId}" — ` +
+                'pick a model from that provider’s gateway group or check provider settings'
+            )
+          }
+        }
+        const harnessId = turn.harnessId ?? 'claude-code'
+        await deps.readiness?.validateTurn(threadId, turnId, signal ?? new AbortController().signal, {
+          harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: gatewayProviderId, model: gatewayModelId,
+          ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {})
+        })
+        if (turn.gatewayBinding && !deps.resolveGatewayAliases) throw new AgentSdkGatewayUnavailableError('alias resolution is unavailable')
+        const aliases = turn.gatewayBinding ? retainFrozenHarnessAliases(await deps.resolveGatewayAliases!(turn.gatewayBinding), turn.gatewayAliasGrants) : undefined
+        if (aliases) await deps.turns.updateTurnMetadata(threadId, turnId, { gatewayAliasGrants: aliases })
+        gatewayEnv = resolveAgentSdkGatewayEnv({
+          deps: {
+            tokens: deps.harnessTokens,
+            baseUrl: deps.harnessGatewayBaseUrl,
+            roles: deps.roles,
+            gateway: () => deps.harnessCatalog?.get(harnessId)?.gateway
+          },
+          threadId,
+          harnessId,
+          providerId: gatewayProviderId,
+          model: gatewayModelId,
+          ...(aliases ? { aliasRoutes: aliases, turnId, onResolvedRoute: observeHarnessAliasRoute(aliasActingRoute!, gatewayModelId, async (route) => {
+            await deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute: route })
+          }) } : {})
+        })
+      }
+      const selectedModel = gatewayMode
+        ? gatewayModelId
+        : rawModel === 'default' ? undefined : resolveSdkModel(rawModel, deps.defaultModel)
+      const actingModelRoute: ActingTurnModelRoute = aliasActingRoute ?? turn.actingModelRoute ?? {
+        model: selectedModel ?? 'default',
+        ...(gatewayProviderId
+          ? { providerId: gatewayProviderId }
+          : actingProviderId
+            ? { providerId: actingProviderId }
+            : {}),
         ...(requestedAccountId ? { accountId: requestedAccountId } : {})
       }
-      if (!turn.actingModelRoute) {
+      if (!turn.actingModelRoute && !turn.gatewayBinding) {
         await deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute })
       }
       const providerId = actingModelRoute.providerId
@@ -193,7 +201,7 @@ export function createAgentSdkTurnRuntimeDeps(
         providerId: actingProviderId,
         baseUrl: providerCfg?.baseUrl
       })
-      const model = actingModelRoute.model
+      const model = !gatewayMode && actingModelRoute.model === 'default' ? undefined : actingModelRoute.model
       const approvalPolicy =
         turn.approvalPolicy ?? thread.approvalPolicy ?? deps.defaultApprovalPolicy
       const sandboxMode =
@@ -207,50 +215,41 @@ export function createAgentSdkTurnRuntimeDeps(
       // ambient Claude Code login only when it has no managed credential
       // source. Managed sources are re-read for every turn so a fence written
       // by another Runtime fails closed before the SDK can use cached material.
-      const credentialSourceId = explicitRouteProviderId
-        ? providerCfg?.credentialSourceId
-        : deps.defaultCredentialSourceId
-      let rawToken = explicitRouteProviderId ? providerCfg?.apiKey : deps.defaultToken
-      if (credentialSourceId) {
-        const resolved = await deps.resolveCredentialSource?.(credentialSourceId).catch(() => null)
-        rawToken = resolved?.apiKey ?? ''
-        if (!rawToken.trim()) throw new AgentSdkCredentialUnavailableError()
+      // Gateway turns skip this entirely — the gateway token is the credential.
+      let token: string | undefined
+      if (!gatewayEnv) {
+        // The apiKey/credentialSource fallback belongs to the single-engine
+        // deployment where `default` IS the agent-sdk subscription route. On a
+        // mixed runtime it holds an unrelated HTTP provider key — a harness-
+        // pinned native-login turn must fall back to the CLI's ambient login
+        // instead of being force-fed a token it cannot parse.
+        const defaultIsSubscriptionRoute = !explicitRouteProviderId && deps.defaultIsAgentSdk
+        const credentialSourceId = explicitRouteProviderId
+          ? providerCfg?.credentialSourceId
+          : defaultIsSubscriptionRoute
+            ? deps.defaultCredentialSourceId
+            : undefined
+        let rawToken = explicitRouteProviderId
+          ? providerCfg?.apiKey
+          : defaultIsSubscriptionRoute
+            ? deps.defaultToken
+            : undefined
+        if (credentialSourceId) {
+          const resolved = await deps.resolveCredentialSource?.(credentialSourceId).catch(() => null)
+          rawToken = resolved?.apiKey ?? ''
+          if (!rawToken.trim()) throw new AgentSdkCredentialUnavailableError()
+        }
+        token = normalizeClaudeOAuthToken(rawToken)
       }
-      const token = normalizeClaudeOAuthToken(rawToken)
-      // Resolve skills before listing bridgeable tools so the SDK sees the
-      // same per-turn catalog as the native Kun loop.
-      const roomSkillsDisabled = thread.roomContext?.skillsEnabled === false
-      const blockedSkillIds = mergeRoomDeniedIds(
-        deps.toolContextBoundary?.blockedSkillIds,
-        thread.roomContext?.blockedSkillIds
-      )
-      const allowedSkillIds = roomSkillsDisabled ? [] : deps.toolContextBoundary?.allowedSkillIds
-      const skillResolution = !roomSkillsDisabled && deps.skillRuntime
-        ? await deps.skillRuntime.resolveTurn({
-            prompt: userText,
-            workspace: thread.workspace,
-            threadId,
-            turnId,
-            ...(allowedSkillIds ? { allowedSkillIds } : {}),
-            ...(blockedSkillIds.length ? { blockedSkillIds } : {})
-          })
-        : undefined
-      const activeSkillIds = skillResolution?.activeSkillIds ?? []
-      const turnKey = skillTurnKey(threadId, turnId)
-      activeSkillIdsByTurn.set(turnKey, activeSkillIds)
-      skillPromptByTurn.set(turnKey, userText)
-      // Plan turns expose create_plan (and narrow kun tools to the plan-allowed
-      // set); resolve before listing tools so the bridge sees create_plan.
-      // awaitUserInput presence is what advertises `user_input` (the signal here
-      // is only for advertisement; the real per-call signal is set on execution).
-      const dedicatedSvgTurn = turn.guiDesignArtifact?.kind === 'svg'
-      const clientSurface = resolveTurnClientSurface(turn)
-      const awaitUserInput = turn.disableUserInput === true
-        ? undefined
-        : makeAwaitUserInput(threadId, turnId, new AbortController().signal)
-      const plan = dedicatedSvgTurn
-        ? { planMode: false as const }
-        : resolveTurnPlanContext(thread, turnId)
+      // Resolve the shared turn scope (skills, plan, graph, surface) before
+      // listing bridgeable tools so the SDK sees the same per-turn catalog as
+      // the native Kun loop.
+      const scope = await toolBridge.resolveTurnScope(threadId, turnId, {
+        skillPrompt: userText,
+        actingModelRoute
+      })
+      if (!scope) return null
+      const { plan, graphPolicy, skillResolution, clientSurface, activeSkillIds } = scope
       if (!plan.planMode && thread.goal?.status === 'active') {
         await deps.turns.ensureGoalContext(threadId, turnId, signal)
         // Goal context is persisted by TurnService outside the public thread
@@ -270,93 +269,10 @@ export function createAgentSdkTurnRuntimeDeps(
         items
       })
       items = [...turnDynamicContext.historyItems]
-      const graphPolicy = delegatedGraphTurnPolicy(turn)
-      // An Agent SDK query pins its in-process MCP schemas at startup and
-      // cannot add tools after `load_skill` returns. Pre-bridge schemas gated
-      // by skills visible in this workspace; executeKunTool still re-resolves
-      // the real active ids for every call, so schema visibility is not
-      // execution authority.
-      const availableSkillIds = !roomSkillsDisabled && typeof deps.skillRuntime?.availableSkillIdsForWorkspace === 'function'
-        ? await deps.skillRuntime.availableSkillIdsForWorkspace(
-            thread.workspace,
-            blockedSkillIds,
-            allowedSkillIds
-          )
-        : activeSkillIds
-      const listingOptions = {
-        additionalWorkspaces: thread.additionalWorkspaces,
-        ...plan,
-        ...(turn?.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
-        ...(turn?.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
-        ...(turn?.guiDesignMode ? { guiDesignMode: true } : {}),
-        ...(turn?.guiDesignArtifact ? { guiDesignArtifact: turn.guiDesignArtifact } : {}),
-        activeSkillIds: [...new Set([...activeSkillIds, ...availableSkillIds])],
-        clientSurface,
-        sandboxMode,
-        approvalPolicy,
-        approvalReviewer,
-        actingModelRoute,
-        ...(turn.orchestration ? { orchestration: turn.orchestration } : {}),
-        ...(awaitUserInput ? { awaitUserInput } : {})
-      }
-      const discoveryContext = toolContext(threadId, turnId, thread.workspace, {
-        ...listingOptions,
-        ...(!graphPolicy && turn.guiDesignArtifact?.kind === 'svg'
-          ? { allowedToolNames: SVG_ARTIFACT_ALLOWED_TOOL_NAMES }
-          : {})
-      })
-      if (deps.toolHost) {
-        // Activate turn-scoped extension contributions before taking the
-        // canonical registry snapshot used by the SDK MCP bridge.
-        await deps.toolHost.listTools(discoveryContext)
-      }
-      const graphAllowedToolNames = graphPolicy
-        ? delegatedGraphAllowedToolNames(
-            deps.registry.listTools(discoveryContext),
-            graphPolicy.phase
-          )
-        : undefined
-      const bridgeListingContext = toolContext(threadId, turnId, thread.workspace, {
-        ...listingOptions,
-        ...(intersectDelegatedToolNames(
-          !graphPolicy && turn.guiDesignArtifact?.kind === 'svg'
-            ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES
-            : undefined,
-          graphAllowedToolNames
-        )
-          ? {
-              allowedToolNames: intersectDelegatedToolNames(
-                !graphPolicy && turn.guiDesignArtifact?.kind === 'svg'
-                  ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES
-                  : undefined,
-                graphAllowedToolNames
-              )
-            }
-          : {})
-      })
-      const bridgeableTools: BridgeableTool[] = deps.registry.listTools(
-        thread.roomContext ? applyRoomToolPolicy(bridgeListingContext, thread) : bridgeListingContext
-      ).map((spec) => ({
-        name: spec.name,
-        description: spec.description,
-        inputSchema: spec.inputSchema,
-        providerId: spec.providerId,
-        providerKind: spec.providerKind
-      }))
-      const bridgedTools = selectBridgeableTools(
-        bridgeableTools,
-        graphPolicy || thread.roomContext || plan.planMode || managedPptScope ? { overlap: new Set() } : undefined
-      )
-
-      // This is the portable rebase handoff. Compatible consecutive turns use
-      // the official SDK resume id and do not send this transcript again.
-      const historyTranscript = managedPptScope
-        ? ''
-        : buildHistoryTranscript(
-            items,
-            turnId,
-            deps.historyTranscriptMaxBytes ?? DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
-          )
+      // The bridged catalog comes from the shared tool bridge host: same
+      // capability snapshot, plan context, client surface, and overlap policy
+      // as the native loop.
+      const bridgedTools = await toolBridge.listTools(threadId, turnId, { scope })
 
       // A plan turn suppresses goal/todo continuation and injects the plan-mode
       // instruction telling the model to call create_plan (now advertised above).
@@ -377,7 +293,7 @@ export function createAgentSdkTurnRuntimeDeps(
       const memoryBlocks = memoryContext.referenceBlocks
       const memoryIds = memoryContext.memories.map((memory) => memory.id)
 
-      const todoInstruction = planMode ? null : todoContinuationInstruction(thread.todos)
+      const todoInstruction = planMode ? null : todoContinuationInstruction(thread.todos, thread.executionTasks)
       if (instructionResolution || memoryContext.memories.length > 0 || memoryContext.directives.length > 0) {
         await deps.turns.updateTurnMetadata(threadId, turnId, {
           ...memoryInjectionMetadata({
@@ -392,13 +308,21 @@ export function createAgentSdkTurnRuntimeDeps(
       }
 
       const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(thread.additionalWorkspaces)
+      // planning-phase harness menu as dynamic context (not the
+      // stable delegated-session prefix).
+      const graphHarnessInstruction =
+        graphPolicy?.phase === 'planning'
+          ? await deps.graphHarnessSummary?.().catch(() => undefined)
+          : undefined
       const contextInstructions = managedPptScope ? [
         ...turnDynamicContext.instructions
       ] : [
         ...historyReferenceInstructions(thread),
+        ...dispatchGuidanceForTools(bridgedTools),
         buildClientSurfaceInstruction(clientSurface),
         ...(additionalWorkspacesInstruction ? [additionalWorkspacesInstruction] : []),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
+        ...(graphHarnessInstruction ? [graphHarnessInstruction] : []),
         ...(planMode ? [PLAN_MODE_INSTRUCTION] : []),
         ...(turn?.guiDesignArtifact?.kind === 'svg'
           ? [SVG_ARTIFACT_MODE_INSTRUCTION]
@@ -423,14 +347,21 @@ export function createAgentSdkTurnRuntimeDeps(
           route: {
             providerKind: 'agent-sdk',
             providerId: providerId || 'default',
-            credentialIdentity: delegatedCredentialIdentity({
+            credentialIdentity: gatewayEnv?.credentialIdentity ?? delegatedCredentialIdentity({
               providerId: providerId || 'default',
               accountId,
-              credentialSourceId: providerCfg?.credentialSourceId,
+              // Gateway turns bind sessions to the route, not a provider
+              // credential — the grant token never enters the identity.
+              credentialSourceId: gatewayEnv ? 'kun-gateway' : providerCfg?.credentialSourceId,
               credentialSecret: token
             }),
             workspace: thread.workspace,
             model: model ?? 'claude-default',
+            // The SDK applies `model` on every query, including a resumed one,
+            // so an explicit model change continues the same Claude session.
+            // Gateway turns already bind the session to the route through the
+            // credential identity, and no model at all is its own session.
+            ...(model && !gatewayEnv ? { modelScope: 'session' as const } : {}),
             capabilityFingerprint: delegatedCapabilityFingerprint({
               systemPrompt: deps.prefix.systemPrompt,
               threadPersona: thread.systemPrompt?.trim() || '',
@@ -439,7 +370,7 @@ export function createAgentSdkTurnRuntimeDeps(
               approvalReviewer,
               planMode,
               allowSdkBuiltins:
-                graphPolicy || thread.roomContext || planMode || turn?.guiDesignArtifact?.kind === 'svg'
+                graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || planMode || turn?.guiDesignArtifact?.kind === 'svg'
                   ? false
                   : deps.allowSdkBuiltins ?? true,
               capabilities: agentSdkCapabilities(),
@@ -455,13 +386,57 @@ export function createAgentSdkTurnRuntimeDeps(
           },
           priorItems: priorItemsForDelegatedTurn(items, turnId)
         })
-        if (token) {
-          claudeConfigDir = deps.sessionCoordinator.store.providerStateDir('agent-sdk', threadId)
+        if (token || gatewayEnv) {
+          claudeConfigDir = deps.sessionCoordinator.store.providerStateDir(
+            'agent-sdk',
+            threadId,
+            delegatedRouteKey(preparation.route)
+          )
           await mkdir(claudeConfigDir, { recursive: true, mode: 0o700 })
         }
         sessionPreparationsByTurn.set(skillTurnKey(threadId, turnId), preparation)
         sessionGoalContextKeysByTurn.set(skillTurnKey(threadId, turnId), goalContextKeyForHistory)
       }
+
+      // The deterministic handoff brief replaces the portable
+      // transcript whenever the session is new/rebased or a parked session is
+      // restored with a delta. Compatible native resumes send neither. The
+      // closure is re-invoked after a rejected native resume to produce the
+      // fresh-session full brief for the portable retry.
+      const resolveHandoff = (
+        prep: DelegatedSessionPreparation | undefined
+      ): TurnHandoff | undefined => {
+        const resolved = resolveTurnHandoff({
+          enabled: Boolean(deps.sessionCoordinator) &&
+            !managedPptScope &&
+            deps.deterministicHandoff !== false,
+          preparation: prep,
+          items,
+          currentTurnId: turnId,
+          ownerThreadId: threadId,
+          workspacePath: thread.workspace,
+          taskWorkspaces: deps.taskWorkspaces
+        })
+        if (resolved) {
+          handoffBriefDigestsByTurn.set(
+            skillTurnKey(threadId, turnId),
+            resolved.brief.digest
+          )
+        }
+        return resolved
+      }
+      const turnHandoff = resolveHandoff(preparation)
+
+      // This is the portable rebase handoff. Compatible consecutive turns use
+      // the official SDK resume id and do not send this transcript again.
+      const historyTranscript =
+        managedPptScope || turnHandoff
+          ? ''
+          : buildHistoryTranscript(
+              items,
+              turnId,
+              deps.historyTranscriptMaxBytes ?? DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
+            )
 
       void recordRetrieved({
         feedback: deps.memoryFeedback,
@@ -482,44 +457,55 @@ export function createAgentSdkTurnRuntimeDeps(
         sandboxMode,
         approvalReviewer,
         actingModelRoute,
+        harnessRoute: {
+          harnessId: 'claude-code', credentialMode: gatewayEnv ? 'kun-gateway' : 'native-login',
+          providerId: turn.gatewayBinding ? undefined : gatewayProviderId ?? actingProviderId, model: gatewayEnv?.model ?? model ?? 'default',
+          ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {})
+        },
         planMode,
         allowSdkBuiltins:
-          graphPolicy || thread.roomContext || planMode || turn?.guiDesignArtifact?.kind === 'svg'
+          graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || planMode || turn?.guiDesignArtifact?.kind === 'svg'
             ? false
             : deps.allowSdkBuiltins ?? true,
-        ...(graphPolicy || thread.roomContext || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
+        ...(graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
         ...(graphPolicy ? { graphPhase: graphPolicy.phase } : {}),
         ...(turn?.guiDesignArtifact?.kind === 'svg' ? { requireSvgCompletion: true } : {}),
         // Claude Code only accepts Anthropic models; coerce a thread's non-Claude
         // model (e.g. an old deepseek thread now routed to the subscription) to
         // the runtime default so the turn doesn't fail "model may not exist".
-        model,
+        // Gateway turns send the `kun/<provider>/<model>` address instead.
+        model: gatewayEnv?.model ?? model,
         ...(billingKind ? { billingKind } : {}),
         ...(turn?.reasoningEffort ? { reasoningEffort: turn.reasoningEffort } : {}),
-        ...(preparation?.nativeSessionId && turnDynamicContext.instructions.length === 0
+        ...(preparation?.nativeSessionId
           ? { resumeSessionId: preparation.nativeSessionId }
           : {}),
         ...(claudeConfigDir ? { claudeConfigDir } : {}),
         ...(preparation ? { sessionPreparation: preparation } : {}),
-        ...(turnDynamicContext.instructions.length
-          ? { disableNativeContinuation: true }
-          : {}),
         ...(deps.contextProfile
-          ? { contextProfile: deps.contextProfile(model ?? 'claude-default') }
+          ? { contextProfile: deps.contextProfile(model ?? 'claude-default', providerId) }
           : {}),
         oauthToken: token || undefined,
+        ...(gatewayEnv ? { gateway: gatewayEnv } : {}),
         ...(images.length ? { images } : {}),
-        bridgeableTools,
-        ...([...goalContextTexts(items), ...turnDynamicContext.privateValues].length
+        bridgeableTools: bridgedTools,
+        ...([...goalContextTexts(items), ...turnDynamicContext.privateValues, ...(gatewayEnv ? [gatewayEnv.token] : [])].length
           ? {
               redactedRequestValues: [
                 ...goalContextTexts(items),
-                ...turnDynamicContext.privateValues
+                ...turnDynamicContext.privateValues,
+                ...(gatewayEnv ? [gatewayEnv.token] : [])
               ]
             }
           : {}),
-        ...(historyTranscript ? { historyTranscript } : {}),
+        resolveHandoff,
+        ...(turnHandoff
+          ? { handoffBrief: turnHandoff.brief.text, handoffEvent: turnHandoff.event }
+          : historyTranscript
+            ? { historyTranscript }
+            : {}),
         ...(contextInstructions.length ? { contextInstructions } : {}),
+        turnLocalInstructions: turnDynamicContext.instructions,
         ...(activeSkillIds.length ? { activeSkillIds: [...activeSkillIds] } : {})
       }
     },

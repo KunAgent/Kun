@@ -27,7 +27,7 @@ describe('peer participation classifier', () => {
     expect(f.requests[0]).toMatchObject({ model: 'small', providerId: 'small-provider', accountId: 'small-account',
       tools: [], responseFormat: 'json_object', temperature: 0 })
     expect(f.requests[0].maxTokens).toBeUndefined()
-    expect(f.requests[0].reasoningEffort).toBeUndefined()
+    expect(f.requests[0].reasoningEffort).toBe('off')
     expect(result).toMatchObject({ action: 'skip', reason: 'Already covered', model: 'small', usage })
     expect(result.elapsedMs).toBeGreaterThanOrEqual(0)
   })

@@ -1,6 +1,6 @@
 /**
  * `rawMarkdownBlock` — atom block for constructs the rich schema cannot
- * represent (implementation §5). Stores the verbatim Markdown source in
+ * represent. Stores the verbatim Markdown source in
  * `raw`, shows a sanitized preview plus a `source` badge, and opens a small
  * CodeMirror editor on click:
  *   - Cmd/Ctrl+Enter saves and reparses the fragment — recognizable

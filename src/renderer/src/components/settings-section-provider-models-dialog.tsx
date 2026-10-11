@@ -1,3 +1,8 @@
+import { ProviderModelMetadataPanel } from './provider-model-metadata-panel'
+import { clearModelMetadataOverride, setModelMetadataOverride } from '../../../../kun/src/services/model-metadata-resolver.js'
+import { applyProviderModelForm, chatModelProfile } from './provider-model-editor'
+import { editorStateForExisting } from './settings-section-provider-models-support'
+import { settingsButtonClass } from './settings-button'
 import {
   MODEL_ENDPOINT_FORMATS,
   type ModelEndpointFormat,
@@ -88,7 +93,7 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                 type="button"
                 aria-label={t('providerModelCancel')}
                 onClick={closeEditor}
-                className="shrink-0 rounded-full p-1.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+                  className={settingsButtonClass({ variant: 'ghost', size: 'icon', className: 'shrink-0' })}
               >
                 <X className="h-4 w-4" strokeWidth={1.9} />
               </button>
@@ -133,6 +138,7 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                   value={editor.form.modelId}
                   placeholder={t('providerModelIdPlaceholder')}
                   spellCheck={false}
+                  readOnly={editor.form.originalModelId === "*"}
                   onChange={(e) => updateForm({ modelId: e.target.value })}
                 />
                 <span className="text-[12px] font-normal leading-5 text-ds-faint">{t('providerModelIdHint')}</span>
@@ -159,6 +165,17 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                       onChange={(value) => updateForm({ supportsToolCalling: value })}
                     />
                   </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(['parallelTools', 'structuredOutput', 'streaming'] as const).map((field) => <label key={field} className={fieldLabelClass}>
+                      {t(`providerConfiguration.metadata${field}`)}
+                      <select className={selectControlClass} value={editor.form[field] === null ? 'unknown' : String(editor.form[field])}
+                        onChange={(event) => updateForm({ [field]: event.target.value === 'unknown' ? null : event.target.value === 'true' })}>
+                        <option value="unknown">{t('providerConfiguration.evidenceunknown')}</option>
+                        <option value="true">{t('providerConfiguration.metadataSupported')}</option>
+                        <option value="false">{t('providerConfiguration.metadataUnsupported')}</option>
+                      </select>
+                    </label>)}
+                  </div>
                   <ToggleField
                     label={t('providerModelReasoningLabel')}
                     description={t('providerModelReasoningDesc')}
@@ -166,6 +183,30 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                     onChange={(value) => updateForm({ reasoningEnabled: value })}
                   />
 
+                  {effectiveForm?.modelId.trim() ? <ProviderModelMetadataPanel
+                    profile={chatModelProfile(applyProviderModelForm(provider, effectiveForm), effectiveForm.modelId)!}
+                    t={t}
+                    onRestore={(field) => {
+                      const draft = applyProviderModelForm(provider, effectiveForm)
+                      const key = effectiveForm.modelId.trim().toLowerCase()
+                      draft.modelProfiles[key] = clearModelMetadataOverride(draft.modelProfiles[key], field)
+                      const next = editorStateForExisting(draft, 'chat', effectiveForm.modelId)
+                      next.form.originalModelId = editor.form.originalModelId
+                      next.form.clearedOverrides = [...(editor.form.clearedOverrides ?? []), field]
+                      next.form.adoptedSuggestions = editor.form.adoptedSuggestions
+                      setEditor(next)
+                    }}
+                    onAdopt={(field, value, observationId) => {
+                      const draft = applyProviderModelForm(provider, effectiveForm)
+                      const key = effectiveForm.modelId.trim().toLowerCase()
+                      draft.modelProfiles[key] = setModelMetadataOverride(draft.modelProfiles[key], field, value)
+                      const next = editorStateForExisting(draft, 'chat', effectiveForm.modelId)
+                      next.form.originalModelId = editor.form.originalModelId
+                      next.form.clearedOverrides = (editor.form.clearedOverrides ?? []).filter((item) => item !== field)
+                      next.form.adoptedSuggestions = { ...editor.form.adoptedSuggestions, [field]: observationId }
+                      setEditor(next)
+                    }}
+                  /> : null}
                   <AdvancedSettingsDisclosure
                     title={t('providerModelAdvancedTitle')}
                     description={t('providerModelAdvancedDesc')}
@@ -207,6 +248,11 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                       </div>
 
                       <label className={fieldLabelClass}>
+                        {t('providerConfiguration.metadatamaxInputTokens')}
+                        <input className={textInputClass} value={editor.maxInputText} placeholder="128K" spellCheck={false}
+                          onChange={(event) => { const value = event.target.value; setEditor((previous) => previous ? { ...previous, maxInputText: value } : previous) }} />
+                      </label>
+                      <label className={fieldLabelClass}>
                         {t('providerModelMaxOutputLabel')}
                         <input
                           className="w-36 min-w-0 rounded-xl border border-ds-border bg-ds-card px-3 py-1.5 font-mono text-[12.5px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
@@ -227,6 +273,38 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                           {t('providerModelMaxOutputHint')}
                         </span>
                       </label>
+
+                      <div className="grid gap-1.5">
+                        <span className="text-[12px] font-semibold text-ds-muted">
+                          {t('providerModelPricingLabel')}
+                        </span>
+                        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">
+                          {([
+                            ['pricingInputText', 'providerModelPricingInput'],
+                            ['pricingOutputText', 'providerModelPricingOutput'],
+                            ['pricingCacheReadText', 'providerModelPricingCacheRead'],
+                            ['pricingCacheWriteText', 'providerModelPricingCacheWrite']
+                          ] as const).map(([field, labelKey]) => (
+                            <label key={field} className={fieldLabelClass}>
+                              {t(labelKey)}
+                              <input
+                                className="w-full min-w-0 rounded-xl border border-ds-border bg-ds-card px-3 py-1.5 font-mono text-[12.5px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                                value={editor[field]}
+                                placeholder={t('providerModelPricingPlaceholder')}
+                                inputMode="decimal"
+                                spellCheck={false}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  setEditor((prev) => prev ? { ...prev, [field]: value } : prev)
+                                }}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        <span className="text-[12px] leading-5 text-ds-faint">
+                          {t('providerModelPricingHint')}
+                        </span>
+                      </div>
 
                       {editor.form.reasoningEnabled ? (
                         <div className="grid gap-3 rounded-xl border border-ds-border-muted bg-ds-card/60 p-3">
@@ -326,6 +404,20 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                       </label>
 
                       <label className={fieldLabelClass}>
+                        {t('providerModelWireIdLabel')}
+                        <input
+                          className={selectControlClass}
+                          value={editor.form.wireModelId}
+                          placeholder={editor.form.modelId || 'vendor/*'}
+                          spellCheck={false}
+                          onChange={(e) => updateForm({ wireModelId: e.target.value })}
+                        />
+                        <span className="text-[12px] font-normal leading-5 text-ds-faint">
+                          {t('providerModelWireIdHint')}
+                        </span>
+                      </label>
+
+                      <label className={fieldLabelClass}>
                         {t('providerModelAliasesLabel')}
                         <input
                           className={`${textInputClass} font-mono text-[13px]`}
@@ -358,10 +450,9 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
             </div>
 
             <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-ds-border px-5 py-3">
-              <button
+              <button className={settingsButtonClass()}
                 type="button"
                 onClick={closeEditor}
-                className="inline-flex h-9 items-center rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
               >
                 {t('providerModelCancel')}
               </button>
@@ -369,7 +460,7 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                 type="button"
                 disabled={errors.length > 0}
                 onClick={saveEditor}
-                className="inline-flex h-9 items-center gap-2 rounded-full bg-accent px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className={settingsButtonClass({ variant: 'primary' })}
               >
                 {t('providerModelSave')}
               </button>

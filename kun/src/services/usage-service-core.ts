@@ -46,12 +46,14 @@ export class UsageService {
     signature?: CacheRequestSignature,
     turnId?: string
   ): UsageSnapshot {
+    const responseUsage = usage
+    if (usage.attemptAccounting) usage = { ...usage, ...usage.attemptAccounting.totals }
     const enriched = signature ? this.withCacheDiagnostics(threadId, usage, signature) : usage
-    this.cache.ingest(threadId, enriched)
+    if (!responseUsage.attemptAccounting || responseUsage.attemptAccounting.responseUsageKnown) this.cache.ingest(threadId, responseUsage)
     const cumulative = this.counter.record(threadId, enriched)
     const withLastRequest = {
       ...cumulative,
-      lastRequestCacheHitRate: enriched.cacheHitRate ?? null
+      lastRequestCacheHitRate: responseUsage.cacheHitRate ?? null
     }
     if (turnId) {
       return attachTurnAverages(withLastRequest, this.foldTurnTiming(threadId, turnId, enriched))
@@ -144,14 +146,15 @@ export class UsageService {
       agg.ttftCalls += 1
     }
     const generation = snapshot.requestGenerationMs
+    const tokens = snapshot.requestGenerationTokens ?? snapshot.completionTokens
     if (
       typeof generation === 'number' &&
       Number.isFinite(generation) &&
       generation >= 0 &&
-      snapshot.completionTokens > 0
+      tokens > 0
     ) {
       agg.generationSumMs += generation
-      agg.completionTokensSum += snapshot.completionTokens
+      agg.completionTokensSum += tokens
       agg.tpsCalls += 1
     }
     this.turnTiming.set(key, agg)

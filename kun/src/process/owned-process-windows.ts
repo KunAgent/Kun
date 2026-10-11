@@ -8,7 +8,7 @@ import { promisify } from 'node:util'
 import { WINDOWS_OWNED_LAUNCHER_SOURCE } from './owned-process-windows-launcher.js'
 
 type StopOptions = { graceMs?: number; timeoutMs?: number }
-type LaunchOptions = SpawnOptions & { ownerLossGraceMs?: number }
+type LaunchOptions = SpawnOptions & { ownerLossGraceMs?: number; beforeLaunch?: () => Promise<unknown> }
 type Launch = { directory: string; stopPath: string; launcherPid: number; stop?: Promise<void> }
 const launches = new Map<ChildProcess, Launch>()
 const retired = new WeakSet<ChildProcess>()
@@ -47,7 +47,7 @@ async function buildLauncher(): Promise<string> {
   } finally { await rm(work, { recursive: true, force: true }) }
 }
 
-async function executablePath(command: string, options: SpawnOptions): Promise<string> {
+export async function resolveWindowsExecutablePath(command: string, options: SpawnOptions): Promise<string> {
   const environment = options.env ?? process.env
   const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === 'path')
   const paths = /[\\/]/u.test(command) || isAbsolute(command)
@@ -63,7 +63,7 @@ async function executablePath(command: string, options: SpawnOptions): Promise<s
 async function prepareWindowsLaunch(command: string, args: readonly string[], options: LaunchOptions, console = false) {
   if (stopping) throw new Error('Owned process admission is closed')
   if (options.shell) throw new Error('Owned commands must select an explicit shell executable')
-  let executable = await executablePath(command, options)
+  let executable = await resolveWindowsExecutablePath(command, options)
   let commandLine = [executable, ...args].map(quoteWindowsArgument).join(' ')
   if (/\.(?:cmd|bat)$/iu.test(executable)) {
     // Batch commands require cmd.exe; reject metacharacters instead of silently
@@ -72,7 +72,7 @@ async function prepareWindowsLaunch(command: string, args: readonly string[], op
       throw new Error('Use an executable or explicit shell for batch arguments containing shell metacharacters')
     }
     commandLine = `${quoteWindowsArgument(process.env.ComSpec ?? 'cmd.exe')} /d /s /c "${commandLine}"`
-    executable = await executablePath(process.env.ComSpec ?? 'cmd.exe', options)
+    executable = await resolveWindowsExecutablePath(process.env.ComSpec ?? 'cmd.exe', options)
   }
   const launcher = await (launcherBuild ??= buildLauncher().catch((error) => { launcherBuild = undefined; throw error }))
   if (stopping) throw new Error('Owned process admission is closed')
@@ -89,12 +89,12 @@ async function prepareWindowsLaunch(command: string, args: readonly string[], op
       String(ownerPid), ownerBirth, String(options.ownerLossGraceMs ?? 20_000), console ? 'console' : 'pipe',
       Buffer.from(startPath).toString('base64')
     ]).join('\n'), { mode: 0o600 })
-  const { ownerLossGraceMs: _ownerLossGraceMs, ...spawnOptions } = options
+  const { ownerLossGraceMs: _ownerLossGraceMs, beforeLaunch, ...spawnOptions } = options
   const launcherOptions: SpawnOptions = {
     ...spawnOptions, shell: false, windowsVerbatimArguments: false, detached: false, windowsHide: true,
     env: { ...environment, KUN_OWNED_LAUNCH_CONFIG: configPath }
   }
-  return { launcher, launcherOptions, directory, statusPath, stopPath, startPath }
+  return { launcher, launcherOptions, directory, statusPath, stopPath, startPath, beforeLaunch }
 }
 
 async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnType<typeof prepareWindowsLaunch>>): Promise<ChildProcess> {
@@ -113,6 +113,8 @@ async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnTy
         // _handle still owns the launcher/Job lifetime, while callers and
         // Runtime discovery observe the real target process identity.
         Object.defineProperty(child, 'pid', { value: Number(status), configurable: true, enumerable: true })
+        await prepared.beforeLaunch?.()
+        if (stopping) throw new Error('Owned process admission closed during launch')
         // Do not await after releasing the gate: the caller installs its
         // listeners in the promise microtask before target I/O can be handled.
         writeFileSync(prepared.startPath, 'start', { mode: 0o600 })
@@ -146,9 +148,12 @@ async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnTy
 
 export async function spawnWindowsOwnedProcess(command: string, args: readonly string[], options: LaunchOptions): Promise<ChildProcess> {
   const prepared = await prepareWindowsLaunch(command, args, options)
-  if (stopping) {
+  try {
+    await prepared.beforeLaunch?.()
+    if (stopping) throw new Error('Owned process admission is closed')
+  } catch (error) {
     await rm(prepared.directory, { recursive: true, force: true })
-    throw new Error('Owned process admission is closed')
+    throw error
   }
   return bindWindowsLaunch(spawn(prepared.launcher, [], prepared.launcherOptions), prepared)
 }

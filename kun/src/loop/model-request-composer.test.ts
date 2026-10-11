@@ -57,7 +57,14 @@ describe('composeModelRequest', () => {
       inputTokens: 0,
       contextCapTokens: 20_000,
       declaredMaxOutputTokens: 128_000
-    })).toBe(20_000)
+    })).toBe(5_000)
+  })
+
+  it('reserves useful input capacity for small and unknown windows', () => {
+    for (const cap of [3400, 6800, 27_200, 54_400]) {
+      expect(ordinaryOutputReserveTokens({ inputTokens: 0, contextCapTokens: cap })).toBe(Math.floor(cap / 4))
+      expect(effectiveOutputBudgetTokens({ inputTokens: 1000, contextCapTokens: cap })).toBe(Math.min(32_768, cap - 1000))
+    }
   })
 
   it('uses a finite fallback when a model has no output metadata', () => {

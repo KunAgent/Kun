@@ -5,13 +5,9 @@ import {
   Clock3,
   Columns3,
   LayoutGrid,
-  Moon,
-  Plus,
   Puzzle,
-  Settings,
-  Smartphone,
-  Sun,
-  Workflow
+  Workflow,
+  Zap
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
@@ -27,18 +23,15 @@ import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
 import { SidebarAttentionPanel } from './SidebarAttentionPanel'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
-import { SidebarConversationsSection } from './SidebarConversationsSection'
+import { SidebarAgentChatsSection } from './SidebarAgentChatsSection'
+import { SidebarMenuRow, SidebarNavRow, SidebarPrimaryActions } from './SidebarCodeNav'
 import { SidebarProjectBoardsSection } from './SidebarProjectBoardsSection'
 import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDialog'
 import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
 import { useProjectBoardEnabled } from '../../project-board/use-project-board-enabled'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
-import {
-  SidebarCommandRow,
-  SidebarFrame,
-  SidebarIconButton
-} from '../sidebar/SidebarPrimitives'
-import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
+import { SidebarFrame } from '../sidebar/SidebarPrimitives'
+import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
 
 type Props = {
   threads: NormalizedThread[]
@@ -113,18 +106,7 @@ export function Sidebar({
   onNewConversation
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
-  const [isDarkMode, setIsDarkMode] = useState(
-    () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark'
-  )
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDarkMode(document.documentElement.getAttribute('data-theme') === 'dark')
-    })
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => observer.disconnect()
-  }, [])
-
+  const iconProps = { className: 'h-4 w-4', strokeWidth: 1.75 }
   // HTML5 drag does not scroll containers; without this, dragged sidebar rows
   // cannot reach projects above or below the visible window.
   useEffect(() => registerSidebarDragAutoScroll(document), [])
@@ -187,41 +169,14 @@ export function Sidebar({
     <SidebarFrame
       title={t('appName')}
       footer={
-        <div className="space-y-1">
-          <SidebarFocusModeControl
-            enabled={focusModeEnabled}
-            onChange={onFocusModeChange}
-          />
-          <div className="flex items-center gap-1">
-            <div className="min-w-0 flex-1">
-              <SidebarCommandRow
-                icon={<Settings className="h-4 w-4" strokeWidth={1.75} />}
-                label={t('settings')}
-                onClick={() => onOpenSettings('general')}
-                variant="footer"
-              />
-            </div>
-            <SidebarIconButton
-              title={t('claw')}
-              ariaLabel={t('claw')}
-              onClick={onToggleConnectPhone}
-              active={connectPhoneSidebarOpen}
-            >
-              <Smartphone className="h-4 w-4" strokeWidth={1.75} />
-            </SidebarIconButton>
-            <SidebarIconButton
-              title={isDarkMode ? t('switchToLight') : t('switchToDark')}
-              ariaLabel={t('toggleTheme')}
-              onClick={onToggleTheme}
-            >
-              {isDarkMode ? (
-                <Sun className="h-4 w-4" strokeWidth={1.75} />
-              ) : (
-                <Moon className="h-4 w-4" strokeWidth={1.75} />
-              )}
-            </SidebarIconButton>
-          </div>
-        </div>
+        <SidebarStandardFooter
+          focusModeEnabled={focusModeEnabled}
+          connectPhoneSidebarOpen={connectPhoneSidebarOpen}
+          onFocusModeChange={onFocusModeChange}
+          onOpenSettings={() => onOpenSettings('general')}
+          onToggleConnectPhone={onToggleConnectPhone}
+          onToggleTheme={onToggleTheme}
+        />
       }
     >
       {codexDialogOpen && codexReferenceEnabled ? <CodexReferenceDialog workspaceRoot={workspaceRoot}
@@ -233,52 +188,46 @@ export function Sidebar({
           onWriteOpen={onWriteOpen}
         />
 
-        {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' ? (
-          <SidebarCommandRow
-            icon={<Plus className="h-4 w-4" strokeWidth={2} />}
-            label={t('newAgent')}
-            onClick={runtimeReady ? onNewChat : undefined}
-            disabled={!runtimeReady}
+        {activeView !== 'claw' ? (
+          <SidebarPrimaryActions
+            runtimeReady={runtimeReady}
+            newTaskLabel={t('newAgent')}
+            newChatLabel={t('agentChatsStart')}
             disabledHint={t('runtimeActionNeedsConnection')}
-            variant="accent"
+            onNewTask={onNewChat}
           />
         ) : null}
-        {codexReferenceEnabled && activeView === 'chat' ? <SidebarCommandRow
-          icon={<Clock3 className="h-4 w-4" />} label={t('codexHistoryCreate')}
-          onClick={() => setCodexDialogOpen(true)} disabled={!runtimeReady}
-        /> : null}
-        <SidebarCommandRow
-          icon={<LayoutGrid className="h-4 w-4" strokeWidth={1.75} />}
-          label={t('plugins')}
-          onClick={onOpenPlugins}
-          active={pluginsActive}
-        />
-        <SidebarCommandRow
-          icon={<Puzzle className="h-4 w-4" strokeWidth={1.75} />}
-          label={i18n.language.toLowerCase().startsWith('zh') ? '扩展' : 'Extensions'}
-          onClick={onOpenExtensions}
-          active={extensionsActive}
-        />
-        {projectBoardEnabled ? (
-          <SidebarCommandRow
-            icon={<Columns3 className="h-4 w-4" strokeWidth={1.75} />}
-            label={t('projectBoardNav')}
-            onClick={onBoardOpen}
-            active={activeView === 'board'}
+        <nav className="sidebar-code-nav" aria-label={t('sidebarTools')}>
+          {codexReferenceEnabled && activeView === 'chat' ? <SidebarNavRow
+            icon={<Clock3 {...iconProps} />} label={t('codexHistoryCreate')} active={false}
+            disabled={!runtimeReady} onClick={() => setCodexDialogOpen(true)}
+          /> : null}
+          <SidebarMenuRow
+            icon={<Zap {...iconProps} />}
+            label={t('sidebarAutomation')}
+            items={[
+              // Re-selecting the open automation view toggles back to Code.
+              { id: 'schedule', label: t('schedule'), icon: <Clock3 {...iconProps} />, active: activeView === 'schedule', onSelect: activeView === 'schedule' ? onCodeOpen : onScheduleOpen },
+              { id: 'workflow', label: t('workflow'), icon: <Workflow {...iconProps} />, active: activeView === 'workflow', onSelect: activeView === 'workflow' ? onCodeOpen : onWorkflowOpen }
+            ]}
           />
-        ) : null}
-        <SidebarCommandRow
-          icon={<Clock3 className="h-4 w-4" strokeWidth={1.75} />}
-          label={t('schedule')}
-          onClick={onScheduleOpen}
-          active={activeView === 'schedule'}
-        />
-        <SidebarCommandRow
-          icon={<Workflow className="h-4 w-4" strokeWidth={1.75} />}
-          label={t('workflowCreate')}
-          onClick={onWorkflowOpen}
-          active={activeView === 'workflow'}
-        />
+          <SidebarMenuRow
+            icon={<LayoutGrid {...iconProps} />}
+            label={t('sidebarAddons')}
+            items={[
+              { id: 'plugins', label: t('plugins'), icon: <LayoutGrid {...iconProps} />, active: pluginsActive, onSelect: onOpenPlugins },
+              { id: 'extensions', label: i18n.language.toLowerCase().startsWith('zh') ? '扩展' : 'Extensions', icon: <Puzzle {...iconProps} />, active: extensionsActive, onSelect: onOpenExtensions }
+            ]}
+          />
+          {projectBoardEnabled ? (
+            <SidebarNavRow
+              icon={<Columns3 {...iconProps} />}
+              label={t('projectBoardNav')}
+              onClick={onBoardOpen}
+              active={activeView === 'board'}
+            />
+          ) : null}
+        </nav>
       </div>
 
       <div className="ds-no-drag mx-1 my-1" />
@@ -320,48 +269,23 @@ export function Sidebar({
           })}
           t={t}
         />
-      ) : activeView === 'workflow' ? (
-        <div className="ds-no-drag flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-          <Workflow className="h-7 w-7 text-ds-faint" strokeWidth={1.5} />
-          <p className="text-[12.5px] leading-5 text-ds-faint">{t('workflowSidebarHint')}</p>
-        </div>
-      ) : activeView === 'schedule' ? (
-        <SidebarProjectsSection
-          threads={threads}
-          activeView="chat"
-          activeThreadId={activeThreadId}
-          runtimeReady={runtimeReady}
-          threadListStatus={threadListStatus}
-          threadListError={threadListError}
-          onRetryThreads={() => void refreshThreads()}
-          onLoadMoreThreads={(workspacePath) => void loadMoreThreads(workspacePath)}
-          threadListCursorByWorkspace={threadListCursorByWorkspace}
-          searchQuery={threadSearch}
-          showArchived={showArchivedThreads}
-          workspaceRoot={workspaceRoot}
-          workspaceRoots={codeWorkspaceRoots}
-          conversationRoot={conversationWorkspaceRoot}
-          busy={busy}
-          watchTurnCompletion={watchTurnCompletion}
-          unreadThreadIds={unreadThreadIds}
-          scheduledThreadActivities={scheduledThreadActivities}
-          awaitingUserInputThreadIds={awaitingUserInputThreadIds}
-          locale={i18n.language}
-          onPickWorkspace={() => void chooseWorkspace()}
-          onRemoveWorkspace={removeWorkspace}
-          onCreateThreadInWorkspace={onNewChatInWorkspace}
-          onSelectThread={onSelectThread}
-          onRenameThread={onRenameThread}
-          onPinThread={onPinThread}
-          onArchiveThread={onArchiveThread}
-          onDeleteThread={onDeleteThread}
-          onRestoreThread={onRestoreThread}
-          onSearchQueryChange={onThreadSearchChange}
-          t={t}
-        />
       ) : (
       <>
-      {!threadSearch.trim() && (activeView === 'chat' || activeView === 'write') ? (
+      <SidebarAgentChatsSection
+        threads={threads}
+        activeThreadId={activeThreadId}
+        runtimeReady={runtimeReady}
+        conversationRoot={conversationWorkspaceRoot}
+        onNewConversation={onNewConversation}
+        onSelectThread={onSelectThread}
+        onRenameThread={onRenameThread}
+        onPinThread={onPinThread}
+        onArchiveThread={onArchiveThread}
+        onDeleteThread={onDeleteThread}
+        onRestoreThread={onRestoreThread}
+        t={t}
+      />
+      {!threadSearch.trim() && ['chat', 'write', 'schedule', 'workflow'].includes(activeView) ? (
         <SidebarAttentionPanel
           threads={threads}
           activityContext={sidebarActivityContext}
@@ -400,20 +324,6 @@ export function Sidebar({
         onDeleteThread={onDeleteThread}
         onRestoreThread={onRestoreThread}
         onSearchQueryChange={onThreadSearchChange}
-        t={t}
-      />
-      <SidebarConversationsSection
-        threads={threads}
-        activeThreadId={activeThreadId}
-        runtimeReady={runtimeReady}
-        conversationRoot={conversationWorkspaceRoot}
-        onNewConversation={onNewConversation}
-        onSelectThread={onSelectThread}
-        onRenameThread={onRenameThread}
-        onPinThread={onPinThread}
-        onArchiveThread={onArchiveThread}
-        onDeleteThread={onDeleteThread}
-        onRestoreThread={onRestoreThread}
         t={t}
       />
       </>

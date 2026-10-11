@@ -1,76 +1,101 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { RotateCcw, Settings2 } from 'lucide-react'
 import type { AgentIdentity, AgentModelOptions, AgentModelBinding, Room } from '@shared/rooms-api'
 import { RoomModal } from './RoomModal'
 import { agentPath, modelBindingKey, saveAgentModels, useAgentResource } from './agent-client'
 import { useChatStore } from '../../store/chat-store'
+import { CodingAgentModelSettings } from './CodingAgentModelSettings'
+import { AgentModelSelect } from './AgentModelSelect'
+import { agentModelNoteBlocks, agentModelRowNote, findAgentModelOption } from './agent-model-select-logic'
 
 export type AgentModels = AgentModelOptions & { agent: AgentIdentity }
 export const modelLabel = (value?: AgentModelBinding) => value?.model ?? '—'
 type SavedModelRef = NonNullable<AgentIdentity['modelRef']>
 export function AgentModelSettings({ agentId, room, onClose, onSaved, variant = 'modal' }: { agentId: string; room?: Room; onClose: () => void; onSaved: () => void; variant?: 'modal' | 'panel' }) {
   const { t } = useTranslation('common')
-  const resource = useAgentResource<AgentModels>(agentPath(agentId) + '/models' + (room ? '?room_id=' + encodeURIComponent(room.id) : ''))
+  const resource = useAgentResource<AgentModels>(agentPath(agentId) + '/models')
   const body = <>
-    {resource.data ? <ModelEditor key={agentId + ':' + resource.data.agent.revision} value={resource.data} onSaved={() => { resource.refresh(); onSaved() }} /> :
+    <p className="rooms-run-note">{t(resource.data?.agent.executor ? 'directCodingAgentModelsHelp' : 'directRoleDefaultsHelp')}</p>
+    <p className="rooms-run-note">{t('directModelsSaveImmediately')}</p>
+    {room?.privateModelRef ? <p className="rooms-run-note">{t('directConversationOverrideNotice')}</p> : null}
+    {resource.data ? resource.data.agent.executor
+      ? <CodingAgentModelSettings key={agentId} agent={resource.data.agent} onRefresh={resource.refresh} onSaved={() => { resource.refresh(); onSaved() }} />
+      : <ModelEditor key={agentId} value={resource.data} onRefresh={resource.refresh} onSaved={() => { resource.refresh(); onSaved() }} /> :
       <p className="rooms-run-note">{t('roomsLoading')}</p>}
     {resource.error ? <p role="alert" className="rooms-run-error">{resource.error}</p> : null}
   </>
   return variant === 'panel' ? <div className="min-h-0 flex-1 overflow-y-auto p-4">{body}</div>
     : <RoomModal title={t('directModels')} onClose={onClose}>{body}</RoomModal>
 }
-function ModelEditor({ value, onSaved }: { value: AgentModels; onSaved: () => void }) {
+function ModelEditor({ value, onSaved, onRefresh }: { value: AgentModels; onSaved: () => void; onRefresh: () => void }) {
   const { t } = useTranslation('common')
   const [main, setMain] = useState<SavedModelRef | null>(value.agent.modelRef ?? null)
   const [fast, setFast] = useState<SavedModelRef | null>(value.agent.fastModelRef ?? null)
-  const [search, setSearch] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
-  const revision = useRef(value.agent.revision)
-  const options = value.options.filter((item) => [item.model, item.providerLabel, item.accountId].join(' ').toLowerCase().includes(search.toLowerCase()))
+  const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const revision = useRef(value.agent.revision), inFlight = useRef(false), mounted = useRef(true)
+  const latestAgent = useRef(value.agent); latestAgent.current = value.agent
+  const [savingField, setSavingField] = useState<'main' | 'fast' | null>(null)
+  const [savedField, setSavedField] = useState<'main' | 'fast' | null>(null)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  useEffect(() => {
+    revision.current = latestAgent.current.revision
+    setMain(latestAgent.current.modelRef ?? null); setFast(latestAgent.current.fastModelRef ?? null)
+  }, [value.agent.revision])
   const apply = async (nextMain: SavedModelRef | null, nextFast: SavedModelRef | null) => {
-    if (busy || modelBindingKey(nextMain) === modelBindingKey(main) && modelBindingKey(nextFast) === modelBindingKey(fast)) return
+    if (inFlight.current || modelBindingKey(nextMain) === modelBindingKey(main) && modelBindingKey(nextFast) === modelBindingKey(fast)) return
+    inFlight.current = true
+    const field = modelBindingKey(nextMain) === modelBindingKey(main) ? 'fast' : 'main'
+    setSavingField(field); setSavedField(null)
     const previous = { main, fast }
     setMain(nextMain); setFast(nextFast); setBusy(true); setError('')
     try {
       const saved = await saveAgentModels(value.agent.id, {
         expectedRevision: revision.current, modelRef: nextMain, fastModelRef: nextFast
       })
-      revision.current = saved.agent.revision
-      onSaved()
+      if (mounted.current) {
+        revision.current = saved.agent.revision; setSavedField(field)
+        onSaved()
+      }
     } catch (cause) {
-      setMain(previous.main); setFast(previous.fast); setError(String(cause))
-    } finally { setBusy(false) }
+      if (mounted.current) { setMain(previous.main); setFast(previous.fast); setError(String(cause)); onRefresh() }
+    } finally { inFlight.current = false; if (mounted.current) { setBusy(false); setSavingField(null) } }
   }
   const choices = (light: boolean) => {
+    const role = light ? 'fast' : 'main'
     const selected = light ? fast : main, inherited = light ? value.inheritedFast : value.inheritedMain
     const effective = selected ?? inherited
     const verifiedAt = modelBindingKey(effective) === modelBindingKey(light ? value.fast : value.main) ? light ? value.fastVerifiedAt : value.mainVerifiedAt : undefined
-    const provider = value.options.find((item) => modelBindingKey(item) === modelBindingKey(effective))
-    const groups = [...new Set(options.map((item) => item.providerId))]
-    return <fieldset className="direct-model-field" disabled={busy}>
-      <legend>{t(light ? 'directFastModel' : 'directMainModel')}</legend>
+    const option = findAgentModelOption(value.options, effective)
+    const usable = Boolean(option) && !agentModelNoteBlocks(option ? agentModelRowNote(option, role) : undefined)
+    const source = t(selected ? 'directSourceAgent' : light && value.fastSource === 'main' ? 'directSourceMain' : 'directSourceDefault')
+    const health = usable && verifiedAt ? t('directVerified', { date: new Date(verifiedAt).toLocaleString() }) : t(usable ? 'directConfigured' : 'directUnavailable')
+    const saving = savingField === role, saved = !saving && savedField === role
+    const tone = saving ? 'is-busy' : !usable ? 'is-bad' : saved || verifiedAt ? 'is-ok' : ''
+    const label = t(light ? 'directFastModel' : 'directMainModel')
+    return <fieldset className="direct-model-field is-agent-role" disabled={busy}>
+      <legend>{label}</legend>
+      {selected ? <button type="button" className="direct-model-restore" onClick={() => void apply(light ? main : null, light ? null : fast)}>
+        <RotateCcw size={13} strokeWidth={2} aria-hidden="true" />{t('directRestoreInherit')}
+      </button> : null}
       <p>{t(light ? 'directFastHelp' : 'directMainHelp')}</p>
-      <select aria-label={t(light ? 'directFastModel' : 'directMainModel')} value={modelBindingKey(selected)} onChange={(event) => {
-        const option = value.options.find((item) => modelBindingKey(item) === event.target.value)
-        const next = option?.providerId ? { providerId: option.providerId, accountId: option.accountId, model: option.model } : null
-        void apply(light ? main : next, light ? next : fast)
-      }}>
-        <option value="">{t('directInherit', { model: modelLabel(inherited) })}</option>
-        {selected && !options.some((item) => modelBindingKey(item) === modelBindingKey(selected)) ? <option value={modelBindingKey(selected)}>{modelLabel(selected)}</option> : null}
-        {groups.map((id) => <optgroup key={id} label={options.find((item) => item.providerId === id)?.providerLabel ?? id}>
-          {options.filter((item) => item.providerId === id).map((item) => <option key={modelBindingKey(item)} value={modelBindingKey(item)} disabled={!item.available || light && !item.fastAvailable}>
-            {item.model}{item.accountId ? ' · ' + item.accountId : ''}{!item.available ? ' · ' + t('reason' in item && item.reason === 'agent_scope_unsupported' ? 'directScopeUnsupported' : 'directUnavailable') : light && !item.fastAvailable ? ' · ' + t('directNoBackground') : !light && !item.groupAvailable ? ' · ' + t('directPrivateOnly') : ''}
-          </option>)}
-        </optgroup>)}
-      </select>
-      <div className="direct-model-effective"><strong>{t('directEffective', { model: modelLabel(effective) })}</strong><small>{provider?.providerLabel ?? effective?.providerId}{effective?.accountId ? ' · ' + effective.accountId : ''} · {t(selected ? 'directSourceAgent' : light && value.fastSource === 'main' ? 'directSourceMain' : 'directSourceDefault')}</small>
-        <small>{provider?.available && verifiedAt ? t('directVerified', { date: new Date(verifiedAt).toLocaleString() }) : t(provider?.available ? 'directConfigured' : 'directUnavailable')}</small></div>
-      {selected ? <button type="button" onClick={() => void apply(light ? main : null, light ? null : fast)}>{t('directRestoreInherit')}</button> : null}
+      <AgentModelSelect role={role} label={label} options={value.options} selected={selected} inherited={inherited}
+        disabled={busy} busy={saving} onConfigureProviders={() => useChatStore.getState().openSettings('agents')}
+        onChange={(next) => void apply(light ? main : next, light ? next : fast)} />
+      <div className="direct-model-status">
+        <span className={`direct-model-status-dot ${tone}`} aria-hidden="true" />
+        {saving ? <span role="status">{t('directModelSaving')}</span> : <>
+          {saved ? <><span role="status">{t('directModelSaved')}</span><span aria-hidden="true"> · </span></> : null}
+          <span>{saved ? source : `${source} · ${health}`}</span>
+        </>}
+      </div>
     </fieldset>
   }
-  return <div className="direct-model-settings">
-    <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('directSearchModels')} aria-label={t('directSearchModels')} />
+  return <div className="direct-model-settings is-agent-roles">
     {choices(false)}{choices(true)}
-    <button type="button" onClick={() => useChatStore.getState().openSettings('agents')}>{t('directConfigureProviders')}</button>
+    <button type="button" className="direct-model-manage" onClick={() => useChatStore.getState().openSettings('agents')}>
+      <Settings2 size={13} strokeWidth={1.9} aria-hidden="true" />{t('directConfigureProviders')}
+    </button>
     {error ? <p role="alert" className="rooms-run-error">{error}</p> : null}
   </div>
 }

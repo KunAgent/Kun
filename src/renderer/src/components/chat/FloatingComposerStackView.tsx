@@ -1,5 +1,7 @@
 import type { ReactElement } from 'react'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
+import { steerDelivery } from '../../agent/harness-capability-ui'
+import { useChatStore } from '../../store/chat-store'
 
 export function FloatingComposerStackView({
   context
@@ -10,17 +12,24 @@ export function FloatingComposerStackView({
     BackgroundShellOverlay, FloatingComposerAboveInputStack, FloatingComposerActionMenu,
     FloatingComposerApprovalPanel,
     FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerQueuedMessages,
-    FloatingComposerSlashCommandMenu, FloatingComposerTodoProgress, FloatingComposerUserInputPanel,
-    PauseCircle, Pencil, PlayCircle, Target, Trash2, X, activeThreadGoal, activeThreadId, activeThreadTodos, applySlashCommand,
+    FloatingComposerDispatchableAgents,
+    FloatingComposerSlashCommandMenu, FloatingComposerTodoProgress, FloatingComposerUserInputPanel, FloatingComposerWorkersPill,
+    PauseCircle, Pencil, PlayCircle, Target, Trash2, X, activeThread, activeThreadGoal, activeThreadId, activeThreadTodos, adeComposerEnabled, applySlashCommand,
     busy, canOpenGoalPanel, canSetGoalPanelDraft, clearActiveThreadGoal, compact, composerMenuOpen,
     currentTurnOrchestration, draft, fileMentions, filteredSlashCommands, goalBannerLabel,
     goalElapsedLabel, goalPanelOpen, goalPanelRef, graphEnabled, highlightedSlashCommand,
-    onReorderQueuedMessage, onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, onRestoreQueuedMessageToComposer, pendingApprovals, pendingUserInputBlock,
-    queuedMessages, runtimeReady,
+    onReorderQueuedMessage, onResumeQueuedMessages, onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, onRestoreQueuedMessageToComposer, pendingApprovals, pendingUserInputBlock,
+    queuedMessages, route, runtimeReady,
     setActiveThreadGoalStatus, setGoalFromComposerInput, setGoalPanelOpen,
     showGoalFloater, showGoalMenuOption, showGraphProgress, showTodoProgress, slashCommandMenu,
     slashQuery, t, userInput
   } = context
+  // Only the running turn's own runtime report says how guidance reaches it.
+  const steering = useChatStore((s) => {
+    const runtime = s.lastDelegatedRuntimeState
+    return runtime && runtime.threadId === activeThreadId && runtime.turnId === s.currentTurnId
+      ? steerDelivery(runtime) : 'live'
+  })
   return (
     <>
       <FloatingComposerAboveInputStack
@@ -28,7 +37,7 @@ export function FloatingComposerStackView({
           <FloatingComposerQueuedMessages
             messages={queuedMessages}
             running={busy}
-            guidanceTarget={currentTurnOrchestration === 'graph' ? 'graph' : 'turn'}
+            guidanceTarget={currentTurnOrchestration === 'graph' ? 'graph' : steering === 'live' ? 'turn' : steering}
             onRemove={onRemoveQueuedMessage}
             onGuide={onGuideQueuedMessage}
             onRestoreToComposer={onRestoreQueuedMessageToComposer
@@ -39,10 +48,19 @@ export function FloatingComposerStackView({
                 }
               : undefined}
             onReorder={onReorderQueuedMessage}
+            onResume={onResumeQueuedMessages}
           />
         )}
         floatingStatuses={(
           <>
+            <FloatingComposerWorkersPill
+              threadId={activeThreadId}
+              enabled={adeComposerEnabled === true}
+            />
+            <FloatingComposerDispatchableAgents
+              thread={activeThread ?? null}
+              enabled={adeComposerEnabled === true}
+            />
             {showTodoProgress && activeThreadTodos ? (
               <FloatingComposerTodoProgress todos={activeThreadTodos} enabled={showGraphProgress} />
             ) : null}
@@ -154,6 +172,7 @@ export function FloatingComposerStackView({
             selectedIndex={fileMentions.selectedIndex}
             highlighted={fileMentions.highlighted}
             hasMountedKnowledgeBases={fileMentions.hasMountedKnowledgeBases}
+            knowledgeBaseHint={route !== 'write'}
             onSelect={fileMentions.applySuggestion}
           />
         ) : null}

@@ -1,6 +1,11 @@
 import { ServiceManagerTransportError } from '../manager/usage-errors.js'
 import { redactSecretText } from '../config/secret-redaction.js'
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
+import type { HarnessId } from '../contracts/harness.js'
+import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
+import { KUN_NATIVE_CAPABILITIES } from '../harness/builtin-harnesses.js'
+import { isConversationalRoomEngine } from '../contracts/agent-executor.js'
+import { effectiveKunTurnIntent, isInternalGraphWorker, unsupportedKunTurnIntent } from '../harness/kun-turn-intent.js'
 import {
   isHostShutdownTurnSuspension,
   ownerLeaseExpiredTurnAbortFrom,
@@ -24,6 +29,7 @@ import {
 import type { GoalElapsedTimer } from './goal-turn-coordinator.js'
 import { AgentLoopBase } from './agent-loop-base.js'
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
+import { hasWorkbenchCapabilityConstraints } from '../contracts/thread-workbench-origin.js'
 
 export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
   protected abstract loop(
@@ -128,15 +134,64 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     const sdkRuntime = this.opts.sdkRuntime
     let delegatedSdkRuntime: DelegatedTurnRuntime | undefined
     let delegatedProviderId: string | undefined
-    if (sdkRuntime) {
-      const turn = owningThread?.turns.find((candidate) => candidate.id === turnId)
-      const providerId = turn?.providerId?.trim() || owningThread?.providerId?.trim()
+    let turnHarnessId: HarnessId | undefined
+    let turnCapabilitiesV2: HarnessCapabilities | undefined
+    const turnRecord = owningThread?.turns.find((candidate) => candidate.id === turnId)
+    if (this.opts.harnessRouter && owningThread && turnRecord) {
+      // Explicit harness routing: resolve synchronously before any further
+      // await so a hot config swap cannot retarget this turn.
+      const resolved = this.opts.harnessRouter.resolve(owningThread, turnRecord)
+      if (!resolved.ok) {
+        const settlement = await settle({
+          status: 'failed',
+          error: resolved.error.userMessage,
+          code: resolved.error.code
+        })
+        finalStatus = statusFromSettlement(settlement, 'failed')
+        finalError = errorFromSettlement(settlement)
+        return finalStatus
+      }
+      delegatedSdkRuntime = resolved.runtime
+      delegatedProviderId = resolved.resolved.route.providerId
+      turnHarnessId = resolved.resolved.route.harnessId
+      turnCapabilitiesV2 = resolved.resolved.effective
+    } else if (sdkRuntime) {
+      const providerId = turnRecord?.providerId?.trim() || owningThread?.providerId?.trim()
       const resolvedRuntime = sdkRuntime.resolveProvider?.(providerId) ??
         (sdkRuntime.handlesProvider(providerId) ? sdkRuntime : undefined)
       if (resolvedRuntime) {
-        delegatedSdkRuntime = resolvedRuntime
-        delegatedProviderId = providerId
+        const settlement = await settle({ status: 'failed', error: 'External Agent readiness gate is unavailable', code: 'harness_not_ready' })
+        return statusFromSettlement(settlement, 'failed')
       }
+    }
+    if (turnRecord?.paperContext && delegatedSdkRuntime) {
+      const settlement = await settle({ status: 'failed', code: 'paper_transport_unsupported',
+        error: 'Paper reading requires a bounded native API model; external agent runtimes are not supported.' })
+      return statusFromSettlement(settlement, 'failed')
+    }
+    // Keep the legacy provider dispatcher subject to the same product boundary.
+    if (delegatedSdkRuntime && owningThread && turnRecord) {
+      const intentError = unsupportedKunTurnIntent(turnHarnessId ?? 'external', effectiveKunTurnIntent(owningThread, turnRecord), {
+        graphWorker: isInternalGraphWorker(owningThread, turnRecord)
+      })
+      if (intentError) {
+        const settlement = await settle({ status: 'failed', error: intentError, code: 'route_unsupported' })
+        finalStatus = statusFromSettlement(settlement, 'failed')
+        finalError = errorFromSettlement(settlement)
+        return finalStatus
+      }
+    }
+    // Native-loop turns emit the same harness identity event so clients can
+    // render capability state uniformly (delegated turns emit
+    // `delegated_runtime` from inside their own runtime).
+    if (!delegatedSdkRuntime && owningThread && turnRecord) {
+      await this.opts.events.record({
+        kind: 'harness_runtime',
+        threadId,
+        turnId,
+        harnessId: turnHarnessId ?? 'kun',
+        capabilitiesV2: turnCapabilitiesV2 ?? KUN_NATIVE_CAPABILITIES
+      })
     }
     // The Agent SDK owns its own wall-clock timeout so it can distinguish a
     // runtime deadline from a user cancellation. Starting this native timer
@@ -193,8 +248,13 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       return finalStatus
     }
     try {
-      goalTimer = await this.goalTurns.begin(threadId)
-      if (delegatedSdkRuntime && owningThread?.roomContext &&
+      goalTimer = turnRecord?.paperContext ? null : await this.goalTurns.begin(threadId)
+      // Conversation members retain their engine-native gate; constrained Code
+      // handoffs still require the host to enforce their inherited ceiling.
+      const conversationalEngine = Boolean(owningThread?.roomContext && turnHarnessId &&
+        isConversationalRoomEngine(owningThread.roomContext.kind, turnHarnessId))
+      if (delegatedSdkRuntime && ((owningThread?.roomContext && !conversationalEngine) ||
+        hasWorkbenchCapabilityConstraints(owningThread?.workbenchOrigin?.capabilityCeiling)) &&
         delegatedSdkRuntime.capabilities(delegatedProviderId)?.roomToolPolicy !== true) {
         throw new Error('This provider cannot enforce the room tool policy; select an API model or a supported SDK provider.')
       }
@@ -206,7 +266,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       const resumedGraphLead = owningThread?.turns
         .find((candidate) => candidate.id === turnId)
         ?.graphLeadLifecycle?.resumedAt !== undefined
-      const denial = resumedGraphLead
+      const denial = resumedGraphLead || turnRecord?.paperContext
         ? undefined
         : await runTurnStartLifecycleHooks(this.lifecycleHookDeps(), { threadId, turnId })
       if (denial) {
@@ -239,7 +299,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       // Fire-and-forget: start LLM title generation as soon as the first-turn
       // user message is in place, in parallel with the main reply. Only uses
       // user input; never blocks the agent loop.
-      if (!resumedGraphLead) {
+      if (!resumedGraphLead && !turnRecord?.paperContext) {
         void this.threadTitle.generateAfterTurn(threadId, turnId, signal).catch(() => {})
       }
       if (delegatedSdkRuntime) {
@@ -368,7 +428,9 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         // Accounting/resume are post-settlement conveniences. A late store or
         // event failure must not hide an already durable terminal outcome, nor
         // skip the unconditional transient-state cleanup below.
-        if (suspended) {
+        if (turnRecord?.paperContext) {
+          this.goalTurns.suppressResume(turnId)
+        } else if (suspended) {
           await this.goalTurns.afterSuspended(threadId, goalTimer)
         } else {
           await this.goalTurns.afterTerminal({
@@ -389,7 +451,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         }
         this.turnFailures.delete(turnId)
         this.telemetry.clearPromptPressure(threadId)
-        if (!suspended) {
+        if (!suspended && !turnRecord?.paperContext) {
           await runTurnEndLifecycleHooks(this.lifecycleHookDeps(), {
             threadId,
             turnId,

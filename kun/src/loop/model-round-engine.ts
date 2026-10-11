@@ -49,6 +49,7 @@ export type ModelRoundEngineInput = {
   turnId: string
   signal: AbortSignal
   request: ModelRequest
+  outputRenderMode?: 'plain-text' | 'safe-markdown'
   maxToolCallsPerStep: number
   toolCallOverflowBehavior?: 'fail' | 'truncate'
   streamToolMetadata: ReadonlyMap<string, ModelStreamToolMetadata>
@@ -147,6 +148,7 @@ export class ModelRoundEngine {
             turnId: input.turnId,
             threadId: input.threadId,
             text: nextReasoning,
+            ...(input.outputRenderMode ? { renderMode: input.outputRenderMode } : {}),
             status: 'completed',
             createdAt: reasoningCreatedAt
           })
@@ -165,6 +167,7 @@ export class ModelRoundEngine {
             turnId: input.turnId,
             threadId: input.threadId,
             text: nextText,
+            ...(input.outputRenderMode ? { renderMode: input.outputRenderMode } : {}),
             status: 'completed',
             createdAt: textCreatedAt
           })
@@ -187,6 +190,7 @@ export class ModelRoundEngine {
             turnId: input.turnId,
             threadId: input.threadId,
             text: emittedText,
+            ...(input.outputRenderMode ? { renderMode: input.outputRenderMode } : {}),
             status: 'running',
             createdAt: textCreatedAt
           }),
@@ -208,6 +212,7 @@ export class ModelRoundEngine {
           turnId: input.turnId,
           threadId: input.threadId,
           text: emittedReasoningText,
+          ...(input.outputRenderMode ? { renderMode: input.outputRenderMode } : {}),
           status: 'running',
           createdAt: reasoningCreatedAt
         }),
@@ -370,7 +375,7 @@ export class ModelRoundEngine {
               break
             }
             case 'usage': {
-              this.deps.telemetry.recordPromptPressure(
+              if (!intent.usage.attemptAccounting || intent.usage.attemptAccounting.responseUsageKnown) this.deps.telemetry.recordPromptPressure(
                 input.threadId,
                 input.request.model,
                 intent.usage.promptTokens
@@ -381,7 +386,7 @@ export class ModelRoundEngine {
                 input.cacheSignature,
                 input.turnId
               )
-              await this.deps.recordGoalUsage(input.threadId, intent.usage.totalTokens)
+              await this.deps.recordGoalUsage(input.threadId, intent.usage.attemptAccounting?.totals.totalTokens ?? intent.usage.totalTokens)
               await this.deps.events.record({
                 kind: 'usage',
                 threadId: input.threadId,

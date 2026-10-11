@@ -174,6 +174,12 @@ export type FloatingComposerProps = {
   emptyTaskLayout?: boolean
   /** Surface-specific idle placeholder (runtime, queue and plan hints still win). */
   placeholderOverride?: string
+  /**
+   * Code's Agent controls (Kun / external Agents, permission, "+") on a
+   * composer outside Code, e.g. the Work assistant. Sends must route through
+   * the composer's Agent too (`useComposerAgent`).
+   */
+  agentSwitcher?: boolean
   /** GUI-only Laboratory availability for Automatic (plan + build). */
   autoPlanBuildEnabled?: boolean
   designTaskProfile?: DesignTaskComposerProfile
@@ -229,6 +235,7 @@ export type FloatingComposerProps = {
     position: 'before' | 'after'
   ) => void
   onGuideQueuedMessage?: (id: string) => void | Promise<unknown>
+  onResumeQueuedMessages?: () => void | Promise<unknown>
   attachments?: AttachmentReference[]
   attachmentUploadEnabled?: boolean
   attachmentUploadBusy?: boolean

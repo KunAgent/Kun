@@ -1,3 +1,4 @@
+import { isAgentSettingsCategory } from './settings-navigation'
 import {
   type AppSettingsPatch
 } from '@shared/app-settings'
@@ -12,6 +13,7 @@ import type {
   CorePendingMemoryCandidateJson,
   CoreRuntimeInfoJson
 } from '../agent/kun-contract'
+import { applyMemoryLifecycle } from '../agent/kun-runtime-memory-lifecycle'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { confirmDialog } from '../lib/confirm-dialog'
@@ -61,7 +63,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }, [])
 
   useEffect(() => {
-    if (category !== 'agents') return
+    if (category !== 'skills') return
     void refreshSkillRoots()
   }, [category, refreshSkillRoots])
 
@@ -86,7 +88,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }
 
   useEffect(() => {
-    if (category !== 'agents' || mcpLoaded || mcpLoading) return
+    if (category !== 'mcp' || mcpLoaded || mcpLoading) return
     void loadMcpConfig()
   }, [category, mcpLoaded, mcpLoading])
 
@@ -172,7 +174,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }, [activeProjectWorkspaceRoot])
 
   useEffect(() => {
-    if (category !== 'agents') return
+    if (category !== 'projects') return
     void loadProjectConfig()
   }, [category, loadProjectConfig, projectConfigGrantFingerprint])
 
@@ -284,7 +286,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }, [activeProjectWorkspaceRoot])
 
   useEffect(() => {
-    if (category !== 'agents' && category !== 'laboratory' && category !== 'memory') return
+    if (!isAgentSettingsCategory(category) && category !== 'laboratory' && category !== 'memory') return
     void refreshKunDiagnostics()
   }, [category, refreshKunDiagnostics])
 
@@ -421,12 +423,12 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
 
   const updateMemoryRecord = async (
     memoryId: string,
-    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; authority?: CoreMemoryRecordJson['authority']; disabled?: boolean }
+    patch: { expectedRevision?: number; content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; authority?: CoreMemoryRecordJson['authority']; disabled?: boolean }
   ): Promise<boolean> => {
     const provider = getProvider()
     if (typeof provider.updateMemory !== 'function') return false
     try {
-      const memory = await provider.updateMemory(memoryId, patch, memoryMutationAccess(memoryId))
+      const memory = await provider.updateMemory(memoryId, { ...patch, expectedRevision: patch.expectedRevision ?? memoryRecords.find((record) => record.id === memoryId)?.revision ?? 1 }, memoryMutationAccess(memoryId))
       setMemoryRecords((records) => records.map((record) => (record.id === memoryId ? memory : record)))
       return true
     } catch (error) {
@@ -466,7 +468,8 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
       validFrom?: string | null
       validTo?: string | null
       expiresAt?: string | null
-    }
+    },
+    expectedRevision?: number
   ): Promise<boolean> => {
     const provider = getProvider()
     if (typeof provider.correctMemory !== 'function') return false
@@ -475,7 +478,8 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
         memoryId,
         memoryOperationId('correct'),
         replacement,
-        memoryMutationAccess(memoryId)
+        memoryMutationAccess(memoryId),
+        expectedRevision ?? memoryRecords.find((record) => record.id === memoryId)?.revision ?? 1
       )
       await refreshKunDiagnostics()
       return true
@@ -492,7 +496,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     const provider = getProvider()
     if (typeof provider.updateMemory !== 'function') return
     try {
-      const memory = await provider.updateMemory(memoryId, { disabled }, memoryMutationAccess(memoryId))
+      const memory = await provider.updateMemory(memoryId, { disabled, expectedRevision: memoryRecords.find((record) => record.id === memoryId)?.revision ?? 1 }, memoryMutationAccess(memoryId))
       setMemoryRecords((records) => records.map((record) => record.id === memoryId ? memory : record))
     } catch (error) {
       setRuntimeDiagnosticsNotice({
@@ -521,10 +525,10 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
       t('memoryDeleteConfirmDetail')
     )
     if (!confirmed) return
-    const provider = getProvider()
-    if (typeof provider.deleteMemory !== 'function') return
+    const selected = memoryRecords.find((record) => record.id === memoryId)
+    if (!selected) return
     try {
-      await provider.deleteMemory(memoryId, memoryMutationAccess(memoryId))
+      await applyMemoryLifecycle(selected, { action: 'forget' })
       setMemoryRecords((records) => records.filter((record) => record.id !== memoryId))
     } catch (error) {
       setRuntimeDiagnosticsNotice({

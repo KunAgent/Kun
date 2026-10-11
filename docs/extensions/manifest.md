@@ -83,7 +83,7 @@
 
 `main` 与 `browser` 至少存在一个。任何要求 headless 的工具、Agent profile、模型 Provider、认证处理器、计划任务或后台命令都必须存在 `main`；Kun 不会用 `browser` 代替 Node 入口。
 
-Browser-only Manifest（只有 `browser`）不能声明 `commands`、`agentProfiles`、`tools`、`modelProviders` 或 `authentication`；这些都需要 Node handler。所有 `browser` 入口都必须声明 `webview` 权限。
+Browser-only Manifest（只有 `browser`）不能声明 `commands`、`agentProfiles`、`tools`、`modelProviders`、`agentProviders` 或 `authentication`；这些都需要 Node 入口。所有 `browser` 入口都必须声明 `webview` 权限。
 
 完整 ID 为 `publisher.name`，一旦公开不得更改。改名等同于一个新扩展，旧状态、权限、账号和 thread 不会自动转移。
 
@@ -179,6 +179,7 @@ v1 支持：
 | `agentProfiles` | Agent profile | id、显示信息、instruction overlay、默认绑定/工具范围/预算/可见性 |
 | `tools` | 扩展工具 | `id`、`description`、`inputSchema`；可选 `outputSchema`/sideEffects/idempotent/maxOutputBytes（1 KiB–1 MiB） |
 | `modelProviders` | 完整模型 Provider | id、displayName、authenticationProviderId、model/capability 元数据 |
+| `agentProviders` | 本地 ACP 命令行 Agent | id、displayName、command、args、env（非密钥）、可选 extends（内置 ACP Agent）、docsUrl、installHint |
 | `authentication` | 认证 Provider | id、认证类型和受保护流程元数据 |
 | `hostContentScripts` | Direct DOM | 静态脚本/样式、允许宿主 surface、激活条件；高风险且不稳定 |
 
@@ -203,6 +204,7 @@ Validator 从入口/贡献自动推导并强制以下最小权限；缺少时 Ma
 | `agentProfiles` | `agent.run` |
 | `tools` | `tools.register` |
 | `modelProviders` | `providers.register` |
+| `agentProviders` | `agents.register` |
 | `hostContentScripts` | `hostDom` |
 
 这些只是注册/呈现所需权限；实际 handler 仍要声明其使用的 workspace、network、account、storage 等权限。`authentication` 的账号读取/管理/use/secret 权限按具体调用检查。
@@ -298,6 +300,7 @@ v1 权限是精确字符串数组：
 | `rooms.read` | 读取本地全部房间摘要、消息、任务摘要与公开事件 |
 | `tools.register` | 注册 Manifest 声明的工具 |
 | `providers.register` | 注册模型 Provider |
+| `agents.register` | 向 Agent 中心添加本地命令行 Agent；只有用户在 Agent 中心启用后 Kun 才会启动它 |
 | `accounts.read` | 读取获准范围内的脱敏账号元数据 |
 | `accounts.use:<providerId>` | 使用指定 Provider 的账号句柄 |
 | `accounts.manage:<providerId>` | 请求指定 Provider 的受保护账号管理流程 |

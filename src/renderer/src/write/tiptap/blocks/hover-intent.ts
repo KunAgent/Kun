@@ -1,5 +1,5 @@
 /**
- * Hover-intent state machine for the block handle's grip menu (§9.3).
+ * Hover-intent state machine for the block handle's grip menu.
  *
  * States: closed → opening (armed by trigger hover) → open-hover (opened by
  * hover, auto-closes when both trigger and menu are left) → open-pinned

@@ -1,3 +1,7 @@
+export const KUN_AGENT_DISPATCH_INTENTS_TEMPLATE = '/v1/agent-dispatch-intents'
+export const KUN_AGENT_DISPATCH_INTENT_TEMPLATE = '/v1/agent-dispatch-intents/{intentId}'
+export const KUN_AGENT_DISPATCH_ACTION_TEMPLATE = '/v1/agent-dispatch-intents/{intentId}/actions'
+
 /**
  * Kun HTTP endpoint path templates. The renderer and the main
  * process IPC allow-list both derive their paths from this table, so
@@ -20,6 +24,17 @@ export const KUN_THREAD_GUARDIAN_PATH = '/v1/runtime/thread-guardian'
 export const KUN_THREAD_GUARDIAN_TEMPLATE = '/v1/runtime/thread-guardian'
 
 export const KUN_MODEL_CONNECTIONS_PATH = '/v1/model-connections'
+export const KUN_PROVIDER_CONFIG_TEMPLATE = '/v1/provider-config'
+export const KUN_PROVIDER_CONFIG_PREVIEW_TEMPLATE = '/v1/provider-config/transactions/preview'
+export const KUN_PROVIDER_CONFIG_COMMIT_TEMPLATE = '/v1/provider-config/transactions/commit'
+export const KUN_PROVIDER_CONFIG_EXPORT_TEMPLATE = '/v1/provider-config/export'
+export const KUN_PROVIDER_CONFIG_IMPORT_TEMPLATE = '/v1/provider-config/import/preview'
+export const KUN_PROVIDER_IMPORT_COMMIT_TEMPLATE = '/v1/provider-config/import/commit'
+export const KUN_PROVIDER_BACKUP_TEMPLATE = '/v1/provider-config/backup'
+export const KUN_PROVIDER_BACKUP_PREVIEW_TEMPLATE = '/v1/provider-config/backup/preview'
+export const KUN_PROVIDER_RECOVERY_PREVIEW_TEMPLATE = '/v1/provider-config/recovery/preview'
+export const KUN_PROVIDER_RECOVERY_EXPORT_TEMPLATE = '/v1/provider-config/recovery/export'
+export const KUN_PROVIDER_ROUTE_PREVIEW_TEMPLATE = '/v1/provider-config/routes/preview'
 export const KUN_MODEL_CONNECTIONS_TEMPLATE = '/v1/model-connections'
 export const KUN_MODEL_CONNECTION_EVENTS_TEMPLATE = '/v1/model-connections/events'
 export const KUN_MODEL_CONNECTION_CONNECT_TEMPLATE = '/v1/model-connections/connect'
@@ -49,6 +64,7 @@ export const KUN_GATEWAY_CREDENTIAL_ROTATE_TEMPLATE = '/v1/model-gateway/credent
 export const KUN_GATEWAY_CREDENTIAL_REVOKE_TEMPLATE = '/v1/model-gateway/credential'
 export const KUN_GATEWAY_CREDENTIAL_REVEAL_TEMPLATE = '/v1/model-gateway/credential/reveal'
 export const KUN_MODEL_ROUTE_TEST_TEMPLATE = '/v1/model-routes/{id}/test'
+export const KUN_MODEL_ROUTE_RETRY_TEMPLATE = '/v1/model-routes/{id}/retry'
 export function kunModelRouteTestPath(poolId: string): string {
   return `/v1/model-routes/${encodeURIComponent(poolId)}/test`
 }
@@ -61,6 +77,11 @@ export const KUN_SUPPLY_CHAIN_UPDATE_CHECK_TEMPLATE = '/v1/supply-chain/update-c
 export const KUN_MCP_OAUTH_PATH = '/v1/mcp/oauth'
 export const KUN_MCP_OAUTH_TEMPLATE = '/v1/mcp/oauth'
 export const KUN_MCP_OAUTH_SERVER_TEMPLATE = '/v1/mcp/oauth/{id}'
+export const KUN_MCP_CONFIG_TEMPLATE = '/v1/mcp/config'
+export const KUN_MCP_REMOTE_APP_TEMPLATE = '/v1/mcp/remote-apps/{id}'
+export function kunMcpRemoteAppPath(serverId: string): string {
+  return `/v1/mcp/remote-apps/${encodeURIComponent(serverId)}`
+}
 export function kunMcpOAuthServerPath(serverId: string): string {
   return `/v1/mcp/oauth/${encodeURIComponent(serverId)}`
 }
@@ -232,6 +253,96 @@ export function kunGraphProjectConsolidatePath(projectId: string): string {
 export const KUN_THREAD_ACTIVITY_EVENTS_PATH = '/v1/thread-activity/events'
 export const KUN_THREAD_ACTIVITY_EVENTS_TEMPLATE = '/v1/thread-activity/events'
 
+export const KUN_ACTIVITY_PATH = '/v1/activity'
+export const KUN_ACTIVITY_TEMPLATE = '/v1/activity'
+export const KUN_ACTIVITY_EVENTS_PATH = '/v1/activity/events'
+export const KUN_ACTIVITY_EVENTS_TEMPLATE = '/v1/activity/events'
+export const KUN_ACTIVITY_FOREGROUND_PATH = '/v1/activity/foreground'
+export const KUN_APPROVALS_PATH = '/v1/approvals'
+export const KUN_ACTIVITY_FOREGROUND_TEMPLATE = '/v1/activity/foreground'
+export const KUN_ACTIVITY_UNIT_TEMPLATE = '/v1/activity/{id}/{action}'
+export const KUN_TASK_WORKSPACES_PATH = '/v1/task-workspaces'
+export const KUN_TASK_WORKSPACES_TEMPLATE = '/v1/task-workspaces'
+export const KUN_TASK_WORKSPACE_TEMPLATE = '/v1/task-workspaces/{id}'
+export function kunTaskWorkspacePath(workspaceId: string, suffix = ''): string {
+  return `${KUN_TASK_WORKSPACES_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
+}
+
+/** ADE line-level review comments. */
+export const KUN_REVIEWS_PATH = '/v1/reviews'
+export const KUN_REVIEW_COMMENTS_TEMPLATE = '/v1/reviews/{id}/comments'
+export const KUN_REVIEW_COMMENT_TEMPLATE = '/v1/reviews/{id}/comments/{commentId}'
+export const KUN_REVIEW_SEND_TEMPLATE = '/v1/reviews/{id}/send'
+export function kunReviewsPath(workspaceId: string, suffix = ''): string {
+  return `${KUN_REVIEWS_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
+}
+export function kunActivityUnitPath(unitId: string, action: 'ack' | 'dismiss' | 'pin'): string {
+  return `${KUN_ACTIVITY_PATH}/${encodeURIComponent(unitId)}/${action}`
+}
+
+/** ADE team control surface. */
+export const KUN_TEAMS_PATH = '/v1/teams'
+export const KUN_TEAM_BY_MANAGER_TEMPLATE = '/v1/teams/by-manager/{id}'
+export const KUN_TEAM_QUESTION_ANSWER_TEMPLATE = '/v1/teams/questions/{id}/answer'
+export const KUN_TEAM_WORKER_TEMPLATE = '/v1/teams/workers/{id}'
+export const KUN_TEAM_WORKER_ACTION_TEMPLATE = '/v1/teams/workers/{id}/{action}'
+export const KUN_TEAM_RACE_TEMPLATE = '/v1/teams/races/{id}'
+export const KUN_TEAM_RACE_ACTION_TEMPLATE = '/v1/teams/races/{id}/{action}'
+export function kunTeamByManagerPath(managerThreadId: string): string {
+  return `${KUN_TEAMS_PATH}/by-manager/${encodeURIComponent(managerThreadId)}`
+}
+export function kunTeamQuestionAnswerPath(questionId: string): string {
+  return `${KUN_TEAMS_PATH}/questions/${encodeURIComponent(questionId)}/answer`
+}
+export function kunTeamWorkerPath(workerId: string): string {
+  return `${KUN_TEAMS_PATH}/workers/${encodeURIComponent(workerId)}`
+}
+export function kunTeamWorkerActionPath(
+  workerId: string,
+  action: 'take-over' | 'hand-back' | 'detach' | 'dispatch' | 'stop' | 'run-checks'
+): string {
+  return `${kunTeamWorkerPath(workerId)}/${action}`
+}
+export function kunTeamRacePath(raceId: string): string {
+  return `${KUN_TEAMS_PATH}/races/${encodeURIComponent(raceId)}`
+}
+export function kunTeamRaceActionPath(
+  raceId: string,
+  action: 'decide' | 'discard-others'
+): string {
+  return `${kunTeamRacePath(raceId)}/${action}`
+}
+
+export const KUN_HARNESSES_PATH = '/v1/harnesses'
+export const KUN_HARNESSES_TEMPLATE = '/v1/harnesses'
+export const KUN_HARNESS_MODELS_TEMPLATE = '/v1/harnesses/{id}/models'
+export const KUN_HARNESS_SUBSCRIPTION_QUOTA_TEMPLATE = '/v1/harnesses/{id}/subscription-quota'
+export const KUN_HARNESS_PROBE_TEMPLATE = '/v1/harnesses/{id}/probe'
+/** Re-validate this Agent's stale readiness proofs (composer selection, not polling). */
+export const KUN_HARNESS_WARM_TEMPLATE = '/v1/harnesses/{id}/warm'
+export function kunHarnessWarmPath(harnessId: string): string {
+  return `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/warm`
+}
+export const KUN_HARNESS_INTEGRATION_TEMPLATE = '/v1/harnesses/{id}/integration'
+export const KUN_HARNESS_INTEGRATION_RESOLVE_TEMPLATE = '/v1/harnesses/{id}/integration/resolve'
+export const KUN_HARNESS_TEST_TEMPLATE = '/v1/harnesses/{id}/test'
+export const KUN_HARNESS_UPDATES_TEMPLATE = '/v1/harnesses/{id}/updates'
+export const KUN_HARNESS_UPDATE_ACTION_TEMPLATE = '/v1/harnesses/{id}/updates/{action}'
+export const KUN_HARNESS_INSTALL_TEMPLATE = '/v1/harnesses/{id}/install'
+export const KUN_HARNESS_INSTALL_CANCEL_TEMPLATE = '/v1/harnesses/{id}/install/cancel'
+// unsaved-definition handshake + credential-store secret refs.
+export const KUN_HARNESS_PROBE_DEFINITION_TEMPLATE = '/v1/harnesses/probe-definition'
+export const KUN_HARNESS_SECRETS_TEMPLATE = '/v1/harness-secrets'
+export const KUN_HARNESS_SECRET_TEMPLATE = '/v1/harness-secrets/{ref}'
+export function kunHarnessModelsPath(harnessId: string, credentialMode?: string, selectedModel?: string): string {
+  const base = `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/models`
+  const mode = credentialMode?.trim()
+  const query = new URLSearchParams()
+  if (mode) query.set('credential_mode', mode)
+  if (selectedModel) query.set('selected_model', selectedModel)
+  return query.size ? `${base}?${query}` : base
+}
+
 export const KUN_THREADS_PATH = '/v1/threads'
 export const KUN_THREADS_TEMPLATE = '/v1/threads'
 
@@ -270,6 +381,11 @@ export function kunThreadPath(threadId: string): string {
 export const KUN_THREAD_SUMMARY_TEMPLATE = '/v1/threads/{id}/summary'
 export function kunThreadSummaryPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/summary`
+}
+
+export const KUN_THREAD_EXECUTION_CONFIG_TEMPLATE = '/v1/threads/{id}/execution-config'
+export function kunThreadExecutionConfigPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/execution-config`
 }
 
 export const KUN_THREAD_STATE_TEMPLATE = '/v1/threads/{id}/state'
@@ -321,6 +437,11 @@ export function kunThreadGoalPath(threadId: string): string {
 }
 
 export const KUN_THREAD_TODOS_TEMPLATE = '/v1/threads/{id}/todos'
+export const KUN_THREAD_TASKS_TEMPLATE = '/v1/threads/{id}/tasks'
+export const KUN_THREAD_TASK_TEMPLATE = '/v1/threads/{id}/tasks/{taskId}'
+export function kunThreadTaskPath(threadId: string, taskId: string): string {
+  return `${kunThreadPath(threadId)}/tasks/${encodeURIComponent(taskId)}`
+}
 export function kunThreadTodosPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/todos`
 }
@@ -426,6 +547,7 @@ export function kunThreadTrajectoryDetailPath(threadId: string, recordId: string
   return `${kunThreadTrajectoryPath(threadId)}/${encodeURIComponent(recordId)}/detail`
 }
 
+export const KUN_APPROVALS_TEMPLATE = '/v1/approvals'
 export const KUN_APPROVAL_TEMPLATE = '/v1/approvals/{id}'
 export function kunApprovalPath(approvalId: string): string {
   return `/v1/approvals/${encodeURIComponent(approvalId)}`

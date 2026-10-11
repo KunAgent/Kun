@@ -39,6 +39,20 @@ export function runWithoutTurnMutationFence<T>(operation: () => T): T {
   return storage.exit(operation)
 }
 
+/** Bind a per-turn callback before handing it to a reused native process.
+ * Its stdout async resource still belongs to the process's first turn. Keep
+ * this exact captured lease; never substitute whichever turn is active later.
+ */
+export function bindTurnMutationContext<Args extends unknown[], Result>(
+  callback: (...args: Args) => Result
+): (...args: Args) => Result {
+  const current = storage.getStore()
+  const fence = current ? toFence(current) : undefined
+  return (...args) => fence
+    ? storage.run(fence, () => callback(...args))
+    : storage.exit(() => callback(...args))
+}
+
 export function mutationFenceForValue(value: unknown): TurnMutationFence | undefined {
   const contextual = currentTurnMutationFence()
   const threadId = mutationThreadId(value) ?? undefined

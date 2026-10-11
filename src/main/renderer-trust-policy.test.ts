@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isTrustedRendererSurfaceUrl,
   isTrustedRendererUrl,
+  registerAuxiliaryWorkbenchWindow,
   rendererSurfaceForUrl,
   trustedRendererSenderIsCurrent
 } from './renderer-trust-policy'
@@ -52,6 +53,38 @@ describe('renderer trust policy', () => {
     const external = { processId: 10, routingId: 20, url: 'https://example.com' }
     const externalState = windowFor(external)
     expect(trustedRendererSenderIsCurrent(externalState.event, externalState.window, {
+      trustedRendererUrl: trusted,
+      surface: 'workbench'
+    })).toBe(false)
+  })
+
+  it('accepts a registered auxiliary workbench window until it closes', () => {
+    const main = windowFor({ processId: 10, routingId: 20, url: trusted })
+    let closed: (() => void) | undefined
+    let destroyed = false
+    const auxContents = { id: 9, mainFrame: { processId: 30, routingId: 40, url: `${trusted}?popout=1` } }
+    const aux = {
+      isDestroyed: () => destroyed,
+      webContents: auxContents,
+      once: (_event: string, handler: () => void) => {
+        closed = handler
+      }
+    } as never
+    registerAuxiliaryWorkbenchWindow(aux)
+    const popoutEvent = { sender: auxContents, senderFrame: auxContents.mainFrame } as never
+    // The main-window check alone fails for the popout's own webContents.
+    expect(trustedRendererSenderIsCurrent(popoutEvent, main.window, {
+      trustedRendererUrl: trusted,
+      surface: 'workbench'
+    })).toBe(true)
+    // Auxiliary windows never inherit non-workbench surfaces.
+    expect(trustedRendererSenderIsCurrent(popoutEvent, main.window, {
+      trustedRendererUrl: trusted,
+      surface: 'storage-relocation'
+    })).toBe(false)
+    destroyed = true
+    closed?.()
+    expect(trustedRendererSenderIsCurrent(popoutEvent, main.window, {
       trustedRendererUrl: trusted,
       surface: 'workbench'
     })).toBe(false)

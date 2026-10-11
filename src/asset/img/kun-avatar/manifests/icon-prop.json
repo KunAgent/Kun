@@ -1,0 +1,200 @@
+{
+  "icon/prop/magnifier": {
+    "png": "icon/prop/magnifier.png",
+    "webp": {
+      "128": "128/icon/prop/magnifier.webp",
+      "256": "256/icon/prop/magnifier.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-material-epic-tools.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 512,
+        "top": 512,
+        "width": 512,
+        "height": 512
+      }
+    }
+  },
+  "icon/prop/paintbrush": {
+    "png": "icon/prop/paintbrush.png",
+    "webp": {
+      "128": "128/icon/prop/paintbrush.webp",
+      "256": "256/icon/prop/paintbrush.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-props.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 1,
+      "crop": {
+        "left": 450,
+        "top": 0,
+        "width": 385,
+        "height": 450
+      }
+    }
+  },
+  "icon/prop/flask": {
+    "png": "icon/prop/flask.png",
+    "webp": {
+      "128": "128/icon/prop/flask.webp",
+      "256": "256/icon/prop/flask.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-material-epic-tools.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 1024,
+        "top": 512,
+        "width": 512,
+        "height": 512
+      }
+    }
+  },
+  "icon/prop/quill": {
+    "png": "icon/prop/quill.png",
+    "webp": {
+      "128": "128/icon/prop/quill.webp",
+      "256": "256/icon/prop/quill.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-props.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 3,
+      "crop": {
+        "left": 0,
+        "top": 450,
+        "width": 450,
+        "height": 405
+      }
+    }
+  },
+  "icon/prop/notebook": {
+    "png": "icon/prop/notebook.png",
+    "webp": {
+      "128": "128/icon/prop/notebook.webp",
+      "256": "256/icon/prop/notebook.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-props.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 4,
+      "crop": {
+        "left": 450,
+        "top": 450,
+        "width": 385,
+        "height": 405
+      }
+    }
+  },
+  "icon/prop/wrench": {
+    "png": "icon/prop/wrench.png",
+    "webp": {
+      "128": "128/icon/prop/wrench.webp",
+      "256": "256/icon/prop/wrench.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-props.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 5,
+      "crop": {
+        "left": 835,
+        "top": 450,
+        "width": 419,
+        "height": 405
+      }
+    }
+  },
+  "icon/prop/book": {
+    "png": "icon/prop/book.png",
+    "webp": {
+      "128": "128/icon/prop/book.webp",
+      "256": "256/icon/prop/book.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-props.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 6,
+      "crop": {
+        "left": 0,
+        "top": 855,
+        "width": 450,
+        "height": 399
+      }
+    }
+  },
+  "icon/prop/leaf": {
+    "png": "icon/prop/leaf.png",
+    "webp": {
+      "128": "128/icon/prop/leaf.webp",
+      "256": "256/icon/prop/leaf.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-props.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 7,
+      "crop": {
+        "left": 450,
+        "top": 855,
+        "width": 385,
+        "height": 399
+      }
+    }
+  },
+  "icon/prop/camera": {
+    "png": "icon/prop/camera.png",
+    "webp": {
+      "128": "128/icon/prop/camera.webp",
+      "256": "256/icon/prop/camera.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-perspective-icons.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 1520,
+        "top": 103,
+        "width": 585,
+        "height": 538
+      }
+    }
+  }
+}

@@ -119,7 +119,8 @@ export const UPDATE_TRANSACTION_STATE_FACTS: Readonly<
     mustStayRollbackCapable: false,
     rollbackSucceeded: false,
     mayDeleteBackup: true,
-    allowsNewInstall: true
+    // The helper must finish its idempotent cleanup and remove the journal.
+    allowsNewInstall: false
   }
 }
 

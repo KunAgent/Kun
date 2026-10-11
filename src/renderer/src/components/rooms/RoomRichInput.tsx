@@ -22,8 +22,9 @@ import { RoomAvatar, RoomAvatarGroup } from './RoomAvatar'
 import { roomPopoverPlacement } from './RoomPopover'
 import { ROOM_ALL_MENTION, roomMentionToken, roomRichContent, roomRichDraft } from './room-mentions'
 import './rooms-interactions.css'
+import { useRoomDictationInsertion } from './useRoomDictationInsertion'
 
-export type RoomRichInputHandle = { focus(): void; insertText(text: string): void; insertMention(id: string): void }
+export type RoomRichInputHandle = { focus(): void; insertText(text: string): void; insertMention(id: string): void; appendDictation(text: string): void; cancelDictation(): void }
 const RoomMention = Node.create({ name: 'roomMention', group: 'inline', inline: true, atom: true,
   addAttributes: () => ({ id: { default: '' }, label: { default: '' } }),
   parseHTML: () => [{ tag: 'span[data-room-mention]' }],
@@ -124,6 +125,7 @@ function RoomMentionMenu({
 
 export const RoomRichInput = forwardRef<RoomRichInputHandle, {
   room: Room; value: string; mentions: string[]; disabled?: boolean; placeholder: string;
+  onDictationPendingChange?: (pending: boolean) => void
   onChange: (value: { body: string; mentions: string[] }) => void; onSubmit: () => void; onPasteFiles?: (files: FileList) => void
 }>(function RoomRichInput(props, ref) {
   const { t } = useTranslation('common')
@@ -176,6 +178,7 @@ export const RoomRichInput = forwardRef<RoomRichInputHandle, {
       }
     }
   }, [])
+  const dictationInsertion = useRoomDictationInsertion(editor, props.onDictationPendingChange)
   const choices = [{ id: ROOM_ALL_MENTION, label: t('roomsMentionAll') }, ...props.room.members
     .filter((member) => member.enabled && !member.removedAt).map((member) => ({ id: member.id, label: member.displayName }))]
     .filter((member) => member.label.toLocaleLowerCase().includes((query ?? '').toLocaleLowerCase()) || member.id === ROOM_ALL_MENTION && 'all'.includes((query ?? '').toLowerCase()))
@@ -190,7 +193,7 @@ export const RoomRichInput = forwardRef<RoomRichInputHandle, {
   }
   chooseRef.current = choose
   useImperativeHandle(ref, () => ({ focus: () => { editor?.commands.focus() },
-    insertText: (text) => { editor?.chain().focus().insertContent({ type: 'text', text }).run() }, insertMention: choose }))
+    insertText: (text) => { editor?.chain().focus().insertContent({ type: 'text', text }).run() }, insertMention: choose, ...dictationInsertion }))
   useEffect(() => {
     if (editor && roomRichDraft(editor.getJSON()).body !== props.value) editor.commands.setContent(roomRichContent(props.value, props.mentions), { emitUpdate: false })
   }, [editor, props.value, props.mentions])

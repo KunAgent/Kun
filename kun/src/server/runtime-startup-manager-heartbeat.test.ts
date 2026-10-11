@@ -29,7 +29,7 @@ const registration: RuntimeRegistration = {
 const manager: ServiceManagerConnection = {
   discovery: {
     version: 1,
-    protocolVersion: 5,
+    protocolVersion: 6,
     instanceId: 'manager',
     pid: 41,
     startedAt: '2026-09-02T00:00:00.000Z',

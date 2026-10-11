@@ -1,22 +1,17 @@
-import type { ChatBlock, NormalizedThread } from '../agent/types'
+import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
+import { DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS } from '@shared/app-settings-provider-core'
+import type { NormalizedThread } from '../agent/types'
 import { DEFAULT_COMPOSER_MODEL_IDS } from '@shared/default-composer-models'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import {
-  CLAW_MANAGED_INSTRUCTIONS_HEADING,
   CLAW_MODEL_IDS,
   MODEL_REASONING_EFFORTS,
   isComposerChatModelId,
   modelProfileSupportsTextChat,
-  type ClawImAgentProfileV1,
-  type ClawImChannelV1,
-  type ClawImPlatformCredentialV1,
-  type ClawImProvider,
   type ModelReasoningEffort
 } from '@shared/app-settings'
-import type {
-  ChatState,
-  WriteAssistantMessageContext
-} from './chat-store-types'
+import type { WriteAssistantMessageContext } from './chat-store-types'
 import type { WriteTurnContext } from '../agent/write-turn-context'
 import {
   isClawWorkspacePath,
@@ -30,11 +25,8 @@ import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-
 import {
   loadThreadComposerModeMap,
   loadThreadComposerSelectionMap,
-  loadTurnModelMap,
-  normalizeTurnModelMap,
   saveThreadComposerModeMap,
-  saveThreadComposerSelectionMap,
-  saveTurnModelMap
+  saveThreadComposerSelectionMap
 } from './chat-store-helper-storage'
 
 export { normalizeTurnModelMap } from './chat-store-helper-storage'
@@ -67,12 +59,13 @@ const COMPOSER_PERSONA_STORAGE_KEY = 'kun.composerPersonaId'
 const COMPOSER_REASONING_EFFORT_STORAGE_KEY = 'kun.composerReasoningEffortByModel.v1'
 const COMPOSER_FAST_MODE_STORAGE_KEY = 'kun.composerFastMode.v1'
 const COMPOSER_MODE_STORAGE_KEY = 'kun.composerMode'
+const COMPOSER_ISOLATION_STORAGE_KEY = 'kun.composerIsolation'
 const CODE_WORKSPACE_ROOTS_STORAGE_KEY = 'kun.codeWorkspaceRoots.v1'
 export const MAX_CODE_WORKSPACE_ROOTS = 30
 export const MAX_THREAD_COMPOSER_SELECTIONS = 500
 export const MAX_COMPOSER_REASONING_EFFORTS = 500
 export const MAX_TURN_MODEL_LABELS = 500
-export const DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS = 256_000
+export const DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS = DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS
 const LEGACY_COMPOSER_REASONING_EFFORTS: readonly ModelReasoningEffort[] = [
   'off',
   'low',
@@ -87,7 +80,14 @@ export type ComposerPlanMode = 'plan' | 'agent' | 'auto'
 export type ThreadComposerSelection = {
   model: string
   providerId: string
+  /** ADE harness pinned for this thread's next turns. */
+  harnessId?: string
+  /** Credential path selected with the harness (native-login / kun-gateway …). */
+  gatewayBinding?: HarnessGatewayBinding
+  credentialMode?: string
   source?: 'user' | 'default'
+  /** Reasoning level picked for this thread's model; an external Agent restores it with the model. */
+  reasoningEffort?: ModelReasoningEffort
 }
 
 export const CLAW_COMPOSER_MODEL_IDS = [...CLAW_MODEL_IDS]
@@ -102,6 +102,16 @@ export function readStoredComposerModel(allowedIds: readonly string[]): string {
 
 export function persistComposerModel(model: string): void {
   writeBrowserStorageItem(COMPOSER_MODEL_STORAGE_KEY, model)
+}
+
+export function readStoredComposerIsolation(): 'local' | 'worktree' {
+  return readBrowserStorageItem(COMPOSER_ISOLATION_STORAGE_KEY) === 'worktree'
+    ? 'worktree'
+    : 'local'
+}
+
+export function persistComposerIsolation(isolation: 'local' | 'worktree'): void {
+  writeBrowserStorageItem(COMPOSER_ISOLATION_STORAGE_KEY, isolation)
 }
 
 export function readStoredComposerProviderId(
@@ -131,9 +141,18 @@ export function readStoredComposerReasoningEffort(
   modelId: string,
   providerId = ''
 ): ModelReasoningEffort {
+  return storedComposerReasoningEffort(modelId, providerId) ?? 'max'
+}
+
+/** The effort last picked for this model, if any. */
+export function storedComposerReasoningEffort(modelId: string, providerId = ''): ModelReasoningEffort | undefined {
   const key = composerReasoningEffortStorageKey(modelId, providerId)
-  if (!key) return 'max'
-  return loadComposerReasoningEffortMap()[key] ?? 'max'
+  return key ? loadComposerReasoningEffortMap()[key] : undefined
+}
+
+/** Whether a route runs an external Agent on its own sign-in (not a Kun provider). */
+export function isNativeAgentRoute(harnessId: string | undefined, credentialMode: string | undefined): boolean {
+  return Boolean(harnessId?.trim()) && harnessId !== 'kun' && credentialMode !== 'provider' && credentialMode !== 'kun-gateway'
 }
 
 export function persistComposerReasoningEffort(
@@ -176,8 +195,11 @@ export function persistComposerPersonaId(presetId: string): void {
 export function composerReasoningEffortForSelection(
   modelGroups: readonly ModelProviderModelGroup[],
   modelId: string,
-  providerId = ''
+  providerId = '',
+  options: { nativeAgent?: boolean } = {}
 ): ModelReasoningEffort {
+  // An external Agent keeps its own configured level until the user picks one for that model.
+  if (options.nativeAgent) return storedComposerReasoningEffort(modelId, providerId) ?? 'auto'
   const stored = readStoredComposerReasoningEffort(modelId, providerId)
   const profile = modelProfileForComposerSelection(modelGroups, modelId, providerId)
   const resolved = profile?.reasoning
@@ -282,17 +304,59 @@ export function rememberThreadComposerSelection(
   threadId: string,
   model: string,
   providerId = '',
-  source: NonNullable<ThreadComposerSelection['source']> = 'user'
+  source: NonNullable<ThreadComposerSelection['source']> = 'user',
+  harness?: { harnessId?: string; credentialMode?: string; gatewayBinding?: HarnessGatewayBinding },
+  reasoningEffort?: ModelReasoningEffort
 ): void {
   const thread = threadId.trim()
   const nextModel = model.trim()
-  if (!thread || !nextModel) return
+  if (!thread || (!nextModel && !harness?.gatewayBinding)) return
   const map = loadThreadComposerSelectionMap()
+  const previous = map[thread]
+  // The level belongs to the model: keep it across same-model updates, drop it on a switch.
+  const sameRoute = previous?.model.trim().toLowerCase() === nextModel.toLowerCase() &&
+    previous.providerId.trim().toLowerCase() === providerId.trim().toLowerCase()
+  const effort = reasoningEffort ?? (sameRoute ? previous?.reasoningEffort : undefined)
   delete map[thread]
   map[thread] = {
     model: nextModel,
     providerId: providerId.trim(),
+    ...(harness?.harnessId?.trim() ? { harnessId: harness.harnessId.trim() } : {}),
+    ...(harness?.credentialMode?.trim() ? { credentialMode: harness.credentialMode.trim() } : {}),
+    ...(harness?.gatewayBinding ? { gatewayBinding: structuredClone(harness.gatewayBinding) } : {}),
+    ...(effort ? { reasoningEffort: effort } : {}),
     source
+  }
+  saveThreadComposerSelectionMap(map)
+}
+
+/** Remember the reasoning level picked for the thread's current model. */
+export function rememberThreadComposerReasoning(threadId: string, effort: ModelReasoningEffort): void {
+  const thread = threadId.trim()
+  const existing = thread ? loadThreadComposerSelectionMap()[thread] : undefined
+  if (!existing || !MODEL_REASONING_EFFORTS.includes(effort)) return
+  const map = loadThreadComposerSelectionMap()
+  delete map[thread]
+  map[thread] = { ...existing, reasoningEffort: effort }
+  saveThreadComposerSelectionMap(map)
+}
+
+/** Harness-only update preserving the stored model/provider selection. */
+export function rememberThreadComposerHarness(
+  threadId: string,
+  harnessId: string,
+  credentialMode?: string
+): void {
+  const thread = threadId.trim()
+  if (!thread) return
+  const map = loadThreadComposerSelectionMap()
+  const existing = map[thread] ?? { model: '', providerId: '' }
+  delete map[thread]
+  map[thread] = {
+    ...existing,
+    harnessId: harnessId.trim(),
+    credentialMode: credentialMode?.trim() ?? '',
+    gatewayBinding: undefined
   }
   saveThreadComposerSelectionMap(map)
 }
@@ -306,11 +370,26 @@ export function normalizeThreadComposerSelectionMap(raw: unknown): Record<string
     const value = rawValue as Record<string, unknown>
     const model = typeof value.model === 'string' ? value.model.trim() : ''
     const providerId = typeof value.providerId === 'string' ? value.providerId.trim() : ''
+    const harnessId = typeof value.harnessId === 'string' ? value.harnessId.trim() : ''
+    const credentialMode = typeof value.credentialMode === 'string' ? value.credentialMode.trim() : ''
     const source = value.source === 'user' || value.source === 'default'
       ? value.source
       : undefined
-    if (!model) continue
-    entries.push([key, { model, providerId, ...(source ? { source } : {}) }])
+    const rawEffort = typeof value.reasoningEffort === 'string' ? value.reasoningEffort.trim().toLowerCase() : ''
+    const reasoningEffort = MODEL_REASONING_EFFORTS.find((effort) => effort === rawEffort)
+    // Harness-only entries are legal for ADE threads whose model rides the
+    // harness's own catalog rather than the provider pick list.
+    if (!model && !harnessId) continue
+    const binding = HarnessGatewayBindingSchema.safeParse(value.gatewayBinding)
+    entries.push([key, {
+      ...(credentialMode === 'kun-gateway' && binding.success ? { gatewayBinding: binding.data } : {}),
+      model,
+      providerId,
+      ...(harnessId ? { harnessId } : {}),
+      ...(credentialMode ? { credentialMode } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
+      ...(source ? { source } : {})
+    }])
   }
   return Object.fromEntries(entries.slice(-MAX_THREAD_COMPOSER_SELECTIONS))
 }
@@ -571,119 +650,14 @@ function firstSelectableProviderModel(
   return ''
 }
 
-export function newClawChannel(
-  provider: ClawImProvider,
-  agentProfile?: Partial<ClawImAgentProfileV1>,
-  platformCredential?: ClawImPlatformCredentialV1
-): ClawImChannelV1 {
-  const now = new Date().toISOString()
-  const fallbackId = `im-${provider}-${Date.now()}`
-  const defaultName = defaultClawProviderLabel(provider)
-  const profileName = agentProfile?.name?.trim() || defaultName
-  return {
-    id: globalThis.crypto?.randomUUID?.() ?? fallbackId,
-    provider,
-    label: profileName,
-    enabled: true,
-    model: 'auto',
-    threadId: '',
-    workspaceRoot: '',
-    conversations: [],
-    agentProfile: {
-      name: profileName,
-      description: agentProfile?.description?.trim() ?? '',
-      identity: agentProfile?.identity ?? '',
-      personality: agentProfile?.personality ?? '',
-      userContext: agentProfile?.userContext ?? '',
-      replyRules: agentProfile?.replyRules ?? ''
-    },
-    ...(platformCredential ? { platformCredential } : {}),
-    createdAt: now,
-    updatedAt: now
-  }
-}
-
-export function normalizeClawComposerModel(raw: string): string {
-  const trimmed = raw.trim()
-  return trimmed || 'auto'
-}
-
-export function activeClawChannel(
-  state: Pick<ChatState, 'clawChannels' | 'activeClawChannelId'>
-): ClawImChannelV1 | null {
-  return state.clawChannels.find((channel) => channel.id === state.activeClawChannelId) ?? null
-}
-
-function addClawThreadId(ids: Set<string>, threadId: string | undefined): void {
-  const id = threadId?.trim() ?? ''
-  if (id) ids.add(id)
-}
-
-export function clawThreadIdsFromChannels(
-  channels: ClawImChannelV1[]
-): Set<string> {
-  const ids = new Set<string>()
-  for (const channel of channels) {
-    addClawThreadId(ids, channel.threadId)
-    for (const conversation of channel.conversations) {
-      addClawThreadId(ids, conversation.localThreadId)
-    }
-  }
-  return ids
-}
-
-export function clawThreadTitleLooksManaged(title: string | undefined): boolean {
-  const trimmed = title?.trim() ?? ''
-  return trimmed.startsWith(CLAW_MANAGED_INSTRUCTIONS_HEADING) ||
-    trimmed.startsWith('[Claw:') ||
-    trimmed.startsWith('[Claw IM:') ||
-    trimmed.startsWith('[Claw]')
-}
-
-export function isClawThread(
-  thread: Pick<NormalizedThread, 'id' | 'title'>,
-  channels: ClawImChannelV1[] = []
-): boolean {
-  return clawThreadTitleLooksManaged(thread.title) || clawThreadIdsFromChannels(channels).has(thread.id)
-}
-
-export function optimisticUserModelLabel(
-  composerModel: string,
-  threadModel: string | undefined
-): string | undefined {
-  const composer = composerModel.trim()
-  if (composer) return composer.toLowerCase() === 'auto' ? 'auto' : composer
-  const model = threadModel?.trim()
-  return model || undefined
-}
-
-export function rememberTurnModel(threadId: string, itemId: string, model: string): void {
-  const thread = threadId.trim()
-  const item = itemId.trim()
-  const label = model.trim()
-  if (!thread || !item || !label) return
-  const key = `${thread}|${item}`
-  const map = loadTurnModelMap()
-  delete map[key]
-  map[key] = label
-  saveTurnModelMap(map)
-}
-
-export function hydrateBlockModelLabels(threadId: string, blocks: ChatBlock[]): ChatBlock[] {
-  const map = loadTurnModelMap()
-  let changed = false
-  const next = blocks.map((block) => {
-    if (block.kind !== 'user') return block
-    if (block.modelLabel) return block
-    const label = map[`${threadId}|${block.id}`]
-    if (!label) return block
-    changed = true
-    return { ...block, modelLabel: label }
-  })
-  return changed ? next : blocks
-}
-
-function defaultClawProviderLabel(provider: ClawImProvider): string {
-  if (provider === 'weixin') return 'weixin agent'
-  return 'feishu agent'
-}
+export {
+  newClawChannel,
+  normalizeClawComposerModel,
+  activeClawChannel,
+  clawThreadIdsFromChannels,
+  clawThreadTitleLooksManaged,
+  isClawThread,
+  optimisticUserModelLabel,
+  rememberTurnModel,
+  hydrateBlockModelLabels
+} from './chat-store-helper-claw'

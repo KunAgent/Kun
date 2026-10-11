@@ -6,7 +6,7 @@ type ClawPlatformInstallStartResult =
   | { ok: false; message: string }
 
 type ClawPlatformInstallPollResult =
-  | { done: true; kind: 'feishu'; appId: string; appSecret: string; domain: string }
+  | { done: true; kind: 'feishu'; appId: string; appSecret: string; domain: string; ownerId?: string }
   | { done: true; kind: 'weixin'; accountId: string; sessionKey: string }
   | { done: false; error?: string }
 
@@ -323,7 +323,8 @@ export async function pollFeishuInstall(deviceCode: string): Promise<ClawPlatfor
     const appSecret = recordString(data, 'client_secret')
     if (appId && appSecret) {
       feishuInstallDomains.delete(deviceCode)
-      return { done: true, kind: 'feishu', appId, appSecret, domain }
+      const ownerId = recordString(asRecord(data.user_info), 'open_id')
+      return { done: true, kind: 'feishu', appId, appSecret, domain, ...(ownerId ? { ownerId } : {}) }
     }
     return { done: false }
   } catch (error) {

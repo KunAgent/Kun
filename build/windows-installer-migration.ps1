@@ -1,12 +1,30 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'PrepareUpdateTransaction', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
+  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
   [string]$Action,
-  [string]$ResultPath = ''
+  [string]$ResultPath = '',
+  [switch]$Bounded
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
+
+
+# Native recovery actions can outlive their coordinator if it is interrupted.
+# Keep the watchdog inside each process; normal installer invocations opt out.
+if ($Bounded) {
+  Add-Type -TypeDefinition @'
+using System;
+using System.Threading;
+public static class KunInstallerActionDeadline {
+  static Timer timer;
+  public static void Start() {
+    timer = new Timer(delegate { Environment.Exit(124); }, null, 300000, Timeout.Infinite);
+  }
+}
+'@
+  [KunInstallerActionDeadline]::Start()
+}
 
 
 . (Join-Path $PSScriptRoot 'windows-installer-migration-paths.ps1')
@@ -153,6 +171,9 @@ try {
     'ResolveRecoveryExecutable' {
       Write-InstallerResult (Resolve-RecoveryPayloadExecutable)
     }
+    'ValidateUpdateRollback' {
+      Assert-UpdateRollbackReady
+    }
     'RecoverUpdateTransaction' {
       Recover-PendingUpdateTransaction
     }
@@ -250,3 +271,5 @@ try {
   }
   exit 1
 }
+
+exit 0

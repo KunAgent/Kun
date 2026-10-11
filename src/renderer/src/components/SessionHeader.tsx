@@ -1,14 +1,19 @@
 import type { ReactElement } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, ChevronRight, CircleHelp, FileText, Folder, GitBranch, GitFork } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useChatStore } from '../store/chat-store'
+import { useActiveThreadMayHaveUsage, useChatStore } from '../store/chat-store'
 import { hasLivePendingUserInput } from '../store/chat-store-runtime-helpers'
 import { formatRelativeTime } from '../lib/format-relative-time'
 import { GIT_BRANCH_STATUS_CHANGED_EVENT } from '../lib/git-branch-status-event'
 import { middleEllipsize } from '../lib/middle-ellipsize'
+import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
+import { resolveProjectWorkspacePath } from '../lib/worktree-project-path'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import { SessionExportMenu } from './SessionExportMenu'
+import { TaskSettingsButton } from './workbench/TaskSettingsButton'
+import { HEADER_ICON_CLASS, HEADER_ICON_STROKE, headerTextButtonClass } from './workbench/header-action-button'
+import { WorkbenchSessionActions, WorkbenchOriginChip } from './rooms/WorkbenchSessionBits'
 import {
   formatCompactNumber,
   formatCacheMissReason,
@@ -132,16 +137,19 @@ export function SessionHeader({
 
   const active = threads.find((th) => th.id === activeThreadId)
   const activeWorkspaceRoot = active?.workspace?.trim() || workspaceRoot.trim()
-  const activeWorkspaceLabel = active?.workspace
-    ? workspaceLabelFromPath(active.workspace)
-    : workspaceLabel
+  const activeWorkspaceLabel = useMemo(() => active?.workspace
+    ? workspaceLabelFromPath(resolveProjectWorkspacePath(active.workspace, {
+        threadWorktrees: readThreadWorktreeRegistry().worktrees
+      }))
+    : workspaceLabel, [active, workspaceLabel])
   const [editing, setEditing] = useState(false)
   const [draftTitle, setDraftTitle] = useState('')
   // Usage stats are no longer shown in compact mode (the composer footer
   // already shows them in the chat route), so skip fetching there.
+  const activeThreadMayHaveUsage = useActiveThreadMayHaveUsage()
   const restThreadUsage = useThreadUsage(
     activeThreadId,
-    runtimeConnection === 'ready' && !compact,
+    runtimeConnection === 'ready' && !compact && activeThreadMayHaveUsage,
     `${active?.updatedAt ?? ''}:${busy ? 'busy' : 'idle'}`
   )
   const threadUsage = mergeLiveThreadUsage(restThreadUsage, liveThreadUsage)
@@ -180,6 +188,7 @@ export function SessionHeader({
   if (compact) {
     return (
       <div
+        data-active-thread-id={activeThreadId ?? undefined}
         className={`session-header-compact flex min-h-0 min-w-0 flex-1 items-center gap-2 text-left ${className}`}
       >
         {active ? (
@@ -187,7 +196,7 @@ export function SessionHeader({
             <div className="session-header-compact-identity flex min-w-0 flex-1 items-center gap-2">
               <span
                 className="session-header-compact-workspace inline-flex min-w-0 max-w-[min(36%,220px)] shrink items-center gap-1.5 text-[12px] font-medium leading-5 text-ds-faint"
-                title={activeWorkspaceLabel}
+                title={activeWorkspaceRoot}
               >
                 <Folder className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                 <span className="truncate">{activeWorkspaceLabel}</span>
@@ -207,17 +216,13 @@ export function SessionHeader({
               {trajectoryEnabled && onToggleTrajectory ? (
                 <button
                   type="button"
-                  className={`session-header-compact-trajectory ds-no-drag relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--ds-radius-control)] border px-2 text-[11.5px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
-                    trajectoryOpen
-                      ? 'border-ds-border-strong bg-ds-card text-ds-ink'
-                      : 'border-ds-border-muted bg-ds-card text-ds-muted hover:border-ds-border-strong hover:bg-ds-hover hover:text-ds-ink'
-                  }`}
+                  className={`session-header-compact-trajectory ${headerTextButtonClass(trajectoryOpen)}`}
                   onClick={onToggleTrajectory}
                   data-tooltip={t('trajectoryButtonTooltip')}
                   aria-label={t('trajectoryButtonTooltip')}
                   aria-pressed={trajectoryOpen}
                 >
-                  <Activity className="h-3.5 w-3.5 shrink-0" strokeWidth={1.85} aria-hidden="true" />
+                  <Activity className={HEADER_ICON_CLASS} strokeWidth={HEADER_ICON_STROKE} aria-hidden="true" />
                   <span>{t('trajectoryButton')}</span>
                   {trajectoryRunning ? (
                     <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
@@ -229,12 +234,12 @@ export function SessionHeader({
               {onOpenRequirementDraft ? (
                 <button
                   type="button"
-                  className="session-header-compact-requirement ds-no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--ds-radius-control)] border border-ds-border-muted bg-ds-card px-2 text-[11.5px] font-medium text-ds-muted transition hover:border-ds-border-strong hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+                  className={`session-header-compact-requirement ${headerTextButtonClass()}`}
                   onClick={onOpenRequirementDraft}
                   title={t('sddDraftTitle')}
                   aria-label={t('sddDraftTitle')}
                 >
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.85} />
+                  <FileText className={`${HEADER_ICON_CLASS} text-accent`} strokeWidth={HEADER_ICON_STROKE} />
                   <span className="max-w-24 truncate">{t('sddDraftTitle')}</span>
                 </button>
               ) : null}
@@ -246,6 +251,8 @@ export function SessionHeader({
                 />
               ) : null}
             </div>
+            <WorkbenchSessionActions thread={active} running={busy} />
+            <TaskSettingsButton key={active.id} thread={active} />
             <SessionExportMenu
               title={active.title}
               blocks={blocks}
@@ -253,6 +260,7 @@ export function SessionHeader({
               currentTurnId={currentTurnId}
               currentTurnUserId={currentTurnUserId}
             />
+            <span aria-hidden="true" className="session-header-compact-divider mx-0.5 h-4 w-px shrink-0 bg-ds-border" />
           </>
         ) : (
           <div className="session-header-compact-empty flex min-w-0 items-center gap-1.5 text-[12.5px] font-medium text-ds-faint">
@@ -317,6 +325,7 @@ export function SessionHeader({
                   {active.workspace.split(/[/\\]/).pop()}
                 </span>
               ) : null}
+              {active.workbenchOrigin ? <WorkbenchOriginChip origin={active.workbenchOrigin} /> : null}
               {active.forkedFromThreadId ? (
                 <span
                   className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-accent/18 bg-accent/8 px-2.5 py-1 font-medium text-accent"
@@ -374,6 +383,7 @@ export function SessionHeader({
           <div className="mt-1 text-[13.5px] text-ds-faint">{t('sessionHeaderHint')}</div>
         </div>
       )}
+      {active ? <TaskSettingsButton key={active.id} thread={active} /> : null}
       {busy ? (
         hasLivePendingUserInput(blocks) ? (
           <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/25 px-3 py-1.5 text-[12.5px] font-semibold text-amber-950 motion-safe:animate-pulse dark:text-amber-100">

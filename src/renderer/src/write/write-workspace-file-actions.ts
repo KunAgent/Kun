@@ -126,7 +126,7 @@ export function createWriteFileActions({
         await get().refreshWorkspace(normalized)
         return
       }
-      if (current.workspaceRoot && (force || current.workspaceRoot !== normalized)) {
+      if (!options?.navigationPrepared && current.workspaceRoot && (force || current.workspaceRoot !== normalized)) {
         const canLeaveCurrentFile = await prepareActiveWriteFileForNavigation(get, current.workspaceRoot)
         if (!canLeaveCurrentFile || generation !== navigationGeneration) return
       }

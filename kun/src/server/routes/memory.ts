@@ -1,3 +1,6 @@
+import { MemoryRevisionConflictError } from '../../memory/memory-revisions.js'
+import { MemoryForgottenError } from '../../memory/memory-forgetting.js'
+import { MemoryNotFoundError } from '../../memory/memory-not-found-error.js'
 import { MemoryAuthority, MemoryCreateRequest, MemoryType, MemoryUpdateRequest } from '../../contracts/memory.js'
 import { MemoryFeedbackDiagnostics } from '../../contracts/memory-feedback.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
@@ -23,14 +26,14 @@ export async function listMemories(store: MemoryStore | undefined, request: Requ
     return ERRORS.validation('invalid memory type filter')
   }
   return jsonResponse({
-    memories: await store.list({
+    memories: (await store.list({
       workspace: url.searchParams.get('workspace') ?? undefined,
       project: url.searchParams.get('project') ?? undefined,
       includeDeleted: url.searchParams.get('include_deleted') === 'true',
       all: url.searchParams.get('all') === 'true',
       authority: authority as MemoryAuthority | undefined,
       type: type as MemoryType | undefined
-    })
+    })).map((memory) => ({ ...memory, history: [] }))
   })
 }
 
@@ -40,8 +43,15 @@ export async function createMemory(store: MemoryStore | undefined, request: Requ
   if (!body.ok) return body.response
   const parsed = MemoryCreateRequest.safeParse(body.value)
   if (!parsed.success) return ERRORS.validation('invalid memory create body', parsed.error.issues)
+  if (hasHostEvidence(parsed.data)) return ERRORS.validation('execution receipts and consolidation are host-owned evidence')
   if (parsed.data.agentContext) return ERRORS.validation('use the scoped agent memory endpoint')
-  return jsonResponse({ memory: await store.create(parsed.data) }, 201)
+  if (parsed.data.supersedes && parsed.data.supersedesExpectedRevision === undefined) return ERRORS.validation('supersession requires supersedesExpectedRevision')
+  try { return jsonResponse({ memory: await store.create(parsed.data) }, 201) }
+  catch (error) {
+    if (error instanceof MemoryRevisionConflictError || error instanceof MemoryForgottenError) return ERRORS.conflict(error.message)
+    if (error instanceof MemoryNotFoundError) return ERRORS.notFound(error.message)
+    throw error
+  }
 }
 
 export async function updateMemory(store: MemoryStore | undefined, id: string, request: Request): Promise<JsonResponse | Response> {
@@ -50,14 +60,18 @@ export async function updateMemory(store: MemoryStore | undefined, id: string, r
   if (!body.ok) return body.response
   const parsed = MemoryUpdateRequest.safeParse(body.value)
   if (!parsed.success) return ERRORS.validation('invalid memory update body', parsed.error.issues)
+  if (hasHostEvidence(parsed.data)) return ERRORS.validation('execution receipts and consolidation are host-owned evidence')
   if (parsed.data.agentContext) return ERRORS.validation('use the scoped agent memory endpoint')
+  if (parsed.data.expectedRevision === undefined) return ERRORS.validation('memory edits require expectedRevision; reload before editing')
   try {
     const url = new URL(request.url)
     const workspace = url.searchParams.get('workspace') ?? undefined
     const project = url.searchParams.get('project') ?? undefined
     return jsonResponse({ memory: await store.update(id, parsed.data, { workspace, project }) })
   } catch (error) {
-    return ERRORS.notFound(errorMessage(error))
+    if (error instanceof MemoryRevisionConflictError || error instanceof MemoryForgottenError) return ERRORS.conflict(error.message)
+    if (error instanceof MemoryNotFoundError) return ERRORS.notFound(error.message)
+    throw error
   }
 }
 
@@ -67,9 +81,15 @@ export async function deleteMemory(store: MemoryStore | undefined, id: string, r
     const url = new URL(request.url)
     const workspace = url.searchParams.get('workspace') ?? undefined
     const project = url.searchParams.get('project') ?? undefined
-    return jsonResponse({ memory: await store.delete(id, { workspace, project }) })
+    const expectedRevision = Number(url.searchParams.get('expected_revision'))
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) return ERRORS.validation('forget requires expected_revision')
+    if (!store.lifecycle) return ERRORS.unavailable('memory lifecycle is unavailable')
+    const result = await store.lifecycle(id, { action: 'forget', expectedRevision }, { workspace, project })
+    return jsonResponse({ memory: result.memory })
   } catch (error) {
-    return ERRORS.notFound(errorMessage(error))
+    if (error instanceof MemoryRevisionConflictError || error instanceof MemoryForgottenError) return ERRORS.conflict(error.message)
+    if (error instanceof MemoryNotFoundError) return ERRORS.notFound(error.message)
+    throw error
   }
 }
 
@@ -117,6 +137,7 @@ export async function correctMemory(
   if (!body.ok) return body.response
   const parsed = parseFeedbackBody(body.value, id, MemoryCorrectRequest)
   if (!parsed.success) return ERRORS.validation('invalid memory correction body', parsed.error.issues)
+  if (parsed.data.expectedRevision === undefined) return ERRORS.validation('memory corrections require expectedRevision')
   try {
     return jsonResponse({ correction: await feedback.correct(parsed.data) })
   } catch (error) {
@@ -151,10 +172,6 @@ function parseFeedbackBody<T extends { memoryId: string }>(
   return schema.safeParse({ ...body, memoryId: id })
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function degradedFeedbackDiagnostics(feedback: MemoryFeedbackRuntime) {
   let enabled = false
   try {
@@ -172,4 +189,12 @@ function degradedFeedbackDiagnostics(feedback: MemoryFeedbackRuntime) {
     malformedCount: 0,
     degradedReason: 'feedback diagnostics unavailable'
   })
+}
+
+
+function hasHostEvidence(input: { consolidation?: unknown; sources?: ReadonlyArray<{ receiptId?: string;
+  repositorySha?: string; artifactIds?: string[]; outcome?: string }> }): boolean {
+  return input.consolidation !== undefined || Boolean(input.sources?.some((source) =>
+    source.receiptId !== undefined || source.repositorySha !== undefined ||
+    source.artifactIds !== undefined || source.outcome !== undefined))
 }

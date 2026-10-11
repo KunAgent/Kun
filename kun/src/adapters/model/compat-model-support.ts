@@ -24,7 +24,6 @@ export function isCodexEndpoint(baseUrl: string): boolean {
 }
 
 export {
-  isOpenCodeFree,
   isOpenCodeGo,
   openCodeSessionRuntimeHeaders,
   requiresOpenCodeSessionHeader

@@ -67,6 +67,7 @@ export class OfficeCliRunner {
   private readonly logger: (message: string) => void
   private active = 0
   private readonly waiters: QueueWaiter[] = []
+  private diagnosed = false
 
   constructor(options: OfficeCliRunnerOptions) {
     this.binaryPath = options.binaryPath
@@ -76,6 +77,13 @@ export class OfficeCliRunner {
   }
 
   async run(args: readonly string[], signal?: AbortSignal): Promise<OfficeCliRunResult> {
+    // The version/schema diagnostic only feeds the log. Running it with the
+    // first real command keeps an idle Runtime from spawning officecli (and the
+    // owned-process guard) on every start and config apply.
+    if (!this.diagnosed) {
+      this.diagnosed = true
+      void this.diagnose()
+    }
     const release = await this.acquire(signal)
     try {
       await mkdir(this.profileDir, { recursive: true, mode: 0o700 })
@@ -212,9 +220,7 @@ export function createConfiguredOfficeCliRunner(options: {
 }): OfficeCliRunner | undefined {
   const binaryPath = options.binaryPath?.trim()
   if (!binaryPath || !existsSync(binaryPath)) return undefined
-  const runner = new OfficeCliRunner({ binaryPath, profileDir: options.profileDir })
-  void runner.diagnose()
-  return runner
+  return new OfficeCliRunner({ binaryPath, profileDir: options.profileDir })
 }
 
 export function buildOfficeCliToolProviders(options: {
@@ -228,7 +234,6 @@ export function buildOfficeCliToolProviders(options: {
     binaryPath: binaryPath!,
     profileDir: options.profileDir
   })
-  if (!options.runner) void runner.diagnose()
   return [{
     id: 'officecli',
     kind: 'built-in',

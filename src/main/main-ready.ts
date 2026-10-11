@@ -1,4 +1,5 @@
-import { app, dialog, type BrowserWindow } from 'electron'
+import { registerArtProtocol } from './art-assets/protocol'
+import { app, dialog, protocol, type BrowserWindow } from 'electron'
 import { shouldStartHidden } from './desktop-behavior'
 import { disposeProxyAgents } from './proxy-fetch'
 import { maybePromptCliInstall } from './cli-install-service'
@@ -22,7 +23,8 @@ import {
   shutdownActiveServiceManagerForUpdate
 } from './main-migrations'
 import {
-  applyManagedRuntimeSettingsHot
+  applyManagedRuntimeSettingsHot,
+  publishRuntimeSettingsSyncStatus
 } from './main-runtime-settings'
 import {
   runtimeSupervisor
@@ -48,6 +50,7 @@ import { registerShellIpc } from './main-ready-ipc'
 import { registerMainIpc } from './main-ready-ipc-full'
 import { revealMainWindow, syncTray } from './main-tray'
 import { resolveLogDirectory } from './main-paths'
+import { isKunAccountReturnLink } from './kun-account/config'
 import { showStartupFailureWindow } from './startup-failure-window'
 import { sanitizeStartupFailureMessage } from './startup-failure-content'
 import {
@@ -59,7 +62,6 @@ import {
 } from './desktop-instance-identity'
 import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
 import { join, resolve } from 'node:path'
-import { prefetchCatalogPricing } from './catalog-prefetch'
 import { attachModelsDevDiskCache } from './models-dev-catalog'
 import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
 import { installHostPowerRecovery } from './host-power-recovery'
@@ -122,6 +124,12 @@ export function startMainApp(): Promise<void> {
     }
   }
   const onImportLink = (raw: string): void => {
+    // "Back to Kun" on the account sign-in result page: macOS will not let a
+    // background app take focus, so the browser hands it back explicitly.
+    if (isKunAccountReturnLink(raw)) {
+      activation.requestReveal()
+      return
+    }
     const staged = stageProviderImportLink(raw)
     if (!staged.ok) {
       logWarn('provider-import-link', 'Rejected kun:// import link.', { message: staged.message })
@@ -133,8 +141,10 @@ export function startMainApp(): Promise<void> {
   }
   // Only packaged builds claim the scheme: a dev instance must not steal
   // kun:// links from the installed app. `KUN_DEV_REGISTER_PROTOCOL=1`
-  // opts a dev build back in, pointing the OS at the dev entry script.
-  if (app.isPackaged || process.env.KUN_DEV_REGISTER_PROTOCOL === '1') {
+  // opts a dev build back in, pointing the OS at the dev entry script. Isolated
+  // packaged smoke must not replace the user's global protocol association.
+  if (process.env.KUN_PACKAGED_EXTENSION_DESKTOP_SMOKE !== '1' &&
+      (app.isPackaged || process.env.KUN_DEV_REGISTER_PROTOCOL === '1')) {
     if (!app.isPackaged && process.defaultApp && process.argv[1]) {
       app.setAsDefaultProtocolClient('kun', process.execPath, [resolve(process.argv[1])])
     } else {
@@ -218,6 +228,7 @@ export function startMainApp(): Promise<void> {
 
   return app.whenReady().then(async () => {
     traceStartup('app.whenReady:start')
+    registerArtProtocol(protocol)
     if (!gotSingleInstanceLock) {
       await explainConflictingDesktopInstance()
       return
@@ -267,9 +278,8 @@ export function startMainApp(): Promise<void> {
     // Persist the models.dev catalog across restarts so provider metadata is
     // available immediately and offline launches reuse the last fetch.
     attachModelsDevDiskCache(join(app.getPath('userData'), 'cache', 'models-dev.json'))
-    void prefetchCatalogPricing(mainState.store).catch((err) => {
-      console.warn('[kun-gui] catalog pricing prefetch failed:', err)
-    })
+    // Runtime owns public catalog warming and derived pricing; startup never
+    // writes automatic prices into user model profiles.
 
     await runPostWindowRuntimeStartup(initial, {
       startupState: mainState.startupState,
@@ -282,6 +292,10 @@ export function startMainApp(): Promise<void> {
         runtimeSupervisor,
         settledRuntimeSettings: mainState.settledRuntimeSettings,
         applyManagedRuntimeSettingsHot,
+        settingsSync: {
+          current: () => mainState.runtimeSettingsSyncStatus,
+          publish: publishRuntimeSettingsSyncStatus
+        },
         logWarn
       }),
       loadGuiUpdaterModule,

@@ -371,7 +371,9 @@
 
 /* Retroma 羊皮纸浅色主题(仅浅色生效):底色 #faf9f6 / 卡片 #f5f4ef / 主色青 #0f7887 / 点缀紫红 #6e3a66 / 边框 #d8d4c8。
    :not([data-theme='dark']) 守卫确保暗色模式下回退 Kun 默认暗色。 */
-[data-retroma-mode='on']:not([data-theme='dark']) {
+/* 羊皮纸配色(原 Retroma)浅色材质;深色由 color-palettes.ts 生成 */
+html[data-color-palette='parchment']:not([data-theme='dark']):not([data-palette-pack-first='on'][data-ikun-mode='on']):not([data-palette-pack-first='on'][data-ui-plugin]),
+html[data-color-palette='parchment']:not([data-theme='dark']):not([data-palette-pack-first='on'][data-ikun-mode='on']):not([data-palette-pack-first='on'][data-ui-plugin]) .ds-workbench-shell {
   --bg-app: #faf9f6;
   --bg-sidebar: #f5f4ef;
   --bg-canvas: #faf9f6;
@@ -455,11 +457,11 @@
   --ds-shadow-chip: inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
-[data-retroma-mode='on']:not([data-theme='dark']) body::before {
+html[data-color-palette='parchment']:not([data-theme='dark']):not([data-palette-pack-first='on'][data-ikun-mode='on']):not([data-palette-pack-first='on'][data-ui-plugin]) body::before {
   background: linear-gradient(180deg, #faf9f6 0%, #f5f4ef 100%);
 }
 
-[data-retroma-mode='on']:not([data-theme='dark']) body::after {
+html[data-color-palette='parchment']:not([data-theme='dark']):not([data-palette-pack-first='on'][data-ikun-mode='on']):not([data-palette-pack-first='on'][data-ui-plugin]) body::after {
   background:
     radial-gradient(circle at 78% -10%, rgba(15, 120, 135, 0.1), transparent 40%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.5), transparent 22%),

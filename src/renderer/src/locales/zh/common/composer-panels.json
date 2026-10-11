@@ -1,4 +1,8 @@
 {
+  "composerVoicePreparing": "正在启动麦克风…",
+  "composerVoiceCancel": "取消语音输入",
+  "composerVoiceRecording": "正在录音…",
+  "composerVoiceCaptureFailed": "录音意外中断。",
   "approvalInterruptTurn": "取消本轮",
   "approvalInterruptTurnHint": "拒绝剩余审批并停止当前任务"
 }

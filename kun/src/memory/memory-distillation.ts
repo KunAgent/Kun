@@ -13,6 +13,7 @@ import {
 } from '../contracts/memory-distillation.js'
 import { MemoryRecord, type MemoryRecord as MemoryRecordValue } from '../contracts/memory.js'
 import { memoryLifecycleState } from './memory-ranking.js'
+import { candidateSafetyFailure, consolidateMemoryCandidate } from './memory-consolidation.js'
 
 const SENSITIVE_PATTERNS: readonly RegExp[] = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/iu,
@@ -53,6 +54,8 @@ export function decideMemoryCandidate(
   validateDecisionTime(evidence.observedAt, nowMs)
   const activeRecords = validateAuthorizedRecords(authorizedRecords, assessment.comparisons, nowMs)
   const candidate = bindAuthorizedEvidence(assessment.candidate, evidence)
+  const safetyFailure = candidateSafetyFailure(candidate, evidence.sources)
+  if (safetyFailure) return DistillationDecision.parse({ action: 'skip', reason: safetyFailure })
 
   if (containsCredentialLikeData(candidate)) {
     return DistillationDecision.parse({ action: 'skip', reason: 'sensitive' })
@@ -74,23 +77,26 @@ export function decideMemoryCandidate(
 
   const supersede = assessment.comparisons.find((comparison) => comparison.relation === 'supersede')
   if (supersede) {
-    return DistillationDecision.parse({
-      action: 'supersede',
-      memoryId: supersede.memoryId,
-      candidate
-    })
+    return consolidatedDecision(candidate, 'supersede', activeRecords.get(supersede.memoryId)!, supersede.reason)
   }
 
   const update = assessment.comparisons.find((comparison) => comparison.relation === 'update')
   if (update) {
-    return DistillationDecision.parse({
-      action: 'update',
-      memoryId: update.memoryId,
-      candidate
-    })
+    return consolidatedDecision(candidate, 'update', activeRecords.get(update.memoryId)!, update.reason)
   }
 
-  return DistillationDecision.parse({ action: 'create', candidate })
+  return consolidatedDecision(candidate, 'create')
+}
+
+function consolidatedDecision(candidate: MemoryCandidate, action: 'create' | 'update' | 'supersede',
+  target?: MemoryRecordValue, reason?: string): DistillationDecisionValue {
+  let consolidated: MemoryCandidate
+  try { consolidated = consolidateMemoryCandidate(candidate, target ? [target] : [], reason) }
+  catch (error) { throw new MemoryDistillationDecisionError(error instanceof Error ? error.message : String(error)) }
+  if (containsCredentialLikeData(consolidated)) return { action: 'skip', reason: 'sensitive' }
+  const unsafe = candidateSafetyFailure(consolidated)
+  if (unsafe) return { action: 'skip', reason: unsafe }
+  return DistillationDecision.parse({ action, ...(target ? { memoryId: target.id } : {}), candidate: consolidated })
 }
 
 export function memoryCandidateFingerprint(input: MemoryCandidateInput): string {
@@ -101,7 +107,7 @@ export function memoryCandidateFingerprint(input: MemoryCandidateInput): string 
 export function containsCredentialLikeData(input: MemoryCandidateInput): boolean {
   const candidate = MemoryCandidate.parse(input)
   const evidenceText = candidate.sources.flatMap((source) => [source.locator, source.excerpt])
-  const text = [candidate.content, ...evidenceText].filter((value): value is string => Boolean(value)).join('\n')
+  const text = [candidate.content, candidate.consolidation?.reason, ...evidenceText].filter((value): value is string => Boolean(value)).join('\n')
   return SENSITIVE_PATTERNS.some((pattern) => pattern.test(text))
 }
 

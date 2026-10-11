@@ -18,6 +18,7 @@ import {
   type RoundOutcomeInput
 } from './round-outcome-state.js'
 import { SEND_IM_MESSAGE_TOOL_NAME } from '../rooms/room-im-message-tool.js'
+import { PRIVATE_PUBLICATION_TOOL_NAMES, isCardRequestTool } from '../rooms/room-im-delivery.js'
 
 export {
   GRAPH_CREATE_RUN_TOOL_NAME,
@@ -36,6 +37,20 @@ export {
  * streaming, tool execution, or terminal turn settlement.
  */
 export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
+  private async recoverPrivatePublication(input: RoundOutcomeInput): Promise<ModelRoundOutcome> {
+    const steps = (this.imPublicationRecoveryByTurn.get(input.turnId) ?? 0) + 1
+    if (steps <= IM_PUBLICATION_MAX_RECOVERY_STEPS) {
+      this.imPublicationRecoveryByTurn.set(input.turnId, steps)
+      await this.deps.events.record({
+        kind: 'error', threadId: input.threadId, turnId: input.turnId,
+        message: 'Conversation needs a user-visible response before continuing.',
+        code: 'im_message_missing', severity: 'warning'
+      })
+      return 'continue'
+    }
+    return this.failHardRequiredTool(input, 'im_final_missing',
+      'The private Agent could not publish a complete response after two attempts. No pending work was replayed.')
+  }
   /**
    * A room step's deliverable is its accepted scoped submission
    * (submit_room_plan, submit_room_review, declare_room_checks,
@@ -55,6 +70,27 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
   }
 
   /**
+   * A peer reply or a coordination plan is the step's whole deliverable: the
+   * host publishes the accepted submission and discards any later prose. Ending
+   * the turn here skips that discarded model round, which also keeps the window
+   * in which a parallel member's answer makes this staged draft stale small.
+   * A held (not accepted) draft keeps the turn going so the member can revise.
+   */
+  private async acceptedFinalRoomSubmission(input: RoundOutcomeInput,
+    calls: readonly { callId: string; toolName: string }[]): Promise<boolean> {
+    const context = input.prepared.toolDiscoveryContext
+    const toolName = context.roomStepKind === 'coordination' ? 'submit_room_plan'
+      : context.roomStepKind === 'discussion' && context.roomPeer === true ? 'send_room_message' : undefined
+    if (!toolName || !calls.some((call) => call.toolName === toolName)) return false
+    const items = await this.deps.sessionStore.loadItems(input.threadId)
+    return items.some((item) => item.turnId === input.turnId && item.kind === 'tool_result' &&
+      item.toolName === toolName && item.isError !== true &&
+      calls.some((call) => call.callId === item.callId) &&
+      typeof item.output === 'object' && item.output !== null &&
+      (item.output as { accepted?: unknown }).accepted === true)
+  }
+
+  /**
    * A bot conversation turn owes the user a visible bubble. It is still
    * pending while the turn has no successful send_im_message result and the
    * model can still call the tool (not during tool-disabled recovery).
@@ -62,6 +98,10 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
   private conversationPublicationPending(input: RoundOutcomeInput): boolean {
     const context = input.prepared.toolDiscoveryContext
     if (context.roomStepKind !== 'conversation' || context.roomAgent !== true) return false
+    if (input.prepared.privateDelivery) {
+      const delivery = input.prepared.privateDelivery
+      return delivery.finalResponseRequired && !delivery.waitingOnUser && !delivery.finalCurrent
+    }
     if (input.toolCallsDisabled || !input.toolKinds.has(SEND_IM_MESSAGE_TOOL_NAME)) return false
     return !input.prepared.history.some((item) =>
       item.turnId === input.turnId &&
@@ -83,6 +123,9 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
       (context.roomStepKind === 'conversation' && context.roomAgent === true) ||
       context.imContext === true
     if (!scoped) return false
+    if (input.prepared.privateDelivery) {
+      return input.prepared.privateDelivery.waitingOnUser || input.prepared.privateDelivery.finalCurrent
+    }
     return input.prepared.history.some((item) =>
       item.turnId === input.turnId &&
       item.kind === 'tool_result' &&
@@ -135,18 +178,14 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
         streamSnapshot.stopReason !== 'length' &&
         this.conversationPublicationPending(input)
       ) {
+        if (input.prepared.privateDelivery?.finalResponseRequired) {
+          if (input.toolCallsDisabled) return this.failHardRequiredTool(input, 'im_final_missing',
+            'The private Agent cannot publish a complete response because tools are unavailable.')
+          return this.recoverPrivatePublication(input)
+        }
         const steps = (this.imPublicationRecoveryByTurn.get(input.turnId) ?? 0) + 1
         if (steps <= IM_PUBLICATION_MAX_RECOVERY_STEPS) {
           this.imPublicationRecoveryByTurn.set(input.turnId, steps)
-          await this.deps.events.record({
-            kind: 'error',
-            threadId: input.threadId,
-            turnId: input.turnId,
-            message:
-              'Conversation turn ended without publishing a send_im_message bubble; requesting publication.',
-            code: 'im_message_missing',
-            severity: 'warning'
-          })
           return 'continue'
         }
       }
@@ -208,9 +247,18 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
       )
       return this.failToolSuppressionRecovery(input.threadId, input.turnId)
     }
+    const gate = input.prepared.privateDelivery?.gate ?? 'none'
+    const forbidden = gate === 'none' ? [] : completedToolCalls.filter((call) =>
+      !PRIVATE_PUBLICATION_TOOL_NAMES.includes(call.toolName as typeof PRIVATE_PUBLICATION_TOOL_NAMES[number]))
+    if (forbidden.length) {
+      await this.deps.suppressToolCalls(this.toolDispatchInput(input, forbidden, true),
+        'The private Room must publish a response before doing work. This call was not executed.')
+    }
+    const permittedCalls = forbidden.length ? completedToolCalls.filter((call) => !forbidden.includes(call)) : completedToolCalls
+    if (gate !== 'none' && permittedCalls.length === 0) return this.recoverPrivatePublication(input)
     const dispatchableToolCalls = await this.suppressMismatchedRequiredToolCalls(
       input,
-      completedToolCalls
+      permittedCalls
     )
     if (input.requiredToolName && dispatchableToolCalls.length === 0) {
       if (input.requiredToolName === GRAPH_CREATE_RUN_TOOL_NAME) {
@@ -226,6 +274,22 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
     )
     if (dispatched === 'aborted') return 'aborted'
     if (dispatched === 'budget_exhausted') return 'failed'
+    if (await this.acceptedFinalRoomSubmission(input, dispatchableToolCalls)) return 'stop'
+    const publicationCalls = dispatchableToolCalls.filter((call) => PRIVATE_PUBLICATION_TOOL_NAMES.includes(
+      call.toolName as typeof PRIVATE_PUBLICATION_TOOL_NAMES[number]))
+    if (publicationCalls.length) {
+      const settled = await this.deps.sessionStore.loadItems(input.threadId)
+      const published = settled.some((item) => item.turnId === input.turnId && item.kind === 'tool_result' &&
+        publicationCalls.some((call) => call.callId === item.callId && call.toolName === item.toolName) &&
+        item.isError !== true && (item.toolName !== SEND_IM_MESSAGE_TOOL_NAME ||
+          (typeof item.output === 'object' && item.output !== null &&
+            (item.output as { accepted?: unknown }).accepted === true)) &&
+        (!isCardRequestTool(item.toolName) ||
+          (typeof item.output === 'object' && item.output !== null &&
+            (item.output as { requested?: unknown }).requested === true)))
+      if (published) this.imPublicationRecoveryByTurn.delete(input.turnId)
+      else if (gate !== 'none') return this.recoverPrivatePublication(input)
+    }
     const graphCreateCalls = dispatchableToolCalls.filter(
       (call) => call.toolName === GRAPH_CREATE_RUN_TOOL_NAME
     )
@@ -301,6 +365,7 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
       }
     }
     if (dispatched === 'all_suppressed') {
+      if (gate !== 'none') return this.recoverPrivatePublication(input)
       if (input.prepared.dedicatedSvgTurn) {
         const latestItems = await this.deps.sessionStore.loadItems(input.threadId)
         const latestCompletion = svgArtifactCompletionState(latestItems, input.turnId)

@@ -184,15 +184,26 @@ describe('SideConversationPanel', () => {
 
     const composer = renderer!.root.findByType(FloatingComposer)
     expect(composer.props.composerFastMode).toBe(false)
-    const fastButton = renderer!.root.findByProps({ 'aria-label': 'Fast mode off' })
+    vi.stubGlobal('window', { innerHeight: 800, innerWidth: 1200, addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    try {
+      const trigger = renderer!.root.findAll((node) => node.type === 'button' && node.props['data-composer-model-trigger'] === true)[0]!
+      act(() => {
+        trigger.props.onClick()
+      })
+      const fastButton = renderer!.root.findByProps({ 'aria-label': 'Fast mode off' })
 
-    act(() => {
-      fastButton.props.onClick()
-    })
+      act(() => {
+        fastButton.props.onClick()
+      })
 
-    expect(useChatStore.getState().sideConversations['side-1'].fastMode).toBe(true)
-    expect(useChatStore.getState().composerFastMode).toBe(false)
-
+      expect(useChatStore.getState().sideConversations['side-1'].fastMode).toBe(true)
+      expect(useChatStore.getState().composerFastMode).toBe(false)
+      act(() => {
+        trigger.props.onClick()
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
     act(() => renderer!.unmount())
   })
 

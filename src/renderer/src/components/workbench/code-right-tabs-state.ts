@@ -15,6 +15,11 @@ export type CodeRightTabsState = {
   expanded: boolean
 }
 
+/** Older ADE review links now open the existing Code changes surface. */
+function codeTabTarget(id: RightPanelContributionId): RightPanelContributionId {
+  return id === BUILTIN_RIGHT_PANEL_IDS.review ? BUILTIN_RIGHT_PANEL_IDS.changes : id
+}
+
 function isCodeRightTabContributionId(value: unknown): value is RightPanelContributionId {
   return isRightPanelContributionId(value) &&
     value !== BUILTIN_RIGHT_PANEL_IDS.sddAi &&
@@ -39,8 +44,9 @@ function uniqueValidTabs(value: unknown): RightPanelContributionId[] {
   if (!Array.isArray(value)) return []
   const tabs: RightPanelContributionId[] = []
   for (const candidate of value) {
-    if (!isCodeRightTabContributionId(candidate) || tabs.includes(candidate)) continue
-    tabs.push(candidate)
+    if (!isCodeRightTabContributionId(candidate)) continue
+    const target = codeTabTarget(candidate)
+    if (!tabs.includes(target)) tabs.push(target)
   }
   return tabs
 }
@@ -57,8 +63,9 @@ export function normalizeCodeRightTabsState(
     return migrateLegacyRightPanelMode(legacyMode)
   }
   const tabs = uniqueValidTabs(source.tabs)
-  const activeId = isCodeRightTabContributionId(source.activeId) && tabs.includes(source.activeId)
-    ? source.activeId
+  const target = isCodeRightTabContributionId(source.activeId) ? codeTabTarget(source.activeId) : null
+  const activeId = target && tabs.includes(target)
+    ? target
     : tabs[0] ?? null
   return {
     version: CODE_RIGHT_TABS_STATE_VERSION,
@@ -69,8 +76,9 @@ export function normalizeCodeRightTabsState(
 }
 
 export function migrateLegacyRightPanelMode(mode: unknown): CodeRightTabsState {
-  const normalized = normalizeStoredRightPanelId(mode)
-  if (!isCodeRightTabContributionId(normalized)) return emptyCodeRightTabsState()
+  const legacy = normalizeStoredRightPanelId(mode)
+  if (!isCodeRightTabContributionId(legacy)) return emptyCodeRightTabsState()
+  const normalized = codeTabTarget(legacy)
   return {
     version: CODE_RIGHT_TABS_STATE_VERSION,
     tabs: [normalized],
@@ -84,6 +92,7 @@ export function openCodeRightTab(
   id: RightPanelContributionId
 ): CodeRightTabsState {
   if (!isCodeRightTabContributionId(id)) return state
+  id = codeTabTarget(id)
   return {
     version: CODE_RIGHT_TABS_STATE_VERSION,
     tabs: state.tabs.includes(id) ? state.tabs : [...state.tabs, id],
@@ -96,6 +105,7 @@ export function activateCodeRightTab(
   state: CodeRightTabsState,
   id: RightPanelContributionId
 ): CodeRightTabsState {
+  id = codeTabTarget(id)
   return state.tabs.includes(id) ? openCodeRightTab(state, id) : state
 }
 
@@ -103,6 +113,7 @@ export function closeCodeRightTab(
   state: CodeRightTabsState,
   id: RightPanelContributionId
 ): CodeRightTabsState {
+  id = codeTabTarget(id)
   const closingIndex = state.tabs.indexOf(id)
   if (closingIndex < 0) return state
   const tabs = state.tabs.filter((tab) => tab !== id)

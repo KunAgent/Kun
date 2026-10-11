@@ -169,6 +169,43 @@ describe('sandbox policy', () => {
     )).toMatchObject({ code: 'sandbox_command_blocked' })
   })
 
+  it('lets MCP-provided command tools reach the workspace-write approval layer', () => {
+    const mcp = { kind: 'mcp' as const }
+    expect(sandboxBlockForTool(
+      { name: 'mcp_github_mutate', toolKind: 'command_execution' },
+      { sandboxMode: 'workspace-write' },
+      mcp
+    )).toBeNull()
+    expect(sandboxBlockForTool(
+      { name: 'mcp_github_mutate', toolKind: 'command_execution' },
+      { sandboxMode: 'read-only' },
+      mcp
+    )).toMatchObject({ code: 'sandbox_command_blocked' })
+    expect(sandboxBlockForTool(
+      { name: 'mcp_github_mutate', toolKind: 'command_execution' },
+      { sandboxMode: 'external-sandbox' },
+      mcp
+    )).toMatchObject({ code: 'sandbox_command_blocked' })
+    // Delegated narrow path boundaries still block unconditionally.
+    const delegatedContext = {
+      workspace: '/repo/workspace',
+      sandboxMode: 'workspace-write' as const,
+      allowedReadPaths: ['src'],
+      allowedWritePaths: ['src']
+    }
+    expect(sandboxBlockForTool(
+      { name: 'mcp_github_mutate', toolKind: 'command_execution' },
+      delegatedContext,
+      mcp
+    )).toMatchObject({ code: 'sandbox_command_blocked' })
+    // Non-MCP command tools keep the strict boundary.
+    expect(sandboxBlockForTool(
+      { name: 'lsp', toolKind: 'command_execution' },
+      { sandboxMode: 'workspace-write' },
+      { kind: 'built-in' }
+    )).toMatchObject({ code: 'sandbox_command_blocked' })
+  })
+
   it('enforces delegated write scopes and blocks shell escape for narrow scopes', () => {
     const context = {
       workspace: '/repo/workspace',

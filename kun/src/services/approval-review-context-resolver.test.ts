@@ -4,6 +4,16 @@ import type { ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model
 import { createApprovalReviewModelContextResolver } from './approval-review-context-resolver.js'
 
 describe('createApprovalReviewModelContextResolver', () => {
+  it('refuses unresolved aliases and fences a captured client when configuration replaces it', () => {
+    const original = modelClient('original')
+    const clients = clientsFor({ account: original })
+    const resolver = createApprovalReviewModelContextResolver({ selection: () => undefined, clients })
+    expect(() => resolver({ model: 'route/coding', unresolvedGatewayAlias: true })).toThrow('first upstream')
+    const context = resolver({ model: 'model', providerId: 'account', requestedGatewayAlias: 'route/coding' })
+    clients.replace({ default: modelClient('default'), providers: new Map([['account', modelClient('replacement')]]) })
+    expect(() => context.client.stream({ model: 'model', providerId: 'account', threadId: 'thread', turnId: 'turn',
+      prefix: [], history: [], tools: [], abortSignal: new AbortController().signal })).toThrow('configuration changed')
+  })
   it('inherits the exact acting route by default', () => {
     const fixed = modelClient('fixed-client')
     const resolver = createApprovalReviewModelContextResolver({
@@ -20,7 +30,7 @@ describe('createApprovalReviewModelContextResolver', () => {
     expect(context).toEqual({
       source: 'inherit',
       route: { model: 'model-b', providerId: 'provider-b', accountId: 'account-b' },
-      client: fixed
+      client: expect.objectContaining({ provider: 'fixed-client', model: 'fixed-client' })
     })
   })
 
@@ -49,7 +59,7 @@ describe('createApprovalReviewModelContextResolver', () => {
       providerId: 'provider-b',
       accountId: 'account-b'
     })
-    expect(context.client).toBe(fixed)
+    expect(context.client).toMatchObject({ provider: 'fixed-client', model: 'fixed-client' })
     expect(context.client).not.toBe(defaultClient)
   })
 

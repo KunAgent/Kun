@@ -4,6 +4,7 @@ import type {
   ApprovalReviewEventPayload,
   CompactionEventPayload,
   DelegatedRuntimeState,
+  HarnessRuntimeState,
   ReviewEventPayload,
   RequestContextSnapshot,
   RuntimeErrorEventPayload,
@@ -16,6 +17,18 @@ import type {
   TurnTerminalEvent
 } from './types'
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
+import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
+import { nativeAgentsFromAcpModes } from '../../../../kun/src/contracts/harness-native-agents'
+import { HarnessSessionSettingListSchema } from '../../../../kun/src/contracts/harness-session-settings'
+
+function nativeAgentsField(agents: unknown) {
+  return Array.isArray(agents) ? { agents: nativeAgentsFromAcpModes({ availableModes: agents }) } : {}
+}
+
+function sessionSettingsField(settings: unknown) {
+  const parsed = HarnessSessionSettingListSchema.safeParse(settings)
+  return settings !== undefined && parsed.success ? { settings: parsed.data } : {}
+}
 
 export type KunEventNormalizerDeps = {
   userMessage: (item: CoreTurnItemJson) => UserMessageEventPayload
@@ -39,6 +52,7 @@ export type KunEventNormalizerDeps = {
   todosAction: (event: CoreRuntimeEventJson, cleared: boolean) => RuntimeProjectionAction
   contextSnapshot: (event: CoreRuntimeEventJson) => RequestContextSnapshot | null
   delegatedRuntime: (event: CoreRuntimeEventJson) => DelegatedRuntimeState | null
+  harnessRuntime: (event: CoreRuntimeEventJson) => HarnessRuntimeState | null
   usage: (event: CoreRuntimeEventJson) => ThreadUsageSnapshot | null
   runtimeError: (event: CoreRuntimeEventJson, fallback: string) => RuntimeErrorEventPayload
   errorFromRuntime: (payload: RuntimeErrorEventPayload) => Error
@@ -63,7 +77,8 @@ export function normalizeKunTurnItem(
           kind: item.kind === 'assistant_text' ? 'agent_message' : 'agent_reasoning',
           status: item.status,
           createdAt: item.createdAt,
-          text: item.text ?? ''
+          text: item.text ?? '',
+          ...(item.renderMode ? { renderMode: item.renderMode } : {})
         }
       }
     case 'approval':
@@ -212,6 +227,105 @@ function normalizeKunRuntimeEventPayload(
     case 'delegated_runtime': {
       const state = deps.delegatedRuntime(event)
       return state ? [{ type: 'delegated_runtime_received', payload: state }] : []
+    }
+    case 'harness_runtime': {
+      const state = deps.harnessRuntime(event)
+      return state ? [{ type: 'harness_runtime_received', payload: state }] : []
+    }
+    case 'harness_session_state': {
+      const threadId = event.threadId?.trim()
+      const harnessId = event.harnessId?.trim()
+      if (!threadId || !harnessId) return []
+      const commands = Array.isArray(event.commands)
+        ? event.commands
+            .map((entry) => (entry && typeof entry === 'object'
+              ? entry as { name?: unknown; description?: unknown; inputHint?: unknown }
+              : null))
+            .filter((entry): entry is NonNullable<typeof entry> =>
+              Boolean(entry && typeof entry.name === 'string' && entry.name.trim()))
+            .map((entry) => ({
+              name: (entry.name as string).trim(),
+              ...(typeof entry.description === 'string' && entry.description.trim()
+                ? { description: entry.description.trim() }
+                : {}),
+              ...(typeof entry.inputHint === 'string' && entry.inputHint.trim()
+                ? { inputHint: entry.inputHint.trim() }
+                : {})
+            }))
+        : undefined
+      return [{
+        type: 'harness_session_state_received',
+        payload: {
+          threadId,
+          ...(event.turnId?.trim() ? { turnId: event.turnId.trim() } : {}),
+          harnessId,
+          ...(commands !== undefined ? { commands } : {}),
+          ...(typeof event.currentModeId === 'string' && event.currentModeId.trim()
+            ? { currentModeId: event.currentModeId.trim() }
+            : {}),
+          ...nativeAgentsField((event as { agents?: unknown }).agents),
+          ...sessionSettingsField(event.settings)
+        }
+      }]
+    }
+    case 'task_workspace': {
+      const payload = event.taskWorkspace
+      const threadId = event.threadId?.trim()
+      const workspaceId = payload?.workspaceId?.trim()
+      const state = payload?.state?.trim()
+      if (!threadId || !payload || !workspaceId || !state) return []
+      return [{
+        type: 'task_workspace_received',
+        payload: {
+          threadId,
+          ...(event.turnId?.trim() ? { turnId: event.turnId.trim() } : {}),
+          workspaceId,
+          ...(payload.unitId?.trim() ? { unitId: payload.unitId.trim() } : {}),
+          state: state as TaskWorkspaceThreadEvent['state'],
+          ...(payload.progress
+            ? {
+                progress: {
+                  ...(typeof payload.progress.step === 'string' ? { step: payload.progress.step } : {}),
+                  ...(typeof payload.progress.percent === 'number' ? { percent: payload.progress.percent } : {}),
+                  ...(typeof payload.progress.message === 'string' ? { message: payload.progress.message } : {})
+                }
+              }
+            : {}),
+          ...(payload.workspace
+            ? {
+                workspace: {
+                  ...(typeof payload.workspace.path === 'string' ? { path: payload.workspace.path } : {}),
+                  ...(typeof payload.workspace.sourceRoot === 'string' ? { sourceRoot: payload.workspace.sourceRoot } : {}),
+                  ...(typeof payload.workspace.kind === 'string' ? { kind: payload.workspace.kind } : {}),
+                  ...(typeof payload.workspace.branch === 'string' ? { branch: payload.workspace.branch } : {})
+                }
+              }
+            : {})
+        }
+      }]
+    }
+    case 'handoff_injected': {
+      if (!event.threadId || !event.to) return []
+      return [{
+        type: 'handoff_received',
+        payload: {
+          threadId: event.threadId,
+          ...(event.turnId ? { turnId: event.turnId } : {}),
+          reason:
+            event.reason === 'harness-switch' ||
+            event.reason === 'worker-dispatch' ||
+            event.reason === 'context-overflow'
+              ? event.reason
+              : 'rebase',
+          mode: event.mode === 'delta' ? 'delta' : 'full',
+          toHarnessName: event.to.harnessName,
+          ...(event.to.model ? { toModel: event.to.model } : {}),
+          recentTurns: event.stats?.recentTurns ?? 0,
+          files: event.stats?.files ?? 0,
+          briefDigest: event.briefDigest ?? '',
+          ...(event.timestamp ? { createdAt: event.timestamp } : {})
+        }
+      }]
     }
     case 'usage': {
       const usage = deps.usage(event)

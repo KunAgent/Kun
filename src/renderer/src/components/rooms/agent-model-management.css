@@ -1,0 +1,9 @@
+.agent-directory .agent-directory-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding-bottom: 12px; }
+.agent-directory .agent-directory-open { grid-column: 1 / -1; }
+.agent-directory-model-summary { display: grid; gap: 3px; min-width: 0; padding-left: 8px; overflow-wrap: anywhere; font-size: 12px; }
+.agent-directory-model-summary small, .agent-directory-model-help { color: var(--ds-text-muted); font-size: 11px; }
+.agent-directory-model-help { margin: 0 0 12px; }
+.agent-directory-configure, .agent-manager-entry { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 8px 10px; border-radius: 8px; background: var(--ds-surface-hover); color: var(--ds-text); font-size: 12px; }
+.agent-manager-entry { margin: 8px 12px; }
+.agent-directory-configure:hover, .agent-manager-entry:hover { background: var(--ds-border); }
+.agent-directory-configure:focus-visible, .agent-manager-entry:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }

@@ -192,6 +192,9 @@ export class MemoryFeedbackService {
     if (receipt.state === 'prepared') {
       const previous = await this.findMemory(receipt.previousMemoryId, request!.access)
       if (!previous) return this.abandonCorrection(receipt, 'not-found', 'memory not found')
+      if (request!.expectedRevision !== undefined && request!.expectedRevision !== previous.revision && !previous.supersededAt) {
+        return this.abandonCorrection(receipt, 'id-conflict', 'memory changed; reload before correcting')
+      }
       const existingReplacement = await this.findMemory(receipt.replacementMemoryId, request!.access)
       if (existingReplacement && existingReplacement.supersedes !== previous.id) {
         return this.abandonCorrection(receipt, 'id-conflict', 'memory correction replacement id conflicts')
@@ -337,7 +340,8 @@ function replacementInput(previous: MemoryRecord, request: ReturnType<typeof Mem
     validTo: replacement.validTo === undefined ? previous.validTo : replacement.validTo ?? undefined,
     expiresAt: replacement.expiresAt === undefined ? previous.expiresAt : replacement.expiresAt ?? undefined,
     sources: [{ id: `correction-${stableHash(request.operationId).slice(0, 24)}`, kind: 'user' as const, trust: 'explicit-user' as const }],
-    supersedes: previous.id
+    supersedes: previous.id,
+    supersedesExpectedRevision: request.expectedRevision ?? previous.revision
   }
 }
 

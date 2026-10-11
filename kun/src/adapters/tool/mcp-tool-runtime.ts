@@ -279,6 +279,9 @@ async function callMcpToolWithReconnect(
   let sentToServer = false
   try {
     await ensureMcpConnectionForCall(state, signal)
+    // A deferred stdio client spawns its server here; a failure at this point
+    // means the request never left, so it stays safe to retry.
+    await state.client.ready?.()
     sentToServer = true
     return await state.client.callTool(input, { signal, timeout, context })
   } catch (error) {

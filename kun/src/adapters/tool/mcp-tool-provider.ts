@@ -1,3 +1,4 @@
+import { McpCatalogCache, withDeferredStdioConnect } from './mcp-deferred-client.js'
 import type { McpCapabilityConfig, McpServerConfig } from '../../contracts/capabilities.js'
 import { redactSecretText } from '../../config/secret-redaction.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
@@ -132,6 +133,11 @@ export type McpToolProviderOptions = {
   clientFactory?: (serverId: string, server: McpServerConfig) => Promise<McpClientLike>
   nowIso?: () => string
   oauthStorageDir?: string
+  /**
+   * Tool catalogs of stdio servers persisted here let later starts advertise
+   * their tools without spawning them until the first call.
+   */
+  catalogCachePath?: string
   /** Optional encryptor so persisted OAuth tokens are encrypted at rest. */
   oauthEncryptor?: import('../../security/secret-store.js').SecretEncryptor
   openExternal?: (url: URL) => void | Promise<void>
@@ -222,12 +228,15 @@ export async function buildMcpToolProviders(
   const searchCatalog = new McpSearchCatalogController([])
   const mcp = config
   const nowIso = options.nowIso ?? (() => new Date().toISOString())
-  const clientFactory = options.clientFactory ?? ((serverId, server) =>
+  const baseClientFactory = options.clientFactory ?? ((serverId, server) =>
     createSdkMcpClient(serverId, server, {
       storageDir: options.oauthStorageDir,
       openExternal: options.openExternal,
       ...(options.oauthEncryptor ? { encryptor: options.oauthEncryptor } : {})
     }))
+  const clientFactory = options.catalogCachePath
+    ? withDeferredStdioConnect(baseClientFactory, new McpCatalogCache(options.catalogCachePath))
+    : baseClientFactory
   if (!mcp?.enabled) {
     return {
       providers,

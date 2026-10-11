@@ -14,7 +14,7 @@ const workflows = [
 ]
 
 function windowsJob(workflow) {
-  return workflow.jobs['build-windows'] ?? workflow.jobs['package-windows']
+  return workflow.jobs['windows-recovery'] ?? workflow.jobs['build-windows'] ?? workflow.jobs['package-windows']
 }
 
 test('release workflows preserve Windows transaction diagnostics immediately after the test', () => {

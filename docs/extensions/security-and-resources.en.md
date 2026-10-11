@@ -43,7 +43,7 @@ Manifest permissions are exact strings; see [Manifest](./manifest.en.md#permissi
 6. Revocation immediately blocks new calls; in-flight calls cancel/fail under capability rules.
 7. One extension's threads, state, accounts, private commands, View Sessions, and content-script worlds are inaccessible to another by default.
 
-`accounts.secrets.read:<providerId>` and `hostDom` are high-risk permissions that require renewed consent when added. `workspace.write`, `tools.register`, and `providers.register` also cannot override stricter core policy.
+`accounts.secrets.read:<providerId>` and `hostDom` are high-risk permissions that require renewed consent when added. `workspace.write`, `tools.register`, `providers.register`, and `agents.register` also cannot override stricter core policy. An Agent declared under `agents.register` only joins the Agent Center catalog: Kun's owned-process launcher owns the process, the user must enable it separately and pass its readiness check, and file writes, approvals and the sandbox still go through Kun's ACP mediation.
 
 ## Protected surfaces
 

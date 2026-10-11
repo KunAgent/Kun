@@ -41,12 +41,13 @@ export async function correctRuntimeMemory(
   memoryId: string,
   operationId: string,
   replacement: MemoryCorrection,
-  access: MemoryAccess = {}
+  access: MemoryAccess = {},
+  expectedRevision: number
 ): Promise<CoreMemoryCorrectResultJson> {
   const response = await rendererRuntimeClient.runtimeRequest(
     kunMemoryFeedbackActionPath(memoryId, 'correct'),
     'POST',
-    JSON.stringify({ operationId, access, replacement })
+    JSON.stringify({ operationId, expectedRevision, access, replacement })
   )
   if (!response.ok) throw runtimeErrorToError(parseRuntimeErrorBody(response.body, 'failed to correct memory'))
   return parseJson<{ correction: CoreMemoryCorrectResultJson }>(

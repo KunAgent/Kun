@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { subscribeRoomEvents, roomEventsLive } from './useRoomEvents'
+import { noteRoomMessageCommitted } from './room-im-response-metrics'
 import type { Room, RoomMessage, RoomTask } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
@@ -13,15 +14,19 @@ import {
   type RoomRule,
   type RoomListEntry
 } from './rooms-client'
+import { roomMatchesSelectionScope, type RoomSelectionScope } from './room-surface-selection'
 
-export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', listEnabled = true) {
+export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', listEnabled = true,
+  options: { selectionKey?: string; initialSelectedId?: string; scope?: RoomSelectionScope } = {}) {
+  const selectionKey = options.selectionKey ?? 'kun.rooms.selected'
+  const selectionScope = options.scope ?? 'all'
   const [rooms, setRooms] = useState<RoomListEntry[]>([])
   const [archived, setArchived] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'unread' | 'attention'>('all')
   const [repositoryRoot, setRepositoryRoot] = useState('')
   const [selectedId, setSelectedId] = useState(
-    readBrowserStorageItem('kun.rooms.selected') ?? ''
+    options.initialSelectedId ?? readBrowserStorageItem(selectionKey) ?? ''
   )
   const [room, setRoom] = useState<Room | null>(null)
   const [messages, setMessages] = useState<RoomMessage[]>([])
@@ -39,6 +44,8 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
   roomsRef.current = rooms
   const messagesRef = useRef(messages)
   messagesRef.current = messages
+  const roomRef = useRef(room)
+  roomRef.current = room
   const listGenerationRef = useRef(0)
   const listScopeRef = useRef('')
   listScopeRef.current = JSON.stringify([archived, search, filter, repositoryRoot, conversationKind])
@@ -46,8 +53,8 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
 
   const select = useCallback((id: string): void => {
     setSelectedId(id)
-    writeBrowserStorageItem('kun.rooms.selected', id)
-  }, [])
+    writeBrowserStorageItem(selectionKey, id)
+  }, [selectionKey])
   const refreshList = useCallback(
     async (reset = false, changedIds?: string[]): Promise<void> => {
       if (!listEnabled) { setLoading(false); return }
@@ -154,6 +161,10 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
           Promise.all(taskIds.map((id) => roomsClient.task(selectedId, id, controller.signal)))
         ])
         if (controller.signal.aborted) return
+        if (detail && (detail.room.deletedAt || !roomMatchesSelectionScope(detail.room, selectionScope))) {
+          select('')
+          return
+        }
         if (detail) setRoom((current) => !current || detail.room.revision >= current.revision ? detail.room : current)
         const incoming = [...(page?.messages ?? []), ...changedMessages.map((value) => value.message)]
         const loaded = new Map(messagesRef.current.map((message) => [message.id, message]))
@@ -211,13 +222,22 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
     const messageIds = new Set<string>()
     const taskIds = new Set<string>()
     const unsubscribe = subscribeRoomEvents((event) => {
-      if (event.roomId !== selectedId) return
-      if (event.kind.startsWith('room.')) pending.add('room')
-      if (event.kind.startsWith('rule.')) pending.add('rules')
-      if (event.kind === 'message.created' || event.kind === 'message.presentation.created') pending.add('messages')
-      if (event.kind === 'message.updated' && event.payload?.id) messageIds.add(event.payload.id)
-      if (event.kind === 'task.created') pending.add('tasks')
-      if (event.kind.startsWith('task.') && event.payload?.id) taskIds.add(event.payload.id)
+      if (event.roomId !== selectedId) {
+        // Agent edits (name, avatar) are announced on the Agent directory, not on each room
+        // that presents that Agent; refresh the members so headers and messages follow at once.
+        const current = roomRef.current
+        if (event.kind !== 'agent.updated' || current?.id !== selectedId ||
+          !current.members.some((member) => member.participantAgentId === event.payload?.id)) return
+        pending.add('room')
+      } else {
+        noteRoomMessageCommitted(event)
+        if (event.kind.startsWith('room.')) pending.add('room')
+        if (event.kind.startsWith('rule.')) pending.add('rules')
+        if (event.kind === 'message.created' || event.kind === 'message.presentation.created') pending.add('messages')
+        if (event.kind === 'message.updated' && event.payload?.id) messageIds.add(event.payload.id)
+        if (event.kind === 'task.created') pending.add('tasks')
+        if (event.kind.startsWith('task.') && event.payload?.id) taskIds.add(event.payload.id)
+      }
       if (!pending.size && !messageIds.size && !taskIds.size) return
       clearTimeout(eventTimer)
       eventTimer = setTimeout(() => {
@@ -233,7 +253,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
       clearTimeout(timer)
       refreshRef.current = async () => undefined
     }
-  }, [selectedId])
+  }, [selectedId, select, selectionScope])
 
   const loadEarlier = async (): Promise<void> => {
     if (!messageCursor || moreBusy) return

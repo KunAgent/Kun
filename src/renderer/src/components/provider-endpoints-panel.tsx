@@ -6,8 +6,9 @@ import type {
 import { normalizeModelProviderEndpoints } from '@shared/app-settings'
 import type { ProviderProtocolDetectResult } from '@shared/kun-gui-api'
 import { Loader2, Radar } from 'lucide-react'
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { DetailSection, textInputClass } from './settings-section-providers-controls'
+import { ProviderBalanceEndpointField } from './provider-balance-endpoint-field'
 import { MODEL_ENDPOINT_FORMAT_LABEL_KEYS } from './settings-section-providers-profile'
 
 const ENDPOINT_FORMAT_FIELDS: {
@@ -74,7 +75,7 @@ export function ProviderEndpointsPanel({
     <DetailSection
       title={t('modelProviderEndpointsSection')}
       action={
-        <button
+        <button aria-busy={detecting} data-settings-action="secondary" data-settings-size="default"
           type="button"
           disabled={detecting || !baseUrlValid}
           onClick={() => void detect()}
@@ -117,7 +118,7 @@ export function ProviderEndpointsPanel({
                   {entry.ok ? ` · ${entry.latencyMs}ms` : ''}
                 </span>
                 {isRecommended && detectResult.recommended !== provider.endpointFormat ? (
-                  <button
+                  <button data-settings-action="primary" data-settings-size="default"
                     type="button"
                     onClick={() => onChange({ endpointFormat: detectResult.recommended })}
                     className="ml-auto text-[12px] font-medium text-accent underline-offset-2 hover:underline"
@@ -152,6 +153,7 @@ export function ProviderEndpointsPanel({
           {t('modelProviderCatalogSourcesHint')}
         </span>
       </label>
+      <ProviderBalanceEndpointField provider={provider} onChange={onChange} t={t} />
       <div className="grid gap-3">
         {ENDPOINT_FORMAT_FIELDS.map(({ format, labelKey }) => {
           const value = endpoints[format] ?? ''

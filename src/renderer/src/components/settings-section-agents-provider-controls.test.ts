@@ -228,42 +228,6 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       return runtimeRequest
     }
 
-    it('places a stored OpenCore Free profile in the free group without an API key field', async () => {
-      const provider = defaultModelProviderSettings()
-      const storedFreeProvider = {
-        ...provider.providers.find((item) => item.id === 'opencode-free')!,
-        name: 'opencode-free',
-        presetSource: undefined
-      } satisfies ModelProviderProfileV1
-      const customProvider = {
-        id: 'custom-provider-2',
-        name: 'Custom Provider',
-        apiKey: 'sk-custom',
-        baseUrl: 'https://api.example.com/v1',
-        endpointFormat: 'messages',
-        useProxy: false,
-        models: ['custom-model-1'],
-        modelProfiles: {}
-      } satisfies ModelProviderProfileV1
-      const renderer = await mountProviders({
-        ...baseCtx(),
-        provider: {
-          ...provider,
-          providers: [storedFreeProvider, customProvider]
-        },
-        kun: {
-          ...defaultKunRuntimeSettings(),
-          providerId: storedFreeProvider.id
-        }
-      })
-
-      expect(rendererText(renderer)).toContain('Free')
-      expect(activePanelText(renderer)).toContain('Provider connection')
-      expect(rendererText(renderer)).not.toContain('Enter provider API key')
-      expect(rendererText(renderer)).not.toContain('未找到可用凭据')
-      expect(rendererText(renderer)).not.toContain('No usable credential is stored')
-    })
-
     it('renders task tabs and keeps the selected task while switching providers', async () => {
       const provider = defaultModelProviderSettings()
       const customProvider = {
@@ -293,13 +257,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         }
       })
 
-      const workspacePanels = renderer.root.findAllByProps({ role: 'tabpanel' })
-        .filter((panel) => String(panel.props.id ?? '').startsWith('provider-workspace-panel-'))
-      expect(workspacePanels.map((panel) => panel.props.id)).toEqual([
-        'provider-workspace-panel-providers',
-        'provider-workspace-panel-routes'
-      ])
-      expect(workspacePanels.map((panel) => panel.props.hidden)).toEqual([false, true])
+      // The local gateway is its own settings page; providers keep one workspace.
+      expect(renderer.root.findAllByProps({ id: 'provider-workspace-panel-providers' })).toHaveLength(1)
+      expect(renderer.root.findAllByProps({ id: 'provider-workspace-panel-routes' })).toHaveLength(0)
 
       const tabs = renderer.root
         .findAllByProps({ role: 'tab' })
@@ -538,10 +498,18 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       }
       const ctx = { ...baseCtx(), provider, update }
       const renderer = await mountProviders(ctx)
-      let details = renderer.root.findByType('details')
+      const proxyDetails = () => {
+        let current = renderer.root.findByProps({ placeholder: 'e.g. 10808' })
+        while (current.type !== 'details') {
+          expect(current.parent).not.toBeNull()
+          current = current.parent!
+        }
+        return current
+      }
+      let details = proxyDetails()
 
       await act(async () => details.props.onToggle({ currentTarget: { open: true } }))
-      expect(renderer.root.findByType('details').props.open).toBe(true)
+      expect(proxyDetails().props.open).toBe(true)
 
       const proxyInput = renderer.root.findByProps({ placeholder: 'e.g. 10808' })
       await act(async () => proxyInput.props.onChange({ target: { value: '10808' } }))
@@ -559,7 +527,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
           ctx: { ...ctx, provider: { ...provider, proxy: { enabled: true, url: 'http://127.0.0.1:65536' } } }
         }))
       })
-      details = renderer.root.findByType('details')
+      details = proxyDetails()
       expect(details.props.open).toBe(true)
       expect(renderer.root.findByProps({ placeholder: 'e.g. 10808' }).props.value)
         .toBe('65536')

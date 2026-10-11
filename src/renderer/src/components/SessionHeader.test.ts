@@ -71,6 +71,25 @@ describe('SessionHeader', () => {
     act(() => renderer!.unmount())
   })
 
+  it('labels a task worktree by its registered source project while retaining its real branch path', async () => {
+    const worktree = '/Users/test/.kun/worktrees/tasks/project/tws_example'
+    Object.assign(window, { localStorage: {
+      getItem: (key: string) => key === 'kun.threadWorktrees.v1' ? JSON.stringify({ version: 1,
+        worktrees: { 'thread-1': { projectPath: '/workspace/deepseek-gui', worktreePath: worktree, branch: 'kun/task' } }
+      }) : null,
+      setItem: vi.fn()
+    } })
+    useChatStore.setState((state) => ({ threads: state.threads.map((thread) => ({ ...thread, workspace: worktree })) }))
+    let renderer!: ReactTestRenderer
+    await act(async () => { renderer = createRenderer(createElement(SessionHeader, { compact: true })) })
+    const crumb = renderer.root.find((node) => typeof node.props.className === 'string' &&
+      node.props.className.includes('session-header-compact-workspace'))
+    expect(crumb.findByProps({ className: 'truncate' }).children).toEqual(['deepseek-gui'])
+    expect(crumb.props.title).toBe(worktree)
+    expect(window.kunGui.getGitBranches).toHaveBeenCalledWith(worktree)
+    act(() => renderer.unmount())
+  })
+
   it('shows only the current workspace identity when there is no active conversation', () => {
     useChatStore.setState({
       activeThreadId: null,

@@ -1,3 +1,5 @@
+import { mayRefreshOAuthCredential, runInsideOAuthRefresh } from './oauth-refresh-scope.js'
+
 export const CODEX_OAUTH_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 export const CODEX_OAUTH_TOKEN_ENDPOINT = 'https://auth.openai.com/oauth/token'
 const CODEX_EARLY_INVALIDATION_MS = 5 * 60 * 1000
@@ -62,7 +64,9 @@ export class CodexOAuthCredentialRefresher {
     const shouldRefresh = rejectedAccessToken
       ? credentials.accessToken === rejectedAccessToken
       : isStoredCodexCredentialExpired(credentials, this.nowMs())
-    if (shouldRefresh) {
+    // Read-only chains and resolutions nested inside this source's own refresh
+    // use the stored credential instead of refreshing (or waiting for) it.
+    if (shouldRefresh && mayRefreshOAuthCredential(sourceId)) {
       await this.refreshSingleFlight(sourceId, rejectedAccessToken)
       resolved = await this.store.resolveApiKey(sourceId)
       if (!resolved) {
@@ -83,7 +87,7 @@ export class CodexOAuthCredentialRefresher {
   ): Promise<void> {
     let pending = this.inflight.get(sourceId)
     if (!pending) {
-      pending = this.refreshSource(sourceId, rejectedAccessToken)
+      pending = runInsideOAuthRefresh(sourceId, () => this.refreshSource(sourceId, rejectedAccessToken))
       this.inflight.set(sourceId, pending)
       void pending.finally(() => {
         if (this.inflight.get(sourceId) === pending) this.inflight.delete(sourceId)
@@ -169,6 +173,7 @@ export async function refreshStoredCodexOAuthCredentials(
   try {
     response = await fetchImpl(CODEX_OAUTH_TOKEN_ENDPOINT, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'refresh_token',

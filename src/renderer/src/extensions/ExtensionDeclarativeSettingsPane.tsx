@@ -161,7 +161,7 @@ export function ExtensionDeclarativeSettingsPane({
       {error ? (
         <div role="alert" className="rounded-xl border border-red-300/70 bg-red-50 px-4 py-3 text-[12px] text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
           <div>{error}</div>
-          <button
+          <button aria-busy={loading} data-settings-action="secondary" data-settings-size="default"
             type="button"
             onClick={() => void load()}
             className="mt-2 rounded-lg border border-current px-2 py-1 font-semibold"

@@ -499,6 +499,29 @@ describe('Kun extension metadata mapping', () => {
     })
   })
 
+  it('preserves worker-update source for manager wake-up cards', () => {
+    const block = chatBlockFromItem({
+      id: 'item_worker_update',
+      turnId: 'turn_1',
+      threadId: 'thr_mgr',
+      role: 'user',
+      status: 'completed',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      kind: 'user_message',
+      text: '<kun_worker_updates>\n- [Completed] fix login dsp_1\n</kun_worker_updates>',
+      displayText: '1 worker update',
+      messageSource: 'worker_update'
+    })
+
+    expect(block).toMatchObject({
+      kind: 'user',
+      meta: {
+        displayText: '1 worker update',
+        messageSource: 'worker_update'
+      }
+    })
+  })
+
   it('preserves Design continuation source for hidden progress turns', () => {
     const block = chatBlockFromItem({
       id: 'item_design_continuation',

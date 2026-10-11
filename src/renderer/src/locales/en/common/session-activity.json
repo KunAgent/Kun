@@ -9,6 +9,7 @@
   "processed": "Processed",
   "processStepCount": "{{count}} steps",
   "workedFor": "Worked for {{duration}}",
+  "turnUsageDetailsGatewaySource": "Requests routed through the local Kun gateway.",
   "working": "Running…",
   "workingSprint": "Analyzing…",
   "workingDive": "Organizing…",
@@ -325,6 +326,18 @@
   "subagentSessionBannerSub": "This process was delegated from “{{title}}”. Return to the main chat anytime.",
   "subagentSessionBannerSubUnknown": "This is a subagent process page. Return to the main chat anytime.",
   "subagentSessionBannerBack": "Back to main chat",
+  "externalSubagentBannerTitle": "Viewing a {{agent}} subagent",
+  "externalSubagentBannerSub": "Delegated by {{agent}} in “{{title}}”. Read only: ask follow-ups in the main chat.",
+  "externalSubagentBannerSubUnknown": "Run by {{agent}}. Read only: ask follow-ups in the main chat.",
+  "externalSubagentAwaitingNative": "Waiting for a permission in {{agent}}; Kun cannot approve it",
+  "externalSubagentEndedWithTurn": "The turn ended before it finished",
+  "externalSubagentClosedByParent": "Closed by the main agent",
+  "externalSubagentProgressChecks": "Progress checks by the main agent: {{count}}",
+  "externalSubagentNoProcess": "{{agent}} does not share this subagent’s steps",
+  "conversationSubagentsTitle": "Subagents in this chat",
+  "conversationSubagentsRunning": "Running · {{count}}",
+  "conversationSubagentsFinished": "Finished · {{count}}",
+  "conversationSubagentsExternalNote": "Subagent types and models come from {{agent}}’s own configuration. The settings below apply only to Kun.",
   "subagentSwarmTitle": "{{count}} subagents",
   "subagentSwarmRunning": "{{count}} running",
   "subagentSwarmQueued": "{{count}} queued",
@@ -395,5 +408,15 @@
   "writeTableAlignLeft": "Align left",
   "writeTableAlignCenter": "Align center",
   "writeTableAlignRight": "Align right",
-  "writeCopyMarkdown": "Copy as Markdown"
+  "writeCopyMarkdown": "Copy as Markdown",
+  "acpTool": {
+    "cwd": "Working directory",
+    "exitCode": "Exit code {{code}}",
+    "summaryOnly": "The Agent returned a summary without the file contents.",
+    "waiting": "Waiting for tool output…",
+    "noOutput": "The tool returned no output.",
+    "truncated": "Showing the retained portion of a longer result.",
+    "input": "Input parameters",
+    "rawOutput": "Raw output"
+  }
 }

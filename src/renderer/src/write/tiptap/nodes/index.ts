@@ -1,6 +1,6 @@
 /**
  * Work construct nodes + attribute extensions composing the rich schema
- * additions (implementation §3.2, §7). `WriteBlockId` must come first so the
+ * additions. `WriteBlockId` must come first so the
  * global attribute applies to every listed node type.
  */
 import type { AnyExtension } from '@tiptap/core'
@@ -60,11 +60,11 @@ export function buildWorkConstructExtensions(runtime?: {
     FootnoteReference,
     InlineHtml,
     BlockMath.configure({
-      katexOptions: { throwOnError: false },
+      katexOptions: { throwOnError: false, displayMode: true, trust: false },
       onClick: (node, pos) => mathEditorFor(node, pos, 'block')
     }),
     WorkInlineMath.configure({
-      katexOptions: { throwOnError: false },
+      katexOptions: { throwOnError: false, displayMode: false, trust: false },
       onClick: (node, pos) => mathEditorFor(node, pos, 'inline')
     }),
     WriteMathInput

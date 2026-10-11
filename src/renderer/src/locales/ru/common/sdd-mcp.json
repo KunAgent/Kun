@@ -107,6 +107,7 @@
   "rightPanelSubagents": "Субагенты",
   "rightPanelMcpSkills": "MCP и навыки",
   "rightPanelProviderQuotas": "Использование и квота",
+  "rightPanelWardrobe": "Гардероб",
   "usageQuotaTitle": "Использование и квота",
   "usageQuotaDescription": "Просмотр использования Kun и квоты подписки провайдера.",
   "usageQuotaTabUsage": "Использование",
@@ -490,5 +491,12 @@
   "trajectoryDetailInputTokens": "Input tokens",
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
-  "trajectoryDetailError": "Error"
+  "trajectoryDetailError": "Error",
+  "trajectoryDetailAgent": "Агент",
+  "trajectoryAgentRequestHint": "Выполнено сторонним агентом: Kun восстановил этот вызов модели по выводу агента и не видит полный запрос.",
+  "trajectoryAgentUsageAggregate": "Агент сообщает расход за весь ход; здесь сумма вызовов модели: {{steps}}.",
+  "trajectoryAgentUsageIncluded": "Агент сообщает расход за весь ход; этот вызов учтён в сумме одного из следующих вызовов.",
+  "trajectoryAgentUsageUnreported": "Агент не сообщил расход для этого вызова.",
+  "providerQuotaResetReminder": "{{percent}}% лимита «{{label}}» не использовано, сброс примерно через {{hours}} ч.",
+  "providerQuotaReminderTitle": "{{provider}}: лимит скоро обновится"
 }

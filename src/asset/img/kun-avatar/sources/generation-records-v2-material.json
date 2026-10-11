@@ -1,0 +1,87 @@
+{
+  "created": "2026-10-08",
+  "sources": [
+    {
+      "prompt": "Edit this exact transparent reference sprite sheet. Preserve its grid, the exact existing object identities, silhouettes, poses, proportions and base palettes, and the visual identity of every paired top-row wearing layer / bottom-row inventory icon. Only polish the specified small material details. Do not redesign or add extra objects, birds, eyes, faces, text, labels, borders, backgrounds, cast shadows or ambient effects. Fully transparent RGBA background, including all holes; retain real transparent lens areas in the TOP wearable layer so a character's eyes will show through it. Top row is strict front-facing flat wearable art, bottom row retains the reference inventory perspective. Keep every object wholly in its own equal rectangular grid cell with generous transparent gutters, same cell ordering. One organic dark navy contour pen, clean two-tone cel shading with one upper-left highlight. No white outer fringe, no blur, no overall glow, no photorealism, no palette shift. Each small material accent occupies under eight percent of its object. This sheet has THREE COLUMNS and TWO ROWS, exactly six objects. Column1 white astronaut helmet: preserve its white shell, blue-gray collar and clear face window. Add one thin curved visor reflection near the upper-left rim, exactly TWO tiny white star glints restricted to the top/rim of the visor, and a crisp white highlight to the chrome collar. The TOP window remains truly transparent and the BOTTOM icon keeps its existing dark blue interior. Do NOT paint milky fill over the top window. Column2 dark blue bent wizard hat: preserve hat angle, star positions and moon; make its existing golden stars stitched two-tone embroidery with a minuscule white glint on just one star, and a short moon highlight. Do NOT add a hat band or change its silhouette. Column3 gold laurel: same leaf shapes and open center, gold two-tone metal with small leaf-tip highlights; add precisely THREE small RED BERRIES nestled among the leaves inside its existing silhouette. These are the only red details. All three are legendary quality through tiny craftsmanship, not explosive sparkle.",
+      "referencedImages": [
+        "v2-material-reference-legendary.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "fbb3a263e3d5cae0f0832920020a502bb90da04dc64c309996922729c14deda6",
+      "width": 1536,
+      "height": 1024,
+      "referenceHashes": {
+        "v2-material-reference-legendary.png": "383c390e105d4b385a1af1f130c40f2b19d799325cfebce90e553b467c97ba52"
+      },
+      "file": "v2-material-legendary.png"
+    },
+    {
+      "prompt": "Edit this exact transparent reference sprite sheet. Preserve its grid, the exact existing object identities, silhouettes, poses, proportions and base palettes, and the visual identity of every paired top-row wearing layer / bottom-row inventory icon. Only polish the specified small material details. Do not redesign or add extra objects, birds, eyes, faces, text, labels, borders, backgrounds, cast shadows or ambient effects. Fully transparent RGBA background, including all holes; retain real transparent lens areas in the TOP wearable layer so a character's eyes will show through it. Top row is strict front-facing flat wearable art, bottom row retains the reference inventory perspective. Keep every object wholly in its own equal rectangular grid cell with generous transparent gutters, same cell ordering. One organic dark navy contour pen, clean two-tone cel shading with one upper-left highlight. No white outer fringe, no blur, no overall glow, no photorealism, no palette shift. Each small material accent occupies under eight percent of its object. This sheet has FOUR COLUMNS and TWO ROWS, exactly eight objects. Column1 red detective cap: keep red plaid, tied red bow and double visor, add only three short herringbone stitch marks and a restrained satin highlight on its existing brim/band. Column2 brown pilot cap: preserve brown leather, blue goggles and earflaps, revise goggle metal to muted brass #c98a3a and add small cream wool brush tufts INSIDE the existing rim, no furry expansion; one tiny reflection on blue lenses. Column3 purple pointed hood: keep the broad front opening perfectly TRANSPARENT in the top wearable and original cloth folds. Give fabric two deep purple velvet tones, replace round gold clasp with a small muted brass clasp without enlarging it. Column4 red/orange forehead welding goggles: keep the red/orange outer shell, blue lenses and brown strap, add a slender muted brass inset around each lens and one restrained pale blue glass reflection. No change to the low wide silhouette. Epic metal is brass #c98a3a, never bright yellow gold; nothing emits light.",
+      "referencedImages": [
+        "v2-material-reference-epicHats.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "0ccbca12e5c222730dd5f7012aa81e02d9c7f7f1fb2fe2c9666a25c4c31df056",
+      "width": 1774,
+      "height": 887,
+      "referenceHashes": {
+        "v2-material-reference-epicHats.png": "9e14a4069aa28a7118cbe532eb63824f7af80bf71fee8474051f37977616a329"
+      },
+      "file": "v2-material-epic-hats.png"
+    },
+    {
+      "prompt": "Edit this exact transparent reference sprite sheet. Preserve its grid, the exact existing object identities, silhouettes, poses, proportions and base palettes, and the visual identity of every paired top-row wearing layer / bottom-row inventory icon. Only polish the specified small material details. Do not redesign or add extra objects, birds, eyes, faces, text, labels, borders, backgrounds, cast shadows or ambient effects. Fully transparent RGBA background, including all holes; retain real transparent lens areas in the TOP wearable layer so a character's eyes will show through it. Top row is strict front-facing flat wearable art, bottom row retains the reference inventory perspective. Keep every object wholly in its own equal rectangular grid cell with generous transparent gutters, same cell ordering. One organic dark navy contour pen, clean two-tone cel shading with one upper-left highlight. No white outer fringe, no blur, no overall glow, no photorealism, no palette shift. Each small material accent occupies under eight percent of its object. This sheet has THREE COLUMNS and TWO ROWS, exactly six objects. Column1 cyan laboratory goggles: keep silhouette, nose notch, pale cyan transparent lenses, dark navy side strap. Add ONE small muted brass strap buckle and a restrained pale-blue lens tint. The top wearable lens must be optically CLEAR and truly transparent through its central eye area; no eyes or anything inside. Column2 magnifying glass: preserve the diagonal wooden brown handle, round glass and right-up tilt, change existing gold ring to muted warm brass #c98a3a with a small satin highlight and add one slender curved highlight to its pale blue glass. Column3 laboratory flask: preserve slim blue glass neck and triangular flask, violet liquid and same volume level. Keep liquid violet, add a tiny local luminous pale-violet spot within the liquid plus TWO distinct round bubbles and a restrained glass glint. No surrounding glow and no text. Magnifier/flask positions and silhouettes remain unchanged.",
+      "referencedImages": [
+        "v2-material-reference-epicTools.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "sha256": "77bd40ebbaee3a0411c80093db19b45cda3b780c9ccbe630cb31930d63dcc88a",
+      "width": 1536,
+      "height": 1024,
+      "referenceHashes": {
+        "v2-material-reference-epicTools.png": "5d85d9c2c9cf7fcc3d93aab11a719804c28528df63e9385cde07b4819600ece9"
+      },
+      "file": "v2-material-epic-tools.png"
+    },
+    {
+      "prompt": "Make ONLY two tiny local corrections to the FIRST attached six-cell transparent game-equipment sheet. Keep the same three-column/two-row layout, scale, silhouettes, palette, exact material painting and transparent holes everywhere else. Do not add backgrounds or glows; preserve RGBA transparency. 1) TOP-LEFT astronaut wearable helmet: it currently has one tiny four-point white star reflection near the upper-left visor rim. Add one SECOND, SMALLER white star glint near the upper-right visor rim, inside the glass edge and above the eye area, while keeping the entire large central visor opening completely transparent. Do not alter bottom-left inventory helmet. 2) TOP-RIGHT wearable laurel: restore the clearly separated left and right branches shown in the SECOND reference's top-right cell; the bottom-center must have a transparent gap, no connecting gold branch or central berry. Keep exactly THREE small red berries but move the current bottom-center berry into the inner lower LEFT leaf cluster, entirely inside that existing branch. Preserve the original pointed tips, leaf sizes, two-tone gold material and small leaf-tip highlights. The BOTTOM-RIGHT inventory laurel stays a complete ring with its existing three berries, unchanged. Preserve all other four cells byte-for-byte in appearance. No text, glyphs, bird or head. Only these two corrections.",
+      "referencedImages": [
+        "v2-material-legendary.png",
+        "v2-material-reference-legendary.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "width": 1536,
+      "height": 1024,
+      "sha256": "7b386b157fc21cc8c3eebc0c328f2fde877cd135913b61a9a6c4f5ae19e78e16",
+      "referenceHashes": {
+        "v2-material-legendary.png": "fbb3a263e3d5cae0f0832920020a502bb90da04dc64c309996922729c14deda6",
+        "v2-material-reference-legendary.png": "383c390e105d4b385a1af1f130c40f2b19d799325cfebce90e553b467c97ba52"
+      },
+      "file": "v2-material-legendary-refined.png"
+    },
+    {
+      "prompt": "Make only a careful local material correction to this existing transparent FOUR-column TWO-row sheet of eight matching wearable/inventory hats and goggles. Preserve exact grid positions, silhouettes, identities, all red/brown/purple/blue base colors and real transparent cutouts. COLUMN 1 both red detective hats: replace the three GOLD CHEVRON arrow-like marks on the brim with three TINY SUBTLE DARK-RED herringbone FABRIC stitch pairs within the red plaid. The stitches must look like short low-contrast texture strokes, never a gold logo, glyph, arrows, text or badge. Keep the red plaid, red bow and exact brim shape. Other columns: the metal rings and clasps on brown pilot caps, purple hoods and red/orange goggles should be muted BRASS based on #c98a3a, with its warm brown shadow and a small restrained pale-cream specular glint, not bright yellow gold. Do not repaint their nonmetal shells or blue lenses. Keep the pilot's small wool lining, purple velvet fold tones, top hood's completely open transparent face hole and all object extents unchanged. Absolutely no glow, external shadow, background, extra outline or white matte fringe. Retain TRUE transparent RGBA background. This is a small polish, not a redesign.",
+      "referencedImages": [
+        "v2-material-epic-hats.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "width": 1774,
+      "height": 887,
+      "sha256": "12a3ff0a260b7c1d53e2568fc58e46682bd794396cf0d679ae06af6203c88735",
+      "referenceHashes": {
+        "v2-material-epic-hats.png": "0ccbca12e5c222730dd5f7012aa81e02d9c7f7f1fb2fe2c9666a25c4c31df056"
+      },
+      "file": "v2-material-epic-hats-refined.png"
+    }
+  ]
+}

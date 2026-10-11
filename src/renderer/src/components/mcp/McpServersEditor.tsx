@@ -137,7 +137,7 @@ export function McpServersEditor({
         />
         {!forceRaw ? (
           <div>
-            <button type="button" onClick={() => onToggleRawMode(false)} className={ghostButtonClass}>
+            <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => onToggleRawMode(false)} className={ghostButtonClass}>
               {t('mcpFormBackToForm')}
             </button>
           </div>
@@ -166,11 +166,11 @@ export function McpServersEditor({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={addServer} disabled={disabled} className={ghostButtonClass}>
+        <button data-settings-action="primary" data-settings-size="default" type="button" onClick={addServer} disabled={disabled} className={ghostButtonClass}>
           <Plus className="h-4 w-4" strokeWidth={1.9} />
           {t('mcpFormAddServer')}
         </button>
-        <button type="button" onClick={() => onToggleRawMode(true)} disabled={disabled} className={ghostButtonClass}>
+        <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => onToggleRawMode(true)} disabled={disabled} className={ghostButtonClass}>
           <Code2 className="h-4 w-4" strokeWidth={1.9} />
           {t('mcpFormEditJson')}
         </button>
@@ -242,7 +242,7 @@ function McpServerCard({
           />
           {t('mcpFormEnabled')}
         </label>
-        <button
+        <button data-settings-action="danger-ghost" data-settings-size="icon"
           type="button"
           onClick={onRemove}
           disabled={disabled}
@@ -447,7 +447,7 @@ function KeyValueEditor({
             onChange={(e) => updateEntry(index, { value: e.target.value })}
             className={`${inputClass} flex-1`}
           />
-          <button
+          <button data-settings-action="danger-ghost" data-settings-size="icon"
             type="button"
             onClick={() => removeEntry(index)}
             disabled={disabled}
@@ -458,7 +458,7 @@ function KeyValueEditor({
         </div>
       ))}
       <div>
-        <button type="button" onClick={addEntry} disabled={disabled} className={ghostButtonClass}>
+        <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={addEntry} disabled={disabled} className={ghostButtonClass}>
           <Plus className="h-3.5 w-3.5" strokeWidth={1.9} />
           {addLabel}
         </button>

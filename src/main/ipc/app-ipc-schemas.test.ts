@@ -292,7 +292,7 @@ describe('app-ipc-schemas runtime', () => {
     }).path).toBe('/v1/supply-chain/update-check')
   })
 
-  it('accepts Kun MCP OAuth status and token reset endpoints', () => {
+  it('accepts Kun MCP configuration and interactive OAuth endpoints', () => {
     expect(runtimeRequestPayloadSchema.parse({
       path: '/v1/mcp/oauth',
       method: 'GET'
@@ -301,6 +301,18 @@ describe('app-ipc-schemas runtime', () => {
       path: '/v1/mcp/oauth/google_drive',
       method: 'DELETE'
     }).path).toBe('/v1/mcp/oauth/google_drive')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/mcp/oauth/google_drive', method: 'POST'
+    }).path).toBe('/v1/mcp/oauth/google_drive')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/mcp/config', method: 'GET'
+    }).path).toBe('/v1/mcp/config')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/mcp/remote-apps/google_drive', method: 'POST', body: '{}'
+    }).path).toBe('/v1/mcp/remote-apps/google_drive')
+    expect(() => runtimeRequestPayloadSchema.parse({
+      path: '/v1/mcp/config/google_drive', method: 'PUT', body: '{}'
+    })).toThrow(/runtime request path is not allowed/)
   })
 
   it('accepts the Kun skills endpoint', () => {

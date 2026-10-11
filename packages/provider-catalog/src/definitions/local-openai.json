@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "local-openai",
+  "name": "Local OpenAI-Compatible",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "credentialRequirement": "optional",
+  "baseUrl": "http://localhost:8000/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://docs.vllm.ai/",
+  "credentialUrl": "https://docs.vllm.ai/"
+}

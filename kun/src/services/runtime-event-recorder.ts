@@ -57,6 +57,15 @@ export class RuntimeEventRecorder {
     this.options = options
   }
 
+  /**
+   * Late-bound observer registration for compositions built after the
+   * recorder (e.g. the ADE manager runtime). `notifyObservers` reads the
+   * live list, so a pushed observer sees every subsequent event.
+   */
+  addObserver(observer: RuntimeEventObserver): void {
+    ;(this.options.observers ??= []).push(observer)
+  }
+
   async record(draft: RuntimeEventDraft): Promise<RuntimeEvent> {
     // Capture a generation lease before queueing. A record already waiting
     // behind another event must stay stale even if the same id is later

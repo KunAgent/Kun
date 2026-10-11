@@ -1,15 +1,17 @@
 import type { ApprovalGate } from '../ports/approval-gate.js'
-import type { ApprovalRequest } from '../domain/approval.js'
-import { expireApprovalRequest, resolveApprovalRequest } from '../domain/approval.js'
+import type { ApprovalRequest, ApprovalResolution } from '../domain/approval.js'
+import { expireApprovalRequest, resolveApprovalRequest, manualApprovalResolution } from '../domain/approval.js'
+import { approvalChoiceIsValid, type ApprovalChoice } from '../contracts/approval-choice.js'
 
 type PendingResolver = {
-  resolve: (decision: 'allow' | 'deny') => void
+  resolve: (resolution: ApprovalResolution) => void
   reject: (error: Error) => void
 }
 
 type ReservedDecision = {
   decision: 'allow' | 'deny'
   reason?: string
+  choice?: ApprovalChoice
 }
 
 /**
@@ -29,26 +31,31 @@ export class InMemoryApprovalGate implements ApprovalGate {
   }
 
   request(approval: ApprovalRequest): Promise<'allow' | 'deny'> {
+    return this.requestResolution(approval).then((resolution) => resolution.decision)
+  }
+
+  requestResolution(approval: ApprovalRequest): Promise<ApprovalResolution> {
     if (this.approvals.has(approval.id)) {
       throw new Error(`duplicate approval id: ${approval.id}`)
     }
     this.approvals.set(approval.id, approval)
-    return new Promise<'allow' | 'deny'>((resolve, reject) => {
+    return new Promise<ApprovalResolution>((resolve, reject) => {
       this.resolvers.set(approval.id, { resolve, reject })
     })
   }
 
-  decide(approvalId: string, decision: 'allow' | 'deny', reason?: string): boolean {
-    if (!this.reserveDecision(approvalId, decision, reason)) return false
+  decide(approvalId: string, decision: 'allow' | 'deny', reason?: string, choice?: ApprovalChoice): boolean {
+    if (!this.reserveDecision(approvalId, decision, reason, choice)) return false
     return this.commitDecision(approvalId)
   }
 
-  reserveDecision(approvalId: string, decision: 'allow' | 'deny', reason?: string): boolean {
+  reserveDecision(approvalId: string, decision: 'allow' | 'deny', reason?: string, choice?: ApprovalChoice): boolean {
     const approval = this.approvals.get(approvalId)
     if (!approval || approval.status !== 'pending' || this.reservations.has(approvalId)) {
       return false
     }
-    this.reservations.set(approvalId, { decision, ...(reason ? { reason } : {}) })
+    if (!approvalChoiceIsValid(approval.action?.permissionOptions, decision, choice)) return false
+    this.reservations.set(approvalId, { decision, ...(reason ? { reason } : {}), ...(choice ? { choice } : {}) })
     return true
   }
 
@@ -56,13 +63,14 @@ export class InMemoryApprovalGate implements ApprovalGate {
     const approval = this.approvals.get(approvalId)
     const reserved = this.reservations.get(approvalId)
     if (!approval || approval.status !== 'pending' || !reserved) return false
-    const resolved = resolveApprovalRequest(approval, reserved.decision, reserved.reason)
+    const resolved = { ...resolveApprovalRequest(approval, reserved.decision, reserved.reason), ...(reserved.choice ? { choice: reserved.choice } : {}) }
+    this.approvals.delete(approvalId)
     this.approvals.set(approvalId, resolved)
     this.reservations.delete(approvalId)
     this.deferredExpirations.delete(approvalId)
     const resolver = this.resolvers.get(approvalId)
     this.resolvers.delete(approvalId)
-    resolver?.resolve(reserved.decision)
+    resolver?.resolve(manualApprovalResolution(reserved.decision, reserved.reason, reserved.choice))
     this.trimResolved()
     return true
   }
@@ -90,10 +98,11 @@ export class InMemoryApprovalGate implements ApprovalGate {
   private expireNow(approvalId: string, reason?: string): boolean {
     const approval = this.approvals.get(approvalId)
     if (!approval || approval.status !== 'pending') return false
+    this.approvals.delete(approvalId)
     this.approvals.set(approvalId, expireApprovalRequest(approval, reason))
     const resolver = this.resolvers.get(approvalId)
     this.resolvers.delete(approvalId)
-    resolver?.resolve('deny')
+    resolver?.resolve(manualApprovalResolution('deny', reason))
     this.trimResolved()
     return true
   }

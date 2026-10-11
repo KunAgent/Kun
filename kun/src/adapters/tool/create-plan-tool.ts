@@ -387,7 +387,7 @@ async function resolveReservedTarget(
     return { error: 'workspace root is required' }
   }
   let relativePath = reservedRelativePath
-  if (contextPlan.operation === 'draft') {
+  if (contextPlan.operation === 'draft' && !contextPlan.fixedPath) {
     // The renderer reserves a provisional path before the model responds. Use
     // the model's concise plan title when available; only fall back to the
     // stable session id when the title call/tool argument is unavailable.

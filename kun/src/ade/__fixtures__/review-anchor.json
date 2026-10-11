@@ -1,0 +1,67 @@
+{
+  "cases": [
+    {
+      "name": "unchanged file keeps the same line",
+      "line": 4,
+      "anchor": { "lineText": "const timeout = 5000", "before": ["function connect() {", "  const socket = open()"], "after": ["  const retries = 3", "}"] },
+      "file": "header\nfunction connect() {\n  const socket = open()\nconst timeout = 5000\n  const retries = 3\n}",
+      "expected": { "line": 4 }
+    },
+    {
+      "name": "line moved down stays anchored",
+      "line": 3,
+      "anchor": { "lineText": "const timeout = 5000", "before": ["function connect() {"], "after": ["  const retries = 3"] },
+      "file": "header\nfunction connect() {\n  const socket = open()\n  const socket2 = open()\n  const socket3 = open()\nconst timeout = 5000\n  const retries = 3\n}",
+      "expected": { "line": 6 }
+    },
+    {
+      "name": "line moved beyond the window falls back to exact match",
+      "line": 3,
+      "anchor": { "lineText": "unique_marker_line()", "before": ["pre_ctx()"], "after": ["post_ctx()"] },
+      "file": "p0\np1\np2\np3\np4\np5\np6\np7\np8\np9\np10\np11\np12\np13\np14\np15\np16\np17\np18\np19\np20\np21\np22\npre_ctx()\nunique_marker_line()\npost_ctx()\nz",
+      "expected": { "line": 25 }
+    },
+    {
+      "name": "deleted line becomes outdated",
+      "line": 2,
+      "anchor": { "lineText": "const removed = true", "before": ["start"], "after": ["end"] },
+      "file": "start\nend\nfooter",
+      "expected": { "outdated": true }
+    },
+    {
+      "name": "duplicated line becomes outdated when both copies keep context",
+      "line": 2,
+      "anchor": { "lineText": "dup()", "before": ["x"], "after": ["y"] },
+      "file": "pad0\npad1\npad2\npad3\npad4\npad5\npad6\npad7\npad8\npad9\npadA\npadB\npadC\npadD\npadE\npadF\npadG\npadH\npadI\npadJ\npadK\nx\ndup()\ny\ntail\nx\ndup()\ny",
+      "expected": { "outdated": true }
+    },
+    {
+      "name": "duplicate lines resolve by the better context score",
+      "line": 6,
+      "anchor": { "lineText": "same()", "before": ["alpha"], "after": ["beta"] },
+      "file": "alpha\nsame()\nbeta\nalpha\nsame()\ngamma\nalpha\nsame()\nbeta",
+      "expected": { "line": 8 }
+    },
+    {
+      "name": "empty context anchors on a unique lineText match",
+      "line": 1,
+      "anchor": { "lineText": "only_once()", "before": [], "after": [] },
+      "file": "a\nb\nonly_once()\nc",
+      "expected": { "line": 3 }
+    },
+    {
+      "name": "empty context with duplicates is outdated",
+      "line": 2,
+      "anchor": { "lineText": "twice()", "before": [], "after": [] },
+      "file": "twice()\nmiddle\ntwice()",
+      "expected": { "outdated": true }
+    },
+    {
+      "name": "edited line with surviving context picks the closest match",
+      "line": 3,
+      "anchor": { "lineText": "step()", "before": ["one"], "after": ["three"] },
+      "file": "one\ntwo\nstep()\nthree\nstep()\nthree",
+      "expected": { "line": 3 }
+    }
+  ]
+}

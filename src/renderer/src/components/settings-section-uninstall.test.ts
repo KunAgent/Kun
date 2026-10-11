@@ -109,6 +109,24 @@ describe('UninstallSettingsSection', () => {
     expect(textContent(renderer.root)).toContain('Uninstalling…')
   })
 
+  it('names the confirmation dialog and cancels Escape without authorizing removal', async () => {
+    const uninstall = api()
+    vi.stubGlobal('window', { kunGui: { uninstall } })
+    let renderer!: ReactTestRenderer
+    await act(async () => { renderer = create(createElement(UninstallSettingsSection)) })
+    await act(async () => { findButton(renderer, 'Uninstall Kun').props.onClick() })
+    const dialog = renderer.root.findByProps({ role: 'dialog' })
+    expect(dialog.props['aria-modal']).toBe('true')
+    expect(dialog.props['aria-label']).toBeTruthy()
+    expect(dialog.props.style.margin).toBe(0)
+    expect(renderer.root.findAllByProps({ 'data-uninstall-cancel': true })).toHaveLength(1)
+    await act(async () => {
+      dialog.props.onKeyDown({ key: 'Escape', preventDefault: vi.fn(), stopPropagation: vi.fn() })
+    })
+    expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0)
+    expect(uninstall.perform).not.toHaveBeenCalled()
+  })
+
   it('hides the app-removal checkbox and shows the hint when the app cannot be removed', async () => {
     vi.stubGlobal('window', { kunGui: { uninstall: api({
       getStatus: vi.fn(async () => status({

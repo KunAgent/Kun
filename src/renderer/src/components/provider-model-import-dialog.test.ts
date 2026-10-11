@@ -127,21 +127,21 @@ describe('ProviderModelImportDialog', () => {
       ])
     })
 
-    expect(html).toContain('Found 2 for Acme')
+    expect(html).toContain('Found 1 for Acme')
     expect(html).toContain('Provider API (1)')
-    expect(html).toContain('models.dev (2)')
+    expect(html).toContain('models.dev (1)')
     expect(html).toContain('API + models.dev')
-    expect(html).toContain('models.dev only')
+    expect(html).not.toContain('models.dev only')
     expect(html).toContain('Multimodal flagship')
     expect(html).toContain('Context 128K')
     expect(html).toContain('Output 16K')
     expect(html).toContain('Vision')
     expect(html).toContain('Audio input')
-    expect(html).toContain('Text chat · 2')
+    expect(html).toContain('Text chat · 1')
     expect(html).not.toContain('Speech to text ·')
     expect(html).toContain('Tools')
     expect(html).toContain('Reasoning')
-    expect(html).toContain('No tools')
+    expect(html).not.toContain('No tools')
     expect(html).toContain('Import 1')
   })
 
@@ -270,10 +270,39 @@ describe('ProviderModelImportDialog', () => {
     expect(html).toContain('Import 1')
   })
 
+  it('shows listed gpt-6 models without requiring matching models.dev entries', () => {
+    const html = render({
+      target: provider({ id: 'codex', name: 'ChatGPT subscription' }),
+      providerModelIds: ['gpt-6-sol', 'gpt-6-luna'],
+      catalogResult: catalog([
+        { id: 'gpt-6-sol', inputModalities: ['text'], outputModalities: ['text'] },
+        { id: 'gpt-6-unavailable', inputModalities: ['text'], outputModalities: ['text'] }
+      ], { matchMode: 'enrichment-only' })
+    })
+    expect(html).toContain('gpt-6-sol')
+    expect(html).toContain('gpt-6-luna')
+    expect(html).not.toContain('gpt-6-unavailable')
+    expect(html).toContain('Import 2')
+  })
+
   it('renders an empty state when neither source returned models', () => {
     const html = render()
     expect(html).toContain('No models available')
     expect(html).toContain('Import 0')
     expect(html).toContain('disabled=""')
   })
+})
+
+it('labels preset fallback candidates without claiming provider API verification', () => {
+  const html = renderToStaticMarkup(createElement(ProviderModelImportDialog, {
+    provider: provider(), providerModelIds: ['candidate-model'], catalogResult: catalog([]),
+    discoverySource: 'preset', t: (key, params) => ({
+      'providerConfiguration.discoverypresetBadge': 'Preset candidate',
+      'providerConfiguration.discoverypresetCount': 'Preset candidates',
+      'providerConfiguration.candidateModelsHint': 'Account access is unverified'
+    } as Record<string, string>)[key] ?? t(key, params), onCancel: () => {}, onConfirm: async () => {}
+  }))
+  expect(html).toContain('Preset candidate')
+  expect(html).toContain('Account access is unverified')
+  expect(html).not.toContain('Provider API')
 })

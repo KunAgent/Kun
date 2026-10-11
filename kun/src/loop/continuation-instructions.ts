@@ -1,8 +1,9 @@
 import type { TurnItem } from '../contracts/items.js'
 import type { ThreadGoal, ThreadTodoList } from '../contracts/threads.js'
+import type { ExecutionTaskState } from '../contracts/execution-tasks.js'
 import { CREATE_PLAN_TOOL_NAME } from '../adapters/tool/create-plan-tool.js'
 import { GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME } from '../adapters/tool/goal-tools.js'
-import { TODO_LIST_TOOL_NAME, TODO_WRITE_TOOL_NAME } from '../adapters/tool/todo-tools.js'
+import { EXECUTION_TASK_TOOL_NAMES } from '../adapters/tool/execution-task-tools.js'
 import { computeShortHash } from './compaction-marker.js'
 
 export function goalContinuationInstruction(goal: ThreadGoal | undefined): string | null {
@@ -350,17 +351,20 @@ function charBigramCounts(text: string): Map<string, number> {
   return counts
 }
 
-export function todoContinuationInstruction(todos: ThreadTodoList | undefined): string | null {
-  const items = todos?.items ?? []
+export function todoContinuationInstruction(todos: ThreadTodoList | undefined, tasks?: ExecutionTaskState): string | null {
+  const items = tasks ? tasks.tasks.filter((task) => !['succeeded', 'cancelled'].includes(task.status)).map((task) => ({
+    content: `${task.title} (id=${task.id}, revision=${task.revision}, owner=${task.ownerThreadId})${task.reason ? `: ${task.reason}` : ''}`,
+    status: task.status, source: task.planSource
+  })) : todos?.items ?? []
   if (items.length === 0) return null
   const rows = items.slice(0, 50).map((item, index) => {
     const source = item.source?.kind === 'plan' ? ` source=plan:${item.source.relativePath}` : ''
     return `${index + 1}. [${item.status}] ${escapeXmlText(item.content)}${source}`
   })
   return [
-    'The current thread todo list is structured, user-visible progress state.',
-    'Use `todo_list` to inspect it and `todo_write` to replace the whole list when task state changes.',
-    'Keep at most one item in_progress. Plan-linked todos mirror Markdown checkboxes in the saved plan file.',
+    'This is a bounded progress projection; task_list and task_get provide canonical execution tasks and revisions.',
+    'Use task_create and task_update for atomic changes. Never replace the whole task list. Preserve owners and dependencies; completion requires evidence.',
+    'Saved plan checkboxes are a projection, not execution authority. Legacy in-progress records require explicit recovery. Task state does not start background work or complete a Goal.',
     '',
     '<thread_todos>',
     ...rows,
@@ -422,8 +426,7 @@ export function allowedToolNamesWithGuiStateTools(
     next.add(GET_GOAL_TOOL_NAME)
     next.add(UPDATE_GOAL_TOOL_NAME)
   }
-  next.add(TODO_LIST_TOOL_NAME)
-  next.add(TODO_WRITE_TOOL_NAME)
+  for (const name of EXECUTION_TASK_TOOL_NAMES) next.add(name)
   return [...next]
 }
 
@@ -451,17 +454,26 @@ export function intersectAllowedToolNames(
  * threads created before the tool existed still learn the contract. A
  * positive `recoveryStep` switches to the bounded no-publication nudge.
  */
-export function conversationDeliveryInstruction(recoveryStep = 0, maxSteps = 0): string {
+export function conversationDeliveryInstruction(recoveryStep = 0, maxSteps = 0,
+  deliveryGate: 'start' | 'progress' | 'none' = 'none'): string {
   if (recoveryStep > 0) {
     return [
-      `You stopped without calling \`send_im_message\`, so the user saw nothing (recovery ${recoveryStep}/${maxSteps}).`,
+      `No user-visible reply was successfully published (recovery ${recoveryStep}/${maxSteps}).`,
       'Ordinary assistant text is internal and never reaches the user.',
-      'Call `send_im_message` now with the text and/or workspace file attachments the user should receive.'
+      deliveryGate === 'progress'
+        ? 'Call `send_im_message` with phase progress for a verified update, or phase final for the completed result.'
+        : 'Call `send_im_message` with phase start for a concrete next action, or phase final for a complete answer.'
     ].join(' ')
+  }
+  if (deliveryGate === 'start') {
+    return 'Respond to this user in their language before doing work. Call send_im_message with phase start and one concrete next action, or phase final for a complete answer. If you need the user to decide or connect an app, use the visible question or connection-card tool. Continue the task after a start message. Only the reply tools are listed for this first step; shell, file, and other tools are not revoked and unlock right after it, so never tell the user you lack terminal or tool permissions.'
+  }
+  if (deliveryGate === 'progress') {
+    return 'The user has not received an update during this long task. Call send_im_message with phase progress to report a verified finding and next action, or phase final if the work is complete. Avoid generic waiting notices; continue the task after progress.'
   }
   return [
     'This is an IM-style agent conversation. Your ordinary assistant text is internal working output the user never sees.',
-    'Publish every user-visible reply, status, question, or result with the `send_im_message` tool: text and/or workspace file attachments (images, documents, audio, video, or other files).',
+    'Publish every user-visible reply, status, question, or result with the `send_im_message` tool: text and/or workspace file attachments (images, documents, audio, video, or other files). Use phase start for an initial work update, progress for a material finding, and final for the complete answer.',
     'Each call creates one chat bubble. Do not repeat tool-published content in assistant text, and do not end the turn expecting your text to be shown.'
   ].join(' ')
 }

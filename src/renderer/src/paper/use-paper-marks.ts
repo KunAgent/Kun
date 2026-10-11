@@ -12,13 +12,17 @@ import { usePaperMarksStore } from './paper-marks-store'
  * between our load and save survive; external writes are reloaded on window
  * focus.
  */
-export function usePaperMarks(workspaceRoot: string, unitDir: string): void {
+export function usePaperMarks(workspaceRoot: string, unitDir: string, enabled = true): void {
   const saveTimerRef = useRef<number | null>(null)
   const revisionRef = useRef(0)
 
   useEffect(() => {
+    if (!enabled) return
     const store = usePaperMarksStore
-    store.setState({ unitDir, items: [], cards: {}, removedIds: [], dirty: false })
+    const owner = store.getState()
+    if (owner.workspaceRoot !== workspaceRoot || owner.unitDir !== unitDir) {
+      store.setState({ workspaceRoot, unitDir, items: [], cards: {}, removedIds: [], dirty: false })
+    }
     if (!workspaceRoot || !unitDir) return
     if (typeof window.kunGui?.paperMarksRead !== 'function') return
 
@@ -36,7 +40,7 @@ export function usePaperMarks(workspaceRoot: string, unitDir: string): void {
         if (item.kind && item.kind !== 'highlight' && item.id) cards[item.id] = item
       }
       usePaperMarksStore.setState((state) => {
-        if (state.unitDir !== unitDir) return state
+        if (state.workspaceRoot !== workspaceRoot || state.unitDir !== unitDir) return state
         const removed = new Set(state.removedIds)
         const incoming = (annotations.success ? annotations.data.items : []).filter(
           (item) => !removed.has(item.id)
@@ -64,12 +68,13 @@ export function usePaperMarks(workspaceRoot: string, unitDir: string): void {
       // store still holds this unit's items until the next effect resets it.
       void flushPaperMarks(workspaceRoot, unitDir)
     }
-  }, [workspaceRoot, unitDir])
+  }, [workspaceRoot, unitDir, enabled])
 
   // Debounced flush of dirty marks.
   useEffect(() => {
+    if (!enabled) return
     const unsubscribe = usePaperMarksStore.subscribe((state) => {
-      if (!state.dirty || state.unitDir !== unitDir || !workspaceRoot) return
+      if (!state.dirty || state.workspaceRoot !== workspaceRoot || state.unitDir !== unitDir || !workspaceRoot) return
       if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current)
       saveTimerRef.current = window.setTimeout(() => {
         saveTimerRef.current = null
@@ -77,7 +82,7 @@ export function usePaperMarks(workspaceRoot: string, unitDir: string): void {
       }, 600)
     })
     return unsubscribe
-  }, [workspaceRoot, unitDir])
+  }, [workspaceRoot, unitDir, enabled])
 
   // Keep revisionRef warm for future conflict UIs.
   revisionRef.current = usePaperMarksStore.getState().revision
@@ -90,7 +95,7 @@ export function usePaperMarks(workspaceRoot: string, unitDir: string): void {
  */
 export async function flushPaperMarks(workspaceRoot: string, unitDir: string): Promise<void> {
   const current = usePaperMarksStore.getState()
-  if (!workspaceRoot || !unitDir || current.unitDir !== unitDir || !current.dirty) return
+  if (!workspaceRoot || !unitDir || current.workspaceRoot !== workspaceRoot || current.unitDir !== unitDir || !current.dirty) return
   if (typeof window.kunGui?.paperMarksWrite !== 'function') return
   const sentItems = current.items
   const sentRemoved = current.removedIds
@@ -103,7 +108,7 @@ export async function flushPaperMarks(workspaceRoot: string, unitDir: string): P
   if (!result?.ok) return
   usePaperMarksStore.setState((state) => {
     // The store may already belong to the next unit; never merge across units.
-    if (state.unitDir !== unitDir) return state
+    if (state.workspaceRoot !== workspaceRoot || state.unitDir !== unitDir) return state
     const stillDirty = state.items !== sentItems || state.removedIds !== sentRemoved
     return {
       items: mergeIntoState(state.items, result.items as PaperHighlight[]),

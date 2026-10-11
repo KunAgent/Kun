@@ -1,3 +1,4 @@
+import { publishAgentDispatchIntent } from './agent-dispatch-client'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -72,6 +73,7 @@ import {
   compactionBlockFromItem,
   contextSnapshotFromCore,
   delegatedRuntimeFromCore,
+  harnessRuntimeFromCore,
   errorForRuntimeEvent,
   reasoningBlockFromItem,
   reviewBlockFromItem,
@@ -454,6 +456,7 @@ export const kunEventNormalizerDeps: KunEventNormalizerDeps = {
   }),
   contextSnapshot: contextSnapshotFromCore,
   delegatedRuntime: delegatedRuntimeFromCore,
+  harnessRuntime: harnessRuntimeFromCore,
   usage: (event) => event.usage ? usageFromCore(event.usage, event.turnId) : null,
   runtimeError: runtimeErrorFromEvent,
   errorFromRuntime: errorForRuntimeEvent
@@ -491,6 +494,10 @@ export async function applyRuntimeProjectionAction(
     case 'thread_metadata_changed': sink.onThreadUpdated?.(action.payload); return
     case 'context_snapshot_received': sink.onContextSnapshot?.(action.payload); return
     case 'delegated_runtime_received': sink.onDelegatedRuntimeState?.(action.payload); return
+    case 'harness_runtime_received': sink.onHarnessRuntimeState?.(action.payload); return
+    case 'harness_session_state_received': sink.onHarnessSessionState?.(action.payload); return
+    case 'task_workspace_received': sink.onTaskWorkspace?.(action.payload); return
+    case 'handoff_received': sink.onHandoff?.(action.payload); return
     case 'usage_received': sink.onUsage?.(action.payload); return
     case 'turn_completed': sink.onTurnComplete(action.payload); return
     case 'turn_aborted': sink.onTurnComplete(action.payload); return
@@ -572,6 +579,7 @@ export async function dispatchKunRuntimeEvent(
   sink: ThreadEventSink,
   handleApprovalRequest: (event: CoreRuntimeEventJson, sink: ThreadEventSink) => Promise<void>
 ): Promise<void> {
+  if (event.kind === 'agent_dispatch_intent') publishAgentDispatchIntent(event.dispatchIntent)
   const child = normalizeChildMetadata(event.child)
   if (child) {
     sink.onChildRuntimeEvent?.({

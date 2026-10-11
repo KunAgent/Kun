@@ -1,3 +1,6 @@
+import { providerPresetScopeMatches } from '@kun/provider-catalog'
+import { migrateModelMetadata, resolveModelMetadata, withModelObservation } from '../../kun/src/services/model-metadata-resolver.js'
+import { metadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
@@ -73,7 +76,6 @@ import {
   CHATGPT_SUBSCRIPTION_NAME,
   CHATGPT_SUBSCRIPTION_PROVIDER_ID,
   GEMINI_SUBSCRIPTION_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
   TOKEN_PLAN_PROVIDER_ID_SUFFIX,
   getModelProviderPreset,
   modelProviderPresetProfile,
@@ -111,6 +113,7 @@ import {
 import {
   sameModelIds
 } from './app-settings-provider-runtime'
+import { normalizeProviderBalanceEndpoint } from './provider-balance-endpoint'
 
 export function defaultModelProviderProfile(apiKey: string, baseUrl: string): ModelProviderProfileV1 {
   return {
@@ -132,15 +135,29 @@ export function defaultModelProviderProfile(apiKey: string, baseUrl: string): Mo
   }
 }
 
+export function isRetiredOpenCodeFreeProviderId(id: string): boolean {
+  return /^opencode-free(?:-[0-9]+)?$/u.test(id)
+}
+
+export function isRetiredOpenCodeFreeProvider(input: {
+  id?: string
+  presetSource?: string | { presetId?: string } | null
+}): boolean {
+  const id = typeof input.id === 'string' ? input.id.trim() : ''
+  if (id && isRetiredOpenCodeFreeProviderId(id)) return true
+  const presetId = typeof input.presetSource === 'string'
+    ? input.presetSource.trim()
+    : input.presetSource?.presetId?.trim() ?? ''
+  return presetId === 'opencode-free'
+}
+
 export function normalizeModelProviderProfile(
   input: ModelProviderProfilePatchV1 | undefined,
   missingUseProxy = false
 ): ModelProviderProfileV1 | null {
   const id = normalizeModelProviderId(input?.id)
-  if (!id) return null
-  const presetSource = id === OPENCODE_FREE_PROVIDER_ID
-    ? { presetId: OPENCODE_FREE_PROVIDER_ID, mode: 'api' as const }
-    : normalizeModelProviderPresetSource(input, id)
+  if (!id || isRetiredOpenCodeFreeProvider({ id, presetSource: input?.presetSource })) return null
+  const presetSource = normalizeModelProviderPresetSource(input, id)
   const resolvedPresetSource = presetSource
     ? resolveModelProviderPresetSource({ id, presetSource })
     : null
@@ -174,8 +191,9 @@ export function normalizeModelProviderProfile(
   const baseUrl = migrated.baseUrl
   const endpointFormat = migrated.endpointFormat
   const models = migrateProviderPresetModelCatalog(id, migrated.models)
+  const endpoints = normalizeModelProviderEndpoints(input?.endpoints)
   const modelProfiles = withPresetModelProfiles(
-    { id, presetSource },
+    { id, presetSource, baseUrl, endpointFormat, endpoints, kind },
     models,
     normalizeModelProviderModelProfiles(input?.modelProfiles, models)
   )
@@ -184,7 +202,7 @@ export function normalizeModelProviderProfile(
   const textToSpeech = normalizeModelProviderTextToSpeechCapability(input?.textToSpeech)
   const music = normalizeModelProviderMusicCapability(input?.music)
   const video = normalizeModelProviderVideoCapability(input?.video)
-  const endpoints = normalizeModelProviderEndpoints(input?.endpoints)
+  const balance = normalizeProviderBalanceEndpoint(input as Record<string, unknown> | undefined, baseUrl)
   const catalogSources = normalizeModelProviderCatalogSources(input?.catalogSources) ??
     (resolvedPresetSource?.mode === 'api' ? resolvedPresetSource.preset.catalogSources : undefined)
   const iconId = normalizeProviderIconId(input?.iconId)
@@ -201,6 +219,7 @@ export function normalizeModelProviderProfile(
     baseUrl,
     endpointFormat,
     ...(endpoints ? { endpoints } : {}),
+    ...balance,
     ...(catalogSources ? { catalogSources: [...catalogSources] } : {}),
     ...(iconId ? { iconId } : {}),
     useProxy: typeof input?.useProxy === 'boolean' ? input.useProxy : missingUseProxy,
@@ -351,7 +370,7 @@ export function boundedNonNegativeInteger(value: unknown, fallback: number, max 
 }
 
 export function deepseekTextModelProfile(): ModelProviderModelProfileV1 {
-  return {
+  const profile: ModelProviderModelProfileV1 = {
     ...DEFAULT_TEXT_MODEL_PROFILE,
     contextWindowTokens: 1_000_000,
     reasoning: {
@@ -360,6 +379,7 @@ export function deepseekTextModelProfile(): ModelProviderModelProfileV1 {
       requestProtocol: 'deepseek-chat-completions'
     }
   }
+  return { ...profile, evidence: metadataEvidence(profile, 'adapter') }
 }
 
 /**
@@ -369,11 +389,22 @@ export function deepseekTextModelProfile(): ModelProviderModelProfileV1 {
  * in Settings keep surviving normalization.
  */
 export function withPresetModelProfiles(
-  provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource'>,
+  provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource' | 'baseUrl' | 'endpointFormat' | 'endpoints' | 'kind'>,
   models: readonly string[],
   stored: Record<string, ModelProviderModelProfileV1>
 ): Record<string, ModelProviderModelProfileV1> {
   const presetProfiles = presetModelProfilesForProvider(provider)
+  const hasPresetScope = !!presetProfiles || provider.id === DEFAULT_MODEL_PROVIDER_ID || provider.presetSource?.presetId === DEFAULT_MODEL_PROVIDER_ID
+  if (hasPresetScope && !providerPresetScopeMatches({ ...provider, presetSource: provider.presetSource?.presetId, presetMode: provider.presetSource?.mode })) {
+    return Object.fromEntries(Object.entries(stored).map(([id, profile]) => {
+      const migrated = migrateModelMetadata(profile)
+      const metadata = { ...migrated.metadata, observations: migrated.metadata.observations.filter((row) =>
+        row.source !== 'adapter' || !['preset', 'legacy-adapter'].includes(row.id)) }
+      const effective = resolveModelMetadata({ ...migrated, metadata })
+      delete effective.metadataResolution
+      return [id, { ...effective, ...metadata.overrides, evidence: { ...effective.evidence, ...metadata.overrideEvidence } }]
+    }))
+  }
   if (!presetProfiles) return stored
   const knownModelKeys = new Set(models.map(normalizeModelKey).filter(Boolean))
   const merged: Record<string, ModelProviderModelProfileV1> = {}
@@ -384,115 +415,29 @@ export function withPresetModelProfiles(
       const aliases = normalizeProviderModels(presetProfile.aliases)
       if (!aliases.some((alias) => knownModelKeys.has(normalizeModelKey(alias)))) continue
     }
-    merged[modelId] = normalizeModelProviderModelProfile(presetProfile)
+    merged[modelId] = normalizeModelProviderModelProfile({ ...presetProfile, evidence: presetProfile.evidence ?? metadataEvidence(presetProfile, 'adapter') })
   }
   const profiles = { ...stored }
   for (const [modelId, presetProfile] of Object.entries(merged)) {
     const storedProfile = stored[modelId]
-    const usePresetReasoning = shouldUpgradeGeneratedPresetReasoning(
-      provider.id,
-      modelId,
-      storedProfile?.reasoning,
-      presetProfile.reasoning
-    )
-    const repairKnownGrokCapacity = shouldRepairKnownOpenCodeGrokCapacity(
-      provider,
-      modelId,
-      storedProfile,
-      presetProfile
-    )
-    // Codex live catalogs are the tier authority: an explicit stored
-    // declaration (including an empty array) must survive, and the static
-    // preset only fills models that never declared tiers. Other providers keep
-    // inheriting additions and removals from the preset catalog.
-    const inheritPresetServiceTiers = !isCodexPresetProvider(provider) ||
-      storedProfile?.serviceTiers === undefined
-    const profile: ModelProviderModelProfileV1 = {
-      ...presetProfile,
-      ...(storedProfile ?? {}),
-      ...(usePresetReasoning && presetProfile.reasoning
-        ? { reasoning: presetProfile.reasoning }
-        : {}),
-      // Service-tier availability is upstream model metadata. Older stored
-      // profiles inherit additions and removals from the preset catalog unless
-      // Codex declared them explicitly (see inheritPresetServiceTiers).
-      ...(inheritPresetServiceTiers && presetProfile.serviceTiers?.length
-        ? { serviceTiers: [...presetProfile.serviceTiers] }
-        : {}),
-      // Catalog reference pricing is upstream metadata, not a user-editable
-      // profile choice; stored profiles inherit it from the preset catalog.
-      ...(presetProfile.pricing ? { pricing: { ...presetProfile.pricing } } : {}),
-      // Responses Lite is a required transport contract for its matching
-      // Codex models, not a user-editable profile choice. Older manually
-      // added profiles should inherit it from the preset.
-      ...(presetProfile.responsesMode && !storedProfile?.responsesMode
-        ? { responsesMode: presetProfile.responsesMode }
-        : {}),
-      ...(repairKnownGrokCapacity
-        ? {
-            contextWindowTokens: presetProfile.contextWindowTokens!,
-            maxOutputTokens: presetProfile.maxOutputTokens!
-          }
-        : {})
+    // Only identified adapter observations may be refreshed automatically.
+    // Unknown historical values remain protected overrides; shape matching is
+    // insufficient to tell a generated default from an intentional user edit.
+    const migrated = storedProfile ? migrateModelMetadata(storedProfile) : undefined
+    if (migrated) migrated.metadata = { ...migrated.metadata,
+      observations: migrated.metadata.observations.filter((row) => row.id !== 'legacy-adapter') }
+    const automatic = withModelObservation(migrated ?? {
+      inputModalities: ['text'], outputModalities: ['text'], messageParts: ['text'], supportsToolCalling: true,
+      evidence: metadataEvidence({}, 'adapter')
+    } as ModelProviderModelProfileV1, {
+      id: 'preset', source: 'adapter', values: presetProfile, match: 'exact',
+      evidence: presetProfile.evidence ?? metadataEvidence(presetProfile, 'adapter')
+    })
+    profiles[modelId] = {
+      ...automatic,
+      ...(presetProfile.responsesMode && !storedProfile?.responsesMode ? { responsesMode: presetProfile.responsesMode } : {}),
+      ...(storedProfile?.aliases ? { aliases: storedProfile.aliases } : presetProfile.aliases ? { aliases: presetProfile.aliases } : {})
     }
-    if (inheritPresetServiceTiers && !presetProfile.serviceTiers?.length) {
-      delete profile.serviceTiers
-    }
-    profiles[modelId] = profile
   }
   return profiles
-}
-
-function isCodexPresetProvider(
-  provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource'>
-): boolean {
-  return resolveModelProviderPresetSource(provider)?.preset.id === CHATGPT_SUBSCRIPTION_PROVIDER_ID
-}
-
-export function shouldRepairKnownOpenCodeGrokCapacity(
-  provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource'>,
-  modelId: string,
-  stored: ModelProviderModelProfileV1 | undefined,
-  preset: ModelProviderModelProfileV1
-): boolean {
-  const source = resolveModelProviderPresetSource(provider)
-  return source?.preset.id === 'opencode-go' &&
-    modelId === 'grok-4.5' &&
-    stored?.contextWindowTokens === 256_000 &&
-    stored.maxOutputTokens === 500_000 &&
-    preset.contextWindowTokens === 500_000 &&
-    preset.maxOutputTokens === 64_000
-}
-
-export function shouldUpgradeGeneratedPresetReasoning(
-  providerId: string,
-  modelId: string,
-  stored: ModelProviderReasoningCapabilityV1 | undefined,
-  preset: ModelProviderReasoningCapabilityV1 | undefined
-): boolean {
-  if (!stored || !preset) return false
-  const presetId = providerId.endsWith(TOKEN_PLAN_PROVIDER_ID_SUFFIX)
-    ? providerId.slice(0, -TOKEN_PLAN_PROVIDER_ID_SUFFIX.length)
-    : providerId
-  if (
-    presetId === 'kimi-code' &&
-    modelId === 'k3' &&
-    stored.requestProtocol === 'openai-responses' &&
-    preset.requestProtocol === 'openai-chat-completions'
-  ) {
-    return true
-  }
-  const generatedPlaceholderProviders = new Set([
-    'opencode-go',
-    'zhipu-coding-plan',
-    'zai-coding-plan',
-    'aliyun',
-    'tencentcloud',
-    'volcengine-coding-plan'
-  ])
-  if (!generatedPlaceholderProviders.has(presetId)) return false
-  return stored.requestProtocol === 'none' &&
-    preset.requestProtocol !== 'none' &&
-    stored.defaultEffort === 'auto' &&
-    stored.supportedEfforts.every((effort) => effort === 'auto' || effort === 'off')
 }

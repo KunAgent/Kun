@@ -40,6 +40,8 @@ import {
   defaultRemoteAccessSettings,
   mergeRemoteAccessSettings,
   mergeDarkUiColors,
+  mergeColorPaletteSettings,
+  normalizeColorPaletteSettings,
   DEFAULT_CHAT_CONTENT_MAX_WIDTH_PX,
   DEFAULT_COMPOSER_SEND_KEY,
   DEFAULT_UI_FONT_SCALE,
@@ -114,7 +116,12 @@ export type SettingsCredentialMigration = {
 }
 
 export type SettingsDocumentBackend = {
-  read(): Promise<{ revision: number; value: string | null }>
+  read(): Promise<{ revision: number; value: string | null; etag?: string }>
+  /** Optional conditional read; unchanged documents return only their etag. */
+  readIfChanged?(ifNoneMatch?: string): Promise<
+    | { revision: number; value: string | null; etag?: string }
+    | { revision: number; etag: string; unchanged: true }
+  >
   write(expectedRevision: number, value: string): Promise<{ revision: number; value: string }>
 }
 
@@ -300,6 +307,7 @@ export const defaultSettings = (): AppSettingsV1 => ({
   cursorSpotlight: true,
   cursorSpotlightColor: DEFAULT_CURSOR_SPOTLIGHT_COLOR,
   darkUiColors: { ...DEFAULT_DARK_UI_COLORS },
+  colorPalette: normalizeColorPaletteSettings(),
   provider: defaultModelProviderSettings(),
   agents: {
     kun: defaultKunRuntimeSettings()
@@ -487,12 +495,15 @@ export function applySettingsPatchToSnapshot(
     agents: agentsPatch,
     provider: providerPatch,
     darkUiColors: darkUiColorsPatch,
+    colorPalette: colorPalettePatch,
     ...restPatch
   } = partial
+  const darkUiColors = mergeDarkUiColors(current.darkUiColors, darkUiColorsPatch)
   return normalizeStoredSettings({
     ...applyKunRuntimePatch(current, agentsPatch?.kun),
     ...restPatch,
-    darkUiColors: mergeDarkUiColors(current.darkUiColors, darkUiColorsPatch),
+    darkUiColors,
+    colorPalette: mergeColorPaletteSettings(current.colorPalette, colorPalettePatch, darkUiColors),
     provider: mergeModelProviderSettings(current.provider, providerPatch),
     log: { ...current.log, ...(partial.log ?? {}) },
     checkpointCleanup: normalizeCheckpointCleanupSettings({

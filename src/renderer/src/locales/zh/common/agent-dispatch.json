@@ -1,0 +1,44 @@
+{
+  "dispatchIntent": {
+    "loading": "正在加载 Agent 任务…",
+    "countdown": "{{seconds}} 秒后按推荐自动执行",
+    "startNow": "立即按推荐执行",
+    "confirm": "确认并执行",
+    "resume": "恢复推荐方案",
+    "adjust": "调整",
+    "stop": "停止",
+    "cancel": "取消",
+    "title": "任务标题",
+    "task": "任务说明",
+    "save": "保存推荐方案",
+    "keepRecommendation": "保留原推荐方案",
+    "details": "任务与验收条件",
+    "viewProcess": "查看过程",
+    "updateFailed": "无法保存推荐方案，任务仍保持暂停。",
+    "status": {
+      "pending_confirmation": "等待你确认",
+      "reviewing": "Agent 正在审批派工",
+      "countdown": "准备自动执行",
+      "paused": "已暂停，可调整方案",
+      "queued": "排队中",
+      "starting": "正在启动 Agent",
+      "uncertain": "正在核对启动状态",
+      "running": "Agent 正在执行",
+      "awaiting_parent": "等待主 Agent 验收",
+      "completed": "已完成",
+      "failed": "任务未能完成",
+      "cancelled": "已取消",
+      "stopping": "正在停止"
+    },
+    "permissionLabel": "任务权限",
+    "permission": {
+      "ask-for-approval": "需要审批",
+      "approve-for-me": "代我审批",
+      "full-access": "完全访问"
+    },
+    "takeover": "接管",
+    "takenOver": "你已接管，Agent 不会自动续派。",
+    "elapsed": "当前阶段 {{seconds}} 秒"
+  },
+  "roomsWorkbenchDispatchPolicyHint": "Code 任务卡片按当前对话权限处理：需要确认、自动审批，或完全访问时在 60 秒后启动。其他操作使用上面的策略。"
+}

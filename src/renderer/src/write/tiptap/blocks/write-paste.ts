@@ -36,7 +36,7 @@ export function insertParsedMarkdown(editor: Editor, markdown: string): boolean 
 }
 
 /**
- * Markdown-aware paste (implementation §9.9): plain-text payloads that look
+ * Markdown-aware paste: plain-text payloads that look
  * like markdown parse through the work codec so headings/lists/tables land
  * as real blocks; Shift-held paste always inserts raw text.
  */

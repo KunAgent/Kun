@@ -34,7 +34,7 @@ export function registerBrowserUseIpc(options: {
   ipcMain.handle('browser-use:state:get', (event, raw) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     const input = BrowserUseThreadInputSchema.parse(raw)
-    return manager.stateForThread(input.threadId)
+    return manager.stateForThread(input.threadId, input.expectedTurnId)
   })
   ipcMain.handle('browser-use:mount', (event, raw) => {
     const window = assertTrustedWorkbenchSender(event, getMainWindow)
@@ -44,7 +44,8 @@ export function registerBrowserUseIpc(options: {
       window,
       input.bounds,
       input.visible,
-      input.supervisionActive
+      input.supervisionActive,
+      input.expectedTurnId
     )
   })
   ipcMain.handle('browser-use:origin:decide', (event, raw) => {
@@ -63,26 +64,26 @@ export function registerBrowserUseIpc(options: {
     const window = assertTrustedWorkbenchSender(event, getMainWindow)
     const input = BrowserUseControlInputSchema.parse(raw)
     assertBoundSession(manager, input.threadId, window)
-    return manager.setControlOwner(input.threadId, input.controlOwner)
+    return manager.setControlOwner(input.threadId, input.controlOwner, input.expectedTurnId)
   })
   ipcMain.handle('browser-use:navigate', (event, raw) => {
     const window = assertTrustedWorkbenchSender(event, getMainWindow)
     const input = BrowserUseNavigationInputSchema.parse(raw)
     assertBoundSession(manager, input.threadId, window)
-    return manager.navigate(input.threadId, input.command)
+    return manager.navigate(input.threadId, input.command, input.expectedTurnId)
   })
   ipcMain.handle('browser-use:stop', (event, raw) => {
     const window = assertTrustedWorkbenchSender(event, getMainWindow)
     const input = BrowserUseThreadInputSchema.parse(raw)
     assertBoundSession(manager, input.threadId, window)
-    return manager.stop(input.threadId)
+    return manager.stop(input.threadId, input.expectedTurnId)
   })
   ipcMain.handle('browser-use:clear', async (event, raw) => {
     const window = assertTrustedWorkbenchSender(event, getMainWindow)
     const input = BrowserUseThreadInputSchema.parse(raw)
     assertBoundSession(manager, input.threadId, window)
-    await manager.clear(input.threadId)
-    return manager.stateForThread(input.threadId)
+    await manager.clear(input.threadId, 'cleared', input.expectedTurnId)
+    return manager.stateForThread(input.threadId, input.expectedTurnId)
   })
   return () => {
     for (const channel of CHANNELS) ipcMain.removeHandler(channel)

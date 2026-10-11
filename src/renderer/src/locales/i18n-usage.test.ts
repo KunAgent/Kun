@@ -24,6 +24,23 @@ function flattenKeys(tree: LocaleTree, prefix = '', keys = new Set<string>()): S
 }
 
 const STRICT_RESOURCE_FILES = new Set([
+  'src/renderer/src/components/ade/AgentAddDialog.tsx',
+  'src/renderer/src/components/ade/AgentCenter.tsx',
+  'src/renderer/src/components/ade/AgentCenterRail.tsx',
+  'src/renderer/src/components/ade/AgentCommandPathField.tsx',
+  'src/renderer/src/components/ade/AgentConnectionFields.tsx',
+  'src/renderer/src/components/ade/AgentConnectionTab.tsx',
+  'src/renderer/src/components/ade/AgentDeleteConfirm.tsx',
+  'src/renderer/src/components/ade/AgentDetail.tsx',
+  'src/renderer/src/components/ade/AgentDetailHeader.tsx',
+  'src/renderer/src/components/ade/AgentDiagnosticsCard.tsx',
+  'src/renderer/src/components/ade/AgentDraftBar.tsx',
+  'src/renderer/src/components/ade/AgentEnvTable.tsx',
+  'src/renderer/src/components/ade/AgentLaunchTab.tsx',
+  'src/renderer/src/components/ade/AgentLoginRow.tsx',
+  'src/renderer/src/components/ade/AgentModelsTab.tsx',
+  'src/renderer/src/components/ade/AgentSetupSteps.tsx',
+  'src/renderer/src/components/ade/AgentVersionTab.tsx',
   'src/renderer/src/components/workbench/WorkbenchChatStage.tsx',
   'src/renderer/src/components/chat/BackgroundShellOverlay.tsx',
   'src/renderer/src/components/chat/FloatingComposerAgentPicker.tsx',

@@ -24,9 +24,11 @@ import type {
   GuiUpdateInfo,
   GuiUpdateInstallResult
 } from '../../shared/gui-update'
+import type { ReleaseNotice } from '../../shared/release-notice'
 import {
   appBadgeCountSchema,
   computerUsePermissionKindSchema,
+  conversationExportBatchPayloadSchema,
   conversationExportPayloadSchema,
   desktopCommandSchema,
   guiUpdateChannelSchema,
@@ -58,9 +60,6 @@ import {
   writePrototypeFilePayloadSchema,
   writeRetrievalPayloadSchema
 } from './app-ipc-schemas'
-import {
-  lintProjectDesignMd
-} from '../services/project-design-md-lint'
 import {
   openPathWithShell
 } from '../services/workspace-service'
@@ -123,14 +122,10 @@ import {
   getComputerUsePermissions,
   requestComputerUsePermission
 } from '../services/computer-use-permissions'
-import {
-  copyWriteDocumentAsRichText,
-  exportDesignPrototype,
-  exportWriteDocument
-} from '../services/write-export-service'
-import {
-  exportConversation
-} from '../services/conversation-export-service'
+// Export renderers pull in html-to-docx, react-dom/server, KaTeX and the
+// markdown stack (hundreds of modules); load them on the first export only.
+const loadWriteExportService = () => import('../services/write-export-service')
+const loadConversationExportService = () => import('../services/conversation-export-service')
 import {
   exportMemoryMarkdown
 } from '../services/memory-export-service'
@@ -170,14 +165,20 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
     getMainWindow()?.webContents.send('speak:sanotts:progress', payload)
   })
   ipcMain.handle('write:export', async (_, payload: unknown) =>
-    exportWriteDocument(
+    (await loadWriteExportService()).exportWriteDocument(
       parseIpcPayload('write:export', writeExportPayloadSchema, payload),
       { parentWindow: getMainWindow() }
     )
   )
   ipcMain.handle('conversation:export', async (_, payload: unknown) =>
-    exportConversation(
+    (await loadConversationExportService()).exportConversation(
       parseIpcPayload('conversation:export', conversationExportPayloadSchema, payload),
+      { parentWindow: getMainWindow() }
+    )
+  )
+  ipcMain.handle('conversation:export-batch', async (_, payload: unknown) =>
+    (await loadConversationExportService()).exportConversationBatch(
+      parseIpcPayload('conversation:export-batch', conversationExportBatchPayloadSchema, payload),
       { parentWindow: getMainWindow() }
     )
   )
@@ -188,17 +189,17 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
     )
   )
   ipcMain.handle('design:export-prototype', async (_, payload: unknown) =>
-    exportDesignPrototype(
+    (await loadWriteExportService()).exportDesignPrototype(
       parseIpcPayload('design:export-prototype', designExportPayloadSchema, payload),
       { parentWindow: getMainWindow() }
     )
   )
   ipcMain.handle('design:lint-project-design-md', async (_, payload: unknown) => {
     const request = parseIpcPayload('design:lint-project-design-md', projectDesignMdLintPayloadSchema, payload)
-    return lintProjectDesignMd(request.content)
+    return (await import('../services/project-design-md-lint')).lintProjectDesignMd(request.content)
   })
   ipcMain.handle('write:copy-rich-text', async (_, payload: unknown) =>
-    copyWriteDocumentAsRichText(
+    (await loadWriteExportService()).copyWriteDocumentAsRichText(
       parseIpcPayload('write:copy-rich-text', writeRichClipboardPayloadSchema, payload)
     )
   )
@@ -452,6 +453,20 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
   ipcMain.handle('gui:update-install', async (): Promise<GuiUpdateInstallResult> => {
     const module = await loadGuiUpdaterModule()
     return module.installGuiUpdate()
+  })
+  ipcMain.handle('gui:release-notice', async (_, request: unknown): Promise<ReleaseNotice | null> => {
+    const parsed = parseIpcPayload(
+      'gui:release-notice',
+      z.object({ current: z.boolean().optional() }).strict().optional(),
+      request ?? undefined
+    )
+    const { readReleaseNotice } = await import('../gui-updater-release-notes')
+    return readReleaseNotice(parsed ?? {})
+  })
+  ipcMain.handle('gui:release-notice-ack', async (_, version: unknown): Promise<void> => {
+    const parsed = parseIpcPayload('gui:release-notice-ack', z.string().trim().min(1).max(64), version)
+    const { acknowledgeReleaseNotice } = await import('../gui-updater-release-notes')
+    await acknowledgeReleaseNotice(parsed)
   })
 
   ipcMain.handle('log:error', async (_, payload: unknown) => {

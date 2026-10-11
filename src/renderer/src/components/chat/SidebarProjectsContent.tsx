@@ -222,7 +222,7 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
     />
   }
   return (
-    <div className="ds-no-drag flex min-h-0 flex-1 flex-col">
+    <div className="ds-no-drag flex min-h-0 flex-1 flex-col" data-sidebar-section="projects">
       <SidebarProjectsHeader
         allGroupsCollapsed={allGroupsCollapsed}
         searchVisible={searchVisible}

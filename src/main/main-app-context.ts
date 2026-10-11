@@ -2,7 +2,6 @@ import {
   app,
   BrowserWindow,
   Menu,
-  protocol,
   Tray
 } from 'electron'
 import {
@@ -72,6 +71,7 @@ import {
   NativeDialogCoordinator
 } from './native-dialog-coordinator'
 import { DesktopStartupState } from './desktop-startup-state'
+import { KUN_NODE_CHILD_V8_FLAGS } from '../../kun/src/process/node-child-v8-flags.js'
 import {
   type ClawRuntime
 } from './claw-runtime'
@@ -109,9 +109,6 @@ import {
   type TelegramRuntime
 } from './telegram-runtime'
 import {
-  registerKunExtensionPlatformSchemesAsPrivileged
-} from './extensions/extension-media-protocol'
-import {
   ExtensionViewSessionRegistry
 } from './extensions/extension-view-sessions'
 import {
@@ -145,7 +142,6 @@ export function developmentRendererUrl(): string | undefined {
   return devServerHintUrl(app.isPackaged)
 }
 
-registerKunExtensionPlatformSchemesAsPrivileged(protocol)
 export const startupTraceEnabled =
   process.env.KUN_STARTUP_TRACE === '1' || process.env.DEEPSEEK_GUI_STARTUP_TRACE === '1'
 export const startupTraceStart = Date.now()
@@ -280,6 +276,9 @@ export const appIdentity = configureAppIdentity({
 })
 process.env.KUN_APP_FLAVOR = appIdentity.flavor
 process.env.KUN_RUNTIME_FLAVOR = appIdentity.runtimeFlavor
+// Renderer and utility processes start after this point and inherit the cap on
+// V8's young generation (the main process heap is already configured).
+app.commandLine.appendSwitch('js-flags', KUN_NODE_CHILD_V8_FLAGS.join(' '))
 if (appIdentity.flavor === 'development') {
   process.title = appIdentity.appName
   app.commandLine.appendSwitch('kun-app-flavor', appIdentity.flavor)

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "vercel-ai-gateway",
+  "name": "Vercel AI Gateway",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://ai-gateway.vercel.sh/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions",
+  "credentialUrl": "https://vercel.com/ai-gateway"
+}

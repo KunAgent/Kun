@@ -62,7 +62,7 @@ const SOURCE_EXPLORATION_PATTERN =
 
 const INSPECTION_TOOL_NAMES = ['read', 'grep', 'glob', 'ls', 'repo_map', 'find', 'lsp'] as const
 const MUTATION_TOOL_NAMES = ['edit', 'write'] as const
-const TODO_TOOL_NAMES = ['todo_list', 'todo_write'] as const
+const TODO_TOOL_NAMES = ['task_create', 'task_update', 'task_get', 'task_list'] as const
 const GOAL_TOOL_NAMES = ['get_goal', 'create_goal', 'update_goal'] as const
 const USER_INPUT_TOOL_NAMES = ['user_input', 'request_user_input'] as const
 const MEMORY_TOOL_NAMES = ['memory_create', 'memory_update', 'memory_delete'] as const
@@ -129,7 +129,7 @@ export function buildToolPreferenceInstruction(
 
   if (todoTools.length > 0) {
     bullets.push(
-      `Use ${formatToolNames(todoTools)} for user-visible multi-step progress when tracking adds clarity; update state as work changes and keep at most one item in progress.`
+      `Use ${formatToolNames(todoTools)} for meaningful multi-step progress. Create and update individual tasks with stable request ids and expected revisions; preserve dependencies and owner scopes. Task records do not start execution or authorize background work. Record acceptance evidence before success and explain waits or blockers. Goals remain separate.`
     )
   }
 

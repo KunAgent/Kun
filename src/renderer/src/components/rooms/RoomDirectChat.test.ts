@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement, useState, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
@@ -10,9 +10,15 @@ vi.mock('./agent-client', () => ({
   useAgentResource: () => ({ data: null, refresh: vi.fn(), error: '' })
 }))
 vi.mock('./RoomAvatar', () => ({ RoomAvatar: () => null }))
+const roomsRequest = vi.hoisted(() => vi.fn(async () => ({})))
+vi.mock('./rooms-client', async (importOriginal) => ({ ...await importOriginal<typeof import('./rooms-client')>(), roomsRequest }))
 vi.mock('./RoomPopover', () => ({
-  RoomPopover: ({ children }: { children: (close: () => void) => ReactNode }) =>
-    createElement('div', { 'data-testid': 'room-popover' }, children(() => undefined))
+  RoomPopover: ({ label, children }: { label: string; children: (close: () => void) => ReactNode }) => {
+    const [open, setOpen] = useState(false)
+    return createElement('div', { 'data-testid': 'room-popover' },
+      createElement('button', { 'aria-label': label, 'aria-expanded': open, onClick: () => setOpen(!open) }),
+      open ? children(() => setOpen(false)) : null)
+  }
 }))
 
 const room = {
@@ -44,6 +50,15 @@ describe('RoomDirectHeader session sidebar button', () => {
   })
   afterEach(() => { if (renderer) act(() => renderer.unmount()) })
 
+  it('exposes all Agent settings directly from embedded private chat', async () => {
+    const onManageAgents = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomDirectHeader, { ...baseProps(), embedded: true, onManageAgents })) })
+    const button = renderer.root.findByProps({ 'aria-label': 'Manage all Agents' })
+    act(() => button.props.onClick())
+    expect(onManageAgents).toHaveBeenCalledOnce()
+    expect(renderer.root.findByProps({ 'aria-label': 'More actions' }).props['aria-expanded']).toBe(false)
+  })
+
   it('toggles the Agent session sidebar and reflects its open state', async () => {
     const props = baseProps()
     await act(async () => { renderer = create(createElement(RoomDirectHeader, props)) })
@@ -64,13 +79,68 @@ describe('RoomDirectHeader session sidebar button', () => {
   })
 
   it('shows the supplied current model immediately', async () => {
+    const props = baseProps()
     await act(async () => {
       renderer = create(createElement(RoomDirectHeader, {
-        ...baseProps(),
+        ...props,
         models: { main: { providerId: 'kimi', model: 'kimi-code' } } as never
       }))
     })
-    expect(renderer.root.findByProps({ 'aria-label': 'Model settings' }).findByType('span').children).toEqual(['kimi-code'])
+    const more = () => renderer.root.findByProps({ 'aria-label': 'More actions' })
+    expect(more().props['aria-expanded']).toBe(false)
+    expect(renderer.root.findByProps({ className: 'direct-chat-title' }).findByType('small').children).toEqual(['kimi-code'])
+    await act(async () => { more().props.onClick() })
+    const modelSettings = renderer.root.findByProps({ 'data-conversation-action': 'models' })
+    expect(modelSettings.findByType('span').children).toEqual(['Model settings'])
+    await act(async () => { modelSettings.props.onClick() })
+    expect(props.onModels).toHaveBeenCalledTimes(1)
+    expect(more().props['aria-expanded']).toBe(false)
+  })
+
+  it('preserves embedded Agent Chat navigation and workspace controls beside the saved-files menu', async () => {
+    const props = baseProps(), onToggleLeftSidebar = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomDirectHeader, {
+      ...props, room: { ...room, privateWorkspace: '/workspace/project' }, embedded: true, onToggleLeftSidebar,
+      models: { main: { providerId: 'kimi', model: 'kimi-code' } } as never
+    })) })
+    expect(renderer.root.findByProps({ className: 'direct-chat-title' }).findAllByType('small')).toHaveLength(0)
+    await act(async () => { renderer.root.findByProps({ 'aria-label': i18n.t('sidebarToggle', { ns: 'common' }) }).props.onClick() })
+    expect(onToggleLeftSidebar).toHaveBeenCalledOnce()
+    await act(async () => { renderer.root.findByProps({ className: 'direct-workspace-control' }).props.onClick() })
+    expect(props.onConnect).toHaveBeenCalledOnce()
+    await act(async () => { renderer.root.findByProps({ 'aria-label': 'More actions' }).props.onClick() })
+    const files = renderer.root.findByProps({ 'data-conversation-action': 'files' })
+    expect(files.findByType('span').children).toEqual([i18n.t('directFiles', { ns: 'common' })])
+    await act(async () => { files.props.onClick() })
+    expect(props.onFiles).toHaveBeenCalledOnce()
+  })
+
+  it('opens connected apps from a private Room header', async () => {
+    const onApps = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomDirectHeader, { ...baseProps(), onApps })) })
+    const more = () => renderer.root.findByProps({ 'aria-label': 'More actions' })
+    const appButtons = () => renderer.root.findAllByProps({ 'data-conversation-action': 'apps' })
+      .filter((button) => button.type === 'button' && button.findByType('span').children.includes('Connected apps'))
+    expect(appButtons()).toHaveLength(0)
+    await act(async () => { more().props.onClick() })
+    expect(appButtons()).toHaveLength(1)
+    await act(async () => { appButtons()[0].props.onClick() })
+    expect(onApps).toHaveBeenCalledTimes(1)
+    expect(more().props['aria-expanded']).toBe(false)
+  })
+
+  it('opens the info board from the title and keeps removals last in the menu', async () => {
+    const onInfo = vi.fn(), onRemove = vi.fn(), props = baseProps()
+    await act(async () => { renderer = create(createElement(RoomDirectHeader, { ...props, onInfo, onRemove })) })
+    await act(async () => { renderer.root.findByProps({ className: 'direct-chat-title' }).props.onClick() })
+    expect(onInfo).toHaveBeenCalledOnce()
+    expect(props.onProfile).not.toHaveBeenCalled()
+    await act(async () => { renderer.root.findByProps({ 'aria-label': 'More actions' }).props.onClick() })
+    const actions = renderer.root.findAllByType('button').map((button) => button.props['data-conversation-action']).filter(Boolean)
+    expect(actions[0]).toBe('info')
+    expect(actions.slice(-2)).toEqual(['conversation', 'agent'])
+    await act(async () => { renderer.root.findByProps({ 'data-conversation-action': 'agent' }).props.onClick() })
+    expect(onRemove).toHaveBeenCalledWith('agent')
   })
 })
 
@@ -95,10 +165,15 @@ const progressProps = (state: Parameters<typeof RoomDirectProgress>[0]['state'])
 
 describe('RoomDirectProgress dismissible notices', () => {
   let renderer: ReactTestRenderer
+  let focused = true
   beforeEach(async () => {
     await i18n.changeLanguage('en')
+    focused = true
+    roomsRequest.mockClear()
+    vi.stubGlobal('document', { hasFocus: () => focused })
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
   })
-  afterEach(() => { if (renderer) act(() => renderer.unmount()) })
+  afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.unstubAllGlobals() })
 
   const errorAlert = () => renderer.root.findAllByProps({ role: 'alert' })
   const dismissButton = () => renderer.root.findByProps({ 'aria-label': 'Dismiss notice' })
@@ -148,5 +223,32 @@ describe('RoomDirectProgress dismissible notices', () => {
     })
     await act(async () => { renderer.update(createElement(RoomDirectProgress, progressProps(next))) })
     expect(renderer.root.findAllByProps({ className: 'direct-failed' })).toHaveLength(1)
+  })
+
+  it('acknowledges a failed reply once the focused window shows it, so the sidebar stops marking it pending', async () => {
+    const failedRequest = { id: 'req-1', revision: 3, status: 'failed', error: 'Error: boom' }
+    const state = directState({
+      data: { requests: [failedRequest], pendingCount: 0, approvals: [], userInputs: [] } as unknown as AgentDirectActivity
+    })
+    await act(async () => { renderer = create(createElement(RoomDirectProgress, progressProps(state))) })
+    expect(roomsRequest).toHaveBeenCalledOnce()
+    expect(roomsRequest).toHaveBeenCalledWith('/v1/rooms/room-1/requests/req-1/acknowledge', 'POST',
+      { clientRequestId: expect.any(String) })
+  })
+
+  it('leaves an already acknowledged or unseen failure alone', async () => {
+    const seen = { id: 'req-1', revision: 4, status: 'failed', error: 'Error: boom', failureAcknowledged: true }
+    await act(async () => {
+      renderer = create(createElement(RoomDirectProgress, progressProps(directState({
+        data: { requests: [seen], pendingCount: 0, approvals: [], userInputs: [] } as unknown as AgentDirectActivity
+      }))))
+    })
+    focused = false
+    await act(async () => {
+      renderer.update(createElement(RoomDirectProgress, progressProps(directState({
+        data: { requests: [{ ...seen, id: 'req-2', failureAcknowledged: false }], pendingCount: 0, approvals: [], userInputs: [] } as unknown as AgentDirectActivity
+      }))))
+    })
+    expect(roomsRequest).not.toHaveBeenCalled()
   })
 })

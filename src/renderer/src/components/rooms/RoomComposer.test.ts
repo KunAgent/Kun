@@ -4,12 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Room, RoomTask, SendRoomMessage } from '@shared/rooms-api'
 import i18n from '../../i18n'
 import { RoomComposer } from './RoomComposer'
+import { defaultKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
+import { CUSTOM_SPEECH_TO_TEXT_PROVIDER_ID, type AppSettingsV1 } from '@shared/app-settings'
+import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 
 vi.mock('./RoomRichInput', async () => {
   const React = await import('react')
   return { RoomRichInput: React.forwardRef((props: { value: string; mentions: string[];
     onChange: (value: { body: string; mentions: string[] }) => void; onSubmit: () => void }, ref) => {
-    React.useImperativeHandle(ref, () => ({ focus() {}, insertText(text: string) {
+    React.useImperativeHandle(ref, () => ({ focus() {}, cancelDictation() {}, appendDictation(text: string) {
+      props.onChange({ body: [props.value, text].filter(Boolean).join(' '), mentions: props.mentions })
+    }, insertText(text: string) {
       props.onChange({ body: props.value + text, mentions: props.mentions })
     } }))
     return React.createElement('room-rich-input', { ...props, 'data-room-rich-input': true }, React.createElement('textarea', { value: props.value,
@@ -18,8 +23,19 @@ vi.mock('./RoomRichInput', async () => {
 })
 
 const upload = vi.hoisted(() => vi.fn())
+const metadataRequest = vi.hoisted(() => vi.fn())
+const imagePreview = vi.hoisted(() => vi.fn())
 vi.mock('../../lib/runtime-attachment', () => ({
   uploadRuntimeAttachment: upload
+}))
+vi.mock('./rooms-client', async (load) => ({
+  ...await load<typeof import('./rooms-client')>(),
+  roomsRequest: metadataRequest
+}))
+vi.mock('./room-composer-image-preview', () => ({
+  roomComposerImagePreview: imagePreview,
+  isRoomComposerImage: (name: string, mimeType?: string) =>
+    Boolean(mimeType?.startsWith('image/')) || /\.(png|jpe?g|webp|gif)$/i.test(name)
 }))
 const room = {
   id: 'room',
@@ -41,6 +57,9 @@ describe('RoomComposer', () => {
     upload
       .mockReset()
       .mockResolvedValue({ id: 'attachment', name: 'diagram.png' })
+    metadataRequest.mockReset()
+    imagePreview.mockReset().mockImplementation(async (file: File) => file.type.startsWith('image/')
+      ? { url: 'data:image/webp;base64,YQ==', transient: false } : undefined)
     vi.stubGlobal('window', {
       addEventListener: (name: string, fn: (event: Event) => void) =>
         listeners.set(name, fn),
@@ -54,6 +73,7 @@ describe('RoomComposer', () => {
   })
   afterEach(() => {
     if (renderer) act(() => renderer.unmount())
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
   const render = async (
@@ -81,6 +101,73 @@ describe('RoomComposer', () => {
     )
   }
 
+  it('preserves the draft and blocks keyboard and button sends while the model is updating', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send, { modelUpdating: true })
+    input('Keep this draft')
+    expect(renderer.root.findByProps({ 'aria-label': i18n.t('roomsSend') }).props.disabled).toBe(true)
+    await submit()
+    expect(send).not.toHaveBeenCalled()
+    expect(renderer.root.findByType('textarea').props.value).toBe('Keep this draft')
+    await act(async () => renderer.update(createElement(RoomComposer, { room, tasks: [], onSend: send, modelUpdating: false })))
+    await submit()
+    expect(send).toHaveBeenCalledOnce()
+  })
+
+  it('shares Code speech settings and local Whisper credential policy in personal and group composers', async () => {
+    const runtime = defaultKunRuntimeSettings()
+    runtime.speechToText = { ...runtime.speechToText, enabled: true,
+      providerId: CUSTOM_SPEECH_TO_TEXT_PROVIDER_ID, protocol: 'local-whisper', model: 'whisper-small-q5_1', apiKey: '' }
+    const settings = { agents: { kun: runtime } } as AppSettingsV1
+    Object.assign(window.kunGui, { getSettings: async () => settings })
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send, { room: { ...room, conversationKind: 'user_agent' } })
+    expect(renderer.root.findByProps({ 'aria-label': i18n.t('composerVoiceStart') }).props.disabled).toBe(false)
+    runtime.speechToText.enabled = false
+    act(() => listeners.get(SETTINGS_CHANGED_EVENT)!(new CustomEvent(SETTINGS_CHANGED_EVENT, { detail: settings })))
+    expect(renderer.root.findAllByProps({ 'aria-label': i18n.t('composerVoiceStart') })).toHaveLength(0)
+    runtime.speechToText.enabled = true
+    runtime.speechToText.protocol = 'openai-transcriptions'
+    act(() => listeners.get(SETTINGS_CHANGED_EVENT)!(new CustomEvent(SETTINGS_CHANGED_EVENT, { detail: settings })))
+    expect(renderer.root.findAllByProps({ 'aria-label': i18n.t('composerVoiceStart') })).toHaveLength(0)
+    runtime.speechToText.protocol = 'local-whisper'
+    act(() => listeners.get(SETTINGS_CHANGED_EVENT)!(new CustomEvent(SETTINGS_CHANGED_EVENT, { detail: settings })))
+    await act(async () => renderer.update(createElement(RoomComposer, { room: { ...room, archivedAt: '2026-10-02' }, tasks: [], onSend: send })))
+    expect(renderer.root.findByProps({ 'aria-label': i18n.t('composerVoiceStart') }).props.disabled).toBe(true)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('does not echo its own draft events and clears the acknowledged send', async () => {
+    const dispatched: Event[] = []
+    vi.stubGlobal('window', { ...window, dispatchEvent: (event: Event) => {
+      dispatched.push(event)
+      if (dispatched.length > 8) throw new Error('Draft update event loop')
+      listeners.get(event.type)?.(event)
+      return true
+    } })
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    input('Dispatch this task')
+    await submit()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(renderer.root.findByType('textarea').props.value).toBe('')
+    expect(dispatched.length).toBeLessThanOrEqual(4)
+  })
+
+  it('refreshes a referenced draft in the already open conversation without affecting other rooms', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    input('Existing message')
+    const references = [{ kind: 'code_thread', threadId: 'task', titleSnapshot: 'Task' }]
+    stored.set('kun.rooms.draft.room', JSON.stringify({ body: 'Existing message\nAdded context', references }))
+    act(() => listeners.get('kun-room-draft-updated')!({ detail: { roomId: 'other' } } as unknown as Event))
+    expect(renderer.root.findByType('textarea').props.value).toBe('Existing message')
+    act(() => listeners.get('kun-room-draft-updated')!({ detail: { roomId: 'room' } } as unknown as Event))
+    expect(renderer.root.findByType('textarea').props.value).toBe('Existing message\nAdded context')
+    await submit()
+    expect(send.mock.calls[0][0].references).toEqual(references)
+  })
+
   it('retains a failed send and reuses its request ID until content changes', async () => {
     const send = vi.fn().mockRejectedValue(new Error('Connection lost'))
     await render(send)
@@ -102,6 +189,37 @@ describe('RoomComposer', () => {
       'Implement the corrected feature'
     )
   })
+  describe('failed send notice', () => {
+    const alerts = () => renderer.root.findAll((node) => node.type === 'p' && node.props.role === 'alert')
+    const text = () => JSON.stringify(renderer.toJSON())
+
+    it('explains a starting conversation service in the UI language and can be dismissed', async () => {
+      const send = vi.fn().mockRejectedValue(new Error(
+        'Conversation service is starting or reconnecting. Please try again in a moment.'))
+      await render(send)
+      input('hello')
+      await submit()
+      expect(alerts()).toHaveLength(1)
+      expect(text()).toContain('The conversation service is starting or reconnecting. Wait a moment, then retry.')
+      expect(text()).not.toContain('Please try again in a moment.')
+      act(() => alerts()[0].findByProps({ className: 'rooms-notice-dismiss' }).props.onClick())
+      expect(alerts()).toHaveLength(0)
+      expect(renderer.root.findByType('textarea').props.value).toBe('hello')
+    })
+
+    it('clears itself once the draft changes and keeps unrelated failures verbatim', async () => {
+      const send = vi.fn().mockRejectedValue(new Error('Connection lost'))
+      await render(send)
+      input('hello')
+      await submit()
+      expect(text()).toContain('Connection lost')
+      await submit()
+      expect(alerts()).toHaveLength(1)
+      input('hello again')
+      expect(alerts()).toHaveLength(0)
+    })
+  })
+
   it('sends mentions as stable IDs and preserves an existing discussion draft', async () => {
     stored.set('kun.rooms.draft.room', JSON.stringify({ body: '', intent: 'discussion' }))
     const send = vi.fn().mockResolvedValue(undefined)
@@ -141,9 +259,140 @@ describe('RoomComposer', () => {
         mimeType: 'image/png'
       })
     )
+    expect(renderer.root.findByType('img').props.src).toBe('data:image/webp;base64,YQ==')
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments[0].previewUrl)
+      .toBe('data:image/webp;base64,YQ==')
     await submit()
     expect(send.mock.calls[0][0].attachmentIds).toEqual(['attachment'])
   })
+  it('restores an image thumbnail after a failed send and removes only the chosen attachment', async () => {
+    let id = 0
+    upload.mockImplementation(async (file: { name: string }) => ({ id: String(++id), name: file.name }))
+    const send = vi.fn().mockRejectedValue(new Error('Offline'))
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [
+        { name: 'image.png', type: 'image/png' },
+        { name: 'notes.txt', type: 'text/plain' }
+      ] }
+    }))
+    await submit()
+    expect(renderer.root.findByType('img').props.src).toBe('data:image/webp;base64,YQ==')
+    act(() => renderer.unmount())
+    await render(send)
+    expect(renderer.root.findByType('img').props.src).toBe('data:image/webp;base64,YQ==')
+    act(() => renderer.root.findByProps({ title: 'image.png', className: 'rooms-composer-image-attachment' })
+      .findByType('button').props.onClick())
+    expect(renderer.root.findAllByType('img')).toHaveLength(0)
+    expect(renderer.root.findByProps({ title: 'notes.txt', className: 'rooms-composer-chip' })).toBeTruthy()
+    await submit()
+    expect(send.mock.calls[1][0].attachmentIds).toEqual(['2'])
+  })
+  it('restores a thumbnail for an image attached by an older draft', async () => {
+    stored.set('kun.rooms.draft.room', JSON.stringify({ body: '', attachments: [{ id: 'legacy', name: 'image.png' }] }))
+    metadataRequest.mockResolvedValue({ attachment: { textFallback: {
+      dataBase64: 'YQ==', mimeType: 'image/png'
+    } } })
+    await render(vi.fn().mockResolvedValue(undefined))
+    expect(metadataRequest).toHaveBeenCalledWith('/v1/attachments/legacy', 'GET', undefined, expect.anything())
+    expect(renderer.root.findByType('img').props.src).toBe('data:image/webp;base64,YQ==')
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments[0].previewUrl)
+      .toBe('data:image/webp;base64,YQ==')
+  })
+  it('releases temporary previews when an image is removed or sent without storing blob URLs', async () => {
+    let id = 0
+    upload.mockImplementation(async () => ({ id: String(++id), name: `image-${id}.png` }))
+    imagePreview.mockResolvedValue({ url: 'blob:preview', transient: true })
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [
+        { name: 'one.png', type: 'image/png' },
+        { name: 'two.png', type: 'image/png' }
+      ] }
+    }))
+    act(() => renderer.root.findByProps({ title: 'image-1.png', className: 'rooms-composer-image-attachment' })
+      .findByType('button').props.onClick())
+    expect(revoke).toHaveBeenCalledTimes(1)
+    expect(stored.get('kun.rooms.draft.room')).not.toContain('blob:preview')
+    await submit()
+    expect(revoke).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[0][0].attachmentIds).toEqual(['2'])
+  })
+  it('keeps typing enabled during uploads, supports per-file cancellation, and ignores late responses', async () => {
+    let finish!: (value: { id: string; name: string }) => void
+    upload.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [{ name: 'slow.png', type: 'image/png' }] }
+    }))
+    expect(renderer.root.findByType('fieldset').props.disabled).toBe(false)
+    input('Continue typing while upload runs')
+    await submit()
+    expect(send).not.toHaveBeenCalled()
+    act(() => renderer.root.findByProps({ 'aria-label': 'Cancel slow.png' }).props.onClick())
+    await act(async () => finish({ id: 'late', name: 'slow.png' }))
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments).toEqual([])
+    await submit()
+    expect(send.mock.calls[0][0]).toMatchObject({ body: 'Continue typing while upload runs', attachmentIds: [] })
+  })
+
+  it('keeps Workbench file references and typed text when a concurrent upload completes', async () => {
+    let finish!: (value: { id: string; name: string }) => void
+    upload.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send, { room: { ...room, repositories: [{ ...room.repositories[0], canonicalRoot: '/workspace/App' }] } })
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [{ name: 'slow.txt', type: 'text/plain' }] }
+    }))
+    input('Compare the two files')
+    act(() => listeners.get('kun-room-file-reference')!(new CustomEvent('kun-room-file-reference', { detail: {
+      roomId: room.id, reference: { type: 'file', path: '/workspace/App/readme.md', name: 'readme.md' }
+    } })))
+    await act(async () => finish({ id: 'uploaded', name: 'slow.txt' }))
+    await submit()
+    expect(send.mock.calls[0][0]).toMatchObject({ body: 'Compare the two files', attachmentIds: ['uploaded'],
+      references: [{ kind: 'repository_file', repositoryId: 'repo', relativePath: 'readme.md', titleSnapshot: 'readme.md' }] })
+  })
+
+  it('keeps successful files when another upload fails and retries only the failed file', async () => {
+    upload.mockImplementation(async (file: { name: string }) => {
+      if (file.name === 'bad.txt') throw new Error('Offline')
+      return { id: 'good', name: file.name }
+    })
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [{ name: 'good.txt', type: 'text/plain' }, { name: 'bad.txt', type: 'text/plain' }] }
+    }))
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments).toHaveLength(1)
+    expect(JSON.stringify(renderer.toJSON())).toContain('Offline')
+    upload.mockResolvedValue({ id: 'retried', name: 'bad.txt' })
+    await act(async () => renderer.root.findByProps({ 'aria-label': 'Retry bad.txt' }).props.onClick())
+    await submit()
+    expect(send.mock.calls[0][0].attachmentIds).toEqual(['good', 'retried'])
+    expect(send.mock.calls[0][1]).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'good', name: 'good.txt' })]))
+  })
+
+  it('discards in-flight uploads when leaving the room and keeps mention IDs unique', async () => {
+    let finish!: (value: { id: string; name: string }) => void
+    upload.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [{ name: 'slow.txt', type: 'text/plain' }] }
+    }))
+    act(() => renderer.unmount())
+    await act(async () => finish({ id: 'late', name: 'slow.txt' }))
+    await render(send)
+    act(() => renderer.root.findByProps({ 'data-room-rich-input': true }).props.onChange({ body: 'hello', mentions: ['developer', 'developer'] }))
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments).toEqual([])
+    await submit()
+    expect(send.mock.calls[0][0].mentionMemberIds).toEqual(['developer'])
+  })
+
   it('continues a selected topic explicitly and starts a new topic after a successful send', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send)
@@ -275,8 +524,8 @@ describe('RoomComposer', () => {
     expect(upload).toHaveBeenCalledTimes(20)
     act(() => renderer.root.findByProps({ 'aria-label': i18n.t('roomsAddContext') }).props.onClick())
     expect(renderer.root.findByProps({ 'aria-label': i18n.t('roomsAttach') }).props.disabled).toBe(true)
-    act(() => renderer.root.findByProps({ title: 'image-1.png', className: 'rooms-composer-chip' })
-      .props.onClick())
+    act(() => renderer.root.findByProps({ title: 'image-1.png', className: 'rooms-composer-image-attachment' })
+      .findByType('button').props.onClick())
     await submit()
     expect(send.mock.calls[0][0].attachmentIds).toHaveLength(19)
     expect(send.mock.calls[0][0].attachmentIds).not.toContain('1')

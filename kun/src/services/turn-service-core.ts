@@ -67,6 +67,7 @@ import { turnServiceCompactionOperations } from './turn-service-compaction-opera
 import { turnServicePruneOperations } from './turn-service-prune-operations.js'
 import type { ThreadSnapshotStore } from './thread-snapshot-store.js'
 import { turnServiceGraphOperations } from './turn-service-graph-operations.js'
+import { turnServiceQueueControlOperations } from './turn-service-queue-control.js'
 import { turnServiceQueueOperations } from './turn-service-queue-operations.js'
 import { turnServiceRuntimeStateOperations } from './turn-service-runtime-state-operations.js'
 import { turnServiceItemPersistenceOperations } from './turn-service-item-persistence-operations.js'
@@ -83,6 +84,8 @@ export type TurnServiceDeps = {
   usage?: UsageService
   prefix?: ImmutablePrefix
   attachmentStore?: () => AttachmentStore | undefined
+  /** Resolve review references to immutable host-authored per-turn content. */
+  resolveReviewRequests?: import('./review-composer-context.js').ReviewContextResolver
   /** Verify a durable Write document reference at promotion; null means valid. */
   writeDocumentGuard?: (context: WriteTurnContext) => Promise<string | null>
   defaultModel?: string
@@ -106,6 +109,16 @@ export type TurnServiceDeps = {
    * route cannot execute tools.
    */
   modelCapabilities?: (model: string, providerId?: string) => ModelCapabilityMetadata
+  /**
+   * Provider-kind lookup used to freeze `harnessId` at turn admission.
+   * Optional so test scaffolds keep working; absent => every provider id maps
+   * to the native loop.
+   */
+  providerKinds?: () => import('../harness/resolve-turn-harness.js').ProviderKindsView
+  gatewayAliasProfilesEnabled?: () => boolean
+  resolveGatewayAliasModel?: (binding: import('../contracts/harness-gateway-binding.js').HarnessGatewayBinding) => string | undefined
+  /** Optional harness catalog used to pick the default credential mode. */
+  harnessCatalog?: { get(id: string): import('../contracts/harness.js').HarnessDefinition | undefined; isProfileEnabled?(route: Pick<import('../contracts/harness.js').HarnessRoute, 'harnessId' | 'credentialMode' | 'providerId' | 'gatewayBinding'>): boolean }
   /** Resolve durable Graph ownership without coupling TurnService to the Graph store. */
   resolveGraphLeadRun?: (input: {
     threadId: string
@@ -482,6 +495,7 @@ installServiceOperations(
   turnServicePruneOperations,
   turnServiceGraphOperations,
   turnServiceQueueOperations,
+  turnServiceQueueControlOperations,
   turnServiceRuntimeStateOperations,
   turnServiceItemPersistenceOperations
 )
@@ -490,7 +504,10 @@ installServiceOperations(
 export function fingerprintStartTurnRequest(request: StartTurnRequest): string | undefined {
   if (!request.clientRequestId?.trim()) return undefined
   const normalized = StartTurnRequestSchema.parse(request)
-  const canonical = canonicalizeFingerprintValue(normalized)
+  // ackNoticeIds is transport metadata the renderer refetches per attempt;
+  // hashing it would break idempotent replay of an otherwise identical send.
+  const { ackNoticeIds: _ackNoticeIds, ...content } = normalized
+  const canonical = canonicalizeFingerprintValue(content)
   return createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex')
 }
 

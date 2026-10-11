@@ -1,3 +1,8 @@
+import { directCancellationTarget } from './agent-direct-cancellation.js'
+import { resumeStalledPrivateQueue } from './agent-direct-queue.js'
+import { freezeConversationBridge, acknowledgeConversationBridge } from './agent-conversation-history.js'
+import { AGENT_COMMITMENT_TOOLS, AGENT_ARTIFACT_TOOLS, AGENT_HISTORY_TOOLS } from '../contracts/agent-work-tools.js'
+import { settleRoomResultInbox } from '../rooms/room-result-inbox.js'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -16,19 +21,25 @@ import { agentStableId } from './agent-identity-service.js'
 import { appendAgentResponseBudget } from './agent-response-budget.js'
 import { AGENT_COLLABORATION_TOOLS } from './agent-handoff-tools.js'
 import { persistDirectChoiceMessages } from './agent-choice-messages.js'
-import { agentSetupConversationPolicy, agentSetupPending, isHiddenAgentSetupMessage } from './agent-setup.js'
+import { agentSetupConversationPolicy, agentSetupPending } from './agent-setup.js'
+import { AGENT_SETUP_KICKOFF } from './agent-setup-prompt.js'
 import { settleConversationRunOutcome } from './agent-direct-publication.js'
 import { withdrawRunProposals } from '../rooms/room-proposals.js'
 import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js'
 import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
-import { agentHistoryReferenceText, agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
+import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
+import { WORKBENCH_TOOL_NAMES, resolveWorkbenchPolicy, workbenchToolNamesForPolicy } from '../contracts/workbench-policy.js'
+import { agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
+import { agentExecutorRouteKey } from '../contracts/agent-executor.js'
+import { EXTERNAL_AGENT_PRIVATE_BLOCKED_TOOLS, externalAgentBinding, externalAgentSystemPrompt, externalAgentThreadRoute } from './agent-external.js'
+import { publishExternalAgentReply } from './agent-external-publication.js'
 
 export function agentWorkspace(dataDir: string, agentId: string) { return join(dataDir, 'agents', 'workspaces', agentId) }
 export class AgentDirectRunner {
   constructor(private readonly deps: RoomRuntimeDeps, private readonly service: RoomService) {}
   /** Process-local record of steer attempts the target durably rejected, so a sealed turn is not retried every tick. */
   private readonly steerRejected = new Set<string>()
-  async tick(row: RoomStoredDocument<RoomRequestState>) {
+  async tick(row: RoomStoredDocument<RoomRequestState>, allowNewTurn = true) {
     let request = structuredClone(row.value)
     const member = request.roomSnapshot.members.find((item) => item.id === request.roomSnapshot.defaultMemberId)!
     if (!member.participantAgentId) throw new Error('Agent identity unavailable')
@@ -39,13 +50,21 @@ export class AgentDirectRunner {
       return
     }
     if (request.cancellationRequested) {
-      const thread = await this.deps.threads.getMetadata(request.threadId)
-      // A steered request has no turn of its own; cancelling it stops the response it merged into.
-      const turn = thread?.turns.find((item) => request.steer ? item.id === request.steer!.targetTurnId :
-        request.turnId ? item.id === request.turnId : item.clientRequestId === this.clientId(request))
+      let { thread, turn } = await directCancellationTarget(this.deps, request)
       if (turn && ['queued', 'running'].includes(turn.status)) {
-        await this.deps.turns.interruptTurn({ threadId: thread!.id, turnId: turn.id })
-        return this.save(row, { ...request, status: 'stopping', ...(request.steer ? {} : { turnId: turn.id }) })
+        try {
+          await this.deps.turns.interruptTurn({ threadId: thread!.id, turnId: turn.id })
+          return this.save(row, { ...request, status: 'stopping', ...(request.steer ? {} : { turnId: turn.id }) })
+        } catch (error) {
+          if (!(error instanceof TurnConflictError)) throw error
+          // The Stop API can finish this exact interrupt after our metadata read.
+          // Reconcile only a proven terminal target; never stop a newer turn.
+          const settled = await directCancellationTarget(this.deps, request)
+          if (settled.thread?.id !== thread!.id || settled.turn?.id !== turn.id ||
+            !['completed', 'failed', 'aborted'].includes(settled.turn.status)) throw error
+          thread = settled.thread
+          turn = settled.turn
+        }
       }
       if (request.steer) {
         if (turn) {
@@ -64,8 +83,10 @@ export class AgentDirectRunner {
       return this.save(row, { ...request, status: 'cancelled' })
     }
     if (!request.privateInput) {
-      const main = request.privateModel ?? agentMainModel(this.deps, member)
-      await assertAgentModel(this.deps, main)
+      const external = member.executor
+      const main = request.privateModel ?? (external ? externalAgentBinding(external, request.roomSnapshot.privateExecutorModel) : agentMainModel(this.deps, member))
+      // An external route is re-validated by harness admission on every turn.
+      if (!external) await assertAgentModel(this.deps, main)
       const workspace = request.roomSnapshot.privateWorkspace ?? agentWorkspace(this.deps.dataDir, member.participantAgentId)
       if (!request.roomSnapshot.privateWorkspace) await mkdir(workspace, { recursive: true })
       if (!(await stat(workspace)).isDirectory()) throw new Error('Working directory is unavailable')
@@ -74,14 +95,13 @@ export class AgentDirectRunner {
       const agent = await this.deps.agentDirectory?.get(member.participantAgentId)
       const fingerprint = JSON.stringify([request.roomId, request.roomSnapshot.privateEpoch ?? 0, canonical,
         main.providerId, main.accountId, request.roomSnapshot.privateExecutionPolicy, member.presetId, member.agentInstructions,
-        profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed'])
+        profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', resolveWorkbenchPolicy(agent?.workbench),
+        ...(external ? [agentExecutorRouteKey(external), 'private-code-dispatch-v1'] : [])])
       const threadId = agentStableId('agent-chat', createHash('sha256').update(fingerprint).digest('hex'))
-      const prior = await this.deps.threads.getMetadata(threadId)
-      const history = !prior ? await this.history(request) : ''
       const reply = request.message.replyToMessageId ? await this.deps.store.get<RoomMessage>('message', request.message.replyToMessageId) : null
       const reminderInput = request.privateReminder ? await this.reminderWakeInput(request) : null
       const input = agentPrivateTurnInput({
-        history,
+        history: '',
         replyQuote: reply?.roomId === request.roomId ? 'The user explicitly replied to this earlier message (reference only): ' + reply.value.body.slice(0, 4000) : '',
         wakeInput: reminderInput ?? '',
         userBody: request.message.body,
@@ -94,11 +114,17 @@ export class AgentDirectRunner {
     }
     let thread = await this.deps.threads.getMetadata(request.threadId)
     if (!thread) {
+      if (!allowNewTurn) return
       if (request.admissionAttempted) return this.save(row, { ...request, status: 'recovery_required', error: 'Original conversation is unavailable; do not resend this execution.' })
+      if (member.executor) thread = await this.createExternalThread(request, member)
+    }
+    if (!thread) {
       const profile = member.presetSnapshot ?? this.deps.profiles()[member.presetId]
       const limits = member.capabilityOverrides
       const agent = await this.deps.agentDirectory?.get(member.participantAgentId)
       const policy = agentSetupConversationPolicy(agentSetupPending(agent), profile, limits)
+      const workbench = agentSetupPending(agent) ? undefined : resolveWorkbenchPolicy(agent?.workbench)
+      const workbenchNames = workbench ? workbenchToolNamesForPolicy(workbench) : []
       thread = await this.deps.threads.create({ title: member.displayName, workspace: request.privateWorkspace!,
         ...request.privateModel!, agentId: member.presetId,
         mode: policy.sandboxMode === 'workspace-write' ? 'agent' : profile?.toolPolicy === 'readOnly' ? 'plan' : 'agent',
@@ -106,11 +132,13 @@ export class AgentDirectRunner {
         ...(request.roomSnapshot.privateExecutionPolicy ?? {}),
         sandboxMode: policy.sandboxMode ?? (profile?.toolPolicy === 'readOnly' ? 'read-only' : request.roomSnapshot.privateExecutionPolicy?.sandboxMode ?? 'workspace-write'),
         systemPrompt: agentPrivateSystemPrompt({
-          profilePrompt: profile?.systemPrompt, agentInstructions: member.agentInstructions, roleNotes: member.roleNotes })
+          profilePrompt: profile?.systemPrompt, agentInstructions: member.agentInstructions, roleNotes: member.roleNotes,
+          ...(workbench ? { workbench: { code: workbench.code !== 'off', work: workbench.work !== 'off' } } : {}) })
       }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
         participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
-        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS])] : undefined,
-        blockedToolNames: policy.blocked,
+        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...ROOM_APP_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS, ...AGENT_COMMITMENT_TOOLS, ...AGENT_ARTIFACT_TOOLS, ...AGENT_HISTORY_TOOLS, ...workbenchNames])] : undefined,
+        // Tools outside the Agent's workbench policy are hidden, not merely refused.
+        blockedToolNames: [...new Set([...(policy.blocked ?? []), ...WORKBENCH_TOOL_NAMES.filter((name) => !workbenchNames.includes(name))])],
         blockedProviderIds: limits?.blockedMcpServers ?? [], blockedSkillIds: limits?.blockedSkills ?? [], skillsEnabled: policy.skillsEnabled } })
     }
     if (thread.roomContext?.kind !== 'conversation' || thread.roomContext.roomId !== request.roomId || thread.roomContext.memberId !== member.id || thread.workspace !== request.privateWorkspace) throw new Error('Private conversation identity mismatch')
@@ -137,9 +165,25 @@ export class AgentDirectRunner {
         if (target) { await this.admitSteer(row, request, thread, scoped, identity, target); return }
       }
     }
-    const prompt = await freezeAgentMemoryInput(this.deps, scoped, identity, request.privateInput!)
+    // Busy lanes still admit steering, but never create a competing turn.
+    if (!turn && !allowNewTurn) return
+    // The run snapshot, not its user-facing input preview, owns the exact
+    // admitted prompt. Recovery must not retrieve history or memory again.
+    const existingInput = await this.deps.store.get<{ prompt: string }>('context', roomRunId(request.roomId, identity) + '-input')
+    const bridged = existingInput ? existingInput.value.prompt :
+      await freezeConversationBridge(this.deps, request, scoped, identity, request.privateInput!)
+    if (bridged === null) return
+    // External engines never read Kun's long-term Agent memory.
+    const prompt = existingInput?.value.prompt ?? (member.executor ? bridged : await freezeAgentMemoryInput(this.deps, scoped, identity, bridged))
+    const freshUserRequest = !request.privateContinuation && !request.privateReminder && !request.handoffReturnId &&
+      request.message.body !== AGENT_SETUP_KICKOFF
     const run = await prepareRoomRun(this.deps, scoped, identity, prompt, request.message.attachmentIds, {
-      requestId: request.id, rootRequestId: request.rootRequestId, triggerMessageId: request.sourceMessageId, phase: 'conversation', ...request.privateModel })
+      requestId: request.id, rootRequestId: request.rootRequestId, triggerMessageId: request.sourceMessageId, phase: 'conversation',
+      // The host publishes an external Agent's reply, so no in-turn delivery gate applies.
+      communicationRequired: freshUserRequest && !member.executor,
+      finalResponseRequired: !member.executor && (freshUserRequest || request.privateContinuation?.kind === 'app_connection' ||
+        request.privateContinuation?.kind === 'workbench_task'),
+      ...request.privateModel })
     if (!turn) {
       if (run.admissionAttempted || request.admissionAttempted) return this.save(row, { ...request, privateRunId: run.id, status: 'recovery_required' })
       const budget: import('../rooms/room-store.js').RoomStoreCommit = { requestId: agentStableId('private-response-budget', request.id, identity) }
@@ -150,10 +194,15 @@ export class AgentDirectRunner {
       await this.save(row, { ...request, privateRunId: run.id, admissionAttempted: true, status: 'running' })
       try {
         const admitted = await this.deps.turns.enqueueTurn({ threadId: thread.id, request: { prompt, clientRequestId: identity,
-          ...request.privateModel, attachmentIds: request.message.attachmentIds, clientSurface: 'gui', agentSurface: 'code',
+          ...request.privateModel, attachmentIds: request.message.attachmentIds, clientSurface: request.clientSurface ?? 'gui', agentSurface: 'code',
+          ...(member.executor ? { harnessId: member.executor.harnessId, credentialMode: member.executor.credentialMode } : {}),
+          // The conversation's effort is frozen with the request like its model.
+          ...(request.roomSnapshot.privateReasoningEffort ? { reasoningEffort: request.roomSnapshot.privateReasoningEffort } : {}),
           displayText: request.message.body.slice(0, 8000),
-          mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true } })
+          mode: thread.mode, sandboxMode: thread.sandboxMode,
+          ...(request.privateContinuation?.route ?? {}), ...(request.privateContinuation?.policy ?? {}), enqueueIfBusy: true } })
         await updateRoomRun(this.deps.store, run.id, { turnId: admitted.turnId })
+        await acknowledgeConversationBridge(this.deps, request, thread, identity)
         const current = (await this.deps.store.get<RoomRequestState>('request', request.id))!
         await this.save(current, { ...current.value, turnId: admitted.turnId })
       } catch (error) {
@@ -168,19 +217,44 @@ export class AgentDirectRunner {
     }
     if (request.turnId && request.turnId !== turn.id) throw new Error('Private turn identity changed')
     await updateRoomRun(this.deps.store, run.id, { turnId: turn.id })
+    if (!turn.admissionPending) await acknowledgeConversationBridge(this.deps, request, thread, identity)
     if (request.turnId !== turn.id || request.privateRunId !== run.id) {
       await this.save(row, { ...request, turnId: turn.id, privateRunId: run.id, status: 'running' }); return
     }
     await observeRecordedRoomTurn(this.deps, thread, turn)
+    await resumeStalledPrivateQueue(this.deps, thread, turn)
     const pendingInputs = this.deps.inputs.pending(thread.id)
     if (pendingInputs.length) await persistDirectChoiceMessages(this.deps.store, request, pendingInputs)
     const finished = !['queued', 'running'].includes(turn.status)
     if (finished) {
+      if (member.executor && turn.status === 'completed') {
+        await publishExternalAgentReply(this.deps, this.service, { roomId: request.roomId, runId: run.id,
+          threadId: thread.id, turnId: turn.id, memberId: member.id })
+      }
       await settleConversationRunOutcome(this.deps, run.id, turn)
       if (turn.status === 'aborted') await withdrawRunProposals(this.deps.store, run.id, 'run_cancelled')
       await this.save(row, { ...request, status: turn.status === 'completed' ? 'completed' : turn.status === 'aborted' ? 'cancelled' : 'failed',
         error: turn.status === 'failed' ? 'The response failed. Its partial output is retained; inspect the run or retry.' : undefined })
     }
+  }
+  /** An external engine runs in the private workspace under the conversation's own permission policy. */
+  private async createExternalThread(request: RoomRequestState, member: RoomMember): Promise<ThreadRecord> {
+    const executor = member.executor!
+    const workbench = resolveWorkbenchPolicy(member.workbenchPolicy)
+    const enabled = workbenchToolNamesForPolicy(workbench)
+    return this.deps.threads.create({ title: member.displayName, workspace: request.privateWorkspace!,
+      ...externalAgentThreadRoute(executor), ...request.privateModel, agentId: member.presetId, mode: 'agent', agentSurface: 'code',
+      ...(request.roomSnapshot.privateExecutionPolicy ?? {}),
+      sandboxMode: request.roomSnapshot.privateExecutionPolicy?.sandboxMode ?? 'workspace-write',
+      systemPrompt: externalAgentSystemPrompt({ name: member.displayName, instructions: member.agentInstructions,
+        roleNotes: member.roleNotes, group: false })
+    }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
+      participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
+      // Kun bridge discovery and execution independently require a real bridge
+      // for an external turn; the host continues to publish its final reply.
+      blockedToolNames: [...new Set([...EXTERNAL_AGENT_PRIVATE_BLOCKED_TOOLS,
+        ...WORKBENCH_TOOL_NAMES.filter((name) => !enabled.includes(name))])],
+      blockedProviderIds: [], blockedSkillIds: [], skillsEnabled: true } })
   }
   private clientId(request: RoomRequestState) {
     return 'private-' + request.id + '-' + (request.stepAttempt ?? 0)
@@ -199,18 +273,6 @@ export class AgentDirectRunner {
     return agentReminderWakeInput({ note: doc?.value.note ?? request.message.body,
       scheduledFor: reminder.scheduledFor, lateSeconds: reminder.lateSeconds, anchorText })
   }
-  private async history(request: RoomRequestState) {
-    const rows = await this.deps.store.list<RoomMessage>('message', { roomId: request.roomId, limit: 30 })
-    const source = await this.deps.store.get('message', request.sourceMessageId)
-    const eligible = []
-    for (const row of rows) {
-      if (row.id === request.sourceMessageId || row.seq >= (source?.seq ?? Infinity) || row.value.status === 'streaming' || isHiddenAgentSetupMessage(row.value)) continue
-      const origin = row.value.sourceRequestId ? await this.deps.store.get<RoomRequestState>('request', row.value.sourceRequestId) : null
-      if ((origin?.value.roomSnapshot.privateEpoch ?? 0) !== (request.roomSnapshot.privateEpoch ?? 0)) continue
-      eligible.push({ author: row.value.authorLabelSnapshot, status: row.value.status, text: row.value.body.slice(0, 1500) })
-    }
-    return agentHistoryReferenceText(eligible.reverse())
-  }
   /**
    * Eligible steering target: the thread's currently running conversation turn.
    * Only plain text user messages merge; continuations, reminders, handoff
@@ -219,11 +281,11 @@ export class AgentDirectRunner {
    * is implied by the deterministic thread identity plus the explicit checks here.
    */
   private async steerTarget(request: RoomRequestState, thread: ThreadRecord, member: RoomMember): Promise<Turn | undefined> {
-    if (request.privateContinuation || request.privateReminder || request.handoffReturnId ||
-      request.message.attachmentIds.length || request.message.taskId) return
+    if (request.clientSurface === 'im' || request.privateContinuation || request.privateReminder || request.handoffReturnId ||
+      request.message.attachmentIds.length || request.message.taskId || member.executor) return
     const agent = await this.deps.agentDirectory?.get(member.participantAgentId!)
     if (!agent || agentSetupPending(agent)) return
-    return thread.turns.find((turn) => turn.status === 'running' &&
+    return thread.turns.find((turn) => turn.status === 'running' && (turn.clientSurface ?? 'gui') === (request.clientSurface ?? 'gui') &&
       turn.clientRequestId?.startsWith('private-') &&
       !this.steerRejected.has(request.id + ':' + turn.id) &&
       (!request.privateModel?.model || turn.model === request.privateModel.model) &&
@@ -314,8 +376,10 @@ export class AgentDirectRunner {
     await this.save(row, { ...request, admissionAttempted: false, status,
       error: status === 'failed' ? 'The response failed. Its partial output is retained; inspect the run or retry.' : undefined })
   }
-  private save(row: RoomStoredDocument<RoomRequestState>, value: RoomRequestState) {
-    if (JSON.stringify(row.value) === JSON.stringify(value)) return Promise.resolve()
-    return putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)
+  private async save(row: RoomStoredDocument<RoomRequestState>, value: RoomRequestState) {
+    if (JSON.stringify(row.value) !== JSON.stringify(value)) {
+      await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)
+    }
+    await settleRoomResultInbox(this.deps.store, value)
   }
 }

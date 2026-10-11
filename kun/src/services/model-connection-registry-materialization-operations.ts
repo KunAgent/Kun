@@ -1,6 +1,11 @@
+import { resolveRegistryProfileMetadata } from './registry-model-metadata.js'
+import { isInsideAnyOAuthRefresh } from './oauth-refresh-scope.js'
+import { readProviderGeneratedHeaders } from './provider-protected-headers.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { effectiveProviderConfiguration } from './provider-effective-configuration.js'
+import { readProviderHeaders } from './provider-protected-headers.js'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
 import type { ServeProviderConfig } from '../config/kun-config.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
@@ -44,7 +49,11 @@ async materializeDocument(this: ModelConnectionRegistry,
     const credentialHealth = await this['inspectCredentialHealth'](document)
     const providers = new Map<string, ServeProviderConfig>()
     let selected: MaterializedModelConnections['selected']
-    for (const profile of Object.values(document.profiles)) {
+    for (const rawProfile of Object.values(document.profiles)) {
+      const metadataProfile = await resolveRegistryProfileMetadata(this, rawProfile, !document.credentialTransactions[rawProfile.id])
+      const resolved = effectiveProviderConfiguration(metadataProfile, document.configuration)
+      const profile = resolved.profile
+      if (!resolved.enabled) continue
       const credentialReplacementPending = Boolean(
         document.credentialTransactions[profile.id] && profile.id !== recoveryProviderId
       )
@@ -55,6 +64,9 @@ async materializeDocument(this: ModelConnectionRegistry,
       // Other unusable profiles stay visible in the Registry snapshot but are
       // intentionally absent from executable runtime configuration.
       if (!profileUsable && !credentialReplacementPending) continue
+      let customHeaders: Record<string, string>
+      try { customHeaders = await readProviderHeaders(this, profile) }
+      catch { continue }
       let credential: Awaited<ReturnType<ExtensionCredentialStore['get']>> = null
       if (profile.credentialRef && !credentialReplacementPending) {
         try {
@@ -65,7 +77,7 @@ async materializeDocument(this: ModelConnectionRegistry,
         }
       }
       const material = materializeLegacyProviderCredential(credential?.apiKey ?? '')
-      const credentialSourceId = credentialReplacementPending || !profileUsable
+      const credentialSourceId = profile.authType === 'none' || credentialReplacementPending || !profileUsable
         ? undefined
         : profile.credentialRef
           ? modelConnectionCredentialSourceId(profile.id)
@@ -77,9 +89,11 @@ async materializeDocument(this: ModelConnectionRegistry,
         profile.kind === 'http' &&
         !profile.credentialRef &&
         Boolean(profile.credentialSourceId)
-      const apiKey = usesRequestTimeCredential ? '' : material.apiKey
-      const materialHeaders = usesRequestTimeCredential ? undefined : material.headers
-      const modelProxyUrl = resolveRegistryProfileProxyUrl(document, profile)
+      const apiKey = profile.authType === 'none' || usesRequestTimeCredential ? '' : material.apiKey
+      const materialHeaders = profile.authType === 'none' || usesRequestTimeCredential ? undefined : material.headers
+      const modelProxyUrl = resolved.proxy?.mode === 'proxy'
+        ? resolved.proxy.url : resolveRegistryProfileProxyUrl(document, profile)
+      const generatedHeaders = await readProviderGeneratedHeaders(this, profile)
       const config: ServeProviderConfig =
         profile.kind === 'agent-sdk' ||
         profile.kind === 'antigravity-cli' ||
@@ -117,6 +131,11 @@ async materializeDocument(this: ModelConnectionRegistry,
             }
           : {
               kind: 'http',
+              accountId: profile.accountId,
+              ...(resolved.authProfile ? { authProfile: resolved.authProfile } : {}),
+              ...(resolved.headerProfile ? { headerProfile: resolved.headerProfile } : {}),
+              ...(resolved.admission ? { admission: resolved.admission } : {}),
+              ...(resolved.fullEndpointProtocol ? { customEndpointProtocol: resolved.fullEndpointProtocol } : {}),
               apiKey,
               ...(credentialSourceId ? { credentialSourceId } : {}),
               ...(profile.presetSource ? { presetSource: profile.presetSource } : {}),
@@ -130,19 +149,22 @@ async materializeDocument(this: ModelConnectionRegistry,
               models: [...profile.models],
               ...(profile.modelCapabilities ? { modelCapabilities: profile.modelCapabilities } : {}),
               ...(profile.selectedModel ? { selectedModel: profile.selectedModel } : {}),
-              ...(materialHeaders || profile.headers
-                ? { headers: { ...(profile.headers ?? {}), ...(materialHeaders ?? {}) } }
+              ...(materialHeaders || Object.keys(generatedHeaders).length
+                ? { headers: { ...generatedHeaders, ...(materialHeaders ?? {}) } }
                 : {}),
-              ...(profile.customHeaders && Object.keys(profile.customHeaders).length > 0
-                ? { customHeaders: profile.customHeaders }
+              ...(Object.keys(customHeaders).length > 0
+                ? { customHeaders }
                 : {})
             }
+      if (resolved.authProfile) config.authProfile = resolved.authProfile
+      if (resolved.headerProfile) config.headerProfile = resolved.headerProfile
       providers.set(profile.id, config)
       if (profileUsable && profile.id === document.defaultProviderId && document.defaultModel) {
         selected = { profile, config, model: document.defaultModel }
       }
     }
     return {
+      registryRevision: document.revision,
       providers,
       proxy: document.proxy,
       routePools: document.routePools,
@@ -155,11 +177,12 @@ async materializeDocument(this: ModelConnectionRegistry,
 async probeInput(this: ModelConnectionRegistry, input: ModelConnectionConnectRequest): Promise<string[]> {
     return probeModels({
       kind: input.kind,
+      authType: input.authType,
       baseUrl: input.baseUrl,
       endpointFormat: input.endpointFormat,
       ...(input.endpoints ? { endpoints: input.endpoints } : {}),
       apiKey: input.credential?.trim() ?? '',
-      headers: input.customHeaders,
+      customHeaders: input.customHeaders,
       fallbackModels: input.models,
       proxyUrl: resolveRegistryProfileProxyUrl(
         { proxy: (await this['file'].read(emptyDocument)).proxy },
@@ -249,6 +272,17 @@ async retireDeletedLegacyCredentialSource(this: ModelConnectionRegistry, provide
   },
 
 async changed(this: ModelConnectionRegistry, _document: RegistryDocument): Promise<void> {
+    // An OAuth refresh runs inside the apply that is waiting for it (the apply
+    // resolves credentials to read the model catalog). Waiting for a newer apply
+    // from here would queue behind that very apply, so re-apply after it settles.
+    if (isInsideAnyOAuthRefresh()) {
+      void this['applyLatest']().catch((error: unknown) => {
+        console.warn('[kun] Deferred Registry apply after a credential refresh failed.', {
+          message: error instanceof Error ? error.message : String(error)
+        })
+      })
+      return
+    }
     await this['applyLatest']()
   },
 }

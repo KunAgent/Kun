@@ -1,4 +1,5 @@
 import type { ThreadRecord } from '../../contracts/threads.js'
+import { executionTasksAsTodos } from '../../tasks/execution-task-state.js'
 import type { Turn } from '../../contracts/turns.js'
 import {
   isPublicTurnItem,
@@ -37,7 +38,7 @@ export function projectTimelineTurn(turn: Turn, items: TurnItem[]): Turn {
     prompt: '',
     steering: [],
     items: turn.status === 'queued' || turn.steeredToTurnId || turn.terminalCode === 'queue_cancelled'
-      ? [] : items.filter(isPublicTurnItem),
+      ? [] : projectPublicTurnItems(turn, items),
     attachmentIds: turn.attachmentIds.slice(0, 32),
     composerContexts: undefined,
     activeSkillIds: turn.activeSkillIds.slice(0, 32),
@@ -63,8 +64,19 @@ export function projectPublicTurn(turn: Turn): Turn {
   } = turn
   return {
     ...publicTurn,
-    items: turn.items.filter(isPublicTurnItem)
+    items: projectPublicTurnItems(turn, turn.items)
   } as Turn
+}
+
+/** Upgrade legacy paper display only; persisted/model history remains unchanged. */
+function projectPublicTurnItems(turn: Turn, items: TurnItem[]): TurnItem[] {
+  return items.filter(isPublicTurnItem).map((item) =>
+    turn.paperContext && item.turnId === turn.id &&
+    (item.kind === 'assistant_text' || item.kind === 'assistant_reasoning') &&
+    item.renderMode === 'plain-text'
+      ? { ...item, renderMode: 'safe-markdown' }
+      : item
+  )
 }
 
 function truncateTimelineText(value: string, maxChars: number): string {
@@ -216,9 +228,9 @@ export function hydrateThreadItemsFromSession(
 
 /** Defense in depth for every HTTP endpoint that returns a ThreadRecord. */
 export function projectPublicThreadRecord(thread: ThreadRecord): ThreadRecord {
-  const { revision: _revision, ...publicThread } = thread
+  const { revision: _revision, executionTasks, ...publicThread } = thread
   const turns = thread.turns.map(projectPublicTurn)
-  return { ...publicThread, turns }
+  return { ...publicThread, ...(executionTasks ? { todos: executionTasksAsTodos(thread.id, executionTasks) } : {}), turns }
 }
 
 const CHILD_BACKED_TOOL_NAMES = new Set(['delegate_task', 'fast_context'])

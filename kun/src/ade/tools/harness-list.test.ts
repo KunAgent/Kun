@@ -1,0 +1,210 @@
+import { describe, expect, it } from 'vitest'
+import {
+  HarnessDefinitionSchema,
+  type HarnessDefinition,
+  type HarnessRoute,
+  type HarnessStatus
+} from '../../contracts/harness.js'
+import {
+  BUILTIN_HARNESSES,
+  KUN_NATIVE_CAPABILITIES
+} from '../../harness/builtin-harnesses.js'
+import { terminalAgentToDefinition } from '../../harness/harness-catalog.js'
+import {
+  listHarnessesForManager,
+  type HarnessListDeps,
+  type HarnessProviderModelGroup
+} from './harness-list.js'
+
+const NOW = '2026-09-28T00:00:00.000Z'
+
+const catalog = {
+  get: (id: string) => BUILTIN_HARNESSES.find((def) => def.id === id),
+  list: () => BUILTIN_HARNESSES,
+  isDisabled: (id: string) => id === 'devin',
+  isProfileEnabled: (route: Pick<HarnessRoute, 'harnessId'>) => route.harnessId !== 'devin'
+}
+
+function readyStatus(harnessId: string): HarnessStatus {
+  return {
+    harnessId: harnessId as HarnessStatus['harnessId'],
+    installed: 'yes',
+    login: 'signed-in',
+    checkedAt: NOW
+  }
+}
+
+const detector = { status: async (id: string) => readyStatus(id) } as never
+
+function deps(overrides: Partial<HarnessListDeps> = {}): HarnessListDeps {
+  return {
+    catalog: catalog as never,
+    detector,
+    ...overrides
+  }
+}
+
+describe('listHarnessesForManager', () => {
+  it('keeps native SDK models separate from gateway model export', async () => {
+    const out = await listHarnessesForManager(deps({ providers: async () => [
+      { providerId: 'native', kind: 'agent-sdk', gatewayExportable: false, models: ['native-model'] },
+      { providerId: 'unknown', kind: 'http', models: ['unknown-model'] },
+      { providerId: 'key', kind: 'http', gatewayExportable: true, models: ['key-model'] }
+    ] }))
+    const claude = out.agents.find((entry) => entry.harnessId === 'claude-code')!
+    expect(claude.models.filter((entry) => entry.credentialMode === 'kun-gateway'))
+      .toEqual([{ model: 'kun/key/key-model', providerId: 'key', credentialMode: 'kun-gateway' }])
+    expect(claude.models).toContainEqual({ model: 'native-model', providerId: 'native', credentialMode: 'native-login' })
+  })
+
+  it('does not expose any model from an unapproved credential profile', async () => {
+    const out = await listHarnessesForManager(deps({
+      catalog: { ...catalog, isProfileEnabled: (route: Pick<HarnessRoute, 'harnessId'>) => route.harnessId === 'kun' } as never,
+      providers: async () => [{ providerId: 'deepseek', kind: 'http', gatewayExportable: true, models: ['deepseek-chat'] }]
+    }))
+    expect(out.agents.filter((agent) => agent.harnessId !== 'kun').every((agent) => agent.models.length === 0)).toBe(true)
+    expect(out.agents.find((agent) => agent.harnessId === 'kun')!.models).toHaveLength(1)
+  })
+
+  it('lists static models under native-login and gateway groups under kun-gateway', async () => {
+    const providers: HarnessProviderModelGroup[] = [
+      { providerId: 'deepseek', label: 'DeepSeek', kind: 'http', gatewayExportable: true, models: ['deepseek-chat'] },
+      { providerId: 'moonshot', kind: 'http', gatewayExportable: true, models: ['kimi-k2'] }
+    ]
+    const out = await listHarnessesForManager(
+      deps({ providers: async () => providers })
+    )
+    const claude = out.agents.find((entry) => entry.harnessId === 'claude-code')!
+    expect(
+      claude.models.filter((entry) => entry.credentialMode === 'native-login')
+        .map((entry) => entry.model)
+    ).toEqual([
+      'claude-opus-5',
+      'claude-sonnet-5',
+      'claude-fable-5-1',
+      'claude-haiku-4-5-20251001'
+    ])
+    const gateway = claude.models.filter((entry) => entry.credentialMode === 'kun-gateway')
+    expect(gateway).toEqual([
+      { model: 'kun/deepseek/deepseek-chat', providerId: 'deepseek', credentialMode: 'kun-gateway' },
+      { model: 'kun/moonshot/kimi-k2', providerId: 'moonshot', credentialMode: 'kun-gateway' }
+    ])
+  })
+
+  it('prefers the cached probe result over the static list for probe harnesses', async () => {
+    const out = await listHarnessesForManager(
+      deps({
+        probedModels: (def) =>
+          def.id === 'claude-code' ? ['claude-probed-1'] : undefined
+      })
+    )
+    const claude = out.agents.find((entry) => entry.harnessId === 'claude-code')!
+    expect(
+      claude.models.filter((entry) => entry.credentialMode === 'native-login')
+    ).toEqual([{ model: 'claude-probed-1', credentialMode: 'native-login' }])
+    const opencode = out.agents.find((entry) => entry.harnessId === 'opencode')!
+    // No static list and no probe cache: no model entries.
+    expect(opencode.models).toEqual([])
+    expect(out.agents.find((entry) => entry.harnessId === 'devin')).toBeUndefined()
+  })
+
+  it('caps each group at 8 models and reports the overflow', async () => {
+    const providers: HarnessProviderModelGroup[] = [
+      {
+        providerId: 'deepseek',
+        kind: 'http', gatewayExportable: true,
+        models: Array.from({ length: 11 }, (_, index) => `m${index}`)
+      }
+    ]
+    const out = await listHarnessesForManager(
+      deps({ providers: async () => providers })
+    )
+    const claude = out.agents.find((entry) => entry.harnessId === 'claude-code')!
+    const gateway = claude.models.filter((entry) => entry.credentialMode === 'kun-gateway')
+    expect(gateway).toHaveLength(8)
+    expect(gateway.every((entry) => entry.providerId === 'deepseek')).toBe(true)
+    expect(claude.modelsTruncated).toBe(3)
+  })
+
+  it('lets pickers raise the per-group cap so every provider stays listed', async () => {
+    const providers: HarnessProviderModelGroup[] = [{ providerId: 'deepseek', kind: 'http', gatewayExportable: true,
+      models: Array.from({ length: 11 }, (_, index) => `m${index}`) }]
+    const out = await listHarnessesForManager(deps({ providers: async () => providers }), undefined, { modelsPerGroup: 64 })
+    const claude = out.agents.find((entry) => entry.harnessId === 'claude-code')!
+    expect(claude.models.filter((entry) => entry.credentialMode === 'kun-gateway')).toHaveLength(11)
+    expect(claude.modelsTruncated).toBeUndefined()
+  })
+
+  it('filters provider-mode groups to the harness connection kind', async () => {
+    const providers: HarnessProviderModelGroup[] = [
+      { providerId: 'deepseek', kind: 'http', gatewayExportable: true, models: ['deepseek-chat'] },
+      { providerId: 'cursor-prov', kind: 'cursor-sdk', models: ['composer-2'] }
+    ]
+    const out = await listHarnessesForManager(
+      deps({ providers: async () => providers })
+    )
+    const cursor = out.agents.find((entry) => entry.harnessId === 'cursor')!
+    expect(cursor.models).toEqual([
+      { model: 'composer-2', providerId: 'cursor-prov', credentialMode: 'provider' }
+    ])
+    const kun = out.agents.find((entry) => entry.harnessId === 'kun')!
+    // kun (no required kind) sees every provider.
+    expect(kun.models.map((entry) => entry.providerId).sort())
+      .toEqual(['cursor-prov', 'deepseek'])
+  })
+
+  it('keeps the manager current model at the head of the kun list', async () => {
+    const providers: HarnessProviderModelGroup[] = [
+      { providerId: 'deepseek', kind: 'http', gatewayExportable: true, models: ['deepseek-chat'] }
+    ]
+    const out = await listHarnessesForManager(
+      deps({ providers: async () => providers }),
+      'deepseek-reasoner'
+    )
+    const kun = out.agents.find((entry) => entry.harnessId === 'kun')!
+    expect(kun.models[0]).toEqual({ model: 'deepseek-reasoner', credentialMode: 'provider' })
+    expect(kun.models).toContainEqual({
+      model: 'deepseek-chat', providerId: 'deepseek', credentialMode: 'provider'
+    })
+  })
+
+  it('reports readiness and manager-worker admission per harness', async () => {
+    const out = await listHarnessesForManager(deps())
+    const kun = out.agents.find((entry) => entry.harnessId === 'kun')!
+    expect(kun.ready).toBe(true)
+    expect(kun.admission.managerWorker).toBe(true)
+    expect(out.agents.every((entry) => entry.ready)).toBe(true)
+  })
+
+  it('terminal agents are listed as terminal-only, never dispatchable', async () => {
+    const terminalDef = HarnessDefinitionSchema.parse(
+      terminalAgentToDefinition({
+        id: 'zed-shell',
+        displayName: 'Zed Shell',
+        command: '/bin/zsh-agent',
+        args: ['--tty'],
+        taskFlag: '-i',
+        hooks: 'claude-settings'
+      })
+    ) satisfies HarnessDefinition
+    const withTerminal = {
+      ...catalog,
+      list: () => [...BUILTIN_HARNESSES, terminalDef]
+    }
+    const out = await listHarnessesForManager(
+      deps({ catalog: withTerminal as never })
+    )
+    const entry = out.agents.find((agent) => agent.harnessId === 'zed-shell')!
+    expect(entry.terminalOnly).toBe(true)
+    expect(entry.ready).toBe(true)
+    expect(entry.models).toEqual([])
+    expect(entry.admission.managerWorker).toBe(false)
+    expect(entry.admission.missing).toEqual(
+      expect.arrayContaining(['abort', 'structuredStreaming'])
+    )
+    expect(entry.notes).toContain('terminal only')
+    // Turn-serving entries stay unmarked.
+    const claude = out.agents.find((agent) => agent.harnessId === 'claude-code')!
+    expect(claude.terminalOnly).toBeUndefined()
+  })
+})

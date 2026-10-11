@@ -15,8 +15,10 @@ export function mobileWorkAssistantThreadReady(expectedThreadId: string | null, 
   return Boolean(expectedThreadId && activeThreadId === expectedThreadId)
 }
 
-export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
+export function MobileWorkAssistant({ expectedThreadId, resourceReady, unavailableReason, onSettings }: {
   expectedThreadId: string | null
+  resourceReady: boolean
+  unavailableReason: string
   onSettings: () => void
 }) {
   const { t } = useTranslation('common')
@@ -43,7 +45,7 @@ export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
   // text back only if the assistant rejected it.
   const send = (): void => {
     const text = input
-    if (pendingInput || assistant.sending || !text.trim()) return
+    if (pendingInput || assistant.sending || !resourceReady || !text.trim()) return
     setInput('')
     void assistant.send(text).then((sent) => {
       if (!sent) setInput((current) => mergeRestoredDraft(text, current))
@@ -62,7 +64,8 @@ export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
     <MobileComposer value={input} onChange={setInput} onSend={send}
       onStop={() => void state.interrupt()} onAttachments={null} onOptions={null}
       running={threadReady && state.busy} disabled={state.runtimeConnection !== 'ready'} sending={assistant.sending}
-      canSend={!pendingInput && Boolean(input.trim())} error={assistant.error}
+      canSend={resourceReady && !pendingInput && Boolean(input.trim())}
+      error={assistant.error || (!resourceReady ? unavailableReason : null)}
       pendingActions={threadReady ? <MobilePendingActions blocks={state.blocks} resolveApproval={state.resolveApproval}
         resolveUserInput={state.resolveUserInput} /> : null}
       labels={{ placeholder: t(pendingInput ? 'mobileInputComposerHint' : 'mobileComposerPlaceholder'), send: t('send'), stop: t('interrupt'),

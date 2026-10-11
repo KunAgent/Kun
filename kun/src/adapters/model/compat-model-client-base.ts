@@ -1,3 +1,6 @@
+import { fitModelRequestOutput } from './model-request-capacity.js'
+import { modelInputHasNoTextBound } from './model-input-bound.js'
+import { protectInferenceHeaders, ProviderSecretScopeError } from '../../services/provider-request-security.js'
 import { randomUUID } from 'node:crypto'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
@@ -63,6 +66,9 @@ import { decodeCompatNonStreamingResponse } from './compat-non-streaming-decoder
 import type { CompatModelClientConfig, ChatMessage, CompatPostResult } from './compat-model-types.js'
 import { isCodexEndpoint, ignoreModelTraceFailure } from './compat-model-support.js'
 import { isDeepSeekHost } from './model-error-probe.js'
+import { GatewayBudgetError } from '../../services/gateway-token-budget.js'
+import { budgetRefusalChunk } from './model-attempt-observer.js'
+import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
 
 export class CompatModelClientBase {
   readonly provider = 'compat'
@@ -134,7 +140,7 @@ export class CompatModelClientBase {
     model: string,
     fallback?: number
   ): number | undefined {
-    return request.maxTokens ?? this.maxOutputTokensFor(model) ?? fallback
+    return fitModelRequestOutput(request, this.config.modelCapabilities?.(model), fallback)
   }
 
   protected async postChatCompletion(
@@ -153,8 +159,45 @@ export class CompatModelClientBase {
         | 'stream_options_fallback'
         | 'request_fallback'
       apiKey: string
+      gatewayRouting?: ModelRequest['gatewayRouting']
+      paperReadOnly?: ModelRequest['paperReadOnly']
+      routingBudget?: ModelRequest['routingBudget']
+      beforeProviderDispatch?: ModelRequest['beforeProviderDispatch']
+      beforeWireDispatch?: ModelRequest['beforeWireDispatch']
+      onWireDispatch?: ModelRequest['onWireDispatch']
     }
   ): Promise<CompatPostResult> {
+    if (trace.paperReadOnly) {
+      trace.paperReadOnly.assertCurrent()
+      if (!trace.paperReadOnly.takeAttempt()) return { kind: 'error', code: 'paper_request_budget_exhausted',
+        message: 'Paper reading permits one upstream request; explicitly submit again to retry.',
+        failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+    }
+    try { if (trace.beforeProviderDispatch) await trace.beforeProviderDispatch() } catch {
+      return { kind: 'error', code: 'provider_configuration_changed', message: 'Provider configuration changed before dispatch; retry with the current configuration.',
+        failure: { category: 'request', reason: 'request', httpStatus: 503, failoverAllowed: false } }
+    }
+    if (trace.gatewayRouting) {
+      try {
+        await trace.gatewayRouting.beforeDispatch?.()
+        trace.gatewayRouting.assertCurrent?.()
+      } catch (error) {
+        return { kind: 'error', code: 'gateway_route_changed',
+          message: error instanceof GatewayRouteChangedError ? error.message : 'Gateway provider configuration changed.',
+          failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+      }
+    }
+    const takeAttempt = trace.routingBudget?.takeAttempt ?? trace.gatewayRouting?.takeAttempt
+    if (takeAttempt && !takeAttempt()) {
+      return { kind: 'error', code: 'route_attempt_budget_exhausted', message: 'Model routing attempt budget exhausted.',
+        failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+    }
+    try { headers = protectInferenceHeaders({ headers, apiKey: trace.apiKey, protocol: trace.endpointFormat,
+      authProfile: this.config.authProfile, headerProfile: this.config.headerProfile, userHeaderNames: Object.keys(this.config.customHeaders ?? {}), requestUrl: url,
+      fallbackUrls: [this.config.baseUrl, ...Object.values(this.config.endpoints ?? {})] }) } catch (error) {
+      return { kind: 'error', code: 'provider_secret_scope_denied', message: error instanceof ProviderSecretScopeError ? error.message : 'Provider authentication profile is invalid',
+        failure: { category: 'request', reason: 'request', httpStatus: 403, failoverAllowed: false } }
+    }
     const bodyText = JSON.stringify(body)
     const traceRound = trace.round
     const traceSink = this.config.debugSink
@@ -170,8 +213,28 @@ export class CompatModelClientBase {
         }))
       : undefined
     try {
+      trace.paperReadOnly?.assertCurrent()
+      trace.gatewayRouting?.assertCurrent?.()
+      signal.throwIfAborted()
+      if (trace.beforeWireDispatch) {
+        const model = typeof body.model === 'string' ? body.model : this.config.model
+        const output = body.max_output_tokens ?? body.max_completion_tokens ?? body.max_tokens
+        const maxOutputTokens = typeof output === 'number' && Number.isSafeInteger(output) && output > 0 ? output : undefined
+        // A declared context ceiling bounds text input. Media/provider-owned state has no such contract.
+        const unbounded = modelInputHasNoTextBound(body)
+        await trace.beforeWireDispatch({ providerId: this.config.providerId ?? 'default', model,
+          protocol: trace.endpointFormat, maxOutputTokens,
+          ...(!unbounded && this.config.inputTokenUpperBound ? { inputUpperBound: this.config.inputTokenUpperBound } : {}),
+          estimatedTokens: Math.ceil(Buffer.byteLength(bodyText) / 3) + (maxOutputTokens ?? 4096) })
+      }
+      if (trace.gatewayRouting?.beforeDispatch) await trace.gatewayRouting.beforeDispatch()
+      trace.paperReadOnly?.assertCurrent()
+      trace.gatewayRouting?.assertCurrent?.()
+      signal.throwIfAborted()
+      trace.onWireDispatch?.()
       const response = await this.fetchImpl(url, {
         method: 'POST',
+        redirect: 'error',
         headers,
         body: bodyText,
         signal
@@ -183,6 +246,11 @@ export class CompatModelClientBase {
       }
       return { kind: 'response', response }
     } catch (error) {
+      if (error instanceof GatewayBudgetError) return budgetRefusalChunk(error)
+      if (error instanceof GatewayRouteChangedError) {
+        return { kind: 'error', code: 'gateway_route_changed', message: error.message,
+          failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+      }
       if (traceRecord) {
         ignoreModelTraceFailure(() => traceSink?.captureHttpError(traceRecord, error))
       }
@@ -233,7 +301,8 @@ export class CompatModelClientBase {
       runtimeHeaders,
       stream,
       endpointFormat,
-      responsesLite
+      responsesLite,
+      requestUrl: this.baseUrlForFormat(endpointFormat)
     })
   }
 
@@ -293,9 +362,11 @@ export class CompatModelClientBase {
     const isCodex = isCodexEndpoint(this.config.baseUrl)
     const isCodexLite = isCodex && this.capabilitiesForModel(model).responsesMode === 'lite'
     const codecs = createCompatRequestCodecs()
+    const wireModel = this.capabilitiesForModel(model).wireModelId
     return codecs.build({
       request,
       model,
+      ...(wireModel && wireModel !== model ? { wireModel } : {}),
       messages,
       tools,
       stream,

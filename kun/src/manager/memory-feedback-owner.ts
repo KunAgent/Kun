@@ -67,6 +67,8 @@ export class ManagerMemoryFeedbackOwner {
     }
   }
 
+  async scrubForgotten(): Promise<void> { await this.service().ready() }
+
   private service(): MemoryFeedbackService {
     if (!this.serviceInstance) {
       this.serviceInstance = new MemoryFeedbackService({

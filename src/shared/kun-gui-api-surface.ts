@@ -25,6 +25,7 @@ import type {
   WorkflowRunResult,
   WorkflowRuntimeStatus
 } from './app-settings'
+import type { HarnessIntegrationOpenRequest, HarnessIntegrationOpenResult } from '../../kun/src/contracts/harness-integration'
 import type { DesktopTitleBarMode } from './desktop-title-bar'
 import type {
   BuiltinGitHubMcpAuthorizationConfirmation,
@@ -44,6 +45,7 @@ import type {
   GuiUpdateInstallResult,
   GuiUpdateState
 } from './gui-update'
+import type { ReleaseNotice, ReleaseNoticeRequest } from './release-notice'
 import type {
   BrowserUseControlInput,
   BrowserUseDecisionInput,
@@ -149,6 +151,8 @@ import type {
   WriteRichClipboardResult
 } from './write-export'
 import type {
+  ConversationExportBatchPayload,
+  ConversationExportBatchResult,
   ConversationExportPayload,
   ConversationExportResult
 } from './conversation-export'
@@ -172,20 +176,6 @@ import type {
   TerminalWritePayload
 } from './terminal'
 import type { ExtensionIpcApi } from './extension-ipc'
-import type {
-  DataMigrationEstimate,
-  DataMigrationExportOptions,
-  DataMigrationImportOptions,
-  DataMigrationImportPlan,
-  DataMigrationInspectionSummary,
-  DataMigrationOperationStatus,
-  DataMigrationPathPickResult,
-  DataMigrationProgress,
-  DataMigrationRendererRequest,
-  DataMigrationRendererResponse,
-  DataMigrationReport,
-  DataMigrationWorkspaceConflictStrategy
-} from './data-migration'
 import type {
   RuntimeImageAttachmentUploadRequest,
   RuntimeImageAttachmentUploadResult
@@ -256,8 +246,14 @@ import {
   WorkspacePickResult
 } from './kun-gui-api-contracts'
 import type { KunGuiProviderApi } from './kun-gui-api-surface-provider'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & {
+import type { KunGuiMarketApi } from './market/kun-gui-api-market'
+export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi &
+  import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
+  import('./ade-collaboration-settings').AdeCollaborationSettingsBridge & import('./ade-project-defaults').AdeProjectDefaultsBridge & {
   platform: string
+  /** Native Kun account, unavailable in the remote browser client. */
+  kunArt?: import('./kun-art').KunArtApi
+  kunAccount?: import('./kun-account').KunAccountApi
   /** True only in the browser Remote build served by the Remote gateway. */
   isRemoteWeb?: boolean
   /** Immutable mode selected before the BrowserWindow and renderer are created. */
@@ -284,34 +280,6 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   uninstall: UninstallApi
   /** One-time, path-opaque Runtime migration recovery surface. */
   runtimeDataRecovery: RuntimeDataRecoveryApi
-  dataMigration: {
-    pickExportPackage: (defaultPath?: string) => Promise<DataMigrationPathPickResult>
-    pickImportPackage: (defaultPath?: string) => Promise<DataMigrationPathPickResult>
-    pickDestinationDirectory: (defaultPath?: string) => Promise<DataMigrationPathPickResult>
-    estimateExport: (input: Pick<DataMigrationExportOptions,
-      'operationId' | 'selectedWorkspaceIds' | 'categories' | 'preset' | 'sensitiveContentAcknowledged'
-    >) => Promise<DataMigrationEstimate>
-    inspectPackage: (input: { packagePath: string; passphrase?: string }) => Promise<DataMigrationInspectionSummary>
-    planImport: (input: {
-      operationId: string
-      inspectionId: string
-      destinationBaseRoot: string
-      destinationRoots?: Record<string, string>
-      strategies?: Record<string, DataMigrationWorkspaceConflictStrategy>
-      skippedWorkspaceIds?: string[]
-    }) => Promise<DataMigrationImportPlan>
-    startExport: (input: DataMigrationExportOptions) => Promise<{ packagePath: string; report: DataMigrationReport }>
-    startImport: (input: DataMigrationImportOptions) => Promise<{ report: DataMigrationReport; refreshRequired: boolean }>
-    cancel: (operationId: string) => Promise<DataMigrationOperationStatus>
-    recover: (operationId: string, action: 'resume' | 'rollback') => Promise<DataMigrationOperationStatus>
-    getStatus: () => Promise<DataMigrationOperationStatus>
-    listReports: () => Promise<DataMigrationReport[]>
-    getReport: (operationId: string) => Promise<DataMigrationReport>
-    deleteReport: (operationId: string) => Promise<void>
-    onProgress: (handler: (progress: DataMigrationProgress) => void) => () => void
-    onRendererRequest: (handler: (request: DataMigrationRendererRequest) => void) => () => void
-    respondRendererRequest: (response: DataMigrationRendererResponse) => Promise<void>
-  }
   getSettings: () => Promise<AppSettingsV1>
   /** Opens the fixed Manager-owned settings document in the system editor. */
   openSettingsConfigFile: () => Promise<PathOpenResult>
@@ -328,6 +296,9 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   claudeSubscriptionProbe: (token?: string, providerId?: string) => Promise<ClaudeSubscriptionProbeResult>
   /** List Claude models available to the subscription (via the SDK's supportedModels). */
   claudeSubscriptionModels: (token?: string, providerId?: string) => Promise<string[]>
+  claudeSubscriptionModelCatalog?: (token?: string, providerId?: string) => Promise<Array<{
+    id: string; displayName?: string; aliases?: string[]; inferredModelId?: string; profile?: Partial<ModelProviderModelProfileV1>
+  }>>
   /** Whether the on-demand Claude Code binary is present + any in-flight download. */
   claudeSubscriptionSdkStatus: () => Promise<{
     installed: boolean
@@ -358,7 +329,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
     credentialSource?: 'keychain' | 'file'
   }>
   /** Concrete models routed through the Gemini CLI Code Assist API contract. */
-  geminiCliSubscriptionModels: () => Promise<string[]>
+  geminiCliSubscriptionModels: (providerId?: string) => Promise<string[]>
   /** Validate a Cursor API key and list models visible to that Cursor account. */
   cursorSubscriptionDiscover: (apiKey?: string, providerId?: string) => Promise<{
     account: {
@@ -371,6 +342,11 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   }>
   setSettings: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   saveSettingsSilent: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
+  gatewayLaunchProfile: (request: import('./gateway-launch-profile').GatewayLaunchProfileRequest) => Promise<import('./gateway-launch-profile').GatewayLaunchProfileResult>
+  gatewayClients: (request: import('./gateway-clients').GatewayClientAction) => Promise<import('./gateway-clients').GatewayClientResult>
+  agentWiring: (request: import('./agent-wiring').AgentWiringAction) => Promise<import('./agent-wiring').AgentWiringResult>
+  /** Opens the runtime's gateway middleware script folder (path resolved by Main from the runtime). */
+  openGatewayMiddlewareFolder: () => Promise<{ ok: boolean; message?: string }>
   gatewayCredential: (action: 'status' | 'ensure' | 'copy' | 'rotate' | 'revoke') => Promise<GatewayCredentialResult>
   getRuntimeSettingsSyncStatus: () => Promise<KunRuntimeSettingsSyncStatusPayload>
   remoteAccessGetStatus: () => Promise<RemoteAccessStatus>
@@ -428,6 +404,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   testWorkflowNode: (workflowId: string, nodeId: string, mockJson: string) => Promise<WorkflowNodeTestResult>
   resolveWorkflowApproval: (token: string, decision: WorkflowApprovalDecision) => Promise<{ ok: boolean }>
   checkWorkflowCode: (language: WorkflowCodeLanguage, code: string) => Promise<WorkflowCodeCheckResult>
+  personalAgentIm: (request: import('./personal-agent-im').PersonalAgentImRequest) => Promise<import('./personal-agent-im').PersonalAgentImResult>
   startClawImInstallQr: (
     provider: 'feishu' | 'weixin',
     options?: { isLark?: boolean }
@@ -627,6 +604,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   clearWriteInlineCompletionDebugEntries: () => Promise<boolean>
   exportWriteDocument: (payload: WriteExportPayload) => Promise<WriteExportResult>
   exportConversation: (payload: ConversationExportPayload) => Promise<ConversationExportResult>
+  exportConversationBatch: (payload: ConversationExportBatchPayload) => Promise<ConversationExportBatchResult>
   exportMemoryMarkdown: (payload: MemoryMarkdownExportSavePayload) => Promise<MemoryMarkdownExportSaveResult>
   exportDesignPrototype: (payload: DesignExportPayload) => Promise<DesignExportResult>
   copyWriteDocumentAsRichText: (
@@ -634,11 +612,11 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   ) => Promise<WriteRichClipboardResult>
   onClawChannelActivity: (handler: (payload: ClawChannelActivityPayload) => void) => () => void
   onTrayAction: (handler: (payload: TrayActionPayload) => void) => () => void
+  missionControlTogglePopout: () => Promise<{ open: boolean }>
+  missionControlOpenThread: (threadId: string) => Promise<void>
   onRuntimeStatus: (handler: (payload: KunRuntimeStatusPayload) => void) => () => void
   onAppQuitting: (handler: () => void) => () => void
-  onRuntimeSettingsSyncStatus: (
-    handler: (payload: KunRuntimeSettingsSyncStatusPayload) => void
-  ) => () => void
+  onRuntimeSettingsSyncStatus: (handler: (payload: KunRuntimeSettingsSyncStatusPayload) => void) => () => void
   mirrorClawChannelMessage: (
     threadId: string,
     text: string,
@@ -661,22 +639,25 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   getWindowMiniMode: () => Promise<boolean>
   onWindowMiniMode: (handler: (mini: boolean) => void) => () => void
   openExternal: (url: string) => Promise<void>
+  openAgentIntegration: (input: HarnessIntegrationOpenRequest) => Promise<HarnessIntegrationOpenResult>
   getComputerUsePermissions: () => Promise<ComputerUsePermissions>
   requestComputerUsePermission: (
     kind: ComputerUsePermissionKind
   ) => Promise<ComputerUsePermissions>
-  getBrowserUseState: (threadId: string) => Promise<BrowserUseViewState>
+  getBrowserUseState: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   mountBrowserUse: (input: BrowserUseMountInput) => Promise<BrowserUseViewState>
   decideBrowserUseOrigin: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
   decideBrowserUseAction: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
   setBrowserUseControl: (input: BrowserUseControlInput) => Promise<BrowserUseViewState>
   navigateBrowserUse: (input: BrowserUseNavigationInput) => Promise<BrowserUseViewState>
-  stopBrowserUse: (threadId: string) => Promise<BrowserUseViewState>
-  clearBrowserUse: (threadId: string) => Promise<BrowserUseViewState>
+  stopBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
+  clearBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   onBrowserUseState: (handler: (state: BrowserUseViewState) => void) => () => void
   showTurnCompleteNotification: (
     payload: TurnCompleteNotificationPayload
   ) => Promise<SystemNotificationResult>
+  /** Main shows allowance reminders itself; a click asks the renderer to open provider settings. */
+  onQuotaReminderClicked: (handler: () => void) => () => void
   setAppBadgeCount: (count: number) => Promise<AppBadgeCountResult>
   getAppVersion: () => Promise<string>
   getGuiUpdateState: () => Promise<GuiUpdateState>
@@ -684,6 +665,9 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   downloadGuiUpdate: (channel?: GuiUpdateChannel) => Promise<GuiUpdateDownloadResult>
   installGuiUpdate: () => Promise<GuiUpdateInstallResult>
   onGuiUpdateState: (handler: (payload: GuiUpdateState) => void) => () => void
+  /** The post-update "what's new" notice that is due, or the running version's with `current`. */
+  getReleaseNotice: (request?: ReleaseNoticeRequest) => Promise<ReleaseNotice | null>
+  acknowledgeReleaseNotice: (version: string) => Promise<void>
   onProviderMutationFlushRequest: (handler: ProviderMutationFlushRequestHandler) => () => void
   logError: (category: string, message: string, detail?: unknown) => Promise<void>
   getLogPath: () => Promise<string>

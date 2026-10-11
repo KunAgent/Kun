@@ -22,9 +22,11 @@ import {
   reconcileCodeWorkspaceRoots,
   composerModeForThread,
   composerReasoningEffortForSelection,
+  isNativeAgentRoute,
   normalizeComposerReasoningEffortMap,
   persistComposerReasoningEffort,
   readStoredComposerReasoningEffort,
+  rememberThreadComposerHarness,
   rememberThreadComposerMode,
   readThreadComposerMode,
   rememberThreadComposerSelection,
@@ -296,6 +298,7 @@ describe('chat-store Claw helpers', () => {
       }
     ]
 
+    expect(DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS).toBe(32_000)
     expect(resolveComposerContextWindowTokens(modelGroups, 'custom-model', 'custom')).toBe(
       DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS
     )
@@ -437,6 +440,18 @@ describe('chat-store Claw helpers', () => {
     expect(readStoredComposerReasoningEffort('reasoning-model', 'provider-a')).toBe('medium')
   })
 
+  it('leaves an external Agent at its own level until the user picks one for that model', () => {
+    expect(composerReasoningEffortForSelection([], 'gpt-6.1-sol', '', { nativeAgent: true })).toBe('auto')
+    expect(readStoredComposerReasoningEffort('gpt-6.1-sol', '')).toBe('max')
+    persistComposerReasoningEffort('gpt-6.1-sol', '', 'high')
+    expect(composerReasoningEffortForSelection([], 'gpt-6.1-sol', '', { nativeAgent: true })).toBe('high')
+    expect(isNativeAgentRoute('codex', '')).toBe(true)
+    expect(isNativeAgentRoute('codex', 'native-login')).toBe(true)
+    expect(isNativeAgentRoute('claude-code', 'kun-gateway')).toBe(false)
+    expect(isNativeAgentRoute('kun', '')).toBe(false)
+    expect(isNativeAgentRoute('', '')).toBe(false)
+  })
+
   it('caps the stored reasoning preference registry', () => {
     for (let index = 0; index < MAX_COMPOSER_REASONING_EFFORTS + 5; index += 1) {
       persistComposerReasoningEffort(`model-${index}`, 'provider-a', 'off')
@@ -458,6 +473,15 @@ describe('chat-store Claw helpers', () => {
     ).toBe('agent')
     expect(composerModeForThread({ id: 'thread-b', mode: 'plan' }, null)).toBe('plan')
     expect(composerModeForThread({ id: 'thread-c', mode: 'agent' }, null)).toBe('agent')
+  })
+
+  it('clears native credentials when explicitly switching the persisted selection back to Kun', () => {
+    rememberThreadComposerSelection('thread-a', 'native-model', '', 'user', {
+      harnessId: 'codex', credentialMode: 'native-login'
+    })
+    rememberThreadComposerHarness('thread-a', 'kun', '')
+    expect(readThreadComposerSelection('thread-a')).toMatchObject({ harnessId: 'kun' })
+    expect(readThreadComposerSelection('thread-a')?.credentialMode).toBeUndefined()
   })
 
   it('persists composer model selections independently per thread', () => {

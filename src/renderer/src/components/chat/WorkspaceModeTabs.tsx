@@ -10,8 +10,7 @@ import {
   Briefcase,
   Check,
   ChevronDown,
-  Code2,
-  MessagesSquare
+  Code2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useRoomAttentionCount } from '../rooms/useRoomEvents'
@@ -27,24 +26,24 @@ type Props = {
     | 'schedule'
     | 'workflow'
     | 'subagents'
+    | 'ade'
   onCodeOpen: () => void
   onWriteOpen: () => void
-  onRoomsOpen?: () => void
+  onAdeOpen?: () => void
   disabled?: boolean
   disabledReason?: string
 }
 
-type WorkspaceMode = 'chat' | 'write' | 'rooms'
+/**
+ * Code and Work are the only workspace modes. Agent private and group
+ * conversations live inside Code, so the retired Rooms route is shown as Code.
+ */
+type WorkspaceMode = 'chat' | 'write'
 
 export function WorkspaceModeTabs({
   activeView,
   onCodeOpen,
   onWriteOpen,
-  onRoomsOpen = () => {
-    void import('../../store/chat-store').then(({ useChatStore }) =>
-      useChatStore.getState().setRoute('rooms')
-    )
-  },
   disabled = false,
   disabledReason
 }: Props): ReactElement {
@@ -56,8 +55,7 @@ export function WorkspaceModeTabs({
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const pendingFocusIndexRef = useRef<number | null>(null)
   const menuId = useId()
-  const selectedMode: WorkspaceMode =
-    activeView === 'write' || activeView === 'rooms' ? activeView : 'chat'
+  const selectedMode: WorkspaceMode = activeView === 'write' ? 'write' : 'chat'
   const options = [
     {
       id: 'write' as const,
@@ -72,18 +70,12 @@ export function WorkspaceModeTabs({
       description: t('workspaceModeCodeDescription'),
       Icon: Code2,
       onSelect: onCodeOpen
-    },
-    {
-      id: 'rooms' as const,
-      label: t('roomsLabel'),
-      description: t('roomsDescription'),
-      Icon: MessagesSquare,
-      onSelect: onRoomsOpen
     }
   ]
   const selectedOption =
     options.find((option) => option.id === selectedMode) ?? options[0]
   const SelectedIcon = selectedOption.Icon
+  const modesAriaLabel = `${t('code')} / ${t('workspaceModeWorkLabel')}`
 
   useEffect(() => {
     setOpen(false)
@@ -155,7 +147,9 @@ export function WorkspaceModeTabs({
 
   const selectMode = (mode: WorkspaceMode): void => {
     setOpen(false)
-    if (mode === selectedMode) {
+    // Automation and board views map to the Code tab but are not Code itself,
+    // so picking Code from them must still navigate back.
+    if (mode === selectedMode && (mode === 'write' || activeView === 'chat')) {
       triggerRef.current?.focus()
       return
     }
@@ -173,7 +167,7 @@ export function WorkspaceModeTabs({
         data-workspace-mode-trigger
         data-workspace-mode={selectedMode}
         data-cursor-spotlight-target
-        aria-label={`${t('code')} / ${t('workspaceModeWorkLabel')} / ${t('roomsLabel')}`}
+        aria-label={modesAriaLabel}
         aria-haspopup="menu"
         aria-controls={menuId}
         aria-expanded={open}
@@ -191,7 +185,7 @@ export function WorkspaceModeTabs({
         <span className="workspace-mode-tab-label min-w-0 truncate whitespace-nowrap">
           {selectedOption.label}
         </span>
-        {selectedMode !== 'rooms' && roomAttention > 0 ? (
+        {selectedMode !== 'chat' && roomAttention > 0 ? (
           <span
             className="rounded-full bg-accent/15 px-1.5 text-[10px] text-accent"
             aria-label={t('roomsAttention')}
@@ -210,7 +204,7 @@ export function WorkspaceModeTabs({
         <div
           id={menuId}
           role="menu"
-          aria-label={`${t('code')} / ${t('workspaceModeWorkLabel')} / ${t('roomsLabel')}`}
+          aria-label={modesAriaLabel}
           className="workspace-mode-menu ds-no-drag absolute left-0 top-[calc(100%+6px)] z-50 w-[248px] max-w-[calc(100vw-32px)] rounded-xl border border-[var(--ds-border-strong)] p-1.5"
         >
           {options.map(({ id, label, description, Icon }, index) => {
@@ -244,7 +238,7 @@ export function WorkspaceModeTabs({
                     {description}
                   </span>
                 </span>
-                {id === 'rooms' && !selected && roomAttention > 0 ? (
+                {id === 'chat' && !selected && roomAttention > 0 ? (
                   <span
                     className="rounded-full bg-accent/15 px-1.5 text-[10px] text-accent"
                     aria-label={t('roomsAttention')}

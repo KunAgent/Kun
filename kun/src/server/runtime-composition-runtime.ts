@@ -1,3 +1,8 @@
+import { join } from 'node:path'
+import { RoomNotificationObserver } from '../rooms/room-notification-observer.js'
+import { GatewayMiddlewareHost } from './routes/gateway-middleware.js'
+import { bindAgentCommitmentService } from '../agents/agent-commitment-tools.js'
+import { bindAgentArtifactLibrary } from '../agents/agent-artifact-library.js'
 import {
   KUN_SERVICE_VERSION,
   KUN_MANAGER_PROTOCOL_VERSION,
@@ -13,8 +18,11 @@ import type { createRuntimeConfigController } from './runtime-composition-config
 import { bindRoomRuleStore } from '../rooms/room-rule-read-tool.js'
 import { bindRoomPeerStore } from '../rooms/room-peer-tools.js'
 import { bindImMessageService } from '../rooms/room-im-message-tool.js'
+import { bindRoomAppAccess } from '../rooms/room-app-connection-tools.js'
 import { bindAgentHandoffService } from '../agents/agent-handoff-tools.js'
 import { bindAgentSetupDirectory } from '../agents/agent-setup-tools.js'
+import { WorkbenchHarnessService } from '../workbench-bridge/harnesses.js'
+import { bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
 import {
   persistRuntimeCapabilitySection,
   persistRuntimeMcpConfig,
@@ -26,8 +34,11 @@ import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
 import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
 import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
+import { CodeWardrobeObserver } from '../rooms/code-wardrobe-observer.js'
 import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/owned-process.js'
 import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
+import { workbenchExecutionControl } from './runtime-workbench-execution.js'
+import { loadExtensionAgentProviders } from './extension-agent-provider-loader.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -54,6 +65,9 @@ export function createServerRuntimeComposition(
     agentObservability,
     events,
     threadActivity,
+    activityStore,
+    activityFacts,
+    taskWorkspaces,
     prefix,
     threadService,
     projectBoardService,
@@ -78,6 +92,8 @@ export function createServerRuntimeComposition(
     officialProviderCli,
     officialProviderAuth,
     gatewayCredentials,
+    gatewayUsage,
+    gatewayBudget,
     stopExtensionModelListener
   } = model
   const {
@@ -100,6 +116,7 @@ export function createServerRuntimeComposition(
     toolHost,
     extensionTools,
     canvasReceipts,
+    kunToolBridge,
     activeRuntimeRuns,
     runAgentTurn,
     runReview,
@@ -126,41 +143,75 @@ export function createServerRuntimeComposition(
     bundledSeedResults,
     extensionIndexClient
   } = extensions
-  const { startedAt, rebuildCapabilities, applyConfig } = config
+  const { startedAt, rebuildCapabilities, applyConfig: applyConfigNow } = config
+  // The desktop watchdog and attachment paths poll /v1/runtime/info; the
+  // capability manifest is rebuilt at most every few seconds and immediately
+  // after any config apply.
+  let capabilitiesMemo: { at: number; value: ReturnType<typeof rebuildCapabilities> } | undefined
+  const currentCapabilities = (): ReturnType<typeof rebuildCapabilities> => {
+    const now = Date.now()
+    if (capabilitiesMemo && now - capabilitiesMemo.at < 5_000) return capabilitiesMemo.value
+    capabilitiesMemo = { at: now, value: rebuildCapabilities() }
+    return capabilitiesMemo.value
+  }
+  const applyConfig: typeof applyConfigNow = async (request) => {
+    try {
+      return await applyConfigNow(request)
+    } finally {
+      capabilitiesMemo = undefined
+    }
+  }
+  // Extension-declared Agents join the catalog once their
+  // extension is enabled with `agents.register`; listing Agents refreshes them.
+  services.harnesses.extensionAgents.setLoader(() =>
+    loadExtensionAgentProviders({ registry: extensionRegistry, packageManager: extensionPackageManager }))
+  void services.harnesses.extensionAgents.refresh()
   const roomComposition = createRuntimeRoomComposition({
     options: () => config.activeOptions,
-    services: { threads: threadService, threadStore: stores.threadStore,
-      artifacts: artifactStore,
+    services: { threads: threadService, threadStore: stores.threadStore, eventBus,
+      artifacts: artifactStore, modelCapabilities: core.modelCapabilities,
       memoryStore: services.memoryStore, memoryEnabled: () => config.activeOptions.capabilities?.memory?.enabled !== false,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,
       peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
       backgroundExecutionActive: (threadId) => backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running'),
-      stopBackgroundExecution: async (threadId) => { await backgroundShellRuntime.stopThread(threadId) },
-      proveStopped: async (threadId, turnId) => {
-        if (turnId && turnService.isTurnExecutionActive(turnId)) return false
-        if (backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running')) return false
-        if (executionLeases && await executionLeases.owner(threadId)) return false
-        const thread = await threadService.getMetadata(threadId)
-        if (thread?.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')) return false
-        if (!turnId) return true
-        if (thread?.turns.some((turn) => turn.id === turnId && ['completed', 'failed', 'aborted'].includes(turn.status))) return true
-        // Lease absence alone does not prove a missing executor finished.
-        const highest = await sessionStore.highestSeq(threadId)
-        const tail = await sessionStore.loadEventsSince(threadId, Math.max(0, highest - 1000))
-        return tail.some((event) => event.turnId === turnId &&
-          ['turn_completed', 'turn_failed', 'turn_aborted'].includes(event.kind))
-      } }
+      ...workbenchExecutionControl({ turns: turnService, threads: threadService, sessions: sessionStore,
+        backgroundShells: backgroundShellRuntime, executionLeases }) }
   })
+  events.addObserver(new RoomNotificationObserver({ threadStore: stores.threadStore, store: roomComposition.rooms.deps.store }))
+  // Code task turns roll wardrobe bottles too; Agent conversation turns are counted by their room runs.
+  events.addObserver(new CodeWardrobeObserver({ threadStore: stores.threadStore, turns: turnService, store: roomComposition.rooms.deps.store }))
+  bindAgentCommitmentService(core.threadStore, roomComposition.rooms.commitments)
+  bindAgentArtifactLibrary(core.threadStore, roomComposition.rooms.artifactLibrary)
   bindRoomRuleStore(core.threadStore, roomComposition.rooms.service.store)
   // Tool providers bind to the lifecycle-fenced facade, while room admission
   // retains the backing store. Bind both identities to the same room scope.
   bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
   bindImMessageService(core.threadStore, roomComposition.rooms.service)
+  bindRoomAppAccess(core.threadStore, () => ({
+    servers: (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp.servers,
+    statuses: Object.fromEntries(services.mcpProviders.diagnostics.map((item) => [item.id, item.status]))
+  }))
   bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
   bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
+  // The tool registry holds the lifecycle-fenced facade, which is a different identity from the room runtime's store.
+  bindWorkbenchBridge(core.threadStore, roomComposition.rooms.workbench)
+  events.addObserver({ record: (event) => {
+    if (event.kind === 'agent_dispatch_intent' && event.dispatchIntent.kind === 'workbench') roomComposition.rooms.workbench.wake()
+  } })
+  roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService, agentDispatch: services.agentDispatchService,
+    harnesses: new WorkbenchHarnessService({ catalog: services.harnesses.catalog, detector: services.harnesses.detector, readiness: services.harnesses.readiness,
+      runtimes: agent.harnessRuntimeMap, router: agent.harnessRouter,
+      probedModels: (definition) => services.harnesses.probedModels(definition),
+      probeModels: (definition) => definition.transport === 'acp' ? services.harnesses.acpModels.probe(definition)
+        : definition.transport === 'agent-sdk' ? services.harnesses.agentSdkModels.probe(definition)
+          : definition.transport === 'codex-app-server' ? services.harnesses.codexModels.probe(definition)
+            : definition.transport === 'pi-rpc' ? services.harnesses.piModels.probe(definition)
+              : definition.transport === 'antigravity-cli' ? services.harnesses.antigravityModels.probe(definition) : Promise.resolve([]),
+      snapshot: () => modelConnections.snapshot(), defaultModel: () => roomComposition.rooms.deps.model() }) })
   return {
     threadService,
+    agentDispatchService: services.agentDispatchService,
     historyReferences: core.historyReferences,
     rooms: roomComposition.rooms,
     projectBoardService,
@@ -173,9 +224,27 @@ export function createServerRuntimeComposition(
     sessionStore,
     events,
     threadActivity,
+    activityStore,
+    activityFacts,
+    activityHibernation: agent.activityHibernation,
+    taskWorkspaces,
+    attribution: services.attribution,
+    changeRequests: services.changeRequests,
     eventStreamRegistry,
     llmDebug,
     canvasReceipts,
+    kunToolBridge,
+    harnessTokens: services.harnesses.tokens,
+    ade: {
+      stores: services.adeStores,
+      workerCallbacks: services.workerCallbacks,
+      terminalAgents: services.terminalAgents,
+      hookWriter: services.hookWriter,
+      manager: agent.managerRuntime,
+      deliverer: agent.dispatchDeliverer,
+      noticeCoordinator: agent.workerNoticeCoordinator,
+      races: agent.raceDeps
+    },
     liveCounters: () => ({
       inflight: inflight.size(),
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
@@ -183,8 +252,27 @@ export function createServerRuntimeComposition(
     startBackgroundMaintenance: () => {
       backgroundMaintenance.start()
       roomComposition.start()
+      void services.agentDispatchService.start().catch((error) => console.warn('[kun] Agent dispatch startup failed:', error))
     },
-    prepareForRequests: prepareUsageCarryover,
+    prepareForRequests: async () => {
+      await prepareUsageCarryover()
+      // Interrupted ask_manager waiters can never resolve after a restart;
+      // mark their persisted questions timed out before serving requests.
+      await services.workerCallbacks.reconcileAllTeams().catch(() => undefined)
+      // Terminal-agent units whose exit reports were lost with the last
+      // session come back as restoredUnconfirmed rows.
+      await services.terminalAgents.restore().catch(() => undefined)
+      // Re-resolve dispatches stuck in delivering/uncertain before the crash
+      //: found turns are adopted; missing ones redeliver idempotently.
+      await agent.managerRuntime.reconcileOnStartup().catch((error) => {
+        console.warn('[kun] ade dispatch reconciliation failed:', error)
+      })
+      // Restart replay: notices still unacknowledged after the last
+      // run get one merged wake-up per manager thread.
+      await agent.workerNoticeCoordinator.replayPending().catch((error) => {
+        console.warn('[kun] ade worker-notice replay failed:', error)
+      })
+    },
     inspectThreadStore: () => services.threadStoreGuardian.run(),
     sessionGuardian: services.sessionGuardian,
     threadSnapshots: services.threadSnapshots,
@@ -248,16 +336,29 @@ export function createServerRuntimeComposition(
 	      jobs: extensionJobs,
 	      bundledSeedResults
 	    },
+	    harnesses: services.harnesses,
+	    providerConfigs: () => config.activeOptions.providers ?? {},
 	    modelClient,
 	    directModelClient,
 	    modelGateway: {
-	      enabled: () => config.activeOptions.localModelGateway?.enabled === true && gatewayCredentials.hasKey(),
+	      requiresAdminToken: () => config.activeOptions.localModelGateway?.enabled === true ||
+            gatewayCredentials.hasActiveCredentials() || gatewayCredentials.listClients().length > 0,
+	      enabled: () => config.activeOptions.localModelGateway?.enabled === true && gatewayCredentials.hasActiveCredentials(),
       exposeProviderModels: () => config.activeOptions.localModelGateway?.exposeProviderModels === true,
 	      pools: () => modelClient.routePools(),
 	      configuredPools: () => modelClient.configuredPools(),
+          previewOrder: (pool, targets) => modelClient.previewOrder(pool, targets),
 	      health: routeHealth,
 	      tests: routePoolTests,
-	      credentials: gatewayCredentials
+	      credentials: gatewayCredentials,
+          budget: gatewayBudget,
+	      usage: gatewayUsage,
+	      modelCapabilities: core.modelCapabilities,
+	      extensionExports: () => config.activeOptions.localModelGateway?.extensionExports ?? [],
+	      experimentalSubscriptionExports: () => config.activeOptions.localModelGateway?.experimentalSubscriptionExports ?? [],
+	      advertiseDiscovery: () => config.activeOptions.localModelGateway?.advertiseDiscovery !== false,
+	      middleware: new GatewayMiddlewareHost(join(config.activeOptions.dataDir, 'gateway-middleware'),
+	        () => config.activeOptions.localModelGateway?.middleware ?? [])
 	    },
 	    modelConnections,
 	    modelConnectionOAuth,
@@ -324,7 +425,7 @@ export function createServerRuntimeComposition(
           heapTotalBytes: memory.heapTotal,
           externalBytes: memory.external
         },
-        capabilities: rebuildCapabilities(),
+        capabilities: currentCapabilities(),
 	        extensions: {
 	          enabled: true,
 	          apiVersions: [...SUPPORTED_EXTENSION_API_VERSIONS],
@@ -442,6 +543,7 @@ export function createServerRuntimeComposition(
           await shutdownRuntimeExecutionForHost({
             prepare: async () => {
               eventStreamRegistry.closeAll()
+              await services.agentDispatchService.stop()
               await roomComposition.close()
               agent.shuttingDown = true
               await agent.queuedTurnDispatcher.dispose()
@@ -458,7 +560,10 @@ export function createServerRuntimeComposition(
             shutdownLeases: async () => { await executionLeases?.shutdown() }
           })
         },
+        () => { agent.activityHibernation.stop() },
         async () => { await services.memoryDistillation.shutdown() },
+        () => services.harnesses.updates.dispose(),
+        () => services.harnesses.acpModels.dispose(),
         () => backgroundShellRuntime.shutdown(),
         () => extensionJobs.handleRuntimeShutdown(),
         () => { extensionMediaJobs.dispose() },

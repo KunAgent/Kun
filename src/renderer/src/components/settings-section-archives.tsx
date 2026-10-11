@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { Archive, Folder, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react'
@@ -159,6 +160,7 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
                 <Search className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.75} />
                 <input
                   type="search"
+                  aria-label={t('archivesSearchPlaceholder')}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={t('archivesSearchPlaceholder')}
@@ -169,13 +171,13 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
                 <Archive className="h-3.5 w-3.5" strokeWidth={1.75} />
                 {t('archivesCount', { count: totalArchived })}
               </div>
-              <button
+              <button aria-busy={Boolean(loading)}
                 type="button"
                 disabled={!runtimeReady}
                 onClick={() => void refresh()}
                 title={t('refresh')}
                 aria-label={t('refresh')}
-                className="self-end rounded-lg p-2 text-ds-muted transition hover:bg-ds-hover disabled:opacity-50 sm:self-auto"
+                  className={settingsButtonClass({ variant: 'ghost', size: 'icon', className: 'self-end' })}
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.75} />
               </button>
@@ -231,11 +233,10 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
                             ) : null}
                           </button>
                           <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">
-                            <button
+                            <button className={settingsButtonClass()}
                               type="button"
                               disabled={busy || !runtimeReady}
                               onClick={() => void restoreThread(thread.id)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-ds-hover px-2.5 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-subtle hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
                               {t('archivesRestore')}
@@ -246,7 +247,7 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
                               onClick={() => void removeThread(thread)}
                               aria-label={t('archivesDelete')}
                               title={t('archivesDelete')}
-                              className="rounded-lg p-1.5 text-ds-muted transition hover:bg-red-500/10 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon' })}
                             >
                               <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
                             </button>

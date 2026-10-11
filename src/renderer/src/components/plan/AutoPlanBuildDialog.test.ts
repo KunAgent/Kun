@@ -57,7 +57,7 @@ describe('AutoPlanBuildDialog', () => {
     expect(worktree.props['aria-checked']).toBe(true)
     await act(async () => worktree.props.onClick())
     await act(async () => renderer.root.findByProps({ 'data-auto-plan-build-use-once': true }).props.onClick())
-    expect(onSubmit).toHaveBeenCalledWith({ buildMode: 'direct', useWorktree: false }, false)
+    expect(onSubmit).toHaveBeenCalledWith({ buildMode: 'direct', useWorktree: false, useWorktreeExplicit: true }, false)
     await act(async () => renderer.unmount())
   })
 

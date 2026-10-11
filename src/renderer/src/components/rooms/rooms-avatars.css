@@ -7,15 +7,25 @@
   width: var(--rooms-avatar-size, 2.375rem);
   height: var(--rooms-avatar-size, 2.375rem);
   padding: 0;
-  border: 1px solid
-    color-mix(in srgb, var(--rooms-avatar-tone) 18%, var(--ds-border));
-  border-radius: 0.8rem;
+  border: 0;
+  /* One shape everywhere: a rounded square whose corner scales with the size. */
+  --rooms-avatar-radius: max(5px, calc(var(--rooms-avatar-size, 2.375rem) * 0.26));
+  border-radius: var(--rooms-avatar-radius);
   color: var(--rooms-avatar-tone);
   background: color-mix(
     in srgb,
     var(--rooms-avatar-tone) 10%,
     var(--ds-surface-card)
   );
+}
+/* A hairline inside the square keeps it crisp on a background of the same colour. */
+.rooms-avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ds-text) 10%, transparent);
+  pointer-events: none;
 }
 
 .rooms-avatar-art {
@@ -56,41 +66,89 @@
   outline-offset: 3px;
 }
 .rooms-avatar-group {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 1px;
   width: var(--rooms-avatar-size, 2.75rem);
   height: var(--rooms-avatar-size, 2.75rem);
   flex: 0 0 auto;
-  padding: 2px;
-  overflow: hidden;
-  border: 1px solid var(--ds-border);
-  border-radius: 0.8rem;
-  background: var(--ds-surface-subtle);
 }
 .rooms-avatar-group .rooms-avatar {
   width: 100%;
   height: 100%;
   min-height: 0;
-  border: 0;
-  border-radius: 0.3rem;
 }
 .rooms-avatar-group .rooms-avatar-letter {
   display: none;
 }
-.rooms-avatar-group .rooms-avatar-art {
-  height: auto;
-  aspect-ratio: 1;
-}
 .rooms-avatar-group-1 {
   grid-template-columns: 1fr;
 }
+/* Two members: overlapping squares on the diagonal. */
+.rooms-avatar-group-2 {
+  display: block;
+}
 .rooms-avatar-group-2 .rooms-avatar {
-  align-self: center;
-  height: 70%;
+  position: absolute;
+  width: 66%;
+  height: 66%;
+}
+.rooms-avatar-group-2 .rooms-avatar:first-child {
+  top: 0;
+  left: 0;
+  /* Cut a 2px gap where the second square overlaps (it starts at 51.5% of this tile), on any background. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) 0 0 / 100% calc(51.5% - 2px) no-repeat,
+    linear-gradient(#000 0 0) 0 0 / calc(51.5% - 2px) 100% no-repeat;
+  mask:
+    linear-gradient(#000 0 0) 0 0 / 100% calc(51.5% - 2px) no-repeat,
+    linear-gradient(#000 0 0) 0 0 / calc(51.5% - 2px) 100% no-repeat;
+}
+.rooms-avatar-group-2 .rooms-avatar:last-child {
+  right: 0;
+  bottom: 0;
 }
 .rooms-avatar-group-3 .rooms-avatar:first-child {
-  grid-row: span 2;
-  align-self: center;
-  height: 70%;
+  grid-column: span 2;
+  justify-self: center;
+  width: 50%;
 }
+.rooms-avatar-group-more {
+  display: grid;
+  place-items: center;
+  border-radius: max(4px, calc(var(--rooms-avatar-size, 2.75rem) * 0.13));
+  background: var(--ds-surface-hover);
+  color: var(--ds-text-muted);
+  font-size: calc(var(--rooms-avatar-size, 2.75rem) * 0.22);
+  font-weight: 600;
+  line-height: 1;
+}
+.ds-sidebar-kun-face {
+  display: grid;
+  flex: none;
+}
+.ds-sidebar-kun-dot { background: var(--ds-status-dot-muted, var(--ds-text-faint)); }
+.ds-sidebar-kun-status[data-runtime-connection='ready'] .ds-sidebar-kun-dot { background: var(--ds-status-dot-success, #1f9d55); }
+.ds-sidebar-kun-status[data-runtime-connection='offline'] .ds-sidebar-kun-dot { background: var(--ds-status-dot-danger, #d14343); }
+.ds-sidebar-kun-status[data-runtime-connection='checking'] .ds-sidebar-kun-dot { animation: ds-sidebar-kun-pulse 1.4s ease-in-out infinite; }
+@keyframes ds-sidebar-kun-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .ds-sidebar-kun-status .ds-sidebar-kun-dot { animation: none; } }
+/* Below 28px the picture zooms to the face; the legacy atlas portraits zoom in CSS. */
+.rooms-avatar[data-framing='face'] {
+  overflow: hidden;
+}
+.rooms-avatar[data-framing='face'] span.rooms-avatar-art {
+  transform: scale(1.25);
+  transform-origin: 50% 34%;
+}
+.rooms-avatar[data-compact] .rooms-avatar-letter { display: none; }
+/* Coding Agents: the engine mark in the same rounded square. */
+.rooms-avatar[data-engine] {
+  border: 1px solid var(--ds-border);
+  border-radius: var(--rooms-avatar-radius);
+  color: var(--ds-text);
+  background: var(--ds-surface-card);
+}
+.rooms-avatar[data-engine]::after { content: none; }

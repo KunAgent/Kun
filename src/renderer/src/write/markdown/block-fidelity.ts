@@ -1,5 +1,5 @@
 /**
- * Block-level fidelity machinery (implementation §3.6).
+ * Block-level fidelity machinery.
  *
  * `semanticSignature` gives a stable identity for a block's *content*:
  * positions, `data` metadata, and null-valued fields are ignored so an

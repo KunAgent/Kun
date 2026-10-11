@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto'
+import { PaperTurnContextSchema, type PaperTurnContext } from '../contracts/paper-turn-context.js'
+import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import type {
   ActingTurnModelRoute,
   GuiDesignArtifactContextJson,
@@ -15,6 +18,7 @@ import type {
   SandboxMode
 } from '../contracts/policy.js'
 import type { GraphOrchestrationStrategy } from '../contracts/graph.js'
+import type { HarnessCredentialMode } from '../contracts/harness.js'
 import type { ThreadMode } from '../contracts/threads.js'
 import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { ComposerContextAttachmentJson } from '../contracts/composer-context.js'
@@ -32,11 +36,18 @@ export function createTurnRecord(input: {
   clientRequestId?: string
   clientRequestFingerprint?: string
   admissionPending?: boolean
+  paperContext?: PaperTurnContext
   prompt: string
   messageSource?: UserMessageSource
   subagentResume?: SubagentResumeRequest
   model?: string
   providerId?: string
+  harnessId?: string
+  collaborationEnabled?: boolean
+  gatewayBinding?: HarnessGatewayBinding
+  credentialMode?: HarnessCredentialMode
+  harnessAgentId?: string
+  harnessSettings?: Record<string, string | boolean>
   accountId?: string
   actingModelRoute?: ActingTurnModelRoute
   reasoningEffort?: TurnReasoningEffort
@@ -62,6 +73,7 @@ export function createTurnRecord(input: {
   orchestration?: GraphOrchestrationStrategy
   disableUserInput?: boolean
   imContext?: boolean
+  planBuild?: boolean
   workspaceCheckpointId?: string
   workspaceCheckpointRequestId?: string
   extensionBudgetTokenBaseline?: number
@@ -69,6 +81,7 @@ export function createTurnRecord(input: {
   createdAt?: string
   status?: TurnStatus
 }): TurnEntity {
+  const paperContext = input.paperContext ? PaperTurnContextSchema.parse(input.paperContext) : undefined
   const model = input.model?.trim()
   const providerId = input.providerId?.trim()
   const accountId = input.accountId?.trim()
@@ -84,6 +97,11 @@ export function createTurnRecord(input: {
     ...(input.admissionPending ? { admissionPending: true as const } : {}),
     status: input.status ?? 'queued',
     prompt: input.prompt,
+    ...(paperContext ? {
+      paperContext,
+      paperContextSha256: createHash('sha256').update(JSON.stringify(paperContext)).digest('hex'),
+      paperModelRequests: 0
+    } : {}),
     ...(input.messageSource ? { messageSource: input.messageSource } : {}),
     ...(input.subagentResume ? { subagentResume: { ...input.subagentResume } } : {}),
     orchestration: input.orchestration ?? 'direct',
@@ -99,13 +117,21 @@ export function createTurnRecord(input: {
     injectedInstructionSources: [],
     ...(model ? { model } : {}),
     ...(providerId ? { providerId } : {}),
+    ...(input.harnessId?.trim() ? { harnessId: input.harnessId.trim() } : {}),
+    ...(input.collaborationEnabled !== undefined
+      ? { collaborationEnabled: input.collaborationEnabled } : {}),
+    ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
+    ...(input.harnessAgentId?.trim() ? { harnessAgentId: input.harnessAgentId.trim() } : {}),
+    ...(input.harnessSettings && Object.keys(input.harnessSettings).length
+      ? { harnessSettings: { ...input.harnessSettings } } : {}),
+    ...(input.gatewayBinding ? { gatewayBinding: structuredClone(input.gatewayBinding) } : {}),
     ...(accountId ? { accountId } : {}),
     ...(input.actingModelRoute ? { actingModelRoute: { ...input.actingModelRoute } } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
     ...(input.clientSurface ? { clientSurface: input.clientSurface } : {}),
     ...(input.approvalPolicy ? { approvalPolicy: input.approvalPolicy } : {}),
-    ...(input.sandboxMode ? { sandboxMode: input.sandboxMode } : {}),
+    ...(input.paperContext ? { sandboxMode: 'read-only' as const } : input.sandboxMode ? { sandboxMode: input.sandboxMode } : {}),
     ...(input.approvalReviewer ? { approvalReviewer: input.approvalReviewer } : {}),
     ...(input.guiPlan ? { guiPlan: input.guiPlan } : {}),
     ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
@@ -120,6 +146,7 @@ export function createTurnRecord(input: {
     ...(input.mode ? { mode: input.mode } : {}),
     ...(input.disableUserInput ? { disableUserInput: true } : {}),
     ...(input.imContext ? { imContext: true } : {}),
+    ...(input.planBuild ? { planBuild: true } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {}),
     ...(input.workspaceCheckpointRequestId
       ? { workspaceCheckpointRequestId: input.workspaceCheckpointRequestId }

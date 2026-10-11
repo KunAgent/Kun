@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "zenmux",
+  "name": "ZenMux API",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://zenmux.ai/api/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://zenmux.ai/docs/guide/quickstart",
+  "credentialUrl": "https://zenmux.ai/platform/pay-as-you-go",
+  "tokenPlan": {
+    "displayName": "ZenMux Builder Plan (Coding Plan)",
+    "baseUrl": "https://zenmux.ai/api/v1",
+    "endpointFormat": "chat_completions",
+    "models": [],
+    "credentialUrl": "https://zenmux.ai/platform/subscription"
+  }
+}

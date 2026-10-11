@@ -29,6 +29,15 @@ describe('isChatAttachmentUploadEnabled', () => {
     })).toBe(true)
   })
 
+  it('allows ADE uploads in their own composer scope', () => {
+    expect(isChatAttachmentUploadEnabled({
+      runtimeConnection: 'ready',
+      route: 'ade',
+      mode: 'agent',
+      attachmentStoreAvailable: true
+    })).toBe(true)
+  })
+
   it('disables composer attachments outside ready supported modes', () => {
     expect(isChatAttachmentUploadEnabled({
       runtimeConnection: 'connecting',

@@ -1,3 +1,4 @@
+import { offlineAgentSdkHarness } from './helpers/offline-agent-sdk-harness.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { InMemoryEventBus } from '../src/adapters/in-memory-event-bus.js'
 import { InMemoryApprovalGate } from '../src/adapters/in-memory-approval-gate.js'
@@ -321,6 +322,7 @@ describe('native model tool-call limit', () => {
       nowIso
     })
     const turns = new TurnService({
+      providerKinds: () => ({ byId: { 'sdk-provider': 'agent-sdk' }, defaultKind: 'http' }),
       threadStore,
       sessionStore,
       events,
@@ -340,6 +342,7 @@ describe('native model tool-call limit', () => {
       model,
       toolHost: new LocalToolHost({ tools: [] }),
       sdkRuntime: sdkRuntime as unknown as AgentSdkRuntime,
+      harnessRouter: offlineAgentSdkHarness(sdkRuntime as unknown as AgentSdkRuntime, ['sdk-provider']).router,
       usage: new UsageService(),
       events,
       turns,

@@ -10,6 +10,7 @@ import {
   saveThreadRightPanelExpansionRegistry
 } from '../lib/thread-right-panel-expansion'
 import { WORKSPACE_FILE_PREVIEW_EVENT, type WorkspaceFilePreviewDetail } from '../lib/workspace-file-preview'
+import { TERMINAL_OPEN_AT_EVENT, hasPendingTerminalRequest } from './terminal/terminal-open'
 import { isNarrowViewportNow, isRemoteWeb } from '../lib/remote-mobile'
 import {
   CODE_CANVAS_OPEN_REQUEST_EVENT,
@@ -56,6 +57,10 @@ export {
   type StoredCodeRightWidthsRegistry,
   type WorkbenchWidthConstraints
 } from './workbench-layout-storage'
+import {
+  WRITE_RIGHT_PANEL_DEFAULT_WIDTH,
+  WRITE_RIGHT_PANEL_WIDTH_KEY
+} from '../write/write-right-panel-state'
 import {
   CODE_PANEL_PREFERRED,
   GRAPH_PANEL_PREFERRED,
@@ -137,12 +142,18 @@ export function useWorkbenchLayout({
     // only wins once the user has toggled it deliberately.
     readStoredBoolean(LEFT_PANEL_COLLAPSED_KEY, isRemoteWeb() && isNarrowViewportNow())
   )
-  const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
+  const [codeRightWidth, setCodeRightWidth] = useState(() => {
     const scoped = widthsRegistryRef.current.workspaces[initialScopeRef.current]
     if (scoped) return scoped
     const legacy = readStoredWidth(RIGHT_PANEL_WIDTH_KEY, RIGHT_PANEL_DEFAULT)
     return codeRightTabs.expanded ? Math.max(legacy, CODE_PANEL_PREFERRED) : legacy
   })
+  // Work keeps its own right-panel width so resizing Code never moves it.
+  const [writeRightWidth, setWriteRightWidth] = useState(() =>
+    readStoredWidth(WRITE_RIGHT_PANEL_WIDTH_KEY, WRITE_RIGHT_PANEL_DEFAULT_WIDTH)
+  )
+  const rightSidebarWidth = route === 'write' ? writeRightWidth : codeRightWidth
+  const setRightSidebarWidth = route === 'write' ? setWriteRightWidth : setCodeRightWidth
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState(() =>
     readStoredWidth(TERMINAL_HEIGHT_KEY, TERMINAL_HEIGHT_DEFAULT)
@@ -154,7 +165,7 @@ export function useWorkbenchLayout({
     threadLoadingId,
     signal: latestAutoOpenDevPreviewSignal
   }))
-  const rightPanelMode = route === 'chat'
+  const rightPanelMode = route === 'chat' || route === 'ade'
     ? transientRightPanelMode ?? (codeRightTabs.expanded ? codeRightTabs.activeId : null)
     : null
   const rightPanelVisible = route === 'write'
@@ -165,11 +176,11 @@ export function useWorkbenchLayout({
   const widthConstraints = workbenchWidthConstraintsForRightPanel(route, rightPanelMode)
   useEffect(() => {
     if (rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.graph) return
-    setRightSidebarWidth((width) => Math.max(width, GRAPH_PANEL_PREFERRED))
+    setCodeRightWidth((width) => Math.max(width, GRAPH_PANEL_PREFERRED))
   }, [rightPanelMode])
   const ensureInitialCodePanelWidth = useCallback((): void => {
     if (codeRightTabsRef.current.tabs.length === 0) {
-      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+      setCodeRightWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
     }
   }, [])
 
@@ -182,17 +193,21 @@ export function useWorkbenchLayout({
   }, [leftSidebarCollapsed])
 
   useEffect(() => {
-    persistWidth(RIGHT_PANEL_WIDTH_KEY, rightSidebarWidth)
+    persistWidth(RIGHT_PANEL_WIDTH_KEY, codeRightWidth)
     const scope = initialScopeRef.current
     widthsRegistryRef.current = {
       version: 1,
       workspaces: {
         ...widthsRegistryRef.current.workspaces,
-        [scope]: rightSidebarWidth
+        [scope]: codeRightWidth
       }
     }
     persistCodeRightWidthsRegistry(widthsRegistryRef.current)
-  }, [rightSidebarWidth])
+  }, [codeRightWidth])
+
+  useEffect(() => {
+    persistWidth(WRITE_RIGHT_PANEL_WIDTH_KEY, writeRightWidth)
+  }, [writeRightWidth])
 
   useEffect(() => {
     const scope = initialScopeRef.current
@@ -236,9 +251,9 @@ export function useWorkbenchLayout({
     )
     setCodeRightTabs(nextTabs)
     const nextWidth = widthsRegistryRef.current.workspaces[nextScope]
-    if (nextWidth) setRightSidebarWidth(nextWidth)
+    if (nextWidth) setCodeRightWidth(nextWidth)
     else if (nextTabs.expanded) {
-      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+      setCodeRightWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
     }
   }, [activeThreadId, codeRightTabs, workspaceRoot])
 
@@ -251,6 +266,7 @@ export function useWorkbenchLayout({
   }, [terminalHeight])
 
   useEffect(() => {
+    if (route === 'rooms' || route === 'agent-chat') return
     const onPreview = (event: Event): void => {
       const detail = (event as CustomEvent<WorkspaceFilePreviewDetail>).detail
       if (!detail?.path) return
@@ -264,7 +280,7 @@ export function useWorkbenchLayout({
 
     window.addEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
     return () => window.removeEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
-  }, [ensureInitialCodePanelWidth, workspaceRoot])
+  }, [ensureInitialCodePanelWidth, workspaceRoot, route])
 
   useEffect(() => {
     const onCanvasOpenRequest = (event: Event): void => {
@@ -347,6 +363,7 @@ export function useWorkbenchLayout({
     rightPanelVisible,
     rightSidebarWidth,
     route,
+    setRightSidebarWidth,
     widthConstraints
   ])
 
@@ -559,6 +576,19 @@ export function useWorkbenchLayout({
   const toggleTerminal = (): void => {
     setTerminalOpen((current) => !current)
   }
+
+  // "Open this worktree in a terminal" requests come from other surfaces
+  // (e.g. the review result dialog); they only open the panel — the mounted
+  // TerminalPanel drains the pending cwd itself (terminal-open.ts).
+  // a setup prefill can be dispatched while a covering route
+  // (Settings) still hides the workbench; the pending request is checked on
+  // mount so the panel still opens once the workbench remounts.
+  useEffect(() => {
+    if (hasPendingTerminalRequest()) setTerminalOpen(true)
+    const onOpenAt = (): void => setTerminalOpen(true)
+    window.addEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)
+    return () => window.removeEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)
+  }, [])
 
   return {
     beginLeftResize,

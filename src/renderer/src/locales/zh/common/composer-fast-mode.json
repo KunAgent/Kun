@@ -3,5 +3,27 @@
   "composerFastModeOff": "快速模式已关闭",
   "composerFastModeHint": "获得更快的 Codex 响应，但会增加订阅用量。",
   "composerFastModeUnverified": "尚未确认该模型支持快速模式，请在提供商设置中获取并更新模型列表。",
-  "composerFastModeUnsupported": "当前模型未提供快速模式。"
+  "composerFastModeUnsupported": "当前模型未提供快速模式。",
+  "composerFastModeLabel": "快速模式",
+  "nativeAgentPicker": {
+    "title": "Agent",
+    "auto": "自动",
+    "autoHint": "跟随输入框权限档",
+    "triggerTitle": "{{agent}} Agent：{{name}}",
+    "ownPermissions": "选定的 Agent 使用它自己的工具权限；只读任务仍使用最严格的模式。",
+    "replacedModes": "{{agent}} 自带的 {{modes}} 不在列表里：插件或它的配置替换了它们，这里是 {{agent}} 当前提供的 Agent。"
+  },
+  "agentSettingsPicker": {
+    "title": "设置",
+    "triggerTitle": "{{agent}} 的会话设置",
+    "hint": "由 Agent 提供，下一条消息生效。",
+    "reset": "恢复默认"
+  },
+  "contextCapacityInputLimit": "输入上限 {{input}} · 总上下文 {{context}}",
+  "contextCapacityAgentFallback": "Agent",
+  "contextCapacityAgentOverLimit": "接近上限 · {{agent}} 将自行压缩",
+  "contextCapacityAgentReported": "{{agent}} 最近一次请求",
+  "contextCapacityAgentThresholdLabel": "约 {{percent}} 自动压缩",
+  "contextCapacityAgentUsed": "已用（{{agent}} 报告）",
+  "contextCapacityAgentReportedNote": "数值由 {{agent}} 报告，是它最近一次请求的上下文占用。Kun 无法细分其中的系统提示词、工具和消息；累计消耗见下方用量。"
 }

@@ -76,7 +76,11 @@ const harness = vi.hoisted(() => {
     restart: vi.fn(async (operation: () => Promise<void>) => operation()),
     replace: vi.fn(async (operation: () => Promise<void>) => operation()),
     waitForIdle: vi.fn(async () => undefined),
-    ensure: vi.fn(async (_fingerprint: string, operation: () => Promise<unknown>) => operation())
+    ensure: vi.fn(async (_fingerprint: string, operation: () => Promise<unknown>) => operation()),
+    // These scenarios exercise every ensure; a pending lane bypasses the
+    // short verified-health window.
+    hasPendingOperation: vi.fn(() => true),
+    lifecycleGeneration: vi.fn(() => 0)
   }
 
   const retireVerifiablyIdleLegacyManager = vi.fn(async () => 'retired' as const)

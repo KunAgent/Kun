@@ -45,6 +45,8 @@ type ReasoningCapability = ModelCapabilityMetadata['reasoning']
 export type CompatRequestCodecInput = {
   request: ModelRequest
   model: string
+  /** Name sent upstream in the body's model field; heuristics keep using `model`. */
+  wireModel?: string
   messages: CompatChatMessage[]
   tools: ModelToolSpec[]
   stream: boolean
@@ -125,9 +127,10 @@ export class CompatRequestCodecs {
 
   private chatCompletions(input: CompatRequestCodecInput): Record<string, unknown> {
     const body: Record<string, unknown> = {
-      model: input.model,
+      model: input.wireModel ?? input.model,
       stream: input.stream,
-      messages: this.deps.splitOpenAiMessages(input.messages)
+      messages: this.deps.splitOpenAiMessages(input.messages),
+      ...((input.request.gatewayRouting || input.request.paperReadOnly) ? { store: false } : {})
     }
     if (input.maxTokens !== undefined) body.max_tokens = input.maxTokens
     applySamplingParams(body, input)
@@ -166,6 +169,7 @@ export class CompatRequestCodecs {
         }
       }))
     }
+    if (input.request.parallelToolCalls !== undefined && input.tools.length) body.parallel_tool_calls = input.request.parallelToolCalls
     if (requiredToolChoice) body.tool_choice = {
       type: 'function',
       function: { name: requiredToolChoice }
@@ -214,9 +218,10 @@ export class CompatRequestCodecs {
     const requiredToolChoice = namedToolChoice(input)
     const useThreadPromptCacheKey = input.isCodex || isGpt56FamilyModel(input.model)
     const body: Record<string, unknown> = {
-      model: input.model,
+      model: input.wireModel ?? input.model,
       stream: input.stream,
       input: input.isCodexLite ? [...litePrefix, ...responseInput] : responseInput,
+      ...((input.request.gatewayRouting || input.request.paperReadOnly) ? { store: false } : {}),
       ...(input.isCodexLite
         ? {
             store: false,
@@ -258,9 +263,10 @@ export class CompatRequestCodecs {
     // when the resolved model advertises no explicit reasoning control.
     if (input.isCodex) body.include = ['reasoning.encrypted_content']
     if (!input.isCodexLite && responseTools.length) body.tools = responseTools
-    if (!input.isCodexLite && input.isCodex && input.codexNativeImageGeneration) {
+    if (!input.request.gatewayRouting && !input.isCodexLite && input.isCodex && input.codexNativeImageGeneration) {
       body.tools = [...((body.tools ?? []) as Record<string, unknown>[]), { type: 'image_generation' }]
     }
+    if (!input.isCodexLite && input.request.parallelToolCalls !== undefined && input.tools.length) body.parallel_tool_calls = input.request.parallelToolCalls
     if (requiredToolChoice && !input.isCodexLite) {
       body.tool_choice = { type: 'function', name: requiredToolChoice }
       // The server must not emit additional calls beside a hard-gated one.
@@ -282,7 +288,7 @@ export class CompatRequestCodecs {
       : undefined
     const thinkingEnabled = resolvedEffort !== undefined && resolvedEffort !== 'off'
     const body: Record<string, unknown> = {
-      model: input.model,
+      model: input.wireModel ?? input.model,
       stream: input.stream,
       max_tokens: input.maxTokens ?? (
         thinkingEnabled ? DEFAULT_MESSAGES_REASONING_MAX_TOKENS : DEFAULT_MESSAGES_MAX_TOKENS
@@ -307,6 +313,9 @@ export class CompatRequestCodecs {
       }))
     }
     if (requiredToolChoice) body.tool_choice = { type: 'tool', name: requiredToolChoice }
+    if (input.request.parallelToolCalls === false && input.tools.length) body.tool_choice = {
+      ...(requiredToolChoice ? { type: 'tool', name: requiredToolChoice } : { type: 'auto' }), disable_parallel_tool_use: true
+    }
     return body
   }
 }

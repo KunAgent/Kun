@@ -9,6 +9,7 @@ export const STATIC_PERMISSIONS = [
   'webview.external',
   'hostDom',
   'agent.run',
+  'agents.register',
   'agent.capacity.read',
   'agent.threads.readOwn',
   'rooms.read',

@@ -107,6 +107,7 @@
   "rightPanelSubagents": "サブエージェント",
   "rightPanelMcpSkills": "MCPとスキル",
   "rightPanelProviderQuotas": "使用量と割り当て",
+  "rightPanelWardrobe": "ワードローブ",
   "usageQuotaTitle": "使用量と割り当て",
   "usageQuotaDescription": "Kun の使用量とプロバイダーのサブスクリプション割り当てを表示します。",
   "usageQuotaTabUsage": "使用量",
@@ -490,5 +491,12 @@
   "trajectoryDetailInputTokens": "Input tokens",
   "trajectoryDetailOutputTokens": "Output tokens",
   "trajectoryDetailReasoningTokens": "Reasoning tokens",
-  "trajectoryDetailError": "Error"
+  "trajectoryDetailError": "Error",
+  "trajectoryDetailAgent": "エージェント",
+  "trajectoryAgentRequestHint": "サードパーティのエージェントが実行: Kun はエージェントの出力からこのモデル呼び出しを再構成しており、完全なリクエストは見えません。",
+  "trajectoryAgentUsageAggregate": "このエージェントは使用量をターン単位で報告します。これは {{steps}} 回のモデル呼び出しの合計です。",
+  "trajectoryAgentUsageIncluded": "このエージェントは使用量をターン単位で報告します。この呼び出しは後続の呼び出しの合計に含まれています。",
+  "trajectoryAgentUsageUnreported": "このエージェントはこの呼び出しの使用量を報告していません。",
+  "providerQuotaResetReminder": "{{label}} の {{percent}}% が未使用で、約 {{hours}} 時間後にリセットされます。",
+  "providerQuotaReminderTitle": "{{provider}}: 利用枠がまもなくリセット"
 }

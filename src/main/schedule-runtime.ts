@@ -56,6 +56,7 @@ import {
   scheduledThreadTitle
 } from './schedule-runtime-queue'
 import { boundThreadTasksForStatus } from './schedule-runtime-status'
+import { describeLocalListenError } from './local-listen-error'
 
 export {
   hasTaskDependencyCycle,
@@ -173,7 +174,8 @@ export class ScheduleRuntime {
   }
 
   async status(): Promise<ScheduleRuntimeStatus> {
-    const settings = await this.loadSettings()
+    // Status is polled by the renderer and needs no provider credentials.
+    const settings = await this.deps.store.load()
     const runningTaskIds = this.queue.runningIds()
     const queuedTaskIds = this.queue.queuedIds()
     return {
@@ -383,10 +385,13 @@ export class ScheduleRuntime {
 
   private async tick(): Promise<void> {
     if (this.stopped) return
-    const settings = await this.loadSettings()
+    // Deciding what is due needs no credentials. Resolving every provider's
+    // registry credentials here re-read (and rewrote) the registry twice per
+    // 30 s tick while idle; execution resolves them when a run starts.
+    const settings = await this.deps.store.load()
     if (!settings.schedule.enabled) return
     await this.queue.ensureNextRuns(settings)
-    const fresh = await this.loadSettings()
+    const fresh = await this.deps.store.load()
     const now = Date.now()
     const dueTasks = fresh.schedule.tasks
       .filter((task) => task.enabled && task.schedule.kind !== 'manual')
@@ -412,9 +417,7 @@ export class ScheduleRuntime {
       void this.handleInternalRequest(req, res)
     })
     server.on('error', (error) => {
-      this.deps.logError('schedule-server', 'Schedule internal server failed', {
-        message: error instanceof Error ? error.message : String(error)
-      })
+      this.deps.logError('schedule-server', 'Schedule internal server failed', describeLocalListenError(error, internal.port, 'Settings > Schedule'))
       if (this.server === server) {
         this.closeInternalServer()
       }

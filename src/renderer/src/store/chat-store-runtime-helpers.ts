@@ -1,3 +1,5 @@
+import { markThreadWorkspacePrepFailed, useTaskWorkspaceStore } from './task-workspace-store'
+import { markThreadWorktree, saveThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
 import type {
   ChatBlock,
   NormalizedThread,
@@ -10,6 +12,9 @@ import {
 } from '@shared/background-shell-notice'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { shouldAutoTitleThread } from '../lib/thread-title'
+import { getProvider } from '../agent/registry'
+import { ensureThreadBinding } from './review-store'
+import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
 import type { ChatState } from './chat-store-types'
 import { emptyLiveProjection } from './chat-store-live-projection'
 
@@ -286,6 +291,8 @@ export function collectAssistantTextForTurn(
 export function clearedThreadSelection(): Pick<
   ChatState,
   | 'activeThreadId'
+  | 'lastContextSnapshot'
+  | 'composerCollaborationEnabled'
   | 'threadLoadingId'
   | 'threadRefreshingId'
   | 'threadHistoryCursor'
@@ -321,6 +328,8 @@ export function clearedThreadSelection(): Pick<
 > {
   return {
     activeThreadId: null,
+    lastContextSnapshot: null,
+    composerCollaborationEnabled: true,
     threadLoadingId: null,
     threadRefreshingId: null,
     threadHistoryCursor: null,
@@ -380,16 +389,38 @@ export async function findReusableEmptyThreadId(
     )
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
 
+  // The thread list already says which threads never accepted a turn, so New
+  // task normally needs no timeline request. Only rows that predate that field
+  // are checked, and only the newest few, concurrently.
+  const unknown: NormalizedThread[] = []
   for (const thread of candidates) {
+    const verdict = listedThreadEmptiness(thread)
+    if (verdict === 'empty') return thread.id
+    if (verdict === 'unknown') unknown.push(thread)
+  }
+  const checked = await Promise.all(unknown.slice(0, REUSABLE_THREAD_DETAIL_CHECKS).map(async (thread) => {
     try {
       const { blocks } = await provider.getThreadDetail(thread.id)
-      if (!threadHasUserMessage(blocks)) return thread.id
+      return threadHasUserMessage(blocks) ? null : thread.id
     } catch {
-      /* ignore and keep checking other candidates */
+      return null
     }
-  }
+  }))
+  return checked.find((id): id is string => id !== null) ?? null
+}
 
-  return null
+/** Legacy rows without `turnCount` still need a detail request; cap how many New task may wait on. */
+export const REUSABLE_THREAD_DETAIL_CHECKS = 2
+
+/**
+ * `turnCount` comes from the list; `latestTurnId` is stamped locally on send,
+ * so a list that has not refreshed since a message was sent still counts it.
+ * History references and forks can show content that lives outside `turns`.
+ */
+export function listedThreadEmptiness(thread: NormalizedThread): 'empty' | 'used' | 'unknown' {
+  if (thread.latestTurnId || (thread.turnCount ?? 0) > 0) return 'used'
+  if (thread.historyRefId || thread.forkedFromThreadId) return 'unknown'
+  return thread.turnCount === 0 ? 'empty' : 'unknown'
 }
 
 function normalizedRuntimeStatus(status?: string): string {
@@ -406,4 +437,61 @@ function runtimeStatusLooksRunning(status?: string): boolean {
 
 function threadHasUserMessage(blocks: ChatBlock[]): boolean {
   return blocks.some((block) => block.kind === 'user')
+}
+
+/** Ready task workspace: PATCH the binding, patch the thread, drain queue. */
+export async function bindReadyTaskWorkspace(
+  event: TaskWorkspaceThreadEvent,
+  set: (partial: Partial<ChatState> | ((state: ChatState) => Partial<ChatState>)) => void,
+  get: () => ChatState,
+  stillCurrent: () => boolean = () => true
+): Promise<void> {
+  if (!stillCurrent() || event.unitId) return
+  const thread = get().threads.find((item) => item.id === event.threadId) ??
+    get().adeThreads?.find((item) => item.id === event.threadId)
+  if (thread?.taskWorkspaceId && thread.taskWorkspaceId !== event.workspaceId) return
+  const path = event.workspace?.path?.trim()
+  if (!path) return
+  try {
+    useTaskWorkspaceStore.setState((state) => {
+      const prep = state.prepByThread[event.threadId]
+      return prep ? { prepByThread: { ...state.prepByThread,
+        [event.threadId]: { ...prep, state: 'setting-up' as const } } } : {}
+    })
+    const provider = getProvider()
+    if (provider.bindThreadTaskWorkspace) {
+      await provider.bindThreadTaskWorkspace(event.threadId, {
+        taskWorkspaceId: event.workspaceId,
+        workspace: path
+      })
+    }
+    const sourceRoot = useTaskWorkspaceStore.getState().prepByThread[event.threadId]?.sourceRoot
+    if (sourceRoot && normalizeWorkspaceRoot(sourceRoot) !== normalizeWorkspaceRoot(path)) {
+      saveThreadWorktreeRegistry(markThreadWorktree(event.threadId, {
+        projectPath: sourceRoot, worktreePath: path, branch: 'task-workspace'
+      }))
+    }
+    if (!stillCurrent()) return
+    // Mid-session binds must refresh the review binding so the Review tab
+    // appears without waiting for a thread re-selection.
+    void ensureThreadBinding(event.threadId)
+    set((s) => ({
+      threads: s.threads.map((thread) => thread.id === event.threadId
+        ? { ...thread, taskWorkspaceId: event.workspaceId, workspace: path }
+        : thread),
+      adeThreads: (s.adeThreads ?? []).map((thread) => thread.id === event.threadId
+        ? { ...thread, taskWorkspaceId: event.workspaceId, workspace: path }
+        : thread)
+    }))
+    useTaskWorkspaceStore.setState((state) => {
+      const prep = state.prepByThread[event.threadId]
+      return prep ? { prepByThread: { ...state.prepByThread,
+        [event.threadId]: { ...prep, state: 'ready' as const } } } : {}
+    })
+    if (get().activeThreadId === event.threadId) void get().drainQueuedMessages()
+  } catch (error) {
+    markThreadWorkspacePrepFailed(event.threadId, error instanceof Error ? error.message : String(error))
+    if (!stillCurrent()) return
+    set({ error: error instanceof Error ? error.message : String(error) })
+  }
 }

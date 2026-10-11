@@ -63,6 +63,7 @@ export function addUsage(into: UsageSnapshot, delta: UsageSnapshot): UsageSnapsh
       ? undefined
       : (into.tokenEconomySavingsCny ?? 0) + (delta.tokenEconomySavingsCny ?? 0)
   return {
+    ...(delta.attemptAccounting ? { attemptAccounting: delta.attemptAccounting } : {}),
     promptTokens,
     completionTokens,
     ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
@@ -113,6 +114,7 @@ export function diffUsage(current: UsageSnapshot, previous: UsageSnapshot): Usag
   const cacheTotal = (cacheHitTokens ?? 0) + (cacheMissTokens ?? 0)
   const costByCurrency = diffCurrencyCosts(current.costByCurrency, previous.costByCurrency)
   return {
+    ...(current.attemptAccounting ? { attemptAccounting: current.attemptAccounting } : {}),
     promptTokens,
     completionTokens,
     ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
@@ -149,6 +151,12 @@ export function diffUsage(current: UsageSnapshot, previous: UsageSnapshot): Usag
     ...diffOptionalField('tokenEconomySavingsUsd', current, previous),
     ...diffOptionalField('tokenEconomySavingsCny', current, previous),
     ...(current.hasError ? { hasError: true } : {}),
+    ...(current.gateway ? { gateway: { ...current.gateway } } : {}),
+    ...(current.requestTtftMs !== undefined ? { requestTtftMs: current.requestTtftMs } : {}),
+    ...(current.requestGenerationMs !== undefined ? { requestGenerationMs: current.requestGenerationMs } : {}),
+    ...(current.requestGenerationTokens !== undefined
+      ? { requestGenerationTokens: current.requestGenerationTokens }
+      : {}),
     ...(current.avgTtftMs !== undefined ? { avgTtftMs: current.avgTtftMs } : {}),
     ...(current.avgTokensPerSecond !== undefined
       ? { avgTokensPerSecond: current.avgTokensPerSecond }

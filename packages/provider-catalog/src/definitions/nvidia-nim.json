@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "nvidia-nim",
+  "name": "NVIDIA NIM",
+  "origin": "relay",
+  "baseUrl": "https://integrate.api.nvidia.com/v1",
+  "docsUrl": "https://docs.api.nvidia.com/nim/reference/llm-apis",
+  "credentialUrl": "https://build.nvidia.com/settings/api-keys"
+}

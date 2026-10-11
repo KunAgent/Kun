@@ -137,6 +137,14 @@ node scripts/smoke-development-rooms.cjs --ui-visual --evidence dist/independent
 npm run check:file-lines
 ```
 
+The scenario (`scripts/smoke-independent-agents.cjs`) creates the Agent from the
+Code New conversation picker with Fill in yourself and opens private chats and
+groups from the Code sidebar. Profile and memory and Agent collaboration open
+from the conversation header's More actions menu, the handoff run opens as the
+Agent session panel, memory Forget is confirmed in its dialog, and Agent
+features are toggled from the Agent directory in the Code sidebar's
+Conversations menu.
+
 When native dependencies use the Electron ABI, run Vitest through Electron with
 ELECTRON_RUN_AS_NODE=1. Do not rebuild Runtime output or edit renderer sources
 during a running desktop scenario.

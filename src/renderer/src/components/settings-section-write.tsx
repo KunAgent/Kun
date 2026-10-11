@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
   DEFAULT_WRITE_AUTOSAVE_DELAY_MS,
@@ -26,8 +27,6 @@ import { WRITE_DESIGN_DRAFT_DEFAULT_PROMPT, WRITE_INFOGRAPHIC_DEFAULT_PROMPT } f
 import { WRITE_PROTOTYPE_DEFAULT_PROMPT } from '@shared/write-prototype'
 import {
   Bot,
-  FolderOpen,
-  GraduationCap,
   Plus,
   RotateCcw,
   Sparkles,
@@ -48,12 +47,9 @@ import {
   Toggle
 } from './settings-controls'
 import { WriteAgentPresetsSettingsPanel } from './settings-section-write-agent-presets'
-import { WritePaperReadingSettingsPanel } from './settings-section-write-paper'
 
 const textInputClass =
   'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30'
-const ghostButtonClass =
-  'inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover'
 
 const WRITE_FONT_PRESET_LABEL_KEYS: Record<WriteFontPreset, string> = {
   system: 'writeFontSystem',
@@ -122,8 +118,8 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
       : undefined)
     || (kun?.model?.trim() || DEFAULT_WRITE_INLINE_COMPLETION_MODEL)
   const [activeTab, setActiveTab] = useState<
-    'workspace' | 'typography' | 'suggestions' | 'selection' | 'agents' | 'paper'
-  >('workspace')
+    'editor' | 'suggestions' | 'selection' | 'agents'
+  >('editor')
 
   return (
             <>
@@ -133,15 +129,13 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                 value={activeTab}
                 onChange={setActiveTab}
                 items={[
-                  { id: 'workspace', label: t('sectionWrite'), icon: FolderOpen },
-                  { id: 'typography', label: t('writeTypography'), icon: Type },
+                  { id: 'editor', label: t('settingsIaWriteEditorTab'), icon: Type },
                   { id: 'suggestions', label: t('writeInlineCompletion'), icon: Sparkles },
                   { id: 'selection', label: t('writeSelectionAssistTitle'), icon: TextCursorInput },
-                  { id: 'agents', label: t('writeAgentPresets'), icon: Bot },
-                  { id: 'paper', label: t('writePaperModeSettingsTitle'), icon: GraduationCap }
+                  { id: 'agents', label: t('settingsIaWriteAgentsTab'), icon: Bot }
                 ]}
               />
-              <SettingsTabPanel baseId="write-settings" tabId="workspace" active={activeTab === 'workspace'}>
+              <SettingsTabPanel baseId="write-settings" tabId="editor" active={activeTab === 'editor'}>
               <SettingsCard title={t('sectionWrite')}>
                 <SettingRow
                   title={t('writeWorkspaceRoot')}
@@ -167,14 +161,14 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                         <button
                           type="button"
                           onClick={resetWriteWorkspaceToDefault}
-                          className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                          className={settingsButtonClass({ className: 'shrink-0' })}
                         >
                           {t('restoreWorkspaceDefault')}
                         </button>
                         <button
                           type="button"
                           onClick={() => void pickWriteWorkspace()}
-                          className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                          className={settingsButtonClass({ className: 'shrink-0' })}
                         >
                           {t('browse')}
                         </button>
@@ -219,9 +213,6 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                   }
                 />
               </SettingsCard>
-              </SettingsTabPanel>
-
-              <SettingsTabPanel baseId="write-settings" tabId="typography" active={activeTab === 'typography'}>
               <SettingsCard title={t('writeTypography')} className="mt-5">
                 <SettingRow
                   title={t('writeFontPreset')}
@@ -307,10 +298,9 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                   title={t('writeTypographyReset')}
                   description={t('writeTypographyResetDesc')}
                   control={
-                    <button
+                    <button className={settingsButtonClass()}
                       type="button"
                       onClick={() => update({ write: { typography: defaultWriteTypography() } })}
-                      className={ghostButtonClass}
                     >
                       <RotateCcw className="h-4 w-4" />
                       {t('writeTypographyResetButton')}
@@ -607,7 +597,7 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                                     </select>
                                     <button
                                       type="button"
-                                      className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ds-faint transition hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"
+                                        className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon', className: 'ml-auto shrink-0' })}
                                       title={t('writeQuickActionRemove')}
                                       aria-label={t('writeQuickActionRemove')}
                                       onClick={() =>
@@ -638,9 +628,8 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                           )}
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <button
+                          <button className={settingsButtonClass()}
                             type="button"
-                            className={ghostButtonClass}
                             disabled={selectionAssist.quickActions.length >= WRITE_QUICK_ACTION_MAX_COUNT}
                             onClick={() =>
                               updateQuickActions([
@@ -652,9 +641,8 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                             <Plus className="h-4 w-4" strokeWidth={2} />
                             {t('writeQuickActionAdd')}
                           </button>
-                          <button
+                          <button className={settingsButtonClass()}
                             type="button"
-                            className={ghostButtonClass}
                             onClick={() =>
                               update({ write: { selectionAssist: defaultWriteSelectionAssistSettings() } })
                             }
@@ -672,9 +660,6 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
 
               <WriteAgentPresetsSettingsPanel view={{ t, agentPresets, updateAgentPresets, setWriteDebugModalOpen, loadWriteDebugEntries, activeTab }} />
 
-              <SettingsTabPanel baseId="write-settings" tabId="paper" active={activeTab === 'paper'}>
-                <WritePaperReadingSettingsPanel form={form} update={update} />
-              </SettingsTabPanel>
             </>
   )
 }

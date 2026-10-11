@@ -1,3 +1,4 @@
+import { threadHasIsolatedWorkspace } from '../../lib/thread-workspace-owner'
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { CalendarClock, ChevronDown, GitBranch, Hammer, Share2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -194,6 +195,8 @@ export function PlanBuildActions({
           orchestration: 'direct',
           graphEnabled,
           usePromptWorktree: selectedPreference?.usePromptWorktree === true,
+          workspaceAlreadyIsolated: threadHasIsolatedWorkspace(useChatStore.getState(), activeThreadId),
+          usePromptWorktreeExplicit: selectedPreference?.overridden,
           branchPrefix: selectedPreference?.branchPrefix ?? 'codex/',
           activeThreadId,
           save: async (target, content) => {

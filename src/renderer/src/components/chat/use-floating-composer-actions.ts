@@ -83,6 +83,19 @@ export function useFloatingComposerActions(
     steerWindowExpiresAtRef.current = Date.now() + DOUBLE_ENTER_STEER_WINDOW_MS
   }, [busy, onGuideQueuedMessage, queuedMessages.length])
   const applySlashCommand = (commandId: SlashCommandId): void => {
+    if (commandId.startsWith('harness:')) {
+      // Harness-native commands go out verbatim — the owning harness parses
+      // them, so the builtin parsers must never touch the text.
+      const command = slashCommands.find((item: SlashCommand) => item.id === commandId)
+      const nativeText = command?.nativeText?.trim()
+      if (nativeText) {
+        inputHistory.push(nativeText)
+        setInput('')
+        void useChatStore.getState().sendMessage(nativeText)
+      }
+      draft.focusComposer()
+      return
+    }
     if (commandId.startsWith('skill:')) {
       const command = slashCommands.find((item: SlashCommand) => item.id === commandId)
       if (command?.skillPrompt) {
@@ -200,7 +213,7 @@ export function useFloatingComposerActions(
 
   const setGoalFromGoalInputMode = (): boolean => {
     const objective = input.trim()
-    if (!goalInputMode || objective.length === 0 || objective.startsWith('/')) return false
+    if (!canOpenGoalPanel || !goalInputMode || objective.length === 0 || objective.startsWith('/')) return false
     inputHistory.push(input)
     setInput('')
     setGoalInputMode(false)
@@ -411,6 +424,7 @@ export function useFloatingComposerActions(
       draft.focusComposer()
       return
     }
+    if (primaryActionDisabled) return
     inputHistory.push(input)
     onSend()
   }

@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { RoomNotificationQueue } from './room-notification-queue'
+import { privateRoomNotice } from './room-private-notices'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { useChatStore } from '../../store/chat-store'
 import {
@@ -22,15 +23,11 @@ import {
   writeBrowserStorageItem
 } from '../../lib/browser-storage'
 import { registerRemoteStreamResubscriber } from '../../lib/remote-stream-resubscribers'
+import { createRoomNotificationNavigator, isFocusedRoomConversation, type RoomNotificationTarget } from './room-notification-navigation'
+import { publishRoomEvent, subscribeRoomEvents, type RoomEvent } from './room-event-listeners'
 
-type Event = {
-  seq: number
-  roomId: string
-  kind: string
-  createdAt?: string
-  payload?: { id?: string; taskId?: string }
-}
-const listeners = new Set<(event: Event) => void>()
+type Event = RoomEvent
+export { subscribeRoomEvents }
 const badgeListeners = new Set<() => void>()
 const SEEN_ATTENTION_KEY = 'kun.rooms.seenAttention.v1'
 let badge = 0
@@ -68,12 +65,6 @@ export function acknowledgeRoomAttention() {
   writeSeenAttention(attentionItems)
   publishBadge(0)
 }
-export function subscribeRoomEvents(listener: (event: Event) => void) {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
 export function useRoomAttentionCount() {
   return useSyncExternalStore(
     (listener) => {
@@ -91,10 +82,12 @@ export function useRoomEvents() {
     if (!window.kunGui?.startSse) return
     const streamId = 'rooms-' + roomRequestId()
     let stopped = false
+    const notificationNavigation = createRoomNotificationNavigator({ isStopped: () => stopped })
     const savedCursor = Number(readBrowserStorageItem('kun.rooms.eventCursor') ?? 0)
     let cursor = Number.isSafeInteger(savedCursor) && savedCursor >= 0 ? savedCursor : 0
     let queue: RoomNotificationQueue | undefined
     let refreshTimer: ReturnType<typeof setTimeout> | undefined
+    let threadRefreshTimer: ReturnType<typeof setTimeout> | undefined
     let fallback: ReturnType<typeof setInterval> | undefined
     const updateBadge = async () => {
       const result = await roomsRequest<{ attentionCount: number; items?: string[] }>(
@@ -108,7 +101,9 @@ export function useRoomEvents() {
       const integrationEvent = event.kind.startsWith('integration.')
       let notice: { key: string; threadId: string; body: string } | null = null
       try {
-        if (event.kind.startsWith('request.')) {
+        if (event.kind.startsWith('message.') || event.kind === 'notification.requested') {
+          notice = await privateRoomNotice(event)
+        } else if (event.kind.startsWith('request.')) {
           const result = await roomsRequest<{ request: { id: string; status: string; threadId: string; continuation?: number; stepAttempt?: number; clarification?: string; error?: string; message: { body: string } } }>(
             '/v1/rooms/' + encodeURIComponent(event.roomId) + '/requests/' + encodeURIComponent(event.payload!.id!))
           const request = result.request
@@ -134,9 +129,10 @@ export function useRoomEvents() {
       if (!notice || known(notice.key)) return notice?.key ?? null
       const { preference } = await roomsRequest<RoomPreferenceDetail>('/v1/rooms/' + encodeURIComponent(event.roomId) + '/preferences')
       if (stopped) throw new Error('room notification subscription stopped')
-      if (roomNotificationSuppressed(preference, event.createdAt)) return roomNotificationsMuted(preference) ? notice.key : null
-      if (useChatStore.getState().route === 'rooms' && readBrowserStorageItem('kun.rooms.selected') === event.roomId && document.hasFocus()) return notice.key
+      if (roomNotificationSuppressed(preference, event.payload?.occurredAt ?? event.createdAt)) return roomNotificationsMuted(preference) ? notice.key : null
+      if (isFocusedRoomConversation(event.roomId)) return notice.key
       const result = await window.kunGui.showTurnCompleteNotification({ roomId: event.roomId, threadId: notice.threadId,
+        dedupeKey: 'room:' + event.roomId + ':' + notice.key,
         source: 'main-agent', title: 'Kun · ' + i18n.t('roomsLabel', { ns: 'common' }), body: notice.body.slice(0, 500) })
       if (!result.ok) throw new Error(result.message)
       return notice.key
@@ -145,7 +141,12 @@ export function useRoomEvents() {
       if (stopped || !queue || !queue.accept(event)) return
       cursor = queue.cursor
       writeBrowserStorageItem('kun.rooms.eventCursor', String(cursor))
-      listeners.forEach((listener) => listener(event))
+      publishRoomEvent(event)
+      // A bot-started Code session appears in the sidebar without the user opening Rooms.
+      if (event.kind === 'workbench.link.updated' && (event.payload?.status === 'queued' || event.payload?.status === 'running')) {
+        clearTimeout(threadRefreshTimer)
+        threadRefreshTimer = setTimeout(() => { void useChatStore.getState().refreshThreads().catch(() => undefined) }, 500)
+      }
       clearTimeout(refreshTimer)
       refreshTimer = setTimeout(() => { void updateBadge().catch(() => undefined) }, 300)
       await queue.drain(deliver)
@@ -154,14 +155,8 @@ export function useRoomEvents() {
     void queue?.drain(deliver)
     const off = rendererRuntimeClient.onSseEvent((payload) => {
       if (payload.streamId === 'rooms-navigation') {
-        const event = payload.events[0] as { roomId?: string }
-        if (event.roomId) {
-          writeBrowserStorageItem('kun.rooms.selected', event.roomId)
-          useChatStore.getState().setRoute('rooms')
-          listeners.forEach((listener) =>
-            listener({ seq: cursor, roomId: event.roomId!, kind: 'navigate' })
-          )
-        }
+        const event = payload.events[0] as RoomNotificationTarget
+        if (event?.roomId) void notificationNavigation.open(event).catch(() => undefined)
       } else if (payload.streamId === streamId)
         for (const event of payload.events) void consume(event as Event)
     })
@@ -206,16 +201,17 @@ export function useRoomEvents() {
       await Promise.allSettled([
         rendererRuntimeClient.startSse('rooms', cursor, streamId, { scope: 'rooms' }), updateBadge()
       ])
-      if (!stopped && useChatStore.getState().route === 'rooms') acknowledgeRoomAttention()
+      if (!stopped && useChatStore.getState().route === 'agent-chat') acknowledgeRoomAttention()
     }
     void initialize().catch(() => { live = false })
+    // Opening any Code conversation acknowledges the cross-mode attention badge.
     const offRoute = typeof useChatStore.subscribe === 'function'
       ? useChatStore.subscribe((state, previous) => {
-          if (state.route !== 'rooms' || previous.route === 'rooms') return
+          if (state.route !== 'agent-chat' || previous.route === 'agent-chat') return
           acknowledgeRoomAttention()
           void updateBadge()
             .then(() => {
-              if (!stopped && useChatStore.getState().route === 'rooms') acknowledgeRoomAttention()
+              if (!stopped && useChatStore.getState().route === 'agent-chat') acknowledgeRoomAttention()
             })
             .catch(() => undefined)
         })
@@ -234,8 +230,10 @@ export function useRoomEvents() {
     }, 10000)
     return () => {
       stopped = true
+      notificationNavigation.dispose()
       live = false
       clearTimeout(refreshTimer)
+      clearTimeout(threadRefreshTimer)
       clearInterval(fallback)
       clearInterval(notificationRetry)
       offRoute()

@@ -1,3 +1,5 @@
+import type { PaperEvidenceApi } from './paper-evidence-types'
+import type { PaperWorkspaceEnsureResult } from './paper-workspace-types'
 import type { PaperSearchResult, PaperSearchSource } from './paper-search'
 import type {
   PaperCoolNotesResult,
@@ -19,6 +21,7 @@ import type {
   PaperLibraryTrashResult,
   PaperDownloadPdfResult,
   PaperLocalLibraryState,
+  PaperLocalStateWriteResult,
   PaperBibtexImportResult,
   PaperMoveToGroupResult,
   PaperCreateGroupResult,
@@ -104,6 +107,8 @@ export type PaperUnitApi = {
  * v2 metadata patching, grouping, trash, local reading state, and BibTeX.
  */
 export type PaperLibraryApi = {
+  /** Initialize the default once, or validate the selected library. Desktop only. */
+  paperWorkspaceEnsure: () => Promise<PaperWorkspaceEnsureResult>
   /** Scan `<workspaceRoot>/<papersDir>` recursively (depth ≤3). */
   paperLibraryList: (payload: {
     workspaceRoot: string
@@ -165,7 +170,7 @@ export type PaperLibraryApi = {
       lastPage: number
       pageCount: number
     }>
-  }) => Promise<void>
+  }) => Promise<PaperLocalStateWriteResult>
   /** BibTeX for one unit ('unitDir') or the whole library ('all'). */
   paperExportBibtex: (payload: {
     workspaceRoot: string
@@ -197,6 +202,7 @@ export type PaperReaderApi = {
     workspaceRoot: string
     unitDir: string
     items: unknown[]
+    expectedPdfSha256?: string
     removedIds?: string[]
   }) => Promise<PaperMarksResult>
   paperTranslateSelection: (payload: {
@@ -240,6 +246,7 @@ export type PaperReaderApi = {
       comment?: string
     }
     pngBase64: string
+    expectedPdfSha256?: string
   }) => Promise<
     | { ok: true; mark: PaperVisualMark }
     | { ok: false; code: string; message: string }
@@ -332,3 +339,4 @@ export type KunGuiPaperApi =
   & PaperLibraryApi
   & PaperReaderApi
   & PaperDiscoverApi
+  & PaperEvidenceApi

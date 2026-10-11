@@ -76,7 +76,11 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
             validTo: { type: 'string', format: 'date-time' },
             sources: memorySourcesSchema,
             ttlDays: { type: 'number', minimum: 1, description: 'Optional lifetime in days.' },
-            supersedes: { type: 'string', description: 'Optional memory id replaced by this memory.' }
+            supersedes: { type: 'string', description: 'Optional memory id replaced by this memory.' },
+            supersedesExpectedRevision: {
+              type: 'integer', minimum: 1,
+              description: 'Required with supersedes. Use the revision returned by memory_read.'
+            }
           },
           required: ['content'],
           additionalProperties: false
@@ -87,6 +91,9 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
         requiresExplicitApproval: (call) => call.arguments?.authority === 'directive',
         requiresApprovalInFullAccess: true,
         execute: async (args, context) => {
+          if (hasOwn(args, 'consolidation') || hasHostOnlySourceFields(args.sources)) return invalidArguments('create', [
+            { path: ['sources'], message: 'tool arguments cannot assert host evidence or consolidation fields' }
+          ])
           const content = typeof args.content === 'string' ? args.content.trim() : ''
           if (!content) return { output: { error: 'content is required' }, isError: true }
           let ttlMs: number | undefined
@@ -108,6 +115,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
             ...(ttlMs !== undefined ? { ttlMs } : {}),
             ...optionalArgument(args, 'authority'),
             ...optionalArgument(args, 'supersedes', (value) => typeof value === 'string' ? value.trim() : value),
+            ...optionalArgument(args, 'supersedesExpectedRevision'),
             ...optionalArgument(args, 'type'),
             ...optionalArgument(args, 'confidence'),
             ...optionalArgument(args, 'importance'),
@@ -117,6 +125,10 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
             ...optionalArgument(args, 'sources')
           })
           if (!parsed.success) return invalidArguments('create', parsed.error.issues)
+          if (parsed.data.supersedes && parsed.data.supersedesExpectedRevision === undefined) {
+            return invalidArguments('create', [{ path: ['supersedesExpectedRevision'],
+              message: 'replacing a memory requires supersedesExpectedRevision; read the current memory first' }])
+          }
           return {
             output: {
               memory: await store.create(parsed.data)
@@ -132,6 +144,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
           type: 'object',
           properties: {
             id: { type: 'string' },
+            expectedRevision: { type: 'integer', minimum: 1 },
             content: { type: 'string' },
             tags: { type: 'array', items: { type: 'string' } },
             type: memoryTypeSchema,
@@ -152,6 +165,9 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
         requiresExplicitApproval: (call) => call.arguments?.authority === 'directive',
         requiresApprovalInFullAccess: true,
         execute: async (args, context) => {
+          if (hasOwn(args, 'consolidation') || hasHostOnlySourceFields(args.sources)) return invalidArguments('update', [
+            { path: ['sources'], message: 'tool arguments cannot assert host evidence or consolidation fields' }
+          ])
           const id = typeof args.id === 'string' ? args.id.trim() : ''
           if (!id) return { output: { error: 'id is required' }, isError: true }
           const patch = {
@@ -171,15 +187,18 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
           if (Object.keys(patch).length === 0) {
             return invalidArguments('update', [{ path: [], message: 'at least one update field is required' }])
           }
-          const parsed = MemoryUpdateRequest.safeParse(patch)
+          const existing = store.getById
+            ? await store.getById(id, { workspace: context.workspace }).catch(() => undefined)
+            : undefined
+          if (!existing) return { output: { error: 'memory not found' }, isError: true }
+          const parsed = MemoryUpdateRequest.safeParse({
+            ...patch, expectedRevision: args.expectedRevision ?? existing.revision
+          })
           if (!parsed.success) return invalidArguments('update', parsed.error.issues)
           // Rewriting, re-enabling, or re-timing an existing directive changes
           // what is injected as a user instruction, so it must repeat the
           // explicit user approval by carrying authority='directive'.
           if (patch.authority === undefined && touchesDirectiveEffect(patch)) {
-            const existing = store.getById
-              ? await store.getById(id, { workspace: context.workspace }).catch(() => undefined)
-              : undefined
             if (!store.getById || existing?.authority === 'directive') {
               return {
                 output: { error: 'updating a directive requires authority=directive' },
@@ -200,14 +219,28 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
         shouldAdvertise: (context) => context.memoryPolicy?.enabled === true,
         inputSchema: {
           type: 'object',
-          properties: { id: { type: 'string' } },
+          properties: {
+            id: { type: 'string' },
+            expectedRevision: { type: 'integer', minimum: 1 }
+          },
           required: ['id'],
           additionalProperties: false
         },
         policy: 'on-request',
         execute: async (args, context) => {
           if (typeof args.id !== 'string') return { output: { error: 'id is required' }, isError: true }
-          return { output: { memory: await store.delete(args.id, { workspace: context.workspace }) } }
+          const access = { workspace: context.workspace }
+          const current = await store.getById?.(args.id, access).catch(() => undefined)
+          if (!current) return { output: { error: 'memory not found' }, isError: true }
+          if (!store.lifecycle) return { output: { error: 'revisioned memory deletion is unavailable' }, isError: true }
+          if (args.expectedRevision !== undefined && (typeof args.expectedRevision !== 'number' ||
+            !Number.isSafeInteger(args.expectedRevision) || args.expectedRevision < 1)) {
+            return { output: { error: 'invalid expected revision' }, isError: true }
+          }
+          const result = await store.lifecycle(args.id, {
+            action: 'forget', expectedRevision: typeof args.expectedRevision === 'number' ? args.expectedRevision : current.revision
+          }, access)
+          return { output: { memory: result.memory } }
         }
       }),
       ...buildMemoryReadTools(store)
@@ -228,6 +261,14 @@ function touchesDirectiveEffect(patch: Record<string, unknown>): boolean {
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key)
+}
+
+/** The host does not JSON-schema-validate execute arguments; enforce the evidence boundary here. */
+function hasHostOnlySourceFields(value: unknown): boolean {
+  if (!Array.isArray(value)) return false
+  const allowed = new Set(Object.keys(memorySourceSchema.properties))
+  return value.some((source) => source && typeof source === 'object' &&
+    Object.keys(source).some((key) => !allowed.has(key)))
 }
 
 function optionalArgument(

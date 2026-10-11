@@ -1,5 +1,6 @@
 export type RoomNotificationEvent = {
-  seq: number; roomId: string; kind: string; payload?: { id?: string; taskId?: string }
+  seq: number; roomId: string; kind: string; createdAt?: string
+  payload?: { id?: string; taskId?: string; threadId?: string; gateKind?: 'approval' | 'input'; occurredAt?: string }
 }
 type Pending = { event: RoomNotificationEvent; attempts: number; retryAt: number }
 type State = { cursor: number; pending: Record<string, Pending>; notified: string[] }
@@ -22,7 +23,7 @@ export class RoomNotificationQueue {
   }
   accept(event: RoomNotificationEvent) {
     if (!Number.isSafeInteger(event.seq) || event.seq <= this.state.cursor) return false
-    if (/^(task|integration|request)\./.test(event.kind) && event.payload?.id) {
+    if (/^(task|integration|request|message|notification)\./.test(event.kind) && event.payload?.id) {
       const key = JSON.stringify([event.roomId, event.kind.split('.')[0], event.payload.id])
       this.state.pending[key] = { event, attempts: 0, retryAt: 0 }
     }

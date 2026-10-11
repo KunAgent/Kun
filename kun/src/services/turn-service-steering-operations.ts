@@ -1,4 +1,5 @@
 import { admitDurableSteering, flushDurableSteering } from './durable-steering.js'
+import { openDelegatedSteering, type DelegatedSteering } from './delegated-steering.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -70,6 +71,9 @@ async steerTurn(this: TurnService, input: {
     messageSource?: UserMessageSource
     attachmentIds?: string[]
   }): Promise<void> {
+    if ((await this.getTurn(input.threadId, input.turnId))?.paperContext) {
+      throw new TurnConflictError('Paper reading context is frozen; ask a new question in a new turn')
+    }
     const finishAdmission = this['beginExecutionAdmission']()
     try {
     if (input.operationId) {
@@ -217,6 +221,10 @@ hasGraphSteeringResume(this: TurnService, turnId: string): boolean {
     return (this['graphSteeringResumeFences'].get(turnId) ?? 0) > 0
   },
 
+openDelegatedSteering(this: TurnService, threadId: string, turnId: string): DelegatedSteering {
+    return openDelegatedSteering(this, threadId, turnId)
+  },
+
 async steeringQueue(this: TurnService, input: { threadId: string; turnId: string }): Promise<SteeringEntry[]> {
     const current = await this['deps'].threadStore.get(input.threadId)
     const turn = current?.turns.find((candidate) => candidate.id === input.turnId)
@@ -307,7 +315,10 @@ async interruptTurn(this: TurnService, input: { threadId: string; turnId: string
         const turns = current.turns.map((candidate) =>
           candidate.id === input.turnId
             ? this['finalizeOpenItems'](
-                finishTurn(input.discard ? { ...candidate, items: this['keepUserItems'](candidate.items) } : candidate, 'aborted'),
+                finishTurn({
+                  ...(input.discard ? { ...candidate, items: this['keepUserItems'](candidate.items) } : candidate),
+                  ...(candidate.status === 'queued' ? { terminalCode: 'queue_cancelled' } : {})
+                }, 'aborted'),
                 'aborted'
               )
             : candidate
@@ -315,6 +326,7 @@ async interruptTurn(this: TurnService, input: { threadId: string; turnId: string
         await this['deps'].threadStore.upsert({
           ...touchThread(current, this['deps'].nowIso()),
           turns,
+          ...(turn.status === 'running' ? { queueControl: { reason: 'user_stop' as const, sourceTurnId: turn.id, pausedAt: this['deps'].nowIso() } } : {}),
           status: threadStatusAfterTurnTransition(current.status, turns),
           updatedAt: this['deps'].nowIso()
         })

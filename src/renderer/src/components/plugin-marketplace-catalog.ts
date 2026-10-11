@@ -204,6 +204,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'playwright',
     kind: 'mcp',
+    categories: ['browser'],
     titleKey: 'pluginMcpPlaywrightTitle',
     descriptionKey: 'pluginMcpPlaywrightDesc',
     group: 'recommended',
@@ -228,6 +229,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'vercel',
     kind: 'mcp',
+    categories: ['developer'],
     titleKey: 'pluginMcpVercelTitle',
     descriptionKey: 'pluginMcpVercelDesc',
     group: 'recommended',
@@ -259,6 +261,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'context7',
     kind: 'mcp',
+    categories: ['developer'],
     titleKey: 'pluginMcpContext7Title',
     descriptionKey: 'pluginMcpContext7Desc',
     group: 'recommended',
@@ -273,6 +276,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'sequential-thinking',
     kind: 'mcp',
+    categories: ['developer'],
     titleKey: 'pluginMcpSequentialThinkingTitle',
     descriptionKey: 'pluginMcpSequentialThinkingDesc',
     group: 'recommended',
@@ -287,6 +291,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'memory',
     kind: 'mcp',
+    categories: ['productivity'],
     titleKey: 'pluginMcpMemoryTitle',
     descriptionKey: 'pluginMcpMemoryDesc',
     group: 'recommended',
@@ -301,6 +306,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'brave-search',
     kind: 'mcp',
+    categories: ['search'],
     titleKey: 'pluginMcpBraveSearchTitle',
     descriptionKey: 'pluginMcpBraveSearchDesc',
     group: 'recommended',
@@ -316,6 +322,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'code-review',
     kind: 'skill',
+    categories: ['development'],
     titleKey: 'pluginSkillReviewTitle',
     descriptionKey: 'pluginSkillReviewDesc',
     group: 'recommended',
@@ -326,6 +333,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'frontend-polish',
     kind: 'skill',
+    categories: ['development'],
     titleKey: 'pluginSkillFrontendTitle',
     descriptionKey: 'pluginSkillFrontendDesc',
     group: 'recommended',
@@ -336,6 +344,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'bug-hunt',
     kind: 'skill',
+    categories: ['development'],
     titleKey: 'pluginSkillBugTitle',
     descriptionKey: 'pluginSkillBugDesc',
     group: 'recommended',
@@ -346,6 +355,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
   {
     id: 'release-notes',
     kind: 'skill',
+    categories: ['document'],
     titleKey: 'pluginSkillReleaseTitle',
     descriptionKey: 'pluginSkillReleaseDesc',
     group: 'recommended',

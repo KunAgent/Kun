@@ -1,0 +1,33 @@
+{
+  "agentIntegrations": {
+    "search": "搜索 Agent",
+    "clearSearch": "清除搜索",
+    "fromExtension": "来自扩展 {{name}}",
+    "loadingCatalog": "正在检测 Agent 和应用…",
+    "catalogError": "无法刷新 Agent 目录，请重试。",
+    "noMatches": "没有与搜索条件匹配的 Agent 或应用。",
+    "emptyCatalog": "暂时没有可用的集成。",
+    "terminalExplanation": "启用后，可在 Kun 的终端中打开此 Agent 的交互式 CLI，对话由其自身界面管理。",
+    "terminalModelManaged": "原生模型请在 CLI 中选择。此终端集成不提供原生模型目录。",
+    "askKun": "让小 Kun 处理",
+    "askKunHint": "会打开与小 Kun 的对话并带上错误和日志，确认后发送即可。",
+    "askKunFailed": "无法打开小 Kun 的对话：{{error}}",
+    "askKunUnavailable": "找不到可用的小 Kun 对话，请先在对话列表中恢复或新建。",
+    "askKunOperation": {
+      "install": "安装",
+      "adapter": "适配器安装",
+      "update": "更新",
+      "readiness": "就绪检查"
+    },
+    "askKunPrompt": {
+      "intro": "我在 Kun 里为第三方 Agent「{{agent}}」执行{{operation}}时失败了，请帮我排查并修复。",
+      "agent": "Agent：{{agent}}（{{id}}）",
+      "command": "执行的命令：`{{command}}`",
+      "current": "当前使用：{{current}}",
+      "target": "目标版本：{{version}}",
+      "error": "错误：{{error}}",
+      "log": "日志末尾：",
+      "instructions": "请先根据日志判断原因，告诉我打算执行哪些命令；删除、覆盖文件或需要 sudo 的操作要先征得我同意。修复后验证命令能正常运行，并提醒我回到「设置 → AI 助手 → Agent 接入」点「重试检测」。"
+    }
+  }
+}

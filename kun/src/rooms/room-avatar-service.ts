@@ -3,6 +3,7 @@ import { RoomAvatarAssetSchema, type RoomAvatarAsset, type RoomAvatarReference, 
 import type { AttachmentMetadata } from '../contracts/attachments.js'
 import type { AttachmentStore } from '../attachments/attachment-store.js'
 import type { RoomStore } from './room-store.js'
+import { assertRoomWardrobeAllows } from './room-wardrobe-service.js'
 
 export async function recordRoomAvatarAsset(store: RoomStore, metadata: AttachmentMetadata): Promise<void> {
   const asset = RoomAvatarAssetSchema.parse({ attachmentId: metadata.id, hash: metadata.hash,
@@ -42,6 +43,7 @@ export async function validateRoomMemberAvatars(
   members: Array<{ avatar?: RoomAvatarReference | null }>
 ): Promise<void> {
   await validateRoomAvatarReferences(store, attachments, members.map((member) => member.avatar))
+  await assertRoomWardrobeAllows(store, members.map((member) => member.avatar))
 }
 export async function getRoomAvatarImage(store: RoomStore, attachments: AttachmentStore | undefined, id: string): Promise<RoomPreviewImage> {
   const { asset, scope } = await verifiedAvatarMetadata(store, attachments, id)

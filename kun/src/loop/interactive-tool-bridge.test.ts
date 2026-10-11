@@ -38,8 +38,9 @@ describe('InteractiveToolBridge', () => {
   it('arms an approval before its requested event is observed', async () => {
     const approvalGate = new InMemoryApprovalGate()
     let immediatelyAllowed = false
+    const resumeTimer = vi.fn(), pauseForUser = vi.fn(() => resumeTimer)
     const bridge = new InteractiveToolBridge({
-      approvalGate,
+      approvalGate, pauseForUser,
       userInputGate: new InMemoryUserInputGate(),
       events: {
         record: async (event: { kind: string; approvalId?: string }) => {
@@ -62,6 +63,8 @@ describe('InteractiveToolBridge', () => {
       signal: new AbortController().signal
     })).resolves.toEqual({ decision: 'allow', reviewer: 'user' })
     expect(immediatelyAllowed).toBe(true)
+    expect(pauseForUser).toHaveBeenCalledWith('thread_1')
+    expect(resumeTimer).toHaveBeenCalledOnce()
   })
 
   it.each([
@@ -194,6 +197,7 @@ describe('InteractiveToolBridge', () => {
   })
 
   it('persists the user-input item before its request event and settles once', async () => {
+    const resumeTimer = vi.fn(), pauseForUser = vi.fn(() => resumeTimer)
     const userInputGate = new InMemoryUserInputGate()
     const order: string[] = []
     const turns = {
@@ -213,7 +217,7 @@ describe('InteractiveToolBridge', () => {
     } as unknown as RuntimeEventRecorder
     const bridge = new InteractiveToolBridge({
       approvalGate: new InMemoryApprovalGate(),
-      userInputGate,
+      userInputGate, pauseForUser,
       events,
       turns,
       sessionStore: { loadEventsSince: async () => [] } as unknown as SessionStore,
@@ -237,6 +241,8 @@ describe('InteractiveToolBridge', () => {
       signal: new AbortController().signal
     })).resolves.toEqual({ status: 'submitted', answers: [] })
 
+    expect(pauseForUser).toHaveBeenCalledWith('thread_1')
+    expect(resumeTimer).toHaveBeenCalledOnce()
     expect(turns.applyItem).toHaveBeenCalledWith(
       'thread_1',
       expect.objectContaining({

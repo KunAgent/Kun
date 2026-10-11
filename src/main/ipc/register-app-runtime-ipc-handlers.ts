@@ -67,9 +67,7 @@ import type { ModelProviderProfileV1 } from '../../shared/app-settings'
 import {
   requestRuntimeProviderQuotas
 } from '../runtime-provider-quota'
-import {
-  fetchModelsDevCatalog
-} from '../models-dev-catalog'
+import { observeProviderQuotasForReminders } from '../services/provider-quota-reminder-service'
 import {
   verifyTelegramBotToken
 } from '../telegram-runtime'
@@ -180,7 +178,10 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
     const request = parseIpcPayload('provider:quota:list', quotaListPayloadSchema, payload)
-    return requestRuntimeProviderQuotas(runtimeRequest, request?.forceRefresh === true)
+    const result = await requestRuntimeProviderQuotas(runtimeRequest, request?.forceRefresh === true)
+    // The same list drives allowance reminders, so they never need a request of their own here.
+    observeProviderQuotasForReminders(result)
+    return result
   })
 
   ipcMain.handle('provider:models-dev-catalog', async (_, payload: unknown) => {
@@ -189,7 +190,11 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
       modelsDevCatalogPayloadSchema,
       payload
     )
-    return fetchModelsDevCatalog(request, await store.load())
+    const profile = getModelProviderSettings(await store.load()).providers.find((profile) => profile.id === request.providerId)
+    const response = await runtimeRequest('/v1/model-catalog/public', 'POST', JSON.stringify({ ...request,
+      ...(profile?.catalogSources?.length ? { catalogSources: profile.catalogSources.slice(0, 8) } : {}) }))
+    if (!response.ok) throw new Error(`Kun catalog request failed (HTTP ${response.status}).`)
+    return JSON.parse(response.body)
   })
 
   const externalImportPayloadSchema = z.object({
@@ -515,6 +520,15 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
       })
     }
   )
+
+  ipcMain.handle('personal-agent:im', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = z.object({ action: z.enum(['start', 'poll', 'cancel', 'status', 'disconnect']),
+      roomId: z.string().min(1).max(128), cardId: z.string().min(1).max(128),
+      attemptId: z.string().uuid().optional(), isLark: z.boolean().optional() }).strict().parse(payload)
+    const service = getClawRuntime()?.personalIm
+    return service ? service.handle(request) : { status: 'error', message: 'Keep the Kun desktop open to connect IM' }
+  })
 
   ipcMain.handle(
     'claw:im-install:qrcode',

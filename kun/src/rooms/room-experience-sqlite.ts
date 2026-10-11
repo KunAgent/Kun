@@ -18,6 +18,7 @@ export function queryRoomSearch(db: DatabaseSync, raw: RoomSearchQuery): RoomSea
   const common = ["r.kind='room'"]
   const args: Array<string | number> = []
   if (!input.includeArchived) common.push('r.archived=0')
+  common.push("json_extract(r.document,'$.deletedAt') IS NULL")
   if (input.roomId) { common.push('r.id=?'); args.push(input.roomId) }
   if (input.repositoryRoot) {
     common.push("EXISTS(SELECT 1 FROM json_each(r.document,'$.repositories') repo WHERE json_extract(repo.value,'$.canonicalRoot')=?)")
@@ -64,7 +65,8 @@ export function queryRoomRepositories(db: DatabaseSync): RoomRepositoryChoice[] 
   return db.prepare(`SELECT json_extract(repo.value,'$.canonicalRoot') AS canonicalRoot,
     MIN(json_extract(repo.value,'$.displayName')) AS displayName,COUNT(DISTINCT r.id) AS roomCount
     FROM room_documents r,json_each(r.document,'$.repositories') repo
-    WHERE r.kind='room' AND r.archived=0 GROUP BY canonicalRoot ORDER BY canonicalRoot LIMIT 500`).all() as RoomRepositoryChoice[]
+    WHERE r.kind='room' AND r.archived=0 AND json_extract(r.document,'$.deletedAt') IS NULL
+    GROUP BY canonicalRoot ORDER BY canonicalRoot LIMIT 500`).all() as RoomRepositoryChoice[]
 }
 
 export function queryRoomRunSummary(db: DatabaseSync, raw: RoomRunSummaryQuery): RoomRunSummary {

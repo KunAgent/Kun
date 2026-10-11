@@ -16,7 +16,7 @@ describe('Rooms desktop HTTP boundary', () => {
     ['/v1/rooms/room-1/tasks/task-1', ['GET']],
     ['/v1/rooms/room-1/events?since_seq=10', ['GET']],
     ['/v1/rooms/room-1/rules', ['GET', 'POST']],
-    ['/v1/rooms/room-1/read', ['POST']],
+    ['/v1/rooms/room-1/read', ['GET', 'POST']],
     ['/v1/rooms/room-1/search?q=hello', ['GET']],
     ['/v1/rooms/room-1/messages/message-1', ['GET']],
     ['/v1/rooms/room-1/requests?limit=50&cursor=100', ['GET']],

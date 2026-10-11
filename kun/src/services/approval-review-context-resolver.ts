@@ -19,8 +19,9 @@ export type ApprovalReviewModelContextResolver = (
 /** Resolve one immutable review route/client before the first await. */
 export function createApprovalReviewModelContextResolver(input: {
   selection: () => ApprovalReviewModelSelection | undefined
-  clients: { resolve(providerId?: string): ModelClient }
+  clients: { resolve(providerId?: string): ModelClient; capture?(providerId?: string): ModelClient }
   routePoolProviderIds?: readonly string[]
+  inheritedRouteAllowed?: (route: ApprovalReviewModelRoute) => boolean
 }): ApprovalReviewModelContextResolver {
   const routePoolIds = new Set(
     (input.routePoolProviderIds ?? []).map((id) => id.trim().toLowerCase())
@@ -29,8 +30,9 @@ export function createApprovalReviewModelContextResolver(input: {
     const selection = input.selection() ?? DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION
     if (selection.mode === 'inherit') {
       const route = exactRoute(actingRoute)
-      if (!route) throw new Error('the acting turn model route is unavailable')
-      return { source: 'inherit', route, client: input.clients.resolve(route.providerId) }
+      if (!route || route.unresolvedGatewayAlias) throw new Error('the acting turn model route is unavailable until the gateway resolves its first upstream')
+      if (input.inheritedRouteAllowed && !input.inheritedRouteAllowed(route)) throw new Error('The acting gateway target is no longer allowed; automatic review will not substitute another provider')
+      return { source: 'inherit', route, client: input.clients.capture?.(route.providerId) ?? input.clients.resolve(route.providerId) }
     }
     if (!selection.providerId.trim() || !selection.model.trim()) {
       throw new Error('the fixed approval review route is incomplete')
@@ -52,7 +54,7 @@ export function createApprovalReviewModelContextResolver(input: {
     return {
       source: 'fixed',
       route,
-      client: input.clients.resolve(route.providerId)
+      client: input.clients.capture?.(route.providerId) ?? input.clients.resolve(route.providerId)
     }
   }
 }
@@ -64,6 +66,8 @@ function exactRoute(route: ApprovalReviewModelRoute | undefined): ApprovalReview
   const accountId = route?.accountId?.trim()
   return {
     model,
+    ...(route?.unresolvedGatewayAlias ? { unresolvedGatewayAlias: true as const } : {}),
+    ...(route?.requestedGatewayAlias ? { requestedGatewayAlias: route.requestedGatewayAlias } : {}),
     ...(providerId ? { providerId } : {}),
     ...(accountId ? { accountId } : {})
   }

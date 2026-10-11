@@ -1,0 +1,5 @@
+{
+  "marketSkillInstalled": "Installed {{name}} from {{source}}: {{path}}",
+  "marketSkillInstallFailed": "Couldn't install {{name}}: {{message}}",
+  "marketMcpPlanFailed": "Couldn't prepare {{name}}: {{message}}"
+}

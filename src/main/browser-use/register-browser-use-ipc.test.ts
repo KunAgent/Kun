@@ -103,7 +103,8 @@ describe('registerBrowserUseIpc', () => {
       h.window,
       { x: 0, y: 0, width: 800, height: 600 },
       true,
-      true
+      true,
+      undefined
     )
   })
 
@@ -141,4 +142,26 @@ describe('registerBrowserUseIpc', () => {
     h.dispose()
     expect(h.handlers.size).toBe(0)
   })
+})
+
+it('forwards exact expected turn identity on every browser read and mutation', async () => {
+  const h = harness(), identity = { threadId: 'thread-1', expectedTurnId: 'turn-current' }
+  const invoke = (channel: string, input: unknown) => h.handlers.get('browser-use:' + channel)!(h.event, input)
+  invoke('state:get', identity)
+  expect(h.manager.stateForThread).toHaveBeenLastCalledWith('thread-1', 'turn-current')
+  invoke('mount', { ...identity, visible: true, supervisionActive: true, bounds: { x: 0, y: 0, width: 400, height: 300 } })
+  expect(h.manager.mount).toHaveBeenLastCalledWith('thread-1', h.window, { x: 0, y: 0, width: 400, height: 300 }, true, true, 'turn-current')
+  invoke('control', { ...identity, controlOwner: 'manual' })
+  expect(h.manager.setControlOwner).toHaveBeenLastCalledWith('thread-1', 'manual', 'turn-current')
+  invoke('navigate', { ...identity, command: 'back' })
+  expect(h.manager.navigate).toHaveBeenLastCalledWith('thread-1', 'back', 'turn-current')
+  const decision = { ...identity, requestId: 'consent-request-identifier', decision: 'deny' }
+  invoke('origin:decide', decision)
+  invoke('action:decide', decision)
+  expect(h.manager.decideOrigin).toHaveBeenLastCalledWith(decision)
+  expect(h.manager.decideAction).toHaveBeenLastCalledWith(decision)
+  invoke('stop', identity)
+  expect(h.manager.stop).toHaveBeenLastCalledWith('thread-1', 'turn-current')
+  await invoke('clear', identity)
+  expect(h.manager.clear).toHaveBeenLastCalledWith('thread-1', 'cleared', 'turn-current')
 })

@@ -2,12 +2,18 @@
 // 后面的 store 模块在 import 阶段就会读这些键。
 import './lib/legacy-local-storage-migration'
 import React from 'react'
+import { startArtUpdates } from './components/rooms/art-asset-store'
 import ReactDOM from 'react-dom/client'
 import '@xyflow/react/dist/style.css'
 import './index.css'
 import './styles/base-shell.css'
 import './styles/startup-gate.css'
+import './styles/kun-loader.css'
 import './styles/settings-layout.css'
+import './styles/settings-chrome.css'
+import './styles/settings-controls.css'
+import './styles/settings-pages.css'
+import './styles/settings-features.css'
 import './styles/surfaces-write.css'
 import './styles/markdown-code.css'
 import './styles/write-editor.css'
@@ -20,23 +26,35 @@ import './styles/graph-workbench.css'
 import './styles/neutral-polish.css'
 import './styles/provider-quota-panel.css'
 import { applyCursorSpotlight, initializeStartupTheme } from './lib/apply-theme'
+import { applyCachedColorPalette } from './lib/color-palettes'
 import { installCursorSpotlightTracking } from './lib/cursor-spotlight'
 import { installDataMigrationRendererRpc } from './data-migration/renderer-state-rpc'
 import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
+import { whenDesktopStartupReady } from './lib/desktop-startup-ready'
 import { StartupGate } from './StartupGate'
 import { installProviderMutationFlushHandler } from './services/provider-mutation-flush-service'
+import { startActivityForegroundReporting } from './store/activity-foreground'
 
 document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode
   ?? resolveDesktopTitleBarMode(window.kunGui?.platform ?? 'unknown', false)
 if (window.kunGui?.isRemoteWeb === true) document.documentElement.dataset.remoteWeb = 'true'
-initializeStartupTheme(window.kunGui?.getSettings)
+void whenDesktopStartupReady().then(startArtUpdates)
+initializeStartupTheme()
+applyCachedColorPalette()
 applyCursorSpotlight(true)
 installCursorSpotlightTracking()
 const storageRelocationMode = new URLSearchParams(window.location.search).get('storageRelocation') === '1'
 const runtimeMigrationRecoveryMode = new URLSearchParams(window.location.search).get('runtimeMigrationRecovery') === '1'
-if (!storageRelocationMode && !runtimeMigrationRecoveryMode) installDataMigrationRendererRpc()
-installProviderMutationFlushHandler()
+const missionControlPopoutMode = new URLSearchParams(window.location.search).get('popout') === '1'
+if (!storageRelocationMode && !runtimeMigrationRecoveryMode && !missionControlPopoutMode) {
+  installDataMigrationRendererRpc()
+}
+if (!missionControlPopoutMode) {
+  installProviderMutationFlushHandler()
+  // The popout owns no chat thread, so it must not claim activity foreground.
+  startActivityForegroundReporting()
+}
 
 // The renderer owns exactly one React root for the whole app lifecycle.
 // Startup phases, boot views, and the workbench all render through StartupGate.
@@ -52,6 +70,17 @@ void bootstrap().catch((error: unknown) => {
 
 async function bootstrap(): Promise<void> {
   await import('./i18n')
+  if (missionControlPopoutMode) {
+    const { MissionControlPopoutView } = await import(
+      './components/mission-control/MissionControlPopoutView'
+    )
+    reactRoot.render(
+      <React.StrictMode>
+        <MissionControlPopoutView />
+      </React.StrictMode>
+    )
+    return
+  }
   reactRoot.render(
     <React.StrictMode>
       <StartupGate

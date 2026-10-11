@@ -1,3 +1,4 @@
+import { ModelAttemptAccountingSchema } from './model-attempt-accounting.js'
 import { z } from 'zod'
 
 /**
@@ -8,7 +9,31 @@ import { z } from 'zod'
  * the values are absent, `cacheHitRate` is reported as `null` rather than
  * guessing at zero.
  */
+/** Request-local gateway metadata. Contains no prompt, output, header values, or secrets. */
+export const GatewayUsageMetadataSchema = z.object({
+  clientId: z.string().min(1),
+  requestId: z.string().min(1),
+  /** Opaque hash bound to the authenticated client; never a Kun thread id. */
+  sessionId: z.string().min(1).optional(),
+  /** Calling agent (key prefix, x-kun-agent or User-Agent); attribution only, never authorization. */
+  agent: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/).optional(),
+  status: z.enum(['completed', 'failed', 'cancelled']),
+  latencyMs: z.number().nonnegative(),
+  retryCount: z.number().int().nonnegative(),
+  failoverCount: z.number().int().nonnegative(),
+  tokenUsage: z.enum(['upstream', 'unavailable']),
+  attempts: z.array(z.object({ attemptId: z.string(), providerId: z.string(), modelId: z.string(),
+    promptTokens: z.number().int().nonnegative().optional(), completionTokens: z.number().int().nonnegative().optional(),
+    usageKnown: z.boolean() }).strict()).max(16).optional(),
+  /** Costs are not a reconciled provider bill, even when upstream supplies them. */
+  costBasis: z.literal('unverified'),
+  httpStatus: z.number().int().min(400).max(599).optional()
+}).strict()
+export type GatewayUsageMetadata = z.infer<typeof GatewayUsageMetadataSchema>
+
 export const UsageSnapshotSchema = z.object({
+  attemptAccounting: ModelAttemptAccountingSchema.optional(),
+  gateway: GatewayUsageMetadataSchema.optional(),
   promptTokens: z.number().int().nonnegative(),
   completionTokens: z.number().int().nonnegative(),
   /** Provider-reported reasoning tokens when separately available. */
@@ -80,6 +105,15 @@ export const UsageSnapshotSchema = z.object({
    * until the final usage/completed chunk. Used with `completionTokens` to
    * derive per-request tokens-per-second. */
   requestGenerationMs: z.number().nonnegative().optional(),
+  /**
+   * Tokens produced within `requestGenerationMs` when that differs from
+   * `completionTokens`. Delegated Agents report tokens per call or turn but
+   * not when they were generated, so Kun measures the stream itself and
+   * estimates the tokens that flowed in it (capped by the reported
+   * completion). Tokens-per-second divides this by the generation time;
+   * absent means `completionTokens`.
+   */
+  requestGenerationTokens: z.number().nonnegative().optional(),
   /** Average TTFT across model calls of the current turn (null = no data). */
   turnAvgTtftMs: z.number().nonnegative().nullable().optional(),
   /** Average tokens-per-second across model calls of the current turn. */
@@ -195,7 +229,9 @@ export const ThreadUsageResponseSchema = UsageResponseSchema.extend({
 export type ThreadUsageResponse = z.infer<typeof ThreadUsageResponseSchema>
 
 export const ModelUsageBucketSchema = DailyUsageCountersSchema.extend({
-  model: z.string().min(1)
+  model: z.string().min(1),
+  /** External Agents whose turns reported usage for this model. */
+  harness_ids: z.array(z.string().min(1)).optional()
 })
 export type ModelUsageBucket = z.infer<typeof ModelUsageBucketSchema>
 
@@ -263,9 +299,13 @@ export const TurnUsageCountersSchema = z.object({
 }).strict()
 export type TurnUsageCounters = z.infer<typeof TurnUsageCountersSchema>
 
+export const UsageEventSourceSchema = z.enum(['native', 'harness-gateway', 'harness-reported', 'public-gateway', 'utility'])
+export type UsageEventSource = z.infer<typeof UsageEventSourceSchema>
+
 export const TurnUsageBucketSchema = TurnUsageCountersSchema.extend({
   turn_id: z.string().min(1),
-  reference_price_breakdown: TurnUsageReferencePriceBreakdownSchema.nullable().optional()
+  reference_price_breakdown: TurnUsageReferencePriceBreakdownSchema.nullable().optional(),
+  sources: z.array(UsageEventSourceSchema).optional()
 }).strict()
 export type TurnUsageBucket = z.infer<typeof TurnUsageBucketSchema>
 

@@ -30,8 +30,9 @@ describe('ContextWindowSettingsPanel', () => {
       onWindowModeChange: () => undefined
     }))
     expect(markup).toContain('Context compression')
-    expect(markup).toContain('Gives the model budget notices and a compression tool.')
+    expect(markup).toContain('Experimental context compression.')
     expect(markup).toContain('Enable windowed context')
+    expect(markup).toContain('data-open="false"')
     expect(markup).toContain('aria-checked="false"')
     expect(markup).toContain('aria-disabled="true"')
   })
@@ -129,7 +130,7 @@ describe('LaboratorySettingsSection context compression toggles', () => {
         }
       }))
     })
-    const panel = renderer.root.findByProps({ id: 'laboratory-settings-panel-contextWindow' })
+    const panel = renderer.root
     const parentToggle = panel.findByProps({
       role: 'switch',
       'aria-label': 'Model-initiated context compression'

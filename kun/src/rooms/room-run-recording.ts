@@ -1,3 +1,5 @@
+import type { MemoryInjectionReceipt } from '../memory/memory-injection-receipt.js'
+import { privatePublicationChecks } from '../agents/agent-direct-publication-guard.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { RoomRunRecordSchema, type RoomRunRecord } from '../contracts/room-runs.js'
 import type { ThreadRecord } from '../contracts/threads.js'
@@ -9,11 +11,13 @@ import { RoomStoreConflictError } from './room-store.js'
 import { captureRoomTurnUsageBaseline, readRoomTurnUsage } from './room-run-usage.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
 import { roomRunSegmentMessageId } from './room-run-segments.js'
+import { beginActivity, finishActivity } from './engagement/queue.js'
 
 export const roomRunId = (roomId: string, clientRequestId: string, triage = false): string =>
   'run-' + createHash('sha256').update(JSON.stringify([roomId, clientRequestId, triage])).digest('hex').slice(0, 40)
 export type RoomRunAdmission = Partial<Pick<RoomRunRecord,
   'phase' | 'requestId' | 'rootRequestId' | 'triggerMessageId' | 'contextId' | 'generation' |
+  'communicationRequired' | 'finalResponseRequired' |
   'attempt' | 'previousRunId' | 'integrationId' | 'integrationStage' | 'input' | 'model' | 'providerId' | 'accountId'>>
 
 async function retry<T>(work: () => Promise<T>): Promise<T> {
@@ -34,7 +38,7 @@ export async function prepareRoomRun(deps: RoomRuntimeDeps, thread: ThreadRecord
     const snapshot = await deps.store.get<{ prompt: string; attachmentIds: string[] }>('context',
       old.value.threadId ? id + '-input' : old.value.contextId ?? id + '-input') ??
       await deps.store.get<{ prompt: string; attachmentIds: string[] }>('context', old.value.contextId ?? id + '-input')
-    const memoryInput = scope.participantAgentId ? await deps.store.get<{ originalHash: string; prompt: string; memoryIds?: string[] }>('context',
+    const memoryInput = scope.participantAgentId ? await deps.store.get<{ originalHash: string; prompt: string; memoryIds?: string[]; memoryReceipt?: MemoryInjectionReceipt }>('context',
       agentStableId('agent-memory-input', thread.id, clientRequestId)) : null
     const enriched = !old.value.threadId && snapshot && memoryInput?.roomId === scope.roomId &&
       memoryInput.value.prompt === prompt && memoryInput.value.originalHash === createHash('sha256').update(snapshot.value.prompt).digest('hex')
@@ -46,14 +50,14 @@ export async function prepareRoomRun(deps: RoomRuntimeDeps, thread: ThreadRecord
       if (enriched) await deps.store.commit({ requestId: id + '-memory-input',
         checks: [{ kind: 'context', id: id + '-input', expectedRevision: null }],
         puts: [{ kind: 'context', id: id + '-input', roomId: scope.roomId, value: {
-          id: id + '-input', roomId: scope.roomId, prompt, attachmentIds, memoryIds: memoryInput?.value.memoryIds
+          id: id + '-input', roomId: scope.roomId, prompt, attachmentIds, memoryIds: memoryInput?.value.memoryIds, memoryReceipt: memoryInput?.value.memoryReceipt
         } }] })
       await updateRoomRun(deps.store, id, { threadId: thread.id, model: thread.model,
         ...await captureRoomTurnUsageBaseline(deps, thread.id), ...override })
     }
     return (await deps.store.get<RoomRunRecord>('room_run', id))!.value
   }
-  const memoryInput = scope.participantAgentId ? await deps.store.get<{ memoryIds?: string[] }>('context', agentStableId('agent-memory-input', thread.id, clientRequestId)) : null
+  const memoryInput = scope.participantAgentId ? await deps.store.get<{ memoryIds?: string[]; memoryReceipt?: MemoryInjectionReceipt }>('context', agentStableId('agent-memory-input', thread.id, clientRequestId)) : null
   const task = scope.taskId ? await deps.store.get<RoomTaskExecution>('task', scope.taskId) : null
   const requestId = override.requestId ?? scope.requestId ?? task?.value.task.requestId
   const request = requestId ? await deps.store.get<RoomRequestState>('request', requestId) : null
@@ -83,7 +87,7 @@ export async function prepareRoomRun(deps: RoomRuntimeDeps, thread: ThreadRecord
       checks: [{ kind: 'room_run', id, expectedRevision: null }, { kind: 'context', id: id + '-input', expectedRevision: null }],
       puts: [{ kind: 'room_run', id, roomId: run.roomId, taskId: run.taskId, value: run },
         { kind: 'context', id: id + '-input', roomId: run.roomId, taskId: run.taskId,
-          value: { id: id + '-input', roomId: run.roomId, rootRequestId, memberId: run.memberId, prompt, attachmentIds, memoryIds: memoryInput?.value.memoryIds } }],
+          value: { id: id + '-input', roomId: run.roomId, rootRequestId, memberId: run.memberId, prompt, attachmentIds, memoryIds: memoryInput?.value.memoryIds, memoryReceipt: memoryInput?.value.memoryReceipt } }],
       events: [{ roomId: run.roomId, kind: 'room_run.updated', payload: { id, rootRequestId, memberId: run.memberId } }] })
     return run
   })
@@ -131,7 +135,17 @@ export async function observeRecordedRoomTurn(deps: RoomRuntimeDeps, thread: Thr
     } else if (!row.value.usage) patch.usageStatus = accounting.usageStatus
   }
   await updateRoomRun(deps.store, id, patch)
+  if (row.value.participantAgentId && !row.value.taskId && !row.value.integrationId &&
+    WARDROBE_PHASES.has(row.value.phase) && !turn.messageSource) {
+    try {
+      if (turn.status === 'running') await beginActivity(deps.store, {source:'room',roomId:row.value.roomId,runId:id,
+        sourceLabel:row.value.memberLabel}, turn.startedAt ?? new Date().toISOString())
+      else if (['completed','failed','aborted'].includes(turn.status)) await finishActivity(deps.store,id,
+        turn.status === 'aborted' ? 'cancelled' : turn.status as 'completed'|'failed', row.value.publishedMessageId)
+    } catch { console.warn('[kun] engagement lifecycle unavailable') }
+  }
 }
+const WARDROBE_PHASES = new Set<RoomRunRecord['phase']>(['conversation', 'discussion', 'coordination'])
 
 /** Add provenance and its publication result to the same message transaction. */
 export async function attachRoomRunPublication(store: RoomStore, commit: RoomStoreCommit,
@@ -142,6 +156,8 @@ export async function attachRoomRunPublication(store: RoomStore, commit: RoomSto
     (row.value.taskId && row.value.taskId !== message.taskId)) {
     throw new Error('Message run provenance does not match its room and member')
   }
+  commit.checks ??= []
+  commit.checks.push(...await privatePublicationChecks(store, row.value))
   const segmented = Boolean(message.originItemId)
   if (segmented) {
     // Segmented publication allows one message per source item. Its identity must be
@@ -166,8 +182,16 @@ export async function attachRoomRunPublication(store: RoomStore, commit: RoomSto
     ? (terminal ? row.value.status === 'failed' ? 'failed' : row.value.status === 'cancelled' ? 'cancelled' : 'published' : row.value.outcome)
     : (message.status === 'streaming' ? row.value.outcome : message.status === 'failed' ? 'failed' : 'published')
   const publishedMessageId = segmented ? (row.value.publishedMessageId ?? message.id) : message.id
+  const visibleAt = message.createdAt
+  const trigger = !row.value.firstVisibleAt && row.value.triggerMessageId
+    ? await store.get<RoomMessage>('message', row.value.triggerMessageId) : null
+  const firstResponseMs = trigger?.roomId === message.roomId
+    ? Math.max(0, Date.parse(visibleAt) - Date.parse(trigger.value.createdAt)) : undefined
   commit.puts.push({ kind: 'room_run', id: runId, roomId: row.roomId, taskId: row.taskId,
-    value: { ...row.value, outcome, publishedMessageId, updatedAt: new Date().toISOString() } })
+    value: { ...row.value, outcome, publishedMessageId, updatedAt: new Date().toISOString(),
+      ...(visibleAt ? { firstVisibleAt: row.value.firstVisibleAt ?? visibleAt, lastVisibleAt: visibleAt,
+        ...(firstResponseMs !== undefined && Number.isFinite(firstResponseMs) ? { firstResponseMs } : {}),
+        ...(message.deliveryPhase ? { lastDeliveryPhase: message.deliveryPhase } : {}) } : {}) } })
   commit.events.push({ roomId: message.roomId, kind: 'room_run.updated', payload: { id: runId, memberId: row.value.memberId } })
 }
 

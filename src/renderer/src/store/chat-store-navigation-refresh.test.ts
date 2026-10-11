@@ -17,6 +17,7 @@ import {
   saveWriteThreadRegistry
 } from '../write/write-thread-registry'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
+import { useWorkSessionStore } from '../write/work-session-store'
 import {
   isSddAssistantThread,
   markSddAssistantThread,
@@ -426,7 +427,8 @@ describe('chat-store navigation workspace selection', () => {
 
     expect(provider.listThreads).toHaveBeenCalledWith({
       includeArchived: true,
-      includeSide: true
+      includeSide: true,
+      workbenchScope: 'code'
     })
     // The currently open side thread remains visible through the ordinary
     // active-thread preservation path; its legacy run id grants no special case.
@@ -533,26 +535,22 @@ describe('write assistant file conversation selection', () => {
 
   afterEach(() => {
     useWriteWorkspaceStore.getState().resetWorkspace()
+    useWorkSessionStore.setState({ current: {}, transitions: 0 })
     rendererRuntimeClient.invalidateSettings()
     vi.unstubAllGlobals()
   })
 
-  it('selects the conversation mapped to the active file', async () => {
+  it('keeps the space\'s current session whatever file is active', async () => {
     const storage = new MemoryStorage()
     const workspace = '/Users/zxy/write'
-    const registry = markWriteThread(
-      workspace,
-      'thr_b',
-      markWriteThread(workspace, 'thr_a', emptyWriteThreadRegistry(), `${workspace}/a.md`),
-      `${workspace}/b.md`
-    )
-    saveWriteThreadRegistry(registry, storage)
+    saveWriteThreadRegistry(markWriteThread(workspace, 'thr_b', emptyWriteThreadRegistry(), `${workspace}/b.md`), storage)
     vi.stubGlobal('window', { localStorage: storage })
     useWriteWorkspaceStore.setState({
       workspaceRoot: workspace,
       activeFilePath: `${workspace}/b.md`,
       activeFileKind: 'text'
     })
+    useWorkSessionStore.getState().select(workspace, 'thr_a')
     const harness = buildHarness()
     Object.assign(harness.state, harness.actions)
     harness.state.activeThreadId = 'thr_a'
@@ -562,8 +560,9 @@ describe('write assistant file conversation selection', () => {
       thread({ id: 'thr_b', workspace })
     ]
 
-    await expect(harness.actions.ensureWriteThreadForWorkspace(workspace)).resolves.toBe('thr_b')
-    expect(harness.selectThread).toHaveBeenCalledWith('thr_b')
+    // Opening b.md does not switch to the session anchored to it.
+    await expect(harness.actions.ensureWriteThreadForWorkspace(workspace)).resolves.toBe('thr_a')
+    expect(harness.selectThread).not.toHaveBeenCalled()
   })
 
   it('creates and records a fresh conversation for an unmapped file', async () => {

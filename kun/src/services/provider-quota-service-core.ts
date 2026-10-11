@@ -1,3 +1,5 @@
+import { scopedQuotaFetch, providerQuotaIdentity } from './provider-quota-security.js'
+import { randomUUID } from 'node:crypto'
 import {
   ProviderQuotaListResponseSchema,
   type ProviderLocalCostSummary,
@@ -16,6 +18,8 @@ import {
 } from './provider-subscription-quota.js'
 import { isSubscriptionQuotaProbe, mapWithConcurrency, proxyAwareFetch, runProbe } from './provider-quota-service-probe.js'
 import { exactHostname, quotaErrorMessage } from './provider-quota-service-metrics.js'
+import { queryComposerSubscriptionQuota, type NativeSubscriptionProfileResolver } from './composer-subscription-quota.js'
+import type { ComposerSubscriptionQuotaQuery, ComposerSubscriptionQuotaResponse } from '../contracts/composer-subscription-quota.js'
 
 export const QUOTA_TIMEOUT_MS = 12_000
 
@@ -46,6 +50,13 @@ export type ProviderQuotaProbeKind =
   | 'minimax-cn'
   | 'kimi-code'
   | 'openai'
+  | 'siliconflow-cn'
+  | 'siliconflow-global'
+  | 'stepfun-cn'
+  | 'stepfun-global'
+  | 'aihubmix'
+  | 'new-api'
+  | 'custom-balance'
   | SubscriptionQuotaProbeKind
 
 export type ProviderQuotaProbe = {
@@ -56,6 +67,7 @@ export type ProviderQuotaProbe = {
 
 export type ProviderQuotaSourceSnapshot = {
   profiles: ProviderQuotaProbeProfile[]
+  defaultProviderId?: string
   /** Retained for legacy callers only; Provider profiles never inherit it. */
   proxyUrl?: string
 }
@@ -86,6 +98,7 @@ export class ProviderQuotaService {
   private readonly subscriptionRuntime: Partial<SubscriptionQuotaRuntime>
   private readonly cache = new Map<string, { entry: ProviderQuotaEntry; fetchedAt: number }>()
   private readonly inflight = new Map<string, Promise<ProviderQuotaEntry>>()
+  private readonly subscriptionScopes = new Map<string, string>()
 
   constructor(private readonly options: {
     loadSource: () => Promise<ProviderQuotaSourceSnapshot>
@@ -133,6 +146,23 @@ export class ProviderQuotaService {
     return ProviderQuotaListResponseSchema.parse({ entries, refreshedAt })
   }
 
+  async subscription(query: ComposerSubscriptionQuotaQuery, native: NativeSubscriptionProfileResolver): Promise<ComposerSubscriptionQuotaResponse> {
+    return queryComposerSubscriptionQuota(query, {
+      loadSource: this.options.loadSource, native,
+      refresh: (profile) => this.cachedRefreshProfile(profile, query.forceRefresh === true),
+      nowIso: this.nowIso,
+      publicScopeKey: (identity) => {
+        let scope = this.subscriptionScopes.get(identity)
+        if (!scope) {
+          scope = randomUUID()
+          this.subscriptionScopes.set(identity, scope)
+          while (this.subscriptionScopes.size > 64) this.subscriptionScopes.delete(this.subscriptionScopes.keys().next().value!)
+        }
+        return scope
+      }
+    })
+  }
+
   /**
    * Probes a profile through the shared TTL cache. Concurrent callers share
    * one in-flight request; a failed refresh keeps the previous snapshot so
@@ -142,13 +172,16 @@ export class ProviderQuotaService {
     profile: ProviderQuotaProbeProfile,
     forceRefresh: boolean
   ): Promise<ProviderQuotaEntry> {
-    const key = profile.id.trim().toLowerCase()
+    const prefix = `${profile.id.trim().toLowerCase()}:`
+    const key = `${prefix}${providerQuotaIdentity(profile)}`
+    for (const previous of this.cache.keys()) if (previous.startsWith(prefix) && previous !== key) this.cache.delete(previous)
+    while (this.cache.size > 1_024) this.cache.delete(this.cache.keys().next().value!)
     const cached = this.cache.get(key)
     if (!forceRefresh && cached && this.now() - cached.fetchedAt < QUOTA_CACHE_TTL_MS) {
       return Promise.resolve(cached.entry)
     }
     const pending = this.inflight.get(key)
-    if (pending && !forceRefresh) return pending
+    if (pending) return pending
     const request = this.refreshProfile(profile, profile.proxyUrl ?? '')
       .then((entry) => {
         const previous = this.cache.get(key)
@@ -172,6 +205,8 @@ export class ProviderQuotaService {
       providerName: provider.name,
       ...(provider.presetId ? { presetId: provider.presetId } : {})
     }
+    if (provider.configured === false) return { ...baseEntry, status: 'missing_credentials', metrics: [],
+      message: 'The provider connection has no usable protected credential.' }
     const probe = classifyProviderQuotaProbe(provider)
     if (!probe) {
       return {
@@ -180,6 +215,9 @@ export class ProviderQuotaService {
         metrics: [],
         message: 'This provider does not expose a supported quota API in this version.'
       }
+    }
+    if (provider.authProfile && !provider.authProfile.scope.purposes.includes('quota')) return {
+      ...baseEntry, status: 'unsupported', metrics: [], message: 'This connection does not authorize quota requests.'
     }
     const apiKey = provider.apiKey.trim()
     if (!isSubscriptionQuotaProbe(probe.kind) && !apiKey) {
@@ -196,7 +234,7 @@ export class ProviderQuotaService {
       const result = await runProbe(
         probe.kind,
         provider,
-        { fetcher: this.fetcher, proxyUrl, apiKey },
+        { fetcher: scopedQuotaFetch(this.fetcher, provider, probe.kind), proxyUrl, apiKey },
         this.subscriptionRuntime
       )
       return {
@@ -236,6 +274,7 @@ export function classifyProviderQuotaProbe(
   provider: ProviderQuotaProbeProfile
 ): ProviderQuotaProbe | null {
   const stableId = provider.presetId || provider.id
+  const hostname = exactHostname(provider.baseUrl)
   if (stableId === 'claude-subscription' && provider.kind === 'agent-sdk') {
     return {
       kind: 'claude-subscription',
@@ -243,14 +282,14 @@ export function classifyProviderQuotaProbe(
       dashboardUrl: 'https://claude.ai/settings/usage'
     }
   }
-  if (stableId === 'codex' && provider.kind === 'http') {
+  if (stableId === 'codex' && provider.kind === 'http' && hostname === 'chatgpt.com') {
     return {
       kind: 'codex-subscription',
       source: 'ChatGPT Codex usage API',
       dashboardUrl: 'https://chatgpt.com/codex/settings/usage'
     }
   }
-  if (stableId === 'grok-subscription' && provider.kind === 'http') {
+  if (stableId === 'grok-subscription' && provider.kind === 'http' && hostname === 'cli-chat-proxy.grok.com') {
     return {
       kind: 'grok-subscription',
       source: 'Grok web billing API',
@@ -278,7 +317,6 @@ export function classifyProviderQuotaProbe(
       dashboardUrl: 'https://aistudio.google.com/usage'
     }
   }
-  const hostname = exactHostname(provider.baseUrl)
   if (
     stableId === 'opencode-go' &&
     provider.kind === 'http' &&
@@ -342,6 +380,27 @@ export function classifyProviderQuotaProbe(
       dashboardUrl: 'https://openrouter.ai/settings/credits'
     }
   }
+  if (hostname === 'api.siliconflow.cn' || hostname === 'api.siliconflow.com') {
+    return {
+      kind: hostname === 'api.siliconflow.cn' ? 'siliconflow-cn' : 'siliconflow-global',
+      source: 'SiliconFlow account API',
+      dashboardUrl: hostname === 'api.siliconflow.cn' ? 'https://cloud.siliconflow.cn/expensebill' : 'https://cloud.siliconflow.com/expensebill'
+    }
+  }
+  if (hostname === 'api.stepfun.com' || hostname === 'api.stepfun.ai') {
+    return {
+      kind: hostname === 'api.stepfun.com' ? 'stepfun-cn' : 'stepfun-global',
+      source: 'StepFun account API',
+      dashboardUrl: hostname === 'api.stepfun.com' ? 'https://platform.stepfun.com/account-overview' : 'https://platform.stepfun.ai/account-overview'
+    }
+  }
+  if (hostname === 'aihubmix.com') {
+    return { kind: 'aihubmix', source: 'AiHubMix key balance API', dashboardUrl: 'https://console.aihubmix.com/token' }
+  }
+  // new-api relays answer a key's own balance at /api/usage/token on their own host.
+  if (stableId === 'cherryin' && hostname === 'open.cherryin.ai') {
+    return { kind: 'new-api', source: 'Relay key usage API', dashboardUrl: 'https://open.cherryin.ai/console/token' }
+  }
   if (hostname === 'api.openai.com') {
     return {
       kind: 'openai',
@@ -349,5 +408,22 @@ export function classifyProviderQuotaProbe(
       dashboardUrl: 'https://platform.openai.com/settings/organization/billing/overview'
     }
   }
+  // A balance endpoint the user named, on the host that already receives the key or one they confirmed.
+  const custom = customBalanceUrl(provider)
+  if (custom) return { kind: 'custom-balance', source: 'Custom balance endpoint', dashboardUrl: custom.origin }
   return null
+}
+
+/**
+ * The user's balance URL when it is HTTPS on the provider's own host, or on
+ * the one other host they confirmed by name; otherwise undefined. The key is
+ * sent there, so a changed URL host voids an earlier confirmation.
+ */
+export function customBalanceUrl(provider: Pick<ProviderQuotaProbeProfile, 'balanceUrl' | 'baseUrl' | 'balanceHost'>): URL | undefined {
+  if (!provider.balanceUrl || !provider.baseUrl) return undefined
+  try {
+    const url = new URL(provider.balanceUrl)
+    if (url.protocol !== 'https:' || url.username || url.password) return undefined
+    return url.host === new URL(provider.baseUrl).host || (provider.balanceHost !== undefined && url.host === provider.balanceHost.toLowerCase()) ? url : undefined
+  } catch { return undefined }
 }

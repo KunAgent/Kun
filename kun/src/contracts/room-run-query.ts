@@ -1,3 +1,4 @@
+import type { MemoryInjectionReceipt } from '../memory/memory-injection-receipt.js'
 import type { TurnItem } from './items.js'
 import type { RoomMessage } from './rooms.js'
 import type { RoomRunRecord } from './room-runs.js'
@@ -10,7 +11,7 @@ export type RoomRunAvailability = {
 export type RoomRunDetail = {
   run: RoomRunRecord
   trigger?: RoomMessage
-  context?: { prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }
+  context?: { prompt?: string; attachmentIds?: string[]; memoryIds?: string[]; memoryReceipt?: MemoryInjectionReceipt }
   availability: RoomRunAvailability
   eventsCursor: string
   /** Authorized source workspace, present only after exact run/thread validation. */

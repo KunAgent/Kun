@@ -47,7 +47,7 @@ describe('preserveRedactedProviderCredentials', () => {
     const prev = settingsWithSecrets()
     prev.agents.kun.providerId = providerId
     const patch = preserveRedactedProviderCredentials(prev, {
-      provider: { providers: [], apiKey: '', excludedBuiltinProviderIds: ['deepseek', 'opencode-free'] },
+      provider: { providers: [], apiKey: '', excludedBuiltinProviderIds: ['deepseek'] },
       agents: { kun: { providerId: '', apiKey: '', baseUrl: '' } }
     })
     expect(patch.provider?.apiKey).toBe('')

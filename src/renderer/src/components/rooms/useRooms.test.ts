@@ -16,7 +16,7 @@ vi.mock('./rooms-client', async (original) => ({
   roomsClient: client,
   roomsRequest: client.request
 }))
-const events = vi.hoisted(() => new Set<(event: { seq: number; roomId: string; kind: string }) => void>())
+const events = vi.hoisted(() => new Set<(event: { seq: number; roomId: string; kind: string; payload?: { id: string } }) => void>())
 const connection = vi.hoisted(() => ({ live: false }))
 vi.mock('./useRoomEvents', () => ({
   roomEventsLive: () => connection.live,
@@ -60,15 +60,30 @@ describe('Rooms view state', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
-  async function mount(): Promise<void> {
+  async function mount(options?: Parameters<typeof useRooms>[2]): Promise<void> {
     function Harness() {
-      state = useRooms()
+      state = useRooms('group', true, options)
       return null
     }
     await act(async () => {
       renderer = create(createElement(Harness))
     })
   }
+
+  it('loads private history in the Rooms surface without discarding the selected private room', async () => {
+    client.get.mockImplementation(async (id) => ({ room: { ...room, id, conversationKind: 'user_agent' } }))
+    await mount({ scope: 'rooms', initialSelectedId: 'private-room' })
+    expect(state.selectedId).toBe('private-room')
+    expect(state.room).toMatchObject({ id: 'private-room', conversationKind: 'user_agent' })
+    expect(state.messages.map((message) => message.id)).toEqual(['m2'])
+  })
+
+  it('still rejects group selection in the Code private-chat shortcut', async () => {
+    await mount({ scope: 'private', initialSelectedId: 'group-room' })
+    expect(state.selectedId).toBe('')
+    expect(state.room).toBeNull()
+    expect(state.messages).toEqual([])
+  })
 
   function pagedRooms() {
     const records = Array.from({ length: 101 }, (_, index) => ({ ...room, id: `room-${index}`,
@@ -291,5 +306,27 @@ describe('Rooms view state', () => {
     expect(client.list).toHaveBeenCalledTimes(listCalls + 1)
     expect(client.messages).toHaveBeenCalledTimes(historyCalls)
     expect(state.rooms[0].latestMessage).toEqual(latestMessage)
+  })
+
+  it('refreshes the open group at once when one of its Agents changes avatar', async () => {
+    connection.live = true
+    const member = (avatar: string) => ({ id: 'm1', participantAgentId: 'agent-coder', displayName: 'Coder', avatar: { kind: 'builtin', id: avatar } })
+    client.get.mockImplementation(async (id) => ({ room: { ...room, id, revision: 3, members: [member('coder')] } }))
+    await mount()
+    const detailCalls = client.get.mock.calls.length
+    // Presenting a changed Agent keeps the room revision, so the same revision must still replace the view.
+    client.get.mockImplementation(async (id) => ({ room: { ...room, id, revision: 3, members: [member('detective')] } }))
+    const agentUpdated = (id: string, seq: number) => ({ seq, roomId: 'agent-directory', kind: 'agent.updated', payload: { id } })
+    await act(async () => {
+      events.forEach((listener) => listener(agentUpdated('agent-other', 30)))
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(client.get).toHaveBeenCalledTimes(detailCalls)
+    await act(async () => {
+      events.forEach((listener) => listener(agentUpdated('agent-coder', 31)))
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(client.get).toHaveBeenCalledTimes(detailCalls + 1)
+    expect(state.room?.members[0]).toMatchObject({ avatar: { kind: 'builtin', id: 'detective' } })
   })
 })

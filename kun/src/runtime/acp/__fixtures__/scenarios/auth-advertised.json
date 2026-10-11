@@ -1,0 +1,36 @@
+{
+  "sessionId": "session-with-login-method",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentInfo": { "name": "fixture-agent", "version": "1.0.0" },
+    "agentCapabilities": { "loadSession": true },
+    "authMethods": [{ "id": "browser", "name": "Log in with browser" }]
+  },
+  "newSession": {
+    "modes": {
+      "currentModeId": "bypass",
+      "availableModes": [{ "id": "normal" }, { "id": "bypass" }]
+    },
+    "configOptions": [{
+      "id": "model",
+      "name": "Model",
+      "category": "model",
+      "type": "select",
+      "currentValue": "available-model",
+      "options": [{ "value": "available-model", "name": "Available model" }]
+    }]
+  },
+  "loadSession": {
+    "modes": {
+      "currentModeId": "bypass",
+      "availableModes": [{ "id": "normal" }, { "id": "bypass" }]
+    }
+  },
+  "turns": [{
+    "steps": [{ "update": {
+      "sessionUpdate": "agent_message_chunk",
+      "content": { "type": "text", "text": "Authenticated reply" }
+    } }],
+    "stopReason": "end_turn"
+  }]
+}

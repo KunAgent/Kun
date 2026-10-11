@@ -1,3 +1,5 @@
+import { settingsButtonClass } from './settings-button'
+import { ProviderConfigurationPanel } from './provider-configuration-panel'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
   isLocalModelProxyPort,
@@ -12,12 +14,12 @@ import {
   Download,
   FilePenLine,
   ChevronDown,
+  KeyRound,
   Loader2,
   PlugZap,
   Plus,
-  Route,
   Search,
-  ServerCog,
+  Server,
   Trash2,
   X
 } from 'lucide-react'
@@ -27,8 +29,6 @@ import {
 import {
   InlineNoticeView,
   SettingsSubTabs,
-  SettingsTabPanel,
-  SettingsTabs,
   Toggle
 } from './settings-controls'
 import {
@@ -40,7 +40,7 @@ import {
 import {
   MODEL_ENDPOINT_FORMAT_LABEL_KEYS, PROVIDER_TASK_TABS,
   providerModelCount,
-  type ProviderTaskTab, type ProviderWorkspaceMode
+  type ProviderTaskTab
 } from './settings-section-providers-profile'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
@@ -57,12 +57,12 @@ import { ProviderReliabilityPanel } from './provider-reliability-panel'
 import { ProviderQuickAddPanel } from './provider-quick-add-panel'
 import { ProviderAddSheet } from './provider-add-sheet'
 import { ProviderIcon } from './provider-icon'
-import { ModelRoutesSettings } from './settings-section-model-routes'
+import { SettingsIconTile } from './settings-icon-tile'
 import { ProviderConnectionAdvancedPanels } from './settings-section-providers-connection-panels'
 import { ProviderModelsCapabilitiesPanels } from './settings-section-providers-model-panels'
 
 export function ProvidersSettingsView({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider,
+  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider,
     externalImportOpen, setExternalImportOpen, quickAddEntry, setQuickAddEntry, submitQuickAdd, stagedImportLink, setStagedImportLink,
     importLinkInput, setImportLinkInput, importLinkError, setImportLinkError, stageImportLinkInput } = view
   const activeProvider = view.activeProvider as ModelProviderProfileV1 | undefined
@@ -78,11 +78,14 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
   return (
     <>
       {providerSetupNeedsApiKey ? (
-        <div className="mb-6 rounded-2xl border border-amber-300/80 bg-amber-50/95 px-5 py-4 text-amber-950 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/35 dark:text-amber-100">
-          <div className="text-[15px] font-semibold">{t('apiKeyRequiredTitle')}</div>
-          <p className="mt-1 text-[13px] leading-6 text-amber-900/90 dark:text-amber-100/90">
-            {t('apiKeyRequiredBody')}
-          </p>
+        <div className="mb-6 flex items-start gap-3.5 rounded-2xl border border-amber-300/80 bg-amber-50/95 px-5 py-4 text-amber-950 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/35 dark:text-amber-100">
+          <SettingsIconTile icon={KeyRound} tone="amber" className="mt-0.5" />
+          <div className="min-w-0">
+            <div className="text-[15px] font-semibold">{t('apiKeyRequiredTitle')}</div>
+            <p className="mt-1 text-[13px] leading-6 text-amber-900/90 dark:text-amber-100/90">
+              {t('apiKeyRequiredBody')}
+            </p>
+          </div>
         </div>
       ) : null}
       <section className="ds-provider-workspace overflow-hidden rounded-xl border border-ds-border bg-ds-card">
@@ -91,14 +94,16 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
             className="grid min-w-0 content-start gap-3 border-b border-ds-border-muted px-4 py-3 lg:border-b-0 lg:border-r"
             data-testid="provider-workspace-meta"
           >
-            <div className="min-w-0">
-              <h2 className="truncate text-[16px] font-semibold text-ds-ink">{t('providers')}</h2>
-              <p className="mt-0.5 truncate text-[11.5px] text-ds-faint">
-                {zh
-                  ? `${displayProviders.length} 个已配置`
-                  : `${displayProviders.length} configured`}
-              </p>
-              <p className="mt-2 text-[11.5px] leading-5 text-ds-faint">{t('modelProviderConfigFileHint')}</p>
+            <div className="flex min-w-0 items-center gap-3">
+              <SettingsIconTile icon={Server} tone="blue" className="ds-provider-workspace-tile" />
+              <div className="min-w-0">
+                <h2 className="truncate text-[16px] font-semibold text-ds-ink">{t('settingsIaProviders')}</h2>
+                <p className="mt-0.5 truncate text-[11.5px] text-ds-faint">
+                  {zh
+                    ? `${displayProviders.length} 个已配置`
+                    : `${displayProviders.length} configured`}
+                </p>
+              </div>
             </div>
             <div
               className="flex min-w-0 flex-wrap items-center gap-2"
@@ -107,44 +112,33 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
               <button
                 type="button"
                 onClick={() => void openSettingsConfigFile()}
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-ds-border bg-ds-card px-2.5 text-[12px] font-medium text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover"
+                title={t('modelProviderConfigFileHint')}
+                className={settingsButtonClass({ size: 'compact', className: 'shrink-0 whitespace-nowrap' })}
               >
                 <FilePenLine className="h-3.5 w-3.5" strokeWidth={2} />
                 {t('modelProviderOpenConfigFile')}
               </button>
-              {workspaceMode === 'providers' ? (
-                <button
-                  ref={addProviderButtonRef}
-                  type="button"
-                  aria-haspopup="dialog"
-                  aria-expanded={addMenuOpen}
-                  onClick={openAddProviderDialog}
-                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-ds-border bg-ds-card px-2.5 text-[12px] font-medium text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover"
-                >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                  {t('modelProviderAdd')}
-                </button>
-              ) : null}
+              <button
+                ref={addProviderButtonRef}
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={addMenuOpen}
+                onClick={openAddProviderDialog}
+                className={settingsButtonClass({ size: 'compact', className: 'shrink-0 whitespace-nowrap' })}
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                {t('modelProviderAdd')}
+              </button>
             </div>
           </div>
-          <div className="flex min-w-0 items-start px-4 py-3 sm:px-6">
-            <SettingsTabs<ProviderWorkspaceMode>
-              baseId="provider-workspace"
-              ariaLabel={t('providers')}
-              items={[
-                { id: 'providers', label: t('modelProviderModeProviders'), icon: ServerCog },
-                { id: 'routes', label: t('modelProviderModeRoutes'), icon: Route }
-              ]}
-              value={workspaceMode}
-              onChange={setWorkspaceMode}
-            />
+          <div className="grid min-w-0 content-start gap-2.5 px-4 py-3 sm:px-6">
+            <p className="max-w-2xl px-1 text-[12px] leading-5 text-ds-muted">
+              {t('providersDesc')}
+              <span className="text-ds-faint"> {t('modelProviderConfigFileHint')}</span>
+            </p>
           </div>
         </header>
-        <SettingsTabPanel<ProviderWorkspaceMode>
-          baseId="provider-workspace"
-          tabId="providers"
-          active={workspaceMode === 'providers'}
-        >
+        <div id="provider-workspace-panel-providers">
           <div className="grid min-w-0">
             <label className="grid gap-1.5 px-4 py-4 lg:hidden">
             <span className="flex items-center gap-2 text-[12px] font-semibold text-ds-muted">
@@ -272,7 +266,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                               : t('autoApplyHint')}
                       </StatusPill>
                     ) : null}
-                    <button
+                    <button aria-busy={Boolean(probeBusy && activeProbe?.mode === 'fetch')} className={settingsButtonClass()}
                       type="button"
                       data-testid="provider-fetch-models"
                       disabled={probeBusy || activeProbeBlocked}
@@ -282,14 +276,13 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                           ? t('modelProviderInvalidUrl')
                           : t('modelProviderFetchModels')}
                       onClick={() => void runProbe(activeProvider, 'fetch')}
-                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
                     >
                       {probeBusy && activeProbe?.mode === 'fetch'
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
                         : <Download className="h-3.5 w-3.5" strokeWidth={1.9} />}
                       {t('modelProviderFetchModels')}
                     </button>
-                    <button
+                    <button aria-busy={Boolean(probeBusy && activeProbe?.mode === 'test')} className={settingsButtonClass()}
                       type="button"
                       disabled={probeBusy || activeProbeBlocked}
                       title={activeMissingCredential
@@ -298,7 +291,6 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                           ? t('modelProviderInvalidUrl')
                           : undefined}
                       onClick={() => void runProbe(activeProvider, 'test')}
-                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
                     >
                       {probeBusy && activeProbe?.mode === 'test'
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
@@ -312,7 +304,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                         disabled={Boolean(deletingProviderId)}
                         aria-busy={deletingProviderId === activeProvider.id}
                         onClick={() => void removeModelProvider(activeProvider.id)}
-                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-red-200/70 bg-red-50 px-3 text-[12.5px] font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-55 dark:border-red-900/70 dark:bg-red-950/25 dark:text-red-200 dark:hover:bg-red-950/40"
+                        className={settingsButtonClass({ variant: 'danger' })}
                       >
                         {deletingProviderId === activeProvider.id
                           ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
@@ -361,17 +353,16 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      <button
+                      <button className={settingsButtonClass()}
                         type="button"
                         onClick={cancelProviderDraft}
-                        className="inline-flex h-9 items-center rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
                       >
                         {t('modelProviderDraftDiscard')}
                       </button>
                       <button
                         type="button"
                         onClick={commitProviderDraft}
-                        className="inline-flex h-9 items-center gap-2 rounded-full bg-accent px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:opacity-90"
+                        className={settingsButtonClass({ variant: 'primary' })}
                       >
                         <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                         {t('modelProviderDraftConfirm')}
@@ -388,7 +379,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                 <button
                   type="button"
                   onClick={openAddProviderDialog}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-3 text-[13px] font-medium text-white"
+                  className={settingsButtonClass({ variant: 'primary' })}
                 >
                   <Plus className="h-4 w-4" strokeWidth={2} />
                   {t('modelProviderAdd')}
@@ -397,25 +388,9 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
             )}
           </div>
           </div>
-        </SettingsTabPanel>
-        <SettingsTabPanel<ProviderWorkspaceMode>
-          baseId="provider-workspace"
-          tabId="routes"
-          active={workspaceMode === 'routes'}
-          className="p-4 sm:p-6"
-        >
-          <ModelRoutesSettings
-            settings={provider}
-            onChange={(next) => update({ provider: { routePools: next.routePools, localGateway: next.localGateway } })}
-            translation={t}
-            saveStatus={saveStatus}
-            saveError={saveError}
-            onRetrySave={retrySave}
-            active={workspaceMode === 'routes'}
-            publicBaseUrl={`http://127.0.0.1:${kun.port}`}
-          />
-        </SettingsTabPanel>
+        </div>
       </section>
+      <ProviderConfigurationPanel t={t} activeProviderId={activeProvider?.id} />
       <details
         className="group rounded-2xl border border-ds-border bg-ds-card/95 shadow-sm"
         open={globalNetworkOpen === true}
@@ -493,8 +468,10 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
         provider={pendingImportProvider}
         providerModelIds={pendingImport.providerModelIds}
         catalogResult={pendingImport.catalogResult}
+        catalogLoading={pendingImport.catalogLoading}
         providerError={pendingImport.providerError}
         authoritative={pendingImport.authoritative}
+        discoverySource={pendingImport.discoverySource}
         t={t}
         onCancel={() => setPendingImport(null)}
         onConfirm={async (picked) => {

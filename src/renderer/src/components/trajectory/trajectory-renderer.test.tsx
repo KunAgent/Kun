@@ -84,4 +84,30 @@ describe('trajectory renderer primitives', () => {
     expect(html).toContain('Request #1')
     expect(html).not.toContain('trajectoryTabSource')
   })
+
+  it('names the Agent and explains per-turn usage on a rebuilt Agent call', () => {
+    const agentRequest = {
+      ...request('agent:turn-1:2', '2026-01-01T00:00:00.000Z'),
+      origin: 'agent', harnessId: 'codemaker', harnessLabel: 'CodeMaker',
+      usageAttribution: 'aggregate', usageSteps: 3,
+      usage: { promptTokens: 3_000, completionTokens: 300, totalTokens: 3_300, cacheHitRate: null }
+    } as TrajectoryRecord
+    const layout = deriveHarnessLayout([agentRequest])
+    const html = renderToStaticMarkup(createElement(TrajectoryInspector, {
+      threadId: 'thread-1',
+      cell: null,
+      request: layout.requests[0] ?? null,
+      parentRequest: null,
+      width: null,
+      onWidthChange: () => undefined,
+      onClose: () => undefined,
+      onSelectParentRequest: () => undefined
+    }))
+    expect(html).toContain('trajectoryDetailAgent')
+    expect(html).toContain('CodeMaker')
+    expect(html).not.toContain('trajectoryDetailAttempt')
+    expect(html).toContain('data-trajectory-agent-note')
+    expect(html).toContain('trajectoryAgentUsageAggregate')
+    expect(html).toContain('3,000')
+  })
 })

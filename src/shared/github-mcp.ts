@@ -4,6 +4,7 @@ import {
   KUN_MANAGED_GITHUB_MCP_MARKER,
   KUN_MANAGED_GITHUB_MCP_TOOLSETS,
   KUN_MANAGED_GITHUB_MCP_URL,
+  isKunManagedGitHubMcpEntry,
   isKunManagedGitHubMcpServer
 } from '../../kun/src/contracts/builtin-mcp'
 import type { KunGitHubMcpSettingsV1 } from './github-mcp-authorization'
@@ -72,4 +73,9 @@ export function buildBuiltinGitHubMcpServer(
 
 export function isBuiltinGitHubMcpServer(value: unknown): boolean {
   return isKunManagedGitHubMcpServer(value)
+}
+
+/** Ownership-only check for config migration; runtime authorization stays strict. */
+export function isBuiltinGitHubMcpServerOwnedByKun(value: unknown): boolean {
+  return isKunManagedGitHubMcpEntry(value)
 }

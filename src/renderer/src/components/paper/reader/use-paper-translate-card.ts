@@ -153,7 +153,7 @@ export function usePaperTranslateCard({
         return
       }
       setTranslateNotice({ message: result.outputPath, config: false })
-      // Open the translated markdown in the right editor group (plan §6.5).
+      // Open the translated markdown in the right editor group.
       const root = useWriteWorkspaceStore.getState().workspaceRoot
       if (root) {
         await useWriteWorkspaceStore.getState().openFile(

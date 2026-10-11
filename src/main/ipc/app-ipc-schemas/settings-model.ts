@@ -1,4 +1,11 @@
+import { ModelMetadataStateSchema, ModelMetadataResolutionSchema, ModelCapabilityFactsSchema, ModelReasoningCapabilityMetadata } from '../../../../kun/src/contracts/capabilities-core.js'
+import { ModelMetadataEvidenceSchema } from '../../../../kun/src/contracts/model-metadata-evidence.js'
+import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
+import { HarnessProviderOverrideSchema } from '../../../../kun/src/config/kun-config-harness-providers.js'
 import { z } from 'zod'
+import { GatewayMiddlewareSchema } from '../../../../kun/src/contracts/gateway-middleware.js'
+import { routePoolPatchesSchema } from './settings-route-pools'
+import { AdeProjectDefaultsMapSchema } from '../../../shared/ade-project-defaults'
 import {
   APP_LOCALES,
   IMAGE_GENERATION_QUALITIES,
@@ -151,17 +158,27 @@ const modelReasoningEffortSchema = z.enum(MODEL_REASONING_EFFORTS)
 const modelReasoningRequestProtocolSchema = z.enum(MODEL_REASONING_REQUEST_PROTOCOLS)
 const modelServiceTierSchema = z.enum(MODEL_SERVICE_TIERS)
 const modelProfilePatchShape = {
+  metadata: ModelMetadataStateSchema.optional(),
+  metadataResolution: ModelMetadataResolutionSchema.optional(),
+  maxInputTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
+  supportsReasoning: z.boolean().optional(),
+  conditionalCapabilities: ModelCapabilityFactsSchema.shape.conditionalCapabilities,
   aliases: z.array(modelIdSchema).max(50).optional(),
   contextWindowTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
   maxOutputTokens: z.number().int().positive().max(MAX_MODEL_OUTPUT_TOKENS).optional(),
   inputModalities: z.array(modelProviderInputModalitySchema).max(8).optional(),
   outputModalities: z.array(modelProviderInputModalitySchema).max(8).optional(),
   supportsToolCalling: z.boolean().optional(),
+  parallelTools: z.boolean().optional(), streaming: z.boolean().optional(), structuredOutput: z.boolean().optional(),
+  evidence: ModelMetadataEvidenceSchema,
   messageParts: z.array(modelProviderMessagePartSchema).max(8).optional(),
   reasoning: z.object({
     supportedEfforts: z.array(modelReasoningEffortSchema).min(1).max(8),
     defaultEffort: modelReasoningEffortSchema,
-    requestProtocol: modelReasoningRequestProtocolSchema
+    requestProtocol: modelReasoningRequestProtocolSchema,
+    nativeEfforts: ModelReasoningCapabilityMetadata.shape.nativeEfforts,
+    nativeDefaultEffort: ModelReasoningCapabilityMetadata.shape.nativeDefaultEffort,
+    effortMapping: ModelReasoningCapabilityMetadata.shape.effortMapping
   }).strict().optional(),
   pricing: z.object({
     inputUsdPerMillion: z.number().nonnegative().max(1_000_000),
@@ -172,12 +189,13 @@ const modelProfilePatchShape = {
   // An empty array is an explicit "no supported tier" declaration, not unknown.
   serviceTiers: z.array(modelServiceTierSchema).max(MODEL_SERVICE_TIERS.length).optional(),
   endpointFormat: modelEndpointFormatSchema.optional(),
-  responsesMode: z.literal('lite').optional()
+  responsesMode: z.literal('lite').optional(),
+  wireModelId: z.string().trim().min(1).max(512).optional()
 } satisfies Record<keyof ModelProviderModelProfilePatchV1, z.ZodTypeAny>
 const modelProfilePatchSchema = z.object(modelProfilePatchShape).strict()
 
 export const modelProviderPatchSchema = z.object({
-  excludedBuiltinProviderIds: z.array(z.enum(['deepseek', 'opencode-free'])).max(2).optional(),
+  excludedBuiltinProviderIds: z.array(z.enum(['deepseek'])).max(1).optional(),
   apiKey: z.string().max(MAX_BODY_BYTES).optional(),
   baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
   proxy: z.object({
@@ -200,6 +218,10 @@ export const modelProviderPatchSchema = z.object({
       responses: z.string().trim().max(MAX_URL_LENGTH).optional(),
       messages: z.string().trim().max(MAX_URL_LENGTH).optional()
     }).strict().nullable().optional(),
+    balanceUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
+    balanceUnit: z.string().trim().max(16).optional(),
+    balanceKeyHeader: z.string().trim().max(64).optional(),
+    balanceHost: z.string().trim().max(253).optional(),
     catalogSources: z.array(z.string().trim().min(1).max(64)).max(8).optional(),
     iconId: z.string().trim().min(1).max(128).optional(),
     useProxy: z.boolean().optional(),
@@ -254,42 +276,14 @@ export const modelProviderPatchSchema = z.object({
       models: z.array(modelIdSchema).max(500).optional()
     }).strict().nullable().optional()
   }).strict()).max(50).optional(),
-  routePools: z.array(z.object({
-    id: z.string().trim().min(1).max(64).optional(),
-    name: z.string().trim().min(1).max(80).optional(),
-    modelId: modelIdSchema.optional(),
-    enabled: z.boolean().optional(),
-    strategy: z.enum(['priority', 'round-robin', 'weighted-round-robin', 'least-latency', 'least-used', 'adaptive']).optional(),
-    targets: z.array(z.object({
-      id: z.string().trim().min(1).max(64),
-      providerId: z.string().trim().min(1).max(64),
-      modelId: modelIdSchema,
-      enabled: z.boolean(),
-      weight: z.number().int().min(1).max(100)
-    }).strict()).max(50).optional(),
-    failurePolicy: z.object({
-      failoverHttpStatusCodes: z.array(z.number().int().min(400).max(599)).max(64),
-      failoverOnNetworkError: z.boolean(),
-      failoverOnTimeout: z.boolean(),
-      failoverOnAuthError: z.boolean()
-    }).strict().optional(),
-    healthPolicy: z.object({
-      failureThreshold: z.number().int().min(1).max(20),
-      cooldownMs: z.number().int().min(1000).max(3_600_000),
-      halfOpenMaxAttempts: z.number().int().min(1).max(10),
-      creditCooldownMs: z.number().int().min(1000).max(86_400_000).optional(),
-      quotaCooldownMs: z.number().int().min(1000).max(86_400_000).optional(),
-      authCooldownMs: z.number().int().min(1000).max(86_400_000).optional(),
-      maxCooldownMs: z.number().int().min(1000).max(86_400_000).optional()
-    }).strict().optional()
-  }).strict()).max(100).optional(),
+  routePools: routePoolPatchesSchema,
   failover: z.array(z.object({
     providerId: z.string().trim().min(1).max(64).optional(),
     accounts: z.array(z.object({
       providerId: z.string().trim().min(1).max(64),
       enabled: z.boolean()
     }).strict()).max(20).optional(),
-    strategy: z.enum(['smart', 'order', 'rotate', 'least-used']).optional(),
+    strategy: z.enum(['smart', 'order', 'rotate', 'least-used', 'pace']).optional(),
     fallbackTargets: z.array(z.object({
       providerId: z.string().trim().min(1).max(64),
       modelId: modelIdSchema
@@ -298,7 +292,11 @@ export const modelProviderPatchSchema = z.object({
   localGateway: z.object({
     enabled: z.boolean().optional(),
     name: z.string().trim().min(1).max(80).optional(),
-    exposeProviderModels: z.boolean().optional()
+    exposeProviderModels: z.boolean().optional(),
+    middleware: z.array(GatewayMiddlewareSchema).max(32).optional(),
+    extensionExports: z.array(z.object({ providerId: z.string().trim().min(1).max(160), accountId: z.string().trim().min(1).max(160) }).strict()).max(50).optional(),
+    experimentalSubscriptionExports: z.array(z.string().trim().min(1).max(128)).max(10).optional(),
+    advertiseDiscovery: z.literal(false).optional()
   }).strict().optional()
 }).strict()
 
@@ -323,6 +321,10 @@ const subagentProfilePatchSchema = z
     blockedMcpServers: z.array(z.string().max(128)).max(200).optional(),
     blockedSkills: z.array(z.string().max(128)).max(200).optional(),
     reasoningEffort: modelReasoningEffortSchema.optional(),
+    harnessId: z.string().trim().min(1).max(64).optional(),
+    credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+    gatewayBinding: HarnessGatewayBindingSchema.optional(),
+    delegationNotes: z.string().max(1_000).optional(),
     builtin: z.boolean().optional()
   })
   .passthrough()
@@ -586,6 +588,75 @@ export const kunRuntimePatchSchema = z.object({
   fastContext: kunFastContextPatchSchema.optional(),
   planExecution: z.object({
     useWorktreeByDefault: z.boolean().optional()
+  }).strict().optional(),
+  harnesses: z.object({
+    enabledProfiles: z.array(z.object({
+      harnessId: z.string().trim().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+      credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']),
+      gatewayBinding: HarnessGatewayBindingSchema.optional(),
+      providerId: z.string().trim().min(1).max(128).optional()
+    }).strict()).max(128).optional(),
+    disabledIds: z.array(z.string().trim().min(1).max(128)).max(64).optional(),
+    // Launch overrides and user Agents; normalize validates each entry.
+    providers: z.record(z.string().trim().min(1).max(128), HarnessProviderOverrideSchema).optional(),
+    defaults: z.record(z.string().trim().min(1).max(128), z.object({
+      credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+    gatewayBinding: HarnessGatewayBindingSchema.optional(),
+      providerId: z.string().trim().min(1).max(128).optional(),
+      model: z.string().trim().min(1).max(512).optional(),
+      permissionMode: z.string().trim().min(1).max(64).optional(),
+      isolation: z.enum(['local', 'worktree']).optional()
+    }).strict()).optional(),
+    // Legacy shape; still accepted so old writers do not lose the
+    // value — normalize folds it into `defaults[*].permissionMode`.
+    defaultPermissionMode: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(64)).optional(),
+    defaultHarnessId: z.string().trim().min(1).max(128).optional(),
+    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional()
+  }).strict().optional(),
+  ade: z.object({
+    enabled: z.boolean().optional(),
+    projectDefaults: AdeProjectDefaultsMapSchema.optional(),
+    harnessRouter: z.boolean().optional(),
+    deterministicHandoff: z.boolean().optional(),
+    managerModel: z.object({
+      providerId: z.string().trim().min(1).max(128).optional(),
+      model: z.string().trim().min(1).max(512).optional()
+    }).strict().optional(),
+    managerMayApprove: z.boolean().optional(),
+    allowUnattendedFullAccess: z.boolean().optional(),
+    limits: z.object({
+      softWorkers: z.number().int().min(1).max(16).optional(),
+      hardWorkers: z.number().int().min(1).max(32).optional()
+    }).strict().optional(),
+    budget: z.object({
+      softTokens: z.number().int().positive().optional(),
+      hardTokens: z.number().int().positive().optional()
+    }).strict().nullable().optional(),
+    hibernation: z.object({
+      enabled: z.boolean().optional(),
+      idleMinutes: z.number().int().min(1).max(1_440).optional()
+    }).strict().optional(),
+    stall: z.object({
+      structuredMinutes: z.number().int().min(1).max(240).optional(),
+      terminalMinutes: z.number().int().min(1).max(480).optional()
+    }).strict().optional(),
+    notifications: z.object({
+      waiting: z.boolean().optional(),
+      failed: z.boolean().optional(),
+      done: z.boolean().optional(),
+      stalled: z.boolean().optional(),
+      sound: z.boolean().optional(),
+      keepAwake: z.boolean().optional()
+    }).strict().optional()
+  }).strict().optional(),
+  worktrees: z.object({
+    sharedPaths: z.record(
+      z.string().trim().min(1).max(4_096),
+      z.array(z.object({
+        path: z.string().trim().min(1).max(1_024),
+        mode: z.enum(['symlink', 'clone', 'copy']).optional()
+      }).strict()).max(64)
+    ).optional()
   }).strict().optional(),
   subagents: subagentsPatchSchema.optional(),
   lab: kunLabPatchSchema.optional()

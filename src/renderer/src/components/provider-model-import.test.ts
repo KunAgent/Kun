@@ -8,11 +8,16 @@ import {
   buildProviderModelImportEntries,
   defaultSelectedProviderModelImportKeys,
   enrichCursorProviderModelProfiles,
-  enrichProviderModelProfiles,
+  enrichProviderModelProfiles as enrichProfiles,
   mergeProviderModelIdsCaseInsensitive,
   providerModelImportEntryKey,
   providerModelImportResult
 } from './provider-model-import'
+
+// These fixture rows represent exact provider catalog matches unless overridden.
+function enrichProviderModelProfiles(...args: Parameters<typeof enrichProfiles>) {
+  return enrichProfiles(args[0], args[1], args[2].map((model) => ({ ...model, matchSpecificity: model.matchSpecificity ?? 'exact' })), args[3])
+}
 
 function provider(overrides: Partial<ModelProviderProfileV1> = {}): ModelProviderProfileV1 {
   return {
@@ -43,7 +48,7 @@ function catalog(
 }
 
 describe('provider model import merging', () => {
-  it('deduplicates ids case-insensitively, preserves API casing, and leaves catalog-only rows unchecked', () => {
+  it('deduplicates ids case-insensitively, preserves API casing, and does not advertise unobserved catalog-only models', () => {
     const entries = buildProviderModelImportEntries(
       provider(),
       ['Model-A', 'model-a', 'api-only'],
@@ -62,9 +67,9 @@ describe('provider model import merging', () => {
       ])
     )
 
-    expect(entries.map((entry) => entry.modelId)).toEqual(['Model-A', 'api-only', 'catalog-only'])
+    expect(entries.map((entry) => entry.modelId)).toEqual(['Model-A', 'api-only'])
     expect(entries[0]?.sources).toEqual(['provider-api', 'models-dev'])
-    expect(entries[2]?.sources).toEqual(['models-dev'])
+    expect(entries.some((entry) => entry.modelId === 'catalog-only')).toBe(false)
     const selected = defaultSelectedProviderModelImportKeys(entries)
     expect(selected).toEqual(new Set([
       providerModelImportEntryKey('chat', 'Model-A'),
@@ -73,7 +78,7 @@ describe('provider model import merging', () => {
   })
 
   it('uses catalog modalities for endpoint classification before id fallback', () => {
-    const entries = buildProviderModelImportEntries(provider(), [], catalog([
+    const entries = buildProviderModelImportEntries(provider(), ['visual-maker', 'sound-reader', 'omni-chat', 'voice-maker', 'movie-maker', 'music-2.6'], catalog([
       { id: 'visual-maker', inputModalities: ['text'], outputModalities: ['image'] },
       { id: 'sound-reader', inputModalities: ['audio'], outputModalities: ['text'] },
       { id: 'omni-chat', inputModalities: ['text', 'image', 'audio'], outputModalities: ['text'] },
@@ -128,6 +133,25 @@ describe('provider model import merging', () => {
     ], 'enrichment-only'))
     expect(entries.map((entry) => entry.modelId)).toEqual(['model-a'])
     expect(entries[0]?.sources).toEqual(['provider-api', 'models-dev'])
+  })
+
+  it('imports official gpt-6 IDs without models.dev metadata but never imports catalog-only IDs', () => {
+    const codex = provider({ id: 'codex', baseUrl: 'https://chatgpt.com/backend-api/codex/responses' })
+    const entries = buildProviderModelImportEntries(
+      codex,
+      ['gpt-6-sol', 'gpt-6-luna'],
+      catalog([
+        { id: 'gpt-6-sol', inputModalities: ['text'], outputModalities: ['text'] },
+        { id: 'gpt-6-unavailable', inputModalities: ['text'], outputModalities: ['text'] }
+      ], 'enrichment-only')
+    )
+    expect(entries.map(({ modelId, sources }) => [modelId, sources])).toEqual([
+      ['gpt-6-sol', ['provider-api', 'models-dev']],
+      ['gpt-6-luna', ['provider-api']]
+    ])
+    const picked = providerModelImportResult(entries, defaultSelectedProviderModelImportKeys(entries))
+    expect(picked.chat).toEqual(['gpt-6-sol', 'gpt-6-luna'])
+    expect(picked.catalogModels.map(({ id }) => id)).toEqual(['gpt-6-sol'])
   })
 
   it('imports Ollama Cloud API models while using its catalog only for matching metadata', () => {
@@ -211,7 +235,7 @@ describe('provider model import merging', () => {
   })
 
   it('returns metadata only for selected rows', () => {
-    const entries = buildProviderModelImportEntries(provider(), ['model-a'], catalog([
+    const entries = buildProviderModelImportEntries(provider(), ['model-a', 'catalog-only'], catalog([
       { id: 'model-a', inputModalities: ['text'], outputModalities: ['text'] },
       { id: 'catalog-only', inputModalities: ['text'], outputModalities: ['text'] }
     ]))
@@ -284,7 +308,7 @@ describe('models.dev profile enrichment', () => {
       }],
       { 'Vision-Model': ['vision-latest'] }
     )
-    expect(next['vision-model']).toEqual({
+    expect(next['vision-model']).toMatchObject({
       aliases: ['vision-latest'],
       contextWindowTokens: 256_000,
       maxOutputTokens: 32_000,
@@ -298,10 +322,12 @@ describe('models.dev profile enrichment', () => {
         requestProtocol: 'none'
       }
     })
+    expect(next['vision-model'].evidence?.pricing?.status).toBe('unknown')
+    expect(next['vision-model'].evidence?.supportsToolCalling).toMatchObject({ source: 'catalog', status: 'declared' })
     expect(next['vision-model']).not.toHaveProperty('description')
   })
 
-  it('refreshes catalog limits on an existing profile and preserves behavior fields', () => {
+  it('preserves explicit limits while recording fresh automatic capabilities', () => {
     const explicitProfile: ModelProviderModelProfileV1 = {
       aliases: ['writer'],
       maxOutputTokens: 4_096,
@@ -326,14 +352,30 @@ describe('models.dev profile enrichment', () => {
       maxOutputTokens: 128_000,
       toolCalling: true
     }])
-    expect(next['Model-A']).toEqual({
+    expect(next['Model-A']).toMatchObject({
       ...explicitProfile,
       contextWindowTokens: 1_000_000,
-      maxOutputTokens: 128_000
+      maxOutputTokens: 4_096
     })
+    expect(next['Model-A'].metadata?.observations.some((row) => row.values.maxOutputTokens === 128_000)).toBe(true)
   })
 
-  it('returns the original profile map when catalog limits are unchanged', () => {
+  it('retains unknown tool capability when public metadata omits it', () => {
+    const next = enrichProviderModelProfiles(provider({ modelProfiles: {} }), ['unlisted'], [{ id: 'unlisted', inputModalities: ['text'], outputModalities: ['text'] }])
+    expect(next.unlisted.evidence?.supportsToolCalling).toMatchObject({ status: 'unknown' })
+    expect(next.unlisted.evidence?.contextWindowTokens?.status).toBe('unknown')
+  })
+
+  it('imports only explicitly reported parallel, streaming, and structured facts with their observation time', () => {
+    const observedAt = '2026-09-01T00:00:00.000Z'
+    const next = enrichProviderModelProfiles(provider({ modelProfiles: {} }), ['declared'], [{ id: 'declared',
+      inputModalities: ['text'], outputModalities: ['text'], parallelTools: false, structuredOutput: true, observedAt }])
+    expect(next.declared).toMatchObject({ parallelTools: false, structuredOutput: true })
+    expect(next.declared.streaming).toBeUndefined()
+    expect(next.declared.evidence?.parallelTools).toMatchObject({ source: 'catalog', status: 'declared', observedAt })
+    expect(next.declared.evidence?.streaming?.status).toBe('unknown')
+  })
+  it('records new observations without changing existing user limits', () => {
     const profile: ModelProviderModelProfileV1 = {
       contextWindowTokens: 128_000,
       maxOutputTokens: 8_000,
@@ -350,7 +392,7 @@ describe('models.dev profile enrichment', () => {
       contextWindowTokens: 128_000,
       maxOutputTokens: 8_000,
       toolCalling: false
-    }])).toBe(target.modelProfiles)
+    }])['model-a']).toMatchObject(profile)
   })
 
   it('refreshes catalog pricing on an existing profile when it differs', () => {
@@ -382,7 +424,7 @@ describe('models.dev profile enrichment', () => {
       outputModalities: ['text'],
       contextWindowTokens: 128_000,
       maxOutputTokens: 8_000
-    }])).toBe(target.modelProfiles)
+    }])['model-a']).toMatchObject(profile)
   })
 
   it('hydrates existing unprofiled models with current models.dev capabilities', () => {

@@ -4,6 +4,11 @@ import {
   type RightPanelContributionId,
   type RightPanelMode
 } from '../../extensions/contribution-ids'
+import { useReviewStore } from '../../store/review-store'
+import { takePlanBuildReview } from '../../store/plan-build-watch'
+import { useActivityStore } from '../../store/activity-store'
+import { selectWorkerRowsForParent } from '../../store/activity-selectors'
+import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
@@ -149,12 +154,38 @@ export function useWorkbenchRightTools({
     else expandRightPanel()
   }, [codeRightTabs.expanded, collapseRightPanel, expandRightPanel])
 
+  // The review tab only exists while the active thread binds a task
+  // workspace; the binding lookup itself runs in WorkbenchContent.
+  const reviewEnabled = useReviewStore((s) =>
+    Boolean(activeThreadId && s.bindings[activeThreadId]))
+  // Collaboration appears only once this task actually has execution units.
+  const workersEnabled = useActivityStore((s) =>
+    Boolean(activeThreadId && selectWorkerRowsForParent(s.rows, activeThreadId).length > 0))
+
+  // A finished build never replaces the user's current tool panel. Clear
+  // its pending flag when the user explicitly visits the combined changes tab.
+  const pendingPlanBuildReview = useReviewStore((s) =>
+    activeThreadId ? s.pendingPlanBuildReview[activeThreadId] : undefined)
+  useEffect(() => {
+    if (activeThreadId && pendingPlanBuildReview && codeRightTabs.expanded &&
+        rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.changes) takePlanBuildReview(activeThreadId)
+  }, [activeThreadId, pendingPlanBuildReview, codeRightTabs.expanded, rightPanelMode])
+
+  // The composer Workers pill asks the workbench to open the panel.
+  useEffect(() => {
+    const open = (): void => openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.workers)
+    window.addEventListener(OPEN_WORKERS_PANEL_EVENT, open)
+    return () => window.removeEventListener(OPEN_WORKERS_PANEL_EVENT, open)
+  }, [openRightPanelTab])
+
   useEffect(() => {
     const unavailable: RightPanelContributionId[] = []
     unavailable.push(BUILTIN_RIGHT_PANEL_IDS.agentPerspective)
     if (!activeGuiPlan) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.plan)
     if (!fileTreeWorkspaceRoot) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.files)
     if (!filePreviewTarget) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.file)
+    if (!reviewEnabled) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.review)
+    if (!workersEnabled) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.workers)
     if (!activeThreadId) {
       unavailable.push(BUILTIN_RIGHT_PANEL_IDS.sideConversations)
     }
@@ -167,7 +198,9 @@ export function useWorkbenchRightTools({
     closeRightPanelTab,
     codeRightTabs.tabs,
     filePreviewTarget,
-    fileTreeWorkspaceRoot
+    fileTreeWorkspaceRoot,
+    reviewEnabled,
+    workersEnabled
   ])
 
   return {

@@ -9,20 +9,22 @@ import {
   type ReactElement
 } from 'react'
 import {
-  ArrowUp,
   ChevronDown,
   ChevronUp,
+  CircleAlert,
+  CornerDownRight,
   GripVertical,
   ImageIcon,
+  ListEnd,
   Loader2,
-  MessageCircle,
-  Pencil,
+  RotateCw,
   Trash2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
 import { queuedMessageGuidancePayload } from '../../store/queued-message-guidance'
 import { QueuedMessageSnapshotBadges } from './FloatingComposerQueuedMessageBadges'
+import { QueuePausedBanner, QueueRowMoreMenu, type QueueRowMenuItem } from './FloatingComposerQueueParts'
 import { parseWritePromptForDisplay } from '../../write/quoted-selection'
 import {
   calculateComposerPopoverPlacement,
@@ -90,11 +92,14 @@ type QueueDragState = {
 type Props = {
   messages: QueuedComposerMessage[]
   running?: boolean
-  guidanceTarget?: 'turn' | 'graph'
+  /** turn/graph: guidance joins the run; deferred: after its current step; unsupported: next turn only. */
+  guidanceTarget?: 'turn' | 'graph' | 'deferred' | 'unsupported'
   onRemove: (id: string) => void
   onGuide?: (id: string) => void | Promise<unknown>
   onRestoreToComposer?: (id: string) => boolean | void | Promise<boolean | void>
   onReorder?: (id: string, targetId: string, position: QueueDropPosition) => void
+  /** Resume a queue parked by an interrupt; shown on the paused banner. */
+  onResume?: () => void | Promise<unknown>
 }
 
 /** True when the steer contract can preserve the whole queued payload. */
@@ -145,7 +150,8 @@ export function FloatingComposerQueuedMessages({
   onRemove,
   onGuide,
   onRestoreToComposer,
-  onReorder
+  onReorder,
+  onResume
 }: Props): ReactElement | null {
   const { t } = useTranslation('common')
   const queue = useMemo(() => visibleQueue(messages), [messages])
@@ -155,6 +161,7 @@ export function FloatingComposerQueuedMessages({
   const [busy, setBusy] = useState<{ id: string; kind: QueueActionKind } | null>(null)
   const [dragState, setDragState] = useState<QueueDragState | null>(null)
   const [moveAnnouncement, setMoveAnnouncement] = useState('')
+  const [resuming, setResuming] = useState(false)
   const reorderHandleRefs = useRef(new Map<string, HTMLButtonElement>())
   const listId = useId()
   const reorderHintId = useId()
@@ -179,7 +186,9 @@ export function FloatingComposerQueuedMessages({
   if (queue.length === 0) return null
 
   const interactionActive = busy !== null
-  const expanded = queue.length === 1 || !collapsed || interactionActive
+  const pausedCount = queue.filter((message) => message.deliveryState === 'paused' && !message.editIntent).length
+  const showPausedBanner = pausedCount > 0
+  const expanded = queue.length === 1 || !collapsed || interactionActive || showPausedBanner
   const reorderEnabled = Boolean(onReorder && expanded && queue.length > 1 && !interactionActive &&
     !queue.some((message) => message.editIntent || message.deliveryState === 'starting'))
 
@@ -268,6 +277,15 @@ export function FloatingComposerQueuedMessages({
     }
   }
 
+  const resume = (): void => {
+    if (!onResume || busy || resuming) return
+    setResuming(true)
+    void Promise.resolve()
+      .then(onResume)
+      .catch(() => undefined)
+      .finally(() => setResuming(false))
+  }
+
   return (
     <div
       className={css.dock}
@@ -276,10 +294,18 @@ export function FloatingComposerQueuedMessages({
       data-queue-dock
       data-queued-message-count={queue.length}
       data-busy-message-id={busy?.id}
+      data-queue-paused={showPausedBanner || undefined}
       data-queue-reorder-enabled={reorderEnabled || undefined}
     >
       <div className={css.panel}>
-        {queue.length > 1 ? (
+        {showPausedBanner ? (
+          <QueuePausedBanner
+            count={pausedCount}
+            running={running}
+            busy={resuming || interactionActive}
+            onResume={onResume ? resume : undefined}
+          />
+        ) : queue.length > 1 ? (
           <button
             type="button"
             className={css.header}
@@ -290,9 +316,14 @@ export function FloatingComposerQueuedMessages({
             onClick={() => setCollapsed((value) => !value)}
           >
             <span className={css.lead} aria-hidden="true">
-              <MessageCircle size={14} strokeWidth={1.7} />
+              <ListEnd size={15} strokeWidth={1.8} />
             </span>
             <span className={css.count}>{queueTitle}</span>
+            <span className={css.headerHint}>
+              {expanded
+                ? t('queuedMessagesHint')
+                : t('queuedMessagesNextHint', { summary: queuedComposerMessageDisplayText(queue[0]!) })}
+            </span>
             <span className={css.chevron} aria-hidden="true">
               {expanded
                 ? <ChevronUp size={14} strokeWidth={1.7} />
@@ -332,12 +363,13 @@ export function FloatingComposerQueuedMessages({
               ? !running && !message.waitForRuntimeAdmission
               : (
                 running &&
+                guidanceTarget !== 'unsupported' &&
                 message.guidanceEligible !== false &&
                 canGuideQueuedComposerMessage(message)
               ))))
             const guideLabel = recoverable
               ? t('queuedMessageRetry')
-              : t('queuedMessageSteer')
+              : t('guideQueuedMessage')
             const reorderLabel = t('queuedMessageReorderHandle', {
               index: index + 1,
               count: queue.length,
@@ -353,11 +385,42 @@ export function FloatingComposerQueuedMessages({
                   : t('queuedMessageRetry')
                 : !running
                   ? t('guideQueuedMessageNoActiveTurn')
+                  : guidanceTarget === 'unsupported'
+                    ? t('guideQueuedMessageUnsupported')
                   : message.guidanceEligible === false || !canGuideQueuedComposerMessage(message)
                     ? t('guideQueuedMessageTextOnly')
                 : guidanceTarget === 'graph'
                   ? t('guideQueuedMessageGraphHint')
-                  : t('guideQueuedMessageHint')
+                  : guidanceTarget === 'deferred'
+                    ? t('guideQueuedMessageDeferredHint')
+                    : t('guideQueuedMessageHint')
+            // The paused banner owns resuming; idle rows have nothing to steer.
+            const guideHidden = (paused && showPausedBanner) || (!failed && !paused && !running && !message.steeringRequest)
+            const restoreLabel = canRestore
+              ? t('queuedMessageEditInComposer')
+              : t(message.composerRestoreBlockReason ?? 'queuedMessageEditUnsupported')
+            const menuItems: QueueRowMenuItem[] = [
+              ...(onRestoreToComposer ? [{
+                key: 'edit' as const,
+                label: t('queuedMessageEditInComposer'),
+                title: restoreLabel,
+                disabled: !canRestore,
+                onSelect: () => void applyAction(message.id, 'edit', () => onRestoreToComposer(message.id))
+              }] : []),
+              ...(reorderEnabled && onReorder && index > 0 ? [{
+                key: 'move-top' as const,
+                label: t('queuedMessageMoveToTop'),
+                onSelect: () => {
+                  onReorder(message.id, queue[0]!.id, 'before')
+                  setMoveAnnouncement(t('queuedMessageMovedToPosition', { position: 1 }))
+                }
+              }] : []),
+              {
+                key: 'copy' as const,
+                label: t('queuedMessageCopy'),
+                onSelect: () => void navigator.clipboard?.writeText(queuedComposerMessageDisplayText(message)).catch(() => undefined)
+              }
+            ]
 
             return (
               <li
@@ -379,12 +442,6 @@ export function FloatingComposerQueuedMessages({
                 }}
                 onDrop={(event) => dropQueuedMessage(event, message.id)}
               >
-                {queue.length === 1 ? (
-                  <span className={css.lead} aria-hidden="true">
-                    <MessageCircle size={14} strokeWidth={1.7} />
-                  </span>
-                ) : null}
-
                 {reorderEnabled ? (
                   <button
                     type="button"
@@ -403,9 +460,20 @@ export function FloatingComposerQueuedMessages({
                     onDragStart={(event) => startDragging(event, message.id)}
                     onDragEnd={() => setDragState(null)}
                   >
-                    <GripVertical size={15} strokeWidth={1.8} aria-hidden="true" />
+                    <span className={css.index} aria-hidden="true">{index + 1}</span>
+                    <GripVertical className={css.grip} size={14} strokeWidth={1.8} aria-hidden="true" />
                   </button>
-                ) : null}
+                ) : failed ? (
+                  <span className={`${css.lead} ${css.failed}`} aria-hidden="true">
+                    <CircleAlert size={15} strokeWidth={2} />
+                  </span>
+                ) : queue.length === 1 ? (
+                  <span className={css.lead} aria-hidden="true">
+                    <ListEnd size={15} strokeWidth={1.8} />
+                  </span>
+                ) : (
+                  <span className={css.index} aria-hidden="true">{index + 1}</span>
+                )}
 
                 <span
                   className={css.preview}
@@ -430,7 +498,7 @@ export function FloatingComposerQueuedMessages({
                 {message.deliveryState === 'starting' ? (
                   <span className={css.status}>{t('queuedMessageConfirming')}</span>
                 ) : null}
-                {paused ? (
+                {paused && (message.editIntent || !showPausedBanner) ? (
                   <span className={`${css.status} ${css.paused}`}>
                     {t(message.editIntent === 'restoring' ? 'queuedMessageRestorePending'
                       : message.editIntent === 'cancelling' ? 'queuedMessageCancelPending' : 'queuedMessagePaused')}
@@ -451,46 +519,14 @@ export function FloatingComposerQueuedMessages({
                 ) : null}
 
                 <div className={css.actions}>
-                  {onRestoreToComposer ? (
-                    <QueueActionButton
-                      action="edit"
-                      label={canRestore
-                        ? t('queuedMessageEditInComposer')
-                        : t(message.composerRestoreBlockReason ?? 'queuedMessageEditUnsupported')}
-                      title={canRestore
-                        ? t('queuedMessageEditInComposer')
-                        : t(message.composerRestoreBlockReason ?? 'queuedMessageEditUnsupported')}
-                      disabled={busy !== null || !canRestore}
-                      onClick={() => void applyAction(
-                        message.id,
-                        'edit',
-                        () => onRestoreToComposer(message.id)
-                      )}
-                    >
-                      {isBusy && busy?.kind === 'edit'
-                        ? <Loader2 className={css.spinner} size={14} />
-                        : <Pencil size={14} strokeWidth={1.8} />}
-                    </QueueActionButton>
-                  ) : null}
-                  <QueueActionButton
-                    action="remove"
-                    label={t('queuedMessageRemove')}
-                    disabled={busy !== null || message.deliveryState === 'starting' || Boolean(message.steeringRequest)}
-                    onClick={() => void applyAction(
-                      message.id,
-                      'remove',
-                      () => onRemove(message.id)
-                    )}
-                  >
-                    {isBusy && busy?.kind === 'remove'
-                      ? <Loader2 className={css.spinner} size={14} />
-                      : <Trash2 size={14} strokeWidth={1.8} />}
-                  </QueueActionButton>
                   {onGuide ? (
-                    <QueueActionButton
-                      action="guide"
-                      label={canGuide ? guideLabel : guideTitle}
+                    <button
+                      type="button"
+                      className={css.textAction}
+                      data-queued-message-action="guide"
+                      aria-label={canGuide ? guideLabel : guideTitle}
                       title={guideTitle}
+                      hidden={guideHidden}
                       disabled={busy !== null || !canGuide}
                       onClick={() => void applyAction(
                         message.id,
@@ -499,10 +535,35 @@ export function FloatingComposerQueuedMessages({
                       )}
                     >
                       {isBusy && busy?.kind === 'guide'
-                        ? <Loader2 className={css.spinner} size={14} />
-                        : <ArrowUp size={15} strokeWidth={1.8} />}
-                    </QueueActionButton>
+                        ? <Loader2 className={css.spinner} size={14} aria-hidden="true" />
+                        : recoverable
+                          ? <RotateCw size={13} strokeWidth={1.9} aria-hidden="true" />
+                          : <CornerDownRight size={14} strokeWidth={1.9} aria-hidden="true" />}
+                      <span>{recoverable ? t('queuedMessageRetryShort') : t('guideQueuedMessage')}</span>
+                    </button>
                   ) : null}
+                  <button
+                    type="button"
+                    className={css.action}
+                    data-queued-message-action="remove"
+                    aria-label={t('queuedMessageRemove')}
+                    title={t('queuedMessageRemove')}
+                    disabled={busy !== null || message.deliveryState === 'starting' || Boolean(message.steeringRequest)}
+                    onClick={() => void applyAction(
+                      message.id,
+                      'remove',
+                      () => onRemove(message.id)
+                    )}
+                  >
+                    {isBusy && busy?.kind === 'remove'
+                      ? <Loader2 className={css.spinner} size={14} aria-hidden="true" />
+                      : <Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />}
+                  </button>
+                  <QueueRowMoreMenu
+                    label={t('queuedMessageMoreActions')}
+                    disabled={busy !== null}
+                    items={menuItems}
+                  />
                 </div>
               </li>
             )
@@ -526,36 +587,6 @@ function attachmentImageNames(message: QueuedComposerMessage): string {
     .map((attachment) => attachment.name?.trim())
     .filter((name): name is string => Boolean(name))
     .join(', ') ?? ''
-}
-
-function QueueActionButton({
-  action,
-  label,
-  title = label,
-  disabled,
-  onClick,
-  children
-}: {
-  action: 'edit' | 'remove' | 'guide'
-  label: string
-  title?: string
-  disabled: boolean
-  onClick: () => void
-  children: ReactElement
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      className={css.action}
-      data-queued-message-action={action}
-      aria-label={label}
-      title={title}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  )
 }
 
 /* Retained pure exports keep downstream placement callers source-compatible;

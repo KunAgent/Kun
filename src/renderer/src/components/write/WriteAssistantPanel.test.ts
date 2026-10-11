@@ -79,7 +79,8 @@ describe('WriteAssistantPanel', () => {
     expect(html).not.toContain('Disabled Skill')
     expect(html).toContain('write-assistant-ready')
     expect(html.match(/write-assistant-action-row/g)).toHaveLength(3)
-    expect(html).toContain('Current file')
+    // Nothing is open: no context chip until a document, paper or board is.
+    expect(html).not.toContain('data-work-context')
   })
 
   it('exposes queued plain-text messages from the collapsed queue', () => {
@@ -128,7 +129,7 @@ describe('WriteAssistantPanel', () => {
     expect(html).toContain('aria-label="1 queued"')
   })
 
-  it('shows separate reasoning and Fast controls for Codex models', () => {
+  it('shows the model, reasoning and Fast state in one composer control', () => {
     useChatStore.setState({
       activeThreadId: 'thr_write',
       activeThreadGoal: null,
@@ -192,9 +193,11 @@ describe('WriteAssistantPanel', () => {
       onCollapse: () => undefined
     }))
 
-    expect(html).toContain('Codex · gpt-5.4')
-    expect(html).toContain('aria-label="Reasoning: High"')
-    expect(html).toContain('aria-label="Fast mode on"')
+    // Provider and model are separate so a narrow composer can drop the provider.
+    expect(html).toContain('<span class="ds-composer-model-trigger-provider">Codex<span aria-hidden="true"> · </span></span>' +
+      '<span class="ds-composer-model-trigger-model">gpt-5.4</span>')
+    expect(html).toContain('aria-label="Model and reasoning settings: Codex / gpt-5.4 / Reasoning High / Fast mode on"')
+    expect(html).toContain('lucide-zap')
   })
 
 })

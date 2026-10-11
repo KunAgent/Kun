@@ -1,4 +1,5 @@
 import type { ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
+import { isAzureOpenAiUrl } from '../../contracts/azure-openai.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
 import type { ModelFailureMetadata } from '../../contracts/model-route-pool.js'
 import { modelFailureMetadata, providerErrorCode, type FailureHeaderSource } from './failure-reason.js'
@@ -14,11 +15,14 @@ export function buildCompatRequestHeaders(input: {
   stream: boolean
   endpointFormat: ModelEndpointFormat
   responsesLite?: boolean
+  /** Final request URL; Azure OpenAI hosts take the key in `api-key`. */
+  requestUrl?: string
 }): Record<string, string> {
   const defaults: Record<string, string> = { 'Content-Type': 'application/json' }
   if (!input.stream) defaults.Accept = 'application/json'
   if (input.apiKey) {
-    defaults.Authorization = `Bearer ${input.apiKey}`
+    if (isAzureOpenAiUrl(input.requestUrl)) defaults['api-key'] = input.apiKey
+    else defaults.Authorization = `Bearer ${input.apiKey}`
     if (input.endpointFormat === 'messages') {
       defaults['x-api-key'] = input.apiKey
       defaults['anthropic-version'] = '2023-06-01'

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { useTranslation } from 'react-i18next'
 import { ArrowDown, GitCommitHorizontal, Hash } from 'lucide-react'
 import type { ToolBlock } from '../../agent/types'
-import { useChatStore } from '../../store/chat-store'
+import { useActiveThreadMayHaveUsage, useChatStore } from '../../store/chat-store'
 import { threadHasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
 import { useTimelineJumpRail } from './use-timeline-jump-rail'
 import { SourceHistoryCard, SourceHistoryTurnLabel, SourceHistoryBoundary } from '../../history-reference/SourceHistoryCard'
@@ -17,6 +17,7 @@ import { useTimelineTurnTargetBlocks } from './thread-turn-target'
 import { useTimelineTurnNavigation } from './use-timeline-turn-navigation'
 import { useTimelineFindJump } from './use-timeline-find-jump'
 import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './message-timeline-empty'
+import { WorkerControlBanner } from '../workers/WorkerControlBanner'
 import {
   activeTimelineTurnIndex,
   groupTurns,
@@ -58,6 +59,7 @@ import { TimelineSurfaceProvider } from './timeline-surface'
 import { useMobileJumpLatest } from './use-mobile-jump-latest'
 import type { MessageTimelineProps } from './message-timeline-props'
 import { useTurnUsageState } from '../../hooks/use-turn-usage'
+import { RoomWardrobeDropCard } from '../rooms/RoomWardrobeDropCard'
 import {
   timelineTurnAllowsRecoveryContinue,
   timelineTurnIsProcessing
@@ -124,7 +126,9 @@ export function MessageTimeline({
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const usageRefreshKey = useChatStore((state) => state.usageRefreshKey)
   const cancelToolCall = useChatStore((state) => state.cancelToolCall)
-  const turnUsage = useTurnUsageState(threadLoadingId === activeThreadId ? null : activeThreadId, usageRefreshKey)
+  const activeThreadMayHaveUsage = useActiveThreadMayHaveUsage()
+  const turnUsage = useTurnUsageState(
+    threadLoadingId === activeThreadId || !activeThreadMayHaveUsage ? null : activeThreadId, usageRefreshKey)
   const handleCancelToolCall = useCallback(async (block: ToolBlock): Promise<boolean> => {
     if (!activeThreadId || !block.turnId) return false
     const callId = typeof block.meta?.callId === 'string' ? block.meta.callId : ''
@@ -157,7 +161,8 @@ export function MessageTimeline({
     activeThread ? [activeThread] : [],
     workspaceRoot
   )
-  const heroRoute: 'chat' | 'claw' = route === 'claw' ? 'claw' : 'chat'
+  const heroRoute: 'chat' | 'claw' =
+    route === 'claw' ? 'claw' : 'chat'
   const hasContent = blocks.length > 0 || live || liveReasoning
   const endRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null), contentRef = useRef<HTMLDivElement>(null)
@@ -394,7 +399,7 @@ export function MessageTimeline({
           <MessageTimelineEmptyHero
             route={heroRoute}
             ready={runtimeConnection === 'ready'}
-            hasWorkspace={!!workspaceRoot}
+            hasWorkspace={Boolean(activeThread?.workspace || workspaceRoot)}
             runtimeError={runtimeError}
             activeClawChannel={activeClawChannel}
             onPickWorkspace={() => void chooseWorkspace()}
@@ -407,6 +412,9 @@ export function MessageTimeline({
 
         {activeThread?.forkedFromThreadId ? (
           <ThreadForkBanner parentTitle={forkedFromTitle} />
+        ) : null}
+        {activeThread?.executionUnit?.kind === 'worker' ? (
+          <WorkerControlBanner threadId={activeThread.id} />
         ) : null}
         {hasEarlierTurns ? (
           <div className="flex items-center justify-center">
@@ -577,6 +585,7 @@ export function MessageTimeline({
           )
         })}
 
+        {activeThreadId && !busy && threadLoadingId !== activeThreadId && !activeThread?.historyRefId ? <RoomWardrobeDropCard threadId={activeThreadId} /> : null}
         {activeThread?.historyRefId && turns.length > 0 && isSourceHistoryTurn(turns[turns.length - 1]!) ? <SourceHistoryBoundary /> : null}
         {forkPointIndex !== undefined &&
         forkPointIndex === turns.length &&

@@ -205,7 +205,7 @@ export function TelegramConnectCard({
             </span>
           </label>
         </div>
-        <button
+        <button aria-busy={connecting} data-settings-action="primary" data-settings-size="default"
           type="button"
           onClick={() => void handleConnect()}
           disabled={connecting}

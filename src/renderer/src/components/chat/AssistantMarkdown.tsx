@@ -7,16 +7,24 @@ const LazyStreamdownAssistant = lazy(() =>
   loadAssistantMarkdownRenderer().then((module) => ({ default: module.StreamdownAssistant }))
 )
 
+const LazyPassiveAssistantMarkdown = lazy(() =>
+  import('./PassiveAssistantMarkdown').then((module) => ({ default: module.PassiveAssistantMarkdown }))
+)
+
 export function AssistantMarkdown({
   text,
   streaming,
   className,
-  hideHtmlComments = false
+  hideHtmlComments = false,
+  plainText = false,
+  safeMarkdown = false
 }: {
   text: string
   streaming: boolean
   className?: string
   hideHtmlComments?: boolean
+  plainText?: boolean
+  safeMarkdown?: boolean
 }): ReactElement {
   // The bubble's presentation gate keeps catch-up replay out of the
   // typewriter. The context also covers nested Markdown rendered by it.
@@ -25,6 +33,14 @@ export function AssistantMarkdown({
   const fallbackText = hideHtmlComments
     ? text.replace(/<!--[\s\S]*?(?:-->|$)/g, '')
     : text
+
+  if (plainText) return <div className={className} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text}</div>
+
+  if (safeMarkdown) return (
+    <Suspense fallback={<div className={className} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text}</div>}>
+      <LazyPassiveAssistantMarkdown text={text} className={className} />
+    </Suspense>
+  )
 
   return (
     <Suspense

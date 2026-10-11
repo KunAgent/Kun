@@ -227,7 +227,7 @@ describe('FileArtifactStore streaming reads', () => {
     }
   })
 
-  it('stitches a multibyte UTF-8 char split across a 64KiB read boundary (P2-04)', async () => {
+  it('stitches a multibyte UTF-8 char split across a 64KiB read boundary', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'kun-artifacts-'))
     try {
       const store = new FileArtifactStore(dir, () => 't0')

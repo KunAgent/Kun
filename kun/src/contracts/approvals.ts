@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ApprovalChoiceSchema, ApprovalPermissionOptionSchema } from './approval-choice.js'
 
 export const ApprovalActionKindSchema = z.enum([
   'command',
@@ -51,12 +52,20 @@ export const ApprovalActionEnvelopeSchema = z.object({
   cwd: z.string().min(1).max(4_096).optional(),
   targets: z.array(ApprovalActionTargetSchema).max(16),
   reason: z.string().min(1).max(2_048),
+  permissionOptions: z.array(ApprovalPermissionOptionSchema).max(32).optional(),
   /**
    * The action may only be authorized by a human. Full-access auto-allow,
    * configured hooks, and the automatic agent reviewer must not decide it
    * (for example promoting content into a standing user directive).
    */
-  requiresUserDecision: z.boolean().optional()
+  requiresUserDecision: z.boolean().optional(),
+  /**
+   * Who may resolve this request. 'user' is equivalent to requiresUserDecision:
+   * the approval always waits for the human queue — auto policy and the agent
+   * reviewer are skipped. ADE uses it for worker permission escalation, where
+   * only the user may widen a worker's ceiling above the manager's authority.
+   */
+  reviewerRequirement: z.literal('user').optional()
 }).strict()
 export type ApprovalActionEnvelope = z.infer<typeof ApprovalActionEnvelopeSchema>
 
@@ -78,6 +87,7 @@ export type ApprovalReviewTerminalStatus = z.infer<typeof ApprovalReviewTerminal
 
 export const ApprovalDecisionRequest = z.object({
   decision: z.enum(['allow', 'deny']),
+  choice: ApprovalChoiceSchema.optional(),
   /** Optional human-readable reason stored alongside the resolution. */
   reason: z.string().trim().max(4096).optional().transform((value) => value || undefined)
 })

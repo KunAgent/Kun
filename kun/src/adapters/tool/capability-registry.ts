@@ -112,7 +112,7 @@ export class CapabilityRegistry {
       }, context)) continue
       if (!this.canUseTool(record.tool, context)) continue
       if (record.tool.modelAdvertised === false) continue
-      if (!isToolAdvertisedInSandbox(record.tool, context)) continue
+      if (!isToolAdvertisedInSandbox(record.tool, context, record.provider)) continue
       if (record.tool.shouldAdvertise) {
         if (!context || !record.tool.shouldAdvertise(context)) continue
       }

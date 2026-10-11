@@ -3,5 +3,27 @@
   "composerFastModeOff": "Fast mode off",
   "composerFastModeHint": "Faster Codex responses with increased subscription usage.",
   "composerFastModeUnverified": "Fast support is not confirmed for this model. Refresh the model list in provider settings.",
-  "composerFastModeUnsupported": "This model does not offer Fast mode."
+  "composerFastModeUnsupported": "This model does not offer Fast mode.",
+  "composerFastModeLabel": "Fast",
+  "nativeAgentPicker": {
+    "title": "Agent",
+    "auto": "Auto",
+    "autoHint": "Follows the composer permission level",
+    "triggerTitle": "{{agent}} Agent: {{name}}",
+    "ownPermissions": "A selected Agent uses its own tool permissions. Read-only tasks still use the strictest mode.",
+    "replacedModes": "{{agent}}'s built-in {{modes}} are not listed: a plugin or its configuration replaced them. These are the Agents {{agent}} offers now."
+  },
+  "agentSettingsPicker": {
+    "title": "Settings",
+    "triggerTitle": "{{agent}} session settings",
+    "hint": "Provided by the Agent; applies to your next message.",
+    "reset": "Reset"
+  },
+  "contextCapacityInputLimit": "Input limit {{input}} · Total context {{context}}",
+  "contextCapacityAgentFallback": "Agent",
+  "contextCapacityAgentOverLimit": "Near the limit · {{agent}} compacts",
+  "contextCapacityAgentReported": "{{agent}}'s latest request",
+  "contextCapacityAgentThresholdLabel": "Compacts at ~{{percent}}",
+  "contextCapacityAgentUsed": "Used (reported by {{agent}})",
+  "contextCapacityAgentReportedNote": "Reported by {{agent}}: the context of its latest request. Kun cannot split it into system prompt, tools and messages; cumulative consumption is in the usage bar below."
 }

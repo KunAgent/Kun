@@ -1,0 +1,582 @@
+import type { AdeHarnessAliasModelGroup } from '@shared/ade-harnesses'
+import { create } from 'zustand'
+import type {
+  AdeHarnessCommand,
+  AdeHarnessModels,
+  AdeHarnessProviderModelGroup,
+  AdeHarnessRow,
+  AdeHarnessSessionState
+} from '@shared/ade-harnesses'
+import { harnessProfileKey, readyHarnessProfiles } from '@shared/harness-enablement'
+import { getProvider } from '../agent/registry'
+import type { HarnessNativeAgent } from '../../../../kun/src/contracts/harness-native-agents'
+import { rememberAgentIconAliases } from '../lib/agent-icon-aliases'
+import { rendererRuntimeClient } from '../agent/runtime-client'
+import { kunHarnessWarmPath } from '@shared/kun-endpoints'
+
+/** A model-detail lookup may omit the Agent list; keep the last known one. */
+function nativeAgentCacheFields(source: { agents?: HarnessNativeAgent[]; defaultAgentId?: string } | undefined) {
+  return source?.agents?.length
+    ? { agents: source.agents, ...(source.defaultAgentId ? { defaultAgentId: source.defaultAgentId } : {}) } : {}
+}
+
+/** Agent settings follow the same rule as the Agent list. */
+function settingsCacheFields(source: { settings?: AdeHarnessModels['settings'] } | undefined) {
+  return source?.settings?.length ? { settings: source.settings } : {}
+}
+
+/**
+ * Harness catalog + per-thread session surface.
+ *
+ * - `rows` is the `GET /v1/harnesses` cache; ordinary menu opens reuse it.
+ *   Settings changes and explicit refreshes invalidate it (`probe` stays server-side).
+ * - `models[harnessId]` is the lazy `GET /v1/harnesses/:id/models` cache.
+ * - `sessions[threadId]` is the last `harness_session_state` event:
+ *   native slash commands + config options the composer renders.
+ */
+export type HarnessSessionSurface = {
+  harnessId: string
+  commands?: AdeHarnessCommand[]
+  currentModeId?: string
+  agents?: HarnessNativeAgent[]
+  settings?: AdeHarnessSessionState['settings']
+  updatedAt: string
+}
+
+/**
+ * One Agent's native model catalog. `error` marks a failed live lookup (the
+ * runtime's categorical reason when known); `failures` counts consecutive
+ * failed lookups so the composer can back off its automatic retries.
+ */
+export type HarnessModelCacheEntry = {
+  models: string[]
+  modelInfo?: AdeHarnessModels['modelInfo']
+  agents?: HarnessNativeAgent[]
+  defaultAgentId?: string
+  settings?: AdeHarnessModels['settings']
+  detailsModel?: string
+  catalogStatus?: AdeHarnessModels['catalogStatus']
+  loadedAt?: number
+  loading: boolean
+  error?: string
+  errorCode?: string
+  failures?: number
+}
+
+/** Automatic retry delays after a failed native catalog lookup. */
+export const HARNESS_MODEL_RETRY_DELAYS_MS = [5_000, 15_000, 45_000] as const
+
+type HarnessStoreState = {
+  /** One-shot deep link from an Agent repair action into its settings detail. */
+  settingsHarnessId?: string
+  /** Tab the deep link opens on (e.g. Version from an update notice). */
+  settingsHarnessTab?: 'connection' | 'models' | 'launch' | 'version'
+  rows: AdeHarnessRow[]
+  /**
+   * Timestamp of the last successful list response: replaced the
+   * load-once `rowsLoaded` flag so callers can force a refresh while
+   * detection is still settling.
+   */
+  rowsLoadedAt?: number
+  rowsLoading: boolean
+  rowsError?: string
+  models: Record<string, HarnessModelCacheEntry>
+  /**
+   * Provider-grouped models for `provider`/`kun-gateway` credential modes:
+   * the exposable providers each harness turn could address. The
+   * two modes share one exposable set, so a single per-harness entry serves
+   * both.
+   */
+  providerGroups: Record<
+    string,
+    { groups: AdeHarnessProviderModelGroup[]; aliasGroups?: AdeHarnessAliasModelGroup[]; loading: boolean; error?: string }
+  >
+  sessions: Record<string, HarnessSessionSurface>
+}
+
+export const useHarnessStore = create<HarnessStoreState>(() => ({
+  rows: [],
+  rowsLoading: false,
+  models: {},
+  providerGroups: {},
+  sessions: {}
+}))
+
+/** Catalog facts relevant to model discovery; checkedAt is intentionally excluded. */
+export function harnessModelFingerprint(row: AdeHarnessRow | undefined): string {
+  if (!row) return 'unlisted'
+  return JSON.stringify({
+    transport: row.definition.transport,
+    credentialModes: row.definition.credentialModes,
+    modelSource: row.definition.modelSource,
+    staticModels: row.definition.staticModels,
+    login: row.status.login,
+    version: row.status.version,
+    command: row.status.resolvedCommand,
+    network: row.status.networkFingerprint
+  })
+}
+
+const modelRequestGeneration = new Map<string, number>()
+const generationFor = (id: string): number => modelRequestGeneration.get(id) ?? 0
+
+/**
+ * while any row still reports `detecting`, the store polls the
+ * catalog until detection settles or the budget expires — the first load
+ * usually lands mid-probe, and without this the sidebar/picker would pin
+ * the provisional `unknown` verdict forever.
+ */
+export const HARNESS_DETECTING_POLL_MS = 5_000
+const DETECTING_POLL_BUDGET_MS = 30_000
+const LOAD_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000]
+/**
+ * Every composer mount asks for the catalog, and each answer costs Kun a full
+ * readiness pass. Edits, installs and explicit refreshes force a reload, so
+ * the passive cache can live for minutes.
+ */
+export const HARNESS_CATALOG_TTL_MS = 5 * 60_000
+
+let expiryTimer: ReturnType<typeof setTimeout> | null = null
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+let pollWindowStart: number | null = null
+let retryCount = 0
+let pollGeneration = 0
+let catalogGeneration = 0
+let now = (): number => Date.now()
+
+/** Test seam: vitest fake timers need a clock they can advance. */
+export function setHarnessStoreNow(next: () => number): void {
+  now = next
+}
+
+function anyRowDetecting(rows: AdeHarnessRow[]): boolean {
+  return rows.some(
+    (row) => row.status.detecting === true || row.status.installed === 'unknown'
+  )
+}
+
+function scheduleHarnessPoll(delayMs: number): void {
+  if (pollTimer) clearTimeout(pollTimer)
+  const generation = pollGeneration
+  pollTimer = setTimeout(() => {
+    pollTimer = null
+    if (pollGeneration !== generation) return
+    void loadHarnesses(true)
+  }, delayMs)
+}
+
+/** Exported so tests can reset the module-level poll/retry state. */
+export function resetHarnessPolling(): void {
+  pollGeneration += 1
+  pollWindowStart = null
+  retryCount = 0
+  if (pollTimer) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+}
+
+const HARNESS_WARM_MIN_INTERVAL_MS = 5 * 60_000
+const lastWarmRequestAt = new Map<string, number>()
+
+/**
+ * Selecting an Agent in the composer re-validates its readiness proof ahead of
+ * the next turn. This replaces background refresh-ahead, which re-spawned every
+ * enabled Agent CLI every few minutes while the app sat idle.
+ */
+export function warmHarnessReadiness(harnessId: string): void {
+  if (harnessId === 'kun' || typeof window === 'undefined' || !window.kunGui?.runtimeRequest) return
+  const last = lastWarmRequestAt.get(harnessId) ?? 0
+  if (now() - last < HARNESS_WARM_MIN_INTERVAL_MS) return
+  lastWarmRequestAt.set(harnessId, now())
+  void rendererRuntimeClient.runtimeRequest(kunHarnessWarmPath(harnessId), 'POST', '{}').catch(() => {
+    lastWarmRequestAt.delete(harnessId)
+  })
+}
+
+export async function loadHarnesses(
+  force = false,
+  options?: { waitMs?: number }
+): Promise<void> {
+  const provider = getProvider()
+  if (!provider.listHarnesses) return
+  const state = useHarnessStore.getState()
+  const fresh = state.rowsLoadedAt !== undefined && now() - state.rowsLoadedAt < HARNESS_CATALOG_TTL_MS
+  if (state.rowsLoading || (fresh && !force)) return
+  const requestGeneration = ++catalogGeneration
+  useHarnessStore.setState({ rowsLoading: true, rowsError: undefined })
+  try {
+    const rows = await provider.listHarnesses({ ...options, includeDisabled: true })
+    if (requestGeneration !== catalogGeneration) return
+    const previous = useHarnessStore.getState()
+    const oldRows = new Map(previous.rows.map((row) => [row.definition.id, harnessModelFingerprint(row)]))
+    const newRows = new Map(rows.map((row) => [row.definition.id, harnessModelFingerprint(row)]))
+    const models = { ...previous.models }
+    const providerGroups = { ...previous.providerGroups }
+    for (const id of new Set([...oldRows.keys(), ...newRows.keys()])) {
+      if (oldRows.get(id) === newRows.get(id)) continue
+      modelRequestGeneration.set(id, generationFor(id) + 1)
+      delete models[id]
+      delete providerGroups[id]
+    }
+    scheduleReadinessExpiry(rows)
+    rememberAgentIconAliases(rows)
+    useHarnessStore.setState({ rows, rowsLoadedAt: now(), rowsLoading: false, models, providerGroups })
+    retryCount = 0
+    if (anyRowDetecting(rows)) {
+      if (pollWindowStart === null) pollWindowStart = now()
+      if (now() - pollWindowStart <= DETECTING_POLL_BUDGET_MS) {
+        scheduleHarnessPoll(HARNESS_DETECTING_POLL_MS)
+      } else {
+        resetHarnessPolling()
+      }
+    } else {
+      resetHarnessPolling()
+    }
+  } catch (error) {
+    if (requestGeneration !== catalogGeneration) return
+    useHarnessStore.setState({
+      rowsLoading: false,
+      rowsError: error instanceof Error ? error.message : String(error)
+    })
+    // Backoff retry — a transient runtime hiccup used to stick forever.
+    if (pollWindowStart === null) pollWindowStart = now()
+    const elapsed = now() - pollWindowStart
+    if (elapsed <= DETECTING_POLL_BUDGET_MS) {
+      const delay = LOAD_RETRY_DELAYS_MS[Math.min(retryCount, LOAD_RETRY_DELAYS_MS.length - 1)]
+      retryCount += 1
+      scheduleHarnessPoll(delay)
+    } else {
+      resetHarnessPolling()
+    }
+  }
+}
+
+export function invalidateHarnessModels(id: string): void {
+  modelRequestGeneration.set(id, generationFor(id) + 1)
+  useHarnessStore.setState((state) => {
+    const models = { ...state.models }, providerGroups = { ...state.providerGroups }
+    delete models[id]; delete providerGroups[id]
+    return { models, providerGroups }
+  })
+}
+
+const NATIVE_CATALOG_SEED_KEY = 'kun.native-model-catalog.v1'
+type NativeCatalogSeed = { models: string[]; modelInfo?: AdeHarnessModels['modelInfo']; version?: string; savedAt: string }
+
+function readCatalogSeed(harnessId: string): NativeCatalogSeed | undefined {
+  try {
+    const parsed = JSON.parse(globalThis.localStorage?.getItem(NATIVE_CATALOG_SEED_KEY) ?? '{}') as Record<string, NativeCatalogSeed>
+    const seed = parsed[harnessId]
+    return seed && Array.isArray(seed.models) && seed.models.length > 0 ? seed : undefined
+  } catch { return undefined }
+}
+
+function writeCatalogSeed(harnessId: string, seed: NativeCatalogSeed): void {
+  try {
+    const parsed = JSON.parse(globalThis.localStorage?.getItem(NATIVE_CATALOG_SEED_KEY) ?? '{}') as Record<string, NativeCatalogSeed>
+    globalThis.localStorage?.setItem(NATIVE_CATALOG_SEED_KEY, JSON.stringify({ ...parsed, [harnessId]: seed }))
+  } catch { /* storage is a convenience; the live catalog stays authoritative */ }
+}
+
+export async function loadHarnessModels(harnessId: string, force = false, selectedModel?: string): Promise<void> {
+  const provider = getProvider()
+  if (!provider.listHarnessModels) return
+  let existing = useHarnessStore.getState().models[harnessId]
+  // Seed a cold start with the last live catalog (same Agent version when
+  // known) so the menu is usable while a slow Agent answers the live read.
+  if (!existing && !selectedModel) {
+    const seed = readCatalogSeed(harnessId)
+    const version = useHarnessStore.getState().rows.find((row) => row.definition.id === harnessId)?.status.version
+    if (seed && (!version || !seed.version || seed.version === version)) {
+      existing = { models: seed.models, ...(seed.modelInfo ? { modelInfo: seed.modelInfo } : {}), loading: false,
+        catalogStatus: { source: 'cache', fetchedAt: seed.savedAt, ...(seed.version ? { version: seed.version } : {}) } }
+    }
+  }
+  if (existing?.loading || (existing && !existing.error && !force &&
+    (!selectedModel || existing.detailsModel === selectedModel) && Date.now() - (existing.loadedAt ?? 0) < 60_000)) return
+  const generation = generationFor(harnessId)
+  useHarnessStore.setState((state) => ({
+    models: { ...state.models, [harnessId]: { ...existing, models: existing?.models ?? [], loading: true } }
+  }))
+  try {
+    const result = force ? await provider.listHarnessModels(harnessId, undefined, selectedModel, { refresh: true })
+      : selectedModel ? await provider.listHarnessModels(harnessId, undefined, selectedModel) : await provider.listHarnessModels(harnessId)
+    if (selectedModel && !result.models.length) throw new Error('Native model details are temporarily unavailable')
+    if (generation !== generationFor(harnessId)) return
+    // A response with no models and a live-lookup error is a failure, not an
+    // empty catalog: keep any models already shown and let the caller retry.
+    const lookupError = result.catalogStatus?.error
+    const failed = result.models.length === 0 && (lookupError !== undefined || result.catalogStatus?.source === 'fallback')
+    const models = failed && existing?.models.length ? existing.models : result.models
+    if (!failed && !selectedModel && result.models.length > 0 && result.catalogStatus?.source !== 'provider' &&
+      result.catalogStatus?.source !== 'static') {
+      writeCatalogSeed(harnessId, { models: result.models, ...(result.modelInfo ? { modelInfo: result.modelInfo } : {}),
+        ...(result.catalogStatus?.version ? { version: result.catalogStatus.version } : {}), savedAt: result.catalogStatus?.fetchedAt ?? new Date().toISOString() })
+    }
+    useHarnessStore.setState((state) => ({
+      models: { ...state.models, [harnessId]: { models, modelInfo: failed && existing?.models.length ? existing.modelInfo : result.modelInfo?.map((entry) => {
+        const previous = existing?.modelInfo?.find((old) => old.id === entry.id)
+        return { ...(entry.reasoningEfforts === undefined && previous?.reasoningEfforts !== undefined
+          ? { reasoningEfforts: previous.reasoningEfforts, defaultReasoningEffort: previous.defaultReasoningEffort } : {}), ...entry }
+      }), ...nativeAgentCacheFields(result.agents?.length ? result : existing),
+        ...settingsCacheFields(result.settings?.length ? result : existing),
+        detailsModel: selectedModel, catalogStatus: result.catalogStatus,
+        loadedAt: Date.now(), loading: false,
+        ...(failed ? { error: lookupError?.message ?? lookupError?.code ?? 'model_catalog_unavailable',
+          ...(lookupError?.code ? { errorCode: lookupError.code } : {}), failures: (existing?.failures ?? 0) + 1 } : {}) } }
+    }))
+  } catch (error) {
+    if (generation !== generationFor(harnessId)) return
+    useHarnessStore.setState((state) => ({
+      models: {
+        ...state.models,
+        [harnessId]: {
+          models: existing?.models ?? [],
+          modelInfo: existing?.modelInfo,
+          ...(existing?.catalogStatus ? { catalogStatus: existing.catalogStatus } : {}),
+          detailsModel: selectedModel,
+          loading: false,
+          // A failed per-model detail lookup is not a catalog failure.
+          ...(selectedModel && existing?.models.length ? { failures: existing.failures } : { failures: (existing?.failures ?? 0) + 1 }),
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }))
+  }
+}
+
+/** Lazy load of the provider-grouped model catalog for provider/gateway modes. */
+export async function loadHarnessProviderGroups(
+  harnessId: string,
+  force = false
+): Promise<void> {
+  const provider = getProvider()
+  if (!provider.listHarnessModels) return
+  const existing = useHarnessStore.getState().providerGroups[harnessId]
+  if (existing?.loading || (existing && !existing.error && !force)) return
+  const generation = generationFor(harnessId)
+  useHarnessStore.setState((state) => ({
+    providerGroups: {
+      ...state.providerGroups,
+      [harnessId]: { groups: existing?.groups ?? [], aliasGroups: existing?.aliasGroups ?? [], loading: true }
+    }
+  }))
+  try {
+    const modes = useHarnessStore.getState().rows.find((row) => row.definition.id === harnessId)?.definition.credentialModes
+    const mode = modes?.includes('kun-gateway') ? 'kun-gateway'
+      : modes?.includes('provider') || harnessId === 'cursor' || harnessId === 'kun' ? 'provider' : 'kun-gateway'
+    const result = await provider.listHarnessModels(harnessId, mode)
+    if (generation !== generationFor(harnessId)) return
+    useHarnessStore.setState((state) => ({
+      providerGroups: {
+        ...state.providerGroups,
+        [harnessId]: { groups: result.groups ?? [], aliasGroups: result.aliasGroups ?? [], loading: false }
+      }
+    }))
+  } catch (error) {
+    if (generation !== generationFor(harnessId)) return
+    useHarnessStore.setState((state) => ({
+      providerGroups: {
+        ...state.providerGroups,
+        [harnessId]: {
+          groups: existing?.groups ?? [],
+          loading: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }))
+  }
+}
+
+/** Sink entry for mapped `harness_session_state` runtime events. */
+export function receiveHarnessSessionState(state: AdeHarnessSessionState): void {
+  const threadId = state.threadId.trim()
+  if (!threadId || !state.harnessId.trim()) return
+  useHarnessStore.setState((current) => ({
+    sessions: {
+      ...current.sessions,
+      [threadId]: {
+        harnessId: state.harnessId,
+        ...(state.commands !== undefined
+          ? { commands: state.commands }
+          : current.sessions[threadId]?.commands !== undefined
+            ? { commands: current.sessions[threadId]!.commands }
+            : {}),
+        ...(state.currentModeId !== undefined
+          ? { currentModeId: state.currentModeId }
+          : current.sessions[threadId]?.currentModeId !== undefined
+            ? { currentModeId: current.sessions[threadId]!.currentModeId }
+            : {}),
+        ...(state.agents !== undefined
+          ? { agents: state.agents }
+          : current.sessions[threadId]?.harnessId === state.harnessId && current.sessions[threadId]?.agents
+            ? { agents: current.sessions[threadId]!.agents }
+            : {}),
+        ...(state.settings !== undefined
+          ? { settings: state.settings }
+          : current.sessions[threadId]?.harnessId === state.harnessId && current.sessions[threadId]?.settings
+            ? { settings: current.sessions[threadId]!.settings }
+            : {}),
+        updatedAt: new Date().toISOString()
+      }
+    }
+  }))
+}
+
+/**
+ * Turn-serving rows: `transport: 'terminal'` entries are interactive
+ * CLIs launched inside a Kun terminal tab — they never host a delegated turn,
+ * so every turn picker (composer, one-on-one, subagent profile) hides them.
+ */
+export function harnessRowRunsTurns(row: AdeHarnessRow): boolean {
+  return row.definition.transport !== 'terminal' && row.definition.transport !== 'application'
+}
+
+/** Harness availability for pickers: installed + handshake-ready + signed in. */
+export function harnessRowAvailable(row: AdeHarnessRow): boolean {
+  if (row.definition.transport === 'native-loop') return row.definition.id === 'kun'
+  return harnessRowRunsTurns(row) && readyHarnessProfiles(row).length > 0
+}
+
+/**
+ * Stable unavailability code for pickers. Returns the 'detecting'
+ * sentinel while a probe is inflight or the verdict is still provisional;
+ * otherwise the wire `reasonCode` (falling back to field derivation for
+ * statuses that predate it). Consumers localize `adeHarnessUnavailable.*`
+ * and `adeHarnessNextStep.*` from this — never the raw message.
+ */
+export function harnessRowUnavailableCode(row: AdeHarnessRow): string | null {
+  if (harnessRowAvailable(row)) return null
+  if (row.status.detecting === true) return 'detecting'
+  const status = row.status
+  if (row.definition.availability === 'retired') return 'disabled'
+  if (status.reasonCode && status.reasonCode !== 'disabled') return status.reasonCode
+  if (row.enabled !== true) return 'disabled'
+  if (status.installed === 'no') return 'not_installed'
+  if (status.installed === 'yes') {
+    if (status.versionSupported === false) return 'version_too_low'
+    if (status.ready === 'no') return 'handshake_failed'
+    if (status.login === 'signed-out') return 'signed_out'
+  }
+  // A settled `unknown` (the version probe failed and the polling
+  // budget is spent) is unavailable — not "detecting" forever.
+  return 'readiness_required'
+}
+
+/** Raw diagnostic detail; render only inside a "view reason" disclosure. */
+export function harnessRowUnavailableDetail(row: AdeHarnessRow): string | null {
+  const message = row.status.message?.trim()
+  return message || null
+}
+
+/** i18n suffix per unavailable code for `adeHarnessUnavailable.*` labels. */
+export const HARNESS_UNAVAILABLE_LABEL_KEY: Record<string, string> = {
+  detecting: 'detecting',
+  not_installed: 'notInstalled',
+  adapter_missing: 'adapterMissing',
+  version_too_low: 'versionLow',
+  handshake_failed: 'handshakeFailed',
+  handshake_timeout: 'handshakeTimeout',
+  signed_out: 'signedOut',
+  disabled: 'disabled',
+  readiness_required: 'readinessRequired',
+  configuration_invalid: 'configurationInvalid',
+  credentials_missing: 'credentialsMissing',
+  authentication_unverified: 'authenticationUnverified',
+  unavailable: 'unavailable'
+}
+
+/** i18n suffix per code for `adeHarnessNextStep.*` guidance; absent = none. */
+export const HARNESS_UNAVAILABLE_NEXT_STEP_KEY: Record<string, string | undefined> = {
+  not_installed: 'install',
+  adapter_missing: 'installAdapter',
+  version_too_low: 'upgrade',
+  handshake_failed: 'retry',
+  handshake_timeout: 'retry',
+  signed_out: 'login',
+  disabled: 'enable',
+  readiness_required: 'enable',
+  configuration_invalid: 'configure',
+  credentials_missing: 'login',
+  authentication_unverified: 'login',
+  unavailable: 'retry'
+}
+
+export function harnessUnavailableLabelKey(code: string): string {
+  return `adeHarnessUnavailable.${HARNESS_UNAVAILABLE_LABEL_KEY[code] ?? 'unavailable'}`
+}
+
+export function harnessUnavailableNextStepKey(code: string): string | null {
+  const suffix = HARNESS_UNAVAILABLE_NEXT_STEP_KEY[code]
+  return suffix ? `adeHarnessNextStep.${suffix}` : null
+}
+
+/** Drop removed grants immediately; an in-flight older catalog cannot restore them. */
+/**
+ * Agents whose launch settings (command path and other `providers`
+ * overrides, profile defaults) differ between two snapshots. Only these lose their readiness
+ * proof on save; editing one Agent must not send every other Agent back to checking.
+ */
+export function harnessIdsWithChangedLaunchSettings(before: import('@shared/app-settings').KunHarnessSettingsV1,
+  after: import('@shared/app-settings').KunHarnessSettingsV1): string[] {
+  const changed = new Set<string>()
+  const compare = (left: Record<string, unknown> | undefined, right: Record<string, unknown> | undefined): void => {
+    for (const id of new Set([...Object.keys(left ?? {}), ...Object.keys(right ?? {})])) {
+      if (JSON.stringify(left?.[id] ?? null) !== JSON.stringify(right?.[id] ?? null)) changed.add(id)
+    }
+  }
+  compare(before.providers, after.providers)
+  compare(before.defaults, after.defaults)
+  return [...changed]
+}
+
+/**
+ * Mirror saved enablement into the cached rows before the runtime answers.
+ * `invalidateReadiness` drops ready proofs for every row (`true`) or only
+ * for the listed Agent ids.
+ */
+export function applyHarnessEnablementSettings(settings: import('@shared/app-settings').KunHarnessSettingsV1,
+  invalidateReadiness: boolean | readonly string[] = false): void {
+  catalogGeneration += 1
+  const invalidated = (id: string): boolean => invalidateReadiness === true ||
+    (Array.isArray(invalidateReadiness) && invalidateReadiness.includes(id))
+  useHarnessStore.setState((state) => ({ rowsLoading: false, rowsLoadedAt: undefined, rows: state.rows.map((row) => {
+    if (row.definition.id === 'kun') return row
+    const enabledProfiles = settings.disabledIds.includes(row.definition.id) ? [] :
+      (settings.enabledProfiles ?? []).filter((entry) => entry.harnessId === row.definition.id)
+    return { ...row, enabled: enabledProfiles.length > 0, enabledProfiles,
+      readyProfiles: invalidated(row.definition.id) ? [] : (row.readyProfiles ?? []).filter((entry) =>
+        enabledProfiles.some((enabled) => harnessProfileKey(entry) === harnessProfileKey(enabled))) }
+  }) }))
+}
+
+/** Expiring proofs disappear even while a composer menu is left open. */
+/**
+ * The runtime re-validates a proof in the last 90 s of its life while still
+ * serving it. Poll once inside that window so the refreshed expiry arrives
+ * before the old one lapses; if the window already passed, poll at expiry.
+ */
+export const READINESS_REFRESH_AHEAD_MS = 75_000
+export function nextReadinessPoll(expirations: readonly number[], now: number): number {
+  return Math.min(...expirations.map((expiration) =>
+    expiration - READINESS_REFRESH_AHEAD_MS > now ? expiration - READINESS_REFRESH_AHEAD_MS : expiration + 1))
+}
+
+function scheduleReadinessExpiry(rows: AdeHarnessRow[]): void {
+  if (expiryTimer) clearTimeout(expiryTimer)
+  expiryTimer = null
+  const expirations = rows.flatMap((row) => (row.readyProfiles ?? []).map((profile) => Date.parse(profile.expiresAt ?? '')))
+    .filter((expiration) => Number.isFinite(expiration) && expiration > Date.now())
+  if (!expirations.length) return
+  expiryTimer = setTimeout(() => {
+    expiryTimer = null
+    useHarnessStore.setState((state) => ({ rows: state.rows.map((row) => ({ ...row,
+      readyProfiles: (row.readyProfiles ?? []).filter((profile) => Date.parse(profile.expiresAt ?? '') > Date.now()) })) }))
+    scheduleReadinessExpiry(useHarnessStore.getState().rows)
+    // Expired proofs must be revalidated even when the catalog's short UI cache is fresh.
+    void loadHarnesses(true)
+  }, Math.max(1, nextReadinessPoll(expirations, Date.now()) - Date.now()))
+  // Catalog caches must not keep a non-browser test process alive.
+  if (typeof expiryTimer === 'object' && 'unref' in expiryTimer) expiryTimer.unref()
+}

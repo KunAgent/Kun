@@ -1,7 +1,11 @@
 // Type-only aliases keep the desktop and HTTP contracts in sync without
 // bundling runtime implementation code in the renderer.
+export * from '../../kun/src/contracts/kun-avatar-catalog'
+export * from '../../kun/src/contracts/kun-wardrobe'
+export { KUN_AVATAR_PRESETS, KUN_AVATAR_CARD_SCENES, ROOM_BUILTIN_AVATAR_IDS } from '../../kun/src/contracts/kun-avatar-presets'
+export type { KunAvatarPresetId } from '../../kun/src/contracts/kun-avatar-presets'
 export type { RoomContentReference, RoomAvatarReference, RoomContentResult,
-  RoomContentOpenTarget, RoomLinkPreview, RoomPreviewImage } from '../../kun/src/contracts/room-content'
+  RoomContentOpenTarget, RoomArtifactSourceTarget, RoomLinkPreview, RoomPreviewImage } from '../../kun/src/contracts/room-content'
 export type { RoomPoll, RoomPollInvitation, RoomMessageReactions,
   RoomMessageInteractions } from '../../kun/src/contracts/room-interactions'
 export type { RoomProposal, RoomProposalEntry, RoomProposalPayload,
@@ -22,6 +26,13 @@ export type {
   SendRoomMessage
 } from '../../kun/src/contracts/rooms'
 export type { RoomTask } from '../../kun/src/contracts/room-tasks'
+export { ROOM_APP_CATALOG, isHiddenRoomGoogleApp } from '../../kun/src/contracts/room-app-catalog'
+export type {
+  WorkbenchLink, WorkbenchLinkEntry, WorkbenchLinkKind, WorkbenchLinkStatus, WorkbenchRequest, WorkbenchResult,
+  WorkbenchDirectory, ConfirmWorkbenchLink, WorkbenchExecution, WorkbenchSchedule
+} from '../../kun/src/contracts/workbench-links'
+export type { AgentWorkbenchPolicy } from '../../kun/src/contracts/workbench-policy'
+export type { ThreadWorkbenchOrigin } from '../../kun/src/contracts/thread-workbench-origin'
 export type { RoomLatestMessage, RoomListEntry } from '../../kun/src/contracts/room-list'
 export type {
   RoomDelivery,
@@ -62,7 +73,12 @@ export const ROOM_ENDPOINTS = {
   recovery: '/v1/rooms/{roomId}/tasks/{taskId}/recovery',
   deliveries: '/v1/rooms/{roomId}/tasks/{taskId}/deliveries',
   integrations: '/v1/rooms/{roomId}/tasks/{taskId}/integrations',
-  cleanup: '/v1/rooms/{roomId}/tasks/{taskId}/cleanup'
+  cleanup: '/v1/rooms/{roomId}/tasks/{taskId}/cleanup',
+  appConnectionComplete: '/v1/rooms/{roomId}/app-connections/{messageId}/complete',
+  appConnectionSkip: '/v1/rooms/{roomId}/app-connections/{messageId}/skip',
+  workbenchLinks: '/v1/rooms/{roomId}/workbench-links',
+  workbenchLink: '/v1/rooms/{roomId}/workbench-links/{linkId}',
+  workbenchWatch: '/v1/rooms/{roomId}/workbench-links/watch'
 } as const
 
 export const ROOM_TASK_ACTIONS = [

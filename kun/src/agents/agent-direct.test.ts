@@ -1,3 +1,4 @@
+import { putRoomDocument } from '../rooms/room-service.js'
 import { execFileSync } from 'node:child_process'
 import { setAgentPermissions, agentPermissions } from './agent-permissions.js'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -14,6 +15,7 @@ import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { RoomRuntime } from '../rooms/room-runtime.js'
 import type { RoomRequestState, RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import { quickCreateAgent } from './agent-chat-entry.js'
+import { openAgentConversation } from './agent-conversations.js'
 import { controlDirectRequest, updateDirectWorkspace, directActivity } from './agent-direct-service.js'
 import { AgentDirectRunner } from './agent-direct-runner.js'
 import { enqueuePrivateContinuation } from '../rooms/room-continuation-service.js'
@@ -24,16 +26,25 @@ afterEach(async () => { for (const fn of cleanup.splice(0)) await fn() })
 async function fixture(outputPath = 'hello.txt', model?: ModelClient) {
   const root = await mkdtemp(join(tmpdir(), 'kun-direct-'))
   const seen: ModelRequest[] = []
+  // Model adapters may receive compacted/delta history; remember observed receipts.
+  const progress = new Map<string, { started: boolean; wrote: boolean; finished: boolean }>()
   const client: ModelClient = model ?? { provider: 'test', model: 'first', async *stream(request) {
     seen.push(request)
     const results = request.history.filter((item): item is Extract<typeof item, { kind: 'tool_result' }> =>
       item.turnId === request.turnId && item.kind === 'tool_result')
-    const wrote = results.some((item) => item.toolName === 'write')
-    const sent = results.some((item) => item.toolName === 'send_im_message' && item.isError !== true)
-    if (!wrote) yield { kind: 'tool_call_complete', callId: 'write-' + request.turnId, toolName: 'write', arguments: { path: outputPath, content: request.model === 'second' ? 'updated' : 'hello' } }
-    else if (!sent) yield { kind: 'tool_call_complete', callId: 'say-' + request.turnId, toolName: 'send_im_message',
-      arguments: { text: 'The file is ready.', ...(outputPath.startsWith('/') ? {} : { attachments: [{ path: outputPath }] }) } }
-    yield { kind: 'completed', stopReason: wrote && !sent ? 'tool_calls' : 'stop' }
+    const previous = progress.get(request.turnId)
+    const started = Boolean(previous?.started) || results.some((item) => item.toolName === 'send_im_message' && item.isError !== true &&
+      (item.output as { phase?: string })?.phase === 'start')
+    const wrote = Boolean(previous?.wrote) || results.some((item) => item.toolName === 'write' && item.isError !== true)
+    const finished = Boolean(previous?.finished) || results.some((item) => item.toolName === 'send_im_message' && item.isError !== true &&
+      (item.output as { phase?: string })?.phase === 'final')
+    progress.set(request.turnId, { started, wrote, finished })
+    if (!started) yield { kind: 'tool_call_complete', callId: 'start-' + request.turnId, toolName: 'send_im_message',
+      arguments: { text: 'I will create the requested file.', phase: 'start' } }
+    else if (!wrote) yield { kind: 'tool_call_complete', callId: 'write-' + request.turnId, toolName: 'write', arguments: { path: outputPath, content: request.model === 'second' ? 'updated' : 'hello' } }
+    else if (!finished) yield { kind: 'tool_call_complete', callId: 'say-' + request.turnId, toolName: 'send_im_message',
+      arguments: { text: 'The file is ready.', phase: 'final', ...(outputPath.startsWith('/') ? {} : { attachments: [{ path: outputPath }] }) } }
+    yield { kind: 'completed', stopReason: !started || !wrote || !finished ? 'tool_calls' : 'stop' }
   } }
   const h = makeHarness(model ? { provider: model.provider, model: model.model,
     async *stream(request) { seen.push(request); yield* model.stream(request) } } : client)
@@ -41,10 +52,13 @@ async function fixture(outputPath = 'hello.txt', model?: ModelClient) {
     { id: 'builtin', kind: 'built-in', enabled: true, available: true, tools: defaultLocalTools },
     roomResultProvider(h.threadStore)
   ]) })
+  const approve = setInterval(() => { for (const pending of h.approvalGate.pending()) h.approvalGate.decide(pending.id, 'allow') }, 10)
+  cleanup.push(async () => { clearInterval(approve) })
   const store = new SqliteRoomStore({ path: join(root, 'rooms.sqlite') })
   const deps: RoomRuntimeDeps = { dataDir: root, store, threads: h.threads, threadStore: h.threadStore,
     turns: h.turns, sessions: h.sessionStore, approvals: h.approvalGate, inputs: h.userInputGate,
-    runTurn: (id, turnId) => h.loop.runTurn(id, turnId), model: () => ({ model: 'first', providerId: 'test' }), profiles: () => ({}), assertOwnership: async () => {} }
+    runTurn: (id, turnId) => h.loop.runTurn(id, turnId), model: () => ({ model: 'first', providerId: 'test' }),
+    profiles: () => ({ general: { mode: 'subagent', toolPolicy: 'inherit' } }), assertOwnership: async () => {} }
   const runtime = new RoomRuntime(deps), runner = new AgentDirectRunner(deps, runtime.service)
   const created = await quickCreateAgent(runtime.agents, { clientRequestId: 'create' }, true)
   const advance = async (id: string) => {
@@ -86,14 +100,19 @@ it('queues a scoped continuation before admission and publishes its exact run on
   expect(result.threadId).toBe(source.threadId)
   expect(result.turnId).not.toBe(source.turnId)
   const messages = await f.store.list<import('../contracts/rooms.js').RoomMessage>('message', { roomId: f.created.roomId })
-  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(2)
+  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(4)
   expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-two' })).toBe('queued')
   const second = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))
     .find((row) => row.value.privateContinuation && row.id !== continuations[0].id)!
   expect((await f.advance(second.id)).status).toBe('completed')
   const newer = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'new-user', body: 'New task' })
   await f.advance(newer.requestId)
-  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-three' })).toBe('ignored')
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-three' })).toBe('queued')
+  const inbox = await f.store.list<import('../contracts/room-result-inbox.js').RoomResultInbox>('room_result_inbox', { roomId: f.created.roomId })
+  expect(inbox).toHaveLength(3)
+  expect(inbox.filter((row) => row.value.status === 'completed')).toHaveLength(2)
+  expect(inbox.find((row) => row.value.status === 'pending')?.value.rootRequestId).toBe(source.id)
+  await expect(enqueuePrivateContinuation(f.deps, { ...input, prompt: 'changed payload' })).rejects.toThrow('different content')
 })
 
 it('rejects stale or cross-thread continuation sources and rechecks authority before admission', async () => {
@@ -112,7 +131,34 @@ it('rejects stale or cross-thread continuation sources and rechecks authority be
   await f.runner.tick(continuation)
   expect((await f.store.get<RoomRequestState>('request', continuation.id))?.value.status).toBe('cancelled')
   expect(enqueue).not.toHaveBeenCalled()
+  const inbox = await f.store.list<{ status: string }>('room_result_inbox', { roomId: f.created.roomId })
+  expect(inbox[0].value.status).toBe('revoked')
   expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'child-two' })).toBe('ignored')
+})
+
+it('keeps the exact source Agent route and permission when a handed-over task returns', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'dispatch-source', body: 'Create hello.txt' })
+  const source = await f.advance(sent.requestId)
+  const thread = (await f.h.threadStore.get(source.threadId))!
+  const turn = thread.turns.find((entry) => entry.id === source.turnId)!
+  Object.assign(turn, { harnessId: 'codex', credentialMode: 'native-login', approvalPolicy: 'on-request',
+    approvalReviewer: 'agent', sandboxMode: 'workspace-write', reasoningEffort: 'high' })
+  await f.h.threadStore.upsert(thread)
+  expect(await enqueuePrivateContinuation(f.deps, { threadId: source.threadId, sourceTurnId: source.turnId!,
+    kind: 'workbench_task', key: 'finished-code-task', prompt: 'Review the completed Code result and report its checks.' })).toBe('queued')
+  const returned = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))
+    .find((row) => row.value.privateContinuation?.kind === 'workbench_task')!
+  expect(returned.value.privateContinuation).toMatchObject({ route: { harnessId: 'codex', credentialMode: 'native-login', model: turn.model,
+    reasoningEffort: 'high' }, policy: { approvalPolicy: 'on-request', approvalReviewer: 'agent', sandboxMode: 'workspace-write' } })
+  // Simulate different defaults during recovery; admission must still use the
+  // source turn, never re-infer a route from mutable or legacy thread fields.
+  Object.assign(thread, { harnessId: 'kun', model: 'second', approvalReviewer: 'user' })
+  await f.h.threadStore.upsert(thread)
+  const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn')
+  await f.runner.tick(returned)
+  expect(enqueue.mock.calls[0][0].request).toMatchObject({ harnessId: 'codex', credentialMode: 'native-login', model: turn.model,
+    reasoningEffort: 'high', approvalPolicy: 'on-request', approvalReviewer: 'agent', sandboxMode: 'workspace-write' })
 })
 
 it('creates one default Agent and private chat without calling a model', async () => {
@@ -147,7 +193,7 @@ it('writes and updates a real file with one persistent conversation and ordinary
   expect(await readFile(join(b.privateWorkspace!, 'hello.txt'), 'utf8')).toBe('updated')
   expect(f.seen.some((request) => request.model === 'second')).toBe(true)
   const messages = await f.store.list<import('../contracts/rooms.js').RoomMessage>('message', { roomId: f.created.roomId })
-  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(2)
+  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(4)
   expect(messages.filter((row) => row.value.authorKind === 'member').every((row) => row.value.originRunId && !row.value.replyToMessageId)).toBe(true)
   expect(await f.store.list('task')).toHaveLength(0)
 })
@@ -165,7 +211,7 @@ it('reconciles lost admission and publication receipts without executing or publ
   const repeated = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'lost', body: 'Create hello.txt' })
   expect(repeated.requestId).toBe(sent.requestId)
   expect((await f.store.list('room_run'))).toHaveLength(1)
-  expect((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message')).filter((row) => row.value.authorKind === 'member')).toHaveLength(1)
+  expect((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message')).filter((row) => row.value.authorKind === 'member')).toHaveLength(2)
 })
 it('retains an unknown admission and never retries it on timeout or restart', async () => {
   const f = await fixture()
@@ -214,7 +260,7 @@ it('resets model context without erasing public history and retains active work 
   const b = await f.advance(second.requestId)
   expect(b.threadId).not.toBe(a.threadId)
   expect(JSON.stringify(f.seen.filter((request) => request.threadId === b.threadId))).not.toContain('PRIVATE_ALPHA')
-  expect((await f.store.list('message'))).toHaveLength(4)
+  expect((await f.store.list('message'))).toHaveLength(6)
   const pending = await f.runtime.service.send(room.id, { clientRequestId: 'waiting-first', body: 'Wait' })
   for (let i = 0; i < 21; i++) await f.runtime.service.send(room.id, { clientRequestId: 'waiting-' + i, body: 'Wait next' })
   const activity = await directActivity(f.runtime, room.id)
@@ -240,35 +286,51 @@ it('publishes text and workspace attachments as one visible room message', async
   const done = await f.advance(sent.requestId)
   expect(done.status).toBe('completed')
   const published = (await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
-    .find((row) => row.value.originRunId === done.privateRunId)
+    .find((row) => row.value.originRunId === done.privateRunId && row.value.deliveryPhase === 'final')
   expect(published?.value.body).toBe('The file is ready.')
   expect(published?.value.references).toEqual([
     { kind: 'agent_file', workspaceId: expect.any(String), relativePath: 'hello.txt', titleSnapshot: 'hello.txt' }
   ])
   const run = await f.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', done.privateRunId!)
   expect(run?.value.outcome).toBe('published')
-  expect(run?.value.publishedMessageId).toBe(published?.id)
+  expect(run?.value.lastDeliveryPhase).toBe('final')
+  expect(run?.value.publishedMessageId).toBe((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
+    .find((row) => row.value.originRunId === done.privateRunId && row.value.deliveryPhase === 'start')?.id)
 })
 
-it('keeps ordinary assistant text internal and settles the run as skipped after bounded recovery', async () => {
+it('keeps ordinary assistant text internal and fails visibly after bounded publication recovery', async () => {
   const f = await fixture('hello.txt', { provider: 'test', model: 'first', async *stream() {
     yield { kind: 'assistant_text_delta', text: 'The file is ready.' }
     yield { kind: 'completed', stopReason: 'stop' }
   } })
   const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'quiet', body: 'Say something' })
   const done = await f.advance(sent.requestId)
-  expect(done.status).toBe('completed')
+  expect(done.status).toBe('failed')
   expect((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
     .filter((row) => row.value.authorKind === 'member')).toHaveLength(0)
   const run = await f.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', done.privateRunId!)
-  expect(run?.value.outcome).toBe('skipped')
+  expect(run?.value.outcome).toBe('failed')
   expect(run?.value.publishedMessageId).toBeUndefined()
   expect(f.seen).toHaveLength(1 + IM_PUBLICATION_MAX_RECOVERY_STEPS)
 })
 
+it('uses the fresh personal Full access policy in both the permission picker and admitted runtime', async () => {
+  const f = await fixture()
+  const approvals = vi.spyOn(f.h.approvalGate, 'requestResolution')
+  const state = await agentPermissions(f.runtime, f.created.roomId)
+  expect(state.mode).toBe('full-access')
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'default-policy', body: 'Create hello.txt' })
+  const done = await f.advance(sent.requestId)
+  const thread = await f.h.threads.getMetadata(done.threadId)
+  expect(done.roomSnapshot.privateExecutionPolicy).toEqual(state.policy)
+  expect(thread).toMatchObject(state.policy)
+  expect(done.status).toBe('completed')
+  expect(approvals).not.toHaveBeenCalled()
+})
+
 it('freezes accepted permissions and applies full access only to the next private turn', async () => {
   const f = await fixture()
-  const approvals = vi.spyOn(f.h.approvalGate, 'request')
+  const approvals = vi.spyOn(f.h.approvalGate, 'requestResolution')
   const state = await agentPermissions(f.runtime, f.created.roomId)
   expect(state.mode).toBe('full-access')
   await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'restrict-first', expectedRevision: state.revision, mode: 'ask-for-approval' })
@@ -287,7 +349,7 @@ it('freezes accepted permissions and applies full access only to the next privat
   expect(approvals).toHaveBeenCalledTimes(1)
   expect(JSON.stringify(f.seen.filter((request) => request.threadId === b.threadId))).toContain('ALPHA')
   const other = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'other-policy', setupMode: 'form' })
-  expect((await agentPermissions(f.runtime, other.roomId)).mode).toBe('full-access')
+  expect((await agentPermissions(f.runtime, other.roomId)).mode).toBe('ask-for-approval')
 })
 it('full access performs an explicitly selected external file write and respects later Agent directory limits', async () => {
   const outside = await mkdtemp(join(tmpdir(), 'kun-permission-external-'))
@@ -310,15 +372,17 @@ it('defaults a directory-limited Agent to ask-for-approval instead of full acces
   execFileSync('git', ['init', '--quiet', outside])
   execFileSync('git', ['-C', outside, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', '-c', 'commit.gpgSign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-m', 'test: initialize scope'])
   const f = await fixture()
-  const agent = await f.runtime.agents.get(f.created.agentId)
-  await f.runtime.agents.update(agent.id, { clientRequestId: 'restrict-agent', expectedRevision: agent.revision, allowedRepositoryRoots: [outside] })
-  const state = await agentPermissions(f.runtime, f.created.roomId)
+  const { agent } = await f.runtime.agents.create({ clientRequestId: 'restricted-agent', name: 'Scoped Agent', allowedRepositoryRoots: [outside] })
+  const { room } = await openAgentConversation(f.runtime.agents, f.runtime.service, agent.id)
+  const state = await agentPermissions(f.runtime, room.id)
   expect(state.mode).toBe('ask-for-approval')
   expect(state.fullAccessUnavailable).toBe('agent_directory_limits')
 })
 
 it('uses current confirmed permissions for a new retry while retaining the original workspace', async () => {
   const f = await fixture()
+  const initial = await agentPermissions(f.runtime, f.created.roomId)
+  await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'restrict-retry', expectedRevision: initial.revision, mode: 'ask-for-approval' })
   const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'retry-policy', body: 'Create hello.txt' })
   const original = (await f.store.get<RoomRequestState>('request', sent.requestId))!
   await controlDirectRequest(f.runtime, f.created.roomId, sent.requestId, { action: 'stop', clientRequestId: 'cancel-retry', expectedRevision: original.revision })
@@ -330,4 +394,115 @@ it('uses current confirmed permissions for a new retry while retaining the origi
   const retry = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))[0]
   expect(retry.value.roomSnapshot.privateExecutionPolicy?.sandboxMode).toBe('danger-full-access')
   expect(retry.value.roomSnapshot.privateWorkspace).toBe(original.value.roomSnapshot.privateWorkspace)
+})
+
+// Cross-provider execution threads must converge on the product conversation.
+it('bridges B messages when returning to an existing A execution thread', async () => {
+  const f = await fixture()
+  const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'a1', body: 'ALPHA_GOAL Create hello.txt' })
+  const a = await f.advance(first.requestId)
+  let agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'to-b', expectedRevision: agent.revision,
+    modelRef: { model: 'second', providerId: 'other' } })
+  const middle = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'b1', body: 'BETA_DECISION Use a blue cover. Update that file.' })
+  const b = await f.advance(middle.requestId)
+  expect(b.threadId).not.toBe(a.threadId)
+  agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'to-a', expectedRevision: agent.revision,
+    modelRef: { model: 'first', providerId: 'test' } })
+  const last = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'a2', body: 'Continue with the agreed cover.' })
+  const resumed = await f.advance(last.requestId)
+  expect(resumed.threadId).toBe(a.threadId)
+  const input = f.seen.find((request) => request.turnId === resumed.turnId)!
+  expect(JSON.stringify(input.history)).toContain('BETA_DECISION Use a blue cover.')
+})
+
+
+it('replays a cross-provider bridge after a lost admission receipt without duplicate execution', async () => {
+  const f = await fixture()
+  await f.advance((await f.runtime.service.send(f.created.roomId, { clientRequestId: 'a', body: 'Initial goal' })).requestId)
+  let agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'b-route', expectedRevision: agent.revision,
+    modelRef: { model: 'second', providerId: 'other', accountId: 'b-account' } })
+  await f.advance((await f.runtime.service.send(f.created.roomId, { clientRequestId: 'b', body: 'DECISION_BLUE' })).requestId)
+  agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'a-route', expectedRevision: agent.revision,
+    modelRef: { model: 'first', providerId: 'test' } })
+  const original = f.h.turns.enqueueTurn.bind(f.h.turns)
+  const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn').mockImplementationOnce(async (input) => {
+    await original(input); throw new Error('lost acknowledgement')
+  })
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'return-a', body: 'CURRENT_UNIQUE' })
+  for (let n = 0; n < 3; n++) await new AgentDirectRunner(f.deps, f.runtime.service).tick((await f.store.get<RoomRequestState>('request', sent.requestId))!)
+  const done = await f.advance(sent.requestId)
+  expect(done.status).toBe('completed'); expect(enqueue).toHaveBeenCalledTimes(1)
+  const request = f.seen.find((item) => item.turnId === done.turnId)!
+  const current = request.history.find((item) => item.kind === 'user_message' && item.turnId === done.turnId)
+  expect(current?.kind === 'user_message' && current.text).toContain('DECISION_BLUE')
+  expect(current?.kind === 'user_message' && current.text.match(/CURRENT_UNIQUE/g)).toHaveLength(1)
+  expect((await f.h.sessionStore.loadItems(done.threadId)).filter((item) => item.turnId === done.turnId && item.kind === 'tool_call' && item.toolName === 'write')).toHaveLength(1)
+})
+
+it('refreshes durable open commitments through repeated provider and account switches', async () => {
+  const f = await fixture()
+  const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'goal', body: 'KEEP_CRITICAL_COMMITMENT Create the file' })
+  const source = await f.advance(first.requestId)
+  await f.runtime.commitments.create(f.created.agentId, { clientRequestId: 'durable', sourceRoomId: f.created.roomId,
+    sourceMessageId: source.sourceMessageId, objective: 'KEEP_CRITICAL_COMMITMENT', acceptance: 'User confirms delivery' })
+  const threads = new Set<string>()
+  for (let n = 0; n < 12; n++) {
+    const agent = await f.runtime.agents.get(f.created.agentId)
+    await f.runtime.agents.update(agent.id, { clientRequestId: 'route-' + n, expectedRevision: agent.revision,
+      modelRef: { model: n % 2 ? 'first' : 'second', providerId: n % 3 ? 'test' : 'other', accountId: 'account-' + n % 2 } })
+    const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'turn-' + n, body: 'CURRENT_' + n + ' Continue the task' })
+    const done = await f.advance(sent.requestId); threads.add(done.threadId)
+    expect(done.status).toBe('completed')
+    const actual = f.seen.find((item) => item.turnId === done.turnId)!
+    const current = actual.history.find((item) => item.kind === 'user_message' && item.turnId === done.turnId)
+    expect(current?.kind === 'user_message' && current.text).toContain('KEEP_CRITICAL_COMMITMENT')
+  }
+  expect(threads.size).toBe(4)
+}, 30_000)
+
+
+it('cancels during resumable history preparation before any admission or side effect', async () => {
+  const f = await fixture()
+  for (let n = 0; n < 80; n++) await putRoomDocument(f.store, 'message', 'old-' + n, f.created.roomId,
+    { id: 'old-' + n, roomId: f.created.roomId, authorKind: 'user', authorLabelSnapshot: 'You', body: 'Older note ' + n,
+      messageSeq: n + 1, status: 'final', attachmentIds: [], mentionMemberIds: [], bodyRevision: 0, createdAt: new Date().toISOString() }, null)
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'cancel-scan', body: 'Create the file' })
+  for (let n = 0; n < 2; n++) await f.runner.tick((await f.store.get<RoomRequestState>('request', sent.requestId))!)
+  expect(await f.store.list('agent_conversation_preparation')).toHaveLength(1)
+  const before = (await f.store.get<RoomRequestState>('request', sent.requestId))!
+  expect(before.value.turnId).toBeUndefined()
+  await controlDirectRequest(f.runtime, f.created.roomId, sent.requestId,
+    { action: 'stop', clientRequestId: 'cancel', expectedRevision: before.revision })
+  await new AgentDirectRunner(f.deps, f.runtime.service).tick((await f.store.get<RoomRequestState>('request', sent.requestId))!)
+  expect((await f.store.get<RoomRequestState>('request', sent.requestId))!.value.status).toBe('cancelled')
+  expect(f.seen).toHaveLength(0)
+  expect(await f.store.list('agent_conversation_cursor')).toHaveLength(0)
+})
+
+
+it('does not acknowledge a recovered turn whose admission is still pending', async () => {
+  const f = await fixture()
+  const original = f.h.turns.enqueueTurn.bind(f.h.turns)
+  const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn').mockImplementationOnce(async (input) => {
+    const admitted = await original(input)
+    const thread = (await f.h.threadStore.get(input.threadId))!
+    thread.turns.find((turn) => turn.id === admitted.turnId)!.admissionPending = true
+    await f.h.threadStore.upsert(thread)
+    throw new Error('admission commit receipt unavailable')
+  })
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'partial-admission', body: 'Create the file' })
+  for (let n = 0; n < 3; n++) await new AgentDirectRunner(f.deps, f.runtime.service).tick((await f.store.get<RoomRequestState>('request', sent.requestId))!)
+  expect(await f.store.list('agent_conversation_cursor')).toHaveLength(0)
+  expect(f.seen).toHaveLength(0)
+  const request = (await f.store.get<RoomRequestState>('request', sent.requestId))!.value
+  const thread = (await f.h.threadStore.get(request.threadId))!
+  delete thread.turns.find((turn) => turn.id === request.turnId)!.admissionPending
+  await f.h.threadStore.upsert(thread)
+  expect((await f.advance(sent.requestId)).status).toBe('completed')
+  expect(enqueue).toHaveBeenCalledTimes(1)
+  expect(await f.store.list('agent_conversation_cursor')).toHaveLength(1)
 })

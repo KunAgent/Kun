@@ -10,7 +10,7 @@ import {
 } from '../write/write-workspace-store'
 import { normalizePath } from '../write/write-workspace-store-helpers'
 import { usePaperModeStore } from './paper-mode-store'
-import { enterPaperMode } from './paper-mode-actions'
+import { rememberPaperSpace } from './paper-mode-actions'
 import { applyPaperReaderLayout, readPaperReaderLayout } from './paper-reader-layout'
 import { paperImportParentDir, readImportFolder } from './paper-import-target'
 
@@ -19,11 +19,9 @@ function paperNotice(notice: { tone: 'info' | 'success' | 'error'; message: stri
 }
 
 /**
- * Docs-surface file-tree action (§3.2 「加入论文库」): copy a workspace PDF into
- * the active paper library as a unit. When no library is configured, entering
- * paper mode lands on the library onboarding which offers folder picking.
- * Unlike `openPdfAsPaper` this never disturbs the docs editor layout — it is a
- * background import reported through the paper notice strip.
+ * File-tree action 「加入论文」: copy a PDF of the space into its papers folder
+ * as a unit. A background import reported through the notice, which offers
+ * to open the new paper; the editor layout is left alone.
  */
 export async function addPdfToPaperLibrary(input: {
   pdfPath: string
@@ -31,14 +29,8 @@ export async function addPdfToPaperLibrary(input: {
 }): Promise<void> {
   const { t } = input
   const state = useWriteWorkspaceStore.getState()
-  const library =
-    normalizePath(state.paperMode.activeLibrary)
-    || normalizePath(state.paperMode.libraries[0] ?? '')
-  if (!library) {
-    paperNotice({ tone: 'info', message: t('writePaperModeNeedLibrary') })
-    void enterPaperMode()
-    return
-  }
+  const library = normalizePath(state.workspaceRoot)
+  if (!library) return
   const parentDir = paperImportParentDir(state.paperReading.papersDir, readImportFolder(library))
   const requestId = newPaperRequestId()
   usePaperStore.getState().beginJob('import', requestId)
@@ -57,10 +49,20 @@ export async function addPdfToPaperLibrary(input: {
       })
       return
     }
+    if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== library) return
     usePaperStore.getState().rememberUnit(result.unitDir, result.meta)
-    paperNotice({
+    usePaperModeStore.getState().refreshEntries()
+    void rememberPaperSpace(library)
+    usePaperStore.getState().setNotice({
       tone: 'success',
-      message: t('writePaperAddedToLibrary', { title: result.meta.title })
+      message: t(result.reused ? 'workPaperAlreadyInLibrary' : 'writePaperAddedToLibrary', { title: result.meta.title }),
+      action: {
+        label: t('workPaperOpen'),
+        run: () => {
+          const entry = usePaperModeStore.getState().entries.find((item) => item.unitDir === result.unitDir)
+          if (entry) void openLibraryEntry(entry, library, t)
+        }
+      }
     })
   } catch (error) {
     paperNotice({
@@ -75,12 +77,25 @@ export async function addPdfToPaperLibrary(input: {
 }
 
 /**
- * Open a library entry in the reader view (§3.4): units with a PDF get the
+ * Open a library entry in the reader view: units with a PDF get the
  * PDF+NOTES split; metadata-only units open NOTES.md alone. Records
  * `lastOpenedAt` in the local library state and, when `autoMarkReading` is
  * enabled, flips unread units to `reading`.
+ *
+ * `libraryRoot` is the space the entry belongs to. When it is not the
+ * mounted space that space is mounted first (settling dirty documents); a
+ * cancelled switch leaves the reader untouched.
  */
-export async function openLibraryEntry(entry: PaperLibraryEntry): Promise<void> {
+export async function openLibraryEntry(
+  entry: PaperLibraryEntry,
+  libraryRoot?: string,
+  t?: PaperTranslate
+): Promise<void> {
+  const requested = normalizePath(libraryRoot ?? '')
+  if (requested && requested !== normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)) {
+    await useWriteWorkspaceStore.getState().selectWriteWorkspace(requested)
+    if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== requested) return
+  }
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(store.workspaceRoot)
   if (!root) return
@@ -100,6 +115,7 @@ export async function openLibraryEntry(entry: PaperLibraryEntry): Promise<void> 
       { groupId: 'primary', viewMode: 'rich' }
     )
   }
+  if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== root) return
   // R1.1: the reader layout preset persists across papers — apply the stored
   // choice (阅读/笔记/助手) right after the unit opens.
   if (entry.hasPdf && entry.meta.pdfFile) {
@@ -109,6 +125,7 @@ export async function openLibraryEntry(entry: PaperLibraryEntry): Promise<void> 
       pdfFile: entry.meta.pdfFile
     })
   }
+  if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== root) return
   const now = new Date().toISOString()
   void window.kunGui?.paperLocalStateWrite?.({
     libraryRoot: root,
@@ -121,7 +138,7 @@ export async function openLibraryEntry(entry: PaperLibraryEntry): Promise<void> 
       unitDir: entry.unitDir,
       patch: { status: 'reading' }
     }).then((result) => {
-      if (result?.ok) {
+      if (result?.ok && normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) === root) {
         const state = usePaperModeStore.getState()
         state.setEntriesResult({
           entries: state.entries.map((item) =>

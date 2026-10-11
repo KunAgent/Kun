@@ -5,7 +5,7 @@ import { TurnCapacityError } from '../services/turn-service.js'
 import { InterruptedTurnCoordinator } from './interrupted-turn-coordinator.js'
 
 describe('InterruptedTurnCoordinator subagent recovery context', () => {
-  it('launches one idempotent parent decision turn with safe child facts', async () => {
+  it.each([false, true])('launches one parent decision turn with queued inputs=%s', async (queued) => {
     const baseThread = createThreadRecord({
       id: 'parent', title: 'Parent', workspace: '/workspace', model: 'test-model',
       status: 'idle', createdAt: '2026-08-19T00:00:00.000Z',
@@ -18,12 +18,13 @@ describe('InterruptedTurnCoordinator subagent recovery context', () => {
     })
     const thread = {
       ...baseThread,
+      ...(queued ? { status: 'running' as const, queueControl: { reason: 'restart_recovery' as const, sourceTurnId: 'turn_interrupted', pausedAt: '2026-08-19T00:00:00.000Z' } } : {}),
       turns: [createTurnRecord({
         id: 'turn_interrupted',
         threadId: baseThread.id,
         prompt: 'Delegate the review',
-        status: 'failed'
-      })]
+        status: 'failed', clientSurface: 'tui'
+      }), ...(queued ? ['B', 'C'].map((id) => createTurnRecord({ id, threadId: 'parent', prompt: id, clientSurface: 'gui' })) : [])]
     }
     const threadStore = {
       get: vi.fn(async () => thread),

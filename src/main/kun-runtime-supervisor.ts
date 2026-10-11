@@ -167,6 +167,10 @@ export class KunRuntimeSupervisor<Settings> {
     return this.operations.hasPendingOperation()
   }
 
+  lifecycleGeneration(): number {
+    return this.operations.lifecycleGeneration()
+  }
+
   latestOr(fallback: Settings): Settings {
     return this.operations.latestOr(fallback)
   }

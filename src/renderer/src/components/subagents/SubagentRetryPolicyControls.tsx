@@ -37,6 +37,7 @@ export function SubagentRetryPolicyControls({
           description={tSettings('subagentsProactiveRetryAttemptsDesc')}
         >
           <BoundedNumberInput
+            ariaLabel={tSettings('subagentsProactiveRetryAttempts')}
             value={retry.maxAttempts}
             min={1}
             max={3}

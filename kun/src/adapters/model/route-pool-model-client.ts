@@ -1,3 +1,4 @@
+import { accountModelRequest } from './request-attempt-accounting.js'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
 import type {
   ModelFailoverGroup,
@@ -26,7 +27,12 @@ import {
 } from './route-pool-failover-groups.js'
 import type { FailoverGroupRouteState } from './route-pool-failover-groups.js'
 import { RoutePoolHealthStore } from './route-pool-health-store.js'
-import type { RuntimeHealth } from './route-pool-health-store.js'
+import { orderRouteTargets } from './route-target-order.js'
+import { capabilitySupportsGatewayRequest, fittedMaxTokens } from './route-capability-contract.js'
+import { GatewayRouteChangedError, gatewayTargetMatches } from '../../domain/model-gateway-export-policy.js'
+import { GATEWAY_MAX_ROUTE_ATTEMPTS, withGatewayRoutingBudget } from './gateway-routing-budget.js'
+import { RouteAffinity } from './route-affinity.js'
+import { demoteOverflow, effortFor, estimateRequestTokens, flattenNestedPools, orderByDecision, routeDecisionSource, RouteRuleEngine } from './route-rules.js'
 
 export { RoutePoolHealthStore } from './route-pool-health-store.js'
 export type {
@@ -46,6 +52,8 @@ export class RoutePoolModelClient implements ModelClient {
   private failoverByProvider = new Map<string, ModelFailoverGroup>()
   private readonly groupState: FailoverGroupRouteState = createFailoverGroupRouteState()
   private quotaLookup?: (providerId: string) => ProviderQuotaEntry | undefined
+  private readonly affinity: RouteAffinity
+  private readonly rules: RouteRuleEngine
 
   constructor(
     private readonly direct: ModelClient,
@@ -54,13 +62,20 @@ export class RoutePoolModelClient implements ModelClient {
     readonly health: RoutePoolHealthStore = new RoutePoolHealthStore(),
     private readonly now: () => number = Date.now
   ) {
+    this.affinity = new RouteAffinity(now)
+    this.rules = new RouteRuleEngine(() => this.direct, now)
     this.replacePools(pools)
   }
 
   replacePools(pools: readonly ModelRoutePoolConfig[]): void {
+    // Affinity entries are revalidated against the current targets on use, so a
+    // configuration change does not need to forget which account holds a cache.
+    this.rules.clear()
     this.configured = pools.map((pool) => structuredClone(pool))
-    this.pools = new Map(pools.filter((pool) => pool.enabled).map((pool) => [pool.modelId.toLowerCase(), structuredClone(pool)]))
+    // Nested aliases are flattened once per configuration, with cycle and depth checks.
+    this.pools = new Map(flattenNestedPools(pools).filter((pool) => pool.enabled).map((pool) => [pool.modelId.toLowerCase(), structuredClone(pool)]))
     this.roundRobin.clear()
+    this.requestCounts.clear()
     this.health.prune([...this.pools.values(), ...this.failoverPools()])
   }
 
@@ -82,6 +97,15 @@ export class RoutePoolModelClient implements ModelClient {
       }
     }
     this.health.prune([...this.pools.values(), ...this.failoverPools()])
+  }
+
+  /** Persist conversation affinity so a restart keeps prompt-cache locality. */
+  persistAffinity(file: string): void {
+    this.affinity.persistTo(file)
+  }
+
+  flushAffinity(): void {
+    this.affinity.flush()
   }
 
   /**
@@ -106,8 +130,32 @@ export class RoutePoolModelClient implements ModelClient {
     return this.poolForRequest(request) !== undefined
   }
 
+  paperReadOnlyDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): () => void {
+    if (this.poolForRequest(request)) throw new Error('Paper reading requires a fixed provider and model, without automatic failover')
+    if (!this.direct.paperReadOnlyDispatchGuard) throw new Error('Paper read-only transport is unavailable')
+    const guard = this.direct.paperReadOnlyDispatchGuard(request)
+    return () => {
+      if (this.poolForRequest(request)) throw new Error('Paper routing changed after disclosure')
+      guard()
+    }
+  }
+
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    request.paperReadOnly?.assertCurrent()
+    return accountModelRequest(request, (accounted) => this.streamWithBudget(accounted))
+  }
+
+  private streamWithBudget(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    return (request.gatewayRouting || this.poolForRequest(request)) && !request.routingBudget
+      ? withGatewayRoutingBudget(request, (bounded) => this.streamRouted(bounded))
+      : this.streamRouted(request)
+  }
+
+  private streamRouted(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     const routed = this.poolForRequest(request)
+    if (!routed && request.gatewayRouting && !gatewayAllowsTarget(request, {
+      providerId: request.providerId ?? '', modelId: request.model
+    })) return rejectedGatewayTarget()
     return routed ? this.streamPool(routed.pool, request, routed.group) : this.direct.stream(request)
   }
 
@@ -166,15 +214,31 @@ export class RoutePoolModelClient implements ModelClient {
   /** Highest reported quota usage in percent; undefined without a reading. */
   private quotaUsedPercent(providerId: string): number | undefined {
     const entry = this.quotaLookup?.(providerId)
-    if (!entry || entry.status !== 'available') return undefined
-    if (entry.metrics.some((metric) => metric.remaining !== undefined && metric.remaining <= 0)) {
+    const observed = entry?.updatedAt ? Date.parse(entry.updatedAt) : NaN
+    if (!entry || entry.status !== 'available' || !Number.isFinite(observed) ||
+      this.now() - observed > 5 * 60_000 || observed > this.now()) return undefined
+    const metrics = entry.metrics.filter((metric) => !metric.resetsAt || Date.parse(metric.resetsAt) > this.now())
+    if (metrics.some((metric) => metric.remaining !== undefined && metric.remaining <= 0)) {
       return 100
     }
     let used: number | undefined
-    for (const metric of entry.metrics) {
+    for (const metric of metrics) {
       if (metric.usedPercent !== undefined) used = Math.max(used ?? 0, metric.usedPercent)
     }
     return used
+  }
+
+  /** Percent of the longest live window still unused, per hour until it resets. */
+  private quotaPace(providerId: string): number | undefined {
+    const entry = this.quotaLookup?.(providerId)
+    if (!entry || entry.status !== 'available') return undefined
+    const now = this.now()
+    const windows = entry.metrics.filter((metric) => metric.usedPercent !== undefined && metric.resetsAt && Date.parse(metric.resetsAt) > now)
+      .sort((a, b) => Date.parse(b.resetsAt!) - Date.parse(a.resetsAt!))
+    const longest = windows[0]
+    if (!longest) return undefined
+    const hours = Math.max(1 / 60, (Date.parse(longest.resetsAt!) - now) / 3_600_000)
+    return Math.max(0, 100 - longest.usedPercent!) / hours
   }
 
   /**
@@ -223,10 +287,18 @@ export class RoutePoolModelClient implements ModelClient {
     request: ModelRequest,
     group?: ModelFailoverGroup
   ): AsyncIterable<ModelStreamChunk> {
+    const authorized = pool.targets.filter((target) => target.enabled && gatewayAllowsTarget(request, target))
+    if (pool.capabilityMode === 'guaranteed' && authorized.some((target) =>
+      !capabilitySupportsGatewayRequest(this.capabilities(target.modelId, target.providerId), request))) {
+      yield { kind: 'error', code: 'route_capability_not_guaranteed', message: 'This request exceeds the route guarantee. Select request capability filtering or change its targets.',
+        failure: { category: 'capability', failoverAllowed: false, routePoolId: pool.id } }
+      return
+    }
     let eligible = pool.targets.filter((target) =>
       target.enabled &&
+      gatewayAllowsTarget(request, target) &&
       this.targetAvailable(pool, target) &&
-      targetSupportsRequest(target, request, this.capabilities))
+      capabilitySupportsGatewayRequest(this.capabilities(target.modelId, target.providerId), request))
     if (this.quotaLookup && eligible.length > 1) {
       // Quota-aware routing only applies to same-vendor member accounts:
       // a member whose cached quota entry is definitively exhausted is
@@ -245,20 +317,63 @@ export class RoutePoolModelClient implements ModelClient {
       }
       return
     }
-    const ordered = group
+    const decision = group ? {} : await this.rules.decide(pool, request)
+    const base = group
       ? orderFailoverGroupTargets({
           group,
           request,
           members: eligible.filter((target) => target.id.startsWith('member:')),
           fallbacks: eligible.filter((target) => !target.id.startsWith('member:')),
           usedPercent: (providerId) => this.quotaUsedPercent(providerId),
+          pace: (providerId) => this.quotaPace(providerId),
           state: this.groupState,
           now: this.now()
         })
       : this.orderTargets(pool, eligible)
+    const preferred = this.affinity.prefer(pool, request, base)
+    const ruled = orderByDecision(preferred, decision)
+    const ordered = pool.overflowMove === false ? ruled
+      : demoteOverflow(ruled, estimateRequestTokens(request), (modelId, providerId) => this.capabilities(modelId, providerId))
+    // What put the first member first, for route traces.
+    const firstSource = routeDecisionSource({ base, preferred, ruled, ordered, decision, group: Boolean(group), manual: pool.strategy === 'manual' })
     const failures: string[] = []
     let lastRejection: { providerId: string; modelId: string; reason?: string; message?: string } | undefined
-    for (const [index, target] of ordered.entries()) {
+    const attempts = request.gatewayRouting || request.routingBudget ? ordered.slice(0, GATEWAY_MAX_ROUTE_ATTEMPTS) : ordered
+    for (const [index, target] of attempts.entries()) {
+      request.abortSignal.throwIfAborted()
+      const releaseHealth = this.health.acquire(pool, [target,
+        ...(target.id.startsWith('member:') && target.modelId ? [{ ...target,
+          id: memberModelTargetId(target.providerId, target.modelId) }] : [])], request.routeTestId)
+      if (!releaseHealth) continue
+      const started = this.now()
+      const countKey = `${pool.id}:${target.id}`
+      this.requestCounts.set(countKey, (this.requestCounts.get(countKey) ?? 0) + 1)
+      const route: ModelRouteTargetMetadata = {
+        routePoolId: pool.id,
+        targetId: target.id,
+        providerId: target.providerId,
+        modelId: target.modelId,
+        requestedModelId: request.model,
+        ...(decision.ruleId ? { ruleId: decision.ruleId } : {}),
+        decision: index === 0 ? firstSource : 'failover',
+        ...(decision.intent ? { intent: decision.intent } : {})
+      }
+      const effort = effortFor(target, decision, request.reasoningEffort)
+      let committed = false
+      let failed = false
+      let usageTokens = 0
+      let healthSucceeded = false
+      const recordSuccess = () => {
+        if (healthSucceeded) return
+        healthSucceeded = true
+        this.recordHealthSuccess(pool, target, Math.max(0, this.now() - started), request.routeTestId)
+        if (group && target.id.startsWith('member:')) recordFailoverGroupSuccess({ state: this.groupState,
+          groupId: group.providerId, threadId: request.threadId, providerId: target.providerId,
+          tokens: usageTokens, now: this.now() })
+      }
+      const pending: ModelStreamChunk[] = []
+      let pendingBytes = 0
+      try {
       if (index > 0 && lastRejection) {
         // Surface the in-flight switch so a slow failover is visible instead
         // of looking like a stalled request. Not route-attributed: the first
@@ -271,32 +386,18 @@ export class RoutePoolModelClient implements ModelClient {
           ...(lastRejection.message ? { message: lastRejection.message } : {})
         }
       }
-      const started = this.now()
-      this.health.begin(pool, target, request.routeTestId)
-      const countKey = `${pool.id}:${target.id}`
-      this.requestCounts.set(countKey, (this.requestCounts.get(countKey) ?? 0) + 1)
-      const route: ModelRouteTargetMetadata = {
-        routePoolId: pool.id,
-        targetId: target.id,
-        providerId: target.providerId,
-        modelId: target.modelId,
-        requestedModelId: request.model
-      }
-      let committed = false
-      let failed = false
-      let usageTokens = 0
-      const pending: ModelStreamChunk[] = []
-      try {
         for await (const chunk of this.direct.stream({
           ...request,
           model: target.modelId,
           providerId: target.providerId,
+          ...(effort ? { reasoningEffort: effort } : {}),
+          ...(request.gatewayRouting && request.maxTokens ? { maxTokens: fittedMaxTokens(this.capabilities(target.modelId, target.providerId), request) } : {}),
           routeSelection: {
             kind: 'route-pool',
             id: pool.id,
             targetProviderId: target.providerId
           },
-          failover: { alternatives: ordered.length - index - 1 }
+          failover: { alternatives: attempts.length - index - 1 }
         })) {
           if (chunk.kind === 'usage') usageTokens = chunk.usage.totalTokens
           if (chunk.kind === 'error') {
@@ -307,6 +408,8 @@ export class RoutePoolModelClient implements ModelClient {
               this.health.failure(
                 pool, this.failureTarget(target, failure), latency, failure,
                 chunk.message, request.routeTestId)
+            } else {
+              this.health.abandon(pool, target)
             }
             if (!committed && routeFailureAllowed(pool, failure)) {
               // Do not expose a rejected target. The first observable route is
@@ -328,17 +431,39 @@ export class RoutePoolModelClient implements ModelClient {
             return
           }
           if (!committed && !isContentChunk(chunk)) {
+            pendingBytes += new TextEncoder().encode(JSON.stringify(chunk)).byteLength
+            if (pending.length >= 128 || pendingBytes > 256_000) {
+              yield { kind: 'error', code: 'route_precommit_limit', message: 'Provider emitted too much metadata before response content.',
+                failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+              return
+            }
             pending.push(chunk)
             continue
           }
           if (!committed) {
             committed = true
+            this.affinity.committed(pool, request, target)
             for (const buffered of pending) yield attributeRouteChunk(buffered, route)
             pending.length = 0
           }
+          if (chunk.kind === 'completed' && chunk.stopReason === 'error') {
+            failed = true
+            this.health.failure(pool, target, Math.max(0, this.now() - started),
+              { category: 'unavailable', failoverAllowed: false }, 'Provider completed with an error', request.routeTestId)
+            yield attributeRouteChunk(chunk, route)
+            return
+          }
+          if (chunk.kind === 'completed') recordSuccess()
           yield attributeRouteChunk(chunk, route)
         }
       } catch (error) {
+        // Cancellation/deadline is terminal and is not an upstream outage.
+        if (request.abortSignal.aborted) throw request.abortSignal.reason ?? error
+        if (error instanceof GatewayRouteChangedError) {
+          yield { kind: 'error', code: 'gateway_route_changed', message: error.message,
+            failure: { category: 'request', failoverAllowed: false } }
+          return
+        }
         failed = true
         const message = error instanceof Error ? error.message : String(error)
         const failure = withRouteFailure({ category: 'unavailable', failoverAllowed: true }, route)
@@ -353,6 +478,8 @@ export class RoutePoolModelClient implements ModelClient {
         }
         lastRejection = { providerId: target.providerId, modelId: target.modelId, message }
         failures.push(`${target.providerId}/${target.modelId}: ${message}`)
+      } finally {
+        releaseHealth()
       }
       if (!failed) {
         if (!committed) {
@@ -382,50 +509,38 @@ export class RoutePoolModelClient implements ModelClient {
           continue
         }
         for (const buffered of pending) yield attributeRouteChunk(buffered, route)
-        this.recordHealthSuccess(pool, target, Math.max(0, this.now() - started), request.routeTestId)
-        if (group && target.id.startsWith('member:')) {
-          recordFailoverGroupSuccess({
-            state: this.groupState,
-            groupId: group.providerId,
-            threadId: request.threadId,
-            providerId: target.providerId,
-            tokens: usageTokens,
-            now: this.now()
-          })
-        }
+        recordSuccess()
         return
       }
     }
     yield {
       kind: 'error',
       message: `route pool ${pool.modelId} exhausted ${failures.length} target(s): ${failures.join(' | ').slice(0, 1_500)}`,
-      code: 'route_targets_exhausted',
+      code: attempts.length < ordered.length ? 'route_attempt_budget_exhausted' : 'route_targets_exhausted',
       failure: { category: 'unavailable', failoverAllowed: false, routePoolId: pool.id }
     }
   }
 
-  private orderTargets(pool: ModelRoutePoolConfig, targets: ModelRouteTargetConfig[]): ModelRouteTargetConfig[] {
-    if (pool.strategy === 'priority') return [...targets]
-    if (pool.strategy === 'least-latency') {
-      return [...targets].sort((a, b) => latency(this.health.state(pool.id, a.id)) - latency(this.health.state(pool.id, b.id)))
-    }
-    if (pool.strategy === 'least-used') {
-      // Stable sort: equal usage keeps the configured member order, so a
-      // brand-new account never jumps ahead of the representative.
-      return [...targets].sort((a, b) =>
-        (this.requestCounts.get(`${pool.id}:${a.id}`) ?? 0) -
-        (this.requestCounts.get(`${pool.id}:${b.id}`) ?? 0))
-    }
-    if (pool.strategy === 'adaptive') {
-      return [...targets].sort((a, b) => adaptiveScore(this.health.state(pool.id, b.id)) - adaptiveScore(this.health.state(pool.id, a.id)))
-    }
-    const cursor = this.roundRobin.get(pool.id) ?? 0
-    this.roundRobin.set(pool.id, cursor + 1)
-    if (pool.strategy === 'round-robin') return rotate(targets, cursor % targets.length)
-    const wheel = targets.flatMap((target) => Array.from({ length: target.weight }, () => target))
-    const first = wheel[cursor % wheel.length]
-    return [first, ...targets.filter((target) => target.id !== first.id)]
+  previewOrder(pool: ModelRoutePoolConfig, targets: ModelRouteTargetConfig[]): ModelRouteTargetConfig[] {
+    return orderRouteTargets(pool, targets, this.health, this.requestCounts, this.roundRobin.get(pool.id) ?? 0)
   }
+
+  private orderTargets(pool: ModelRoutePoolConfig, targets: ModelRouteTargetConfig[]): ModelRouteTargetConfig[] {
+    const ordered = this.previewOrder(pool, targets)
+    if (pool.strategy === 'round-robin' || pool.strategy === 'weighted-round-robin') {
+      this.roundRobin.set(pool.id, (this.roundRobin.get(pool.id) ?? 0) + 1)
+    }
+    return ordered
+  }
+}
+
+function gatewayAllowsTarget(request: ModelRequest, target: { providerId: string; modelId: string }): boolean {
+  return !request.gatewayRouting || request.gatewayRouting.allowedTargets.some((allowed) => gatewayTargetMatches(allowed, target))
+}
+
+async function* rejectedGatewayTarget(): AsyncIterable<ModelStreamChunk> {
+  yield { kind: 'error', code: 'gateway_route_not_allowed', message: 'Gateway route is not authorized.',
+    failure: { category: 'request', failoverAllowed: false } }
 }
 
 function shouldRouteRequest(
@@ -435,26 +550,6 @@ function shouldRouteRequest(
   const providerId = request.providerId?.trim().toLowerCase()
   if (!providerId) return true
   return providerId === LOCAL_MODEL_GATEWAY_PROVIDER_ID || providerId === `route-pool:${pool.id}`.toLowerCase()
-}
-
-function targetSupportsRequest(
-  target: ModelRouteTargetConfig,
-  request: ModelRequest,
-  resolve: (model: string, providerId?: string) => ModelCapabilityMetadata
-): boolean {
-  const capability = resolve(target.modelId, target.providerId)
-  const hasHistoricalImages = Object.values(request.messageAttachments ?? {})
-    .some((attachments) => attachments.images.length > 0)
-  if (
-    ((request.attachments?.length ?? 0) > 0 || hasHistoricalImages) &&
-    !capability.inputModalities.includes('image')
-  ) return false
-  if (request.tools.length > 0 && !capability.supportsToolCalling) return false
-  if (request.reasoningEffort && request.reasoningEffort !== 'off' && !capability.reasoning) return false
-  if (request.maxTokens && capability.maxOutputTokens && request.maxTokens > capability.maxOutputTokens) return false
-  const estimatedInputTokens = JSON.stringify([...request.prefix, ...request.history]).length / 4
-  if (capability.contextWindowTokens && estimatedInputTokens + (request.maxTokens ?? 0) > capability.contextWindowTokens) return false
-  return true
 }
 
 function isContentChunk(chunk: ModelStreamChunk): boolean {
@@ -486,7 +581,8 @@ function attributeRouteChunk(
  * account's consecutive-failure budget.
  */
 function healthCountable(failure: ModelFailureMetadata | undefined): boolean {
-  return failure?.reason !== 'request' && failure?.reason !== 'model'
+  return !failure?.localAdmission && !['request', 'capability', 'model_not_found'].includes(failure?.category ?? '') &&
+    failure?.reason !== 'request' && failure?.reason !== 'model'
 }
 
 function routeFailureAllowed(pool: ModelRoutePoolConfig, failure: ModelFailureMetadata): boolean {
@@ -521,7 +617,8 @@ const FAILOVER_GROUP_STRATEGY: Record<ModelFailoverStrategy, ModelRoutePoolConfi
   smart: 'adaptive',
   order: 'priority',
   rotate: 'round-robin',
-  'least-used': 'least-used'
+  'least-used': 'least-used',
+  pace: 'priority'
 }
 
 function synthesizedGroupPool(
@@ -545,12 +642,3 @@ function synthesizedGroupPool(
     healthPolicy: { failureThreshold: 3, cooldownMs: 60_000, halfOpenMaxAttempts: 1 }
   }
 }
-
-function latency(state: RuntimeHealth): number { return state.ewmaLatencyMs ?? -1 }
-function adaptiveScore(state: RuntimeHealth): number {
-  const total = state.successes + state.failures
-  if (total === 0) return Number.MAX_SAFE_INTEGER
-  const successRate = state.successes / total
-  return successRate * 10_000 - Math.log1p(state.ewmaLatencyMs ?? 1_000) * 100 - state.consecutiveFailures * 1_000
-}
-function rotate<T>(values: T[], offset: number): T[] { return [...values.slice(offset), ...values.slice(0, offset)] }

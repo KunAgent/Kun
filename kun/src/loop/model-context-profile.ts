@@ -1,135 +1,26 @@
+import { providerPresetScopeMatches } from '@kun/provider-catalog'
+import { scopeBuiltInModelCapability } from './model-provider-profile-scope.js'
+import { MODEL_METADATA_FIELDS } from '../contracts/model-metadata-evidence.js'
+import { metadataEvidence } from '../contracts/model-metadata-evidence.js'
 import type {
   ModelCapabilityMetadata,
-  ModelCatalogPricing,
   ModelInputModality,
   ModelMessagePartSupport,
   ModelReasoningCapabilityMetadata
 } from '../contracts/capabilities.js'
-import type { ModelEndpointFormat } from '../contracts/model-endpoint-format.js'
+import { redactSecretText } from '../config/secret-redaction.js'
 
-export type ModelContextThresholds = {
-  softThreshold: number
-  hardThreshold: number
-}
+export type * from './model-context-profile-types.js'
+import type { ContextCompactionConfig, ModelConfig, ModelContextThresholds, ModelContextProfile, ModelContextProfileConfig, ModelProfileConfigSource, ProviderModelCapabilityInput } from './model-context-profile-types.js'
 
-export type ModelContextCompactionProfileConfig = {
-  softRatio?: number
-  hardRatio?: number
-  softThreshold?: number
-  hardThreshold?: number
-}
-
-export type ModelContextProfile = ModelContextThresholds & {
-  canonicalModel: string
-  modelIds: readonly string[]
-  contextWindowTokens: number
-  maxOutputTokens?: number
-  inputModalities: readonly ModelInputModality[]
-  outputModalities: readonly ModelInputModality[]
-  supportsToolCalling: boolean
-  messageParts: readonly ModelMessagePartSupport[]
-  reasoning?: ModelReasoningCapabilityMetadata
-  pricing?: ModelCatalogPricing
-  serviceTiers?: readonly ('priority' | 'flex')[]
-  endpointFormat?: ModelEndpointFormat
-  responsesMode?: 'lite'
-}
-
-export type ModelContextProfileConfig = {
-  aliases?: readonly string[]
-  contextWindowTokens?: number
-  maxOutputTokens?: number
-  contextCompaction?: ModelContextCompactionProfileConfig
-  /** @deprecated Use contextCompaction.softRatio. */
-  softRatio?: number
-  /** @deprecated Use contextCompaction.hardRatio. */
-  hardRatio?: number
-  /** @deprecated Use contextCompaction.softThreshold. */
-  softThreshold?: number
-  /** @deprecated Use contextCompaction.hardThreshold. */
-  hardThreshold?: number
-  inputModalities?: readonly ModelInputModality[]
-  outputModalities?: readonly ModelInputModality[]
-  supportsToolCalling?: boolean
-  messageParts?: readonly ModelMessagePartSupport[]
-  reasoning?: ModelReasoningCapabilityMetadata
-  pricing?: ModelCatalogPricing
-  serviceTiers?: readonly ('priority' | 'flex')[]
-  endpointFormat?: ModelEndpointFormat
-  responsesMode?: 'lite'
-}
-
-export type ModelConfig = {
-  profiles?: Record<string, ModelContextProfileConfig>
-}
-
-export type ContextCompactionConfig = {
-  defaultSoftThreshold?: number
-  defaultHardThreshold?: number
-  summaryMode?: 'heuristic' | 'model'
-  /**
-   * Parent switch for model-initiated compression. Alone it advertises
-   * compact_context plus budget notices; combined with windowModeEnabled it
-   * selects the window strategy. Missing means summary mode.
-   */
-  modelInitiatedCompactionEnabled?: boolean
-  /**
-   * Opt-in window-mode context strategy. Effective only when
-   * modelInitiatedCompactionEnabled is also true. Then enabled turns advertise
-   * the history/notes/new_context tools and budget notices instead of the
-   * summary compaction path. Missing means summary mode.
-   */
-  windowModeEnabled?: boolean
-  summaryTimeoutMs?: number
-  summaryMaxTokens?: number
-  summaryInputMaxBytes?: number
-  /** Optional model override for compaction summary (empty = follow main model). */
-  summaryModel?: string
-  /** Provider id paired with summaryModel. */
-  summaryProviderId?: string
-  /**
-   * Target post-compaction input ratio relative to the model context window
-   * (0 < ratio < 1). The verbatim tail is trimmed to complete turns that fit
-   * this budget so consecutive compactions actually reclaim capacity.
-   */
-  targetInputRatio?: number
-  /** Absolute post-compaction input target in tokens; overrides the ratio when set. */
-  targetInputTokens?: number
-  /**
-   * @deprecated Model-specific context windows and compaction thresholds belong
-   * in top-level models.profiles. This field is still read for compatibility.
-   */
-  modelProfiles?: Record<string, ModelContextProfileConfig>
-}
-
-export type ModelProfileConfigSource = {
-  models?: ModelConfig
-  contextCompaction?: ContextCompactionConfig
-}
-
-export type ProviderModelCapabilityInput = {
-  providerId?: string
-  presetSource?: string
-  baseUrl?: string
-  kind?:
-    | 'http'
-    | 'agent-sdk'
-    | 'antigravity-cli'
-    | 'cursor-sdk'
-    | 'gemini-cli-api'
-    | 'gemini-code-assist'
-  model?: string
-}
-
-export const DEFAULT_CONTEXT_WINDOW_TOKENS = 256_000
+// Unknown capacity is not evidence of a large context window. Custom models
+// can override this conservative estimate with models.profiles.<id>.contextWindowTokens.
+// Models smaller than 32k still need an explicit profile; this is not a hard-fit guarantee.
+export const DEFAULT_CONTEXT_WINDOW_TOKENS = 32_000
 
 export const DEFAULT_CONTEXT_THRESHOLDS: ModelContextThresholds = {
-  // Fallback for models without a registered profile. These assume a
-  // reasonably large window (>=256k). A custom endpoint with a small
-  // window (e.g. 32k) should register a profile with explicit thresholds,
-  // otherwise it may exceed its window before the first compaction.
-  softThreshold: 192_000,
-  hardThreshold: 217_600
+  softThreshold: Math.floor(DEFAULT_CONTEXT_WINDOW_TOKENS * 0.75),
+  hardThreshold: Math.floor(DEFAULT_CONTEXT_WINDOW_TOKENS * 0.85)
 }
 
 const DEEPSEEK_V4_CONTEXT_WINDOW_TOKENS = 1_000_000
@@ -203,16 +94,20 @@ export function contextThresholdsForModel(
   profiles: readonly ModelContextProfile[] = MODEL_CONTEXT_PROFILES
 ): ModelContextThresholds {
   const profile = resolveModelContextProfile(model, profiles)
+  // Explicit compactor thresholds can be paired with a separately supplied
+  // model-capability resolver. The per-request hard cap still enforces the
+  // actual window; do not replace that declared policy with a 32k assumption.
   if (!profile) return fallback
   // Safety cap: never let thresholds exceed 75%/85% of the context
   // window, even if a config-provided model profile sets them higher
   // (e.g. 98%/99%). Compacting too late leaves no headroom and lets a
   // single large turn blow past the real window, causing runaway growth.
-  const maxSoft = profile.contextWindowTokens
-    ? Math.floor(profile.contextWindowTokens * 0.75)
+  const inputWindow = Math.min(profile.contextWindowTokens, profile.maxInputTokens ?? Infinity)
+  const maxSoft = inputWindow
+    ? Math.floor(inputWindow * 0.75)
     : profile.softThreshold
-  const maxHard = profile.contextWindowTokens
-    ? Math.floor(profile.contextWindowTokens * 0.85)
+  const maxHard = inputWindow
+    ? Math.floor(inputWindow * 0.85)
     : profile.hardThreshold
   return {
     softThreshold: Math.min(profile.softThreshold, maxSoft),
@@ -220,17 +115,30 @@ export function contextThresholdsForModel(
   }
 }
 
+const warnedUnknownWindows = new Set<string>()
 export function modelCapabilitiesForModel(
   model: string | undefined,
   profiles: readonly ModelContextProfile[] = MODEL_CONTEXT_PROFILES
 ): ModelCapabilityMetadata {
   const profile = resolveModelContextProfile(model, profiles)
+  if (!profile && model && !warnedUnknownWindows.has(model)) {
+    if (warnedUnknownWindows.size >= 128) warnedUnknownWindows.delete(warnedUnknownWindows.values().next().value!)
+    warnedUnknownWindows.add(model)
+    console.warn(`[kun] No context capacity registered for "${redactSecretText(model)}"; using a conservative ` +
+      `${DEFAULT_CONTEXT_WINDOW_TOKENS}-token estimate. Configure contextWindowTokens for the actual model, especially smaller windows.`)
+  }
   return {
     id: model?.trim() || profile?.canonicalModel || 'auto',
     inputModalities: [...(profile?.inputModalities ?? DEFAULT_MODEL_INPUT_MODALITIES)],
     outputModalities: [...(profile?.outputModalities ?? DEFAULT_MODEL_OUTPUT_MODALITIES)],
     supportsToolCalling: profile?.supportsToolCalling ?? true,
+    ...(typeof profile?.parallelTools === 'boolean' ? { parallelTools: profile.parallelTools } : {}),
+    ...(typeof profile?.streaming === 'boolean' ? { streaming: profile.streaming } : {}),
+    ...(typeof profile?.structuredOutput === 'boolean' ? { structuredOutput: profile.structuredOutput } : {}),
+    evidence: profile?.evidence ?? metadataEvidence(profile ? { ...profile } : {}, 'adapter'),
     contextWindowTokens: profile?.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS,
+    ...(profile?.maxInputTokens ? { maxInputTokens: profile.maxInputTokens } : {}),
+    ...(profile?.supportsReasoning !== undefined ? { supportsReasoning: profile.supportsReasoning } : {}),
     ...(profile?.maxOutputTokens ? { maxOutputTokens: profile.maxOutputTokens } : {}),
     messageParts: [...(profile?.messageParts ?? DEFAULT_MODEL_MESSAGE_PARTS)],
     ...(profile?.reasoning ? { reasoning: copyReasoningCapability(profile.reasoning) } : {}),
@@ -254,14 +162,38 @@ export function modelCapabilitiesForProviderModel(
   profiles: readonly ModelContextProfile[] = MODEL_CONTEXT_PROFILES
 ): ModelCapabilityMetadata {
   const model = input.model?.trim()
-  const builtIn = modelCapabilitiesForModel(model, profiles)
+  const candidate = modelCapabilitiesForModel(model, profiles)
+  const selected = resolveModelContextProfile(model, profiles)
+  const builtIn = scopeBuiltInModelCapability(input, candidate, Boolean(selected &&
+    MODEL_CONTEXT_PROFILES.some((profile) => profile.canonicalModel === selected.canonicalModel)))
   const reasoning = providerReasoningCapability(input)
   const serviceTiers = providerServiceTiers(input)
   return {
     ...builtIn,
+    evidence: { ...builtIn.evidence ?? metadataEvidence({}, 'adapter'), ...(reasoning ? { reasoning: { source: 'adapter', status: 'declared' } } : {}),
+      ...(serviceTiers ? { serviceTiers: { source: 'adapter', status: 'declared' } } : {}) },
     ...(reasoning ? { reasoning: copyReasoningCapability(reasoning) } : {}),
     ...(serviceTiers ? { serviceTiers } : {})
   }
+}
+
+/** Scope inherited static profiles before compaction, UI budgets and requests consume them. */
+export function modelContextProfilesForProvider(input: ProviderModelCapabilityInput,
+  profiles: readonly ModelContextProfile[] = MODEL_CONTEXT_PROFILES): readonly ModelContextProfile[] {
+  return profiles.map((profile) => {
+    if (!MODEL_CONTEXT_PROFILES.some((builtIn) => builtIn.canonicalModel === profile.canonicalModel)) return profile
+    const capability = modelCapabilitiesForModel(profile.canonicalModel, [profile])
+    const scoped = scopeBuiltInModelCapability({ ...input, model: profile.canonicalModel }, capability, true)
+    if (scoped === capability) return profile
+    const base = { ...profile } as unknown as Record<string, unknown>
+    for (const field of MODEL_METADATA_FIELDS) delete base[field]
+    const { id: _id, ...facts } = scoped
+    const capacity = scoped.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS
+    return { ...base, ...facts, canonicalModel: profile.canonicalModel, modelIds: profile.modelIds,
+      contextWindowTokens: capacity,
+      softThreshold: Math.min(profile.softThreshold, Math.floor(capacity * 0.75)),
+      hardThreshold: Math.min(profile.hardThreshold, Math.floor(capacity * 0.85)) }
+  })
 }
 
 function providerServiceTiers(
@@ -272,7 +204,7 @@ function providerServiceTiers(
   const codexSubscription =
     presetSource === 'codex' ||
     (!presetSource && /^codex(?:-\d+)?$/.test(providerId))
-  if (!codexSubscription) return undefined
+  if (!codexSubscription || (input.baseUrl && !providerPresetScopeMatches({ id: providerId, presetSource, baseUrl: input.baseUrl, kind: input.kind, endpointFormat: input.endpointFormat, endpoints: input.endpoints }))) return undefined
   const model = normalizeModelId(input.model).split('/').at(-1) ?? ''
   return CODEX_PRIORITY_SERVICE_TIER_MODELS.has(model) ? ['priority'] : undefined
 }
@@ -296,17 +228,21 @@ export function safeProviderReasoningCapability(
 function providerReasoningCapability(
   input: ProviderModelCapabilityInput
 ): ModelReasoningCapabilityMetadata | undefined {
-  const provider = `${input.providerId ?? ''} ${input.presetSource ?? ''}`.trim().toLowerCase()
+  const identityMatches = !input.baseUrl || providerPresetScopeMatches({ id: input.providerId, presetSource: input.presetSource, baseUrl: input.baseUrl, kind: input.kind, endpointFormat: input.endpointFormat, endpoints: input.endpoints })
+  const provider = identityMatches ? `${input.providerId ?? ''} ${input.presetSource ?? ''}`.trim().toLowerCase() : ''
   const model = normalizeModelId(input.model)
   const endpoint = parseProviderEndpoint(input.baseUrl)
 
   if (
     (input.kind === 'agent-sdk' || provider.includes('claude-subscription')) &&
-    (model.includes('claude-opus-4-8') || model.includes('claude-sonnet-4-6'))
+    (model.startsWith('claude-') ||
+      model === 'sonnet' || model === 'opus' || model === 'haiku' || model === 'fable')
   ) {
     return reasoning(['low', 'medium', 'high', 'max'], 'high', 'anthropic-thinking')
   }
-  if (isKimiK3Model(model, provider)) {
+  if (isKimiK3Model(model, provider) && (provider.includes('kimi-code') || provider.includes('moonshot') ||
+      providerHostMatches(endpoint, 'api.kimi.com') || providerHostMatches(endpoint, 'api.kimi.com.cn') ||
+      providerHostMatches(endpoint, 'api.moonshot.ai') || providerHostMatches(endpoint, 'api.moonshot.cn'))) {
     return reasoning(['low', 'high', 'max'], 'high', 'openai-chat-completions')
   }
   if (
@@ -523,12 +459,39 @@ function mergeModelContextProfile(
       : DEEPSEEK_V4_HARD_THRESHOLD_RATIO,
     fallbackThreshold: current?.hardThreshold
   })
-  const contextWindowTokens =
+  let contextWindowTokens =
     configuredContextWindowTokens ?? Math.max(softThreshold ?? 0, hardThreshold ?? 0)
-  if (!contextWindowTokens || !softThreshold || !hardThreshold) {
+  let resolvedSoftThreshold = softThreshold
+  let resolvedHardThreshold = hardThreshold
+  if (!contextWindowTokens && softThreshold === undefined && hardThreshold === undefined) {
+    // A sparse provider profile (e.g. pricing or reasoning only) carries no
+    // capacity information at all. Mirror the DEFAULT_CONTEXT_WINDOW_TOKENS
+    // fallback used by modelCapabilitiesForModel instead of crashing serve
+    // startup; models with a smaller window must set contextWindowTokens
+    // explicitly.
+    console.warn(
+      `[kun] model context profile "${redactSecretText(canonicalModel)}" has no context ` +
+      `window or thresholds; assuming a ${DEFAULT_CONTEXT_WINDOW_TOKENS} token window. ` +
+      'Custom models with a smaller context window should configure contextWindowTokens explicitly.'
+    )
+    contextWindowTokens = DEFAULT_CONTEXT_WINDOW_TOKENS
+    resolvedSoftThreshold = thresholdFromWindow({
+      contextWindowTokens,
+      ratio: compaction.softRatio ?? input.softRatio,
+      fallbackRatio: DEEPSEEK_V4_SOFT_THRESHOLD_RATIO,
+      fallbackThreshold: undefined
+    })
+    resolvedHardThreshold = thresholdFromWindow({
+      contextWindowTokens,
+      ratio: compaction.hardRatio ?? input.hardRatio,
+      fallbackRatio: DEEPSEEK_V4_HARD_THRESHOLD_RATIO,
+      fallbackThreshold: undefined
+    })
+  }
+  if (!contextWindowTokens || !resolvedSoftThreshold || !resolvedHardThreshold) {
     throw new Error(`model context profile "${canonicalModel}" needs a context window or thresholds`)
   }
-  if (hardThreshold < softThreshold) {
+  if (resolvedHardThreshold < resolvedSoftThreshold) {
     throw new Error(`model context profile "${canonicalModel}" hard threshold must be >= soft threshold`)
   }
   const modelIds = uniqueModelIds([
@@ -541,17 +504,24 @@ function mergeModelContextProfile(
   const serviceTiers = input.serviceTiers ?? current?.serviceTiers
   const endpointFormat = input.endpointFormat ?? current?.endpointFormat
   const responsesMode = input.responsesMode ?? current?.responsesMode
+  const maxInputTokens = input.maxInputTokens ?? current?.maxInputTokens
+  const supportsReasoning = input.supportsReasoning ?? current?.supportsReasoning
   const maxOutputTokens = input.maxOutputTokens ?? current?.maxOutputTokens
   return {
     canonicalModel,
     modelIds,
     contextWindowTokens,
+    ...(maxInputTokens ? { maxInputTokens } : {}),
+    ...(supportsReasoning !== undefined ? { supportsReasoning } : {}),
     ...(maxOutputTokens ? { maxOutputTokens } : {}),
-    softThreshold,
-    hardThreshold,
+    softThreshold: resolvedSoftThreshold,
+    hardThreshold: resolvedHardThreshold,
     inputModalities: uniqueModelCapabilityValues(input.inputModalities ?? current?.inputModalities ?? DEFAULT_MODEL_INPUT_MODALITIES),
     outputModalities: uniqueModelCapabilityValues(input.outputModalities ?? current?.outputModalities ?? DEFAULT_MODEL_OUTPUT_MODALITIES),
     supportsToolCalling: input.supportsToolCalling ?? current?.supportsToolCalling ?? true,
+    parallelTools: input.parallelTools ?? current?.parallelTools, streaming: input.streaming ?? current?.streaming,
+    structuredOutput: input.structuredOutput ?? current?.structuredOutput,
+    evidence: input.evidence ?? current?.evidence ?? metadataEvidence({ ...input }, 'user'),
     messageParts: uniqueModelCapabilityValues(input.messageParts ?? current?.messageParts ?? DEFAULT_MODEL_MESSAGE_PARTS),
     ...(reasoning
       ? { reasoning: copyReasoningCapability(reasoning) }
@@ -567,6 +537,9 @@ function copyReasoningCapability(
   reasoning: ModelReasoningCapabilityMetadata
 ): ModelReasoningCapabilityMetadata {
   return {
+    ...reasoning,
+    ...(reasoning.nativeEfforts ? { nativeEfforts: [...reasoning.nativeEfforts] } : {}),
+    ...(reasoning.effortMapping ? { effortMapping: { ...reasoning.effortMapping } } : {}),
     supportedEfforts: [...reasoning.supportedEfforts],
     defaultEffort: reasoning.defaultEffort,
     requestProtocol: reasoning.requestProtocol

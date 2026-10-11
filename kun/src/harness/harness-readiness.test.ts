@@ -1,0 +1,312 @@
+import { mkdtemp, writeFile, rm, utimes } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
+import { HarnessCatalog } from './harness-catalog.js'
+import type { HarnessStatus } from '../contracts/harness.js'
+import { HarnessReadinessService, type HarnessReadinessDeps } from './harness-readiness.js'
+import { harnessProfileKey, type ReadinessOptions } from './harness-readiness-profile.js'
+
+const route = { harnessId: 'opencode', credentialMode: 'kun-gateway' as const, providerId: 'account-a', model: 'model-a' }
+const dirs: string[] = []
+afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }) })
+async function fixture() {
+  const dir = await mkdtemp(join(tmpdir(), 'kun-readiness-test-')); dirs.push(dir)
+  const command = join(dir, 'opencode'); await writeFile(command, '#!/bin/sh\nexit 0\n')
+  const options: ReadinessOptions = { model: 'model-a', providers: {
+    'account-a': { kind: 'http', apiKey: 'secret-a', baseUrl: 'https://api.example.com', models: ['model-a'] },
+    'account-b': { kind: 'http', apiKey: 'secret-b', baseUrl: 'https://api.example.com', models: ['model-a'] }
+  }, harnesses: HarnessesConfigSchema.parse({ binaryPaths: { opencode: command } }) }
+  let revision = 0
+  const catalog = new HarnessCatalog({ custom: () => [], enabledProfiles: () => options.harnesses!.enabledProfiles })
+  const detector = { status: vi.fn(async (): Promise<HarnessStatus> => ({ harnessId: 'opencode', installed: 'yes' as const, login: 'unknown' as const,
+    ready: 'yes' as const, resolvedCommand: command, checkedAt: '2026-10-03T00:00:00.000Z' })) }
+  const handshake = vi.fn<NonNullable<HarnessReadinessDeps['handshake']>>(async () => ({ ok: true, supported: true, protocol: 'acp' }))
+  const service = new HarnessReadinessService({ options: () => options, catalog, detector, handshake, revision: () => revision })
+  const test = () => service.test(catalog.get('opencode')!, { level: 'handshake', ...route })
+  const enable = () => { options.harnesses!.enabledProfiles = [{ harnessId: route.harnessId, credentialMode: route.credentialMode, providerId: route.providerId }]; revision++ }
+  return { options, catalog, detector, handshake, service, test, enable, command, revise: () => revision++ }
+}
+
+describe('explicit per-profile readiness', () => {
+  it('checks an alias profile without a native login or upstream key in its child environment', async () => {
+    const f = await fixture()
+    const gatewayBinding = { main: { routeId: 'coding', allowedConnectionIds: ['account-a'] } }
+    const aliasRoute = { harnessId: 'opencode', credentialMode: 'kun-gateway' as const, model: 'route/coding', gatewayBinding }
+    const service = new HarnessReadinessService({ options: () => f.options, catalog: f.catalog, detector: f.detector,
+      handshake: f.handshake, resolveGatewayAliases: async () => [{ role: 'main', routeId: 'coding', alias: 'route/coding',
+        targets: [{ providerId: 'account-a', modelId: 'model-a' }] }] })
+    const result = await service.test(f.catalog.get('opencode')!, { level: 'handshake', ...aliasRoute })
+    expect(result.ok).toBe(true)
+    expect(JSON.stringify(f.handshake.mock.calls)).not.toContain('secret-a')
+    expect(JSON.stringify(f.handshake.mock.calls)).not.toContain('secret-b')
+    f.options.harnesses!.enabledProfiles = [{ harnessId: 'opencode', credentialMode: 'kun-gateway', gatewayBinding }]
+    expect(await service.readyProfiles('opencode')).toEqual([expect.objectContaining({ gatewayBinding })])
+    await expect(service.assertReady({ ...aliasRoute, gatewayBinding: { main: { ...gatewayBinding.main,
+      allowedConnectionIds: ['account-a', 'account-b'] } } })).rejects.toThrow('disabled')
+  })
+  it('defaults all external profiles off, including installed ones and legacy native profiles', async () => {
+    const f = await fixture()
+    expect(f.catalog.isDisabled('opencode')).toBe(true)
+    expect(f.catalog.isProfileEnabled(route)).toBe(false)
+    await expect(f.service.assertReady(route)).rejects.toThrow('disabled')
+    expect(f.detector.status).not.toHaveBeenCalled()
+  })
+  it('only an exact opted-in profile may launch; configured key never claims validated auth or quota', async () => {
+    const f = await fixture(); const tested = await f.test()
+    expect(tested.ok).toBe(true)
+    expect(tested.readiness?.authentication).toBe('unverified')
+    f.enable()
+    expect(await f.service.readyProfiles('opencode')).toEqual([expect.objectContaining({ providerId: 'account-a', expiresAt: expect.any(String) })])
+    // The check that earned the proof stays attached, so a client can show it again without re-checking.
+    expect((await f.service.readyProfiles('opencode'))[0]?.readiness).toEqual(tested.readiness)
+    await expect(f.service.assertReady({ ...route, providerId: 'account-b' })).rejects.toThrow('disabled')
+    await expect(f.service.assertReady(route)).resolves.toMatch(/^[a-f0-9]{64}$/)
+    expect(f.handshake).toHaveBeenCalledTimes(2)
+  })
+  it('does not infer native authentication from initialize, authMethods or an arbitrary model list', async () => {
+    const f = await fixture()
+    const definition = f.catalog.get('opencode')!
+    // This negative case must not consume the developer's real OAuth account.
+    vi.spyOn(f.catalog, 'get').mockReturnValue({ ...definition,
+      launch: { ...definition.launch!, env: { XDG_DATA_HOME: dirname(f.command) } } })
+    const result = await f.service.test(f.catalog.get('opencode')!, { level: 'handshake', credentialMode: 'native-login' })
+    // A working session without local evidence is usable but never verified.
+    expect(result.readiness?.authentication).toBe('unverified')
+    expect(result.readiness?.checks.find((check) => check.id === 'credentials')).toMatchObject({
+      ok: true, detail: expect.stringContaining('No local credential found') })
+  })
+  it('rejects a missing provider, missing credential, incompatible model, and failed handshake', async () => {
+    const f = await fixture()
+    expect((await f.service.test(f.catalog.get('opencode')!, { level: 'handshake', ...route, model: 'invented' })).ok).toBe(false)
+    f.options.providers!['account-a'].apiKey = ''
+    expect((await f.test()).ok).toBe(false)
+    f.options.providers!['account-a'].apiKey = 'secret-a'
+    f.handshake.mockResolvedValueOnce({ ok: false, supported: true, protocol: 'acp' })
+    expect((await f.test()).ok).toBe(false)
+  })
+  it('rejects credential edits while a check is pending and never caches their old result', async () => {
+    const f = await fixture(); f.enable()
+    let finish!: (value: { ok: boolean; supported: boolean; protocol: string }) => void
+    f.handshake.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const checking = f.test()
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    f.options.providers!['account-a'].apiKey = 'rotated'
+    finish({ ok: true, supported: true, protocol: 'acp' })
+    expect((await checking).ok).toBe(false)
+    expect(await f.service.readyProfiles('opencode')).toEqual([])
+  })
+  it('fences disable/re-enable ABA and superseding checks with runtime revisions', async () => {
+    const f = await fixture(); f.enable()
+    let finish!: (value: { ok: boolean; supported: boolean; protocol: string }) => void
+    f.handshake.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const checking = f.test(); await vi.waitFor(() => expect(finish).toBeDefined())
+    f.options.harnesses!.enabledProfiles = []; f.revise(); f.enable()
+    finish({ ok: true, supported: true, protocol: 'acp' })
+    expect((await checking).ok).toBe(false)
+    expect(await f.service.readyProfiles('opencode')).toEqual([])
+  })
+  it('cancels finitely, ignores late success, and does not infer', async () => {
+    const f = await fixture(); const controller = new AbortController()
+    let finish!: (value: { ok: boolean; supported: boolean; protocol: string }) => void
+    f.handshake.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const checking = f.service.test(f.catalog.get('opencode')!, { level: 'handshake', ...route }, controller.signal)
+    await vi.waitFor(() => expect(finish).toBeDefined()); controller.abort()
+    expect((await checking).ok).toBe(false)
+    finish({ ok: true, supported: true, protocol: 'acp' }); f.enable()
+    expect(await f.service.readyProfiles('opencode')).toEqual([])
+  })
+  it('invalidates a proof when a same-path binary changes and prevents post-setup launch', async () => {
+    const f = await fixture(); f.enable()
+    await f.service.prepareTurn('thread', 'turn', route, f.service.configurationSignature(route), new AbortController().signal)
+    await writeFile(f.command, '#!/bin/sh\n# replaced same version\nexit 0\n')
+    expect(await f.service.readyProfiles('opencode')).toEqual([])
+    await expect(f.service.validateTurn('thread', 'turn', new AbortController().signal)).rejects.toThrow('readiness proof')
+  })
+  it('keeps native profile keys independent from provider labels and separates provider accounts', () => {
+    expect(harnessProfileKey({ ...route, providerId: 'default', credentialMode: 'native-login' })).toBe('["opencode","native-login",""]')
+    expect(harnessProfileKey({ ...route, credentialMode: 'native-login' })).not.toBe(harnessProfileKey({ ...route, credentialMode: 'native-login', providerId: 'account-b' }))
+    expect(harnessProfileKey(route)).not.toBe(harnessProfileKey({ ...route, providerId: 'account-b' }))
+  })
+})
+
+it('rechecks persisted enabled profiles after a runtime restart without creating an inference turn', async () => {
+  const f = await fixture(); f.enable()
+  expect(await f.service.readyProfiles('opencode')).toEqual([])
+  f.service.warmProfiles('opencode')
+  await vi.waitFor(async () => expect(await f.service.readyProfiles('opencode')).toHaveLength(1))
+  expect(f.handshake).toHaveBeenCalledTimes(1)
+  expect(f.handshake.mock.calls[0]?.[0]).toMatchObject({ id: 'opencode' })
+})
+
+it('keeps a default native opt-in from authorizing a named native account', async () => {
+  const f = await fixture()
+  f.options.harnesses!.enabledProfiles = [{ harnessId: 'claude-code', credentialMode: 'native-login' }]
+  const named = { harnessId: 'claude-code', credentialMode: 'native-login' as const, providerId: 'subscription-account', model: 'default' }
+  expect(f.catalog.isProfileEnabled(named)).toBe(false)
+  await expect(f.service.assertReady(named)).rejects.toThrow('disabled')
+})
+
+it('rejects an unrelated configured provider at native readiness even when its profile was opted in', async () => {
+  const f = await fixture()
+  const incompatible = { harnessId: 'codex', credentialMode: 'native-login' as const,
+    providerId: 'account-a', model: 'default' }
+  f.options.harnesses!.enabledProfiles = [incompatible]
+  const result = await f.service.test(f.catalog.get('codex')!, { level: 'handshake', ...incompatible })
+  expect(result.ok).toBe(false)
+  expect(result.readiness?.checks.find((check) => check.id === 'configuration')).toMatchObject({
+    ok: false, detail: expect.stringContaining('Native login cannot use an unrelated provider profile')
+  })
+  await expect(f.service.assertReady(incompatible)).rejects.toThrow('unrelated provider profile')
+  expect(await f.service.readyProfiles('codex')).toEqual([])
+  expect(f.handshake).not.toHaveBeenCalled()
+})
+
+it('rejects an authoritative native model mismatch without sending a prompt', async () => {
+  const f = await fixture()
+  f.detector.status.mockResolvedValue({ harnessId: 'opencode', installed: 'yes', ready: 'yes', login: 'signed-in',
+    resolvedCommand: f.command, checkedAt: '2026-10-03T00:00:00.000Z' })
+  f.handshake.mockResolvedValue({ ok: true, supported: true, protocol: 'acp', models: ['actual-model'] })
+  const result = await f.service.test(f.catalog.get('opencode')!, { level: 'handshake', credentialMode: 'native-login', model: 'made-up-model' })
+  expect(result.readiness?.checks.find((check) => check.id === 'protocol')?.ok).toBe(false)
+  expect(result.ok).toBe(false)
+})
+
+it('validates the actual acting route and pins the checked executable before launch', async () => {
+  const f = await fixture(); f.enable()
+  const signal = new AbortController().signal
+  await f.service.prepareTurn('thread', 'turn', route, f.service.configurationSignature(route), signal)
+  expect(f.service.commandForTurn('thread', 'turn')).toBe(f.command)
+  await expect(f.service.validateTurn('thread', 'turn', signal, { ...route, providerId: 'account-b' })).rejects.toThrow('does not match')
+})
+
+it('cancels a stalled secret lookup at the final launch boundary', async () => {
+  const f = await fixture(); f.enable()
+  f.options.providers!['account-a'].credentialSourceId = 'credential-ref'
+  const resolveProviderCredential = vi.fn(async (): Promise<{ apiKey: string } | null> => ({ apiKey: 'selected-secret' }))
+  const service = new HarnessReadinessService({ options: () => f.options, catalog: f.catalog, detector: f.detector,
+    handshake: f.handshake, resolveProviderCredential })
+  await service.prepareTurn('thread', 'turn', route, service.configurationSignature(route), new AbortController().signal)
+  resolveProviderCredential.mockImplementation(() => new Promise(() => {}))
+  const controller = new AbortController()
+  const validation = service.validateTurn('thread', 'turn', controller.signal)
+  controller.abort(new Error('cancelled'))
+  await expect(validation).rejects.toThrow('cancelled')
+})
+
+it('rejects disable/re-enable during final asynchronous credential validation', async () => {
+  const f = await fixture(); f.enable()
+  f.options.providers!['account-a'].credentialSourceId = 'credential-ref'
+  let revision = 0
+  const resolveProviderCredential = vi.fn(async (): Promise<{ apiKey: string } | null> => ({ apiKey: 'selected-secret' }))
+  const service = new HarnessReadinessService({ options: () => f.options, catalog: f.catalog, detector: f.detector,
+    handshake: f.handshake, resolveProviderCredential, revision: () => revision })
+  const signal = new AbortController().signal
+  await service.prepareTurn('thread', 'turn', route, service.configurationSignature(route), signal)
+  let finish!: (value: { apiKey: string }) => void
+  resolveProviderCredential.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+  const validation = service.validateTurn('thread', 'turn', signal)
+  await vi.waitFor(() => expect(finish).toBeDefined())
+  f.options.harnesses!.enabledProfiles = []; revision++
+  f.enable(); revision++
+  finish({ apiKey: 'selected-secret' })
+  await expect(validation).rejects.toThrow('changed during launch validation')
+})
+
+it('detects native profile file A-to-B-to-A edits during a handshake', async () => {
+  const f = await fixture()
+  const profilePath = join(dirname(f.command), 'opencode.json')
+  await writeFile(profilePath, '{"model":"a"}')
+  const original = f.catalog.get('opencode')!
+  const definition = { ...original, launch: { ...original.launch!, env: { ...original.launch?.env, OPENCODE_CONFIG: profilePath } } }
+  const get = f.catalog.get.bind(f.catalog)
+  vi.spyOn(f.catalog, 'get').mockImplementation((id) => id === 'opencode' ? definition : get(id))
+  f.handshake.mockImplementationOnce(async () => {
+    await writeFile(profilePath, '{"model":"b"}')
+    await writeFile(profilePath, '{"model":"a"}')
+    // Deterministic even on low timestamp-resolution filesystems.
+    await utimes(profilePath, new Date('2025-01-01'), new Date('2025-01-01'))
+    return { ok: true, supported: true, protocol: 'acp' }
+  })
+  const result = await f.test()
+  expect(result.ok).toBe(false)
+  expect(result.readiness?.detail).toContain('changed')
+  expect(await f.service.readyProfiles('opencode')).toEqual([])
+})
+
+it('requires a reported catalog for an explicit native model even when account status is known', async () => {
+  const f = await fixture()
+  f.handshake.mockResolvedValue({ ok: true, supported: true, protocol: 'codex-app-server', authentication: 'verified' })
+  const result = await f.service.test(f.catalog.get('codex')!, { level: 'handshake', credentialMode: 'native-login', model: 'invented-native-model' })
+  expect(result.readiness?.checks.find((check) => check.id === 'protocol')?.ok).toBe(false)
+  expect(result.ok).toBe(false)
+})
+
+
+it('drains a preparing turn during updates and blocks only new admissions', async () => {
+  const f = await fixture(); f.enable()
+  let finish!: (value: { ok: boolean; supported: boolean; protocol: string }) => void
+  f.handshake.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+  const signal = new AbortController().signal
+  const first = f.service.prepareTurn('thread', 'first', route, f.service.configurationSignature(route), signal)
+  await vi.waitFor(() => expect(finish).toBeDefined())
+  const release = f.service.beginMaintenance('opencode')
+  expect(f.service.inUse('opencode')).toBe(true)
+  await expect(f.service.prepareTurn('thread', 'second', route, f.service.configurationSignature(route), signal)).rejects.toThrow('update is in progress')
+  finish({ ok: true, supported: true, protocol: 'acp' })
+  await first
+  await expect(f.service.validateTurn('thread', 'first', signal)).resolves.toBeTruthy()
+  f.service.releaseTurn('thread', 'first')
+  expect(f.service.inUse('opencode')).toBe(false)
+  release()
+  await expect(f.service.prepareTurn('thread', 'second', route, f.service.configurationSignature(route), signal)).resolves.toBeUndefined()
+})
+
+it('does not leave a failed launch reservation blocking a later update', async () => {
+  const f = await fixture(); f.enable()
+  vi.spyOn(f.service, 'validateTurn').mockRejectedValueOnce(new Error('credential changed'))
+  await expect(f.service.prepareTurn('thread', 'failed', route, f.service.configurationSignature(route), new AbortController().signal))
+    .rejects.toThrow('credential changed')
+  expect(f.service.inUse('opencode')).toBe(false)
+})
+
+describe('credentials as diagnostics', () => {
+  it('admits an Agent without a local credential unless a definitive signal says otherwise', async () => {
+    const f = await fixture()
+    const empty = await mkdtemp(join(tmpdir(), 'kun-readiness-xdg-')); dirs.push(empty)
+    vi.stubEnv('XDG_DATA_HOME', empty)
+    try {
+      const native = { level: 'handshake' as const, harnessId: 'opencode', credentialMode: 'native-login' as const, model: 'default' }
+      const ready = await f.service.test(f.catalog.get('opencode')!, native)
+      expect(ready.readiness).toMatchObject({ usable: true, authentication: 'unverified' })
+      expect(ready.readiness?.diagnostics).toContainEqual({ id: 'credentials', status: 'warn',
+        value: 'No local credential found; the Agent asks you to sign in if it needs one' })
+      // The session answered auth_required.
+      f.handshake.mockResolvedValueOnce({ ok: false, supported: true, protocol: 'acp', authRequired: true, authentication: 'missing' })
+      expect((await f.service.test(f.catalog.get('opencode')!, native)).readiness).toMatchObject({ usable: false, authentication: 'missing' })
+      // The engine's own status command reports it is signed out.
+      f.detector.status.mockResolvedValueOnce({ harnessId: 'opencode', installed: 'yes', login: 'signed-out', ready: 'yes',
+        resolvedCommand: f.command, checkedAt: '2026-10-03T00:00:00.000Z' })
+      const signedOut = await f.service.test(f.catalog.get('opencode')!, native)
+      expect(signedOut.readiness?.checks.find((check) => check.id === 'credentials')).toMatchObject({
+        ok: false, detail: expect.stringContaining('signed out') })
+    } finally { vi.unstubAllEnvs() }
+  })
+})
+
+describe('handshake catalog reuse', () => {
+  it('hands the catalog read during a usable handshake to the model cache', async () => {
+    const f = await fixture()
+    const onCatalog = vi.fn()
+    const service = new HarnessReadinessService({ options: () => f.options, catalog: f.catalog, detector: f.detector,
+      handshake: async () => ({ ok: true, supported: true, protocol: 'acp',
+        catalog: { models: ['model-a'], modelInfo: [{ id: 'model-a' }] } }), onCatalog })
+    const result = await service.test(f.catalog.get('opencode')!, { level: 'handshake', ...route })
+    expect(result.ok).toBe(true)
+    expect(onCatalog).toHaveBeenCalledWith(expect.objectContaining({ id: 'opencode' }), { models: ['model-a'], modelInfo: [{ id: 'model-a' }] })
+    // The catalog is internal; the wire response keeps the handshake contract.
+    expect(result.handshake).not.toHaveProperty('catalog')
+    expect(result.readiness?.diagnostics).toContainEqual({ id: 'models', status: 'info', value: '1 models' })
+  })
+})

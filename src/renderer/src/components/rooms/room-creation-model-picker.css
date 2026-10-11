@@ -1,0 +1,12 @@
+.direct-creation-model { display: grid; gap: 14px; min-width: 0; padding: 4px 24px 24px; color: var(--ds-text); }
+.direct-creation-model > p { margin: 0; font-size: 13px; }
+.direct-creation-model .direct-model-field { min-width: 0; margin: 0; padding: 12px 0; }
+.direct-creation-model .direct-model-effective { overflow-wrap: anywhere; }
+.direct-creation-model [role="alert"] { color: var(--ds-danger, #bd4545); font-size: 13px; overflow-wrap: anywhere; }
+.direct-creation-model-tools, .direct-creation-model-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.direct-creation-model-tools { font-size: 12px; color: var(--ds-text-muted); }
+.direct-creation-model-actions { justify-content: flex-end; }
+.direct-creation-model button { min-height: 32px; }
+.direct-creation-model button:disabled { opacity: .5; cursor: not-allowed; }
+.direct-creation-model button:focus-visible, .direct-creation-model select:focus-visible { outline: 2px solid var(--ds-accent, #597cff); outline-offset: 3px; }
+@media (max-width: 480px) { .direct-creation-model { padding-inline: 16px; } }

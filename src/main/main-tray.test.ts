@@ -21,7 +21,7 @@ const state = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({
-  app: { quit: vi.fn() },
+  app: { quit: vi.fn(), getAppPath: () => '/app' },
   BrowserWindow: class {},
   dialog: { showMessageBox: vi.fn() },
   Menu: { buildFromTemplate: vi.fn(() => ({})) },

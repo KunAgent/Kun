@@ -1,4 +1,6 @@
+import { isAgentDispatchBlock } from './AgentDispatchCard'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
+import { readToolPresentation } from '../../agent/tool-presentation'
 import { blockHasPendingRuntimeWork } from './message-timeline-turns'
 import { isFastContextToolBlock } from './fast-context-card-copy'
 import { describeProcessBlock, getProcessDetail } from './message-timeline-process-detail'
@@ -7,6 +9,12 @@ export type ProcessSection = {
   id: string
   kind: 'reasoning' | 'execution' | 'output' | 'subagent'
   blocks: ChatBlock[]
+}
+
+export function keepInteractiveProcessBlock(block: ChatBlock): boolean {
+  return (block.kind === 'approval' && block.status === 'pending') ||
+    (block.kind === 'approval_review' && block.status === 'in-progress') ||
+    (block.kind === 'user_input' && block.status === 'pending')
 }
 
 /**
@@ -58,6 +66,10 @@ export function groupProcessSections(blocks: ChatBlock[]): ProcessSection[] {
   const sections: ProcessSection[] = []
 
   for (const block of blocks) {
+    if (isAgentDispatchBlock(block)) {
+      sections.push({ id: `dispatch-${block.id}`, kind: 'execution', blocks: [block] })
+      continue
+    }
     if (isSubagentBlock(block)) {
       const last = sections[sections.length - 1]
       // Coalesce sibling non-explore delegations of one turn (same parentTurnId)
@@ -89,6 +101,13 @@ export function groupProcessSections(blocks: ChatBlock[]): ProcessSection[] {
       sections.push({ id: `compaction-${block.id}`, kind: 'execution', blocks: [block] })
       continue
     }
+    // Handoff markers stay standalone rows: merging them into an adjacent
+    // execution section would bury the harness-switch boundary in a
+    // generic "N steps" group.
+    if (block.kind === 'handoff') {
+      sections.push({ id: `handoff-${block.id}`, kind: 'execution', blocks: [block] })
+      continue
+    }
     const kind =
       block.kind === 'reasoning'
         ? 'reasoning'
@@ -97,8 +116,8 @@ export function groupProcessSections(blocks: ChatBlock[]): ProcessSection[] {
           : 'execution'
     const last = sections[sections.length - 1]
     const followsGeneratedMedia = last?.blocks.some(processBlockHasGeneratedMedia) === true
-    const followsCompaction = last?.blocks.some(
-      (candidate) => candidate.kind === 'compaction'
+    const followsStandaloneMarker = last?.blocks.some(
+      (candidate) => candidate.kind === 'compaction' || candidate.kind === 'handoff'
     ) === true
 
     // Keep a real assistant text update as a hard timeline boundary, but fold
@@ -111,7 +130,7 @@ export function groupProcessSections(blocks: ChatBlock[]): ProcessSection[] {
     if (
       last &&
       !followsGeneratedMedia &&
-      !followsCompaction &&
+      !followsStandaloneMarker &&
       silentProcessPhase &&
       previousIsSilentProcessPhase
     ) {
@@ -124,7 +143,7 @@ export function groupProcessSections(blocks: ChatBlock[]): ProcessSection[] {
       continue
     }
 
-    if (last && !followsGeneratedMedia && !followsCompaction && last.kind === kind) {
+    if (last && !followsGeneratedMedia && !followsStandaloneMarker && last.kind === kind) {
       last.blocks.push(block)
       continue
     }
@@ -196,7 +215,7 @@ export function isRequestUserInputTool(block: ChatBlock): boolean {
 export type ProcessErrorTone = 'tool' | 'error' | null
 
 export function processBlockErrorTone(block: ChatBlock): ProcessErrorTone {
-  if (block.kind === 'tool' && block.status === 'error') return 'tool'
+  if (block.kind === 'tool') return readToolPresentation(block).state === 'failed' ? 'tool' : null
   if (block.kind === 'compaction' && block.status === 'error') return 'error'
   if (block.kind === 'approval' && block.status === 'error') return 'error'
   if (

@@ -1,5 +1,7 @@
+import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { AgentProvider } from '../agent/types'
+import type { CodeProjectRouteSnapshot } from './chat-store-ade-send-snapshot'
 import type {
   ChatState,
   QueuedUserMessage,
@@ -9,11 +11,13 @@ import type {
   StoreActionContext,
   ThreadActionRuntime
 } from './chat-store-thread-actions-support'
+import type { AdeDraftSendSnapshot } from './chat-store-ade-send-snapshot'
 
 export type PreparedThreadSend = {
   context: StoreActionContext
   runtime: ThreadActionRuntime
   provider: AgentProvider
+  adeDraft?: AdeDraftSendSnapshot
   trimmedText: string
   mode: Parameters<ChatState['sendMessage']>[1]
   overrides: Parameters<ChatState['sendMessage']>[2]
@@ -33,6 +37,7 @@ export type PreparedThreadSend = {
   attachments: NonNullable<QueuedUserMessage['attachments']>
   fileReferences: NonNullable<QueuedUserMessage['fileReferences']>
   composerContexts: ComposerContextAttachment[]
+  ackNoticeIds: string[] | undefined
   activeThreadId: string | null
   displayText: string
   userDisplayText: string | undefined
@@ -42,6 +47,12 @@ export type PreparedThreadSend = {
   composerModel: string
   composerProviderId: string
   composerAccountId: string
+  composerCollaborationEnabled?: boolean
+  composerCollaborationExplicit?: boolean
+  codeProjectRoute?: CodeProjectRouteSnapshot
+  composerHarnessId: string
+  composerGatewayBinding?: HarnessGatewayBinding
+  composerCredentialMode: string
   reasoningEffort: string | undefined
   serviceTier: QueuedUserMessage['serviceTier']
   guiDesignCanvas: boolean

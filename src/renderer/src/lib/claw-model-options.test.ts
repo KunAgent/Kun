@@ -54,13 +54,13 @@ function buildSettings(models: string[]): AppSettingsV1 {
 }
 
 describe('claw model options', () => {
-  it('includes configured text models alongside the always-available free catalog', () => {
+  it('includes configured text models alongside auto', () => {
     const options = clawModelSelectOptions(buildSettings(['team-chat-model']))
     expect(options).toEqual(expect.arrayContaining([
       'auto',
-      'big-pickle',
       'team-chat-model'
     ]))
+    expect(options).not.toContain('big-pickle')
     expect(options).not.toContain('gpt-5-nano')
     expect(options).not.toContain('deepseek-chat')
   })

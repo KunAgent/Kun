@@ -1,7 +1,7 @@
+import { rememberSubmittedComposerRoute } from './chat-store-submitted-route'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
 import { describeRuntimeError, formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
-import { shouldAutoTitleThread } from '../lib/thread-title'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import { saveQueuedMessagesForThread } from './queued-message-persistence'
@@ -11,15 +11,14 @@ import {
   activeClawChannel,
   readThreadComposerSelection,
   rememberCodeWorkspaceRoots,
-  rememberThreadComposerSelection,
   rememberTurnModel
 } from './chat-store-helpers'
-import { findReusableEmptyThreadId, reconcileOptimisticUserBlock } from './chat-store-runtime-helpers'
+import { reconcileOptimisticUserBlock } from './chat-store-runtime-helpers'
+import { prepareAdeThreadWorktree } from './chat-store-thread-send-worktree'
 import { clearBusyWatchdog, resetBusyRecoveryAttempts } from './chat-store-schedulers'
 import {
   armBusyWatchdog,
   buildThreadEventSink,
-  isCodeThread,
   looksLikeActiveTurnError,
   rememberPendingClawFeishuMirror,
   runtimeErrorDetail,
@@ -29,12 +28,13 @@ import {
 import { ensureRuntimeProviderForSend, subscribeThreadEventsWithRecovery } from './chat-store-thread-action-helpers'
 import { settleAcceptedTurnAfterNavigation } from './chat-store-thread-send-navigation'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
-import { readDesignThreadRegistry } from '../design/design-thread-registry'
 import { mergeThreadDesignProfile } from '../design/design-locked-profile'
 import {
   executionSnapshotOverrides,
+  capturePreSendSnapshot,
   failQueuedSubmission,
   localConversationErrorBlock,
+  preSendSnapshotPatch,
   resetQueuedSubmission,
   resetUnknownOutcomeAttempts,
   scheduleUnknownOutcomeRetry,
@@ -46,8 +46,13 @@ import {
   withoutConsumedComposerContexts
 } from './chat-store-thread-actions-support'
 import type { PreparedThreadSend } from './chat-store-thread-send-direct-types'
-import { copyLiveProjection, emptyLiveProjection } from './chat-store-live-projection'
-
+import { emptyLiveProjection } from './chat-store-live-projection'
+import { adeDraftStillCurrent, cancelStaleAdeDraftSend, validateAdeDraftWorkspace } from './chat-store-ade-send-snapshot'
+import { createNewSendThread, reusableThreadForSend, shouldRenameReusedSendThread } from './chat-store-thread-send-create'
+import {
+  isAdeProjectDefaultsStaleError,
+  requestAdeProjectDefaultsRefresh
+} from '../lib/ade-project-defaults-refresh'
 /**
  * A queued message freezes the model captured when it was enqueued. Draining
  * that queue after the user already switched models must not write the stale
@@ -71,7 +76,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     shouldRenameThreadAfterSend
   } = input
   const {
-    context,
+    context, adeDraft,
     runtime,
     provider: p,
     trimmedText,
@@ -92,6 +97,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     attachments,
     fileReferences,
     composerContexts,
+    ackNoticeIds,
     displayText,
     userDisplayText,
     generatedTitle,
@@ -99,6 +105,9 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     composerModel,
     composerProviderId,
     composerAccountId,
+    composerHarnessId,
+    composerCredentialMode,
+    composerGatewayBinding,
     reasoningEffort,
     serviceTier,
     guiDesignCanvas, guiExcalidrawCanvas,
@@ -109,21 +118,11 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     submittedMessageForQueue
   } = input
   const { set, get, sseAbortRef } = context
-    const previousBlocks = get().blocks
-    const previousActiveThreadId = get().activeThreadId
-    const previousLastSeq = get().lastSeq
-    const previousCurrentTurnId = get().currentTurnId
-    const previousCurrentTurnOrchestration = get().currentTurnOrchestration
-    const previousCurrentTurnUserId = get().currentTurnUserId
-    const previousLiveProjection = copyLiveProjection(get())
-    const previousTurnStartedAtByUserId = get().turnStartedAtByUserId
-    const previousTurnDurationByUserId = get().turnDurationByUserId
-    const previousTurnReasoningFirstAtByUserId = get().turnReasoningFirstAtByUserId
-    const previousTurnReasoningLastAtByUserId = get().turnReasoningLastAtByUserId
-    const previousQueuedMessages = get().queuedMessages
+  if (!activeThreadId && get().route === 'ade' && !adeDraft) return false
+    const previous = capturePreSendSnapshot(get())
     resetBusyRecoveryAttempts()
     // Fence stale detail hydration before publishing the optimistic turn.
-    runtime.fenceThreadMutation(previousActiveThreadId ?? undefined)
+    runtime.fenceThreadMutation(previous.activeThreadId ?? undefined)
     set((s) => ({
       busy: true,
       busyUnconfirmed: false,
@@ -172,64 +171,47 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     if (!activeThreadId) {
       try {
         const settings = await rendererRuntimeClient.getSettings()
-        const workspaceRoot = currentCodeWorkspaceRoot(get(), settings)
+        const workspaceRoot = adeDraft ? adeDraft.workspaceRoot : currentCodeWorkspaceRoot(get(), settings)
+        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) {
+          return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
+        }
         if (!workspaceRoot) {
           set({
-            blocks: previousBlocks,
-            busy: false,
-            busyUnconfirmed: false,
-            ...previousLiveProjection,
-            currentTurnId: previousCurrentTurnId,
-            currentTurnOrchestration: previousCurrentTurnOrchestration,
-            currentTurnUserId: previousCurrentTurnUserId,
-            turnStartedAtByUserId: previousTurnStartedAtByUserId,
-            turnDurationByUserId: previousTurnDurationByUserId,
-            turnReasoningFirstAtByUserId: previousTurnReasoningFirstAtByUserId,
-            turnReasoningLastAtByUserId: previousTurnReasoningLastAtByUserId,
-            queuedMessages: previousQueuedMessages,
+            ...preSendSnapshotPatch(previous),
             error: i18n.t('common:workspaceRequiredToCreateThread')
           })
           runtime.persistActiveQueuedMessages()
           return false
         }
-        const codeWorkspaceRoots = rememberCodeWorkspaceRoots(get().codeWorkspaceRoots, [workspaceRoot])
-        set({ codeWorkspaceRoots })
-        const reusableThreadId = await findReusableEmptyThreadId(
-          get(),
-          p,
-          workspaceRoot,
-          (thread) => isCodeThread(thread, get().clawChannels, undefined, readDesignThreadRegistry())
+        if (adeDraft && !(await validateAdeDraftWorkspace(
+          workspaceRoot, adeDraft, Boolean(p.createTaskWorkspace), () => adeDraftStillCurrent(get(), adeDraft)
+        ))) {
+          return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
+        }
+        const reusableThreadId = await reusableThreadForSend(input, workspaceRoot)
+        shouldRenameThreadAfterSend = shouldRenameReusedSendThread(
+          get().threads, reusableThreadId, shouldAutoRenameForRoute
         )
-        const reusableThread = reusableThreadId
-          ? get().threads.find((thread) => thread.id === reusableThreadId) ?? null
+        const adeSend = Boolean(adeDraft)
+        const createdThread = reusableThreadId == null
+          ? await createNewSendThread(p, input, workspaceRoot, adeSend)
           : null
-        shouldRenameThreadAfterSend =
-          shouldAutoRenameForRoute &&
-          reusableThreadId != null && shouldAutoTitleThread(reusableThread)
-        const createdThread =
-          reusableThreadId == null
-            ? await p.createThread({
-                workspace: workspaceRoot,
-                title: generatedTitle,
-                titleAuto: true,
-                ...(composerModel ? { model: composerModel } : {}),
-                ...(composerProviderId ? { providerId: composerProviderId } : {}),
-                ...(composerAccountId ? { accountId: composerAccountId } : {}),
-                // Design is turn intent; workbench thread ownership stays Code.
-                agentSurface: requestedAgentSurface === 'write' ? 'write' : 'code',
-                mode: mode ?? 'agent'
-              })
-            : null
+        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) {
+          if (createdThread) void get().refreshAdeThreads()
+          return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
+        }
         const threadId = reusableThreadId ?? createdThread?.id ?? null
         if (!threadId) {
           throw new Error('Failed to resolve target thread id.')
         }
         activeThreadId = threadId
         if (composerModel && !queuedModelWouldOverwriteUserSelection(queued, threadId, composerModel)) {
-          rememberThreadComposerSelection(threadId, composerModel, composerProviderId)
+          rememberSubmittedComposerRoute(threadId, input)
         }
         set((s) => ({
           activeThreadId: threadId,
+          composerCollaborationEnabled: false,
+          ...(adeSend ? { adeDraftOpen: false } : {}),
           // Freshly created threads are always primary — clear any side-session
           // relation carried over from the previously active thread.
           activeThreadRelation: 'primary',
@@ -240,28 +222,39 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           threads:
             createdThread && !s.threads.some((thread) => thread.id === createdThread.id)
               ? [createdThread, ...s.threads]
-              : s.threads
+              : s.threads,
+          adeThreads:
+            createdThread && adeSend && !(s.adeThreads ?? []).some((thread) => thread.id === createdThread.id)
+              ? [createdThread, ...(s.adeThreads ?? [])]
+              : (s.adeThreads ?? [])
         }))
         void get().refreshThreads()
+        // New-session worktree isolation: start async prep, subscribe for the
+        // ready event, and park this submission in the local queue.
+        if (adeDraft?.isolation === 'worktree' && createdThread) {
+          await prepareAdeThreadWorktree({
+            provider: p,
+            threadId,
+            workspaceRoot,
+            startFrom: adeDraft.startFrom,
+            context,
+            submittedMessageForQueue,
+            persistActiveQueuedMessages: runtime.persistActiveQueuedMessages
+          })
+          return true
+        }
       } catch (e) {
+        if (input.codeProjectRoute && isAdeProjectDefaultsStaleError(e)) {
+          requestAdeProjectDefaultsRefresh(input.codeProjectRoute.workspaceRoot)
+        }
+        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) {
+          return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
+        }
         void window.kunGui.logError('create-thread', 'Failed to create thread', {
           message: e instanceof Error ? e.message : String(e)
         }).catch(() => undefined)
         set({
-          activeThreadId: previousActiveThreadId,
-          blocks: previousBlocks,
-          lastSeq: previousLastSeq,
-          busy: false,
-          busyUnconfirmed: false,
-          ...previousLiveProjection,
-          currentTurnId: previousCurrentTurnId,
-          currentTurnOrchestration: previousCurrentTurnOrchestration,
-          currentTurnUserId: previousCurrentTurnUserId,
-          turnStartedAtByUserId: previousTurnStartedAtByUserId,
-          turnDurationByUserId: previousTurnDurationByUserId,
-          turnReasoningFirstAtByUserId: previousTurnReasoningFirstAtByUserId,
-          turnReasoningLastAtByUserId: previousTurnReasoningLastAtByUserId,
-          queuedMessages: previousQueuedMessages,
+          ...preSendSnapshotPatch(previous),
           error: formatRuntimeError(e),
           ...(shouldOpenSettingsForError(e)
             ? { route: 'settings' as const, settingsSection: 'agents' as const }
@@ -283,14 +276,15 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         composerModel &&
         !queuedModelWouldOverwriteUserSelection(queued, activeThreadId, composerModel)
       ) {
-        rememberThreadComposerSelection(activeThreadId, composerModel, composerProviderId)
+        rememberSubmittedComposerRoute(activeThreadId, input)
       }
       await ensureRuntimeProviderForSend({
         providerId: channel ? undefined : composerProviderId,
         model: composerModel
       })
       const settings = await rendererRuntimeClient.getSettings()
-      const workspaceCheckpointRequestId = startWorkspaceCheckpointSnapshot({
+      const paperContext = queued?.paperContext ?? overrides?.paperContext
+      const workspaceCheckpointRequestId = paperContext ? undefined : startWorkspaceCheckpointSnapshot({
         settings,
         threads: get().threads,
         activeThreadId,
@@ -308,19 +302,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         const current = get()
         if (current.activeThreadId === activeThreadId) {
           set({
-            blocks: previousBlocks,
-            lastSeq: previousLastSeq,
-            busy: false,
-            busyUnconfirmed: false,
-            ...previousLiveProjection,
-            currentTurnId: previousCurrentTurnId,
-            currentTurnOrchestration: previousCurrentTurnOrchestration,
-            currentTurnUserId: previousCurrentTurnUserId,
-            turnStartedAtByUserId: previousTurnStartedAtByUserId,
-            turnDurationByUserId: previousTurnDurationByUserId,
-            turnReasoningFirstAtByUserId: previousTurnReasoningFirstAtByUserId,
-            turnReasoningLastAtByUserId: previousTurnReasoningLastAtByUserId,
-            queuedMessages: previousQueuedMessages,
+            ...preSendSnapshotPatch(previous),
             error: i18n.t('common:designThreadChangedBeforeSend')
           })
           runtime.persistActiveQueuedMessages()
@@ -344,6 +326,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         designProfile: acceptedDesignProfile
       } = await p.sendUserMessage(activeThreadId, runtimeText, {
         clientRequestId,
+        ...(paperContext ? { paperContext } : {}),
         mode,
         orchestration,
         agentSurface: requestedAgentSurface ??
@@ -351,6 +334,11 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ...(composerModel ? { model: composerModel } : {}),
         ...(!channel && composerProviderId ? { providerId: composerProviderId } : {}),
         ...(!channel && composerAccountId ? { accountId: composerAccountId } : {}),
+        ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+        ...(composerCredentialMode
+          ? { credentialMode: composerCredentialMode as 'native-login' | 'provider' | 'kun-gateway' }
+          : {}),
+        ...(composerGatewayBinding ? { gatewayBinding: composerGatewayBinding } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(!channel && serviceTier ? { serviceTier } : {}),
         ...((queued?.subagentResume ?? overrides?.subagentResume) ? { subagentResume: queued?.subagentResume ?? overrides?.subagentResume } : {}),
@@ -370,7 +358,9 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ...(attachmentIds.length ? { attachmentIds } : {}),
         ...(workspaceCheckpointRequestId ? { workspaceCheckpointRequestId } : {}),
         ...(fileReferences.length ? { fileReferences } : {}),
-        ...(composerContexts.length ? { composerContexts } : {})
+        ...(composerContexts.length ? { composerContexts } : {}),
+        ...(ackNoticeIds?.length ? { ackNoticeIds } : {}),
+        ...((queued?.planBuild ?? overrides?.planBuild) ? { planBuild: true } : {})
       })
       runtimeTurnAccepted = true
       if (submittedMessageForQueue.waitForRuntimeAdmission) settleRuntimeTurnAdmission(clientRequestId, true)
@@ -404,7 +394,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           ...(userMessageItemId ? { userMessageItemId } : {}),
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
           queued,
-          previousQueuedMessages
+          previousQueuedMessages: previous.queuedMessages
         })
         void get().refreshThreads()
         return true
@@ -559,19 +549,19 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
       const runtimeErrorCode = getRuntimeErrorCode(e)
       if (runtimeErrorCode === 'thread_busy' || looksLikeActiveTurnError(e)) {
         set((state) => ({
-          blocks: previousBlocks,
+          blocks: previous.blocks,
           busy: true,
           busyUnconfirmed: false,
-          ...previousLiveProjection,
-          currentTurnId: previousCurrentTurnId,
-          currentTurnOrchestration: previousCurrentTurnOrchestration,
-          currentTurnUserId: previousCurrentTurnUserId,
-          turnStartedAtByUserId: previousTurnStartedAtByUserId,
-          turnDurationByUserId: previousTurnDurationByUserId,
-          turnReasoningFirstAtByUserId: previousTurnReasoningFirstAtByUserId,
-          turnReasoningLastAtByUserId: previousTurnReasoningLastAtByUserId,
+          ...previous.liveProjection,
+          currentTurnId: previous.currentTurnId,
+          currentTurnOrchestration: previous.currentTurnOrchestration,
+          currentTurnUserId: previous.currentTurnUserId,
+          turnStartedAtByUserId: previous.turnStartedAtByUserId,
+          turnDurationByUserId: previous.turnDurationByUserId,
+          turnReasoningFirstAtByUserId: previous.turnReasoningFirstAtByUserId,
+          turnReasoningLastAtByUserId: previous.turnReasoningLastAtByUserId,
           queuedMessages: upsertQueuedSubmission(
-            previousQueuedMessages,
+            previous.queuedMessages,
             submittedMessageForQueue
           ),
           extensionComposerContexts: withoutConsumedComposerContexts(state, composerContexts),
@@ -603,15 +593,15 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
       if (turnAdmissionOutcomeMayBeUnknown(e)) {
         const view = describeRuntimeError(e)
         set((state) => ({
-          blocks: previousBlocks,
+          blocks: previous.blocks,
           busy: false,
           busyUnconfirmed: false,
-          ...previousLiveProjection,
-          currentTurnId: previousCurrentTurnId,
-          currentTurnOrchestration: previousCurrentTurnOrchestration,
-          currentTurnUserId: previousCurrentTurnUserId,
+          ...previous.liveProjection,
+          currentTurnId: previous.currentTurnId,
+          currentTurnOrchestration: previous.currentTurnOrchestration,
+          currentTurnUserId: previous.currentTurnUserId,
           queuedMessages: startingQueuedSubmission(
-            previousQueuedMessages,
+            previous.queuedMessages,
             submittedMessageForQueue
           ),
           extensionComposerContexts: withoutConsumedComposerContexts(state, composerContexts),
@@ -669,7 +659,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         currentTurnStartedAtMs: null,
         currentTurnOrchestration: null,
         queuedMessages: failQueuedSubmission(
-          previousQueuedMessages,
+          previous.queuedMessages,
           submittedMessageForQueue.id,
           view
         ),

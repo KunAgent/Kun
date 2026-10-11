@@ -10,6 +10,7 @@ import {
   ManagerRemoteThreadStore,
   resolveManagerDataRequestTimeoutMs
 } from './remote-data-stores.js'
+import { isManagerStoreRead } from './remote-data-store-request.js'
 import { USAGE_QUERY_TIMEOUT_MS } from './usage-query-executor.js'
 import { runWithTurnMutationFence } from './turn-mutation-context.js'
 import {
@@ -26,7 +27,7 @@ function managerConnection(): ServiceManagerConnection {
   return {
     discovery: {
       version: 1,
-      protocolVersion: 5,
+      protocolVersion: 6,
       instanceId: 'manager-read-compatibility',
       pid: process.pid,
       startedAt: '2026-08-14T00:00:00.000Z',
@@ -339,5 +340,20 @@ describe('ManagerRemoteThreadStore legacy read compatibility', () => {
       id: thread.id,
       planBuildRunId: 'run-legacy-1'
     })
+  })
+})
+
+
+describe('remote context telemetry', () => {
+  it('uses a read-only, sequence-fenced manager request and validates its response', async () => {
+    stubManagerResult(null)
+    const store = new ManagerRemoteSessionStore(managerConnection())
+    expect(await store.loadLatestContextSnapshot('thread', 42)).toBeNull()
+    expect(isManagerStoreRead('session', 'loadLatestContextSnapshot')).toBe(true)
+    const [url, options] = vi.mocked(fetch).mock.calls[0]!
+    expect(String(url)).toContain('/v1/data/session/loadLatestContextSnapshot')
+    expect(JSON.parse(options!.body as string)).toEqual({ value: { threadId: 'thread', maxSeq: 42 } })
+    stubManagerResult({ kind: 'context_snapshot', seq: 42 })
+    await expect(store.loadLatestContextSnapshot('thread', 42)).rejects.toThrow()
   })
 })

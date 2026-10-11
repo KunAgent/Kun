@@ -1,0 +1,76 @@
+import type { ThreadRecord } from '../contracts/threads.js'
+import type { Turn } from '../contracts/turns.js'
+import { hasWorkbenchCapabilityConstraints } from '../contracts/thread-workbench-origin.js'
+
+/**
+ * Harness usage scenarios drive the admission matrix. They describe
+ * what the surrounding Kun feature needs from a harness, not which client
+ * rendered the prompt.
+ */
+export const HARNESS_USAGES = [
+  'one-to-one',
+  'manager-worker',
+  'graph-worker',
+  'graph-lead',
+  'room-execution',
+  'room-conversation',
+  'scheduled',
+  'im',
+  'plan-build',
+  'design'
+] as const
+export type HarnessUsage = (typeof HARNESS_USAGES)[number]
+
+/** Thread field added by task workspaces; absent until then. */
+type ExecutionUnitCarrier = { executionUnit?: { kind?: string } }
+
+/**
+ * Derive the admission usage for a turn from the owning thread and the frozen
+ * turn fields. Ordering matters: rooms and Graph outrank manager-worker and
+ * the unattended/IM cases below them.
+ */
+export function usageForTurn(
+  thread: Pick<ThreadRecord, 'roomContext' | 'workbenchOrigin'>,
+  turn: Pick<
+    Turn,
+    | 'orchestration'
+    | 'graphLeadLifecycle'
+    | 'graphPlanningLifecycle'
+    | 'imContext'
+    | 'planBuild'
+    | 'clientSurface'
+    | 'disableUserInput'
+    | 'agentSurface'
+  >
+): HarnessUsage {
+  if (hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling)) return 'room-execution'
+  // An explicit plan-build marker wins: the isolated-workspace rule must
+  // apply regardless of which host feature scheduled the turn.
+  if (turn.planBuild === true) return 'plan-build'
+  // Private chats and read-only group discussion accept an engine-native
+  // sandbox; coordination, execution and review keep the host-enforced rule.
+  if (thread.roomContext) {
+    return thread.roomContext.kind === 'conversation' || thread.roomContext.kind === 'discussion'
+      ? 'room-conversation' : 'room-execution'
+  }
+  if (turn.orchestration === 'graph') {
+    return turn.graphLeadLifecycle || turn.graphPlanningLifecycle
+      ? 'graph-lead'
+      : 'graph-worker'
+  }
+  if ((thread as ExecutionUnitCarrier).executionUnit?.kind === 'worker') {
+    return 'manager-worker'
+  }
+  if (turn.imContext === true || turn.clientSurface === 'im') return 'im'
+  if (turn.disableUserInput === true) return 'scheduled'
+  if (turn.agentSurface === 'design') return 'design'
+  return 'one-to-one'
+}
+
+/**
+ * Sole unattended criterion: IM and headless/scheduled runs both set these
+ * turn flags (turns carry no scheduled-task id).
+ */
+export const isUnattendedTurn = (
+  turn: Pick<Turn, 'disableUserInput' | 'imContext'>
+): boolean => turn.disableUserInput === true || turn.imContext === true

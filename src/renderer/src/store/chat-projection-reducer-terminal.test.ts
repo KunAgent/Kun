@@ -40,6 +40,7 @@ function state(): ChatState {
     threads: [{
       id: 'thread_1', title: 'Thread', updatedAt: '2026-07-10T00:00:00.000Z', model: 'model', mode: 'agent'
     }],
+    adeThreads: [],
     usageRefreshKey: 0,
     error: 'recovering'
   } as unknown as ChatState

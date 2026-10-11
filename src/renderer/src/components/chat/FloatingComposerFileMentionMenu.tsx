@@ -18,6 +18,8 @@ type Props = {
   selectedIndex: number
   highlighted: ComposerMentionSuggestion | null
   hasMountedKnowledgeBases: boolean
+  /** Code projects mount knowledge bases below the composer; Work has no such entry. */
+  knowledgeBaseHint?: boolean
   onSelect: (suggestion: ComposerMentionSuggestion) => void
 }
 
@@ -28,6 +30,7 @@ export function FloatingComposerFileMentionMenu({
   selectedIndex,
   highlighted,
   hasMountedKnowledgeBases,
+  knowledgeBaseHint = true,
   onSelect
 }: Props): ReactElement {
   const { t } = useTranslation('common')
@@ -49,7 +52,7 @@ export function FloatingComposerFileMentionMenu({
         <span>{t('composerMentionMenuTitle')}</span>
         {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-ds-faint" strokeWidth={1.9} /> : null}
       </div>
-      {suggestions.length > 0 || !hasMountedKnowledgeBases ? (
+      {suggestions.length > 0 || (knowledgeBaseHint && !hasMountedKnowledgeBases) ? (
         <div
           ref={menuRef}
           className="flex max-h-[min(280px,calc(100vh-260px))] flex-col gap-0.5 overflow-y-auto pr-1"
@@ -58,7 +61,7 @@ export function FloatingComposerFileMentionMenu({
             <div className="px-2.5 pb-1 pt-1 text-[10.5px] font-semibold uppercase tracking-wide text-ds-faint">
               {t('knowledgeBaseTitle')}
             </div>
-          ) : !hasMountedKnowledgeBases ? (
+          ) : knowledgeBaseHint && !hasMountedKnowledgeBases ? (
             <div className="mx-1 mb-1 rounded-[10px] bg-ds-hover px-2.5 py-2 text-[11.5px] text-ds-faint">
               {t('composerKnowledgeMentionEmpty')}
             </div>

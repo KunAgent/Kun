@@ -35,7 +35,13 @@ export const ModelProviderDeclarationSchema = z.strictObject({
     /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
   )).max(64).default([]),
   adapterApiVersion: z.string().regex(/^\d+\.\d+\.\d+$/).default('1.0.0'),
-  models: z.array(ProviderModelSchema).max(512).default([])
+  models: z.array(ProviderModelSchema).max(512).default([]),
+  /**
+   * The provider may be offered to external agents through Kun's local
+   * gateway. Declaring it changes nothing by itself: the user must also
+   * choose which account to export in Kun's gateway settings.
+   */
+  gatewayExport: z.boolean().optional()
 })
 export type ModelProviderDeclaration = z.infer<typeof ModelProviderDeclarationSchema>
 export type ModelProviderDeclarationInput = z.input<typeof ModelProviderDeclarationSchema>

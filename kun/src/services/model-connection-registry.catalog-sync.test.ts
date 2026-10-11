@@ -55,7 +55,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -204,7 +204,7 @@ describe('ModelConnectionRegistry', () => {
         probe: false,
         select: false
       })
-      const registryPath = join(dataDir, 'model-connections.v1.json')
+      const registryPath = join(dataDir, 'model-connections.v2.json')
       const before = JSON.parse(await readFile(registryPath, 'utf8')) as {
         profiles: Record<string, { credentialRef?: string }>
       }
@@ -288,7 +288,7 @@ describe('ModelConnectionRegistry', () => {
       expect(applied).toContain('custom/model-a')
     })
 
-  it('falls back only to another configured provider when deleting the shared default', async () => {
+  it('rejects silent default replacement and atomically applies an explicitly selected replacement before deletion', async () => {
       const { value } = await registry()
       const unavailable = await value.connect({
         expectedRevision: 0,
@@ -323,7 +323,14 @@ describe('ModelConnectionRegistry', () => {
         select: true
       })
 
-      const removed = await value.delete('selected', selected.revision)
+      await expect(value.delete('selected', selected.revision)).rejects.toThrow('still has references')
+      expect((await value.snapshot()).defaultProviderId).toBe('selected')
+      const preview = await value.previewConfiguration({ expectedRevision: selected.revision, operations: [
+        { kind: 'set-default-selection', selection: { connectionId: 'configured', modelId: 'model-c' } },
+        { kind: 'remove-connection', connectionId: 'selected' }
+      ] })
+      await value.commitConfiguration({ expectedRevision: preview.expectedRevision, previewId: preview.previewId, idempotencyKey: 'explicit-default-delete' })
+      const removed = await value.snapshot()
       expect(removed).toMatchObject({
         defaultProviderId: 'configured',
         defaultAccountId: 'account:configured',

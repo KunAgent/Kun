@@ -3,6 +3,7 @@ import type { RuntimeEvent } from '../../contracts/events.js'
 import { RuntimeEvent as RuntimeEventSchema } from '../../contracts/events.js'
 import { DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES } from '../file/file-session-store.js'
 import type { UsageRuntimeEvent } from './hybrid-thread-support.js'
+import { isLegacyHarnessUsage } from '../../domain/usage-legacy-harness.js'
 
 const ERROR_SNIPPET_MAX_CHARS = 120
 
@@ -62,6 +63,9 @@ export async function scanEventsForUsageBackfill(
   )
   let highWater = 0
   const usage: UsageRuntimeEvent[] = []
+  // Turns that ran on an external Agent, so raw pre-ledger reports from those
+  // turns can be accounted as increments rather than cumulative snapshots.
+  const delegatedTurns = new Map<string, string>()
   let remainder = ''
   let lineNumber = 0
 
@@ -69,7 +73,10 @@ export async function scanEventsForUsageBackfill(
     if (!event) return
     if (event.seq > highWater) highWater = event.seq
     if (event.kind === 'usage') usage.push(event)
+    else if (event.kind === 'delegated_runtime' && event.turnId) delegatedTurns.set(event.turnId, event.harnessId ?? event.providerId)
   }
+  const classified = (): UsageRuntimeEvent[] => usage.map((event) => isLegacyHarnessUsage(event, delegatedTurns)
+    ? { ...event, legacyHarness: true as const, harnessId: event.harnessId ?? delegatedTurns.get(event.turnId!) } : event)
 
   try {
     const stream = createReadStream(path, {
@@ -109,5 +116,5 @@ export async function scanEventsForUsageBackfill(
     }
   }
 
-  return { highWater, usage }
+  return { highWater, usage: classified() }
 }

@@ -98,11 +98,19 @@ describe('TrayProviderQuotaPopover', () => {
         style: { setProperty: vi.fn() }
       }
     })
+    const store = new Map<string, string>()
     vi.stubGlobal('window', {
       addEventListener: vi.fn((name: string, handler: (event: KeyboardEvent) => void) => {
         if (name === 'keydown') keydown = handler
       }),
-      removeEventListener: vi.fn()
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      setInterval: vi.fn(() => 1),
+      clearInterval: vi.fn(),
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => store.set(key, value)
+      }
     })
   })
 
@@ -111,31 +119,30 @@ describe('TrayProviderQuotaPopover', () => {
     vi.clearAllMocks()
   })
 
-  it('selects the first configured provider and exposes overview/provider tabs', async () => {
+  it('lists every provider on one page with subscriptions as rings', async () => {
     const api = createApi()
     let renderer!: ReactTestRenderer
     await act(async () => {
       renderer = create(createElement(TrayProviderQuotaPopover, { api }))
     })
 
-    const tabs = renderer.root.findAllByProps({ role: 'tab' })
-    expect(tabs).toHaveLength(3)
-    expect(tabs[1].props['aria-selected']).toBe(true)
+    expect(renderer.root.findAllByProps({ role: 'tab' })).toHaveLength(0)
     expect((document.documentElement.dataset as Record<string, string>).platform).toBe('win32')
     expect(renderer.root.findByType('main').props['data-context-ready']).toBe('true')
-    expect(JSON.stringify(renderer.toJSON())).toContain('Weekly')
-    expect(JSON.stringify(renderer.toJSON())).toContain('77 requests')
-    expect(JSON.stringify(renderer.toJSON())).toContain('Local API reference value')
-    expect(JSON.stringify(renderer.toJSON())).toContain('$0.0250')
+    const ring = renderer.root.findByProps({ className: 'kq-ring', 'data-quota-metric': 'weekly' })
+    expect(ring.props.title).toContain('23 / 100 requests')
+    const html = JSON.stringify(renderer.toJSON())
+    expect(html).toContain('23%')
+    expect(html).toContain('API reference: today ≈$0.0250')
+    expect(html).toContain('1 more without a quota to read: Claude subscription')
     expect(renderer.root.findAllByProps({ 'data-provider-icon': 'codex' }).length).toBeGreaterThan(0)
 
-    await act(async () => tabs[0].props.onClick())
-    expect(renderer.root.findAllByProps({ role: 'tab' })[0].props['aria-selected']).toBe(true)
-    expect(JSON.stringify(renderer.toJSON())).toContain('Claude subscription')
-    expect(renderer.root.findByProps({ 'aria-label': 'Codex: Available' })).toBeTruthy()
-    expect(renderer.root.findByProps({
-      'data-provider-local-cost': 'tray-overview'
-    }).props['aria-hidden']).toBe(true)
+    // A ring turns every meter to what is left.
+    await act(async () => ring.props.onClick())
+    expect(JSON.stringify(renderer.toJSON())).toContain('77%')
+
+    await act(async () => renderer.root.findByProps({ 'aria-label': 'Open Codex dashboard' }).props.onClick())
+    expect(api.openExternal).toHaveBeenCalledWith('https://chatgpt.com/codex/settings/usage')
     await act(async () => renderer.unmount())
   })
 
@@ -204,44 +211,6 @@ describe('TrayProviderQuotaPopover', () => {
     await act(async () => renderer.unmount())
   })
 
-  it('maps a mouse wheel to the overflowing provider switcher', async () => {
-    const api = createApi()
-    let renderer!: ReactTestRenderer
-    await act(async () => {
-      renderer = create(createElement(TrayProviderQuotaPopover, { api }))
-    })
-
-    const switcher = renderer.root.findByProps({ className: 'tray-quota-switcher' })
-    const scrollTarget = {
-      clientWidth: 400,
-      scrollLeft: 20,
-      scrollWidth: 800
-    }
-    const preventDefault = vi.fn()
-    switcher.props.onWheel({
-      currentTarget: scrollTarget,
-      deltaMode: 1,
-      deltaX: 0,
-      deltaY: 3,
-      preventDefault
-    })
-
-    expect(scrollTarget.scrollLeft).toBe(92)
-    expect(preventDefault).not.toHaveBeenCalled()
-
-    scrollTarget.scrollWidth = scrollTarget.clientWidth
-    switcher.props.onWheel({
-      currentTarget: scrollTarget,
-      deltaMode: 0,
-      deltaX: 0,
-      deltaY: 80,
-      preventDefault
-    })
-    expect(scrollTarget.scrollLeft).toBe(92)
-    expect(preventDefault).not.toHaveBeenCalled()
-    await act(async () => renderer.unmount())
-  })
-
   it('retains the last quota data when a refresh fails', async () => {
     let publishRefresh: (() => void) | undefined
     const list = vi.fn()
@@ -262,7 +231,7 @@ describe('TrayProviderQuotaPopover', () => {
 
     const html = JSON.stringify(renderer.toJSON())
     expect(html).toContain('provider offline')
-    expect(html).toContain('Weekly')
+    expect(renderer.root.findAllByProps({ className: 'kq-ring' })).toHaveLength(1)
     await act(async () => renderer.unmount())
   })
 
@@ -285,19 +254,13 @@ describe('TrayProviderQuotaPopover', () => {
     await act(async () => renderer.unmount())
   })
 
-  it('keeps providers in one horizontal row and quota details independently scrollable', async () => {
+  it('keeps the quota list independently scrollable above a fixed footer', async () => {
     const css = await readStylesheetBundle(new URL('../../styles/tray-provider-quota.css', import.meta.url))
 
-    expect(css).toMatch(/\.tray-quota-tabs \{[\s\S]*display: flex/)
-    expect(css).toMatch(/\.tray-provider-tab \{[\s\S]*flex: 1 0 56px/)
-    expect(css).toMatch(/\.tray-quota-switcher \{[\s\S]*overflow-x: auto/)
-    expect(css).toMatch(/\.tray-quota-switcher \{[\s\S]*overflow-y: hidden/)
-    expect(css).toMatch(/\.tray-quota-switcher \{[\s\S]*scrollbar-width: thin/)
-    expect(css).toMatch(/\.tray-quota-switcher::-webkit-scrollbar \{[\s\S]*height: 5px/)
     expect(css).toMatch(/\.tray-quota-content \{[\s\S]*min-height: 0;[\s\S]*overflow-y: auto/)
     expect(css).toMatch(/\.tray-quota-content::-webkit-scrollbar \{[\s\S]*width: 8px/)
     expect(css).toMatch(/\.tray-quota-footer \{[\s\S]*flex: none/)
-    expect(css).not.toMatch(/\.tray-quota-switcher::-webkit-scrollbar \{[^}]*display: none/)
+    expect(css).toMatch(/\.tray-quota-popover \{[\s\S]*--kq-text: var\(--tray-text\)/)
     expect(css).toContain(':root[data-platform="win32"] .tray-quota-popover')
     expect(css).toContain('@media (forced-colors: active)')
   })

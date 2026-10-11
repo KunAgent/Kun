@@ -1,3 +1,6 @@
+import { positiveInteger, nonnegativeInteger } from './kun-mapper-numbers'
+export { positiveInteger, nonnegativeInteger } from './kun-mapper-numbers'
+export { contextSnapshotFromCore } from './kun-context-snapshot'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -6,12 +9,12 @@ import type {
   ComponentPrototypeMetadata,
   DelegatedRuntimeState,
   GeneratedFileReference,
+  HarnessRuntimeState,
   NormalizedThread,
   ReviewBlock,
   ReviewEventPayload,
   ReviewOutput,
   ReviewTarget,
-  RequestContextSnapshot,
   RuntimeChildMetadata,
   RuntimeErrorEventPayload,
   RuntimeStatusEventPayload,
@@ -28,6 +31,12 @@ import type {
   UserInputQuestion
 } from './types'
 import { normalizeKunRuntimeEvent, type KunEventNormalizerDeps } from './kun-event-normalizer'
+import {
+  capabilitiesV2FromLegacy,
+  isHarnessCapabilities,
+  LEGACY_DERIVATION_BASE
+} from '@shared/harness-capabilities'
+import { ADE_DELEGATED_TRANSPORTS } from '@shared/ade-harnesses'
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
 import { applyClientUserMessageSourceMeta } from '@shared/background-shell-notice'
@@ -113,17 +122,6 @@ export function normalizeUserInputQuestion(question: unknown): UserInputQuestion
   }
 }
 
-export function positiveInteger(value: unknown): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
-  const normalized = Math.floor(value)
-  return normalized > 0 ? normalized : undefined
-}
-
-export function nonnegativeInteger(value: unknown): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
-  const normalized = Math.floor(value)
-  return normalized >= 0 ? normalized : undefined
-}
 
 export function normalizeUserInputOption(option: unknown): UserInputQuestion['options'][number] | null {
   if (!option || typeof option !== 'object') return null
@@ -211,65 +209,6 @@ export function nullableFinite(value: number | null | undefined): number | null 
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-export function contextSnapshotFromCore(event: CoreRuntimeEventJson): RequestContextSnapshot | null {
-  const threadId = event.threadId?.trim()
-  const model = event.model?.trim()
-  const contextWindowTokens = positiveInteger(event.contextWindowTokens)
-  const softThresholdTokens = positiveInteger(event.softThresholdTokens)
-  const hardThresholdTokens = positiveInteger(event.hardThresholdTokens)
-  const estimatedInputTokens = nonnegativeInteger(event.estimatedInputTokens)
-  const stepIndex = nonnegativeInteger(event.stepIndex)
-  const toolCount = nonnegativeInteger(event.toolCount)
-  const rawBreakdown = event.breakdown
-  const tools = nonnegativeInteger(rawBreakdown?.tools)
-  const system = nonnegativeInteger(rawBreakdown?.system)
-  const skills = nonnegativeInteger(rawBreakdown?.skills)
-  const messages = nonnegativeInteger(rawBreakdown?.messages)
-  const other = nonnegativeInteger(rawBreakdown?.other)
-  if (
-    !threadId ||
-    !model ||
-    contextWindowTokens === undefined ||
-    softThresholdTokens === undefined ||
-    hardThresholdTokens === undefined ||
-    estimatedInputTokens === undefined ||
-    stepIndex === undefined ||
-    toolCount === undefined ||
-    tools === undefined ||
-    system === undefined ||
-    skills === undefined ||
-    messages === undefined ||
-    other === undefined
-  ) {
-    return null
-  }
-  if (tools + system + skills + messages + other !== estimatedInputTokens) return null
-  return {
-    threadId,
-    ...(event.turnId?.trim() ? { turnId: event.turnId.trim() } : {}),
-    model,
-    ...(event.providerId?.trim() ? { providerId: event.providerId.trim() } : {}),
-    stepIndex,
-    contextWindowTokens,
-    softThresholdTokens,
-    hardThresholdTokens,
-    estimatedInputTokens,
-    breakdown: { tools, system, skills, messages, other },
-    toolCount,
-    activeSkillIds: Array.isArray(event.activeSkillIds)
-      ? event.activeSkillIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
-          .map((id) => id.trim())
-      : [],
-    ...(event.contextManagement === 'kun-managed' || event.contextManagement === 'sdk-managed'
-      ? { contextManagement: event.contextManagement }
-      : {}),
-    ...(event.nativeHistory === 'known' ||
-      event.nativeHistory === 'unknown' ||
-      event.nativeHistory === 'none'
-      ? { nativeHistory: event.nativeHistory }
-      : {})
-  }
-}
 
 export function delegatedRuntimeFromCore(event: CoreRuntimeEventJson): DelegatedRuntimeState | null {
   const threadId = event.threadId?.trim()
@@ -280,11 +219,8 @@ export function delegatedRuntimeFromCore(event: CoreRuntimeEventJson): Delegated
   if (
     !threadId ||
     !providerId ||
-    (
-      providerKind !== 'agent-sdk' &&
-      providerKind !== 'cursor-sdk' &&
-      providerKind !== 'antigravity-cli'
-    ) ||
+    !providerKind ||
+    !ADE_DELEGATED_TRANSPORTS.has(providerKind) ||
     (phase !== 'portable' && phase !== 'resumed' && phase !== 'rebased') ||
     !capabilities ||
     ![
@@ -298,11 +234,26 @@ export function delegatedRuntimeFromCore(event: CoreRuntimeEventJson): Delegated
     ].every((value) => typeof value === 'boolean')
   ) return null
   const reason = event.reason
+  const legacyCapabilities = {
+    nativeResume: capabilities.nativeResume!,
+    structuredStreaming: capabilities.structuredStreaming!,
+    kunTools: capabilities.kunTools!,
+    externalApproval: capabilities.externalApproval!,
+    liveSteering: capabilities.liveSteering!,
+    nativeContextTelemetry: capabilities.nativeContextTelemetry!,
+    fork: capabilities.fork!
+  }
+  const capabilitiesV2 = isHarnessCapabilities(event.capabilitiesV2)
+    ? event.capabilitiesV2
+    : capabilitiesV2FromLegacy(legacyCapabilities, LEGACY_DERIVATION_BASE)
+  const harnessId = event.harnessId?.trim()
   return {
     threadId,
     ...(event.turnId?.trim() ? { turnId: event.turnId.trim() } : {}),
     providerKind,
     providerId,
+    ...(harnessId ? { harnessId } : {}),
+    capabilitiesV2,
     phase,
     ...(reason === 'new' ||
       reason === 'route_changed' ||
@@ -311,15 +262,20 @@ export function delegatedRuntimeFromCore(event: CoreRuntimeEventJson): Delegated
       reason === 'native_state_unavailable'
       ? { reason }
       : {}),
-    capabilities: {
-      nativeResume: capabilities.nativeResume!,
-      structuredStreaming: capabilities.structuredStreaming!,
-      kunTools: capabilities.kunTools!,
-      externalApproval: capabilities.externalApproval!,
-      liveSteering: capabilities.liveSteering!,
-      nativeContextTelemetry: capabilities.nativeContextTelemetry!,
-      fork: capabilities.fork!
-    }
+    capabilities: legacyCapabilities
+  }
+}
+
+/** `harness_runtime` events carry native-loop harness state (kun today). */
+export function harnessRuntimeFromCore(event: CoreRuntimeEventJson): HarnessRuntimeState | null {
+  const threadId = event.threadId?.trim()
+  const harnessId = event.harnessId?.trim()
+  if (!threadId || !harnessId || !isHarnessCapabilities(event.capabilitiesV2)) return null
+  return {
+    threadId,
+    ...(event.turnId?.trim() ? { turnId: event.turnId.trim() } : {}),
+    harnessId,
+    capabilitiesV2: event.capabilitiesV2
   }
 }
 
@@ -350,7 +306,8 @@ export function userMessageEventFromItem(item: CoreTurnItemJson): UserMessageEve
 
 export function assistantTextBlockFromItem(item: CoreTurnItemJson): ChatBlock | null {
   if (!item.text?.trim()) return null
-  return { kind: 'assistant', id: item.id, turnId: item.turnId, createdAt: itemCreatedAt(item), text: item.text }
+  return { kind: 'assistant', id: item.id, turnId: item.turnId, createdAt: itemCreatedAt(item), text: item.text,
+    ...(item.renderMode ? { renderMode: item.renderMode } : {}) }
 }
 
 export function reasoningBlockFromItem(item: CoreTurnItemJson): ChatBlock | null {
@@ -360,7 +317,8 @@ export function reasoningBlockFromItem(item: CoreTurnItemJson): ChatBlock | null
     id: item.id,
     turnId: item.turnId,
     createdAt: itemCreatedAt(item),
-    text: item.text
+    text: item.text,
+    ...(item.renderMode ? { renderMode: item.renderMode } : {})
   }
 }
 

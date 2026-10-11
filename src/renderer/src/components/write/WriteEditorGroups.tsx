@@ -22,6 +22,7 @@ import {
 } from '../../write/write-editor-layout'
 import { WriteEditorGroupContent } from './WriteEditorGroupContent'
 import { WriteEditorTabBar } from './WriteEditorTabBar'
+import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { PaperViewSurface } from '../paper/PaperViewSurface'
 import { WorkWhiteboardTitleDialog } from './WorkWhiteboardTitleDialog'
 
@@ -152,11 +153,11 @@ export function WriteEditorGroups({
   const [pendingWhiteboardGroupId, setPendingWhiteboardGroupId] = useState<'primary' | 'secondary' | null>(null)
   const [creatingWhiteboard, setCreatingWhiteboard] = useState(false)
   const splitActive = isWriteEditorLayoutSplit(editorLayout)
-  const workSurface = useWriteWorkspaceStore((state) => state.workSurface)
-  // Paper mode: a full-page view (library / discover) owns the whole center;
-  // the other group (the paper's NOTES) stays mounted but hidden until a
-  // reader tab is focused again.
-  const expandedGroupId = workSurface === 'papers' && splitActive && activePaperViewId(editorLayout)
+  const remoteMobile = useRemoteMobileLayout()
+  // A full-page view (library / discover) owns the whole center; the other
+  // group (a paper's NOTES) stays mounted but hidden until a reader or
+  // document tab is focused again.
+  const expandedGroupId = splitActive && activePaperViewId(editorLayout)
     ? editorLayout.focusedGroupId
     : null
   const quickOpenFiles = useMemo(() => {
@@ -275,11 +276,11 @@ export function WriteEditorGroups({
               onCloseGroup={() => closeEditorGroup(group.id)}
               hasSecondGroup={splitActive}
               assistantOpen={assistantOpen}
-              showAssistantToggle={
+              showAssistantToggle={remoteMobile && (
                 !splitActive ||
                 (editorLayout.orientation === 'horizontal'
                   ? group.id === 'secondary'
-                  : group.id === 'primary')
+                  : group.id === 'primary'))
               }
               onToggleAssistant={() => setAssistantOpen(!assistantOpen)}
             />

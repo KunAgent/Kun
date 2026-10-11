@@ -11,7 +11,7 @@ import {
 } from './settings-section-providers-profile'
 
 describe('explicit built-in provider deletion', () => {
-  it.each(['deepseek', 'opencode-free'])('keeps %s removed across saves and reloads', (id) => {
+  it.each(['deepseek'])('keeps %s removed across saves and reloads', (id) => {
     const current = defaultModelProviderSettings()
     current.apiKey = 'legacy-default-key'
     const remaining = current.providers.filter((provider) => provider.id !== id)
@@ -31,19 +31,19 @@ describe('explicit built-in provider deletion', () => {
     const patch = modelProvidersSettingsPatch({ provider: current, providers: [] })
     const saved = mergeModelProviderSettings(current, patch.provider)
     expect(normalizeModelProviderSettings(JSON.parse(JSON.stringify(saved))).providers).toEqual([])
-    expect(normalizeModelProviderSettings(undefined).providers).toHaveLength(2)
-    expect(normalizeModelProviderSettings({ providers: [] }).providers).toHaveLength(2)
+    expect(normalizeModelProviderSettings(undefined).providers).toHaveLength(1)
+    expect(normalizeModelProviderSettings({ providers: [] }).providers).toHaveLength(1)
   })
 
-  it.each(['deepseek', 'opencode-free'])('allows %s to be explicitly added again', (id) => {
+  it.each(['deepseek'])('allows %s to be explicitly added again', (id) => {
     const current = normalizeModelProviderSettings({
-      providers: [], excludedBuiltinProviderIds: ['deepseek', 'opencode-free']
+      providers: [], excludedBuiltinProviderIds: ['deepseek']
     })
     const added = defaultModelProviderSettings().providers.find((provider) => provider.id === id)!
     const patch = modelProvidersSettingsPatch({ provider: current, providers: [added] })
     const restored = mergeModelProviderSettings(current, patch.provider)
     expect(restored.providers.map((provider) => provider.id)).toEqual([id])
-    expect(restored.excludedBuiltinProviderIds).not.toContain(id)
+    expect(restored.excludedBuiltinProviderIds ?? []).not.toContain(id)
   })
 
   it.each(['deepseek', ''])('clears the last provider and legacy credentials for selection "%s"', (providerId) => {

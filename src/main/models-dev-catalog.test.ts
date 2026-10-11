@@ -212,7 +212,7 @@ describe('resolveModelsDevProvider', () => {
     ['zai-coding-plan', 'https://example.invalid/custom', 'zai-coding-plan', 'catalog'],
     ['kimi-code', 'https://api.kimi.com/coding/v1', 'kimi-for-coding', 'catalog'],
     ['opencode-go', 'https://opencode.ai/zen/go/v1', 'opencode-go', 'catalog'],
-    ['opencode-free', 'https://opencode.ai/zen/v1', 'opencode', 'catalog'],
+    ['custom-zen', 'https://opencode.ai/zen/v1', 'opencode', 'catalog'],
     ['moonshot-cn', 'https://api.moonshot.cn/v1', 'moonshotai-cn', 'catalog'],
     ['moonshot-global', 'https://api.moonshot.ai/v1', 'moonshotai', 'catalog'],
     ['xiaomi', 'https://api.xiaomimimo.com/v1', 'xiaomi', 'catalog'],
@@ -298,7 +298,7 @@ describe('ModelsDevCatalogService', () => {
     const fetcher = vi.fn(async () => new Response(catalogBody(), { status: 200 }))
     const service = new ModelsDevCatalogService(fetcher)
     await expect(service.fetch({
-      providerId: 'opencode-free',
+      providerId: 'custom-zen',
       baseUrl: 'https://opencode.ai/zen/v1'
     })).resolves.toMatchObject({
       status: 'ok',
@@ -384,7 +384,7 @@ describe('ModelsDevCatalogService', () => {
       baseUrl: 'https://api.deepseek.com'
     }, proxySettings())
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: 'ok',
       providerKey: 'deepseek',
       providerName: 'DeepSeek',
@@ -404,6 +404,7 @@ describe('ModelsDevCatalogService', () => {
         maxOutputTokens: 16_000
       }]
     })
+    if (result.status === 'ok') expect(Number.isFinite(Date.parse(result.models[0].observedAt ?? ''))).toBe(true)
     expect(fetcher).toHaveBeenCalledWith(
       'https://models.dev/api.json',
       expect.objectContaining({

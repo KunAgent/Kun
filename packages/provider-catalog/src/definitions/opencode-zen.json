@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "id": "opencode-zen",
+  "name": "OpenCode Zen",
+  "origin": "relay",
+  "credentialRequirement": "optional",
+  "baseUrl": "https://opencode.ai/zen/v1",
+  "endpoints": {
+    "chat_completions": "https://opencode.ai/zen/v1",
+    "responses": "https://opencode.ai/zen/v1",
+    "messages": "https://opencode.ai/zen"
+  },
+  "docsUrl": "https://opencode.ai/docs/zen",
+  "credentialUrl": "https://opencode.ai/auth"
+}

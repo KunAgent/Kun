@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { RuntimeFlavorSchema, type RuntimeFlavor } from '../contracts/runtime-flavor.js'
 
 export const RESOURCE_LEASE_TTL_MS = 10_000
+/** How often a lease holder renews, or a waiting instance retries acquisition. */
+export const RESOURCE_LEASE_TICK_MS = 3_000
 export const RESOURCE_COMMIT_TTL_MS = 10_000
 
 export type ManagerResourceFence = {

@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { roomsRequest, type RoomUserInput } from './rooms-client'
-import { useRoomMutation } from './useRoomResource'
+import './rooms-choice.css'
+
+type Answers = ReturnType<typeof roomInputAnswers>
 
 export function roomInputAnswers(
   input: RoomUserInput,
@@ -10,10 +12,9 @@ export function roomInputAnswers(
   freeform: Record<string, string>
 ) {
   return input.questions.map((question) => {
-    const values = [
-      ...(selected[question.id] ?? []),
-      ...(freeform[question.id]?.trim() ? [freeform[question.id].trim()] : [])
-    ]
+    const typed = freeform[question.id]?.trim()
+    if (typed) return { id: question.id, label: 'Other', value: typed }
+    const values = selected[question.id] ?? []
     return {
       id: question.id,
       label: values.join(', '),
@@ -29,67 +30,110 @@ export function otherUserInputAnswers(input: RoomUserInput, text: string) {
   return input.questions.map((question) => ({ id: question.id, label: 'Other', value }))
 }
 
-export async function submitRoomUserInput(inputId: string, payload: { cancelled: true } | { answers: ReturnType<typeof roomInputAnswers> }) {
+export async function submitRoomUserInput(inputId: string, payload: { cancelled: true } | { answers: Answers }) {
   return roomsRequest(`/v1/user-inputs/${encodeURIComponent(inputId)}`, 'POST', payload)
 }
 
 export function RoomChoiceCard({
-  input, title, setupPending, onUpdated, onSkipSetup
+  input, title, setupPending, onUpdated, onSkipSetup, resolvedAnswer
 }: {
   input?: RoomUserInput
   title?: string
   setupPending?: boolean
   onUpdated: () => Promise<void>
   onSkipSetup?: () => Promise<void>
+  resolvedAnswer?: string
 }) {
   const { t } = useTranslation('common')
   const [selected, setSelected] = useState<Record<string, string[]>>({})
   const [freeform, setFreeform] = useState<Record<string, string>>({})
-  const mutation = useRoomMutation(onUpdated)
-  const prompt = input?.prompt || title || ''
-  if (!input) {
-    return <section className="direct-choice-card is-answered" aria-label={prompt}>
-      <p>{prompt}</p><Check size={16} aria-hidden="true" />
-    </section>
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<{ cancelled: boolean; summary: string } | null>(null)
+  const displayResult = result ?? (resolvedAnswer ? { cancelled: false, summary: resolvedAnswer } : null)
+  const locked = useRef(false)
+  const prompt = input?.prompt || input?.questions[0]?.question || title || ''
+  const questions = input?.questions ?? []
+  const valid = questions.every((question) => {
+    if (freeform[question.id]?.trim()) return true
+    const count = selected[question.id]?.length ?? 0
+    return count >= (question.minSelections ?? 1) && count <= (question.maxSelections ??
+      (question.selectionMode === 'multiple' ? question.options.length : 1))
+  })
+
+  const submit = async (answers?: Answers, cancelled = false) => {
+    if (!input || locked.current) return
+    locked.current = true
+    setBusy(true)
+    setError('')
+    try {
+      const submittedAnswers = cancelled ? undefined : answers ??
+        (questions.length ? roomInputAnswers(input, selected, freeform) : otherUserInputAnswers(input, freeform[input.id] ?? ''))
+      const payload = cancelled ? { cancelled: true as const } : { answers: submittedAnswers! }
+      await submitRoomUserInput(input.id, payload)
+      const summary = submittedAnswers?.map((answer) => answer.value).filter(Boolean).join(' · ') ?? ''
+      setResult({ cancelled, summary })
+      // The answer is already recorded. A refresh error must never invite a second submission.
+      void onUpdated().catch(() => undefined)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      locked.current = false
+      setBusy(false)
+    }
   }
-  const question = input.questions[0]
-  const answers = roomInputAnswers(input, selected, freeform)
-  const valid = input.questions.every((item, index) => Boolean(answers[index]?.value) &&
-    ((selected[item.id]?.length ?? 0) + (freeform[item.id]?.trim() ? 1 : 0)) >= (item.minSelections ?? 1))
-  const submit = (cancelled = false, extra?: { answers: ReturnType<typeof roomInputAnswers> }) => {
-    const custom = (freeform[question?.id ?? input.id] ?? '').trim()
-    const payload = extra?.answers ?? (custom ? otherUserInputAnswers(input, custom) : answers)
-    return mutation.run(`${input.id}:${cancelled ? 'cancel' : JSON.stringify(payload)}`,
-      () => submitRoomUserInput(input.id, cancelled ? { cancelled: true } : { answers: payload }))
+
+  const choose = (question: RoomUserInput['questions'][number], label: string) => {
+    const current = selected[question.id] ?? []
+    const next = question.selectionMode === 'multiple'
+      ? current.includes(label) ? current.filter((value) => value !== label) : [...current, label]
+      : [label]
+    setSelected((previous) => ({ ...previous, [question.id]: next }))
+    setFreeform((previous) => ({ ...previous, [question.id]: '' }))
+    if (questions.length === 1 && question.selectionMode !== 'multiple') {
+      void submit(roomInputAnswers(input!, { [question.id]: next }, {}))
+    }
   }
-  const pick = (questionId: string, label: string) => {
-    const next = { [questionId]: [label] }
-    const rest = Object.fromEntries(input.questions.filter((item) => item.id !== questionId).map((item) => [item.id, selected[item.id] ?? []]))
-    void submit(false, { answers: roomInputAnswers(input, { ...rest, ...next }, {}) })
-  }
-  return <section className="direct-choice-card">
+
+  if (!input || displayResult) return <section className="direct-choice-card is-answered" aria-label={prompt}>
+    <div><p>{prompt}</p><small>{displayResult?.cancelled ? t('directChoiceCancelled') : displayResult?.summary ||
+      (displayResult ? t('directChoiceResolved') : t('directChoiceClosed'))}</small></div>
+    {displayResult?.cancelled ? <X size={16} aria-hidden="true" /> : displayResult ? <Check size={16} aria-hidden="true" /> : null}
+  </section>
+
+  return <section className="direct-choice-card" aria-label={prompt}>
     <header>
-      <strong>{question?.question || prompt}</strong>
-      <button type="button" className="direct-choice-close" aria-label={t('directChoiceClose')} disabled={mutation.busy}
-        onClick={() => void submit(true)}><X size={16} /></button>
+      <strong>{prompt}</strong>
+      <button type="button" className="direct-choice-close" aria-label={t('directChoiceClose')} disabled={busy}
+        onClick={() => void submit(undefined, true)}><X size={16} /></button>
     </header>
-    {question?.options.map((option, index) =>
-      <button type="button" key={option.label} className="direct-choice-option" disabled={mutation.busy}
-        onClick={() => pick(question.id, option.label)}>
-        <span>{String.fromCharCode(65 + index)}</span>{option.label}
-      </button>)}
-    <form onSubmit={(event) => { event.preventDefault(); if (valid) void submit() }}>
-      <input value={freeform[question?.id ?? input.id] ?? ''} placeholder={t('directChoiceOther')}
-        aria-label={t('directChoiceOther')} disabled={mutation.busy}
-        onChange={(event) => {
-          const id = question?.id ?? input.id
-          setFreeform({ [id]: event.target.value })
-          setSelected({ [id]: [] })
+    {questions.map((question) => <div className="direct-choice-question" key={question.id}>
+      {question.question && question.question !== prompt ? <strong>{question.question}</strong> : null}
+      {question.options.map((option) => {
+        const active = (selected[question.id] ?? []).includes(option.label)
+        const full = question.selectionMode === 'multiple' && !active &&
+          (selected[question.id]?.length ?? 0) >= (question.maxSelections ?? question.options.length)
+        return <button type="button" key={option.label} className="direct-choice-option" aria-pressed={active}
+          disabled={busy || full} onClick={() => choose(question, option.label)}>
+          <span className="direct-choice-indicator" aria-hidden="true">{active ? <Check size={13} /> : null}</span>
+          <span><b>{option.label}</b>{option.description ? <small>{option.description}</small> : null}</span>
+        </button>
+      })}
+      <input value={freeform[question.id] ?? ''} placeholder={t('directChoiceOther')}
+        aria-label={question.question ? `${question.question}: ${t('directChoiceOther')}` : t('directChoiceOther')}
+        disabled={busy} onChange={(event) => {
+          setFreeform((previous) => ({ ...previous, [question.id]: event.target.value }))
+          setSelected((previous) => ({ ...previous, [question.id]: [] }))
         }} />
-      {freeform[question?.id ?? input.id]?.trim() ? <button type="submit" disabled={mutation.busy || !valid}>{t('roomsSubmitAnswer')}</button> : null}
-    </form>
-    {setupPending && onSkipSetup ? <button type="button" className="direct-choice-skip" disabled={mutation.busy}
+    </div>)}
+    {!questions.length ? <input value={freeform[input.id] ?? ''} placeholder={t('directChoiceOther')}
+      aria-label={t('directChoiceOther')} disabled={busy}
+      onChange={(event) => setFreeform({ [input.id]: event.target.value })} /> : null}
+    {(questions.length !== 1 || questions[0].selectionMode === 'multiple' || Boolean(freeform[questions[0].id]?.trim())) ?
+      <button type="button" className="direct-choice-submit" disabled={busy || (questions.length ? !valid : !freeform[input.id]?.trim())}
+        onClick={() => void submit()}>{t('roomsSubmitAnswer')}</button> : null}
+    {setupPending && onSkipSetup ? <button type="button" className="direct-choice-skip" disabled={busy}
       onClick={() => void onSkipSetup()}>{t('directSkipSetup')}</button> : null}
-    {mutation.error ? <p role="alert">{mutation.error}</p> : null}
+    {error ? <p role="alert">{error}</p> : null}
   </section>
 }

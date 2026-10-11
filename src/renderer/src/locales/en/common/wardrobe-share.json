@@ -1,0 +1,31 @@
+{
+  "wardrobeShare": {
+    "title": "Create share image",
+    "subtitle": "Bring your current Kun and invite a friend.",
+    "preview": "Invite image preview",
+    "style": "Style",
+    "night": "Night sky",
+    "sunset": "Sunset",
+    "paper": "Paper",
+    "size": "Size",
+    "portrait": "Portrait 3:4",
+    "square": "Square 1:1",
+    "showCode": "Show invite code",
+    "privacy": "No name, email or profile photo is included. The QR code still works when the invite code is hidden.",
+    "save": "Save image",
+    "copyImage": "Copy image",
+    "copyLink": "Copy link",
+    "generating": "Creating image…",
+    "working": "Working…",
+    "saved": "Image saved",
+    "copied": "Image copied. Paste it to a friend.",
+    "linkCopied": "Invite link copied",
+    "fallback": "Image copying is unavailable here. Switched to saving.",
+    "failed": "Could not finish. Please try again.",
+    "missing": "Your invite code is unavailable. Please retry.",
+    "retry": "Retry",
+    "reveal": "Show in folder",
+    "close": "Close",
+    "hold": "Touch and hold the image to save it."
+  }
+}

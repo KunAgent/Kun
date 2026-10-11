@@ -1,3 +1,4 @@
+import type { MemoryInjectionReceipt } from '../memory/memory-injection-receipt.js'
 import { z } from 'zod'
 import type { Turn } from '../contracts/turns.js'
 import { isPublicTurnItem } from '../contracts/items.js'
@@ -92,16 +93,16 @@ export async function roomRunDetail(deps: RoomRuntimeDeps, roomId: string, runId
   const seq = current.snapshotSeq
   const trigger = current.run.triggerMessageId
     ? await deps.store.get<RoomMessage>('message', current.run.triggerMessageId) : null
-  const admittedContext = current.run.threadId ? await deps.store.get<{ prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }>('context', current.run.id + '-input') : null
+  const admittedContext = current.run.threadId ? await deps.store.get<{ prompt?: string; attachmentIds?: string[]; memoryIds?: string[]; memoryReceipt?: MemoryInjectionReceipt }>('context', current.run.id + '-input') : null
   const context = admittedContext ?? (current.run.contextId
-    ? await deps.store.get<{ prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }>('context', current.run.contextId) : null)
+    ? await deps.store.get<{ prompt?: string; attachmentIds?: string[]; memoryIds?: string[]; memoryReceipt?: MemoryInjectionReceipt }>('context', current.run.contextId) : null)
   return { run: publicRoomRun(current.run), availability: current.availability,
     ...(current.workspaceRoot ? { workspaceRoot: current.workspaceRoot } : {}),
     trigger: trigger?.roomId === roomId ? { ...trigger.value, messageSeq: trigger.seq } : undefined,
     context: current.run.id.startsWith('legacy-') && current.turn
       ? { prompt: current.turn.prompt.slice(0, 64000), attachmentIds: current.turn.attachmentIds?.slice(0, 20) }
       : context?.roomId === roomId ? { prompt: context.value.prompt?.slice(0, 64000),
-        attachmentIds: context.value.attachmentIds?.slice(0, 20), memoryIds: context.value.memoryIds?.slice(0, 8) } : undefined,
+        attachmentIds: context.value.attachmentIds?.slice(0, 20), memoryIds: context.value.memoryIds?.slice(0, 8), memoryReceipt: context.value.memoryReceipt } : undefined,
     eventsCursor: encodeRunCursor({ v: 1, id: runId, revision: current.row.revision, seq,
       availability: current.availability.status }) }
 }

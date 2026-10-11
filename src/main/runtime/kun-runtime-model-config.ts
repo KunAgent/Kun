@@ -1,12 +1,13 @@
 import {
   defaultKunTokenEconomySettings,
   getModelProviderSettings,
-  projectExecutableModelRoutePools,
+  projectRuntimeModelRoutePools,
   projectFailoverGroupsForRuntime,
   resolveKunRuntimeSettings,
   resolveModelProviderPresetSource,
   resolveProviderProxyUrl,
   type AppSettingsV1,
+  type KunHarnessDefaultsEntryV1,
   type KunRuntimeSettingsV1,
   type ModelProviderModelProfileV1,
   type ModelProviderProfileV1
@@ -90,6 +91,10 @@ export function providersConfigForRuntime(
         : {}),
       ...(provider.endpointFormat ? { endpointFormat: provider.endpointFormat } : {}),
       ...(provider.endpoints ? { endpoints: provider.endpoints } : {}),
+      ...(provider.balanceUrl ? { balanceUrl: provider.balanceUrl } : {}),
+      ...(provider.balanceUrl && provider.balanceUnit ? { balanceUnit: provider.balanceUnit } : {}),
+      ...(provider.balanceUrl && provider.balanceKeyHeader ? { balanceKeyHeader: provider.balanceKeyHeader } : {}),
+      ...(provider.balanceUrl && provider.balanceHost ? { balanceHost: provider.balanceHost } : {}),
       models: [...provider.models],
       modelCapabilities: modelCapabilitiesForProviderConfig(provider),
       ...(selectedModel ? { selectedModel } : {}),
@@ -108,8 +113,11 @@ function modelCapabilitiesForProviderConfig(
   provider: Pick<ModelProviderProfileV1, 'models' | 'modelProfiles'>
 ): Record<string, unknown> {
   return Object.fromEntries(provider.models.flatMap((model) => {
-    const profile = provider.modelProfiles[model] ??
-      provider.modelProfiles[model.trim().toLowerCase()]
+    // A provider-wide `*` profile is materialized for models without their own.
+    const own = provider.modelProfiles[model] ?? provider.modelProfiles[model.trim().toLowerCase()]
+    const wildcard = provider.modelProfiles['*']
+    // Field-level fallback: a model's own facts win, the `*` profile fills the rest.
+    const profile = own && wildcard ? { ...wildcard, ...own } : own ?? wildcard
     if (!profile) return []
     return [[model, {
       id: model,
@@ -118,6 +126,10 @@ function modelCapabilitiesForProviderConfig(
       inputModalities: [...profile.inputModalities],
       outputModalities: [...profile.outputModalities],
       supportsToolCalling: profile.supportsToolCalling,
+      ...(typeof profile.parallelTools === 'boolean' ? { parallelTools: profile.parallelTools } : {}),
+      ...(typeof profile.streaming === 'boolean' ? { streaming: profile.streaming } : {}),
+      ...(typeof profile.structuredOutput === 'boolean' ? { structuredOutput: profile.structuredOutput } : {}),
+      ...(profile.evidence ? { evidence: profile.evidence } : {}),
       messageParts: [...profile.messageParts],
       ...(profile.reasoning
         ? {
@@ -131,14 +143,15 @@ function modelCapabilitiesForProviderConfig(
       ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
       ...(profile.serviceTiers ? { serviceTiers: [...profile.serviceTiers] } : {}),
       ...(profile.endpointFormat ? { endpointFormat: profile.endpointFormat } : {}),
-      ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {})
+      ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {}),
+      ...(profile.wireModelId ? { wireModelId: profile.wireModelId } : {})
     }]]
   }))
 }
 
 export function routePoolsConfigForRuntime(settings: AppSettingsV1) {
   const providerSettings = getModelProviderSettings(settings)
-  return projectExecutableModelRoutePools(providerSettings)
+  return projectRuntimeModelRoutePools(providerSettings)
 }
 
 export function providerFailoverConfigForRuntime(settings: AppSettingsV1) {
@@ -147,7 +160,11 @@ export function providerFailoverConfigForRuntime(settings: AppSettingsV1) {
 
 export function localModelGatewayConfigForRuntime(settings: AppSettingsV1) {
   const localGateway = getModelProviderSettings(settings).localGateway
-  return { enabled: localGateway.enabled, exposeProviderModels: localGateway.exposeProviderModels }
+  return { enabled: localGateway.enabled, exposeProviderModels: localGateway.exposeProviderModels,
+    ...(localGateway.middleware?.length ? { middleware: localGateway.middleware } : {}),
+    ...(localGateway.extensionExports?.length ? { extensionExports: localGateway.extensionExports } : {}),
+    ...(localGateway.experimentalSubscriptionExports?.length ? { experimentalSubscriptionExports: localGateway.experimentalSubscriptionExports } : {}),
+    ...(localGateway.advertiseDiscovery === false ? { advertiseDiscovery: false } : {}) }
 }
 
 export function tokenEconomyConfigForRuntime(
@@ -183,6 +200,129 @@ export function toolOutputLimitsConfigForRuntime(
   limits: Pick<KunRuntimeSettingsV1, 'toolOutputLimits'>['toolOutputLimits'] | undefined
 ): Record<string, unknown> {
   return { maxLines: limits?.maxLines, maxBytes: limits?.maxBytes }
+}
+
+const sortedRecord = (value: Record<string, string> | undefined): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b))
+  )
+
+/**
+ * `defaults[harnessId]`: fixed field order inside each entry so
+ * identical settings serialize byte-identically.
+ */
+const sortedDefaultsRecord = (
+  value: Record<string, KunHarnessDefaultsEntryV1> | undefined
+): Record<string, KunHarnessDefaultsEntryV1> =>
+  Object.fromEntries(
+    Object.entries(value ?? {})
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, entry]) => [
+        id,
+        {
+          ...(entry.credentialMode ? { credentialMode: entry.credentialMode } : {}),
+          ...(entry.providerId ? { providerId: entry.providerId } : {}),
+          ...(entry.model ? { model: entry.model } : {}),
+          ...(entry.permissionMode ? { permissionMode: entry.permissionMode } : {}),
+          ...(entry.isolation ? { isolation: entry.isolation } : {})
+        }
+      ])
+  )
+
+/**
+ * `harnesses` config section. Pure and byte-stable: arrays sort by id and
+ * record keys (including `providers`) sort alphabetically so identical settings never rewrite
+ * config.json (a moving config would retrigger runtime syncs forever).
+ */
+export function harnessesConfigForRuntime(
+  harnesses: Pick<KunRuntimeSettingsV1, 'harnesses'>['harnesses'] | undefined
+): Record<string, unknown> {
+  const providers = Object.fromEntries(Object.entries(harnesses?.providers ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, entry]) => [id, {
+      ...(entry.extends ? { extends: entry.extends } : {}),
+      ...(entry.label ? { label: entry.label } : {}),
+      ...(entry.command ? { command: entry.command } : {}),
+      ...(entry.args ? { args: { mode: entry.args.mode, values: [...entry.args.values] } } : {}),
+      ...(entry.env ? { env: sortedRecord(entry.env) } : {}),
+      ...(entry.secretEnv?.length ? { secretEnv: [...entry.secretEnv]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((row) => ({ name: row.name, secretRef: row.secretRef })) } : {}),
+      ...(entry.terminal ? { terminal: {
+        ...(entry.terminal.taskFlag ? { taskFlag: entry.terminal.taskFlag } : {}),
+        ...(entry.terminal.resumeArgs?.length ? { resumeArgs: [...entry.terminal.resumeArgs] } : {}),
+        ...(entry.terminal.hooks ? { hooks: entry.terminal.hooks } : {})
+      } } : {})
+    }]))
+  return {
+    enabledProfiles: [...(harnesses?.enabledProfiles ?? [])]
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+      .map(({ harnessId, credentialMode, providerId, gatewayBinding }) => ({ harnessId, credentialMode,
+        ...(gatewayBinding ? { gatewayBinding: structuredClone(gatewayBinding) } : providerId ? { providerId } : {}) })),
+    disabledIds: [...(harnesses?.disabledIds ?? [])].sort(),
+    providers,
+    defaults: sortedDefaultsRecord(harnesses?.defaults),
+    defaultHarnessId: harnesses?.defaultHarnessId ?? 'kun',
+    // Ordering is significant: the worker selector reads it as preference rank.
+    agentOrder: [...(harnesses?.agentOrder ?? [])]
+  }
+}
+
+/**
+ * `ade` config section. The GUI-only `notifications` group is deliberately
+ * dropped; everything else maps 1:1 onto Kun's AdeConfigSchema with a fixed
+ * key order. `approvedWorktreeConfigs` entries are resolved from
+ * project-config grants by the caller (they need async file reads), and
+ * `worktreeSharedPaths` carries `agents.kun.worktrees.sharedPaths`.
+ */
+export function adeConfigForRuntime(
+  ade: Pick<KunRuntimeSettingsV1, 'ade'>['ade'] | undefined,
+  extras: {
+    approvedWorktreeConfigs?: Array<{ repoRoot: string; digest: string; worktree: unknown }>
+    worktreeSharedPaths?: Record<string, Array<{ path: string; mode: string }>>
+  } = {}
+): Record<string, unknown> {
+  const budget = ade?.budget &&
+    (ade.budget.softTokens !== undefined || ade.budget.hardTokens !== undefined)
+    ? {
+        ...(ade.budget.softTokens !== undefined ? { softTokens: ade.budget.softTokens } : {}),
+        ...(ade.budget.hardTokens !== undefined ? { hardTokens: ade.budget.hardTokens } : {})
+      }
+    : undefined
+  return {
+    enabled: ade?.enabled ?? false,
+    ...(ade?.projectDefaults && Object.keys(ade.projectDefaults).length > 0
+      ? { projectDefaults: ade.projectDefaults }
+      : {}),
+    harnessRouter: ade?.harnessRouter ?? true,
+    deterministicHandoff: ade?.deterministicHandoff ?? true,
+    ...(ade?.managerModel?.providerId && ade.managerModel.model
+      ? {
+          managerModel: {
+            providerId: ade.managerModel.providerId,
+            model: ade.managerModel.model
+          }
+        }
+      : {}),
+    managerMayApprove: ade?.managerMayApprove ?? false,
+    allowUnattendedFullAccess: ade?.allowUnattendedFullAccess ?? false,
+    limits: {
+      softWorkers: ade?.limits.softWorkers ?? 4,
+      hardWorkers: ade?.limits.hardWorkers ?? 8
+    },
+    ...(budget ? { budget } : {}),
+    hibernation: {
+      enabled: ade?.hibernation.enabled ?? true,
+      idleMinutes: ade?.hibernation.idleMinutes ?? 30
+    },
+    stall: {
+      structuredMinutes: ade?.stall.structuredMinutes ?? 10,
+      terminalMinutes: ade?.stall.terminalMinutes ?? 20
+    },
+    approvedWorktreeConfigs: [...(extras.approvedWorktreeConfigs ?? [])]
+      .sort((a, b) => a.repoRoot.localeCompare(b.repoRoot)),
+    worktreeSharedPaths: extras.worktreeSharedPaths ?? {}
+  }
 }
 
 export function storageConfigForRuntime(
@@ -248,7 +388,7 @@ function modelConfigProfilesFromProviderProfiles(
   const out: Record<string, unknown> = {}
   for (const [modelId, profile] of Object.entries(profiles)) {
     const trimmed = modelId.trim()
-    if (!trimmed) continue
+    if (!trimmed || trimmed === '*') continue
     out[trimmed] = {
       ...(profile.aliases?.length ? { aliases: profile.aliases } : {}),
       ...(profile.contextWindowTokens ? { contextWindowTokens: profile.contextWindowTokens } : {}),
@@ -256,12 +396,17 @@ function modelConfigProfilesFromProviderProfiles(
       inputModalities: profile.inputModalities,
       outputModalities: profile.outputModalities,
       supportsToolCalling: profile.supportsToolCalling,
+      ...(typeof profile.parallelTools === 'boolean' ? { parallelTools: profile.parallelTools } : {}),
+      ...(typeof profile.streaming === 'boolean' ? { streaming: profile.streaming } : {}),
+      ...(typeof profile.structuredOutput === 'boolean' ? { structuredOutput: profile.structuredOutput } : {}),
+      ...(profile.evidence ? { evidence: profile.evidence } : {}),
       messageParts: profile.messageParts,
       ...(profile.reasoning ? { reasoning: profile.reasoning } : {}),
       ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
       ...(profile.serviceTiers ? { serviceTiers: profile.serviceTiers } : {}),
       ...(profile.endpointFormat ? { endpointFormat: profile.endpointFormat } : {}),
-      ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {})
+      ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {}),
+      ...(profile.wireModelId ? { wireModelId: profile.wireModelId } : {})
     }
   }
   return out

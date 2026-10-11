@@ -1,6 +1,6 @@
 .ds-settings-content {
   width: 100%;
-  max-width: 920px;
+  max-width: 880px;
 }
 
 .ds-settings-content--providers {
@@ -16,6 +16,12 @@
   background: var(--ds-surface-card);
 }
 
+/* The Agent list takes the window's height at most, so a long list scrolls inside its column.
+   Body zoom leaves `100vh` unscaled, hence the division; 8rem covers the card header above. */
+.ds-agent-rail {
+  max-height: max(20rem, calc(100vh / var(--ds-ui-scale, 1) - 8rem));
+}
+
 .ds-provider-workspace > .ds-settings-tab-panel:not([hidden]) {
   gap: 0;
 }
@@ -25,7 +31,7 @@
 }
 
 .ds-settings-scroller {
-  padding: 56px 24px 128px 16px;
+  padding: 52px 32px 128px;
   scrollbar-gutter: stable;
 }
 
@@ -36,8 +42,8 @@
 .ds-settings-page {
   display: grid;
   min-width: 0;
-  gap: 14px;
-  animation: ds-settings-page-enter 150ms ease-out;
+  gap: 16px;
+  animation: ds-settings-page-enter 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ds-settings-page > *,
@@ -62,7 +68,7 @@
 }
 
 .ds-settings-page-header {
-  margin-bottom: 18px;
+  margin-bottom: 24px;
 }
 
 .ds-settings-tabs,
@@ -87,13 +93,13 @@
 
 .ds-settings-tab-panel:not([hidden]) {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .ds-settings-panel-stack {
   display: grid;
   min-width: 0;
-  gap: 14px;
+  gap: 16px;
 }
 
 .ds-settings-card {
@@ -103,7 +109,7 @@
 }
 
 .ds-settings-card-header {
-  padding-block: 20px 14px;
+  padding-block: 18px 10px;
 }
 
 .ds-settings-card-body {
@@ -115,7 +121,7 @@
 }
 
 .ds-setting-row p {
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 @keyframes ds-settings-page-enter {
@@ -134,15 +140,6 @@
 .ds-settings-tab-panel > :is(.mt-5, .mt-6).ds-settings-card,
 .ds-settings-tab-panel > .ds-settings-card:is(.mt-5, .mt-6) {
   margin-top: 0;
-}
-
-.ds-settings-page--shortcuts .ds-settings-card-body > div:last-child {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.ds-settings-page--shortcuts .ds-settings-card-body > div:last-child > * {
-  border-bottom: 1px solid var(--ds-border-muted);
 }
 
 .ds-settings-page--dataMigration [data-testid='data-migration-settings'] {
@@ -174,10 +171,6 @@
   .ds-provider-workspace {
     min-height: 0;
   }
-
-  .ds-settings-page--shortcuts .ds-settings-card-body > div:last-child {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 760px) {
@@ -194,5 +187,218 @@
 @media (prefers-reduced-motion: reduce) {
   .ds-settings-page {
     animation: none;
+  }
+}
+
+/* Settings control baseline also covers extension and specialized selection controls. */
+.ds-settings-surface {
+  --settings-control-height: 2.25rem;
+  --settings-space: 1.25rem;
+}
+
+.ds-settings-surface :is(button, summary, input, select, textarea):focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+.ds-settings-surface :is(button, select, input, textarea):disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ds-settings-surface button:not([role='switch']):not(.ds-settings-button):not([data-settings-action]):not(.ds-shortcut-binding) {
+  min-block-size: 2rem;
+  min-inline-size: 2rem;
+}
+
+.ds-settings-surface button[aria-busy='true'] {
+  cursor: progress;
+}
+
+/* Keep the existing track/thumb shapes while enlarging the actual button,
+   including the app's independent UI scale (0.82 by default). */
+.ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch]) {
+  --settings-switch-track-height: 1.25rem;
+  --settings-switch-thumb-half: 0.5rem;
+  --settings-switch-track-color: var(--settings-switch-off, var(--ds-text-faint));
+  min-block-size: max(2rem, calc(25px / var(--ds-ui-scale, 1)));
+  background: transparent;
+}
+
+.ds-settings-surface .ds-settings-toggle[aria-checked='true'] {
+  --settings-switch-track-color: var(--ds-control);
+}
+
+.ds-settings-surface [data-settings-switch='compact'] {
+  --settings-switch-track-color: var(--ds-border);
+}
+
+.ds-settings-surface [data-settings-switch='large'] {
+  --settings-switch-track-height: 1.5rem;
+  --settings-switch-thumb-half: 0.625rem;
+  --settings-switch-track-color: var(--ds-card-muted);
+}
+
+.ds-settings-surface [data-settings-switch]:is([aria-checked='true'], [data-state='partial']) {
+  --settings-switch-track-color: var(--ds-accent);
+}
+
+.ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch])::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  block-size: var(--settings-switch-track-height);
+  transform: translateY(-50%);
+  border-radius: inherit;
+  background: var(--settings-switch-track-color);
+  transition: background-color var(--ds-duration-functional);
+  pointer-events: none;
+}
+
+.ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch]) > span {
+  top: 50%;
+  margin-block-start: calc(-1 * var(--settings-switch-thumb-half));
+}
+
+.ds-settings-surface :is(input, select, textarea) {
+  max-inline-size: 100%;
+}
+
+.ds-settings-surface :is(input:not([type='range']):not([type='checkbox']):not([type='radio']):not([type='color']):not(.hide-number-spinner), select) {
+  min-block-size: var(--settings-control-height);
+}
+
+.ds-settings-surface :is(input[type='range'], input[type='checkbox'], input[type='radio']) {
+  accent-color: var(--ds-control);
+}
+
+.ds-settings-surface :is(p, h1, h2, h3, label, .ds-setting-row-label) {
+  overflow-wrap: anywhere;
+}
+
+.ds-settings-surface .ds-settings-card-header {
+  padding-inline: var(--settings-space);
+}
+
+.ds-settings-surface .ds-settings-card-body {
+  padding-inline: 0.5rem;
+}
+
+.ds-settings-surface .ds-setting-row {
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.ds-settings-surface .ds-setting-row > :first-child {
+  padding-block-start: 0.4rem;
+}
+
+.ds-settings-surface .ds-settings-tabs,
+.ds-settings-surface .ds-settings-subtabs {
+  scroll-padding-inline: 0.25rem;
+  padding: 0.25rem;
+}
+
+.ds-settings-surface .ds-settings-tabs button,
+.ds-settings-surface .ds-settings-subtabs button {
+  height: auto;
+  min-block-size: var(--settings-control-height);
+  padding-block: 0.5rem;
+}
+
+.ds-settings-sidebar {
+  width: 252px;
+}
+
+.ds-settings-compact-navigation {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .ds-settings-sidebar { width: 224px; }
+  .ds-settings-scroller { padding-inline: 24px; }
+}
+
+@media (max-width: 760px) {
+  .ds-settings-surface { flex-direction: column; }
+  .ds-settings-sidebar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    padding: calc(0.75rem + var(--ds-window-controls-safe-block)) 1rem 0.75rem;
+    border-bottom: 1px solid var(--ds-border);
+  }
+  .ds-settings-sidebar-header { padding: 0; }
+  .ds-settings-sidebar-heading h1 { font-size: 1rem; }
+  .ds-settings-sidebar .ds-titlebar-safe-block,
+  .ds-settings-sidebar nav,
+  .ds-settings-search,
+  .ds-settings-sidebar-footer { display: none; }
+  .ds-settings-compact-navigation {
+    display: block;
+    min-width: 0;
+    flex: 1;
+  }
+  .ds-settings-compact-navigation select {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--ds-border-strong);
+    border-radius: var(--ds-radius-control);
+    background: var(--ds-surface-card);
+    color: var(--ds-text);
+    font-size: 0.8125rem;
+  }
+  .ds-settings-scroller,
+  .ds-settings-scroller--providers { padding: 1.5rem 1rem 3rem; }
+  .ds-settings-page-header { margin-bottom: 1.25rem; }
+  .ds-settings-page-header h1 { font-size: 1.25rem; }
+  .ds-settings-card { --settings-space: 1rem; }
+  .ds-settings-surface .ds-setting-row > :first-child { padding-block-start: 0; }
+  .ds-settings-surface .ds-settings-page :is(.ds-settings-tabs, .ds-settings-subtabs) {
+    border-radius: var(--ds-radius-card);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-settings-surface :is(button, summary, input, select, textarea) { transition: none; }
+  .ds-settings-surface .animate-spin { animation: none; }
+}
+
+.ds-settings-surface .ds-settings-inline-notice {
+  flex-wrap: wrap;
+}
+
+.ds-settings-surface .ds-settings-inline-notice > :last-child {
+  max-inline-size: 100%;
+  flex-wrap: wrap;
+}
+
+/* Content-sized tabs must not let intrinsic long labels widen their grid tracks. */
+.ds-settings-surface .ds-settings-tabs--wrap {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+}
+
+.ds-settings-surface .ds-settings-tabs--wrap button {
+  min-inline-size: 0;
+  white-space: normal;
+}
+
+.ds-settings-surface .ds-settings-tabs--wrap button > span {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch])::before {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch])::before {
+    border: 1px solid ButtonText;
   }
 }

@@ -1,3 +1,4 @@
+import { kunArtApi } from './kun-art'
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { KunGuiApi } from '../shared/kun-gui-api'
 import { providerBridge } from './provider-bridge'
@@ -11,10 +12,14 @@ import { createGitHubMcpAuthorizationPreloadApi } from './github-mcp-authorizati
 import { createDataMigrationPreloadApi } from './data-migration'
 import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
+import { quotaReminderPreloadApi } from './quota-reminder-bridge'
+import { worktreePreloadApi } from './worktree-bridge'
 import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
+import { marketApi } from './market-api'
+import { kunAccountApi } from './kun-account'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -36,6 +41,8 @@ const desktopTitleBarMode = normalizeDesktopTitleBarMode(
 )
 
 const api = {
+  kunAccount: kunAccountApi,
+  kunArt: kunArtApi,
   platform: process.platform,
   desktopTitleBarMode,
   homeDir: homeDirFromArgs,
@@ -57,6 +64,8 @@ const api = {
   },
   dataMigration: createDataMigrationPreloadApi(),
   getSettings: () => ipcRenderer.invoke('settings:get'),
+  getAdeCollaborationSettings: () => ipcRenderer.invoke('settings:ade-collaboration:get'),
+  getAdeProjectDefaults: (request) => ipcRenderer.invoke('settings:ade-project-defaults:get', request),
   openSettingsConfigFile: () => ipcRenderer.invoke('settings:open-config-file'),
   revealModelProviderCredential: (providerId) =>
     ipcRenderer.invoke('model-provider:credential:reveal', { providerId }),
@@ -69,6 +78,8 @@ const api = {
     ipcRenderer.invoke('claude-subscription:probe', token, providerId),
   claudeSubscriptionModels: (token, providerId) =>
     ipcRenderer.invoke('claude-subscription:models', token, providerId),
+  claudeSubscriptionModelCatalog: (token, providerId) =>
+    ipcRenderer.invoke('claude-subscription:model-catalog', token, providerId),
   claudeSubscriptionSdkStatus: () => ipcRenderer.invoke('claude-subscription:sdk-status'),
   claudeSubscriptionSdkInstall: () => ipcRenderer.invoke('claude-subscription:sdk-install'),
   onClaudeSubscriptionSdkProgress: (handler) => {
@@ -91,15 +102,23 @@ const api = {
   },
   geminiSubscriptionModels: () => ipcRenderer.invoke('gemini-subscription:models'),
   geminiCliSubscriptionStatus: () => ipcRenderer.invoke('gemini-cli-subscription:status'),
-  geminiCliSubscriptionModels: () => ipcRenderer.invoke('gemini-cli-subscription:models'),
+  geminiCliSubscriptionModels: (providerId) => ipcRenderer.invoke('gemini-cli-subscription:models', providerId),
   cursorSubscriptionDiscover: (apiKey, providerId) =>
     ipcRenderer.invoke('cursor-subscription:discover', { apiKey, providerId }),
   setSettings: (partial) =>
     ipcRenderer.invoke('settings:set', partial),
+  saveAdeCollaborationSettings: (request) =>
+    ipcRenderer.invoke('settings:ade-collaboration:save', request),
+  saveAdeProjectDefaults: (request) => ipcRenderer.invoke('settings:ade-project-defaults:save', request),
   saveSettingsSilent: (partial) =>
     ipcRenderer.invoke('settings:save-silent', partial),
   ...runtimeRequestPreloadApi,
+  ...quotaReminderPreloadApi,
   setRoomPermissions: (request) => ipcRenderer.invoke('room:permissions:set', request),
+  gatewayLaunchProfile: (request) => ipcRenderer.invoke('gateway:launch-profile', request),
+  gatewayClients: (request) => ipcRenderer.invoke('gateway:clients', request),
+  agentWiring: (request) => ipcRenderer.invoke('agent-wiring', request),
+  openGatewayMiddlewareFolder: () => ipcRenderer.invoke('gateway-middleware:open-dir'),
   gatewayCredential: (action) => ipcRenderer.invoke('gateway:credential', action),
   getRuntimeSettingsSyncStatus: () =>
     ipcRenderer.invoke('runtime:settings-sync-status:get'),
@@ -144,6 +163,7 @@ const api = {
   resolveWorkflowApproval: (token, decision) =>
     ipcRenderer.invoke('workflow:approval:resolve', { token, decision }),
   checkWorkflowCode: (language, code) => ipcRenderer.invoke('workflow:code:check', { language, code }),
+  personalAgentIm: (request) => ipcRenderer.invoke('personal-agent:im', request),
   startClawImInstallQr: (provider, options) =>
     ipcRenderer.invoke('claw:im-install:qrcode', { provider, isLark: options?.isLark }),
   pollClawImInstall: (provider, deviceCode) =>
@@ -240,32 +260,7 @@ const api = {
     ipcRenderer.invoke('git:branch-worktrees', params),
   removeGitBranchWorktree: (params) =>
     ipcRenderer.invoke('git:remove-branch-worktree', params),
-  acquireWorktree: (params) =>
-    ipcRenderer.invoke('worktree:acquire', params),
-  releaseWorktree: (params) =>
-    ipcRenderer.invoke('worktree:release', params),
-  listWorktrees: (params) =>
-    ipcRenderer.invoke('worktree:list', params),
-  removeWorktree: (params) =>
-    ipcRenderer.invoke('worktree:remove', params),
-  getWorktreeChanges: (params) =>
-    ipcRenderer.invoke('worktree:changes', params),
-  commitWorktree: (params) =>
-    ipcRenderer.invoke('worktree:commit', params),
-  mergeWorktree: (params) =>
-    ipcRenderer.invoke('worktree:merge', params),
-  abortWorktreeMerge: (params) =>
-    ipcRenderer.invoke('worktree:abort-merge', params),
-  continueWorktreeMerge: (params) =>
-    ipcRenderer.invoke('worktree:continue-merge', params),
-  syncWorktreeFromMain: (params) =>
-    ipcRenderer.invoke('worktree:sync', params),
-  abortWorktreeRebase: (params) =>
-    ipcRenderer.invoke('worktree:abort-rebase', params),
-  cleanupWorktrees: (params) =>
-    ipcRenderer.invoke('worktree:cleanup', params),
-  findAvailableWorktreePoolIndex: (params) =>
-    ipcRenderer.invoke('worktree:find-available', params),
+  ...worktreePreloadApi,
   listEditors: () => ipcRenderer.invoke('editor:list'),
   openEditorPath: (options) =>
     ipcRenderer.invoke('editor:open-path', options),
@@ -332,6 +327,8 @@ const api = {
   ...writeBridge,
   exportConversation: (payload) =>
     ipcRenderer.invoke('conversation:export', payload),
+  exportConversationBatch: (payload) =>
+    ipcRenderer.invoke('conversation:export-batch', payload),
   exportMemoryMarkdown: (payload) =>
     ipcRenderer.invoke('memory:export-markdown', payload),
   exportDesignPrototype: (payload) =>
@@ -409,6 +406,9 @@ const api = {
     ipcRenderer.on('tray:action', wrapped)
     return () => ipcRenderer.removeListener('tray:action', wrapped)
   },
+  missionControlTogglePopout: () => ipcRenderer.invoke('mission-control:popout:toggle'),
+  missionControlOpenThread: (threadId) =>
+    ipcRenderer.invoke('mission-control:open-thread', { threadId }),
   onRuntimeStatus: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,
@@ -461,11 +461,12 @@ const api = {
     return () => ipcRenderer.removeListener('window:mini-mode', wrapped)
   },
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  openAgentIntegration: (input) => ipcRenderer.invoke('agent:open-integration', input),
   getComputerUsePermissions: () => ipcRenderer.invoke('computer-use:permissions'),
   requestComputerUsePermission: (kind) =>
     ipcRenderer.invoke('computer-use:request-permission', kind),
-  getBrowserUseState: (threadId) =>
-    ipcRenderer.invoke('browser-use:state:get', { threadId }),
+  getBrowserUseState: (threadId, expectedTurnId) =>
+    ipcRenderer.invoke('browser-use:state:get', { threadId, expectedTurnId }),
   mountBrowserUse: (input) =>
     ipcRenderer.invoke('browser-use:mount', input),
   decideBrowserUseOrigin: (input) =>
@@ -476,10 +477,10 @@ const api = {
     ipcRenderer.invoke('browser-use:control', input),
   navigateBrowserUse: (input) =>
     ipcRenderer.invoke('browser-use:navigate', input),
-  stopBrowserUse: (threadId) =>
-    ipcRenderer.invoke('browser-use:stop', { threadId }),
-  clearBrowserUse: (threadId) =>
-    ipcRenderer.invoke('browser-use:clear', { threadId }),
+  stopBrowserUse: (threadId, expectedTurnId) =>
+    ipcRenderer.invoke('browser-use:stop', { threadId, expectedTurnId }),
+  clearBrowserUse: (threadId, expectedTurnId) =>
+    ipcRenderer.invoke('browser-use:clear', { threadId, expectedTurnId }),
   onBrowserUseState: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,
@@ -497,6 +498,8 @@ const api = {
   downloadGuiUpdate: (channel) =>
     ipcRenderer.invoke('gui:update-download', channel),
   installGuiUpdate: () => ipcRenderer.invoke('gui:update-install'),
+  getReleaseNotice: (request) => ipcRenderer.invoke('gui:release-notice', request),
+  acknowledgeReleaseNotice: (version) => ipcRenderer.invoke('gui:release-notice-ack', version),
   onGuiUpdateState: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,
@@ -677,6 +680,7 @@ const api = {
     ipcRenderer.on('remote:status-changed', wrapped)
     return () => ipcRenderer.removeListener('remote:status-changed', wrapped)
   },
-  ...paperApi
+  ...paperApi,
+  ...marketApi
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

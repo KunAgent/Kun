@@ -16,6 +16,53 @@ export function trimTrailingToolCalls(history: TurnItem[]): TurnItem[] {
   return end === history.length ? history : history.slice(0, end)
 }
 
+/**
+ * Index of the newest complete tool-batch group owned by `turnId` at or after
+ * `from`, so a retained tail keeps every call of a parallel dispatch together
+ * with its results. A "group" is the run of consecutive `tool_call` items that
+ * starts a dispatch. Returns 0 when there is none.
+ */
+/**
+ * The request the active turn is still executing: its newest user message (or
+ * steering input). Earlier user messages of the same turn were already
+ * answered and stay foldable history. Returns null when the turn has none.
+ */
+export function activeTurnInstructionItem(
+  history: TurnItem[],
+  turnId: string
+): TurnItem | null {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index]
+    if (
+      item?.turnId === turnId &&
+      (item.kind === 'user_message' || item.kind === 'user_input')
+    ) {
+      return item
+    }
+  }
+  return null
+}
+
+export function newestActiveTurnBatchStart(
+  history: TurnItem[],
+  turnId: string,
+  from: number
+): number {
+  const first = Math.max(0, from)
+  let groupStart = 0
+  for (let index = first; index < history.length; index += 1) {
+    const item = history[index]
+    if (!item || item.turnId !== turnId || item.kind !== 'tool_call') continue
+    let start = index
+    while (start > first && history[start - 1]?.turnId === turnId &&
+      history[start - 1]?.kind === 'tool_call') {
+      start -= 1
+    }
+    groupStart = start
+  }
+  return groupStart
+}
+
 export function repairTailStartForToolResults(history: TurnItem[], start: number): number {
   let tailStart = Math.max(0, Math.min(history.length, start))
   while (tailStart > 0) {

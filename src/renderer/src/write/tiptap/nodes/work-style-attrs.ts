@@ -1,6 +1,6 @@
 /**
- * Attribute extensions that carry Markdown source style on rich nodes
- * (implementation §3.4): list tightness/markers, table cell alignment, and
+ * Attribute extensions that carry Markdown source style on rich nodes:
+ * list tightness/markers, table cell alignment, and
  * reference-style link/image fields. They only matter once a block is
  * edited — unchanged blocks emit their original source verbatim anyway.
  */

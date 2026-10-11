@@ -7,6 +7,7 @@ import {
   type KunSubagentProfileV1
 } from '@shared/app-settings'
 import { SubagentSettingsEditor } from './SubagentSettingsEditor'
+import { BUILTIN_AGENT_CATALOG } from '../../../../../kun/src/delegation/builtin-agent-catalog'
 
 const loadComposerModels = vi.fn(async () => undefined)
 let mockRoute = 'chat'
@@ -17,7 +18,8 @@ vi.mock('../../store/chat-store', () => ({
       providerId: 'provider-a',
       label: 'Provider A',
       modelIds: ['model-a'],
-      modelProfiles: {}
+      modelProfiles: { 'model-a': { inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
+        reasoning: { supportedEfforts: ['off', 'low', 'medium', 'high', 'max'], defaultEffort: 'medium', requestProtocol: 'openai-chat-completions' } } }
     }],
     route: mockRoute,
     loadComposerModels
@@ -25,6 +27,7 @@ vi.mock('../../store/chat-store', () => ({
 }))
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: { type: '3rdParty', init: () => undefined },
   useTranslation: () => ({
     t: (key: string, fallback?: string) => ({
       subagentsRuntimePolicy: 'Runtime policy',
@@ -105,6 +108,18 @@ describe('SubagentSettingsEditor', () => {
     }
     loadComposerModels.mockClear()
     mockRoute = 'chat'
+  })
+
+  it('keeps Settings catalog filters in normal flow at short scaled heights', async () => {
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(SubagentSettingsEditor, {
+        kun: defaultKunRuntimeSettings(), onPatch: vi.fn(), variant: 'settings'
+      }))
+    })
+    const toolbar = renderer.root.findByProps({ 'data-testid': 'settings-subagent-catalog-toolbar' })
+    expect(toolbar.props.className).not.toMatch(/\bsticky\b/)
+    expect(toolbar.props.className).not.toMatch(/\btop-0\b/)
   })
 
   it('batch-applies one model to every agent in a category, overwriting mixed overrides', async () => {
@@ -379,10 +394,11 @@ describe('SubagentSettingsEditor', () => {
     expect(profiles.every((profile) => !profile.model && !profile.providerId)).toBe(true)
   })
 
-  it('lets a follow-default agent set reasoning effort without picking a model', async () => {
+  it('offers automatic reasoning while a follow-default model is unresolved', async () => {
     const onPatch = vi.fn<(patch: KunRuntimeSettingsPatchV1) => void>()
     const kun = {
       ...defaultKunRuntimeSettings(),
+      providerId: 'provider-a', model: 'model-a',
       subagents: {
         enabled: true,
         profiles: [customProfile()]
@@ -405,16 +421,17 @@ describe('SubagentSettingsEditor', () => {
     })
 
     const details = renderer.root.findByProps({ 'data-testid': 'subagent-details-panel' })
-    const highChip = details.findAllByType('button').find((button) =>
-      button.children.length === 1 && button.children[0] === 'High')
-    expect(highChip).toBeDefined()
+    const automaticChip = details.findAllByType('button').find((button) =>
+      button.children.length === 1 && button.children[0] === 'Adaptive')
+    expect(automaticChip).toBeDefined()
+    expect(details.findAllByType('button').some((button) => button.children.length === 1 && button.children[0] === 'High')).toBe(false)
     await act(async () => {
-      highChip!.props.onClick()
+      automaticChip!.props.onClick()
     })
 
     const patch = onPatch.mock.calls.at(-1)?.[0] as KunRuntimeSettingsPatchV1
     expect(patch.subagents?.profiles?.find((profile) => profile.id === 'researcher')).toMatchObject({
-      reasoningEffort: 'high'
+      reasoningEffort: 'auto'
     })
   })
 
@@ -422,26 +439,14 @@ describe('SubagentSettingsEditor', () => {
     const onPatch = vi.fn<(patch: KunRuntimeSettingsPatchV1) => void>()
     const kun = {
       ...defaultKunRuntimeSettings(),
+      providerId: 'provider-a', model: 'model-a',
       subagents: {
         enabled: true,
-        profiles: [
-          {
-            id: 'design-reviewer',
-            enabled: true,
-            name: 'Design Reviewer',
-            mode: 'subagent' as const,
-            toolPolicy: 'readOnly' as const,
-            reasoningEffort: 'low' as const
-          },
-          {
-            id: 'code-reviewer',
-            enabled: true,
-            name: 'Code Reviewer',
-            mode: 'subagent' as const,
-            toolPolicy: 'readOnly' as const,
-            reasoningEffort: 'high' as const
-          }
-        ]
+        profiles: BUILTIN_AGENT_CATALOG.filter((agent) => agent.category === 'review').map((agent) => ({
+          id: agent.id, enabled: true, name: agent.name, mode: 'subagent' as const,
+          toolPolicy: 'readOnly' as const, providerId: 'provider-a', model: 'model-a',
+          reasoningEffort: agent.id === 'design-reviewer' ? 'low' as const : 'high' as const
+        }))
       }
     }
     let renderer!: ReactTestRenderer

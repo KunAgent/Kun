@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "id": "groq-api",
+  "name": "Groq API",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.groq.com/openai/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://console.groq.com/docs",
+  "credentialUrl": "https://console.groq.com/keys",
+  "origin": "vendor",
+  "endpoints": {
+    "chat_completions": "https://api.groq.com/openai/v1",
+    "responses": "https://api.groq.com/openai/v1"
+  }
+}

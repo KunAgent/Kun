@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import type { GuiUpdateChannel } from '@shared/gui-update'
 import { GuiUpdateControl } from './settings-gui-update'
 import { SettingsCard, SettingRow } from './settings-controls'
+import { WhatsNewSettingRow } from './whats-new/WhatsNewSettingRow'
 
 export function UpdatesSettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const {
@@ -63,6 +64,7 @@ export function UpdatesSettingsSection({ ctx }: { ctx: Record<string, any> }): R
           />
         }
       />
+      <WhatsNewSettingRow />
     </SettingsCard>
   )
 }

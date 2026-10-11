@@ -62,6 +62,44 @@ describe('Windows PTY ownership adapter', () => {
     expect(abort).toHaveBeenCalledOnce()
     expect(bind).not.toHaveBeenCalled()
   })
+
+  it('validates Agent admission after Windows preparation and before native spawn', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const order: string[] = []
+    const bind = vi.fn(async (child: ChildProcess) => { order.push('bind'); return child })
+    vi.mocked(prepareWindowsOwnedPty).mockImplementation(async () => {
+      order.push('prepare')
+      await Promise.resolve()
+      return { command: 'launcher.exe', args: [], env: {}, bind, abort: vi.fn(async () => undefined) }
+    })
+    const pty = { pid: 1001, onExit: () => ({ dispose: vi.fn() }), onData: () => ({ dispose: vi.fn() }), kill: vi.fn() }
+    const spawn = vi.fn(() => { order.push('spawn'); return pty as unknown as IPty })
+    const validate = vi.fn(async () => { order.push('validate') })
+    const launch = await spawnPtyBehindGate({ spawn }, 'C:\\agents\\agent.exe', [], {}, () => false, validate)
+    await launch.ready
+    expect(order).toEqual(['prepare', 'validate', 'spawn', 'bind'])
+    expect(validate).toHaveBeenCalledOnce()
+  })
+
+  it('aborts prepared Windows state without spawning when proof becomes invalid during preparation', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    let enabled = true
+    const abort = vi.fn(async () => undefined)
+    const bind = vi.fn()
+    vi.mocked(prepareWindowsOwnedPty).mockImplementation(async () => {
+      await Promise.resolve()
+      enabled = false
+      return { command: 'launcher.exe', args: [], env: {}, bind, abort }
+    })
+    const spawn = vi.fn()
+    const validate = vi.fn(async () => { if (!enabled) throw new Error('Agent profile changed before launch') })
+    await expect(spawnPtyBehindGate({ spawn }, 'C:\\agents\\agent.exe', [], {}, () => false, validate))
+      .rejects.toThrow('Agent profile changed before launch')
+    expect(validate).toHaveBeenCalledOnce()
+    expect(spawn).not.toHaveBeenCalled()
+    expect(bind).not.toHaveBeenCalled()
+    expect(abort).toHaveBeenCalledOnce()
+  })
 })
 
 

@@ -125,6 +125,11 @@ import {
   normalizeKunTokenEconomySettings,
   normalizeKunToolOutputLimitsSettings
 } from './app-settings-kun-tuning'
+import {
+  mergeKunAdeSettings,
+  mergeKunHarnessSettings,
+  mergeKunWorktreeSettings
+} from './app-settings-kun-harness'
 
 export function mergeKunRuntimeSettings(
   current: KunRuntimeSettingsV1,
@@ -338,6 +343,9 @@ export function mergeKunRuntimeSettings(
     patch?.fastContext ?? legacyFastContextPatch?.fastContext ?? legacyFastContextPatch?.exploreAgent
   )
   const nextLab = mergeKunLabSettings(current.lab, patch?.lab)
+  const nextHarnesses = mergeKunHarnessSettings(current.harnesses, patch?.harnesses)
+  const nextAde = mergeKunAdeSettings(current.ade, patch?.ade)
+  const nextWorktrees = mergeKunWorktreeSettings(current.worktrees, patch?.worktrees)
   const nextPlanExecution = {
     useWorktreeByDefault: patch?.planExecution?.useWorktreeByDefault
       ?? current.planExecution?.useWorktreeByDefault
@@ -354,6 +362,9 @@ export function mergeKunRuntimeSettings(
     planExecution: _planExecutionPatch,
     llmDebug: _llmDebugPatch,
     lab: _labPatch,
+    harnesses: _harnessesPatch,
+    ade: _adePatch,
+    worktrees: _worktreesPatch,
     model: _modelPatch,
     ...flatPatch
   } = patch ?? {}
@@ -363,6 +374,9 @@ export function mergeKunRuntimeSettings(
   void _planExecutionPatch
   void _llmDebugPatch
   void _labPatch
+  void _harnessesPatch
+  void _adePatch
+  void _worktreesPatch
   void _modelPatch
   const nextModel = nonEmptyStringOrFallback(
     patch?.model,
@@ -413,6 +427,9 @@ export function mergeKunRuntimeSettings(
     quality: nextQuality,
     graph: nextGraph,
     planExecution: nextPlanExecution,
+    harnesses: nextHarnesses,
+    ade: nextAde,
+    worktrees: nextWorktrees,
     fastContext: nextFastContext,
     lab: nextLab,
     ...(nextSubagents !== undefined ? { subagents: nextSubagents } : {})

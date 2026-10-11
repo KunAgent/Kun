@@ -30,13 +30,15 @@ type Props = {
   disabled?: boolean
   /** Accessible label for the trigger button (e.g. the preset name it belongs to). */
   ariaLabel?: string
+  /** Carry the Settings control baseline into this picker portal only when hosted there. */
+  settingsSurface?: boolean
 }
 
 /**
  * Trigger button + searchable lucide icon grid in a portal popover. Search
  * matches case-insensitively on the PascalCase icon name.
  */
-export function LucideIconPicker({ value, onChange, disabled = false, ariaLabel }: Props): ReactElement {
+export function LucideIconPicker({ value, onChange, disabled = false, ariaLabel, settingsSurface = false }: Props): ReactElement {
   const { t } = useTranslation('settings')
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -111,12 +113,13 @@ export function LucideIconPicker({ value, onChange, disabled = false, ariaLabel 
         role="dialog"
         aria-label={t('codeAgentIconPickerTitle')}
         style={menuStyle}
-        className="fixed z-50 flex max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-[18px] border border-ds-border-muted bg-white text-[13px] text-ds-ink shadow-[0_18px_48px_rgba(20,47,95,0.14)] dark:bg-ds-card"
+        className={`${settingsSurface ? 'ds-settings-surface ' : ''}fixed z-50 flex max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-[18px] border border-ds-border-muted bg-white text-[13px] text-ds-ink shadow-[0_18px_48px_rgba(20,47,95,0.14)] dark:bg-ds-card`}
       >
         <div className="flex items-center gap-2 border-b border-ds-border-muted px-3 py-2">
           <Search className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
           <input
             ref={searchRef}
+            aria-label={t('codeAgentIconSearchPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('codeAgentIconSearchPlaceholder')}

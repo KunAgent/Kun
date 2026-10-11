@@ -1,3 +1,6 @@
+import { isQueueExecutionBlocked, latestExecutedTurn } from '../domain/queue-execution-state.js'
+import { executableHistory } from '../loop/executable-history.js'
+import { resolveTurnReviewRequests } from './review-composer-context.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import { enqueueTurnDurably, reconcilePendingQueueAdmissions } from './queue-admission.js'
 import type { TurnItem } from '../contracts/items.js'
@@ -22,7 +25,12 @@ import {
   firstNonBlank,
   fingerprintStartTurnRequest
 } from './turn-service-core.js'
+import {
+  defaultCredentialMode
+} from '../harness/resolve-turn-harness.js'
 import { resolveDesignTurnAdmission } from './turn-service-design-admission.js'
+import { resolveSupportedAdmissionHarness } from './turn-harness-admission.js'
+import { submittedDesignTaskProfile } from '../domain/design-task-profile.js'
 
 export const QUEUE_CANCELLED_TURN_CODE = 'queue_cancelled'
 export const QUEUE_ADMISSION_FAILED_CODE = 'queue_admission_failed'
@@ -115,8 +123,15 @@ export const turnServiceQueueOperations = {
       request: input.request,
       turnId
     })
+    const turnHarnessId = resolveSupportedAdmissionHarness({
+      request: input.request, thread, effectiveSurface: designAdmission.effectiveSurface,
+      providerKinds: this['deps'].providerKinds?.(), harnessCatalog: this['deps'].harnessCatalog
+    })
     const composerContexts = ComposerContextAttachmentSchema.array().parse(
       input.request.composerContexts ?? []
+    )
+    const reviewRequests = await resolveTurnReviewRequests(
+      thread, composerContexts, this['deps'].resolveReviewRequests
     )
     const attachmentIds = [...new Set(
       (input.request.attachmentIds ?? []).map((id) => id.trim()).filter(Boolean)
@@ -129,7 +144,7 @@ export const turnServiceQueueOperations = {
         ...(thread.workspace ? { workspace: thread.workspace } : {})
       })
     }
-    const turnModel = firstNonBlank(
+    let turnModel = firstNonBlank(
       input.request.model,
       thread.model,
       this['deps'].defaultModel,
@@ -138,22 +153,45 @@ export const turnServiceQueueOperations = {
     const requestedProviderId = firstNonBlank(input.request.providerId)
     const threadProviderId = firstNonBlank(thread.providerId)
     const turnProviderId = requestedProviderId ?? threadProviderId ?? 'default'
+    const turnCredentialMode =
+      input.request.credentialMode ??
+      (turnHarnessId === thread.executionConfig?.route.harnessId
+        ? thread.executionConfig.route.credentialMode : undefined) ??
+      defaultCredentialMode(turnHarnessId, this['deps'].harnessCatalog?.get(turnHarnessId))
     const turnAccountId = firstNonBlank(input.request.accountId) ?? (
       !requestedProviderId || requestedProviderId === threadProviderId
         ? firstNonBlank(thread.accountId)
         : undefined
     )
-    const turn = createTurnRecord({
+    const gatewayBinding = input.request.gatewayBinding ?? (!input.request.providerId?.trim() && turnCredentialMode === 'kun-gateway' && turnHarnessId === thread.executionConfig?.route.harnessId
+              ? thread.executionConfig.route.gatewayBinding : undefined)
+          if (gatewayBinding && !this['deps'].gatewayAliasProfilesEnabled?.()) throw new Error('Gateway alias profiles require the Agent router')
+          if (gatewayBinding) {
+            if (input.request.providerId?.trim() && input.request.providerId !== 'default') throw new Error('Choose a provider connection or a gateway alias, not both')
+            if (turnCredentialMode !== 'kun-gateway' || turnHarnessId === 'kun') throw new Error('Alias bindings require an external Agent in gateway mode')
+            const alias = this['deps'].resolveGatewayAliasModel?.(gatewayBinding)
+            if (!alias) throw new Error('The selected Agent gateway alias is unavailable')
+            if (input.request.model && input.request.model !== 'default' && input.request.model !== alias) throw new Error('The model does not match the selected gateway alias')
+            turnModel = alias
+          }
+          const turn = createTurnRecord({
       id: turnId,
       threadId: input.threadId,
       clientRequestId: input.request.clientRequestId,
       clientRequestFingerprint: fingerprintStartTurnRequest(input.request),
       admissionPending: true,
       prompt: input.request.prompt,
+      paperContext: input.request.paperContext,
       messageSource: input.request.messageSource,
       subagentResume: input.request.subagentResume,
       model: turnModel,
       providerId: turnProviderId,
+      harnessId: turnHarnessId,
+      collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
+      credentialMode: turnCredentialMode,
+      harnessAgentId: input.request.harnessAgentId,
+      harnessSettings: input.request.harnessSettings,
+            gatewayBinding,
       accountId: turnAccountId,
       reasoningEffort: input.request.reasoningEffort,
       serviceTier: input.request.serviceTier,
@@ -173,10 +211,11 @@ export const turnServiceQueueOperations = {
       writeContext: input.request.writeContext,
       persona: input.request.persona,
       guiDesignArtifact: input.request.guiDesignArtifact,
-      mode: input.request.mode,
+      mode: input.request.mode ?? thread.mode,
       orchestration: input.request.orchestration,
       disableUserInput: input.request.disableUserInput,
       imContext: input.request.imContext,
+      planBuild: input.request.planBuild,
       workspaceCheckpointId: input.request.workspaceCheckpointId,
       workspaceCheckpointRequestId: input.request.workspaceCheckpointRequestId
     })
@@ -189,6 +228,7 @@ export const turnServiceQueueOperations = {
       messageSource: input.request.messageSource,
       attachmentIds,
       composerContexts,
+      reviewRequests,
       fileReferences: input.request.fileReferences ?? [],
       workspaceCheckpointId: input.request.workspaceCheckpointId,
       workspace: thread.workspace,
@@ -210,10 +250,14 @@ export const turnServiceQueueOperations = {
     let current = thread
     for (let attempt = 0; attempt < 3; attempt += 1) {
       assertQueueCapacity(current, input.threadId)
+      const stopped = latestExecutedTurn(current)
+      const freshAfterStop = queuedTurns(current).length === 0 && stopped?.status === 'aborted' &&
+        current.queueControl?.reason !== 'restart_recovery'
       const next: ThreadRecord = {
         ...touchThread(current, now),
         status: 'running',
-        turns: [...current.turns, queuedTurn],
+        turns: [...current.turns, { ...queuedTurn,
+          ...(freshAfterStop ? { queueResumeSourceTurnId: stopped.id } : {}) }],
         updatedAt: now
       }
       const committed = await this['commitThreadRecordCAS'](next, current.revision ?? 0)
@@ -339,7 +383,7 @@ export const turnServiceQueueOperations = {
         while (true) {
           if (this['deps'].lifecycleFence?.isClosing(input.threadId)) return null
           const thread = await this['deps'].threadStore.get(input.threadId)
-          if (!thread || thread.status === 'archived') return null
+          if (!thread || thread.status === 'archived' || isQueueExecutionBlocked(thread)) return null
           if (thread.turns.some((turn) => turn.status === 'running')) return null
           if (await this['deps'].executionLeases?.owner(input.threadId)) return null
           const candidate = queuedTurns(thread)[0]
@@ -349,12 +393,13 @@ export const turnServiceQueueOperations = {
           if (candidate.admissionPending) return null
           const requestSnapshot: StartTurnRequest = {
             prompt: candidate.prompt,
+            paperContext: candidate.paperContext,
             orchestration: candidate.orchestration ?? 'direct',
             attachmentIds: candidate.attachmentIds ?? [],
             composerContexts: candidate.composerContexts ?? [],
             fileReferences: [],
             ...(candidate.agentSurface ? { agentSurface: candidate.agentSurface } : {}),
-            ...(candidate.designProfile ? { designProfile: candidate.designProfile } : {}),
+            ...(candidate.designProfile ? { designProfile: submittedDesignTaskProfile(candidate.designProfile) } : {}),
             ...(candidate.designDocumentTarget
               ? { designDocumentTarget: candidate.designDocumentTarget }
               : {}),
@@ -393,12 +438,14 @@ export const turnServiceQueueOperations = {
               this['leasedTurns'].set(candidate.id, lease)
             }
             const now = this['deps'].nowIso()
-            const startedTurn = candidate.admissionPending
+            const promotedTurn = candidate.admissionPending
               ? (() => {
                   const { admissionPending: _pending, ...committed } = startTurnRecord(candidate, now)
                   return { ...committed, admissionCompletedAt: now }
                 })()
               : startTurnRecord(candidate, now)
+            const history = executableHistory(await this['deps'].sessionStore.loadItems(input.threadId), thread)
+            const startedTurn = { ...promotedTurn, queueExecutionAnchorItemId: history.at(-1)?.id }
             const next: ThreadRecord = {
               ...touchThread(thread, now),
               ...(designAdmission.locksSurface && designAdmission.effectiveSurface

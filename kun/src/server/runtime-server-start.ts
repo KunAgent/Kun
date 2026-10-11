@@ -11,11 +11,13 @@ import {
   unregisterRuntimeWithManager
 } from './runtime-factory-dependencies.js'
 import { createKunServeRuntime } from './runtime-composition.js'
+import { makeKgwTokenGuard } from './kgw-token-guard.js'
 import { settleCleanupSteps } from './runtime-factory-cleanup.js'
 import { startMemoryPressureMonitor } from './memory-pressure-monitor.js'
 import type { KunServeHandle, KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { reconcileRuntimeAfterRestart } from './runtime-restart-reconciliation.js'
 import { startRuntimeStartupManagerHeartbeat } from './runtime-startup-manager-heartbeat.js'
+import { GatewayDiscoveryPublisher } from './gateway-discovery-file.js'
 
 const MANAGER_SETTLEMENT_RECOVERY_WINDOW_MS = 5 * 60_000
 
@@ -63,11 +65,23 @@ export async function startKunServe(
       router,
       host: options.host,
       port: options.port,
-      ...(options.faultInjection ? { faultInjection: options.faultInjection } : {})
+      ...(options.faultInjection ? { faultInjection: options.faultInjection } : {}),
+      ...(runtime.harnessTokens
+        ? { requestGuard: makeKgwTokenGuard(runtime.harnessTokens) }
+        : {})
     })
   } catch (error) {
     await runtime.shutdown?.().catch(() => undefined)
     throw error
+  }
+  // Fill the shared cell right after bind so turns can resolve the
+  // loopback endpoint harness gateway env.
+  if (runtime.harnesses?.gatewayEndpoint) {
+    const gatewayHost =
+      isLoopbackHost(server.host) || server.host === '0.0.0.0' || server.host === '::'
+        ? '127.0.0.1'
+        : server.host
+    runtime.harnesses.gatewayEndpoint.baseUrl = runtimeBaseUrl(gatewayHost, server.port)
   }
   let discovery: Awaited<ReturnType<typeof publishRuntimeDiscovery>>
   const runtimeFlavor = options.runtimeFlavor ?? 'production'
@@ -146,6 +160,16 @@ export async function startKunServe(
   }
   await startupManagerHeartbeat?.stop()
   startupManagerHeartbeat = null
+  // Only the production loopback runtime advertises itself to external agents;
+  // development and test runtimes must not take over the shared rendezvous.
+  const advertiseGateway = options.advertiseGatewayDiscovery === true && runtimeFlavor === 'production' && isLoopbackHost(server.host)
+  const gatewayDiscovery = new GatewayDiscoveryPublisher({ baseUrl: runtimeBaseUrl(server.host === '0.0.0.0' ? '127.0.0.1' : server.host, server.port),
+    version: KUN_SERVICE_VERSION, instanceId }, () => runtime.modelGateway?.advertiseDiscovery?.() !== false, advertiseGateway)
+  if (runtime.modelGateway) runtime.modelGateway.discovery = gatewayDiscovery
+  void gatewayDiscovery.reconcile()
+  // The setting is hot-applied through the model-connections registry; follow it.
+  const discoveryTimer = advertiseGateway ? setInterval(() => { void gatewayDiscovery.reconcile() }, 5_000) : undefined
+  discoveryTimer?.unref?.()
   runtime.startBackgroundMaintenance?.()
   // Background sweep after listen: settle turns orphaned by a crash so
   // clients stop spinning on them, without delaying readiness. Then resume
@@ -188,6 +212,9 @@ export async function startKunServe(
     close: async () => {
       memoryMonitor?.stop()
       await settleCleanupSteps([
+        // Withdraw the discovery file first: a closing runtime must not be advertised, and the
+        // runtime's own shutdown may run past the forced-exit deadline.
+        async () => { if (discoveryTimer) clearInterval(discoveryTimer); await gatewayDiscovery.stop() },
         async () => { await runtime.shutdown?.() },
         () => server.close(),
         async () => {

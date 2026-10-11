@@ -21,6 +21,8 @@ export type CompatModelCapabilities = {
   pricing?: ModelCatalogPricing
   serviceTiers?: ModelCapabilityMetadata['serviceTiers']
   responsesMode?: ModelCapabilityMetadata['responsesMode']
+  /** Resolved upstream model name, when it differs from Kun's id. */
+  wireModelId?: string
 }
 
 export function resolveCompatModelCapabilities(input: {
@@ -41,13 +43,21 @@ export function resolveCompatModelCapabilities(input: {
     messageParts,
     supportsStreaming: true,
     supportsVision: inputModalities.includes('image'),
-    supportsReasoning: metadata?.reasoning !== undefined,
+    supportsReasoning: metadata?.supportsReasoning ?? metadata?.reasoning !== undefined,
     supportsCacheUsage: true,
     supportsToolCalling: metadata?.supportsToolCalling ?? true,
     ...(metadata?.maxOutputTokens ? { maxOutputTokens: metadata.maxOutputTokens } : {}),
-    ...(metadata?.reasoning ? { reasoning: metadata.reasoning } : {}),
+    ...(metadata?.supportsReasoning === false
+      ? { reasoning: { supportedEfforts: ['off'], defaultEffort: 'off' as const, requestProtocol: 'none' as const } }
+      : metadata?.reasoning ? { reasoning: metadata.reasoning } : {}),
     ...(metadata?.pricing ? { pricing: metadata.pricing } : {}),
     ...(metadata?.serviceTiers ? { serviceTiers: metadata.serviceTiers } : {}),
-    ...(metadata?.responsesMode ? { responsesMode: metadata.responsesMode } : {})
+    ...(metadata?.responsesMode ? { responsesMode: metadata.responsesMode } : {}),
+    ...(metadata?.wireModelId ? { wireModelId: resolveWireModelId(metadata.wireModelId, input.model) } : {})
   }
+}
+
+/** `*` in an upstream name stands for the model's own id. */
+export function resolveWireModelId(template: string, model: string): string {
+  return template.includes('*') ? template.split('*').join(model) : template
 }

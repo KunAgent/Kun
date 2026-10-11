@@ -36,6 +36,7 @@ export function createRuntimeRoomComposition(input: {
     memoryStore: ownedAgentMemory ?? input.services.memoryStore,
     memoryEnabled: () => true,
     store: executionStore,
+    maxConcurrentTasks: options.runtime?.rooms?.maxConcurrentTasks,
     dataDir: options.dataDir,
     model: () => ({ model: input.options().model, providerId: activeModelConnectionProviderId(input.options()) }),
     // A bridge is insufficient unless the engine also gates its native tools.
@@ -44,6 +45,7 @@ export function createRuntimeRoomComposition(input: {
     profiles: () => mergeBuiltinSubagentProfiles(
       (input.options().capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).subagents
     ).profiles,
+    waitForOwnership: (signal) => lease?.waitForOwnership(signal) ?? Promise.resolve(),
     assertOwnership: () => executionStore.assertOwnership()
   }, () => lease?.held ?? true, apiStore)
   let stopped = false
@@ -61,6 +63,7 @@ export function createRuntimeRoomComposition(input: {
     },
     async close(): Promise<void> {
       stopped = true
+      lease?.closeAdmission()
       await starting
       try { await rooms.close(); await ownedAgentMemory?.shutdown?.() } finally {
         try { await lease?.close() } finally { await localStore?.close() }

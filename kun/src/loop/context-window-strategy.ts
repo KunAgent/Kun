@@ -72,8 +72,8 @@ export class ContextWindowStrategyCoordinator implements CompactionDispatch {
     const windowId = window?.windowId ?? 'win-0'
     const existing = this.deps.budget.stateFor(input.threadId, windowId)
     if (existing) {
-      if (existing.model !== input.model || existing.capacityTokens !== capacity) {
-        this.deps.budget.switchModel(input.threadId, windowId, input.model, capacity)
+      if (existing.model !== input.model || existing.capacityTokens !== capacity || existing.maxInputTokens !== input.requestMaxInputTokens) {
+        this.deps.budget.switchModel(input.threadId, windowId, input.model, capacity, input.requestMaxInputTokens)
       }
       return this.deps.budget.stateFor(input.threadId, windowId)
     }
@@ -87,7 +87,8 @@ export class ContextWindowStrategyCoordinator implements CompactionDispatch {
       windowId,
       windowSeq: window?.windowSeq ?? 0,
       model: input.model,
-      capacityTokens: capacity
+      capacityTokens: capacity,
+      maxInputTokens: input.requestMaxInputTokens
     })
     // Restart hydration: restore is read-only for the budget (capacity comes
     // from the live model profile), so persisted threshold marks are applied
@@ -136,19 +137,22 @@ export class ContextWindowStrategyCoordinator implements CompactionDispatch {
     // Unrecoverable: the fresh window's initial context (everything that is
     // not conversation history) plus the output reservation already exceeds
     // the hard capacity. Fail only this turn; no repeated reset, no replay.
-    if (overhead > 0 && overhead + outputReserve > hardCap) {
+    const overheadExceedsInput = overhead > (input.requestMaxInputTokens ?? Infinity)
+    if (overhead > 0 && (overheadExceedsInput || overhead + outputReserve > hardCap)) {
       return {
         history: currentHistory,
         triggered: true,
         compacted: false,
         replacedTokens: 0,
         unrecoverable: true,
-        notice: `[context window: the initial request needs about ${overhead + outputReserve} tokens but the hard capacity is ${hardCap}; reduce tools/attachments or switch to a larger model]`
+        notice: overheadExceedsInput
+          ? `[context window: the initial request needs about ${overhead} input tokens but maximum input is ${input.requestMaxInputTokens}; reduce tools/attachments or switch to a larger model]`
+          : `[context window: the initial request needs about ${overhead + outputReserve} tokens but the hard capacity is ${hardCap}; reduce tools/attachments or switch to a larger model]`
       }
     }
 
     // Hard pressure (or forced overflow recovery).
-    if (input.force !== undefined || (estimatedInput > 0 && estimatedInput + outputReserve > hardCap)) {
+    if (input.force !== undefined || (estimatedInput > 0 && (estimatedInput > (input.requestMaxInputTokens ?? Infinity) || estimatedInput + outputReserve > hardCap))) {
       if (mode === 'model_compact') {
         return this.deps.summary.compactIfNeeded({
           ...input,

@@ -2,7 +2,8 @@ import type {
   ToolCallProviderMetadata,
   ModelContextBlockState,
   TurnItem,
-  UserMessageSource
+  UserMessageSource,
+  UserTurnItem
 } from '../contracts/items.js'
 import type { ReviewOutput, ReviewTarget } from '../contracts/review.js'
 import type { UserInputQuestion } from '../ports/user-input-gate.js'
@@ -25,6 +26,7 @@ export function makeUserItem(input: {
   messageSource?: UserMessageSource
   attachmentIds?: string[]
   composerContexts?: ComposerContextAttachmentJson[]
+  reviewRequests?: UserTurnItem['reviewRequests']
   fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
   historyRefId?: string
   workspaceCheckpointId?: string
@@ -59,6 +61,7 @@ export function makeUserItem(input: {
     ...(input.messageSource ? { messageSource: input.messageSource } : {}),
     ...(attachmentIds?.length ? { attachmentIds } : {}),
     ...(input.composerContexts?.length ? { composerContexts: input.composerContexts } : {}),
+    ...(input.reviewRequests?.length ? { reviewRequests: input.reviewRequests } : {}),
     ...(fileReferences?.length ? { fileReferences } : {}),
     ...(input.historyRefId ? { historyRefId: input.historyRefId } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {}),
@@ -155,6 +158,7 @@ export function makeAssistantTextItem(input: {
   turnId: string
   threadId: string
   text: string
+  renderMode?: 'plain-text' | 'safe-markdown'
   status?: 'running' | 'completed' | 'failed'
   createdAt?: string
 }): TurnItem {
@@ -166,7 +170,8 @@ export function makeAssistantTextItem(input: {
     status: input.status ?? 'running',
     createdAt: input.createdAt ?? new Date().toISOString(),
     kind: 'assistant_text',
-    text: input.text
+    text: input.text,
+    ...(input.renderMode ? { renderMode: input.renderMode } : {})
   }
 }
 
@@ -175,6 +180,7 @@ export function makeAssistantReasoningItem(input: {
   turnId: string
   threadId: string
   text: string
+  renderMode?: 'plain-text' | 'safe-markdown'
   status?: 'running' | 'completed' | 'failed'
   createdAt?: string
 }): TurnItem {
@@ -186,7 +192,8 @@ export function makeAssistantReasoningItem(input: {
     status: input.status ?? 'running',
     createdAt: input.createdAt ?? new Date().toISOString(),
     kind: 'assistant_reasoning',
-    text: input.text
+    text: input.text,
+    ...(input.renderMode ? { renderMode: input.renderMode } : {})
   }
 }
 
@@ -200,6 +207,7 @@ export function makeToolCallItem(input: {
   arguments: Record<string, unknown>
   providerMetadata?: ToolCallProviderMetadata
   summary?: string
+  meta?: Record<string, unknown>
   status?: 'pending' | 'running' | 'completed' | 'failed'
 }): TurnItem {
   const projected = projectToolArgumentsForPersistence(input.arguments)
@@ -217,7 +225,8 @@ export function makeToolCallItem(input: {
     toolKind: input.toolKind ?? 'tool_call',
     arguments: projected.arguments,
     ...(input.providerMetadata ? { providerMetadata: input.providerMetadata } : {}),
-    summary
+    summary,
+    ...(input.meta ? { meta: input.meta } : {})
   }
 }
 

@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useWorkbenchChatStarters } from './use-workbench-chat-starters'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
-import type { NormalizedThread, RuntimeConnectionStatus } from '../../agent/types'
+import type { NormalizedThread } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import type { ChatState } from '../../store/chat-store-types'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
-import { usePaperStore } from '../../write/paper/paper-store'
-import { paperModeView } from '../../paper/paper-view'
-import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
+import { startWorkSession } from '../../write/work-session-actions'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
 import { useSddDraftStore } from '../../sdd/sdd-draft-store'
 import { markSddAssistantThread } from '../../sdd/sdd-thread-registry'
@@ -20,7 +19,7 @@ import {
 } from '../../design/design-thread-registry'
 import { isDesignWorkbenchThread } from '../../design/design-task-classification'
 import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-error'
-import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../../lib/workspace-path'
+import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import { activateThreadTurnTarget, prepareThreadTurnTarget, useThreadTurnTarget } from '../chat/thread-turn-target'
@@ -30,7 +29,7 @@ import {
   DEFAULT_WORKBENCH_DESIGN_PROFILE
 } from './workbench-task-intent'
 
-export type WorkbenchSidebarView = 'chat' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
+export type WorkbenchSidebarView = 'chat' | 'ade' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
 
 export type UseWorkbenchNavigationControllerParams = {
   activeSddDraft: boolean
@@ -38,9 +37,10 @@ export type UseWorkbenchNavigationControllerParams = {
   pluginHostRoute: ChatState['pluginHostRoute']
   rightPanelMode: RightPanelMode
   route: ChatState['route']
-  runtimeConnection: RuntimeConnectionStatus
   sddDraftContent: string
   threads: NormalizedThread[]
+  /** ADE inventory is separate; openThread consults it for workspaceMode. */
+  adeThreads?: NormalizedThread[]
   useWorktreePool: boolean
   workspaceRoot: string
   worktreeBranch: string
@@ -48,9 +48,7 @@ export type UseWorkbenchNavigationControllerParams = {
   clearFilePreviewTargets: () => void
   createConversation: ChatState['createConversation']
   createThread: ChatState['createThread']
-  createWriteThread: ChatState['createWriteThread']
   dismissActiveSddDraft: (options?: { closeAssistant?: boolean }) => void
-  ensureWriteThreadForWorkspace: ChatState['ensureWriteThreadForWorkspace']
   findSddDraftForSidebarThread: (
     threadId: string,
     thread: NormalizedThread | null
@@ -58,6 +56,7 @@ export type UseWorkbenchNavigationControllerParams = {
   openClaw: ChatState['openClaw']
   openBoard: ChatState['openBoard']
   openCode: ChatState['openCode']
+  openAde: ChatState['openAde']
   openPlugins: ChatState['openPlugins']
   openSchedule: ChatState['openSchedule']
   openWorkflow: ChatState['openWorkflow']
@@ -77,6 +76,7 @@ export type WorkbenchNavigationController = {
   closeRightPanel: () => void
   exploreSddRequirementInDesign: () => void
   openCodeMode: () => void
+  openAdeMode: () => void
   openPluginsView: () => void
   openBoardView: () => void
   openExtensionsView: () => void
@@ -87,6 +87,16 @@ export type WorkbenchNavigationController = {
   pickWriteAssistantWorkspace: () => Promise<void>
   sidebarView: WorkbenchSidebarView
   startNewChat: () => void
+  startNewAdeChat: () => void
+  /** One-to-one thread pinned to a harness; isolation defaults to a new worktree. */
+  startNewAdeOneOnOne: (input: {
+    harnessId: string
+    credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    providerId?: string
+    model?: string
+    isolation?: 'local' | 'worktree'
+    permissionMode?: string
+  }) => void
   startNewChatInWorkspace: (
     workspaceRoot: string,
     options?: { forceNew?: boolean }
@@ -136,22 +146,21 @@ export function useWorkbenchNavigationController({
   pluginHostRoute,
   rightPanelMode,
   route,
-  runtimeConnection,
   sddDraftContent,
   threads,
+  adeThreads = [],
   useWorktreePool,
   workspaceRoot,
   worktreeBranch,
   clearFilePreviewTargets,
   createConversation,
   createThread,
-  createWriteThread,
   dismissActiveSddDraft,
-  ensureWriteThreadForWorkspace,
   findSddDraftForSidebarThread,
   openClaw,
   openBoard,
   openCode,
+  openAde,
   openPlugins,
   openSchedule,
   openWorkflow,
@@ -180,12 +189,27 @@ export function useWorkbenchNavigationController({
     }
   }, [route])
 
+  const { startNewChat, startNewAdeChat, startNewAdeOneOnOne, startNewChatInWorkspace } =
+    useWorkbenchChatStarters({
+      activeSddDraft,
+      beginNavigation,
+      createThread,
+      dismissActiveSddDraft,
+      navigationIsCurrent,
+      setConnectPhoneSidebarOpen,
+      setRoute,
+      setUseWorktreePool,
+      useWorktreePool,
+      worktreeBranch
+    })
+
   const sidebarView: WorkbenchSidebarView = useMemo(() => {
     if (route === 'claw' || (route === 'plugins' && pluginHostRoute === 'claw')) return 'claw'
     if (route === 'schedule') return 'schedule'
     if (route === 'board') return 'board'
     if (route === 'workflow') return 'workflow'
     if (route === 'write') return 'write'
+    if (route === 'ade') return 'chat'
     return 'chat'
   }, [pluginHostRoute, route])
 
@@ -207,7 +231,15 @@ export function useWorkbenchNavigationController({
         return
       }
       useThreadTurnTarget.setState({ target: null })
-      const thread = threads.find((item) => item.id === id) ?? null
+      const thread = threads.find((item) => item.id === id) ??
+        adeThreads.find((item) => item.id === id) ?? null
+      // Historical ADE threads retain their identity and open in Code.
+      if (thread?.workspaceMode === 'ade') {
+        if (useSddDraftStore.getState().activeDraft) dismissActiveSddDraft({ closeAssistant: true })
+        setRoute('chat')
+        await selectThread(id, { selectionGuard: isCurrentRequest })
+        return
+      }
       const designRegistry = readDesignThreadRegistry()
       if (isWorkbenchDesignThread(id, thread, designRegistry)) {
         const cachedDesignRef = (): WorkbenchDesignDocumentRef | null => {
@@ -325,6 +357,7 @@ export function useWorkbenchNavigationController({
       await selectThread(id, { selectionGuard: isCurrentRequest })
     })()
   }, [
+    adeThreads,
     beginNavigation,
     dismissActiveSddDraft,
     findSddDraftForSidebarThread,
@@ -333,62 +366,6 @@ export function useWorkbenchNavigationController({
     setConnectPhoneSidebarOpen,
     setRoute,
     threads
-  ])
-
-  const startNewChat = useCallback((): void => {
-    const requestId = beginNavigation()
-    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
-    setConnectPhoneSidebarOpen(false)
-    setRoute('chat')
-    void createThread({
-      useWorktreePool,
-      worktreeBranch,
-      agentSurface: 'code',
-      activationGuard: () => navigationIsCurrent(requestId)
-    })
-    if (useWorktreePool) setUseWorktreePool(false)
-  }, [
-    activeSddDraft,
-    beginNavigation,
-    createThread,
-    dismissActiveSddDraft,
-    navigationIsCurrent,
-    setConnectPhoneSidebarOpen,
-    setRoute,
-    setUseWorktreePool,
-    useWorktreePool,
-    worktreeBranch
-  ])
-
-  const startNewChatInWorkspace = useCallback(async (
-    targetWorkspaceRoot: string,
-    options?: { forceNew?: boolean }
-  ): Promise<string | null> => {
-    const requestId = beginNavigation()
-    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
-    setConnectPhoneSidebarOpen(false)
-    setRoute('chat')
-    const threadId = await createThread({
-      workspaceRoot: targetWorkspaceRoot,
-      forceNew: options?.forceNew,
-      agentSurface: 'code',
-      useWorktreePool,
-      worktreeBranch,
-      activationGuard: () => navigationIsCurrent(requestId)
-    })
-    if (useWorktreePool) setUseWorktreePool(false)
-    return threadId
-  }, [
-    activeSddDraft,
-    beginNavigation,
-    createThread,
-    dismissActiveSddDraft,
-    navigationIsCurrent,
-    setConnectPhoneSidebarOpen,
-    setRoute,
-    setUseWorktreePool,
-    useWorktreePool,
-    worktreeBranch
   ])
 
   const startNewConversation = useCallback((): void => {
@@ -412,6 +389,12 @@ export function useWorkbenchNavigationController({
     setConnectPhoneSidebarOpen(false)
     void openCode({ activationGuard: () => navigationIsCurrent(requestId) })
   }, [beginNavigation, navigationIsCurrent, openCode, setConnectPhoneSidebarOpen])
+
+  const openAdeMode = useCallback((): void => {
+    const requestId = beginNavigation()
+    setConnectPhoneSidebarOpen(false)
+    void openAde({ activationGuard: () => navigationIsCurrent(requestId) })
+  }, [beginNavigation, navigationIsCurrent, openAde, setConnectPhoneSidebarOpen])
 
   const openWriteMode = useCallback((): void => {
     const requestId = beginNavigation()
@@ -495,6 +478,11 @@ export function useWorkbenchNavigationController({
         void openWrite({ activationGuard: () => navigationIsCurrent(requestId) })
         return
       }
+      if (returnRoute === 'ade') {
+        // ADE 与 Code 各自记忆线程:返回 ADE 时恢复上次的 ADE 会话。
+        void openAde({ activationGuard: () => navigationIsCurrent(requestId) })
+        return
+      }
       setRoute(returnRoute)
       return
     }
@@ -504,6 +492,7 @@ export function useWorkbenchNavigationController({
   }, [
     beginNavigation,
     navigationIsCurrent,
+    openAde,
     openClaw,
     openCode,
     openWrite,
@@ -541,48 +530,12 @@ export function useWorkbenchNavigationController({
   ])
 
   const startNewWriteAssistantConversation = useCallback((): void => {
-    const writeState = useWriteWorkspaceStore.getState()
-    const writeWorkspaceRoot = writeState.workspaceRoot || workspaceRoot
-    const activeBoardId = writeState.activeWhiteboardId
-    const activeBoard = activeBoardId ? writeState.whiteboards[activeBoardId] ?? null : null
     setInput('')
-    writeState.clearQuotedSelections()
-    // PPT review boards are canonically tied to the task that created their
-    // workflow. A generic New conversation must not replace that parent
-    // identity (or create an unrelated Write task with no board to own it).
-    if (activeBoard?.workflowId) return
-    const writeWorkspaceScope = workspaceRootScopeKey(writeWorkspaceRoot)
-    const conversationResource = writeState.workSurface === 'papers'
-      ? paperConversationResourcePath({
-          surface: writeState.workSurface,
-          workspaceRoot: writeWorkspaceRoot,
-          activeFilePath: writeState.activeFilePath,
-          unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
-          entriesByDir: writeState.entriesByDir,
-          view: paperModeView(writeState),
-          researchSessionId: writeState.paperResearch.sessionId
-        }) ?? ''
-      : writeState.activeFilePath ?? undefined
-    void createWriteThread(
-      writeWorkspaceRoot,
-      conversationResource,
-      activeBoard
-        ? { title: activeBoard.title, titleAuto: false }
-        : undefined
-    ).then((threadId) => {
-      if (!activeBoardId || !threadId) return
-      const latest = useWriteWorkspaceStore.getState()
-      const latestBoard = latest.whiteboards[activeBoardId]
-      if (
-        latest.activeWhiteboardId !== activeBoardId ||
-        workspaceRootScopeKey(latest.workspaceRoot) !== writeWorkspaceScope ||
-        !latestBoard ||
-        workspaceRootScopeKey(latestBoard.workspaceRoot) !== writeWorkspaceScope ||
-        latestBoard.workflowId
-      ) return
-      void latest.bindWhiteboardThread(activeBoardId, threadId)
-    })
-  }, [createWriteThread, setInput, workspaceRoot])
+    useWriteWorkspaceStore.getState().clearQuotedSelections()
+    // Same entry as the sidebar's New session: a draft that the first send
+    // turns into a session anchored to whatever is open then.
+    void startWorkSession()
+  }, [setInput])
 
   const pickWriteAssistantWorkspace = useCallback(async (): Promise<void> => {
     try {
@@ -594,19 +547,18 @@ export function useWorkbenchNavigationController({
       const picked = await window.kunGui.pickWorkspaceDirectory(
         writeState.workspaceRoot || writeState.defaultWorkspaceRoot || workspaceRoot || undefined
       )
-      if (!picked.canceled && picked.path) {
-        await useWriteWorkspaceStore.getState().addWriteWorkspace(picked.path)
-        if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
-      }
+      // The space's first session starts with the first send; nothing is created here.
+      if (!picked.canceled && picked.path) await useWriteWorkspaceStore.getState().addWriteWorkspace(picked.path)
     } catch (error) {
       useWriteWorkspaceStore.getState().setFileError(formatWorkspacePickerError(error))
     }
-  }, [ensureWriteThreadForWorkspace, runtimeConnection, workspaceRoot])
+  }, [workspaceRoot])
 
   return {
     closeRightPanel,
     exploreSddRequirementInDesign,
     openCodeMode,
+    openAdeMode,
     openPluginsView,
     openBoardView,
     openExtensionsView,
@@ -617,6 +569,8 @@ export function useWorkbenchNavigationController({
     pickWriteAssistantWorkspace,
     sidebarView,
     startNewChat,
+    startNewAdeChat,
+    startNewAdeOneOnOne,
     startNewChatInWorkspace,
     startNewConversation,
     startNewWriteAssistantConversation,

@@ -1,0 +1,15 @@
+{
+  "gatewayExtensions": {
+    "title": "Extension providers",
+    "description": "Extensions that allow it can serve their models to external agents. Choose the account each provider's gateway requests use; nothing is exported until you do.",
+    "needsExposure": "Turn on \"Expose provider models\" above for exported extension models to appear.",
+    "models": "{{count}} models",
+    "accountFor": "Account for {{provider}}",
+    "notExported": "Not exported",
+    "noAccounts": "Sign in to this provider in its extension first.",
+    "boundaries": "Gateway client keys still need permission for each exported model. Installing or updating an extension never grants it.",
+    "subscriptionTitle": "Experimental: share a ChatGPT subscription",
+    "subscriptionRisk": "A subscription is a personal entitlement, not an API. Using it from other agents may break the vendor's terms and put the account at risk. It stays off unless you turn it on here, and client keys still need permission for its models.",
+    "subscriptionToggle": "Share {{provider}} through the gateway"
+  }
+}

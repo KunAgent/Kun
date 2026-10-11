@@ -61,6 +61,9 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     ...(thread.historyRefId ? { historyRefId: thread.historyRefId } : {}),
     title: thread.title?.trim() || thread.id.slice(0, 8),
     ...(thread.agentSurface ? { agentSurface: thread.agentSurface } : {}),
+    ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
+    ...(thread.collaboration ? { collaboration: { ...thread.collaboration } } : {}),
+    ...(thread.executionConfig ? { executionConfig: { ...thread.executionConfig } } : {}),
     ...(thread.lockedTaskSurface ? { lockedTaskSurface: thread.lockedTaskSurface } : {}),
     ...(thread.designProfile
       ? { designProfile: cloneDesignTaskProfile(thread.designProfile) }
@@ -80,6 +83,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     knowledgeBases: thread.knowledgeBases?.map((mount) => ({ ...mount })),
     status: thread.status,
     ...(typeof thread.latestSeq === 'number' ? { latestSeq: thread.latestSeq } : {}),
+    ...(typeof thread.turnCount === 'number' ? { turnCount: thread.turnCount } : {}),
     approvalPolicy: normalizeApprovalPolicy(thread.approvalPolicy),
     sandboxMode: normalizeSandboxMode(thread.sandboxMode),
     approvalReviewer: normalizeApprovalReviewer(thread.approvalReviewer),
@@ -87,11 +91,15 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     archived: thread.status === 'archived',
     pinned: thread.pinned === true,
     ...(thread.providerId ? { providerId: thread.providerId } : {}),
+    ...(thread.harnessId ? { harnessId: thread.harnessId } : {}),
+    ...(thread.taskWorkspaceId ? { taskWorkspaceId: thread.taskWorkspaceId } : {}),
     ...(thread.agentId ? { agentId: thread.agentId } : {}),
     ...(thread.systemPrompt ? { systemPrompt: thread.systemPrompt } : {}),
     relation: thread.relation,
     parentThreadId: thread.parentThreadId,
+    ...(thread.executionUnit ? { executionUnit: { ...thread.executionUnit } } : {}),
     ...(thread.roomContext ? { roomContext: thread.roomContext } : {}),
+    ...(thread.workbenchOrigin ? { workbenchOrigin: { ...thread.workbenchOrigin } } : {}),
     planBuildRunId: thread.planBuildRunId,
     forkedFromThreadId: thread.forkedFromThreadId,
     forkedFromTitle: thread.forkedFromTitle,
@@ -152,10 +160,15 @@ export function goalFromCore(goal: CoreThreadGoalJson): ThreadGoal {
 export function todosFromCore(todos: CoreThreadTodoListJson): ThreadTodoList {
   return {
     threadId: todos.threadId,
+    ...(todos.revision !== undefined ? { revision: todos.revision } : {}),
     items: (todos.items ?? []).map((item) => ({
       id: item.id,
       content: item.content,
       status: item.status,
+      ...(item.taskStatus ? { taskStatus: item.taskStatus } : {}),
+      ...(item.taskRevision !== undefined ? { taskRevision: item.taskRevision } : {}),
+      ...(item.ownerThreadId ? { ownerThreadId: item.ownerThreadId } : {}),
+      ...(item.reason ? { reason: item.reason } : {}),
       ...(item.source ? { source: { ...item.source } } : {}),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt
@@ -488,7 +501,8 @@ export function applyRuntimeDisclosureMeta(
     item.messageSource === 'background_subagent' ||
     item.messageSource === 'graph_runtime' ||
     item.messageSource === 'subagent_resume' ||
-    item.messageSource === 'design_continuation'
+    item.messageSource === 'design_continuation' ||
+    item.messageSource === 'worker_update'
   ) {
     meta.messageSource = item.messageSource
   }

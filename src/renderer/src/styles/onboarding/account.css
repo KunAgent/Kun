@@ -1,0 +1,226 @@
+/* First-run guide: the optional Kun account step. */
+
+.kun-onb-account {
+display: flex;
+flex: none;
+align-items: center;
+gap: 14px;
+padding: 16px 18px 16px 16px;
+border-radius: 16px;
+border: 1px solid var(--onb-line);
+background: var(--onb-surface);
+box-shadow: var(--onb-card-shadow);
+transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.kun-onb-account[data-tone='live'] {
+border-color: var(--onb-accent-line);
+background: color-mix(in srgb, var(--onb-accent-soft) 55%, var(--onb-surface));
+box-shadow: 0 0 0 3px var(--onb-accent-ring);
+}
+
+.kun-onb-account[data-tone='ok'] {
+border-color: var(--onb-ok-line);
+}
+
+.kun-onb-account-face {
+display: flex;
+width: 48px;
+height: 48px;
+flex: none;
+align-items: center;
+justify-content: center;
+overflow: hidden;
+border-radius: 14px;
+background: var(--onb-surface-2);
+color: var(--onb-text-3);
+}
+
+.kun-onb-account[data-tone='ok'] .kun-onb-account-face {
+background: var(--onb-accent-soft);
+color: var(--onb-accent-ink);
+}
+
+.kun-onb-account-face img {
+width: 100%;
+height: 100%;
+object-fit: cover;
+}
+
+.kun-onb-account-face b {
+font-size: 20px;
+font-weight: 700;
+}
+
+.kun-onb-account-text {
+display: flex;
+min-width: 0;
+flex: 1;
+flex-direction: column;
+gap: 3px;
+}
+
+.kun-onb-account-text b {
+overflow: hidden;
+font-size: 15px;
+font-weight: 600;
+color: var(--onb-text);
+text-overflow: ellipsis;
+white-space: nowrap;
+}
+
+.kun-onb-account-text small {
+display: flex;
+align-items: center;
+gap: 6px;
+font-size: 12.5px;
+line-height: 1.5;
+color: var(--onb-text-3);
+text-wrap: pretty;
+}
+
+.kun-onb-account-live {
+width: 7px;
+height: 7px;
+flex: none;
+border-radius: 50%;
+background: var(--onb-accent);
+animation: kun-onb-account-pulse 1.4s ease-in-out infinite;
+}
+
+.kun-onb-account-actions {
+display: flex;
+flex: none;
+gap: 8px;
+}
+
+.kun-onb-account .kun-onb-btn.is-accent {
+height: 36px;
+padding: 0 16px;
+border-color: var(--onb-primary-bg);
+background: var(--onb-primary-bg);
+font-weight: 600;
+color: var(--onb-primary-fg);
+box-shadow: 0 6px 16px var(--onb-primary-glow);
+}
+
+.kun-onb-account .kun-onb-btn.is-accent:hover:not(:disabled) {
+filter: brightness(1.06);
+}
+
+.kun-onb-account-steps {
+display: flex;
+flex: none;
+flex-wrap: wrap;
+gap: 6px 18px;
+margin: -4px 0 0;
+padding: 0 4px;
+list-style: none;
+font-size: 12.5px;
+color: var(--onb-text-3);
+}
+
+.kun-onb-account-steps li {
+display: inline-flex;
+align-items: center;
+gap: 7px;
+}
+
+.kun-onb-account-steps li > i {
+width: 8px;
+height: 8px;
+border-radius: 50%;
+border: 1.5px solid var(--onb-line-strong);
+}
+
+.kun-onb-account-steps li[data-step='done'] {
+color: var(--onb-ok);
+}
+
+.kun-onb-account-steps li[data-step='current'] {
+font-weight: 600;
+color: var(--onb-accent-ink);
+}
+
+.kun-onb-account-steps li[data-step='current'] > i {
+border-color: var(--onb-accent);
+background: var(--onb-accent);
+animation: kun-onb-account-pulse 1.4s ease-in-out infinite;
+}
+
+.kun-onb-benefits {
+display: grid;
+grid-template-columns: repeat(3, minmax(0, 1fr));
+gap: 10px;
+margin: 0;
+padding: 0;
+list-style: none;
+}
+
+.kun-onb-benefit {
+position: relative;
+display: flex;
+flex-direction: column;
+gap: 10px;
+padding: 14px;
+border-radius: 14px;
+border: 1px solid var(--onb-line);
+background: var(--onb-surface);
+}
+
+.kun-onb-benefit-icon {
+display: flex;
+width: 34px;
+height: 34px;
+align-items: center;
+justify-content: center;
+border-radius: 10px;
+}
+
+.kun-onb-benefit-icon[data-kind='wardrobe'] { background: #efeaff; color: #6a4fd1; }
+.kun-onb-benefit-icon[data-kind='bottles'] { background: #e8f1ff; color: #2a66c7; }
+.kun-onb-benefit-icon[data-kind='invite'] { background: #fff0e1; color: #a64f0b; }
+[data-theme='dark'] .kun-onb-benefit-icon[data-kind='wardrobe'] { background: rgba(150, 120, 255, 0.16); color: #b9a6ff; }
+[data-theme='dark'] .kun-onb-benefit-icon[data-kind='bottles'] { background: rgba(80, 150, 255, 0.14); color: #8cbcff; }
+[data-theme='dark'] .kun-onb-benefit-icon[data-kind='invite'] { background: rgba(245, 140, 40, 0.14); color: #ffb26b; }
+
+.kun-onb-benefit-text {
+display: flex;
+flex-direction: column;
+gap: 4px;
+}
+
+.kun-onb-benefit-text b {
+font-size: 13.5px;
+font-weight: 600;
+color: var(--onb-text);
+}
+
+.kun-onb-benefit-text small {
+font-size: 12px;
+line-height: 1.55;
+color: var(--onb-text-3);
+text-wrap: pretty;
+}
+
+.kun-onb-benefit-check {
+position: absolute;
+top: 14px;
+right: 14px;
+color: var(--onb-ok);
+}
+
+@keyframes kun-onb-account-pulse {
+0%, 100% { opacity: 1; transform: scale(1); }
+50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+@media (max-width: 760px) {
+.kun-onb-benefits {
+grid-template-columns: minmax(0, 1fr);
+}
+
+.kun-onb-account {
+flex-wrap: wrap;
+}
+}

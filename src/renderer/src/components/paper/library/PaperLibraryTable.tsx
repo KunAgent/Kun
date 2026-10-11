@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement, type RefObject } from 'react'
-import { ArrowDown, ArrowUp, ArrowUpDown, FileWarning, MoreHorizontal, ScrollText } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, FileWarning, MessageSquare, MoreHorizontal, ScrollText } from 'lucide-react'
 import type {
   PaperLibraryEntry,
   PaperLibrarySort,
@@ -87,6 +87,8 @@ export function PaperLibraryTable({
   onToggleAll,
   onOpen,
   onMenu,
+  sessionCounts,
+  onOpenSessions,
   t
 }: {
   rows: PaperLibraryEntry[]
@@ -98,6 +100,10 @@ export function PaperLibraryTable({
   onToggleAll: () => void
   onOpen: (entry: PaperLibraryEntry) => void
   onMenu: (entry: PaperLibraryEntry, x: number, y: number) => void
+  /** unitDir → number of sessions anchored to the paper (readings, batches). */
+  sessionCounts?: Record<string, number>
+  /** Open the paper with its most recent session. */
+  onOpenSessions?: (entry: PaperLibraryEntry) => void
   t: Translate
 }): ReactElement {
   const allSelected = rows.length > 0 && rows.every((row) => selection.has(row.unitDir))
@@ -158,6 +164,8 @@ export function PaperLibraryTable({
             onToggle={() => onToggleSelected(entry.unitDir)}
             onOpen={() => onOpen(entry)}
             onMenu={(x, y) => onMenu(entry, x, y)}
+            sessions={sessionCounts?.[entry.unitDir] ?? 0}
+            onOpenSessions={onOpenSessions ? () => onOpenSessions(entry) : undefined}
             hidden={hidden}
             t={t}
           />
@@ -177,11 +185,15 @@ function PaperLibraryRow({
   onToggle,
   onOpen,
   onMenu,
+  sessions,
+  onOpenSessions,
   hidden,
   t
 }: {
   entry: PaperLibraryEntry
   activity: PaperUnitReadingActivity | undefined
+  sessions: number
+  onOpenSessions?: () => void
   selected: boolean
   onToggle: () => void
   onOpen: () => void
@@ -240,6 +252,22 @@ function PaperLibraryRow({
             <span className="shrink-0 rounded border border-amber-300 px-1 text-[10px] text-amber-700 dark:border-amber-800 dark:text-amber-300">
               {t('writePaperNeedsReview')}
             </span>
+          ) : null}
+          {sessions > 0 && onOpenSessions ? (
+            <button
+              type="button"
+              data-paper-sessions={sessions}
+              title={t('paperRowSessions', { count: sessions })}
+              aria-label={t('paperRowSessions', { count: sessions })}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenSessions()
+              }}
+              className="ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] text-accent transition hover:bg-accent/10"
+            >
+              <MessageSquare className="h-3 w-3" strokeWidth={1.9} />
+              {sessions}
+            </button>
           ) : null}
         </span>
       </td>

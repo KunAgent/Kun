@@ -201,7 +201,6 @@ describe('provider quota registry and refresh', () => {
     ], 'http://127.0.0.1:7890'), fetcher)
 
     expect(result.entries
-      .filter((entry) => entry.providerId !== 'opencode-free')
       .map((entry) => [entry.providerId, entry.status])).toEqual([
       ['deepseek', 'available'],
       ['deepseek-two', 'missing_credentials'],
@@ -319,7 +318,7 @@ describe('provider quota registry and refresh', () => {
     })
 
     expect(result.entries
-      .filter((entry) => !['deepseek', 'opencode-free'].includes(entry.providerId))
+      .filter((entry) => entry.providerId !== 'deepseek')
       .map((entry) => [entry.providerId, entry.status])).toEqual([
       ['claude-subscription', 'available'],
       ['codex', 'available'],

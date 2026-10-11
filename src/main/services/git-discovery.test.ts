@@ -1,8 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, parse } from 'node:path'
 import { findNearestGitRoot } from './git-discovery'
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...actual, stat: vi.fn(actual.stat) }
+})
 
 let sandbox = ''
 
@@ -11,6 +16,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.mocked(stat).mockReset()
   if (sandbox) {
     await rm(sandbox, { recursive: true, force: true })
     sandbox = ''
@@ -55,11 +61,17 @@ describe('findNearestGitRoot', () => {
   })
 
   it('returns null when no ancestor contains .git', async () => {
-    // sandbox is a fresh tmpdir with no .git anywhere up the chain (the
-    // walker stops at the filesystem root, so we just verify the function
-    // does not crash and returns null for a non-repo path).
+    // CI or a developer may keep /tmp inside a repository. Model the stated
+    // no-ancestor condition instead of relying on the host filesystem layout.
+    vi.mocked(stat).mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     const result = await findNearestGitRoot(sandbox)
     expect(result).toBeNull()
+    const expected: string[] = []
+    for (let directory = sandbox; ; directory = dirname(directory)) {
+      expected.push(`${directory}/.git`)
+      if (directory === parse(directory).root) break
+    }
+    expect(vi.mocked(stat).mock.calls.map(([path]) => path)).toEqual(expected)
   })
 
   it('returns null for an empty string', async () => {
@@ -94,9 +106,8 @@ describe('findNearestGitRoot', () => {
   })
 
   it('returns null for a path that walks past the filesystem root', async () => {
-    // /this/path/does/not/exist/anywhere is not a real ancestor of anything
-    // git-ish, so the walker should return null without throwing.
-    const result = await findNearestGitRoot('/this/path/does/not/exist/anywhere')
+    vi.mocked(stat).mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    const result = await findNearestGitRoot(join(parse(sandbox).root, 'this/path/does/not/exist/anywhere'))
     expect(result).toBeNull()
   })
 })

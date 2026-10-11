@@ -23,6 +23,22 @@ function expectOk(result: ReturnType<typeof parseMcpConfigText>) {
 }
 
 describe('parseMcpConfigText', () => {
+  it('preserves the OAuth issuer and credential configuration when editing a server', () => {
+    const oauth = {
+      enabled: true,
+      clientId: 'configured-client',
+      clientSecret: 'fixture-secret',
+      expectedIssuer: 'https://auth.example.test/tenant',
+      scopes: ['read'],
+      callbackTimeoutMs: 5000
+    }
+    const model = expectOk(parseMcpConfigText(JSON.stringify({
+      servers: { remote: { transport: 'streamable-http', url: 'https://mcp.example.test', oauth } }
+    })))
+    model.servers[0].timeoutMs = 15000
+    expect(JSON.parse(serializeMcpConfig(model)).servers.remote.oauth).toEqual(oauth)
+  })
+
   it('treats empty text as an empty model', () => {
     const model = expectOk(parseMcpConfigText('   \n  '))
     expect(model.servers).toEqual([])

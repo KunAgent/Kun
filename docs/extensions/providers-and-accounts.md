@@ -1,5 +1,15 @@
 # 模型 Provider、账号与认证
 
+See [the provider configuration and gateway contract](../provider-configuration-and-gateway.md)
+for the built-in descriptor schema and v2 account Registry. Extension executable
+adapters keep their existing permission boundary; registering an extension
+provider does not automatically grant public gateway export or an Agent login.
+当前统一网关只开放验收过的内置 HTTP 文本 adapter。扩展 Provider 的公开导出
+属于独立 P5 change；安装扩展不扩大已有客户端 Key 的批准账号集合。字段级
+能力/价格资料保留来源和观察时间，未知值不能当作兼容保证。见
+[发布验收](../provider-gateway-release-validation.md)。
+
+
 > Extension API：v1
 > English: [Model Providers, accounts, and authentication](./providers-and-accounts.en.md)
 > 相关：[权限与秘密](./security-and-resources.md) · [版本与迁移](./versioning-and-migrations.md)

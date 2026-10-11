@@ -4,13 +4,12 @@ import type { SettingsRouteSection } from '../../store/chat-store'
 import type { ClawInstallTarget } from '../chat/SidebarClawDialogHelpers'
 import { Sidebar } from '../chat/Sidebar'
 import { WriteSidebar } from '../write/WriteSidebar'
-import { PaperSidebar } from '../paper/PaperSidebar'
-import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import type { RegisteredContribution } from '../../extensions/contribution-registry'
 import { ExtensionViewOutlet } from '../../extensions/ControlledContributionSurfaces'
 import { normalizeWorkbenchRoute } from './workbench-route'
 import { workbenchDividerClassName } from './workbench-divider'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { useWardrobeRoute } from '../wardrobe/wardrobe-route'
 
 type CodeSidebarProps = ComponentProps<typeof Sidebar>
 
@@ -19,8 +18,10 @@ export type WorkbenchLeftSidebarProps = {
   width: number
   route: string
   codeThreads: CodeSidebarProps['threads']
+  /** ADE inventory is fully separate from the Code thread list. */
+  adeThreads: CodeSidebarProps['threads']
   activeThreadId: CodeSidebarProps['activeThreadId']
-  sidebarView: CodeSidebarProps['activeView']
+  sidebarView: CodeSidebarProps['activeView'] | 'ade'
   connectPhoneSidebarOpen: boolean
   connectPhoneInitialTarget?: ClawInstallTarget
   extensionsActive: boolean
@@ -47,6 +48,16 @@ export type WorkbenchLeftSidebarProps = {
   onToggleTheme: CodeSidebarProps['onToggleTheme']
   onToggleConnectPhone: CodeSidebarProps['onToggleConnectPhone']
   onCodeOpen: CodeSidebarProps['onCodeOpen']
+  onAdeOpen: () => void
+  onNewAdeChat: () => void
+  onNewAdeOneOnOne: (input: {
+    harnessId: string
+    credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    providerId?: string
+    model?: string
+    isolation?: 'local' | 'worktree'
+    permissionMode?: string
+  }) => void
   onWriteOpen: CodeSidebarProps['onWriteOpen']
   onScheduleOpen: CodeSidebarProps['onScheduleOpen']
   onBoardOpen?: CodeSidebarProps['onBoardOpen']
@@ -104,9 +115,11 @@ export function WorkbenchLeftSidebar({
 }: WorkbenchLeftSidebarProps): ReactElement | null {
   const { t } = useTranslation('common')
   const remoteMobile = useRemoteMobileLayout()
-  const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
-  if (collapsed || route === 'rooms') return null
+  // The wardrobe page keeps the sidebar of the mode it was opened from.
+  const wardrobeFromWork = useWardrobeRoute((state) => state.returnRoute === 'write')
+  if (collapsed) return null
   const normalizedRoute = normalizeWorkbenchRoute(route)
+  const wardrobe = normalizedRoute === 'wardrobe'
   // On a phone the sidebar is an overlay drawer: navigation actions and the
   // backdrop both collapse it again (onBackdropClose toggles collapsed state).
   const close = (): void => { onBackdropClose?.() }
@@ -126,37 +139,25 @@ export function WorkbenchLeftSidebar({
           workspaceRoot={workspaceRoot}
           onClose={wrapCloseOpt(onCloseExtensionView)}
         />
-      ) : normalizedRoute === 'write' ? (
+      ) : normalizedRoute === 'write' || (wardrobe && wardrobeFromWork) ? (
         <Suspense fallback={<SidebarFallback />}>
-          {workSurface === 'papers' ? (
-            <PaperSidebar
-              activeView="write"
-              connectPhoneSidebarOpen={connectPhoneSidebarOpen}
-              focusModeEnabled={focusModeEnabled}
-              onCodeOpen={wrapClose(onCodeOpen)}
-              onWriteOpen={wrapClose(onWriteOpen)}
-              onFocusModeChange={onFocusModeChange}
-              onOpenSettings={wrapClose(onOpenSettings)}
-              onToggleConnectPhone={onToggleConnectPhone}
-            />
-          ) : (
-            <WriteSidebar
-              activeView="write"
-              connectPhoneSidebarOpen={connectPhoneSidebarOpen}
-              focusModeEnabled={focusModeEnabled}
-              onCodeOpen={wrapClose(onCodeOpen)}
-              onWriteOpen={wrapClose(onWriteOpen)}
-              onFocusModeChange={onFocusModeChange}
-              onOpenSettings={wrapClose(onOpenSettings)}
-              onToggleConnectPhone={onToggleConnectPhone}
-            />
-          )}
+          <WriteSidebar
+            activeView="write"
+            connectPhoneSidebarOpen={connectPhoneSidebarOpen}
+            focusModeEnabled={focusModeEnabled}
+            onCodeOpen={wrapClose(onCodeOpen)}
+            onWriteOpen={wrapClose(onWriteOpen)}
+            onFocusModeChange={onFocusModeChange}
+            onOpenSettings={wrapClose(onOpenSettings)}
+            onToggleConnectPhone={onToggleConnectPhone}
+            onToggleTheme={onToggleTheme}
+          />
         </Suspense>
       ) : (
         <Sidebar
           threads={codeThreads}
-          activeThreadId={activeThreadId}
-          activeView={sidebarView}
+          activeThreadId={route === 'agent-chat' || wardrobe ? null : activeThreadId}
+          activeView={sidebarView === 'ade' ? 'chat' : sidebarView}
           connectPhoneSidebarOpen={connectPhoneSidebarOpen}
           connectPhoneInitialTarget={connectPhoneInitialTarget}
           pluginsActive={route === 'plugins'}

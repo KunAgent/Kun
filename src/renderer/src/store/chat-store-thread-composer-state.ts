@@ -7,6 +7,7 @@ import {
   composerModeForThread,
   composerReasoningEffortForSelection,
   fallbackComposerModel,
+  isNativeAgentRoute,
   providerIdForComposerModel,
   providerIdMatchesComposerModel,
   readThreadComposerMode,
@@ -24,10 +25,14 @@ export type ThreadComposerState = {
   composerModel: string
   composerProviderId: string
   composerReasoningEffort: ChatState['composerReasoningEffort']
+  /** ADE harness for the next turn; '' = inherit/provider inference. */
+  composerHarnessId: string
+  composerCredentialMode: string
+  composerGatewayBinding?: ChatState['composerGatewayBinding']
 }
 
 type ThreadLike = Pick<NormalizedThread, 'id' | 'model'> &
-  Partial<Pick<NormalizedThread, 'mode' | 'providerId'>>
+  Partial<Pick<NormalizedThread, 'mode' | 'providerId' | 'harnessId' | 'executionConfig'>>
 
 export type ThreadComposerSelectionOptions = {
   hasUserMessages?: boolean
@@ -46,6 +51,29 @@ function catalogLoaded(
   return pickList.length > 0 || modelGroups.length > 0
 }
 
+/**
+ * An external Agent's thread restores its own recorded model. That Agent's
+ * catalog owns the choice (see resolveCatalogComposerSelection); validating it
+ * against the Kun registry would swap in an unrelated Kun model.
+ */
+function externalAgentThreadSelection(
+  thread: ThreadLike,
+  stored: ReturnType<typeof readThreadComposerSelection>,
+  runtimeModel: string
+): ThreadComposerModelSelection | null | undefined {
+  const route = thread.executionConfig?.route
+  const harnessId = (stored?.harnessId ?? route?.harnessId ?? thread.harnessId ?? '').trim()
+  if (!harnessId || harnessId === 'kun') return undefined
+  const storedModel = stored?.harnessId === harnessId ? stored.model.trim() : ''
+  const routeModel = route?.harnessId === harnessId ? route.model.trim() : ''
+  const model = storedModel || routeModel || runtimeModel
+  if (!model) return null
+  return {
+    model,
+    providerId: storedModel ? stored?.providerId.trim() ?? '' : routeModel ? route?.providerId?.trim() ?? '' : ''
+  }
+}
+
 function threadComposerModelSelection(
   state: ChatState,
   thread: ThreadLike | null | undefined,
@@ -55,8 +83,12 @@ function threadComposerModelSelection(
   const pickList = state.composerPickList
   const modelGroups = state.composerModelGroups
   const stored = readThreadComposerSelection(thread.id)
+  if (stored?.gatewayBinding && stored.credentialMode === 'kun-gateway') return { model: stored.model, providerId: '' }
+  if (!stored && thread.executionConfig?.route.gatewayBinding) return { model: thread.executionConfig.route.model, providerId: '' }
   const storedModel = stored?.model.trim() ?? ''
   const runtimeModel = options.runtimeModel?.trim() || thread.model.trim()
+  const externalSelection = externalAgentThreadSelection(thread, stored, runtimeModel)
+  if (externalSelection !== undefined) return externalSelection
   const runtimeDefaultModel = options.runtimeDefaultModel?.trim() ?? ''
   const runtimeDefaultProviderId = options.runtimeDefaultProviderId?.trim() ?? ''
   const runtimeDefaultSelectable = Boolean(
@@ -118,6 +150,19 @@ export function composerSelectionForThread(
   return threadComposerModelSelection(state, thread, options)
 }
 
+/** An external Agent thread restores the level last used with its model, like the model itself. */
+function threadRememberedReasoning(
+  stored: ReturnType<typeof readThreadComposerSelection>,
+  harnessId: string,
+  model: string,
+  providerId: string
+): ChatState['composerReasoningEffort'] | undefined {
+  if (!stored?.reasoningEffort || !harnessId.trim() || harnessId === 'kun') return undefined
+  const sameRoute = stored.model.trim().toLowerCase() === model.trim().toLowerCase() &&
+    stored.providerId.trim().toLowerCase() === providerId.trim().toLowerCase()
+  return sameRoute ? stored.reasoningEffort : undefined
+}
+
 export function resolveThreadComposerState(
   state: ChatState,
   thread: ThreadLike | null | undefined,
@@ -126,6 +171,9 @@ export function resolveThreadComposerState(
   const selection = threadComposerModelSelection(state, thread, options)
   const model = selection?.model ?? ''
   const providerId = selection?.providerId ?? ''
+  const stored = thread ? readThreadComposerSelection(thread.id) : null
+  const composerHarnessId = stored?.harnessId ?? thread?.executionConfig?.route.harnessId ?? thread?.harnessId ?? ''
+  const composerCredentialMode = stored?.credentialMode ?? thread?.executionConfig?.route.credentialMode ?? ''
   return {
     composerMode: composerModeForThread(
       thread && thread.mode !== undefined
@@ -135,11 +183,16 @@ export function resolveThreadComposerState(
     ),
     composerModel: model,
     composerProviderId: providerId,
-    composerReasoningEffort: composerReasoningEffortForSelection(
-      state.composerModelGroups,
-      model,
-      providerId
-    )
+    composerReasoningEffort: threadRememberedReasoning(stored, composerHarnessId, model, providerId) ??
+      composerReasoningEffortForSelection(
+        state.composerModelGroups,
+        model,
+        providerId,
+        { nativeAgent: isNativeAgentRoute(composerHarnessId, composerCredentialMode) }
+      ),
+    composerHarnessId,
+    composerCredentialMode,
+    composerGatewayBinding: stored ? stored.gatewayBinding : thread?.executionConfig?.route.gatewayBinding
   }
 }
 
@@ -147,6 +200,11 @@ export function resolveCatalogComposerSelection(
   state: ChatState,
   options: ThreadComposerSelectionOptions = {}
 ): ThreadComposerModelSelection {
+  // This registry describes Kun's model sources. Native/gateway Agent choices
+  // are owned by that Agent's catalog and must survive a background refresh.
+  if (state.composerHarnessId?.trim() && state.composerHarnessId !== 'kun') {
+    return { model: state.composerModel, providerId: state.composerProviderId }
+  }
   const activeThread = state.activeThreadId
     ? state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
     : null

@@ -21,8 +21,8 @@ import type {
   ModelRequestTraceRecord
 } from '../../contracts/model-request-trace.js'
 import { goalContextTexts, type TurnItem } from '../../contracts/items.js'
-import type { ActingTurnModelRoute } from '../../contracts/turns.js'
-import type { SetThreadTodosRequest } from '../../contracts/threads.js'
+import type { ActingTurnModelRoute, Turn } from '../../contracts/turns.js'
+import type { SetThreadTodosRequest, ThreadRecord } from '../../contracts/threads.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
@@ -90,6 +90,7 @@ export interface CursorSdkApi {
 }
 
 export interface CursorSdkRuntimeDeps {
+  readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'validateTurn'>
   providerConfigs: Record<string, ServeProviderConfig>
   providerIds: ReadonlySet<string>
   defaultIsCursor: boolean
@@ -114,7 +115,21 @@ export interface CursorSdkRuntimeDeps {
   /** Delegated read-only children must deny mutation regardless of parent defaults. */
   enforceReadOnly?: boolean
   sessionCoordinator?: DelegatedSessionCoordinator
-  contextProfile?: (model: string) => {
+  /** Host task-workspace index for handoff work-state merging. */
+  taskWorkspaces?: {
+    list(filter?: { ownerThreadId?: string }): Array<{
+      ownerThreadId: string
+      path: string
+      branch?: string
+      changedFiles: readonly string[]
+    }>
+  }
+  /**
+   * `ade.deterministicHandoff` — when false the runtime sends the raw portable
+   * transcript instead of the deterministic brief.
+   */
+  deterministicHandoff?: boolean
+  contextProfile?: (model: string, providerId?: string) => {
     contextWindowTokens: number
     softThresholdTokens: number
     hardThresholdTokens: number
@@ -147,7 +162,8 @@ export class CursorTurnInterruptedError extends Error {
 
 export function normalizeCursorModel(model: string | undefined): string {
   const normalized = model?.trim()
-  return normalized || DEFAULT_CURSOR_MODEL
+  // The composer's "Agent default model" maps to Cursor's own automatic choice.
+  return normalized && normalized !== 'default' ? normalized : DEFAULT_CURSOR_MODEL
 }
 
 export function cursorAgentExecutionOptions(input: {
@@ -279,4 +295,84 @@ export function cursorSdkErrorCode(error: unknown): string {
     return 'cursor_sdk_unavailable'
   }
   return 'cursor_sdk_failed'
+}
+
+export type CursorTurnCredentials = {
+  actingModelRoute: ActingTurnModelRoute
+  resolvedProviderId: string
+  resolvedAccountId?: string
+  credentialSourceId?: string
+  apiKey: string
+}
+
+/**
+ * Resolve the turn's provider route + credential. Returns 'failed' after
+ * finishing the turn when no API key can be produced.
+ */
+export async function resolveCursorTurnCredentials(input: {
+  deps: Pick<
+    CursorSdkRuntimeDeps,
+    'providerConfigs' | 'defaultCredentialSourceId' | 'defaultApiKey' |
+    'resolveCredentialSource' | 'defaultModel' | 'turns'
+  >
+  thread: ThreadRecord
+  turn: Turn
+  providerId: string | undefined
+  threadId: string
+  turnId: string
+}): Promise<CursorTurnCredentials | 'failed'> {
+  const { deps, thread, turn, providerId, threadId, turnId } = input
+  const requestedProviderId = turn.providerId?.trim()
+  const fallbackProviderId =
+    requestedProviderId ||
+    providerId?.trim() ||
+    thread.providerId?.trim() ||
+    'cursor-subscription'
+  const requestedAccountId = turn.accountId?.trim() || (
+    !requestedProviderId || requestedProviderId === thread.providerId?.trim()
+      ? thread.accountId?.trim()
+      : undefined
+  )
+  const actingModelRoute: ActingTurnModelRoute = turn.actingModelRoute ?? {
+    model: normalizeCursorModel(turn.model || thread.model || deps.defaultModel),
+    providerId: fallbackProviderId,
+    ...(requestedAccountId ? { accountId: requestedAccountId } : {})
+  }
+  const resolvedProviderId = actingModelRoute.providerId ?? fallbackProviderId
+  const resolvedAccountId =
+    actingModelRoute.accountId ??
+    requestedAccountId
+  const provider = deps.providerConfigs[resolvedProviderId]
+  const credentialSourceId = provider?.credentialSourceId ?? (
+    resolvedProviderId === 'cursor-subscription'
+      ? deps.defaultCredentialSourceId
+      : undefined
+  )
+  const resolvedCredential = credentialSourceId
+    ? await deps.resolveCredentialSource?.(credentialSourceId).catch(() => null)
+    : undefined
+  const apiKey = credentialSourceId
+    ? resolvedCredential?.apiKey?.trim() ?? ''
+    : provider?.apiKey?.trim() ||
+      (resolvedProviderId === 'cursor-subscription'
+        ? deps.defaultApiKey?.trim() || ''
+        : '')
+  if (!apiKey) {
+    await deps.turns.finishTurn({
+      threadId,
+      turnId,
+      status: 'failed',
+      error: 'Cursor subscription API key is not configured',
+      code: 'cursor_sdk_missing_credential',
+      severity: 'error'
+    })
+    return 'failed'
+  }
+  return {
+    actingModelRoute,
+    resolvedProviderId,
+    resolvedAccountId,
+    credentialSourceId,
+    apiKey
+  }
 }

@@ -26,7 +26,7 @@ This guide is for AI agents working in this repository. It collects the project 
   - `src/renderer/src/agent/kun-mapper.ts`
   - `kun/src/server/runtime-factory.ts`
   - `kun/src/server/routes/`
-- Do not recreate old runtime paths, provider switchers, runtime diagnostics panels, CodeWhale/Reasonix adapters, process managers, or RPC bridges. Legacy provider fields should only be read during settings migration and folded into `agents.kun`.
+- Do not recreate old runtime paths, provider switchers, runtime diagnostics panels, CodeWhale/Reasonix adapters, process managers, or RPC bridges. Legacy provider fields should only be read during settings migration and folded into `agents.kun`. External agent harnesses are the exception.
 - Connect phone code may still use the internal `claw` name for compatibility. That name does not mean there should be a separate Claw runtime.
 
 ## Providers And Model Requests
@@ -115,6 +115,7 @@ gh pr create --base develop --head <branch> --title "<title>" --body-file <file>
 
 - Provider URL or request body issue: inspect every model consumer, then list URL and body behavior separately for chat, write-inline, scheduled task detection, model list, and provider probe.
 - Settings save/runtime behavior issue: inspect `src/shared/app-settings-provider.ts`, `src/shared/app-settings-kun.ts`, settings store migration, and the renderer settings section.
+- Skill/MCP market issue (Youdao market or a new source): read `docs/market-sources.md`, then trace `use-market-catalogs.ts` -> `src/preload/market-api.ts` -> `register-app-market-ipc-handlers.ts` -> `src/main/services/market/`.
 - SSE/event/OOM issue: inspect `runtime-factory`, `RuntimeEventRecorder`, `FileSessionStore.highestSeq()`, `events.jsonl`, and events route replay.
 - `/new`, session resume, fork, archive/search issue: trace the full path from renderer command/store to Kun routes instead of changing only the UI command.
 - Clipboard/image fallback issue: inspect `webUtils.getPathForFile`, temporary file persistence, the `localFilePath` contract, attachment store, and model client fallback.

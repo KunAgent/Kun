@@ -24,7 +24,7 @@ import {
 import type { ClawImChannelV1 } from '@shared/app-settings'
 import type { TurnCompleteNotificationSource } from '@shared/kun-gui-api'
 import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-notice'
-import type { ChatState } from './chat-store-types'
+import type { ChatState, WriteAssistantMessageContext } from './chat-store-types'
 import { isPendingQueuedMessage } from './queued-message-persistence'
 import { hydrateBlockModelLabels, isClawThread } from './chat-store-helpers'
 import {
@@ -41,6 +41,7 @@ import {
   completionIsCurrentlyVisible,
   markUnreadCompletion
 } from './unread-completions'
+import { activityFeedCoversThread } from './activity-store'
 import { isAutoPlanIntermediatePlanCompletion } from '../plan/auto-plan-build-intents'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
 import {
@@ -258,6 +259,20 @@ export async function readActiveWriteWorkspace(fallbackWorkspaceRoot: string): P
   }
 }
 
+export async function resolveSendWorkspaceRoot(
+  state: ChatState,
+  activeThread: NormalizedThread | null,
+  writeContext: WriteAssistantMessageContext | undefined,
+  scopedWriteThread: NormalizedThread | null
+): Promise<string> {
+  if (writeContext) return normalizeWorkspaceRoot(writeContext.workspaceRoot)
+  if (state.route !== 'write') return normalizeWorkspaceRoot(activeThread?.workspace)
+  // A paper thread has no document fence, but must stay in its selected library.
+  return scopedWriteThread && activeThread?.id === scopedWriteThread.id
+    ? normalizeWorkspaceRoot(scopedWriteThread.workspace)
+    : readActiveWriteWorkspace(state.workspaceRoot)
+}
+
 export async function readWriteWorkspaceRoots(): Promise<string[]> {
   try {
     const settings = await rendererRuntimeClient.getSettings()
@@ -366,6 +381,9 @@ export function notifyTurnComplete(
   // before the build turn begins. Suppress it so the final build turn keeps
   // the ordinary once-only notification semantics.
   if (isAutoPlanIntermediatePlanCompletion(threadId, turnId)) return
+  // Workers and task-workspace threads are tracked by the activity feed:
+  // their completions already surface through its transition notifications.
+  if (activityFeedCoversThread(threadId)) return
   if (!rememberCompletionNotificationKey(dedupeKey)) return
 
   const threadTitle =
@@ -413,6 +431,9 @@ export function notifyUserInputAwaiting(
   ) {
     return
   }
+  // Activity-tracked units surface waits through the feed's 'waiting'
+  // transition notification; a second desktop alert would double-report.
+  if (activityFeedCoversThread(threadId)) return
   if (!rememberCompletionNotificationKey(dedupeKey)) return
 
   const threadTitle =

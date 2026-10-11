@@ -9,7 +9,8 @@ async function monitor(page) {
     const state = { mutations: [], opened: [], closed: [] }
     globalThis.__roomRunInspection = state
     client.runtimeRequest = (path, method = 'GET', ...args) => {
-      if (method !== 'GET' && !path.endsWith('/read')) state.mutations.push({ path, method })
+      // The Code foreground-thread heartbeat is app presence, not run inspection.
+      if (method !== 'GET' && !path.endsWith('/read') && path !== '/v1/activity/foreground') state.mutations.push({ path, method })
       return request(path, method, ...args)
     }
     client.startSse = (id, seq, stream, options) => {
@@ -40,10 +41,10 @@ async function viewRunningRoomRun({ page, request, roomId, poll, capture }) {
     return Boolean(current)
   }, 15000, 'current activity has durable exact run identity')
   await monitor(page)
-  const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+  const drawer = page.getByRole('region', { name: 'Room details', exact: true })
   const button = drawer.getByRole('button', { name: 'View current run', exact: true }).first()
   await button.click()
-  const viewer = drawer.getByRole('region', { name: 'Run details', exact: true })
+  const viewer = drawer.getByRole('region', { name: 'Agent session', exact: true })
   await viewer.locator('.rooms-run-header').waitFor()
   assert.equal(await viewer.getAttribute('data-run-id'), current.currentRunId)
   assert((await viewer.innerText()).includes('Running') || (await viewer.innerText()).includes('Queued'))
@@ -68,19 +69,21 @@ async function exerciseFinishedRoomRuns({ page, request, roomId, messages, poll,
   const detail = await request(page, `${base}/runs/${older.originRunId}`)
   const before = fixture.snapshot()
   await monitor(page)
-  const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+  const drawer = page.getByRole('region', { name: 'Room details', exact: true })
   if (await drawer.isVisible()) await drawer.getByRole('button', { name: 'Close', exact: true }).click()
   const message = page.locator('#room-message-' + older.id)
-  await message.getByRole('button', { name: 'View this run', exact: true }).click()
-  const viewer = drawer.getByRole('region', { name: 'Run details', exact: true })
-  await viewer.getByText('Published', { exact: false }).waitFor()
+  await message.hover()
+  await message.getByRole('button', { name: 'More actions', exact: true }).click()
+  await page.getByRole('button', { name: 'View Agent session', exact: true }).click()
+  // The Agent session panel replays the exact run with the shared conversation timeline.
+  const viewer = drawer.getByRole('region', { name: 'Agent session', exact: true })
+  await viewer.locator('.rooms-run-header').getByText('Completed', { exact: true }).waitFor()
   assert.equal(await viewer.getAttribute('data-run-id'), older.originRunId)
-  assert.equal(await viewer.getByRole('button', { name: 'Open this run in Code', exact: true }).getAttribute('data-thread-target-turn-id'), detail.run.turnId)
-  const tool = viewer.locator('[data-run-tool-call-id]').first()
-  await tool.getByText('Tool result', { exact: true }).click()
-  const output = tool.locator('details[open]')
-  await output.getByRole('button', { name: 'Read full recorded content', exact: true }).click()
-  await output.getByText(/characters loaded/).waitFor()
+  assert.equal(detail.run.outcome, 'published')
+  const items = (await request(page, `${base}/runs/${older.originRunId}/items?limit=50`)).items
+  const call = items.find((item) => item.kind === 'tool_call' && item.toolName === 'send_room_message')
+  assert(call && items.some((item) => item.kind === 'tool_result' && item.callId === call.callId), 'Run lacks its exact tool call and result')
+  await poll(async () => (await viewer.locator('.rooms-run-turns').innerText()).trim().length > 0, 10000, 'session replays the run turn')
   await capture('run-inspector-completed-tools')
   for (const theme of ['light', 'dark']) {
     await page.evaluate(async (value) => {
@@ -94,25 +97,13 @@ async function exerciseFinishedRoomRuns({ page, request, roomId, messages, poll,
     await capture('run-inspector-narrow-' + theme)
   }
   await resize(1360, 900)
-  await viewer.getByRole('button', { name: 'Open this run in Code', exact: true }).click()
-  await poll(async () => page.evaluate(async ({ threadId, turnId }) => {
-    const { useChatStore } = await import('/src/store/chat-store.ts')
-    const { useThreadTurnTarget } = await import('/src/components/chat/thread-turn-target.ts')
-    return useChatStore.getState().activeThreadId === threadId && useThreadTurnTarget.getState().target?.turnId === turnId
-  }, { threadId: detail.run.threadId, turnId: detail.run.turnId }), 20000, 'Code exact turn target selected')
-  const target = page.locator(`[data-turn-id="${detail.run.turnId}"]`)
-  await target.waitFor()
-  await poll(() => target.evaluate((node) => {
-    const rect = node.getBoundingClientRect()
-    return rect.top < innerHeight && rect.bottom > 0
-  }), 5000, 'Code exact turn is in viewport')
-  await capture('run-inspector-code-exact-turn')
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
   await poll(() => page.evaluate(() => globalThis.__roomRunInspection.opened.every((entry) =>
-    globalThis.__roomRunInspection.closed.includes(entry.stream))), 5000, 'Code navigation closed run subscription')
+    globalThis.__roomRunInspection.closed.includes(entry.stream))), 5000, 'closing the session closed its run subscription')
   const monitoring = await inspected(page)
   assert.deepEqual(fixture.snapshot(), before, 'Run inspection invoked the offline model')
   return { inspectedRunId: older.originRunId, threadId: detail.run.threadId, turnId: detail.run.turnId,
-    exactOrigin: true, triageHistory: true, cancelledHistory: true, codeTargetVisible: true, ...monitoring }
+    exactOrigin: true, triageHistory: true, cancelledHistory: true, ...monitoring }
 }
 async function exerciseTaskRoomRuns({ page, request, roomId, taskId, poll, capture }) {
   const runs = (await request(page, `/v1/rooms/${roomId}/runs?task_id=${taskId}&limit=50`)).runs
@@ -125,16 +116,23 @@ async function exerciseTaskRoomRuns({ page, request, roomId, taskId, poll, captu
     !message.originRunId && !message.id.startsWith('progress-' + taskId + '-'))) {
     const row = page.locator('#room-message-' + notice.id)
     if (!await row.count()) continue
-    assert.equal(await row.getByRole('button', { name: 'View this run', exact: true }).count(), 0,
+    // Run inspection lives in each message's More actions menu.
+    await row.hover()
+    await row.getByRole('button', { name: 'More actions', exact: true }).click()
+    const actions = page.getByRole('dialog', { name: 'More actions', exact: true })
+    await actions.waitFor()
+    assert.equal(await actions.getByRole('button', { name: 'View Agent session', exact: true }).count(), 0,
       'Task status notice pretends to be a model response')
+    await page.keyboard.press('Escape')
+    await actions.waitFor({ state: 'detached' })
     noticesChecked++
   }
   assert(noticesChecked > 0, 'No task status notice was checked')
-  const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+  const drawer = page.getByRole('region', { name: 'Room details', exact: true })
   const list = drawer.getByRole('region', { name: 'Current and past runs', exact: true })
   await list.getByRole('combobox', { name: 'Run phase', exact: true }).selectOption('execution')
   await list.locator('.rooms-run-list-entry').first().click()
-  const viewer = drawer.getByRole('region', { name: 'Run details', exact: true })
+  const viewer = drawer.getByRole('region', { name: 'Agent session', exact: true })
   await viewer.locator('.rooms-run-header').waitFor()
   const runId = await viewer.getAttribute('data-run-id')
   assert(runs.some((run) => run.id === runId && run.phase === 'execution'), 'Task entry selected wrong run phase')

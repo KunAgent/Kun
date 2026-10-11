@@ -1,7 +1,7 @@
 import type { PaperSearchSource } from './paper/paper-search'
 
 /**
- * `write.paperMode` settings slice (§5.1 of the work-paper-mode plan).
+ * `write.paperMode` settings slice.
  * `enabled` persists the Work surface toggle; `libraries`/`activeLibrary`
  * hold the paper-mode root list, kept separate from `write.workspaces` so
  * the same folder can be both a docs workspace and a paper library.
@@ -63,8 +63,10 @@ export type WritePaperModeReaderSettingsV1 = {
 export type WritePaperModeSettingsV1 = {
   enabled: boolean
   libraries: string[]
-  /** '' means unconfigured — the onboarding page shows. */
+  /** '' means no library is currently selected. */
   activeLibrary: string
+  /** One-time bootstrap marker; removing all libraries must not recreate one. */
+  workspaceInitialized: boolean
   /** First open of an unread paper marks it as reading. */
   autoMarkReading: boolean
   translate: WritePaperModeTranslateSettingsV1

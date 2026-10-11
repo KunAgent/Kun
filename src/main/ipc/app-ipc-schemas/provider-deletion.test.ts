@@ -3,7 +3,7 @@ import { modelProviderPatchSchema } from './settings-model'
 
 describe('provider deletion settings IPC', () => {
   it('accepts explicit removal and restoration of bundled providers', () => {
-    const patch = { providers: [], excludedBuiltinProviderIds: ['deepseek', 'opencode-free'] }
+    const patch = { providers: [], excludedBuiltinProviderIds: ['deepseek'] }
     expect(modelProviderPatchSchema.parse(patch)).toEqual(patch)
     expect(modelProviderPatchSchema.parse({ excludedBuiltinProviderIds: [] }))
       .toEqual({ excludedBuiltinProviderIds: [] })

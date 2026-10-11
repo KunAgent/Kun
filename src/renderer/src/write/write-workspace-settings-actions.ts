@@ -4,6 +4,9 @@ import {
   resolveWriteInlineCompletionApiKey
 } from '@shared/app-settings'
 import { rendererRuntimeClient } from '../agent/runtime-client'
+import { resetPaperWorkspaceContent, usePaperWorkspaceBootstrapStore } from '../paper/paper-workspace-bootstrap'
+import { invalidatePaperLibraryIndex } from '../paper/paper-library-index'
+import { mobileDocumentsWorkspaceRoot } from '../mobile/work/mobile-documents-workspace'
 import { prepareActiveWriteFileForNavigation } from './write-workspace-file-action-helpers'
 import type { WriteWorkspaceGet, WriteWorkspaceSet, WriteWorkspaceState } from './write-workspace-store-types'
 import {
@@ -12,6 +15,7 @@ import {
   normalizeWriteSettings,
   withResolvedInlineCompletionSettings
 } from './write-workspace-store-helpers'
+import { legacyPaperLibraryMigration, withoutPaperLibrary } from './work-space-migration'
 
 type WriteSettingsActions = Pick<
   WriteWorkspaceState,
@@ -95,33 +99,55 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
   let inflightLoad: Promise<void> | null = null
   let queuedLoad: Promise<void> | null = null
 
-  const runLoadWriteSettings = async (): Promise<void> => {
+  const runLoadWriteSettings = async (mobile = false): Promise<void> => {
     const generation = nextSettingsRequest()
     const inlineRevisionAtRequest = inlineCompletionSettingsRevision
     const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
     set({ settingsLoading: true, settingsError: null })
     try {
-      const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
+      const previousPapersDir = get().paperReading.papersDir
+      let settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
       if (!requestIsCurrent(generation)) return
+      // Papers live inside every space now; a desktop that still carries the
+      // old paper-mode surface folds its libraries into the space list once.
+      if (!mobile) {
+        const migration = legacyPaperLibraryMigration(settings.write)
+        if (migration) {
+          settings = await rendererRuntimeClient.setSettings({ write: migration })
+          if (!requestIsCurrent(generation)) return
+        }
+      }
       const write = applySettingsResponse(
         settings,
         inlineRevisionAtRequest,
         inlineWritePendingAtRequest
       )
-      // Paper mode re-roots the workspace at the active library; a same-root
-      // surface switch must force a full reinit so the papers-namespaced
-      // layout replaces the docs one (and vice versa).
-      const targetSurface = write.paperMode.enabled ? 'papers' : 'docs'
-      const surfaceChanged = get().workSurface !== targetSurface
-      if (surfaceChanged && get().workspaceRoot) {
-        // Settle the outgoing surface BEFORE flipping the layout namespace:
-        // if the user keeps unsaved edits, stay put and roll the persisted
-        // flag back instead of mounting the new surface over the old root.
-        const canLeave = await prepareActiveWriteFileForNavigation(get, get().workspaceRoot)
+      // The Remote phone owns its Work/Papers navigation locally. Never
+      // apply the host's persisted paper surface switch to that browser.
+      if (mobile) {
+        const root = mobileDocumentsWorkspaceRoot({
+          workspaces: write.workspaces,
+          activeWorkspaceRoot: write.activeWorkspaceRoot,
+          defaultWorkspaceRoot: write.defaultWorkspaceRoot,
+          paperModeEnabled: write.paperMode.enabled
+        })
+        await get().initializeWorkspace(root)
+        if (requestIsCurrent(generation)) set({ settingsLoading: false })
+        return
+      }
+      const surfaceChanged = get().workSurface !== 'docs'
+      const previousRoot = get().workspaceRoot
+      const root = write.activeWorkspaceRoot
+      const rootChanged = normalizePath(previousRoot) !== normalizePath(root)
+      const navigationPrepared = Boolean((surfaceChanged || rootChanged) && previousRoot)
+      if (navigationPrepared) {
+        // Settle the outgoing space before re-rooting: if the user keeps
+        // unsaved edits, stay put and point the setting back at it.
+        const canLeave = await prepareActiveWriteFileForNavigation(get, previousRoot)
         if (!requestIsCurrent(generation)) return
         if (!canLeave) {
           const rolledBack = await rendererRuntimeClient.setSettings({
-            write: { paperMode: { enabled: get().workSurface === 'papers' } }
+            write: { activeWorkspaceRoot: normalizePath(previousRoot) }
           })
           if (!requestIsCurrent(generation)) return
           applySettingsResponse(rolledBack, inlineRevisionAtRequest, inlineWritePendingAtRequest)
@@ -129,32 +155,68 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           return
         }
       }
-      if (surfaceChanged) get().setWorkSurface(targetSurface)
-      const root = targetSurface === 'papers'
-        ? write.paperMode.activeLibrary
-        : write.activeWorkspaceRoot
-      await get().initializeWorkspace(root, { force: surfaceChanged })
+      if (surfaceChanged) get().setWorkSurface('docs')
+      const paperDirectoryChanged = previousPapersDir !== write.paperReading.papersDir
+      if (paperDirectoryChanged) invalidatePaperLibraryIndex()
+      if (surfaceChanged || rootChanged || paperDirectoryChanged) {
+        if (previousRoot) invalidatePaperLibraryIndex(previousRoot)
+        resetPaperWorkspaceContent()
+        get().setPaperResearch({ sessionId: null })
+      }
+      await get().initializeWorkspace(root, {
+        force: surfaceChanged,
+        ...(navigationPrepared ? { navigationPrepared: true } : {})
+      })
       if (!requestIsCurrent(generation)) return
+      usePaperWorkspaceBootstrapStore.setState({ status: 'ready', error: null })
       set({ settingsLoading: false })
     } catch (error) {
       if (!requestIsCurrent(generation)) return
-      set({
-        settingsLoading: false,
-        settingsError: error instanceof Error ? error.message : String(error)
+      const message = error instanceof Error ? error.message : String(error)
+      set({ settingsLoading: false, settingsError: message })
+    }
+  }
+
+  /** Mount a space (registering it when new); every space is a docs root. */
+  const activateWorkspace = async (workspaceRoot: string): Promise<void> => {
+    const normalized = normalizePath(workspaceRoot)
+    if (!normalized) return
+    const generation = nextSettingsRequest()
+    const inlineRevisionAtRequest = inlineCompletionSettingsRevision
+    const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
+    const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
+    set({ workspaceRoots: roots, settingsLoading: false })
+    try {
+      const settings = await rendererRuntimeClient.setSettings({
+        write: { activeWorkspaceRoot: normalized, workspaces: roots }
       })
+      if (!requestIsCurrent(generation)) return
+      const write = applySettingsResponse(
+        settings,
+        inlineRevisionAtRequest,
+        inlineWritePendingAtRequest
+      )
+      if (normalizePath(get().workspaceRoot) !== normalizePath(write.activeWorkspaceRoot)) {
+        resetPaperWorkspaceContent()
+        get().setPaperResearch({ sessionId: null })
+      }
+      await get().initializeWorkspace(write.activeWorkspaceRoot)
+    } catch (error) {
+      if (!requestIsCurrent(generation)) return
+      set({ settingsError: error instanceof Error ? error.message : String(error) })
     }
   }
 
   return {
-    loadWriteSettings: () => {
+    loadWriteSettings: (options) => {
       if (inflightLoad) {
         queuedLoad ??= inflightLoad.then(() => {
           queuedLoad = null
-          return get().loadWriteSettings()
+          return get().loadWriteSettings(options)
         })
         return queuedLoad
       }
-      inflightLoad = runLoadWriteSettings().finally(() => {
+      inflightLoad = runLoadWriteSettings(options?.mobile === true).finally(() => {
         inflightLoad = null
       })
       return inflightLoad
@@ -201,67 +263,9 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       }
     },
 
-    selectWriteWorkspace: async (workspaceRoot) => {
-      const normalized = normalizePath(workspaceRoot)
-      if (!normalized) return
-      const generation = nextSettingsRequest()
-      const inlineRevisionAtRequest = inlineCompletionSettingsRevision
-      const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
-      const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
-      set({ workspaceRoots: roots, settingsLoading: false })
-      try {
-        const settings = await rendererRuntimeClient.setSettings({
-          write: {
-            activeWorkspaceRoot: normalized,
-            workspaces: roots
-          }
-        })
-        if (!requestIsCurrent(generation)) return
-        const write = applySettingsResponse(
-          settings,
-          inlineRevisionAtRequest,
-          inlineWritePendingAtRequest
-        )
-        // Workspace switching is a docs-surface operation; on the papers
-        // surface the library root stays mounted until the toggle flips back.
-        if (get().workSurface === 'docs') {
-          await get().initializeWorkspace(write.activeWorkspaceRoot)
-        }
-      } catch (error) {
-        if (!requestIsCurrent(generation)) return
-        set({ settingsError: error instanceof Error ? error.message : String(error) })
-      }
-    },
+    selectWriteWorkspace: (workspaceRoot) => activateWorkspace(workspaceRoot),
 
-    addWriteWorkspace: async (workspaceRoot) => {
-      const normalized = normalizePath(workspaceRoot)
-      if (!normalized) return
-      const generation = nextSettingsRequest()
-      const inlineRevisionAtRequest = inlineCompletionSettingsRevision
-      const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
-      const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
-      set({ settingsLoading: false })
-      try {
-        const settings = await rendererRuntimeClient.setSettings({
-          write: {
-            activeWorkspaceRoot: normalized,
-            workspaces: roots
-          }
-        })
-        if (!requestIsCurrent(generation)) return
-        const write = applySettingsResponse(
-          settings,
-          inlineRevisionAtRequest,
-          inlineWritePendingAtRequest
-        )
-        if (get().workSurface === 'docs') {
-          await get().initializeWorkspace(write.activeWorkspaceRoot)
-        }
-      } catch (error) {
-        if (!requestIsCurrent(generation)) return
-        set({ settingsError: error instanceof Error ? error.message : String(error) })
-      }
-    },
+    addWriteWorkspace: (workspaceRoot) => activateWorkspace(workspaceRoot),
 
     removeWriteWorkspace: async (workspaceRoot) => {
       const normalized = normalizePath(workspaceRoot)
@@ -282,10 +286,14 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
         ? fallback
         : state.workspaceRoot
       try {
+        // A former paper library leaves the library list too, or the
+        // migration on the next load would bring it straight back.
+        const paperMode = withoutPaperLibrary(state.paperMode, normalized)
         const settings = await rendererRuntimeClient.setSettings({
           write: {
             activeWorkspaceRoot,
-            workspaces: roots
+            workspaces: roots,
+            ...(paperMode ? { paperMode } : {})
           }
         })
         if (!requestIsCurrent(generation)) return
@@ -294,10 +302,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           inlineRevisionAtRequest,
           inlineWritePendingAtRequest
         )
-        if (
-          get().workSurface === 'docs' &&
-          normalizePath(get().workspaceRoot) === normalized
-        ) {
+        if (normalizePath(get().workspaceRoot) === normalized) {
           await get().initializeWorkspace(write.activeWorkspaceRoot)
         }
       } catch (error) {

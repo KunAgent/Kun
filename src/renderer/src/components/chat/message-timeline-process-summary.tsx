@@ -1,7 +1,9 @@
+import { formatFilePathForDisplay } from '../../lib/diff-stats'
 import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LucideIcon } from 'lucide-react'
 import {
+  ArrowRightLeft,
   BellRing,
   Bot,
   BookOpen,
@@ -14,15 +16,18 @@ import {
   Search,
   Sparkles,
   Terminal,
+  Users,
   Wrench
 } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
+import { readToolPresentation } from '../../agent/tool-presentation'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import {
   blockHasPendingRuntimeWork,
   isBackgroundShellNoticeBlock,
-  isBackgroundSubagentNoticeBlock
+  isBackgroundSubagentNoticeBlock,
+  isWorkerUpdateNoticeBlock
 } from './message-timeline-turns'
 import { formatDuration, isBackgroundShellCommandBlock } from './message-timeline-tools'
 import {
@@ -105,13 +110,16 @@ export function summarizeProcessWork(
   blocks: ChatBlock[],
   t: (key: string, opts?: Record<string, unknown>) => string
 ): string {
-  let readCount = 0
+  const readFiles = new Set<string>()
   let searchCount = 0
-  let fileCount = 0
+  const editedFiles = new Set<string>()
+  const fetchedPages = new Set<string>()
   let commandCount = 0
   let backgroundCommandCount = 0
   let toolCount = 0
   let approvalCount = 0
+  let failedCount = 0
+  let canceledCount = 0
 
   for (const block of blocks) {
     if (block.kind === 'approval' || block.kind === 'approval_review') {
@@ -119,23 +127,38 @@ export function summarizeProcessWork(
       continue
     }
     if (block.kind !== 'tool') continue
-    if (block.toolKind === 'file_change') {
-      fileCount += 1
-    } else if (block.toolKind === 'command_execution') {
+    const presentation = readToolPresentation(block)
+    if (presentation.state === 'failed') failedCount += 1
+    if (presentation.state === 'canceled') canceledCount += 1
+    const paths = [...new Set([
+      presentation.filePath ?? toolFilePath(block),
+      ...(presentation.locations ?? []).map((location) => location.path),
+      ...(presentation.diffs ?? []).map((diff) => diff.path)
+    ].filter((path): path is string => Boolean(path?.trim())).map((path) => path.trim().replace(/\\/g, '/')))]
+    // An unknown path represents one operation; do not collapse every unknown
+    // file into a single entry or invent a path from the tool's display title.
+    const fileKeys = paths.length ? paths : [`unknown:${block.id}`]
+    if (block.toolKind === 'file_change' || ['edit', 'write', 'delete', 'move'].includes(presentation.kind)) {
+      fileKeys.forEach((path) => editedFiles.add(path))
+    } else if (block.toolKind === 'command_execution' || presentation.kind === 'shell' || presentation.kind === 'execute') {
       if (isBackgroundShellCommandBlock(block)) {
         backgroundCommandCount += 1
       } else {
         commandCount += 1
       }
-    } else if (isReadToolBlock(block)) {
-      readCount += 1
-    } else if (isSearchToolBlock(block)) {
+    } else if (presentation.kind === 'read' || isReadToolBlock(block)) {
+      fileKeys.forEach((path) => readFiles.add(path))
+    } else if (presentation.kind === 'search' || isSearchToolBlock(block)) {
       searchCount += 1
+    } else if (presentation.kind === 'fetch') {
+      fetchedPages.add(presentation.url || `unknown:${block.id}`)
     } else {
       toolCount += 1
     }
   }
 
+  const readCount = readFiles.size
+  const fileCount = editedFiles.size
   const parts: string[] = []
   if (readCount > 0) {
     parts.push(readCount === 1 ? t('groupReadFile') : t('groupReadFiles', { count: readCount }))
@@ -165,6 +188,9 @@ export function summarizeProcessWork(
   if (toolCount > 0) {
     parts.push(toolCount === 1 ? t('groupUsedTool') : t('groupUsedTools', { count: toolCount }))
   }
+  if (fetchedPages.size > 0) parts.push(t('toolSummaryFetched', { count: fetchedPages.size }))
+  if (failedCount > 0) parts.push(t('toolSummaryFailed', { count: failedCount }))
+  if (canceledCount > 0) parts.push(t('toolSummaryCanceled', { count: canceledCount }))
   if (approvalCount > 0) {
     parts.push(
       approvalCount === 1 ? t('groupApproval') : t('groupApprovals', { count: approvalCount })
@@ -206,11 +232,13 @@ export function processBlockIcon(block: ChatBlock): LucideIcon | null {
   if (block.kind === 'reasoning') return Brain
   if (block.kind === 'assistant') return MessageSquareQuote
   if (block.kind === 'compaction') return Minimize2
+  if (block.kind === 'handoff') return ArrowRightLeft
   if (block.kind === 'approval') return Wrench
   if (block.kind === 'approval_review') return Bot
   if (block.kind === 'user_input') return MessageSquareQuote
   if (isBackgroundShellNoticeBlock(block)) return BellRing
   if (isBackgroundSubagentNoticeBlock(block)) return Sparkles
+  if (isWorkerUpdateNoticeBlock(block)) return Users
   if (block.kind !== 'tool') return null
   return toolBlockIcon(block)
 }
@@ -323,7 +351,7 @@ export function ProcessSummaryText({
   return (
     <>
       {before}
-      <ProcessFileReference path={path} workspaceRoot={workspaceRoot}>{path}</ProcessFileReference>
+      <ProcessFileReference path={path} workspaceRoot={workspaceRoot}>{block.meta?.acpKind ? (formatFilePathForDisplay(path, workspaceRoot) ?? path) : path}</ProcessFileReference>
       {after}
     </>
   )

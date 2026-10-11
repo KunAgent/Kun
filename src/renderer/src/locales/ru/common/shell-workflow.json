@@ -38,6 +38,8 @@
   "code": "Код",
   "write": "Работа",
   "workspaceModeWorkLabel": "Работа",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "Управление командой агентов",
   "workspaceModeCodeDescription": "Создание, отладка и выпуск",
   "workspaceModeWorkDescription": "Тексты, организация и повседневные задачи",
   "design": "Дизайн",
@@ -651,5 +653,11 @@
   "workflowCallableShort": "AI-вызываемый",
   "workflowCallableHint": "Позвольте агенту режима кода запустить его напрямую через run_workflow.",
   "miniWindowRestore": "Восстановить окно",
-  "miniWindowDragHint": "Перетащите эту панель, чтобы переместить окно"
+  "miniWindowDragHint": "Перетащите эту панель, чтобы переместить окно",
+  "sidebarKunStatusReady": "Готов",
+  "sidebarKunStatusStarting": "Запуск…",
+  "sidebarKunStatusOffline": "Нет подключения",
+  "sidebarKunStatusOpen": "Открыть мой гардероб",
+  "mobileCodeSegmentTasks": "Задачи",
+  "mobileCodeSegmentChats": "Беседы"
 }

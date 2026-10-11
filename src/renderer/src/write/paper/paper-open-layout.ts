@@ -4,7 +4,7 @@ import { normalizePath } from '../write-workspace-store-helpers'
 import { PAPER_INTERPRET_SUFFIX, PAPER_NOTES_FILE } from './paper-unit'
 
 /**
- * Open a paper unit as the reading layout (§6.4): PDF in the left (primary)
+ * Open a paper unit as the reading layout: PDF in the left (primary)
  * group, NOTES.md in the right (secondary) group at a 0.55 split. Uses the
  * existing two-group editor layout — no separate layout mode.
  */
@@ -17,6 +17,7 @@ export async function openPaperUnit(input: {
 }): Promise<void> {
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(input.workspaceRoot)
+  if (normalizePath(store.workspaceRoot) !== root) return
   const unitAbs = input.unitDir.startsWith(root)
     ? normalizePath(input.unitDir)
     : writeJoinPath(root, input.unitDir)
@@ -30,6 +31,7 @@ export async function openPaperUnit(input: {
   const pdfPath = writeJoinPath(unitAbs, input.meta.pdfFile)
 
   await store.openFile(root, pdfPath, { groupId: 'primary' })
+  if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== root) return
   const layout = useWriteWorkspaceStore.getState().editorLayout
   if (layout.groups.length < 2) {
     store.splitEditorGroup('horizontal')
@@ -51,6 +53,7 @@ export async function openPaperInterpretation(input: {
 }): Promise<void> {
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(input.workspaceRoot)
+  if (normalizePath(store.workspaceRoot) !== root) return
   const target = input.path.startsWith(root)
     ? normalizePath(input.path)
     : writeJoinPath(root, input.path)

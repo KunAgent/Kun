@@ -1,14 +1,12 @@
 /* Desktop IM chat surface. Loaded last by RoomsWorkspaceView and
  * scoped to .rooms-workspace so the mobile Remote shell keeps its own layout. */
 
-/* Header: compact title bar with a round avatar. */
+/* Header: compact title bar with the square avatar. */
 .rooms-workspace .rooms-main-titlebar { min-height: 56px; padding-block: 8px; }
-.rooms-workspace .rooms-main-titlebar .rooms-avatar { border: 0; border-radius: 50%; }
 .rooms-workspace .rooms-main-titlebar .rooms-avatar-letter { display: none; }
 .rooms-workspace .direct-chat-title strong { font-size: 16px; font-weight: 600; }
 
-/* Messages: round avatars, flat tinted bubbles, no reserved action row. */
-.rooms-workspace .rooms-message-row > .rooms-avatar { border: 0; border-radius: 50%; }
+/* Messages: square avatars, flat tinted bubbles, no reserved action row. */
 .rooms-workspace .rooms-message-row > .rooms-avatar .rooms-avatar-letter { display: none; }
 .rooms-workspace .rooms-message-meta { font-size: 12px; }
 .rooms-workspace .rooms-message-bubble { border-color: transparent; border-radius: 8px; background: var(--ds-surface-subtle); }

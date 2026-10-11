@@ -8,6 +8,7 @@ import {
   type AppSettingsV1,
   type KunRuntimeSettingsPatchV1
 } from '@shared/app-settings'
+import type { AdeCollaborationSettingsSnapshot } from '@shared/ade-collaboration-settings'
 import {
   getKunRuntimeSettings,
   kunSettingsPatch
@@ -15,7 +16,7 @@ import {
 import { getModelProviderSettings } from '@shared/app-settings-provider-core'
 import type { KunProjectConfigFileResult, SkillRootListItem } from '@shared/kun-gui-api'
 import type { WriteInlineCompletionDebugEntry } from '@shared/write-inline-completion'
-import type { ReactElement } from 'react'
+import type { Dispatch, ReactElement, SetStateAction } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -26,7 +27,9 @@ import type {
   CoreRuntimeToolDiagnosticsJson
 } from '../agent/kun-contract'
 import { useActiveExtensionWorkspaceRoot } from '../extensions/active-extension-workspace'
+import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useExtensionSettingsService } from '../extensions/ExtensionSettingsServiceContext'
+import { KunLoader } from './KunLoader'
 import {
   isExtensionContributionSnapshotReady,
   useExtensionContributionLoadState,
@@ -34,6 +37,7 @@ import {
   workbenchContextForRoute
 } from '../extensions/use-contributions'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
+import { registerAgentUpdateSettingsFlush } from '../store/harness-update-runner'
 import {
   compactHomePathForSettingsDisplay,
   compactHomePathListForSettingsDisplay,
@@ -41,8 +45,10 @@ import {
   expandHomePathListForSettingsUse
 } from '../lib/settings-home-paths'
 import { defaultConversationWorkspaceRoot } from '../lib/workspace-path'
+import { emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
 import { useChatStore } from '../store/chat-store'
 import { useSettingsCommandPaletteShortcut } from '../palette/useSettingsCommandPaletteShortcut'
+import { useCommandPaletteStore } from '../palette/palette-store'
 import {
   DEFAULT_WORKSPACE_ROOT,
   hasValidPort,
@@ -50,7 +56,11 @@ import {
   mergeSettings,
   splitSettingsList
 } from './settings-utils'
+import { cancelAgentEnablementChecks } from './ade/agent-enablement-cancellation'
 import { SettingsViewLayout } from './settings-view-layout'
+import { SettingsDraftLeaveDialog } from './SettingsDraftLeaveDialog'
+import { resolveSettingsDraftExit, type SettingsDraftController } from './settings-draft-navigation'
+import { useSettingsDraftControllers } from './use-settings-draft-controllers'
 import type { SettingsSaveIssue } from './settings-save-error'
 import {
   settingsCategoryDescriptionKey,
@@ -77,7 +87,6 @@ export function SettingsView(): ReactElement {
   const { t, i18n } = useTranslation('settings')
   const { t: tCommon } = useTranslation('common')
   const closeSettings = useChatStore((s) => s.closeSettings)
-  useSettingsCommandPaletteShortcut(closeSettings)
   const settingsSection = useChatStore((s) => s.settingsSection)
   const openCode = useChatStore((s) => s.openCode)
   const openInitialSetup = useChatStore((s) => s.openInitialSetup)
@@ -94,7 +103,36 @@ export function SettingsView(): ReactElement {
   const archiveThread = useChatStore((s) => s.archiveThread)
   const deleteThread = useChatStore((s) => s.deleteThread)
   const addClawChannel = useChatStore((s) => s.addClawChannel)
-  const [category, setCategory] = useState<SettingsCategory>('general')
+  const [category, setCategoryState] = useState<SettingsCategory>('general')
+  // Bumped when a deep link opens a page, so the page can flash what was asked for.
+  const [arrival, setArrival] = useState(0)
+  const markArrival = useCallback(() => setArrival((value) => value + 1), [])
+  const {
+    register: registerSettingsDraft,
+    hasPending: hasPendingSettingsDraft,
+    current: currentSettingsDraftController
+  } = useSettingsDraftControllers()
+  const onAdeCollaborationDraftChange = useCallback((controller: SettingsDraftController | null) => {
+    registerSettingsDraft('collaboration', controller)
+  }, [registerSettingsDraft])
+  const onAdeProjectDraftChange = useCallback((controller: SettingsDraftController | null) => {
+    registerSettingsDraft('project', controller)
+  }, [registerSettingsDraft])
+  const [pendingNavigation, setPendingNavigation] = useState<
+    { kind: 'category'; target: SettingsCategory } | { kind: 'back' | 'palette' } | null
+  >(null)
+  const [pendingNavigationBusy, setPendingNavigationBusy] = useState(false)
+  const [pendingNavigationFailed, setPendingNavigationFailed] = useState(false)
+  const setCategory: Dispatch<SetStateAction<SettingsCategory>> = useCallback((action) => {
+    const target = typeof action === 'function' ? action(category) : action
+    if (target === category) return
+    cancelAgentEnablementChecks()
+    if (hasPendingSettingsDraft()) {
+      setPendingNavigation({ kind: 'category', target })
+      return
+    }
+    setCategoryState(target)
+  }, [category, hasPendingSettingsDraft])
   const [form, setForm] = useState<AppSettingsV1 | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [workspacePickerError, setWorkspacePickerError] = useState<string | null>(null)
@@ -130,7 +168,6 @@ export function SettingsView(): ReactElement {
   const [memoryDiagnostics, setMemoryDiagnostics] = useState<CoreMemoryDiagnosticsJson | null>(null)
   const [runtimeDiagnosticsBusy, setRuntimeDiagnosticsBusy] = useState(false)
   const [runtimeDiagnosticsNotice, setRuntimeDiagnosticsNotice] = useState<InlineNotice | null>(null)
-  const [agentsSectionReady, setAgentsSectionReady] = useState(false)
   const [writeDebugModalOpen, setWriteDebugModalOpen] = useState(false)
   const [writeCompletionDebugEntries, setWriteCompletionDebugEntries] = useState<WriteInlineCompletionDebugEntry[]>([])
   const [writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId] = useState<string | null>(null)
@@ -178,7 +215,6 @@ export function SettingsView(): ReactElement {
   const formCursorSpotlight = form?.cursorSpotlight
   const formCursorSpotlightColor = form?.cursorSpotlightColor
   const formDarkUiColors = form?.darkUiColors
-  const markAgentsSectionReady = useCallback(() => setAgentsSectionReady(true), [])
   const settingsPlatform = typeof window !== 'undefined' ? window.kunGui?.platform ?? '' : ''
   const settingsHomeDir = typeof window !== 'undefined' ? window.kunGui?.homeDir ?? '' : ''
   const categoryTitle = t(settingsCategoryLabelKey(category))
@@ -228,8 +264,7 @@ export function SettingsView(): ReactElement {
   })
 
   useSettingsRouteSynchronization({
-    settingsSection, category, setCategory, form, agentsSectionReady, agentsSectionRef,
-    skillSectionRef, mcpSectionRef, permissionsSectionRef
+    settingsSection, setCategory, markArrival
   })
 
   useEffect(() => {
@@ -252,6 +287,57 @@ export function SettingsView(): ReactElement {
     setSaveStatus, setSaveError, setSaveIssue, saveTimer, statusTimer, draftVersion, pendingSnapshotRef,
     persistedSettingsRef, flushOnUnmountRef, settingsPlatform, settingsHomeDir
   })
+  const flushRef = useRef(flushPendingSave); flushRef.current = flushPendingSave
+  // A background Agent update writes its new command path only after this view's pending edits are saved.
+  useEffect(() => registerAgentUpdateSettingsFlush(() => flushRef.current(true)), [])
+  const guardedGoBack = (): void => {
+    cancelAgentEnablementChecks()
+    if (hasPendingSettingsDraft()) {
+      setPendingNavigation({ kind: 'back' })
+      return
+    }
+    goBack()
+  }
+  useSettingsCommandPaletteShortcut(() => {
+    cancelAgentEnablementChecks()
+    if (hasPendingSettingsDraft()) {
+      setPendingNavigation({ kind: 'palette' })
+      return false
+    }
+    closeSettings()
+    return true
+  })
+  const completePendingNavigation = (pending: NonNullable<typeof pendingNavigation>): void => {
+    setPendingNavigation(null)
+    setPendingNavigationFailed(false)
+    if (pending.kind === 'category') setCategoryState(pending.target)
+    else if (pending.kind === 'back') goBack()
+    else {
+      closeSettings()
+      useCommandPaletteStore.getState().openPalette()
+    }
+  }
+  const resolvePendingNavigation = async (choice: 'save' | 'discard' | 'keep'): Promise<void> => {
+    const pending = pendingNavigation
+    if (!pending || pendingNavigationBusy) return
+    setPendingNavigationBusy(true)
+    let result: Awaited<ReturnType<typeof resolveSettingsDraftExit>>
+    try {
+      result = await resolveSettingsDraftExit(choice, currentSettingsDraftController())
+    } finally {
+      setPendingNavigationBusy(false)
+    }
+    if (result === 'save-failed') {
+      setPendingNavigationFailed(true)
+      return
+    }
+    if (result === 'keep') {
+      setPendingNavigation(null)
+      setPendingNavigationFailed(false)
+      return
+    }
+    completePendingNavigation(pending)
+  }
 
   const update = useCallback((partial: SettingsPatch): void => {
     if (!form) return
@@ -293,7 +379,7 @@ export function SettingsView(): ReactElement {
         <button
           type="button"
           className="rounded-xl bg-ds-userbubble px-4 py-2 text-sm font-medium text-ds-userbubbleFg"
-          onClick={goBack}
+          onClick={guardedGoBack}
         >
           {t('back')}
         </button>
@@ -301,13 +387,7 @@ export function SettingsView(): ReactElement {
     )
   }
 
-  if (!form) {
-    return (
-      <div className="flex h-full items-center justify-center bg-ds-main text-ds-faint">
-        {t('loading')}
-      </div>
-    )
-  }
+  if (!form) return <KunLoader fill label={t('loading')} />
 
   const kun = getKunRuntimeSettings(form)
   const provider = getModelProviderSettings(form)
@@ -328,6 +408,23 @@ export function SettingsView(): ReactElement {
 
   const updateKun = (patch: KunRuntimeSettingsPatchV1): void => {
     update({ agents: kunSettingsPatch(patch) })
+  }
+  const onAdeCollaborationSaved = (snapshot: AdeCollaborationSettingsSnapshot): void => {
+    rendererRuntimeClient.invalidateSettings()
+    const value = snapshot.value
+    const patch: SettingsPatch = { agents: kunSettingsPatch({ ade: {
+      ...value,
+      managerModel: value.managerModel ?? { providerId: '', model: '' },
+      budget: value.budget ?? null
+    } }) }
+    setForm((current) => current ? mergeSettings(current, patch) : current)
+    if (persistedSettingsRef.current) {
+      persistedSettingsRef.current = mergeSettings(persistedSettingsRef.current, patch)
+      emitRendererSettingsChanged(persistedSettingsRef.current)
+    }
+    if (pendingSnapshotRef.current) {
+      pendingSnapshotRef.current = mergeSettings(pendingSnapshotRef.current, patch)
+    }
   }
 
   const pickWorkspace = async (): Promise<void> => {
@@ -456,6 +553,7 @@ export function SettingsView(): ReactElement {
   const settingsSectionContext = {
     t,
     tCommon,
+    goBack: guardedGoBack,
     openStorageSettings: () => setCategory('storage'),
     settingsSection,
     form,
@@ -465,6 +563,11 @@ export function SettingsView(): ReactElement {
     saveError,
     saveIssue,
     retrySave: () => { void flushPendingSave() },
+    beforeAdeCollaborationSave: flushPendingSave,
+    beforeAgentEnablementCheck: () => flushPendingSave(true),
+    onAdeCollaborationSaved,
+    onAdeCollaborationDraftChange,
+    onAdeProjectDraftChange,
     update,
     updateKun,
     updateSharedCredential,
@@ -575,13 +678,18 @@ export function SettingsView(): ReactElement {
     deleteThread
   }
 
-  return <SettingsViewLayout view={{
-    t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, saveStatus, saveError, saveIssue,
+  return <>
+    <SettingsViewLayout view={{
+    t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, arrival,
+    saveStatus, saveError, saveIssue,
     writeDebugModalOpen, setWriteDebugModalOpen, writeCompletionDebugEntries,
     writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId, writeDebugLoading,
     writeDebugError, extensionSettingsService, extensionSettingsContributions,
-    extensionSettingsAvailable, settingsScrollerRef, markAgentsSectionReady, categoryTitle,
-    categoryDescription, loadWriteDebugEntries, portError, flushPendingSave, goBack,
+    extensionSettingsAvailable, settingsScrollerRef, categoryTitle,
+    categoryDescription, loadWriteDebugEntries, portError, flushPendingSave, goBack: guardedGoBack,
     clearWriteDebugEntries, settingsSectionContext
-  }} />
+    }} />
+    {pendingNavigation ? <SettingsDraftLeaveDialog t={t} busy={pendingNavigationBusy}
+      saveFailed={pendingNavigationFailed} onChoice={(choice) => void resolvePendingNavigation(choice)} /> : null}
+  </>
 }

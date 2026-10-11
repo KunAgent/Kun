@@ -96,15 +96,26 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
   }
 
   async clientInformation(ctx?: OAuthClientInformationContext): Promise<StoredOAuthClientInformation | undefined> {
+    this.assertExpectedIssuer(ctx?.issuer)
     const configured = this.configuredClientInformation()
     if (configured) return configured
-    return issuerCompatible((await this.store.read()).clientInformation, ctx?.issuer)
+    const state = await this.store.read()
+    const issuer = ctx?.issuer ?? this.server.oauth?.expectedIssuer
+    // Stop automatic registration/refresh of legacy state before the SDK can
+    // replace it. An explicit interactive authorization can obtain fresh state.
+    if (!this.interactive && [state.clientInformation, state.tokens].some(
+      (value) => value && !issuerCompatible(value, issuer)
+    )) {
+      throw new McpAuthorizationRequiredError(this.serverId, MCP_OAUTH_REAUTHORIZE_MESSAGE)
+    }
+    return issuerCompatible(state.clientInformation, issuer)
   }
 
   async saveClientInformation(
     clientInformation: StoredOAuthClientInformation,
     ctx?: OAuthClientInformationContext
   ): Promise<void> {
+    this.assertExpectedIssuer(ctx?.issuer ?? clientInformation.issuer)
     if (this.configuredClientInformation()) return
     await this.store.update((state) => ({
       ...state,
@@ -113,11 +124,15 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
   }
 
   async tokens(ctx?: OAuthClientInformationContext): Promise<StoredOAuthTokens | undefined> {
+    this.assertExpectedIssuer(ctx?.issuer)
     const tokens = (await this.store.read()).tokens
-    return ctx ? issuerCompatible(tokens, ctx.issuer) : tokens
+    // Transports read without context for resource requests. Only credentials
+    // already bound to an issuer may be used, including on that initial request.
+    return issuerCompatible(tokens, ctx?.issuer ?? this.server.oauth?.expectedIssuer)
   }
 
   async saveTokens(tokens: StoredOAuthTokens, ctx?: OAuthClientInformationContext): Promise<void> {
+    this.assertExpectedIssuer(ctx?.issuer ?? tokens.issuer)
     await this.store.update((state) => {
       const next: McpOAuthState = {
         ...state,
@@ -237,19 +252,34 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
 
   async diagnostics(): Promise<McpOAuthDiagnosticDetail> {
     const state = await this.store.read()
-    const hasClientInformation = Boolean(state.clientInformation)
-    const hasTokens = Boolean(state.tokens?.access_token)
-    const hasRefreshToken = Boolean(state.tokens?.refresh_token)
+    const expectedIssuer = this.server.oauth?.expectedIssuer
+    const discoveredIssuer = state.discoveryState?.authorizationServerMetadata?.issuer
+      ?? state.discoveryState?.authorizationServerUrl
+    const diagnosticIssuer = expectedIssuer ?? discoveredIssuer
+    const unpinnedClient = Boolean(this.server.oauth?.clientId && !expectedIssuer)
+    // Configured client information supersedes any older dynamic registration.
+    const clientInformation = this.server.oauth?.clientId
+      ? expectedIssuer ? this.configuredClientInformation() : undefined
+      : state.clientInformation
+    const needsReauthorization = unpinnedClient
+      || Boolean(expectedIssuer && discoveredIssuer && expectedIssuer !== discoveredIssuer)
+      || [clientInformation, state.tokens].some(
+      (value) => value && !issuerCompatible(value, diagnosticIssuer)
+    )
+    const tokens = needsReauthorization ? undefined : issuerCompatible(state.tokens, diagnosticIssuer)
+    const hasClientInformation = Boolean(issuerCompatible(clientInformation, diagnosticIssuer))
+    const hasTokens = Boolean(tokens?.access_token)
+    const hasRefreshToken = Boolean(tokens?.refresh_token)
     const hasCodeVerifier = Boolean(state.codeVerifier)
     const hasDiscoveryState = Boolean(state.discoveryState)
-    const expiresAt = computeTokenExpiry(state)
+    const expiresAt = tokens ? computeTokenExpiry(state) : undefined
     const expired = hasTokens && expiresAt !== undefined && Date.parse(expiresAt) <= this.now()
-    const grantedScopes = parseTokenScopes(state.tokens?.scope)
+    const grantedScopes = parseTokenScopes(tokens?.scope)
     const status = deriveOAuthStatus({
       hasTokens,
       expired,
       hasPartialState: hasClientInformation || hasCodeVerifier || hasDiscoveryState,
-      hasError: Boolean(state.lastError)
+      hasError: needsReauthorization || Boolean(state.lastError)
     })
     return {
       status,
@@ -260,7 +290,9 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
       hasDiscoveryState,
       ...(grantedScopes.length ? { grantedScopes } : {}),
       ...(expiresAt ? { expiresAt } : {}),
-      ...(state.lastError ? { lastError: state.lastError } : {}),
+      ...(needsReauthorization
+        ? { lastError: unpinnedClient ? MCP_OAUTH_ISSUER_REQUIRED_MESSAGE : MCP_OAUTH_REAUTHORIZE_MESSAGE }
+        : state.lastError ? { lastError: state.lastError } : {}),
       ...(state.lastErrorAt ? { lastErrorAt: state.lastErrorAt } : {})
     }
   }
@@ -271,9 +303,23 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
 
   private configuredClientInformation(): StoredOAuthClientInformation | undefined {
     if (!this.server.oauth?.clientId) return undefined
+    if (!this.server.oauth.expectedIssuer) {
+      throw new McpAuthorizationRequiredError(this.serverId, MCP_OAUTH_ISSUER_REQUIRED_MESSAGE)
+    }
     return {
       client_id: this.server.oauth.clientId,
+      issuer: this.server.oauth.expectedIssuer,
       ...(this.server.oauth.clientSecret ? { client_secret: this.server.oauth.clientSecret } : {})
+    }
+  }
+
+  private assertExpectedIssuer(issuer: string | undefined): void {
+    const expectedIssuer = this.server.oauth?.expectedIssuer
+    if (expectedIssuer && issuer !== undefined && issuer !== expectedIssuer) {
+      throw new McpAuthorizationRequiredError(this.serverId, MCP_OAUTH_REAUTHORIZE_MESSAGE)
+    }
+    if (this.server.oauth?.clientId && !expectedIssuer) {
+      throw new McpAuthorizationRequiredError(this.serverId, MCP_OAUTH_ISSUER_REQUIRED_MESSAGE)
     }
   }
 
@@ -361,17 +407,35 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
   }
 }
 
+const MCP_OAUTH_REAUTHORIZE_MESSAGE = 'MCP OAuth credentials require authorization again to bind the trusted authorization server'
+const MCP_OAUTH_ISSUER_REQUIRED_MESSAGE = 'Configure oauth.expectedIssuer for the trusted authorization server before using this MCP OAuth client'
+
 function issuerCompatible<T extends { issuer?: string }>(
   value: T | undefined,
   issuer: string | undefined
 ): T | undefined {
-  if (!value || !issuer || !value.issuer || value.issuer === issuer) return value
+  if (hasValidIssuer(value?.issuer) && (issuer === undefined || value!.issuer === issuer)) return value
   return undefined
 }
 
 function stampIssuer<T extends { issuer?: string }>(value: T, issuer: string | undefined): T {
-  if (!issuer || value.issuer === issuer) return value
+  if (value.issuer !== undefined && (!hasValidIssuer(value.issuer) || (issuer !== undefined && value.issuer !== issuer))) {
+    throw new Error('MCP OAuth credential issuer does not match the authorization context')
+  }
+  if (value.issuer) return value
+  if (!hasValidIssuer(issuer)) throw new Error('MCP OAuth credentials must include an authorization server issuer')
   return { ...value, issuer }
+}
+
+function hasValidIssuer(value: unknown): value is string {
+  if (typeof value !== 'string' || value.trim() !== value) return false
+  try {
+    const url = new URL(value)
+    return ['https:', 'http:'].includes(url.protocol)
+      && !url.username && !url.password && !url.search && !url.hash
+  } catch {
+    return false
+  }
 }
 
 export function createMcpOAuthProvider(
@@ -442,8 +506,8 @@ function deriveOAuthStatus(input: {
   hasPartialState: boolean
   hasError: boolean
 }): McpOAuthStatus {
-  if (input.hasTokens) return input.expired ? 'expired' : 'authorized'
   if (input.hasError) return 'error'
+  if (input.hasTokens) return input.expired ? 'expired' : 'authorized'
   if (input.hasPartialState) return 'partial'
   return 'empty'
 }

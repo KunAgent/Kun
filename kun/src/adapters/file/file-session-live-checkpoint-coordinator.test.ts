@@ -251,3 +251,62 @@ describe('FileSession live checkpoint generation barrier', () => {
     await recovered.close()
   })
 })
+
+describe('live checkpoint persistence outage', () => {
+  it('backs off repeated failures, keeps newest data, and recovers', async () => {
+    vi.useFakeTimers()
+    const root = await mkdtemp(join(tmpdir(), 'kun-live-outage-'))
+    roots.push(root)
+    const gate = makeGatedHost(root, 'outage')
+    let failing = true
+    const write = vi.fn(async () => {
+      if (failing) throw new Error('disk full')
+    })
+    const coordinator = new FileSessionLiveCheckpointCoordinator({ ...gate.host, withThreadWrite: async (_id, operation) => { await write(); return operation() } })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const item = (text: string) => makeAssistantReasoningItem({
+      id: 'reasoning', threadId: 'outage', turnId: 'turn', status: 'running', text
+    })
+    try {
+      await expect(coordinator.checkpoint('outage', item('a'), 1)).rejects.toThrow('disk full')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(write.mock.calls.length).toBeLessThanOrEqual(6)
+      await coordinator.checkpoint('outage', item('newest'), 2)
+      expect(coordinator.stats()).toMatchObject({ degraded: true, pending: 1 })
+      failing = false
+      await coordinator.flushThread('outage')
+      expect(await readLiveItems(gate.liveItemsPath)).toMatchObject([{ representedSeq: 2, item: { text: 'newest' } }])
+      expect(coordinator.stats()).toMatchObject({ degraded: false })
+      expect(warn.mock.calls.length).toBeLessThanOrEqual(2)
+    } finally {
+      failing = false
+      await coordinator.close()
+      warn.mockRestore()
+    }
+  })
+})
+
+describe('live checkpoint failed teardown', () => {
+  it('stops timers on failed close and retains dirty state for a retry', async () => {
+    vi.useFakeTimers()
+    const root = await mkdtemp(join(tmpdir(), 'kun-live-close-outage-'))
+    roots.push(root)
+    const gate = makeGatedHost(root, 'outage')
+    let failing = true
+    const write = vi.fn(async () => {
+      if (failing) throw new Error('disk unavailable')
+    })
+    const coordinator = new FileSessionLiveCheckpointCoordinator({ ...gate.host, withThreadWrite: async (_id, operation) => { await write(); return operation() } })
+    const item = makeAssistantReasoningItem({ id: 'reasoning', threadId: 'outage', turnId: 'turn', status: 'running', text: 'keep me' })
+    await expect(coordinator.checkpoint('outage', item, 1)).rejects.toThrow('disk unavailable')
+    await expect(coordinator.close()).rejects.toThrow('disk unavailable')
+    const attempts = write.mock.calls.length
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(write).toHaveBeenCalledTimes(attempts)
+    expect(coordinator.stats()).toMatchObject({ pending: 1, degraded: true })
+    failing = false
+    await coordinator.close()
+    expect(coordinator.stats().pending).toBe(0)
+    expect(await readLiveItems(gate.liveItemsPath)).toMatchObject([{ item: { text: 'keep me' } }])
+  })
+})

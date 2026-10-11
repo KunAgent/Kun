@@ -11,6 +11,13 @@ import {
 } from './model-connection-registry.js'
 import { CodexOAuthCredentialRefresher } from './codex-oauth-credential-refresher.js'
 
+// These fixtures isolate account discovery; background public catalog enrichment
+// has separate tests and must not outlive this fixture's temporary data directory.
+vi.mock('./provider-public-catalog.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./provider-public-catalog.js')>(),
+  publicCatalogService: () => ({ fetch: async () => ({ status: 'unavailable', models: [] }) })
+}))
+
 const roots: string[] = []
 
 afterEach(async () => {
@@ -55,7 +62,7 @@ function installFakeAtomicJsonManager(dataDir: string) {
   return {
     documents,
     externalRequests,
-    registryDocument: () => documents.get(join(dataDir, 'model-connections.v1.json'))?.value as {
+    registryDocument: () => documents.get(join(dataDir, 'model-connections.v2.json'))?.value as {
       revision: number
       profiles: Record<string, { credentialRef?: string }>
       credentialTransactions: Record<string, {
@@ -146,6 +153,57 @@ async function registry(
 }
 
 describe('ModelConnectionRegistry', () => {
+  it('retires leftover OpenCode Free connections and keeps other defaults', async () => {
+    const { dataDir, value } = await registry()
+    const remaining = await value.connect(deepseekConnection())
+    await value.connect({
+      expectedRevision: remaining.revision,
+      id: 'opencode-free',
+      name: 'OpenCore Free',
+      presetSource: 'opencode-free',
+      kind: 'http',
+      authType: 'api-key',
+      baseUrl: 'https://opencode.ai/zen/v1',
+      endpointFormat: 'chat_completions',
+      credential: 'stale-free-token',
+      models: ['big-pickle', 'gpt-5-nano'],
+      selectedModel: 'big-pickle',
+      probe: false,
+      select: true
+    })
+
+    const retired = await value.initialize([
+      deepseekConnection(),
+      {
+        expectedRevision: 0,
+        id: 'opencode-free',
+        name: 'OpenCore Free',
+        presetSource: 'opencode-free',
+        kind: 'http',
+        authType: 'api-key',
+        baseUrl: 'https://opencode.ai/zen/v1',
+        endpointFormat: 'chat_completions',
+        credential: 'stale-free-token',
+        models: ['big-pickle'],
+        selectedModel: 'big-pickle',
+        probe: false,
+        select: true
+      }
+    ])
+
+    expect(retired.providers.map((provider) => provider.id)).toEqual(['deepseek'])
+    expect(retired.defaultProviderId).toBe('deepseek')
+    expect(retired.defaultModel).toBe('deepseek-chat')
+    const stored = JSON.parse(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')) as {
+      profiles: Record<string, unknown>
+      tombstones: Record<string, unknown>
+    }
+    expect(stored.profiles['opencode-free']).toBeUndefined()
+    expect(stored.tombstones['opencode-free']).toEqual(expect.objectContaining({
+      deletedRevision: expect.any(Number)
+    }))
+  })
+
   it('reconciles explicit gateway globals even after the registry already exists', async () => {
     const { value } = await registry()
     const connected = await value.connect(deepseekConnection())
@@ -186,7 +244,7 @@ describe('ModelConnectionRegistry', () => {
       },
       {
         label: 'a versioned chat completions endpoint',
-        baseUrl: 'https://catalog.example.test/v2/chat/completions?deployment=blue#fragment',
+        baseUrl: 'https://catalog.example.test/v2/chat/completions?deployment=blue',
         endpointFormat: 'chat_completions' as const,
         expectedUrl: 'https://catalog.example.test/v2/models'
       },
@@ -258,8 +316,8 @@ describe('ModelConnectionRegistry', () => {
         select: false
       })
 
-      await expect(value.probe('custom-full-endpoint')).resolves.toEqual({
-        ok: true,
+      await expect(value.probe('custom-full-endpoint')).resolves.toMatchObject({
+        ok: true, source: 'manual', lastAttemptStatus: 'success',
         models: ['configured-model']
       })
       expect(fetchMock).not.toHaveBeenCalled()
@@ -322,8 +380,8 @@ describe('ModelConnectionRegistry', () => {
         select: false
       })
 
-      await expect(value.probe('codex')).resolves.toEqual({
-        ok: true,
+      await expect(value.probe('codex')).resolves.toMatchObject({
+        ok: true, source: 'provider', lastAttemptStatus: 'success',
         models: ['gpt-6-astra']
       })
       expect(fetchMock).toHaveBeenCalledWith(
@@ -332,7 +390,7 @@ describe('ModelConnectionRegistry', () => {
           authorization: 'Bearer access-token',
           'ChatGPT-Account-Id': 'account-1',
           originator: 'codex_cli_rs'
-        }) })
+        }) }), ''
       )
     })
 
@@ -357,9 +415,9 @@ describe('ModelConnectionRegistry', () => {
         select: true
       })
 
-      await expect(value.probe('anthropic')).resolves.toEqual({
-        ok: true,
-        models: ['claude-sonnet-4-5', 'claude-fallback']
+      await expect(value.probe('anthropic')).resolves.toMatchObject({
+        ok: true, source: 'provider', lastAttemptStatus: 'success',
+        models: ['claude-sonnet-4-5']
       })
       expect(fetchMock).toHaveBeenCalledWith('https://api.anthropic.com/v1/models', expect.objectContaining({
         headers: expect.objectContaining({
@@ -439,7 +497,7 @@ describe('ModelConnectionRegistry', () => {
       }])
 
       expect(JSON.stringify(reconciled)).not.toContain(sourceId)
-      const stored = await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')
+      const stored = await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')
       expect(stored).not.toContain(sourceId)
       const materialized = await value.materialize()
       expect(materialized.providers.get('codex')).toMatchObject({
@@ -482,98 +540,13 @@ describe('ModelConnectionRegistry', () => {
       }])
 
       expect(reconciled.providers[0]).toMatchObject({ configured: false })
-      const stored = await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')
+      const stored = await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')
       expect(stored).not.toContain('settings:provider:deepseek')
       expect((await value.materialize()).providers.has('deepseek')).toBe(false)
       await expect(value.credentialStateForInternalConsumer('deepseek')).resolves.toEqual({
         authoritative: true,
         apiKey: ''
       })
-    })
-
-    it('keeps a credential-less OpenCore Free provider usable and anonymous', async () => {
-      const { dataDir, value } = await registry()
-      const snapshot = await value.connect({
-        expectedRevision: 0,
-        id: 'opencode-free',
-        name: 'OpenCore Free',
-        presetSource: 'opencode-free',
-        presetMode: 'api',
-        kind: 'http',
-        authType: 'api-key',
-        baseUrl: 'https://opencode.ai/zen/v1',
-        endpointFormat: 'chat_completions',
-        credential: '',
-        models: ['big-pickle'],
-        selectedModel: 'big-pickle',
-        probe: false,
-        select: true
-      })
-
-      expect(snapshot.providers[0]).toMatchObject({
-        id: 'opencode-free',
-        configured: true,
-        credentialStatus: 'ready'
-      })
-      const stored = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
-        profiles: Record<string, { credentialRef?: string; credentialSourceId?: string }>
-      }
-      expect(stored.profiles['opencode-free']).not.toHaveProperty('credentialRef')
-      expect(stored.profiles['opencode-free']).not.toHaveProperty('credentialSourceId')
-
-      const materialized = await value.materialize()
-      expect(materialized.providers.has('opencode-free')).toBe(true)
-      expect(materialized.providers.get('opencode-free')).toMatchObject({ apiKey: '' })
-      expect(materialized.selected?.profile.id).toBe('opencode-free')
-    })
-
-    it('removes a legacy OpenCore Free credential when the seed is anonymous', async () => {
-      const { dataDir, value } = await registry()
-      const connected = await value.connect({
-        expectedRevision: 0,
-        id: 'opencode-free',
-        name: 'OpenCore Free',
-        presetSource: 'opencode-free',
-        presetMode: 'api',
-        kind: 'http',
-        authType: 'api-key',
-        baseUrl: 'https://opencode.ai/zen/v1',
-        endpointFormat: 'chat_completions',
-        credential: 'legacy-invalid-key',
-        models: ['big-pickle'],
-        selectedModel: 'big-pickle',
-        probe: false,
-        select: true
-      })
-
-      const migrated = await value.initialize([{
-        expectedRevision: connected.revision,
-        id: 'opencode-free',
-        name: 'OpenCore Free',
-        presetSource: 'opencode-free',
-        presetMode: 'api',
-        kind: 'http',
-        authType: 'api-key',
-        baseUrl: 'https://opencode.ai/zen/v1',
-        endpointFormat: 'chat_completions',
-        credential: '',
-        models: ['big-pickle'],
-        selectedModel: 'big-pickle',
-        probe: false,
-        select: true
-      }])
-
-      expect(migrated.providers[0]).toMatchObject({
-        id: 'opencode-free',
-        configured: true,
-        credentialStatus: 'ready'
-      })
-      const stored = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
-        profiles: Record<string, { credentialRef?: string; credentialSourceId?: string }>
-      }
-      expect(stored.profiles['opencode-free']).not.toHaveProperty('credentialRef')
-      expect(stored.profiles['opencode-free']).not.toHaveProperty('credentialSourceId')
-      expect((await value.materialize()).providers.get('opencode-free')).toMatchObject({ apiKey: '' })
     })
 
   it('backfills an OpenCode Go numbered account without changing its credential binding', async () => {
@@ -606,7 +579,7 @@ describe('ModelConnectionRegistry', () => {
       probe: false,
       select: true
     })
-    const before = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
+    const before = JSON.parse(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')) as {
       profiles: Record<string, { credentialRef?: string }>
     }
     const credentialRef = before.profiles['opencode-go-2']?.credentialRef
@@ -638,7 +611,7 @@ describe('ModelConnectionRegistry', () => {
         }
       }
     })
-    const after = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
+    const after = JSON.parse(await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')) as {
       profiles: Record<string, { credentialRef?: string }>
     }
     expect(after.profiles['opencode-go-2']?.credentialRef).toBe(credentialRef)
@@ -685,7 +658,7 @@ describe('ModelConnectionRegistry', () => {
         authoritative: true,
         apiKey: 'final-secret'
       })
-      const stored = await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')
+      const stored = await readFile(join(dataDir, 'model-connections.v2.json'), 'utf8')
       expect(stored).not.toContain('settings:provider:deepseek')
       expect(stored).not.toContain('replacement-secret')
       expect(stored).not.toContain('final-secret')

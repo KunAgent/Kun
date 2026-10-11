@@ -1,7 +1,7 @@
 import { arch, release, type as osType } from 'node:os'
 
-/** Verified against the Codex model catalog; older versions can hide new models. */
-export const CODEX_CLI_VERSION = '0.153.3'
+/** Verified with GPT-6.1 Sol discovery; 0.153.3 returns only the older catalog. */
+export const CODEX_CLI_VERSION = '0.160.0'
 /** Pinned to current npm @google/gemini-cli. */
 export const GEMINI_CLI_VERSION = '0.52.0'
 /** Pinned to current grok / Grok Build CLI. */

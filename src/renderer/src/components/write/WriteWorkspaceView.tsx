@@ -53,7 +53,6 @@ import { WriteEditorGroups } from './WriteEditorGroups'
 import { useWriteEditorGroupFileWatches } from './use-write-editor-group-file-watches'
 import { shouldShowWriteInlineAgent } from './write-inline-agent-visibility'
 import { usePaperSurfaceSlots } from './use-paper-surface-slots'
-import { enterPaperMode } from '../../paper/paper-mode-actions'
 
 type Props = {
   leftSidebarCollapsed: boolean; onToggleLeftSidebar: () => void
@@ -71,8 +70,6 @@ export function WriteWorkspaceView({
   onOpenAgentSettings
 }: Props): ReactElement {
   const { t } = useTranslation('common')
-  const ensureWriteThreadForWorkspace = useChatStore((s) => s.ensureWriteThreadForWorkspace)
-  const runtimeConnection = useChatStore((s) => s.runtimeConnection)
   const busy = useChatStore((s) => s.busy)
   // Field-level subscription: this view must follow fileContent, but it should
   // not re-render for sidebar-only state such as the directory tree or quoted
@@ -97,7 +94,6 @@ export function WriteWorkspaceView({
     inlineCompletionApiReady,
     selectionAssist,
     paperReading,
-    workSurface,
     imageGenReady,
     fileContent,
     fileSize,
@@ -152,7 +148,6 @@ export function WriteWorkspaceView({
       inlineCompletionApiReady: s.inlineCompletionApiReady,
       selectionAssist: s.selectionAssist,
       paperReading: s.paperReading,
-      workSurface: s.workSurface,
       agentPresets: s.agentPresets,
       assistantAgentPresetId: s.assistantAgentPresetId,
       setAssistantAgentPresetId: s.setAssistantAgentPresetId,
@@ -194,7 +189,7 @@ export function WriteWorkspaceView({
   const exportNoticeTimerRef = useRef<number | null>(null)
   const richHandleRef = useRef<WriteRichEditorHandle | null>(null)
   const markdownHandleRef = useRef<WriteMarkdownEditorHandle | null>(null)
-  // Unified diff-review surface (§6.1): whichever editor is mounted answers
+  // Unified diff-review surface: whichever editor is mounted answers
   // review calls; only one handle is non-null at a time.
   const documentHandleRef = useRef<WriteDocumentReviewHandle | null>(null)
   Object.defineProperty(documentHandleRef, 'current', {
@@ -235,7 +230,7 @@ export function WriteWorkspaceView({
     fileSize,
     truncated: fileTruncated
   })
-  // Single-view surface decision (§8.2/§8.3): the document editor handles
+  // Single-view surface decision: the document editor handles
   // markdown up to the safety cap; everything else renders plain text.
   const { surface: editorSurface } = resolveWriteEditorSurface({
     path: activeFilePath ?? '',
@@ -381,11 +376,10 @@ export function WriteWorkspaceView({
   })
   useWriteEditorGroupFileWatches({ workspaceRoot, editorLayout })
 
-  const { paperBar, paperDialog, openPaperImport } = usePaperSurfaceSlots({
+  const { paperBar, inPaperUnit, openPaperImport } = usePaperSurfaceSlots({
     workspaceRoot,
     paperReading,
     activeFilePath,
-    surface: workSurface,
     input,
     setInput,
     onSubmitPrompt,
@@ -476,7 +470,6 @@ export function WriteWorkspaceView({
     fileContent,
     presentationEnabled,
     presentationInFlight,
-    runtimeConnection,
     input,
     setInput,
     onSubmitPrompt,
@@ -486,7 +479,6 @@ export function WriteWorkspaceView({
     flushSave,
     setAssistantOpen,
     setFileError,
-    ensureWriteThreadForWorkspace,
     completeOnboarding,
     showExportNotice,
     setExportMenuOpen,
@@ -546,10 +538,9 @@ export function WriteWorkspaceView({
     <WriteDocumentStatusBar documentStatsLabel={documentStatsLabel} saveLabel={saveLabel} saveStatus={saveStatus}
       readOnly={renderSafety.readOnly} reviewActive={reviewActive} onSave={saveNow} />
   ) : null
-  // U1: on the papers surface the reader owns its chrome — the 52px file
-  // toolbar is replaced by the PDF reader's floating capsules; unit-file
-  // actions live in the sidebar info panel instead of the paper strip.
-  const hidePaperReaderChrome = workSurface === 'papers' && activeFileIsPdf
+  // A paper's PDF owns its chrome: the reader's floating capsules replace the
+  // 52px file toolbar; unit actions live in the info drawer.
+  const hidePaperReaderChrome = activeFileIsPdf && inPaperUnit
   const focusedToolbar = hidePaperReaderChrome ? null : (
     <WriteWorkspaceToolbar
         embedded
@@ -621,7 +612,7 @@ export function WriteWorkspaceView({
           onboardingDecision={onboardingDecision}
           onAskAssistant={setAssistantPrompt}
           onCreateDraft={() => void createDraftFile()}
-          onImportPaper={workSurface === 'papers' ? openPaperImport : () => void enterPaperMode()}
+          onImportPaper={openPaperImport}
           onPickWorkspace={() => void pickWriteWorkspace()}
         />
       </div>
@@ -651,7 +642,6 @@ export function WriteWorkspaceView({
           {fileError}
         </div>
       ) : null}
-      {paperDialog}
       {exportNotice ? (
         <div
           className={`pointer-events-none fixed left-1/2 -translate-x-1/2 rounded-full border px-4 py-2 text-[13px] shadow-[0_14px_32px_rgba(20,47,95,0.12)] ${writeFocusModeFloatingLayerClassName(documentFocusMode, 'z-40')} ${

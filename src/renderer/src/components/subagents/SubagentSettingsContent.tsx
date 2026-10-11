@@ -101,6 +101,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
                 description={tSettings('subagentsMaxParallelDesc')}
               >
                 <BoundedNumberInput
+                  ariaLabel={tSettings('subagentsMaxParallel')}
                   value={subagents.maxParallel ?? 256}
                   min={1}
                   max={256}
@@ -122,7 +123,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
           tabId="profiles"
           active={settingsTab === 'profiles'}
         >
-          <section className="overflow-visible rounded-2xl border border-ds-border bg-ds-card/95 shadow-sm shadow-black/5 dark:shadow-black/25">
+          <section className="min-w-0 overflow-visible rounded-2xl border border-ds-border bg-ds-card/95 shadow-sm shadow-black/5 dark:shadow-black/25">
           <div className="flex flex-col gap-3 border-b border-ds-border-muted px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -133,7 +134,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
               </div>
               <p className="mt-1 text-[13px] leading-5 text-ds-muted">{tSettings('subagentsDelegatableDesc')}</p>
             </div>
-            <button
+            <button data-settings-action="primary" data-settings-size="default"
               type="button"
               onClick={() => setDialog({ profile: newProfile(selectedSurface), isNew: true })}
               className="inline-flex items-center gap-2 rounded-xl bg-accent px-3 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-accent/90"
@@ -143,7 +144,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
             </button>
           </div>
 
-          <div className="sticky top-0 z-20 border-b border-ds-border-muted bg-ds-main/95 px-4 py-3 backdrop-blur-xl">
+          <div data-testid="settings-subagent-catalog-toolbar" className="border-b border-ds-border-muted bg-ds-main/95 px-4 py-3">
             <SurfaceTabs value={selectedSurface} onChange={setSelectedSurface} t={t} />
             <AgentCatalogToolbar
               query={catalogQuery}
@@ -650,7 +651,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
             total: catalogAgents.length
           })}
         </span>
-        <button
+        <button data-settings-action="primary" data-settings-size="default"
           type="button"
           onClick={() => setDialog({ profile: newProfile(panelSurface), isNew: true })}
           className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[9px] bg-accent px-3 py-2 text-[11.5px] font-semibold text-white transition hover:bg-accent/90"

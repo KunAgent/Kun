@@ -137,7 +137,7 @@ async function defaultProbeRendererWindow(context: UpdateHealthProbeContext): Pr
   const { BrowserWindow, ipcMain } = await import('electron')
   registerUpdateHealthRendererIpc(ipcMain)
   const preloadPath = (await import('./main-paths')).resolveNamedPreloadPath(
-    HEALTH_BUNDLE_DIR, 'index'
+    app.getAppPath(), 'index'
   )
   const window = new BrowserWindow({
     show: false,

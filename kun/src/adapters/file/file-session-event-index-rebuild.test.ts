@@ -435,6 +435,32 @@ describe('FileSessionEventIndexRebuild', () => {
     expect(events).toEqual(Array.from({ length: 601 }, (_, i) => i + 1))
   })
 
+  it('yields at the wall-clock budget and resumes the remaining sweep', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-event-rebuild-deadline-'))
+    roots.push(root)
+    const threadsDir = join(root, 'threads')
+    await writeEvents(join(threadsDir, 'thread-a'), 'thread-a', 40)
+    const eventsPathB = await writeEvents(join(threadsDir, 'thread-b'), 'thread-b', 40)
+    let now = 0
+    const index = new FileSessionEventIndex()
+    const boundedIndex = {
+      withIndexMutation: async (sourcePath: string, operation: () => Promise<unknown>) => {
+        const result = await index.withIndexMutation(sourcePath, operation)
+        now += 50
+        return result
+      },
+      clearMemory: (threadId: string) => index.clearMemory(threadId)
+    } as unknown as FileSessionEventIndex
+    const rebuild = await newRebuild(threadsDir, boundedIndex, {}, { now: () => now })
+
+    expect(await rebuild.runSlice()).toBe(false)
+    expect(rebuild.stats()).toMatchObject({ published: 1, eventsScanned: 40 })
+    await expect(stat(eventIndexPaths(eventsPathB).state)).rejects.toThrow()
+    expect(await rebuild.runSlice()).toBe(false)
+    expect(rebuild.stats()).toMatchObject({ published: 2, eventsScanned: 80 })
+    expect(await rebuild.runSlice()).toBe(true)
+  })
+
   it('quarantines a persistently failing source and continues the sweep', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-event-rebuild-blocked-'))
     roots.push(root)
@@ -450,7 +476,9 @@ describe('FileSessionEventIndexRebuild', () => {
       },
       clearMemory: () => undefined
     } as unknown as FileSessionEventIndex
-    const rebuild = await newRebuild(threadsDir, index, {})
+    // This case exercises failure counting, independent of disk latency and
+    // the maintenance lane's wall-clock budget.
+    const rebuild = await newRebuild(threadsDir, index, {}, { now: () => 0 })
 
     expect(await rebuild.runSlice()).toBe(false) // failure 1
     expect(await rebuild.runSlice()).toBe(false) // failure 2
@@ -459,6 +487,6 @@ describe('FileSessionEventIndexRebuild', () => {
     const sweep = JSON.parse(await readFile(join(threadsDir, 'event-index-rebuild.sweep.json'), 'utf8'))
     expect(sweep.blocked['thread-a']).toBeTruthy()
     expect(sweep.blocked['thread-a'].sourceFingerprint).toBeTruthy()
-    expect(rebuild.stats()).toMatchObject({ blocked: 1 })
+    expect(rebuild.stats()).toMatchObject({ blocked: 1, published: 1 })
   })
 })

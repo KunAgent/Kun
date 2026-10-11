@@ -1,3 +1,4 @@
+import { ROOM_GOAL_MAX_TIME_SECONDS, ROOM_GOAL_MAX_TOKENS } from './goal-execution-budget.js'
 import { describe, expect, it, vi } from 'vitest'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import type { TurnItem } from '../contracts/items.js'
@@ -83,6 +84,28 @@ describe('TurnBudgetGate', () => {
     await expect(h.gate.check(thread, threadId, turnId)).resolves.toBe('blocked')
     expect(h.effects).toEqual(['event:goal_token_budget_limited'])
     expect(h.items).toEqual([])
+  })
+
+  it('checks private goal ceilings before another request and persists the limit across restart', async () => {
+    for (const kind of ['tokens', 'time'] as const) {
+      const h = harness(0)
+      const thread = createThreadRecord({ id: threadId, title: 'private goal', workspace: '/', model: 'm',
+        goal: { threadId, objective: 'finish', status: 'active', tokenBudget: null,
+          tokensUsed: kind === 'tokens' ? ROOM_GOAL_MAX_TOKENS : 0,
+          timeUsedSeconds: kind === 'time' ? ROOM_GOAL_MAX_TIME_SECONDS - 1 : 0,
+          createdAt: '2026-07-10T00:00:00.000Z', updatedAt: '2026-07-10T00:00:00.000Z' }
+      })
+      thread.roomContext = { roomId: 'room', memberId: 'member', kind: 'conversation',
+        blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: [] }
+      thread.turns = [startTurn(createTurnRecord({ id: turnId, threadId, prompt: 'continue',
+        createdAt: '2026-07-10T23:59:58.000Z' }), '2026-07-10T23:59:58.000Z')]
+      await h.threadStore.upsert(thread)
+      expect(await h.gate.check(thread, threadId, turnId)).toBe('blocked')
+      const persisted = (await h.threadStore.get(threadId))!
+      expect(persisted.goal?.status).toBe(kind === 'tokens' ? 'usageLimited' : 'budgetLimited')
+      expect(await h.gate.check(persisted, threadId, turnId)).toBe('blocked')
+      expect(h.effects.filter((effect) => effect === 'event:undefined')).toHaveLength(1)
+    }
   })
 
   it('persists the exhausted-cost item before its event', async () => {

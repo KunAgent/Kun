@@ -1,10 +1,20 @@
+import { modelCatalogRevisionFile } from './model-catalog-revision.js'
+import { migrateModelMetadata, resolveModelMetadata, withModelObservation } from './model-metadata-resolver.js'
+import { metadataEvidence } from '../contracts/model-metadata-evidence.js'
+import { assertProviderConfigurationUrls } from '../contracts/provider-safe-url.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { ProviderConfigurationStateSchema } from '../contracts/provider-configuration.js'
+import { PROVIDER_REGISTRY_FILE, upgradeProviderRegistry } from './provider-registry-migration.js'
+import { effectiveProviderConfiguration } from './provider-effective-configuration.js'
+import { providerConfigurationSecretOperations } from './provider-configuration-secret-operations.js'
+import type { ProviderSecretBinding } from './provider-configuration-backup.js'
+import { providerConfigurationOperations, type ConfigurationPreview } from './provider-configuration-operations.js'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
 import type { ServeProviderConfig } from '../config/kun-config.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
-import { normalizeModelCapabilityMetadata } from './model-capability-limits.js'
+import { normalizeModelCapabilityMetadata, enforceProviderModelSafety } from './model-capability-limits.js'
 import {
   ModelConnectionConnectRequestSchema,
   ModelConnectionCredentialCommitRequestSchema,
@@ -33,8 +43,17 @@ import { modelConnectionRegistryCredentialRecoveryOperations } from './model-con
 import { upgradeRegistryProxyRouting } from './model-connection-registry-proxy.js'
 import { reconciledSeedIdentity } from './model-connection-registry-seed-support.js'
 import type { ModelConnectionRegistryOperations } from './model-connection-registry-operations-contract.js'
-import { isAnonymousHttpProfile, isProfileUsable } from './model-connection-registry-usability.js'
-export { configuredFallback, isAnonymousHttpProfile, isProfileUsable } from './model-connection-registry-usability.js'
+import {
+  isAnonymousHttpProfile,
+  isProfileUsable,
+  isRetiredOpenCodeFreeConnection
+} from './model-connection-registry-usability.js'
+export {
+  configuredFallback,
+  isAnonymousHttpProfile,
+  isProfileUsable,
+  isRetiredOpenCodeFreeConnection
+} from './model-connection-registry-usability.js'
 
 export const StoredProfileSchema = ModelConnectionSnapshotSchema.shape.providers.element.omit({
   credentialStatus: true,
@@ -49,7 +68,9 @@ export const StoredProfileSchema = ModelConnectionSnapshotSchema.shape.providers
   credentialSourceId: z.string().min(1).max(256).optional(),
   legacyCredentialSourceToRetire: z.string().min(1).max(256).optional(),
   headers: z.record(z.string(), z.string()).optional(),
-  customHeaders: z.record(z.string(), z.string()).optional()
+  headersRef: z.string().min(1).max(256).optional(),
+  customHeaders: z.record(z.string(), z.string()).optional(),
+  customHeadersRef: z.string().min(1).max(256).optional()
 })
 export const DeletedProfileTombstoneSchema = z.object({
   deletedRevision: z.number().int().nonnegative(),
@@ -86,7 +107,9 @@ export const CredentialRefCleanupEntrySchema = z.object({
   writerPid: z.number().int().positive().optional()
 }).strict()
 export const RegistryDocumentSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
+  modelMetadataVersion: z.literal(1).optional(),
+  configuration: ProviderConfigurationStateSchema.default(() => ProviderConfigurationStateSchema.parse({})),
   proxyRoutingVersion: z.literal(1),
   revision: z.number().int().nonnegative(),
   profiles: z.record(z.string(), StoredProfileSchema),
@@ -157,6 +180,7 @@ export class ModelConnectionConflictError extends Error {
 }
 
 export type MaterializedModelConnections = {
+  registryRevision?: number
   selected?: { profile: StoredProfile; config: ServeProviderConfig; model: string }
   providers: Map<string, ServeProviderConfig>
   proxy: RegistryDocument['proxy']
@@ -166,7 +190,22 @@ export type MaterializedModelConnections = {
 }
 
 export class ModelConnectionRegistry {
+  async assertActiveConfiguration(revision?: number): Promise<void> {
+    let document = await this.file.read(emptyDocument)
+    if (this.lastAppliedRevision < document.revision) {
+      // Another registry instance on the same data dir (Electron Main OAuth
+      // refresh, TUI) can advance the durable revision without notifying this
+      // process. Catch up before refusing dispatch, or the gate stays shut.
+      await this.applyLatest().catch(() => undefined)
+      document = await this.file.read(emptyDocument)
+    }
+    if (this.lastAppliedRevision !== document.revision || (revision !== undefined && revision !== document.revision)) {
+      throw new Error('Provider configuration is not active; retry after settings finish applying')
+    }
+  }
+
   declare private connectInternal: (raw: unknown, credentialSourceId?: string, trustedExternalAuth?: boolean) => Promise<ModelConnectionSnapshot>
+  declare private migrateLegacyRegistry: () => Promise<void>
   declare private materializeDocument: (document: RegistryDocument, recoveryProviderId?: string) => Promise<MaterializedModelConnections>
   declare private probeInput: (input: ModelConnectionConnectRequest) => Promise<string[]>
   declare private apply: (document: RegistryDocument) => Promise<void>
@@ -193,7 +232,10 @@ export class ModelConnectionRegistry {
   declare private projectWithCredentialHealth: (document: RegistryDocument) => Promise<ModelConnectionSnapshot>
   declare private inspectCredentialHealth: (document: RegistryDocument) => Promise<ReadonlyMap<string, ProjectedCredentialHealth>>
 
+  private readonly metadataRevisionFile: ReturnType<typeof modelCatalogRevisionFile>
   private readonly file: AtomicJsonFile<RegistryDocument>
+  private readonly configurationImportSecrets = new Map<string, ProviderSecretBinding[]>()
+  private readonly configurationPreviews = new Map<string, ConfigurationPreview>()
   private listeners = new Set<(snapshot: ModelConnectionSnapshot) => void>()
   private changeOperation: Promise<void> = Promise.resolve()
   private lastAppliedRevision = -1
@@ -210,7 +252,7 @@ export class ModelConnectionRegistry {
     credentials: ExtensionCredentialStore
     modelCapabilities?: (
       model: string,
-      profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind'>
+      profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind' | 'endpointFormat' | 'endpoints'>
     ) => ModelCapabilityMetadata
     onChanged?: (connections: MaterializedModelConnections) => Promise<void> | void
     retireLegacyCredentialSource?: (sourceId: string) => Promise<void>
@@ -222,16 +264,23 @@ export class ModelConnectionRegistry {
     afterCredentialCommitRecord?: (providerId: string) => Promise<void>
     afterCredentialCommitWrite?: (providerId: string) => Promise<void>
     afterCredentialConnectWrite?: (providerId: string) => Promise<void>
+    historyReferenceSources?: () => Promise<Record<string, unknown>> | Record<string, unknown>
+    referenceSources?: () => Promise<Record<string, unknown>> | Record<string, unknown>
     resolveCredentialSource?: (sourceId: string) => Promise<{
       apiKey: string
       headers?: Record<string, string>
     }>
   }) {
-    const registryPath = join(options.dataDir, 'model-connections.v1.json')
+    this.metadataRevisionFile = modelCatalogRevisionFile(options.dataDir)
+    const registryPath = join(options.dataDir, PROVIDER_REGISTRY_FILE)
     assertManagerAtomicJsonPath(registryPath)
     this.file = new AtomicJsonFile(
       registryPath,
-      (value) => RegistryDocumentSchema.parse(upgradeRegistryProxyRouting(value)),
+      (value) => {
+        const upgraded = upgradeProviderRegistry(upgradeRegistryProxyRouting(value))
+        assertProviderConfigurationUrls(upgraded)
+        return RegistryDocumentSchema.parse(upgraded)
+      },
       false
     )
   }
@@ -245,7 +294,9 @@ installServiceOperations(
   modelConnectionRegistryCredentialMutationOperations,
   modelConnectionRegistrySelectionOperations,
   modelConnectionRegistryMaterializationOperations,
-  modelConnectionRegistryCredentialRecoveryOperations
+  modelConnectionRegistryCredentialRecoveryOperations,
+  providerConfigurationOperations,
+  providerConfigurationSecretOperations
 )
 
 
@@ -267,10 +318,11 @@ export function credentialHealth(status: ModelConnectionCredentialStatus): Proje
 export function readLatestIfChanged(
   registry: ModelConnectionRegistry,
   sinceRevision: number,
-  finish: (snapshot: ModelConnectionSnapshot) => void
+  finish: (snapshot: ModelConnectionSnapshot) => void,
+  sinceMetadataRevision?: number
 ): void {
   void registry.snapshot().then((snapshot) => {
-    if (snapshot.revision > sinceRevision) finish(snapshot)
+    if (snapshot.revision > sinceRevision || (sinceMetadataRevision !== undefined && (snapshot.metadataRevision ?? 0) > sinceMetadataRevision)) finish(snapshot)
   })
 }
 
@@ -340,7 +392,7 @@ export function requireCredentialTransaction(
 }
 
 export function credentialReferenceIsLive(document: RegistryDocument, reference: string): boolean {
-  return Object.values(document.profiles).some((profile) => profile.credentialRef === reference) ||
+  return Object.values(document.profiles).some((profile) => profile.credentialRef === reference || profile.customHeadersRef === reference || profile.headersRef === reference) ||
     Object.values(document.credentialTransactions)
       .some((transaction) => transaction.nextCredentialRef === reference)
 }
@@ -356,7 +408,8 @@ export function processIsAlive(pid: number): boolean {
 
 export function emptyDocument(): RegistryDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    configuration: ProviderConfigurationStateSchema.parse({}),
     proxyRoutingVersion: 1,
     revision: 0,
     profiles: {},
@@ -395,23 +448,12 @@ export function reconcileSeedProfile(
     ? capabilitiesForModels(request.modelCapabilities, models)
     : existing.modelCapabilities
 
-  const anonymousCredentiallessSeed = request.kind === 'http' &&
+  const anonymousCredentiallessSeed = existing.authType === 'none' && request.kind === 'http' &&
     isAnonymousHttpProfile(request) &&
     !request.credential?.trim()
-  const profileBase = anonymousCredentiallessSeed
-    ? (() => {
-        const {
-          credentialRef: _credentialRef,
-          credentialSourceId: _credentialSourceId,
-          legacyCredentialSourceToRetire: _legacyCredentialSourceToRetire,
-          ...withoutCredential
-        } = existing
-        return withoutCredential
-      })()
-    : existing
 
   return StoredProfileSchema.parse({
-    ...profileBase,
+    ...existing,
     // Credential ownership is imported only when a profile is first created.
     // Re-applying GUI/settings seeds must never replace a Registry-owned
     // credentialRef, resurrect a cleared credential, or switch an existing
@@ -449,6 +491,7 @@ export function sameStoredProfile(left: StoredProfile, right: StoredProfile): bo
     left.configured === right.configured &&
     left.incarnationId === right.incarnationId &&
     left.selectedModel === right.selectedModel &&
+    left.headersRef === right.headersRef &&
     left.credentialRef === right.credentialRef &&
     left.credentialSourceId === right.credentialSourceId &&
     left.legacyCredentialSourceToRetire === right.legacyCredentialSourceToRetire &&
@@ -461,12 +504,14 @@ export function project(
   document: RegistryDocument,
   resolveModelCapabilities?: (
     model: string,
-    profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind'>
+    profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind' | 'endpointFormat' | 'endpoints'>
   ) => ModelCapabilityMetadata,
   credentialHealthByProvider: ReadonlyMap<string, ProjectedCredentialHealth> = new Map()
 ): ModelConnectionSnapshot {
   const providers = Object.values(document.profiles)
-    .map((storedProfile) => {
+    .map((rawProfile) => {
+      const resolved = effectiveProviderConfiguration(rawProfile, document.configuration)
+      const storedProfile = resolved.profile
       const {
         incarnationId: _incarnationId,
         credentialMutationHighWater: _credentialMutationHighWater,
@@ -474,8 +519,10 @@ export function project(
         credentialSourceId: _credentialSourceId,
         legacyCredentialSourceToRetire: _legacyCredentialSourceToRetire,
         headers: _headers,
+        headersRef: _headersRef,
         customHeaders: customHeaders,
-        customHeaderNames: _customHeaderNames,
+        customHeadersRef: _customHeadersRef,
+        customHeaderNames,
         ...profile
       } = storedProfile
       const credentialHealth = credentialHealthByProvider.get(profile.id)
@@ -489,16 +536,17 @@ export function project(
       return {
         ...profile,
         configured: isProfileUsable(storedProfile, credentialHealth),
+        ...(!resolved.enabled ? { enabled: false } : {}),
         ...credentialHealth,
         ...(Object.keys(modelCapabilities).length > 0 ? { modelCapabilities } : {}),
-        ...(customHeaders && Object.keys(customHeaders).length > 0
-          ? { customHeaderNames: Object.keys(customHeaders) }
+        ...((customHeaderNames?.length || (customHeaders && Object.keys(customHeaders).length > 0))
+          ? { customHeaderNames: customHeaderNames ?? Object.keys(customHeaders ?? {}) }
           : {})
       }
     })
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
   const selected = document.defaultProviderId
-    ? providers.find((profile) => profile.id === document.defaultProviderId && profile.configured)
+    ? providers.find((profile) => profile.id === document.defaultProviderId && profile.configured && profile.enabled !== false)
     : undefined
   return ModelConnectionSnapshotSchema.parse({
     schemaVersion: 1,
@@ -522,39 +570,15 @@ export function project(
 export function mergeProjectedCapability(
   stored: ModelCapabilityMetadata | undefined,
   derived: ModelCapabilityMetadata | undefined,
-  profile: Pick<ModelConnectionProfile, 'id' | 'endpointFormat'>,
+  profile: Pick<ModelConnectionProfile, 'id' | 'endpointFormat'> & { presetSource?: string },
   model: string
 ): ModelCapabilityMetadata | undefined {
-  if (!stored) return normalizeModelCapabilityMetadata(derived)
-  const serviceTiers = stored.serviceTiers ?? derived?.serviceTiers
-  if (!derived?.reasoning || stored.reasoning === derived.reasoning) {
-    return normalizeModelCapabilityMetadata(
-      serviceTiers ? { ...stored, serviceTiers: [...serviceTiers] } : stored
-    )
-  }
-  const placeholder = stored.reasoning?.requestProtocol === 'none' &&
-    derived.reasoning.requestProtocol !== 'none' &&
-    stored.reasoning.defaultEffort === 'auto' &&
-    stored.reasoning.supportedEfforts.every((effort) => effort === 'auto' || effort === 'off')
-  const chatResponsesMismatch =
-    profile.endpointFormat === 'chat_completions' &&
-    stored.reasoning?.requestProtocol === 'openai-responses' &&
-    derived.reasoning.requestProtocol === 'openai-chat-completions' &&
-    (
-      (profile.id.toLowerCase().includes('kimi-code') && model.trim().toLowerCase() === 'k3') ||
-      (profile.id.toLowerCase().includes('opencode-go') &&
-        model.trim().toLowerCase().endsWith('grok-4.5'))
-    )
-  if (!stored.reasoning || placeholder || chatResponsesMismatch) {
-    return normalizeModelCapabilityMetadata({
-      ...stored,
-      reasoning: derived.reasoning,
-      ...(serviceTiers ? { serviceTiers: [...serviceTiers] } : {})
-    })
-  }
-  return normalizeModelCapabilityMetadata(
-    serviceTiers ? { ...stored, serviceTiers: [...serviceTiers] } : stored
-  )
+  if (!stored) return enforceProviderModelSafety(normalizeModelCapabilityMetadata(derived), profile)
+  const value = derived ? withModelObservation(stored, {
+    id: 'runtime-adapter', source: 'adapter', values: derived,
+    evidence: derived.evidence ?? metadataEvidence(derived, 'adapter'), match: 'exact'
+  }) : stored
+  return enforceProviderModelSafety(normalizeModelCapabilityMetadata({ ...resolveModelMetadata(value), id: model }), profile)
 }
 
 export function assertRevision(
@@ -562,7 +586,7 @@ export function assertRevision(
   expected: number,
   resolveModelCapabilities?: (
     model: string,
-    profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind'>
+    profile?: Pick<ModelConnectionProfile, 'id' | 'presetSource' | 'baseUrl' | 'kind' | 'endpointFormat' | 'endpoints'>
   ) => ModelCapabilityMetadata,
   credentialHealthByProvider: ReadonlyMap<string, ProjectedCredentialHealth> = new Map()
 ): void {
@@ -588,7 +612,7 @@ export function capabilitiesForModels(
   return Object.fromEntries(models.flatMap((model) => {
     const capability = input[model] ?? input[model.trim().toLowerCase()]
     const normalized = capability
-      ? normalizeModelCapabilityMetadata({ ...capability, id: model })
+      ? normalizeModelCapabilityMetadata(migrateModelMetadata({ ...capability, id: model }))
       : undefined
     return normalized ? [[model, normalized]] : []
   }))

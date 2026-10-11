@@ -1,3 +1,6 @@
+import { migrateModelMetadata } from '../../kun/src/services/model-metadata-resolver.js'
+import { ModelCapabilityFactsSchema, ModelReasoningCapabilityMetadata } from '../../kun/src/contracts/capabilities-core.js'
+import { ModelMetadataEvidenceSchema } from '../../kun/src/contracts/model-metadata-evidence.js'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
@@ -96,6 +99,9 @@ export function presetModelProfilesForProvider(
   return profiles ?? null
 }
 
+/** Model-profile key for provider-wide defaults (window, output cap, prices, upstream naming). */
+export const PROVIDER_WIDE_MODEL_KEY = '*'
+
 export function normalizeModelProviderModelProfiles(
   input: Record<string, ModelProviderModelProfilePatchV1 | null> | undefined,
   models: readonly string[]
@@ -106,7 +112,8 @@ export function normalizeModelProviderModelProfiles(
   for (const [rawModelId, rawProfile] of Object.entries(input)) {
     const modelId = normalizeModelKey(rawModelId)
     if (!modelId || rawProfile === null) continue
-    if (knownModelKeys.size > 0 && !knownModelKeys.has(modelId)) {
+    // `*` holds provider-wide facts for models without a profile of their own.
+    if (knownModelKeys.size > 0 && !knownModelKeys.has(modelId) && modelId !== PROVIDER_WIDE_MODEL_KEY) {
       const aliases = normalizeProviderModels(rawProfile.aliases)
       if (!aliases.some((alias) => knownModelKeys.has(normalizeModelKey(alias)))) continue
     }
@@ -135,21 +142,33 @@ export function normalizeModelProviderModelProfile(
   const serviceTiers = normalizeModelServiceTiers(input?.serviceTiers)
   const endpointFormat = normalizeOptionalModelEndpointFormat(input?.endpointFormat)
   const responsesMode = input?.responsesMode === 'lite' ? 'lite' : undefined
+  const wireModelId = typeof input?.wireModelId === 'string' && input.wireModelId.trim()
+    ? input.wireModelId.trim().slice(0, 512) : undefined
   return {
     ...(normalizeProviderModels(input?.aliases).length
       ? { aliases: normalizeProviderModels(input?.aliases) }
       : {}),
+    metadata: migrateModelMetadata(input ?? {}).metadata,
+    ...(boundedPositiveInteger(input?.maxInputTokens, MAX_MODEL_CONTEXT_WINDOW_TOKENS) ? { maxInputTokens: input!.maxInputTokens } : {}),
+    ...(typeof input?.supportsReasoning === 'boolean' ? { supportsReasoning: input.supportsReasoning } : {}),
+    ...(ModelCapabilityFactsSchema.shape.conditionalCapabilities.safeParse(input?.conditionalCapabilities).success && input?.conditionalCapabilities ? { conditionalCapabilities: input.conditionalCapabilities } : {}),
+    ...(input?.metadataResolution ? { metadataResolution: input.metadataResolution } : {}),
     ...(contextWindowTokens ? { contextWindowTokens } : {}),
     ...(maxOutputTokens ? { maxOutputTokens } : {}),
     inputModalities,
     outputModalities: normalizeModelInputModalities(input?.outputModalities),
     supportsToolCalling: input?.supportsToolCalling !== false,
+    ...(typeof input?.parallelTools === 'boolean' ? { parallelTools: input.parallelTools } : {}),
+    ...(typeof input?.streaming === 'boolean' ? { streaming: input.streaming } : {}),
+    ...(typeof input?.structuredOutput === 'boolean' ? { structuredOutput: input.structuredOutput } : {}),
+    ...(ModelMetadataEvidenceSchema.safeParse(input?.evidence).success && input?.evidence ? { evidence: input.evidence } : {}),
     messageParts: normalizeModelMessageParts(input?.messageParts, defaultMessageParts),
     ...(reasoning ? { reasoning } : {}),
     ...(pricing ? { pricing } : {}),
     ...(serviceTiers ? { serviceTiers } : {}),
     ...(endpointFormat ? { endpointFormat } : {}),
-    ...(responsesMode ? { responsesMode } : {})
+    ...(responsesMode ? { responsesMode } : {}),
+    ...(wireModelId ? { wireModelId } : {})
   }
 }
 
@@ -223,6 +242,9 @@ export function normalizeModelReasoningCapability(
   return {
     supportedEfforts,
     defaultEffort: resolvedDefault,
+    ...(ModelReasoningCapabilityMetadata.shape.nativeEfforts.safeParse(input.nativeEfforts).success && input.nativeEfforts ? { nativeEfforts: input.nativeEfforts } : {}),
+    ...(ModelReasoningCapabilityMetadata.shape.nativeDefaultEffort.safeParse(input.nativeDefaultEffort).success && input.nativeDefaultEffort ? { nativeDefaultEffort: input.nativeDefaultEffort } : {}),
+    ...(ModelReasoningCapabilityMetadata.shape.effortMapping.safeParse(input.effortMapping).success && input.effortMapping ? { effortMapping: input.effortMapping } : {}),
     requestProtocol
   }
 }

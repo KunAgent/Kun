@@ -104,6 +104,8 @@ export type McpClientLike = {
   ): Promise<unknown>
   close(): Promise<void>
   setLifecycleHandlers?(handlers: McpClientLifecycleHandlers): void
+  /** Deferred clients connect here, before a request is considered sent. */
+  ready?(): Promise<void>
 }
 
 export type McpServerDiagnostic = {

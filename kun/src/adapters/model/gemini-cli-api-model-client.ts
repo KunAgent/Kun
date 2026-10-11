@@ -1,3 +1,5 @@
+import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
+import { fitModelRequestOutput, modelRequestCapacityFailure } from './model-request-capacity.js'
 import { randomUUID } from 'node:crypto'
 import { goalContextTexts } from '../../contracts/items.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
@@ -40,6 +42,7 @@ export const GEMINI_CLI_CODE_ASSIST_API_VERSION = 'v1internal'
 
 export type GeminiCliApiModelClientConfig = {
   model: string
+  modelCapabilities?: (model: string) => ModelCapabilityMetadata
   modelProxyUrl?: string
   endpoint?: string
   apiVersion?: string
@@ -78,9 +81,11 @@ export class GeminiCliApiModelClient implements ModelClient {
   private readonly apiVersion: string
   private readonly retry: ReturnType<typeof normalizeModelRequestRetryConfig>
   private projectId: string | undefined
+  private readonly modelCapabilities?: (model: string) => ModelCapabilityMetadata
 
   constructor(config: GeminiCliApiModelClientConfig) {
     this.model = config.model
+    this.modelCapabilities = config.modelCapabilities
     this.endpoint = (config.endpoint ??
       process.env.CODE_ASSIST_ENDPOINT?.trim() ??
       GEMINI_CLI_CODE_ASSIST_ENDPOINT).replace(/\/+$/, '')
@@ -102,6 +107,10 @@ export class GeminiCliApiModelClient implements ModelClient {
   }
 
   async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    const capability = this.modelCapabilities?.(request.model?.trim() || this.model)
+    const failure = modelRequestCapacityFailure(request, capability)
+    if (failure) { yield failure; return }
+    request = { ...request, maxTokens: fitModelRequestOutput(request, capability) }
     const round = await this.startDebugRound(request)
     try {
       for await (const chunk of this.streamInner(request, round)) {

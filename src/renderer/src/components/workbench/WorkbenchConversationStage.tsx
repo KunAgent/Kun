@@ -11,6 +11,9 @@ type SddDraftEditorViewProps = ComponentProps<typeof SddDraftEditorView>
 
 export type WorkbenchConversationStageProps = {
   route: string
+  /** ADE reuses the Code conversation surface; the mode marker keeps ADE-only
+   * affordances (agent picker, manager panels) gated to ADE turns. */
+  mode?: 'code' | 'ade'
   runtimeBanner: ReactNode
   activeSddDraft: boolean
   sdd: Pick<
@@ -37,6 +40,7 @@ function WorkbenchPaneFallback(): ReactElement {
 
 export function WorkbenchConversationStage({
   route,
+  mode = 'code',
   runtimeBanner,
   activeSddDraft,
   sdd,
@@ -46,7 +50,7 @@ export function WorkbenchConversationStage({
 }: WorkbenchConversationStageProps): ReactElement {
   const remoteMobile = useRemoteMobileLayout()
   const [mobileRailOpen, setMobileRailOpen] = useState(false)
-  const showRail = route === 'chat' && !activeSddDraft
+  const showRail = (route === 'chat' || mode === 'ade') && !activeSddDraft
   return (
     <>
       {runtimeBanner}
