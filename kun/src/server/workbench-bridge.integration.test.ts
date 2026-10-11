@@ -109,7 +109,9 @@ async function modelServer(projectRoot: string) {
 async function acceptLink(api: <T>(path: string, body?: unknown, method?: string) => Promise<T>, linkPath: string,
   body: Record<string, unknown>): Promise<void> {
   await vi.waitFor(async () => {
-    const { link } = await api<{ link: { revision: number } }>(linkPath)
+    const { link } = await api<{ link: WorkbenchLink & { revision: number } }>(linkPath)
+    // The card is visible before its host-owned dispatch binding is persisted.
+    if (link.kind === 'code_task' && !link.request.schedule) expect(link.dispatchIntentId).toBeTruthy()
     await api(`${linkPath}/confirm`, { ...body, expectedRevision: link.revision })
   }, { timeout: 20_000, interval: 250 })
 }

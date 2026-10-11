@@ -33,6 +33,11 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   } })
   const entry = await runtimeRequest(page, '/v1/agents/chat-entry')
   assert(entry.initialized && entry.roomId)
+  const { agent } = await runtimeRequest(page, '/v1/agents/' + entry.agentId)
+  await runtimeRequest(page, '/v1/agents/' + entry.agentId, 'PATCH', {
+    clientRequestId: 'rooms-harness-offline-source', expectedRevision: agent.revision,
+    presetId: 'rooms-harness-smoke', workbench: { code: 'confirm', work: 'off', maxActiveTasks: 1 }
+  })
   await runtimeRequest(page, '/v1/workbench/directory', 'PUT', { workRoots: [], codeProjects: [workspaceRoot] })
   // Show localized production UI while keeping fixture markers out of normal copy.
   await page.evaluate(async () => { const { default: i18n } = await import('/src/i18n.ts'); await i18n.changeLanguage('zh') })
@@ -69,8 +74,12 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   await capture('rooms-03-execution-options')
   // Cancel must discard local edits and the selection must stay on this card only.
   await card.getByRole('button', { name: /^(Cancel editing|Cancel|取消编辑)$/u }).click()
+  await card.locator('.rooms-workbench-edit').waitFor({ state: 'hidden' })
   const before = await roomWorkbenchSnapshot(page)
-  await card.locator('.rooms-workbench-actions .is-primary').click()
+  const dispatchControls = card.locator('[data-agent-dispatch-controls]')
+  await poll(async () => ['countdown', 'pending_confirmation'].includes(await dispatchControls.getAttribute('data-state')),
+    20_000, 'host dispatch resumed after cancelling edits')
+  await dispatchControls.getByRole('button').first().click()
   const linkPath = `/v1/rooms/${entry.roomId}/workbench-links/${proposed.id}`
   await poll(async () => (await runtimeRequest(page, linkPath)).link.status === 'running', 90_000, 'ACP task running')
   await poll(async () => await card.getAttribute('data-status') === 'running', 20_000, 'rendered progress')
@@ -92,7 +101,8 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   assert.equal(thread.agentSurface, 'code')
   assert.equal(thread.turns.length, 1, 'Single accepted proposal creates one task turn')
   assert.match(completed.result.finalExcerpt, /devin-fixture-model/u)
-  assert.equal(await card.getByRole('button', { name: /^(Stop|停止)$/u }).count(), 0)
+  await poll(async () => await card.getByRole('button', { name: /^(Stop|停止)$/u }).count() === 0,
+    20_000, 'terminal dispatch controls settled')
   await page.evaluate(async () => { const { applyTheme } = await import('/src/lib/apply-theme.ts'); applyTheme('dark') })
   await capture('rooms-07-dark-result')
   await rm(releaseFile, { force: true })

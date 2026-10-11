@@ -25,9 +25,10 @@ function settle(messages, message, output = { accepted: true, phase: 'start' }) 
 const toolName = (message) => message.tool_calls?.[0]?.function.name
 const args = (message) => JSON.parse(message.tool_calls[0].function.arguments)
 
-test('Rooms fixture seeds only explicit Devin consent, its exact model and an offline-only key', () => {
+test('Rooms fixture seeds explicit Devin consent, an offline source profile and an offline-only key', () => {
   const harnesses = { binaryPaths: { devin: '/offline/stub' }, defaults: { other: { model: 'unchanged' } } }
-  const settings = { agents: { kun: { harnesses } } }
+  const general = { id: 'general', mode: 'subagent', toolPolicy: 'inherit', skillsEnabled: false, blockedTools: ['load_skill'] }
+  const settings = { agents: { kun: { harnesses, subagents: { profiles: [general] } } } }
   const environment = { HOME: '/offline/home', WINDSURF_API_KEY: 'do-not-inherit-real-credentials' }
   configureRoomsHarnessFixture(settings, environment)
   assert.deepEqual(harnesses.enabledProfiles, [ROOMS_HARNESS_PROFILE])
@@ -36,6 +37,9 @@ test('Rooms fixture seeds only explicit Devin consent, its exact model and an of
   assert.equal(environment.WINDSURF_API_KEY, 'rooms-offline-fixture-no-service-access')
   assert.equal(environment.HOME, '/offline/home')
   assert.equal(harnesses.readyProfiles, undefined, 'Persisted settings must not invent readiness')
+  assert.deepEqual(settings.agents.kun.subagents.profiles[0], general, 'Builtin source limits stay unchanged')
+  assert.deepEqual(settings.agents.kun.subagents.profiles[1].blockedTools, [])
+  assert.equal(settings.agents.kun.subagents.profiles[1].skillsEnabled, true)
 })
 
 test('publication-only first step sends one start, then discovers before proposing', () => {

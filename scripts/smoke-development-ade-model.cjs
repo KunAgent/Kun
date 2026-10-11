@@ -54,6 +54,11 @@ async function startModelFixture(model, options = {}) {
     }
     observation.responseTools = (message.tool_calls ?? []).map((tool) => tool.function.name)
     observation.roomsHarnessDiscoverySucceeded = Boolean(roomsHarnessDiscoveryRoute(messages))
+    const discovery = messages.find((entry) => entry.role === 'tool' && entry.tool_call_id === 'rooms-harness-discover')
+    if (discovery) {
+      try { observation.roomsHarnessDiscovery = JSON.parse(discovery.content) }
+      catch { observation.roomsHarnessDiscovery = { error: 'Invalid fixture discovery JSON' } }
+    }
     response.writeHead(200, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ id: 'ade-smoke', object: 'chat.completion', created: 1,
       model: body.model ?? model, choices: [{ index: 0, message,

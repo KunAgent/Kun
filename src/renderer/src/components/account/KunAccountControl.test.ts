@@ -175,7 +175,9 @@ describe('sidebar Kun account card', () => {
     await act(async () => seed())
     await act(async () => entry().click())
     const rows = [...panel()!.querySelectorAll<HTMLButtonElement>('.kun-account-view button')]
-    rows[0].focus()
+    // Opening focuses the first row on the next paint; begin navigation after it settles.
+    await act(async () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve())))
+    expect(document.activeElement).toBe(rows[0])
     await act(async () => rows[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
     expect(document.activeElement).toBe(rows[1])
     await act(async () => rows[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })))

@@ -11,6 +11,19 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { gunzipSync } from 'node:zlib'
+import { settingsCategoryInventory } from './settings-ui-smoke-inventory.mjs'
+
+test('navigation inventory preserves historical destinations and Windows-only filtering', () => {
+  const source = `const groups = [{ items: [
+    { category: 'general', labelKey: 'general', icon: Settings },
+    { category: 'integrations', labelKey: 'integrations', icon: Plug },
+    { category: 'storage', labelKey: 'storage', icon: HardDrive, windowsOnly: true }
+  ] }]`
+  assert.deepEqual(settingsCategoryInventory(source, 'darwin'), ['general', 'integrations'])
+  assert.deepEqual(settingsCategoryInventory(source, 'win32'), ['general', 'integrations', 'storage'])
+  assert.throws(() => settingsCategoryInventory('', 'darwin'), /must declare/)
+  assert.throws(() => settingsCategoryInventory(source + "{ category: 'general' }", 'darwin'), /duplicate/)
+})
 
 const control = (overrides = {}) => ({
   id: '1', semanticKey: 'appearance|Font scale|input|number||occurrence:1',
@@ -357,10 +370,13 @@ test('workflow keeps both native OSes, source baseline and failure evidence', ()
   const workflow = readFileSync(new URL('../.github/workflows/settings-ui-smoke.yml', import.meta.url), 'utf8')
   assert.match(workflow, /os: \[windows-latest, macos-latest\]/)
   assert.match(workflow, /github\.event\.pull_request\.base\.sha/)
+  assert.match(workflow, /github\.event\.pull_request\.base\.ref != 'master'/)
   assert.match(workflow, /github\.event\.pull_request\.head\.sha/)
   assert.match(workflow, /9179a656e3b4236225cf098b00ccda932c55750d/)
   assert.match(workflow, /KUN_SETTINGS_SOURCE_ROOT: settings-ui-baseline/)
   assert.match(workflow, /KUN_SETTINGS_BASELINE_REPORT: dist\/settings-ui\/before\/report\.json/)
+  assert.match(workflow, /SettingsUiSmokeGatewayFixtures\.ts/)
+  assert.match(workflow, /existsSync\(resolve\(dirname\(fixture\), path\)\)/)
   assert.match(workflow, /if: always\(\)[\s\S]*actions\/upload-artifact/)
   assert.match(workflow, /settings-ui-review-/)
   assert.match(workflow, /settings-ui-reports-/)

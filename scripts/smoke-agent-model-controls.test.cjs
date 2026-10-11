@@ -32,6 +32,8 @@ test('Agent model scenario waits for exact private identity and captures the loa
   const captured = scenario.indexOf("await capture('agent-models-manager-overview')")
   assert(loaded > 0 && captured > loaded && scenario.indexOf('await configure.click()') > captured)
   assert.match(scenario, /getByRole\('region', \{ name: 'Room details', exact: true \}\)/)
+  assert.match(scenario, /getByRole\('listbox', \{ name: 'Main model', exact: true \}\)/)
+  assert.doesNotMatch(scenario, /roleModel\.inputValue/)
   assert.match(scenario, /newChat\.locator\('\.direct-start-group'\)/)
   assert.doesNotMatch(scenario, /getByRole\('heading'|force:\s*true|--real-model/)
 })

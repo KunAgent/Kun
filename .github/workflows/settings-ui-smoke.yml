@@ -60,21 +60,30 @@ jobs:
       - name: Check out the verified pre-polish source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha || '9179a656e3b4236225cf098b00ccda932c55750d' }}
+          # Stable master predates this measurable settings layout. Release PRs
+          # use the existing pre-polish baseline; feature PRs compare their base.
+          ref: ${{ github.event.pull_request.base.ref != 'master' && github.event.pull_request.base.sha || '9179a656e3b4236225cf098b00ccda932c55750d' }}
           path: settings-ui-baseline
 
       - name: Add only the offline fixture to the baseline checkout
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          import { cpSync, symlinkSync } from 'node:fs'
-          import { resolve } from 'node:path'
+          import { cpSync, existsSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+          import { dirname, resolve } from 'node:path'
           const baseline = resolve('settings-ui-baseline')
           symlinkSync(resolve('node_modules'), resolve(baseline, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
-          for (const file of ['SettingsUiSmokeFixture.tsx', 'SettingsUiSmokeHost.ts', 'ade/agent-enablement-smoke-runtime.ts']) {
+          for (const file of ['SettingsUiSmokeFixture.tsx', 'SettingsUiSmokeHost.ts', 'SettingsUiSmokeGatewayFixtures.ts', 'ade/agent-enablement-smoke-runtime.ts']) {
             const relative = `src/renderer/src/components/${file}`
             cpSync(relative, resolve(baseline, relative))
           }
+          // A historical checkout owns its styles. Omit fixture-only imports
+          // for CSS splits that did not exist there; never copy newer CSS back.
+          const fixture = resolve(baseline, 'src/renderer/src/components/SettingsUiSmokeFixture.tsx')
+          writeFileSync(fixture, readFileSync(fixture, 'utf8').replace(
+            /^import '([^']+\.css)'\r?\n/gm,
+            (line, path) => existsSync(resolve(dirname(fixture), path)) ? line : ''
+          ))
           NODE
 
       - name: Capture real baseline source and measurements

@@ -45,7 +45,8 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   const catalog = await request(page, '/v1/agents/creation-models')
   const eligible = catalog.options.filter((item) => item.available && item.providerId)
   assert(eligible.length > 1, 'Offline model fixture must expose two eligible models')
-  const selected = eligible[0]
+  const selected = eligible.find((item) => item.providerId === offline.id && item.model !== 'rooms-model-alternative')
+  assert(selected, 'The disposable offline model must be available for the new Agent')
   const key = JSON.stringify([selected.providerId, selected.accountId, selected.model])
   await modal.getByLabel('Provider, account and model', { exact: true }).selectOption(key)
   await capture('agent-models-create-selected')
@@ -65,7 +66,8 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   assert.equal(await conversation.locator('[data-room-model-picker] small, [data-room-model-picker] select').count(), 0,
     'No native select or caption grows the composer row')
   await capture('agent-models-composer-light')
-  const alternative = eligible.find((item) => JSON.stringify([item.providerId, item.accountId, item.model]) !== key)
+  const alternative = eligible.find((item) => item.providerId === selected.providerId &&
+    item.accountId === selected.accountId && item.model === 'rooms-model-alternative')
   assert(alternative)
   const binding = { providerId: alternative.providerId, accountId: alternative.accountId, model: alternative.model }
   const sharedProvider = new Set(eligible.filter((item) => item.providerId === binding.providerId).map((item) => item.accountId ?? '')).size > 1
@@ -117,7 +119,13 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   await activePage.getByText('Model changes save immediately. Profile changes use the profile Save button.', { exact: true }).waitFor()
   const roleModel = activePage.getByLabel('Main model', { exact: true })
   await roleModel.waitFor()
-  assert.equal(await roleModel.inputValue(), key, 'Manager displays the role default, not the conversation override')
+  await roleModel.click()
+  const roleOptionsList = page.getByRole('listbox', { name: 'Main model', exact: true })
+  await roleOptionsList.waitFor()
+  assert.equal(await roleOptionsList.locator('[role="option"][aria-selected="true"]').getAttribute('data-agent-model-option'), key,
+    'Manager displays the exact role provider/account/model, not the conversation override')
+  await page.keyboard.press('Escape')
+  await roleOptionsList.waitFor({ state: 'hidden' })
   await capture('agent-models-manager-role-defaults')
   assertions.push('All-Agent manager opens inline role-default model configuration')
   // The workspace renders this drawer as an embedded region, not a modal dialog.
