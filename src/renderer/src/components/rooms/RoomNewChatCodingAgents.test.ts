@@ -47,6 +47,7 @@ describe('coding Agents in the new chat picker', () => {
   afterEach(() => { if (renderer) act(() => renderer.unmount()) })
   const row = (name: string) => renderer.root.findAllByProps({ className: 'direct-coding-agent' })
     .find((item) => item.findAllByType('strong').some((label) => label.props.children === name))!
+  const main = (name: string) => row(name).findAllByType('button')[0]!
 
   it('opens a private chat on the chosen engine model and keeps unready engines disabled', async () => {
     const onAgent = vi.fn()
@@ -56,9 +57,13 @@ describe('coding Agents in the new chat picker', () => {
       .toEqual(['Developer'])
     expect(row('OpenCode').findByType('button').props.disabled).toBe(true)
     expect(row('OpenCode').findByType('small').props.children).toBe('not installed')
-    const select = row('Codex').findByType('select')
-    await act(async () => select.props.onChange({ target: { value: select.props.children[1].props.value } }))
-    await act(async () => row('Codex').findByType('button').props.onClick())
+    expect(row('Codex').findByType('small').props.children).toBe('Own sign-in')
+    await act(async () => row('Codex').findByProps({ 'aria-label': 'Codex model' }).props.onClick())
+    const options = row('Codex').findAll((node) => node.type === 'button' && node.props['data-route-option'] !== undefined)
+    expect(options.map((option) => option.props['aria-selected'])).toEqual([true, false])
+    await act(async () => options[1]!.props.onClick())
+    expect(row('Codex').findAll((node) => node.props['data-route-option'] !== undefined)).toHaveLength(0)
+    await act(async () => main('Codex').props.onClick())
     expect(api.request).toHaveBeenCalledWith('/v1/agents/coding-agents', 'POST', expect.objectContaining({
       harnessId: 'codex', model: 'gpt-5.5-mini', credentialMode: 'native-login' }))
     expect(onAgent).toHaveBeenCalledWith('agent-codex')
@@ -67,8 +72,8 @@ describe('coding Agents in the new chat picker', () => {
   it('lets coding Agents join a group but keeps a Kun Agent as its lead', async () => {
     await act(async () => { renderer = create(createElement(RoomNewChat, { onClose: vi.fn(), onOpen: vi.fn(), onAgent: vi.fn(), selectionMode: 'group' })) })
     const start = () => renderer.root.findByProps({ className: 'rooms-run-primary direct-start-group' })
-    await act(async () => row('Codex').findByType('button').props.onClick())
-    expect(row('Codex').findByType('button').props['aria-pressed']).toBe(true)
+    await act(async () => main('Codex').props.onClick())
+    expect(main('Codex').props['aria-pressed']).toBe(true)
     expect(start().props.disabled).toBe(true)
     const developer = renderer.root.findByProps({ className: 'direct-agent-choices' }).findAllByType('button')[0]
     await act(async () => developer.props.onClick())

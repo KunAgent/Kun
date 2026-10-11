@@ -1,6 +1,8 @@
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentIdentity } from '@shared/rooms-api'
+import { CodingAgentRouteSelect } from './CodingAgentRouteSelect'
+import { CODING_ROUTE_SOURCE_LABELS } from './coding-agent-route-select-logic'
 import { RoomAvatar } from './RoomAvatar'
 import { codingRouteKey, useCodingAgentCatalog, type CodingAgentEntry, type CodingAgentRoute } from './coding-agent-client'
 import './room-new-chat-coding.css'
@@ -28,19 +30,16 @@ export function RoomNewChatCodingAgents({ busy, group, selected, onChoose }: {
       const route = entry.models.find((item) => codingRouteKey(item) === key) ?? entry.models[0]
       const chosen = selected.some((agent) => agent.executor?.harnessId === entry.harnessId)
       const ready = entry.available && Boolean(route)
+      const source = route?.credentialMode ? t(CODING_ROUTE_SOURCE_LABELS[route.credentialMode]) : undefined
       return <div key={entry.harnessId} className="direct-coding-agent" data-ready={ready || undefined}>
         <button type="button" disabled={busy || !ready} aria-pressed={group ? chosen : undefined}
           onClick={() => { if (route) onChoose(entry, route) }}>
           <RoomAvatar avatar={{ kind: 'harness', harnessId: entry.harnessId }} id={entry.harnessId} label={entry.displayName} size={38} />
           <span><strong>{entry.displayName}</strong>
-            <small>{ready ? route!.model : entry.reason ?? t('directCodingAgentUnavailable')}</small></span>
+            <small>{ready ? source ?? route!.model : entry.reason ?? t('directCodingAgentUnavailable')}</small></span>
         </button>
-        {ready && entry.models.length > 1 ? <select aria-label={t('directCodingAgentModel', { name: entry.displayName })}
-          disabled={busy} value={key} onChange={(event) => setChoices({ ...choices, [entry.harnessId]: event.target.value })}>
-          {entry.models.map((item) => <option key={codingRouteKey(item)} value={codingRouteKey(item)}>
-            {item.credentialMode === 'kun-gateway' ? t('directCodingAgentGatewayModel', { model: item.model }) : item.model}
-          </option>)}
-        </select> : null}
+        {ready ? <CodingAgentRouteSelect label={t('directCodingAgentModel', { name: entry.displayName })} routes={entry.models}
+          value={route!} disabled={busy} onChange={(next) => setChoices({ ...choices, [entry.harnessId]: next })} /> : null}
       </div>
     })}
     {catalog.error ? <p className="direct-coding-agents-error" role="alert">{catalog.error}</p> : null}
