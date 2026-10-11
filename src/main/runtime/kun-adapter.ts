@@ -291,7 +291,7 @@ function isThreadSummarizePath(pathNorm: string): boolean {
 function isProviderQuotaPath(pathNorm: string): boolean {
   const queryIndex = pathNorm.indexOf('?')
   const pathname = queryIndex >= 0 ? pathNorm.slice(0, queryIndex) : pathNorm
-  return pathname === '/v1/provider-quotas'
+  return pathname === '/v1/provider-quotas' || /^\/v1\/harnesses\/[^/]+\/subscription-quota$/u.test(pathname)
 }
 
 function runtimeEventsWaitMs(pathNorm: string): number | null {

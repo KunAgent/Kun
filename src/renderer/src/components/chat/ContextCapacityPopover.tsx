@@ -24,9 +24,10 @@ type Props = {
   /** Display name of the Agent that owns an Agent-managed context. */
   agentName?: string
   style?: CSSProperties
+  embedded?: boolean
 }
 
-export function ContextCapacityPopover({ capacity, agentName, style }: Props): ReactElement {
+export function ContextCapacityPopover({ capacity, agentName, style, embedded = false }: Props): ReactElement {
   const { t } = useTranslation()
   const agent = agentName?.trim() || t('contextCapacityAgentFallback')
   const thresholdRatio = capacity.alertRatio
@@ -61,8 +62,8 @@ export function ContextCapacityPopover({ capacity, agentName, style }: Props): R
     <div
       className="ds-context-capacity w-[300px] max-w-[calc(100vw-1.5rem)] rounded-2xl border border-ds-border-muted bg-ds-card p-3.5 text-ds-ink shadow-[0_14px_34px_rgba(20,47,95,0.16)]"
       style={style}
-      role="dialog"
-      aria-label={t('contextCapacityTitle')}
+      role={embedded ? undefined : 'dialog'}
+      aria-label={embedded ? undefined : t('contextCapacityTitle')}
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[13.5px] font-medium">{t('contextCapacityTitle')}</span>

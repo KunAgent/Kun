@@ -54,6 +54,8 @@ export const codexQuotaCredentialCache = new Map<string, StoredCodexOAuthCredent
 export const grokQuotaCredentialCache = new Map<string, StoredGrokOAuthCredentials>()
 
 export type ProviderQuotaProbeProfile = {
+  accountId?: string
+  authType?: 'api-key' | 'oauth' | 'subscription' | 'none'
   authProfile?: ProviderAuthProfile
   configured?: boolean
   id: string

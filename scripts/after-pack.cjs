@@ -46,6 +46,7 @@ const KUN_RUNTIME_REQUIRED_PATHS = [
   'node_modules/yauzl/package.json',
   'node_modules/yazl/package.json',
   'kun/node_modules/typescript/package.json',
+  'kun/node_modules/smol-toml/package.json',
   'kun/node_modules/typescript/lib/typescript.js',
   'kun/node_modules/typescript-language-server/package.json',
   'kun/node_modules/typescript-language-server/lib/cli.mjs',

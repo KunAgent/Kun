@@ -449,6 +449,8 @@ export async function createRuntimeModelComposition(
         return {
           id: profile.id,
           name: profile.name,
+          accountId: profile.accountId,
+          authType: profile.authType,
           ...(profile.presetSource ? { presetId: profile.presetSource } : {}),
           kind: profile.kind,
           configured: Boolean(config),
@@ -464,7 +466,8 @@ export async function createRuntimeModelComposition(
         }
       }))
       return {
-        profiles
+        profiles,
+        defaultProviderId: snapshot.defaultProviderId
       }
     },
     loadLocalCosts: async (profiles) => {

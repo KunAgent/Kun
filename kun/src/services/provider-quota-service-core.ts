@@ -1,4 +1,5 @@
 import { scopedQuotaFetch, providerQuotaIdentity } from './provider-quota-security.js'
+import { randomUUID } from 'node:crypto'
 import {
   ProviderQuotaListResponseSchema,
   type ProviderLocalCostSummary,
@@ -17,6 +18,8 @@ import {
 } from './provider-subscription-quota.js'
 import { isSubscriptionQuotaProbe, mapWithConcurrency, proxyAwareFetch, runProbe } from './provider-quota-service-probe.js'
 import { exactHostname, quotaErrorMessage } from './provider-quota-service-metrics.js'
+import { queryComposerSubscriptionQuota, type NativeSubscriptionProfileResolver } from './composer-subscription-quota.js'
+import type { ComposerSubscriptionQuotaQuery, ComposerSubscriptionQuotaResponse } from '../contracts/composer-subscription-quota.js'
 
 export const QUOTA_TIMEOUT_MS = 12_000
 
@@ -64,6 +67,7 @@ export type ProviderQuotaProbe = {
 
 export type ProviderQuotaSourceSnapshot = {
   profiles: ProviderQuotaProbeProfile[]
+  defaultProviderId?: string
   /** Retained for legacy callers only; Provider profiles never inherit it. */
   proxyUrl?: string
 }
@@ -94,6 +98,7 @@ export class ProviderQuotaService {
   private readonly subscriptionRuntime: Partial<SubscriptionQuotaRuntime>
   private readonly cache = new Map<string, { entry: ProviderQuotaEntry; fetchedAt: number }>()
   private readonly inflight = new Map<string, Promise<ProviderQuotaEntry>>()
+  private readonly subscriptionScopes = new Map<string, string>()
 
   constructor(private readonly options: {
     loadSource: () => Promise<ProviderQuotaSourceSnapshot>
@@ -139,6 +144,23 @@ export class ProviderQuotaService {
       return localCost ? { ...entry, localCost } : entry
     })
     return ProviderQuotaListResponseSchema.parse({ entries, refreshedAt })
+  }
+
+  async subscription(query: ComposerSubscriptionQuotaQuery, native: NativeSubscriptionProfileResolver): Promise<ComposerSubscriptionQuotaResponse> {
+    return queryComposerSubscriptionQuota(query, {
+      loadSource: this.options.loadSource, native,
+      refresh: (profile) => this.cachedRefreshProfile(profile, query.forceRefresh === true),
+      nowIso: this.nowIso,
+      publicScopeKey: (identity) => {
+        let scope = this.subscriptionScopes.get(identity)
+        if (!scope) {
+          scope = randomUUID()
+          this.subscriptionScopes.set(identity, scope)
+          while (this.subscriptionScopes.size > 64) this.subscriptionScopes.delete(this.subscriptionScopes.keys().next().value!)
+        }
+        return scope
+      }
+    })
   }
 
   /**

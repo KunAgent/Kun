@@ -1,0 +1,15 @@
+{
+  "subscriptionQuota": {
+    "checking": "Checking the current account…",
+    "windowHours": "{{count}}-hour", "windowMinutes": "{{count}}-minute", "windowDays": "{{count}}-day",
+    "title": "Subscription limits",
+    "button": "Limits",
+    "open": "View subscription limits",
+    "contextAndQuota": "Context usage and subscription limits",
+    "remaining": "{{percent}} left",
+    "windowRemaining": "{{window}} remaining allowance",
+    "weekly": "Weekly",
+    "refresh": "Refresh subscription limits",
+    "updated": "Updated {{time}}"
+  }
+}

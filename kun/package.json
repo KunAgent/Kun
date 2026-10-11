@@ -102,6 +102,7 @@
     "proxy-agent": "^8.0.2",
     "safe-regex2": "5.1.1",
     "semver": "^7.8.5",
+    "smol-toml": "1.9.1",
     "typescript": "5.9.3",
     "typescript-language-server": "5.3.0",
     "undici": "^7.29.1",

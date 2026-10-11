@@ -1,0 +1,15 @@
+{
+  "subscriptionQuota": {
+    "checking": "正在确认当前账户额度…",
+    "windowHours": "{{count}} 小时", "windowMinutes": "{{count}} 分钟", "windowDays": "{{count}} 天",
+    "title": "订阅额度",
+    "button": "额度",
+    "open": "查看订阅额度",
+    "contextAndQuota": "上下文使用量与订阅额度",
+    "remaining": "剩余 {{percent}}",
+    "windowRemaining": "{{window}}剩余额度",
+    "weekly": "每周",
+    "refresh": "刷新订阅额度",
+    "updated": "更新于 {{time}}"
+  }
+}

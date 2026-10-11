@@ -1,3 +1,4 @@
+import composerSubscriptionQuota from './common/composer-subscription-quota.json'
 import toolApprovalDetails from './common/tool-approval-details.json'
 import toolDetails from './common/tool-details.json'
 import toolStates from './common/tool-states.json'
@@ -63,6 +64,7 @@ import wardrobeShare from './common/wardrobe-share.json'
 import whatsNew from './common/whats-new.json'
 
 const common = {
+  ...composerSubscriptionQuota,
   ...toolApprovalDetails,
   ...toolDetails,
   ...toolStates,

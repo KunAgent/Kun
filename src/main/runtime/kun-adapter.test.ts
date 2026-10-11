@@ -190,6 +190,7 @@ describe('runtimeRequestViaHost', () => {
 
   it('allows the bounded provider quota scan to outlive the generic GET budget', () => {
     expect(resolveRuntimeRequestTimeoutMs('/v1/provider-quotas', 'GET')).toBe(120_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/harnesses/codex/subscription-quota?credential_mode=native-login', 'GET')).toBe(120_000)
     expect(resolveRuntimeRequestTimeoutMs(
       '/v1/provider-quotas?refresh=true',
       'GET',

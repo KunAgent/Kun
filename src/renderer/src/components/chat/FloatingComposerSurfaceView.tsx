@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
 import { nativePermissionPreview } from '../../lib/harness-native-permission'
 import { selectedNativeAgentPreview, useHarnessNativeAgentStore } from '../../lib/harness-native-agent'
 import type { KunToolPermissionMode } from '@shared/app-settings'
@@ -20,6 +20,7 @@ import { FloatingComposerAgentModePicker } from './FloatingComposerAgentModePick
 import { FloatingComposerNativeAgentPicker } from './FloatingComposerNativeAgentPicker'
 import { FloatingComposerAgentSettings } from './FloatingComposerAgentSettings'
 import { composerToolbarFitRef } from './composer-toolbar-fit'
+import { composerSubscriptionSelection } from './composer-subscription-selection'
 
 export function FloatingComposerSurfaceView({
   context
@@ -56,6 +57,16 @@ export function FloatingComposerSurfaceView({
     agentSwitcher, worktreeBranch
   } = context
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
+  const rawProviderId = useChatStore((state) => state.composerProviderId)
+  const rawModelGroups = useChatStore((state) => state.composerModelGroups)
+  const gatewayBinding = useChatStore((state) => state.composerGatewayBinding)
+  const fallbackWorkspaceRoot = useChatStore((state) => state.workspaceRoot)
+  const quotaWorkspaceRoot = activeThread?.workspace || effectiveWorkspaceRoot || fallbackWorkspaceRoot
+  const quotaSelection = useMemo(() => composerSubscriptionSelection({
+    enabled: runtimeReady && adeComposerEnabled === true && !side && ['chat', 'ade', 'write'].includes(route),
+    harnessId: adeComposer?.harnessId, credentialMode: adeComposer?.credentialMode,
+    providerId: rawProviderId, model: composerModel, modelGroups: rawModelGroups, gatewayBinding, workspaceRoot: quotaWorkspaceRoot
+  }), [runtimeReady, adeComposerEnabled, side, route, adeComposer?.harnessId, adeComposer?.credentialMode, rawProviderId, composerModel, rawModelGroups, gatewayBinding, quotaWorkspaceRoot])
   const runtimeOffline = useChatStore((state) => state.runtimeConnection === 'offline')
   const modelCatalogStatus = useChatStore((state) => state.composerModelCatalogStatus)
   const harnessRows = useHarnessStore((state) => state.rows)
@@ -495,6 +506,7 @@ export function FloatingComposerSurfaceView({
                       activeThreadId={activeThreadId}
                       selectedModel={composerModel}
                       selectedProviderId={composerProviderId}
+                      subscriptionSelection={quotaSelection}
                     />
                   )}
                   {adeComposerEnabled === true && !side && adeComposer &&

@@ -7,7 +7,9 @@ import {
   type ReactElement
 } from 'react'
 import { createPortal } from 'react-dom'
+import { Gauge } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { ComposerSubscriptionQuotaRequest } from '@shared/composer-subscription-quota'
 import type { RequestContextSnapshot } from '../../agent/types'
 import type { AppRoute } from '../../store/chat-store-types'
 import { useChatStore } from '../../store/chat-store'
@@ -15,14 +17,19 @@ import { useHarnessStore } from '../../store/harness-store'
 import { formatPercent } from '../../hooks/use-thread-usage'
 import { buildContextCapacity, type ContextCapacity } from '../../lib/context-capacity'
 import { ContextCapacityPopover } from './ContextCapacityPopover'
+import { ComposerSubscriptionQuota } from './ComposerSubscriptionQuota'
+import { composerQuotaWindows } from './composer-subscription-quota-model'
+import { useComposerSubscriptionQuota } from '../../hooks/use-composer-subscription-quota'
+import { subscriptionQuotaSelectionKey } from '../../hooks/composer-subscription-quota-cache'
+import { fitComposerToolbar } from './composer-toolbar-fit'
 
 const RING_SIZE = 24
 const RING_STROKE = 2.5
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
 const POPOVER_WIDTH = 300
-const POPOVER_MIN_HEIGHT = 180
-const POPOVER_MAX_HEIGHT = 360
+const POPOVER_MIN_HEIGHT = 72
+const POPOVER_MAX_HEIGHT = 520
 const POPOVER_ESTIMATED_HEIGHT = 252
 const POPOVER_MARGIN = 12
 const POPOVER_GAP = 8
@@ -112,6 +119,7 @@ type Props = {
   activeThreadId: string | null
   selectedModel: string
   selectedProviderId?: string
+  subscriptionSelection?: ComposerSubscriptionQuotaRequest
 }
 
 /** Owns context-capacity measurement, popover lifecycle, and accessible trigger UI. */
@@ -120,7 +128,8 @@ export function FloatingComposerContextCapacity({
   route,
   activeThreadId,
   selectedModel,
-  selectedProviderId
+  selectedProviderId,
+  subscriptionSelection
 }: Props): ReactElement | null {
   const { t } = useTranslation('common')
   const capacity = useComposerContextCapacity({
@@ -134,20 +143,36 @@ export function FloatingComposerContextCapacity({
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
   const agentName = useHarnessStore((state) => capacity?.agentManaged
     ? state.rows.find((row) => row.definition.id === composerHarnessId)?.definition.displayName : undefined)
+  const subscription = useComposerSubscriptionQuota(subscriptionSelection, `${route}:${activeThreadId ?? ''}:${selectedModel}`)
+  const quotaEntry = subscription.result?.entry
+  const hasQuota = composerQuotaWindows(quotaEntry).length > 0
+  const quotaBindingKey = subscriptionSelection ? `${route}:${activeThreadId ?? ''}:${selectedModel}:${subscriptionQuotaSelectionKey(subscriptionSelection)}` : ''
+  const knownQuotaRef = useRef({ key: quotaBindingKey, available: false })
+  if (knownQuotaRef.current.key !== quotaBindingKey || !subscription.verifyingIdentity) {
+    knownQuotaRef.current = { key: quotaBindingKey, available: hasQuota }
+  }
+  const checkingQuota = subscription.verifyingIdentity && knownQuotaRef.current.key === quotaBindingKey && knownQuotaRef.current.available
+  const quotaTriggerVisible = hasQuota || checkingQuota
   const [open, setOpen] = useState(false)
   const [placement, setPlacement] = useState<ContextCapacityPopoverPlacement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const hoverCloseTimerRef = useRef<number | null>(null)
-  const visible = Boolean(capacity)
+  const suppressFocusOpenRef = useRef(false)
+  const visible = Boolean(capacity) || quotaTriggerVisible
+
+  useEffect(() => {
+    const toolbar = rootRef.current?.closest<HTMLElement>('.ds-composer-toolbar')
+    if (toolbar) fitComposerToolbar(toolbar)
+  }, [quotaTriggerVisible, visible])
 
   useEffect(() => {
     if (!visible && open) setOpen(false)
   }, [open, visible])
 
   useEffect(() => {
-    if (!open || !capacity) {
+    if (!open || !visible) {
       setPlacement(null)
       return
     }
@@ -164,14 +189,18 @@ export function FloatingComposerContextCapacity({
     }
     updatePlacement()
     const frame = window.requestAnimationFrame(updatePlacement)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updatePlacement)
+    if (popoverRef.current) observer?.observe(popoverRef.current)
+    if (buttonRef.current) observer?.observe(buttonRef.current)
     window.addEventListener('resize', updatePlacement)
     window.addEventListener('scroll', updatePlacement, true)
     return () => {
       window.cancelAnimationFrame(frame)
+      observer?.disconnect()
       window.removeEventListener('resize', updatePlacement)
       window.removeEventListener('scroll', updatePlacement, true)
     }
-  }, [capacity, open])
+  }, [capacity, hasQuota, open, visible])
 
   useEffect(() => {
     if (!open) return
@@ -182,7 +211,12 @@ export function FloatingComposerContextCapacity({
       setOpen(false)
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') {
+        setOpen(false)
+        suppressFocusOpenRef.current = true
+        buttonRef.current?.focus({ preventScroll: true })
+        queueMicrotask(() => { suppressFocusOpenRef.current = false })
+      }
     }
     window.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('keydown', onKeyDown)
@@ -196,7 +230,7 @@ export function FloatingComposerContextCapacity({
     if (hoverCloseTimerRef.current != null) window.clearTimeout(hoverCloseTimerRef.current)
   }, [])
 
-  if (!capacity) return null
+  if (!visible) return null
 
   const cancelClose = (): void => {
     if (hoverCloseTimerRef.current == null) return
@@ -205,10 +239,13 @@ export function FloatingComposerContextCapacity({
   }
   const openPreview = (): void => {
     cancelClose()
+    if (!open) subscription.revalidate()
     setOpen(true)
   }
   const closePreviewSoon = (): void => {
     cancelClose()
+    const focused = document.activeElement
+    if (focused && (rootRef.current?.contains(focused) || popoverRef.current?.contains(focused))) return
     hoverCloseTimerRef.current = window.setTimeout(() => {
       hoverCloseTimerRef.current = null
       setOpen(false)
@@ -228,8 +265,8 @@ export function FloatingComposerContextCapacity({
         maxHeight: `${POPOVER_MAX_HEIGHT}px`,
         visibility: 'hidden'
       }
-  const percent = formatPercent(capacity.usedRatio)
-  const ariaLabel = capacity.nativeHistoryUnknown
+  const percent = capacity ? formatPercent(capacity.usedRatio) : ''
+  const ariaLabel = !capacity ? t('subscriptionQuota.open') : capacity.nativeHistoryUnknown
     ? t('contextCapacitySdkManagedChipAria', { tokens: capacity.usedTokens })
     : t('contextCapacityChipAria', { percent })
 
@@ -239,36 +276,50 @@ export function FloatingComposerContextCapacity({
         ? createPortal(
             <div
               ref={popoverRef}
-              className="ds-no-drag fixed z-[1000]"
+              className="ds-composer-capacity-popup ds-no-drag fixed z-[1000]"
               style={popoverStyle}
               data-context-capacity-popover
+              role="dialog"
+              aria-label={t(quotaTriggerVisible ? capacity ? 'subscriptionQuota.contextAndQuota' : 'subscriptionQuota.title' : 'contextCapacityTitle')}
               onMouseEnter={cancelClose}
               onMouseLeave={closePreviewSoon}
+              onFocusCapture={cancelClose}
+              onBlurCapture={(event) => {
+                if (event.relatedTarget instanceof Node && (popoverRef.current?.contains(event.relatedTarget) || rootRef.current?.contains(event.relatedTarget))) return
+                closePreviewSoon()
+              }}
             >
-              <ContextCapacityPopover
+              {capacity ? <ContextCapacityPopover
                 capacity={capacity}
                 agentName={agentName}
-                style={{ width: '100%', maxHeight: 'inherit', overflowY: 'auto' }}
-              />
+                embedded
+              /> : null}
+              {hasQuota && quotaEntry ? <ComposerSubscriptionQuota entry={quotaEntry}
+                refreshedAt={subscription.result?.refreshedAt} refreshing={subscription.refreshing} onRefresh={subscription.refresh} /> : null}
+              {checkingQuota ? <section className="ds-composer-subscription" data-composer-subscription-checking role="status">
+                <div className="ds-composer-subscription-header"><h3>{t('subscriptionQuota.title')}</h3></div>
+                <p className="ds-composer-subscription-updated">{t('subscriptionQuota.checking')}</p>
+              </section> : null}
             </div>,
             document.body
           )
         : null}
-      <div className="ds-composer-context-control relative shrink-0" ref={rootRef}>
+      <div className={`${quotaTriggerVisible ? 'ds-composer-subscription-control' : 'ds-composer-context-control'} relative shrink-0`} ref={rootRef}>
         <button
           ref={buttonRef}
           type="button"
           onClick={openPreview}
-          onFocus={openPreview}
+          onFocus={() => { if (!suppressFocusOpenRef.current) openPreview() }}
           onBlur={closePreviewSoon}
           onMouseEnter={openPreview}
           onMouseLeave={closePreviewSoon}
-          className="ds-composer-context ds-no-drag inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+          className={capacity ? 'ds-composer-context ds-no-drag inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30' : 'ds-composer-subscription-trigger ds-no-drag'}
           aria-label={ariaLabel}
           aria-expanded={open}
           aria-haspopup="dialog"
+          data-composer-capacity-trigger={capacity ? 'context' : 'subscription'}
         >
-          <svg
+          {capacity ? <svg
             className="h-5 w-5 -rotate-90 shrink-0"
             viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
             aria-hidden="true"
@@ -307,7 +358,7 @@ export function FloatingComposerContextCapacity({
                 />
               </>
             )}
-          </svg>
+          </svg> : <><Gauge size={15} aria-hidden="true" /><span className="ds-composer-subscription-trigger-label">{t('subscriptionQuota.button')}</span></>}
         </button>
       </div>
     </>

@@ -1,0 +1,101 @@
+.ds-composer-capacity-popup {
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 16px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text);
+  box-shadow: 0 14px 34px rgba(20, 47, 95, 0.16);
+}
+
+.ds-composer-capacity-popup .ds-context-capacity {
+  width: 100%;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ds-composer-subscription {
+  min-width: 0;
+  padding: 14px;
+  color: var(--ds-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ds-composer-capacity-popup .ds-context-capacity + .ds-composer-subscription {
+  border-top: 1px solid var(--ds-border-muted);
+}
+
+.ds-composer-subscription-header,
+.ds-composer-subscription-window-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ds-composer-subscription-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ds-composer-subscription-account,
+.ds-composer-subscription-plan,
+.ds-composer-subscription-reset,
+.ds-composer-subscription-updated {
+  margin: 3px 0 0;
+  color: var(--ds-text-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.ds-composer-subscription-account {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-composer-subscription-refresh {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--ds-text-muted);
+}
+
+.ds-composer-subscription-refresh:hover { background: var(--ds-surface-hover); }
+.ds-composer-subscription-refresh:disabled { opacity: 0.5; cursor: wait; }
+.ds-composer-subscription-refresh:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+.ds-composer-subscription-windows { display: grid; gap: 13px; margin-top: 14px; }
+.ds-composer-subscription-window-heading { align-items: baseline; font-size: 11.5px; }
+.ds-composer-subscription-window-heading > span { min-width: 0; color: var(--ds-text-muted); }
+.ds-composer-subscription-window-heading strong { flex-shrink: 0; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ds-composer-subscription-track { height: 5px; margin-top: 6px; overflow: hidden; border-radius: 5px; background: var(--ds-surface-subtle); }
+.ds-composer-subscription-track > span { display: block; height: 100%; border-radius: inherit; background: #519b78; }
+.ds-composer-subscription-window[data-severity='warn'] .ds-composer-subscription-track > span { background: #d9920f; }
+.ds-composer-subscription-window[data-severity='danger'] .ds-composer-subscription-track > span { background: #d9544e; }
+.ds-composer-subscription-window[data-severity='danger'] strong { color: #d9544e; }
+.ds-composer-subscription-updated { margin-top: 13px; font-size: 10.5px; color: var(--ds-text-faint); }
+
+/* A real quota-only action remains reachable when the optional context ring is hidden. */
+.ds-composer-subscription-trigger {
+  display: inline-flex;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 8px;
+  padding: 0 7px;
+  color: var(--ds-text-muted);
+  font-size: 11.5px;
+}
+.ds-composer-subscription-trigger:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+.ds-composer-subscription-trigger:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+.ds-composer-toolbar[data-fit-2] .ds-composer-subscription-trigger-label { display: none; }

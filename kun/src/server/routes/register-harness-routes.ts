@@ -1,5 +1,6 @@
 import { registerHarnessUpdateRoutes } from './register-harness-update-routes.js'
 import { registerHarnessIntegrationRoutes } from './register-harness-integration-routes.js'
+import { readComposerSubscriptionQuota } from './composer-subscription-quota.js'
 import type { Router } from '../router.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { authorize } from './route-auth.js'
@@ -20,6 +21,10 @@ export function registerHarnessRoutes(router: Router, runtime: ServerRuntime): v
   registerHarnessInstallRoutes(router, runtime)
   registerHarnessUpdateRoutes(router, runtime)
   registerHarnessIntegrationRoutes(router, runtime)
+  router.add('GET', '/v1/harnesses/:id/subscription-quota', (request, context) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return readComposerSubscriptionQuota(runtime, request, context.params)
+  })
   router.add('GET', '/v1/harnesses', (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return listHarnesses(runtime, request)

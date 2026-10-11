@@ -368,7 +368,7 @@ export type ServerRuntime = {
   modelConnectionOAuth?: ModelConnectionOAuthService
   officialProviderAuth?: OfficialProviderAuthService
   officialProviderCli?: OfficialProviderCliService
-  providerQuotaService?: Pick<ProviderQuotaService, 'list'>
+  providerQuotaService?: Pick<ProviderQuotaService, 'list'> & Partial<Pick<ProviderQuotaService, 'subscription'>>
   modelGateway?: {
     requiresAdminToken?(): boolean
     enabled(): boolean
