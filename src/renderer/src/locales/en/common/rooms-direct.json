@@ -99,6 +99,7 @@
   "directCodingAgentsLoading": "Checking coding Agents…",
   "directCodingAgentsEmpty": "No coding Agent is ready. Set up Codex, Claude Code or OpenCode in Code first.",
   "directCodingAgentUnavailable": "Not ready",
+  "directCodingAgentDetecting": "Checking…",
   "directCodingAgentModel": "{{name}} model",
   "directCodingAgentGatewayTag": "Gateway",
   "directCodingAgentSearchModels": "Search models",

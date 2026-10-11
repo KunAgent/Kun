@@ -14,13 +14,21 @@ export type CodingAgentEntry = {
   displayName: string
   available: boolean
   reason?: string
+  /** Kun is still checking this engine; the entry may become ready on the next refresh. */
+  detecting?: boolean
   models: CodingAgentRoute[]
 }
 
 export const codingRouteKey = (route: CodingAgentRoute): string =>
   JSON.stringify([route.credentialMode ?? '', route.providerId ?? '', route.accountId ?? '', route.model])
 
-type CodingAgentCatalog = { agents: CodingAgentEntry[] }
+type CodingAgentCatalog = { agents: CodingAgentEntry[]; discovering?: boolean }
+
+/** Follow-up cadence while Kun reports engines still detecting; its own cache answers in between. */
+export const CODING_AGENT_DISCOVERING_POLL_MS = 5_000
+const CODING_AGENT_DISCOVERING_POLL_LIMIT = 6
+const CODING_AGENT_RETRY_BASE_MS = 2_000
+const CODING_AGENT_RETRY_LIMIT = 3
 let lastCatalog: CodingAgentCatalog | null = null
 let inflight: Promise<CodingAgentCatalog> | null = null
 
@@ -33,27 +41,34 @@ export function loadCodingAgentCatalog(): Promise<CodingAgentCatalog> {
 }
 
 /**
- * Ready engines come from Code's own Agent discovery, which spawns every CLI.
- * Kun caches it; here we show the last list at once and refresh quietly,
- * instead of re-probing on every conversation event.
+ * Ready engines come from Code's own Agent discovery. Kun caches it for
+ * minutes and answers from that cache, so the dialog asks once when it opens
+ * and only follows up while Kun says an engine is still being checked.
  */
 export function useCodingAgentCatalog(active: boolean) {
   const [state, setState] = useState<{ data: CodingAgentCatalog | null; error: string }>(() => ({ data: lastCatalog, error: '' }))
   useEffect(() => {
     if (!active) return
-    let alive = true, failures = 0, retry: ReturnType<typeof setTimeout> | undefined
-    // A cold probe can outlive one request timeout while Kun keeps discovering;
-    // retry soon and keep the loading state for the first misses.
-    const refresh = () => void loadCodingAgentCatalog().then(
-      (data) => { failures = 0; if (alive) setState({ data, error: '' }) },
-      (cause) => {
-        if (!alive) return
-        if (++failures < 3) { clearTimeout(retry); retry = setTimeout(refresh, 2_000) }
-        setState((old) => ({ data: old.data, error: old.data || failures < 3 ? '' : String(cause) }))
-      })
+    let alive = true, failures = 0, followUps = 0
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const schedule = (delayMs: number) => { clearTimeout(timer); timer = setTimeout(refresh, delayMs) }
+    function refresh(): void {
+      void loadCodingAgentCatalog().then(
+        (data) => {
+          failures = 0
+          if (!alive) return
+          setState({ data, error: '' })
+          if (data.discovering && ++followUps <= CODING_AGENT_DISCOVERING_POLL_LIMIT) schedule(CODING_AGENT_DISCOVERING_POLL_MS)
+        },
+        (cause) => {
+          if (!alive) return
+          // A cold discovery can outlive one request; back off instead of re-asking every few seconds.
+          if (++failures < CODING_AGENT_RETRY_LIMIT) schedule(CODING_AGENT_RETRY_BASE_MS * 2 ** (failures - 1))
+          setState((old) => ({ data: old.data, error: old.data || failures < CODING_AGENT_RETRY_LIMIT ? '' : String(cause) }))
+        })
+    }
     refresh()
-    const timer = setInterval(refresh, 30_000)
-    return () => { alive = false; clearInterval(timer); clearTimeout(retry) }
+    return () => { alive = false; clearTimeout(timer) }
   }, [active])
   return state
 }

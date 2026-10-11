@@ -508,6 +508,8 @@ export type ChatState = {
   reindexThreadKnowledgeBase: (threadId: string, knowledgeBaseId: string) => Promise<boolean>
   setThreadSearch: (query: string) => void
   setShowArchivedThreads: (show: boolean) => void
+  /** Clears a non-empty conversation so New task can show its blank page before the thread exists. */
+  leaveThreadForNewTask: () => boolean
   createThread: (options?: {
     workspaceRoot?: string
     forceNew?: boolean

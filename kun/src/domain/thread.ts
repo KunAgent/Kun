@@ -236,6 +236,7 @@ export function toThreadSummary(
     ...(thread.goal ? { goal: thread.goal } : {}),
     ...(thread.executionTasks ? { todos: executionTasksAsTodos(thread.id, thread.executionTasks) }
       : thread.todos ? { todos: thread.todos } : {}),
+    ...(Array.isArray(thread.turns) ? { turnCount: thread.turns.length } : {}),
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt
   }

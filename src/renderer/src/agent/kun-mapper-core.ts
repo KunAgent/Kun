@@ -83,6 +83,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     knowledgeBases: thread.knowledgeBases?.map((mount) => ({ ...mount })),
     status: thread.status,
     ...(typeof thread.latestSeq === 'number' ? { latestSeq: thread.latestSeq } : {}),
+    ...(typeof thread.turnCount === 'number' ? { turnCount: thread.turnCount } : {}),
     approvalPolicy: normalizeApprovalPolicy(thread.approvalPolicy),
     sandboxMode: normalizeSandboxMode(thread.sandboxMode),
     approvalReviewer: normalizeApprovalReviewer(thread.approvalReviewer),

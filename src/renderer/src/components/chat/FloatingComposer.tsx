@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AttachmentReference, ChatBlock, ReviewTarget } from '../../agent/types'
-import { useChatStore } from '../../store/chat-store'
+import { useActiveThreadMayHaveUsage, useChatStore } from '../../store/chat-store'
 import type { AppRoute } from '../../store/chat-store-types'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import {
@@ -330,8 +330,9 @@ export function FloatingComposer({
     hasActiveThread,
     hasConversationStarted
   })
+  const activeThreadMayHaveUsage = useActiveThreadMayHaveUsage()
   const threadUsageState = useThreadUsageState(activeThreadId,
-    showUsageHistoryFooter && Boolean(activeThreadId) && !hydratingActiveThread,
+    showUsageHistoryFooter && activeThreadMayHaveUsage && !hydratingActiveThread,
     `${activeThreadId ?? ''}:${usageRefreshKey}`)
   const threadUsage = threadUsageState.usage
   // Prefer the live usage SSE event; fall back to the REST summary after reloads.

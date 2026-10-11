@@ -9,6 +9,7 @@ import {
   applyHarnessEnablementSettings,
   harnessIdsWithChangedLaunchSettings,
   HARNESS_CATALOG_TTL_MS,
+  HARNESS_DETECTING_POLL_MS,
   nextReadinessPoll,
   READINESS_REFRESH_AHEAD_MS,
   useHarnessStore
@@ -89,7 +90,8 @@ describe('harness-store loadHarnesses polling', () => {
     await loadHarnesses()
     for (let open = 0; open < 5; open++) await loadHarnesses()
     expect(provider.listHarnesses).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(HARNESS_CATALOG_TTL_MS + 1)
+    // Age only the catalog; readiness-expiry timers have their own coverage below.
+    vi.setSystemTime(Date.now() + HARNESS_CATALOG_TTL_MS + 1)
     let finish!: (rows: AdeHarnessRow[]) => void
     provider.listHarnesses.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const refresh = loadHarnesses()
@@ -139,7 +141,8 @@ describe('harness-store loadHarnesses polling', () => {
     const cached = row('devin')
     provider.listHarnesses.mockResolvedValueOnce([cached]).mockRejectedValueOnce(new Error('offline'))
     await loadHarnesses()
-    await vi.advanceTimersByTimeAsync(HARNESS_CATALOG_TTL_MS + 1)
+    // Age only the catalog; readiness-expiry timers have their own coverage below.
+    vi.setSystemTime(Date.now() + HARNESS_CATALOG_TTL_MS + 1)
     await loadHarnesses()
     expect(useHarnessStore.getState()).toMatchObject({ rows: [cached], rowsLoading: false, rowsError: 'offline' })
   })
@@ -151,7 +154,7 @@ describe('harness-store loadHarnesses polling', () => {
     await loadHarnesses(true)
     expect(provider.listHarnesses).toHaveBeenCalledTimes(1)
 
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(HARNESS_DETECTING_POLL_MS)
     expect(provider.listHarnesses).toHaveBeenCalledTimes(2)
     expect(useHarnessStore.getState().rows[0]?.status.installed).toBe('yes')
 
@@ -165,7 +168,7 @@ describe('harness-store loadHarnesses polling', () => {
       .mockResolvedValueOnce([row('fake-cli', { installed: 'unknown', login: 'unknown' })])
       .mockResolvedValueOnce([row('fake-cli')])
     await loadHarnesses(true)
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(HARNESS_DETECTING_POLL_MS)
     expect(provider.listHarnesses).toHaveBeenCalledTimes(2)
     expect(useHarnessStore.getState().rows[0]?.status.installed).toBe('yes')
   })

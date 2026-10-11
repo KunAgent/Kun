@@ -15,6 +15,7 @@ import {
 import { type DailyUsageBucket, useDailyUsageState } from '../../hooks/use-daily-usage'
 import { useModelUsageState, type ModelUsageScope } from '../../hooks/use-model-usage'
 import { useUsageAutoRefresh } from '../../hooks/use-usage-auto-refresh'
+import { useActiveThreadMayHaveUsage } from '../../store/chat-store'
 import { formatUsageDay, UsageTrendChart, type UsageTrendMetric } from '../usage/UsageTrendChart'
 
 export type UsagePeriod = 'today' | '7d' | '30d' | '90d'
@@ -72,7 +73,9 @@ export function SidebarUsagePanel({
   const [modelsExpanded, setModelsExpanded] = useState(false)
   const [autoRefreshKey, setAutoRefreshKey] = useState(0)
   const effectiveRefreshKey = `${String(refreshKey)}:${autoRefreshKey}`
-  const threadState = useThreadUsageState(activeThreadId, enabled && Boolean(activeThreadId), effectiveRefreshKey)
+  const activeThreadMayHaveUsage = useActiveThreadMayHaveUsage()
+  const threadState = useThreadUsageState(activeThreadId,
+    enabled && Boolean(activeThreadId) && activeThreadMayHaveUsage, effectiveRefreshKey)
   const dailyState = useDailyUsageState(enabled, effectiveRefreshKey, HISTORY_DAYS)
   const modelState = useModelUsageState(enabled, effectiveRefreshKey, PERIOD_DAYS[period], modelScope)
   const loading = dailyState.loading || modelState.loading || (Boolean(activeThreadId) && threadState.loading)

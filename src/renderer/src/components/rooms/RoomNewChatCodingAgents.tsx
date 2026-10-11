@@ -36,7 +36,8 @@ export function RoomNewChatCodingAgents({ busy, group, selected, onChoose }: {
           onClick={() => { if (route) onChoose(entry, route) }}>
           <RoomAvatar avatar={{ kind: 'harness', harnessId: entry.harnessId }} id={entry.harnessId} label={entry.displayName} size={38} />
           <span><strong>{entry.displayName}</strong>
-            <small>{ready ? source ?? route!.model : entry.reason ?? t('directCodingAgentUnavailable')}</small></span>
+            <small>{ready ? source ?? route!.model : entry.detecting ? t('directCodingAgentDetecting')
+              : entry.reason ?? t('directCodingAgentUnavailable')}</small></span>
         </button>
         {ready ? <CodingAgentRouteSelect label={t('directCodingAgentModel', { name: entry.displayName })} routes={entry.models}
           value={route!} disabled={busy} onChange={(next) => setChoices({ ...choices, [entry.harnessId]: next })} /> : null}

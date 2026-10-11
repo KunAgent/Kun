@@ -1,3 +1,4 @@
+import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks'
 import type { Router } from './router.js'
 import type { JsonResponse } from './response.js'
 import { jsonResponse } from './response.js'
@@ -8,6 +9,30 @@ export type HttpServerOptions = {
 
 /** Warn once a non-streaming request exceeds this budget; SSE streams opt out. */
 const SLOW_REQUEST_LOG_MS = 500
+
+let loopDelay: IntervalHistogram | null | undefined
+
+/**
+ * Event-loop delay since the previous slow-request line. A high p99 means the
+ * request waited behind other work on the loop (for example synchronous child
+ * process setup); a low one means the handler itself was slow.
+ */
+export function eventLoopDelaySummary(): string {
+  if (loopDelay === undefined) {
+    try {
+      loopDelay = monitorEventLoopDelay({ resolution: 20 })
+      loopDelay.enable()
+    } catch {
+      loopDelay = null
+    }
+    return ''
+  }
+  if (!loopDelay || loopDelay.count === 0) return ''
+  const p99 = Math.round(loopDelay.percentile(99) / 1e6)
+  const max = Math.round(loopDelay.max / 1e6)
+  loopDelay.reset()
+  return ` (event loop delay p99 ${p99}ms, max ${max}ms)`
+}
 
 function toResponse(response: Response | JsonResponse): Response {
   if (response instanceof Response) return response
@@ -39,6 +64,7 @@ export async function dispatchRequest(
       404
     ))
   }
+  if (loopDelay === undefined) eventLoopDelaySummary()
   const startedAt = performance.now()
   const response = toResponse(await match.handler(request, { params: match.params }))
   const elapsedMs = performance.now() - startedAt
@@ -46,7 +72,7 @@ export async function dispatchRequest(
     // Route-level signal for event-loop stalls (#621 family): names the
     // endpoint and thread so a slow scan is attributable in stdout logs.
     console.warn(
-      `[kun] ${request.method} ${url.pathname} took ${Math.round(elapsedMs)}ms`
+      `[kun] ${request.method} ${url.pathname} took ${Math.round(elapsedMs)}ms${eventLoopDelaySummary()}`
     )
   }
   return response

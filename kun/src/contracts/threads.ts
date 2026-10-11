@@ -447,7 +447,9 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   /** First accepted Code/Design mode, derived from durable turn history. */
   lockedTaskSurface: ThreadAgentSurface.optional(),
   /** Rebuildable event-log high-water mark used by lean activity observers. */
-  latestSeq: z.number().int().nonnegative().optional()
+  latestSeq: z.number().int().nonnegative().optional(),
+  /** Accepted turns; lets New task find an empty thread without loading its timeline. */
+  turnCount: z.number().int().nonnegative().optional()
 })
 export type ThreadSummary = z.infer<typeof ThreadSummarySchema>
 

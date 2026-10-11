@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { useTranslation } from 'react-i18next'
 import { ArrowDown, GitCommitHorizontal, Hash } from 'lucide-react'
 import type { ToolBlock } from '../../agent/types'
-import { useChatStore } from '../../store/chat-store'
+import { useActiveThreadMayHaveUsage, useChatStore } from '../../store/chat-store'
 import { threadHasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
 import { useTimelineJumpRail } from './use-timeline-jump-rail'
 import { SourceHistoryCard, SourceHistoryTurnLabel, SourceHistoryBoundary } from '../../history-reference/SourceHistoryCard'
@@ -126,7 +126,9 @@ export function MessageTimeline({
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const usageRefreshKey = useChatStore((state) => state.usageRefreshKey)
   const cancelToolCall = useChatStore((state) => state.cancelToolCall)
-  const turnUsage = useTurnUsageState(threadLoadingId === activeThreadId ? null : activeThreadId, usageRefreshKey)
+  const activeThreadMayHaveUsage = useActiveThreadMayHaveUsage()
+  const turnUsage = useTurnUsageState(
+    threadLoadingId === activeThreadId || !activeThreadMayHaveUsage ? null : activeThreadId, usageRefreshKey)
   const handleCancelToolCall = useCallback(async (block: ToolBlock): Promise<boolean> => {
     if (!activeThreadId || !block.turnId) return false
     const callId = typeof block.meta?.callId === 'string' ? block.meta.callId : ''

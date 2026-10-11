@@ -19,7 +19,8 @@ import { kunToolPermissionModeSettings } from '../contracts/policy.js'
 const open: WorkbenchFixture[] = []
 afterEach(async () => { for (const f of open.splice(0)) await f.cleanup() })
 
-function harnessFixture(probeModels?: (definition: import('../contracts/harness.js').HarnessDefinition) => Promise<string[]>) {
+function harnessFixture(probeModels?: (definition: import('../contracts/harness.js').HarnessDefinition) => Promise<string[]>,
+  options: { discoveryBudgetMs?: number } = {}) {
   const disabled: string[] = []
   const enabledProfiles: HarnessEnabledProfile[] = BUILTIN_HARNESSES.flatMap((definition) =>
     definition.credentialModes.map((credentialMode) => ({ harnessId: definition.id, credentialMode,
@@ -28,7 +29,9 @@ function harnessFixture(probeModels?: (definition: import('../contracts/harness.
   const statuses = new Map<string, HarnessStatus>(catalog.list().map((def) => [def.id, {
     harnessId: def.id, installed: 'yes', login: 'signed-in', checkedAt: '2026-10-01T00:00:00.000Z'
   }]))
-  const detector = { status: vi.fn(async (id: string) => statuses.get(id)!) } satisfies Pick<HarnessDetector, 'status'>
+  const cached = new Map<string, HarnessStatus>()
+  const detector = { status: vi.fn(async (id: string) => statuses.get(id)!),
+    cachedStatus: vi.fn((id: string) => cached.get(id)) } satisfies Pick<HarnessDetector, 'status' | 'cachedStatus'>
   const runtime = { handlesProvider: () => true, handlesRoute: () => true, capabilities: () => undefined,
     capabilitiesV2: () => ({ statuses: allSupportedStatuses(), facts: { sandbox: 'native', usageReporting: 'exact', compactionOwner: 'harness' } }),
     runTurn: async () => 'completed' } as unknown as DelegatedTurnRuntime
@@ -49,11 +52,12 @@ function harnessFixture(probeModels?: (definition: import('../contracts/harness.
       const discovered = await probeModels(definition); models.set(definition.id, discovered); return discovered
     } } : {}),
     probedModels: (def) => models.get(def.id),
-    snapshot: async () => snapshot, defaultModel: () => ({ providerId: 'p1', model: 'test-model' }) })
+    snapshot: async () => snapshot, defaultModel: () => ({ providerId: 'p1', model: 'test-model' }),
+    ...(options.discoveryBudgetMs ? { discoveryBudgetMs: options.discoveryBudgetMs } : {}) })
   const native = { harnessId: 'codex', credentialMode: 'native-login' as const, model: 'codex-test' }
   const request = (model = native): WorkbenchRequest => ({ title: 'Fix tests', goal: 'Make tests pass',
     mode: 'agent', isolation: 'inherit', report: 'silent', execution: { mode: 'direct', model } })
-  return { service, catalog, statuses, detector, disabled, enabledProfiles, runtimes, snapshot, native, request, disableRouter: () => { routerEnabled = false } }
+  return { service, catalog, statuses, cached, detector, disabled, enabledProfiles, runtimes, snapshot, native, request, disableRouter: () => { routerEnabled = false } }
 }
 async function fixture(options?: Parameters<typeof workbenchFixture>[0]) {
   const f = await workbenchFixture(options); open.push(f)
@@ -142,6 +146,30 @@ describe('Code harness discovery and validation', () => {
     expect(probe).toHaveBeenCalledWith(expect.objectContaining({ id: 'devin' }))
     expect(agents.find((agent) => agent.harnessId === 'devin')).toMatchObject({ available: true,
       models: [{ harnessId: 'devin', credentialMode: 'native-login', model: 'devin-cold-model' }] })
+  })
+
+  it('lists from fresh detector verdicts without re-detecting each engine', async () => {
+    const h = harnessFixture()
+    for (const [id, status] of h.statuses) h.cached.set(id, status)
+    const { agents } = await h.service.list()
+    expect(agents.find((agent) => agent.harnessId === 'codex')?.available).toBe(true)
+    expect(h.detector.status).not.toHaveBeenCalled()
+  })
+
+  it('answers within the discovery budget and marks a slow engine as still detecting', async () => {
+    const h = harnessFixture(undefined, { discoveryBudgetMs: 30 })
+    let release: ((status: HarnessStatus) => void) | undefined
+    h.detector.status.mockImplementation(async (id: string) => id === 'codex'
+      ? new Promise<HarnessStatus>((resolve) => { release = resolve })
+      : h.statuses.get(id)!)
+    const started = Date.now()
+    const { agents } = await h.service.list()
+    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(agents.find((agent) => agent.harnessId === 'codex')).toMatchObject({ available: false, detecting: true,
+      reason: 'Still checking this Agent' })
+    expect(agents.find((agent) => agent.harnessId === 'kun')).toMatchObject({ available: true })
+    expect(agents.find((agent) => agent.harnessId === 'kun')?.detecting).toBeUndefined()
+    release?.(h.statuses.get('codex')!)
   })
 
   it('does not probe external models while routing is disabled and honors cancellation', async () => {

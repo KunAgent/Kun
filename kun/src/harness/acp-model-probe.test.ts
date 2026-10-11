@@ -96,6 +96,28 @@ describe('AcpModelProbe', () => {
     expect(f.spawned()).toBe(1)
   })
 
+  it('backs off repeated failures instead of respawning a broken Agent every 30 seconds', async () => {
+    const rejected = { newSession: { error: { code: -32000, message: 'Authentication required' } } }
+    const f = await sequence(rejected, rejected, rejected, rejected)
+    let now = 0
+    const probe = new AcpModelProbe({ spawn: f.spawnFixture, retryDelayMs: 0, log: () => undefined, nowMs: () => now })
+    await probe.probeCatalog(devin)
+    now = 31_000
+    await probe.probeCatalog(devin)
+    expect(f.spawned()).toBe(2)
+    // The second failure is cached for 60s, not 30s.
+    now = 31_000 + 59_000
+    await probe.probeCatalog(devin)
+    expect(f.spawned()).toBe(2)
+    now = 31_000 + 61_000
+    await probe.probeCatalog(devin)
+    expect(f.spawned()).toBe(3)
+    // An explicit refresh is never held back by the backoff.
+    probe.invalidate('devin')
+    await probe.probeCatalog(devin)
+    expect(f.spawned()).toBe(4)
+  })
+
   it('keeps the last good catalog, marked with the error, when a refresh fails', async () => {
     const f = await sequence(working, failing, failing)
     const probe = new AcpModelProbe({ spawn: f.spawnFixture, retryDelayMs: 0, log: () => undefined })

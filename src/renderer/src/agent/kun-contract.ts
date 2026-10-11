@@ -58,6 +58,8 @@ export type CoreThreadSummaryJson = {
   status: CoreThreadStatus
   /** Rebuildable event-log high-water mark available on lean list responses. */
   latestSeq?: number
+  /** Accepted turns; absent on runtimes or index rows that predate it. */
+  turnCount?: number
   approvalPolicy?: string
   sandboxMode?: string
   approvalReviewer?: string

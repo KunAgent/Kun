@@ -131,7 +131,7 @@ export function MediaGenerationSettingsSection({ ctx }: { ctx: Record<string, an
 
   useEffect(() => {
     let cancelled = false
-    void fetchSharedModelConnectionCredentialStates()
+    void fetchSharedModelConnectionCredentialStates({ fresh: true })
       .then((states) => {
         if (!cancelled) setConnectionCredentials(states)
       })

@@ -99,6 +99,7 @@
   "directCodingAgentsLoading": "正在检查编程 Agent…",
   "directCodingAgentsEmpty": "还没有可用的编程 Agent。请先在 Code 里配置 Codex、Claude Code 或 OpenCode。",
   "directCodingAgentUnavailable": "未就绪",
+  "directCodingAgentDetecting": "检查中…",
   "directCodingAgentModel": "{{name}} 的模型",
   "directCodingAgentGatewayTag": "网关",
   "directCodingAgentSearchModels": "搜索模型",

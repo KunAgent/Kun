@@ -389,16 +389,38 @@ export async function findReusableEmptyThreadId(
     )
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
 
+  // The thread list already says which threads never accepted a turn, so New
+  // task normally needs no timeline request. Only rows that predate that field
+  // are checked, and only the newest few, concurrently.
+  const unknown: NormalizedThread[] = []
   for (const thread of candidates) {
+    const verdict = listedThreadEmptiness(thread)
+    if (verdict === 'empty') return thread.id
+    if (verdict === 'unknown') unknown.push(thread)
+  }
+  const checked = await Promise.all(unknown.slice(0, REUSABLE_THREAD_DETAIL_CHECKS).map(async (thread) => {
     try {
       const { blocks } = await provider.getThreadDetail(thread.id)
-      if (!threadHasUserMessage(blocks)) return thread.id
+      return threadHasUserMessage(blocks) ? null : thread.id
     } catch {
-      /* ignore and keep checking other candidates */
+      return null
     }
-  }
+  }))
+  return checked.find((id): id is string => id !== null) ?? null
+}
 
-  return null
+/** Legacy rows without `turnCount` still need a detail request; cap how many New task may wait on. */
+export const REUSABLE_THREAD_DETAIL_CHECKS = 2
+
+/**
+ * `turnCount` comes from the list; `latestTurnId` is stamped locally on send,
+ * so a list that has not refreshed since a message was sent still counts it.
+ * History references and forks can show content that lives outside `turns`.
+ */
+export function listedThreadEmptiness(thread: NormalizedThread): 'empty' | 'used' | 'unknown' {
+  if (thread.latestTurnId || (thread.turnCount ?? 0) > 0) return 'used'
+  if (thread.historyRefId || thread.forkedFromThreadId) return 'unknown'
+  return thread.turnCount === 0 ? 'empty' : 'unknown'
 }
 
 function normalizedRuntimeStatus(status?: string): string {

@@ -60,7 +60,8 @@ export type HarnessListDeps = {
   gatewayAliasModel?: (binding: HarnessGatewayBinding) => string | undefined
   catalog: HarnessCatalog
   readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'readyProfiles' | 'warmProfiles'>
-  detector: Pick<HarnessDetector, 'status'>
+  /** `cachedStatus` (optional) lets discovery reuse a fresh identity-checked verdict without spawning. */
+  detector: Pick<HarnessDetector, 'status'> & Partial<Pick<HarnessDetector, 'cachedStatus'>>
   /** The composition-time runtime map; absent entries mean definition-only. */
   runtimes?: HarnessRuntimeMap
   /** Last successful model probe per harness (spawn-free); statics otherwise. */

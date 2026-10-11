@@ -97,12 +97,45 @@ export function shouldWarnMissingProviderCredential(input: {
   )
 }
 
-/** One-shot GET of credential readiness for all shared model connections. */
-export async function fetchSharedModelConnectionCredentialStates(): Promise<SharedConnectionCredentialState[]> {
+/**
+ * The composer's dictation check only needs credential readiness, but the
+ * snapshot is the whole model-connections document. Concurrent mounts share
+ * one request and reuse it briefly; Settings pages ask for a fresh read.
+ */
+export const CREDENTIAL_STATES_CACHE_MS = 60_000
+let credentialStatesCache: { at: number; states: SharedConnectionCredentialState[] } | null = null
+let credentialStatesInflight: Promise<SharedConnectionCredentialState[]> | null = null
+
+/** Test seam: forget the shared credential-state cache. */
+export function resetSharedModelConnectionCredentialStatesCache(): void {
+  credentialStatesCache = null
+  credentialStatesInflight = null
+}
+
+/** GET of credential readiness for all shared model connections. */
+export async function fetchSharedModelConnectionCredentialStates(
+  options: { fresh?: boolean } = {}
+): Promise<SharedConnectionCredentialState[]> {
   if (typeof window.kunGui?.runtimeRequest !== 'function') return []
-  const result = await window.kunGui.runtimeRequest('/v1/model-connections', 'GET')
-  if (!result.ok) {
-    throw new Error(`Shared model connection request failed (HTTP ${result.status})`)
+  if (!options.fresh) {
+    if (credentialStatesCache && Date.now() - credentialStatesCache.at < CREDENTIAL_STATES_CACHE_MS) {
+      return credentialStatesCache.states
+    }
+    if (credentialStatesInflight) return credentialStatesInflight
   }
-  return parseCredentialStates(result.body)
+  const task = (async () => {
+    const result = await window.kunGui.runtimeRequest('/v1/model-connections', 'GET')
+    if (!result.ok) {
+      throw new Error(`Shared model connection request failed (HTTP ${result.status})`)
+    }
+    return parseCredentialStates(result.body)
+  })()
+  credentialStatesInflight = task
+  try {
+    const states = await task
+    credentialStatesCache = { at: Date.now(), states }
+    return states
+  } finally {
+    if (credentialStatesInflight === task) credentialStatesInflight = null
+  }
 }

@@ -1,4 +1,5 @@
 import { markThreadWorkspacePreparing } from './task-workspace-store'
+import { startNewTaskTiming } from './new-task-timing'
 import { codeThreadWorkspaceIntent } from './code-thread-workspace-intent'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
 import { getProvider } from '../agent/registry'
@@ -190,9 +191,11 @@ export function createThreadCreationActions(
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return null
     }
+    const timing = startNewTaskTiming('createThread')
     try {
       const p = getProvider()
       const settings = await rendererRuntimeClient.getSettings()
+      timing.step('settings')
       const runtime = getKunRuntimeSettings(settings)
       const activeThread = creationState.activeThreadId
         ? creationState.threads.find((thread) => thread.id === creationState.activeThreadId) ??
@@ -275,7 +278,9 @@ export function createThreadCreationActions(
         await get().chooseWorkspace({ createThreadAfter: true })
         return null
       }
-      if (!(await workspaceDirectoryExists(workspaceRoot))) {
+      const workspaceExists = await workspaceDirectoryExists(workspaceRoot)
+      timing.step('workspace')
+      if (!workspaceExists) {
         set({ error: workspaceMissingError() })
         await showWorkspaceMissingDialog(workspaceRoot)
         return null
@@ -297,6 +302,7 @@ export function createThreadCreationActions(
             creationState.composerIsolationExplicitWorkspaceRoot !== workspaceRoot
               ? undefined : options.useWorktreePool, worktreeBranch: options.worktreeBranch,
           stillCurrent: activationAllowed }) : undefined
+      timing.step('project-defaults')
       if (workspaceIntent === null) return null
       // Worktree pool mode always needs a fresh thread bound to a fresh pool
       // slot, so never reuse an existing main-workspace thread in that case.
@@ -313,6 +319,7 @@ export function createThreadCreationActions(
               !isDesignThreadId(thread.id, readDesignThreadRegistry()) &&
               (thread.agentSurface ?? 'code') === requestedAgentSurface
           )
+      timing.step('reuse-lookup')
       if (reusableThreadId) {
         if (!activationAllowed()) return null
         if (initialModel) {
@@ -325,6 +332,7 @@ export function createThreadCreationActions(
         }
         if (get().activeThreadId !== reusableThreadId) {
           await get().selectThread(reusableThreadId)
+          timing.step('select')
         } else {
           set({
             error: null,
@@ -341,6 +349,7 @@ export function createThreadCreationActions(
               : {})
           })
         }
+        timing.finish('reused a thread')
         return reusableThreadId
       }
       // Primary-agent persona snapshot: bind this thread to the picked
@@ -362,6 +371,7 @@ export function createThreadCreationActions(
           ...(personaProfile.systemPrompt ? { systemPrompt: personaProfile.systemPrompt } : {})
         } : {})
       })
+      timing.step('create')
       if (initialModel) {
         rememberThreadComposerSelection(
           t.id,
@@ -393,12 +403,15 @@ export function createThreadCreationActions(
       }))
       if (workspaceIntent?.isolation === 'worktree') markThreadWorkspacePreparing(t.id, '')
       if (activate) await get().selectThread(t.id)
+      timing.step('select')
       if (workspaceIntent?.isolation === 'worktree') {
         await get().requestAdeThreadWorkspace(t.id, workspaceIntent.startFrom)
       }
       if (activate) {
         await (isAdeThread ? get().refreshAdeThreads() : get().refreshThreads())
       }
+      timing.step('refresh-list')
+      timing.finish('created a thread')
       return t.id
     } catch (e) {
       set({

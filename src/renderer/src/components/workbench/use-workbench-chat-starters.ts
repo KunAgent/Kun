@@ -43,12 +43,20 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
     setRoute('chat')
+    const activeBefore = useChatStore.getState().activeThreadId
+    let leftForBlankPage = false
     void createThread({
       useWorktreePool,
       worktreeBranch,
       agentSurface: 'code',
-      activationGuard: () => navigationIsCurrent(requestId)
+      // A message sent from the blank page creates its own thread; this one
+      // must not take over the view after that.
+      activationGuard: () => navigationIsCurrent(requestId) &&
+        useChatStore.getState().activeThreadId === (leftForBlankPage ? null : activeBefore)
     })
+    // createThread has already captured the source project synchronously, so
+    // the blank page can show now instead of after its runtime round trips.
+    leftForBlankPage = useChatStore.getState().leaveThreadForNewTask()
     if (useWorktreePool) setUseWorktreePool(false)
   }, [
     activeSddDraft,

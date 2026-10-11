@@ -95,7 +95,7 @@ export function SpeechToTextSettingsSection({ ctx }: { ctx: Record<string, any> 
 
   useEffect(() => {
     let cancelled = false
-    void fetchSharedModelConnectionCredentialStates()
+    void fetchSharedModelConnectionCredentialStates({ fresh: true })
       .then((states) => {
         if (!cancelled) setConnectionCredentials(states)
       })

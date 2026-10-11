@@ -2,6 +2,7 @@ import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import { saveQueuedMessagesForThread } from './queued-message-persistence'
 import i18n from '../i18n'
 import { createThreadCreationActions } from './chat-store-thread-creation-actions'
+import { createNewTaskLeaveActions } from './chat-store-new-task-leave'
 import { createThreadSelectionActions } from './chat-store-thread-selection-actions'
 import { createThreadQueueActions } from './chat-store-thread-queue-actions'
 import { createThreadSendActions } from './chat-store-thread-send-actions'
@@ -14,7 +15,7 @@ type SseAbortRef = { current: AbortController | null }
 
 export function createThreadActions(
   context: { set: ChatStoreSet; get: ChatStoreGet; sseAbortRef: SseAbortRef }
-): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'loadEarlierThreadHistory' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'restoreQueuedMessage' | 'reorderQueuedMessage' | 'guideQueuedMessage' | 'resumeQueuedTurns' | 'resumePausedQueuedMessages' | 'sendMessage' | 'dispatchExternalPlanBuild' | 'reviewActiveThread'> {
+): Pick<ChatState, 'createThread' | 'leaveThreadForNewTask' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'loadEarlierThreadHistory' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'restoreQueuedMessage' | 'reorderQueuedMessage' | 'guideQueuedMessage' | 'resumeQueuedTurns' | 'resumePausedQueuedMessages' | 'sendMessage' | 'dispatchExternalPlanBuild' | 'reviewActiveThread'> {
   const actionContext: StoreActionContext = context
   const runtime: ThreadActionRuntime = {
     threadSelectionGeneration: 0,
@@ -34,6 +35,7 @@ export function createThreadActions(
   }
   return {
     ...createThreadCreationActions(actionContext, runtime),
+    ...createNewTaskLeaveActions(actionContext, runtime),
     ...createThreadSelectionActions(actionContext, runtime),
     ...createThreadQueueActions(actionContext, runtime),
     ...createThreadSendActions(actionContext, runtime),

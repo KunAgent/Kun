@@ -75,7 +75,9 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
       workbenchOrigin: thread.workbenchOrigin,
       planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint,
       planBuildAdmissionCapabilityHash: thread.planBuildAdmissionCapabilityHash,
-      planBuildAdmissionFrozen: thread.planBuildAdmissionFrozen
+      planBuildAdmissionFrozen: thread.planBuildAdmissionFrozen,
+      // Rows written before this field stay without it; readers treat absence as unknown.
+      turnCount: Array.isArray(thread.turns) ? thread.turns.length : undefined
     }),
     created_at: thread.createdAt, updated_at: thread.updatedAt,
     created_at_ms: isoToMillis(thread.createdAt), updated_at_ms: isoToMillis(thread.updatedAt),
@@ -117,7 +119,7 @@ type ExtensionThreadMetadata = Pick<ThreadRecord,
   | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId' | 'workbenchOrigin'
   | 'collaboration' | 'executionConfig'
   | 'planBuildAdmissionFingerprint' | 'planBuildAdmissionCapabilityHash'
-  | 'planBuildAdmissionFrozen'>
+  | 'planBuildAdmissionFrozen'> & { turnCount?: number }
 
 export function needsSummaryMetadataRepair(row: ThreadRow): boolean {
   return parseJson<{ summaryMetadataVersion?: number }>(row.extension_metadata_json)?.summaryMetadataVersion !== 1

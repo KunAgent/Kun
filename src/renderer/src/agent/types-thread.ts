@@ -30,6 +30,8 @@ export type NormalizedThread = {
   knowledgeBases?: KnowledgeBaseMount[]
   status?: string
   latestSeq?: number
+  /** Accepted turns from the thread list; absent when unknown (older runtime or index row). */
+  turnCount?: number
   approvalPolicy?: ApprovalPolicy
   sandboxMode?: SandboxMode
   approvalReviewer?: ApprovalReviewer

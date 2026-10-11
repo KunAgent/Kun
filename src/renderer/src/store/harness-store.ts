@@ -126,10 +126,15 @@ const generationFor = (id: string): number => modelRequestGeneration.get(id) ?? 
  * usually lands mid-probe, and without this the sidebar/picker would pin
  * the provisional `unknown` verdict forever.
  */
-const DETECTING_POLL_MS = 2_000
+export const HARNESS_DETECTING_POLL_MS = 5_000
 const DETECTING_POLL_BUDGET_MS = 30_000
 const LOAD_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000]
-export const HARNESS_CATALOG_TTL_MS = 30_000
+/**
+ * Every composer mount asks for the catalog, and each answer costs Kun a full
+ * readiness pass. Edits, installs and explicit refreshes force a reload, so
+ * the passive cache can live for minutes.
+ */
+export const HARNESS_CATALOG_TTL_MS = 5 * 60_000
 
 let expiryTimer: ReturnType<typeof setTimeout> | null = null
 let pollTimer: ReturnType<typeof setTimeout> | null = null
@@ -221,7 +226,7 @@ export async function loadHarnesses(
     if (anyRowDetecting(rows)) {
       if (pollWindowStart === null) pollWindowStart = now()
       if (now() - pollWindowStart <= DETECTING_POLL_BUDGET_MS) {
-        scheduleHarnessPoll(DETECTING_POLL_MS)
+        scheduleHarnessPoll(HARNESS_DETECTING_POLL_MS)
       } else {
         resetHarnessPolling()
       }

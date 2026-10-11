@@ -33,6 +33,8 @@ import {
 
 export const ACP_MODEL_PROBE_CACHE_MS = 10 * 60 * 1_000
 export const ACP_MODEL_PROBE_FAILURE_CACHE_MS = 30_000
+/** Repeated failures back off exponentially up to this ceiling; any success resets it. */
+export const ACP_MODEL_PROBE_FAILURE_CACHE_MAX_MS = 10 * 60 * 1_000
 const ACP_PROBE_SESSION_TIMEOUT_MS = 30_000
 const ACP_PROBE_RETRY_DELAY_MS = 1_000
 /** A warm probe process is reused for this long after its last lookup. */
@@ -105,6 +107,7 @@ export class AcpModelProbe {
   seed(definition: HarnessDefinition, catalog: HarnessModelCatalog): void {
     if (catalog.models.length === 0) return
     this.store(this.cacheKey(definition), catalog, this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS)
+    this.failures.delete(this.cacheKey(definition))
     this.lastGood.set(this.identityKey(definition), catalog)
   }
 
@@ -121,6 +124,8 @@ export class AcpModelProbe {
     { expiresAt: number; fetchedAt?: number; catalog: HarnessModelCatalog }
   >()
   private readonly pending = new Map<string, Promise<HarnessModelCatalog>>()
+  /** Consecutive failed probes per cache key, for the failure backoff. */
+  private readonly failures = new Map<string, number>()
   /**
    * Last successful catalog per launch identity, independent of refresh
    * generations: a failed refresh keeps showing it (marked with `error`)
@@ -165,6 +170,7 @@ export class AcpModelProbe {
     const task = this.probeWithRetry(definition, selectedModel)
       .then((catalog) => {
         this.store(key, catalog, this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS)
+        this.failures.delete(key)
         if (catalog.models.length > 0) {
           if (this.lastGood.size >= 32) this.lastGood.delete(this.lastGood.keys().next().value!)
           this.lastGood.set(this.identityKey(definition, selectedModel), catalog)
@@ -179,7 +185,7 @@ export class AcpModelProbe {
         const catalog: HarnessModelCatalog = previous
           ? { ...previous, error: reason }
           : { models: [], modelInfo: [], error: reason }
-        this.store(key, catalog, ACP_MODEL_PROBE_FAILURE_CACHE_MS)
+        this.store(key, catalog, this.failureBackoffMs(key))
         this.log(`[harness] ${definition.id} model catalog probe failed after ${this.nowMs() - started}ms: ` +
           `${reason.code}${reason.message ? ` (${reason.message})` : ''}`)
         return catalog
@@ -316,6 +322,14 @@ export class AcpModelProbe {
   private store(key: string, catalog: HarnessModelCatalog, ttlMs: number): void {
     if (this.cache.size >= 32) this.cache.delete(this.cache.keys().next().value!)
     this.cache.set(key, { fetchedAt: this.nowMs(), expiresAt: this.nowMs() + ttlMs, catalog })
+  }
+
+  /** 30s, 60s, 120s ... capped, so a broken binary is not respawned by every list refresh. */
+  private failureBackoffMs(key: string): number {
+    const count = (this.failures.get(key) ?? 0) + 1
+    if (this.failures.size >= 32 && !this.failures.has(key)) this.failures.delete(this.failures.keys().next().value!)
+    this.failures.set(key, count)
+    return Math.min(ACP_MODEL_PROBE_FAILURE_CACHE_MS * 2 ** Math.min(count - 1, 10), ACP_MODEL_PROBE_FAILURE_CACHE_MAX_MS)
   }
 
   private bump(id: string): void { this.generations.set(id, (this.generations.get(id) ?? 0) + 1) }
