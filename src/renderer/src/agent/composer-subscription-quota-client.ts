@@ -1,4 +1,5 @@
 import type { ComposerSubscriptionQuotaRequest, ComposerSubscriptionQuotaResult } from '@shared/composer-subscription-quota'
+import { KUN_HARNESS_SUBSCRIPTION_QUOTA_TEMPLATE } from '@shared/kun-endpoints'
 import { ComposerSubscriptionQuotaResponseSchema } from '../../../../kun/src/contracts/composer-subscription-quota'
 import { rendererRuntimeClient } from './runtime-client'
 
@@ -11,8 +12,9 @@ export async function requestComposerSubscriptionQuota(request: ComposerSubscrip
   if (request.workspaceRoot) query.set('workspace_root', request.workspaceRoot)
   if (request.gatewayBinding) query.set('gateway_binding', '1')
   if (request.forceRefresh) query.set('refresh', '1')
+  const path = KUN_HARNESS_SUBSCRIPTION_QUOTA_TEMPLATE.replace('{id}', encodeURIComponent(request.harnessId))
   const response = await rendererRuntimeClient.runtimeRequest(
-    `/v1/harnesses/${encodeURIComponent(request.harnessId)}/subscription-quota?${query}`, 'GET', undefined,
+    `${path}?${query}`, 'GET', undefined,
     { priority: 'background' }
   )
   if (!response.ok) throw new Error('Subscription quota is unavailable.')

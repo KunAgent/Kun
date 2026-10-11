@@ -316,6 +316,7 @@ export function kunTeamRaceActionPath(
 export const KUN_HARNESSES_PATH = '/v1/harnesses'
 export const KUN_HARNESSES_TEMPLATE = '/v1/harnesses'
 export const KUN_HARNESS_MODELS_TEMPLATE = '/v1/harnesses/{id}/models'
+export const KUN_HARNESS_SUBSCRIPTION_QUOTA_TEMPLATE = '/v1/harnesses/{id}/subscription-quota'
 export const KUN_HARNESS_PROBE_TEMPLATE = '/v1/harnesses/{id}/probe'
 /** Re-validate this Agent's stale readiness proofs (composer selection, not polling). */
 export const KUN_HARNESS_WARM_TEMPLATE = '/v1/harnesses/{id}/warm'

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestComposerSubscriptionQuota } from './composer-subscription-quota-client'
+import { runtimeRequestPayloadSchema } from '../../../main/ipc/app-ipc-schemas/runtime'
 
 const request = vi.hoisted(() => vi.fn())
 vi.mock('./runtime-client', () => ({ rendererRuntimeClient: { runtimeRequest: request } }))
@@ -8,7 +9,22 @@ const response = { entry: { providerId: 'profile-a', providerName: 'Codex', stat
   refreshedAt: '2026-10-11T00:00:00Z', scopeKey: 'public-scope' }
 
 describe('composer subscription boundary', () => {
-  beforeEach(() => request.mockReset())
+  beforeEach(() => { request.mockReset() })
+
+  it.each(['codex', 'claude-code'])('passes the real desktop IPC boundary for %s quota reads', async (harnessId) => {
+    request.mockImplementation(async (path, method, body, options) => {
+      runtimeRequestPayloadSchema.parse({ path, method, body, ...options })
+      return { ok: true, body: JSON.stringify(response) }
+    })
+    for (const credentialMode of ['native-login', 'provider']) {
+      const result = await requestComposerSubscriptionQuota({ harnessId, credentialMode,
+        providerId: credentialMode === 'native-login' ? 'default' : 'work & home',
+        ...(credentialMode === 'provider' ? { accountId: 'actual-account' } : {}),
+        workspaceRoot: '/repo/a?account_id=other', forceRefresh: true })
+      expect(result.entry?.status).toBe('available')
+      expect(result.entry?.metrics[0].usedPercent).toBe(65)
+    }
+  })
 
   it('preserves exact account and workspace values as data in a background-only read', async () => {
     request.mockResolvedValue({ ok: true, body: JSON.stringify(response) })
