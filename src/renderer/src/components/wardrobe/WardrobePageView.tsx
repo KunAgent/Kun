@@ -10,7 +10,7 @@ import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { WardrobeLogSection, WardrobeSettingsSection } from '../rooms/RoomWardrobePanelSections'
 import { useWardrobeOpener } from '../rooms/RoomWardrobeOpening'
 import {
-  requireKunAppearanceLogin, WardrobeAccountError, exchangeWardrobeItem, markWardrobeSeen, updateWardrobeSettings, useWardrobe, wardrobeSettings
+  requireKunAppearanceLogin, WardrobeAccountError, markWardrobeSeen, updateWardrobeSettings, useWardrobe, wardrobeSettings
 } from '../rooms/room-wardrobe'
 import { wearDropOnMe } from '../rooms/room-wardrobe-wear'
 import { useRoomUserProfile, useRoomUserProfileSync } from '../rooms/room-user-profile'
@@ -256,16 +256,10 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar, on
               onPick={(next, name) => choose(composedAvatar(next), t('wardrobePageToastLook', { name }))} onTry={(next) => { if (!guest) setTrying(next) }} onEndTry={() => setTrying(null)} />
               : tab === 'log' ? <div className="kun-wardrobe-scroll kun-wardrobe-log"><WardrobeLogSection wardrobe={wardrobe} language={language} /></div>
                 : guest ? <WardrobeLockedPanel kind={tab === 'shop' ? 'shop' : 'invite'} />
-                  : tab === 'shop' ? <WardrobeShopPanel wardrobe={wardrobe} language={language} onBought={(text) => setToast({ text })}
-                    onBrowse={() => { setTab('items'); setOwnedOnly(false); setSelection(null) }} />
+                  : tab === 'shop' ? <WardrobeShopPanel wardrobe={wardrobe} language={language} onBought={(text) => setToast({ text })} />
                     : <WardrobeInvitePanel look={wardrobeLook(profileAvatar).parts} language={language} onClaimed={(text) => setToast({ text })} />}
         {tab === 'items' || tab === 'cards' ? <WardrobeInspector selection={selection} wardrobe={wardrobe} unlockAll={unlockAll} guest={guest} parts={parts}
           dressed={dressed} language={language} busy={busy} onWearItem={wearItem} onClose={() => setSelection(null)}
-          onExchange={(key) => {
-            const [slot, id] = key.split('/') as [KunAvatarAccessoryCategory, string]
-            const name = KUN_AVATAR_CATALOG[slot]?.find((entry) => entry.id === id)?.label[language] ?? ''
-            void run(() => exchangeWardrobeItem(key as never), t('roomsWardrobeExchanged', { item: name }))
-          }}
           onWearSet={(presetId) => {
             const preset = KUN_AVATAR_PRESETS.find((entry) => entry.id === presetId)
             if (preset) choose(composedAvatar(normalizeKunAvatarParts({ ...preset.parts, bg: parts.bg })), t('wardrobePageToastSet', { name: preset.label[language] }))

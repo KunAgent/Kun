@@ -126,11 +126,6 @@ export async function markWardrobeSeen(keys: string[]): Promise<void> {
   acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/seen', 'POST',
     { keys: unseen, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
 }
-export async function exchangeWardrobeItem(key: KunWardrobeItemKey): Promise<void> {
-  if (signedIn()) { await accountResult((api) => api.exchange(key)); return }
-  acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/exchange', 'POST',
-    { key, clientRequestId: roomRequestId(), expectedRevision: snapshot.revision }))
-}
 export async function updateWardrobeSettings(settings: Partial<KunWardrobeSettings>): Promise<void> {
   if (signedIn()) { await accountResult((api) => api.settings(settings)); return }
   acceptWardrobe(await roomsRequest<Detail>('/v1/rooms/wardrobe/settings', 'POST',

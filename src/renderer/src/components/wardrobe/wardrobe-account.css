@@ -58,19 +58,6 @@
 .kun-wardrobe-offer > button { grid-column: 1 / -1; height: 38px; border-radius: 11px; color: var(--ds-control-foreground, #fff);
   background: var(--ds-control, var(--ds-accent)); font-size: 13px; font-weight: 650; }
 .kun-wardrobe-offer > button:disabled { color: var(--ds-text-faint); background: var(--ds-surface-subtle); cursor: not-allowed; }
-.kun-wardrobe-shop-exchange { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--ds-border);
-  border-radius: 16px; background: var(--ds-surface-card); }
-.kun-wardrobe-shop-exchange > span:first-child { display: grid; flex: 1 1 220px; gap: 3px; }
-.kun-wardrobe-shop-exchange strong { font-size: 13.5px; font-weight: 650; }
-.kun-wardrobe-shop-exchange small { color: var(--ds-text-muted); font-size: 12px; line-height: 1.5; }
-.kun-wardrobe-shop-prices { display: flex; gap: 6px; }
-.kun-wardrobe-shop-prices > span { display: grid; justify-items: center; gap: 1px; min-width: 52px; padding: 6px 8px; border-radius: 10px;
-  background: color-mix(in srgb, var(--avatar-rarity) 10%, var(--ds-surface-subtle)); }
-.kun-wardrobe-shop-prices em { color: var(--avatar-rarity); font-size: 11px; font-style: normal; font-weight: 650; }
-.kun-wardrobe-shop-prices b { color: var(--feather-ink); font-size: 13px; font-variant-numeric: tabular-nums; }
-.kun-wardrobe-shop-exchange > button { height: 34px; padding: 0 14px; border: 1px solid var(--ds-border); border-radius: 10px;
-  color: var(--ds-text); background: var(--ds-surface-card); font-size: 12.5px; font-weight: 600; }
-.kun-wardrobe-shop-exchange > button:hover { background: var(--ds-surface-hover); }
 .kun-wardrobe-shop-note { margin: 0; color: var(--ds-text-faint); font-size: 12px; line-height: 1.6; }
 .kun-wardrobe-shop-error { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 12px; border-radius: 12px;
   color: var(--ds-danger, #d14343); background: color-mix(in srgb, var(--ds-danger, #d14343) 10%, transparent); font-size: 12.5px; }

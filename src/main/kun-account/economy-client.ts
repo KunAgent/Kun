@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { KunAvatarParts, KunWardrobeItemKey, KunWardrobeSettings } from '../../shared/rooms-api'
+import type { KunAvatarParts, KunWardrobeSettings } from '../../shared/rooms-api'
 import type { KunEconomyFailure } from '../../shared/kun-account-economy'
 import { KUN_ACCOUNT_ISSUER } from './config'
 
@@ -65,7 +65,6 @@ export function createEconomyClient(deps: EconomyClientDependencies) {
     stash: (bottleIds: string[]) => call('/api/wardrobe/stash', 'POST', { bottleIds }, true),
     seen: (keys: string[]) => call('/api/wardrobe/seen', 'POST', { keys }, true),
     settings: (settings: Partial<KunWardrobeSettings>) => call('/api/wardrobe/settings', 'PATCH', settings, true),
-    exchange: (itemKey: KunWardrobeItemKey) => call('/api/wardrobe/exchange', 'POST', { requestId: newId(), itemKey }, true),
     setLook: (look: KunAvatarParts) => call('/api/wardrobe/look', 'PUT', { look }, true),
     shop: () => call('/api/shop'),
     purchase: (offerId: string) => call('/api/shop/purchases', 'POST', { requestId: newId(), offerId }, true),

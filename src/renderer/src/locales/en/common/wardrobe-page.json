@@ -20,7 +20,7 @@
   "wardrobePageCopies": "{{n}} found, duplicates turned into feathers",
   "wardrobePageTakeOff": "Take off",
   "wardrobePageWear": "Wear",
-  "wardrobePageSecret": "Its name and look stay secret until you find it",
+  "wardrobePageSecret": "Its name, look and rarity stay secret until you receive it",
   "wardrobePageSetPieces": "Wear the whole set: {{items}}",
   "wardrobePageSetKeepsBackdrop": "Color and expression follow the role; your backdrop stays",
   "wardrobePageMissing": "{{n}} more to go",

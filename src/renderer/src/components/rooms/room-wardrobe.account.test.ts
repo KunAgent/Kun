@@ -9,7 +9,7 @@ import { saveRoomUserProfile } from './room-user-profile'
 
 const mirror: KunWardrobe = { ...createKunWardrobe(1), feathers: 40 }
 const api = {
-  sync: vi.fn(), open: vi.fn(), stash: vi.fn(), seen: vi.fn(), settings: vi.fn(), exchange: vi.fn(), setLook: vi.fn(async () => ({ ok: true })),
+  sync: vi.fn(), open: vi.fn(), stash: vi.fn(), seen: vi.fn(), settings: vi.fn(), setLook: vi.fn(async () => ({ ok: true })),
   shop: vi.fn(), purchase: vi.fn(), invites: vi.fn(), claimInvite: vi.fn()
 }
 const parts = { color: 'sky' as const, face: 'normal' as const, bg: '#eef6ff', headwear: 'beret' as const }

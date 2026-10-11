@@ -1,7 +1,7 @@
 /** Test fixture only. Never imported by production runtime or renderer. */
 import { KUN_AVATAR_RARITIES, kunAvatarRarity, type KunAvatarRarity } from '../contracts/kun-avatar-catalog.js'
 import { KUN_AVATAR_PRESETS } from '../contracts/kun-avatar-presets.js'
-import { kunWardrobeLocalDate,kunWardrobeItems,kunWardrobeLitCards,kunWardrobeItemRarity,type KunWardrobe,type KunWardrobeDrop,type KunWardrobeItemKey } from '../contracts/kun-wardrobe.js'
+import { kunWardrobeLocalDate,kunWardrobeItems,kunWardrobeLitCards,type KunWardrobe,type KunWardrobeDrop,type KunWardrobeItemKey } from '../contracts/kun-wardrobe.js'
 export const KUN_WARDROBE_RULES = {
   /** Chance that a counted Agent turn drops a bottle. */
   dropRate: 0.12,
@@ -121,14 +121,4 @@ export function rollKunWardrobeDrop(wardrobe: KunWardrobe, context: KunWardrobeR
   return { counted: true, drop, wardrobe: { ...counted, rngState: random.state(), pending: [...wardrobe.pending, drop],
     daily: { date, drops: daily.drops + 1 }, totalDrops: wardrobe.totalDrops + 1, firstDropAt: wardrobe.firstDropAt ?? drop.createdAt,
     pity: { ...counted.pity, sinceEpic: epic ? 0 : wardrobe.pity.sinceEpic + 1 } } }
-}
-
-/** Spend feathers on an item the user does not own yet. */
-export function exchangeKunWardrobeItem(wardrobe: KunWardrobe, key: KunWardrobeItemKey): KunWardrobe {
-  if (!kunWardrobeItems().some((item) => item.key === key)) throw new Error('wardrobe item unknown')
-  if ((wardrobe.items[key] ?? 0) > 0) throw new Error('wardrobe item already owned')
-  const price = KUN_WARDROBE_RULES.exchangeFeathers[kunWardrobeItemRarity(key)]
-  if (wardrobe.feathers < price) throw new Error('not enough feathers')
-  return relightKunWardrobe({ ...wardrobe, feathers: wardrobe.feathers - price, items: { ...wardrobe.items, [key]: 1 },
-    seen: wardrobe.seen.filter((entry) => entry !== key) })
 }

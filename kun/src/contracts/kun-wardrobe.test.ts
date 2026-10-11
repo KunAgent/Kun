@@ -1,4 +1,4 @@
-import { KUN_WARDROBE_RULES, exchangeKunWardrobeItem, grantKunWardrobeItems, rollKunWardrobeDrop } from '../test-support/wardrobe-simulator.js'
+import { KUN_WARDROBE_RULES, grantKunWardrobeItems, rollKunWardrobeDrop } from '../test-support/wardrobe-simulator.js'
 import { describe, expect, it } from 'vitest'
 import { createKunWardrobe, kunWardrobeItems, KUN_WARDROBE_HISTORY_LIMIT, KunWardrobeSchema, kunWardrobeAcceptsSource, kunWardrobeLitCards, kunWardrobeLocalDate, kunWardrobeMissingParts, kunWardrobeProgress, updateKunWardrobeSettings, type KunWardrobe } from './kun-wardrobe.js'
 import { KUN_AVATAR_PRESETS } from './kun-avatar-presets.js'
@@ -92,18 +92,13 @@ describe('wardrobe drop rules', () => {
     expect(() => openKunWardrobeDrop(lit.wardrobe, 'drop-card')).toThrow('not found')
   })
 
-  it('grants never add duplicates, light cards automatically, and exchanges need feathers', () => {
+  it('grants never add duplicates and light cards automatically', () => {
     const coder = KUN_AVATAR_PRESETS.find((preset) => preset.id === 'coder')!
     const granted = grantKunWardrobeItems(createKunWardrobe(0), ['glasses/square', 'outfit/black-hoodie', 'glasses/square', 'prop/unknown'])
     expect(granted.items).toEqual({ 'glasses/square': 1, 'outfit/black-hoodie': 1 })
     expect(granted.roles).toEqual(['coder'])
     expect(kunWardrobeMissingParts(granted, coder.parts)).toEqual([])
     expect(kunWardrobeProgress(granted)).toMatchObject({ ownedItems: 2, totalItems: 57, litCards: 1, totalCards: 30, pending: 0 })
-    expect(() => exchangeKunWardrobeItem(granted, 'headwear/beret')).toThrow('feathers')
-    const rich = exchangeKunWardrobeItem({ ...granted, feathers: 100 }, 'headwear/beret')
-    expect(rich.feathers).toBe(100 - KUN_WARDROBE_RULES.exchangeFeathers.rare)
-    expect(rich.items['headwear/beret']).toBe(1)
-    expect(() => exchangeKunWardrobeItem(rich, 'headwear/beret')).toThrow('already owned')
   })
 
   it('drops on the first counted turn of every local day, after the first ever bottle', () => {

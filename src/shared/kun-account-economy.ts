@@ -58,7 +58,6 @@ export interface KunAccountWardrobeApi {
   stash(dropIds: string[]): Promise<KunEconomyResult<KunAccountWardrobeDetail>>
   seen(keys: string[]): Promise<KunEconomyResult<KunAccountWardrobeDetail>>
   settings(settings: Partial<KunWardrobeSettings>): Promise<KunEconomyResult<KunAccountWardrobeDetail>>
-  exchange(key: KunWardrobeItemKey): Promise<KunEconomyResult<KunAccountWardrobeDetail>>
   /** Makes this look the account avatar; the server accepts only owned items. */
   setLook(parts: KunAvatarParts): Promise<KunEconomyResult<KunAccountWardrobeDetail>>
   shop(): Promise<KunEconomyResult<KunShop>>
@@ -70,7 +69,7 @@ export interface KunAccountWardrobeApi {
 export const KUN_ACCOUNT_WARDROBE_CHANNELS = {
   saveSharePoster: 'kun-account:share:save', revealSharePoster: 'kun-account:share:reveal',
   sync: 'kun-account:wardrobe:sync', open: 'kun-account:wardrobe:open', stash: 'kun-account:wardrobe:stash',
-  seen: 'kun-account:wardrobe:seen', settings: 'kun-account:wardrobe:settings', exchange: 'kun-account:wardrobe:exchange',
+  seen: 'kun-account:wardrobe:seen', settings: 'kun-account:wardrobe:settings',
   setLook: 'kun-account:wardrobe:look', shop: 'kun-account:shop', purchase: 'kun-account:shop:purchase',
   invites: 'kun-account:invites', claimInvite: 'kun-account:invites:claim'
 } as const

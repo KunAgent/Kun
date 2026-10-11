@@ -19,7 +19,7 @@ const Pips = ({ rarity, dim = false }: { rarity: KunAvatarRarity; dim?: boolean 
     {Array.from({ length: KUN_AVATAR_RARITIES.indexOf(rarity) + 1 }, (_, index) => <span key={index} />)}
   </span>
 
-/** Every item: owned ones try on when hovered and go on with a click; unknown ones only say how rare they are. */
+/** Owned items support try-on; undiscovered items are anonymous collection slots. */
 export function WardrobeItemsSection({ wardrobe, unlockAll, parts, dressed, language, category, ownedOnly, selection,
   onCategory, onSelect, onWear, onTry, onEndTry }: {
   wardrobe: KunWardrobe; unlockAll: boolean; parts: KunAvatarParts; dressed: boolean; language: Language
@@ -42,18 +42,17 @@ export function WardrobeItemsSection({ wardrobe, unlockAll, parts, dressed, lang
       <div className="kun-wardrobe-grid" onPointerLeave={onEndTry}
         onPointerOver={(event) => { if (!(event.target as Element).closest('[data-wardrobe-item]')) onEndTry() }}>
         {tiles.map((tile) => {
-          const on = selection?.kind === 'item' && selection.key === tile.key
-          const rarity = KUN_AVATAR_RARITY_LABELS[tile.rarity][language]
+          const on = (selection?.kind === 'item' || selection?.kind === 'unknown') && selection.key === tile.key
           if (!tile.owned) {
-            // Not found yet: no art, no name, no try-on; only how rare it is.
-            return <button key={tile.key} type="button" className="kun-wardrobe-tile rooms-wardrobe-rarity" data-rarity={tile.rarity} data-locked
-              aria-pressed={on} data-wardrobe-item="unknown" aria-label={`${t('roomsWardrobeUnknownItem')}，${rarity}`}
-              onPointerEnter={onEndTry} onClick={() => onSelect(on ? null : { kind: 'item', key: tile.key })}>
+            // The slot has no item identity or rarity until a server reward is owned.
+            return <button key={tile.key} type="button" className="kun-wardrobe-tile" data-locked
+              aria-pressed={on} data-wardrobe-item="unknown" aria-label={t('roomsWardrobeUnknownItem')}
+              onPointerEnter={onEndTry} onClick={() => onSelect(on ? null : { kind: 'unknown', key: tile.key })}>
               <span className="kun-wardrobe-tile-well"><WardrobeUnknownItem size={46} /></span>
               <span className="kun-wardrobe-tile-name">{t('roomsWardrobeUnknownItem')}</span>
-              <Pips rarity={tile.rarity} dim />
             </button>
           }
+          const rarity = KUN_AVATAR_RARITY_LABELS[tile.rarity][language]
           const worn = dressed && parts[tile.category] === tile.id
           return <button key={tile.key} type="button" className="kun-wardrobe-tile rooms-wardrobe-rarity" data-rarity={tile.rarity}
             data-worn={worn || undefined} aria-pressed={on} data-wardrobe-item={tile.key}
@@ -77,8 +76,8 @@ export function WardrobeItemsSection({ wardrobe, unlockAll, parts, dressed, lang
 function WardrobeCodexCard({ card, language }: { card: WardrobeRoleCard; language: Language }): ReactElement {
   const scene = composedAvatarLayerUrl(`scene/${card.preset.cardScene}`, 256)
   const back = composedAvatarLayerUrl('card/back', 256)
-  const level = KUN_AVATAR_RARITIES.indexOf(card.rarity) + 1
-  return <span className="kun-holo rooms-wardrobe-rarity" data-rarity={card.rarity} data-size="small" data-face-up={card.lit || undefined}>
+  const level = card.lit ? KUN_AVATAR_RARITIES.indexOf(card.rarity) + 1 : 0
+  return <span className="kun-holo rooms-wardrobe-rarity" data-rarity={card.lit ? card.rarity : undefined} data-size="small" data-face-up={card.lit || undefined}>
     <span className="kun-holo-card">
       <span className="kun-holo-face kun-holo-front">
         {card.lit && scene ? <span className="kun-holo-scene" style={{ backgroundImage: `url("${scene}")` }} /> : null}
@@ -89,7 +88,7 @@ function WardrobeCodexCard({ card, language }: { card: WardrobeRoleCard; languag
         <span className="kun-holo-frame" />
         <span className="kun-holo-top"><span className="kun-holo-pips">{Array.from({ length: level }, (_, pip) => <span key={pip} />)}</span></span>
         <span className="kun-holo-plate"><strong className="kun-holo-name">{card.lit ? card.preset.label[language] : ''}</strong>
-          <span className="kun-holo-sub">{KUN_AVATAR_RARITY_LABELS[card.rarity][language]}</span></span>
+          <span className="kun-holo-sub">{card.lit ? KUN_AVATAR_RARITY_LABELS[card.rarity][language] : ''}</span></span>
         <span className="kun-holo-foil" />
         <span className="kun-holo-lines" />
         <span className="kun-holo-sparkle" />
@@ -121,7 +120,7 @@ export function WardrobeCardsSection({ wardrobe, unlockAll, language, filter, se
         {cards.map((card) => {
           const on = selection?.kind === 'card' && selection.id === card.preset.id
           const rarity = KUN_AVATAR_RARITY_LABELS[card.rarity][language]
-          return <button key={card.preset.id} type="button" className="kun-wardrobe-card rooms-wardrobe-rarity" data-rarity={card.rarity}
+          return <button key={card.preset.id} type="button" className="kun-wardrobe-card rooms-wardrobe-rarity" data-rarity={card.lit ? card.rarity : undefined}
             data-hidden={!card.lit || undefined} aria-pressed={on} data-wardrobe-card={card.lit ? card.preset.id : 'unknown'}
             aria-label={card.lit ? `${card.preset.label[language]}，${rarity}，${t('roomsWardrobeLit')}`
               : `${t('roomsWardrobeUnknownCard')}，${t('roomsWardrobeCollected', { have: card.have, total: card.total })}`}

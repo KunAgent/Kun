@@ -159,10 +159,6 @@ export function markRoomWardrobeSeen(store: RoomStore, input: Mutation & { keys:
 export function updateRoomWardrobeSettings(store: RoomStore, input: Mutation & { settings: Partial<KunWardrobeSettings> }, fingerprint: string) {
   return mutate(store, 'wardrobe-settings:', input, fingerprint, (wardrobe) => ({ wardrobe: updateKunWardrobeSettings(wardrobe, input.settings) }))
 }
-export function exchangeRoomWardrobeItem(store: RoomStore, input: Mutation & { key: KunWardrobeItemKey }, fingerprint: string) {
-  return rejectAssetMutation(store)
-}
-
 /** What the default Agents wear; editing one of them never needs a collected item. */
 export function defaultAgentWardrobeKeys(): Set<KunWardrobeItemKey> {
   return new Set([...DEFAULT_AGENT_TEMPLATES, DIAGNOSTICIAN_AGENT_TEMPLATE]

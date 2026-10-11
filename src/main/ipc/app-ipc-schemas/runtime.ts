@@ -260,7 +260,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint('/v1/rooms/sidebar', ['GET']),
   compileEndpoint('/v1/rooms/user-profile', ['GET', 'PUT']),
   compileEndpoint('/v1/rooms/wardrobe', ['GET']),
-  ...['open', 'seen', 'exchange', 'settings', 'stash'].map((action) => compileEndpoint('/v1/rooms/wardrobe/' + action, ['POST'])),
+  ...['open', 'seen', 'settings', 'stash'].map((action) => compileEndpoint('/v1/rooms/wardrobe/' + action, ['POST'])),
   compileEndpoint('/v1/agents/onboarding', ['GET', 'POST']),
   compileEndpoint('/v1/agents/chat-entry', ['GET', 'POST']),
   compileEndpoint('/v1/agents/quick-create', ['POST']),

@@ -53,7 +53,12 @@ describe('wardrobe right panel', () => {
     expect(button({ 'data-wardrobe-item': 'glasses/square' })).toBeDefined()
     expect(text()).not.toContain('Space helmet')
     act(() => unknown[0]!.props.onClick())
-    expect(text()).toContain('roomsWardrobeExchangeHint')
+    expect(text()).toContain('roomsWardrobeUnknownItemHint')
+    expect(unknown.every((node) => node.props['data-rarity'] === undefined)).toBe(true)
+    expect(unknown.every((node) => node.findAll((child) => child.props.className === 'rooms-wardrobe-pips').length === 0)).toBe(true)
+    const sheet = renderer.root.findByProps({ className: 'rooms-wardrobe-panel-sheet rooms-wardrobe-rarity' })
+    expect(sheet.props['data-rarity']).toBeUndefined()
+    expect(text()).not.toContain('roomsWardrobeExchange')
     expect(text()).toContain('roomsWardrobeUnknownItem')
     expect(text()).not.toContain('Space helmet')
     const trade = renderer.root.findAll((node) => node.type === 'button' && node.props.className === 'rooms-run-primary')[0]!

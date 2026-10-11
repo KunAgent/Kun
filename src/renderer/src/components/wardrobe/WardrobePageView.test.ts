@@ -108,11 +108,19 @@ describe('wardrobe page', () => {
     expect(container.textContent).not.toContain('wardrobePageTryBadge')
   })
 
-  it('keeps an unknown item secret in the detail bar and offers the feather trade', async () => {
+  it('keeps unknown slots and their detail bar free of item identity, rarity and exchange', async () => {
     await act(async () => $$('[data-wardrobe-item="unknown"]')[0]!.click())
     const sheet = $('[data-wardrobe-sheet]')!
     expect(sheet.textContent).toContain('roomsWardrobeUnknownItem')
-    expect(sheet.textContent).toContain('roomsWardrobeExchangeHint')
+    expect(sheet.textContent).toContain('roomsWardrobeUnknownItemHint')
+    expect(sheet.hasAttribute('data-rarity')).toBe(false)
+    expect(sheet.querySelector('em')).toBeNull()
+    expect(sheet.textContent).not.toContain('roomsWardrobeExchange')
+    for (const slot of $$('[data-wardrobe-item="unknown"]')) {
+      expect(slot.hasAttribute('data-rarity')).toBe(false)
+      expect(slot.querySelector('.kun-wardrobe-pips')).toBeNull()
+      expect(slot.getAttribute('aria-label')).toBe('roomsWardrobeUnknownItem')
+    }
     expect(sheet.querySelector<HTMLButtonElement>('.kun-wardrobe-sheet-action')?.disabled).toBe(true)
   })
 

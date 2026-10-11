@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
-  KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITY_LABELS, KUN_WARDROBE_STARTER_PACK, kunWardrobeRules, kunAvatarRarity,
+  KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITY_LABELS, KUN_WARDROBE_STARTER_PACK, kunAvatarRarity,
   kunWardrobeItemKey, kunWardrobeMissingParts, kunWardrobePartKeys,
   type KunAvatarAccessoryCategory, type KunAvatarParts, type KunAvatarRarity, type KunWardrobe
 } from '@shared/rooms-api'
@@ -14,7 +14,7 @@ import { wardrobeOwns, type WardrobeSelection } from './wardrobe-page-model'
 import { WARDROBE_SLOT_LABELS } from './WardrobeStage'
 
 type Language = 'zh' | 'en'
-type Sheet = { rarity: KunAvatarRarity; art: ReactNode; title: string; chip: string; fresh?: boolean; text: string; meta: string
+type Sheet = { rarity?: KunAvatarRarity; art: ReactNode; title: string; chip: string; fresh?: boolean; text: string; meta: string
   action: string; primary: boolean; enabled: boolean; run: () => void; locked: boolean }
 
 function when(value: string, language: Language): string {
@@ -24,14 +24,19 @@ function when(value: string, language: Language): string {
 }
 
 /** The selected item or role card: what it is, where it came from, and the one thing to do with it. */
-export function WardrobeInspector({ selection, wardrobe, unlockAll, guest = false, parts, dressed, language, busy, onWearItem, onExchange, onWearSet, onClose }: {
+export function WardrobeInspector({ selection, wardrobe, unlockAll, guest = false, parts, dressed, language, busy, onWearItem, onWearSet, onClose }: {
   selection: WardrobeSelection; wardrobe: KunWardrobe; unlockAll: boolean; guest?: boolean; parts: KunAvatarParts; dressed: boolean; language: Language; busy: boolean
-  onWearItem: (category: KunAvatarAccessoryCategory, id: string, worn: boolean) => void; onExchange: (key: string) => void
+  onWearItem: (category: KunAvatarAccessoryCategory, id: string, worn: boolean) => void
   onWearSet: (presetId: string) => void; onClose: () => void
 }): ReactElement | null {
   const { t } = useTranslation('common')
   let sheet: Sheet | null = null
-  if (selection?.kind === 'item') {
+  const unknownItem = (): Sheet => ({ art: <WardrobeUnknownItem size={42} />, title: t('roomsWardrobeUnknownItem'), chip: '',
+    text: t(guest ? 'wardrobeAccountGuestItemHint' : 'roomsWardrobeUnknownItemHint'), meta: t('wardrobePageSecret'),
+    action: t(guest ? 'wardrobeAccountGuestLocked' : 'roomsWardrobeKeepCollecting'), primary: false, enabled: false, locked: true, run: () => undefined })
+  if (selection?.kind === 'unknown') {
+    sheet = unknownItem()
+  } else if (selection?.kind === 'item') {
     const [category, id] = selection.key.split('/') as [KunAvatarAccessoryCategory, string]
     const part = KUN_AVATAR_CATALOG[category]?.find((entry) => entry.id === id)
     if (part) {
@@ -47,18 +52,8 @@ export function WardrobeInspector({ selection, wardrobe, unlockAll, guest = fals
           meta: [from, copies > 1 ? t('wardrobePageCopies', { n: copies }) : ''].filter(Boolean).join(' · '),
           action: t(worn ? 'wardrobePageTakeOff' : 'wardrobePageWear'), primary: !worn, enabled: true, locked: false,
           run: () => onWearItem(category, id, worn) }
-      } else if (guest) {
-        // Signed out there are no feathers and no bottles: collecting starts with a Kun account.
-        sheet = { rarity: part.rarity, art: <WardrobeUnknownItem size={42} />, title: t('roomsWardrobeUnknownItem'), chip: rarity,
-          text: t('wardrobeAccountGuestItemHint'), meta: t('wardrobePageSecret'), action: t('wardrobeAccountGuestLocked'),
-          primary: false, enabled: false, locked: true, run: () => undefined }
       } else {
-        const price = kunWardrobeRules(wardrobe).exchangeFeathers[part.rarity]
-        // Until it is found the item keeps its secret here too; trading feathers reveals it.
-        sheet = { rarity: part.rarity, art: <WardrobeUnknownItem size={42} />, title: t('roomsWardrobeUnknownItem'), chip: rarity,
-          text: t('roomsWardrobeExchangeHint', { price, missing: Math.max(0, price - wardrobe.feathers) }), meta: t('wardrobePageSecret'),
-          action: `${t('roomsWardrobeExchange')} · ${price}`, primary: true, enabled: Boolean(wardrobe.progress) && wardrobe.feathers >= price, locked: true,
-          run: () => onExchange(selection.key) }
+        sheet = unknownItem()
       }
     }
   } else if (selection?.kind === 'card') {
@@ -77,7 +72,7 @@ export function WardrobeInspector({ selection, wardrobe, unlockAll, guest = fals
             return KUN_AVATAR_CATALOG[category].find((entry) => entry.id === id)?.label[language] ?? id
           }).join(' + ') }),
           meta: t('wardrobePageSetKeepsBackdrop'), action: t('roomsWardrobeWearSet'), run: () => onWearSet(preset.id) }
-        : { rarity, chip, locked: true, primary: false, enabled: false, title: t('roomsWardrobeUnknownCard'),
+        : { chip: t('roomsWardrobeCardKind'), locked: true, primary: false, enabled: false, title: t('roomsWardrobeUnknownCard'),
           art: <WardrobeCardBack width={40} height={54} />, text: t('roomsWardrobeUnknownCardHint'),
           meta: t('roomsWardrobeCollected', { have: keys.length - missing, total: keys.length }),
           action: t('wardrobePageMissing', { n: missing }), run: () => undefined }
@@ -87,7 +82,7 @@ export function WardrobeInspector({ selection, wardrobe, unlockAll, guest = fals
   return <div className="kun-wardrobe-sheet rooms-wardrobe-rarity" data-rarity={sheet.rarity} data-locked={sheet.locked || undefined} data-wardrobe-sheet>
     <span className="kun-wardrobe-sheet-art">{sheet.art}</span>
     <span className="kun-wardrobe-sheet-text">
-      <span><strong>{sheet.title}</strong><em>{sheet.chip}</em>{sheet.fresh ? <i>NEW</i> : null}</span>
+      <span><strong>{sheet.title}</strong>{sheet.chip ? <em>{sheet.chip}</em> : null}{sheet.fresh ? <i>NEW</i> : null}</span>
       <span>{sheet.text}</span>
       {sheet.meta ? <small>{sheet.meta}</small> : null}
     </span>

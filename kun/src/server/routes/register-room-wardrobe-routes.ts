@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import { roomFingerprint } from '../../rooms/room-service.js'
 import {
-  exchangeRoomWardrobeItem, markRoomWardrobeSeen, openRoomWardrobeDrops, readRoomWardrobe, stashRoomWardrobeDrops,
+  markRoomWardrobeSeen, openRoomWardrobeDrops, readRoomWardrobe, stashRoomWardrobeDrops,
   updateRoomWardrobeSettings, wardrobeUnlockAll
 } from '../../rooms/room-wardrobe-service.js'
 import {
@@ -22,7 +22,6 @@ const StashRequest = z.object({ ...Mutation, dropIds: z.array(z.string().min(1).
 const SeenRequest = z.object({ ...Mutation, keys: z.array(z.string().min(1).max(128)).max(200) }).strict()
 const SettingsRequest = z.object({ ...Mutation, settings: z.object({ drops: z.boolean().optional(), code: z.boolean().optional(),
   notice: z.enum(['card', 'quiet']).optional() }).strict() }).strict()
-const ExchangeRequest = z.object({ ...Mutation, key: z.string().regex(/^(headwear|glasses|outfit|prop)\/[a-z0-9-]+$/) }).strict()
 
 /** The wardrobe is one row per user; drops are produced by finished Agent and Code turns, never by these routes. */
 export function registerRoomWardrobeRoutes(add: Add) {
@@ -67,11 +66,4 @@ export function registerRoomWardrobeRoutes(add: Add) {
     return rooms.exclusive(() => attachAccountWardrobe(rooms.service.store, input))
   })
   add('POST', '/v1/rooms/wardrobe/account/detach', async (rooms) => rooms.exclusive(() => detachAccountWardrobe(rooms.service.store)))
-  add('POST', '/v1/rooms/wardrobe/exchange', async (rooms, request) => {
-    const raw = await readJsonBody(request)
-    if (!raw.ok) return raw.response
-    const input = ExchangeRequest.parse(raw.value)
-    return rooms.exclusive(() => exchangeRoomWardrobeItem(rooms.service.store,
-      { ...input, key: input.key as `${'headwear' | 'glasses' | 'outfit' | 'prop'}/${string}` }, roomFingerprint(input)))
-  })
 }

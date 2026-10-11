@@ -23,7 +23,6 @@ export const kunAccountApi: KunAccountApi = {
     stash: (dropIds) => ipcRenderer.invoke(wardrobe.stash, dropIds),
     seen: (keys) => ipcRenderer.invoke(wardrobe.seen, keys),
     settings: (settings) => ipcRenderer.invoke(wardrobe.settings, settings),
-    exchange: (key) => ipcRenderer.invoke(wardrobe.exchange, key),
     setLook: (parts) => ipcRenderer.invoke(wardrobe.setLook, parts),
     shop: () => ipcRenderer.invoke(wardrobe.shop),
     purchase: (offerId) => ipcRenderer.invoke(wardrobe.purchase, offerId),

@@ -4,15 +4,16 @@ import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITIES, KUN_AVATAR_RARITY_LABELS, kunWardrobeRules,
-  kunAvatarRarity, kunWardrobeItemKey, kunWardrobeItems, kunWardrobeMissingParts, kunWardrobePartKeys,
+  kunAvatarRarity, kunWardrobeItemKey, kunWardrobeMissingParts, kunWardrobePartKeys,
   type KunAvatarAccessoryCategory, type KunAvatarParts, type KunWardrobe, type KunWardrobeDrop, type KunWardrobeSettings
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
 import { WardrobeBottleIcon, WardrobeCardBack, WardrobeUnknownItem } from './RoomWardrobeBottle'
+import { wardrobeTiles } from './room-wardrobe-items'
 import { wardrobeDropSource } from './room-wardrobe-source'
 
-export type WardrobeSelection = { kind: 'item'; key: string } | { kind: 'card'; id: string } | null
+export type WardrobeSelection = { kind: 'item'; key: string } | { kind: 'unknown'; key: string } | { kind: 'card'; id: string } | null
 type Language = 'zh' | 'en'
 const CATEGORIES: ReadonlyArray<KunAvatarAccessoryCategory | 'all'> = ['all', 'headwear', 'glasses', 'outfit', 'prop']
 const CATEGORY_LABELS = { all: 'roomsWardrobeAll', headwear: 'roomsAvatarHeadwear', glasses: 'roomsAvatarGlasses',
@@ -28,10 +29,9 @@ export function WardrobeItemsSection({ wardrobe, language, category, ownedOnly, 
   onOwnedOnly: (value: boolean) => void; onSelect: (selection: WardrobeSelection) => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const all = kunWardrobeItems()
+  const all = wardrobeTiles(wardrobe, false, 'all', false)
   const copies = (key: string) => wardrobe.items[key] ?? 0
-  const shown = all.filter((item) => (category === 'all' || item.category === category) && (!ownedOnly || copies(item.key) > 0))
-    .sort((a, b) => Number(copies(b.key) > 0) - Number(copies(a.key) > 0))
+  const shown = wardrobeTiles(wardrobe, false, category, ownedOnly)
   return <div className="rooms-wardrobe-panel-section">
     <div className="rooms-wardrobe-panel-filters">
       {CATEGORIES.map((id) => {
@@ -45,20 +45,18 @@ export function WardrobeItemsSection({ wardrobe, language, category, ownedOnly, 
     </div>
     <div className="rooms-wardrobe-panel-grid" data-columns="4">
       {shown.map((item) => {
-        const owned = copies(item.key) > 0
-        const part = KUN_AVATAR_CATALOG[item.category].find((entry) => entry.id === item.id)!
-        const on = selection?.kind === 'item' && selection.key === item.key
-        // An item not found yet keeps its secret: no art, no name, only how rare it is.
-        if (!owned) {
-          return <button key={item.key} type="button" className="rooms-wardrobe-panel-tile rooms-wardrobe-rarity" data-rarity={item.rarity}
+        const on = (selection?.kind === 'item' || selection?.kind === 'unknown') && selection.key === item.key
+        // Unknown positions have no item identity or rarity.
+        if (!item.owned) {
+          return <button key={item.key} type="button" className="rooms-wardrobe-panel-tile"
             data-locked aria-pressed={on} data-wardrobe-item="unknown"
             aria-label={`${t('roomsWardrobeUnknownItem')}，${t('roomsWardrobeLocked')}`}
-            onClick={() => onSelect(on ? null : { kind: 'item', key: item.key })}>
+            onClick={() => onSelect(on ? null : { kind: 'unknown', key: item.key })}>
             <span className="rooms-wardrobe-panel-well"><WardrobeUnknownItem size={44} /></span>
-            <Pips rarity={item.rarity} dim />
             <span className="rooms-wardrobe-panel-name">{t('roomsWardrobeUnknownItem')}</span>
           </button>
         }
+        const part = KUN_AVATAR_CATALOG[item.category].find((entry) => entry.id === item.id)!
         return <button key={item.key} type="button" className="rooms-wardrobe-panel-tile rooms-wardrobe-rarity" data-rarity={item.rarity}
           aria-pressed={on} data-wardrobe-item={item.key}
           aria-label={`${part.label[language]}，${KUN_AVATAR_RARITY_LABELS[item.rarity][language]}`}
@@ -89,7 +87,7 @@ export function WardrobeCardsSection({ wardrobe, language, selection, onSelect }
         const on = selection?.kind === 'card' && selection.id === preset.id
         const rarity = kunAvatarRarity(preset.parts)
         const look: KunAvatarParts = { ...preset.parts, bg: `scene:${preset.cardScene}` }
-        return <button key={preset.id} type="button" className="rooms-wardrobe-panel-card rooms-wardrobe-rarity" data-rarity={rarity}
+        return <button key={preset.id} type="button" className="rooms-wardrobe-panel-card rooms-wardrobe-rarity" data-rarity={lit ? rarity : undefined}
           data-hidden={!lit || undefined} aria-pressed={on} data-wardrobe-card={lit ? preset.id : 'unknown'}
           aria-label={lit ? `${preset.label[language]}，${t('roomsWardrobeLit')}` : `${t('roomsWardrobeUnknownCard')}，${t('roomsWardrobeCollected', { have, total })}`}
           onClick={() => onSelect(on ? null : { kind: 'card', id: preset.id })}>

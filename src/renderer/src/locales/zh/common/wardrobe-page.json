@@ -20,7 +20,7 @@
   "wardrobePageCopies": "共捡到 {{n}} 件，重复的已换成羽毛",
   "wardrobePageTakeOff": "脱下",
   "wardrobePageWear": "穿上",
-  "wardrobePageSecret": "找到之前，名字和样子都保密",
+  "wardrobePageSecret": "获得之前，名字、样子和稀有度都保密",
   "wardrobePageSetPieces": "整套换上：{{items}}",
   "wardrobePageSetKeepsBackdrop": "颜色和表情跟着角色走，背景保留你现在的",
   "wardrobePageMissing": "还差 {{n}} 件",

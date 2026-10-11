@@ -3,7 +3,7 @@ import { Check, Feather, Shirt, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   KUN_AVATAR_CATALOG, KUN_AVATAR_PRESETS, KUN_AVATAR_RARITY_LABELS, kunWardrobeRules, kunAvatarRarity,
-  kunWardrobeItemRarity, kunWardrobeProgress, normalizeKunAvatarParts, updateKunAvatarPart,
+  kunWardrobeProgress, normalizeKunAvatarParts, updateKunAvatarPart,
   type KunAvatarAccessoryCategory, type KunWardrobeItemKey, type KunWardrobeSettings, type RoomUserProfileDetail
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -16,7 +16,7 @@ import {
   wardrobeItemCategory, wardrobeItemId, type WardrobeSelection
 } from './RoomWardrobePanelSections'
 import {
-  exchangeWardrobeItem, markWardrobeSeen, updateWardrobeSettings, useWardrobe, wardrobeSettings
+  markWardrobeSeen, updateWardrobeSettings, useWardrobe, wardrobeSettings
 } from './room-wardrobe'
 import { wearDropOnMe, wearOnMe } from './room-wardrobe-wear'
 import { acceptRoomUserProfile, useRoomUserProfile } from './room-user-profile'
@@ -76,22 +76,20 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
     : today > 0 ? t('roomsWardrobeFirstDone', { count: progress.untilPity }) : t('roomsWardrobeFirstPending')
   const saveSettings = (patch: Partial<KunWardrobeSettings>) => run(() => updateWardrobeSettings(patch))
   const sheet = (() => {
+    const unknownItem = () => ({ art: <WardrobeUnknownItem size={40} />, locked: true, rarity: undefined,
+      title: t('roomsWardrobeUnknownItem'), text: t('roomsWardrobeUnknownItemHint'),
+      action: t('roomsWardrobeKeepCollecting'), enabled: false, run: () => undefined })
+    if (selection?.kind === 'unknown') return unknownItem()
     if (selection?.kind === 'item') {
       const key = selection.key as KunWardrobeItemKey
+      if (!(wardrobe.items[key] > 0)) return unknownItem()
       const category = wardrobeItemCategory(key), id = wardrobeItemId(key)
       const part = KUN_AVATAR_CATALOG[category].find((entry) => entry.id === id)
       if (!part) return null
-      const owned = (wardrobe.items[key] ?? 0) > 0
-      const price = kunWardrobeRules(wardrobe).exchangeFeathers[kunWardrobeItemRarity(key)]
-      // Until it is found the sheet keeps the item a secret too; trading feathers reveals it.
-      return { art: owned ? <RoomAvatarItemArt category={category} id={id} size={40} /> : <WardrobeUnknownItem size={40} />,
-        locked: !owned, rarity: part.rarity,
-        title: `${owned ? part.label[language] : t('roomsWardrobeUnknownItem')} · ${KUN_AVATAR_RARITY_LABELS[part.rarity][language]}`,
-        text: owned ? part.flavor[language] : t('roomsWardrobeExchangeHint', { price, missing: Math.max(0, price - wardrobe.feathers) }),
-        action: owned ? t('roomsWardrobeWearOnMe') : t('roomsWardrobeExchange'),
-        enabled: owned || Boolean(wardrobe.progress) && wardrobe.feathers >= price,
-        run: owned ? () => run(() => wearOnMe((parts) => updateKunAvatarPart(parts, category, id as never).parts), t('roomsWardrobeWorn'))
-          : () => run(() => exchangeWardrobeItem(key), t('roomsWardrobeExchanged', { item: part.label[language] })) }
+      return { art: <RoomAvatarItemArt category={category} id={id} size={40} />, locked: false, rarity: part.rarity,
+        title: `${part.label[language]} · ${KUN_AVATAR_RARITY_LABELS[part.rarity][language]}`, text: part.flavor[language],
+        action: t('roomsWardrobeWearOnMe'), enabled: true,
+        run: () => run(() => wearOnMe((parts) => updateKunAvatarPart(parts, category, id as never).parts), t('roomsWardrobeWorn')) }
     }
     if (selection?.kind === 'card') {
       const preset = KUN_AVATAR_PRESETS.find((entry) => entry.id === selection.id)
@@ -102,7 +100,7 @@ export function RoomWardrobePanel({ active = true }: { active?: boolean }): Reac
         locked: false, rarity, title: `${preset.label[language]} · ${t('roomsWardrobeLit')}`, text: t('roomsWardrobeCardWearHint'),
         action: t('roomsWardrobeWearSet'), enabled: true,
         run: () => run(() => wearOnMe((parts) => normalizeKunAvatarParts({ ...preset.parts, bg: parts.bg })), t('roomsWardrobeWorn')) }
-        : { art: <WardrobeCardBack width={34} height={44} />, locked: true, rarity, title: t('roomsWardrobeUnknownCard'),
+        : { art: <WardrobeCardBack width={34} height={44} />, locked: true, rarity: undefined, title: t('roomsWardrobeUnknownCard'),
           text: t('roomsWardrobeUnknownCardHint'), action: t('roomsWardrobeKeepCollecting'), enabled: false, run: () => undefined }
     }
     return null

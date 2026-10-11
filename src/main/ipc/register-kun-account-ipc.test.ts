@@ -75,13 +75,14 @@ describe('Kun account IPC boundary', () => {
   })
   it('checks the sender and the shape of every wardrobe call before it reaches the account', async () => {
     registerKunAccountIpc(() => null, runtime)
+    expect(mocks.handlers.has('kun-account:wardrobe:exchange')).toBe(false)
     mocks.assertTrusted.mockImplementation(() => { throw new Error('untrusted') })
     for (const channel of Object.values(wardrobeChannels)) {
       await expect(Promise.resolve().then(() => mocks.handlers.get(channel)!({}, ['x']))).rejects.toThrow('untrusted')
     }
     mocks.assertTrusted.mockImplementation(() => {})
     for (const [channel, input] of [[wardrobeChannels.open, []], [wardrobeChannels.open, Array(11).fill('b')], [wardrobeChannels.stash, 'b'],
-      [wardrobeChannels.seen, [3]], [wardrobeChannels.exchange, ''], [wardrobeChannels.setLook, ['sky']], [wardrobeChannels.purchase, 7],
+      [wardrobeChannels.seen, [3]], [wardrobeChannels.setLook, ['sky']], [wardrobeChannels.purchase, 7],
       [wardrobeChannels.claimInvite, 'x'.repeat(40)], [wardrobeChannels.settings, null]] as const) {
       await expect(Promise.resolve().then(() => mocks.handlers.get(channel)!({}, input)), channel).rejects.toThrow('invalid wardrobe')
     }

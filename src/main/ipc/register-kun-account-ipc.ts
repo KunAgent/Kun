@@ -8,7 +8,7 @@ import { app, dialog, ipcMain, net, safeStorage, shell, type BrowserWindow, type
 import { join } from 'node:path'
 import { KUN_ACCOUNT_CHANNELS as channels } from '../../shared/kun-account'
 import { KUN_ACCOUNT_WARDROBE_CHANNELS as wardrobeChannels, type KunInviteSummary } from '../../shared/kun-account-economy'
-import type { KunAvatarParts, KunWardrobeItemKey, KunWardrobeSettings } from '../../shared/rooms-api'
+import type { KunAvatarParts, KunWardrobeSettings } from '../../shared/rooms-api'
 import { assertTrustedWorkbenchSender, revealDialogParent, trustedWorkbenchSenderIsCurrent } from './app-ipc-handler-utils'
 import { KunAccountService } from '../kun-account/service'
 import { createAccountStorage } from '../kun-account/storage'
@@ -111,10 +111,6 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
   handle(wardrobeChannels.settings, (input) => {
     const settings = object<Partial<KunWardrobeSettings>>(input)
     return sync().change((economy) => economy.settings(settings))
-  })
-  handle(wardrobeChannels.exchange, (input) => {
-    const key = text(input, 80) as KunWardrobeItemKey
-    return sync().change((economy) => economy.exchange(key))
   })
   handle(wardrobeChannels.setLook, (input) => {
     const look = object<KunAvatarParts>(input)
