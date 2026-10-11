@@ -4,7 +4,7 @@ import { HarnessIdSchema } from './harness.js'
 /**
  * One Activity row tracks a single execution unit: a conversation thread,
  * a manager-dispatched worker, a side chat, a graph attempt, or a
- * tier-0 terminal agent. See docs/ade/06-activity-store.md.
+ * tier-0 terminal agent.
  */
 export const ExecutionUnitKindSchema = z.enum([
   'thread',

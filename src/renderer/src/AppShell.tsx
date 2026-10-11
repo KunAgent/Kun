@@ -115,11 +115,11 @@ export default function AppShell(): React.ReactElement {
   useEffect(() => installSidebarActivityLifecycle(useChatStore), [])
   useEffect(() => startBackgroundThreadSync(), [])
 
-  // The ADE activity feed is app-level (06 §9): while the lab flag is on it
+  // The ADE activity feed is app-level: while the lab flag is on it
   // stays live across routes so worker completions and waits still notify —
   // and badge counts stay fresh — after the user leaves the ADE view. The
   // Mission Control popout owns its own window's feed; the mobile surface
-  // runs the same feed (P3-19) but keeps local notifications desktop-only.
+  // runs the same feed but keeps local notifications desktop-only.
   useEffect(() => {
     if (!adeEnabled) return
     startActivityFeed()
@@ -133,7 +133,7 @@ export default function AppShell(): React.ReactElement {
   useEffect(() => {
     let previousUnread = useChatStore.getState().unreadThreadIds
     const syncBadge = (unread: typeof previousUnread): void => {
-      // Dock badge = unread completions + ADE "needs you" rows (12 §notifications).
+      // Dock badge = unread completions + ADE "needs you" rows.
       syncAppBadgeCount(unread, useActivityStore.getState().rows)
     }
     const clearVisible = (): void => {

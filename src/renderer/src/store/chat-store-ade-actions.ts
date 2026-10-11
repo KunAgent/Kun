@@ -31,7 +31,7 @@ export function createAdeActions(
           includeSide: true
         })
         // ADE worker threads arrive as `relation: 'side'` children of the
-        // manager (00 §5: workers nest under their manager in the sidebar).
+        // manager.
         // Other side conversations stay out — their parent is not an ADE
         // thread anyway.
         const adeIds = new Set(

@@ -78,7 +78,7 @@ export function FloatingComposerSurfaceView({
     ? [...new Set(modelGroups.flatMap((group) => group.modelIds))] : composerPickList
   const externalAgent = adeComposerEnabled && !side && adeComposer?.harnessId !== 'kun' && Boolean(adeComposer)
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
-  // 01 §8: "continue local session" is offered only on a fresh thread when
+  // "continue local session" is offered only on a fresh thread when
   // the picked harness exposes a matching historySource + lab flag.
   const [continueDialogOpen, setContinueDialogOpen] = useState(false)
   const openContinueLocalSession = adeComposer?.continuation

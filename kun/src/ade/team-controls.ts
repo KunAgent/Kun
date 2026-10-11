@@ -16,9 +16,9 @@ import {
 } from './check-runner.js'
 
 /**
- * GUI team-control operations (09 §9): manager-thread overview, user
+ * GUI team-control operations: manager-thread overview, user
  * takeover/hand-back, detach, user question answers, and GUI-originated
- * dispatches (review comments routed back to a worker, P1-18). Every
+ * dispatches (review comments routed back to a worker). Every
  * operation resolves the team from durable records — the routes carry only
  * worker/question ids, never client-asserted team ids.
  */
@@ -28,7 +28,7 @@ export class TeamControls {
     private readonly controls: ManagerControls
   ) {}
 
-  /** P3-15 soft-cap notice passthrough for lifecycle hooks. */
+  /** soft-cap notice passthrough for lifecycle hooks. */
   notifyBudgetCheck(
     team: TeamRecord,
     check: import('./team-budget.js').TeamBudgetCheck | undefined
@@ -37,7 +37,7 @@ export class TeamControls {
   }
 
   /**
-   * `GET /v1/teams/workers/:workerId` (09 §9): the worker record plus its
+   * `GET /v1/teams/workers/:workerId`: the worker record plus its
    * owning team — the worker thread's control banner keys off `control`.
    */
   async workerById(workerId: string): Promise<{
@@ -48,7 +48,7 @@ export class TeamControls {
   }
 
   /**
-   * `POST /v1/teams/workers/:workerId/stop` (09 §9): the user stops the
+   * `POST /v1/teams/workers/:workerId/stop`: the user stops the
    * worker's active turn; queued dispatches stay pending, exactly like the
    * manager tool's `worker_stop`.
    */
@@ -65,13 +65,13 @@ export class TeamControls {
     return { ok: true, stopped: stopped.turnStopped || stopped.runAborted }
   }
 
-  /** `GET /v1/teams/by-manager/:threadId` (09 §9): roster + recent work + races. */
+  /** `GET /v1/teams/by-manager/:threadId`: roster + recent work + races. */
   async teamOverview(managerThreadId: string): Promise<{
     team: TeamRecord
     dispatches: DispatchRecord[]
     questions: QuestionRecord[]
     races: RaceRecord[]
-    /** P3-15: summed worker-thread usage + soft/hard exceed flags. */
+    /** summed worker-thread usage + soft/hard exceed flags. */
     usage?: import('./team-budget.js').TeamUsageReport
   } | null> {
     const team = await this.deps.teams.get(managerThreadId)
@@ -88,7 +88,7 @@ export class TeamControls {
   }
 
   /**
-   * Take-over (09 §9): `control` becomes 'user'. User messages on the worker
+   * Take-over: `control` becomes 'user'. User messages on the worker
    * thread are ordinary turns; queued dispatches hold until hand-back.
    */
   async takeOverWorker(workerId: string): Promise<{
@@ -101,7 +101,7 @@ export class TeamControls {
     const { team, worker } = found
     if (worker.state !== 'active') return { ok: false, refusal: 'worker_not_active' }
     if (worker.control === 'user') return { ok: true, worker }
-    // Baseline for the hand-back interval diff (09 §9); absent when the
+    // Baseline for the hand-back interval diff; absent when the
     // worker has no worktree (hand-back then falls back to cumulative stats).
     const takeoverBaseline = worker.taskWorkspaceId && this.deps.taskWorkspaces
       ? await this.deps.taskWorkspaces.snapshotBaseline(worker.taskWorkspaceId)
@@ -116,7 +116,7 @@ export class TeamControls {
   }
 
   /**
-   * Hand-back (09 §9): control returns to the manager; the notice carries
+   * Hand-back: control returns to the manager; the notice carries
    * the takeover-period diff stats, and held dispatches resume delivery.
    */
   async handBackWorker(workerId: string): Promise<{
@@ -161,7 +161,7 @@ export class TeamControls {
   }
 
   /**
-   * Detach (09 §9): the worker leaves the team and its thread's
+   * Detach: the worker leaves the team and its thread's
    * `executionUnit` clears — the thread becomes a normal conversation and is
    * not stopped or moved. Queued dispatches can never run, so they cancel.
    */
@@ -177,7 +177,7 @@ export class TeamControls {
     // Queued dispatches can never run, and an in-flight one's terminal hook
     // will no longer resolve it once executionUnit clears — cancel both so
     // the record is honest. The turn itself keeps running as an ordinary
-    // conversation (09 §9: 不停止、不移动).
+    // conversation.
     for (const live of await this.deps.dispatches.listByWorker(team.teamId, workerId)) {
       // delivering/uncertain have no direct cancelled edge — normalize
       // through accepted first, then withdraw.
@@ -196,7 +196,7 @@ export class TeamControls {
     return { ok: true, ...(updated ? { worker: updated } : {}) }
   }
 
-  /** Question answer (09 §6.4) — recorded as `answeredBy: 'user'`. */
+  /** Question answer — recorded as `answeredBy: 'user'`. */
   async answerQuestionAsUser(
     questionId: string,
     answer: string
@@ -218,7 +218,7 @@ export class TeamControls {
   }
 
   /**
-   * `POST /v1/teams/workers/:workerId/run-checks` (10 §4.2): the review
+   * `POST /v1/teams/workers/:workerId/run-checks`: the review
    * panel's run-checks button — same host check runner the manager tool
    * uses, resolved through the worker's owning team.
    */
@@ -246,7 +246,7 @@ export class TeamControls {
   }
 
   /**
-   * GUI-originated dispatch (09 §9): same durable dispatch + exactly-once
+   * GUI-originated dispatch: same durable dispatch + exactly-once
    * delivery as worker_send; still refuses while the user holds control —
    * the user can send an ordinary message in the worker thread instead.
    */

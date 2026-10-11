@@ -1,6 +1,5 @@
 /**
- * ACP handshake probe for `POST /v1/harnesses/:id/test` (docs/ade/impl/p4
- * §3.5, P4-10): unlike the readiness verdict (`acp-readiness-probe.ts`),
+ * ACP handshake probe for `POST /v1/harnesses/:id/test`: unlike the readiness verdict (`acp-readiness-probe.ts`),
  * this keeps the `initialize` result so the Agent Center can show the
  * agent's name, version, capabilities, and auth methods.
  *
@@ -47,7 +46,7 @@ export type AcpHandshakeProbeDeps = {
   includeModels?: boolean
   /** Exercise the same pre-prompt model/mode setup as a real turn, without inference. */
   session?: { model?: string; permissionMode?: string }
-  /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
+  /** Resolves `launch.secretEnv` refs so the probe sees the real env. */
   resolveSecretEnv?: HarnessSecretRefResolver
 }
 

@@ -230,9 +230,9 @@ export interface ThreadService {
     titleAuto?: boolean
     summary?: string
     workspace?: string
-    /** Set-only binding to a host-managed task workspace (07 §5). */
+    /** Set-only binding to a host-managed task workspace. */
     taskWorkspaceId?: string
-    /** Harness rebind for external-session continuation (01 §8). */
+    /** Harness rebind for external-session continuation. */
     harnessId?: string
     collaboration?: ThreadRecord['collaboration']
     additionalWorkspaces?: string[]

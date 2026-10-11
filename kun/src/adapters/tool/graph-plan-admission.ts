@@ -1,6 +1,5 @@
 /**
- * Plan-phase harness admission for `graph_define_plan` (docs/ade/impl
- * p1-manager §P1-25): every intent task that names a `harnessId` is checked
+ * Plan-phase harness admission for `graph_define_plan`: every intent task that names a `harnessId` is checked
  * through the same `checkHarnessAdmission` the HarnessRouter uses at turn
  * time, with the workspace isolation Graph would actually grant the node —
  * read-only nodes are always isolated; write nodes are isolated only when

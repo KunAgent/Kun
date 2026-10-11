@@ -10,7 +10,7 @@ import {
 import { reportLanguage } from '../user-report.js'
 
 /**
- * `workspace_run_checks` (10 §4.2): the host runs the repo's approved
+ * `workspace_run_checks`: the host runs the repo's approved
  * `worktree.checks` commands inside the worker's task workspace and merges
  * results into the dispatch verdict as `source: 'host'`.
  */

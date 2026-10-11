@@ -46,7 +46,7 @@ function ReviewSplitMerge({ oldText, newText }: { oldText: string; newText: stri
 
 type UnifiedLine = { oldNo: number | null; newNo: number | null; text: string; tone: 'add' | 'del' | 'ctx' }
 
-/** Gutter identity mark for an attributed new-side line (11 §6.3). */
+/** Gutter identity mark for an attributed new-side line. */
 export type AttributionMark = { color: string; title: string }
 
 function unifiedLines(patch: string): { hunks: { header: string; lines: UnifiedLine[] }[] } {
@@ -75,7 +75,7 @@ type LineAnchor = {
   after: string[]
 }
 
-/** Row match keys: ctx lines anchor comments on either side (11 §4.1). */
+/** Row match keys: ctx lines anchor comments on either side. */
 function rowKeys(line: UnifiedLine): { side: ReviewCommentSide; line: number }[] {
   if (line.tone === 'del' && line.oldNo !== null) return [{ side: 'old', line: line.oldNo }]
   if (line.tone === 'add' && line.newNo !== null) return [{ side: 'new', line: line.newNo }]
@@ -192,7 +192,7 @@ function UnifiedPatch({
   )
 }
 
-/** Every side:line the patch renders — comments beyond it detach (11 §4.3). */
+/** Every side:line the patch renders — comments beyond it detach. */
 function patchAnchorKeys(patch: string): Set<string> {
   const keys = new Set<string>()
   for (const hunk of unifiedLines(patch).hunks) {
@@ -235,7 +235,7 @@ export function ReviewDiffBlock({
   const [attribution, setAttribution] = useState<Map<number, AttributionMark> | null>(null)
   const [attributionData, setAttributionData] = useState<unknown>(null)
 
-  // Per-line authorship, fetched once per expanded file (11 §6.3).
+  // Per-line authorship, fetched once per expanded file.
   useEffect(() => {
     if (!expanded || !detail || detail.binary || detail.tooLarge) return
     const fetchAttribution = getProvider().getTaskWorkspaceAttribution
@@ -290,7 +290,7 @@ export function ReviewDiffBlock({
     [workspaceId, file.path]
   )
 
-  // Lazy: fetch the file payload only once the block scrolls into view (11 §3).
+  // Lazy: fetch the file payload only once the block scrolls into view.
   useEffect(() => {
     if (!expanded || entry?.detail || entry?.loading) return
     const node = wrapRef.current

@@ -23,7 +23,7 @@ type Props = {
 
 /**
  * Generic controls for the settings an external Agent publishes beyond model,
- * permission mode and reasoning (docs/ade/17 §4.4). Hidden until the Agent
+ * permission mode and reasoning. Hidden until the Agent
  * reports any; a pick applies to the next turns sent to this Agent.
  */
 export function FloatingComposerAgentSettings({ harnessId, threadId, compact = false, disabled }: Props): ReactElement | null {

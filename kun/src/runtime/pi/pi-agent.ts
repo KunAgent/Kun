@@ -1,5 +1,5 @@
 /**
- * PiAgent (P6-09/10): a pooled `pi --mode rpc` process implementing the shared
+ * PiAgent: a pooled `pi --mode rpc` process implementing the shared
  * `HarnessAgent` contract.
  *
  * Layout decisions:

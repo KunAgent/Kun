@@ -1,7 +1,7 @@
 import { trimHookPayload } from '../services/hook-activity-mapping.js'
 
 /**
- * `kun worker <subcommand>` — shell-facing worker callbacks (05 §5). A
+ * `kun worker <subcommand>` — shell-facing worker callbacks. A
  * terminal agent or shell-only worker reaches the runtime's
  * `/v1/worker-callbacks/*` routes with the scoped `kgw_` token it was
  * launched with. Credentials arrive exclusively through the environment —

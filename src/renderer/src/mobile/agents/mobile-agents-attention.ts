@@ -3,7 +3,7 @@ import type { PendingApprovalItem } from '@shared/ade-approvals'
 import type { AdeQuestionRecord, AdeTeamOverview } from '@shared/ade-teams'
 
 /**
- * Mobile "needs your attention" items (P3-19): every activity row whose
+ * Mobile "needs your attention" items: every activity row whose
  * `waitingReason` blocks work becomes one actionable entry. Approvals and
  * worker questions resolve inline; user-input and terminal prompts open
  * the owning conversation.

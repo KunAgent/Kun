@@ -1,6 +1,6 @@
 /**
- * Newline-delimited JSON transport over a spawned child's stdin/stdout
- * (P6-03): splits stream chunks into LF frames (UTF-8 safe across chunk
+ * Newline-delimited JSON transport over a spawned child's stdin/stdout:
+ * splits stream chunks into LF frames (UTF-8 safe across chunk
  * boundaries), rejects oversized/malformed frames into the diagnostic hook
  * instead of crashing, and fails every consumer when the stream closes.
  */

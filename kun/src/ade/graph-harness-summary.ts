@@ -1,5 +1,5 @@
 /**
- * Graph planning harness summary (docs/ade/impl p1-manager §P1-25): one line
+ * Graph planning harness summary: one line
  * per ready harness — display name, what it is suited for, and quota state —
  * injected into the planning turn's dynamic context (never the stable
  * prefix). Both the native loop and delegated runtimes call the same builder

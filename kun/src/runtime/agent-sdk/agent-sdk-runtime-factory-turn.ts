@@ -115,7 +115,7 @@ export function createAgentSdkTurnRuntimeDeps(
       )
       // `kun-gateway` turns address the routed provider through the loopback
       // gateway as `kun/<provider>/<model>`; the grant only authorizes those
-      // routes (docs/ade/04 §5.5). Provider credentials never enter the env.
+      // routes. Provider credentials never enter the env.
       const gatewayMode = turn.credentialMode === 'kun-gateway'
       const rawModel = turn?.model || thread.model
       const gatewayAddress = gatewayMode && !turn.gatewayBinding ? parseGatewayModelId(rawModel) : null
@@ -271,7 +271,7 @@ export function createAgentSdkTurnRuntimeDeps(
       items = [...turnDynamicContext.historyItems]
       // The bridged catalog comes from the shared tool bridge host: same
       // capability snapshot, plan context, client surface, and overlap policy
-      // as the native loop (docs/ade/05 §3.2).
+      // as the native loop.
       const bridgedTools = await toolBridge.listTools(threadId, turnId, { scope })
 
       // A plan turn suppresses goal/todo continuation and injects the plan-mode
@@ -308,7 +308,7 @@ export function createAgentSdkTurnRuntimeDeps(
       }
 
       const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(thread.additionalWorkspaces)
-      // P1-25: planning-phase harness menu as dynamic context (not the
+      // planning-phase harness menu as dynamic context (not the
       // stable delegated-session prefix).
       const graphHarnessInstruction =
         graphPolicy?.phase === 'planning'
@@ -398,7 +398,7 @@ export function createAgentSdkTurnRuntimeDeps(
         sessionGoalContextKeysByTurn.set(skillTurnKey(threadId, turnId), goalContextKeyForHistory)
       }
 
-      // The deterministic handoff brief (docs/ade/08 §4) replaces the portable
+      // The deterministic handoff brief replaces the portable
       // transcript whenever the session is new/rebased or a parked session is
       // restored with a delta. Compatible native resumes send neither. The
       // closure is re-invoked after a rejected native resume to produce the

@@ -113,7 +113,7 @@ describe('projectRuntimeEvent', () => {
   ]
 
   it.each(projections.map(([name, event, patch]) => [name, event, patch] as const))(
-    '%s maps to the §4.2 patch',
+    '%s maps to the patch',
     (_name, event, patch) => {
       expect(projectRuntimeEvent(event)).toEqual([{ unitId: 't1', patch }])
     }

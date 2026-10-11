@@ -3,8 +3,7 @@ import { delimiter, dirname, join } from 'node:path'
 import type { KunBinaryResolution } from '../resolve-kun-binary'
 
 /**
- * Bundled `kun` CLI surfaced to ADE terminal-agent PTYs (docs/ade/05 §5.3,
- * P3-18): the agent's PATH puts this directory first so a bare `kun`
+ * Bundled `kun` CLI surfaced to ADE terminal-agent PTYs: the agent's PATH puts this directory first so a bare `kun`
  * resolves, and `KUN_CLI` exports the absolute command for the callback
  * appendix instructions.
  */

@@ -9,7 +9,7 @@ export const HarnessSecretEnvRowSchema = z.object({
 }).strict()
 
 /**
- * Per-Agent launch override (docs/ade/17 §4.3). On a builtin id it patches
+ * Per-Agent launch override. On a builtin id it patches
  * that engine. Any other id is a user Agent and `extends` names its base: a
  * builtin ACP engine (same protocol behaviour, its own command), `acp` (a
  * generic ACP agent) or `terminal` (an interactive CLI for terminal tabs).
@@ -59,7 +59,7 @@ type LegacyTerminalEntry = {
   hooks?: 'none' | 'claude-settings'
 }
 
-/** Pre-P2 settings that `providers` replaces: command paths, custom ACP and terminal Agents. */
+/** Legacy settings that `providers` replaces: command paths, custom ACP and terminal Agents. */
 export type LegacyHarnessLaunchSettings = {
   providers?: Readonly<Record<string, HarnessProviderOverride>>
   binaryPaths?: Readonly<Record<string, string>>

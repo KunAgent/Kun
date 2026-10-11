@@ -74,7 +74,7 @@ export function createRuntimeRegistry(
     defaultIsAntigravity,
     defaultIsCursorSdk
   } = services
-  // Per-turn `kun-tools` grants for ACP child sessions (P3-08); the bridge
+  // Per-turn `kun-tools` grants for ACP child sessions; the bridge
   // host still narrows execution to each child's read/write boundary.
   const kunToolsMcp = services.kunToolsMcp
   const createChildDelegatedRuntime: ChildDelegatedRuntimeFactory = (child) => {

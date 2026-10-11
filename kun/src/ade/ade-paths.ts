@@ -43,12 +43,12 @@ export function adeNoticesFile(dataDir: string, managerThreadId: string): string
   return join(adeTeamDir(dataDir, managerThreadId), 'notices.json')
 }
 
-/** Same-task race records per manager team (10 §6). */
+/** Same-task race records per manager team. */
 export function adeRacesFile(dataDir: string, managerThreadId: string): string {
   return join(adeTeamDir(dataDir, managerThreadId), 'races.json')
 }
 
-/** Line-level review comments live per task workspace (11 §4.1). */
+/** Line-level review comments live per task workspace. */
 export function adeReviewsDir(dataDir: string): string {
   return join(adeRootDir(dataDir), 'reviews')
 }
@@ -57,7 +57,7 @@ export function adeReviewFile(dataDir: string, workspaceId: string): string {
   return join(adeReviewsDir(dataDir), `${safeId(workspaceId)}.json`)
 }
 
-/** AI line-attribution ledgers, one file per task workspace (11 §6.2). */
+/** AI line-attribution ledgers, one file per task workspace. */
 export function adeAttributionDir(dataDir: string): string {
   return join(adeRootDir(dataDir), 'attribution')
 }

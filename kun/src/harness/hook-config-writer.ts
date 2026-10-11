@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { adeRootDir } from '../ade/ade-paths.js'
 
 /**
- * Managed hooks for terminal agents (05 §6.2): per-launch config lives in
+ * Managed hooks for terminal agents: per-launch config lives in
  * `dataDir/ade/hooks/<unitId>/` and is deleted when the unit exits — the
  * user's global agent configuration is never touched. Each hook event runs
  * `<kun> worker hook <event>`, which POSTs the trimmed payload to
@@ -83,7 +83,7 @@ export async function writeHookConfig(
   }
 }
 
-/** Unit exit removes its temporary hook directory (05 §6.2). */
+/** Unit exit removes its temporary hook directory. */
 export async function cleanupHookConfig(dataDir: string, unitId: string): Promise<void> {
   await rm(join(adeRootDir(dataDir), 'hooks', safeUnitId(unitId)), { recursive: true, force: true })
     .catch(() => undefined)

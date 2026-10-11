@@ -4,7 +4,7 @@ import { readBrowserStorageItem, writeBrowserStorageItem } from './browser-stora
 
 /**
  * Composer values for the settings an external Agent publishes beyond model,
- * permission mode and reasoning (docs/ade/17 §4.4). Kept per harness like the
+ * permission mode and reasoning. Kept per harness like the
  * native Agent pick; an absent value keeps the Agent's own.
  */
 const STORAGE_KEY = 'kun.harnessSessionSettings.v1'

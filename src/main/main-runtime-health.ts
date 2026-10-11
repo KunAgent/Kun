@@ -231,7 +231,7 @@ export function noteRuntimeHealthy(source: string, settings?: AppSettingsV1): vo
     runtimeSupervisor.setManagedRuntimeExpected(true)
   }
   scheduleRuntimeMigrationHistoryVerification()
-  // P4-04: heal the persisted "local gateway enabled without an API key"
+  // heal the persisted "local gateway enabled without an API key"
   // state so it cannot veto every later hot apply.
   if (settings) {
     scheduleLocalGatewayCredentialReconcile(runtimeSupervisor.latestOr(settings), source)

@@ -190,7 +190,7 @@ export interface AgentSdkRuntimeFactoryDeps {
   pathToClaudeCodeExecutable?: string
   /** Shared durable provider-session coordinator. */
   sessionCoordinator?: DelegatedSessionCoordinator
-  /** Host task-workspace index for handoff work-state merging (docs/ade/07). */
+  /** Host task-workspace index for handoff work-state merging. */
   taskWorkspaces?: {
     list(filter?: { ownerThreadId?: string }): Array<{
       ownerThreadId: string
@@ -201,7 +201,7 @@ export interface AgentSdkRuntimeFactoryDeps {
   }
   /**
    * `ade.deterministicHandoff` — when false the runtime sends the raw portable
-   * transcript instead of the deterministic brief (docs/ade/08 §4).
+   * transcript instead of the deterministic brief.
    */
   deterministicHandoff?: boolean
   contextProfile?: (model: string, providerId?: string) => {
@@ -210,7 +210,7 @@ export interface AgentSdkRuntimeFactoryDeps {
     hardThresholdTokens: number
   }
   /**
-   * `kun-gateway` mode wiring (docs/ade/04 §5.5): the token service issuing
+   * `kun-gateway` mode wiring: the token service issuing
    * turn-scoped `kgw_` grants, the loopback serve base URL, the roles config
    * for the small/fast model, the harness catalog for the gateway env block,
    * and the real default provider id for routes that omit `turn.providerId`.
@@ -227,7 +227,7 @@ export interface AgentSdkRuntimeFactoryDeps {
     'get'
   >
   /**
-   * Dynamic Graph planning harness summary (P1-25): injected into
+   * Dynamic Graph planning harness summary: injected into
    * `contextInstructions` while the turn is still in the planning phase.
    */
   graphHarnessSummary?: () => Promise<string | undefined>

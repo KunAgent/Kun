@@ -331,7 +331,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
   }
 
-  /** Execution-unit activity surface (docs/ade/06 §9, §7.2 foreground). */
+  /** Execution-unit activity surface. */
   private readonly activity = createKunActivityClient()
   readonly getActivitySnapshot = this.activity.getActivitySnapshot
   readonly pollActivity = this.activity.pollActivity
@@ -341,7 +341,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly reportActivityForeground = this.activity.reportActivityForeground
   readonly listPendingApprovals = this.activity.listPendingApprovals
 
-  /** Host task-workspace surface (docs/ade/07 §11, 11 §3 review diff). */
+  /** Host task-workspace surface. */
   private readonly taskWorkspaces = createKunTaskWorkspaceClient()
   readonly listTaskWorkspaces = this.taskWorkspaces.listTaskWorkspaces
   readonly createTaskWorkspace = this.taskWorkspaces.createTaskWorkspace
@@ -383,7 +383,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly updateReviewComment = this.reviews.updateReviewComment
   readonly sendReview = this.reviews.sendReview
 
-  /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
+  /** Rebuild a recorded handoff brief on demand. */
   async getHandoffPreview(threadId: string, turnId: string): Promise<{
     turnId: string
     reason: string

@@ -42,9 +42,9 @@ export type NormalizedThread = {
   executionConfig?: import('@shared/ade-execution-config').AdeExecutionConfigSnapshot
   /** Optional provider id when this thread is pinned to a non-default provider. */
   providerId?: string
-  /** Explicit harness identity inherited by new turns (01 §4). */
+  /** Explicit harness identity inherited by new turns. */
   harnessId?: string
-  /** Host-managed task workspace bound to this thread (07 §5). */
+  /** Host-managed task workspace bound to this thread. */
   taskWorkspaceId?: string
   /** Optional subagent profile id this thread is bound to (primary-agent persona). */
   agentId?: string
@@ -58,7 +58,7 @@ export type NormalizedThread = {
   latestTurnStatus?: string
   relation?: 'primary' | 'fork' | 'side'
   parentThreadId?: string
-  /** Host-written ADE worker binding (09 §3.1); absent for normal threads. */
+  /** Host-written ADE worker binding; absent for normal threads. */
   executionUnit?: {
     kind: 'worker'
     teamId: string

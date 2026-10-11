@@ -60,7 +60,7 @@ export const CODEX_DEFINITION: HarnessDefinition = {
   historySource: 'codex',
   capabilities: CODEX_APP_SERVER_CAPABILITIES,
   // Generated CODEX_HOME/config.toml declares a `kun` responses provider
-  // (verified against codex 0.145.0 via `codex doctor`, P3-10).
+  // (verified against codex 0.145.0 via `codex doctor`).
   gateway: {
     protocol: 'openai-responses',
     env: { baseUrl: 'KUN_GATEWAY_BASE_URL', token: 'KUN_GATEWAY_TOKEN' },

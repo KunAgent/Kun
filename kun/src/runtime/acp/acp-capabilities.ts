@@ -1,6 +1,6 @@
 /**
  * Derive HarnessCapabilities v2 from the ACP `initialize` result plus facts
- * observed on a session (docs/ade/03 §10). ACP gives no fork/rewind/steer
+ * observed on a session. ACP gives no fork/rewind/steer
  * methods, so those stay upstream-unsupported; sandbox facts come from the
  * harness catalog declaration since fs/terminal mediation is Kun-provided but
  * never guaranteed to be exercised by the agent.
@@ -30,7 +30,7 @@ export type AcpSessionFacts = {
   sawUsageTokens?: boolean
   /**
    * Which Kun Tools MCP transport descriptor was actually delivered with
-   * session/new (P3-09). 'none' or absent means the agent runs tool-less and
+   * session/new. 'none' or absent means the agent runs tool-less and
    * `kunTools` must not report supported.
    */
   kunToolsDescriptor?: 'http' | 'stdio' | 'none'
@@ -72,7 +72,7 @@ export function capabilitiesFromAcp(
       : unsupported('upstream'),
     planMode: unsupported('upstream'),
     manualCompact: unsupported('upstream'),
-    // Honest declaration (P3-09): kunTools counts only when a descriptor was
+    // Honest declaration: kunTools counts only when a descriptor was
     // actually delivered on a transport the agent accepts.
     kunTools:
       session.kunToolsDescriptor === 'http' || session.kunToolsDescriptor === 'stdio'
@@ -101,8 +101,8 @@ export function capabilitiesFromAcp(
       (session.modes?.availableModes?.length ?? 0) > 0
         ? SUPPORTED
         : unsupported('upstream'),
-    // Form elicitation bridges to the user_input gate / ask_manager (P2-10),
-    // but only when the agent declares it supports elicitation (P3-09).
+    // Form elicitation bridges to the user_input gate / ask_manager,
+    // but only when the agent declares it supports elicitation.
     userInput: capabilityFlagOn(agent?.elicitation) ? SUPPORTED : unsupported('upstream')
   }
   return {

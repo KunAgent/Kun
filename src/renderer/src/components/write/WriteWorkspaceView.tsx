@@ -189,7 +189,7 @@ export function WriteWorkspaceView({
   const exportNoticeTimerRef = useRef<number | null>(null)
   const richHandleRef = useRef<WriteRichEditorHandle | null>(null)
   const markdownHandleRef = useRef<WriteMarkdownEditorHandle | null>(null)
-  // Unified diff-review surface (§6.1): whichever editor is mounted answers
+  // Unified diff-review surface: whichever editor is mounted answers
   // review calls; only one handle is non-null at a time.
   const documentHandleRef = useRef<WriteDocumentReviewHandle | null>(null)
   Object.defineProperty(documentHandleRef, 'current', {
@@ -230,7 +230,7 @@ export function WriteWorkspaceView({
     fileSize,
     truncated: fileTruncated
   })
-  // Single-view surface decision (§8.2/§8.3): the document editor handles
+  // Single-view surface decision: the document editor handles
   // markdown up to the safety cap; everything else renders plain text.
   const { surface: editorSurface } = resolveWriteEditorSurface({
     path: activeFilePath ?? '',

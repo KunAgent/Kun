@@ -1,7 +1,7 @@
 import type { ActivityPatch } from '../contracts/activity.js'
 
 /**
- * Managed-hook event → activity-row mapping (05 §6.3). The ingest route
+ * Managed-hook event → activity-row mapping. The ingest route
  * receives payloads already trimmed by `kun worker hook` to event name,
  * sessionId, toolName, and timestamp; nothing else is trusted. Tables are
  * keyed by the harness's `terminal.hooks.kind`; unknown kinds and unknown
@@ -29,7 +29,7 @@ export type HookMappingContext = {
  * Trim a raw harness hook payload (Claude Code shape: `session_id`,
  * `tool_name`, `timestamp`) to the fields ingest keeps — the argv event
  * name is authoritative over any `hook_event_name` inside the payload.
- * Paths and file contents are dropped, never trusted for writes (05 §6.3).
+ * Paths and file contents are dropped, never trusted for writes.
  */
 export function trimHookPayload(raw: unknown, event: string): HookPayload {
   const record = typeof raw === 'object' && raw !== null ? raw as Record<string, unknown> : {}
@@ -66,7 +66,7 @@ const CLAUDE_CODE_EVENTS: Record<
     patch: { ...WORKING, ...(payload.toolName ? { currentTool: payload.toolName } : {}) }
   }),
   // Permission prompts and idle/attention notifications all resolve inside
-  // the terminal — Kun shows "handle it there" (05 §6.3).
+  // the terminal — Kun shows "handle it there".
   PermissionRequest: () => ({
     patch: { mainState: 'waiting', waitingReason: 'terminal_prompt' }
   }),

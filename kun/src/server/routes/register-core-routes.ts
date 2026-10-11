@@ -94,7 +94,7 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('POST', '/v1/messages', (request) => gatewayMessages(runtime, request))
   router.add('POST', '/v1/messages/count_tokens', (request) => gatewayCountTokens(runtime, request))
   // Kun Tools MCP endpoint lives outside /v1 so harness-scoped kgw_ tokens
-  // never share the runtime-token authorization surface (docs/ade/05 §3.3).
+  // never share the runtime-token authorization surface.
   router.add('POST', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
   router.add('GET', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
   registerAgentDispatchIntentRoutes(router, runtime)

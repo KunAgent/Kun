@@ -116,7 +116,7 @@ export type ManagedRuntimeHotApplySection = { code: string; message: string }
 export type ManagedRuntimeHotApplyResponse = {
   result: ManagedRuntimeHotApplyResult
   message: string
-  /** Sections rejected while the rest of the apply committed (P4-04). */
+  /** Sections rejected while the rest of the apply committed. */
   sections?: Record<string, ManagedRuntimeHotApplySection>
 }
 

@@ -3,8 +3,7 @@ import { MAX_RENDERER_TABS, type TerminalTab } from './terminal-panel-support'
 import type { TerminalAgentCreate } from '@shared/terminal'
 
 /**
- * Cross-surface "open a terminal" request (docs/ade/11 §7.1 recovery
- * affordance; docs/ade/impl/p4 P4-09 harness setup prefill). The workbench
+ * Cross-surface "open a terminal" request. The workbench
  * layout opens the panel; the terminal panel itself drains the pending
  * request on mount and listens for the event while open, so a request made
  * while the workbench is hidden (e.g. inside Settings) survives.
@@ -17,7 +16,7 @@ export type TerminalOpenRequest = {
   /** Open the local shell at this directory. */
   cwd?: string
   /**
-   * P4-09: text written into the PTY input without a trailing Enter — the
+   * text written into the PTY input without a trailing Enter — the
    * user reviews the command and executes it themselves. Only ever carries
    * commands declared by builtin harness `setup` metadata.
    */
@@ -41,7 +40,7 @@ export function openTerminalAt(cwd: string): void {
   openTerminal({ cwd })
 }
 
-/** P4-09: open a shell with a builtin harness setup command prefilled. */
+/** open a shell with a builtin harness setup command prefilled. */
 export function openTerminalWithSetup(request: TerminalOpenRequest): void {
   openTerminal(request)
 }

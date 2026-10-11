@@ -1,5 +1,5 @@
 /**
- * P6-09/11: `SessionTurnRuntimeDeps` assembly for the native `pi --mode rpc`
+ * `SessionTurnRuntimeDeps` assembly for the native `pi --mode rpc`
  * transport. Mirrors runtime-composition-codex.ts; the only structural
  * difference is the Kun config dir handed to the agent factory (bridge
  * extension + per-process permission files live there).

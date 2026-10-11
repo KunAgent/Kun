@@ -14,8 +14,8 @@ export const KUN_NATIVE_CAPABILITIES: HarnessCapabilities = {
 }
 
 /**
- * The Claude Code settings.json hook surface (05 §6.2). Shared with custom
- * terminal agents that opt into `hooks: 'claude-settings'` (p4 §3.8).
+ * The Claude Code settings.json hook surface. Shared with custom
+ * terminal agents that opt into `hooks: 'claude-settings'`.
  */
 export const CLAUDE_SETTINGS_HOOK_EVENTS = [
   'SessionStart',
@@ -100,7 +100,7 @@ export const ANTIGRAVITY_CAPABILITIES: HarnessCapabilities = {
 
 /**
  * Static superset for ACP harnesses; the ACP runtime narrows it from the
- * agentCapabilities reported by `initialize` (03 §10).
+ * agentCapabilities reported by `initialize`.
  */
 export const ACP_DEFAULT_CAPABILITIES: HarnessCapabilities = {
   statuses: {
@@ -142,7 +142,7 @@ export const CODEX_APP_SERVER_CAPABILITIES: HarnessCapabilities = {
 
 
 /**
- * Pi rpc (`pi --mode rpc`, P6-09): native session-file lifecycle
+ * Pi rpc (`pi --mode rpc`): native session-file lifecycle
  * (switch_session/fork), steer/follow_up, abort, get_state handshake,
  * get_session_stats usage/context. Approvals ride the generated
  * kun-pi-bridge extension's `tool_call` interception; Kun Tools MCP and

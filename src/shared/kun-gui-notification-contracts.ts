@@ -1,6 +1,6 @@
 export type TurnCompleteNotificationSource = 'main-agent' | 'subagent'
 
-/** ADE activity-transition categories (docs/ade/12 §notifications, impl P1-23). */
+/** ADE activity-transition categories. */
 export type AdeActivityNotificationCategory = 'waiting' | 'failed' | 'done' | 'stalled'
 
 export type TurnCompleteNotificationPayload = {

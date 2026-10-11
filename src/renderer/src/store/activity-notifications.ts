@@ -10,7 +10,7 @@ import type { ChatState } from './chat-store-types'
 export const ADE_NOTIFICATION_DEDUPE_LIMIT = 500
 
 /**
- * Row transition → notification category (06 §3 states + the stalled flag).
+ * Row transition → notification category.
  * A stalled flip wins over a state label so a still-"working" but stuck unit
  * surfaces once.
  */
@@ -140,7 +140,7 @@ let unsubscribe: (() => void) | null = null
 
 /**
  * Subscribe to ActivityStore row changes and emit OS notifications on
- * transitions to waiting/failed/done/stalled (12 §notifications). Badge count
+ * transitions to waiting/failed/done/stalled. Badge count
  * is synced on every change so the Dock number always reads needs-you +
  * unread. Idempotent: a second start is a no-op.
  */

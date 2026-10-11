@@ -14,7 +14,7 @@ import { applyHarnessEnablementSettings, harnessIdsWithChangedLaunchSettings, lo
 import { SETTINGS_CHANGED_EVENT } from './keyboard-shortcut-settings'
 
 /**
- * `agents.kun.harnesses.defaults` (docs/ade/impl/p4 §3.6, P4-11) reader for
+ * `agents.kun.harnesses.defaults` reader for
  * the workbench: the composer harness picker, the one-to-one creation path,
  * and the Agent Center all fall back to these when nothing was picked
  * explicitly. Mirrors the `use-ade-enabled` load-then-subscribe pattern.

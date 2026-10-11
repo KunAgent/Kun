@@ -10,7 +10,7 @@ type T = (key: string, options?: Record<string, unknown>) => string
 type DropTarget = { id: string; before: boolean }
 
 /**
- * The Agent list (docs/ade/18 §3.2): search, three groups, drag or Alt+Arrow
+ * The Agent list: search, three groups, drag or Alt+Arrow
  * to reorder the connected ones, and a fold for the long "not installed" tail.
  */
 export function AgentCenterRail({ groups, selectedId, defaultId, search, expanded, onSearch, onToggleExpanded, onSelect, onMove, onFindExtensions, t }: {

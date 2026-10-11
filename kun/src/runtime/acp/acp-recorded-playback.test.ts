@@ -1,5 +1,5 @@
 /**
- * Playback tests over real recorded ACP wire traffic (docs/ade impl P3-12).
+ * Playback tests over real recorded ACP wire traffic.
  * Recordings live in `__fixtures__/recorded/` as sanitized JSONL journals
  * produced by `kun/scripts/record-acp-session.mjs`; each frame is replayed
  * through the production schemas and the event mapper so upstream drift in
@@ -59,7 +59,7 @@ function makeMapper(): AcpEventMapper {
   })
 }
 
-describe('recorded ACP sessions (P3-12)', () => {
+describe('recorded ACP sessions', () => {
   test('opencode 1.1.47: initialize + session/new parse and the update maps', () => {
     const all = frames('opencode-1.1.47.jsonl')
 

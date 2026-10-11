@@ -1,5 +1,5 @@
 /**
- * ACP `session/request_permission` handling (docs/ade/03 §8.3).
+ * ACP `session/request_permission` handling.
  * The agent's tool call is translated into a Kun approval envelope and put
  * through the normal approval pipeline (policy → agent reviewer → user
  * gate). Unqualified approval authorizes one call only. Standing permission
@@ -110,7 +110,7 @@ export class AcpPendingPermissions {
   }
 }
 
-/** §8.3 kind mapping for the approval envelope. */
+/** kind mapping for the approval envelope. */
 export function acpPermissionActionKind(
   kind: string | null | undefined
 ): { actionKind: 'command' | 'file' | 'network' | 'external-effect' | 'unknown'

@@ -25,7 +25,7 @@ export function harnessModelProfiles(models: readonly HarnessModelInfo[] = [], n
 }
 
 /**
- * ADE composer harness/model resolution (docs/ade/12 §7.2).
+ * ADE composer harness/model resolution.
  *
  * Harness model catalogs are flat id lists; the composer regroups them by
  * `credentialModes` so a harness that supports both its native subscription
@@ -92,7 +92,7 @@ export type AdeCredentialGroupLabels = {
 /**
  * Synthesize pick-list groups: `native-login` lists the harness's own models;
  * `provider`/`kun-gateway` list one group per exposable configured provider
- * (P3-05) so a picked entry pins both the credential mode and the provider —
+ * so a picked entry pins both the credential mode and the provider —
  * the raw model id plus `providerId` resolves to the `kun/<provider>/<model>`
  * route in `parseGatewayModelId` semantics. Provider modes stay hidden when
  * no provider is configured or none are exposable.
@@ -167,7 +167,7 @@ export function defaultCredentialModeForRow(row: AdeHarnessRow | undefined): str
 
 /**
  * Whether switching harness/model on a thread that already has turns needs
- * the handoff confirmation (12 §7.2): the runtime opens a fresh native
+ * the handoff confirmation: the runtime opens a fresh native
  * session and carries context via the deterministic handoff brief.
  */
 export function harnessSwitchNeedsConfirmation(input: {

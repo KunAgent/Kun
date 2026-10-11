@@ -1,5 +1,5 @@
 /**
- * GET /v1/approvals projection (P3-19): the pending subset every client can
+ * GET /v1/approvals projection: the pending subset every client can
  * render for its "needs you" list. Decisions stay on POST /v1/approvals/:id.
  */
 export type PendingApprovalItem = {

@@ -15,7 +15,7 @@ import { StatusDot } from '../activity/StatusDot'
 import { AgentIcon } from '../agent-icon'
 
 /**
- * One row in the Workers panel (12 §6.1): label + agent/model + status +
+ * One row in the Workers panel: label + agent/model + status +
  * progress + diff stats + verdict badge, with open / inline-answer / stop /
  * release (confirm) actions. `worker_update` cards reuse the same pieces.
  */

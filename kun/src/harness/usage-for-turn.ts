@@ -3,7 +3,7 @@ import type { Turn } from '../contracts/turns.js'
 import { hasWorkbenchCapabilityConstraints } from '../contracts/thread-workbench-origin.js'
 
 /**
- * Harness usage scenarios drive the admission matrix (02 §5.1). They describe
+ * Harness usage scenarios drive the admission matrix. They describe
  * what the surrounding Kun feature needs from a harness, not which client
  * rendered the prompt.
  */
@@ -21,7 +21,7 @@ export const HARNESS_USAGES = [
 ] as const
 export type HarnessUsage = (typeof HARNESS_USAGES)[number]
 
-/** Thread field added by task workspaces (P0-10); absent until then. */
+/** Thread field added by task workspaces; absent until then. */
 type ExecutionUnitCarrier = { executionUnit?: { kind?: string } }
 
 /**

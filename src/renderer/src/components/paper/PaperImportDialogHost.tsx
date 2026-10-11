@@ -5,7 +5,7 @@ import { PaperImportDialog } from './import/PaperImportDialog'
 
 /**
  * Import dialog mounted at the paper-workbench level so it stays usable while
- * the library/discover views hide the reader DOM (plan §3.4). Controlled by
+ * the library/discover views hide the reader DOM. Controlled by
  * `usePaperModeStore.importDialogOpen`; the docs-surface dialog inside
  * WriteWorkspaceView uses `usePaperStore.importOpen` instead.
  */

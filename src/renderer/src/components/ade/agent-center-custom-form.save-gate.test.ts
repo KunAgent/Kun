@@ -93,7 +93,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('AgentCenterCustomForm test-before-save gating (P4-12)', () => {
+describe('AgentCenterCustomForm test-before-save gating', () => {
   it('keeps Add disabled until a fresh successful probe', async () => {
     const { root } = render()
     const add = buttonByText(root, 'adeSettings.acpFormAdd')

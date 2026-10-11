@@ -5,7 +5,7 @@ import type {
 } from '../contracts/provider-quota.js'
 
 /**
- * 60-second quota snapshot wrapper (10 §3.2). The worker selector calls this
+ * 60-second quota snapshot wrapper. The worker selector calls this
  * once per route decision; failures return `null` so quota probing can never
  * block worker creation.
  */
@@ -51,7 +51,7 @@ const NATIVE_LOGIN_QUOTA_PRESET: Partial<Record<HarnessId, string>> = {
 }
 
 /**
- * The provider/preset id a route bills against (10 §3.2). `native-login`
+ * The provider/preset id a route bills against. `native-login`
  * routes map onto their subscription preset; `provider`/`kun-gateway` routes
  * bill the configured provider profile directly.
  */

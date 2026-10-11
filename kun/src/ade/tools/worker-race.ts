@@ -9,7 +9,7 @@ import {
 /** Tool-side race deps: the manager supplies ctx + toolContext per call. */
 export type RaceToolDeps = RaceServiceDeps & { ids: { next(prefix: string): string } }
 
-/** `worker_race` (10 §6.1): dispatch 2–3 contenders from one baseline sha. */
+/** `worker_race`: dispatch 2–3 contenders from one baseline sha. */
 export async function workerRace(
   runtime: ManagerRuntime,
   deps: RaceToolDeps,
@@ -21,7 +21,7 @@ export async function workerRace(
 }
 
 /**
- * `race_recommend` (10 §6.4): the manager records its pick rationale on the
+ * `race_recommend`: the manager records its pick rationale on the
  * race's `notes`; the user still decides in the compare view.
  */
 export async function raceRecommend(

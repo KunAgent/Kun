@@ -25,8 +25,8 @@ import { normalizeEnabledProfiles } from './harness-enablement'
 import { normalizeAdeProjectDefaultsMap } from './ade-project-defaults'
 
 /**
- * Settings normalization for `agents.kun.harnesses` / `agents.kun.ade`
- * (plan 01 §7.1, 13 §3.1). Unknown keys are dropped; numeric fields are
+ * Settings normalization for `agents.kun.harnesses` / `agents.kun.ade`.
+ * Unknown keys are dropped; numeric fields are
  * clamped to the kun config schema bounds so the generated config stays valid.
  */
 
@@ -75,7 +75,7 @@ const stringRecord = (value: unknown): Record<string, string> => {
 const HARNESS_ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/
 
 /**
- * `secretEnv` rows (p4 §3.7): name must be a valid env var, `secretRef` an
+ * `secretEnv` rows: name must be a valid env var, `secretRef` an
  * opaque credential-store id. Last write wins on duplicate names.
  */
 const secretEnvList = (
@@ -108,7 +108,7 @@ export function defaultKunHarnessSettings(): KunHarnessSettingsV1 {
 const TERMINAL_AGENT_HOOKS = new Set(['none', 'claude-settings'])
 
 /**
- * `terminalAgents[]` rows (p4 §3.8): ids must not collide with builtins or
+ * `terminalAgents[]` rows: ids must not collide with builtins or
  * `custom[]` (both win — terminal entries are turn-inert by design).
  * Unknown `hooks` values drop; everything else is string-list hygiene.
  */
@@ -149,7 +149,7 @@ const HARNESS_CREDENTIAL_MODES = new Set(['native-login', 'provider', 'kun-gatew
 const HARNESS_ISOLATION_MODES = new Set(['local', 'worktree'])
 
 /**
- * `defaults[harnessId]` entries (p4 §3.6): every field optional; unknown
+ * `defaults[harnessId]` entries: every field optional; unknown
  * enum values and empty strings drop individually so one bad field never
  * discards a usable sibling. Entries left with no fields drop entirely.
  */
@@ -192,7 +192,7 @@ function normalizeHarnessDefaults(
 }
 
 /**
- * Pre-P4-11 `defaultPermissionMode[harnessId]` folds into
+ * Legacy `defaultPermissionMode[harnessId]` folds into
  * `defaults[harnessId].permissionMode`; an explicit `defaults` entry wins.
  */
 function foldLegacyPermissionModes(
@@ -207,7 +207,7 @@ function foldLegacyPermissionModes(
   return out
 }
 
-/** Pre-P2 `custom[]` rows, sanitized before they fold into `providers`. */
+/** Legacy `custom[]` rows, sanitized before they fold into `providers`. */
 function legacyCustomList(value: unknown, builtinIds: ReadonlySet<string>): KunHarnessCustomEntryV1[] {
   const custom: KunHarnessCustomEntryV1[] = []
   if (Array.isArray(value)) {
@@ -246,7 +246,7 @@ function sanitizeProviderOverride(raw: Record<string, unknown>): Record<string, 
 }
 
 /**
- * `providers` (docs/ade/17 §4.3) with the pre-P2 `binaryPaths`, `custom[]`
+ * `providers` with the legacy `binaryPaths`, `custom[]`
  * and `terminalAgents[]` folded in once; saved settings carry only the
  * result. Each entry validates on its own so one bad row never discards a
  * sibling. A builtin id only takes launch patches; any other id must name
@@ -304,7 +304,7 @@ export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV
 }
 
 /**
- * ADE worker-selection preference (10 §3.2): an ordered harness-id list.
+ * ADE worker-selection preference: an ordered harness-id list.
  * Unknown/duplicate ids drop; user Agents that can host turns are allowed
  * alongside builtins.
  */
@@ -332,7 +332,7 @@ export function mergeKunHarnessSettings(
 ): KunHarnessSettingsV1 {
   const base = normalizeKunHarnessSettings(current)
   if (!patch) return base
-  // A stored pre-P2 settings file arrives here as a patch; its command
+  // A stored legacy settings file arrives here as a patch; its command
   // paths, custom and terminal Agents fold into `providers` once.
   const legacy = patch as Record<string, unknown>
   return normalizeKunHarnessSettings({

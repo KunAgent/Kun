@@ -4,7 +4,7 @@ import { HarnessCredentialModeSchema, HarnessStatusSchema } from './harness.js'
 import { HarnessDiagnosticRowSchema } from './harness-diagnostics.js'
 
 /**
- * `POST /v1/harnesses/:id/test` contract (docs/ade/impl/p4 §3.5, P4-10).
+ * `POST /v1/harnesses/:id/test` contract.
  *
  * Three progressive levels — each deeper level includes the shallower
  * results so a single response renders the whole checklist:
@@ -105,7 +105,7 @@ export const HarnessReadinessSchema = z.object({
   }).strict()),
   checkedAt: z.string().datetime(),
   detail: z.string().optional(),
-  /** Human-readable findings per stage (docs/ade/17 §4.2); never secrets. */
+  /** Human-readable findings per stage; never secrets. */
   diagnostics: z.array(HarnessDiagnosticRowSchema).max(16).optional()
 }).strict()
 export type HarnessReadiness = z.infer<typeof HarnessReadinessSchema>
@@ -127,7 +127,7 @@ export const HarnessTestResponseSchema = z
 export type HarnessTestResponse = z.infer<typeof HarnessTestResponseSchema>
 
 /**
- * `POST /v1/harnesses/probe-definition` (docs/ade/impl/p4 §3.7, P4-12):
+ * `POST /v1/harnesses/probe-definition`:
  * handshake a custom ACP definition before it is saved. Mirrors the
  * `harnesses.custom[]` entry shape minus `id` — the unsaved agent has no
  * stable id yet, so `id` is optional and only used for log correlation.

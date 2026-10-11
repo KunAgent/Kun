@@ -19,7 +19,7 @@ afterAll(async () => {
 })
 
 describe('loadWorkspaceAgentProfiles ADE bindings', () => {
-  it('parses harness/credential-mode/delegation-notes/model frontmatter (10 §3.1)', async () => {
+  it('parses harness/credential-mode/delegation-notes/model frontmatter', async () => {
     const root = await workspaceWith([
       '---',
       'name: Claude Reviewer',

@@ -1,5 +1,5 @@
 /**
- * Pi rpc event → Kun timeline draft mapping (P6-09).
+ * Pi rpc event → Kun timeline draft mapping.
  *
  * Pi streams assistant deltas inside `message_update.assistantMessageEvent`
  * (`text_delta` / `thinking_*`, keyed by contentIndex), ships the full message

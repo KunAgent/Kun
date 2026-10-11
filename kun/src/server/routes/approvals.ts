@@ -19,7 +19,7 @@ const approvalDecisionFlights = new WeakMap<ApprovalGate, Map<string, DecisionFl
 
 /**
  * GET /v1/approvals?threadId=<id> — pending approval requests, optionally
- * scoped to one thread (P3-19). Read-only projection; the decision route
+ * scoped to one thread. Read-only projection; the decision route
  * stays `POST /v1/approvals/:id`.
  */
 export function listPendingApprovals(

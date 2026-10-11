@@ -1,5 +1,5 @@
 /**
- * P6-07: `SessionTurnRuntimeDeps` assembly for the native `codex app-server`
+ * `SessionTurnRuntimeDeps` assembly for the native `codex app-server`
  * transport. Kept out of runtime-composition-agent.ts for the 700-line gate;
  * every field mirrors the ACP dep surface minus ACP-only mediation pieces.
  */

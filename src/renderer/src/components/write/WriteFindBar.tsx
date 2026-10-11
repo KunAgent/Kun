@@ -23,7 +23,7 @@ type Props = {
 const MAX_REPORTED_MATCHES = 1000
 
 /**
- * Find/replace bar (implementation §9.8) backed by prosemirror-search.
+ * Find/replace bar backed by prosemirror-search.
  * Atom-node text (code blocks, math) stays out of scope by design — matches
  * inside those nodes are intentionally not reported.
  */

@@ -77,7 +77,7 @@ export async function addPdfToPaperLibrary(input: {
 }
 
 /**
- * Open a library entry in the reader view (§3.4): units with a PDF get the
+ * Open a library entry in the reader view: units with a PDF get the
  * PDF+NOTES split; metadata-only units open NOTES.md alone. Records
  * `lastOpenedAt` in the local library state and, when `autoMarkReading` is
  * enabled, flips unread units to `reading`.

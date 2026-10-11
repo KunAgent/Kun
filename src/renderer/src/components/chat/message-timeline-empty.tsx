@@ -222,7 +222,7 @@ function ChatEmptyHero({
 }
 
 /**
- * P4-14: an empty ADE thread leads with the readiness checklist and replaces
+ * an empty ADE thread leads with the readiness checklist and replaces
  * the Code welcome copy with an explanation of the two ADE session kinds —
  * the manager session that plans and dispatches workers, and the one-to-one
  * session that runs a single chosen agent.

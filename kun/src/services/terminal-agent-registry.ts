@@ -14,7 +14,7 @@ import { withManagerDataMutex } from '../manager/data-mutex.js'
 import { cleanupHookConfig } from '../harness/hook-config-writer.js'
 
 /**
- * Tier-0 terminal agents (05 §6.1): execution units launched as PTY
+ * Tier-0 terminal agents: execution units launched as PTY
  * processes by the desktop main process. They own no thread, so the
  * registry persists them under `dataDir/ade/terminal-agents.json` and
  * restores unconfirmed rows after a restart.
@@ -144,7 +144,7 @@ export class TerminalAgentRegistry {
   /**
    * The main process observed an interrupt keystroke in the unit's PTY.
    * Persisted as a fact: the next Stop hook resolves to `cancelled`
-   * instead of `done` (05 §6.3; the row write carries 'inferred').
+   * instead of `done` (row write carries 'inferred').
    */
   async interruptHint(unitId: string): Promise<boolean> {
     let found = false
@@ -183,7 +183,7 @@ export class TerminalAgentRegistry {
   }
 
   /**
-   * `kun worker progress` from a tier-0 unit (05 §5): throttled like the
+   * `kun worker progress` from a tier-0 unit: throttled like the
    * worker tool path, writes only supplementary row fields.
    */
   async reportProgress(

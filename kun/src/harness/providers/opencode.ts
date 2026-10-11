@@ -30,7 +30,7 @@ export const OPENCODE_DEFINITION: HarnessDefinition = {
     statuses: { ...ACP_DEFAULT_CAPABILITIES.statuses, sameTurnSteer: SUPPORTED }
   },
   // Generated opencode.json pins a single `kun` provider selected via
-  // OPENCODE_CONFIG (verified against opencode 1.1.47, P3-10).
+  // OPENCODE_CONFIG (verified against opencode 1.1.47).
   gateway: {
     protocol: 'openai-chat',
     env: { baseUrl: 'KUN_GATEWAY_BASE_URL', token: 'KUN_GATEWAY_TOKEN' },

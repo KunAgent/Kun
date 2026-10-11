@@ -72,7 +72,7 @@ export function parseCustomEntryJson(text: string): KunHarnessCustomEntryV1 | nu
 }
 
 /**
- * Serialize a saved custom entry as the portable JSON definition (p4 §3.7).
+ * Serialize a saved custom entry as the portable JSON definition.
  * `secretEnv` refs are machine-local credential-store ids — they export
  * verbatim so a same-profile re-import keeps working.
  */

@@ -18,7 +18,7 @@ export const WORKER_NOTICE_MAX_HOLD_MS = 60_000
 const MAX_RETRY_DELAY_MS = 30_000
 
 /**
- * Manager wake-up coordinator (09 §6.2). Wraps the notice store so every
+ * Manager wake-up coordinator. Wraps the notice store so every
  * enqueue also schedules delivery: notices arriving inside a 3-second merge
  * window collapse into a single worker_update turn keyed by a deterministic
  * batch clientRequestId (same pending set → same key → idempotent replay).
@@ -57,7 +57,7 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
   }
 
   /**
-   * Composer hold (09 §6.2): the renderer renews while the user is typing so
+   * Composer hold: the renderer renews while the user is typing so
    * a wake-up never interrupts composition; pending notices ride the user's
    * next message instead. Hold expiry is capped at 60 s.
    */

@@ -45,7 +45,7 @@ type Props = {
   exportMenuOpen: boolean
   exportMenuRef: RefObject<HTMLDivElement | null>
   leftSidebarCollapsed: boolean
-  /** Single-view surface state for the text file (§8.3). */
+  /** Single-view surface state for the text file. */
   isMarkdown: boolean
   surfacePlain: boolean
   onToggleSurface: () => void

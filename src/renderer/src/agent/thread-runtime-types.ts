@@ -100,7 +100,7 @@ export type HarnessRuntimeState = {
   capabilitiesV2: HarnessCapabilities
 }
 
-/** `handoff_injected` event metadata (docs/ade/08 §4). */
+/** `handoff_injected` event metadata. */
 export type HandoffEventPayload = {
   threadId: string
   turnId?: string

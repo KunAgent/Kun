@@ -1,5 +1,5 @@
 /**
- * Per-document source map (implementation §3.3).
+ * Per-document source map.
  *
  * Each top-level ProseMirror block carries a `blockId` attribute. At parse
  * time we register the node's verbatim source fragment (sliced via mdast

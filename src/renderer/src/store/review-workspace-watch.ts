@@ -14,7 +14,7 @@ const watchControllers = new Map<string, AbortController>()
 
 /**
  * Auto-refresh the diff after the bound unit reports settled work via the
- * activity feed (11 §3/§4.4): a finished worker mutates the worktree, so the
+ * activity feed: a finished worker mutates the worktree, so the
  * panel reloads instead of showing a stale patch. No-ops without an activity
  * provider surface; manual refresh stays available.
  */
@@ -57,7 +57,7 @@ export function watchReviewWorkspace(workspaceId: string, explicitBinding?: Task
           if (change.unitId === unitId && changedSettlement(change.row)) refresh = true
         }
         if (refresh) {
-          // New capture: fresh diff + kun re-anchored comment positions (11 §4.3).
+          // New capture: fresh diff + kun re-anchored comment positions.
           await Promise.all([loadWorkspaceDiff(workspaceId), loadReviewComments(workspaceId)])
         }
       }

@@ -37,7 +37,7 @@ export type HarnessListEntry = {
   modelsTruncated?: number
   admission: { managerWorker: boolean; missing?: string[] }
   /**
-   * Terminal-only agent (p4 §3.8): launches inside a Kun terminal tab;
+   * Terminal-only agent: launches inside a Kun terminal tab;
    * dispatch works only through the `kun worker` callback the agent itself
    * chooses to call — never as an automatic worker pick.
    */
@@ -67,7 +67,7 @@ export type HarnessListDeps = {
   probedModels?: (definition: HarnessDefinition) => string[] | undefined
   /** Configured providers with their model pools, for gateway/provider modes. */
   providers?: () => Promise<HarnessProviderModelGroup[]>
-  /** Kun profiles the manager can name in `agent` (10 §2 `profiles`). */
+  /** Kun profiles the manager can name in `agent`. */
   profiles?: () => Array<{
     name: string
     model?: string
@@ -76,11 +76,11 @@ export type HarnessListDeps = {
   }>
 }
 
-/** Per-source cap so the tool result stays bounded (P3-06); overflow is counted. */
+/** Per-source cap so the tool result stays bounded; overflow is counted. */
 const MODELS_PER_GROUP = 8
 
 /**
- * `harness_list` (10 §2): what the manager can dispatch onto. Models are
+ * `harness_list`: what the manager can dispatch onto. Models are
  * listed per credential mode — native (probe result preferred over the static
  * table) and provider-backed (`kun-gateway` entries in `kun/<p>/<m>` form,
  * `provider` entries bare). Results are a dynamic tool output — never part of
@@ -152,7 +152,7 @@ export async function listHarnessesForManager(
       displayName: def.displayName,
       ready,
       ...(ready ? {} : {
-        // P4-05: stable code first for the manager; the raw message stays
+        // stable code first for the manager; the raw message stays
         // diagnostic detail in parentheses.
         notReadyReason: status?.reasonCode
           ? `${status.reasonCode}${status?.message ? ` (${status.message})` : ''}`

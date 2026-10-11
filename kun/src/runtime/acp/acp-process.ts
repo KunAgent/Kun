@@ -1,5 +1,5 @@
 /**
- * Owned ACP agent process (P6-03): delegates to the shared harness process
+ * Owned ACP agent process: delegates to the shared harness process
  * host in `kun/src/session/harness-process.ts` — spawn containment (process
  * group / job object), bounded sanitized stderr capture, and shutdown fencing
  * are transport-agnostic. ACP keeps its names so call sites stay readable.
@@ -26,7 +26,7 @@ export async function startAcpProcess(input: {
   args?: readonly string[]
   /** Non-sensitive launch env from the harness definition. */
   env?: Record<string, string>
-  /** Resolved secretEnv values (P4-12); overrides plain env entries. */
+  /** Resolved secretEnv values; overrides plain env entries. */
   secretEnv?: Record<string, string>
   /** Credential env from credential resolution (injected last, wins). */
   credentialEnv?: Record<string, string>

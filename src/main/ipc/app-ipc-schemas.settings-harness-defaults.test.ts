@@ -5,7 +5,7 @@ import {
 } from 'vitest'
 import { settingsPatchSchema } from './app-ipc-schemas'
 
-describe('app-ipc-schemas harnesses.defaults (P4-11)', () => {
+describe('app-ipc-schemas harnesses.defaults', () => {
   const patch = (harnesses: unknown) => ({ agents: { kun: { harnesses } } })
 
   it('accepts a full per-harness defaults entry', () => {

@@ -35,7 +35,7 @@ function stateKey(contender: AdeRaceCompareContender): string {
 }
 
 /**
- * Same-task race comparison (docs/ade/11 §5): one column per contender with
+ * Same-task race comparison: one column per contender with
  * execution state, verdict, diff stats, checks, worker report, duration and
  * usage; the user picks the winner here — the manager's notes are advisory.
  */

@@ -191,7 +191,7 @@ export function kunContextBlock(
 }
 
 /**
- * P1-25: while a Graph turn is still planning, the dynamic-context block
+ * while a Graph turn is still planning, the dynamic-context block
  * listing the ready worker harnesses. Empty content is filtered downstream.
  */
 export async function graphHarnessContextBlock(
@@ -206,7 +206,7 @@ export async function graphHarnessContextBlock(
 }
 
 /**
- * P3-14: authorized manager turns (legacy ADE or explicit Code collaboration)
+ * authorized manager turns (legacy ADE or explicit Code collaboration)
  * get a bounded runtime block with the delegation contract, live team state,
  * and the harness routing menu. Worker threads carry parentThreadId and are
  * excluded; external-harness managers skip the Kun-specific guidance.
@@ -237,7 +237,7 @@ export async function adeManagerContextBlock(
 }
 
 /**
- * P1-25 + P3-14: planning-mode runtime blocks — the Graph harness menu while
+ * +: planning-mode runtime blocks — the Graph harness menu while
  * a plan is uncommitted and the bounded ADE manager block on manager turns.
  */
 export async function planningTeamContextBlocks(

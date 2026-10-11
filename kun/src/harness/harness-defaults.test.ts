@@ -5,7 +5,7 @@ import { harnessDefaultsFor } from './harness-defaults.js'
 const harnesses = (partial: Partial<HarnessesConfig>): HarnessesConfig =>
   partial as HarnessesConfig
 
-describe('harnessDefaultsFor (P4-11)', () => {
+describe('harnessDefaultsFor', () => {
   it('returns the canonical defaults entry', () => {
     const entry = { credentialMode: 'kun-gateway' as const, model: 'deepseek-chat' }
     expect(harnessDefaultsFor(harnesses({ defaults: { 'claude-code': entry } }), 'claude-code'))

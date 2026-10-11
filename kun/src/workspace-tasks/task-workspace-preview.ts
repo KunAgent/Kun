@@ -11,7 +11,7 @@ import type {
 } from '../contracts/task-workspace.js'
 
 /**
- * Read-only integrate preview (docs/ade/11 §7.1): every probe is a
+ * Read-only integrate preview: every probe is a
  * `status`/`diff`/`rev-parse`/`remote` query — nothing stages, writes, or
  * locks. The buttons stay accurate between captures by diffing the worktree
  * against its base revision on demand.

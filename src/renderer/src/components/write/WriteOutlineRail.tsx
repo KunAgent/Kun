@@ -28,7 +28,7 @@ export function collectHeadings(editor: Editor): OutlineEntry[] {
 }
 
 /**
- * Document outline rail (implementation §9.7, Agentero-style): a compact
+ * Document outline rail (Agentero-style): a compact
  * column of heading markers pinned to the upper-right of the editor. Hover
  * or focus widens it into a card where each marker gains its title, so the
  * collapsed rail never spans the full editor height. Only renders with

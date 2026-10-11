@@ -74,7 +74,7 @@ export type KunSubagentProfileV1 = {
   blockedSkills?: string[]
   /** Reasoning depth applied to this profile's child model requests. Default 'off'. */
   reasoningEffort?: ModelReasoningEffort
-  /** ADE worker harness binding (10 §3.1); empty/absent = native Kun loop. */
+  /** ADE worker harness binding; empty/absent = native Kun loop. */
   harnessId?: string
   /** Credential path on the bound harness; empty/absent = harness default. */
   credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
@@ -358,7 +358,7 @@ export type KunPlanExecutionSettingsV1 = {
 }
 
 /**
- * A `secretEnv` binding (docs/ade/impl/p4 §3.7, P4-12): settings only carry
+ * A `secretEnv` binding: settings only carry
  * the opaque credential-store ref; the secret value resolves inside kun at
  * spawn time and is never echoed to the UI or logs.
  */
@@ -368,14 +368,14 @@ export type KunHarnessSecretEnvEntryV1 = {
 }
 
 /**
- * Per-Agent launch override or user Agent under agents.kun.harnesses.providers
- * (docs/ade/17 §4.3); the shape is Kun's config schema.
+ * Per-Agent launch override or user Agent under agents.kun.harnesses.providers;
+ * the shape is Kun's config schema.
  */
 export type KunHarnessProviderOverrideV1 =
   import('../../kun/src/config/kun-config-harness-providers.js').HarnessProviderOverride
 
 /**
- * Portable user-Agent definition: the import/export JSON and the pre-P2
+ * Portable user-Agent definition: the import/export JSON and the legacy
  * `harnesses.custom[]` entry. `extends` names a builtin ACP engine it derives
  * from; absent means a generic ACP agent.
  */
@@ -390,7 +390,7 @@ export type KunHarnessCustomEntryV1 = {
 }
 
 /**
- * Per-harness defaults (docs/ade/impl/p4 §3.6, P4-11): the composer, the
+ * Per-harness defaults: the composer, the
  * one-to-one dialog, and the manager worker selector fall back to these
  * when nothing was picked explicitly. Supersedes the legacy flat
  * `defaultPermissionMode` map, which normalization folds into
@@ -408,7 +408,7 @@ export type KunHarnessDefaultsEntryV1 = {
 }
 
 /**
- * Terminal-only agent (docs/ade/impl/p4 §3.8, P4-13): an interactive CLI
+ * Terminal-only agent: an interactive CLI
  * launched inside a Kun terminal tab as a registered execution unit. It
  * cannot host delegated turns — dispatch reaches it only through the
  * `kun worker` callback, and only when the agent cooperates.
@@ -441,14 +441,14 @@ export type KunHarnessSettingsV1 = {
   /**
    * Launch overrides for builtin Agents (command path, arguments, env) and
    * user Agents (`extends`: a builtin ACP engine, `acp` or `terminal`).
-   * Replaces the pre-P2 `binaryPaths`, `custom[]` and `terminalAgents[]`.
+   * Replaces the legacy `binaryPaths`, `custom[]` and `terminalAgents[]`.
    */
   providers: Record<string, KunHarnessProviderOverrideV1>
   /** Per-harness defaults; the migrated home of `defaultPermissionMode`. */
   defaults: Record<string, KunHarnessDefaultsEntryV1>
   /** Default harness for new one-to-one ADE conversations. */
   defaultHarnessId: string
-  /** User preference order for ADE worker selection (10 §3.2 userPreference). */
+  /** User preference order for ADE worker selection. */
   agentOrder: string[]
 }
 

@@ -127,7 +127,7 @@ describe('harness routes', () => {
     const kun = body.harnesses.find(
       (row: { definition: { id: string } }) => row.definition.id === 'kun'
     )
-    // P4-02: native-loop detection settles synchronously, so the fresh cache
+    // native-loop detection settles synchronously, so the fresh cache
     // wins over the optimistic peek placeholder by the time rows render.
     expect(kun.status.installed).toBe('yes')
     // Listing kicks off background detection but must not spawn for the kun loop.
@@ -443,7 +443,7 @@ describe('harness routes', () => {
     release?.()
   })
 
-  // P4-10: POST /v1/harnesses/:id/test
+  // POST /v1/harnesses/:id/test
   it('requires runtime authentication for harness tests', async () => {
     const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }))
     const response = await dispatch(router, 'POST', '/v1/harnesses/kun/test')
@@ -501,7 +501,7 @@ describe('harness routes', () => {
     expect(body.handshake).toBeUndefined()
   })
 
-  // P4-12: POST /v1/harnesses/probe-definition + /v1/harness-secrets
+  // POST /v1/harnesses/probe-definition + /v1/harness-secrets
   async function postJson(
     router: ReturnType<typeof buildRouter>,
     path: string,

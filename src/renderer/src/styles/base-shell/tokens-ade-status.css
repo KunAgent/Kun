@@ -1,5 +1,5 @@
 :root {
-  /* ADE activity status family (docs/ade/12 §3): the single source for
+  /* ADE activity status family: the single source for
      needs-you/working/review/done/idle coloring across Mission Control,
      the ADE sidebar, and status dots. */
   --ds-status-success: var(--ds-success);

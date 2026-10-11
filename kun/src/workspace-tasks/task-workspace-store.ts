@@ -19,8 +19,8 @@ function parseFile(value: unknown): TaskWorkspaceFile {
 }
 
 /**
- * Durable task-workspace records at dataDir/ade/task-workspaces.json
- * (docs/ade/07 §4). Writes go through the Manager data mutex with a short
+ * Durable task-workspace records at dataDir/ade/task-workspaces.json.
+ * Writes go through the Manager data mutex with a short
  * debounce; in-memory state is authoritative within the process.
  */
 export class TaskWorkspaceStore {

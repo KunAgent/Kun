@@ -92,7 +92,7 @@ export function allSupportedStatuses(): HarnessCapabilityStatuses {
 }
 
 /**
- * Every capability unsupported — terminal-only agents (p4 §3.8) run inside a
+ * Every capability unsupported — terminal-only agents run inside a
  * PTY and cannot host delegated turns at all.
  */
 export function allUnsupportedStatuses(

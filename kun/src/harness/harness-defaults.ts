@@ -2,7 +2,7 @@ import type { HarnessesConfig, HarnessDefaultsEntry } from '../config/kun-config
 import type { HarnessId } from '../contracts/harness.js'
 
 /**
- * Per-harness default resolution (docs/ade/impl/p4 §3.6, P4-11).
+ * Per-harness default resolution.
  * `defaults[harnessId]` is the canonical shape; the legacy flat
  * `defaultPermissionMode[harnessId]` still applies when the new entry
  * does not carry a permissionMode of its own.

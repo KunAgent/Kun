@@ -193,7 +193,7 @@ describe('ManagerRuntime.createWorker', () => {
   it('scopes the snapshot to the settled worktree path, not the provisional source root', async () => {
     // Regression: `create` returns before the checkout exists — its `path`
     // still points at the manager workspace. The snapshot must wait for
-    // settlement or the worker can write nowhere (09 §7.1).
+    // settlement or the worker can write nowhere.
     const { runtime, runChild, taskWorkspaces } = makeRuntime()
     taskWorkspaces.create.mockResolvedValue({ ...workspaceRecord('creating'), path: '/repo' })
     taskWorkspaces.get.mockReturnValueOnce(workspaceRecord('ready'))
@@ -405,7 +405,7 @@ describe('ManagerRuntime.createWorker', () => {
     expect(taskWorkspaces.create).not.toHaveBeenCalled()
   })
 
-  it('applies harnesses.defaults for isolation and permission on a pin (P4-11)', async () => {
+  it('applies harnesses.defaults for isolation and permission on a pin', async () => {
     const { runtime, taskWorkspaces } = makeRuntime({
       // A natively-sandboxed harness so 'local' isolation is admissible.
       capabilities: {

@@ -4,7 +4,7 @@ import type { ExtensionPackageManager } from '../extensions/package-manager.js'
 import { extensionAgentProvider, type ExtensionAgentProvider } from '../harness/extension-agent-providers.js'
 
 /**
- * Agents declared by installed extensions (docs/ade/17 §4.5). Only the
+ * Agents declared by installed extensions. Only the
  * selected version of a globally enabled, admitted extension whose granted
  * permissions include `agents.register` contributes; Agents are machine-wide,
  * so workspace-scoped grants never add one.

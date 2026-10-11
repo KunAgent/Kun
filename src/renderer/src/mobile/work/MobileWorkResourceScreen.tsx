@@ -140,7 +140,7 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
 
   const title = board?.title ?? file?.name ?? resourceKey
   const status = board ? board.phase : document?.saveStatus ?? (work.fileLoading ? 'loading' : 'saved')
-  // Single document view (§8.4): read mode renders the same editor
+  // Single document view: read mode renders the same editor
   // read-only instead of a separate preview surface.
   const viewMode = 'rich' as const
   const editable = Boolean(document && (document.kind === 'text' || document.kind === 'code') && !renderSafety.readOnly)

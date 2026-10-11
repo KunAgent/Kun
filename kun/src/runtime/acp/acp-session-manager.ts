@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 /**
- * Thread ↔ ACP session management (docs/ade/03 §5). Reuses
+ * Thread ↔ ACP session management. Reuses
  * DelegatedSessionCoordinator for route matching, parked sessions, and
  * generation checks; the ACP-specific parts are `session/load` vs
  * `session/new`, config-option application, and the loading-phase update
@@ -42,17 +42,17 @@ import type { HarnessSettingValues } from '../../contracts/harness-session-setti
 export type AcpSessionRequest = {
   threadId: string
   turnId: string
-  /** Absolute workspace path — always the task workspace root (§5.2). */
+  /** Absolute workspace path — always the task workspace root. */
   workspacePath: string
   harnessId: string
   model?: string
-  /** Resolved harness permission-level id (02 §5.3). */
+  /** Resolved harness permission-level id. */
   permissionModeId?: string
   acpPermission?: HarnessDefinition['acpPermission']
   /** Composer-selected native Agent; replaces the permission-mapped mode. */
   nativeAgentId?: string
   reasoningEffort?: string
-  /** Composer values for Agent-published settings (docs/ade/17 §4.4). */
+  /** Composer values for Agent-published settings. */
   harnessSettings?: HarnessSettingValues
   /** Kun Tools MCP server descriptors; user MCP servers are not forwarded. */
   mcpServers?: McpServer[]
@@ -104,7 +104,7 @@ export class AcpSessionManager {
   constructor(private readonly deps: AcpSessionManagerDeps) {}
 
   /**
-   * Create or resume the ACP session for this turn (§5.1). `sink` is the
+   * Create or resume the ACP session for this turn. `sink` is the
    * turn's session/update consumer — it is subscribed before `session/load`
    * so the manager can enforce the loading-phase filter: replayed
    * message/tool chunks are dropped while config-bearing updates are absorbed
@@ -332,7 +332,7 @@ export class AcpSessionManager {
     })
   }
 
-  /** Persist the committed session binding after a turn (§5.1). */
+  /** Persist the committed session binding after a turn. */
   async commit(
     session: AcpSessionHandle,
     input: {
@@ -374,7 +374,7 @@ export class AcpSessionManager {
 }
 
 /**
- * Loading-phase update handling (§5.1): while `session/load` replays history,
+ * Loading-phase update handling: while `session/load` replays history,
  * message/tool chunks are dropped entirely; only config-bearing updates are
  * absorbed into the handle so capability/config state stays current.
  */

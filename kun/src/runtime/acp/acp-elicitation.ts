@@ -1,5 +1,5 @@
 /**
- * ACP `elicitation/create` bridging (docs/ade/03 §8.4, P2-10). Form-mode
+ * ACP `elicitation/create` bridging. Form-mode
  * requests map onto Kun's user_input gate for interactive turns and onto
  * ask_manager for worker turns; turns that disable user input never receive
  * a handler here, so the host can decline instead of blocking the agent.

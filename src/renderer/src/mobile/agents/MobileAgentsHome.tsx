@@ -16,7 +16,7 @@ import { AgentIcon } from '../../components/agent-icon'
 import './mobile-agents.css'
 
 /**
- * Read-only Mission Control + "needs you" list for the phone (P3-19):
+ * Read-only Mission Control + "needs you" list for the phone:
  * approvals and worker questions resolve inline, every other wait opens the
  * owning conversation. Work is never dispatched from this surface.
  */
@@ -144,7 +144,7 @@ export function MobileAgentsHome({ onOpenThread, onOpenSettings }: {
 
   const allRows = useMemo(() => Object.values(rows), [rows])
   // Roots are parent-less units; workers and terminal agents nest under the
-  // manager/thread row that owns them (docs/ade/06 §9 tree projection).
+  // manager/thread row that owns them.
   const roots = useMemo(() => {
     const ids = new Set(allRows.map((row) => row.threadId))
     const list = allRows.filter((row) =>

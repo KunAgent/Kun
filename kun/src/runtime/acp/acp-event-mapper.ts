@@ -1,7 +1,7 @@
 import { acpToolPresentation, type AcpToolEvidence } from './acp-tool-presentation.js'
 import type { DelegatedTerminalPresentation } from '../../contracts/delegated-tool-presentation.js'
 /**
- * ACP `session/update` → Kun runtime event drafts (docs/ade/03 §7).
+ * ACP `session/update` → Kun runtime event drafts.
  * The mapper is pure: it accumulates per-turn text/reasoning and the
  * tool-call state machine, and returns `RuntimeEventDraft[]` for
  * `acp-runtime.ts` to persist — no I/O, no process.
@@ -60,7 +60,7 @@ type ToolCallState = {
   call: AcpToolCallWire
 }
 
-/** Facts the runtime folds into capability derivation (03 §10). */
+/** Facts the runtime folds into capability derivation. */
 export type AcpObservedFacts = {
   sawAvailableCommands: boolean
   sawUsageTelemetry: boolean
@@ -203,7 +203,7 @@ export class AcpEventMapper {
       return this.messages.append(channel, `[${link.name || link.uri}](${link.uri})`)
     }
     // Binary/embedded content: attachment persistence is a runtime concern
-    // (P1-05); record a note so the update is not silently lost.
+    //; record a note so the update is not silently lost.
     this.debug(`agent_message_chunk content '${content.type}' not yet mapped`)
     return []
   }
@@ -266,7 +266,7 @@ export class AcpEventMapper {
     const drafts = existing ? [] : this.messages.flush()
     let state = existing
     if (!state) {
-      // Out-of-order update: create the placeholder first (03 §7.2).
+      // Out-of-order update: create the placeholder first.
       const itemId = this.ctx.nextId('item_tool')
       state = { phase: 'seen', itemId, call: update }
       this.toolCalls.set(callId, state)

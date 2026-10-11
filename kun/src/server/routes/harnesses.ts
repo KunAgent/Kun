@@ -24,8 +24,8 @@ import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 /**
  * `GET /v1/harnesses` — definitions plus detection status. With `wait_ms`
  * the handler briefly waits for inflight detections before answering so a
- * first-load client can show real verdicts instead of `unknown` forever
- * (P4-02). Rows still mid-detect carry `status.detecting: true`.
+ * first-load client can show real verdicts instead of `unknown` forever.
+ * Rows still mid-detect carry `status.detecting: true`.
  */
 const HARNESS_LIST_MAX_WAIT_MS = 30_000
 
@@ -147,7 +147,7 @@ export async function probeHarness(
 }
 
 /**
- * `POST /v1/harnesses/:id/test` (docs/ade/impl/p4 §3.5, P4-10): progressive
+ * `POST /v1/harnesses/:id/test`: progressive
  * detect → handshake → trial checks; the trial runs on a side thread that
  * never appears in conversation lists and is deleted afterwards.
  */
@@ -323,7 +323,7 @@ export async function listHarnessModels(
 }
 
 /**
- * `POST /v1/harnesses/probe-definition` (docs/ade/impl/p4 §3.7, P4-12):
+ * `POST /v1/harnesses/probe-definition`:
  * handshake an unsaved custom ACP definition so the Agent Center can gate
  * "save" on a real initialize result. `secretEnv` refs resolve against the
  * credential store; their values never appear in the response or logs.

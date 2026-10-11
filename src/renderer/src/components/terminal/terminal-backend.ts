@@ -17,7 +17,7 @@ export type TerminalTarget =
   | { kind: 'local'; cwd?: string }
   | { kind: 'ssh'; hostId: string; hostName: string }
   /**
-   * ADE terminal agent (docs/ade/05 §6.1): a harness CLI registered with kun
+   * ADE terminal agent: a harness CLI registered with kun
    * as an execution unit and launched inside a local PTY.
    */
   | {

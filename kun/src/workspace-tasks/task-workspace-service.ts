@@ -50,7 +50,7 @@ export type TaskWorkspaceServiceOptions = {
   newId?: () => string
   /** Live `.kun/project.json` resolution; absent → no env fill, setup 'skipped'. */
   projectConfig?: (repoRoot: string) => Promise<TaskWorkspaceProjectConfig | null>
-  /** Approved setup steps for a repo (07 §7.1); absent/[] → 'not-approved'. */
+  /** Approved setup steps for a repo; absent/[] → 'not-approved'. */
   approvedSetup?: (repoRoot: string) => Promise<SetupStep[]>
   /** Runs the approved setup steps; absent → 'not-approved' when declared. */
   setupRunner?: {
@@ -62,13 +62,13 @@ export type TaskWorkspaceServiceOptions = {
       options?: SetupRunOptions
     ): Promise<TaskWorkspaceSetup>
   }
-  /** shareDirectories + copyIncludedFiles (07 §6); absent → no env fill. */
+  /** shareDirectories + copyIncludedFiles; absent → no env fill. */
   environmentFill?: (input: {
     repoRoot: string
     worktreePath: string
     config: KunProjectWorktreeConfig | undefined
   }) => Promise<EnvFillResult>
-  /** Patch/log artifact storage (07 §8.1); absent → capture keeps no patch. */
+  /** Patch/log artifact storage; absent → capture keeps no patch. */
   artifacts?: TaskWorkspaceArtifacts
   /** Git override for the read-only integrate preview (tests). */
   git?: typeof workspaceGit
@@ -85,7 +85,7 @@ function boundedError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 2_048)
 }
 
-/** Host-owned task workspace lifecycle (docs/ade/07 §5). */
+/** Host-owned task workspace lifecycle. */
 export class TaskWorkspaceService {
   private readonly options: TaskWorkspaceServiceOptions
   private readonly nowIso: () => string
@@ -134,7 +134,7 @@ export class TaskWorkspaceService {
     return this.options.store.list(filter)
   }
 
-  /** Rebind an existing workspace to a different execution unit (11 §4.4). */
+  /** Rebind an existing workspace to a different execution unit. */
   bindUnit(workspaceId: string, unitId: string): TaskWorkspaceRecord | undefined {
     const record = this.options.store.update(workspaceId, {
       unitId,
@@ -144,7 +144,7 @@ export class TaskWorkspaceService {
     return record
   }
 
-  /** Persist the latest change-request snapshot so every client sees it (11 §7.2). */
+  /** Persist the latest change-request snapshot so every client sees it. */
   setChangeRequest(
     workspaceId: string,
     changeRequest: TaskWorkspaceRecord['changeRequest']
@@ -242,7 +242,7 @@ export class TaskWorkspaceService {
   }
 
   /**
-   * Capture plus the dispatch-facing diff stat (09 §6.1): changed-file count,
+   * Capture plus the dispatch-facing diff stat: changed-file count,
    * insertions/deletions parsed from the patch, and the patch artifact id.
    */
   async captureForDispatch(workspaceId: string): Promise<{
@@ -266,7 +266,7 @@ export class TaskWorkspaceService {
   }
 
   /**
-   * Working-tree baseline sha for the ADE user-takeover interval (09 §9).
+   * Working-tree baseline sha for the ADE user-takeover interval.
    * Only worktree-isolated workspaces have a host worktree to snapshot.
    */
   async snapshotBaseline(workspaceId: string): Promise<string | undefined> {
@@ -303,7 +303,7 @@ export class TaskWorkspaceService {
   }
 
   /**
-   * Reviewer input for cross-review (10 §5): the live committed+uncommitted
+   * Reviewer input for cross-review: the live committed+uncommitted
    * patch against the workspace's start point. Undefined when the workspace
    * is local-isolated or has no git baseline.
    */
@@ -329,7 +329,7 @@ export class TaskWorkspaceService {
   }
 
   /**
-   * Read-only integrate preview (11 §7.1): reports which modes the Review
+   * Read-only integrate preview: reports which modes the Review
    * panel may enable. Never stages, writes, or locks.
    */
   async integratePreview(workspaceId: string): Promise<TaskWorkspaceIntegratePreview> {
@@ -352,7 +352,7 @@ export class TaskWorkspaceService {
     }
   }
 
-  /** Integrate into the source repository; serialized per repo (07 §8). */
+  /** Integrate into the source repository; serialized per repo. */
   async integrate(
     workspaceId: string,
     mode: 'apply-patch' | 'merge-branch' = 'apply-patch',

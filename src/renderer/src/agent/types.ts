@@ -346,7 +346,7 @@ export type ReviewOutput = {
   overallConfidenceScore: number
 }
 
-/** Deterministic handoff marker (docs/ade/08 §4); click expands the rebuilt brief. */
+/** Deterministic handoff marker; click expands the rebuilt brief. */
 export type HandoffBlock = {
   kind: 'handoff'
   id: string

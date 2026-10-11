@@ -309,7 +309,7 @@ export async function applyManagedRuntimeSettingsHot(
   const adapter = kunRuntimeAdapter
   if (!adapter.isChildRunning()) return { result: 'skipped' }
 
-  // P4-04: heal "gateway enabled but no independent key" before composing so
+  // heal "gateway enabled but no independent key" before composing so
   // a stale flag cannot veto unrelated hot-applied sections.
   const gatewayReconcile = await reconcileLocalGatewayCredential(settings, source).catch(
     (error): { outcome: 'unchanged' } => {

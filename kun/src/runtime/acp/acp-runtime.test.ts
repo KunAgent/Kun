@@ -76,7 +76,7 @@ describe('AcpRuntime.runTurn', () => {
       new AbortController().signal
     )
     expect(outcome).toBe('completed')
-    // allow preferentially maps to the once-only option (§8.4).
+    // allow preferentially maps to the once-only option.
     const settled = h
       .journal()
       .find(
@@ -161,7 +161,7 @@ describe('AcpRuntime.runTurn', () => {
     expect(h.finished[0]?.error ?? '').not.toContain('sk-testsecret')
   })
 
-  test('a launch failure reports back through onLaunchFailure (P4-03)', async () => {
+  test('a launch failure reports back through onLaunchFailure', async () => {
     const failures: Array<{ harnessId: string; detail: string }> = []
     const h = await makeHarness('basic-chat.json', {
       deps: {
@@ -385,7 +385,7 @@ describe('AcpRuntime.runTurn', () => {
   })
 
   test('graph-worker admission rejects an ACP harness that cannot serve MCP', async () => {
-    // P3-09: a runtime with no kun-tools provider cannot deliver a
+    // a runtime with no kun-tools provider cannot deliver a
     // descriptor, so graph admission must refuse it with a readable reason.
     const h = await makeHarness('basic-chat.json')
     const verdict = checkHarnessAdmission({
@@ -411,7 +411,7 @@ describe('AcpRuntime.runTurn', () => {
   })
 
   test('kun-gateway spawn env strips provider secrets and carries the grant', async () => {
-    // P3-10: a gateway-mode child sees the kgw_ grant and the harness's
+    // a gateway-mode child sees the kgw_ grant and the harness's
     // gateway env vars, but never the host's provider credentials.
     process.env.OPENAI_API_KEY = 'sk-test-host-secret'
     process.env.OPENCODE_CONFIG = '/tmp/user-opencode-config.json'

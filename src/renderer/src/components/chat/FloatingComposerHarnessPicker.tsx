@@ -29,7 +29,7 @@ type Props = {
    */
   needsConfirm: (harnessId: string) => boolean
   /**
-   * New-session continuation entry (01 §8): shown only for a fresh
+   * New-session continuation entry: shown only for a fresh
    * one-to-one thread whose selected harness exposes a `historySource`
    * and the matching lab flag is on.
    */
@@ -141,7 +141,7 @@ export function FloatingComposerHarnessPicker({
         <>
           {rows.filter(harnessRowAvailable).map((row) => {
             const id = row.definition.id
-            // P4-05: stable reason code → localized label + next step; the
+            // stable reason code → localized label + next step; the
             // raw message stays in the title tooltip as the "reason detail".
             const { code, labelKey, nextStepKey, configureProvider } = harnessConnectionPresentation(row)
             const detecting = code === 'detecting'

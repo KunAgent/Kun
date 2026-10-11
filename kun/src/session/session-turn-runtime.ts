@@ -1,7 +1,7 @@
 import { harnessExecutableIdentity } from '../harness/harness-executable-identity.js'
 import { sessionInstructions } from './session-instructions.js'
 /**
- * `SessionTurnRuntime` (docs/ade/impl/p6a §1.2): the shared
+ * `SessionTurnRuntime`: the shared
  * `DelegatedTurnRuntime` for session-protocol transports
  * (`codex-app-server`, `pi-rpc`). It owns the full Kun turn against a pooled
  * `HarnessAgent`: resolve the shared turn context, acquire the pooled agent
@@ -10,7 +10,7 @@ import { sessionInstructions } from './session-instructions.js'
  * turn through the adapter's `HarnessSession`, and commit the binding.
  *
  * ACP keeps its own proven `AcpRuntime`; this class is the common layer the
- * new native transports are built on (P6-13 evaluates migrating ACP onto it).
+ * new native transports are built on (evaluates migrating ACP onto it).
  */
 import { resolveCodexExecutable } from '../harness/codex-executable.js'
 import type { TurnItem } from '../contracts/items.js'

@@ -133,7 +133,7 @@ function MessageBubbleImpl({
     return <WorkerUpdateNoticeBubble block={block} nested={nested} />
   }
   // ADE worker threads fold the host-rendered `<kun_assignment>` first-turn
-  // input into a collapsed card (12 §6.3); the raw text stays in history.
+  // input into a collapsed card; the raw text stays in history.
   if (block.kind === 'user' && isAssignmentBlock(block)) {
     return <AssignmentCard block={block} nested={nested} />
   }

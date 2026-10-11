@@ -39,7 +39,7 @@ function copySelection(view: EditorView, event: ClipboardEvent, ctx: WorkDocCont
 }
 
 /**
- * Multi-block selection behavior (implementation §9.4) layered on top of
+ * Multi-block selection behavior layered on top of
  * `@tiptap/extension-node-range`: Escape selects the current block, Cmd/Ctrl+A
  * selects the block first and the whole document second, Delete/Backspace
  * removes selected blocks, Cmd/Ctrl+C/X write markdown to the clipboard, and

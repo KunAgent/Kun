@@ -92,7 +92,7 @@ export function llmDebugCaptureEnabled(
 }
 
 /**
- * P4-04 segmented apply: the local model gateway is validated as its own
+ * segmented apply: the local model gateway is validated as its own
  * section so a missing key or non-loopback host rejects only the gateway
  * instead of vetoing every unrelated hot config update.
  */

@@ -21,10 +21,10 @@ export type AdeStageProps = {
  * ADE mode reuses the Code conversation stage (composer, timeline, right
  * panel host) through `mode="ade"` — it does not copy the chat UI. With no
  * active thread or draft the ADE home is Mission Control; SDD editing stays a
- * Code-only surface. The shared ActivityStore feed (06 §9) is app-owned in
+ * Code-only surface. The shared ActivityStore feed is app-owned in
  * AppShell while the ADE lab flag is on, so this stage only subscribes.
  *
- * P4-09: the agent home carries the shared terminal drawer too — harness
+ * the agent home carries the shared terminal drawer too — harness
  * install/login actions from the Agent Center open a prefilled local tab
  * here, outside any conversation.
  */

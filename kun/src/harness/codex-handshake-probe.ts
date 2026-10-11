@@ -1,5 +1,5 @@
 /**
- * Codex app-server handshake probe for `POST /v1/harnesses/:id/test` (P6-07):
+ * Codex app-server handshake probe for `POST /v1/harnesses/:id/test`:
  * `codex app-server` speaks JSON-RPC over stdio; `initialize` proves the
  * channel is alive and returns the server userAgent. `account/read` adds the
  * local account verdict. Optional `model/list` validates explicit model choices;

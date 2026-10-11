@@ -7,7 +7,7 @@ import type { HarnessUsage } from './usage-for-turn.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
 
 /**
- * Admission matrix (02 §5.2): what each usage requires from a harness.
+ * Admission matrix: what each usage requires from a harness.
  * `sandbox: 'host'` demands Kun enforce the sandbox; 'isolated-or-native'
  * accepts a harness-native sandbox or a host-managed isolated worktree.
  */
@@ -73,7 +73,7 @@ function firstMissingMessage(
 }
 
 /**
- * Host-side admission check (02 §5.3). Runs inside `HarnessRouter.resolve`
+ * Host-side admission check. Runs inside `HarnessRouter.resolve`
  * before a delegated turn starts; the caller maps `ok: false` onto a
  * HarnessAdmissionError so the turn ends with a readable failure.
  */

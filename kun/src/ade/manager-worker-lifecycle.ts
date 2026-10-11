@@ -14,9 +14,8 @@ import { refreshWorkerReviewActivity } from './worker-review-activity.js'
 import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 
 /**
- * ADE worker lifecycle events (09 §5 turnId backfill, §6.1 terminal hook,
- * §6.5 approval notices, §9 implicit takeover, ephemeral release, startup
- * reconciliation). Extracted from ManagerRuntime; every method here runs
+ * ADE worker lifecycle events (ephemeral release; startup
+ * reconciliati). Extracted from ManagerRuntime; every method here runs
  * detached from the calling turn — event handling is fire-and-forget so the
  * runtime event pipeline is never held by workspace captures or store writes.
  */
@@ -28,8 +27,7 @@ export class ManagerWorkerLifecycle {
   ) {}
 
   /**
-   * Runtime-event observer hook (09 §5 turnId backfill + §6.1 terminal
-   * hook). Wired onto the RuntimeEventRecorder's observer list; every
+   * Runtime-event observer hook. Wired onto the RuntimeEventRecorder's observer list; every
    * branch is fire-and-forget so the event pipeline is never held by
    * workspace captures or store writes.
    */
@@ -68,8 +66,8 @@ export class ManagerWorkerLifecycle {
 
   /**
    * `turn_started` on a worker thread: the admitted turn's clientRequestId
-   * is the dispatchId — backfill `turnId` on the accepted dispatch (09 §5).
-   * A turn without a dispatch is a user message: implicit take-over (09 §9).
+   * is the dispatchId — backfill `turnId` on the accepted dispatch.
+   * A turn without a dispatch is a user message: implicit take-over.
    */
   private async backfillDispatchTurnId(workerThreadId: string, turnId: string): Promise<void> {
     const thread = await this.deps.threads.get(workerThreadId).catch(() => null)
@@ -82,7 +80,7 @@ export class ManagerWorkerLifecycle {
       ? await this.deps.dispatches.findByClientRequestId(unit.teamId, key)
       : null
     if (!dispatch) {
-      // User typing in a worker thread takes it over (09 §9); the notice
+      // User typing in a worker thread takes it over; the notice
       // tells the manager and the queue holds until hand-back.
       await this.teamControls.takeOverWorker(workerThreadId)
       return
@@ -95,7 +93,7 @@ export class ManagerWorkerLifecycle {
   }
 
   /**
-   * `approval_requested` on a worker thread (09 §6.5): the request itself
+   * `approval_requested` on a worker thread: the request itself
    * stays user-only, but the manager sees a "waiting for approval" notice so
    * it can tell the user — or answer it via `worker_approve` when
    * `managerMayApprove` is on.
@@ -105,7 +103,7 @@ export class ManagerWorkerLifecycle {
     approvalId: string,
     summary?: string
   ): Promise<void> {
-    // 09 §6.5 / P1-14: the notice exists so the manager can `worker_approve`
+    // /: the notice exists so the manager can `worker_approve`
     // — with the gate off the request is user-only and nothing is reported.
     if (this.deps.managerMayApprove?.() !== true) return
     const thread = await this.deps.threads.get(workerThreadId).catch(() => null)
@@ -131,7 +129,7 @@ export class ManagerWorkerLifecycle {
   }
 
   /**
-   * Worker turn terminal hook (09 §6.1): resolves the owning dispatch,
+   * Worker turn terminal hook: resolves the owning dispatch,
    * captures the task-workspace diff, persists outcome + excerpt, enqueues
    * a manager notice, then delivers the worker's next queued dispatch.
    * User-originated worker turns (no dispatch) return silently. Idempotent:
@@ -166,7 +164,7 @@ export class ManagerWorkerLifecycle {
     ) {
       return
     }
-    // Reviewer workers share the reviewed workspace read-only (10 §5): a
+    // Reviewer workers share the reviewed workspace read-only: a
     // capture here would only re-read the reviewed worker's diff.
     const capture = worker.taskWorkspaceId && !worker.reviewOf && this.deps.taskWorkspaces
       ? await this.deps.taskWorkspaces
@@ -237,10 +235,10 @@ export class ManagerWorkerLifecycle {
         console.warn(`[kun] ade worker notice enqueue failed for ${updated.dispatchId}:`, error)
       })
     }
-    // P3-15: a soft-cap crossing discovered at terminal still reaches the
+    // a soft-cap crossing discovered at terminal still reaches the
     // manager once even if no new dispatch is sent afterwards.
     this.teamControls.notifyBudgetCheck(team, this.deps.teamBudget?.check(team))
-    // Race contenders resolve their shared race when the last one lands (10 §6.3).
+    // Race contenders resolve their shared race when the last one lands.
     if (this.deps.races) {
       await reconcileRaces(
         {
@@ -266,7 +264,7 @@ export class ManagerWorkerLifecycle {
   }
 
   /**
-   * Delayed ephemeral-worker release (09 §6.1): the workspace stays for
+   * Delayed ephemeral-worker release: the workspace stays for
    * review; the worker stops accepting dispatches and leaves the live roster.
    */
   private scheduleRelease(teamId: string, workerId: string): void {
@@ -352,7 +350,7 @@ export class ManagerWorkerLifecycle {
   }
 
   /**
-   * Startup reconciliation (09 §5): re-resolve stuck `delivering`/`uncertain`
+   * Startup reconciliation: re-resolve stuck `delivering`/`uncertain`
    * dispatches against the worker thread's turns, then replay the terminal
    * hook for `accepted` dispatches whose turns ended while the app was off.
    */

@@ -11,7 +11,7 @@ import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 
 /**
- * /v1/reviews client surface (docs/ade/11 §4): per-workspace review
+ * /v1/reviews client surface: per-workspace review
  * comments shared with every client, plus the batched send endpoint that
  * renders the deterministic revision request in kun.
  */
@@ -64,7 +64,7 @@ export function createKunReviewClient() {
     /**
      * Batch pending comments into one revision request. The `manager`
      * target returns a `composerContext` for the renderer to attach to the
-     * manager thread's next message (11 §4.4).
+     * manager thread's next message.
      */
     async sendReview(
       workspaceId: string,

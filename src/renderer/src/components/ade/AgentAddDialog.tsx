@@ -32,7 +32,7 @@ function readState(): DialogState {
 }
 
 /**
- * Adds an Agent that is not in the list (docs/ade/18 §3.6): derive from a
+ * Adds an Agent that is not in the list: derive from a
  * built-in engine, point at any ACP command, or import a saved definition.
  * Built-in Agents are connected from their own page, not from here.
  */

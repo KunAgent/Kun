@@ -36,7 +36,7 @@ export type HarnessRuntimeComposition = {
   acpModels: AcpModelProbe
   /** Agent SDK `supportedModels()` probing for `modelSource: 'probe'` harnesses. */
   agentSdkModels: AgentSdkModelProbe
-  /** Codex app-server `model/list` probing (P6-07). */
+  /** Codex app-server `model/list` probing. */
   codexModels: CodexModelProbe
   piModels: PiModelProbe
   /** `agy models` for the Antigravity CLI transport. */
@@ -51,7 +51,7 @@ export type HarnessRuntimeComposition = {
    * transport; `undefined` means no fresh successful probe is cached.
    */
   probedModels: (definition: HarnessDefinition) => string[] | undefined
-  /** Process-local scoped bearer tokens for spawned harnesses (04 §4). */
+  /** Process-local scoped bearer tokens for spawned harnesses. */
   tokens: HarnessTokenService
   /** Agents declared by enabled extensions; the runtime sets the loader. */
   extensionAgents: ExtensionAgentProviderSource
@@ -62,7 +62,7 @@ export type HarnessRuntimeComposition = {
    */
   gatewayEndpoint: { baseUrl?: string }
   /**
-   * Resolves `launch.secretEnv` credential-store refs (P4-12); undefined when
+   * Resolves `launch.secretEnv` credential-store refs; undefined when
    * the runtime has no credential store. Exposed for `probe-definition`.
    */
   resolveSecretEnv?: HarnessSecretRefResolver

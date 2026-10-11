@@ -121,7 +121,7 @@ export function AdeSidebar({
     () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark'
   )
   const [renameState, setRenameState] = useState<RenameThreadDialogState | null>(null)
-  // P3-17: 一对一先选 agent;按项目分组开关;worker 线程默认折叠。
+  // 一对一先选 agent;按项目分组开关;worker 线程默认折叠。
   const [oneOnOneOpen, setOneOnOneOpen] = useState(false)
   const [groupMode, setGroupMode] = useState<'status' | 'project'>('status')
   const [expandedParents, setExpandedParents] = useState<ReadonlySet<string>>(new Set())
@@ -166,7 +166,7 @@ export function AdeSidebar({
   // Worker threads nest under their manager row instead of listing flat.
   const { roots, childrenByParent } = useMemo(() => indexAdeThreads(threads), [threads])
 
-  // ADE 侧栏分组:待你处理 / 待审查 / 进行中 / 已完成 / 会话 / 已归档,或按项目分组(00 §4)。
+  // ADE 侧栏分组:待你处理 / 待审查 / 进行中 / 已完成 / 会话 / 已归档,或按项目分组。
   const groups = useMemo(() => {
     const byStatus = new Map<AdeStatusGroup, NormalizedThread[]>(
       ADE_STATUS_GROUP_ORDER.map((key) => [key, []])

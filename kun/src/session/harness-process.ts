@@ -1,5 +1,5 @@
 /**
- * Owned harness agent process (P6-03, generalized from `acp-process.ts`):
+ * Owned harness agent process (generalized from `acp-process.ts`):
  * launched through `spawnOwnedProcess` so the child joins the host's
  * process-group/job-object supervision and is reclaimed on shutdown.
  *
@@ -99,7 +99,7 @@ export async function startHarnessProcess(input: {
   args?: readonly string[]
   /** Non-sensitive launch env from the harness definition. */
   env?: Record<string, string>
-  /** Resolved secretEnv values (P4-12); overrides plain env entries. */
+  /** Resolved secretEnv values; overrides plain env entries. */
   secretEnv?: Record<string, string>
   /** Credential env from credential resolution (injected last, wins). */
   credentialEnv?: Record<string, string>

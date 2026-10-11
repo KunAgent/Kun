@@ -191,7 +191,7 @@ function applyMetaPatch(meta: PaperUnitMetaV2, patch: PaperLibraryMetaPatch): Pa
 
 /**
  * Patch `paper.json`; the write upgrades the on-disk file to v2 because the
- * caller changed v2 fields (plan §5.2 — v1 files stay untouched until edited).
+ * caller changed v2 fields (plan — v1 files stay untouched until edited).
  */
 export async function updatePaperUnitMetaV2(
   unitDirAbs: string,
@@ -394,7 +394,7 @@ function bibtexSlug(fields: Record<string, string>, citeKey: string): string {
 }
 
 /**
- * Import `.bib` entries as metadata-only units (plan §PM4): dedupe by
+ * Import `.bib` entries as metadata-only units: dedupe by
  * arXiv → DOI → title+year; a hit on a unit missing its PDF attaches the PDF
  * url instead of duplicating the unit. `downloadPdfs` stays false here — PDF
  * fetching runs through the normal `paperImport` path afterwards.

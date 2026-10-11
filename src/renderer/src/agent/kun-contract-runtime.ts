@@ -535,20 +535,20 @@ export type CoreRuntimeEventJson = {
   }
   /** Explicit harness identity on delegated_runtime / harness_runtime events. */
   harnessId?: string
-  /** harness_session_state: native commands + mode surface (docs/ade/03 §7.3). */
+  /** harness_session_state: native commands + mode surface. */
   commands?: Array<{ name?: unknown; description?: unknown; inputHint?: unknown }>
   configOptions?: Array<{ id?: unknown; name?: unknown; currentValue?: unknown }>
   currentModeId?: string
-  /** harness_session_state: Agent-published settings (docs/ade/17 §4.4). */
+  /** harness_session_state: Agent-published settings. */
   settings?: unknown
-  /** task_workspace lifecycle/state transition on the owner thread (docs/ade/07 §5). */
+  /** task_workspace lifecycle/state transition on the owner thread. */
   taskWorkspace?: {
     workspaceId?: string; unitId?: string; state?: string
     progress?: { step?: string; percent?: number; message?: string }
     setup?: { steps?: unknown[] }
     workspace?: { path?: string; sourceRoot?: string; kind?: string; branch?: string }
   }
-  /** handoff_injected: handoff provenance + brief stats (docs/ade/08). */
+  /** handoff_injected: handoff provenance + brief stats. */
   from?: { harnessName: string; model?: string }
   to?: { harnessName: string; model?: string }
   sinceTurnId?: string

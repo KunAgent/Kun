@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, FileCode2, FolderClosed, FolderOpen } from '
 import type { TaskWorkspaceDiffFile } from '@shared/task-workspace'
 
 /**
- * Directory-collapsed file list for the review panel (11 §3): each file row
+ * Directory-collapsed file list for the review panel: each file row
  * carries its +N −M counts and scrolls the matching diff block into view.
  */
 

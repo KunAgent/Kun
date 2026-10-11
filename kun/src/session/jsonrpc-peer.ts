@@ -1,5 +1,5 @@
 /**
- * Minimal JSON-RPC peer over `JsonlTransport` (P6-03): outbound requests with
+ * Minimal JSON-RPC peer over `JsonlTransport`: outbound requests with
  * incrementing ids + per-request timeout, outbound notifications, inbound
  * request dispatch (server→client calls like approvals) and notification
  * dispatch. Transport close rejects every pending request.

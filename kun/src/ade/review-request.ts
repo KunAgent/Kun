@@ -21,7 +21,7 @@ import { childSecurity } from '../adapters/tool/delegation-tool-context.js'
 import { reportLanguage } from './user-report.js'
 import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 
-/** `review_request` input (10 §5): cross-review a worker's last dispatch. */
+/** `review_request` input: cross-review a worker's last dispatch. */
 export const ReviewRequestInputSchema = z
   .object({
     workerId: z.string().min(1).max(256),
@@ -61,11 +61,11 @@ export type ReviewRequestResult = {
   userReport: string
 }
 
-/** Patch budget inside the 32k dispatch task cap (10 §5: bounded summary). */
+/** Patch budget inside the 32k dispatch task cap. */
 const PATCH_BUDGET = 24_000
 
 /**
- * Cross-review (10 §5): spawns an ephemeral reviewer worker on a different
+ * Cross-review: spawns an ephemeral reviewer worker on a different
  * harness, read-only inside the reviewed worker's task workspace (local
  * semantics — it holds no task-workspace record and no write lease).
  */
@@ -288,7 +288,7 @@ export class ReviewRequests {
   }
 
   /**
-   * Reviewer route (10 §5): an explicit `reviewer.harnessId` pin, else the
+   * Reviewer route: an explicit `reviewer.harnessId` pin, else the
    * selector with the reviewed harness excluded — different agents miss
    * different things. No alternative → an explicit refusal, never the same
    * harness silently.
@@ -395,7 +395,7 @@ export class ReviewRequests {
 }
 
 /**
- * The reviewer's dispatch task (10 §5): original task, worker report,
+ * The reviewer's dispatch task: original task, worker report,
  * optional focus, and the captured patch — bounded to the inline budget,
  * beyond which only file names + stats are embedded and the reviewer reads
  * files directly.

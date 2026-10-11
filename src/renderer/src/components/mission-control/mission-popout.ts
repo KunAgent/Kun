@@ -1,5 +1,5 @@
 /**
- * Mission Control popout marker (docs/ade/impl P2-09): the auxiliary
+ * Mission Control popout marker: the auxiliary
  * BrowserWindow loads the same workbench bundle with `?popout=1`. Inside
  * that window the board renders standalone — card activation is forwarded
  * to the main window instead of driving local chat state.

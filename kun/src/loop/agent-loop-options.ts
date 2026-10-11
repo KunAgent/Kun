@@ -201,12 +201,12 @@ export type AgentLoopOptions = {
    */
   harnessRouter?: import('../harness/harness-router.js').HarnessRouter
   /**
-   * Dynamic Graph planning harness summary (P1-25): injected per planning
+   * Dynamic Graph planning harness summary: injected per planning
    * turn as runtime-authority context, never into the stable prefix.
    */
   graphHarnessSummary?: () => Promise<string | undefined>
   /**
-   * ADE manager turn context (P3-14): resolved per manager turn after the
+   * ADE manager turn context: resolved per manager turn after the
    * stable prefix; absent when the ADE manager block is not wired.
    */
   adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>

@@ -26,12 +26,12 @@ function settingsCacheFields(source: { settings?: AdeHarnessModels['settings'] }
 }
 
 /**
- * Harness catalog + per-thread session surface (docs/ade/12 §7.2).
+ * Harness catalog + per-thread session surface.
  *
  * - `rows` is the `GET /v1/harnesses` cache; ordinary menu opens reuse it.
  *   Settings changes and explicit refreshes invalidate it (`probe` stays server-side).
  * - `models[harnessId]` is the lazy `GET /v1/harnesses/:id/models` cache.
- * - `sessions[threadId]` is the last `harness_session_state` event (03 §7.3):
+ * - `sessions[threadId]` is the last `harness_session_state` event:
  *   native slash commands + config options the composer renders.
  */
 export type HarnessSessionSurface = {
@@ -73,7 +73,7 @@ type HarnessStoreState = {
   settingsHarnessTab?: 'connection' | 'models' | 'launch' | 'version'
   rows: AdeHarnessRow[]
   /**
-   * Timestamp of the last successful list response (P4-02): replaced the
+   * Timestamp of the last successful list response: replaced the
    * load-once `rowsLoaded` flag so callers can force a refresh while
    * detection is still settling.
    */
@@ -82,8 +82,8 @@ type HarnessStoreState = {
   rowsError?: string
   models: Record<string, HarnessModelCacheEntry>
   /**
-   * Provider-grouped models for `provider`/`kun-gateway` credential modes
-   * (12 §7.2): the exposable providers each harness turn could address. The
+   * Provider-grouped models for `provider`/`kun-gateway` credential modes:
+   * the exposable providers each harness turn could address. The
    * two modes share one exposable set, so a single per-harness entry serves
    * both.
    */
@@ -121,7 +121,7 @@ const modelRequestGeneration = new Map<string, number>()
 const generationFor = (id: string): number => modelRequestGeneration.get(id) ?? 0
 
 /**
- * P4-02: while any row still reports `detecting`, the store polls the
+ * while any row still reports `detecting`, the store polls the
  * catalog until detection settles or the budget expires — the first load
  * usually lands mid-probe, and without this the sidebar/picker would pin
  * the provisional `unknown` verdict forever.
@@ -384,7 +384,7 @@ export async function loadHarnessProviderGroups(
   }
 }
 
-/** Sink entry for mapped `harness_session_state` runtime events (03 §7.3). */
+/** Sink entry for mapped `harness_session_state` runtime events. */
 export function receiveHarnessSessionState(state: AdeHarnessSessionState): void {
   const threadId = state.threadId.trim()
   if (!threadId || !state.harnessId.trim()) return
@@ -420,7 +420,7 @@ export function receiveHarnessSessionState(state: AdeHarnessSessionState): void 
 }
 
 /**
- * Turn-serving rows (P4-13): `transport: 'terminal'` entries are interactive
+ * Turn-serving rows: `transport: 'terminal'` entries are interactive
  * CLIs launched inside a Kun terminal tab — they never host a delegated turn,
  * so every turn picker (composer, one-on-one, subagent profile) hides them.
  */
@@ -435,7 +435,7 @@ export function harnessRowAvailable(row: AdeHarnessRow): boolean {
 }
 
 /**
- * Stable unavailability code for pickers (P4-05). Returns the 'detecting'
+ * Stable unavailability code for pickers. Returns the 'detecting'
  * sentinel while a probe is inflight or the verdict is still provisional;
  * otherwise the wire `reasonCode` (falling back to field derivation for
  * statuses that predate it). Consumers localize `adeHarnessUnavailable.*`
@@ -454,7 +454,7 @@ export function harnessRowUnavailableCode(row: AdeHarnessRow): string | null {
     if (status.ready === 'no') return 'handshake_failed'
     if (status.login === 'signed-out') return 'signed_out'
   }
-  // A settled `unknown` (the version probe failed and the P4-02 polling
+  // A settled `unknown` (the version probe failed and the polling
   // budget is spent) is unavailable — not "detecting" forever.
   return 'readiness_required'
 }

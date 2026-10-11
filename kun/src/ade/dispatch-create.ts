@@ -1,5 +1,5 @@
 /**
- * Durable dispatch creation + localized send reports (09 §4.1), shared by
+ * Durable dispatch creation + localized send reports, shared by
  * `worker_send`, `worker_create`'s first dispatch, and the GUI dispatch
  * route. Extracted from ManagerControls so every caller persists and
  * delivers through one code path.
@@ -37,7 +37,7 @@ export async function createDispatch(
     ...(input.context ? { context: input.context } : {}),
     mode: input.mode ?? 'queue',
     state: 'pending',
-    // 10 §4.1: execution state and acceptance stay independent tracks.
+    // execution state and acceptance stay independent tracks.
     verdict: { status: 'pending', checks: [] },
     createdAt: now,
     updatedAt: now

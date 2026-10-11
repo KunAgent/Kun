@@ -12,10 +12,10 @@ import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 import { reviewRevisionValidity } from '../contracts/review-revision.js'
 
 /**
- * Host-originated quality checks (10 §4.2): the approved `worktree.checks`
+ * Host-originated quality checks: the approved `worktree.checks`
  * commands run sequentially inside the worker's task workspace under managed
  * processes — never in the source checkout, and never without the whole-
- * config digest approval from P0-11. Results merge onto the worker's latest
+ * config digest approval. Results merge onto the worker's latest
  * dispatch verdict as `source: 'host'` checks; the combined log lands in the
  * artifact store.
  */

@@ -93,7 +93,7 @@ export const RuntimeConfigApplyRequest = z
 
 /**
  * One config section whose requested state could not be applied while the
- * rest of the request committed normally (P4-04 segmented apply). Sparse:
+ * rest of the request committed normally (segmented apply). Sparse:
  * only rejected sections appear; absent sections applied.
  */
 export const RuntimeConfigApplyRejectedSection = z.object({

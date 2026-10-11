@@ -88,7 +88,7 @@ export type WorkbenchNavigationController = {
   sidebarView: WorkbenchSidebarView
   startNewChat: () => void
   startNewAdeChat: () => void
-  /** One-to-one thread pinned to a harness; isolation defaults to a new worktree (00 §5). */
+  /** One-to-one thread pinned to a harness; isolation defaults to a new worktree. */
   startNewAdeOneOnOne: (input: {
     harnessId: string
     credentialMode?: 'native-login' | 'provider' | 'kun-gateway'

@@ -21,7 +21,7 @@ import {
 import { appWindowTitleForFlavor } from '../shared/app-environment'
 
 /**
- * Mission Control popout (docs/ade/impl p2 P2-09): a single auxiliary
+ * Mission Control popout: a single auxiliary
  * workbench window that renders the Mission Control board surface
  * (`?popout=1`). It reuses the workbench preload and trust surface, so its
  * renderer talks to the same Kun activity/team APIs as the main window.

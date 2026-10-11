@@ -172,7 +172,7 @@ export async function createRuntimeServices(
     nowIso
   })
   const harnesses = createHarnessComposition(() => core.activeOptions, {
-    // P4-12: custom-agent `secretEnv` refs resolve against the credential
+    // custom-agent `secretEnv` refs resolve against the credential
     // store at spawn/probe time; values never reach config or logs.
     revision: () => core.optionsRevision,
     readinessProofStorePath: join(core.activeOptions.dataDir, 'harness-readiness.json'),
@@ -181,7 +181,7 @@ export async function createRuntimeServices(
     resolveSecretEnv: harnessSecretRefResolver(model.extensionCredentials)
   })
   // Per-turn `kun-tools` grants + http/stdio MCP descriptors for ACP sessions
-  // (P3-08). One provider is shared across every delegated-runtime build so
+  //. One provider is shared across every delegated-runtime build so
   // revocation stays consistent no matter which runtime built the turn.
   const kunToolsMcp = new KunToolsMcpProvider({
     tokens: harnesses.tokens,
@@ -189,7 +189,7 @@ export async function createRuntimeServices(
     command: kunCommandParts
   })
   // Per-turn `kun-gateway` grants + generated per-harness provider config for
-  // ACP children (P3-10). One resolver shared by every delegated-runtime build.
+  // ACP children. One resolver shared by every delegated-runtime build.
   const acpCredentialEnv = createAcpCredentialEnv({
     tokens: harnesses.tokens,
     endpoint: () => harnesses.gatewayEndpoint.baseUrl,

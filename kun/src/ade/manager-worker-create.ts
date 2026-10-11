@@ -98,7 +98,7 @@ export class ManagerWorkerCreator {
           : `Task workspace ${reuseId} is not reusable; worker not created.`
       }
     }
-    // P4-11: an explicitly pinned harness's `defaults.isolation` applies
+    // an explicitly pinned harness's `defaults.isolation` applies
     // when the caller left isolation unspecified (a selector-picked harness
     // is not known early enough to feed its own default into selection).
     const isolation = reused?.isolation ?? input.workspace?.isolation ??
@@ -119,7 +119,7 @@ export class ManagerWorkerCreator {
     }
     if (isolation === 'worktree' && !this.deps.taskWorkspaces) {
       // Admission would report `isolated` for a run that would actually write
-      // into the manager's own workspace — refuse instead (09 §7.1).
+      // into the manager's own workspace — refuse instead.
       return {
         ok: false,
         refusal: 'admission',
@@ -188,12 +188,12 @@ export class ManagerWorkerCreator {
             : `Permission escalation for worker "${input.label}" was not confirmed; nothing was created.`
         }
       }
-      // User confirmed: the worker runs at the requested mode (09 §7.2).
+      // User confirmed: the worker runs at the requested mode.
       effectivePermissionMode = permission.requestedMode.id
     }
     const workerId = allocation?.workerId ?? this.deps.ids.next('child')
     if (reused && reused.unitId !== workerId) {
-      // The workspace now belongs to the new worker (11 §4.4 'new-worker').
+      // The workspace now belongs to the new worker.
       this.deps.taskWorkspaces?.bindUnit(reused.workspaceId, workerId)
     }
     let tws = reused ?? (this.deps.taskWorkspaces
@@ -210,7 +210,7 @@ export class ManagerWorkerCreator {
       // `create` returns a provisional record: `path` still names the source
       // root until the async checkout finishes. The snapshot must name the
       // real task workspace — it is both the worker's only write root
-      // (09 §7.1) and its thread workspace (delegation-runtime-run).
+      // and its thread workspace (delegation-runtime-run).
       tws = (await waitForTaskWorkspaceSettlement(
         this.deps.taskWorkspaces!, tws.workspaceId, ctx.signal)) ?? tws
       if (!['ready', 'captured', 'conflict'].includes(tws.state)) {

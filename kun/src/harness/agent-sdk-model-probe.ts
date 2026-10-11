@@ -1,6 +1,6 @@
 import { harnessExecutableIdentity } from './harness-executable-identity.js'
 /**
- * Claude Code model probing for `GET /v1/harnesses/:id/models` (P3-07).
+ * Claude Code model probing for `GET /v1/harnesses/:id/models`.
  * Opens a throwaway `query()` handle — with an empty prompt iterable so no
  * turn ever runs — and calls the SDK's `supportedModels()` control request.
  * Canonical `resolvedModel` ids are returned in Claude Code's own order with

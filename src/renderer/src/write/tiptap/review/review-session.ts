@@ -1,5 +1,5 @@
 /**
- * Review session orchestration (implementation §6.3–§6.6).
+ * Review session orchestration.
  *
  * Owns the lifecycle of one rich diff review on a Tiptap `Editor`:
  * `begin` parses original + next markdown with the work codec, swaps the
@@ -284,7 +284,7 @@ export class WriteReviewSession {
   /**
    * Swap the document to `nodes` via the minimal top-level replacement, so
    * unchanged blocks keep their live nodes — cursor, scroll position, and
-   * undo history survive entering/leaving the review (§6.3).
+   * undo history survive entering/leaving the review.
    */
   private swapToTopNodes(nodes: PMNode[]): void {
     const target = this.editor.schema.topNodeType.create(null, Fragment.from(nodes))

@@ -21,14 +21,14 @@ import { formatRuntimeError } from '../lib/format-runtime-error'
 import { finishReviewSendAttempt, rejectReviewSendAttempt, reviewSendAttempt } from './review-send-attempt'
 
 /**
- * Review-panel state (docs/ade/11 §3): which task workspace binds to each
+ * Review-panel state: which task workspace binds to each
  * thread, the per-workspace diff file list, lazily loaded per-file content,
  * and collapse / unified-vs-split view state. Fetches go through the active
  * provider so tests can substitute them.
  */
 export type ReviewViewMode = 'unified' | 'split'
 
-/** Files with more changed lines than this start collapsed (11 §3 perf). */
+/** Files with more changed lines than this start collapsed. */
 export const REVIEW_LARGE_FILE_LINES = 5_000
 
 export type ReviewFileEntry = {
@@ -47,7 +47,7 @@ export type WorkspaceReview = {
   expandedPaths: Record<string, boolean>
   viewMode: ReviewViewMode
   details: Record<string, ReviewFileEntry>
-  /** Kun-persisted comments + send history for this workspace (11 §4). */
+  /** Kun-persisted comments + send history for this workspace. */
   comments: ReviewComment[]
   requests: ReviewSendRecord[]
   commentsLoaded: boolean
@@ -56,7 +56,7 @@ export type WorkspaceReview = {
   sending: boolean
   sendError?: string
   lastSent?: { round: number; targetKind: ReviewSendTarget['kind']; outcomeRef?: string }
-  /** Read-only integrate availability for the primary action (11 §7.1). */
+  /** Read-only integrate availability for the primary action. */
   integratePreview?: TaskWorkspaceIntegratePreview
   integratePreviewLoaded?: boolean
   actionPending?: 'integrate' | 'discard' | 'cleanup'
@@ -82,7 +82,7 @@ export type ReviewStoreState = {
   workspaces: Record<string, WorkspaceReview>
   /**
    * threadId → workspaceId for an external-harness plan build whose worker
-   * turn just settled (07 §10). The workbench consumes the flag to open the
+   * turn just settled. The workbench consumes the flag to open the
    * Review panel so the user can choose the integration mode.
    */
   pendingPlanBuildReview: Record<string, string>
@@ -151,7 +151,7 @@ export async function loadWorkspaceDiff(workspaceId: string): Promise<void> {
         // still expanded refetch lazily on render.
         details: {}
       })
-      // Files over the lazy/large threshold default to collapsed (11 §3).
+      // Files over the lazy/large threshold default to collapsed.
       next[workspaceId].expandedPaths = Object.fromEntries(
         files.map((f) => [f.path, current?.expandedPaths[f.path]
           ?? (!f.tooLarge && f.insertions + f.deletions <= REVIEW_LARGE_FILE_LINES)])
@@ -227,7 +227,7 @@ export function setReviewViewMode(workspaceId: string, viewMode: ReviewViewMode)
 export { watchReviewWorkspace, unwatchReviewWorkspace } from './review-workspace-watch'
 
 /* ------------------------------------------------------------------ */
-/* Review comments (11 §4): local-first drafts debounced into kun.     */
+/* Review comments: local-first drafts debounced into kun.     */
 /* ------------------------------------------------------------------ */
 
 const REVIEW_SYNC_DELAY_MS = 1_000
@@ -284,7 +284,7 @@ export function loadReviewComments(workspaceId: string): Promise<void> {
 
 export type ReviewDraftInput = Omit<CreateReviewCommentInput, 'body'> & { body?: string }
 
-/** New comment at a diff line; starts as an unsynced draft (11 §4.2). */
+/** New comment at a diff line; starts as an unsynced draft. */
 export function createReviewDraft(workspaceId: string, input: ReviewDraftInput): string {
   const now = new Date().toISOString()
   const commentId = `local_${(++localCommentSeq).toString(36)}${Date.now().toString(36)}`
@@ -396,7 +396,7 @@ function scheduleReviewSync(workspaceId: string): void {
 
 /**
  * Push dirty drafts/edits into kun. Failed ops stay dirty so a later
- * flush — e.g. after reconnect — retries them (11 §4.2 offline).
+ * flush — e.g. after reconnect — retries them.
  */
 export async function flushReviewDrafts(workspaceId: string): Promise<void> {
   const provider = getProvider()
@@ -454,7 +454,7 @@ export async function flushReviewDrafts(workspaceId: string): Promise<void> {
   }
 }
 
-/** Unresolved (draft + previously sent) comments — the next batch (11 §4.4). */
+/** Unresolved (draft + previously sent) comments — the next batch. */
 export function pendingReviewComments(workspaceId: string): ReviewComment[] {
   const ws = useReviewStore.getState().workspaces[workspaceId]
   return (ws?.comments ?? []).filter((c) => c.state !== 'resolved')
@@ -537,7 +537,7 @@ async function performReviewSend(
 }
 
 // ---------------------------------------------------------------------------
-// Integrate / discard / cleanup (docs/ade/11 §7): user-initiated lifecycle
+// Integrate / discard / cleanup: user-initiated lifecycle
 // actions behind the review panel's single primary action.
 // ---------------------------------------------------------------------------
 

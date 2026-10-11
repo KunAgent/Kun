@@ -102,7 +102,7 @@ const base = {
   syncStatus: null
 }
 
-describe('buildAdeReadinessChecks (P4-14)', () => {
+describe('buildAdeReadinessChecks', () => {
   it('keeps every check pending while sources are still loading', () => {
     const checks = buildAdeReadinessChecks(base)
     expect(checks.map((c) => c.ok)).toEqual([null, null, null])

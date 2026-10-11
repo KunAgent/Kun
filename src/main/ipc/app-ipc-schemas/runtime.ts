@@ -401,7 +401,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_MODEL_CONNECTION_PROBE_TEMPLATE, ['POST']),
   compileEndpoint(KUN_MODEL_CONNECTION_PROVIDER_TEMPLATE, ['PATCH', 'DELETE']),
   compileEndpoint(KUN_MODEL_ROUTES_TEMPLATE, ['GET']),
-  // ADE harness catalog (docs/ade/01 §7): the pickers poll this surface.
+  // ADE harness catalog: the pickers poll this surface.
   compileEndpoint(KUN_HARNESSES_TEMPLATE, ['GET']),
   compileEndpoint(KUN_HARNESS_MODELS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_HARNESS_PROBE_TEMPLATE, ['POST']),
@@ -416,12 +416,12 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_HARNESS_PROBE_DEFINITION_TEMPLATE, ['POST']),
   compileEndpoint(KUN_HARNESS_SECRETS_TEMPLATE, ['POST']),
   compileEndpoint(KUN_HARNESS_SECRET_TEMPLATE, ['DELETE']),
-  // ADE Mission Control attention feed + pending approvals (06 §9, P3-02).
+  // ADE Mission Control attention feed + pending approvals.
   compileEndpoint(KUN_ACTIVITY_TEMPLATE, ['GET']),
   compileEndpoint(KUN_ACTIVITY_EVENTS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_ACTIVITY_FOREGROUND_TEMPLATE, ['POST']),
   compileEndpoint(KUN_APPROVALS_TEMPLATE, ['GET']),
-  // ADE task workspaces, review comments, and team controls (09 §9, 11 §4).
+  // ADE task workspaces, review comments, and team controls.
   compileEndpoint(KUN_TASK_WORKSPACES_TEMPLATE, ['GET', 'POST']),
   compileEndpoint(KUN_TASK_WORKSPACE_TEMPLATE, ['GET']),
   ...['diff', 'diff/file', 'attribution', 'integrate-preview'].map(

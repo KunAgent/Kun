@@ -19,7 +19,7 @@ import { createCodeBlockNodeView } from './nodes/code-block-view'
 import { codeHighlightParser } from './code-highlight'
 
 // Documents above this size open in the plain-text editor; CodeMirror handles
-// them better and the document parse would get expensive (§8.2).
+// them better and the document parse would get expensive.
 export const WRITE_RICH_MAX_CHARS = 300_000
 export const WRITE_BACKTICK_FENCE_INPUT_REGEX = /^(`{3,})([A-Za-z0-9_+#.-]+)?[\s\n]$/
 

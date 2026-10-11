@@ -182,7 +182,7 @@ export async function createRuntimeCore(
     threadMetadata: (id) => threadStore.getMetadata?.(id) ?? Promise.resolve(null),
     facts: activityFacts,
     // Graph attempt rows are keyed by attemptId while event.child carries the
-    // worker child thread id (P1-25); resolved lazily at event time.
+    // worker child thread id; resolved lazily at event time.
     unitIdForChild: (childId: string): string | undefined =>
       graphRuntime.workerSessions.get(childId)?.attemptId
   })
@@ -214,7 +214,7 @@ export async function createRuntimeCore(
     nowIso
   })
   // Rebuild activity rows for recently-active threads from durable turn
-  // state before live events start flowing (docs/ade/06 §8), then reapply
+  // state before live events start flowing, then reapply
   // the persisted per-unit user facts.
   await activityStore.hydrate(threadStore)
   for (const [unitId, fact] of Object.entries(activityFacts.all())) {

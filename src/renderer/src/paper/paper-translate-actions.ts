@@ -3,7 +3,7 @@ import { nextPaperMarkId, usePaperMarksStore } from './paper-marks-store'
 import type { PaperRect } from '@shared/paper/paper-marks-types'
 
 /**
- * Translation actions (plan §6.5): selection → translate card (saved as a
+ * Translation actions: selection → translate card (saved as a
  * `marks/<id>.json` translate mark), document → chunked `<slug>-译文.md` job
  * surfaced through `paper:progress` events.
  */

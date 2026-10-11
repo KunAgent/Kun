@@ -5,7 +5,7 @@ import type {
 } from '../contracts/activity.js'
 
 /**
- * Fold child counts into the unit's own state (docs/ade/06 §5).
+ * Fold child counts into the unit's own state.
  * A waiting unit (or any waiting child) surfaces first; a unit whose own
  * turn is done still reads working while its workers run. Keep this file
  * in sync with src/shared/activity-rollup.ts — both sides are pinned by

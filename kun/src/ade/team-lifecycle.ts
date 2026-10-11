@@ -2,7 +2,7 @@ import type { ThreadRecord } from '../contracts/threads.js'
 import type { FileTeamStore } from './team-store.js'
 
 /**
- * ADE delete cascade (09 §3.2):
+ * ADE delete cascade:
  * - deleting a manager thread removes its team directory and revokes every
  *   worker harness grant;
  * - deleting a worker thread marks its team record `released`.

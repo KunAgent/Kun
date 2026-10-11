@@ -397,7 +397,7 @@ export function useWorkbenchPlanController({
       return
     }
     const preference = usePlanWorktreePreferenceStore.getState().plans[plan.id]
-    // 07 §10: resolve the build harness before preparing the prompt — an
+    // resolve the build harness before preparing the prompt — an
     // external harness must skip the prompt-managed worktree protocol and run
     // inside a host-managed task worktree instead.
     const activePlanThread = chatState.activeThreadId
@@ -437,7 +437,7 @@ export function useWorkbenchPlanController({
       })
       setComposerMode('agent')
       if (externalBuild) {
-        // 07 §10 external path: dispatch to a fresh ADE thread bound to a
+        // external path: dispatch to a fresh ADE thread bound to a
         // host-managed worktree; the Review panel opens on settle. Reuse the
         // composer's harness pick when set, else the thread's remembered
         // selection for the pinned harness.

@@ -1,5 +1,5 @@
 /**
- * `session/prompt` block assembly (docs/ade/03 §6 `buildPromptBlocks`).
+ * `session/prompt` block assembly.
  * Ordering: deterministic handoff brief → instruction blocks + user request →
  * image/file payloads → client-surface instruction last. The harness's own
  * system prompt is never touched — Kun's per-turn instructions arrive as
@@ -23,7 +23,7 @@ export type AcpPromptInput = {
   images: readonly { mediaType: string; base64: string }[]
   /**
    * Attachment display names/paths for the no-image-capability fallback:
-   * the model gets a file-path hint instead of binary data (02 §6.2).
+   * the model gets a file-path hint instead of binary data.
    */
   attachmentPaths: readonly string[]
   imageCapable: boolean

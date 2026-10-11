@@ -60,7 +60,7 @@ export interface CursorSdkRuntimeFactoryDeps extends Omit<
   skillRuntime?: SkillRuntime
   instructionRuntime?: InstructionRuntime
   /**
-   * Dynamic Graph planning harness summary (P1-25): injected while the turn
+   * Dynamic Graph planning harness summary: injected while the turn
    * is still in the planning phase (not the stable session prefix).
    */
   graphHarnessSummary?: () => Promise<string | undefined>
@@ -114,7 +114,7 @@ export function createCursorSdkRuntime(
   const nowIso = (): string => configuredNowIso?.() ?? new Date().toISOString()
 
   // Bridged Kun tool listing + execution runs through the shared
-  // transport-independent host (docs/ade/05 §3.2). Cursor keeps only the
+  // transport-independent host. Cursor keeps only the
   // SDKCustomTool format conversion in cursor-sdk-tool-bridge.ts.
   const toolBridge = createKunToolBridgeHost({
     threadStore: deps.threadStore,

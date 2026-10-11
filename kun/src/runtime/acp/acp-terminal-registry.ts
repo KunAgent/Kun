@@ -1,6 +1,6 @@
 import type { DelegatedTerminalPresentation } from '../../contracts/delegated-tool-presentation.js'
 /**
- * ACP terminal/* client methods (docs/ade/03 §8.2). Each handle is an owned
+ * ACP terminal/* client methods. Each handle is an owned
  * process — `spawnOwnedProcess` launch, `stopOwnedProcess` reclamation — so
  * the process tree dies with its terminal. Handles are scoped by sessionId +
  * turnId; the client host reclaims everything when the turn ends.

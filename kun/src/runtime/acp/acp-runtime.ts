@@ -1,7 +1,7 @@
 import { harnessExecutableIdentity } from '../../harness/harness-executable-identity.js'
 import { sessionInstructions } from '../../session/session-instructions.js'
 /**
- * ACP delegated runtime (docs/ade/03 §6). `runTurn` owns a full Kun turn
+ * ACP delegated runtime. `runTurn` owns a full Kun turn
  * against an external ACP agent: pool-acquire a connection by
  * (harnessId, credentialIdentity), ensure/resume the ACP session, forward the
  * prompt (deterministic handoff brief first on fresh sessions), mediate the
@@ -120,7 +120,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
   }
 
   capabilitiesV2() {
-    // kunTools is honest (P3-09): only claim it when this runtime can hand
+    // kunTools is honest: only claim it when this runtime can hand
     // the agent an MCP descriptor — i.e. it is serve-hosted.
     return acpStaticCapabilities(this.deps.kunToolsMcp?.canDeliver() === true)
   }
@@ -141,7 +141,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     turnId: string,
     signal: AbortSignal
   ): Promise<TurnRunOutcome> {
-    // P6-02: the protocol-agnostic front half (thread/turn/items, goal
+    // the protocol-agnostic front half (thread/turn/items, goal
     // context, history, model route, credentials, permission mode) is shared
     // with the native session transports via kun/src/session/.
     const resolved = await resolveSessionTurnContext(this.deps, {
@@ -199,7 +199,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       signal
     }).catch(async (error) => {
       // A user abort is not a harness defect; everything else observed at
-      // launch outweighs any earlier probe verdict (P4-03).
+      // launch outweighs any earlier probe verdict.
       if (!signal.aborted && !(error instanceof AcpError && error.code === 'request_aborted')) {
         this.deps.onLaunchFailure?.(
           definition.id,
@@ -317,7 +317,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       emit: (drafts) => { emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream) },
       debug: (summary) => this.deps.debug?.({ direction: 'note', summary })
     }) : undefined
-    // Protocol errors on this session's traffic fail the turn (§9).
+    // Protocol errors on this session's traffic fail the turn.
     const unsubscribeSessionErrors = conn.subscribeSession(session.sessionId, {
       onUpdate: () => undefined,
       onError: failStream

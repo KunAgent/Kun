@@ -23,7 +23,7 @@ import { buildRaceComparison } from '../../ade/race-compare.js'
 import { readJsonBody } from '../read-json-body.js'
 
 /**
- * ADE team routes (09 §6.2): composer hold + pending-notice readback for
+ * ADE team routes: composer hold + pending-notice readback for
  * manager threads. `teamId` is the manager thread id.
  */
 
@@ -104,7 +104,7 @@ export async function workerByIdResponse(
   return jsonResponse(found)
 }
 
-/** POST /v1/teams/workers/:workerId/stop — user stops the active turn (09 §9). */
+/** POST /v1/teams/workers/:workerId/stop — user stops the active turn. */
 export async function workerStopResponse(
   manager: ManagerRuntime,
   workerId: string
@@ -112,7 +112,7 @@ export async function workerStopResponse(
   return controlResultResponse(await manager.teamControls.stopWorker(workerId))
 }
 
-/** POST /v1/teams/workers/:workerId/take-over — user takes control (09 §9). */
+/** POST /v1/teams/workers/:workerId/take-over — user takes control. */
 export async function workerTakeOverResponse(
   manager: ManagerRuntime,
   workerId: string
@@ -128,7 +128,7 @@ export async function workerHandBackResponse(
   return controlResultResponse(await manager.teamControls.handBackWorker(workerId))
 }
 
-/** POST /v1/teams/workers/:workerId/detach — worker leaves the team (09 §9). */
+/** POST /v1/teams/workers/:workerId/detach — worker leaves the team. */
 export async function workerDetachResponse(
   manager: ManagerRuntime,
   workerId: string
@@ -136,7 +136,7 @@ export async function workerDetachResponse(
   return controlResultResponse(await manager.teamControls.detachWorker(workerId))
 }
 
-/** POST /v1/teams/questions/:questionId/answer — user answers (09 §6.4). */
+/** POST /v1/teams/questions/:questionId/answer — user answers. */
 export async function questionAnswerResponse(
   manager: ManagerRuntime,
   questionId: string,
@@ -155,7 +155,7 @@ export async function questionAnswerResponse(
 
 /**
  * POST /v1/teams/workers/:workerId/dispatch — GUI-originated dispatch
- * (09 §9, review comments in P1-18) with the same durable delivery path as
+ * (review comments) with the same durable delivery path as
  * worker_send.
  */
 export async function workerDispatchResponse(
@@ -173,7 +173,7 @@ export async function workerDispatchResponse(
 }
 
 /**
- * POST /v1/teams/workers/:workerId/run-checks — `{ names? }` (10 §4.2):
+ * POST /v1/teams/workers/:workerId/run-checks — `{ names? }`:
  * the review panel's run-checks button. Runs the repo's approved
  * `worktree.checks` inside the worker task workspace and merges results
  * into the latest dispatch verdict as `source: 'host'`.
@@ -197,7 +197,7 @@ export async function workerRunChecksResponse(
 
 /**
  * POST /v1/teams/dispatches/:dispatchId/verdict — user records a quality
- * verdict from the review panel (10 §4.3); `decidedBy: 'user'` overrides a
+ * verdict from the review panel; `decidedBy: 'user'` overrides a
  * manager verdict while both stay on record.
  */
 export async function dispatchVerdictResponse(
@@ -217,7 +217,7 @@ export async function dispatchVerdictResponse(
 }
 
 /**
- * GET /v1/teams/races/:raceId (10 §6.3, 11 §5): lazily reconcile the owning
+ * GET /v1/teams/races/:raceId: lazily reconcile the owning
  * team's races (covers restarts that dropped deadline timers), then return
  * the record with per-contender compare data.
  */
@@ -236,7 +236,7 @@ export async function raceResponse(
 }
 
 /**
- * POST /v1/teams/races/:raceId/decide — `{ winnerDispatchId }` (10 §6.4).
+ * POST /v1/teams/races/:raceId/decide — `{ winnerDispatchId }`.
  * GUI-only path; managers reach race records through race_recommend only.
  */
 export async function raceDecideResponse(
@@ -256,8 +256,7 @@ export async function raceDecideResponse(
 }
 
 /**
- * POST /v1/teams/races/:raceId/discard-others — `{ confirm: true }` (10 §6.5,
- * 07 §8.3): force-discard each non-winner task workspace.
+ * POST /v1/teams/races/:raceId/discard-others — `{ confirm: true }`: force-discard each non-winner task workspace.
  */
 export async function raceDiscardOthersResponse(
   deps: RaceServiceDeps,

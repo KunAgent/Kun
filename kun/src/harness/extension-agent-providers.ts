@@ -4,7 +4,7 @@ import type { HarnessProviderOverride } from '../config/kun-config-harness-provi
 
 /**
  * A local ACP Agent declared by an installed, enabled extension that holds
- * the `agents.register` permission (docs/ade/17 §4.5). It joins the catalog
+ * the `agents.register` permission. It joins the catalog
  * like a user Agent; the user still enables it explicitly before any launch.
  */
 export type ExtensionAgentProvider = {

@@ -314,7 +314,7 @@ export type ChatState = {
   composerGatewayBinding?: HarnessGatewayBinding
   composerCredentialMode: string
   /**
-   * ADE new-session isolation (12 §7.3): 'local' binds the picked workspace
+   * ADE new-session isolation: 'local' binds the picked workspace
    * directly; 'worktree' asks the host to prepare a fresh task workspace.
    */
   composerIsolation: 'local' | 'worktree'
@@ -373,11 +373,11 @@ export type ChatState = {
    * ADE-only: switch the harness (and optional credential mode) used by the
    * next turn or next new thread. Confirmed switches on a non-empty thread
    * apply to subsequent turns only — the runtime opens a fresh native
-   * session with a deterministic handoff summary (docs/ade/08).
+   * session with a deterministic handoff summary.
    */
   setComposerGatewayBinding: (binding?: HarnessGatewayBinding) => void
   setComposerHarness: (harnessId: string, credentialMode?: string) => void
-  /** ADE-only: pick the isolation used by the next new session (12 §7.3). */
+  /** ADE-only: pick the isolation used by the next new session. */
   setComposerIsolation: (
     isolation: 'local' | 'worktree',
     startFrom?: import('@shared/task-workspace').TaskWorkspaceStartFrom
@@ -521,12 +521,12 @@ export type ChatState = {
     useWorktreePool?: boolean
     worktreeBranch?: string
     /**
-     * ADE one-to-one threads (00 §5): pin the thread to this harness from
+     * ADE one-to-one threads: pin the thread to this harness from
      * creation instead of inferring a route from the composer model.
      */
     harnessId?: string
     gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
-    /** Explicit provider/model pins for the new thread (p4 §3.6 defaults). */
+    /** Explicit provider/model pins for the new thread. */
     providerId?: string
     model?: string
     /**
@@ -558,7 +558,7 @@ export type ChatState = {
   sendMessage: (text: string, mode?: string, overrides?: SendMessageOverrides) => Promise<boolean>
   /**
    * Run a plan build on an external harness inside a host-managed task
-   * worktree (07 §10): creates the ADE build thread, parks the
+   * worktree: creates the ADE build thread, parks the
    * `planBuild`-marked turn until the worktree is ready, and flags the
    * Review panel when the turn settles.
    */

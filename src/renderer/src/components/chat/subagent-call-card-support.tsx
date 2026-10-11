@@ -32,7 +32,7 @@ export type DelegateDetail = {
   parentTurnId?: string
   status?: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
   launcher?: 'delegate_task' | 'fast_context' | 'ppt_agent' | 'component_design' | 'graph' | 'manager-worker'
-  /** ADE worker route/worker workspace from the `worker_create` result (09 §4.2). */
+  /** ADE worker route/worker workspace from the `worker_create` result. */
   harnessId?: string
   taskWorkspaceId?: string
   terminationReason?: 'user_stop' | 'manual_stop' | 'runtime_restart' | 'child_error'

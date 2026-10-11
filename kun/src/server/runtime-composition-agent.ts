@@ -150,9 +150,9 @@ export async function createRuntimeAgentComposition(
   // provider set so /connect can add an account without a TUI runtime restart.
   const canvasReceipts = new CanvasReceiptRegistry({ turns: turnService, events, nowIso })
   // Provider pool access shared by gateway env, worker-route validation, and
-  // harness_list (P3-05/P3-06): kind + advertised models per connection.
+  // harness_list: kind + advertised models per connection.
   const providerPool = createProviderPoolAccess(modelConnections)
-  // Route-level bridge host for the Kun Tools MCP server (docs/ade/05 §3.3):
+  // Route-level bridge host for the Kun Tools MCP server:
   // same execution authority as the SDK adapters with main-scope defaults.
   const kunToolBridge = createKunToolBridgeHost({
     threadStore,
@@ -173,7 +173,7 @@ export async function createRuntimeAgentComposition(
     callIdPrefix: 'mcp',
     nowIso
   })
-  // P6-07: dep assembly extracted to runtime-composition-delegated.ts for the
+  // dep assembly extracted to runtime-composition-delegated.ts for the
   // line-count gate; the wrapper keeps the existing (input) signature for the
   // two local call sites and the runtime-composition-config.ts re-export.
   const buildMainDelegatedRuntime = (input: MainDelegatedRuntimeInput) =>
@@ -199,7 +199,7 @@ export async function createRuntimeAgentComposition(
       threadId,
       (childId) => threadService.delete(childId)
     )
-    // ADE cascade (09 §3.2): deleting a manager removes its team directory and
+    // ADE cascade: deleting a manager removes its team directory and
     // worker grants; deleting a worker marks its team record released.
     const deleted = await threadService.getMetadata(threadId).catch(() => null)
     await handleAdeThreadDeleted({
@@ -210,7 +210,7 @@ export async function createRuntimeAgentComposition(
       onManagerDeleted: (id) => workerNoticeCoordinator.clearManager(id)
     })
   }
-  // Graph planning harness menu (P1-25): shared by the native loop and the
+  // Graph planning harness menu: shared by the native loop and the
   // delegated runtimes so the planner sees the same routing menu.
   const graphHarnessSummary = createGraphHarnessSummary({
     readiness: services.harnesses.readiness,
@@ -218,7 +218,7 @@ export async function createRuntimeAgentComposition(
     detector: services.harnesses.detector,
     quota: createQuotaSnapshot({ list: () => model.providerQuotaService.list() })
   })
-  // P3-14: manager turns get delegation contract + team state + harness menu.
+  // manager turns get delegation contract + team state + harness menu.
   const adeManagerContext = createAdeManagerContext({
     ...services.adeStores,
     harnessSummary: graphHarnessSummary,
@@ -258,7 +258,7 @@ export async function createRuntimeAgentComposition(
     allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
     taskWorkspaceIsolated: (id) => core.taskWorkspaces.get(id)?.isolation === 'worktree'
   })
-  // ADE manager control plane (09 §4-§5): durable dispatch delivery + the
+  // ADE manager control plane: durable dispatch delivery + the
   // worker_* tool surface; AbortControllers outlive the manager turn.
   const childRunStore = new FileDelegationStore(join(core.activeOptions.dataDir, 'child-runs'))
   const dispatchDeliverer = new DispatchDeliverer({
@@ -272,7 +272,7 @@ export async function createRuntimeAgentComposition(
     turns: turnService,
     language: () => Intl.DateTimeFormat().resolvedOptions().locale
   })
-  // Worker-notice wake-ups (09 §6.2); runTurn is late-bound to runAgentTurn.
+  // Worker-notice wake-ups; runTurn is late-bound to runAgentTurn.
   const workerNoticeCoordinator = new WorkerNoticeCoordinator({
     dispatches: services.adeStores.dispatches,
     agentDispatchService: services.agentDispatchService,
@@ -304,7 +304,7 @@ export async function createRuntimeAgentComposition(
     ids, nowIso, usage: usageService,
     approvalGate, approvalEvents: events
   })
-  // Dispatch backfill + worker terminal hooks on the recorder (09 §5, §6.1).
+  // Dispatch backfill + worker terminal hooks on the recorder.
   core.events.addObserver({ record: (event) => managerRuntime.handleRuntimeEvent(event) })
   const activityHibernation = createActivityHibernation({
     core, managerRuntime, catalog: services.harnesses.catalog
@@ -359,7 +359,7 @@ export async function createRuntimeAgentComposition(
 	        !shuttingDown
 	      ) {
 	        await graphRuntime.handleSourceTurnTerminal(threadId, turnId, outcome)
-	        // 09 §6.1 worker terminal hook; idempotent with the event observer.
+	        // worker terminal hook; idempotent with the event observer.
 	        await managerRuntime.handleWorkerTurnTerminal(threadId, turnId, outcome)
 	          .catch((error) => console.warn('[kun] ade worker terminal failed:', error))
 	      }
@@ -432,7 +432,7 @@ export async function createRuntimeAgentComposition(
 	    }
 	    return trackRuntimeRun(reviewService.runReview(input))
 	  }
-	  // Plan-phase admission (P1-25): define_plan validates each task's
+	  // Plan-phase admission: define_plan validates each task's
 	  // harnessId through the same catalog/detector/capability gates the
 	  // HarnessRouter applies at dispatch time.
 	  graphRuntime.harnessAdmission = {

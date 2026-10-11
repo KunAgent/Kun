@@ -85,7 +85,7 @@ export function useFloatingComposerActions(
   const applySlashCommand = (commandId: SlashCommandId): void => {
     if (commandId.startsWith('harness:')) {
       // Harness-native commands go out verbatim — the owning harness parses
-      // them, so the builtin parsers must never touch the text (12 §7.4).
+      // them, so the builtin parsers must never touch the text.
       const command = slashCommands.find((item: SlashCommand) => item.id === commandId)
       const nativeText = command?.nativeText?.trim()
       if (nativeText) {

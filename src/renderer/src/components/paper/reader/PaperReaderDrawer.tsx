@@ -17,7 +17,7 @@ import { PaperEvidencePane } from '../evidence/PaperEvidencePane'
 type DrawerTab = 'outline' | 'figures' | 'annotations' | 'references' | 'citations' | 'evidence'
 
 /**
- * Reader side drawer (plan §6.4): table of contents, annotation list, and
+ * Reader side drawer: table of contents, annotation list, and
  * the references panel (local bbl/bib → S2 → Crossref via the main service).
  */
 export function PaperReaderDrawer({

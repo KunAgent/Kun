@@ -28,7 +28,7 @@ import { QualityVerdicts } from './quality-verdict.js'
 import { ReviewRequests } from './review-request.js'
 import type { ManagerRuntimeDeps, ManagerToolContext } from './manager-runtime.js'
 
-/** Shared fixtures for the P1-14 control-plane suites (09 §4.1/§9/§6.5). */
+/** Shared fixtures for the control-plane suites. */
 
 export const NOW = '2026-09-26T00:00:00.000Z'
 
@@ -210,14 +210,14 @@ export function childRun(overrides: Partial<ChildRunRecord> = {}): ChildRunRecor
 export function makeHarness(stores: AdeStores, opts: {
   workspaceStat?: { changedFiles: number; insertions: number; deletions: number }
   mayApprove?: boolean
-  /** Worker-selector inputs for review_request/worker_create tests (10 §5). */
+  /** Worker-selector inputs for review_request/worker_create tests. */
   selector?: ManagerRuntimeDeps['selector']
   /** Harness defs the catalog lists (default: all builtins). */
   harnesses?: typeof BUILTIN_HARNESSES[number][]
   capabilities?: unknown
   statusFor?: (harnessId: string) => unknown
   reviewSnapshot?: unknown
-  /** P3-15: wire deps.usage + a shared TeamBudgetGate over these snapshots. */
+  /** wire deps.usage + a shared TeamBudgetGate over these snapshots. */
   usageForThread?: (threadId: string) => UsageSnapshot | undefined
 } = {}) {
   const gate = new InMemoryApprovalGate()

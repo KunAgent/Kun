@@ -309,7 +309,7 @@ describe('kun tools MCP route', () => {
   })
 })
 
-  it('delivers a worker submit_result call to the callback service (P3-08)', async () => {
+  it('delivers a worker submit_result call to the callback service', async () => {
     const calls: Array<{ threadId: string; args: unknown }> = []
     const service = {
       reportProgress: async () => ({ status: 'recorded' }),

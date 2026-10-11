@@ -10,7 +10,7 @@ import {
   activitySnapshotResponse
 } from './activity.js'
 
-/** Activity read surface (docs/ade/06 §9) + hook-ingest (05 §6.2). */
+/** Activity read surface + hook-ingest. */
 export function registerActivityRoutes(router: Router, runtime: ServerRuntime): void {
   // Authenticated by the unit's own hook-ingest kgw_ grant — never the
   // runtime token — so this intentionally skips `authorize`.

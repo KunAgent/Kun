@@ -7,7 +7,7 @@ import type { ManagerRuntimeDeps, ManagerToolContext } from './manager-runtime.j
 import { reportLanguage } from './user-report.js'
 
 /**
- * `workspace_integrate` (09 §4.1, 11 §7.2): merging a task worktree back into
+ * `workspace_integrate`: merging a task worktree back into
  * the user's source checkout is a user-only effect. Interactive managers ask
  * through a `file` approval envelope pinned to the source path; unattended
  * turns cannot ask, so they defer to the user instead of integrating.
@@ -127,7 +127,7 @@ export class WorkspaceIntegrations {
     return candidates.length === 1 ? candidates[0] : candidates.length ? candidates : undefined
   }
 
-  /** User-only approval: file envelope pinned to the source checkout (11 §7.2). */
+  /** User-only approval: file envelope pinned to the source checkout. */
   private async askUser(
     ctx: ManagerToolContext,
     record: TaskWorkspaceRecord,

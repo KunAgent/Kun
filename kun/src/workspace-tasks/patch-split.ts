@@ -1,5 +1,5 @@
 /**
- * Per-file patch splitting for the review diff surface (docs/ade/11 §3).
+ * Per-file patch splitting for the review diff surface.
  * Pure parsing — a `diff --git` unified patch becomes one section per file
  * with status, path rename info, binary flag, and insertion/deletion counts.
  */

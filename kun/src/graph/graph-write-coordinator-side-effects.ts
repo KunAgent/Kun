@@ -2,8 +2,7 @@ import { realpath } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { normalizeGraphRelativePath } from '../contracts/graph-path.js'
 
-// Git/mutex helpers moved to workspace-tasks/workspace-git.ts (docs/ade/07
-// §3); the old names stay exported here for compatibility.
+// Git/mutex helpers moved to workspace-tasks/workspace-git.ts; the old names stay exported here for compatibility.
 export {
   workspaceWriteMutexContext as graphWriteMutexContext,
   assertWorkspaceWriteFence as assertGraphWriteFence,

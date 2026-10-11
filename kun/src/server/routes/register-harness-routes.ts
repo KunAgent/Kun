@@ -47,8 +47,8 @@ export function registerHarnessRoutes(router: Router, runtime: ServerRuntime): v
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return testHarness(runtime, request, context.params)
   })
-  // P4-12: unsaved-definition handshake + credential-store refs for
-  // `secretEnv` (docs/ade/impl/p4 §3.7). `secrets` is a fixed segment, so
+  // unsaved-definition handshake + credential-store refs for
+  // `secretEnv`. `secrets` is a fixed segment, so
   // it can never collide with `:id` harness routes.
   router.add('POST', '/v1/harnesses/probe-definition', (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

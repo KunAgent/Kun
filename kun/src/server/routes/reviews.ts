@@ -15,7 +15,7 @@ import { reviewRevisionValidity } from '../../contracts/review-revision.js'
 import type { TaskWorkspaceService } from '../../workspace-tasks/task-workspace-service.js'
 
 /**
- * Line-level review comments (11 §4): stored per task workspace so every
+ * Line-level review comments: stored per task workspace so every
  * client — desktop, phone, TUI — sees and sends the same pending batch.
  */
 
@@ -98,7 +98,7 @@ function sendConflict(reason: string, message: string): JsonResponse {
 
 /**
  * POST /v1/reviews/:workspaceId/send — batch the pending comments into one
- * deterministic revision request (11 §4.4) and route it to the worker that
+ * deterministic revision request and route it to the worker that
  * produced the diff, the manager thread, or a fresh worker reusing the same
  * task workspace.
  */
@@ -141,7 +141,7 @@ async function sendReviewResponseInternal(
       'review send is already reserved; inspect its outcome before retrying')
   }
   const unresolved = sendable.filter((c) => c.state !== 'resolved')
-  // Note-only sends (e.g. a failed CI check summary) carry no comments (11 §7.2).
+  // Note-only sends (e.g. a failed CI check summary) carry no comments.
   if (!unresolved.length && !note?.trim()) {
     return ERRORS.conflict('all selected comments are resolved')
   }

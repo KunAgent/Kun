@@ -1,5 +1,5 @@
 /**
- * CodexSession (P6-05): one Codex app-server thread bound to a Kun turn flow.
+ * CodexSession: one Codex app-server thread bound to a Kun turn flow.
  * Owns the per-turn notification subscription, approval/user-input routing
  * through `HarnessTurnSink`, and turn completion via `turn/completed` —
  * worker self-reports never end a turn.

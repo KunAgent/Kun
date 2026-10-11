@@ -207,7 +207,7 @@ export function createThreadCreationActions(
             primaryAgentAvailableOnSurface(profile, requestedAgentSurface)
         )
         : undefined
-      // P4-11: explicit pins (harness defaults via the one-to-one pickers)
+      // explicit pins (harness defaults via the one-to-one pickers)
       // outrank the persona/global defaults for the new thread's route.
       const initialModel = options.model?.trim() ||
         personaProfile?.model?.trim() || runtime.model.trim()

@@ -1,8 +1,8 @@
 import { bindTurnMutationContext } from '../../manager/turn-mutation-context.js'
 /**
- * PiClient (P6-09): thin RPC peer for `pi --mode rpc` over `JsonlTransport`.
+ * PiClient: thin RPC peer for `pi --mode rpc` over `JsonlTransport`.
  *
- * Frame shapes (verified on pi 0.99.0, docs/ade/impl/pi-protocol-notes.md):
+ * Frame shapes (verified on pi 0.99.0):
  * - request:  `{id:'<string>', type:'<command>', ...args}`
  * - response: `{id:'<string>', type:'response', command:'<echo>', success, data|error}`
  * - event:    `{type:'<event>', ...}` (no id)

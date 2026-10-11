@@ -1,7 +1,7 @@
 import type { ManagerRuntime, ManagerToolContext } from '../manager-runtime.js'
 
 /**
- * Thin handlers for the control-plane tools (09 §4.1): the ManagerRuntime's
+ * Thin handlers for the control-plane tools: the ManagerRuntime's
  * controls/teamControls do the work; these exist so the provider file stays
  * declarative.
  */

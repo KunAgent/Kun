@@ -9,7 +9,7 @@ import type { ThreadService } from '../../services/thread-service-core.js'
 import type { TaskWorkspaceService } from '../../workspace-tasks/task-workspace-service.js'
 
 /**
- * `GET /v1/threads/:threadId/handoff-preview?turnId=` (docs/ade/impl §P0-14).
+ * `GET /v1/threads/:threadId/handoff-preview?turnId=`.
  * Rebuilds the deterministic brief recorded by the latest `handoff_injected`
  * event for that turn so clients can render it on demand without persisting
  * the 16 KiB body in the event stream.

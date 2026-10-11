@@ -100,7 +100,7 @@ export function TerminalPanel({
   }, [active, setupHarnessId])
   const [terminalColors, setTerminalColors] = useState<TerminalColorSettingsV1>(() => defaultTerminalColors())
   const terminalColorsRef = useRef(terminalColors)
-  // P4-09: ids of tabs whose setup command was already written into the PTY.
+  // ids of tabs whose setup command was already written into the PTY.
   const prefilledTabsRef = useRef(new Set<string>())
 
   tabsRef.current = tabs
@@ -246,7 +246,7 @@ export function TerminalPanel({
       fitVisibleTerminal(container, fit, term)
     })
 
-    // P4-09: a setup tab carries a builtin harness command that is written
+    // a setup tab carries a builtin harness command that is written
     // into the PTY input once (no Enter) so the user reviews it first.
     const maybePrefill = (): void => {
       if (!tab.prefill || prefilledTabsRef.current.has(tab.id) || !isCurrentAttach()) return
@@ -264,7 +264,7 @@ export function TerminalPanel({
     const offExit = backend.onExit((payload) => {
       if (payload.sessionId !== sessionId) return
       setExited(true)
-      // P4-09: a setup tab's PTY exiting (install/login finished or the
+      // a setup tab's PTY exiting (install/login finished or the
       // user closed the shell) re-detects the harness it was created for.
       if (tab.probeHarnessId) {
         const harnessId = tab.probeHarnessId
@@ -328,7 +328,7 @@ export function TerminalPanel({
       const dims = fitVisibleTerminal(container, fit, term)
       await resizeTerminalSession(backend.resize, sessionId, dims, onResizeError)
       setExited(false)
-      // P4-09 fallback: a fresh session that never echoes (silent shell
+      // fallback: a fresh session that never echoes (silent shell
       // startup) still receives its prefill; a re-attached session does not.
       if (tab.prefill && !('replayed' in result && result.replayed)) {
         prefillTimer = setTimeout(maybePrefill, 700)

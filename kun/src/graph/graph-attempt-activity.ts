@@ -2,7 +2,7 @@ import type { GraphNodeAttemptV1, GraphRunV1 } from '../contracts/graph.js'
 import type { GraphSchedulerOptions } from './graph-scheduler-types.js'
 
 /**
- * Mission-control registration (docs/ade/06 §4, impl P1-25): binds the worker
+ * Mission-control registration: binds the worker
  * child session and opens the `graph-attempt` activity row before execution
  * starts so `event.child` projections land on the attempt row.
  */

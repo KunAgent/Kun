@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P3-16 manager evaluation (docs/ade/impl/p3-review-followup.md): runs the
+ * manager evaluation: runs the
  * fixed corpus in ade-eval-tasks.mjs twice per task — once on a plain Kun
  * thread ("single") and once on an ADE manager thread that may delegate to
  * workers — and compares success, tokens, wall time, and the number of
@@ -8,7 +8,7 @@
  *
  * Same credential rules as ade-e2e: real providers only on development
  * machines or nightly jobs; results append as JSONL with --out and print a
- * markdown table for the follow-up doc's §4.
+ * markdown table.
  *
  * Usage:
  *   node scripts/ade-eval.mjs --api-key-file <f> [--config c] [--only t01,t07]
@@ -225,13 +225,13 @@ async function runAde(task) {
   const failed = dispatches.filter((d) => d.state === 'failed' || d.state === 'cancelled')
   notes.push(`workers=${workers.length} dispatches=${dispatches.length}` +
     (failed.length ? ` failed=${failed.length}` : ''))
-  // P4-16: parallel-shaped tasks carry an advisory worker floor; flag when
+  // parallel-shaped tasks carry an advisory worker floor; flag when
   // the manager serially self-served work meant to be delegated.
   if (task.expect?.minWorkers && workers.length < task.expect.minWorkers) {
     notes.push(`under-dispatched: workers=${workers.length} < expected ${task.expect.minWorkers}`)
   }
 
-  // The user's lane (09 §7): merge each worker's task workspace back, then
+  // The user's lane: merge each worker's task workspace back, then
   // verify the manager workspace — the same final state a single-Kun run
   // produces. A worker that finished in its own tree but cannot merge is a
   // distinct outcome from the work itself failing.
@@ -327,9 +327,9 @@ if (MODE === 'both' && byMode('single').length && byMode('ade').length) {
   }
 }
 const today = new Date().toISOString().slice(0, 10)
-console.log('\n--- paste into p3-review-followup.md §4 ---')
+console.log('\n--- results ---')
 for (const r of results) {
   const note = (r.notes ?? []).join('; ').replace(/\|/g, '/')
-  console.log(`| ${today} | kun ${ctx.version} | P3-16 ${r.task} ${r.mode} | ${r.success ? '通过' : '失败'} | tokens=${r.tokens ?? '-'} wall=${Math.round((r.wallMs ?? 0) / 1000)}s intv=${r.interventions ?? 0} ${r.workers !== undefined ? `workers=${r.workers} ` : ''}${note} |`)
+  console.log(`| ${today} | kun ${ctx.version} | ${r.task} ${r.mode} | ${r.success ? '通过' : '失败'} | tokens=${r.tokens ?? '-'} wall=${Math.round((r.wallMs ?? 0) / 1000)}s intv=${r.interventions ?? 0} ${r.workers !== undefined ? `workers=${r.workers} ` : ''}${note} |`)
 }
 process.exit(results.some((r) => r.success === false && !r.blocked) ? 1 : 0)

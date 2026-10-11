@@ -1,5 +1,5 @@
 /**
- * Applies AcpEventMapper drafts to the durable timeline (docs/ade/03 §6):
+ * Applies AcpEventMapper drafts to the durable timeline:
  * deltas go through `applyAssistantDelta` with a cumulative running item (the
  * mapper's draft item carries only the chunk), `item_created` persists the
  * item (which emits its own event), started/finished milestones persist the

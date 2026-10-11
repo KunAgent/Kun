@@ -192,7 +192,7 @@ describe('resolveWorkerRoute', () => {
     })
   })
 
-  it('fills unpinned route fields from harnesses.defaults (P4-11)', async () => {
+  it('fills unpinned route fields from harnesses.defaults', async () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       providerPool,

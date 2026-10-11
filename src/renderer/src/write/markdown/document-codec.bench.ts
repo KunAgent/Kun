@@ -1,5 +1,5 @@
 /**
- * Codec benchmarks (implementation §11): document open (parse+convert),
+ * Codec benchmarks: document open (parse+convert),
  * single-keystroke serialization, and external-sync reparse at 30k / 100k /
  * 300k characters. Run with `npx vitest bench`.
  *

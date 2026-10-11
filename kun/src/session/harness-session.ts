@@ -1,6 +1,6 @@
 /**
- * Shared session-level contract for native harness transports
- * (docs/ade/impl/p6a §1.1). One pooled `HarnessAgent` owns a spawned process;
+ * Shared session-level contract for native harness transports.
+ * One pooled `HarnessAgent` owns a spawned process;
  * `ensureSession` binds/creates a native session; each `HarnessSession` runs
  * Kun turns and streams protocol content through `HarnessTurnSink`, which is
  * the adapter's only egress into the timeline and gates.

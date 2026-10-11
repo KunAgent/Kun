@@ -6,7 +6,7 @@ import type { ChatBlock } from '../../agent/types'
 import { AssistantMarkdown } from '../chat/AssistantMarkdown'
 
 /**
- * First-turn task assignment card for ADE worker threads (12 §6.3): folds
+ * First-turn task assignment card for ADE worker threads: folds
  * the `<kun_assignment>` wrapper into a collapsed card — title row shows
  * the task line, expanding reveals the full brief (context, workspace,
  * collaboration). Unparseable text falls back to a plain bubble upstream.

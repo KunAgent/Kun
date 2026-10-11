@@ -70,7 +70,7 @@ describe('ade-one-on-one-pick storage', () => {
   })
 })
 
-describe('resolveOneOnOnePick (P4-15)', () => {
+describe('resolveOneOnOnePick', () => {
   it('falls back to the row defaults when nothing else applies', () => {
     expect(resolveOneOnOnePick({ row: row(), defaults: undefined })).toEqual({
       credentialMode: 'native-login',
@@ -80,7 +80,7 @@ describe('resolveOneOnOnePick (P4-15)', () => {
     })
   })
 
-  it('applies configured P4-11 defaults', () => {
+  it('applies configured defaults', () => {
     const resolved = resolveOneOnOnePick({
       row: row(['native-login', 'kun-gateway']),
       defaults: {

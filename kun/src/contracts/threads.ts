@@ -292,7 +292,7 @@ export const ThreadSchemaBase = z.object({
   /** Host-resolved task defaults and source information for new Code work. */
   executionConfig: ThreadExecutionConfigSchema.optional(),
   pendingExecutionConfig: ThreadExecutionConfigSchema.optional(),
-  /** Host-managed task workspace bound to this thread (07 §5); counts as isolated (02 §6). */
+  /** Host-managed task workspace bound to this thread; counts as isolated. */
   taskWorkspaceId: z.string().min(1).optional(),
   /** Stable owner derived from the authenticated Extension Host session. */
   ownerExtensionId: z.string().min(1).optional(),
@@ -330,7 +330,7 @@ export const ThreadSchemaBase = z.object({
   relation: ThreadRelation.default('primary'),
   parentThreadId: z.string().optional(),
   /**
-   * ADE execution-unit identity (09 §3.1). Host-written only: worker threads
+   * ADE execution-unit identity. Host-written only: worker threads
    * carry their team/manager binding here so stores, tools, and completion
    * hooks can resolve the owning manager without trusting caller input.
    * Never exposed on `CreateThreadRequest`.
@@ -492,7 +492,7 @@ export const CreateThreadRequest = z.object({
   /** CAS of the displayed project defaults; omitted by legacy clients. */
   projectDefaultsRevision: z.string().regex(/^ade-project-v1:[a-f0-9]{64}$/).optional(),
   executionConfig: z.never().optional(),
-  /** Bind a host-managed task workspace to this thread (07 §5). */
+  /** Bind a host-managed task workspace to this thread. */
   taskWorkspaceId: z.string().min(1).optional(),
   /** Opaque core-managed account reference for the selected provider. */
   accountId: z.string().min(1).optional(),
@@ -605,9 +605,9 @@ export const UpdateThreadRequest = z
     /** Marks the new title as auto/provisional (true) or user-set/locked (false). */
     titleAuto: z.boolean().optional(),
     workspace: z.string().min(1).optional(),
-    /** Bind a host-managed task workspace once it reaches `ready` (07 §5); set-only. */
+    /** Bind a host-managed task workspace once it reaches `ready`; set-only. */
     taskWorkspaceId: z.string().min(1).optional(),
-    /** Rebind the harness (01 §8); refused while the thread is running. */
+    /** Rebind the harness; refused while the thread is running. */
     harnessId: HarnessIdSchema.optional(),
     /** Effective on the next turn; updates are refused while a turn is running. */
     collaboration: ThreadCollaborationRequestSchema.optional(),

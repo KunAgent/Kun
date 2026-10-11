@@ -6,7 +6,7 @@ import type {
 } from '@shared/task-workspace'
 
 /**
- * Composer-facing task-workspace preparation state (docs/ade/12 §7.3).
+ * Composer-facing task-workspace preparation state.
  *
  * A new ADE thread may request a fresh worktree at creation; the workspace
  * prepares asynchronously and `task_workspace` events on the owner thread
@@ -122,7 +122,7 @@ export function receiveTaskWorkspaceRecord(record: TaskWorkspaceRecord): void {
   })
 }
 
-/** SSE entry for `task_workspace` events on the owner thread (07 §5). */
+/** SSE entry for `task_workspace` events on the owner thread. */
 export function receiveTaskWorkspaceThreadEvent(ev: TaskWorkspaceThreadEvent): void {
   if (ev.unitId) return
   const threadId = ev.threadId.trim()

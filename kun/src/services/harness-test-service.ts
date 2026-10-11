@@ -16,8 +16,7 @@ import { probePiHandshake } from '../harness/pi-handshake-probe.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 
 /**
- * `POST /v1/harnesses/:id/test` orchestration (docs/ade/impl/p4 §3.5,
- * P4-10). Three progressive levels, each recorded with its own duration:
+ * `POST /v1/harnesses/:id/test` orchestration. Three progressive levels, each recorded with its own duration:
  * detect → handshake → trial. A failed level stops the deeper ones (a
  * missing binary cannot handshake); a transport without a handshake
  * surface reports `supported: false` and does not block the trial.

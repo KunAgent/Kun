@@ -34,9 +34,9 @@ export function buildHarnessRuntimes(input: {
   antigravity?: AntigravityCliRuntimeDeps | null
   cursor?: CursorSdkRuntimeFactoryDeps | null
   acp?: AcpRuntimeDeps | null
-  /** P6-05/07: native `codex app-server` transport on the shared session layer. */
+  /** native `codex app-server` transport on the shared session layer. */
   codexAppServer?: SessionTurnRuntimeDeps | null
-  /** P6-09/11: native `pi --mode rpc` transport on the shared session layer. */
+  /** native `pi --mode rpc` transport on the shared session layer. */
   piRpc?: SessionTurnRuntimeDeps | null
   /**
    * Shared usage ledger. When present, every external transport's usage

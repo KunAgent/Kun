@@ -1,5 +1,5 @@
 /**
- * Generic agent-process pool (P6-03, generalized from `acp-connection-pool.ts`):
+ * Generic agent-process pool (generalized from `acp-connection-pool.ts`):
  * one process per `${harnessId}:${credentialIdentity}` key hosts many sessions.
  * Leases are refcounted; a connection is closed after it has been idle for
  * `idleReleaseMs`. An unexpected process exit evicts the entry and fires the
@@ -96,7 +96,7 @@ export class HarnessAgentPool<T extends PooledAgent> {
   }
 
   /**
-   * Activity dormancy (docs/ade/06 §7.2): close the pooled connection hosting
+   * Activity dormancy: close the pooled connection hosting
    * this unit's session — but only when no turn still leases it, so live
    * sibling sessions on the same agent process are never released with it.
    * Session bindings survive the close; the next turn resumes natively or

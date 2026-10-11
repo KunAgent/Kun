@@ -1,5 +1,5 @@
 /**
- * ADE manager per-turn context (docs/ade/impl p3-review-followup P3-14):
+ * ADE manager per-turn context:
  * a length-bounded dynamic-context block injected after the stable prefix
  * for authorized manager turns on the Kun harness. It carries
  * the delegation contract, live team state, and the harness routing menu —
@@ -15,7 +15,7 @@ export type AdeManagerContextDeps = {
   teams: { byManager(managerThreadId: string): Promise<TeamRecord | null> }
   dispatches: { list(teamId: string): Promise<DispatchRecord[]> }
   questions: { listOpen(teamId: string): Promise<QuestionRecord[]> }
-  /** Same ready-harness routing menu the Graph planner sees (P1-25). */
+  /** Same ready-harness routing menu the Graph planner sees. */
   harnessSummary: () => Promise<string | undefined>
   /** New dispatch admission; existing-team guidance remains when disabled. */
   canStartNewWork?: () => boolean

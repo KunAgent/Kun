@@ -172,14 +172,14 @@ describe('harness/ade settings bridge', () => {
     expect(configA.harnesses).not.toHaveProperty('binaryPaths')
     expect(configA.harnesses).not.toHaveProperty('terminalAgents')
     expect(providers['claude-code']).toEqual({ command: '/opt/claude' })
-    // P4-12: secretEnv refs emit sorted by name; values never appear — the
+    // secretEnv refs emit sorted by name; values never appear — the
     // runtime config carries only opaque credential-store references.
     expect(providers.zeta).toEqual({
       extends: 'acp', label: 'Zeta', command: '/bin/zeta', args: { mode: 'replace', values: ['--x'] },
       env: { A: '1', B: '2' },
       secretEnv: [{ name: 'A_KEY', secretRef: 'cred_a' }, { name: 'Z_KEY', secretRef: 'cred_z' }]
     })
-    // P4-13: terminal Agents keep their launch details with a fixed field order.
+    // terminal Agents keep their launch details with a fixed field order.
     expect(providers['zed-shell']).toEqual({
       extends: 'terminal', label: 'Zed Shell', command: '/bin/zsh-agent', args: { mode: 'replace', values: ['--tty'] },
       terminal: { taskFlag: '-i', resumeArgs: ['--resume'], hooks: 'claude-settings' }
@@ -213,7 +213,7 @@ describe('harness/ade settings bridge', () => {
   })
 
   it('migrates legacy defaultPermissionMode into defaults byte-identically', () => {
-    // P4-11: a pre-migration settings file holding only
+    // a pre-migration settings file holding only
     // `defaultPermissionMode` must produce the same config as the migrated
     // `defaults[*].permissionMode` shape.
     const legacy = runtimeWith({
@@ -280,7 +280,7 @@ describe('harness/ade settings bridge', () => {
       harnesses: { disabledIds: [], bogus: 1 }
     })
     expect(unknownHarnessSubkey.success).toBe(false)
-    // The pre-P2 fields only ever come from a settings file, never a patch.
+    // The legacy fields only ever come from a settings file, never a patch.
     expect(kunRuntimePatchSchema.safeParse({ harnesses: { binaryPaths: {} } }).success).toBe(false)
   })
 

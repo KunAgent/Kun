@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-/** Sanitized snapshot of one harness session config option (ACP §7.3). */
+/** Sanitized snapshot of one harness session config option. */
 export const HarnessConfigOptionSchema = z
   .object({
     id: z.string().min(1).max(256),
@@ -15,8 +15,8 @@ const SettingIdSchema = z.string().min(1).max(256)
 const SettingLabelSchema = z.string().max(256)
 
 /**
- * A session control an Agent publishes that Kun does not model itself
- * (docs/ade/17 §4.4), e.g. an ACP config option outside model, mode and
+ * A session control an Agent publishes that Kun does not model itself,
+ * e.g. an ACP config option outside model, mode and
  * reasoning. The composer renders these generically; a turn carries the
  * chosen values back by id.
  */

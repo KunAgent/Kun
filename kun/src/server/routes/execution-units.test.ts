@@ -128,7 +128,7 @@ describe('execution-unit routes', () => {
       mainState: 'working',
       harnessId: 'claude-code'
     })
-    // Managed hooks populate the launch extras for claude-settings (P2-03).
+    // Managed hooks populate the launch extras for claude-settings.
     const launch = body.launch as { args: string[]; env: Record<string, string> }
     expect(launch.args[0]).toBe('--settings')
     expect(launch.args[1]).toContain('/ade/hooks/tu_1/settings.json')

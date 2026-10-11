@@ -2,7 +2,7 @@ import type { WorkerNotice } from '../contracts/ade.js'
 import { reportLanguage, type ReportLanguage } from './user-report.js'
 
 /**
- * Host-generated manager wake-up text (09 §6.2). One `<kun_worker_updates>`
+ * Host-generated manager wake-up text. One `<kun_worker_updates>`
  * block aggregates every pending notice into deterministic per-worker rows
  * so the manager can review, answer questions, or summarize without any
  * model-authored framing. Dynamic fields are XML-escaped; the renderer

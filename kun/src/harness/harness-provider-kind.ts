@@ -1,5 +1,5 @@
 /**
- * Legacy provider kind a provider-sourced harness requires (docs/ade): SDK and
+ * Legacy provider kind a provider-sourced harness requires: SDK and
  * CLI harnesses only accept provider connections of their own kind, so a
  * `provider`-mode route to a mismatched connection must be refused up front.
  */

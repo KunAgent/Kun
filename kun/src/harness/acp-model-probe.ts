@@ -1,6 +1,6 @@
 import { harnessExecutableIdentity } from './harness-executable-identity.js'
 /**
- * ACP model probing for `GET /v1/harnesses/:id/models` (docs/ade/03 §12.2).
+ * ACP model probing for `GET /v1/harnesses/:id/models`.
  * Opens a throwaway connection, calls `session/new`, and reads the `model`
  * config option's value list or legacy availableModels list. No prompt is sent, so the probe incurs
  * no model usage. Results are cached for ten minutes; concurrent probes for
@@ -41,7 +41,7 @@ export const ACP_PROBE_IDLE_MS = 60_000
 export type AcpModelProbeDeps = {
   /** Settings `harnesses.binaryPaths` override for `launch.command`. */
   binaryPath?: (harnessId: HarnessId) => string | undefined
-  /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
+  /** Resolves `launch.secretEnv` refs so the probe sees the real env. */
   resolveSecretEnv?: HarnessSecretRefResolver
   spawn?: AcpSpawnFn
   nowMs?: () => number

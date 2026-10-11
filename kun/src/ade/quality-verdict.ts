@@ -15,7 +15,7 @@ import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-ser
 import type { ReviewRevision } from '../contracts/review-revision.js'
 import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 
-/** `worker_verdict` input (10 §4.2): the manager records a quality decision. */
+/** `worker_verdict` input: the manager records a quality decision. */
 export const WorkerVerdictInputSchema = z
   .object({
     dispatchId: z.string().min(1).max(256),
@@ -51,7 +51,7 @@ const STATUS_LABEL: Record<VerdictStatus, { zh: string; en: string }> = {
 }
 
 /**
- * Quality verdicts (10 §4): acceptance stays independent from execution
+ * Quality verdicts: acceptance stays independent from execution
  * `state`, a later decision supersedes the earlier one into
  * `verdict.superseded` (both stay on record), and a user verdict is final —
  * manager writes afterwards are refused.
@@ -97,7 +97,7 @@ export class QualityVerdicts {
   }
 
   /**
-   * `setVerdict` (10 §4.2): writes a decided verdict. A prior decided
+   * `setVerdict`: writes a decided verdict. A prior decided
    * verdict moves into `superseded`; checks/reviewer linkage carry over.
    * Once `decidedBy: 'user'` exists only the user may decide again.
    */
@@ -176,7 +176,7 @@ export class QualityVerdicts {
   }
 
   /**
-   * Reviewer findings (10 §5): the reviewer worker's `submit_result` merges
+   * Reviewer findings: the reviewer worker's `submit_result` merges
    * into the reviewed dispatch — checks keep their entries, risks become
    * failed checks, all tagged `source: 'reviewer'`. Status/decision stay
    * untouched; the manager or user still decides.

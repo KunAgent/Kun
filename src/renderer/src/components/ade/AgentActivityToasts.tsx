@@ -62,7 +62,7 @@ function Toast({ card, onOpen }: { card: Card; onOpen: () => void }): ReactEleme
 }
 
 /**
- * Floating cards for Agent work that outlives its page (docs/ade/18 §10.3):
+ * Floating cards for Agent work that outlives its page:
  * an update or install keeps reporting after the user leaves Settings, and
  * its result is announced. The Agent whose page is open stays quiet; its
  * banner and list row already say the same thing.

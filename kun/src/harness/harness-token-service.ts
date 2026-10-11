@@ -4,8 +4,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { HarnessId } from '../contracts/harness.js'
 
 /**
- * Process-local bearer tokens scoped to a spawned harness (docs/ade/04 §4,
- * docs/ade/05 §4). Grants live only in memory: Kun restarts invalidate every
+ * Process-local bearer tokens scoped to a spawned harness. Grants live only in memory: Kun restarts invalidate every
  * token, and harness child processes are rebuilt with the restart, so no
  * persisted credential can outlive its owner. Token bytes are deterministic
  * for a given (harnessId, credentialIdentity, threadId, scopes) tuple so the

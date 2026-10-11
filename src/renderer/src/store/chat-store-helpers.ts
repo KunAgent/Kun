@@ -80,7 +80,7 @@ export type ComposerPlanMode = 'plan' | 'agent' | 'auto'
 export type ThreadComposerSelection = {
   model: string
   providerId: string
-  /** ADE harness pinned for this thread's next turns (12 §7.2). */
+  /** ADE harness pinned for this thread's next turns. */
   harnessId?: string
   /** Credential path selected with the harness (native-login / kun-gateway …). */
   gatewayBinding?: HarnessGatewayBinding

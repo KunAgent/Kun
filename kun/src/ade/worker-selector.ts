@@ -21,7 +21,7 @@ import type { FileTeamStore } from './team-store.js'
 import type { FileDispatchStore } from './dispatch-store.js'
 
 /**
- * Deterministic worker route selection (10 §3.2). `worker_create` without an
+ * Deterministic worker route selection. `worker_create` without an
  * explicit `agent` runs this: every routable profile plus every ready harness
  * default is a candidate; admission filters first, then a fixed score
  * combines BM25 role recall, user preference order, quota pressure, recent
@@ -30,7 +30,7 @@ import type { FileDispatchStore } from './dispatch-store.js'
 
 export type RouteCandidate = {
   route: HarnessRoute
-  /** Set when the candidate is a profile-bound role (10 §3.1). */
+  /** Set when the candidate is a profile-bound role. */
   profileId?: string
   /** Display label: profile name or harness displayName. */
   label: string
@@ -45,7 +45,7 @@ export type WorkerSelectorDeps = {
   catalog: Pick<HarnessCatalog, 'list' | 'get' | 'isDisabled'> & Partial<Pick<HarnessCatalog, 'enabledProfiles' | 'isProfileEnabled'>>
   detector: Pick<HarnessDetector, 'status'>
   capabilitiesForRoute(route: HarnessRoute): Promise<HarnessCapabilities>
-  /** Routing-visible profiles for the manager workspace (10 §3.1 docs). */
+  /** Routing-visible profiles for the manager workspace. */
   profiles(workspace: string): Promise<SubagentRoutingDocument[]>
   /** 60s quota snapshot; null when probing failed (does not block selection). */
   quota(): Promise<ProviderQuotaListResponse | null>
@@ -62,7 +62,7 @@ export type WorkerSelectorDeps = {
   /** Manager thread's own model route; default for provider-sourced harnesses. */
   managerRoute(): { model?: string; providerId?: string }
   /**
-   * Optional small-model arbitration (10 §3.2): consulted only when the top-2
+   * Optional small-model arbitration: consulted only when the top-2
    * deterministic scores differ by less than 0.05. Returning 'b' promotes the
    * runner-up; undefined/error keeps the deterministic order.
    */
@@ -77,9 +77,9 @@ export type WorkerSelectorDeps = {
 export type WorkerRouteSelection = {
   route: HarnessRoute
   profileId?: string
-  /** One-sentence host fact for the manager/user (10 §3.2). */
+  /** One-sentence host fact for the manager/user. */
   reason: string
-  /** Deterministic score of the winning candidate (10 §3.3). */
+  /** Deterministic score of the winning candidate. */
   score: number
   /** Runner-up candidates (up to 3), for WorkerRecord reproducibility. */
   alternatives: Array<RouteCandidate & { score: number }>
@@ -104,7 +104,7 @@ export function costTierFromPricing(pricing: ModelCatalogPricing | undefined): 0
   return perMillion < 3 ? 0 : perMillion < 25 ? 1 : 2
 }
 
-/** Quota pressure per 10 §3.2: >=95% excludes, >=80% penalizes 0.8. */
+/** Quota pressure: >=95% excludes, >=80% penalizes 0.8. */
 export function quotaPenalty(
   snapshot: ProviderQuotaListResponse | null,
   candidate: RouteCandidate
@@ -179,7 +179,7 @@ async function buildCandidates(
     }
   }
 
-  // Profile-bound candidates (10 §3.1): a role pinned to a harness/model.
+  // Profile-bound candidates: a role pinned to a harness/model.
   for (const doc of docs) {
     const { route, rejectedReason } = routeFor(
       (doc.profile.harnessId ?? 'kun') as HarnessId,
@@ -285,7 +285,7 @@ export async function selectWorkerRoute(
   input: {
     task: string
     role?: string
-    /** Manager thread id — also the team id (09 §3.2). */
+    /** Manager thread id — also the team id. */
     teamId: string
     workspace: string
     exclude?: { harnessIds?: string[] }
@@ -300,7 +300,7 @@ export async function selectWorkerRoute(
   const admitted = all.filter((candidate) => candidate.admission.ok)
   const eligible = admitted.filter((candidate) => !excluded.has(candidate.route.harnessId))
   const quota = await deps.quota()
-  // Quota exhaustion is a hard exclusion (10 §3.2): >=95% drops a candidate.
+  // Quota exhaustion is a hard exclusion: >=95% drops a candidate.
   const quotaOk = eligible.filter(
     (candidate) => quotaPenalty(quota, candidate).penalty !== Number.POSITIVE_INFINITY
   )
@@ -393,8 +393,7 @@ export async function selectWorkerRoute(
 }
 
 /**
- * Same-team same-harness dispatch failures within the last hour (10 §3.2
- * `recentFailurePenalty`). Shared by worker_create and cross-review routing.
+ * Same-team same-harness dispatch failures within the last hour. Shared by worker_create and cross-review routing.
  */
 export async function countRecentWorkerFailures(
   stores: {

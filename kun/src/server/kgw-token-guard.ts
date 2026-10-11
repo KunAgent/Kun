@@ -8,7 +8,7 @@ import { jsonResponse, type JsonResponse } from './response.js'
 import { rawGatewayCredential, splitAttributedKey } from './routes/gateway-caller-agent.js'
 
 /**
- * Path prefixes each harness-token scope may reach (docs/ade/05 §4). A grant
+ * Path prefixes each harness-token scope may reach. A grant
  * carrying several scopes may reach the union of their prefixes; everything
  * else — including every other `/v1/*` route — is rejected before dispatch.
  */
@@ -39,7 +39,7 @@ function unauthorized(): JsonResponse {
 }
 
 /**
- * Dispatch-time fence for `kgw_` harness tokens (docs/ade/impl P1-07). Runs
+ * Dispatch-time fence for `kgw_` harness tokens. Runs
  * before routing and before the ordinary runtime-token check, so a harness
  * credential can never widen into control-plane routes — even on insecure
  * loopback servers where route auth is a no-op. Non-`kgw_` credentials pass

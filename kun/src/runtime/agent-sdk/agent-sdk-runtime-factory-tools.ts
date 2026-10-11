@@ -1,7 +1,7 @@
 /**
  * Binds the decoupled {@link AgentSdkRuntime} to kun's real runtime services.
  * Bridged Kun tool execution now lives on the shared transport-independent
- * KunToolBridgeHost (docs/ade/05 §3.2); this module keeps only the SDK-native
+ * KunToolBridgeHost; this module keeps only the SDK-native
  * tool approval seam (`canUseTool`) that has no bridged counterpart.
  */
 import type { SdkRuntimeDeps } from './agent-sdk-runtime.js'

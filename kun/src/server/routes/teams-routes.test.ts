@@ -161,7 +161,7 @@ describe('teams routes', () => {
     expect(body.text).toBeUndefined()
   })
 
-  it('records a user verdict and maps refusals (10 §4.3)', async () => {
+  it('records a user verdict and maps refusals', async () => {
     const setVerdict = vi.fn(async (input: Record<string, unknown>) =>
       input.dispatchId === 'dsp_ghost'
         ? { ok: false, refusal: 'dispatch_not_found', userReport: 'not found' }
@@ -207,7 +207,7 @@ describe('teams routes', () => {
     ).toBe(401)
   })
 
-  it('serves a worker record with its owning team (09 §9 banner)', async () => {
+  it('serves a worker record with its owning team', async () => {
     const worker = {
       workerId: 'wrk_1',
       label: 'backend',
@@ -228,7 +228,7 @@ describe('teams routes', () => {
     expect((await request('GET', '/v1/teams/workers/wrk_1', undefined, false)).status).toBe(401)
   })
 
-  it('stops a worker turn and maps refusals (09 §9)', async () => {
+  it('stops a worker turn and maps refusals', async () => {
     const stopWorker = vi.fn(async (workerId: string) =>
       workerId === 'wrk_gone'
         ? { ok: false, refusal: 'worker_not_found' }
@@ -245,7 +245,7 @@ describe('teams routes', () => {
     expect((await request('POST', '/v1/teams/workers/wrk_1/stop', {}, false)).status).toBe(401)
   })
 
-  it('runs host checks and returns the localized report even on refusal (10 §4.2)', async () => {
+  it('runs host checks and returns the localized report even on refusal', async () => {
     const runWorkerChecks = vi.fn(async (workerId: string, names?: string[]) =>
       workerId === 'wrk_idle'
         ? { ok: false, refusal: 'no_approved_checks', userReport: 'No approved check commands match.' }

@@ -23,7 +23,7 @@ export const CLAUDE_CODE_DEFINITION: HarnessDefinition = {
   ],
   modelSource: 'probe',
   // Fallback list when the SDK `supportedModels()` probe cannot run;
-  // mirrors what Claude Code 2.1.x reports (P3-07).
+  // mirrors what Claude Code 2.1.x reports.
   staticModels: [
     'claude-opus-5',
     'claude-sonnet-5',

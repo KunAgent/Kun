@@ -50,7 +50,7 @@ function useHandoffBrief(block: HandoffBlock): {
 /**
  * Expanded body of a `handoff` process row. The 16 KiB brief body is never
  * persisted into the event stream — it is rebuilt on demand through
- * `GET /v1/threads/:id/handoff-preview?turnId=` (docs/ade/08 §5).
+ * `GET /v1/threads/:id/handoff-preview?turnId=`.
  */
 export function HandoffBriefDetail({ block }: { block: HandoffBlock }): ReactElement {
   const { t } = useTranslation('common')

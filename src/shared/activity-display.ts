@@ -23,7 +23,7 @@ export type ActivityDisplayRow = {
 export type ActivityDisplayBucket = 'needs-you' | 'working' | 'review' | 'done' | 'idle'
 
 /**
- * Single bucketing rule shared by desktop and phone (docs/ade/06 §10).
+ * Single bucketing rule shared by desktop and phone.
  */
 export function displayBucket(row: ActivityDisplayRow, now: number): ActivityDisplayBucket {
   // Recovered facts await runtime confirmation before they drive actionable UI.

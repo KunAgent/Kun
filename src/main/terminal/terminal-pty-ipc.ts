@@ -53,7 +53,7 @@ type TerminalSession = {
   cleanupPromise: Promise<void> | null
   exitPromise: Promise<void>
   ownership?: { stop(): Promise<void> }
-  /** ADE terminal-agent unit this PTY hosts (05 §6.1). */
+  /** ADE terminal-agent unit this PTY hosts. */
   agent?: { unitId: string }
   /** Last interrupt-hint report; Esc bursts in TUIs would spam otherwise. */
   lastInterruptHintAt?: number
@@ -157,7 +157,7 @@ function buildShellEnv(colorMode: TerminalColorMode): NodeJS.ProcessEnv {
 }
 
 /**
- * ADE terminal-agent launch plan (05 §6.1). The command comes from the kun
+ * ADE terminal-agent launch plan. The command comes from the kun
  * Runtime admission snapshot (never renderer argv or a fresh PATH lookup).
  * The execution unit is registered before spawn; final validation checks the
  * exact enabled profile and the command whose readiness proof was captured.
@@ -236,8 +236,8 @@ async function resolveAgentLaunch(
   let task = agent.task?.trim()
   if (task) {
     // `argv` injection is the design-doc default; a harness may also declare
-    // a flag that carries the initial task (05 §6.1). The callback appendix
-    // (05 §5.3) rides along only when the credentials it relies on exist.
+    // a flag that carries the initial task. The callback appendix
+    // rides along only when the credentials it relies on exist.
     if (env.KUN_WORKER_ENDPOINT && env.KUN_WORKER_TOKEN) {
       task += TERMINAL_AGENT_CALLBACK_APPENDIX
     }
@@ -294,12 +294,12 @@ export type RegisterTerminalPtyIpcOptions = {
    */
   getTerminalColorMode?: () => TerminalColorMode | Promise<TerminalColorMode>
   /**
-   * Kun runtime HTTP access for terminal-agent registration/exit/hints
-   * (docs/ade/05 §6.1). Required only when a create carries `agent`.
+   * Kun runtime HTTP access for terminal-agent registration/exit/hints.
+   * Required only when a create carries `agent`.
    */
   runtimeFetch?: (path: string, init?: { method?: string; body?: string }) => Promise<Response>
   /**
-   * Resolve the bundled `kun` CLI for terminal-agent PTYs (P3-18): the
+   * Resolve the bundled `kun` CLI for terminal-agent PTYs: the
    * launch's bin dir is prepended to PATH and `KUN_CLI` exports the
    * absolute command. Only consulted when a create carries `agent`.
    */
@@ -568,7 +568,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
     const request = terminalWritePayloadSchema.parse(args)
     const session = sessions.get(request.sessionId)
     if (stopping || !session || !session.ready || session.exited || session.cleanupPromise) return false
-    // Interrupt inference (05 §6.3): a Ctrl+C or a bare Escape inside a
+    // Interrupt inference: a Ctrl+C or a bare Escape inside a
     // terminal-agent PTY is recorded so the next Stop hook reads cancelled.
     if (session.agent && (request.data === '\x03' || request.data === '\x1b')) {
       const now = Date.now()

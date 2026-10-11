@@ -6,7 +6,7 @@ export type WriteBlockShortcutsOptions = {
 }
 
 /**
- * Notion-style block keyboard map (implementation §9.11). StarterKit already
+ * Notion-style block keyboard map. StarterKit already
  * covers Mod-Shift-7/8 lists, Mod-e inline code, and Mod-k opens the link
  * bubble via WriteWorkLinks — this map adds what is missing.
  */

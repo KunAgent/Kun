@@ -2,7 +2,7 @@ import { dispatchGuidanceForTurn } from '../ade/dispatch-guidance.js'
 import { observeHarnessAliasRoute } from '../harness/gateway-alias-route-observer.js'
 import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 /**
- * Protocol-agnostic front half of a delegated turn (docs/ade/impl/p6a §2):
+ * Protocol-agnostic front half of a delegated turn:
  * load thread/turn/items, locate the user input, gate graph orchestration,
  * ensure goal context, compute the filtered history, instruction blocks,
  * acting model route, credential identity/env, secret env, permission mode,

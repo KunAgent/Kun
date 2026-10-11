@@ -3,7 +3,7 @@ import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import type { PaperLibraryEntry } from '@shared/paper/paper-library-types'
 
 /**
- * Reader-facing actions (plan §6.5): last-page/last-opened local state writes
+ * Reader-facing actions: last-page/last-opened local state writes
  * and the unread→reading auto-transition on first open.
  */
 

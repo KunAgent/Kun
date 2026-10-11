@@ -167,7 +167,7 @@ describe('listHarnessesForManager', () => {
     expect(out.agents.every((entry) => entry.ready)).toBe(true)
   })
 
-  it('P4-13: terminal agents are listed as terminal-only, never dispatchable', async () => {
+  it('terminal agents are listed as terminal-only, never dispatchable', async () => {
     const terminalDef = HarnessDefinitionSchema.parse(
       terminalAgentToDefinition({
         id: 'zed-shell',

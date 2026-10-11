@@ -1,5 +1,5 @@
 /**
- * mdast → Markdown serialization (implementation §3.4).
+ * mdast → Markdown serialization.
  *
  * Wraps `mdast-util-to-markdown` with the GFM/math/frontmatter extensions and
  * handlers for the Work custom nodes (`workRaw`, `wikiLink`). `callout`

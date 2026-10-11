@@ -1,5 +1,5 @@
 /**
- * ADE sidebar grouping (00 §4): status buckets extended with 待审查 / 已完成,
+ * ADE sidebar grouping: status buckets extended with 待审查 / 已完成,
  * an optional by-project grouping, and worker threads nested under their
  * manager. Kept pure so the ordering rules stay unit-testable.
  */
@@ -13,7 +13,7 @@ import type { SidebarThreadActivity } from '../chat/sidebar-project-selectors'
 
 export type AdeStatusGroup = 'attention' | 'review' | 'running' | 'done' | 'idle'
 
-/** Ordered per 00 §4: 待你处理 / 待审查 / 进行中 / 已完成 / 会话. */
+/** Ordered: 待你处理 / 待审查 / 进行中 / 已完成 / 会话. */
 export const ADE_STATUS_GROUP_ORDER: readonly AdeStatusGroup[] = [
   'attention',
   'review',

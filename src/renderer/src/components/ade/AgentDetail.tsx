@@ -30,7 +30,7 @@ export type AgentTabId = 'connection' | 'models' | 'launch' | 'version'
 type TabId = AgentTabId
 
 /**
- * One Agent's page (docs/ade/18 §3.3-3.5): the header with its switch, the one
+ * One Agent's page: the header with its switch, the one
  * next step when something needs doing, and either the first-time steps or the
  * four management tabs. Enablement, drafts and checks live in one hook here, so
  * the switch, the steps and the tabs can never disagree.

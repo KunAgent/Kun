@@ -2,9 +2,9 @@ import type { AdeHarnessSetup } from '@shared/ade-harnesses'
 
 /**
  * Setup commands for the Agent Center: the install command for this platform and
- * the sign-in command that is prefilled into a Kun terminal for the user to run
- * (docs/ade/impl/p4 §3.3). What an Agent shows and offers next comes from
- * `agentPresentation` (docs/ade/18 §4).
+ * the sign-in command that is prefilled into a Kun terminal for the user to run.
+ * What an Agent shows and offers next comes from
+ * `agentPresentation`.
  */
 
 /** Install entries prefer an exact platform match over the 'any' fallback. */

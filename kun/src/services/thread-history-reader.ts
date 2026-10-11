@@ -7,7 +7,7 @@ import { decodeOffsetCursor, encodeOffsetCursor } from './context-window-cursor.
 import { fitUtf8, utf8Bytes } from '../handoff/utf8-budget.js'
 
 /**
- * `read_thread_history` backing reader (docs/ade/08 §6). Lets a delegated
+ * `read_thread_history` backing reader. Lets a delegated
  * external harness page through the canonical turn items of its own thread
  * plus fork ancestors — thread identity always comes from the trusted tool
  * context, never from arguments.

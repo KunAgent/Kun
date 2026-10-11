@@ -161,7 +161,7 @@ export function createServerRuntimeComposition(
       capabilitiesMemo = undefined
     }
   }
-  // Extension-declared Agents (docs/ade/17 §4.5) join the catalog once their
+  // Extension-declared Agents join the catalog once their
   // extension is enabled with `agents.register`; listing Agents refreshes them.
   services.harnesses.extensionAgents.setLoader(() =>
     loadExtensionAgentProviders({ registry: extensionRegistry, packageManager: extensionPackageManager }))
@@ -260,14 +260,14 @@ export function createServerRuntimeComposition(
       // mark their persisted questions timed out before serving requests.
       await services.workerCallbacks.reconcileAllTeams().catch(() => undefined)
       // Terminal-agent units whose exit reports were lost with the last
-      // session come back as restoredUnconfirmed rows (05 §6.1).
+      // session come back as restoredUnconfirmed rows.
       await services.terminalAgents.restore().catch(() => undefined)
       // Re-resolve dispatches stuck in delivering/uncertain before the crash
-      // (09 §5): found turns are adopted; missing ones redeliver idempotently.
+      //: found turns are adopted; missing ones redeliver idempotently.
       await agent.managerRuntime.reconcileOnStartup().catch((error) => {
         console.warn('[kun] ade dispatch reconciliation failed:', error)
       })
-      // Restart replay (09 §6.2): notices still unacknowledged after the last
+      // Restart replay: notices still unacknowledged after the last
       // run get one merged wake-up per manager thread.
       await agent.workerNoticeCoordinator.replayPending().catch((error) => {
         console.warn('[kun] ade worker-notice replay failed:', error)

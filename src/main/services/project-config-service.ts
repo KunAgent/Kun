@@ -102,7 +102,7 @@ export type ApprovedWorktreeConfigEntry = {
 /**
  * Repositories whose `.kun/project.json` is grant-approved carry their
  * `worktree` section verbatim into `ade.approvedWorktreeConfigs` so Kun can
- * run setup without touching GUI settings (docs/ade/07 §7.1). The whole-file
+ * run setup without touching GUI settings. The whole-file
  * digest check means changing any section — including MCP — revokes approval.
  */
 export async function approvedWorktreeConfigs(

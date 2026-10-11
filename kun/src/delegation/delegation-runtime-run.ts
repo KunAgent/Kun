@@ -94,7 +94,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     /**
      * Host-owned idempotency key for the child turn start. Retried deliveries
      * with the same key reattach to the already-admitted turn (manager
-     * dispatch exactly-once, 09 §5).
+ * dispatch exactly-once).
      */
     clientRequestId?: string
     /** Trusted host workflow control kept outside the child user message. */

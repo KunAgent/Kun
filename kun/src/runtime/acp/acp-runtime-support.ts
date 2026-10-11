@@ -2,7 +2,7 @@ import { providerModule } from '../../harness/providers/registry.js'
 import type { HarnessGatewayBinding } from '../../contracts/harness-gateway-binding.js'
 /**
  * AcpRuntime support: delegated trace records (same shape as the other
- * delegated runtimes), the ACP failure → finishTurn mapping (03 §9), and the
+ * delegated runtimes), the ACP failure → finishTurn mapping, and the
  * per-turn credential-env resolution for non-native-login credential modes.
  */
 import type { ModelRequestTraceDelegated } from '../../contracts/model-request-trace.js'
@@ -75,7 +75,7 @@ export function acpLegacyCapabilities(): DelegatedRuntimeCapabilities {
 }
 
 /**
- * ACP failure → finishTurn code/message (03 §9): startup spawn/init failures
+ * ACP failure → finishTurn code/message: startup spawn/init failures
  * read as `harness_not_ready`; mid-turn process death is `harness_crashed`;
  * malformed required frames are `harness_protocol_error`; the agent's own
  * JSON-RPC errors are `agent_error`. User-facing text is bounded and never
@@ -158,7 +158,7 @@ function sanitize(message: string): string {
 }
 
 /**
- * Pre-connect capability view (P3-09): the static ACP declaration, narrowed
+ * Pre-connect capability view: the static ACP declaration, narrowed
  * to not claim `kunTools` when this runtime cannot hand out MCP descriptors.
  */
 export function acpStaticCapabilities(kunToolsDeliverable: boolean): HarnessCapabilities {
@@ -186,11 +186,11 @@ export function kunToolsDescriptorOf(
 export type AcpCredentialEnvInput = DelegatedCredentialEnvInput
 
 /**
- * Resolve the credential identity + child env for a turn (P3-10). A
+ * Resolve the credential identity + child env for a turn. A
  * `kun-gateway` route embeds the selected provider/model in the env, so the
  * identity — and the pooled connection it keys — folds the canonical route in
  * (grant ids never hash routes, so a later turn cannot widen a live token).
- * Shared implementation lives in `session/delegated-credentials.ts` (P6-02).
+ * Shared implementation lives in `session/delegated-credentials.ts`.
  */
 export function resolveAcpCredentialContext(
   resolve: ((input: AcpCredentialEnvInput) => Promise<Record<string, string>>) | undefined,

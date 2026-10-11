@@ -1,6 +1,6 @@
 /**
  * kun-pi-bridge — extension source written into the pi agent home at session
- * start (P6-10). Runs inside the pi subprocess; cannot import kun modules —
+ * start. Runs inside the pi subprocess; cannot import kun modules —
  * only pi's extension API, node:fs and node:path.
  *
  * Responsibilities:

@@ -4,7 +4,7 @@ import { normalizePath } from '../write-workspace-store-helpers'
 import { PAPER_INTERPRET_SUFFIX, PAPER_NOTES_FILE } from './paper-unit'
 
 /**
- * Open a paper unit as the reading layout (§6.4): PDF in the left (primary)
+ * Open a paper unit as the reading layout: PDF in the left (primary)
  * group, NOTES.md in the right (secondary) group at a 0.55 split. Uses the
  * existing two-group editor layout — no separate layout mode.
  */

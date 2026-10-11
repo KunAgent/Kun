@@ -77,7 +77,7 @@ export class GraphRuntimeComposition {
   readonly mailbox: GraphMailbox
   readonly assignments: GraphAssignmentResolver
   readonly workerSessions = new GraphWorkerSessionRegistry()
-  /** Harness services for plan-phase admission (P1-25), set during start. */
+  /** Harness services for plan-phase admission, set during start. */
   harnessAdmission?: GraphPlanHarnessAdmission
   readonly learning: GraphLearningService
   readonly retention: GraphRetentionService

@@ -75,7 +75,7 @@ export function buildGraphDefinePlanTool(options: {
   nowIso: () => string
   nextId: (prefix: string) => string
   config?: () => GraphRuntimeConfig
-  /** Late-bound harness services for per-node admission (P1-25). */
+  /** Late-bound harness services for per-node admission. */
   harnesses?: () => GraphPlanHarnessAdmission | undefined
 }): LocalTool {
   return LocalToolHost.defineTool({

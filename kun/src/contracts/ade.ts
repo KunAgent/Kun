@@ -8,7 +8,7 @@ import { ApprovalPolicySchema, ApprovalReviewerSchema, SandboxModeSchema } from 
 /**
  * ADE manager control-plane records. Every file shell is strict and carries
  * `version: 1` so future migrations can detect the layout unambiguously.
- * Team data lives under `dataDir/ade/teams/<managerThreadId>/` (09 §3.2).
+ * Team data lives under `dataDir/ade/teams/<managerThreadId>/`.
  */
 
 export const TeamLimitsSchema = z
@@ -30,7 +30,7 @@ export const WorkerRecordSchema = z
     /** Profile that produced this route when the worker selector chose one. */
     profileId: z.string().min(1).max(128).optional(),
     /**
-     * Selector decision captured for reproducibility (10 §3.3): the reason
+     * Selector decision captured for reproducibility: the reason
      * sentence plus runner-up candidates with their deterministic scores.
      */
     selection: z
@@ -65,7 +65,7 @@ export const WorkerRecordSchema = z
     lifecycle: z.enum(['persistent', 'ephemeral']),
     taskWorkspaceId: z.string().min(1).optional(),
     /**
-     * Cross-review (10 §5): the dispatch this ephemeral reviewer inspects.
+     * Cross-review: the dispatch this ephemeral reviewer inspects.
      * Reviewers run read-only in the reviewed worker's task workspace and
      * hold no write lease on it.
      */
@@ -77,7 +77,7 @@ export const WorkerRecordSchema = z
     securitySnapshot: ChildSecuritySnapshot,
     control: z.enum(['manager', 'user']),
     /**
-     * Working-tree sha captured when control flipped to 'user' (09 §9);
+     * Working-tree sha captured when control flipped to 'user';
      * hand-back reports the diff between this baseline and the live tree.
      */
     takeoverBaseline: z.string().min(1).max(128).optional(),
@@ -152,7 +152,7 @@ export const QualityCheckSchema = z
   .strict()
 export type QualityCheck = z.infer<typeof QualityCheckSchema>
 
-/** A decided verdict displaced by a later one (10 §4.1: keep both on record). */
+/** A decided verdict displaced by a later one. */
 export const SupersededVerdictSchema = z
   .object({
     status: z.enum(['passed', 'needs_changes', 'rejected', 'waived']),
@@ -179,7 +179,7 @@ export const QualityVerdictSchema = z
   .strict()
 export type QualityVerdict = z.infer<typeof QualityVerdictSchema>
 
-/** Structured worker self-report written by `submit_result` (05 §2.4). */
+/** Structured worker self-report written by `submit_result`. */
 export const WorkerReportSchema = z
   .object({
     summary: z.string().min(1).max(4_000),
@@ -251,7 +251,7 @@ export type QuestionRecord = z.infer<typeof QuestionRecordSchema>
 
 /**
  * One pending manager wake-up item. Notices are persisted before delivery so
- * a restart replays unacknowledged batches (09 §6.2).
+ * a restart replays unacknowledged batches.
  */
 export const WorkerNoticeSchema = z
   .object({
@@ -305,7 +305,7 @@ export const WorkerNoticeSchema = z
 export type WorkerNotice = z.infer<typeof WorkerNoticeSchema>
 
 /**
- * `POST /v1/teams/:managerThreadId/notice-hold` (09 §6.2): the renderer
+ * `POST /v1/teams/:managerThreadId/notice-hold`: the renderer
  * renews this while the composer has focus and unsent text so a wake-up
  * turn never interrupts a user mid-draft.
  */
@@ -315,7 +315,7 @@ export const WorkerNoticeHoldRequestSchema = z
 export type WorkerNoticeHoldRequest = z.infer<typeof WorkerNoticeHoldRequestSchema>
 
 /**
- * `POST /v1/teams/questions/:questionId/answer` (09 §9): the user answers a
+ * `POST /v1/teams/questions/:questionId/answer`: the user answers a
  * worker question directly; the record stores `answeredBy: 'user'`.
  */
 export const QuestionAnswerRequestSchema = z
@@ -324,8 +324,8 @@ export const QuestionAnswerRequestSchema = z
 export type QuestionAnswerRequest = z.infer<typeof QuestionAnswerRequestSchema>
 
 /**
- * `POST /v1/teams/workers/:workerId/dispatch` (09 §9): a GUI-originated
- * dispatch (review comments sent back to the worker, P1-18). Same durable
+ * `POST /v1/teams/workers/:workerId/dispatch`: a GUI-originated
+ * dispatch (review comments sent back to the worker). Same durable
  * dispatch + delivery semantics as manager-created work.
  */
 export const WorkerDispatchRequestSchema = z
@@ -339,7 +339,7 @@ export const WorkerDispatchRequestSchema = z
 export type WorkerDispatchRequest = z.infer<typeof WorkerDispatchRequestSchema>
 
 /**
- * `POST /v1/teams/dispatches/:dispatchId/verdict` (10 §4.3): the user records
+ * `POST /v1/teams/dispatches/:dispatchId/verdict`: the user records
  * a quality verdict from the review panel. `decidedBy: 'user'` overrides a
  * manager verdict while both stay on record.
  */
@@ -360,7 +360,7 @@ export const ADE_WORKER_CALLBACK_TOOL_NAMES = [
 ] as const
 
 /**
- * Read-only tool ceiling for a child run (10 §5): ADE worker children keep
+ * Read-only tool ceiling for a child run: ADE worker children keep
  * their manager-callback channel — a reviewer could not `submit_result`
  * without it. Non-worker read-only children get the base subagent ceiling.
  */
@@ -396,7 +396,7 @@ export const WorkerNoticeFileSchema = z
   .strict()
 
 /**
- * Same-task race across 2–3 harnesses (10 §6): every contender forks its own
+ * Same-task race across 2–3 harnesses: every contender forks its own
  * worktree from the same resolved sha; the manager may write a `notes`
  * recommendation but only the user decides (`decide` is GUI-only).
  */
@@ -424,7 +424,7 @@ export const RaceRecordSchema = z
     contenders: z.array(RaceContenderSchema).min(1).max(8),
     state: z.enum(['running', 'ready', 'decided']),
     winnerDispatchId: z.string().min(1).max(256).optional(),
-    /** Manager recommendation (10 §6.4) — a hint, never an auto-integrate. */
+    /** Manager recommendation — a hint, never an auto-integrate. */
     notes: z.string().max(4_000).optional(),
     deadlineAt: z.string(),
     /** Set when the race_ready notice was enqueued (idempotent). */
@@ -442,7 +442,7 @@ export const RaceFileSchema = z
   })
   .strict()
 
-/** `worker_race` tool input (10 §6.1). */
+/** `worker_race` tool input. */
 export const RaceStartInputSchema = z
   .object({
     label: z.string().min(1).max(64),
@@ -471,7 +471,7 @@ export const RaceStartInputSchema = z
 export type RaceStartInput = z.infer<typeof RaceStartInputSchema>
 
 /**
- * `race_recommend` tool input (10 §6.4): the manager's only write on a race
+ * `race_recommend` tool input: the manager's only write on a race
  * record is the recommendation note; decide belongs to the user.
  */
 export const RaceRecommendInputSchema = z
@@ -489,7 +489,7 @@ export const RaceDecideRequestSchema = z
 
 /**
  * `POST /v1/teams/races/:raceId/discard-others` — drops every non-winner
- * task workspace (07 §8.3); confirm echoes the dialog's acknowledgment.
+ * task workspace; confirm echoes the dialog's acknowledgment.
  */
 export const RaceDiscardRequestSchema = z
   .object({ confirm: z.boolean().optional() })
@@ -497,7 +497,7 @@ export const RaceDiscardRequestSchema = z
 export type RaceDecideRequest = z.infer<typeof RaceDecideRequestSchema>
 export type RaceDiscardRequest = z.infer<typeof RaceDiscardRequestSchema>
 
-/** `workspace_run_checks` tool input + `POST …/run-checks` body (10 §4.2). */
+/** `workspace_run_checks` tool input + `POST …/run-checks` body. */
 export const RunChecksInputSchema = z
   .object({
     workerId: z.string().min(1).max(256).optional(),

@@ -69,7 +69,7 @@ function makeDetector(input: {
   })
 }
 
-describe('HarnessDetector readiness (P3-11)', () => {
+describe('HarnessDetector readiness', () => {
   it('marks an ACP harness ready when initialize succeeds', async () => {
     const detector = makeDetector({
       defs: [acpDef()],
@@ -141,7 +141,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     expect(status.message).toBe('command not found: codex-acp')
   })
 
-  it('reports a probe timeout as inconclusive, not a failure (P4-03)', async () => {
+  it('reports a probe timeout as inconclusive, not a failure', async () => {
     const detector = makeDetector({
       defs: [acpDef()],
       probeReady: async () => ({ ready: 'unknown', detail: 'probe timed out after 30000ms' })
@@ -321,7 +321,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     expect(detector.cachedStatus('opencode')?.ready).toBe('no')
   })
 
-  it('P4-13: terminal agents skip the version probe entirely', async () => {
+  it('terminal agents skip the version probe entirely', async () => {
     // Interactive CLIs often ignore `--version` and wait on stdin — running
     // it would hang the 5s timeout and mask an installed agent.
     const spawned: string[] = []
@@ -343,7 +343,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     expect(spawned).toEqual([])
   })
 
-  it('P4-13: a terminal agent whose command is missing stays not_installed', async () => {
+  it('a terminal agent whose command is missing stays not_installed', async () => {
     const detector = makeDetector({
       defs: [acpDef({ transport: 'terminal' })],
       resolve: async () => undefined

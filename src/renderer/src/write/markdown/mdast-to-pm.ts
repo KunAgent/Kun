@@ -1,5 +1,5 @@
 /**
- * mdast → ProseMirror JSON conversion (implementation §3.2).
+ * mdast → ProseMirror JSON conversion.
  *
  * Every top-level block gets a fresh `blockId` attribute; its verbatim
  * source fragment and semantic signature are registered in the provided

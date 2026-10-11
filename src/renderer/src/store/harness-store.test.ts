@@ -63,7 +63,7 @@ function resetStore(): void {
   })
 }
 
-describe('harness-store loadHarnesses polling (P4-02)', () => {
+describe('harness-store loadHarnesses polling', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     provider.listHarnesses.mockReset()
@@ -279,7 +279,7 @@ describe('harness model cache identity', () => {
   })
 })
 
-describe('harnessRowUnavailableCode (P4-05)', () => {
+describe('harnessRowUnavailableCode', () => {
   it('prefers the wire reasonCode and honors the detecting sentinel', async () => {
     const { harnessRowUnavailableCode } = await import('./harness-store')
     expect(harnessRowUnavailableCode(detectingRow())).toBe('detecting')
@@ -305,7 +305,7 @@ describe('harnessRowUnavailableCode (P4-05)', () => {
   })
 })
 
-describe('harnessRowRunsTurns (P4-13)', () => {
+describe('harnessRowRunsTurns', () => {
   it('excludes terminal-only rows from turn pickers', async () => {
     const { harnessRowRunsTurns } = await import('./harness-store')
     const terminalRow = row('zed-shell')

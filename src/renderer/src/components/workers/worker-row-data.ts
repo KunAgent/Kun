@@ -8,7 +8,7 @@ import type {
 } from '@shared/ade-teams'
 
 /**
- * One Workers-panel row (12 §6.1): the durable team worker merged with its
+ * One Workers-panel row: the durable team worker merged with its
  * latest dispatch (diff stats, verdict) and the live activity row
  * (status bucket, waiting reason, progress note).
  */
@@ -20,7 +20,7 @@ export type WorkerRowData = {
   model?: string
   state: AdeTeamWorker['state']
   control: AdeTeamWorker['control']
-  /** True for ephemeral cross-review workers (10 §5). */
+  /** True for ephemeral cross-review workers. */
   reviewer: boolean
   bucket: ActivityDisplayBucket
   /** Live activity row when one exists — StatusDot renders it directly. */
@@ -119,7 +119,7 @@ export function mergeWorkerRows(
   })
 }
 
-/** Panel header summary (12 §6.1): running / waiting / done / failed. */
+/** Panel header summary: running / waiting / done / failed. */
 export function summarizeWorkerRows(rows: WorkerRowData[]): {
   running: number
   waiting: number
@@ -141,7 +141,7 @@ export function summarizeWorkerRows(rows: WorkerRowData[]): {
 }
 
 /**
- * Composer track pill (12 §6.1): `Workers N` counts workers still in flight
+ * Composer track pill: `Workers N` counts workers still in flight
  * (working or waiting on the manager thread); `waitingQuestions` drives the
  * amber `Workers · N 待回答` variant.
  */

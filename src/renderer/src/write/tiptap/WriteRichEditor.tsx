@@ -215,7 +215,7 @@ export function WriteRichEditor({
   })
   const [mountedEditor, setMountedEditor] = useState<Editor | null>(null)
   // Initial parse result; large documents parse in a Web Worker and arrive
-  // asynchronously (§3.9/§11).
+  // asynchronously.
   const [boot, setBoot] = useState<{ parsed: ParsedWorkDocument; source: string } | null>(null)
 
   workspaceRootRef.current = workspaceRoot ?? ''
@@ -257,7 +257,7 @@ export function WriteRichEditor({
   useEffect(() => {
     if (value === lastEmittedValueRef.current) return
     // During an active diff review the agent's next snapshot re-enters
-    // through `beginDiffReview` (§6.3.4); applying it here would clobber
+    // through `beginDiffReview`; applying it here would clobber
     // chunk positions.
     if (reviewSessionRef.current?.isActive()) return
     const editor = editorRef.current

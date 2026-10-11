@@ -1,5 +1,5 @@
 /**
- * ACP readiness probe (docs/ade impl P3-11, relaxed in P4-03): after
+ * ACP readiness probe: after
  * `--version` proves the binary exists, a real `initialize` handshake
  * decides whether the agent can actually serve turns.
  *
@@ -25,7 +25,7 @@ import {
   type HarnessSecretRefResolver
 } from './harness-secret-env.js'
 
-// P4-03: 10s misjudged cold ACP starts (Gemini needed ~8.6s alone, worse
+// 10s misjudged cold ACP starts (Gemini needed ~8.6s alone, worse
 // under parallel probes). OpenCode bootstraps its config directory on the
 // first run after an install or upgrade (~32s measured on 1.1.47), so allow
 // a full minute; checks run in the background and never block the list.
@@ -36,7 +36,7 @@ export type AcpReadiness = { ready: 'yes' | 'no' | 'unknown'; detail?: string }
 export type AcpReadinessProbeDeps = {
   spawn?: AcpSpawnFn
   timeoutMs?: number
-  /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
+  /** Resolves `launch.secretEnv` refs so the probe sees the real env. */
   resolveSecretEnv?: HarnessSecretRefResolver
 }
 

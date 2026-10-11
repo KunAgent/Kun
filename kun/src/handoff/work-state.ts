@@ -11,7 +11,7 @@ function asString(value: unknown): string | undefined {
 }
 
 /**
- * Changed-file paths per tool family (docs/ade/08 §3.3): Kun native write/edit
+ * Changed-file paths per tool family: Kun native write/edit
  * use `path`, Claude SDK Edit/Write/MultiEdit use `file_path`, ACP diffs use
  * `path`. Unrecognized shapes contribute nothing; this never throws.
  */

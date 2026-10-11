@@ -1,5 +1,5 @@
 /**
- * Codex App Server wire surface (P6-04), distilled from
+ * Codex App Server wire surface, distilled from
  * `codex app-server generate-json-schema` on codex-cli 0.145.0. The checked-in
  * method surface lives in `protocol/snapshot.json`;
  * `scripts/codex-protocol-snapshot.mjs` regenerates and drift-checks it.

@@ -42,7 +42,7 @@ export type QueuedUserMessage = {
   model?: string
   providerId?: string
   accountId?: string
-  /** ADE harness + credential path frozen at enqueue time (12 §7.2). */
+  /** ADE harness + credential path frozen at enqueue time. */
   harnessId?: string
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
@@ -88,7 +88,7 @@ export type QueuedUserMessage = {
   approvalPolicy?: ApprovalPolicy
   sandboxMode?: SandboxMode
   approvalReviewer?: ApprovalReviewer
-  /** Managed plan-build turn (07 §10); Kun admission enforces an isolated worktree. */
+  /** Managed plan-build turn; Kun admission enforces an isolated worktree. */
   planBuild?: boolean
 }
 
@@ -138,12 +138,12 @@ export type SendMessageOverrides = {
   approvalReviewer?: ApprovalReviewer
   /** Resolve the send only after Kun accepts it, including when it first enters the queue. */
   waitForRuntimeAdmission?: boolean
-  /** Managed plan-build turn (07 §10); Kun admission enforces an isolated worktree. */
+  /** Managed plan-build turn; Kun admission enforces an isolated worktree. */
   planBuild?: boolean
   model?: string
   providerId?: string
   accountId?: string
-  /** ADE harness + credential path for this turn (12 §7.2). */
+  /** ADE harness + credential path for this turn. */
   harnessId?: string
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
@@ -204,7 +204,7 @@ export type ClearDesignHistoryResult = {
 export type InitialSetupMode = 'required' | 'preview'
 
 /**
- * External-harness plan build dispatch input (07 §10). The controller
+ * External-harness plan build dispatch input. The controller
  * resolves the harness selection; the store action owns thread creation,
  * host-worktree preparation, and the parked build turn.
  */

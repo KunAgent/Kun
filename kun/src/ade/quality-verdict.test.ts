@@ -10,7 +10,7 @@ import {
   type AdeStores
 } from './manager-controls-test-support.js'
 
-/** Verdict rules: 10 §4 — independence, supersede, user lock, reviewer merge. */
+/** Verdict rules: — independence, supersede, user lock, reviewer merge. */
 
 async function seeded(): Promise<AdeStores> {
   const stores = await setupAdeStores()
@@ -35,7 +35,7 @@ describe('QualityVerdicts.setVerdict', () => {
       })
       expect(result.ok).toBe(true)
       const dispatch = await stores.dispatches.get('thr_mgr', 'dsp_done')
-      // Acceptance is separate from execution (10 §4.1): state stays completed.
+      // Acceptance is separate from execution: state stays completed.
       expect(dispatch?.state).toBe('completed')
       expect(dispatch?.verdict).toMatchObject({
         status: 'needs_changes',
@@ -74,7 +74,7 @@ describe('QualityVerdicts.setVerdict', () => {
       expect(result.ok).toBe(true)
       const verdict = result.verdict!
       expect(verdict).toMatchObject({ status: 'passed', decidedBy: 'user' })
-      // Both decisions stay on record (10 §4.2).
+      // Both decisions stay on record.
       expect(verdict.superseded).toMatchObject([
         {
           status: 'needs_changes',
@@ -182,7 +182,7 @@ describe('QualityVerdicts.mergeReviewerFindings', () => {
           submittedAt: NOW
         }
       })
-      // The reviewer never decides — user verdict stays (10 §5).
+      // The reviewer never decides — user verdict stays.
       expect(verdict).toMatchObject({
         status: 'passed',
         decidedBy: 'user',

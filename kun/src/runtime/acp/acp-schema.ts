@@ -152,7 +152,7 @@ export type AcpErrorCode =
   | 'harness_crashed'
   /** Agent returned a JSON-RPC error object for the request. */
   | 'agent_error'
-  /** Kun policy rejected an agent-requested client action (§8). */
+  /** Kun policy rejected an agent-requested client action. */
   | 'policy_denied'
   | 'request_timeout'
   | 'request_aborted'

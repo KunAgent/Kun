@@ -43,7 +43,7 @@ export function createGraphRuntimeStartOptions(input: {
   defaults: () => GraphAuthorityDefaults
   tools: () => CapabilityToolSpec[]
   skillIds: () => string[]
-  /** Mission-control activity rows for worker attempts (P1-25). */
+  /** Mission-control activity rows for worker attempts. */
   activity?: Pick<{ register(unit: RegisterUnit): unknown }, 'register'>
 }): GraphRuntimeStartOptions {
   return {

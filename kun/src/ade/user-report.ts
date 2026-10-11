@@ -2,7 +2,7 @@ import type { DispatchRecord, WorkerRecord } from '../contracts/ade.js'
 import type { PermissionClamp } from './permission-clamp.js'
 
 /**
- * Fixed-sentence `userReport` strings for manager tools (09 §4.4). The
+ * Fixed-sentence `userReport` strings for manager tools. The
  * manager relays these to the user verbatim — they must never contain model
  * speculation, only facts the host knows. Language follows the manager
  * thread's UI locale; unknown values fall back to English.
@@ -16,11 +16,11 @@ export function reportLanguage(locale: string | undefined): ReportLanguage {
 type CreatedInput = {
   worker: Pick<WorkerRecord, 'label' | 'route' | 'permissionMode'>
   dispatch: DispatchRecord
-  /** Why the dispatch is not yet running (09 §5.3 DeliverOutcome). */
+  /** Why the dispatch is not yet running. */
   pendingReason?: 'workspace' | 'worker-busy' | 'user-control'
   permission: Pick<PermissionClamp, 'downgraded' | 'requestedMode'>
   harnessLabel?: string
-  /** Selector's one-line reason (10 §3.2), already localized. */
+  /** Selector's one-line reason, already localized. */
   selectionReason?: string
 }
 

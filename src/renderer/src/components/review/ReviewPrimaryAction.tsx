@@ -21,7 +21,7 @@ import {
 } from '../../store/review-store'
 import { IntegrateResultDialog } from './IntegrateResultDialog'
 
-/** The single highlighted action (11 §7.1): merge first, patch second. */
+/** The single highlighted action: merge first, patch second. */
 export function reviewPrimaryMode(
   preview: TaskWorkspaceIntegratePreview | undefined
 ): TaskWorkspaceIntegrateMode | null {
@@ -31,7 +31,7 @@ export function reviewPrimaryMode(
 }
 
 /**
- * The review panel's lifecycle action row (docs/ade/11 §7.1): exactly one
+ * The review panel's lifecycle action row: exactly one
  * highlighted primary action — merge-branch preferred, apply-patch next —
  * with discard always available as an outline button that only turns
  * destructive inside its confirmation dialog.
@@ -68,7 +68,7 @@ export function ReviewPrimaryAction({
 
   if (!['ready', 'captured', 'conflict'].includes(binding.state)) return null
 
-  // 11 §7.1: an open change request makes "view PR" the single primary.
+  // an open change request makes "view PR" the single primary.
   const openRequest = binding.changeRequest?.state === 'open' ? binding.changeRequest : null
   const primaryMode = openRequest ? null : reviewPrimaryMode(preview)
 

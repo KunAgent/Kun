@@ -74,8 +74,8 @@ export async function startKunServe(
     await runtime.shutdown?.().catch(() => undefined)
     throw error
   }
-  // The loopback endpoint harness gateway env is injected with (docs/ade/04
-  // §5.5). Fill the shared cell right after bind so turns can resolve it.
+  // Fill the shared cell right after bind so turns can resolve the
+  // loopback endpoint harness gateway env.
   if (runtime.harnesses?.gatewayEndpoint) {
     const gatewayHost =
       isLoopbackHost(server.host) || server.host === '0.0.0.0' || server.host === '::'

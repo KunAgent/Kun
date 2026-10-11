@@ -40,7 +40,7 @@ export type DelegatedSessionRoute = {
 }
 
 /**
- * A delegated session displaced by a harness switch (docs/ade/08 §5.2). The
+ * A delegated session displaced by a harness switch. The
  * provider state directory `provider-state/<thread>/<kind>/<key>` stays on
  * disk so a later turn on the same route can resume natively.
  */
@@ -67,7 +67,7 @@ export type DelegatedSessionBinding = DelegatedSessionRoute & {
   /** History item count at commit, used by prefix validation on restore. */
   priorItemCount?: number
   lastCommittedTurnId: string
-  /** Digest of the last injected handoff brief, for audit (docs/ade/08 §4). */
+  /** Digest of the last injected handoff brief, for audit. */
   handoffBriefDigest?: string
   /** Sessions parked by earlier harness switches; newest last, max 3, ≤7d. */
   parked?: ParkedSession[]
@@ -85,7 +85,7 @@ export type DelegatedSessionPreparation = {
   instructionDigest?: string
   nativeSessionId?: string
   resumed: boolean
-  /** Set when this resume restored a parked session (docs/ade/08 §5). */
+  /** Set when this resume restored a parked session. */
   parkedDelta?: {
     lastCommittedTurnId: string
     /** Route that ran most recently before this restore (the switch source). */
@@ -404,7 +404,7 @@ export class DelegatedSessionCoordinator {
   }
 
   /**
-   * A delegated backing process died (docs/ade/03 §4.3): drop the stored
+   * A delegated backing process died: drop the stored
    * nativeSessionId and any parked entries that lived on the same connection
    * (same providerKind + providerId + credentialIdentity, regardless of
    * model/workspace since one process hosts many sessions). The next

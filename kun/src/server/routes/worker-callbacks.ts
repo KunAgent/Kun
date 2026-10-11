@@ -9,7 +9,7 @@ import {
 } from '../../services/worker-callback-service.js'
 
 /**
- * `POST /v1/worker-callbacks/:action` (05 §5.2): the HTTP twin of the
+ * `POST /v1/worker-callbacks/:action`: the HTTP twin of the
  * worker callback tools — same `WorkerCallbackService`, same semantics.
  * Callers authenticate with a `kgw_` token carrying the `worker-callback`
  * scope; the grant pins the unit id, so a caller can never act for another
@@ -96,7 +96,7 @@ async function progressResponse(
 
 /**
  * `ask` is a long request: whitespace heartbeats keep intermediaries alive
- * while the worker waits on a manager/user answer (05 §5.2). The final body
+ * while the worker waits on a manager/user answer. The final body
  * is still a single JSON document — leading blank lines parse as whitespace.
  */
 function askStreamingResponse(

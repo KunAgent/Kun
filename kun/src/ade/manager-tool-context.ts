@@ -20,7 +20,7 @@ export type ManagerToolContextInput = {
   > | null
 }
 
-/** Projects a `ManagerToolContext` from the calling turn (09 §4.2 ctx). */
+/** Projects a `ManagerToolContext` from the calling turn. */
 export async function buildManagerToolContext(
   deps: Pick<ManagerRuntimeDeps, 'threads' | 'turns'>,
   input: ManagerToolContextInput

@@ -12,7 +12,7 @@ import { ensureWorkerView, selectWorkerPreview, updateWorkerViewDraft, useWorker
 import { EMPTY_WORKER_DRAFT, WorkerInspector, type WorkerDraft } from './WorkerInspector'
 
 /**
- * Right-panel Workers surface (12 §6.1): team summary on top, one WorkerRow
+ * Right-panel Workers surface: team summary on top, one WorkerRow
  * per team worker. Data = `GET /v1/teams/by-manager/:threadId` merged with
  * live ActivityStore rows; the overview refetches (debounced) whenever a
  * worker row's `updatedAt` advances so the panel tracks ongoing work.
@@ -72,8 +72,7 @@ export function WorkersPanel({
     return () => { loadGeneration.current += 1 }
   }, [managerThreadId, active, reload])
 
-  // Debounced refetch when worker activity rows move (09 §9: the panel must
-  // reflect state changes without a manual refresh).
+  // Debounced refetch when worker activity rows move.
   const hasOverview = overview !== null
   const rowStamp = workerRows.map((row) => `${row.unitId}:${row.updatedAt}`).join('|')
   useEffect(() => {

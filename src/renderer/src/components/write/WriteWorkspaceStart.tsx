@@ -31,7 +31,7 @@ export function WriteWorkspaceStart({
   onAskAssistant: (prompt: string) => void
   onCreateDraft: () => void
   onCreateWhiteboard?: () => void
-  /** Opens the paper import dialog (§6.1 读论文 starter). */
+  /** Opens the paper import dialog. */
   onImportPaper?: () => void
   onPickWorkspace: () => void
   onRefreshWorkspace: () => void

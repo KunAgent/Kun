@@ -4,8 +4,7 @@ import { openTerminalWithSetup } from './terminal/terminal-open'
 import { AgentCenter } from './ade/AgentCenter'
 
 /**
- * Settings → Agents → Harnesses hosts the shared Agent Center (P4-08,
- * docs/ade/impl/p4 §3.2): the same cards the ADE sidebar entry opens, so
+ * Settings → Agents → Harnesses hosts the shared Agent Center: the same cards the ADE sidebar entry opens, so
  * both surfaces stay identical.
  *
  * Interactive login and the optional manual install fallback prefill the builtin setup command

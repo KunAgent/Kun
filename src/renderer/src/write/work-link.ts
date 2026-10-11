@@ -1,6 +1,5 @@
 /**
- * Link target resolution for the Work markdown editor (implementation
- * §7.7). Pure classification — actual filesystem checks go through
+ * Link target resolution for the Work markdown editor. Pure classification — actual filesystem checks go through
  * `window.kunGui.resolveWorkspaceFile` so workspace-boundary rules stay in
  * the main process.
  */

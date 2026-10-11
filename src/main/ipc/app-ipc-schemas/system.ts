@@ -274,7 +274,7 @@ export const terminalCreatePayloadSchema = z
     cols: z.number().int().min(1).max(TERMINAL_MAX_COLS).optional(),
     rows: z.number().int().min(1).max(TERMINAL_MAX_ROWS).optional(),
     /**
-     * ADE terminal agent (docs/ade/05 §6.1): registers an execution unit in
+     * ADE terminal agent: registers an execution unit in
      * kun, injects callback tokens into the PTY env, and reports exit.
      */
     agent: z

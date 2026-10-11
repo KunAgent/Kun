@@ -46,7 +46,7 @@ export type AcpLifecycleDeps = {
   binaryPath?: (harnessId: HarnessId) => string | undefined
   /** Extra env keys to strip from the harness child beyond the shared denylist. */
   stripEnv?: readonly string[]
-  /** Resolves `launch.secretEnv` credential-store refs at spawn (P4-12). */
+  /** Resolves `launch.secretEnv` credential-store refs at spawn. */
   resolveSecretEnv?: HarnessSecretRefResolver
   spawn?: AcpSpawnFn
   debug?: AcpDebugLog
@@ -263,7 +263,7 @@ export function acpCheckpointGate(
   }
 }
 
-/** Persist the session binding after the turn (best-effort; §5.1). */
+/** Persist the session binding after the turn (best-effort). */
 export async function commitAcpSession(
   sessions: AcpSessionManager,
   sessionStore: Pick<SessionStore, 'loadItems'>,

@@ -1,5 +1,5 @@
 /**
- * Math editing (implementation §7.1):
+ * Math editing:
  *
  * - Clicking a `blockMath`/`inlineMath` node opens a floating editor:
  *   textarea + live KaTeX preview (`throwOnError:false`, errors shown

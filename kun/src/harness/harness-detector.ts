@@ -126,7 +126,7 @@ export class HarnessDetector {
        * Protocol initialize handshake after the version probe. Runs for ACP
        * and native Codex with a resolved command; its
        * verdict lands on `status.ready` with a sanitized stderr summary.
-       * 'unknown' (P4-03) means the probe timed out — not a failure verdict.
+       * 'unknown' means the probe timed out — not a failure verdict.
        */
       probeReady?: (
         def: HarnessDefinition,
@@ -191,7 +191,7 @@ export class HarnessDetector {
   }
 
   /**
-   * A real turn launch failed after a probe said ready (P4-03): drop the
+   * A real turn launch failed after a probe said ready: drop the
    * persisted readiness entry and mark the cached status `ready: 'no'` so
    * the UI reflects the observed failure until the next detection pass.
    */
@@ -306,7 +306,7 @@ export class HarnessDetector {
     if (!command && !bundled) {
       // A fallback binary that resolves (e.g. `codex` when `codex-acp` is
       // absent) means an installed tool missing its ACP adapter — surface the
-      // definition's install guidance instead of a bare "not found" (P3-11).
+      // definition's install guidance instead of a bare "not found".
       const hint = override ? undefined : def.detect?.adapterHint
       const hintPresent = hint
         ? await wait((this.deps.resolveExecutable ?? defaultResolveExecutable)(
@@ -326,7 +326,7 @@ export class HarnessDetector {
       })
     }
     if (def.transport === 'terminal') {
-      // Terminal agents (p4 §3.8): a resolved command is the whole verdict.
+      // Terminal agents: a resolved command is the whole verdict.
       // Many interactive CLIs ignore `--version` and wait on stdin instead —
       // probing would hang 5s and mask an installed agent as 'unknown'.
       const login = await wait(this.deps.probeLogin(def, command ?? def.id, { signal }).catch(() => 'unknown' as HarnessLoginState))
@@ -388,7 +388,7 @@ export class HarnessDetector {
       checkedAt,
       ...(readyMessage ? { message: readyMessage.slice(0, 512) } : {})
     }
-    // P4-05: stamp the stable reason code so clients localize a label and a
+    // stamp the stable reason code so clients localize a label and a
     // next step instead of parsing `message` (which stays detail-only).
     const reasonCode = harnessStatusReasonCode(status)
     return store(reasonCode ? { ...status, reasonCode } : status)

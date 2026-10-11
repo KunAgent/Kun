@@ -1,5 +1,5 @@
 /**
- * Local reading state (§5.3): last-opened time, last page, page count per unit
+ * Local reading state: last-opened time, last page, page count per unit
  * under `<userData>/paper-library/<sha1(libraryRoot)>.json`. Local-only data —
  * deliberately not written into the library folder so git stays clean.
  */
@@ -80,7 +80,7 @@ async function flushNow(userDataDir: string, libraryRoot: string): Promise<void>
   await atomicWriteFile(filePath, `${JSON.stringify(onDisk, null, 2)}\n`)
 }
 
-/** Merge a unit patch and schedule a throttled atomic write (§5.3). */
+/** Merge a unit patch and schedule a throttled atomic write. */
 export async function writePaperLocalUnitState(
   userDataDir: string,
   libraryRoot: string,

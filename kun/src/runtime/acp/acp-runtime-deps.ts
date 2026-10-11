@@ -43,11 +43,11 @@ export interface AcpRuntimeDeps {
   /** Settings `harnesses.binaryPaths` override for `launch.command`. */
   binaryPath?: (harnessId: HarnessId) => string | undefined
   /**
-   * `agents.kun.harnesses.defaults` lookup (p4 §3.6, P4-11): supplies the
+   * `agents.kun.harnesses.defaults` lookup: supplies the
    * default permission mode when the turn does not pin one.
    */
   harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
-  /** Resolves `launch.secretEnv` credential-store refs at spawn (P4-12). */
+  /** Resolves `launch.secretEnv` credential-store refs at spawn. */
   resolveSecretEnv?: HarnessSecretRefResolver
   threadStore: ThreadStore
   sessionStore: SessionStore
@@ -64,18 +64,18 @@ export interface AcpRuntimeDeps {
   spawn?: AcpSpawnFn
   approvalGate?: ApprovalGate
   approvalReview?: ApprovalReviewPort
-  /** Elicitation (P2-10): user_input gate / ask_manager bridges per turn. */
+  /** Elicitation: user_input gate / ask_manager bridges per turn. */
   userInputGate?: UserInputGate
   workerCallbacks?: Pick<WorkerCallbackService, 'askManager'>
   /**
    * Credential env for `kun-gateway`/`provider` modes (`native-login`
-   * receives none). Default: none — gateway bridging lands in P1-08.
+   * receives none). Default: none — gateway bridging lands.
    */
   credentialEnv?: (input: AcpCredentialEnvInput) => Promise<Record<string, string>>
   /** Extra env keys to strip from the harness child beyond the shared denylist. */
   stripEnv?: readonly string[]
   attachmentStore?: AttachmentStore
-  /** Kun Tools MCP provider (P3-08): per-turn kun-tools grant + descriptor. */
+  /** Kun Tools MCP provider: per-turn kun-tools grant + descriptor. */
   kunToolsMcp?: KunToolsMcpProvider
   taskWorkspaces?: TaskWorkspaceLister
   deterministicHandoff?: boolean
@@ -99,7 +99,7 @@ export interface AcpRuntimeDeps {
   debug?: AcpDebugLog
   cancelSettleMs?: number
   /**
-   * P4-03: a real connection acquisition failed (spawn/initialize, not an
+   * a real connection acquisition failed (spawn/initialize, not an
    * abort) — report back so the harness catalog stops claiming `ready`.
    */
   onLaunchFailure?: (harnessId: HarnessId, detail: string) => void

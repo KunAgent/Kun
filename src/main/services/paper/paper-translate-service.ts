@@ -18,7 +18,7 @@ import { routesTextThroughRuntime } from '../runtime-model-requests'
 import { isPaperJobCanceled } from './paper-jobs'
 
 /**
- * Paper translation (plan §6.4): selection translation is one model request;
+ * Paper translation: selection translation is one model request;
  * whole-document translation chunks `paper.md` on `<!-- page N -->` markers,
  * caches chunks under `.cache/translate-<lang>-<modelHash>.json`, and writes
  * `<slug>-译文.md`. Progress/cancel ride the shared paper-jobs channel.

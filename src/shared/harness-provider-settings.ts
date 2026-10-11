@@ -2,7 +2,7 @@ import { GENERIC_ACP_BASE, TERMINAL_BASE } from '../../kun/src/config/kun-config
 import type { KunHarnessCustomEntryV1, KunHarnessProviderOverrideV1, KunHarnessSettingsV1 } from './app-settings-types-kun-runtime'
 
 /**
- * Edits on `agents.kun.harnesses.providers` (docs/ade/17 §4.3) shared by the
+ * Edits on `agents.kun.harnesses.providers` shared by the
  * Agent Center entries: command path, launch patch and user Agents.
  */
 type Providers = Readonly<Record<string, KunHarnessProviderOverrideV1>>

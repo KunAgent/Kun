@@ -42,7 +42,7 @@ export type SlashCommand = {
   scopeLabel?: string
   skillPrompt?: string
   /**
-   * Harness-native command text sent verbatim on selection (12 §7.4). The
+   * Harness-native command text sent verbatim on selection. The
    * runtime must receive the exact `/<name>` — the composer never rewrites
    * or expands it.
    */

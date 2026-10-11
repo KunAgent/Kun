@@ -62,11 +62,11 @@ function fingerprintOf(
 }
 
 /**
- * "Add custom ACP agent" form (docs/ade/impl/p4 §3.7, P4-12): fields,
+ * "Add custom ACP agent" form: fields,
  * `secretEnv` credential-store bindings, test-before-save, and JSON
  * import. "Based on" derives the Agent from a builtin ACP engine (its
  * protocol behaviour and default arguments, another command). Persists under
- * agents.kun.harnesses.providers (docs/ade/17 §4.3).
+ * agents.kun.harnesses.providers.
  */
 export type CustomFormMode = 'free' | 'derive' | 'acp' | 'import'
 

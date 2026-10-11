@@ -9,7 +9,7 @@ export type CredentialVerdict = {
 }
 
 /**
- * Credentials are diagnostics, not a gate (docs/ade/17 §4.2). A native
+ * Credentials are diagnostics, not a gate. A native
  * login is blocked only by a definitive signal: the session answered
  * auth_required, the engine's own status command reports it is signed out,
  * or the engine cannot report sign-in over its protocol and Kun found no

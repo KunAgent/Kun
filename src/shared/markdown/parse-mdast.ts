@@ -1,6 +1,6 @@
 /**
  * Shared remark parse pipeline used by the renderer editor codec and the
- * export renderer (implementation §3.1, §10.1). Single source of truth for
+ * export renderer. Single source of truth for
  * plugin order and options.
  */
 import { unified, type Processor } from 'unified'

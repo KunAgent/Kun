@@ -208,7 +208,7 @@ const sortedRecord = (value: Record<string, string> | undefined): Record<string,
   )
 
 /**
- * `defaults[harnessId]` (p4 §3.6): fixed field order inside each entry so
+ * `defaults[harnessId]`: fixed field order inside each entry so
  * identical settings serialize byte-identically.
  */
 const sortedDefaultsRecord = (

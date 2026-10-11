@@ -111,7 +111,7 @@ describe('pptWorkflowCompletionToolGate', () => {
   })
 })
 
-describe('adeManagerContextBlock (P3-14)', () => {
+describe('adeManagerContextBlock', () => {
   const resolve = async () => 'manager context'
 
   it('renders only for ade-mode kun manager turns', async () => {

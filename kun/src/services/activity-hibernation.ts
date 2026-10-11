@@ -15,10 +15,10 @@ export type ActivityHibernationDeps = {
   /** Row write with 'inferred' provenance. */
   apply(unitId: string, patch: { stalled?: boolean; residency?: 'live' | 'dormant' }): void
   list(): ActivityRow[]
-  /** Last runtime-event time for the unit (06 §6 quiet window). */
+  /** Last runtime-event time for the unit. */
   lastEventAt(unitId: string): number | undefined
   /**
-   * Dormancy conditions 2-3 (06 §7.2): unfinished dispatches or unanswered
+   * Dormancy conditions 2-3: unfinished dispatches or unanswered
    * questions for the unit — `ManagerRuntime.hasOpenWork` for worker rows.
    */
   hasOpenWork(row: ActivityRow): Promise<boolean>
@@ -51,8 +51,7 @@ const DEFAULT_THRESHOLDS: ActivityHibernationThresholds = {
 }
 
 /**
- * Periodic scanner for the two ActivityStore heuristics (docs/ade/06 §6,
- * §7.2): quiet `working` rows are marked `stalled` (a hint only — no state
+ * Periodic scanner for the two ActivityStore heuristics: quiet `working` rows are marked `stalled` (a hint only — no state
  * or runtime change), and idle worker/terminal-agent rows go `dormant` so
  * their resident connections can be released. Clients report the foreground
  * thread via POST /v1/activity/foreground; marks expire after 30 s so a
@@ -123,7 +122,7 @@ export class ActivityHibernation {
     thresholds: ActivityHibernationThresholds
   ): boolean {
     if (row.stalled || row.residency !== 'live' || row.mainState !== 'working') return false
-    // Waiting on a manager question is a live wait, not a stall (06 §6).
+    // Waiting on a manager question is a live wait, not a stall.
     if (row.waitingReason === 'question') return false
     const limit = row.kind === 'terminal-agent'
       ? thresholds.stallTerminalMs

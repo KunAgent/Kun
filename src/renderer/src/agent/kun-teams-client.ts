@@ -18,8 +18,8 @@ import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 
 /**
- * /v1/teams client surface (docs/ade/09 §9): team overview for Mission
- * Control expansion plus the user-side question answer (§6.4).
+ * /v1/teams client surface: team overview for Mission
+ * Control expansion plus the user-side question answer.
  */
 export function createKunTeamsClient() {
   return {
@@ -71,7 +71,7 @@ export function createKunTeamsClient() {
       )
     },
 
-    /** Worker control actions (09 §9): take-over, hand-back, stop, detach. */
+    /** Worker control actions: take-over, hand-back, stop, detach. */
     async controlTeamWorker(
       workerId: string,
       action: 'take-over' | 'hand-back' | 'stop' | 'detach'
@@ -86,7 +86,7 @@ export function createKunTeamsClient() {
       }
     },
 
-    /** Race record + per-contender compare data (10 §6.3, 11 §5). */
+    /** Race record + per-contender compare data. */
     async getRaceComparison(raceId: string): Promise<AdeRaceComparison> {
       const response = await rendererRuntimeClient.runtimeRequest(
         kunTeamRacePath(raceId), 'GET'
@@ -101,7 +101,7 @@ export function createKunTeamsClient() {
       )
     },
 
-    /** User picks the winning dispatch (10 §6.4). */
+    /** User picks the winning dispatch. */
     async decideRace(raceId: string, winnerDispatchId: string): Promise<void> {
       const response = await rendererRuntimeClient.runtimeRequest(
         kunTeamRaceActionPath(raceId, 'decide'),
@@ -115,7 +115,7 @@ export function createKunTeamsClient() {
       }
     },
 
-    /** Discards every non-winner task workspace (10 §6.5). */
+    /** Discards every non-winner task workspace. */
     async discardRaceOthers(raceId: string): Promise<void> {
       const response = await rendererRuntimeClient.runtimeRequest(
         kunTeamRaceActionPath(raceId, 'discard-others'),
@@ -129,7 +129,7 @@ export function createKunTeamsClient() {
       }
     },
 
-    /** Host check commands against the worker's task workspace (10 §4.2). */
+    /** Host check commands against the worker's task workspace. */
     async runTeamWorkerChecks(workerId: string): Promise<AdeRunWorkerChecksResult> {
       const response = await rendererRuntimeClient.runtimeRequest(
         kunTeamWorkerActionPath(workerId, 'run-checks'), 'POST', '{}'

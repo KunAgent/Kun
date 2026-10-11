@@ -68,7 +68,7 @@ describe('TeamBudgetGate', () => {
   })
 })
 
-describe('budget enforcement (P3-15)', () => {
+describe('budget enforcement', () => {
   it('worker_send refuses at the hard cap with the reason in userReport', async () => {
     await seedTeamBudget({ softTokens: 100, hardTokens: 200 })
     const { controls } = makeHarness(stores, {

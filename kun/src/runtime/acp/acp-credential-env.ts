@@ -2,7 +2,7 @@ import { retainFrozenHarnessAliases } from '../../harness/gateway-alias-binding.
 import { createHash } from 'node:crypto'
 import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../../contracts/harness-gateway-binding.js'
 /**
- * `kun-gateway` credential env for ACP harnesses (docs/ade impl P3-10).
+ * `kun-gateway` credential env for ACP harnesses.
  *
  * A harness child never sees a real provider secret: it gets a process-local
  * `gateway` grant restricted to the selected provider/model route plus a
@@ -19,7 +19,7 @@ import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../../cont
  *   and `wire_api = "responses"` (the `/v1/responses` gateway surface).
  * - Pi (`pi --mode rpc`): a generated `PI_CODING_AGENT_DIR/models.json`
  *   declares only the `kun` openai-completions provider; `apiKey` is pi's
- *   `$NAME` env interpolation so the grant token stays env-only (P6-11).
+ *   `$NAME` env interpolation so the grant token stays env-only.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

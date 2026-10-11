@@ -21,7 +21,7 @@ import {
   type WorkerRouteSelection
 } from './worker-selector.js'
 
-/** Route resolved for a new worker (10 §3): explicit pin, selection, or fallback. */
+/** Route resolved for a new worker: explicit pin, selection, or fallback. */
 export type ResolvedWorkerRoute = {
   route: HarnessRoute
   profileId?: string
@@ -40,13 +40,13 @@ export type WorkerProviderPoolEntry = {
 }
 
 /**
- * Resolve the worker route for `worker_create` (09 §4.1, 10 §3.2). An explicit
+ * Resolve the worker route for `worker_create`. An explicit
  * `agent` pin is validated against the harness definition and wins outright;
  * otherwise the injected `select` runs the deterministic selector, and when no
  * selector is wired the manager's own provider/model on the native Kun loop is
  * the fallback.
  *
- * Model validation follows the credential mode (P3-06): `kun-gateway` and
+ * Model validation follows the credential mode: `kun-gateway` and
  * `provider` modes check the configured provider pool instead of the harness's
  * static list; `native-login` on a `probe` harness uses the last cached probe
  * result and falls back to the static list when none is cached.
@@ -75,7 +75,7 @@ export async function resolveWorkerRoute(input: {
    */
   probedModels?: (definition: HarnessDefinition) => string[] | undefined
   /**
-   * `agents.kun.harnesses.defaults` lookup (p4 §3.6): fields the caller did
+   * `agents.kun.harnesses.defaults` lookup: fields the caller did
    * not pin explicitly fall back to the configured per-harness defaults.
    */
   harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
@@ -164,9 +164,9 @@ export async function resolveWorkerRoute(input: {
 }
 
 /**
- * Manager-side route resolution for `worker_create` (09 §4.1): loads the
+ * Manager-side route resolution for `worker_create`: loads the
  * manager thread for provider/model fallback, then runs the deterministic
- * selector (10 §3.2) when no explicit `agent` pin was given.
+ * selector when no explicit `agent` pin was given.
  */
 export async function resolveManagerWorkerRoute(
   deps: Pick<
@@ -231,7 +231,7 @@ export async function resolveManagerWorkerRoute(
 }
 
 /**
- * `provider`/`kun-gateway` route (P3-06): the model addresses a configured
+ * `provider`/`kun-gateway` route: the model addresses a configured
  * provider — `kun/<provider>/<model>` or a bare model plus providerId (the
  * manager's own provider when neither is pinned). The provider must be a
  * configured model connection, and when its model list is known the requested

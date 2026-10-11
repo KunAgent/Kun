@@ -263,7 +263,7 @@ export async function importPaperUnit(
     if (!info?.isFile()) throw new PaperUnitError('invalid-input', 'Local PDF file not found.')
 
     // Identify the first pages (DOI / arXiv id) and fetch canonical metadata;
-    // uncertain PDFs stay flagged `needsReview` (plan §PM4).
+    // uncertain PDFs stay flagged `needsReview`.
     progress('metadata', 'identifying PDF')
     const identified = await identifyLocalPdf(sourcePath).catch(
       (): PaperIdentifyResult => ({})

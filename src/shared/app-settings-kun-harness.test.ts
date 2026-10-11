@@ -69,7 +69,7 @@ describe('normalizeKunHarnessSettings', () => {
     expect(normalized.agentOrder).toEqual(['mine'])
   })
 
-  // P4-12: secretEnv entries carry only opaque credential-store refs.
+  // secretEnv entries carry only opaque credential-store refs.
   it('normalizes custom secretEnv rows and drops malformed ones', () => {
     const normalized = normalizeKunHarnessSettings({
       custom: [{
@@ -125,7 +125,7 @@ describe('normalizeKunHarnessSettings', () => {
     expect(merged.defaultHarnessId).toBe('antigravity')
   })
 
-  it('normalizes defaults entries and drops garbage (P4-11)', () => {
+  it('normalizes defaults entries and drops garbage', () => {
     const normalized = normalizeKunHarnessSettings({
       defaults: {
         'claude-code': {
@@ -220,7 +220,7 @@ describe('normalizeKunHarnessSettings', () => {
     })
   })
 
-  // P4-13: terminal agents join the catalog as `transport: 'terminal'` —
+  // terminal agents join the catalog as `transport: 'terminal'` —
   // interactive CLIs that never host delegated turns.
   it('folds terminalAgents and drops collisions with builtin/custom ids', () => {
     const normalized = normalizeKunHarnessSettings({

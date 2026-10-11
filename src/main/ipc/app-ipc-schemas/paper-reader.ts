@@ -27,7 +27,7 @@ const translateModel = {
 
 export const paperTranslateSelectionPayloadSchema = z
   .object({
-    // Plan §3.4.3: selection translation is capped at 2000 characters.
+    // Plan: selection translation is capped at 2000 characters.
     text: z.string().min(1).max(2_000),
     targetLanguage: z.enum(['zh', 'en']),
     ...translateModel

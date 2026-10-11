@@ -1,6 +1,5 @@
 /**
- * Fixed task corpus for the P3-16 manager evaluation (docs/ade/impl/
- * p3-review-followup.md). Each task is a self-contained repo fixture:
+ * Fixed task corpus for the manager evaluation. Each task is a self-contained repo fixture:
  * `files` are planted over a fresh git baseline, `prompt` is sent verbatim
  * to both modes (single Kun thread vs ADE manager), and `verify.run` is the
  * objective success check executed in the final workspace.
@@ -10,7 +9,7 @@
  * authoring, cross-file refactors, features, docs, and two parallel work
  * streams where delegation has a natural advantage.
  *
- * P4-16 adds `t11`–`t13`: three-way independent work where doing everything
+ * adds `t11`–`t13`: three-way independent work where doing everything
  * serially in one turn is clearly the slow path, so a manager that follows
  * the delegation guidance should spawn at least two workers. `expect`
  * fields are advisory expectations surfaced in the run notes when missed.

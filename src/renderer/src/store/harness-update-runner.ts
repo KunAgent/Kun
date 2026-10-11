@@ -18,7 +18,7 @@ const BUSY_JOB = new Set(['waiting', 'running', 'verifying'])
 const POLL_MS = 1_500
 
 /**
- * Agent updates run in the background (docs/ade/18 §10): this module, not the
+ * Agent updates run in the background: this module, not the
  * Version tab, polls the job and performs the final switch to the verified
  * executable, so leaving the tab, the Agent or Settings never strands a job
  * in maintenance. Every surface (banner, list row, toast) reads `items`.

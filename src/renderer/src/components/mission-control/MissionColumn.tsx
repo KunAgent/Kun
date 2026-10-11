@@ -23,7 +23,7 @@ export type MissionColumnProps = {
 }
 
 /**
- * One Mission Control column (docs/ade/12 §5.1): header = label + count;
+ * One Mission Control column: header = label + count;
  * only needs-you/review carry a tinted header. Card lists virtualize past
  * 100 entries with the shared @tanstack/react-virtual scroller.
  */

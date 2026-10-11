@@ -26,7 +26,7 @@ import {
  *     allowedTools: [read, grep]
  *     omit_base_prompt: false # when true, role prompt replaces Kun base
  *     color: "#3b82f6"
- *     harness: claude-code    # optional ADE worker binding (10 §3.1)
+ *     harness: claude-code    # optional ADE worker binding
  *     credential-mode: native-login   # optional harness credential path
  *     delegation-notes: use for code review on changed files
  *     model: claude-sonnet-5        # optional harness model pin
@@ -240,7 +240,7 @@ function parseAgentMarkdown(text: string, defaultId: string): {
     ...(parseListField(fields, 'blockedSkills') ? { blockedSkills: parseListField(fields, 'blockedSkills') } : {}),
     skillsEnabled: false
   }
-  // ADE worker binding (10 §3.1): a workspace role may pin the harness and
+  // ADE worker binding: a workspace role may pin the harness and
   // model it dispatches onto; the credential path defaults to the harness's.
   // `model` only applies alongside a harness pin — on the native Kun loop a
   // workspace role still cannot choose a model/provider/reasoning level.

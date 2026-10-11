@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 /**
- * Per-line comment affordance (docs/ade/11 §4.2): the "+" appears on row
+ * Per-line comment affordance: the "+" appears on row
  * hover; the parent row owns focus and forwards the `c` key.
  */
 export function ReviewCommentGutter({

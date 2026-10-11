@@ -457,7 +457,7 @@ export function createRuntimeConfigController(
             }
             // The Registry owns the gateway section even with zero providers.
             nextOptions = { ...nextOptions, localModelGateway: materializedConnections.localModelGateway }
-            // Segmented gateway validation (P4-04): a missing key or
+            // Segmented gateway validation: a missing key or
             // non-loopback host rejects only the localModelGateway section.
             const gatewayIssue = localModelGatewayApplyIssue(nextOptions, gatewayCredentials)
             if (gatewayIssue) {

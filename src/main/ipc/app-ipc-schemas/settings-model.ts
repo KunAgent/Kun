@@ -607,7 +607,7 @@ export const kunRuntimePatchSchema = z.object({
       permissionMode: z.string().trim().min(1).max(64).optional(),
       isolation: z.enum(['local', 'worktree']).optional()
     }).strict()).optional(),
-    // Legacy pre-P4-11 shape; still accepted so old writers do not lose the
+    // Legacy shape; still accepted so old writers do not lose the
     // value — normalize folds it into `defaults[*].permissionMode`.
     defaultPermissionMode: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(64)).optional(),
     defaultHarnessId: z.string().trim().min(1).max(128).optional(),

@@ -8,7 +8,7 @@ import {
 import type { CompletionAttentionRegistry } from './chat-store-types'
 
 /**
- * Single app-badge formula (12 §notifications): ordinary unread turn
+ * Single app-badge formula: ordinary unread turn
  * completions plus ADE "needs you" activity rows. Both call sites funnel
  * here so whichever store changed last still writes the same total.
  */

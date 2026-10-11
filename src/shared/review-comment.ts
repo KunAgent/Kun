@@ -1,6 +1,6 @@
 /**
  * Renderer-facing mirrors of the ADE review-comment wire shapes in
- * kun/src/contracts/review.ts (docs/ade/11 §4). Kun owns the schema; keep
+ * kun/src/contracts/review.ts. Kun owns the schema; keep
  * field names aligned.
  */
 import type { ReviewRevision } from './review-revision'

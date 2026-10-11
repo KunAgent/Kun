@@ -1,5 +1,5 @@
 /**
- * `HarnessTurnSink` implementation bound to a Kun turn (P6-02): protocol
+ * `HarnessTurnSink` implementation bound to a Kun turn: protocol
  * drafts go through the shared draft emitter (the same emitter ACP uses —
  * it is already transport-agnostic), approvals resolve through the delegated
  * approval pipeline, user-input requests route into the `UserInputGate`.

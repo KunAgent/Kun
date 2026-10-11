@@ -10,9 +10,9 @@ import {
 } from '../../store/harness-store'
 
 /**
- * P4-16: on a manager session the composer shows which agents the manager can
+ * on a manager session the composer shows which agents the manager can
  * dispatch to — the ready turn-capable harness rows. Terminal-only agents
- * (P4-13) and one-to-one/worker threads never see the label; clicking opens
+ * and one-to-one/worker threads never see the label; clicking opens
  * the Agent Center where the dispatchable set is managed.
  */
 export function FloatingComposerDispatchableAgents({

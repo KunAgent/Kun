@@ -250,7 +250,7 @@ function workerUpdateStatusTone(status: string): {
   return { tone: 'border-emerald-500/25 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300', Icon: CheckCircle2 }
 }
 
-/** ADE manager wake-up batch (09 §6.2): one card per `<kun_worker_updates>` row. */
+/** ADE manager wake-up batch: one card per `<kun_worker_updates>` row. */
 export function WorkerUpdateNoticeBubble({
   block,
   nested = false

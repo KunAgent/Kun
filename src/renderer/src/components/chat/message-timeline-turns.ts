@@ -33,7 +33,7 @@ export function isDesignContinuationBlock(block: ChatBlock): boolean {
   return block.kind === 'user' && block.meta?.messageSource === 'design_continuation'
 }
 
-/** ADE manager wake-up batch (09 §6.2) — card content, not a user bubble. */
+/** ADE manager wake-up batch — card content, not a user bubble. */
 export function isWorkerUpdateNoticeBlock(block: ChatBlock): boolean {
   return block.kind === 'user' && isWorkerUpdateNoticeUserMessage(block)
 }

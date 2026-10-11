@@ -447,7 +447,7 @@ export class AgentSdkRuntime {
               // usage, and errors may not overtake pending assistant deltas.
               await deltaEvents.flush()
               // Gateway mode: the loopback gateway already recorded this usage
-              // (docs/ade/04 §6); the SDK report stays trace telemetry only.
+              //; the SDK report stays trace telemetry only.
               if (ctx.gateway && draft.kind === 'usage') continue
               const item = itemOf(draft)
               if (ctx.requireSvgCompletion && item) observeSvgToolResult(svgCompletion, item)

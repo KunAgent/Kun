@@ -1,6 +1,6 @@
 /**
  * One ACP connection: an owned agent process plus its JSON-RPC channel and
- * the cached `initialize` result (docs/ade/03 §4.2-4.3). A connection can
+ * the cached `initialize` result. A connection can
  * host many sessions; `session/update` notifications are fanned out to
  * per-session subscribers registered by the session manager.
  */
@@ -89,7 +89,7 @@ export class AcpConnection {
   }
 
   /**
-   * ACP handshake (03 §4.2). Throws `harness_protocol_error` when the agent
+   * ACP handshake. Throws `harness_protocol_error` when the agent
    * reports a protocol version Kun does not speak.
    */
   async initialize(input: { timeoutMs?: number; fileWrites?: boolean } = {}): Promise<AcpInitializeResult> {
@@ -100,7 +100,7 @@ export class AcpConnection {
         clientCapabilities: {
           fs: { readTextFile: true, writeTextFile: input.fileWrites !== false },
           terminal: true,
-          // Form elicitation only (P2-10): url mode has no Kun surface.
+          // Form elicitation only: url mode has no Kun surface.
           elicitation: { form: {} }
         },
         clientInfo: { name: 'kun', title: 'Kun', version: KUN_VERSION }

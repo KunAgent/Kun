@@ -45,7 +45,7 @@ function collectMermaidSources(markdown: string): string[] {
 
 /**
  * Pre-render every mermaid diagram in the document so the export IPC can
- * splice the same SVGs the editor shows (implementation §10.3).
+ * splice the same SVGs the editor shows.
  */
 async function renderExportDiagrams(markdown: string): Promise<Record<string, string> | undefined> {
   const sources = collectMermaidSources(markdown)

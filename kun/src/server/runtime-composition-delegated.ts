@@ -121,7 +121,7 @@ export function buildMainDelegatedRuntime(
     sessionCoordinator: delegatedSessions,
     contextProfile: delegatedContextProfile,
     deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
-    // `kun-gateway` credential mode (docs/ade/04 §5.5): grant issuance,
+    // `kun-gateway` credential mode: grant issuance,
     // loopback endpoint, roles, and the catalog's gateway env block.
     harnessTokens: services.harnesses.tokens,
     harnessGatewayBaseUrl: () => services.harnesses.gatewayEndpoint.baseUrl,
@@ -225,7 +225,7 @@ export function buildMainDelegatedRuntime(
     defaultApprovalReviewer: input.options.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
     turnLimits: input.options.runtime?.turnLimits,
     awaitWorkspaceCheckpoint: (id, sig) => waitForWorkspaceCheckpoint(core.activeOptions.dataDir, id, sig),
-    // P4-03: a real launch failure outweighs any earlier probe verdict.
+    // a real launch failure outweighs any earlier probe verdict.
     onLaunchFailure: (id, detail) => services.harnesses.detector.recordLaunchFailure(id, detail),
     ...(llmDebug ? { debugSink: llmDebug } : {}),
     nowIso,
@@ -236,7 +236,7 @@ export function buildMainDelegatedRuntime(
     antigravity: antigravityRuntimeDeps,
     cursor: cursorRuntimeDeps,
     acp: acpRuntimeDeps,
-    // P6-07: native `codex app-server` transport on the shared session layer;
+    // native `codex app-server` transport on the shared session layer;
     // dep assembly lives in runtime-composition-codex.ts.
     codexAppServer: buildCodexAppServerDeps(input.options, services.harnesses, {
       sessionCoordinator: delegatedSessions,
@@ -255,7 +255,7 @@ export function buildMainDelegatedRuntime(
       debugSink: llmDebug,
       nowIso
     }),
-    // P6-09/11: native `pi --mode rpc` transport on the shared session layer;
+    // native `pi --mode rpc` transport on the shared session layer;
     // dep assembly lives in runtime-composition-pi.ts.
     piRpc: buildPiRpcDeps(input.options, services.harnesses, {
       sessionCoordinator: delegatedSessions,

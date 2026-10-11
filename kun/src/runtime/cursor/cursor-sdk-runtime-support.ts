@@ -115,7 +115,7 @@ export interface CursorSdkRuntimeDeps {
   /** Delegated read-only children must deny mutation regardless of parent defaults. */
   enforceReadOnly?: boolean
   sessionCoordinator?: DelegatedSessionCoordinator
-  /** Host task-workspace index for handoff work-state merging (docs/ade/07). */
+  /** Host task-workspace index for handoff work-state merging. */
   taskWorkspaces?: {
     list(filter?: { ownerThreadId?: string }): Array<{
       ownerThreadId: string
@@ -126,7 +126,7 @@ export interface CursorSdkRuntimeDeps {
   }
   /**
    * `ade.deterministicHandoff` — when false the runtime sends the raw portable
-   * transcript instead of the deterministic brief (docs/ade/08 §4).
+   * transcript instead of the deterministic brief.
    */
   deterministicHandoff?: boolean
   contextProfile?: (model: string, providerId?: string) => {

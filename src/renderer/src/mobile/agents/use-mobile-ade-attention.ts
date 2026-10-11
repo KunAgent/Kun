@@ -10,7 +10,7 @@ import {
 } from './mobile-agents-attention'
 
 /**
- * Hydrates the inline-resolvable data behind waiting activity rows (P3-19):
+ * Hydrates the inline-resolvable data behind waiting activity rows:
  * pending approvals per thread and the manager overview holding a worker's
  * open question. Fetches are deduplicated per row `updatedAt` — a resolved
  * wait disappears on the next feed change and re-fetches stay rare.

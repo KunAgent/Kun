@@ -3,7 +3,7 @@ import { shellSpawnEnv } from '../adapters/tool/builtin-shell-utils.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { TaskWorkspaceSetup } from '../contracts/task-workspace.js'
 
-/** Approved setup execution for task workspaces (docs/ade/07 §7.2). */
+/** Approved setup execution for task workspaces. */
 
 export type ApprovedSetupStep = {
   name: string
@@ -58,7 +58,7 @@ export type TaskWorkspaceSetupRunnerDeps = {
 }
 
 export type SetupRunOptions = {
-  /** Env-fill summary written at the top of the log (07 §7.3). */
+  /** Env-fill summary written at the top of the log. */
   logHeader?: string
 }
 

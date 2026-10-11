@@ -65,7 +65,7 @@ type Props = {
   renderSafety: WriteRenderSafety
   fileGuardMessage: string
   fileGuardDetail: string
-  /** Single-view surface (§8.3): the block document editor or the
+  /** Single-view surface: the block document editor or the
    * plain-text editor — there is no separate preview pane. */
   editorSurface: WriteEditorSurface
   readOnly: boolean

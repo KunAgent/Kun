@@ -1,6 +1,6 @@
 import type { DelegatedTerminalPresentation } from '../../contracts/delegated-tool-presentation.js'
 /**
- * Agent → client method host (docs/ade/03 §8). Registers the fs/*,
+ * Agent → client method host. Registers the fs/*,
  * terminal/*, and session/request_permission handlers on a connection's
  * JSON-RPC peer. Every handler resolves its session through
  * `contextFor(sessionId)` — a context the runtime registers while a turn is
@@ -69,7 +69,7 @@ export type AcpClientContext = {
   /** Scoped env for agent terminals — the same stripped env the agent got. */
   terminalEnv?: NodeJS.ProcessEnv
   /**
-   * Form elicitation handler (P2-10): user_input gate on interactive turns,
+   * Form elicitation handler: user_input gate on interactive turns,
    * ask_manager on worker turns; absent when the turn disables user input.
    */
   elicit?: AcpElicitFn
@@ -381,7 +381,7 @@ export class AcpClientHost {
   // ---- elicitation -----------------------------------------------------------
 
   /**
-   * `elicitation/create` (P2-10): only the form mode is advertised, so url
+   * `elicitation/create`: only the form mode is advertised, so url
    * and custom modes decline politely; request-scoped elicitations carry no
    * sessionId and cancel since no turn context can own them.
    */

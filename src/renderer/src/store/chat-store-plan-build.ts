@@ -24,7 +24,7 @@ import type {
 } from './chat-store-types'
 
 /**
- * External-harness plan builds (07 §10, p2 §P2-11): instead of injecting the
+ * External-harness plan builds: instead of injecting the
  * native Kun prompt-managed worktree protocol into the prompt, the build runs
  * as a one-to-one turn on a fresh ADE thread bound to a host-managed task
  * worktree. The queued turn carries `planBuild` so Kun admission enforces the
@@ -130,7 +130,7 @@ export function createPlanBuildActions(
           submittedMessageForQueue: submission,
           persistActiveQueuedMessages: runtime.persistActiveQueuedMessages,
           // Plan builds always branch from the checkout's current HEAD, never
-          // the composer's default-branch preference (07 §10).
+          // the composer's default-branch preference.
           startFrom: { kind: 'current-head' },
           label: input.title?.trim() || input.displayText
         })

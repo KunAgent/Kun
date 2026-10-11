@@ -51,7 +51,7 @@ export function selectRowsForParent(
 }
 
 /**
- * ADE workers only (12 §6.1): side-chat and graph-attempt children also set
+ * ADE workers only: side-chat and graph-attempt children also set
  * `parentThreadId`, so the Workers pill/panel must filter by `kind`.
  */
 export function selectWorkerRowsForParent(

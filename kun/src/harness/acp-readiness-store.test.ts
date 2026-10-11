@@ -23,7 +23,7 @@ afterEach(async () => {
   dir = undefined
 })
 
-describe('AcpReadinessStore (P4-03)', () => {
+describe('AcpReadinessStore', () => {
   it('returns a hit only when command and version match', async () => {
     const now = 1_000
     const cache = await store(() => now)

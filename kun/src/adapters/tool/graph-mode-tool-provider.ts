@@ -83,7 +83,7 @@ export function buildGraphModeLocalTools(options: {
     updatedAt: string
   } | undefined>
   config?: () => import('../../config/kun-config.js').GraphRuntimeConfig
-  /** Late-bound harness services for plan-phase admission (P1-25). */
+  /** Late-bound harness services for plan-phase admission. */
   harnesses?: () => GraphPlanHarnessAdmission | undefined
   enabled: () => boolean
   signalSupervision?: (input: {

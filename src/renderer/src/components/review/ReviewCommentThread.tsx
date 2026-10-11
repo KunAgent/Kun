@@ -143,7 +143,7 @@ function CommentRow({
 
 /**
  * Inline thread under one diff row — or a file-level strip for outdated /
- * detached comments (11 §4.2). Resolved comments collapse into a chip.
+ * detached comments. Resolved comments collapse into a chip.
  */
 export function ReviewCommentThread({
   workspaceId,

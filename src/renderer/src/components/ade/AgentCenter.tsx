@@ -40,7 +40,7 @@ export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1
 }
 
 /**
- * The Agent Center (docs/ade/impl/p4 §3.2, P4-08): one card per harness with
+ * The Agent Center: one card per harness with
  * a state-driven primary action. Install jobs stay in the card; interactive
  * sign-in can use `onSetupCommand` for terminal prefill. Rendered both from the ADE sidebar entry and
  * from Settings → Agents → Agent harness so the two surfaces stay identical.
@@ -83,7 +83,7 @@ export function AgentCenter({
   const [probeError, setProbeError] = useState('')
 
   useEffect(() => {
-    // P4-02: always re-detect on open; waitMs lets an inflight pass settle.
+    // always re-detect on open; waitMs lets an inflight pass settle.
     void loadHarnesses(true, { waitMs: 3_000 })
     if (typeof window === 'undefined') return
     const refresh = (): void => { void loadHarnesses(true) }
@@ -119,7 +119,7 @@ export function AgentCenter({
     }
   }
 
-  // P4-10: `POST /v1/harnesses/:id/test` — a finished test may have moved
+  // `POST /v1/harnesses/:id/test` — a finished test may have moved
   // the cached status (e.g. a completed login), so the list reloads after.
   const test = async (harnessId: string, level: 'handshake' | 'trial') => {
     const testHarness = getProvider().testHarness
@@ -194,7 +194,7 @@ export function AgentCenter({
       onSetBinaryPath={(path) => patchHarness({ providers: withAgentCommandPath(settings.providers, id, path) })}
       onSetLaunchPatch={(patch) => patchHarness({ providers: withAgentLaunchPatch(settings.providers, id, patch) })}
       onSetPermissionMode={(modeId) => {
-        // P4-11: permission defaults live under defaults[id].
+        // permission defaults live under defaults[id].
         const defaults = { ...settings.defaults }
         if (modeId) {
           defaults[id] = { ...defaults[id], permissionMode: modeId }

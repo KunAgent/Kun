@@ -287,7 +287,7 @@ export const TurnSchema = z.object({
   disableUserInput: z.boolean().optional(),
   /** IM-bridge turn; gates IM-only tools such as outbound attachment delivery. */
   imContext: z.boolean().optional(),
-  /** Managed plan build (07 §10): selects the `plan-build` admission usage. */
+  /** Managed plan build: selects the `plan-build` admission usage. */
   planBuild: z.boolean().optional(),
   /** Optional stable machine-readable reason for a terminal turn. */
   terminalCode: z.string().trim().min(1).max(128).optional(),
@@ -322,7 +322,7 @@ export const StartTurnRequest = z.object({
   credentialMode: HarnessCredentialModeSchema.optional(),
   /** Native Agent for harnesses that declare `nativeAgents`; ignored by others. */
   harnessAgentId: HarnessNativeAgentIdSchema.optional(),
-  /** Values for Agent-published settings (docs/ade/17 §4.4); unknown ids are ignored. */
+  /** Values for Agent-published settings; unknown ids are ignored. */
   harnessSettings: HarnessSettingValuesSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional(),
   accountId: z.string().min(1).optional(),
@@ -371,7 +371,7 @@ export const StartTurnRequest = z.object({
     )
     .default([]),
   /**
-   * ADE manager threads (09 §6.2): pending worker-notice ids attached via
+   * ADE manager threads: pending worker-notice ids attached via
    * composerContexts, acked after admission. Request-scoped, not persisted.
    */
   ackNoticeIds: z.array(z.string().trim().min(1).max(256)).max(1_024).optional(),
@@ -419,7 +419,7 @@ export const StartTurnRequest = z.object({
    * IM-only tool exposure separately from generic headless turns.
    */
   imContext: z.boolean().optional(),
-  /** External-harness plan build (07 §10): admission enforces the host worktree. */
+  /** External-harness plan build: admission enforces the host worktree. */
   planBuild: z.boolean().optional(),
   /**
    * When true and the thread already has an active turn, the request is

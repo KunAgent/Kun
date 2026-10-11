@@ -444,7 +444,7 @@ export class FileArtifactStore implements ArtifactStore {
       let pending = ''
       // Decode incrementally so a multibyte UTF-8 sequence split across a 64KiB
       // read boundary is buffered and stitched, not turned into replacement
-      // characters (P2-04).
+      // characters.
       const decoder = new StringDecoder('utf8')
       const chunk = Buffer.alloc(64 * 1_024)
       for (;;) {

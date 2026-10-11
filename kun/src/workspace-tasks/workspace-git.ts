@@ -9,7 +9,7 @@ import type { ManagerDataMutexOperationContext } from '../manager/data-mutex.js'
 
 /**
  * Generic git helpers for host-managed task worktrees and Graph write
- * isolation (docs/ade/07 §3). The mutex context propagates whichever
+ * isolation. The mutex context propagates whichever
  * Manager data mutex is currently holding the write fence; callers run
  * their operations inside `workspaceWriteMutexContext.run(...)`.
  */

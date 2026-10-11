@@ -19,7 +19,7 @@ export type SettingsRouteSection =
   | 'speak'
   | 'speechToText'
   | 'agents'
-  /** Third-party Agents page (P4-05 Agent Center deep link). */
+  /** Third-party Agents page (Agent Center deep link). */
   | 'agentsHarnesses'
   /** Collaboration defaults page. */
   | 'agentsCollaboration'

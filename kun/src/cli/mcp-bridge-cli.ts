@@ -3,7 +3,7 @@ import { DEFAULT_SERVE_PORT } from './cli-options.js'
 
 /**
  * `kun mcp-bridge` — stdio ↔ `POST /mcp/kun` forwarder for harnesses that can
- * only spawn MCP servers over stdio (docs/ade/05 §3.3). Each newline-delimited
+ * only spawn MCP servers over stdio. Each newline-delimited
  * JSON-RPC message read from stdin is forwarded to the Kun server; the JSON
  * response is written back to stdout. The `kgw_` token reaches this process
  * exclusively through the environment variable named by `--token-env` — it is

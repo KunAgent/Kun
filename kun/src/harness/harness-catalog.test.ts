@@ -6,7 +6,7 @@ import {
   terminalAgentToDefinition
 } from './harness-catalog.js'
 
-describe('terminalAgents catalog entries (P4-13)', () => {
+describe('terminalAgents catalog entries', () => {
   it('parses into a valid HarnessDefinition with terminal launch details', () => {
     const def = HarnessDefinitionSchema.parse(
       terminalAgentToDefinition({
@@ -80,7 +80,7 @@ describe('terminalAgents catalog entries (P4-13)', () => {
   })
 })
 
-describe('transportOverrides (P6-07)', () => {
+describe('transportOverrides', () => {
   it('swaps codex onto its explicit ACP variant with matching setup', () => {
     const catalog = new HarnessCatalog({
       custom: () => [],

@@ -95,7 +95,7 @@ export const KunProjectMcpServerConfig = z
   })
 export type KunProjectMcpServerConfig = z.infer<typeof KunProjectMcpServerConfig>
 
-/** A repo-declared managed command (07 §7 setup / 10 §4.2 checks). */
+/** A repo-declared managed command. */
 const WorktreeCommandStepSchema = z.object({
   name: z.string().min(1).max(64),
   command: z.string().min(1).max(256),
@@ -115,9 +115,9 @@ export const KunProjectWorktreeConfigSchema = z
       .default([]),
     /** Ignored files copied into new task worktrees (.env and friends). */
     copyFiles: z.array(RelativeProjectPath).max(64).default([]),
-    /** Install commands run after creation; require user approval (07 §7). */
+    /** Install commands run after creation; require user approval. */
     setup: z.array(WorktreeCommandStepSchema).max(8).default([]),
-    /** Quality checks run on demand inside the worktree (10 §4.2). */
+    /** Quality checks run on demand inside the worktree. */
     checks: z.array(WorktreeCommandStepSchema).max(16).default([]),
     branchPrefix: z.string().regex(/^[a-z0-9][a-z0-9/_-]{0,31}$/).default('kun/')
   })

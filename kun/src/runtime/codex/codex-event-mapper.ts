@@ -1,5 +1,5 @@
 /**
- * Codex App Server notification → Kun timeline draft mapping (P6-05).
+ * Codex App Server notification → Kun timeline draft mapping.
  *
  * Codex streams deltas per itemId and sends full ThreadItem snapshots on
  * item/completed; the mapper tracks cumulative delta offsets per item so the

@@ -15,7 +15,7 @@ import { WritePaperBar } from './WritePaperBar'
 
 /**
  * The strip rendered under the focused group's toolbar: the full paper bar for
- * unit files, or the "作为论文打开" hint for an ordinary workspace PDF (§6.3).
+ * unit files, or the "作为论文打开" hint for an ordinary workspace PDF.
  * Returns null when neither applies.
  */
 export function WritePaperStrip({

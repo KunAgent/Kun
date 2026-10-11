@@ -8,7 +8,7 @@ import { requestOpenWorkersPanel } from '../chat/FloatingComposerWorkersPill'
 import { useActivityStore } from '../../store/activity-store'
 
 /**
- * Worker-thread control banner (12 §6.3): sits at the top of a worker
+ * Worker-thread control banner: sits at the top of a worker
  * conversation — 「由总管管理 · 接管」 while the manager drives,
  * 「你正在接管 · 交还给总管」 after take-over. Hidden for non-worker
  * threads (the lookup 404s) and for released/detached workers.

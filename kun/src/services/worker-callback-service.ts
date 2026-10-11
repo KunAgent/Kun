@@ -11,7 +11,7 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { SessionStore } from '../ports/session-store.js'
 
 /**
- * Host-side implementation of the worker callback tools (05 §2). The worker
+ * Host-side implementation of the worker callback tools. The worker
  * identity is always derived from the calling thread's persisted
  * `executionUnit`; callers can never nominate another thread.
  */
@@ -23,7 +23,7 @@ export type WorkerCallbackServiceDeps = {
   questions: FileQuestionStore
   /**
    * Initial sink; composition rebinds it to the WorkerNoticeCoordinator so
-   * question notices schedule manager wake-ups too (09 §6.2).
+   * question notices schedule manager wake-ups too.
    */
   notices: WorkerNoticeSink
   activity?: { apply(unitId: string, patch: ActivityPatch, provenance: ActivityProvenance): void }

@@ -1,5 +1,5 @@
 /**
- * CodexAgent (P6-05): a pooled `codex app-server` process implementing the
+ * CodexAgent: a pooled `codex app-server` process implementing the
  * shared `HarnessAgent` contract. Thread-level lifecycle maps to codex
  * `thread/*` methods; the agent routes inbound server requests (approvals,
  * user input) to the owning session by codex threadId.

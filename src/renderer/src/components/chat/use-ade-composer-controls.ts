@@ -37,7 +37,7 @@ import { useCodeProjectDefaults } from './use-code-project-defaults'
 import { readHarnessLastModel, rememberHarnessLastModel } from '../../lib/harness-last-model'
 
 /**
- * ADE composer wiring (docs/ade/12 §7.2–7.4): harness catalog, per-harness
+ * ADE composer wiring: harness catalog, per-harness
  * model groups keyed by credential mode, native slash commands, and the
  * new-session isolation picker state shared by the Code workbench.
  */
@@ -255,7 +255,7 @@ export function useAdeComposerControls(input: {
   }, [composerProviderId, credentialMode, enabled, harnessId, isNativeHarness, row, onComposerModelChange, setComposerHarness, setComposerModel, setComposerGatewayBinding])
 
   /**
-   * External-session continuation (01 §8): a fresh one-to-one thread whose
+   * External-session continuation: a fresh one-to-one thread whose
    * selected harness exposes a `historySource` can import a local session
    * of that source, then the new thread is rebound to the same harness.
    * Hidden while a thread is open or the matching lab flag is off.
@@ -275,10 +275,10 @@ export function useAdeComposerControls(input: {
 
   const selectHarness = (nextId: string, nextCredentialMode?: string): void => {
     const nextRow = rows.find((entry) => entry.definition.id === nextId)
-    // P4-13: picker rows are filtered, but a stale persisted pick can still
+    // picker rows are filtered, but a stale persisted pick can still
     // call in with a terminal-only id — it cannot host turns.
     if (nextId !== 'kun' && (!nextRow || !harnessRowRunsTurns(nextRow) || !harnessRowAvailable(nextRow))) return
-    // P4-11: the configured per-harness defaults supply whatever the user
+    // the configured per-harness defaults supply whatever the user
     // did not pick explicitly on this switch.
     const defaults = harnessDefaults[nextId]
     const defaultCred = defaults?.credentialMode &&
@@ -352,7 +352,7 @@ export function useAdeComposerControls(input: {
 
   return {
     enabled,
-    // P4-13: terminal-only agents live in the catalog for the terminal menu
+    // terminal-only agents live in the catalog for the terminal menu
     // and `harness_list`, but they cannot host turns — keep them out.
     rows: rows.filter((entry) => harnessRowRunsTurns(entry) && harnessRowAvailable(entry)),
     rowsLoading,

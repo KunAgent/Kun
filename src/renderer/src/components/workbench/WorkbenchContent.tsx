@@ -56,7 +56,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
   const externalSource = activeThreadRelation === 'side' ? externalSubagentSourceForThread(activeThreadId) : undefined
   const reviewEnabled = useReviewStore((s) =>
     activeThreadId ? Boolean(s.bindings[activeThreadId]) : false)
-  // 12 §6.1: the Workers rail button appears while worker rows exist under
+  // the Workers rail button appears while worker rows exist under
   // the active (manager) thread; the panel itself also self-disables.
   const workersEnabled = useActivityStore((s) =>
     Boolean(

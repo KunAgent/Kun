@@ -1,5 +1,5 @@
 /**
- * Codex App Server client (P6-04): a typed JSON-RPC facade over the shared
+ * Codex App Server client: a typed JSON-RPC facade over the shared
  * `JsonlTransport`/`JsonRpcPeer` running against `codex app-server` stdio.
  *
  * The client owns only wire concerns — request ids, timeouts, response
@@ -150,7 +150,7 @@ export class CodexClient {
         clientInfo: { name: 'kun', title: 'Kun', version: KUN_VERSION },
         capabilities: {
           // Kun surfaces approvals through its own gates; no experimental
-          // surface is requested (dynamic tools stay MCP-based, P6-06).
+          // surface is requested (dynamic tools stay MCP-based).
           optOutNotificationMethods: null
         }
       },

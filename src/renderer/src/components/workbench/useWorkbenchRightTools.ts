@@ -155,7 +155,7 @@ export function useWorkbenchRightTools({
   }, [codeRightTabs.expanded, collapseRightPanel, expandRightPanel])
 
   // The review tab only exists while the active thread binds a task
-  // workspace (11 §3); the binding lookup itself runs in WorkbenchContent.
+  // workspace; the binding lookup itself runs in WorkbenchContent.
   const reviewEnabled = useReviewStore((s) =>
     Boolean(activeThreadId && s.bindings[activeThreadId]))
   // Collaboration appears only once this task actually has execution units.
@@ -171,7 +171,7 @@ export function useWorkbenchRightTools({
         rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.changes) takePlanBuildReview(activeThreadId)
   }, [activeThreadId, pendingPlanBuildReview, codeRightTabs.expanded, rightPanelMode])
 
-  // The composer Workers pill asks the workbench to open the panel (12 §6.1).
+  // The composer Workers pill asks the workbench to open the panel.
   useEffect(() => {
     const open = (): void => openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.workers)
     window.addEventListener(OPEN_WORKERS_PANEL_EVENT, open)

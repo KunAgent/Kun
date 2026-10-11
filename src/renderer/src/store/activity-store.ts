@@ -8,7 +8,7 @@ import type {
 import { getProvider } from '../agent/registry'
 
 /**
- * Renderer-side execution-unit activity feed (docs/ade/06 §9): one shared
+ * Renderer-side execution-unit activity feed: one shared
  * zustand slice fed by snapshot + long-poll against /v1/activity. The feed
  * keeps every desktop view on the same rows the phone and TUI see.
  */

@@ -1,5 +1,5 @@
 /**
- * User Agents derived from a builtin engine (docs/ade/17 §4.3) show that
+ * User Agents derived from a builtin engine show that
  * engine's icon. The harness store records the lineage when the catalog
  * loads; an unknown id keeps its own (monogram or generic) icon.
  */

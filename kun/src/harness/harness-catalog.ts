@@ -35,12 +35,12 @@ export type CustomHarnessConfig = {
   command: string
   args: string[]
   env: Record<string, string>
-  /** Credential-store refs resolved into env at spawn (P4-12). */
+  /** Credential-store refs resolved into env at spawn. */
   secretEnv?: readonly { name: string; secretRef: string }[]
 }
 
 /**
- * `harnesses.terminalAgents[]` config entry (p4 §3.8, P4-13): an interactive
+ * `harnesses.terminalAgents[]` config entry: an interactive
  * CLI that runs inside a Kun terminal tab, not a delegated turn runtime.
  */
 export type TerminalAgentConfig = {
@@ -110,7 +110,7 @@ export class HarnessCatalog {
       /** External profiles are opt-in; installed software is never consent. */
       enabledProfiles?: () => readonly HarnessEnabledProfile[]
       /**
-       * P6-07 hidden transport pins: `{codex: 'acp'}` re-selects a declared
+       * hidden transport pins: `{codex: 'acp'}` re-selects a declared
        * variant while the default keeps moving (or stays pinned) — unknown
        * ids/transports are ignored rather than breaking the catalog.
        */
@@ -135,7 +135,7 @@ export class HarnessCatalog {
     const taken = new Set(builtins.map((d) => d.id))
     const added: HarnessDefinition[] = []
     const derived: AgentProviderModule[] = []
-    // Engine-backed Agents first, terminal-only ones after (the pre-P2 order).
+    // Engine-backed Agents first, terminal-only ones after (the legacy order).
     const entries = Object.entries(overrides).sort(([, a], [, b]) =>
       Number(a.extends === TERMINAL_BASE) - Number(b.extends === TERMINAL_BASE))
     for (const [id, override] of entries) {
@@ -235,7 +235,7 @@ export function userAgentDefinition(
   return { definition: module.definition, module }
 }
 
-/** Build the catalog definition for a `harnesses.custom[]` entry (P4-12: also used by probe-definition). */
+/** Build the catalog definition for a `harnesses.custom[]` entry (also used by probe-definiti). */
 export function customToDefinition(entry: CustomHarnessConfig): unknown {
   return {
     id: entry.id as HarnessId,

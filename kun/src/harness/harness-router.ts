@@ -87,7 +87,7 @@ export type HarnessRouterDeps = {
   /** `agents.kun.ade.allowUnattendedFullAccess`; default false. */
   allowUnattendedFullAccess?(): boolean
   /**
-   * 07 §5 / 02 §5.2: whether the thread's bound task workspace is a
+   * /: whether the thread's bound task workspace is a
    * host-created isolated worktree. Absent or unknown → not isolated.
    */
   taskWorkspaceIsolated?(workspaceId: string): boolean
@@ -222,9 +222,9 @@ export class HarnessRouter {
         runtime?.capabilities?.(route.providerId)?.roomToolPolicy === true
       )
     }
-    // 07 §5: a thread bound to a host-managed worktree counts isolated.
+    // a thread bound to a host-managed worktree counts isolated.
     // Worker threads carry it on executionUnit; one-to-one threads on
-    // thread.taskWorkspaceId (P1-22).
+    // thread.taskWorkspaceId.
     const boundWorkspaceId = thread.executionUnit?.taskWorkspaceId ?? thread.taskWorkspaceId
     const verdict = checkHarnessAdmission({
       usage,

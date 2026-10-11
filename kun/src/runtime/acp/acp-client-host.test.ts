@@ -347,7 +347,7 @@ describe('AcpClientHost', () => {
     expect((error as AcpError).rpcCode).toBe(-32002)
   })
 
-  // ---- elicitation (P2-10) ---------------------------------------------------
+  // ---- elicitation ---------------------------------------------------
 
   const FORM_PARAMS = {
     sessionId: 'sess-1',

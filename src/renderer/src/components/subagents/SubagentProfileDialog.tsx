@@ -43,7 +43,7 @@ export function ProfileDialog({
   useEffect(() => { if (d.harnessId) void loadHarnessProviderGroups(d.harnessId) }, [d.harnessId])
 
   useEffect(() => {
-    // P4-02: opening the dialog force-refreshes; waitMs lets an in-flight
+    // opening the dialog force-refreshes; waitMs lets an in-flight
     // detection settle so harness options do not stay stuck on 'unknown'.
     void loadHarnesses(true, { waitMs: 3_000 })
   }, [])

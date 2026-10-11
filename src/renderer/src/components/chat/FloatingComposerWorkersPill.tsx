@@ -13,7 +13,7 @@ export function requestOpenWorkersPanel(): void {
 }
 
 /**
- * ADE composer track pill (12 §6.1): `Workers N` while manager-dispatched
+ * ADE composer track pill: `Workers N` while manager-dispatched
  * workers are in flight on this thread; switches to the amber
  * `Workers · N 待回答` variant when a worker waits on an answer. Hidden for
  * non-ADE threads and teams with nothing in flight.

@@ -230,7 +230,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         }))
         void get().refreshThreads()
         // New-session worktree isolation: start async prep, subscribe for the
-        // ready event, and park this submission in the local queue (12 §7.3).
+        // ready event, and park this submission in the local queue.
         if (adeDraft?.isolation === 'worktree' && createdThread) {
           await prepareAdeThreadWorktree({
             provider: p,

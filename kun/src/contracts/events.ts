@@ -474,7 +474,7 @@ export const DelegatedRuntimeEvent = RuntimeEventBase.extend({
     'pi-rpc'
   ]),
   providerId: z.string().min(1),
-  /** Explicit harness identity for the delegated turn (P0-04+). */
+  /** Explicit harness identity for the delegated turn. */
   harnessId: HarnessIdSchema.optional(),
   phase: z.enum(['portable', 'resumed', 'rebased']),
   reason: z.enum([
@@ -503,7 +503,7 @@ export type HarnessRuntimeEvent = z.infer<typeof HarnessRuntimeEvent>
 
 /**
  * Harness-reported session surface state: slash commands, current mode,
- * config options and generic settings (docs/ade/03 §7.3, 17 §4.4).
+ * config options and generic settings.
  * Composer controls refresh off this.
  */
 export const HarnessSessionStateEvent = RuntimeEventBase.extend({
@@ -524,7 +524,7 @@ export const HarnessSessionStateEvent = RuntimeEventBase.extend({
   configOptions: z.array(HarnessConfigOptionSchema).max(32).optional(),
   currentModeId: z.string().max(256).optional(),
   agents: HarnessNativeAgentListSchema.optional(),
-  /** Agent-published controls Kun does not model itself (docs/ade/17 §4.4). */
+  /** Agent-published controls Kun does not model itself. */
   settings: HarnessSessionSettingListSchema.optional()
 })
 export type HarnessSessionStateEvent = z.infer<typeof HarnessSessionStateEvent>
@@ -537,7 +537,7 @@ export type GraphRuntimeEvent = z.infer<typeof GraphRuntimeEvent>
 
 /**
  * Display-only marker recorded when a deterministic handoff brief was spliced
- * into a delegated turn's prompt (docs/ade/08 §4). Carries the rebuild inputs
+ * into a delegated turn's prompt. Carries the rebuild inputs
  * so `GET /v1/threads/:id/handoff-preview` can reproduce the exact text.
  */
 export const HandoffInjectedEvent = RuntimeEventBase.extend({
@@ -570,7 +570,7 @@ export const HandoffInjectedEvent = RuntimeEventBase.extend({
 export type HandoffInjectedEvent = z.infer<typeof HandoffInjectedEvent>
 
 /**
- * Task-workspace progress/state transitions (docs/ade/07 §5). Emitted on
+ * Task-workspace progress/state transitions. Emitted on
  * `threadId = ownerThreadId`; ActivityStore refreshes the bound unit's
  * workspace fields from the payload.
  */

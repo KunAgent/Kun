@@ -354,11 +354,11 @@ export async function sendThreadMessage(
     const admissionPromise = !queued && shouldWaitForRuntimeAdmission
       ? waitForRuntimeTurnAdmission(clientRequestId)
       : null
-    // ADE manager sends fold pending worker notices into the turn (09 §6.2).
+    // ADE manager sends fold pending worker notices into the turn.
     const adeExtras = await adeWorkerNoticeSendExtras(get(), queued?.ackNoticeIds, i18n.language)
     const ackNoticeIds = adeExtras.ackNoticeIds
     const hasPendingActiveTurn = threadHasPendingRuntimeWork(get().blocks)
-    // Task-worktree prep queues locally (12 §7.3): the runtime cannot admit
+    // Task-worktree prep queues locally: the runtime cannot admit
     // a turn until the thread is bound to the ready workspace path.
     const workspacePreparing = threadWorkspaceBlocksSend(get().activeThreadId)
     if (get().busy || hasPendingActiveTurn || workspacePreparing || (queued && !shouldWaitForRuntimeAdmission)) {

@@ -268,7 +268,7 @@ export function kunTaskWorkspacePath(workspaceId: string, suffix = ''): string {
   return `${KUN_TASK_WORKSPACES_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
 }
 
-/** ADE line-level review comments (docs/ade/11 §4). */
+/** ADE line-level review comments. */
 export const KUN_REVIEWS_PATH = '/v1/reviews'
 export const KUN_REVIEW_COMMENTS_TEMPLATE = '/v1/reviews/{id}/comments'
 export const KUN_REVIEW_COMMENT_TEMPLATE = '/v1/reviews/{id}/comments/{commentId}'
@@ -280,7 +280,7 @@ export function kunActivityUnitPath(unitId: string, action: 'ack' | 'dismiss' | 
   return `${KUN_ACTIVITY_PATH}/${encodeURIComponent(unitId)}/${action}`
 }
 
-/** ADE team control surface (docs/ade/09 §9). */
+/** ADE team control surface. */
 export const KUN_TEAMS_PATH = '/v1/teams'
 export const KUN_TEAM_BY_MANAGER_TEMPLATE = '/v1/teams/by-manager/{id}'
 export const KUN_TEAM_QUESTION_ANSWER_TEMPLATE = '/v1/teams/questions/{id}/answer'
@@ -329,7 +329,7 @@ export const KUN_HARNESS_UPDATES_TEMPLATE = '/v1/harnesses/{id}/updates'
 export const KUN_HARNESS_UPDATE_ACTION_TEMPLATE = '/v1/harnesses/{id}/updates/{action}'
 export const KUN_HARNESS_INSTALL_TEMPLATE = '/v1/harnesses/{id}/install'
 export const KUN_HARNESS_INSTALL_CANCEL_TEMPLATE = '/v1/harnesses/{id}/install/cancel'
-// P4-12: unsaved-definition handshake + credential-store secret refs.
+// unsaved-definition handshake + credential-store secret refs.
 export const KUN_HARNESS_PROBE_DEFINITION_TEMPLATE = '/v1/harnesses/probe-definition'
 export const KUN_HARNESS_SECRETS_TEMPLATE = '/v1/harness-secrets'
 export const KUN_HARNESS_SECRET_TEMPLATE = '/v1/harness-secrets/{ref}'

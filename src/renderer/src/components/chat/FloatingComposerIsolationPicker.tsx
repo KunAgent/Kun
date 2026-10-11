@@ -24,7 +24,7 @@ type Props = {
   onRetryPrep?: () => void
 }
 
-/** ADE-only isolation control (12 §7.3): local dir vs host-managed worktree. */
+/** ADE-only isolation control: local dir vs host-managed worktree. */
 export function FloatingComposerIsolationPicker({
   disabled = false,
   showPicker,

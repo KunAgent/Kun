@@ -31,7 +31,7 @@ import type { WorkerProviderPoolEntry } from './worker-route.js'
 import type { ManagerAuthority } from './permission-clamp.js'
 import type { EscalationApprovalContext } from './escalation-approval.js'
 
-/** What a manager tool needs from the calling turn (09 §4.2 ctx). */
+/** What a manager tool needs from the calling turn. */
 export type ManagerToolContext = {
   /** Manager thread id — also the team id. */
   threadId: string
@@ -40,7 +40,7 @@ export type ManagerToolContext = {
   workspace: string
   authority: ManagerAuthority
   signal: AbortSignal
-  /** User-only escalation channel (09 §7.2); see escalation-approval.ts. */
+  /** User-only escalation channel; see escalation-approval.ts. */
   awaitApproval: EscalationApprovalContext['awaitApproval']
 }
 
@@ -59,9 +59,9 @@ export type ManagerRuntimeDeps = {
   teams: FileTeamStore
   dispatches: FileDispatchStore
   questions: FileQuestionStore
-  /** Same-task race records (10 §6); absent disables the worker_race tool. */
+  /** Same-task race records; absent disables the worker_race tool. */
   races?: import('./race.js').FileRaceStore
-  /** Raw store or the wake-up coordinator wrapping it (09 §6.2). */
+  /** Raw store or the wake-up coordinator wrapping it. */
   notices: WorkerNoticeSink
   threads: ThreadStore
   turns: Pick<TurnService, 'getTurn'>
@@ -86,41 +86,41 @@ export type ManagerRuntimeDeps = {
   teamLimits?: () => Partial<{ softWorkers: number; hardWorkers: number }> | undefined
   /** Delay before an ephemeral worker is released after completion (default 30s). */
   ephemeralReleaseDelayMs?: () => number
-  /** worker_answer / GUI question answers (09 §6.4); absent → answer refuses. */
+  /** worker_answer / GUI question answers; absent → answer refuses. */
   workerCallbacks?: Pick<WorkerCallbackService, 'answerQuestion'>
-  /** worker_approve decision channel (09 §6.5); gated by managerMayApprove. */
+  /** worker_approve decision channel; gated by managerMayApprove. */
   approvalGate?: Pick<
     ApprovalGate,
     'get' | 'reserveDecision' | 'commitDecision' | 'rollbackDecision'
   >
-  /** Audit sink for manager-resolved approvals (09 §6.5). */
+  /** Audit sink for manager-resolved approvals. */
   approvalEvents?: Pick<RuntimeEventRecorder, 'record'>
   /** `agents.kun.ade.managerMayApprove` — gates the worker_approve tool. */
   managerMayApprove?: () => boolean
-  /** Per-worker usage rollup for race compare (11 §5). */
+  /** Per-worker usage rollup for race compare. */
   usage?: Pick<UsageService, 'forThread'>
-  /** Team-token budget gate (P3-15); absent → budget unenforced. */
+  /** Team-token budget gate; absent → budget unenforced. */
   teamBudget?: import('./team-budget.js').TeamBudgetGate
-  /** Configured team budget written into newly ensured teams (P3-15). */
+  /** Configured team budget written into newly ensured teams. */
   teamBudgetPolicy?: () => TeamRecord['budget'] | undefined
-  /** Approved `worktree.checks` inputs (10 §4.2); absent hides the tool. */
+  /** Approved `worktree.checks` inputs; absent hides the tool. */
   checks?: Pick<
     import('./check-runner.js').WorkspaceCheckRunnerDeps,
     'approvedChecks' | 'artifacts' | 'spawn' | 'env'
   >
-  /** Provider pool for provider/gateway route validation (P3-06). */
+  /** Provider pool for provider/gateway route validation. */
   resolveGatewayAliases?: (binding: import('../contracts/harness-gateway-binding.js').HarnessGatewayBinding) => Promise<import('../contracts/harness-gateway-binding.js').HarnessGatewayAliasGrant[]>
   providerPool?: (providerId: string) => Promise<WorkerProviderPoolEntry | undefined>
   /** Last cached model-probe list per harness; absent → static list. */
   probedModels?: (definition: HarnessDefinition) => string[] | undefined
   /**
-   * `agents.kun.harnesses.defaults` lookup (p4 §3.6, P4-11): route fields,
+   * `agents.kun.harnesses.defaults` lookup: route fields,
    * `permissionMode`, and `isolation` the caller did not pin fall back to
    * the configured per-harness defaults.
    */
   harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
   /**
-   * Worker-route selector inputs (10 §3.2); `isolated`/`unattended` come from
+   * Worker-route selector inputs; `isolated`/`unattended` come from
    * the create call. Absent → the manager's own provider/model on `kun`.
    */
   selector?: Omit<

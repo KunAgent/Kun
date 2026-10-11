@@ -30,14 +30,14 @@ import type { WorkspaceCheckRunnerDeps } from '../../ade/check-runner.js'
 export type ManagerToolProviderDeps = {
   manager: ManagerRuntime
   harnessList: HarnessListDeps
-  /** `agents.kun.ade.managerMayApprove` — gates worker_approve (09 §6.5). */
+  /** `agents.kun.ade.managerMayApprove` — gates worker_approve. */
   managerMayApprove?: () => boolean
   /** Global admission switch. Existing teams retain read/stop/answer controls. */
   canStartNewWork?: () => boolean
   advancedCollaborationEnabled?: () => boolean
-  /** Race store/services (10 §6); absent → worker_race tools hidden. */
+  /** Race store/services; absent → worker_race tools hidden. */
   race?: RaceToolDeps
-  /** Host check runner (10 §4.2); absent → workspace_run_checks hidden. */
+  /** Host check runner; absent → workspace_run_checks hidden. */
   checks?: WorkspaceCheckRunnerDeps
 }
 
@@ -55,7 +55,7 @@ const START_FROM_SCHEMA = {
 } as const
 
 /**
- * Manager (`worker_*`) tools (09 §4, 10 §2). `shouldAdvertiseManagerTools`
+ * Manager (`worker_*`) tools. `shouldAdvertiseManagerTools`
  * gates advertising AND execution for capable root Agents, never workers or room agents.
  */
 export function createManagerToolProvider(

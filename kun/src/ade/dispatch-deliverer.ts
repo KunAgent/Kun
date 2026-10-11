@@ -37,15 +37,15 @@ type RunChildInput = {
   workspace?: string
   model?: string
   providerId?: string
-  /** Resolved subagent profile id applied to the child's role (10 §3.1). */
+  /** Resolved subagent profile id applied to the child's role. */
   profile?: string
-  /** Selector decision metadata recorded on the child run (10 §3.3). */
+  /** Selector decision metadata recorded on the child run. */
   routing?: ChildRoutingMetadata
   security?: ChildSecuritySnapshot
   harnessId?: WorkerRecord['route']['harnessId']
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: WorkerRecord['route']['credentialMode']
-  /** Read-only policy/sandbox ceiling for reviewer workers (10 §5). */
+  /** Read-only policy/sandbox ceiling for reviewer workers. */
   toolPolicyCeiling?: 'readOnly'
   sandboxMode?: SandboxMode
   approvalPolicy?: ApprovalPolicy
@@ -73,7 +73,7 @@ type ResumeChildInput = {
   signal: AbortSignal
 }
 
-/** The delegation-runtime surface the deliverer needs (09 §5). */
+/** The delegation-runtime surface the deliverer needs. */
 export type DelivererDelegation = {
   runChild(input: RunChildInput): Promise<ChildRunRecord>
   resumeChild(input: ResumeChildInput): Promise<ChildRunRecord>
@@ -98,7 +98,7 @@ export type DispatchDelivererDeps = {
 }
 
 /**
- * Exactly-once dispatch delivery (09 §5). A dispatch row is persisted before
+ * Exactly-once dispatch delivery. A dispatch row is persisted before
  * the worker turn exists; `clientRequestId = dispatchId` makes the turn
  * admission idempotent so a restart or double-fire can never spawn a second
  * turn for the same dispatch.
@@ -140,7 +140,7 @@ export class DispatchDeliverer {
   }
 
   /**
-   * `worker_stop` (09 §4.1): abort the detached run's controller and interrupt
+   * `worker_stop`: abort the detached run's controller and interrupt
    * any active/queued turn. The turn-terminal hook marks the dispatch
    * cancelled; queued dispatches stay pending for the next free slot.
    */
@@ -209,7 +209,7 @@ export class DispatchDeliverer {
       return { accepted: false, pendingReason: 'user-control' }
     }
     if (worker.control === 'user') {
-      // User takeover (09 §9) holds the queue instead of destroying it —
+      // User takeover holds the queue instead of destroying it —
       // hand-back resumes delivery through tryDeliverNext.
       return { accepted: false, pendingReason: 'user-control' }
     }
@@ -265,7 +265,7 @@ export class DispatchDeliverer {
       await this.classifyFailure(teamId, dispatch.dispatchId, error)
       return { accepted: false }
     }
-    // turnId backfills from the admitted turn's clientRequestId (09 §5).
+    // turnId backfills from the admitted turn's clientRequestId.
     await this.deps.dispatches.update(teamId, dispatch.dispatchId, { state: 'accepted' })
     return { accepted: true }
   }
@@ -317,11 +317,11 @@ export class DispatchDeliverer {
       label: worker.label,
       childId: dispatch.workerId,
       // Reviewers hold no task-workspace record; their sandboxRoot is the
-      // reviewed worker's workspace (10 §5 local semantics).
+      // reviewed worker's workspace.
       workspace: workspace?.path ?? (worker.reviewOf ? worker.securitySnapshot.sandboxRoot : undefined),
       model: worker.route.model,
       providerId: worker.route.providerId,
-      // Reviewers run under the host read-only ceiling (10 §5); resumeChild
+      // Reviewers run under the host read-only ceiling; resumeChild
       // inherits the policy from the stored run record automatically.
       ...(worker.reviewOf
         ? { toolPolicyCeiling: 'readOnly' as const, sandboxMode: 'read-only' as const }
@@ -379,7 +379,7 @@ export class DispatchDeliverer {
   }
 
   /**
-   * Classify a rejected run (09 §5): errors proving the turn never started
+   * Classify a rejected run: errors proving the turn never started
    * (validation, resume fences) mark the dispatch `failed`; anything that may
    * have reached admission becomes `uncertain` for startup reconciliation.
    */
@@ -403,7 +403,7 @@ export class DispatchDeliverer {
   }
 
   /**
-   * Startup reconciliation (09 §5): `delivering`/`uncertain` dispatches are
+   * Startup reconciliation: `delivering`/`uncertain` dispatches are
    * looked up by `clientRequestId` on the worker thread. Found → `accepted`
    * with `turnId` backfilled; missing → redelivered under the same key so
    * exactly one turn ever exists per dispatch.

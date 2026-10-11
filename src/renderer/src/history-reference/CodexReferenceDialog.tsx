@@ -14,7 +14,7 @@ export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated, fixedP
   workspaceRoot: string
   onClose: () => void
   onCreated: (id: string) => void
-  /** ADE continuation: pin the source to the picked harness (01 §8). */
+  /** ADE continuation: pin the source to the picked harness. */
   fixedProvider?: HistorySourceProvider
   /** PATCH the created branch onto this harness before reporting success. */
   harnessId?: string

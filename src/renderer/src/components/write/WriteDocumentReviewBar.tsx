@@ -1,5 +1,5 @@
 /**
- * Top bar shown while the rich diff review is active (implementation §6.4):
+ * Top bar shown while the rich diff review is active:
  * progress + prev/next navigation + bulk accept/reject. Replaces the
  * CodeMirror panel used by the source editor.
  */

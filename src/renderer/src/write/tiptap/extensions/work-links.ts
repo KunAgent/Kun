@@ -1,5 +1,5 @@
 /**
- * Link interactions for the Work editor (implementation §7.6/§7.7):
+ * Link interactions for the Work editor:
  *
  * - Plain click on a link opens an editing bubble (text, address input,
  *   open, copy, unlink); Cmd/Ctrl+click or middle click opens the target

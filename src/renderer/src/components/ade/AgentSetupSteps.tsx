@@ -39,7 +39,7 @@ function Step({ index, done, active, last = false, title, description, children 
 }
 
 /**
- * The three first-time steps (docs/ade/18 §3.4): install, choose how the Agent
+ * The three first-time steps: install, choose how the Agent
  * reaches its models, then check and turn it on. The check is the same action
  * as the switch in the header.
  */

@@ -335,7 +335,7 @@ export type KunHarnessSettingsPatchV1 = {
   providers?: Record<string, KunHarnessProviderOverrideV1>
   defaults?: Record<string, KunHarnessDefaultsEntryV1>
   /**
-   * Legacy pre-P4-11 shape: merges into `defaults[*].permissionMode` for
+   * Legacy shape: merges into `defaults[*].permissionMode` for
    * entries that lack one. New writers should send `defaults` only.
    */
   defaultPermissionMode?: Record<string, string>

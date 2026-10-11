@@ -18,7 +18,7 @@ describe('subagentProfilesForRuntime proactive retry', () => {
 })
 
 describe('subagentProfilesForRuntime ADE harness binding', () => {
-  it('round-trips harnessId/credentialMode/delegationNotes through config parse (10 §3.1)', () => {
+  it('round-trips harnessId/credentialMode/delegationNotes through config parse', () => {
     const config = subagentProfilesForRuntime({
       enabled: true,
       profiles: [{

@@ -18,7 +18,7 @@ import { upsertQueuedSubmission, type StoreActionContext } from './chat-store-th
 import type { ChatState } from './chat-store-types'
 
 /**
- * New-session worktree isolation (12 §7.3): subscribe for the task_workspace
+ * New-session worktree isolation: subscribe for the task_workspace
  * lifecycle, kick off async prep, and park the submission in the local queue
  * until the workspace reports `ready` (the sink's ready handler drains it).
  * Returns the created record, or null when preparation failed to start.

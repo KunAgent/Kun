@@ -197,17 +197,17 @@ export type ServerRuntime = {
   events: RuntimeEventRecorder
   /** Compact process-wide invalidations used by sidebar observers. */
   threadActivity?: ThreadActivityRegistry
-  /** Execution-unit activity rows shared by all clients (docs/ade/06). */
+  /** Execution-unit activity rows shared by all clients. */
   activityStore?: import('../../services/activity-store.js').ActivityStore
   /** Persisted user facts (ack/dismiss/pin) for activity rows. */
   activityFacts?: import('../../services/activity-facts-store.js').ActivityFactsStore
-  /** Stall/dormancy scanner plus the client foreground registry (06 §6-§7). */
+  /** Stall/dormancy scanner plus the client foreground registry. */
   activityHibernation?: import('../../services/activity-hibernation.js').ActivityHibernation
-  /** Host-owned task workspaces (docs/ade/07). */
+  /** Host-owned task workspaces. */
   taskWorkspaces?: import('../../workspace-tasks/task-workspace-service.js').TaskWorkspaceService
-  /** AI line-attribution ledger for workspace files (docs/ade/11 §6). */
+  /** AI line-attribution ledger for workspace files. */
   attribution?: import('../../ade/attribution-ledger.js').AttributionLedger
-  /** Forge change requests on workspace branches (docs/ade/11 §7.2). */
+  /** Forge change requests on workspace branches. */
   changeRequests?: import('../../ade/change-request-service.js').ChangeRequestService
   /** Active SSE streams, so a successful thread delete can close them. */
   eventStreamRegistry?: ThreadEventStreamRegistry
@@ -271,7 +271,7 @@ export type ServerRuntime = {
     acpModels?: AcpModelProbe
     /** Agent SDK `supportedModels()` probing for `modelSource: 'probe'` harnesses. */
     agentSdkModels?: AgentSdkModelProbe
-    /** Codex app-server `model/list` probing (P6-07). */
+    /** Codex app-server `model/list` probing. */
     codexModels?: CodexModelProbe
     piModels?: import('../../harness/pi-model-probe.js').PiModelProbe
     antigravityModels?: import('../../harness/antigravity-model-probe.js').AntigravityModelProbe
@@ -287,26 +287,24 @@ export type ServerRuntime = {
      */
     gatewayEndpoint?: { baseUrl?: string }
     /**
-     * Resolves `launch.secretEnv` credential-store refs at spawn/probe time
-     * (P4-12); undefined when the runtime has no credential store.
+     * Resolves `launch.secretEnv` credential-store refs at spawn/probe time;
+     * undefined when the runtime has no credential store.
      */
     resolveSecretEnv?: import('../../harness/harness-secret-env.js').HarnessSecretRefResolver
-    /** Agents declared by enabled extensions (docs/ade/17 §4.5). */
+    /** Agents declared by enabled extensions. */
     extensionAgents?: import('../../harness/extension-agent-providers.js').ExtensionAgentProviderSource
   }
   /**
-   * Process-local `kgw_` bearer tokens scoped to spawned harnesses
-   * (docs/ade/04 §4). Optional so test scaffolds can omit it.
+   * Process-local `kgw_` bearer tokens scoped to spawned harnesses.
+   * Optional so test scaffolds can omit it.
    */
   harnessTokens?: import('../../harness/harness-token-service.js').HarnessTokenService
   /**
-   * Shared Kun-tool bridge host backing the `/mcp/kun` route (docs/ade/05
-   * §3.3). Optional so test scaffolds can omit it.
+   * Shared Kun-tool bridge host backing the `/mcp/kun` route. Optional so test scaffolds can omit it.
    */
   kunToolBridge?: import('../../harness/kun-tool-bridge-host.js').KunToolBridgeHost
   /**
-   * ADE control-plane stores + worker callback service (docs/ade/05 §2,
-   * 09 §3.2). Optional so test scaffolds can omit it.
+   * ADE control-plane stores + worker callback service. Optional so test scaffolds can omit it.
    */
   ade?: {
     stores: {
@@ -314,29 +312,29 @@ export type ServerRuntime = {
       dispatches: import('../../ade/dispatch-store.js').FileDispatchStore
       questions: import('../../ade/question-store.js').FileQuestionStore
       notices: import('../../ade/worker-notice-store.js').FileWorkerNoticeStore
-      /** Line-level review comments per task workspace (11 §4). */
+      /** Line-level review comments per task workspace. */
       reviews: import('../../ade/review-store.js').FileReviewStore
     }
     workerCallbacks: import('../../services/worker-callback-service.js').WorkerCallbackService
-    /** Same-task race records + services (10 §6); optional for test scaffolds. */
+    /** Same-task race records + services; optional for test scaffolds. */
     races?: import('../../ade/race.js').RaceServiceDeps
     /**
-     * Tier-0 terminal-agent units + scoped token issuance (05 §6.1).
+     * Tier-0 terminal-agent units + scoped token issuance.
      * Optional so test scaffolds can omit it.
      */
     terminalAgents?: import('../../services/terminal-agent-registry.js').TerminalAgentRegistry
     /**
-     * Managed-hook config writer for terminal launches (05 §6.2, P2-03).
+     * Managed-hook config writer for terminal launches.
      * Returns argv/env additions; null when the harness kind is unsupported.
      */
     hookWriter?: (
       unitId: string,
       hooks: { kind: string; events: string[] }
     ) => Promise<{ args: string[]; env: Record<string, string>; dir: string } | null>
-    /** Manager control plane + exactly-once dispatch delivery (09 §4-§5). */
+    /** Manager control plane + exactly-once dispatch delivery. */
     manager?: import('../../ade/manager-runtime.js').ManagerRuntime
     deliverer?: import('../../ade/dispatch-deliverer.js').DispatchDeliverer
-    /** Manager wake-up batching + composer holds (09 §6.2). */
+    /** Manager wake-up batching + composer holds. */
     noticeCoordinator?: import('../../ade/worker-notice-coordinator.js').WorkerNoticeCoordinator
   }
   /**

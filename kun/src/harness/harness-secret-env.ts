@@ -1,6 +1,5 @@
 /**
- * `secretEnv` resolution for custom ACP harnesses (docs/ade/impl/p4 §3.7,
- * P4-12): config stores only `{ name, secretRef }` pairs; the credential
+ * `secretEnv` resolution for custom ACP harnesses: config stores only `{ name, secretRef }` pairs; the credential
  * store value is read at spawn/probe time and injected into the child env.
  * Secret values are never logged, echoed in responses, or persisted in
  * settings — this module only ever returns them into an in-memory env map.

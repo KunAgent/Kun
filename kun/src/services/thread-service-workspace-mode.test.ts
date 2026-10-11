@@ -176,7 +176,7 @@ describe('ThreadService workspace mode', () => {
   })
 })
 
-describe('ThreadService harnessId update (01 §8)', () => {
+describe('ThreadService harnessId update', () => {
   it('allows collaboration policy on an external main Agent without changing its route', async () => {
     const service = serviceWith()
     const external = await service.create({

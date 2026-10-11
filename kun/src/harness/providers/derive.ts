@@ -42,7 +42,7 @@ export function derivableProviderModule(module: AgentProviderModule | undefined)
 }
 
 /**
- * A renamed or patched build of a builtin ACP engine (docs/ade/17 §4.1):
+ * A renamed or patched build of a builtin ACP engine:
  * same protocol behaviour, credentials and failure explanations, its own
  * command. The base package's installer, updater and bundled executable do
  * not describe the derived command, and its history reader may not either.

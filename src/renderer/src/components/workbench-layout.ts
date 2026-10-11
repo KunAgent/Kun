@@ -580,7 +580,7 @@ export function useWorkbenchLayout({
   // "Open this worktree in a terminal" requests come from other surfaces
   // (e.g. the review result dialog); they only open the panel — the mounted
   // TerminalPanel drains the pending cwd itself (terminal-open.ts).
-  // P4-09: a setup prefill can be dispatched while a covering route
+  // a setup prefill can be dispatched while a covering route
   // (Settings) still hides the workbench; the pending request is checked on
   // mount so the panel still opens once the workbench remounts.
   useEffect(() => {

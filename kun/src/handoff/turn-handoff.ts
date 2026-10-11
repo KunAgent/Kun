@@ -26,7 +26,7 @@ export type TaskWorkspaceLister = {
 }
 
 /**
- * Per-turn handoff planner for delegated runtimes (docs/ade/08 §4–§5). Given a
+ * Per-turn handoff planner for delegated runtimes. Given a
  * session preparation it decides whether the next prompt needs a deterministic
  * brief, builds it, and returns the `handoff_injected` event payload.
  */

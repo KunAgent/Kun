@@ -32,8 +32,8 @@ function selectChoices(option: AcpConfigOption): { value: string; label: string 
 }
 
 /**
- * Session controls an ACP Agent publishes beyond what Kun maps itself
- * (docs/ade/17 §4.4). `permissionOptionId` is the option a definition's
+ * Session controls an ACP Agent publishes beyond what Kun maps itself.
+ * `permissionOptionId` is the option a definition's
  * `acpPermission` already drives.
  */
 export function acpSessionSettings(

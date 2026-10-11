@@ -6,7 +6,7 @@ const TerminalPanel = lazy(() =>
 
 /**
  * Bottom terminal drawer shared by the Code chat stage and the ADE Mission
- * Control surface (P4-09): install/login setup actions need a terminal on
+ * Control surface: install/login setup actions need a terminal on
  * the agent home too, not only inside a conversation. The panel drains any
  * pending terminal-open request itself (terminal-open.ts).
  */

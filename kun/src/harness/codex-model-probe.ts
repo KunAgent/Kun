@@ -1,6 +1,6 @@
 import { harnessExecutableIdentity } from './harness-executable-identity.js'
 /**
- * Codex app-server model probing for `GET /v1/harnesses/:id/models` (P6-07).
+ * Codex app-server model probing for `GET /v1/harnesses/:id/models`.
  * Spawns a throwaway `codex app-server`, runs `initialize` + `model/list`,
  * and closes it — the same spawn-free-then-cached contract as AcpModelProbe.
  */

@@ -1,6 +1,5 @@
 /**
- * Delegated trace records shared by every session transport (P6-02,
- * generalized from `startAcpTrace`/`finishAcpTrace`). Shape stays identical —
+ * Delegated trace records shared by every session transport (generalized from `startAcpTrace`/`finishAcpTrace`). Shape stays identical —
  * `providerKind`, `endpointFormat`, and `target` are the only per-transport
  * parameters.
  */

@@ -59,8 +59,8 @@ export function createCapabilitiesForRoute(
 }
 
 /**
- * Provider-pool access shared by worker-route validation and `harness_list`
- * (P3-06): reads the modelConnections snapshot, tolerating snapshot failures
+ * Provider-pool access shared by worker-route validation and `harness_list`:
+ * reads the modelConnections snapshot, tolerating snapshot failures
  * as "no providers" so the manager tools degrade to static lists.
  */
 export function createProviderPoolAccess(
@@ -88,7 +88,7 @@ export function createProviderPoolAccess(
 }
 
 /**
- * `harness_list` deps (10 §2): catalog + detector + runtime map plus the
+ * `harness_list` deps: catalog + detector + runtime map plus the
  * cached probe read and provider pool for per-credential-mode model lists.
  */
 export function createHarnessListDeps(input: {
@@ -116,7 +116,7 @@ export function createHarnessListDeps(input: {
 }
 
 /**
- * ADE manager control plane wiring (09 §4, 10 §3.2): assembles ManagerRuntime
+ * ADE manager control plane wiring: assembles ManagerRuntime
  * deps from the composition composites. The runtime fills
  * isolated/unattended/recentFailures/managerRoute/language per call.
  */
@@ -149,7 +149,7 @@ export function createManagerRuntime(input: {
     listQuota,
     ...runtimeDeps
   } = input
-  // AI line attribution (11 §6.1): file-change items feed the ledger.
+  // AI line attribution: file-change items feed the ledger.
   wireAttributionObserver(core, services, runtimeDeps.threads, runtimeDeps.nowIso)
   return new ManagerRuntime({
     ...runtimeDeps,
@@ -173,7 +173,7 @@ export function createManagerRuntime(input: {
       ?? (runtimeDeps.usage ? new TeamBudgetGate(runtimeDeps.usage) : undefined),
     workerCallbacks: services.workerCallbacks,
     managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
-    // Approved worktree.checks runner (10 §4.2) — digest-bound like setup.
+    // Approved worktree.checks runner — digest-bound like setup.
     checks: {
       approvedChecks: createApprovedChecksResolver({
         approvedEntries: () => core.activeOptions.ade?.approvedWorktreeConfigs ?? []
@@ -196,7 +196,7 @@ export function createManagerRuntime(input: {
 }
 
 /**
- * Activity stall + dormancy scanner (docs/ade/06 §6, §7.2). A dormant
+ * Activity stall + dormancy scanner. A dormant
  * worker keeps its session binding; the next turn resumes natively or
  * falls back to portable through the delegated session coordinator.
  */
@@ -216,7 +216,7 @@ export function createActivityHibernation(input: {
       lastEventAt: (unitId) => core.activityStore.lastEventAt(unitId),
       hasOpenWork: (row) => managerRuntime.hasOpenWork(row.unitId),
       // Structured harnesses always continue portably; terminal agents
-      // resume only when the harness declares `terminal.resumeArgs` (05 §7.3).
+      // resume only when the harness declares `terminal.resumeArgs`.
       canResume: (row) =>
         row.kind === 'worker' ||
         (row.kind === 'terminal-agent' &&
@@ -241,8 +241,8 @@ export function createActivityHibernation(input: {
 
 /**
  * Task-workspace change side-effects: deliver dispatches queued while the
- * workspace was provisioning (09 §5), and re-anchor unresolved review
- * comments after every fresh capture (11 §4.3).
+ * workspace was provisioning, and re-anchor unresolved review
+ * comments after every fresh capture.
  */
 export function wireTaskWorkspaceChange(
   taskWorkspaces: Pick<TaskWorkspaceService, 'onChange'>,
@@ -260,7 +260,7 @@ export function wireTaskWorkspaceChange(
 }
 
 /**
- * AI line attribution (11 §6.1): file-change tool items from every runtime
+ * AI line attribution: file-change tool items from every runtime
  * feed the per-workspace ledger through the recorder's observer tap.
  */
 export function wireAttributionObserver(
@@ -279,7 +279,7 @@ export function wireAttributionObserver(
   }))
 }
 
-/** ADE manager tool surface + workspace review wiring (09 §4, 10 §6). */
+/** ADE manager tool surface + workspace review wiring. */
 export function registerAdeManagerTooling(input: {
   registry: { registerProvider(provider: unknown): void }
   managerRuntime: ManagerRuntime

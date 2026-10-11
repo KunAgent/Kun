@@ -11,7 +11,7 @@ export const PI_DEFINITION: HarnessDefinition = {
   displayName: 'Pi',
   transport: 'pi-rpc',
   // pi binds cwd at spawn and hosts one session per process — the shared
-  // pool must therefore key on workspace as well as credential (P6-09).
+  // pool must therefore key on workspace as well as credential.
   poolScope: 'workspace',
   detect: {
     command: 'pi',
@@ -33,7 +33,7 @@ export const PI_DEFINITION: HarnessDefinition = {
   capabilities: PI_RPC_CAPABILITIES,
   // Generated <PI_CODING_AGENT_DIR>/models.json declares a single `kun`
   // provider on the openai-completions surface; the apiKey is a `$NAME`
-  // environment reference so the grant token never lands on disk (P6-11).
+  // environment reference so the grant token never lands on disk.
   gateway: {
     protocol: 'openai-chat',
     env: { baseUrl: 'KUN_PI_GATEWAY_BASE', token: 'KUN_PI_GATEWAY_KEY' },

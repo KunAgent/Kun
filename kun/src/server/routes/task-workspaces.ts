@@ -22,7 +22,7 @@ import {
 } from '../../workspace-tasks/task-workspace-integration.js'
 import { captureReviewRevision } from '../../workspace-tasks/review-revision.js'
 
-/** Task-workspace HTTP handlers (docs/ade/07 §11). */
+/** Task-workspace HTTP handlers. */
 
 function serviceError(error: unknown): JsonResponse {
   if (error instanceof TaskWorkspaceDiscardPending) {
@@ -135,7 +135,7 @@ export async function taskWorkspaceSetupLogResponse(
   return jsonResponse({ log: content, status: record.setup.status })
 }
 
-/** GET /v1/task-workspaces/:id/diff — capture, then per-file stats (11 §3). */
+/** GET /v1/task-workspaces/:id/diff — capture, then per-file stats. */
 export async function taskWorkspaceDiffResponse(
   service: TaskWorkspaceService,
   artifacts: { get(id: string): Promise<string | null> },
@@ -177,7 +177,7 @@ const ATTRIBUTION_CONTENT_LIMIT = 4 * 1024 * 1024
 
 /**
  * GET /v1/task-workspaces/:id/attribution?path= — per-line authorship for
- * the file's current workspace content (11 §6). Lines without a ledger
+ * the file's current workspace content. Lines without a ledger
  * match are human-or-unknown; `label` enriches worker ids for the hover.
  */
 export async function taskWorkspaceAttributionResponse(
@@ -225,7 +225,7 @@ export async function taskWorkspaceAttributionResponse(
 
 /**
  * GET /v1/task-workspaces/:id/change-request — forge availability plus the
- * persisted PR snapshot, refreshed live through `gh` when available (11 §7.2).
+ * persisted PR snapshot, refreshed live through `gh` when available.
  */
 export async function taskWorkspaceChangeRequestStatusResponse(
   service: TaskWorkspaceService,

@@ -10,7 +10,7 @@ import {
 } from './execution-units.js'
 
 /**
- * Host-launched execution units (05 §6.1). Called by the owning client
+ * Host-launched execution units. Called by the owning client
  * (desktop main process) with the ordinary runtime token — never by the
  * spawned harness itself.
  */

@@ -1,5 +1,5 @@
 /**
- * PiSession (P6-09/10): one pi rpc session bound to a Kun turn flow.
+ * PiSession: one pi rpc session bound to a Kun turn flow.
  *
  * Pi differs from codex in that ONE spawned process hosts ONE session at a
  * time (cwd and session file are process-bound), so there is no per-turn id

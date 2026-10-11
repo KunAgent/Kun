@@ -1,5 +1,5 @@
 /**
- * Review-comment re-anchoring (docs/ade/11 §4.3). Pure function shared with
+ * Review-comment re-anchoring. Pure function shared with
  * `kun/src/ade/review-anchor.ts` — keep both copies byte-identical; behavior
  * is pinned by `kun/src/ade/__fixtures__/review-anchor.json`.
  */

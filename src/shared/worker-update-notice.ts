@@ -31,7 +31,7 @@ export function isWorkerUpdateNoticeUserMessage(input: {
 }
 
 /**
- * Parse the host-rendered `<kun_worker_updates>` block (09 §6.2) back into
+ * Parse the host-rendered `<kun_worker_updates>` block back into
  * rows for the worker-update card. Returns null when the text is not a
  * worker-update notice; malformed rows degrade to their raw header text.
  */

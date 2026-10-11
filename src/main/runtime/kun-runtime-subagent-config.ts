@@ -82,7 +82,7 @@ function stripBlankProfileFields(profile: Record<string, unknown>): Record<strin
     }
     next[key] = value
   }
-  // ADE harness binding (10 §3.1): invalid ids/modes drop individually so one
+  // ADE harness binding: invalid ids/modes drop individually so one
   // malformed profile can never fail the whole roster parse.
   if (next.harnessId !== undefined && !HarnessIdSchema.safeParse(next.harnessId).success) {
     delete next.harnessId
@@ -111,7 +111,7 @@ function stripBlankProfileFields(profile: Record<string, unknown>): Record<strin
     // Legacy settings allowed either field independently. Drop the ambiguous
     // override as a pair so the profile stays valid and inherits the active
     // session's coherent model/provider selection. A bare model is valid when
-    // the profile binds a harness that owns its model list (10 §3.1).
+    // the profile binds a harness that owns its model list.
     delete next.model
     delete next.providerId
   }

@@ -8,8 +8,8 @@ import type { HarnessCatalog } from '../../harness/harness-catalog.js'
 import { prepareTerminalLaunch, rememberTerminalLaunch, releaseTerminalLaunch, validateTerminalLaunch } from './terminal-launch-admission.js'
 
 /**
- * Execution-unit lifecycle surface for host-launched tier-0 units
- * (05 §6.1). `POST /v1/execution-units` registers a terminal agent and
+ * Execution-unit lifecycle surface for host-launched tier-0 units.
+ * `POST /v1/execution-units` registers a terminal agent and
  * mints the scoped `kgw_` tokens its PTY env carries; `/exit` and
  * `/interrupt-hint` close the loop from the owning client.
  */
@@ -40,7 +40,7 @@ export type ExecutionUnitRouteDeps = {
   readiness?: import('../../harness/harness-readiness.js').HarnessReadinessService
   /** Loopback base URL filled once the listener binds. */
   endpoint?: () => string | undefined
-  /** Managed-hook config writer (05 §6.2); absent disables hook injection. */
+  /** Managed-hook config writer; absent disables hook injection. */
   hookWriter?: (
     unitId: string,
     hooks: { kind: string; events: string[] }
@@ -100,7 +100,7 @@ export async function executionUnitCreateResponse(
     },
     endpoint: deps.endpoint?.() ?? null,
     /**
-     * Launch additions managed hooks inject (05 §6.2): extra argv flags or
+     * Launch additions managed hooks inject: extra argv flags or
      * env (config dirs) the PTY spawn merges verbatim.
      */
     launch: { command: admission.command, argv: [...definition.terminal.argv], taskFlag: definition.terminal.taskFlag,

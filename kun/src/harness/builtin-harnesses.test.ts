@@ -46,7 +46,7 @@ describe('BUILTIN_HARNESSES', () => {
     }
   })
 
-  // P4-07: Agent Center cards are data-driven from `setup` — locally
+  // Agent Center cards are data-driven from `setup` — locally
   // installable harnesses must declare install or login guidance, and the
   // entries must pass schema validation with no stray keys.
   it('locally installable builtins carry setup metadata', () => {

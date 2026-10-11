@@ -1,6 +1,6 @@
 /**
- * Transport-independent host for Kun tools bridged into delegated harnesses
- * (docs/ade/05 §3.2). The Agent SDK MCP adapter, the Cursor SDK custom-tools
+ * Transport-independent host for Kun tools bridged into delegated harnesses.
+ * The Agent SDK MCP adapter, the Cursor SDK custom-tools
  * adapter, and the Kun Tools MCP server all describe the same turn-scoped
  * catalog and run calls through the same boundary; only their request/result
  * wire formats differ. This module owns the shared semantics so each adapter

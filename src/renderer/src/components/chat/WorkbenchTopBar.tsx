@@ -61,9 +61,9 @@ type Props = {
   planPanelEnabled?: boolean
   canvasEnabled?: boolean
   graphEnabled?: boolean
-  /** Thread binds a task workspace → offer the review tab (11 §3). */
+  /** Thread binds a task workspace → offer the review tab. */
   reviewEnabled?: boolean
-  /** ADE thread has worker activity rows → offer the Workers tab (12 §6.1). */
+  /** ADE thread has worker activity rows → offer the Workers tab. */
   workersEnabled?: boolean
   sideChatRunningCount?: number
   sideChatOpen?: boolean

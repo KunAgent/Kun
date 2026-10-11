@@ -19,7 +19,7 @@ export const TERMINAL_MAX_COLS = 500
 export const TERMINAL_MAX_ROWS = 200
 export const TERMINAL_MAIN_SESSION_ID = 'main'
 
-/** ADE terminal-agent launch request bundled onto `terminal:create` (05 §6.1). */
+/** ADE terminal-agent launch request bundled onto `terminal:create`. */
 export type TerminalAgentCreate = {
   harnessId: string
   title: string
@@ -69,8 +69,8 @@ export type TerminalCreateResult =
   | { ok: false; message: string }
 
 /**
- * Callback-channel appendix appended to a terminal agent's injected task
- * (05 §5.3): the `kun worker` commands are the shell-facing twin of the
+ * Callback-channel appendix appended to a terminal agent's injected task:
+ * the `kun worker` commands are the shell-facing twin of the
  * worker callback tools. This text is turn input — it never enters any
  * system prompt or user-global agent config.
  */

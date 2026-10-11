@@ -5,7 +5,7 @@
  *
  * The transport-independent Kun tool surface (catalog listing + in-process
  * execution) lives on the shared KunToolBridgeHost — see
- * `harness/kun-tool-bridge-host.ts` and docs/ade/05 §3.2. This context keeps
+ * `harness/kun-tool-bridge-host.ts`. This context keeps
  * only the Agent-SDK-owned turn state (native session ids, delegated-session
  * preparations, handoff digests) plus attachment resolution.
  */
@@ -23,7 +23,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
   // force every later turn to rebase.
   const sessionGoalContextKeysByTurn = new Map<string, string | null>()
   // Digest of the deterministic handoff brief injected into this turn; the
-  // lifecycle commit stores it on the binding for audit (docs/ade/08 §4).
+  // lifecycle commit stores it on the binding for audit.
   const handoffBriefDigestsByTurn = new Map<string, string>()
   const skillTurnKey = (threadId: string, turnId: string): string => `${threadId} ${turnId}`
 

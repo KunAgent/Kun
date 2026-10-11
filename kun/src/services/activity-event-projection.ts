@@ -9,8 +9,8 @@ export type ActivityProjection = {
 const PREVIEW_MAX = 200
 
 /**
- * Pure mapping from persisted runtime events to activity-row patches
- * (docs/ade/06 §4.2). Registration decisions live in the ActivityStore;
+ * Pure mapping from persisted runtime events to activity-row patches.
+ * Registration decisions live in the ActivityStore;
  * patches on unregistered units are ignored there.
  */
 export function projectRuntimeEvent(event: RuntimeEvent): ActivityProjection[] {

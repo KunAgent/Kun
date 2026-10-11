@@ -113,7 +113,7 @@ export async function openPdfAsPaper(
 }
 
 /**
- * Fetch papers.cool/Kimi notes and append them to NOTES.md (§6.2). Flushes the
+ * Fetch papers.cool/Kimi notes and append them to NOTES.md. Flushes the
  * open document first; the NOTES.md reload comes from the file watcher.
  */
 export async function fetchCoolNotes(
@@ -167,7 +167,7 @@ export function cancelPaperJob(kind: PaperJobKind): void {
   if (job) void window.kunGui.paperCancel({ requestId: job.requestId })
 }
 
-/** Deterministic preprocessing: paper.md text + figures/index.json (§6.3). */
+/** Deterministic preprocessing: paper.md text + figures/index.json. */
 export async function preprocessPaper(
   deps: PaperActionDeps & { unitDir: string; force?: boolean }
 ): Promise<boolean> {
@@ -214,7 +214,7 @@ export type InterpretDeps = PaperActionDeps & {
 }
 
 /**
- * One-click interpretation (§6.5/§7): flush, ensure paper.md exists, build the
+ * One-click interpretation: flush, ensure paper.md exists, build the
  * prompt, open the assistant, submit. The host watches the workspace for the
  * generated `-解读*.md` after the turn ends (see `checkPendingInterpretation`).
  */

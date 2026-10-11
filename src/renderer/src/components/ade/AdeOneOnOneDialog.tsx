@@ -43,10 +43,10 @@ const fieldClass =
   'w-full rounded-lg border border-ds-border-muted bg-ds-main px-2.5 py-1.5 text-[13px] text-ds-ink outline-none focus:border-accent-tint/50'
 
 /**
- * P4-15: one-to-one session dialog (replaces the sidebar inline list). Pick an
+ * one-to-one session dialog (replaces the sidebar inline list). Pick an
  * agent, then the credential path (native sign-in or Kun gateway/provider with
  * a concrete provider), then model and isolation. Initial values come from the
- * remembered last pick, then `agents.kun.harnesses.defaults` (P4-11).
+ * remembered last pick, then `agents.kun.harnesses.defaults`.
  */
 export function AdeOneOnOneDialog({
   onConfirm,

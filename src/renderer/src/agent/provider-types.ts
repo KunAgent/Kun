@@ -214,11 +214,11 @@ export type ThreadEventSink = {
   onContextSnapshot?(snapshot: RequestContextSnapshot): void
   onDelegatedRuntimeState?(state: DelegatedRuntimeState): void
   onHarnessRuntimeState?(state: HarnessRuntimeState): void
-  /** Harness-reported session surface: native commands, mode (03 §7.3). */
+  /** Harness-reported session surface: native commands, mode. */
   onHarnessSessionState?(state: import('@shared/ade-harnesses').AdeHarnessSessionState): void
-  /** Task-workspace lifecycle on the owning thread (docs/ade/07 §5). */
+  /** Task-workspace lifecycle on the owning thread. */
   onTaskWorkspace?(ev: import('@shared/task-workspace').TaskWorkspaceThreadEvent): void
-  /** Deterministic handoff brief injected into a delegated turn (docs/ade/08). */
+  /** Deterministic handoff brief injected into a delegated turn. */
   onHandoff?(ev: HandoffEventPayload): void
   /** Safe child lifecycle/activity projected onto the parent thread. */
   onChildRuntimeEvent?(event: RuntimeChildEventPayload): void
@@ -242,7 +242,7 @@ export interface AgentProvider {
   listThreads(options?: ThreadListOptions): Promise<NormalizedThread[]>
   /** Optional paginated listing used by the sidebar "show more" flow. */
   listThreadsPage?(options?: ThreadListOptions): Promise<ThreadListPage>
-  /** Execution-unit activity feed (docs/ade/06 §9); absent when unsupported. */
+  /** Execution-unit activity feed; absent when unsupported. */
   getActivitySnapshot?(options?: {
     scope?: 'all' | 'workspace'
     workspace?: string
@@ -255,21 +255,21 @@ export interface AgentProvider {
   ackActivity?(unitId: string): Promise<void>
   dismissActivity?(unitId: string): Promise<void>
   pinActivity?(unitId: string, pinned?: boolean): Promise<void>
-  /** Foreground-thread report for activity dormancy (docs/ade/06 §7.2 cond. 4). */
+  /** Foreground-thread report for activity dormancy. */
   reportActivityForeground?(threadId: string): Promise<void>
-  /** Pending approvals, optionally scoped to a thread (P3-19 attention list). */
+  /** Pending approvals, optionally scoped to a thread (attention list). */
   listPendingApprovals?(threadId?: string): Promise<import('@shared/ade-approvals').PendingApprovalItem[]>
-  /** Task workspaces bound to a thread (docs/ade/07 §11). */
+  /** Task workspaces bound to a thread. */
   listTaskWorkspaces?(options?: {
     boundThreadId?: string
     ownerThreadId?: string
   }): Promise<import('@shared/task-workspace').TaskWorkspaceListResponse>
-  /** Create an isolated task workspace; returns the `creating` record (07 §5). */
+  /** Create an isolated task workspace; returns the `creating` record. */
   createTaskWorkspace?(
     input: import('@shared/task-workspace').CreateTaskWorkspaceRequest
   ): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
   retryTaskWorkspace?(workspaceId: string): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
-  /** Per-file diff stats for the review panel (docs/ade/11 §3). */
+  /** Per-file diff stats for the review panel. */
   getTaskWorkspaceDiff?(
     workspaceId: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceDiffListResponse>
@@ -277,12 +277,12 @@ export interface AgentProvider {
     workspaceId: string,
     path: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceDiffFileResponse>
-  /** Per-line AI authorship for the file's current content (11 §6). */
+  /** Per-line AI authorship for the file's current content. */
   getTaskWorkspaceAttribution?(
     workspaceId: string,
     path: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceAttribution>
-  /** Forge availability + PR snapshot for the workspace (11 §7.2). */
+  /** Forge availability + PR snapshot for the workspace. */
   getChangeRequest?(
     workspaceId: string
   ): Promise<import('@shared/task-workspace').ChangeRequestStatus>
@@ -291,7 +291,7 @@ export interface AgentProvider {
     workspaceId: string,
     input?: import('@shared/task-workspace').CreateChangeRequestRequest
   ): Promise<{ request: import('@shared/task-workspace').ChangeRequestSnapshot | undefined }>
-  /** Read-only integrate availability for the review primary action (11 §7.1). */
+  /** Read-only integrate availability for the review primary action. */
   getTaskWorkspaceIntegratePreview?(
     workspaceId: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceIntegratePreviewResponse>
@@ -309,30 +309,30 @@ export interface AgentProvider {
   cleanupTaskWorkspace?(
     workspaceId: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
-  /** Branches kept for human review after integrate cleanup (07 §8.3). */
+  /** Branches kept for human review after integrate cleanup. */
   listPreservedBranches?(
     repoRoot: string
   ): Promise<import('@shared/task-workspace').PreservedBranchesResponse>
-  /** ADE team overview for Mission Control cards (docs/ade/09 §9). */
+  /** ADE team overview for Mission Control cards. */
   getTeamOverview?(
     managerThreadId: string
   ): Promise<import('@shared/ade-teams').AdeTeamOverview | null>
-  /** User answers a worker question (09 §6.4; `answeredBy: 'user'`). */
+  /** User answers a worker question (`answeredBy: 'user'`). */
   answerTeamQuestion?(questionId: string, answer: string): Promise<void>
-  /** Worker + owning team for the worker-thread banner (09 §9). */
+  /** Worker + owning team for the worker-thread banner. */
   getTeamWorker?(
     workerId: string
   ): Promise<{ team: import('@shared/ade-teams').AdeTeamRecord; worker: import('@shared/ade-teams').AdeTeamWorker } | null>
   /**
-   * Harness catalog rows with cached detection status (01 §7, 12 §7.2).
+   * Harness catalog rows with cached detection status.
    * `waitMs` asks the runtime to hold the response until inflight
-   * detections settle or the budget elapses (P4-02).
+   * detections settle or the budget elapses.
    */
   listHarnesses?(options?: {
     includeDisabled?: boolean
     waitMs?: number
   }): Promise<import('@shared/ade-harnesses').AdeHarnessRow[]>
-  /** Models a harness accepts (01 §9): static, probed, or provider-derived. */
+  /** Models a harness accepts: static, probed, or provider-derived. */
   listHarnessModels?(
     harnessId: string,
     credentialMode?: string,
@@ -344,7 +344,7 @@ export interface AgentProvider {
     harnessId: string
   ): Promise<import('@shared/ade-harnesses').AdeHarnessRow>
   /**
-   * Progressive connection test (p4 §3.5, P4-10): detect → handshake →
+   * Progressive connection test: detect → handshake →
    * optional trial turn. Trial consumes quota on the harness's credential.
    */
   testHarness?(
@@ -353,7 +353,7 @@ export interface AgentProvider {
     options?: { signal?: AbortSignal }
   ): Promise<import('@shared/ade-harnesses').AdeHarnessTestResult>
   /**
-   * Pre-save handshake for a custom ACP definition (p4 §3.7, P4-12).
+   * Pre-save handshake for a custom ACP definition.
    */
   probeHarnessDefinition?(
     input: import('@shared/ade-harnesses').AdeHarnessProbeDefinitionRequest,
@@ -363,20 +363,20 @@ export interface AgentProvider {
   storeHarnessSecret?(value: string): Promise<string>
   /** Release a stored secret (e.g. when a secretEnv row is removed). */
   deleteHarnessSecret?(secretRef: string): Promise<void>
-  /** Worker control: take-over / hand-back / stop / detach (09 §9). */
+  /** Worker control: take-over / hand-back / stop / detach. */
   controlTeamWorker?(
     workerId: string,
     action: 'take-over' | 'hand-back' | 'stop' | 'detach'
   ): Promise<void>
-  /** Same-task race compare + user decision (docs/ade/10 §6, 11 §5). */
+  /** Same-task race compare + user decision. */
   getRaceComparison?(raceId: string): Promise<import('@shared/ade-teams').AdeRaceComparison>
   decideRace?(raceId: string, winnerDispatchId: string): Promise<void>
   discardRaceOthers?(raceId: string): Promise<void>
-  /** Host check commands against the worker's task workspace (10 §4.2). */
+  /** Host check commands against the worker's task workspace. */
   runTeamWorkerChecks?(
     workerId: string
   ): Promise<import('@shared/ade-teams').AdeRunWorkerChecksResult>
-  /** Per-workspace review comments shared across clients (docs/ade/11 §4). */
+  /** Per-workspace review comments shared across clients. */
   listReviewComments?(
     workspaceId: string
   ): Promise<import('@shared/review-comment').ReviewCommentFile>
@@ -394,7 +394,7 @@ export interface AgentProvider {
     input: import('@shared/review-comment').SendReviewInput,
     language?: string
   ): Promise<import('@shared/review-comment').SendReviewResponse>
-  /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
+  /** Rebuild a recorded handoff brief on demand. */
   getHandoffPreview?(threadId: string, turnId: string): Promise<{
     turnId: string
     reason: string
@@ -430,7 +430,7 @@ export interface AgentProvider {
       model?: string
       providerId?: string
       accountId?: string
-      /** ADE harness override for this turn; absent inherits the thread (01 §4). */
+      /** ADE harness override for this turn; absent inherits the thread. */
       harnessId?: string
       /** Harness credential path; absent = the harness's default. */
       gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
@@ -470,7 +470,7 @@ export interface AgentProvider {
       composerContexts?: ComposerContextAttachment[]
       /** ADE manager sends acknowledge these worker notices on admission. */
       ackNoticeIds?: string[]
-      /** Managed plan-build turn; Kun enforces isolated-worktree admission (07 §10). */
+      /** Managed plan-build turn; Kun enforces isolated-worktree admission. */
       planBuild?: boolean
       paperContext?: PaperTurnContext
       writeContext?: WriteTurnContext
@@ -602,7 +602,7 @@ export interface AgentProvider {
   renameThread(threadId: string, title: string, auto?: boolean): Promise<void>
   updateThreadWorkspace?(threadId: string, workspace: string): Promise<void>
   updateThreadCollaboration?(threadId: string, enabled: boolean): Promise<NormalizedThread>
-  /** Atomically bind a ready task workspace (07 §5): path + taskWorkspaceId. */
+  /** Atomically bind a ready task workspace: path + taskWorkspaceId. */
   bindThreadTaskWorkspace?(
     threadId: string,
     input: { taskWorkspaceId: string; workspace: string }

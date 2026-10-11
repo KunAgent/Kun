@@ -395,7 +395,7 @@ export const LabConfigSchema = z
   .strict()
 export type LabConfig = z.infer<typeof LabConfigSchema>
 
-// Harness section schemas live in kun-config-harnesses.ts (P4-13 file split);
+// Harness section schemas live in kun-config-harnesses.ts (file split);
 // re-exported so existing `kun-config-application.js` importers keep working.
 export {
   HarnessCustomEntrySchema,

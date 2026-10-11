@@ -5,7 +5,7 @@ import type {
   WorkerCreateResult
 } from '../manager-runtime.js'
 
-/** `worker_create` (09 §4.2) — delegates to ManagerRuntime.createWorker. */
+/** `worker_create` — delegates to ManagerRuntime.createWorker. */
 export async function workerCreate(
   runtime: ManagerRuntime,
   ctx: ManagerToolContext,
@@ -15,7 +15,7 @@ export async function workerCreate(
   return runtime.createWorker(ctx, args, toolContext)
 }
 
-/** `worker_create_batch` (09 §4.4) — sequential create with skip semantics. */
+/** `worker_create_batch` — sequential create with skip semantics. */
 export async function workerCreateBatch(
   runtime: ManagerRuntime,
   ctx: ManagerToolContext,

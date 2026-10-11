@@ -91,7 +91,7 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
   }): void => {
     const definition = useHarnessStore.getState().rows
       .find((row) => row.definition.id === input.harnessId)?.definition
-    // P4-13: terminal-only agents cannot host turns; the menu lists are
+    // terminal-only agents cannot host turns; the menu lists are
     // filtered, so this guards stale persisted picks like defaultHarnessId.
     if (definition && definition.transport === 'terminal') return
     beginNavigation()
@@ -106,7 +106,7 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
       composerIsolation: input.isolation ?? 'worktree',
       composerWorktreeStartFrom: input.isolation === 'local' ? undefined : { kind: 'default-branch' }
     })
-    // P4-11: the harness's default permission level maps onto the composer
+    // the harness's default permission level maps onto the composer
     // execution settings the new thread's first turn snapshots.
     if (input.permissionMode) {
       const execution = harnessPermissionDefault(definition, {

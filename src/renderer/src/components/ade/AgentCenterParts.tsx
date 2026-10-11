@@ -88,7 +88,7 @@ export function AgentElapsed({ since, className = '' }: { since: number; classNa
 
 /**
  * One block of an Agent page: a heading row and one bordered group of rows.
- * This is the only box inside the workspace (docs/ade/18 §10.2).
+ * This is the only box inside the workspace.
  */
 export function AgentSection({ title, description, action, children, bare = false, ...data }: {
   title?: string

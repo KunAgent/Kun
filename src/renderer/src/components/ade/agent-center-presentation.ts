@@ -8,7 +8,7 @@ import { AGENT_UPDATE_RUNNING, type AgentUpdateItem } from '../../store/harness-
 
 /**
  * The one place that decides what the Agent list and detail say about an
- * Agent (docs/ade/18 §4): its state, the list/status lines, the switch and
+ * Agent: its state, the list/status lines, the switch and
  * the single next step. Components render the result; they never re-derive it.
  */
 

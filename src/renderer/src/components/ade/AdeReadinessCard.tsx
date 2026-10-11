@@ -5,7 +5,7 @@ import { useChatStore } from '../../store/chat-store'
 import { useAdeReadiness, type AdeReadinessCheck } from './ade-readiness'
 
 /**
- * ADE readiness checklist (docs/ade/impl/p4 §P4-14): rendered at the top of
+ * ADE readiness checklist: rendered at the top of
  * the Mission Control home and the ADE new-session hero so a first-time ADE
  * surface states exactly what is missing — a usable provider for manager
  * turns, a ready turn-capable agent, and the Kun gateway.

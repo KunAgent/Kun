@@ -43,7 +43,7 @@ const byName = (a: AgentListEntry, b: AgentListEntry): number =>
   a.row.definition.displayName.localeCompare(b.row.definition.displayName)
 
 /**
- * Groups the chat Agents by what the user can do next (docs/ade/18 §3.2). Kun
+ * Groups the chat Agents by what the user can do next. Kun
  * is the built-in default and is chosen from the page header, not listed.
  * Connected Agents keep the saved `agentOrder`; the other groups sort by name.
  */

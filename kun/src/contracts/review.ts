@@ -98,7 +98,7 @@ export function reviewTargetPrompt(target: ReviewTarget): string {
 }
 
 /**
- * Line-level review comments on a task workspace diff (docs/ade/11 §4).
+ * Line-level review comments on a task workspace diff.
  * Stored in `dataDir/ade/reviews/<workspaceId>.json` so every client (GUI,
  * phone, TUI) sees and sends the same pending batch.
  */
@@ -129,7 +129,7 @@ export const ReviewCommentSchema = z
     outdated: z.boolean().default(false),
     revision: ReviewRevisionSchema.optional(),
     sentInRequestId: z.string().min(1).max(64).optional(),
-    /** 'reviewer' comments originate from a cross-review agent (10 §5). */
+    /** 'reviewer' comments originate from a cross-review agent. */
     author: z.enum(['user', 'reviewer']),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime()
@@ -159,7 +159,7 @@ export const UpdateReviewCommentSchema = z
   .strict()
 export type UpdateReviewCommentRequest = z.infer<typeof UpdateReviewCommentSchema>
 
-/** Send target for a pending review batch (11 §4.4). */
+/** Send target for a pending review batch. */
 export const ReviewSendTargetSchema = z.discriminatedUnion('kind', [
   z
     .object({ kind: z.literal('worker'), workerId: z.string().min(1).max(256) })

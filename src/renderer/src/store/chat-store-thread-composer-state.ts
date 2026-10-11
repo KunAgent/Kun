@@ -25,7 +25,7 @@ export type ThreadComposerState = {
   composerModel: string
   composerProviderId: string
   composerReasoningEffort: ChatState['composerReasoningEffort']
-  /** ADE harness for the next turn; '' = inherit/provider inference (12 §7.2). */
+  /** ADE harness for the next turn; '' = inherit/provider inference. */
   composerHarnessId: string
   composerCredentialMode: string
   composerGatewayBinding?: ChatState['composerGatewayBinding']

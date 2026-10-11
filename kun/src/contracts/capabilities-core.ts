@@ -431,7 +431,7 @@ export const SubagentProfileConfig = z
     model: z.string().min(1).optional(),
     /** Routes this role's child to a specific provider id (falls back to the runtime default provider). */
     providerId: z.string().min(1).optional(),
-    /** ADE worker harness binding; omitted means the native Kun loop (10 §3.1). */
+    /** ADE worker harness binding; omitted means the native Kun loop. */
     harnessId: HarnessIdSchema.optional(),
     /** Credential path on the bound harness; omitted uses the harness default. */
     credentialMode: HarnessCredentialModeSchema.optional(),
@@ -477,7 +477,7 @@ export const SubagentProfileConfig = z
     const hasProvider = Boolean(profile.providerId?.trim())
     if (hasModel === hasProvider) return
     // providerId without a model is always incomplete; a bare model is fine
-    // when the role binds a harness that owns its model list (10 §3.1).
+    // when the role binds a harness that owns its model list.
     if (!hasModel || !profile.harnessId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
