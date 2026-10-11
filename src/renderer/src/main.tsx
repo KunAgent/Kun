@@ -30,6 +30,7 @@ import { applyCachedColorPalette } from './lib/color-palettes'
 import { installCursorSpotlightTracking } from './lib/cursor-spotlight'
 import { installDataMigrationRendererRpc } from './data-migration/renderer-state-rpc'
 import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
+import { whenDesktopStartupReady } from './lib/desktop-startup-ready'
 import { StartupGate } from './StartupGate'
 import { installProviderMutationFlushHandler } from './services/provider-mutation-flush-service'
 import { startActivityForegroundReporting } from './store/activity-foreground'
@@ -38,8 +39,8 @@ document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode
   ?? resolveDesktopTitleBarMode(window.kunGui?.platform ?? 'unknown', false)
 if (window.kunGui?.isRemoteWeb === true) document.documentElement.dataset.remoteWeb = 'true'
-startArtUpdates()
-initializeStartupTheme(window.kunGui?.getSettings)
+void whenDesktopStartupReady().then(startArtUpdates)
+initializeStartupTheme()
 applyCachedColorPalette()
 applyCursorSpotlight(true)
 installCursorSpotlightTracking()
