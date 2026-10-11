@@ -86,6 +86,8 @@ describe('structured Manager memory errors', () => {
     const router = new Router()
     registerRoomRoutes(router, { runtimeToken: 'synthetic-runtime-token', insecure: false,
       rooms: { deps: {}, service: { setDirectModelResolver: vi.fn(), setMemberAvatarValidator: vi.fn(), setContentReferenceValidator: vi.fn() },
+        // Registering the Agent routes wires these two in; neither is exercised here.
+        agents: { setExecutorValidator: vi.fn() }, workbench: { harnesses: {} },
         exclusive: (operation: () => Promise<unknown>) => operation(),
         agentMemory: { edit: async () => { throw new MemoryErasureIncompleteError() } } }
     } as unknown as ServerRuntime)

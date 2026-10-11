@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { mkdtempSync, existsSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,6 +17,11 @@ import { resolveMemoryProjectAccess } from './memory-project-identity.js'
 import { resolveMemoryTurnContext } from './memory-turn-context.js'
 
 const execFileAsync = promisify(execFile)
+// Records are stored by id, so ids that differ only in case are one record on a case-insensitive filesystem (macOS, Windows).
+const caseInsensitiveFilesystem = (() => {
+  const probe = mkdtempSync(join(tmpdir(), 'kun-case-probe-'))
+  try { writeFileSync(join(probe, 'a'), ''); return existsSync(join(probe, 'A')) } finally { rmSync(probe, { recursive: true, force: true }) }
+})()
 const policy: MemoryCapabilityConfig = {
   enabled: true, scopes: ['user', 'workspace', 'project'], maxInjectedRecords: 20,
   distillation: { enabled: false }, directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 }
@@ -79,7 +85,7 @@ describe('approved project memory identity', () => {
       expect(await store.retrieve({ query: 'confidential rule', workspace: source, limit: 20 })).toEqual([])
     })
 
-    it(`uses the same binary keyset order for mixed-case timestamp ties in ${mode}`, async () => {
+    it.skipIf(caseInsensitiveFilesystem)(`uses the same binary keyset order for mixed-case timestamp ties in ${mode}`, async () => {
       const { store } = makeStore(mode)
       const ids = ['mem_a', 'mem_A', 'mem_Z', 'mem_z', 'mem_a_b', 'mem_a-b', 'mem_a0']
       for (const id of ids) await store.createWithId!(id, { content: id, scope: 'user' })

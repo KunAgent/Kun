@@ -11,7 +11,7 @@ import { decodeRunCursor } from '../../rooms/room-run-query.js'
 import type { RoomRunDetail, RoomRunItemsPage } from '../../contracts/room-run-query.js'
 import type { RoomRequestState } from '../../rooms/room-runtime-types.js'
 import type { TurnItem } from '../../contracts/items.js'
-import { putRoomDocument } from '../../rooms/room-service.js'
+import { defaultRoomMembers, putRoomDocument } from '../../rooms/room-service.js'
 import { Router } from '../router.js'
 import { dispatchRequest } from '../http-server.js'
 import { ThreadEventStreamRegistry } from '../thread-event-stream-registry.js'
@@ -37,7 +37,9 @@ async function fixture() {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) }))
     return { status: response.status, body: await response.json() as T }
   }
-  const { room } = await rooms.service.create({ name: 'Run fixture', clientRequestId: 'create' })
+  const { room } = await rooms.service.create({ name: 'Run fixture', clientRequestId: 'create',
+    // A new group starts with 小 Kun only; these tests run the role members of a legacy group.
+    members: defaultRoomMembers([]) })
   const source = await rooms.service.send(room.id, { clientRequestId: 'source', body: 'A precise user request', executionIntent: 'discussion' })
   const member = room.members.find((entry) => entry.id === 'developer')!
   const base = `/v1/rooms/${room.id}`

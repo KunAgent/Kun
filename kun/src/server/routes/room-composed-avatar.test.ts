@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,14 +7,16 @@ import { registerRoomProfileRoutes } from './register-room-profile-routes.js'
 import { normalizeKunAvatarParts } from '../../contracts/kun-avatar-catalog.js'
 import { AgentIdentityService } from '../../agents/agent-identity-service.js'
 import { RoomService, defaultRoomMembers } from '../../rooms/room-service.js'
+import { attachAccountWardrobe } from '../../rooms/room-wardrobe-account.js'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import type { ServerRuntime } from './server-runtime.js'
 
 const resources: Array<{ dir: string; store: SqliteRoomStore }> = []
-// Persistence only: the local debug wardrobe owns what the default Agents wear, as it always did.
-beforeEach(() => { process.env.KUN_WARDROBE_LOCAL = '1' })
+/** The user's own look is account-owned: sign the store in to a wardrobe that holds what these looks wear. */
+const ownedWardrobe = (keys: string[]) => ({ version: 1, items: Object.fromEntries(keys.map((key) => [key, 1])), seen: [], roles: [],
+  feathers: 0, pending: [], pity: { sinceDrop: 0, sinceEpic: 0, lastCountedAt: null }, daily: { date: '2026-10-10', drops: 0 },
+  rngState: 0, totalDrops: 0, firstDropAt: null, settings: { drops: true, code: true, notice: 'card' }, history: [] })
 afterEach(async () => {
-  delete process.env.KUN_WARDROBE_LOCAL
   for (const { dir, store } of resources.splice(0)) {
     await store.close()
     await rm(dir, { recursive: true, force: true })
@@ -27,6 +29,8 @@ it('roundtrips composed avatars in the existing profile route, preserving receip
   const resource = { dir, store }
   resources.push(resource)
   const service = { store }
+  await attachAccountWardrobe(store, { userId: 'user-1', look: null,
+    wardrobe: ownedWardrobe(['headwear/beret', 'prop/paintbrush', 'headwear/astronaut-helmet', 'glasses/square']) })
   const rooms = { service, exclusive: vi.fn((callback: () => unknown) => callback()) } as unknown as RoomRuntime
   const handlers = new Map<string, (rooms: RoomRuntime, request: Request) => Promise<unknown>>()
   registerRoomProfileRoutes((method, path, handler) => handlers.set(method + path, handler), {} as ServerRuntime)
@@ -50,10 +54,10 @@ it('roundtrips composed avatars in the existing profile route, preserving receip
   resource.store = store
   service.store = store
   expect(await get()).toEqual({ profile: { avatar }, revision: 0 })
-  expect((await store.events('*')).map((event) => event.kind)).toEqual(['presentation.user-profile.updated'])
+  expect((await store.events('*')).map((event) => event.kind).filter((kind) => kind.startsWith('presentation.'))).toEqual(['presentation.user-profile.updated'])
   expect(await put({ clientRequestId: 'reset', expectedRevision: 0, avatar: null }))
     .toEqual({ profile: { avatar: null }, revision: 1 })
-  expect((await store.events('*')).map((event) => event.kind))
+  expect((await store.events('*')).map((event) => event.kind).filter((kind) => kind.startsWith('presentation.')))
     .toEqual(['presentation.user-profile.updated', 'presentation.user-profile.updated'])
   expect(await store.list('room_avatar')).toEqual([])
 })
