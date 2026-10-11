@@ -371,6 +371,8 @@ module.exports = {
     target: [{ target: 'nsis', arch: ['x64'] }]
   },
   nsis: {
+    // Custom LangStrings in build/installer-pages.nsh only cover en + zh_CN.
+    installerLanguages: ['en_US', 'zh_CN'],
     oneClick: false,
     installerHeader: './build/installerHeader.bmp',
     installerSidebar: './build/installerSidebar.bmp',
